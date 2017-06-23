@@ -1,0 +1,29 @@
+
+def fib(int x) {
+    return x++
+}
+
+let obj = {
+    int[3] prop = [1, 2, 3]
+    string str = "suck my dick"
+}
+
+obj.prop = ["x", "hmm", ""]
+obj.str = "fuck"
+
+outln fib + " " + obj.prop
+
+let x = 1
+out (bool) x
+
+{
+    let pop = "hi"
+    outln pop
+}
+
+let _ = 3
+let $ = _
+
+$ = 43
+
+out _

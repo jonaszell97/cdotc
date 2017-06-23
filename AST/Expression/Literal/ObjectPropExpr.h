@@ -1,0 +1,29 @@
+//
+// Created by Jonas Zell on 20.06.17.
+//
+
+#ifndef MATHPARSER_OBJECTPROPEXPR_H
+#define MATHPARSER_OBJECTPROPEXPR_H
+
+
+#include "../Expression.h"
+#include "../../../Objects/Object.h"
+
+class ObjectPropExpr : public Expression {
+public:
+    ObjectPropExpr(std::string, Expression::SharedPtr, ValueType = ANY_T);
+    VariantPtr evaluate(VariantPtr = {});
+
+    typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
+    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children();
+
+protected:
+    std::string _prop_name;
+    Expression::SharedPtr _prop_val;
+    ValueType _prop_type;
+    std::string __class_name = "ObjectPropExpr";
+};
+
+
+#endif //MATHPARSER_OBJECTPROPEXPR_H
