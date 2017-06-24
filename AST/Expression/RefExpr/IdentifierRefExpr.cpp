@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "IdentifierRefExpr.h"
-#include "../../../Variant.h"
+#include "../../../Variant/Variant.h"
 #include "../../Statement/CompoundStmt.h"
 #include "../../../Util.h"
 #include "MemberRefExpr.h"
@@ -13,7 +13,7 @@ IdentifierRefExpr::IdentifierRefExpr(std::string ident) : _ident(ident) {
 
 }
 
-IdentifierRefExpr::IdentifierRefExpr(Variant val) : IdentifierRefExpr(val.s_val) {
+IdentifierRefExpr::IdentifierRefExpr(Variant val) : IdentifierRefExpr(val.get<std::string>()) {
 
 }
 
@@ -25,18 +25,20 @@ void IdentifierRefExpr::return_ref(bool ref) {
     _return_ref = ref;
 }
 
-VariantPtr IdentifierRefExpr::evaluate(VariantPtr opt) {
-    // return a reference to the variable instead of the value
+Variant IdentifierRefExpr::evaluate(Variant opt) {
     if (auto root = _root.lock()) {
+        Variant ref = root->has_variable(_ident) ? root->get_variable(_ident) : root->get_function(_ident);
+        Variant var = _return_ref ? ref : ref.dereference();
+
         if (_member_expr == nullptr) {
-            return root->get_var_or_func(_ident);
+            return var;
         } else {
-            VariantPtr obj = root->get_var_or_func(_ident);
-            if (obj->type != OBJECT_T && obj->type != ARRAY_T && obj->type != FUNCTION_T) {
+            if (var.get_type() != OBJECT_T && var.get_type() != ARRAY_T && var.get_type() != FUNCTION_T) {
                 RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on primitive value.");
             }
 
-            return _member_expr->evaluate(obj);
+            _member_expr->return_ref(_return_ref);
+            return _member_expr->evaluate(var);
         }
     }
     else {
@@ -58,7 +60,7 @@ void IdentifierRefExpr::__dump(int depth) {
         std::cout << "\t";
     }
 
-    std::cout << "IdentifierRefExpr" << " [" << _ident << "]" << std::endl;
+    std::cout << "Identifier" << (_return_ref ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
 
     if (_member_expr != nullptr) {
         _member_expr->__dump(depth + 1);

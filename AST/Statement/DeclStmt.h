@@ -12,7 +12,7 @@
 class DeclStmt : public Statement {
 public:
     DeclStmt(std::string, Expression::SharedPtr, ValueType = ANY_T);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     std::vector<AstNode::SharedPtr> get_children();
     Expression::SharedPtr get_expr();
 

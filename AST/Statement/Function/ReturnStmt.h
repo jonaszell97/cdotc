@@ -12,7 +12,7 @@
 class ReturnStmt : public Statement {
 public:
     ReturnStmt(Expression::SharedPtr);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<ReturnStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();

@@ -5,7 +5,7 @@
 #include "Tokenizer.h"
 #include "Util.h"
 #include "Objects/Object.h"
-#include "Variant.h"
+#include "Variant/Variant.h"
 
 Tokenizer::Tokenizer(std::string program) :
         current_token(T_BOF, { }, 0),

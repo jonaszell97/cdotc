@@ -9,6 +9,12 @@
 #include "../../../Objects/Function.h"
 #include "../../Expression/Expression.h"
 
+struct FuncArg {
+    std::string name;
+    ValueType type;
+    Variant default_val = {};
+};
+
 class FuncArgDecl : public Expression {
 public:
     FuncArgDecl();
@@ -16,7 +22,9 @@ public:
     void set_name(std::string);
     void set_type(ValueType);
     void set_default(Expression::SharedPtr);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
+
+    FuncArg specific_eval();
 
     typedef std::shared_ptr<FuncArgDecl> SharedPtr;
     void __dump(int);

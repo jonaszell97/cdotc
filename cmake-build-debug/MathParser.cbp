@@ -280,12 +280,6 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp">
-			<Option target="MathParser"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h">
-			<Option target="MathParser"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.cpp">
 			<Option target="MathParser"/>
 		</Unit>
@@ -304,10 +298,22 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/main.cpp">

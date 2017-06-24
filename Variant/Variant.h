@@ -7,13 +7,17 @@
 
 #include <string>
 #include <cmath>
-#include "Exceptions.h"
+#include "../Exceptions.h"
 
 class Function;
-class FuncArgument;
 class Object;
-class ObjectProperty;
 class Array;
+namespace cdot {
+namespace var {
+    class Converter;
+    class Arithmetic;
+}
+}
 
 enum ValueType : unsigned int {
     INT_T,
@@ -25,21 +29,16 @@ enum ValueType : unsigned int {
     BOOL_T,
     CHAR_T,
     OBJECT_T,
-    OBJECT_PROP_T,
     ANY_T,
     FUNCTION_T,
-    FUNC_ARG_T,
     ARRAY_T,
     VOID_T,
-    AUTO_T
-    //REF_T
+    AUTO_T,
+    REF_T
 };
 
-struct Variant;
-typedef std::shared_ptr<Variant> VariantPtr;
-
 struct Variant {
-
+protected:
     union {
         int int_val;
         long long_val;
@@ -53,16 +52,22 @@ struct Variant {
 
     union {
         std::shared_ptr<Object> o_val;
-        std::shared_ptr<ObjectProperty> op_val;
         std::shared_ptr<Function> fun_val;
-        std::shared_ptr<FuncArgument> fa_val;
+        std::shared_ptr<Variant> ref;
         std::shared_ptr<Array> arr_val;
     };
 
     std::string s_val;
+    ValueType type;
+    bool is_numeric = false;
 
     void check_numeric();
     void destroy();
+
+public:
+    typedef std::shared_ptr<Variant> SharedPtr;
+    friend class cdot::var::Converter;
+    friend class cdot::var::Arithmetic;
 
     ~Variant();
     Variant();
@@ -74,24 +79,15 @@ struct Variant {
     Variant(char);
     Variant(bool);
     Variant(std::shared_ptr<Object>);
-    Variant(std::shared_ptr<ObjectProperty>);
     Variant(std::shared_ptr<Function>);
-    Variant(std::shared_ptr<FuncArgument>);
     Variant(std::shared_ptr<Array>);
+    Variant(std::shared_ptr<Variant>);
     Variant(std::string);
 
-
-    static VariantPtr from(double);
-    static VariantPtr from(int);
-    static VariantPtr from(long);
-    static VariantPtr from(float);
-    static VariantPtr from(char);
-    static VariantPtr from(bool);
-    static VariantPtr from(std::string);
-    static VariantPtr from(Variant);
-
-    ValueType type;
-    bool is_numeric = false;
+    ValueType get_type() const;
+    void is_any_type(bool = true);
+    bool is_ref();
+    Variant dereference();
 
     std::string to_string(bool = false);
     template <class T>
@@ -105,6 +101,7 @@ struct Variant {
     Variant operator*(Variant v1);
     Variant operator/(Variant v1);
     Variant operator%(Variant v1);
+    Variant pow(Variant v1);
 
     // equality operators
     Variant operator==(Variant v1);
@@ -140,9 +137,7 @@ struct Variant {
 };
 
 namespace val {
-    extern Variant empty();
     extern ValueType strtotype(std::string);
-
     extern bool is_compatible(ValueType , ValueType);
 }
 

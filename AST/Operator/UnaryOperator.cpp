@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "UnaryOperator.h"
-#include "../../Variant.h"
+#include "../../Variant/Variant.h"
 #include "../../Objects/Object.h"
 #include "../../Util.h"
 
@@ -15,7 +15,7 @@ UnaryOperator::UnaryOperator(std::string op, std::string fix) :
 
 }
 
-UnaryOperator::UnaryOperator(Variant v, std::string fix) : UnaryOperator(v.s_val, fix) {
+UnaryOperator::UnaryOperator(Variant v, std::string fix) : UnaryOperator(v.get<std::string>(), fix) {
 
 }
 
@@ -23,91 +23,82 @@ std::string UnaryOperator::get_operator() {
     return _operator;
 }
 
-VariantPtr UnaryOperator::evaluate(VariantPtr) {
+Variant UnaryOperator::evaluate(Variant) {
     if (_operator == "typeof") {
-        return Variant::from(util::types[_child->evaluate()->type]);
+        return util::types[_child->evaluate().get_type()];
+    }
+    else if (_operator == "&") {
+        IdentifierRefExpr::SharedPtr child = std::static_pointer_cast<IdentifierRefExpr>(_child);
+        child->return_ref(true);
+
+        return child->evaluate();
+
     }
     else if (_operator == "+") {
         return _child->evaluate();
     }
     else if (_operator == "-") {
-        return Variant::from(-(*_child->evaluate()));
+        return -(_child->evaluate());
     }
     else if (_operator == "!") {
-        return Variant::from(!(*_child->evaluate()));
+        return !(_child->evaluate());
     }
     else if (_operator == "++" && prefix) {
-        auto fst = _child->evaluate(Variant::from(true));
+        auto fst = _child->evaluate();
 
-        fst->strict_equals(*fst + Variant(1));
-        /*if (fst->type == REF_T) {
-            fst->ref->strict_equals(*fst + Variant(1.0));
-        } else if (fst->type == OBJECT_PROP_T) {
-            fst->op_val->set(*fst + Variant(1.0));
+        if (fst.get_type() == REF_T) {
+            fst.strict_equals(fst + Variant(1));
         }
         else {
             RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
-        }*/
+        }
 
         return fst;
     }
     else if (_operator == "++") {
-        auto fst = _child->evaluate(Variant::from(true));
-        Variant return_val;
+        auto fst = _child->evaluate();
+        Variant return_val(fst);
 
-        fst->strict_equals(*fst + Variant(1));
-        /*if (fst->type == REF_T) {
-            fst->ref->strict_equals(*fst->ref + Variant(1.0));
-            return_val = *fst->ref;
-        } else if (fst->type == OBJECT_PROP_T) {
-            fst->op_val->set(*fst + Variant(1.0));
-            return_val = fst->op_val->get();
+        if (fst.get_type() == REF_T) {
+            fst.strict_equals(fst + Variant(1));
         }
         else {
             RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
-        }*/
+        }
 
-        return Variant::from(return_val);
+        return return_val;
     }
     else if (_operator == "--" && prefix) {
-        auto fst = _child->evaluate(Variant::from(true));
+        auto fst = _child->evaluate();
 
-        fst->strict_equals(*fst - Variant(1));
-        /*if (fst->type == REF_T) {
-            fst->ref->strict_equals(*fst->ref - Variant(1.0));
-        } else if (fst->type == OBJECT_PROP_T) {
-            fst->op_val->set(*fst - Variant(1.0));
+        if (fst.get_type() == REF_T) {
+            fst.strict_equals(fst - Variant(1));
         }
         else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply decrement operator to value that is not a reference");
-        }*/
+            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
+        }
 
         return fst;
     }
     else if (_operator == "--") {
-        auto fst = _child->evaluate(Variant::from(true));
-        Variant return_val;
+        auto fst = _child->evaluate();
+        Variant return_val(fst);
 
-        fst->strict_equals(*fst - Variant(1));
-        /*if (fst->type == REF_T) {
-            fst->ref->strict_equals(*fst - Variant(1.0));
-            return_val = *fst->ref;
-        } else if (fst->type == OBJECT_PROP_T) {
-            fst->op_val->set(*fst - Variant(1.0));
-            return_val = fst->op_val->get();
+        if (fst.get_type() == REF_T) {
+            fst.strict_equals(fst - Variant(1));
         }
         else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply decrement operator to value that is not a reference");
-        }*/
+            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
+        }
 
-        return Variant::from(return_val);
+        return return_val;
     }
     else if (_operator == "~") {
-        return Variant::from(_child->evaluate()->operator~());
+        return ~_child->evaluate();
     }
 
     RuntimeError::raise(ERR_OP_UNDEFINED, "No definition found for unary operator " + _operator + " on type "
-                            + std::to_string(_child->evaluate()->type));
+                            + std::to_string(_child->evaluate().get_type()));
 }
 
 std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {

@@ -13,7 +13,7 @@
 class FunctionDecl : public Statement {
 public:
     FunctionDecl(std::string, ValueType = ANY_T);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     void set_return_type(ValueType);
     void set_body(CompoundStmt::SharedPtr);
     void add_arg(FuncArgDecl::SharedPtr);

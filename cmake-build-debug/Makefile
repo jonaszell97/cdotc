@@ -987,33 +987,6 @@ Objects/Object.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Object.cpp.s
 .PHONY : Objects/Object.cpp.s
 
-Objects/Variable.o: Objects/Variable.cpp.o
-
-.PHONY : Objects/Variable.o
-
-# target to build an object file
-Objects/Variable.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Variable.cpp.o
-.PHONY : Objects/Variable.cpp.o
-
-Objects/Variable.i: Objects/Variable.cpp.i
-
-.PHONY : Objects/Variable.i
-
-# target to preprocess a source file
-Objects/Variable.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Variable.cpp.i
-.PHONY : Objects/Variable.cpp.i
-
-Objects/Variable.s: Objects/Variable.cpp.s
-
-.PHONY : Objects/Variable.s
-
-# target to generate assembly for a file
-Objects/Variable.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Variable.cpp.s
-.PHONY : Objects/Variable.cpp.s
-
 Token.o: Token.cpp.o
 
 .PHONY : Token.o
@@ -1095,32 +1068,86 @@ Util.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Util.cpp.s
 .PHONY : Util.cpp.s
 
-Variant.o: Variant.cpp.o
+Variant/Arithmetic.o: Variant/Arithmetic.cpp.o
 
-.PHONY : Variant.o
+.PHONY : Variant/Arithmetic.o
 
 # target to build an object file
-Variant.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant.cpp.o
-.PHONY : Variant.cpp.o
+Variant/Arithmetic.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o
+.PHONY : Variant/Arithmetic.cpp.o
 
-Variant.i: Variant.cpp.i
+Variant/Arithmetic.i: Variant/Arithmetic.cpp.i
 
-.PHONY : Variant.i
+.PHONY : Variant/Arithmetic.i
 
 # target to preprocess a source file
-Variant.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant.cpp.i
-.PHONY : Variant.cpp.i
+Variant/Arithmetic.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.i
+.PHONY : Variant/Arithmetic.cpp.i
 
-Variant.s: Variant.cpp.s
+Variant/Arithmetic.s: Variant/Arithmetic.cpp.s
 
-.PHONY : Variant.s
+.PHONY : Variant/Arithmetic.s
 
 # target to generate assembly for a file
-Variant.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant.cpp.s
-.PHONY : Variant.cpp.s
+Variant/Arithmetic.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.s
+.PHONY : Variant/Arithmetic.cpp.s
+
+Variant/Conversion.o: Variant/Conversion.cpp.o
+
+.PHONY : Variant/Conversion.o
+
+# target to build an object file
+Variant/Conversion.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o
+.PHONY : Variant/Conversion.cpp.o
+
+Variant/Conversion.i: Variant/Conversion.cpp.i
+
+.PHONY : Variant/Conversion.i
+
+# target to preprocess a source file
+Variant/Conversion.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Conversion.cpp.i
+.PHONY : Variant/Conversion.cpp.i
+
+Variant/Conversion.s: Variant/Conversion.cpp.s
+
+.PHONY : Variant/Conversion.s
+
+# target to generate assembly for a file
+Variant/Conversion.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Conversion.cpp.s
+.PHONY : Variant/Conversion.cpp.s
+
+Variant/Variant.o: Variant/Variant.cpp.o
+
+.PHONY : Variant/Variant.o
+
+# target to build an object file
+Variant/Variant.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Variant.cpp.o
+.PHONY : Variant/Variant.cpp.o
+
+Variant/Variant.i: Variant/Variant.cpp.i
+
+.PHONY : Variant/Variant.i
+
+# target to preprocess a source file
+Variant/Variant.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Variant.cpp.i
+.PHONY : Variant/Variant.cpp.i
+
+Variant/Variant.s: Variant/Variant.cpp.s
+
+.PHONY : Variant/Variant.s
+
+# target to generate assembly for a file
+Variant/Variant.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Variant.cpp.s
+.PHONY : Variant/Variant.cpp.s
 
 main.o: main.cpp.o
 
@@ -1254,9 +1281,6 @@ help:
 	@echo "... Objects/Object.o"
 	@echo "... Objects/Object.i"
 	@echo "... Objects/Object.s"
-	@echo "... Objects/Variable.o"
-	@echo "... Objects/Variable.i"
-	@echo "... Objects/Variable.s"
 	@echo "... Token.o"
 	@echo "... Token.i"
 	@echo "... Token.s"
@@ -1266,9 +1290,15 @@ help:
 	@echo "... Util.o"
 	@echo "... Util.i"
 	@echo "... Util.s"
-	@echo "... Variant.o"
-	@echo "... Variant.i"
-	@echo "... Variant.s"
+	@echo "... Variant/Arithmetic.o"
+	@echo "... Variant/Arithmetic.i"
+	@echo "... Variant/Arithmetic.s"
+	@echo "... Variant/Conversion.o"
+	@echo "... Variant/Conversion.i"
+	@echo "... Variant/Conversion.s"
+	@echo "... Variant/Variant.o"
+	@echo "... Variant/Variant.i"
+	@echo "... Variant/Variant.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

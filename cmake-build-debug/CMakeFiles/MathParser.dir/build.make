@@ -105,28 +105,28 @@ CMakeFiles/MathParser.dir/Token.cpp.o.provides: CMakeFiles/MathParser.dir/Token.
 CMakeFiles/MathParser.dir/Token.cpp.o.provides.build: CMakeFiles/MathParser.dir/Token.cpp.o
 
 
-CMakeFiles/MathParser.dir/Variant.cpp.o: CMakeFiles/MathParser.dir/flags.make
-CMakeFiles/MathParser.dir/Variant.cpp.o: ../Variant.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/MathParser.dir/Variant.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Variant.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../Variant/Variant.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/MathParser.dir/Variant/Variant.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Variant/Variant.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp
 
-CMakeFiles/MathParser.dir/Variant.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Variant.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp > CMakeFiles/MathParser.dir/Variant.cpp.i
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Variant/Variant.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp > CMakeFiles/MathParser.dir/Variant/Variant.cpp.i
 
-CMakeFiles/MathParser.dir/Variant.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Variant.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp -o CMakeFiles/MathParser.dir/Variant.cpp.s
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Variant/Variant.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp -o CMakeFiles/MathParser.dir/Variant/Variant.cpp.s
 
-CMakeFiles/MathParser.dir/Variant.cpp.o.requires:
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.requires:
 
-.PHONY : CMakeFiles/MathParser.dir/Variant.cpp.o.requires
+.PHONY : CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.requires
 
-CMakeFiles/MathParser.dir/Variant.cpp.o.provides: CMakeFiles/MathParser.dir/Variant.cpp.o.requires
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant.cpp.o.provides.build
-.PHONY : CMakeFiles/MathParser.dir/Variant.cpp.o.provides
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.provides: CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.provides
 
-CMakeFiles/MathParser.dir/Variant.cpp.o.provides.build: CMakeFiles/MathParser.dir/Variant.cpp.o
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.provides.build: CMakeFiles/MathParser.dir/Variant/Variant.cpp.o
 
 
 CMakeFiles/MathParser.dir/Util.cpp.o: CMakeFiles/MathParser.dir/flags.make
@@ -297,33 +297,9 @@ CMakeFiles/MathParser.dir/Objects/Function.cpp.o.provides: CMakeFiles/MathParser
 CMakeFiles/MathParser.dir/Objects/Function.cpp.o.provides.build: CMakeFiles/MathParser.dir/Objects/Function.cpp.o
 
 
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.o: CMakeFiles/MathParser.dir/flags.make
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.o: ../Objects/Variable.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/MathParser.dir/Objects/Variable.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Objects/Variable.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp
-
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Objects/Variable.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp > CMakeFiles/MathParser.dir/Objects/Variable.cpp.i
-
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Objects/Variable.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp -o CMakeFiles/MathParser.dir/Objects/Variable.cpp.s
-
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.requires:
-
-.PHONY : CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.requires
-
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.provides: CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.requires
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.provides.build
-.PHONY : CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.provides
-
-CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.provides.build: CMakeFiles/MathParser.dir/Objects/Variable.cpp.o
-
-
 CMakeFiles/MathParser.dir/Objects/Array.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/Objects/Array.cpp.o: ../Objects/Array.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/MathParser.dir/Objects/Array.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/MathParser.dir/Objects/Array.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Objects/Array.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Array.cpp
 
 CMakeFiles/MathParser.dir/Objects/Array.cpp.i: cmake_force
@@ -347,7 +323,7 @@ CMakeFiles/MathParser.dir/Objects/Array.cpp.o.provides.build: CMakeFiles/MathPar
 
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../AST/AstNode.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/MathParser.dir/AST/AstNode.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/MathParser.dir/AST/AstNode.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/AstNode.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.cpp
 
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.i: cmake_force
@@ -371,7 +347,7 @@ CMakeFiles/MathParser.dir/AST/AstNode.cpp.o.provides.build: CMakeFiles/MathParse
 
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../AST/Statement/Statement.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.i: cmake_force
@@ -395,7 +371,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o.provides.build: CMakeFil
 
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../AST/Expression/Expression.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.i: cmake_force
@@ -419,7 +395,7 @@ CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o.provides.build: CMakeF
 
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../AST/Statement/ControlFlow/IfStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.i: cmake_force
@@ -443,7 +419,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o.provides.build:
 
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../AST/Statement/ControlFlow/WhileStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.i: cmake_force
@@ -467,7 +443,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o.provides.bui
 
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../AST/Statement/CompoundStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.i: cmake_force
@@ -491,7 +467,7 @@ CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o.provides.build: CMake
 
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../AST/Statement/DeclStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.i: cmake_force
@@ -515,7 +491,7 @@ CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o.provides.build: CMakeFile
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../AST/Expression/Literal/LiteralExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.i: cmake_force
@@ -539,7 +515,7 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o.provides.buil
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../AST/Statement/Function/ReturnStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.i: cmake_force
@@ -563,7 +539,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o.provides.build
 
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../AST/Operator/BinaryOperator.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/BinaryOperator.cpp
 
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.i: cmake_force
@@ -587,7 +563,7 @@ CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o.provides.build: CMak
 
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../AST/Operator/UnaryOperator.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/UnaryOperator.cpp
 
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.i: cmake_force
@@ -611,7 +587,7 @@ CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o.provides.build: CMake
 
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../AST/Operator/TertiaryOperator.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/TertiaryOperator.cpp
 
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.i: cmake_force
@@ -635,7 +611,7 @@ CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o.provides.build: CM
 
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../AST/Operator/Operator.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/Operator.cpp
 
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.i: cmake_force
@@ -659,7 +635,7 @@ CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o.provides.build: CMakeFiles
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../AST/Expression/RefExpr/IdentifierRefExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i: cmake_force
@@ -683,7 +659,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o.provide
 
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../AST/Statement/IO/InputStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.i: cmake_force
@@ -707,7 +683,7 @@ CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o.provides.build: CMake
 
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../AST/Statement/IO/OutputStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.i: cmake_force
@@ -731,7 +707,7 @@ CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o.provides.build: CMak
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../AST/Expression/Literal/ObjectLiteral.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectLiteral.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.i: cmake_force
@@ -755,7 +731,7 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o.provides.bu
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../AST/Expression/Literal/ObjectPropExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectPropExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.i: cmake_force
@@ -779,7 +755,7 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o.provides.b
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../AST/Statement/Function/FunctionDecl.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.i: cmake_force
@@ -803,7 +779,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o.provides.bui
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../AST/Statement/Function/FuncArgDecl.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.cpp
 
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.i: cmake_force
@@ -827,7 +803,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o.provides.buil
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../AST/Expression/RefExpr/MemberRefExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/MemberRefExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.i: cmake_force
@@ -851,7 +827,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o.provides.bu
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../AST/Expression/RefExpr/CallExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/CallExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.i: cmake_force
@@ -875,7 +851,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o.provides.build: 
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../AST/Expression/Literal/ArrayLiteral.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.i: cmake_force
@@ -899,7 +875,7 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o.provides.bui
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../AST/Expression/RefExpr/ArrayAccessExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/ArrayAccessExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.i: cmake_force
@@ -923,7 +899,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o.provides.
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../AST/Expression/RefExpr/RefExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.i: cmake_force
@@ -947,7 +923,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o.provides.build: C
 
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: CMakeFiles/MathParser.dir/flags.make
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../AST/Operator/ExplicitCastExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/ExplicitCastExpr.cpp
 
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.i: cmake_force
@@ -969,11 +945,59 @@ CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o.provides: CMakeFil
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o.provides.build: CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o
 
 
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o: ../Variant/Arithmetic.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp
+
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp > CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.i
+
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp -o CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.s
+
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.requires:
+
+.PHONY : CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.requires
+
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.provides: CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.provides
+
+CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.provides.build: CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o
+
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../Variant/Conversion.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Variant/Conversion.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp > CMakeFiles/MathParser.dir/Variant/Conversion.cpp.i
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Variant/Conversion.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp -o CMakeFiles/MathParser.dir/Variant/Conversion.cpp.s
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.requires:
+
+.PHONY : CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.requires
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.provides: CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.provides
+
+CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.provides.build: CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o
+
+
 # Object files for target MathParser
 MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/main.cpp.o" \
 "CMakeFiles/MathParser.dir/Token.cpp.o" \
-"CMakeFiles/MathParser.dir/Variant.cpp.o" \
+"CMakeFiles/MathParser.dir/Variant/Variant.cpp.o" \
 "CMakeFiles/MathParser.dir/Util.cpp.o" \
 "CMakeFiles/MathParser.dir/Exceptions.cpp.o" \
 "CMakeFiles/MathParser.dir/Debug.cpp.o" \
@@ -981,7 +1005,6 @@ MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/Interpreter.cpp.o" \
 "CMakeFiles/MathParser.dir/Objects/Object.cpp.o" \
 "CMakeFiles/MathParser.dir/Objects/Function.cpp.o" \
-"CMakeFiles/MathParser.dir/Objects/Variable.cpp.o" \
 "CMakeFiles/MathParser.dir/Objects/Array.cpp.o" \
 "CMakeFiles/MathParser.dir/AST/AstNode.cpp.o" \
 "CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o" \
@@ -1008,14 +1031,16 @@ MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o" \
 "CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o" \
 "CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o" \
-"CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o"
+"CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o" \
+"CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o" \
+"CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o"
 
 # External object files for target MathParser
 MathParser_EXTERNAL_OBJECTS =
 
 MathParser: CMakeFiles/MathParser.dir/main.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Token.cpp.o
-MathParser: CMakeFiles/MathParser.dir/Variant.cpp.o
+MathParser: CMakeFiles/MathParser.dir/Variant/Variant.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Util.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Exceptions.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Debug.cpp.o
@@ -1023,7 +1048,6 @@ MathParser: CMakeFiles/MathParser.dir/Tokenizer.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Interpreter.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Objects/Object.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Objects/Function.cpp.o
-MathParser: CMakeFiles/MathParser.dir/Objects/Variable.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Objects/Array.cpp.o
 MathParser: CMakeFiles/MathParser.dir/AST/AstNode.cpp.o
 MathParser: CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o
@@ -1051,9 +1075,11 @@ MathParser: CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o
 MathParser: CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o
 MathParser: CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o
 MathParser: CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o
+MathParser: CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o
+MathParser: CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o
 MathParser: CMakeFiles/MathParser.dir/build.make
 MathParser: CMakeFiles/MathParser.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Linking CXX executable MathParser"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Linking CXX executable MathParser"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/MathParser.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -1063,7 +1089,7 @@ CMakeFiles/MathParser.dir/build: MathParser
 
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/main.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Token.cpp.o.requires
-CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Variant.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Variant/Variant.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Util.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Exceptions.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Debug.cpp.o.requires
@@ -1071,7 +1097,6 @@ CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Tokenizer.cpp.o.re
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Interpreter.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Objects/Object.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Objects/Function.cpp.o.requires
-CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Objects/Variable.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Objects/Array.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/AstNode.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o.requires
@@ -1099,6 +1124,8 @@ CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Expression/Lit
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o.requires
 
 .PHONY : CMakeFiles/MathParser.dir/requires
 

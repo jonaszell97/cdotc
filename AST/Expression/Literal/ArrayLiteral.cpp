@@ -24,9 +24,9 @@ void ArrayLiteral::add_element(Expression::SharedPtr el) {
     _elements.push_back(el);
 }
 
-VariantPtr ArrayLiteral::evaluate(VariantPtr) {
+Variant ArrayLiteral::evaluate(Variant) {
     if (_length_expr != nullptr) {
-        int length = _length_expr->evaluate()->get<int>();
+        int length = _length_expr->evaluate().get<int>();
         if (length > INT32_MAX) {
             RuntimeError::raise(ERR_VAL_TOO_LARGE, "An array can hold a maxium of " + std::to_string(INT32_MAX) + " values, " +
                 "tried to allocate " + std::to_string(int(length)));
@@ -38,14 +38,14 @@ VariantPtr ArrayLiteral::evaluate(VariantPtr) {
     std::shared_ptr<Array> arr = std::make_shared<Array>(_type, _length);
     for (auto el : _elements) {
         auto res = el->evaluate();
-        if (res->type == DOUBLE_T && _type != DOUBLE_T) {
-            res->cast_to(FLOAT_T);
+        if (res.get_type() == DOUBLE_T && _type != DOUBLE_T) {
+            res.cast_to(FLOAT_T);
         }
 
         arr->push(res);
     }
 
-    return std::make_shared<Variant>(arr);
+    return { arr };
 }
 
 std::vector<AstNode::SharedPtr> ArrayLiteral::get_children() {

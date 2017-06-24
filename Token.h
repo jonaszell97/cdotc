@@ -6,7 +6,7 @@
 #define TOKEN_H
 
 #include <string>
-#include "Variant.h"
+#include "Variant/Variant.h"
 #include <map>
 
 /**

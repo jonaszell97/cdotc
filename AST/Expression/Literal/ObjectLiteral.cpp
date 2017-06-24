@@ -17,13 +17,14 @@ std::vector<ObjectPropExpr> ObjectLiteral::get_props() {
     return _props;
 }
 
-VariantPtr ObjectLiteral::evaluate(VariantPtr) {
-    std::shared_ptr<Object> obj(new Object);
+Variant ObjectLiteral::evaluate(Variant) {
+    Object::SharedPtr obj = std::make_shared<Object>();
     for (auto prop : _props) {
-        obj->add_property(prop.evaluate()->op_val);
+        ObjectProp op = prop.specific_eval();
+        obj->add_property(op.name, op.value);
     }
 
-    return std::make_shared<Variant>(obj);
+    return { obj };
 }
 
 std::vector<AstNode::SharedPtr> ObjectLiteral::get_children() {

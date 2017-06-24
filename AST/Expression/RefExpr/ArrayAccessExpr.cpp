@@ -10,7 +10,7 @@
 #include <iostream>
 
 ArrayAccessExpr::ArrayAccessExpr(int index) {
-    _index = std::make_shared<LiteralExpr>(Variant::from(index));
+    _index = std::make_shared<LiteralExpr>(index);
 }
 
 ArrayAccessExpr::ArrayAccessExpr(Expression::SharedPtr expr) {
@@ -25,23 +25,17 @@ void ArrayAccessExpr::return_ref(bool ref) {
     _return_ref = ref;
 }
 
-VariantPtr ArrayAccessExpr::evaluate(VariantPtr parent) {
-    if (parent->type == OBJECT_PROP_T) {
-        parent = parent->op_val->get();
-    }
-
-    if (parent->type != ARRAY_T) {
+Variant ArrayAccessExpr::evaluate(Variant parent) {
+    if (parent.get_type() != ARRAY_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index of non-array element");
     }
 
     // return reference
     if (_member_expr != nullptr) {
-        _member_expr->return_ref(_return_ref);
-
-        return _member_expr->evaluate({ parent->arr_val->at(int(_index->evaluate()->d_val)) });
+        return _member_expr->evaluate({ parent.get<Array::SharedPtr>()->at(_index->evaluate().get<int>()) });
     }
     else {
-        return { parent->arr_val->at(int(_index->evaluate()->d_val)) };
+        return { parent.get<Array::SharedPtr>()->at(_index->evaluate().get<int>()) };
     }
 }
 

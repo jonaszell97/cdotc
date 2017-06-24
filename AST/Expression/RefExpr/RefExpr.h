@@ -6,13 +6,13 @@
 #define MATHPARSER_REFEXPR_H
 
 
-#include "../../../Variant.h"
+#include "../../../Variant/Variant.h"
 #include "../../AstNode.h"
 #include "../Expression.h"
 
 class RefExpr : public Expression {
 public:
-    virtual VariantPtr evaluate(VariantPtr = {}) = 0;
+    virtual Variant evaluate(Variant = {}) = 0;
     virtual void set_member_expr(std::shared_ptr<RefExpr>) = 0;
     virtual void return_ref(bool) = 0;
 

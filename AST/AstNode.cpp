@@ -3,7 +3,7 @@
 //
 
 #include "AstNode.h"
-#include "../Variant.h"
+#include "../Variant/Variant.h"
 #include <string>
 #include <iostream>
 #include <cmath>
@@ -13,28 +13,12 @@
 #include "../Token.h"
 #include "./Statement/CompoundStmt.h"
 
-AstNode::AstNode() : _parent{}, _root{} {
+AstNode::AstNode() {
 
-}
-
-/**
- * Returns the node's parent node
- * @return
- */
-std::weak_ptr<AstNode> AstNode::get_parent() {
-    return _parent;
 }
 
 std::vector<AstNode::SharedPtr> AstNode::get_children() {
     return std::vector<AstNode::SharedPtr>();
-}
-
-/**
- * Sets the node's parent node
- * @param p
- */
-void AstNode::set_parent(AstNode::WeakPtr p) {
-    _parent = p;
 }
 
 void AstNode::set_root(CompoundStmt::WeakPtr root, bool recursive) {

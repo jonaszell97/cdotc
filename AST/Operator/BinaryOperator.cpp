@@ -6,6 +6,7 @@
 #include "BinaryOperator.h"
 #include "../../Objects/Object.h"
 #include "../../Util.h"
+#include "../Statement/CompoundStmt.h"
 
 BinaryOperator::BinaryOperator(std::string op) : _operator(op) {
 
@@ -23,53 +24,48 @@ std::string BinaryOperator::get_operator() {
     return _operator;
 }
 
-VariantPtr BinaryOperator::evaluate(VariantPtr) {
+Variant BinaryOperator::evaluate(Variant) {
     if (!(util::in_vector(util::binary_operators, _operator))) {
         RuntimeError::raise(ERR_OP_UNDEFINED, "Undefined binary operator " + _operator);
     }
 
     if (_operator == "=") {
-        auto fst = _first_child->evaluate(Variant::from(true));
+        auto fst = _first_child->evaluate();
         auto snd = _second_child->evaluate();
 
-        if (fst->type == OBJECT_PROP_T) {
-            fst->op_val->set(snd);
-        }
-        else {
-            fst->strict_equals(*snd);
-        }
+        fst.strict_equals(snd);
 
         return fst;
     }
     else if (_operator == "+=") {
-        auto fst = _first_child->evaluate(Variant::from(true));
+        auto fst = _first_child->evaluate();
         auto snd = _second_child->evaluate();
 
-        fst->strict_equals(*fst + *snd);
+        fst.strict_equals(fst + snd);
 
         return fst;
     }
     else if (_operator == "-=") {
-        auto fst = _first_child->evaluate(Variant::from(true));
+        auto fst = _first_child->evaluate();
         auto snd = _second_child->evaluate();
 
-        fst->strict_equals(*fst - *snd);
+        fst.strict_equals(fst - snd);
 
         return fst;
     }
     else if (_operator == "*=") {
-        auto fst = _first_child->evaluate(Variant::from(true));
+        auto fst = _first_child->evaluate();
         auto snd = _second_child->evaluate();
 
-        fst->strict_equals(*fst * *snd);
+        fst.strict_equals(fst * snd);
 
         return fst;
     }
     else if (_operator == "/=") {
-        auto fst = _first_child->evaluate(Variant::from(true));
+        auto fst = _first_child->evaluate();
         auto snd = _second_child->evaluate();
 
-        fst->strict_equals(*fst - *snd);
+        fst.strict_equals(fst - snd);
 
         return fst;
     }
@@ -78,56 +74,56 @@ VariantPtr BinaryOperator::evaluate(VariantPtr) {
     auto snd = _second_child->evaluate();
 
     if (_operator == "==") {
-        return Variant::from(*fst == *snd);
+        return fst == snd;
     }
     else if (_operator == "!=") {
-        return Variant::from(*fst != *snd);
+        return fst != snd;
     }
     else if (_operator == "<=") {
-        return Variant::from(*fst <= *snd);
+        return fst <= snd;
     }
     else if (_operator == ">=") {
-        return Variant::from(*fst >= *snd);
+        return fst >= snd;
     }
     else if (_operator == ">>") {
-        return Variant::from(*fst >> *snd);
+        return fst >> snd;
     }
     else if (_operator == ">>") {
-        return Variant::from(*fst << *snd);
+        return fst << snd;
     }
     else if (_operator == "**") {
-        return Variant::from(pow(fst->d_val, snd->d_val));
+        return fst.pow(snd);
     }
     else switch (_operator[0]) {
         case '+': {
-            return Variant::from(*fst + *snd);
+            return fst + snd;
         }
         case '-': {
-            return Variant::from(*fst - *snd);
+            return fst - snd;
         }
         case '*': {
-            return Variant::from(*fst * *snd);
+            return fst * snd;
         }
         case '/': {
-            return Variant::from(*fst / *snd);
+            return fst / snd;
         }
         case '%': {
-            return Variant::from(*fst % *snd);
+            return fst % snd;
         }
         case '<': {
-            return Variant::from(*fst < *snd);
+            return fst < snd;
         }
         case '>': {
-            return Variant::from(*fst > *snd);
+            return fst > snd;
         }
         case '&': {
-            return Variant::from(*fst & *snd);
+            return fst & snd;
         }
         case '|': {
-            return Variant::from(*fst | *snd);
+            return fst | snd;
         }
         case '^': {
-            return Variant::from(*fst ^ *snd);
+            return fst ^ snd;
         }
         default:
             RuntimeError::raise(ERR_OP_UNDEFINED, "Undefined binary operator " + _operator);

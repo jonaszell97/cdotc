@@ -14,7 +14,7 @@
 class BinaryOperator : public Operator {
 public:
     BinaryOperator(std::string);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     std::string get_operator();
     std::vector<AstNode::SharedPtr> get_children();
     void set_fst_child(Expression::SharedPtr);

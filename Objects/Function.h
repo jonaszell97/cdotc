@@ -8,43 +8,34 @@
 
 #include <string>
 #include <vector>
-#include "../Variant.h"
+#include "../Variant/Variant.h"
+#include "Object.h"
 
 class CompoundStmt;
 
-class FuncArgument {
-public:
-    FuncArgument(std::string, ValueType, VariantPtr = std::make_shared<Variant>());
-    VariantPtr get_default();
-    ValueType get_type();
-    std::string get_name();
-    bool has_default();
-
-    typedef std::shared_ptr<FuncArgument> SharedPtr;
-protected:
-    std::string _arg_name;
-    VariantPtr _default;
-    ValueType _type;
-    bool _has_default;
-};
-
-class Function {
+class Function : public Object {
 public:
     Function(std::string, ValueType = VOID_T);
-    Function(const Function&);
-    void add_argument(FuncArgument);
+
+    void add_argument(std::string, ValueType, Variant = {});
     void set_return_type(ValueType);
     void set_body(std::shared_ptr<CompoundStmt>);
+
     std::string get_name();
-    VariantPtr call(std::vector<VariantPtr>);
+    Variant call(std::vector<Variant>);
     std::string print();
 
     typedef std::shared_ptr<Function> SharedPtr;
+
 protected:
-    std::string _function_name;
-    std::vector<FuncArgument> _arguments;
-    ValueType _return_type;
-    std::shared_ptr<CompoundStmt> _func_body;
+    std::string function_name;
+    ValueType return_type;
+    std::shared_ptr<CompoundStmt> func_body;
+
+    int num_args;
+    std::vector<std::string> arg_names;
+    std::vector<ValueType> arg_types;
+    std::map<int, Variant> arg_defaults;
 };
 
 

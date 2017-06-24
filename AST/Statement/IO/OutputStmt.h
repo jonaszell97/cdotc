@@ -13,7 +13,7 @@
 class OutputStmt : public Statement {
 public:
     OutputStmt(Expression::SharedPtr, bool = false);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
 
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);

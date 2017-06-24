@@ -6,7 +6,7 @@
 #define MATHPARSER_ARRAYACCESSEXPR_H
 
 
-#include "../../../Variant.h"
+#include "../../../Variant/Variant.h"
 #include "../Expression.h"
 #include "RefExpr.h"
 
@@ -14,7 +14,7 @@ class ArrayAccessExpr : public RefExpr {
 public:
     ArrayAccessExpr(int);
     ArrayAccessExpr(Expression::SharedPtr);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     void return_ref(bool);
 
     typedef std::shared_ptr<ArrayAccessExpr> SharedPtr;

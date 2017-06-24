@@ -6,7 +6,7 @@
 #define UTIL_H
 
 #include <map>
-#include "Variant.h"
+#include "Variant/Variant.h"
 
 namespace util {
     extern int min_op_precedence;
@@ -27,6 +27,7 @@ namespace util {
     extern std::vector<std::string> unary_operators;
     extern std::vector<std::string> unary_only;
     extern std::vector<std::string> equality_operators;
+    extern std::map<ValueType, std::vector<ValueType>> type_conversions;
 };
 
 

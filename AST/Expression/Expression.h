@@ -16,7 +16,7 @@ public:
     Expression();
     Expression(Expression::SharedPtr);
     void set_child(Expression::SharedPtr);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     std::vector<AstNode::SharedPtr> get_children();
 
     virtual void __dump(int) = 0;

@@ -14,7 +14,7 @@ class InputStmt : public Statement {
 public:
     InputStmt(std::string, ValueType = ANY_T);
     InputStmt(Variant, ValueType = ANY_T);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
 
     void __dump(int);
 protected:

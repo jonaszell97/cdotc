@@ -4,7 +4,7 @@
 
 #include <string>
 #include "Interpreter.h"
-#include "Variant.h"
+#include "Variant/Variant.h"
 #include <vector>
 #include "Util.h"
 #include <iostream>
@@ -33,8 +33,7 @@
  */
 Interpreter::Interpreter(std::string program) :
     tokenizer(std::make_unique<Tokenizer>(program)),
-    prog_root(std::make_shared<CompoundStmt>()),
-    flag(IFLAG_NONE)
+    prog_root(std::make_shared<CompoundStmt>())
 {
 
 }
@@ -60,18 +59,6 @@ void Interpreter::token_error(TokenType expected, TokenType found) {
                                    + std::to_string(tokenizer->index_on_line));
 }
 
-/**
- * Expect the end of an expression or throw an error
- */
-void Interpreter::expect_expr_end() {
-    tokenizer->advance();
-    if (!(tokenizer->current_token.is_punctuator('\n') ||
-        tokenizer->current_token.is_punctuator(';') ||
-        tokenizer->current_token.is_punctuator(',')) &&
-        tokenizer->current_token.get_type() != T_EOF) {
-        token_error();
-    }
-}
 
 TypeSpecifier Interpreter::parse_type() {
     TypeSpecifier ts;
@@ -101,6 +88,18 @@ TypeSpecifier Interpreter::parse_type() {
     return ts;
 }
 
+RefExpr::SharedPtr Interpreter::parse_identifier() {
+    RefExpr::SharedPtr ref_expr = __parse_identifier();
+
+    // check if lvalue
+    Token next = tokenizer->lookahead();
+    if (next.get_type() == T_OP && next.get_value().get<std::string>() == "=") {
+        ref_expr->return_ref(true);
+    }
+
+    return ref_expr;
+}
+
 /**
  * Recursively parses an identifier. Can be a combination of a variable, property accesses,
  * array indices and method calls
@@ -108,7 +107,7 @@ TypeSpecifier Interpreter::parse_type() {
  * @param ident_expr
  * @return
  */
-RefExpr::SharedPtr Interpreter::parse_identifier() {
+RefExpr::SharedPtr Interpreter::__parse_identifier() {
     Token _next = tokenizer->lookahead();
 
     // identifier
@@ -118,7 +117,7 @@ RefExpr::SharedPtr Interpreter::parse_identifier() {
         std::string ident = tokenizer->current_token.get_value().get<std::string>();
         IdentifierRefExpr::SharedPtr ident_expr = std::make_shared<IdentifierRefExpr>(ident);
 
-        ident_expr->set_member_expr(parse_identifier());
+        ident_expr->set_member_expr(__parse_identifier());
         return ident_expr;
     }
 
@@ -126,7 +125,7 @@ RefExpr::SharedPtr Interpreter::parse_identifier() {
     if (_next.is_punctuator(C_OPEN_PAREN)) {
         CallExpr::SharedPtr call = parse_function_call();
 
-        call->set_member_expr(parse_identifier());
+        call->set_member_expr(__parse_identifier());
         return call;
     }
 
@@ -136,7 +135,7 @@ RefExpr::SharedPtr Interpreter::parse_identifier() {
         tokenizer->advance(T_IDENT);
         MemberRefExpr::SharedPtr mem_ref = std::make_shared<MemberRefExpr>(tokenizer->current_token.get_value());
 
-        mem_ref->set_member_expr(parse_identifier());
+        mem_ref->set_member_expr(__parse_identifier());
         return mem_ref;
     }
 
@@ -151,7 +150,7 @@ RefExpr::SharedPtr Interpreter::parse_identifier() {
             token_error();
         }
 
-        arr_acc->set_member_expr(parse_identifier());
+        arr_acc->set_member_expr(__parse_identifier());
         return arr_acc;
     }
 
@@ -279,7 +278,7 @@ Expression::SharedPtr Interpreter::parse_unary_expr_target() {
     else if (next.get_type() == T_LITERAL) {
         tokenizer->advance();
 
-        return std::make_shared<LiteralExpr>(std::make_shared<Variant>(tokenizer->current_token.get_value()));
+        return std::make_shared<LiteralExpr>(tokenizer->current_token.get_value());
     }
     else {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier or literal, got " + util::token_names[next.get_type()]);
@@ -593,6 +592,35 @@ FunctionDecl::SharedPtr Interpreter::parse_function_decl() {
     return fun_dec;
 }
 
+IfStmt::SharedPtr Interpreter::parse_if_stmt() {
+    tokenizer->set_flag(TFLAG_IGNORE_NEWLINE);
+
+    Token next = tokenizer->lookahead();
+    if (!next.is_punctuator(C_OPEN_PAREN)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' to begin if expression");
+    }
+
+    Expression::SharedPtr if_cond = parse_expression();
+
+    tokenizer->advance();
+    Statement::SharedPtr if_branch = parse_next_stmt();
+
+    IfStmt::SharedPtr if_stmt = std::make_shared<IfStmt>(if_cond, if_branch);
+
+    next = tokenizer->lookahead();
+    if (next.get_type() == T_KEYWORD && next.get_value().get<std::string>() == "else") {
+        tokenizer->advance();
+        tokenizer->advance();
+
+        Statement::SharedPtr else_branch = parse_next_stmt();
+        if_stmt->set_else_branch(else_branch);
+    }
+
+    tokenizer->set_flag(TFLAG_NONE);
+
+    return if_stmt;
+}
+
 /**
  * Interprets a keyword statement
  */
@@ -644,6 +672,11 @@ AstNode::SharedPtr Interpreter::parse_keyword() {
 
         return out_stmt;
     }
+    else if (keyword == "if") {
+        IfStmt::SharedPtr if_stmt = parse_if_stmt();
+
+        return if_stmt;
+    }
     else if (keyword == "return") {
         Expression::SharedPtr expr = parse_expression();
         ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>(expr);
@@ -691,6 +724,34 @@ CompoundStmt::SharedPtr Interpreter::parse_block() {
     return cmp_stmt;
 }
 
+Statement::SharedPtr Interpreter::parse_next_stmt() {
+    if (tokenizer->current_token.is_punctuator('{')) {
+        tokenizer->backtrack();
+        CompoundStmt::SharedPtr cmp_stmt = parse_block();
+
+        return cmp_stmt;
+    }
+    else if (tokenizer->current_token.get_type() == T_TYPE) {
+        tokenizer->backtrack();
+        Statement::SharedPtr assign = parse_assignment(false);
+
+        assign->set_root(prog_root, true);
+
+        return assign;
+    }
+    else if (tokenizer->current_token.get_type() == T_KEYWORD) {
+        return parse_keyword();
+    }
+    else {
+        tokenizer->backtrack();
+        Expression::SharedPtr expr = parse_expression();
+
+        expr->set_root(prog_root, true);
+        return expr;
+    }
+}
+
+
 /**
  * Runs the program by tokenizing the program, creating the AST and finally evaluating it.
  * @return
@@ -720,29 +781,8 @@ CompoundStmt::SharedPtr Interpreter::parse() {
         if (tokenizer->current_token.get_type() == T_EOF) {
             break;
         }
-        else if (tokenizer->current_token.is_punctuator('{')) {
-            tokenizer->backtrack();
-            CompoundStmt::SharedPtr cmp_stmt = parse_block();
 
-            prog_root->add_statement(cmp_stmt);
-        }
-        else if (tokenizer->current_token.get_type() == T_TYPE) {
-            tokenizer->backtrack();
-            Statement::SharedPtr assign = parse_assignment(false);
-
-            assign->set_root(prog_root, true);
-            prog_root->add_statement(assign);
-        }
-        else if (tokenizer->current_token.get_type() == T_KEYWORD) {
-            prog_root->add_statement(parse_keyword());
-        }
-        else {
-            tokenizer->backtrack();
-            Expression::SharedPtr expr = parse_expression();
-
-            expr->set_root(prog_root, true);
-            prog_root->add_statement(expr);
-        }
+        prog_root->add_statement(parse_next_stmt());
     }
 
     return prog_root;

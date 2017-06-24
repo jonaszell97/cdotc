@@ -10,7 +10,7 @@ MemberRefExpr::MemberRefExpr(std::string ident) : _parent_obj{}, _ident(ident) {
 
 }
 
-MemberRefExpr::MemberRefExpr(Variant val) : MemberRefExpr(val.s_val) {
+MemberRefExpr::MemberRefExpr(Variant val) : MemberRefExpr(val.get<std::string>()) {
 
 }
 
@@ -22,20 +22,16 @@ void MemberRefExpr::return_ref(bool ref) {
     _return_ref = ref;
 }
 
-VariantPtr MemberRefExpr::evaluate(VariantPtr parent) {
-    if (parent->type == OBJECT_PROP_T) {
-        parent = parent->op_val->get();
-    }
-
+Variant MemberRefExpr::evaluate(Variant parent) {
     if (_member_expr == nullptr) {
-        return parent->o_val->access_property(_ident);
+        return parent.get<Object::SharedPtr>()->access_property(_ident);
     }
     else {
-        if (parent->type != OBJECT_T) {
+        if (parent.get_type() != OBJECT_T) {
             RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on primitve value.");
         }
 
-        VariantPtr current = parent->o_val->access_property(_ident);
+        Variant current = parent.get<Object::SharedPtr>()->access_property(_ident);
 
         return _member_expr->evaluate(current);
     }

@@ -1,6 +1,6 @@
 
-def fib(int x) {
-    return x++
+/*def fib(int x) {
+    x = 3
 }
 
 let obj = {
@@ -11,19 +11,16 @@ let obj = {
 obj.prop = ["x", "hmm", ""]
 obj.str = "fuck"
 
-outln fib + " " + obj.prop
+outln fib + " " + obj.prop*/
 
-let x = 1
-out (bool) x
+#out (3 + (4 * (3 + 7 ** 2)))
 
-{
-    let pop = "hi"
-    outln pop
+def fac(int n) {
+    if (n == 1) {
+        return 1
+    }
+
+    return fac(1) * n
 }
 
-let _ = 3
-let $ = _
-
-$ = 43
-
-out _
+outln fac(2)

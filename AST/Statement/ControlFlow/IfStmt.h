@@ -12,12 +12,21 @@
 
 class IfStmt : public Statement {
 public:
-    IfStmt(Expression::SharedPtr, CompoundStmt::SharedPtr, CompoundStmt::SharedPtr);
+    IfStmt(Expression::SharedPtr, Statement::SharedPtr);
+    inline void set_else_branch(Statement::SharedPtr else_branch) {
+        _else_branch = else_branch;
+    }
 
+    Variant evaluate(Variant = {});
+
+    typedef std::unique_ptr<IfStmt> UniquePtr;
+    typedef std::shared_ptr<IfStmt> SharedPtr;
+    std::vector<AstNode::SharedPtr> get_children();
+    void __dump(int);
 protected:
     Expression::SharedPtr _condition;
-    CompoundStmt::SharedPtr _if_branch;
-    CompoundStmt::SharedPtr _else_branch;
+    Statement::SharedPtr _if_branch;
+    Statement::SharedPtr _else_branch;
     std::string __class_name = "IfStmt";
 };
 

@@ -14,7 +14,7 @@ public:
     inline void set_child(Expression::SharedPtr child) {
         _child = child;
     }
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     inline std::string get_operator() {
         return _operator;
     }

@@ -12,7 +12,7 @@ ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : _return_val(return_va
 
 }
 
-VariantPtr ReturnStmt::evaluate(VariantPtr) {
+Variant ReturnStmt::evaluate(Variant) {
     if (auto root = _root.lock()) {
         root->terminate(_return_val->evaluate());
     }

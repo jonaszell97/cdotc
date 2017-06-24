@@ -9,8 +9,8 @@
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/./AstNode.h
 vector
 -
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Variant/Variant.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/./Statement/CompoundStmt.h
 map
@@ -19,8 +19,6 @@ map
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/./AstNode.h
 Statement.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/./Statement/Statement.h
-../../Objects/Variable.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Objects/Variable.h
 ../../Objects/Function.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Objects/Function.h
 
@@ -31,8 +29,8 @@ Statement.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.cpp
 AstNode.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 string
 -
 iostream
@@ -53,8 +51,8 @@ cmath
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
 vector
 -
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.cpp
 iostream
@@ -137,8 +135,8 @@ iostream
 -
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/ArrayAccessExpr.h
-../../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../Expression.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
 RefExpr.h
@@ -167,8 +165,8 @@ iostream
 -
 IdentifierRefExpr.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
-../../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../../Statement/CompoundStmt.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
 ../../../Util.h
@@ -179,8 +177,6 @@ MemberRefExpr.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
 string
 -
-../../../Objects/Variable.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h
 ../Expression.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
 RefExpr.h
@@ -197,8 +193,8 @@ MemberRefExpr.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/MemberRefExpr.h
 string
 -
-../../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../Expression.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
 IdentifierRefExpr.h
@@ -211,8 +207,8 @@ RefExpr.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
-../../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../../AstNode.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
 ../Expression.h
@@ -227,6 +223,8 @@ BinaryOperator.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 ../../Util.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+../Statement/CompoundStmt.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/BinaryOperator.h
 ../AstNode.h
@@ -281,8 +279,8 @@ iostream
 -
 UnaryOperator.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/UnaryOperator.h
-../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../../Objects/Object.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 ../../Util.h
@@ -293,6 +291,8 @@ Operator.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/Operator.h
 ../Expression/Expression.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+../Expression/RefExpr/IdentifierRefExpr.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.cpp
 iostream
@@ -311,14 +311,14 @@ map
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
 Statement.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
-../../Objects/Variable.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h
 ../../Objects/Function.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.cpp
 IfStmt.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
+iostream
+-
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
 ../Statement.h
@@ -407,8 +407,8 @@ iostream
 -
 InputStmt.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
-../../../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../../../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 ../CompoundStmt.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
 ../../Expression/Literal/LiteralExpr.h
@@ -473,8 +473,8 @@ string
 -
 Interpreter.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h
-Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 vector
 -
 Util.h
@@ -543,6 +543,8 @@ Util.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
 AST/Statement/Function/FunctionDecl.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
+AST/Statement/ControlFlow/IfStmt.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Array.cpp
 iostream
@@ -553,10 +555,12 @@ Array.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Array.h
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 vector
 -
+Object.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.cpp
 Function.h
@@ -571,48 +575,38 @@ string
 -
 vector
 -
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+Object.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.cpp
 Object.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 ../Util.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+Function.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
 map
 -
 string
 -
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
-Function.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.h
-
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp
-Variable.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h
-../Util.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
-
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h
-string
--
-../Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+../Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.cpp
 Token.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.h
-Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.h
 string
 -
-Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 map
 -
 
@@ -623,8 +617,8 @@ Util.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
 Objects/Object.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
-Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.h
 string
@@ -647,29 +641,53 @@ vector
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
 map
 -
-Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+Variant/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp
+Arithmetic.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.h
+../Util.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.h
+Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp
+Conversion.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.h
+../Util.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.h
+Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp
 regex
 -
 Variant.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
-Objects/Object.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+../Objects/Object.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h
-Util.h
+../Util.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
-Objects/Variable.h
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.h
-Objects/Array.h
+../Objects/Array.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Array.h
+../Objects/Function.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.h
+Conversion.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.h
+Arithmetic.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.h
 
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.h
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 string
 -
 cmath
 -
-Exceptions.h
+../Exceptions.h
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
 
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/main.cpp

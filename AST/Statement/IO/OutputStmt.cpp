@@ -7,8 +7,8 @@
 
 OutputStmt::OutputStmt(Expression::SharedPtr expr, bool newline) : _value(expr), _newline(newline) {}
 
-VariantPtr OutputStmt::evaluate(VariantPtr) {
-    std::cout << _value->evaluate()->to_string() << (_newline ? "\n" : "");
+Variant OutputStmt::evaluate(Variant) {
+    std::cout << _value->evaluate().to_string() << (_newline ? "\n" : "");
 
     return { };
 }

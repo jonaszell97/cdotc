@@ -27,7 +27,7 @@ public:
         _length = len;
     }
     void add_element(Expression::SharedPtr);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<ArrayLiteral> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();

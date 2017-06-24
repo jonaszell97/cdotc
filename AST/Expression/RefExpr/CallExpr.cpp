@@ -15,23 +15,19 @@ CallExpr::CallExpr() :
 
 }
 
-VariantPtr CallExpr::evaluate(VariantPtr obj) {
-    if (obj->type == OBJECT_PROP_T) {
-        obj = obj->op_val->get();
+Variant CallExpr::evaluate(Variant obj) {
+    if (obj.get_type() != FUNCTION_T) {
+        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call value of type " + util::types[obj.get_type()]);
     }
 
-    if (obj->type != FUNCTION_T) {
-        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call value of type " + util::types[obj->type]);
-    }
-
-    std::vector<VariantPtr> _real_args;
+    std::vector<Variant> _real_args;
     for (auto arg : _arguments) {
         auto arg_val = arg->evaluate();
 
         _real_args.push_back(arg_val);
     }
 
-    auto res = obj->fun_val->call(_real_args);
+    auto res = obj.get<Function::SharedPtr>()->call(_real_args);
 
     if (_member_expr != nullptr) {
         return _member_expr->evaluate(res);

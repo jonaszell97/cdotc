@@ -12,7 +12,7 @@
 class CallExpr : public RefExpr {
 public:
     CallExpr();
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     void add_argument(Expression::SharedPtr);
     void return_ref(bool);
     void set_member_expr(std::shared_ptr<RefExpr>);

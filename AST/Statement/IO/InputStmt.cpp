@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "InputStmt.h"
-#include "../../../Variant.h"
+#include "../../../Variant/Variant.h"
 #include "../CompoundStmt.h"
 #include "../../Expression/Literal/LiteralExpr.h"
 #include "../../../Util.h"
@@ -14,14 +14,14 @@ InputStmt::InputStmt(std::string s, ValueType type) : _ident(s), _type(type) {
     _decl = std::make_shared<DeclStmt>(s, _literal);
 }
 
-InputStmt::InputStmt(Variant v, ValueType type) : InputStmt(v.s_val, type) {
+InputStmt::InputStmt(Variant v, ValueType type) : InputStmt(v.get<std::string>(), type) {
 }
 
-VariantPtr InputStmt::evaluate(VariantPtr) {
+Variant InputStmt::evaluate(Variant) {
     std::string s;
     std::cin >> s;
 
-    _literal->set_val(Variant::from(Variant(s).cast_to(_type)));
+    _literal->set_val(Variant(s).cast_to(_type));
     _decl->evaluate();
 
     return { };

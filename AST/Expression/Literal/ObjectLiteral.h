@@ -15,7 +15,7 @@ public:
     ObjectLiteral();
     void add_prop(ObjectPropExpr);
     std::vector<ObjectPropExpr> get_props();
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     std::vector<AstNode::SharedPtr> get_children();
 
     typedef std::shared_ptr<ObjectLiteral> SharedPtr;

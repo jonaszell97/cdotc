@@ -19,7 +19,7 @@ void Expression::set_child(Expression::SharedPtr child) {
     _child = child;
 }
 
-VariantPtr Expression::evaluate(VariantPtr t) {
+Variant Expression::evaluate(Variant t) {
     return _child->evaluate(t);
 }
 

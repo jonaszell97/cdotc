@@ -36,11 +36,12 @@ set(CMAKE_DEPENDS_CHECK_CXX
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Array.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Objects/Array.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Function.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Objects/Function.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Objects/Object.cpp.o"
-  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Variable.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Objects/Variable.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Token.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Tokenizer.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Util.cpp.o"
-  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Variant.cpp.o"
+  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o"
+  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o"
+  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Variant/Variant.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/main.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "AppleClang")

@@ -7,66 +7,72 @@
 #include "../Util.h"
 
 Function::Function(std::string func_name, ValueType return_type) :
-        _function_name(func_name),
-        _return_type(return_type) {
-    _arguments = std::vector<FuncArgument>();
+    function_name(func_name),
+    return_type(return_type),
+    num_args(0),
+    arg_names(std::vector<std::string>()),
+    arg_types(std::vector<ValueType>()),
+    arg_defaults(std::map<int, Variant>())
+{
+
 }
 
-Function::Function(const Function &func) : Function(func._function_name, func._return_type) {
-    set_body(func._func_body);
-    for (auto arg : func._arguments) {
-        add_argument(arg);
-    }
-}
 
 void Function::set_body(CompoundStmt::SharedPtr body) {
-    _func_body = body;
+    func_body = body;
 }
 
-void Function::add_argument(FuncArgument arg) {
-    _arguments.push_back(arg);
+void Function::add_argument(std::string name, ValueType type, Variant def_val) {
+    arg_names.push_back(name);
+    arg_types.push_back(type);
+
+    if (def_val.get_type() != VOID_T) {
+        arg_defaults.insert(std::pair<int, Variant>(num_args, def_val));
+    }
+
+    num_args++;
 }
 
-void Function::set_return_type(ValueType return_type) {
-    _return_type = return_type;
+void Function::set_return_type(ValueType rt) {
+    return_type = rt;
 }
 
 std::string Function::get_name() {
-    return _function_name;
+    return function_name;
 }
 
-VariantPtr Function::call(std::vector<VariantPtr> args) {
+Variant Function::call(std::vector<Variant> args) {
     // check validity of passed arguments
     int i = 0;
-    CompoundStmt::SharedPtr instance = _func_body->instance();
-    std::vector<VariantPtr> _actual_args;
-    for (auto _arg : _arguments) {
-        // default argument
-        if (i >= args.size()) {
-            if (!_arg.has_default()) {
-                RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No compatible call for function " + _function_name + " found.");
-            }
+    CompoundStmt::SharedPtr instance = func_body->instance();
 
-            _actual_args.push_back(_arg.get_default());
-        }
-        else if (!val::is_compatible(_arg.get_type(), args[i]->type)) {
-            RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No compatible call for function " + _function_name + " found.");
+    for (int j = 0; j < arg_names.size(); ++j) {
+        if (j >= args.size()) {
+            if (arg_defaults.find(j) != arg_defaults.end()) {
+                Variant arg = arg_defaults[j];
+                if (arg_types[j] == ANY_T) {
+                    arg.is_any_type();
+                }
+
+                instance->set_variable(arg_names[j], arg);
+            }
+            else {
+                RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No matching call for function " + function_name +" found");
+            }
         }
         else {
-            _actual_args.push_back(args[i]);
+            if (val::is_compatible(args[j].get_type(), arg_types[j])) {
+                Variant arg = args[j];
+                if (arg_types[j] == ANY_T) {
+                    arg.is_any_type();
+                }
+
+                instance->set_variable(arg_names[j], arg);
+            }
+            else {
+                RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No matching call for function " + function_name +" found");
+            }
         }
-
-        i++;
-    }
-
-    i = 0;
-    for (auto _arg : _actual_args) {
-        if (_arguments[i].get_type() == ANY_T) {
-            _arg->any_type = true;
-        }
-
-        instance->set_variable(_arguments[i].get_name(), _arg);
-        i++;
     }
 
     return instance->evaluate();
@@ -74,36 +80,14 @@ VariantPtr Function::call(std::vector<VariantPtr> args) {
 
 std::string Function::print() {
    std::string str = "(";
-    for (int i = 0; i < _arguments.size(); ++i) {
-        str += util::types[_arguments[i].get_type()];
-        if (i < _arguments.size() - 1) {
+    for (int i = 0; i < arg_types.size(); ++i) {
+        str += util::types[arg_types[i]];
+        if (i < arg_types.size() - 1) {
             str += ", ";
         }
     }
 
-    str += ") => " + util::types[_return_type];
+    str += ") => " + util::types[return_type];
 
     return str;
-}
-
-FuncArgument::FuncArgument(std::string arg_name, ValueType type, VariantPtr def) :
-    _arg_name(arg_name), _type(type), _default(def)
-{
-    _has_default = def->type != VOID_T;
-}
-
-bool FuncArgument::has_default() {
-    return _has_default;
-}
-
-ValueType FuncArgument::get_type() {
-    return _type;
-}
-
-VariantPtr FuncArgument::get_default() {
-    return _default;
-}
-
-std::string FuncArgument::get_name() {
-    return _arg_name;
 }

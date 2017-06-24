@@ -10,8 +10,8 @@ ExplicitCastExpr::ExplicitCastExpr(std::string type) : _operator(type), _child{}
 
 }
 
-VariantPtr ExplicitCastExpr::evaluate(VariantPtr) {
-    return Variant::from(_child->evaluate()->cast_to(util::typemap[_operator]));
+Variant ExplicitCastExpr::evaluate(Variant) {
+    return _child->evaluate().cast_to(util::typemap[_operator]);
 }
 
 std::vector<AstNode::SharedPtr> ExplicitCastExpr::get_children() {

@@ -7,12 +7,16 @@
 
 #include "Operator.h"
 #include "../Expression/Expression.h"
+#include "../Expression/RefExpr/IdentifierRefExpr.h"
 
 class UnaryOperator : public Operator {
 public:
     UnaryOperator(std::string, std::string);
     UnaryOperator(Variant, std::string);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
+    /*inline void set_ref_expr(IdentifierRefExpr ident) {
+        _ref_expr = ident;
+    }*/
     std::string get_operator();
     std::vector<AstNode::SharedPtr> get_children();
 
@@ -20,6 +24,7 @@ public:
     void __dump(int);
 
 protected:
+    //IdentifierRefExpr::SharedPtr _ref_expr;
     std::string _operator;
     std::string __class_name = "UnaryOperator";
     bool prefix;

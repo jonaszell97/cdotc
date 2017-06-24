@@ -9,10 +9,16 @@
 #include "../Expression.h"
 #include "../../../Objects/Object.h"
 
+struct ObjectProp {
+    std::string name;
+    Variant::SharedPtr value;
+};
+
 class ObjectPropExpr : public Expression {
 public:
     ObjectPropExpr(std::string, Expression::SharedPtr, ValueType = ANY_T);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
+    ObjectProp specific_eval();
 
     typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
     void __dump(int);

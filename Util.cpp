@@ -91,6 +91,7 @@ namespace util {
             "~",
             "++",
             "--",
+            "&",
             "typeof"
     };
 
@@ -127,7 +128,6 @@ namespace util {
     };
 
     std::map<ValueType, std::string> types = {
-            {NUMBER_T, "number"},
             {INT_T, "int"},
             {LONG_T, "long"},
             {FLOAT_T, "float"},
@@ -141,10 +141,10 @@ namespace util {
             {ARRAY_T, "array"},
             {VOID_T, "void"},
             {AUTO_T, "let"},
+            {REF_T, "reference"}
     };
 
     std::map<std::string, ValueType> typemap = {
-            {"number", NUMBER_T},
             {"int", INT_T},
             {"long", LONG_T},
             {"double", DOUBLE_T},
@@ -157,7 +157,8 @@ namespace util {
             {"array", ARRAY_T},
             {"void", VOID_T},
             {"any", ANY_T},
-            {"let", AUTO_T}
+            {"let", AUTO_T},
+            {"reference", REF_T}
     };
 
     std::vector<char> punctuators = {
@@ -222,4 +223,14 @@ namespace util {
 
         return res;
     }
+
+    std::map<ValueType, std::vector<ValueType>> type_conversions = {
+            {INT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
+            {LONG_T, {DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
+            {FLOAT_T, {LONG_T, DOUBLE_T, INT_T, BOOL_T, STRING_T, CHAR_T}},
+            {DOUBLE_T, {LONG_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, STRING_T, CHAR_T, INT_T}},
+            {CHAR_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, INT_T}},
+            {STRING_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, INT_T, CHAR_T}},
+    };
 }

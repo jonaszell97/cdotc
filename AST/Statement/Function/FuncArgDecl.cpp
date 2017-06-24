@@ -30,11 +30,18 @@ void FuncArgDecl::set_default(Expression::SharedPtr def) {
     _default_val = def;
 }
 
-VariantPtr FuncArgDecl::evaluate(VariantPtr) {
-    VariantPtr def_val = _default_val == nullptr ? std::make_shared<Variant>() : _default_val->evaluate();
-    FuncArgument::SharedPtr fa = std::make_shared<FuncArgument>(_arg_name, _arg_type, def_val);
+Variant FuncArgDecl::evaluate(Variant) {
+    return {};
+}
 
-    return std::make_shared<Variant>(fa);
+FuncArg FuncArgDecl::specific_eval() {
+    Variant def_val = _default_val == nullptr ? Variant() : _default_val->evaluate();
+    FuncArg fa;
+    fa.type = _arg_type;
+    fa.name = _arg_name;
+    fa.default_val = def_val;
+
+    return fa;
 }
 
 void FuncArgDecl::__dump(int depth) {

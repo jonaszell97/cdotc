@@ -3,7 +3,7 @@
 //
 
 #include "Token.h"
-#include "Variant.h"
+#include "Variant/Variant.h"
 
 std::map<LiteralType, std::string> _literal_names = {
         {NUMBER_LITERAL, "NumberLiteral"},

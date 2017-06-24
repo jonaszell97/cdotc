@@ -7,7 +7,7 @@
 
 
 #include <string>
-#include "../../../Variant.h"
+#include "../../../Variant/Variant.h"
 #include "../Expression.h"
 #include "IdentifierRefExpr.h"
 #include "RefExpr.h"
@@ -16,7 +16,7 @@ class MemberRefExpr : public RefExpr {
 public:
     MemberRefExpr(std::string);
     MemberRefExpr(Variant);
-    VariantPtr evaluate(VariantPtr = {});
+    Variant evaluate(Variant = {});
     void return_ref(bool);
 
     typedef std::shared_ptr<MemberRefExpr> SharedPtr;

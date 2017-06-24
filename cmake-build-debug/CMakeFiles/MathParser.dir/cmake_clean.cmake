@@ -1,7 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/MathParser.dir/main.cpp.o"
   "CMakeFiles/MathParser.dir/Token.cpp.o"
-  "CMakeFiles/MathParser.dir/Variant.cpp.o"
+  "CMakeFiles/MathParser.dir/Variant/Variant.cpp.o"
   "CMakeFiles/MathParser.dir/Util.cpp.o"
   "CMakeFiles/MathParser.dir/Exceptions.cpp.o"
   "CMakeFiles/MathParser.dir/Debug.cpp.o"
@@ -9,7 +9,6 @@ file(REMOVE_RECURSE
   "CMakeFiles/MathParser.dir/Interpreter.cpp.o"
   "CMakeFiles/MathParser.dir/Objects/Object.cpp.o"
   "CMakeFiles/MathParser.dir/Objects/Function.cpp.o"
-  "CMakeFiles/MathParser.dir/Objects/Variable.cpp.o"
   "CMakeFiles/MathParser.dir/Objects/Array.cpp.o"
   "CMakeFiles/MathParser.dir/AST/AstNode.cpp.o"
   "CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o"
@@ -37,6 +36,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o"
   "CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o"
   "CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o"
+  "CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o"
+  "CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o"
   "MathParser.pdb"
   "MathParser"
 )

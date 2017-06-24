@@ -6,19 +6,20 @@
 #define ARRAY_H
 
 
-#include "../Variant.h"
+#include "../Variant/Variant.h"
 #include <vector>
+#include "Object.h"
 
-class Array {
+class Array : public Object {
 public:
     Array(ValueType = ANY_T, int = -1);
-    VariantPtr at(int);
-    void push(VariantPtr);
+    Variant::SharedPtr at(int);
+    void push(Variant::SharedPtr);
     void push(Variant);
-    void set(int, Variant);
-    VariantPtr pop();
+    void set(int, Variant::SharedPtr);
+    Variant::SharedPtr pop();
     std::string print();
-    VariantPtr operator[](size_t);
+    Variant::SharedPtr operator[](size_t);
     inline int get_length() {
         return _length;
     }
@@ -34,7 +35,7 @@ protected:
     int _length;
     bool _var_length;
     ValueType _type;
-    std::vector<VariantPtr> _elements;
+    std::vector<Variant::SharedPtr> _elements;
 };
 
 

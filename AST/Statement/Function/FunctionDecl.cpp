@@ -26,19 +26,20 @@ void FunctionDecl::set_return_type(ValueType type) {
     _return_type = type;
 }
 
-VariantPtr FunctionDecl::evaluate(VariantPtr) {
-    Function::SharedPtr func = std::make_shared<Function>(_func_name, _return_type);
-    func->set_body(_body);
+Variant FunctionDecl::evaluate(Variant) {
+    Function func(_func_name, _return_type);
+    func.set_body(_body);
 
     for (auto arg : _args) {
-        func->add_argument(*arg->evaluate()->fa_val);
+        FuncArg result = arg->specific_eval();
+        func.add_argument(result.name, result.type, result.default_val);
     }
 
     if (auto root = _root.lock()) {
         root->set_function(_func_name, func);
     }
     else {
-        RuntimeError::raise(ERR_MISSING_CONTEXT, "Cannot create function in current context.");
+        RuntimeError::raise(ERR_MISSING_CONTEXT, "Cannot create function in current context");
     }
 
     return { };

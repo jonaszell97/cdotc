@@ -11,17 +11,17 @@
 class LiteralExpr : public Expression {
 public:
     LiteralExpr();
-    LiteralExpr(VariantPtr);
-    LiteralExpr(VariantPtr, ValueType);
-    void set_val(VariantPtr);
-    virtual VariantPtr evaluate(VariantPtr = {});
+    LiteralExpr(Variant);
+    LiteralExpr(Variant, ValueType);
+    void set_val(Variant);
+    virtual Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<LiteralExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
 protected:
-    VariantPtr _value;
+    Variant _value;
     ValueType _type;
     std::string __class_name = "LiteralExpr";
 };
