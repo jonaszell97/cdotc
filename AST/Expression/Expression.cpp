@@ -15,6 +15,16 @@ Expression::Expression() : _child{} {
 
 }
 
+Expression::Expression(const Expression& cp) {
+    _child = std::static_pointer_cast<Expression>(cp.clone());
+    //set_root(cp._root, true);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr Expression::clone() const {
+    return std::make_shared<Expression>(*this);
+}
+
 void Expression::set_child(Expression::SharedPtr child) {
     _child = child;
 }

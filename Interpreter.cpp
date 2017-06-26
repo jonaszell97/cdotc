@@ -10,7 +10,7 @@
 #include <iostream>
 #include "Exceptions.h"
 #include "Debug.h"
-#include "Objects/Object.h"
+#include "StdLib/Objects/Object.h"
 #include "AST/Expression/RefExpr/IdentifierRefExpr.h"
 #include "AST/Operator/UnaryOperator.h"
 #include "AST/Expression/Literal/LiteralExpr.h"
@@ -26,6 +26,11 @@
 #include "AST/Expression/RefExpr/ArrayAccessExpr.h"
 #include "AST/Statement/Function/ReturnStmt.h"
 #include "AST/Operator/ExplicitCastExpr.h"
+#include "AST/Visitor/Visitor.h"
+#include "AST/Statement/ControlFlow/ContinueStmt.h"
+#include "AST/Statement/ControlFlow/BreakStmt.h"
+#include "AST/Expression/RefExpr/MethodCallExpr.h"
+#include "StdLib/GlobalContext.h"
 
 /**
  * Creates a new interpreter for an Xtreme Jonas Script program.
@@ -35,7 +40,7 @@ Interpreter::Interpreter(std::string program) :
     tokenizer(std::make_unique<Tokenizer>(program)),
     prog_root(std::make_shared<CompoundStmt>())
 {
-
+    prog_root->terminable(false);
 }
 
 /**
@@ -60,10 +65,22 @@ void Interpreter::token_error(TokenType expected, TokenType found) {
 }
 
 
+/**
+ * Parses a type specifier, like "int", "bool[3]", "any[18 * x]"
+ * @return
+ */
 TypeSpecifier Interpreter::parse_type() {
     TypeSpecifier ts;
-    tokenizer->advance(T_TYPE);
-    ts.type = util::typemap[tokenizer->current_token.get_value().get<std::string>()];
+    tokenizer->advance();
+    std::string type = tokenizer->current_token.get_value().get<std::string>();
+    if (util::typemap.find(type) != util::typemap.end()) {
+        ts.type = util::typemap[type];
+        ts.is_primitive = true;
+    }
+    else {
+        ts.class_name = type;
+        ts.is_primitive = false;
+    }
 
     // check for array type
     Token _next = tokenizer->lookahead();
@@ -85,9 +102,19 @@ TypeSpecifier Interpreter::parse_type() {
         ts.is_array = true;
     }
 
+    // nullable type
+    if (_next.get_type() == T_OP && _next.get_value().get<std::string>() == "?") {
+        ts.nullable = true;
+        tokenizer->advance();
+    }
+
     return ts;
 }
 
+/**
+ * Parses an identifier (wrapper function for lvalue check)
+ * @return
+ */
 RefExpr::SharedPtr Interpreter::parse_identifier() {
     RefExpr::SharedPtr ref_expr = __parse_identifier();
 
@@ -95,7 +122,9 @@ RefExpr::SharedPtr Interpreter::parse_identifier() {
     Token next = tokenizer->lookahead();
     if (next.get_type() == T_OP && next.get_value().get<std::string>() == "=") {
         ref_expr->return_ref(true);
+        ref_expr->implicit_ref(true);
     }
+
 
     return ref_expr;
 }
@@ -113,8 +142,8 @@ RefExpr::SharedPtr Interpreter::__parse_identifier() {
     // identifier
     if (_next.get_type() == T_IDENT) {
         tokenizer->advance(T_IDENT);
+        std::string ident = tokenizer->s_val();
 
-        std::string ident = tokenizer->current_token.get_value().get<std::string>();
         IdentifierRefExpr::SharedPtr ident_expr = std::make_shared<IdentifierRefExpr>(ident);
 
         ident_expr->set_member_expr(__parse_identifier());
@@ -133,6 +162,17 @@ RefExpr::SharedPtr Interpreter::__parse_identifier() {
     if (_next.is_punctuator(C_DOT)) {
         tokenizer->advance(T_PUNCTUATOR);
         tokenizer->advance(T_IDENT);
+        std::string ident = tokenizer->s_val();
+
+        // method call
+        _next = tokenizer->lookahead();
+        if (_next.is_punctuator(C_OPEN_PAREN)) {
+            CallExpr::SharedPtr call = parse_function_call();
+            MethodCallExpr::SharedPtr method_call = std::make_shared<MethodCallExpr>(*call, ident);
+
+            return method_call;
+        }
+
         MemberRefExpr::SharedPtr mem_ref = std::make_shared<MemberRefExpr>(tokenizer->current_token.get_value());
 
         mem_ref->set_member_expr(__parse_identifier());
@@ -160,8 +200,8 @@ RefExpr::SharedPtr Interpreter::__parse_identifier() {
 /**
  * Parses an object literal in the form of
  * {
- *    prop_name: optional_type = value,
- *    prop2 = value2
+ *    type prop_name = value
+ *    type2 name2 = value2
  * }
  * @return
  */
@@ -210,7 +250,7 @@ ObjectLiteral::SharedPtr Interpreter::parse_object_literal() {
                 arr->set_length(ts.length);
             }
 
-            obj->add_prop(ObjectPropExpr(_prop_name, arr, ARRAY_T));
+            obj->add_prop(ObjectPropExpr(_prop_name, arr, OBJECT_T));
         }
         else {
             Expression::SharedPtr val_node = parse_expression();
@@ -226,6 +266,7 @@ ObjectLiteral::SharedPtr Interpreter::parse_object_literal() {
     }
 
     tokenizer->set_flag(TFLAG_NONE);
+
 
     return obj;
 }
@@ -254,7 +295,6 @@ ArrayLiteral::SharedPtr Interpreter::parse_array_literal() {
     }
 
     arr->set_length(el_count);
-    arr->set_root(prog_root);
 
     return arr;
 }
@@ -272,6 +312,9 @@ Expression::SharedPtr Interpreter::parse_unary_expr_target() {
     else if (next.is_punctuator('[')) {
         return parse_array_literal();
     }
+    else if (next.is_punctuator(C_OPEN_PAREN)) {
+        return parse_expression();
+    }
     else if (next.get_type() == T_IDENT) {
         return parse_identifier();
     }
@@ -281,7 +324,8 @@ Expression::SharedPtr Interpreter::parse_unary_expr_target() {
         return std::make_shared<LiteralExpr>(tokenizer->current_token.get_value());
     }
     else {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier or literal, got " + util::token_names[next.get_type()]);
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier or literal, got "
+                                                + util::token_names[next.get_type()]);
     }
 }
 
@@ -293,21 +337,24 @@ Expression::SharedPtr Interpreter::parse_unary_expr_target() {
  *      - !bar[3]
  * @return
  */
-Expression::SharedPtr Interpreter::parse_unary_expr(Expression::SharedPtr literal) {
+Expression::SharedPtr Interpreter::parse_unary_expr(Expression::SharedPtr literal, bool postfix) {
     Token _next = tokenizer->lookahead();
 
     // prefix unary op
-    if (_next.get_type() == T_OP) {
+    if (_next.get_type() == T_OP && !postfix
+            && util::in_vector<std::string>(util::unary_operators, _next.get_value().get<std::string>()))
+    {
         tokenizer->advance();
 
         UnaryOperator::SharedPtr unary_op = std::make_shared<UnaryOperator>(tokenizer->s_val(), "prefix");
-        unary_op->set_child(parse_unary_expr(literal));
+
+        unary_op->set_child(parse_unary_expr(literal, postfix));
 
         return unary_op;
     }
 
     // typecast
-    if (_next.is_punctuator(C_OPEN_PAREN)) {
+    if (_next.is_punctuator(C_OPEN_PAREN) && !postfix) {
         tokenizer->advance();
         _next = tokenizer->lookahead();
         if (_next.get_type() == T_TYPE) {
@@ -319,7 +366,8 @@ Expression::SharedPtr Interpreter::parse_unary_expr(Expression::SharedPtr litera
                 ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')' after typecast operator");
             }
 
-            cast_op->set_child(parse_unary_expr(literal));
+            cast_op->set_child(parse_unary_expr(literal, postfix));
+
             return cast_op;
         }
         else {
@@ -330,22 +378,33 @@ Expression::SharedPtr Interpreter::parse_unary_expr(Expression::SharedPtr litera
     if (literal == nullptr) {
         literal = parse_unary_expr_target();
     }
-    else {
+    else if (!postfix) {
         literal->set_child(parse_unary_expr_target());
     }
 
     _next = tokenizer->lookahead();
 
     // postfix unary op
-    if (_next.get_type() == T_OP && (_next.get_value().get<std::string>() == "++" || _next.get_value().get<std::string>() == "--")) {
+    if (_next.get_type() == T_OP && (_next.get_value().get<std::string>() == "++"
+         || _next.get_value().get<std::string>() == "--"))
+    {
         tokenizer->advance();
         UnaryOperator::SharedPtr unary_op = std::make_shared<UnaryOperator>(tokenizer->s_val(), "postfix");
+
         unary_op->set_child(literal);
 
         return unary_op;
     }
 
     return literal;
+}
+
+TertiaryOperator::SharedPtr Interpreter::parse_tertiary_operator(Expression::SharedPtr cond) {
+    Expression::SharedPtr if_branch = parse_expression();
+    tokenizer->advance();
+    Expression::SharedPtr else_branch = parse_expression();
+
+    return std::make_shared<TertiaryOperator>(cond, if_branch, else_branch);
 }
 
 /**
@@ -376,7 +435,9 @@ Expression::SharedPtr Interpreter::parse_expression(Expression::SharedPtr lhs, i
             }
 
             tokenizer->advance();
-            return res;
+
+            // possible unary operator
+            return parse_unary_expr(res, true);
         }
     }
 
@@ -387,8 +448,20 @@ Expression::SharedPtr Interpreter::parse_expression(Expression::SharedPtr lhs, i
         next = tokenizer->lookahead();
     }
 
+    // tertiary operator
+    if (next.get_type() == T_OP && next.get_value().get<std::string>() == "?") {
+        tokenizer->advance();
+        return parse_tertiary_operator(lhs);
+    }
+    else if (next.get_type() == T_OP && next.get_value().get<std::string>() == ":") {
+        return lhs;
+    }
+
     // ...while the next operator has a higher precedence than the minimum
-    while (next.get_type() == T_OP && util::op_precedence[next.get_value().get<std::string>()] >= min_precedence) {
+    while (next.get_type() == T_OP &&
+            util::in_vector(util::binary_operators, next.get_value().get<std::string>()) &&
+            util::op_precedence[next.get_value().get<std::string>()] >= min_precedence)
+    {
         std::string op = next.get_value().get<std::string>();
         tokenizer->advance();
 
@@ -398,14 +471,25 @@ Expression::SharedPtr Interpreter::parse_expression(Expression::SharedPtr lhs, i
         // parenthesis recursion
         if (next.is_punctuator(C_OPEN_PAREN)) {
             tokenizer->advance();
-            rhs = parse_expression({}, 0);
-
             next = tokenizer->lookahead();
-            if (!next.is_punctuator(C_CLOSE_PAREN)) {
-                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')'");
-            }
 
-            tokenizer->advance();
+            // typecast
+            if (next.get_type() == T_TYPE) {
+                tokenizer->backtrack();
+                rhs = parse_unary_expr();
+            }
+            else {
+                rhs = parse_expression({}, 0);
+
+                next = tokenizer->lookahead();
+                if (!next.is_punctuator(C_CLOSE_PAREN)) {
+                    ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')'");
+                }
+
+                tokenizer->advance();
+
+                rhs = parse_unary_expr(rhs, true);
+            }
         }
         else {
             // right hand side expression
@@ -414,7 +498,9 @@ Expression::SharedPtr Interpreter::parse_expression(Expression::SharedPtr lhs, i
         }
 
         // continue recursively while a higher precedence operator follows
-        while (next.get_type() == T_OP && util::op_precedence[next.get_value().get<std::string>()] > util::op_precedence[op]) {
+        while (next.get_type() == T_OP &&
+                util::op_precedence[next.get_value().get<std::string>()] > util::op_precedence[op])
+        {
             rhs = parse_expression(rhs, util::op_precedence[next.get_value().get<std::string>()]);
             next = tokenizer->lookahead();
         }
@@ -425,6 +511,17 @@ Expression::SharedPtr Interpreter::parse_expression(Expression::SharedPtr lhs, i
         binary_op->set_snd_child(rhs);
 
         lhs = binary_op;
+    }
+
+    // tertiary operator
+    if (next.get_type() == T_OP && next.get_value().get<std::string>() == "?" &&
+            util::op_precedence["?"] >= min_precedence) {
+        tokenizer->advance();
+        return parse_tertiary_operator(lhs);
+    }
+    else if (next.get_type() == T_OP && next.get_value().get<std::string>() == ":" &&
+            util::op_precedence[":"] >= min_precedence) {
+        return lhs;
     }
 
     return lhs;
@@ -451,13 +548,19 @@ Statement::SharedPtr Interpreter::parse_assignment(bool auto_type, CompoundStmt:
     tokenizer->advance(T_IDENT);
     std::string _ident = tokenizer->current_token.get_value().get<std::string>();
 
+    DeclStmt::SharedPtr decl_stmt;
+
     // equals sign
-    tokenizer->advance(T_OP);
-    if (tokenizer->current_token.get_value().get<std::string>() != "=") {
-        token_error();
+    tokenizer->advance();
+    if (tokenizer->current_token.get_type() != T_OP || tokenizer->current_token.get_value().get<std::string>() != "=") {
+       // only declaration with no value
+        if (!ts.nullable) {
+            ParseError::raise(ERR_UNINITIALIZED_VAR, "Non-nullable variable " + _ident + " must be initialized");
+        }
+
+        return std::make_shared<DeclStmt>(_ident, ts);
     }
 
-    DeclStmt::SharedPtr decl_stmt;
     if (ts.is_array) {
         ArrayLiteral::SharedPtr arr = parse_array_literal();
         arr->set_type(ts.type);
@@ -468,11 +571,12 @@ Statement::SharedPtr Interpreter::parse_assignment(bool auto_type, CompoundStmt:
             arr->set_length(ts.length);
         }
 
-        decl_stmt = std::make_shared<DeclStmt>(_ident, arr, ARRAY_T);
+        ts.type = OBJECT_T;
+        decl_stmt = std::make_shared<DeclStmt>(_ident, arr, ts);
     }
     else {
         Expression::SharedPtr expr = parse_expression();
-        decl_stmt = std::make_shared<DeclStmt>(_ident, expr, _type);
+        decl_stmt = std::make_shared<DeclStmt>(_ident, expr, ts);
     }
 
     if (cmp_stmt != nullptr) {
@@ -496,15 +600,16 @@ Statement::SharedPtr Interpreter::parse_assignment(bool auto_type, CompoundStmt:
         return parse_assignment(auto_type, cmp_stmt);
     }
     else if (cmp_stmt == nullptr) {
-        return decl_stmt;
+                return decl_stmt;
     }
+
 
     return cmp_stmt;
 }
 
 /**
  * Parses a function declaration in the form of
- *  def func(x: number, y: string): bool {
+ *  def func(x: number, y: string) => bool {
  *      ... statements
  *  }
  */
@@ -565,8 +670,8 @@ FunctionDecl::SharedPtr Interpreter::parse_function_decl() {
     // optional return type
     Token _next = tokenizer->lookahead();
     ValueType _type = VOID_T;
-    if (_next.is_punctuator(C_EQUALS)) {
-        tokenizer->advance(T_PUNCTUATOR);
+    if (_next.get_type() == T_OP && _next.get_value().get<std::string>() == "=") {
+        tokenizer->advance();
 
         _next = tokenizer->lookahead();
         if (_next.get_value().get<std::string>() != ">") {
@@ -585,8 +690,8 @@ FunctionDecl::SharedPtr Interpreter::parse_function_decl() {
     std::string body = tokenizer->get_next_block();
     Interpreter _int(body);
     CompoundStmt::SharedPtr func_body = _int.parse();
-    func_body->set_root(prog_root, false);
 
+    func_body->terminable(true);
     fun_dec->set_body(func_body);
 
     return fun_dec;
@@ -597,13 +702,18 @@ IfStmt::SharedPtr Interpreter::parse_if_stmt() {
 
     Token next = tokenizer->lookahead();
     if (!next.is_punctuator(C_OPEN_PAREN)) {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' to begin if expression");
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' to begin if statement");
     }
+
+    tokenizer->advance();
 
     Expression::SharedPtr if_cond = parse_expression();
 
-    tokenizer->advance();
-    Statement::SharedPtr if_branch = parse_next_stmt();
+    tokenizer->advance(); // last part of expression
+    tokenizer->advance(); // closing parenthesis
+
+    CompoundStmt::SharedPtr if_branch = std::static_pointer_cast<CompoundStmt>(parse_next_stmt(true));
+    if_branch->terminable(false);
 
     IfStmt::SharedPtr if_stmt = std::make_shared<IfStmt>(if_cond, if_branch);
 
@@ -612,13 +722,79 @@ IfStmt::SharedPtr Interpreter::parse_if_stmt() {
         tokenizer->advance();
         tokenizer->advance();
 
-        Statement::SharedPtr else_branch = parse_next_stmt();
-        if_stmt->set_else_branch(else_branch);
+        CompoundStmt::SharedPtr else_branch = std::static_pointer_cast<CompoundStmt>(parse_next_stmt(true));
+        else_branch->terminable(false);
+                        if_stmt->set_else_branch(else_branch);
     }
 
     tokenizer->set_flag(TFLAG_NONE);
 
     return if_stmt;
+}
+
+WhileStmt::SharedPtr Interpreter::parse_while_stmt() {
+    tokenizer->set_flag(TFLAG_IGNORE_NEWLINE);
+
+    Token next = tokenizer->lookahead();
+    if (!next.is_punctuator(C_OPEN_PAREN)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' after while keyword");
+    }
+
+    Expression::SharedPtr while_cond = parse_expression();
+
+    tokenizer->advance();
+    CompoundStmt::SharedPtr while_block = std::static_pointer_cast<CompoundStmt>(parse_next_stmt(true));
+    while_block->terminable(false);
+    while_block->continuable(true);
+
+
+    WhileStmt::SharedPtr while_stmt = std::make_shared<WhileStmt>(while_cond, while_block);
+
+    tokenizer->set_flag(TFLAG_NONE);
+
+    return while_stmt;
+}
+
+ForStmt::SharedPtr Interpreter::parse_for_stmt() {
+    Token next = tokenizer->lookahead();
+    if (!next.is_punctuator(C_OPEN_PAREN)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' after for keyword");
+    }
+
+    tokenizer->advance();
+    tokenizer->advance();
+
+    Statement::SharedPtr init = parse_next_stmt();
+    tokenizer->advance();
+
+    if (!tokenizer->current_token.is_punctuator(C_SEMICOLON)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ';' to seperate for loop arguments");
+    }
+
+    tokenizer->advance();
+    Statement::SharedPtr term = parse_next_stmt();
+    tokenizer->advance();
+    if (!tokenizer->current_token.is_punctuator(C_SEMICOLON)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ';' to seperate for loop arguments");
+    }
+
+    tokenizer->advance();
+    Statement::SharedPtr inc = parse_next_stmt();
+    tokenizer->advance();
+    if (!tokenizer->current_token.is_punctuator(C_CLOSE_PAREN)) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ';' to seperate for loop arguments");
+    }
+
+    tokenizer->advance();
+
+    CompoundStmt::SharedPtr block = std::static_pointer_cast<CompoundStmt>(parse_next_stmt(true));
+    block->terminable(false);
+    block->continuable(true);
+
+    ForStmt::SharedPtr for_stmt = std::make_shared<ForStmt>(init, term, inc);
+    for_stmt->set_body(block);
+
+    return for_stmt;
 }
 
 /**
@@ -629,7 +805,6 @@ AstNode::SharedPtr Interpreter::parse_keyword() {
 
     if (keyword == "def") {
         FunctionDecl::SharedPtr fun_dec = parse_function_decl();
-        fun_dec->set_root(prog_root, false);
 
         return fun_dec;
     }
@@ -652,8 +827,7 @@ AstNode::SharedPtr Interpreter::parse_keyword() {
             _type = val::strtotype(type);
         }
 
-        InputStmt::SharedPtr in_stmt(new InputStmt(_ident, _type));
-        in_stmt->set_root(prog_root, true);
+        InputStmt::SharedPtr in_stmt = std::make_shared<InputStmt>(_ident, _type);
 
         return in_stmt;
     }
@@ -668,7 +842,6 @@ AstNode::SharedPtr Interpreter::parse_keyword() {
         }
 
         OutputStmt::SharedPtr out_stmt = std::make_shared<OutputStmt>(_expr, _newline);
-        out_stmt->set_root(prog_root, true);
 
         return out_stmt;
     }
@@ -677,10 +850,30 @@ AstNode::SharedPtr Interpreter::parse_keyword() {
 
         return if_stmt;
     }
+    else if (keyword == "while") {
+        WhileStmt::SharedPtr while_stmt = parse_while_stmt();
+
+        return while_stmt;
+    }
+    else if (keyword == "for") {
+        ForStmt::SharedPtr for_stmt = parse_for_stmt();
+
+        return for_stmt;
+    }
+    else if (keyword == "continue") {
+        ContinueStmt::SharedPtr cont_stmt = std::make_shared<ContinueStmt>();
+
+        return cont_stmt;
+    }
+    else if (keyword == "break") {
+        BreakStmt::SharedPtr break_stmt = std::make_shared<BreakStmt>();
+
+        return break_stmt;
+    }
     else if (keyword == "return") {
         Expression::SharedPtr expr = parse_expression();
+
         ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>(expr);
-        return_stmt->set_root(prog_root, true);
 
         return return_stmt;
     }
@@ -719,12 +912,12 @@ CompoundStmt::SharedPtr Interpreter::parse_block() {
     std::string block = tokenizer->get_next_block();
     Interpreter interp(block);
     CompoundStmt::SharedPtr cmp_stmt = interp.parse();
-    cmp_stmt->set_root(prog_root, false);
+
 
     return cmp_stmt;
 }
 
-Statement::SharedPtr Interpreter::parse_next_stmt() {
+Statement::SharedPtr Interpreter::parse_next_stmt(bool force_cmpnd) {
     if (tokenizer->current_token.is_punctuator('{')) {
         tokenizer->backtrack();
         CompoundStmt::SharedPtr cmp_stmt = parse_block();
@@ -734,19 +927,36 @@ Statement::SharedPtr Interpreter::parse_next_stmt() {
     else if (tokenizer->current_token.get_type() == T_TYPE) {
         tokenizer->backtrack();
         Statement::SharedPtr assign = parse_assignment(false);
+        if (force_cmpnd) {
+            CompoundStmt::SharedPtr cmpnd = std::make_shared<CompoundStmt>();
+            cmpnd->add_statement(assign);
 
-        assign->set_root(prog_root, true);
+            return cmpnd;
+        }
 
         return assign;
     }
     else if (tokenizer->current_token.get_type() == T_KEYWORD) {
-        return parse_keyword();
+        AstNode::SharedPtr expr = parse_keyword();
+        if (force_cmpnd) {
+            CompoundStmt::SharedPtr cmpnd = std::make_shared<CompoundStmt>();
+            cmpnd->add_statement(expr);
+
+            return cmpnd;
+        }
+
+        return expr;
     }
     else {
         tokenizer->backtrack();
         Expression::SharedPtr expr = parse_expression();
+        if (force_cmpnd) {
+            CompoundStmt::SharedPtr cmpnd = std::make_shared<CompoundStmt>();
+            cmpnd->add_statement(expr);
 
-        expr->set_root(prog_root, true);
+            return cmpnd;
+        }
+
         return expr;
     }
 }
@@ -758,6 +968,10 @@ Statement::SharedPtr Interpreter::parse_next_stmt() {
  */
 void Interpreter::run(bool debug = false) {
     parse();
+
+    GlobalContext::init();
+    Visitor v;
+    v.accept(prog_root.get(), VisitorFlag::LINK_TREE);
 
     if (debug) {
         prog_root->__dump(0);
@@ -782,7 +996,9 @@ CompoundStmt::SharedPtr Interpreter::parse() {
             break;
         }
 
-        prog_root->add_statement(parse_next_stmt());
+        Statement::SharedPtr stmt = parse_next_stmt(false);
+
+        prog_root->add_statement(stmt);
     }
 
     return prog_root;

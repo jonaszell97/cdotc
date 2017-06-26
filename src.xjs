@@ -1,26 +1,20 @@
 
-/*def fib(int x) {
-    x = 3
+def fib(int n) => int {
+    if (n == 0 || n == 1) return n
+
+    return fib(n - 1) + fib(n - 2)
 }
 
-let obj = {
-    int[3] prop = [1, 2, 3]
-    string str = "suck my dick"
-}
+let obj = {string prop = "fucbyo" + 3 int peepee = 3}
 
-obj.prop = ["x", "hmm", ""]
-obj.str = "fuck"
+let x = 3
+x.toString()
+obj.toString(3)
+fib.toString()
 
-outln fib + " " + obj.prop*/
+outln Integer.parseInt("3.14153")
+outln Object.hashCode(0x213)
 
-#out (3 + (4 * (3 + 7 ** 2)))
-
-def fac(int n) {
-    if (n == 1) {
-        return 1
-    }
-
-    return fac(1) * n
-}
-
-outln fac(2)
+outln Integer.MAX_VALUE
+Integer.MAX_VALUE = 15
+outln Integer.MAX_VALUE

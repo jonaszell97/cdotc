@@ -10,6 +10,8 @@ namespace util {
     int min_op_precedence = 0;
 
     std::map<std::string, int> op_precedence {
+            {"?", 0},
+            {":", 0},
             {"=", 0},
             {"+=", 0},
             {"-=", 0},
@@ -33,6 +35,20 @@ namespace util {
             {"/", 9},
             {"%", 9},
             {"**", 10}
+    };
+
+    std::map<std::string, int> unary_op_precedence {
+            {"!", 0},
+            {"&", 0},
+            {"*", 0},
+            {"~", 0},
+            {"-", 0},
+            {"+", 0},
+            {"typeof", 0},
+            {"--pre", 1},
+            {"++pre", 1},
+            {"--post", 1},
+            {"++post", 1},
     };
 
     std::string token_names[] = {
@@ -73,7 +89,7 @@ namespace util {
     };
 
     std::vector<char> operator_chars = {
-        '+', '-', '=', '<', '>', '&', '|', '%', '!', '*', '/', '~'
+        '+', '-', '=', '<', '>', '&', '|', '%', '!', '*', '/', '~', '?', ':'
     };
 
     std::vector<std::string> equality_operators = {
@@ -92,7 +108,13 @@ namespace util {
             "++",
             "--",
             "&",
+            "*",
             "typeof"
+    };
+
+    std::vector<std::string> tertiary_operators = {
+            "?",
+            ":"
     };
 
     std::vector<std::string> unary_only = {
@@ -113,6 +135,7 @@ namespace util {
             "while",
             "do",
             "switch",
+            "for",
             "case",
             "default",
             "struct",
@@ -124,7 +147,9 @@ namespace util {
             "static",
             "new",
             "namespace",
-            "typeof"
+            "typeof",
+            "continue",
+            "break"
     };
 
     std::map<ValueType, std::string> types = {
@@ -137,11 +162,20 @@ namespace util {
             {CHAR_T, "char"},
             {OBJECT_T, "object"},
             {ANY_T, "any"},
-            {FUNCTION_T, "function"},
-            {ARRAY_T, "array"},
             {VOID_T, "void"},
             {AUTO_T, "let"},
             {REF_T, "reference"}
+    };
+
+    std::map<ValueType, std::string> classmap = {
+            {INT_T, "Integer"},
+            {LONG_T, "Integer"},
+            {FLOAT_T, "Double"},
+            {DOUBLE_T, "Double"},
+            {STRING_T, "String"},
+            {BOOL_T, "Boolean"},
+            {CHAR_T, "Char"},
+            {OBJECT_T, "Object"}
     };
 
     std::map<std::string, ValueType> typemap = {
@@ -153,8 +187,6 @@ namespace util {
             {"bool", BOOL_T},
             {"char", CHAR_T},
             {"object", OBJECT_T},
-            {"function", FUNCTION_T},
-            {"array", ARRAY_T},
             {"void", VOID_T},
             {"any", ANY_T},
             {"let", AUTO_T},
@@ -166,7 +198,6 @@ namespace util {
         '(',
         ')',
         ';',
-        ':',
         '[',
         ']',
         '{',
@@ -175,7 +206,13 @@ namespace util {
         '.'
     };
 
-    bool in_vector(std::vector<std::string> vec, std::string el) {
+    template <>
+    bool in_vector<std::string>(std::vector<std::string> vec, std::string el) {
+        return std::find(vec.begin(), vec.end(), el) != vec.end();
+    }
+
+    template <>
+    bool in_vector<ValueType>(std::vector<ValueType> vec, ValueType el) {
         return std::find(vec.begin(), vec.end(), el) != vec.end();
     }
 
@@ -227,10 +264,10 @@ namespace util {
     std::map<ValueType, std::vector<ValueType>> type_conversions = {
             {INT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
             {LONG_T, {DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
-            {FLOAT_T, {LONG_T, DOUBLE_T, INT_T, BOOL_T, STRING_T, CHAR_T}},
-            {DOUBLE_T, {LONG_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {FLOAT_T, {DOUBLE_T, STRING_T}},
+            {DOUBLE_T, {STRING_T}},
             {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, STRING_T, CHAR_T, INT_T}},
             {CHAR_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, INT_T}},
-            {STRING_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, INT_T, CHAR_T}},
+            {STRING_T, {}},
     };
 }

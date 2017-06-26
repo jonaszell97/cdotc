@@ -6,8 +6,6 @@
 #define DEBUG_H
 
 
-#include <Magick++.h>
-
 namespace debug {
 
 }

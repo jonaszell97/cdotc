@@ -4,12 +4,24 @@
 
 #include <iostream>
 #include "BinaryOperator.h"
-#include "../../Objects/Object.h"
+#include "../../StdLib/Objects/Object.h"
 #include "../../Util.h"
 #include "../Statement/CompoundStmt.h"
 
 BinaryOperator::BinaryOperator(std::string op) : _operator(op) {
 
+}
+
+BinaryOperator::BinaryOperator(const BinaryOperator& cp) {
+    _operator = cp._operator;
+    _first_child = std::static_pointer_cast<Expression>(cp._first_child->clone());
+    _second_child = std::static_pointer_cast<Expression>(cp._second_child->clone());
+    //set_root(cp._root, true);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr BinaryOperator::clone() const {
+    return std::make_shared<BinaryOperator>(*this);
 }
 
 void BinaryOperator::set_fst_child(Expression::SharedPtr exp) {
@@ -88,8 +100,14 @@ Variant BinaryOperator::evaluate(Variant) {
     else if (_operator == ">>") {
         return fst >> snd;
     }
-    else if (_operator == ">>") {
+    else if (_operator == "<<") {
         return fst << snd;
+    }
+    else if (_operator == "&&") {
+        return fst && snd;
+    }
+    else if (_operator == "||") {
+        return fst || snd;
     }
     else if (_operator == "**") {
         return fst.pow(snd);

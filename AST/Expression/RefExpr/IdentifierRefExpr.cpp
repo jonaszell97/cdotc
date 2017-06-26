@@ -17,32 +17,40 @@ IdentifierRefExpr::IdentifierRefExpr(Variant val) : IdentifierRefExpr(val.get<st
 
 }
 
-void IdentifierRefExpr::set_member_expr(RefExpr::SharedPtr mem_expr) {
-    _member_expr = mem_expr;
+IdentifierRefExpr::IdentifierRefExpr(const IdentifierRefExpr& cp) {
+    _ident = cp._ident;
+    _return_ref = cp._return_ref;
+    if (cp._member_expr != nullptr) {
+        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
+    }
+    context = std::make_shared<Context>(*cp.context);
+    set_parent(cp._parent);
 }
 
-void IdentifierRefExpr::return_ref(bool ref) {
-    _return_ref = ref;
+AstNode::SharedPtr IdentifierRefExpr::clone() const {
+    return std::make_shared<IdentifierRefExpr>(*this);
 }
 
 Variant IdentifierRefExpr::evaluate(Variant opt) {
-    if (auto root = _root.lock()) {
-        Variant ref = root->has_variable(_ident) ? root->get_variable(_ident) : root->get_function(_ident);
-        Variant var = _return_ref ? ref : ref.dereference();
+    if (context != nullptr) {
+        Variant var;
+        if (GlobalContext::is_declared_class(_ident)) {
+            var = { GlobalContext::get_class(_ident) };
+        }
+        else {
+            Variant::SharedPtr ref = context->get_variable(_ident);
+            var = _return_ref ? ref : *ref;
+        }
 
         if (_member_expr == nullptr) {
             return var;
         } else {
-            if (var.get_type() != OBJECT_T && var.get_type() != ARRAY_T && var.get_type() != FUNCTION_T) {
-                RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on primitive value.");
-            }
-
             _member_expr->return_ref(_return_ref);
             return _member_expr->evaluate(var);
         }
     }
     else {
-        RuntimeError::raise(ERR_MISSING_CONTEXT, "No context to get variable " + _ident + " from.");
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "No context to get variable " + _ident + " from.");
     }
 }
 
@@ -59,8 +67,12 @@ void IdentifierRefExpr::__dump(int depth) {
     for (int i = 0; i < depth; i++) {
         std::cout << "\t";
     }
-
-    std::cout << "Identifier" << (_return_ref ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
+    if (_implicit_ref) {
+        std::cout << "ImplicitRefExpr" << " [" << _ident << "]" << std::endl;
+    }
+    else {
+        std::cout << "Identifier" << (_return_ref ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
+    }
 
     if (_member_expr != nullptr) {
         _member_expr->__dump(depth + 1);

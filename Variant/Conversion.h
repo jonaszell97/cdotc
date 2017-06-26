@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 24.06.17.
 //
 
-#ifndef MATHPARSER_CONVERSION_H
-#define MATHPARSER_CONVERSION_H
+#ifndef CDOT_CONVERSION_H
+#define CDOT_CONVERSION_H
 
 
 #include "Variant.h"
@@ -20,4 +20,4 @@ namespace var {
 } // namespace cdot
 
 
-#endif //MATHPARSER_CONVERSION_H
+#endif //CDOT_CONVERSION_H

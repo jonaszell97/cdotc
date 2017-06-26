@@ -86,8 +86,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::minus(Variant v1, Variant v2) {
@@ -156,8 +156,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::divide(Variant v1, Variant v2) {
@@ -222,8 +222,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::modulo(Variant v1, Variant v2) {
@@ -250,8 +250,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::pow(Variant v1, Variant v2) {
@@ -259,13 +259,13 @@ namespace var {
             case INT_T:
                 switch (v2.type) {
                     case INT_T:
-                        return { pow(v1.int_val, v2.int_val) };
+                        return { int(std::pow(v1.int_val, v2.int_val)) };
                     case LONG_T:
-                        return { pow(v1.int_val, v2.long_val) };
+                        return { int(std::pow(v1.int_val, v2.long_val)) };
                     case FLOAT_T:
-                        return { pow(v1.int_val, v2.float_val) };
+                        return { std::pow(v1.int_val, v2.float_val) };
                     case DOUBLE_T:
-                        return { pow(v1.int_val, v2.d_val) };
+                        return { std::pow(v1.int_val, v2.d_val) };
                     default:
                         break;
                 }
@@ -273,13 +273,13 @@ namespace var {
             case LONG_T:
                 switch (v2.type) {
                     case INT_T:
-                        return { pow(v1.long_val, v2.int_val) };
+                        return { int(std::pow(v1.long_val, v2.int_val)) };
                     case LONG_T:
-                        return { pow(v1.long_val, v2.long_val) };
+                        return { int(std::pow(v1.long_val, v2.long_val)) };
                     case FLOAT_T:
-                        return { pow(v1.long_val, v2.float_val) };
+                        return { std::pow(v1.long_val, v2.float_val) };
                     case DOUBLE_T:
-                        return { pow(v1.long_val, v2.d_val) };
+                        return { std::pow(v1.long_val, v2.d_val) };
                     default:
                         break;
                 }
@@ -287,13 +287,13 @@ namespace var {
             case FLOAT_T:
                 switch (v2.type) {
                     case INT_T:
-                        return { pow(v1.float_val, v2.int_val) };
+                        return { std::pow(v1.float_val, v2.int_val) };
                     case LONG_T:
-                        return { pow(v1.float_val, v2.long_val) };
+                        return { std::pow(v1.float_val, v2.long_val) };
                     case FLOAT_T:
-                        return { pow(v1.float_val, v2.float_val) };
+                        return { std::pow(v1.float_val, v2.float_val) };
                     case DOUBLE_T:
-                        return { pow(v1.float_val, v2.d_val) };
+                        return { std::pow(v1.float_val, v2.d_val) };
                     default:
                         break;
                 }
@@ -301,13 +301,13 @@ namespace var {
             case DOUBLE_T:
                 switch (v2.type) {
                     case INT_T:
-                        return { pow(v1.d_val, v2.int_val) };
+                        return { std::pow(v1.d_val, v2.int_val) };
                     case LONG_T:
-                        return { pow(v1.d_val, v2.long_val) };
+                        return { std::pow(v1.d_val, v2.long_val) };
                     case FLOAT_T:
-                        return { pow(v1.d_val, v2.float_val) };
+                        return { std::pow(v1.d_val, v2.float_val) };
                     case DOUBLE_T:
-                        return { pow(v1.d_val, v2.d_val) };
+                        return { std::pow(v1.d_val, v2.d_val) };
                     default:
                         break;
                 }
@@ -316,8 +316,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot add values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     // unary ops
@@ -340,15 +340,26 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + util::types[v1.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + val::typetostr(v1.type));
     }
 
     Variant Arithmetic::unary_not(Variant v1) {
-        if (v1.type == BOOL_T) {
-            return { !v1.b_val };
+        switch (v1.type) {
+            case INT_T:
+                return { !v1.int_val };
+            case LONG_T:
+                return { !v1.long_val };
+            case FLOAT_T:
+                return { !v1.float_val };
+            case DOUBLE_T:
+                return { !v1.d_val };
+            case BOOL_T:
+                return { !v1.b_val };
+            default:
+                break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + util::types[v1.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + val::typetostr(v1.type));
     }
 
     Variant Arithmetic::bitwise_negate(Variant v1) {
@@ -361,7 +372,7 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise negation to value of type " + util::types[v1.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise negation to value of type " + val::typetostr(v1.type));
     }
 
     // equality ops
@@ -398,8 +409,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot compare values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot compare values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::greater(Variant v1, Variant v2) {
@@ -430,8 +441,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot determine larger element between values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot determine larger element between values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::not_equal(Variant v1, Variant v2) {
@@ -457,8 +468,8 @@ namespace var {
             return { v1.b_val && v2.b_val };
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply logical and to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply logical and to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::logical_or(Variant v1, Variant v2) {
@@ -466,8 +477,8 @@ namespace var {
             return { v1.b_val || v2.b_val };
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply logical or to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply logical or to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     // bitwise operators
@@ -534,8 +545,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise and to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise and to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::bitwise_or(Variant v1, Variant v2) {
@@ -600,8 +611,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise or to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise or to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::bitwise_xor(Variant v1, Variant v2) {
@@ -666,8 +677,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise and to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise and to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::bitshift_left(Variant v1, Variant v2) {
@@ -732,8 +743,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply left bitshift to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply left bitshift to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
     Variant Arithmetic::bitshift_right(Variant v1, Variant v2) {
@@ -798,8 +809,8 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply right bitshift to values of type " + util::types[v1.type]
-                                          + " and " + util::types[v2.type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply right bitshift to values of type " + val::typetostr(v1.type)
+                                          + " and " + val::typetostr(v2.type));
     }
 
 } // namespace var

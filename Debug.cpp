@@ -7,9 +7,9 @@
 namespace debug {
 
     void visualize_ast() {
-        Magick::Image img;
-        img.read("https://remedium.de/images/front_page/pageOne.jpg");
-        img.write("__ast.jpg");
+        //Magick::Image img;
+        //img.read("https://remedium.de/images/front_page/pageOne.jpg");
+        //img.write("__ast.jpg");
     }
 
 }

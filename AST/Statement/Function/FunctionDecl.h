@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 20.06.17.
 //
 
-#ifndef MATHPARSER_FUNCTIONDECL_H
-#define MATHPARSER_FUNCTIONDECL_H
+#ifndef CDOT_FUNCTIONDECL_H
+#define CDOT_FUNCTIONDECL_H
 
 
 #include "../Statement.h"
@@ -13,16 +13,30 @@
 class FunctionDecl : public Statement {
 public:
     FunctionDecl(std::string, ValueType = ANY_T);
+    FunctionDecl(const FunctionDecl& cp);
+    virtual AstNode::SharedPtr clone() const;
+
     Variant evaluate(Variant = {});
     void set_return_type(ValueType);
     void set_body(CompoundStmt::SharedPtr);
     void add_arg(FuncArgDecl::SharedPtr);
 
+    inline void set_context(Context::SharedPtr ctx) {
+        context = ctx;
+    }
+
     typedef std::shared_ptr<FunctionDecl> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
 protected:
+    Context::SharedPtr context;
     std::string _func_name;
     ValueType _return_type;
     std::vector<FuncArgDecl::SharedPtr> _args;
@@ -30,4 +44,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_FUNCTIONDECL_H
+#endif //CDOT_FUNCTIONDECL_H

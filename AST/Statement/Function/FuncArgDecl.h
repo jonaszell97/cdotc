@@ -2,11 +2,11 @@
 // Created by Jonas Zell on 20.06.17.
 //
 
-#ifndef MATHPARSER_FUNCARGDECL_H
-#define MATHPARSER_FUNCARGDECL_H
+#ifndef CDOT_FUNCARGDECL_H
+#define CDOT_FUNCARGDECL_H
 
 
-#include "../../../Objects/Function.h"
+#include "../../../StdLib/Objects/Function.h"
 #include "../../Expression/Expression.h"
 
 struct FuncArg {
@@ -19,6 +19,9 @@ class FuncArgDecl : public Expression {
 public:
     FuncArgDecl();
     FuncArgDecl(std::string, ValueType, Expression::SharedPtr = {});
+    FuncArgDecl(const FuncArgDecl& cp);
+    virtual AstNode::SharedPtr clone() const;
+    
     void set_name(std::string);
     void set_type(ValueType);
     void set_default(Expression::SharedPtr);
@@ -27,7 +30,14 @@ public:
     FuncArg specific_eval();
 
     typedef std::shared_ptr<FuncArgDecl> SharedPtr;
+    std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
 
 protected:
     std::string _arg_name;
@@ -36,4 +46,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_FUNCARGDECL_H
+#endif //CDOT_FUNCARGDECL_H

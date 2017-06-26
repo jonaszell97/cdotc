@@ -13,6 +13,13 @@
 class IfStmt : public Statement {
 public:
     IfStmt(Expression::SharedPtr, Statement::SharedPtr);
+    IfStmt(Expression::SharedPtr);
+    IfStmt(const IfStmt& cp);
+    virtual AstNode::SharedPtr clone() const;
+
+    inline void set_if_branch(Statement::SharedPtr if_branch) {
+        _if_branch = if_branch;
+    }
     inline void set_else_branch(Statement::SharedPtr else_branch) {
         _else_branch = else_branch;
     }
@@ -23,6 +30,13 @@ public:
     typedef std::shared_ptr<IfStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
 protected:
     Expression::SharedPtr _condition;
     Statement::SharedPtr _if_branch;

@@ -150,6 +150,33 @@ AST/AstNode.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/AstNode.cpp.s
 .PHONY : AST/AstNode.cpp.s
 
+AST/Context.o: AST/Context.cpp.o
+
+.PHONY : AST/Context.o
+
+# target to build an object file
+AST/Context.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Context.cpp.o
+.PHONY : AST/Context.cpp.o
+
+AST/Context.i: AST/Context.cpp.i
+
+.PHONY : AST/Context.i
+
+# target to preprocess a source file
+AST/Context.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Context.cpp.i
+.PHONY : AST/Context.cpp.i
+
+AST/Context.s: AST/Context.cpp.s
+
+.PHONY : AST/Context.s
+
+# target to generate assembly for a file
+AST/Context.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Context.cpp.s
+.PHONY : AST/Context.cpp.s
+
 AST/Expression/Expression.o: AST/Expression/Expression.cpp.o
 
 .PHONY : AST/Expression/Expression.o
@@ -393,6 +420,33 @@ AST/Expression/RefExpr/MemberRefExpr.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.s
 .PHONY : AST/Expression/RefExpr/MemberRefExpr.cpp.s
 
+AST/Expression/RefExpr/MethodCallExpr.o: AST/Expression/RefExpr/MethodCallExpr.cpp.o
+
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.o
+
+# target to build an object file
+AST/Expression/RefExpr/MethodCallExpr.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.cpp.o
+
+AST/Expression/RefExpr/MethodCallExpr.i: AST/Expression/RefExpr/MethodCallExpr.cpp.i
+
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.i
+
+# target to preprocess a source file
+AST/Expression/RefExpr/MethodCallExpr.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.i
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.cpp.i
+
+AST/Expression/RefExpr/MethodCallExpr.s: AST/Expression/RefExpr/MethodCallExpr.cpp.s
+
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.s
+
+# target to generate assembly for a file
+AST/Expression/RefExpr/MethodCallExpr.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.s
+.PHONY : AST/Expression/RefExpr/MethodCallExpr.cpp.s
+
 AST/Expression/RefExpr/RefExpr.o: AST/Expression/RefExpr/RefExpr.cpp.o
 
 .PHONY : AST/Expression/RefExpr/RefExpr.o
@@ -581,6 +635,87 @@ AST/Statement/CompoundStmt.s: AST/Statement/CompoundStmt.cpp.s
 AST/Statement/CompoundStmt.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.s
 .PHONY : AST/Statement/CompoundStmt.cpp.s
+
+AST/Statement/ControlFlow/BreakStmt.o: AST/Statement/ControlFlow/BreakStmt.cpp.o
+
+.PHONY : AST/Statement/ControlFlow/BreakStmt.o
+
+# target to build an object file
+AST/Statement/ControlFlow/BreakStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o
+.PHONY : AST/Statement/ControlFlow/BreakStmt.cpp.o
+
+AST/Statement/ControlFlow/BreakStmt.i: AST/Statement/ControlFlow/BreakStmt.cpp.i
+
+.PHONY : AST/Statement/ControlFlow/BreakStmt.i
+
+# target to preprocess a source file
+AST/Statement/ControlFlow/BreakStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.i
+.PHONY : AST/Statement/ControlFlow/BreakStmt.cpp.i
+
+AST/Statement/ControlFlow/BreakStmt.s: AST/Statement/ControlFlow/BreakStmt.cpp.s
+
+.PHONY : AST/Statement/ControlFlow/BreakStmt.s
+
+# target to generate assembly for a file
+AST/Statement/ControlFlow/BreakStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.s
+.PHONY : AST/Statement/ControlFlow/BreakStmt.cpp.s
+
+AST/Statement/ControlFlow/ContinueStmt.o: AST/Statement/ControlFlow/ContinueStmt.cpp.o
+
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.o
+
+# target to build an object file
+AST/Statement/ControlFlow/ContinueStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.cpp.o
+
+AST/Statement/ControlFlow/ContinueStmt.i: AST/Statement/ControlFlow/ContinueStmt.cpp.i
+
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.i
+
+# target to preprocess a source file
+AST/Statement/ControlFlow/ContinueStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.i
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.cpp.i
+
+AST/Statement/ControlFlow/ContinueStmt.s: AST/Statement/ControlFlow/ContinueStmt.cpp.s
+
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.s
+
+# target to generate assembly for a file
+AST/Statement/ControlFlow/ContinueStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.s
+.PHONY : AST/Statement/ControlFlow/ContinueStmt.cpp.s
+
+AST/Statement/ControlFlow/ForStmt.o: AST/Statement/ControlFlow/ForStmt.cpp.o
+
+.PHONY : AST/Statement/ControlFlow/ForStmt.o
+
+# target to build an object file
+AST/Statement/ControlFlow/ForStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o
+.PHONY : AST/Statement/ControlFlow/ForStmt.cpp.o
+
+AST/Statement/ControlFlow/ForStmt.i: AST/Statement/ControlFlow/ForStmt.cpp.i
+
+.PHONY : AST/Statement/ControlFlow/ForStmt.i
+
+# target to preprocess a source file
+AST/Statement/ControlFlow/ForStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.i
+.PHONY : AST/Statement/ControlFlow/ForStmt.cpp.i
+
+AST/Statement/ControlFlow/ForStmt.s: AST/Statement/ControlFlow/ForStmt.cpp.s
+
+.PHONY : AST/Statement/ControlFlow/ForStmt.s
+
+# target to generate assembly for a file
+AST/Statement/ControlFlow/ForStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.s
+.PHONY : AST/Statement/ControlFlow/ForStmt.cpp.s
 
 AST/Statement/ControlFlow/IfStmt.o: AST/Statement/ControlFlow/IfStmt.cpp.o
 
@@ -825,6 +960,33 @@ AST/Statement/Statement.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.s
 .PHONY : AST/Statement/Statement.cpp.s
 
+AST/Visitor/Visitor.o: AST/Visitor/Visitor.cpp.o
+
+.PHONY : AST/Visitor/Visitor.o
+
+# target to build an object file
+AST/Visitor/Visitor.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o
+.PHONY : AST/Visitor/Visitor.cpp.o
+
+AST/Visitor/Visitor.i: AST/Visitor/Visitor.cpp.i
+
+.PHONY : AST/Visitor/Visitor.i
+
+# target to preprocess a source file
+AST/Visitor/Visitor.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.i
+.PHONY : AST/Visitor/Visitor.cpp.i
+
+AST/Visitor/Visitor.s: AST/Visitor/Visitor.cpp.s
+
+.PHONY : AST/Visitor/Visitor.s
+
+# target to generate assembly for a file
+AST/Visitor/Visitor.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.s
+.PHONY : AST/Visitor/Visitor.cpp.s
+
 Debug.o: Debug.cpp.o
 
 .PHONY : Debug.o
@@ -906,86 +1068,221 @@ Interpreter.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Interpreter.cpp.s
 .PHONY : Interpreter.cpp.s
 
-Objects/Array.o: Objects/Array.cpp.o
+Option.o: Option.cpp.o
 
-.PHONY : Objects/Array.o
-
-# target to build an object file
-Objects/Array.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Array.cpp.o
-.PHONY : Objects/Array.cpp.o
-
-Objects/Array.i: Objects/Array.cpp.i
-
-.PHONY : Objects/Array.i
-
-# target to preprocess a source file
-Objects/Array.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Array.cpp.i
-.PHONY : Objects/Array.cpp.i
-
-Objects/Array.s: Objects/Array.cpp.s
-
-.PHONY : Objects/Array.s
-
-# target to generate assembly for a file
-Objects/Array.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Array.cpp.s
-.PHONY : Objects/Array.cpp.s
-
-Objects/Function.o: Objects/Function.cpp.o
-
-.PHONY : Objects/Function.o
+.PHONY : Option.o
 
 # target to build an object file
-Objects/Function.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Function.cpp.o
-.PHONY : Objects/Function.cpp.o
+Option.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Option.cpp.o
+.PHONY : Option.cpp.o
 
-Objects/Function.i: Objects/Function.cpp.i
+Option.i: Option.cpp.i
 
-.PHONY : Objects/Function.i
+.PHONY : Option.i
 
 # target to preprocess a source file
-Objects/Function.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Function.cpp.i
-.PHONY : Objects/Function.cpp.i
+Option.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Option.cpp.i
+.PHONY : Option.cpp.i
 
-Objects/Function.s: Objects/Function.cpp.s
+Option.s: Option.cpp.s
 
-.PHONY : Objects/Function.s
+.PHONY : Option.s
 
 # target to generate assembly for a file
-Objects/Function.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Function.cpp.s
-.PHONY : Objects/Function.cpp.s
+Option.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Option.cpp.s
+.PHONY : Option.cpp.s
 
-Objects/Object.o: Objects/Object.cpp.o
+StdLib/Class.o: StdLib/Class.cpp.o
 
-.PHONY : Objects/Object.o
+.PHONY : StdLib/Class.o
 
 # target to build an object file
-Objects/Object.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Object.cpp.o
-.PHONY : Objects/Object.cpp.o
+StdLib/Class.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Class.cpp.o
+.PHONY : StdLib/Class.cpp.o
 
-Objects/Object.i: Objects/Object.cpp.i
+StdLib/Class.i: StdLib/Class.cpp.i
 
-.PHONY : Objects/Object.i
+.PHONY : StdLib/Class.i
 
 # target to preprocess a source file
-Objects/Object.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Object.cpp.i
-.PHONY : Objects/Object.cpp.i
+StdLib/Class.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Class.cpp.i
+.PHONY : StdLib/Class.cpp.i
 
-Objects/Object.s: Objects/Object.cpp.s
+StdLib/Class.s: StdLib/Class.cpp.s
 
-.PHONY : Objects/Object.s
+.PHONY : StdLib/Class.s
 
 # target to generate assembly for a file
-Objects/Object.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Objects/Object.cpp.s
-.PHONY : Objects/Object.cpp.s
+StdLib/Class.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Class.cpp.s
+.PHONY : StdLib/Class.cpp.s
+
+StdLib/GlobalContext.o: StdLib/GlobalContext.cpp.o
+
+.PHONY : StdLib/GlobalContext.o
+
+# target to build an object file
+StdLib/GlobalContext.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o
+.PHONY : StdLib/GlobalContext.cpp.o
+
+StdLib/GlobalContext.i: StdLib/GlobalContext.cpp.i
+
+.PHONY : StdLib/GlobalContext.i
+
+# target to preprocess a source file
+StdLib/GlobalContext.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.i
+.PHONY : StdLib/GlobalContext.cpp.i
+
+StdLib/GlobalContext.s: StdLib/GlobalContext.cpp.s
+
+.PHONY : StdLib/GlobalContext.s
+
+# target to generate assembly for a file
+StdLib/GlobalContext.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.s
+.PHONY : StdLib/GlobalContext.cpp.s
+
+StdLib/Method.o: StdLib/Method.cpp.o
+
+.PHONY : StdLib/Method.o
+
+# target to build an object file
+StdLib/Method.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Method.cpp.o
+.PHONY : StdLib/Method.cpp.o
+
+StdLib/Method.i: StdLib/Method.cpp.i
+
+.PHONY : StdLib/Method.i
+
+# target to preprocess a source file
+StdLib/Method.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Method.cpp.i
+.PHONY : StdLib/Method.cpp.i
+
+StdLib/Method.s: StdLib/Method.cpp.s
+
+.PHONY : StdLib/Method.s
+
+# target to generate assembly for a file
+StdLib/Method.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Method.cpp.s
+.PHONY : StdLib/Method.cpp.s
+
+StdLib/Objects/Array.o: StdLib/Objects/Array.cpp.o
+
+.PHONY : StdLib/Objects/Array.o
+
+# target to build an object file
+StdLib/Objects/Array.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o
+.PHONY : StdLib/Objects/Array.cpp.o
+
+StdLib/Objects/Array.i: StdLib/Objects/Array.cpp.i
+
+.PHONY : StdLib/Objects/Array.i
+
+# target to preprocess a source file
+StdLib/Objects/Array.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.i
+.PHONY : StdLib/Objects/Array.cpp.i
+
+StdLib/Objects/Array.s: StdLib/Objects/Array.cpp.s
+
+.PHONY : StdLib/Objects/Array.s
+
+# target to generate assembly for a file
+StdLib/Objects/Array.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.s
+.PHONY : StdLib/Objects/Array.cpp.s
+
+StdLib/Objects/Function.o: StdLib/Objects/Function.cpp.o
+
+.PHONY : StdLib/Objects/Function.o
+
+# target to build an object file
+StdLib/Objects/Function.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o
+.PHONY : StdLib/Objects/Function.cpp.o
+
+StdLib/Objects/Function.i: StdLib/Objects/Function.cpp.i
+
+.PHONY : StdLib/Objects/Function.i
+
+# target to preprocess a source file
+StdLib/Objects/Function.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.i
+.PHONY : StdLib/Objects/Function.cpp.i
+
+StdLib/Objects/Function.s: StdLib/Objects/Function.cpp.s
+
+.PHONY : StdLib/Objects/Function.s
+
+# target to generate assembly for a file
+StdLib/Objects/Function.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.s
+.PHONY : StdLib/Objects/Function.cpp.s
+
+StdLib/Objects/Object.o: StdLib/Objects/Object.cpp.o
+
+.PHONY : StdLib/Objects/Object.o
+
+# target to build an object file
+StdLib/Objects/Object.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o
+.PHONY : StdLib/Objects/Object.cpp.o
+
+StdLib/Objects/Object.i: StdLib/Objects/Object.cpp.i
+
+.PHONY : StdLib/Objects/Object.i
+
+# target to preprocess a source file
+StdLib/Objects/Object.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.i
+.PHONY : StdLib/Objects/Object.cpp.i
+
+StdLib/Objects/Object.s: StdLib/Objects/Object.cpp.s
+
+.PHONY : StdLib/Objects/Object.s
+
+# target to generate assembly for a file
+StdLib/Objects/Object.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.s
+.PHONY : StdLib/Objects/Object.cpp.s
+
+StdLib/Types/Integer.o: StdLib/Types/Integer.cpp.o
+
+.PHONY : StdLib/Types/Integer.o
+
+# target to build an object file
+StdLib/Types/Integer.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o
+.PHONY : StdLib/Types/Integer.cpp.o
+
+StdLib/Types/Integer.i: StdLib/Types/Integer.cpp.i
+
+.PHONY : StdLib/Types/Integer.i
+
+# target to preprocess a source file
+StdLib/Types/Integer.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.i
+.PHONY : StdLib/Types/Integer.cpp.i
+
+StdLib/Types/Integer.s: StdLib/Types/Integer.cpp.s
+
+.PHONY : StdLib/Types/Integer.s
+
+# target to generate assembly for a file
+StdLib/Types/Integer.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.s
+.PHONY : StdLib/Types/Integer.cpp.s
 
 Token.o: Token.cpp.o
 
@@ -1188,6 +1485,9 @@ help:
 	@echo "... AST/AstNode.o"
 	@echo "... AST/AstNode.i"
 	@echo "... AST/AstNode.s"
+	@echo "... AST/Context.o"
+	@echo "... AST/Context.i"
+	@echo "... AST/Context.s"
 	@echo "... AST/Expression/Expression.o"
 	@echo "... AST/Expression/Expression.i"
 	@echo "... AST/Expression/Expression.s"
@@ -1215,6 +1515,9 @@ help:
 	@echo "... AST/Expression/RefExpr/MemberRefExpr.o"
 	@echo "... AST/Expression/RefExpr/MemberRefExpr.i"
 	@echo "... AST/Expression/RefExpr/MemberRefExpr.s"
+	@echo "... AST/Expression/RefExpr/MethodCallExpr.o"
+	@echo "... AST/Expression/RefExpr/MethodCallExpr.i"
+	@echo "... AST/Expression/RefExpr/MethodCallExpr.s"
 	@echo "... AST/Expression/RefExpr/RefExpr.o"
 	@echo "... AST/Expression/RefExpr/RefExpr.i"
 	@echo "... AST/Expression/RefExpr/RefExpr.s"
@@ -1236,6 +1539,15 @@ help:
 	@echo "... AST/Statement/CompoundStmt.o"
 	@echo "... AST/Statement/CompoundStmt.i"
 	@echo "... AST/Statement/CompoundStmt.s"
+	@echo "... AST/Statement/ControlFlow/BreakStmt.o"
+	@echo "... AST/Statement/ControlFlow/BreakStmt.i"
+	@echo "... AST/Statement/ControlFlow/BreakStmt.s"
+	@echo "... AST/Statement/ControlFlow/ContinueStmt.o"
+	@echo "... AST/Statement/ControlFlow/ContinueStmt.i"
+	@echo "... AST/Statement/ControlFlow/ContinueStmt.s"
+	@echo "... AST/Statement/ControlFlow/ForStmt.o"
+	@echo "... AST/Statement/ControlFlow/ForStmt.i"
+	@echo "... AST/Statement/ControlFlow/ForStmt.s"
 	@echo "... AST/Statement/ControlFlow/IfStmt.o"
 	@echo "... AST/Statement/ControlFlow/IfStmt.i"
 	@echo "... AST/Statement/ControlFlow/IfStmt.s"
@@ -1263,6 +1575,9 @@ help:
 	@echo "... AST/Statement/Statement.o"
 	@echo "... AST/Statement/Statement.i"
 	@echo "... AST/Statement/Statement.s"
+	@echo "... AST/Visitor/Visitor.o"
+	@echo "... AST/Visitor/Visitor.i"
+	@echo "... AST/Visitor/Visitor.s"
 	@echo "... Debug.o"
 	@echo "... Debug.i"
 	@echo "... Debug.s"
@@ -1272,15 +1587,30 @@ help:
 	@echo "... Interpreter.o"
 	@echo "... Interpreter.i"
 	@echo "... Interpreter.s"
-	@echo "... Objects/Array.o"
-	@echo "... Objects/Array.i"
-	@echo "... Objects/Array.s"
-	@echo "... Objects/Function.o"
-	@echo "... Objects/Function.i"
-	@echo "... Objects/Function.s"
-	@echo "... Objects/Object.o"
-	@echo "... Objects/Object.i"
-	@echo "... Objects/Object.s"
+	@echo "... Option.o"
+	@echo "... Option.i"
+	@echo "... Option.s"
+	@echo "... StdLib/Class.o"
+	@echo "... StdLib/Class.i"
+	@echo "... StdLib/Class.s"
+	@echo "... StdLib/GlobalContext.o"
+	@echo "... StdLib/GlobalContext.i"
+	@echo "... StdLib/GlobalContext.s"
+	@echo "... StdLib/Method.o"
+	@echo "... StdLib/Method.i"
+	@echo "... StdLib/Method.s"
+	@echo "... StdLib/Objects/Array.o"
+	@echo "... StdLib/Objects/Array.i"
+	@echo "... StdLib/Objects/Array.s"
+	@echo "... StdLib/Objects/Function.o"
+	@echo "... StdLib/Objects/Function.i"
+	@echo "... StdLib/Objects/Function.s"
+	@echo "... StdLib/Objects/Object.o"
+	@echo "... StdLib/Objects/Object.i"
+	@echo "... StdLib/Objects/Object.s"
+	@echo "... StdLib/Types/Integer.o"
+	@echo "... StdLib/Types/Integer.i"
+	@echo "... StdLib/Types/Integer.s"
 	@echo "... Token.o"
 	@echo "... Token.i"
 	@echo "... Token.s"

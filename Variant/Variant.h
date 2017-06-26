@@ -12,6 +12,9 @@
 class Function;
 class Object;
 class Array;
+class Expression;
+class Class;
+
 namespace cdot {
 namespace var {
     class Converter;
@@ -30,11 +33,20 @@ enum ValueType : unsigned int {
     CHAR_T,
     OBJECT_T,
     ANY_T,
-    FUNCTION_T,
-    ARRAY_T,
     VOID_T,
     AUTO_T,
+    CLASS_T,
     REF_T
+};
+
+struct TypeSpecifier {
+    ValueType type;
+    std::string class_name;
+    std::shared_ptr<Expression> length;
+    bool is_array = false;
+    bool is_var_length = false;
+    bool is_primitive = true;
+    bool nullable = false;
 };
 
 struct Variant {
@@ -52,20 +64,22 @@ protected:
 
     union {
         std::shared_ptr<Object> o_val;
-        std::shared_ptr<Function> fun_val;
         std::shared_ptr<Variant> ref;
-        std::shared_ptr<Array> arr_val;
+        Class* class_val;
     };
 
     std::string s_val;
     ValueType type;
     bool is_numeric = false;
+    bool nullable = true;
 
     void check_numeric();
     void destroy();
 
 public:
     typedef std::shared_ptr<Variant> SharedPtr;
+    typedef std::unique_ptr<Variant> UniquePtr;
+
     friend class cdot::var::Converter;
     friend class cdot::var::Arithmetic;
 
@@ -82,14 +96,20 @@ public:
     Variant(std::shared_ptr<Function>);
     Variant(std::shared_ptr<Array>);
     Variant(std::shared_ptr<Variant>);
+    Variant(Class*);
     Variant(std::string);
 
     ValueType get_type() const;
     void is_any_type(bool = true);
     bool is_ref();
-    Variant dereference();
+
+    inline void is_nullable(bool null) {
+        nullable = null;
+    }
 
     std::string to_string(bool = false);
+    long hash();
+
     template <class T>
     T get();
 
@@ -122,6 +142,9 @@ public:
     Variant operator<<(Variant v1);
     Variant operator>>(Variant v1);
 
+    // dereference operator
+    Variant operator*();
+
     // assignment operator
     Variant operator=(const Variant& v);
     Variant strict_equals(const Variant& v);
@@ -138,6 +161,9 @@ public:
 
 namespace val {
     extern ValueType strtotype(std::string);
+    extern std::string typetostr(ValueType);
+    extern std::string base_class(ValueType);
+    extern std::string type_name(Variant);
     extern bool is_compatible(ValueType , ValueType);
 }
 

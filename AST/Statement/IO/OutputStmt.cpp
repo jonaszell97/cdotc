@@ -7,6 +7,17 @@
 
 OutputStmt::OutputStmt(Expression::SharedPtr expr, bool newline) : _value(expr), _newline(newline) {}
 
+OutputStmt::OutputStmt(const OutputStmt& cp) {
+    _value = std::static_pointer_cast<Expression>(cp._value->clone());
+    _newline = cp._newline;
+    //set_root(cp._root, true);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr OutputStmt::clone() const {
+    return std::make_shared<OutputStmt>(*this);
+}
+
 Variant OutputStmt::evaluate(Variant) {
     std::cout << _value->evaluate().to_string() << (_newline ? "\n" : "");
 

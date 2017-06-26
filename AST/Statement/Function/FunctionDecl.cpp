@@ -14,6 +14,21 @@ FunctionDecl::FunctionDecl(std::string func_name, ValueType type) :
 
 }
 
+FunctionDecl::FunctionDecl(const FunctionDecl& cp) {
+    _func_name = cp._func_name;
+    _return_type = cp._return_type;
+    _args = std::vector<FuncArgDecl::SharedPtr>();
+    for (auto arg : cp._args) {
+        _args.push_back(std::static_pointer_cast<FuncArgDecl>(arg->clone()));
+    }
+    context = std::make_shared<Context>(*cp.context);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr FunctionDecl::clone() const {
+    return std::make_shared<FunctionDecl>(*this);
+}
+
 void FunctionDecl::add_arg(FuncArgDecl::SharedPtr arg) {
     _args.push_back(arg);
 }
@@ -27,20 +42,21 @@ void FunctionDecl::set_return_type(ValueType type) {
 }
 
 Variant FunctionDecl::evaluate(Variant) {
-    Function func(_func_name, _return_type);
-    func.set_body(_body);
+    if (context == nullptr) {
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "Cannot create function in current context");
+    }
+
+    Function::SharedPtr func = std::make_shared<Function>(_func_name, _return_type);
+    func->set_body(_body);
+    func->set_context(context);
 
     for (auto arg : _args) {
         FuncArg result = arg->specific_eval();
-        func.add_argument(result.name, result.type, result.default_val);
+        func->add_argument(result.name, result.type, result.default_val);
+        context->declare_variable(result.name);
     }
 
-    if (auto root = _root.lock()) {
-        root->set_function(_func_name, func);
-    }
-    else {
-        RuntimeError::raise(ERR_MISSING_CONTEXT, "Cannot create function in current context");
-    }
+    context->set_variable(_func_name, Variant(func));
 
     return { };
 }
@@ -59,7 +75,7 @@ std::vector<AstNode::SharedPtr> FunctionDecl::get_children() {
 
 void FunctionDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "FunctionDecl ["<< _func_name << ": " << util::types[_return_type]  << "]" << std::endl;
+    std::cout << "FunctionDecl ["<< _func_name << " => " << val::typetostr(_return_type)  << "]" << std::endl;
 
     for (auto arg : _args) {
         arg->__dump(depth + 1);

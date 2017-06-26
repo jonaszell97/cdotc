@@ -4,7 +4,7 @@
 
 #include "Tokenizer.h"
 #include "Util.h"
-#include "Objects/Object.h"
+#include "StdLib/Objects/Object.h"
 #include "Variant/Variant.h"
 
 Tokenizer::Tokenizer(std::string program) :
@@ -64,6 +64,11 @@ bool Tokenizer::is_operator(std::string s) {
     }
     for (int i = 0; i < util::unary_operators.size(); i++) {
         if (s == util::unary_operators[i]) {
+            return true;
+        }
+    }
+    for (int i = 0; i < util::tertiary_operators.size(); i++) {
+        if (s == util::tertiary_operators[i]) {
             return true;
         }
     }
@@ -153,6 +158,10 @@ char Tokenizer::get_next_char() {
  * Backtracks to the last token
  */
 void Tokenizer::backtrack() {
+    if (tokens.size() <= 1) {
+        return;
+    }
+
     current_index = current_token.get_index();
     tokens.pop_back();
     current_token = tokens.back();
@@ -244,7 +253,7 @@ Token Tokenizer::_get_next_token() {
 
             return get_next_token();
         } else {
-            backtrack_c(2);
+            backtrack_c(1);
         }
     }
 

@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 24.06.17.
 //
 
-#ifndef MATHPARSER_ARITHMETIC_H
-#define MATHPARSER_ARITHMETIC_H
+#ifndef CDOT_ARITHMETIC_H
+#define CDOT_ARITHMETIC_H
 
 #include "Variant.h"
 
@@ -49,4 +49,4 @@ public:
 } // namespace var
 } // namespace cdot
 
-#endif //MATHPARSER_ARITHMETIC_H
+#endif //CDOT_ARITHMETIC_H

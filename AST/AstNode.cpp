@@ -8,10 +8,11 @@
 #include <iostream>
 #include <cmath>
 #include "../Exceptions.h"
-#include "../Objects/Object.h"
+#include "../StdLib/Objects/Object.h"
 #include "../Util.h"
 #include "../Token.h"
 #include "./Statement/CompoundStmt.h"
+#include "Visitor/Visitor.h"
 
 AstNode::AstNode() {
 
@@ -21,14 +22,21 @@ std::vector<AstNode::SharedPtr> AstNode::get_children() {
     return std::vector<AstNode::SharedPtr>();
 }
 
-void AstNode::set_root(CompoundStmt::WeakPtr root, bool recursive) {
-    if (recursive) {
-        for (auto child : get_children()) {
-            child->set_root(root);
-        }
-    }
+//    for (auto child : get_children()) {
+//    }
+//}
+//
+//void AstNode::set_root(CompoundStmt* root, bool recursive) {
+//    if (recursive) {
+//        for (auto child : get_children()) {
+//        }
+//    }
+//
+//    _root = root;
+//}
 
-    _root = root;
+void AstNode::set_parent(AstNode *parent) {
+    _parent = parent;
 }
 
 void AstNode::__tab(int depth) {

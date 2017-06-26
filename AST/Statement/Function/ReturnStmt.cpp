@@ -12,12 +12,23 @@ ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : _return_val(return_va
 
 }
 
+ReturnStmt::ReturnStmt(const ReturnStmt& cp) {
+    _return_val = std::static_pointer_cast<Expression>(cp._return_val->clone());
+    func = cp.func;
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr ReturnStmt::clone() const {
+    return std::make_shared<ReturnStmt>(*this);
+}
+
 Variant ReturnStmt::evaluate(Variant) {
-    if (auto root = _root.lock()) {
-        root->terminate(_return_val->evaluate());
+    if (func != nullptr) {
+        auto res = _return_val->evaluate();
+        func->terminate(res);
     }
     else {
-        RuntimeError::raise(ERR_MISSING_CONTEXT, "No context to return from");
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "No context to return from");
     }
 
     return { };

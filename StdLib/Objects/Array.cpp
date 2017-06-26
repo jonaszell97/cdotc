@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "Array.h"
-#include "../Util.h"
+#include "../../Util.h"
 
 Array::Array(ValueType type, int length) :
     _type(type),
@@ -15,8 +15,23 @@ Array::Array(ValueType type, int length) :
 
 }
 
+Array& Array::operator=(const Array &arr) {
+    if (!val::is_compatible(arr._type, _type)) {
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign array of type " + val::typetostr(_type)
+                                          + " to array of type " + val::typetostr(_type));
+    }
+    if (!_var_length && arr._length != _length) {
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign arrays of incompatible lengths");
+    }
+
+    _elements = std::vector<Variant::SharedPtr>();
+    for (auto el : arr._elements) {
+        _elements.push_back(std::make_shared<Variant>(*el));
+    }
+}
+
 Variant::SharedPtr Array::at(int index) {
-    if (index < 0 || (!_var_length && index > _length)|| (_var_length && index > _elements.size())) {
+    if (index < 0 || (!_var_length && index >= _length) || (_var_length && index >= _elements.size())) {
         RuntimeError::raise(ERR_BAD_ACCESS, "Index " + std::to_string(index) + " does not exist on array " + print());
     }
 
@@ -24,12 +39,16 @@ Variant::SharedPtr Array::at(int index) {
 }
 
 void Array::push(Variant::SharedPtr el) {
+    if (_type == AUTO_T) {
+        _type = el->get_type();
+    }
+
     if (!_var_length && _elements.size() == _length) {
        RuntimeError::raise(ERR_BAD_ACCESS, "Array capacity reached.");
     }
     if (!val::is_compatible(el->get_type(), _type)) {
-        RuntimeError::raise(ERR_BAD_CAST, "Trying to push value of type " + util::types[el->get_type()]
-                                                + " to array of type " + util::types[_type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to push value of type " + val::typetostr(el->get_type())
+                                                + " to array of type " + val::typetostr(_type));
     }
 
     _elements.push_back(el);
@@ -45,8 +64,8 @@ Variant::SharedPtr Array::operator[](size_t index) {
 
 void Array::set(int index, Variant::SharedPtr value) {
     if (!val::is_compatible(value->get_type(), _type)) {
-        RuntimeError::raise(ERR_BAD_CAST, "Trying to push value of type " + util::types[value->get_type()]
-                                                + " to array of type " + util::types[_type]);
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to push value of type " + val::typetostr(value->get_type())
+                                                + " to array of type " + val::typetostr(_type));
     }
 
     _elements[index] = value;
@@ -64,11 +83,7 @@ Variant::SharedPtr Array::pop() {
 }
 
 std::string Array::print() {
-    std::string str = "array";
-
-    if (!_var_length) {
-        str += "(" + std::to_string(_length) + ")";
-    }
+    std::string str = val::typetostr(_type) + "[" + (_var_length ? "" : std::to_string(_length)) + "]";
     str += " [";
 
     auto _el = _elements;

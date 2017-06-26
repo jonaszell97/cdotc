@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 21.06.17.
 //
 
-#ifndef MATHPARSER_REFEXPR_H
-#define MATHPARSER_REFEXPR_H
+#ifndef CDOT_REFEXPR_H
+#define CDOT_REFEXPR_H
 
 
 #include "../../../Variant/Variant.h"
@@ -13,13 +13,27 @@
 class RefExpr : public Expression {
 public:
     virtual Variant evaluate(Variant = {}) = 0;
-    virtual void set_member_expr(std::shared_ptr<RefExpr>) = 0;
-    virtual void return_ref(bool) = 0;
+    virtual AstNode::SharedPtr clone() const = 0;
+
+    virtual inline void return_ref(bool ref) {
+        _return_ref = ref;
+    }
+    virtual inline void implicit_ref(bool implicit) {
+        _implicit_ref = implicit;
+    }
+    virtual inline void set_member_expr(std::shared_ptr<RefExpr> ref_expr) {
+        _member_expr = ref_expr;
+    }
 
     typedef std::shared_ptr<RefExpr> SharedPtr;
     virtual std::vector<AstNode::SharedPtr> get_children() = 0;
     virtual void __dump(int) = 0;
+
+protected:
+    bool _implicit_ref = false;
+    RefExpr::SharedPtr _member_expr;
+    bool _return_ref = false;
 };
 
 
-#endif //MATHPARSER_REFEXPR_H
+#endif //CDOT_REFEXPR_H

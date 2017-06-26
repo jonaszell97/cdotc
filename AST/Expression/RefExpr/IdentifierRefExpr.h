@@ -2,13 +2,14 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#ifndef MATHPARSER_IDENTIFIEREXPRESSION_H
-#define MATHPARSER_IDENTIFIEREXPRESSION_H
+#ifndef CDOT_IDENTIFIEREXPRESSION_H
+#define CDOT_IDENTIFIEREXPRESSION_H
 
 
 #include <string>
 #include "../Expression.h"
 #include "RefExpr.h"
+#include "../../Context.h"
 
 class MemberRefExpr;
 
@@ -16,21 +17,29 @@ class IdentifierRefExpr : public RefExpr {
 public:
     IdentifierRefExpr(std::string);
     IdentifierRefExpr(Variant);
+    IdentifierRefExpr(const IdentifierRefExpr& cp);
+    virtual AstNode::SharedPtr clone() const;
     Variant evaluate(Variant = {});
-    void return_ref(bool);
+
+    inline void set_context(Context::SharedPtr ctx) {
+        context = ctx;
+    }
 
     typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
-    void set_member_expr(std::shared_ptr<RefExpr>);
     std::vector<AstNode::SharedPtr> get_children();
 
     void __dump(int);
 
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
 protected:
+    Context::SharedPtr context;
     std::string _ident;
-    std::string __class_name = "IdentifierRefExpr";
-    std::shared_ptr<RefExpr> _member_expr;
-    bool _return_ref = false;
 };
 
 
-#endif //MATHPARSER_IDENTIFIEREXPRESSION_H
+#endif //CDOT_IDENTIFIEREXPRESSION_H

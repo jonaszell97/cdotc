@@ -4,12 +4,8 @@
 
 #include <iostream>
 #include "CompoundStmt.h"
-#include "../../Util.h"
-#include "../../Objects/Object.h"
 
 CompoundStmt::CompoundStmt() :
-    _variables(std::map<std::string, Variant::SharedPtr>()),
-    _global_functions(std::map<std::string, Variant::SharedPtr>()),
     _statements(std::vector<AstNode::SharedPtr>()),
     _return_reached(false),
     _return_val{}
@@ -17,109 +13,41 @@ CompoundStmt::CompoundStmt() :
 
 }
 
-CompoundStmt::SharedPtr CompoundStmt::instance() {
-    CompoundStmt::SharedPtr inst = std::make_shared<CompoundStmt>();
-    inst->set_root(_root, false);
-    inst->_statements = std::vector<AstNode::SharedPtr>(_statements);
-    for (auto stmt : inst->_statements) {
-        stmt->set_root(inst, true);
+CompoundStmt::CompoundStmt(const CompoundStmt& cp) {
+    _statements = std::vector<AstNode::SharedPtr>();
+    for (auto stmt : cp._statements) {
+        _statements.push_back(stmt->clone());
     }
 
-    return inst;
+    _terminable = cp._terminable;
+    _continuable = cp._continuable;
+
+    _return_reached = false;
+    _return_val = {};
+
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr CompoundStmt::clone() const {
+    return std::make_shared<CompoundStmt>(*this);
 }
 
 void CompoundStmt::terminate(Variant v) {
+    if (!_terminable) {
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "Cannot return from global context");
+    }
+
     _return_reached = true;
     _return_val = v;
 }
 
-/**
- * Returns a variable by it's identifier, throws an UndeclaredVariable exception
- * if a variable by that name does not exist
- * @param ident
- * @return
- */
-Variant CompoundStmt::get_variable(std::string ident) {
-    if (has_variable(ident)) {
-        return { _variables[ident] };
+void CompoundStmt::continue_() {
+    if (!_continuable) {
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "Keyword 'continue' is only allowed in for and while statements");
     }
 
-    if (_root_has_variable(ident)) {
-        auto root = _root.lock();
-        return root->get_variable(ident);
-    }
-
-    RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Reference to undeclared variable " + ident);
-}
-
-/**
- * Sets a variable to be used in the program.
- * @param ident The name of the variable
- * @param val The variables value
- */
-void CompoundStmt::set_variable(std::string ident, Variant val) {
-    if (has_variable(ident)) {
-        RuntimeError::raise(ERR_REDECLARED_VAR, "Redeclaration of variable " + ident);
-    }
-
-    _variables.insert(std::pair<std::string, Variant::SharedPtr>(ident, std::make_shared<Variant>(val)));
-}
-
-bool CompoundStmt::_root_has_variable(std::string ident) {
-    if (auto root = _root.lock()) {
-        return root->has_variable(ident);
-    }
-
-    return false;
-}
-
-bool CompoundStmt::has_variable(std::string ident) {
-    return _variables.find(ident) != _variables.end();
-}
-
-void CompoundStmt::set_function(std::string func_name, Function func) {
-    if (has_function(func_name)) {
-        RuntimeError::raise(ERR_REDECLARED_VAR, "Redeclaration of function " + func_name);
-    }
-
-    _global_functions.insert(std::pair<std::string, Variant::SharedPtr>
-                                     (func_name, std::make_shared<Variant>(std::make_shared<Function>(func))));
-}
-
-bool CompoundStmt::_root_has_function(std::string func_name) {
-    if (auto root = _root.lock()) {
-        return root->has_function(func_name);
-    }
-
-    return false;
-}
-
-bool CompoundStmt::has_function(std::string func_name) {
-    return _global_functions.find(func_name) != _global_functions.end();
-}
-
-Variant CompoundStmt::get_function(std::string func_name) {
-    if (has_function(func_name)) {
-        return { _global_functions[func_name]->get<Function::SharedPtr>() };
-    }
-    if (_root_has_function(func_name)) {
-        auto root = _root.lock();
-        return root->get_function(func_name);
-    }
-
-    RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Call to undeclared function " + func_name);
-}
-
-Variant CompoundStmt::get_var_or_func(std::string ident) {
-    if (has_variable(ident)) {
-        return get_variable(ident);
-    }
-
-    if (has_function(ident)) {
-        return get_function(ident);
-    }
-
-    RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Trying to access undeclared variable " + ident);
+    _return_reached = true;
+    _return_val = {};
 }
 
 void CompoundStmt::add_statement(AstNode::SharedPtr stmt) {
@@ -142,10 +70,6 @@ std::vector<AstNode::SharedPtr> CompoundStmt::get_children() {
     }
 
     return res;
-}
-
-std::map<std::string, Variant::SharedPtr> CompoundStmt::get_variables() {
-    return _variables;
 }
 
 void CompoundStmt::__dump(int depth) {

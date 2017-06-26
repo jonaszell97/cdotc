@@ -4,9 +4,9 @@
 
 #include <iostream>
 #include "MemberRefExpr.h"
-#include "../../../Objects/Object.h"
+#include "../../../StdLib/Objects/Object.h"
 
-MemberRefExpr::MemberRefExpr(std::string ident) : _parent_obj{}, _ident(ident) {
+MemberRefExpr::MemberRefExpr(std::string ident) :  _ident(ident) {
 
 }
 
@@ -14,26 +14,43 @@ MemberRefExpr::MemberRefExpr(Variant val) : MemberRefExpr(val.get<std::string>()
 
 }
 
-void MemberRefExpr::set_member_expr(std::shared_ptr<RefExpr> member_expr) {
-    _member_expr = member_expr;
+MemberRefExpr::MemberRefExpr(const MemberRefExpr& cp) {
+    _ident = cp._ident;
+    _return_ref = cp._return_ref;
+    if (cp._member_expr != nullptr) {
+        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
+    }
+    set_parent(cp._parent);
 }
 
-void MemberRefExpr::return_ref(bool ref) {
-    _return_ref = ref;
+AstNode::SharedPtr MemberRefExpr::clone() const {
+    return std::make_shared<MemberRefExpr>(*this);
 }
 
 Variant MemberRefExpr::evaluate(Variant parent) {
-    if (_member_expr == nullptr) {
-        return parent.get<Object::SharedPtr>()->access_property(_ident);
+    Variant v;
+
+    if (parent.get_type() == OBJECT_T) {
+        auto obj = parent.get<Object::SharedPtr>();
+        v = obj->access_property(_ident);
+    }
+    else if (parent.get_type() == CLASS_T) {
+        auto cl = parent.get<Class*>();
+        v = cl->access_static_property(_ident);
+    }
+    else if (val::base_class(parent.get_type()) != "") {
+        v = GlobalContext::get_class(val::base_class(parent.get_type()))->access_static_property(_ident);
     }
     else {
-        if (parent.get_type() != OBJECT_T) {
-            RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on primitve value.");
-        }
+        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on primitve value.");
+    }
 
-        Variant current = parent.get<Object::SharedPtr>()->access_property(_ident);
-
-        return _member_expr->evaluate(current);
+    if (_member_expr == nullptr) {
+        return _return_ref ? v : *v;
+    }
+    else {
+        _member_expr->return_ref(_return_ref);
+        return _member_expr->evaluate(v);
     }
 }
 

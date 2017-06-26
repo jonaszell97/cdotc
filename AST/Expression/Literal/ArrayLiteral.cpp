@@ -4,7 +4,7 @@
 
 #include "ArrayLiteral.h"
 #include "../../../Util.h"
-#include "../../../Objects/Array.h"
+#include "../../../StdLib/Objects/Array.h"
 
 #include <iostream>
 
@@ -20,6 +20,20 @@ ArrayLiteral::ArrayLiteral(ValueType type) : _type(type), _elements(std::vector<
 
 }
 
+ArrayLiteral::ArrayLiteral(const ArrayLiteral& cp) {
+    _type = cp._type;
+    _length_expr = std::static_pointer_cast<Expression>(cp._length_expr->clone());
+    _elements = std::vector<Expression::SharedPtr>();
+    for (auto el : cp._elements) {
+        _elements.push_back(std::static_pointer_cast<Expression>(el->clone()));
+    }
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr ArrayLiteral::clone() const {
+    return std::make_shared<ArrayLiteral>(*this);
+}
+
 void ArrayLiteral::add_element(Expression::SharedPtr el) {
     _elements.push_back(el);
 }
@@ -32,12 +46,13 @@ Variant ArrayLiteral::evaluate(Variant) {
                 "tried to allocate " + std::to_string(int(length)));
         }
 
-        _length = int(length);
+        _length = length;
     }
 
     std::shared_ptr<Array> arr = std::make_shared<Array>(_type, _length);
     for (auto el : _elements) {
         auto res = el->evaluate();
+
         if (res.get_type() == DOUBLE_T && _type != DOUBLE_T) {
             res.cast_to(FLOAT_T);
         }
@@ -63,8 +78,7 @@ std::vector<AstNode::SharedPtr> ArrayLiteral::get_children() {
 
 void ArrayLiteral::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "ArrayLiteral [" << util::types[_type];
-    std::cout << "]" << std::endl;
+    std::cout << "ArrayLiteral [" << val::typetostr(_type) << "]" << std::endl;
 
     if (_length_expr != nullptr) {
         _length_expr->__dump(depth + 1);

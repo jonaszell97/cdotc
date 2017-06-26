@@ -18,15 +18,11 @@
 #include "Util.h"
 #include "AST/Statement/Function/FunctionDecl.h"
 #include "AST/Statement/ControlFlow/IfStmt.h"
+#include "AST/Statement/ControlFlow/WhileStmt.h"
+#include "AST/Statement/ControlFlow/ForStmt.h"
+#include "AST/Operator/TertiaryOperator.h"
 
 class Tokenizer;
-
-struct TypeSpecifier {
-    ValueType type;
-    Expression::SharedPtr length;
-    bool is_array = false;
-    bool is_var_length = false;
-};
 
 class Interpreter {
 public:
@@ -42,9 +38,14 @@ protected:
     void token_error(TokenType, TokenType);
 
     CompoundStmt::SharedPtr parse();
-    Statement::SharedPtr parse_next_stmt();
+    Statement::SharedPtr parse_next_stmt(bool = false);
 
+    Statement::SharedPtr parse_assignment(bool, CompoundStmt::SharedPtr = {});
     AstNode::SharedPtr parse_keyword();
+    Expression::SharedPtr parse_expression(Expression::SharedPtr = {}, int = 0);
+    CompoundStmt::SharedPtr parse_block();
+
+    TertiaryOperator::SharedPtr parse_tertiary_operator(Expression::SharedPtr);
 
     ObjectLiteral::SharedPtr parse_object_literal();
     ArrayLiteral::SharedPtr parse_array_literal();
@@ -52,18 +53,16 @@ protected:
     FunctionDecl::SharedPtr parse_function_decl();
     CallExpr::SharedPtr parse_function_call();
 
-    Statement::SharedPtr parse_assignment(bool, CompoundStmt::SharedPtr = {});
     TypeSpecifier parse_type();
     RefExpr::SharedPtr parse_identifier();
     RefExpr::SharedPtr __parse_identifier();
 
-    CompoundStmt::SharedPtr parse_block();
-
-    Expression::SharedPtr parse_unary_expr(Expression::SharedPtr = {});
+    Expression::SharedPtr parse_unary_expr(Expression::SharedPtr = {}, bool = false);
     Expression::SharedPtr parse_unary_expr_target();
-    Expression::SharedPtr parse_expression(Expression::SharedPtr = {}, int = 0);
 
     IfStmt::SharedPtr parse_if_stmt();
+    WhileStmt::SharedPtr parse_while_stmt();
+    ForStmt::SharedPtr parse_for_stmt();
 };
 
 #endif //INTERPRETER_H

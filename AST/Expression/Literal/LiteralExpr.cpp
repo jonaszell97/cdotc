@@ -17,6 +17,17 @@ LiteralExpr::LiteralExpr(Variant v, ValueType type) : _value(v), _type(type) {
     set_val(v);
 }
 
+LiteralExpr::LiteralExpr(const LiteralExpr& cp) {
+    set_val(Variant(cp._value));
+    _type = _value.get_type();
+    //set_root(cp._root, true);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr LiteralExpr::clone() const {
+    return std::make_shared<LiteralExpr>(*this);
+}
+
 void LiteralExpr::set_val(Variant val) {
     _value = val;
     switch (val.get_type()) {
@@ -39,6 +50,8 @@ void LiteralExpr::set_val(Variant val) {
             break;
         case OBJECT_T:
             __class_name = "ObjectLiteral";
+        case VOID_T:
+            __class_name = "NullLiteral";
             break;
 
     }

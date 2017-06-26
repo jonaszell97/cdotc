@@ -4,12 +4,13 @@
 
 #include <regex>
 #include "Variant.h"
-#include "../Objects/Object.h"
+#include "../StdLib/Objects/Object.h"
 #include "../Util.h"
-#include "../Objects/Array.h"
-#include "../Objects/Function.h"
+#include "../StdLib/Objects/Array.h"
+#include "../StdLib/Objects/Function.h"
 #include "Conversion.h"
 #include "Arithmetic.h"
+#include <sstream>
 
 Variant::~Variant() {
     destroy();
@@ -17,6 +18,7 @@ Variant::~Variant() {
 
 Variant::Variant() : o_val{} {
     type = VOID_T;
+    nullable = true;
 }
 
 Variant::Variant(bool b) : Variant() {
@@ -60,6 +62,11 @@ Variant::Variant(char c) : Variant() {
     type = CHAR_T;
 }
 
+Variant::Variant(Class* c) : Variant() {
+    class_val = c;
+    type = CLASS_T;
+}
+
 Variant::Variant(std::string s) : Variant() {
     s_val = s;
     type = STRING_T;
@@ -71,8 +78,8 @@ Variant::Variant(std::shared_ptr<Object> o) : Variant() {
 }
 
 Variant::Variant(std::shared_ptr<Function> fun): Variant() {
-    fun_val = fun;
-    type = FUNCTION_T;
+    o_val = fun;
+    type = OBJECT_T;
 }
 
 Variant::Variant(std::shared_ptr<Variant> r): Variant() {
@@ -81,20 +88,16 @@ Variant::Variant(std::shared_ptr<Variant> r): Variant() {
 }
 
 Variant::Variant(std::shared_ptr<Array> arr): Variant() {
-    arr_val = arr;
-    type = ARRAY_T;
+    o_val = arr;
+    type = OBJECT_T;
 }
 
 void Variant::destroy() {
     switch (type) {
         case OBJECT_T:
             o_val.~shared_ptr(); break;
-        case ARRAY_T:
-            arr_val.~shared_ptr(); break;
         case REF_T:
             ref.~shared_ptr(); break;
-        case FUNCTION_T:
-            fun_val.~shared_ptr(); break;
         default:
             break;
     }
@@ -105,7 +108,7 @@ void Variant::destroy() {
 
 ValueType Variant::get_type() const {
     if (type == REF_T) {
-        return ref->get_type();
+        return ref->type;
     }
 
     return type;
@@ -115,12 +118,12 @@ bool Variant::is_ref() {
     return type == REF_T;
 }
 
-Variant Variant::dereference() {
+Variant Variant::operator*() {
     if (type != REF_T) {
         return Variant(*this);
     }
 
-    return Variant(ref->dereference());
+    return Variant(*ref);
 }
 
 void Variant::is_any_type(bool any) {
@@ -130,7 +133,7 @@ void Variant::is_any_type(bool any) {
 template <>
 double Variant::get<double>() {
     if (type == REF_T) {
-        return ref->get<double>();
+        if (ref->type != REF_T) return ref->d_val;
     }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to double");
@@ -142,7 +145,7 @@ double Variant::get<double>() {
 template <>
 int Variant::get<int>() {
     if (type == REF_T) {
-        return ref->get<int>();
+        if (ref->type != REF_T) return ref->int_val;
     }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to int");
@@ -154,7 +157,7 @@ int Variant::get<int>() {
 template <>
 long Variant::get<long>() {
     if (type == REF_T) {
-        return ref->get<long>();
+        if (ref->type != REF_T) return ref->long_val;
     }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to long");
@@ -166,7 +169,7 @@ long Variant::get<long>() {
 template <>
 float Variant::get<float>() {
     if (type == REF_T) {
-        return ref->get<float>();
+        if (ref->type != REF_T) return ref->float_val;
     }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to float");
@@ -178,7 +181,7 @@ float Variant::get<float>() {
 template <>
 bool Variant::get<bool>() {
     if (type == REF_T) {
-        return ref->get<bool>();
+        if (ref->type != REF_T) return ref->b_val;
     }
     if (type != BOOL_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value is not boolean");
@@ -190,7 +193,7 @@ bool Variant::get<bool>() {
 template <>
 char Variant::get<char>() {
     if (type == REF_T) {
-        return ref->get<char>();
+        if (ref->type != REF_T) return ref->c_val;
     }
     if (type != CHAR_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to char");
@@ -201,9 +204,6 @@ char Variant::get<char>() {
 
 template <>
 std::string Variant::get<std::string>() {
-    if (type == REF_T) {
-        return ref->get<std::string>();
-    }
     if (type != STRING_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a string");
     }
@@ -224,18 +224,6 @@ Object::SharedPtr Variant::get<Object::SharedPtr>() {
 }
 
 template <>
-Function::SharedPtr Variant::get<Function::SharedPtr>() {
-    if (type == REF_T) {
-        return ref->get<Function::SharedPtr>();
-    }
-    if (type != FUNCTION_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a function");
-    }
-
-    return fun_val;
-}
-
-template <>
 Variant Variant::get<Variant>() {
     if (type != REF_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a reference");
@@ -245,15 +233,12 @@ Variant Variant::get<Variant>() {
 }
 
 template <>
-Array::SharedPtr Variant::get<Array::SharedPtr>() {
-    if (type == REF_T) {
-        return ref->get<Array::SharedPtr>();
-    }
-    if (type != OBJECT_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not an array");
+Class* Variant::get<Class*>() {
+    if (type != CLASS_T) {
+        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a class");
     }
 
-    return arr_val;
+    return class_val;
 }
 
 void Variant::check_numeric() {
@@ -283,12 +268,8 @@ Variant::Variant(const Variant &cp) {
             b_val = cp.b_val; break;
         case OBJECT_T:
             o_val = cp.o_val; break;
-        case ARRAY_T:
-            arr_val = cp.arr_val; break;
         case REF_T:
             ref = cp.ref; break;
-        case FUNCTION_T:
-            fun_val = cp.fun_val; break;
         case INT_T:
             int_val = cp.int_val; break;
         case LONG_T:
@@ -297,6 +278,8 @@ Variant::Variant(const Variant &cp) {
             d_val = cp.d_val; break;
         case FLOAT_T:
             float_val = cp.float_val; break;
+        case CLASS_T:
+            class_val = cp.class_val; break;
         default:
             d_val = cp.d_val;
             break;
@@ -317,12 +300,12 @@ std::string Variant::to_string(bool escape) {
             return b_val ? "true" : "false";
         case OBJECT_T:
             return o_val->print();
-        case REF_T:
-            return ref->to_string(escape);
-        case ARRAY_T:
-            return arr_val->print();
-        case FUNCTION_T:
-            return fun_val->print();
+        case REF_T: {
+            std::ostringstream ss;
+            ss << &(*ref);
+
+            return ss.str();
+        }
         case INT_T:
             return std::to_string(int_val);
         case LONG_T:
@@ -331,8 +314,34 @@ std::string Variant::to_string(bool escape) {
             return std::to_string(d_val);
         case FLOAT_T:
             return std::to_string(float_val);
+        case CLASS_T:
+            return class_val->class_name();
+        case VOID_T:
+            return "null";
         default:
             return std::to_string(d_val);
+    }
+}
+
+long Variant::hash() {
+    switch (type) {
+        case STRING_T: {
+            return { long(std::hash<std::string>()(s_val)) };
+        }
+        case CHAR_T:
+            return { long(std::hash<char>()(c_val)) };
+        case BOOL_T:
+            return { long(std::hash<bool>()(b_val)) };
+        case INT_T:
+            return { long(std::hash<int>()(int_val)) };
+        case LONG_T:
+            return { long(std::hash<long>()(long_val)) };
+        case DOUBLE_T:
+            return { long(std::hash<double>()(d_val)) };
+        case FLOAT_T:
+            return { long(std::hash<float>()(float_val)) };
+        default:
+            RuntimeError::raise(ERR_TYPE_ERROR, "Cannot hash value of type " + val::type_name(*this));
     }
 }
 
@@ -372,7 +381,10 @@ Variant Variant::operator=(const Variant &v) {
         return ref->operator=(v);
     }
 
-    destroy();
+    if (!nullable && v.type == VOID_T) {
+        RuntimeError::raise(ERR_TYPE_ERROR, "Cannot set non-nullable value to null");
+    }
+
     switch (v.get_type()) {
         case INT_T:
             int_val = v.int_val; break;
@@ -391,24 +403,11 @@ Variant Variant::operator=(const Variant &v) {
             c_val = v.c_val;
             break;
         case OBJECT_T:
+            destroy();
             o_val = v.o_val;
             break;
-        case FUNCTION_T:
-            fun_val = v.fun_val;
-            break;
-        case ARRAY_T:
-            if (type == ARRAY_T && !arr_val->is_var_length() && v.arr_val->get_length() > arr_val->get_length()) {
-                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign array of capacity "
-                                                    + std::to_string(v.arr_val->get_length())
-                + " to array of capacity " + std::to_string(arr_val->get_length()));
-            }
-            if (type == ARRAY_T && arr_val->get_type() != ANY_T && (v.arr_val->get_type() != arr_val->get_type())) {
-                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign array of type " + util::types[v.arr_val->get_type()]
-                                                    + " to array of type " + util::types[arr_val->get_type()]);
-            }
-
-            arr_val = v.arr_val;
-            break;
+        case CLASS_T:
+            class_val = v.class_val;
         default:
             break;
     }
@@ -421,8 +420,8 @@ Variant Variant::operator=(const Variant &v) {
 
 Variant Variant::strict_equals(const Variant &v) {
     if (!val::is_compatible(get_type(), v.get_type()) && !any_type) {
-        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + util::types[v.get_type()]
-                                          + " to variable of type " + util::types[get_type()]);
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + val::typetostr(v.get_type())
+                                          + " to variable of type " + val::typetostr(get_type()));
     }
 
     return operator=(v);
@@ -505,7 +504,31 @@ namespace val {
         return util::typemap[type];
     }
 
+    std::string typetostr(ValueType type) {
+        if (type == AUTO_T) {
+            return "auto";
+        }
+
+        return util::types[type];
+    }
+
+    std::string base_class(ValueType v) {
+        if (util::classmap.find(v) != util::classmap.end()) {
+            return util::classmap[v];
+        }
+
+        return "";
+    }
+
+    std::string type_name(Variant v) {
+        if (v.get_type() == OBJECT_T) {
+            return v.get<Object::SharedPtr>()->get_class()->class_name();
+        }
+
+        return typetostr(v.get_type());
+    }
+
     bool is_compatible(ValueType v1, ValueType v2) {
-        return (v1 == ANY_T || v2 == ANY_T || (v1 == v2));
+        return (v1 == ANY_T || v2 == ANY_T || (v1 == v2)) || util::in_vector<ValueType>(util::type_conversions[v1], v2);
     }
 };

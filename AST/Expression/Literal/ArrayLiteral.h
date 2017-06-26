@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 21.06.17.
 //
 
-#ifndef MATHPARSER_ARRAYLITERAL_H
-#define MATHPARSER_ARRAYLITERAL_H
+#ifndef CDOT_ARRAYLITERAL_H
+#define CDOT_ARRAYLITERAL_H
 
 
 #include "../../AstNode.h"
@@ -13,6 +13,8 @@ class ArrayLiteral : public Expression {
 public:
     ArrayLiteral(ValueType = ANY_T);
     ArrayLiteral(ValueType, Expression::SharedPtr);
+    ArrayLiteral(const ArrayLiteral& cp);
+    virtual AstNode::SharedPtr clone() const;
     inline void is_var_length(bool var) {
         _var_length = var;
         _length = -1;
@@ -33,6 +35,12 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
 protected:
     std::vector<Expression::SharedPtr> _elements;
     ValueType _type;
@@ -42,4 +50,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_ARRAYLITERAL_H
+#endif //CDOT_ARRAYLITERAL_H

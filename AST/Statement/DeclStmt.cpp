@@ -6,8 +6,10 @@
 #include "DeclStmt.h"
 #include "CompoundStmt.h"
 #include "../../Util.h"
+#include "../Expression/Literal/ArrayLiteral.h"
+#include "../../StdLib/Objects/Array.h"
 
-DeclStmt::DeclStmt(std::string ident, Expression::SharedPtr val, ValueType type) :
+DeclStmt::DeclStmt(std::string ident, Expression::SharedPtr val, TypeSpecifier type) :
         _ident(ident),
         _val(val),
         _type(type)
@@ -15,30 +17,54 @@ DeclStmt::DeclStmt(std::string ident, Expression::SharedPtr val, ValueType type)
 
 }
 
-Variant DeclStmt::evaluate(Variant) {
-    if (auto root = _root.lock()) {
-        Variant res = _val->evaluate();
+DeclStmt::DeclStmt(std::string ident, TypeSpecifier type) : DeclStmt(ident, {}, type) {
 
-        if (res.get_type() == DOUBLE_T && _type != DOUBLE_T) {
+}
+
+DeclStmt::DeclStmt(const DeclStmt& cp) {
+    _ident = cp._ident;
+    _type = cp._type;
+    if (cp._val != nullptr) {
+        _val = std::static_pointer_cast<Expression>(cp._val->clone());
+    }
+    else {
+        new (&_val) std::shared_ptr<Expression>();
+    }
+    context = std::make_shared<Context>(*cp.context);
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr DeclStmt::clone() const {
+    return std::make_shared<DeclStmt>(*this);
+}
+
+Variant DeclStmt::evaluate(Variant) {
+    if (context != nullptr) {
+
+        Variant res = _val != nullptr ? _val->evaluate() : Variant();
+
+        res.is_nullable(_type.nullable);
+
+        if (res.get_type() == DOUBLE_T && _type.type != DOUBLE_T) {
             res.cast_to(FLOAT_T);
         }
 
-        if (_type == AUTO_T) {
-            _type = res.get_type();
+        if (_type.type == AUTO_T) {
+            _type.type = res.get_type();
         }
-        else if (_type == ANY_T) {
+        else if (_type.type == ANY_T) {
             res.is_any_type();
         }
 
-        if (!val::is_compatible(_type, res.get_type())) {
-            RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + util::types[res.get_type()]
-                                                    + " to variable of type " + util::types[_type]);
+        if (!val::is_compatible(_type.type, res.get_type())) {
+            RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + val::typetostr(res.get_type())
+                                                    + " to variable of type " + val::typetostr(_type.type));
         }
 
-        root->set_variable(_ident, res);
+        context->set_variable(_ident, res);
     }
     else {
-        RuntimeError::raise(ERR_MISSING_CONTEXT, "No context to create variable " + _ident + " in.");
+        RuntimeError::raise(ERR_CONTEXT_ERROR, "No context to create variable " + _ident + " in.");
     }
 
     return { };
@@ -49,10 +75,7 @@ Expression::SharedPtr DeclStmt::get_expr() {
 }
 
 std::vector<AstNode::SharedPtr> DeclStmt::get_children() {
-    std::vector<AstNode::SharedPtr> res;
-    res.emplace_back(_val);
-
-    return res;
+    return _val == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{ _val };
 }
 
 void DeclStmt::__dump(int depth) {
@@ -60,7 +83,10 @@ void DeclStmt::__dump(int depth) {
         std::cout << "\t";
     }
 
-    std::cout << "DeclStmt [" << (_type == AUTO_T ? "auto" : util::types[_type]) << " " << _ident << "]" << std::endl;
+    std::cout << "DeclStmt [" << (_type.type == AUTO_T ? "auto" : val::typetostr(_type.type))
+              << " " << _ident << "]" << std::endl;
 
-    _val->__dump(depth + 1);
+    if (_val != nullptr) {
+        _val->__dump(depth + 1);
+    }
 }

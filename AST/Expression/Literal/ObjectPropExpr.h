@@ -2,12 +2,12 @@
 // Created by Jonas Zell on 20.06.17.
 //
 
-#ifndef MATHPARSER_OBJECTPROPEXPR_H
-#define MATHPARSER_OBJECTPROPEXPR_H
+#ifndef CDOT_OBJECTPROPEXPR_H
+#define CDOT_OBJECTPROPEXPR_H
 
 
 #include "../Expression.h"
-#include "../../../Objects/Object.h"
+#include "../../../StdLib/Objects/Object.h"
 
 struct ObjectProp {
     std::string name;
@@ -17,11 +17,19 @@ struct ObjectProp {
 class ObjectPropExpr : public Expression {
 public:
     ObjectPropExpr(std::string, Expression::SharedPtr, ValueType = ANY_T);
+    ObjectPropExpr(const ObjectPropExpr& cp);
+    virtual AstNode::SharedPtr clone() const;
     Variant evaluate(Variant = {});
     ObjectProp specific_eval();
 
     typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
     void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
     std::vector<AstNode::SharedPtr> get_children();
 
 protected:
@@ -32,4 +40,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_OBJECTPROPEXPR_H
+#endif //CDOT_OBJECTPROPEXPR_H

@@ -3,8 +3,8 @@
 //
 
 #include "ArrayAccessExpr.h"
-#include "../../../Objects/Array.h"
-#include "../../../Objects/Object.h"
+#include "../../../StdLib/Objects/Array.h"
+#include "../../../StdLib/Objects/Object.h"
 #include "../Literal/LiteralExpr.h"
 
 #include <iostream>
@@ -17,25 +17,32 @@ ArrayAccessExpr::ArrayAccessExpr(Expression::SharedPtr expr) {
     _index = expr;
 }
 
-void ArrayAccessExpr::set_member_expr(std::shared_ptr<RefExpr> member_expr) {
-    _member_expr = member_expr;
+ArrayAccessExpr::ArrayAccessExpr(const ArrayAccessExpr& cp) {
+    _index = std::static_pointer_cast<Expression>(cp._index->clone());;
+    _return_ref = cp._return_ref;
+    if (cp._member_expr != nullptr) {
+        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
+    }
+    set_parent(cp._parent);
 }
 
-void ArrayAccessExpr::return_ref(bool ref) {
-    _return_ref = ref;
+AstNode::SharedPtr ArrayAccessExpr::clone() const {
+    return std::make_shared<ArrayAccessExpr>(*this);
 }
 
 Variant ArrayAccessExpr::evaluate(Variant parent) {
-    if (parent.get_type() != ARRAY_T) {
+    Array::SharedPtr arr = std::dynamic_pointer_cast<Array>(parent.get<Object::SharedPtr>());
+    if (arr == nullptr) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index of non-array element");
     }
 
-    // return reference
+    Variant v = arr->at(_index->evaluate().get<int>());
     if (_member_expr != nullptr) {
-        return _member_expr->evaluate({ parent.get<Array::SharedPtr>()->at(_index->evaluate().get<int>()) });
+        _member_expr->return_ref(_return_ref);
+        return _member_expr->evaluate(v);
     }
     else {
-        return { parent.get<Array::SharedPtr>()->at(_index->evaluate().get<int>()) };
+        return (_return_ref) ? v : *v;
     }
 }
 

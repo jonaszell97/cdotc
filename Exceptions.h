@@ -12,11 +12,12 @@
 enum ParseErrors {
     ERR_UNEXPECTED_TOKEN,
     ERR_UNEXPECTED_CHARACTER,
+    ERR_UNINITIALIZED_VAR,
     ERR_EOF
 };
 
 enum RuntimeErrors {
-    ERR_MISSING_CONTEXT,
+    ERR_CONTEXT_ERROR,
     ERR_UNDECLARED_VARIABLE,
     ERR_BAD_CAST,
     ERR_BAD_ACCESS,
@@ -24,7 +25,8 @@ enum RuntimeErrors {
     ERR_REDECLARED_VAR,
     ERR_WRONG_NUM_ARGS,
     ERR_TYPE_ERROR,
-    ERR_VAL_TOO_LARGE
+    ERR_VAL_TOO_LARGE,
+    ERR_PRIVATE_PROPERTY
 };
 
 extern std::map<ParseErrors, std::string> _parse_errors;

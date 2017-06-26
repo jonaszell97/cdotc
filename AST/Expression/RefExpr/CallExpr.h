@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 21.06.17.
 //
 
-#ifndef MATHPARSER_CALLEXPR_H
-#define MATHPARSER_CALLEXPR_H
+#ifndef CDOT_CALLEXPR_H
+#define CDOT_CALLEXPR_H
 
 
 #include "../Expression.h"
@@ -12,19 +12,24 @@
 class CallExpr : public RefExpr {
 public:
     CallExpr();
+    CallExpr(const CallExpr& cp);
+    virtual AstNode::SharedPtr clone() const;
     Variant evaluate(Variant = {});
     void add_argument(Expression::SharedPtr);
-    void return_ref(bool);
-    void set_member_expr(std::shared_ptr<RefExpr>);
 
     typedef std::shared_ptr<CallExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+    friend class MethodCallExpr;
 protected:
     std::vector<Expression::SharedPtr> _arguments;
-    std::shared_ptr<RefExpr> _member_expr;
-    bool _return_ref;
 };
 
 
-#endif //MATHPARSER_CALLEXPR_H
+#endif //CDOT_CALLEXPR_H

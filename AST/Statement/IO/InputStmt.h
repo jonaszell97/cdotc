@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#ifndef MATHPARSER_INPUTSTATEMENT_H
-#define MATHPARSER_INPUTSTATEMENT_H
+#ifndef CDOT_INPUTSTATEMENT_H
+#define CDOT_INPUTSTATEMENT_H
 
 
 #include "../Statement.h"
@@ -14,9 +14,19 @@ class InputStmt : public Statement {
 public:
     InputStmt(std::string, ValueType = ANY_T);
     InputStmt(Variant, ValueType = ANY_T);
+    InputStmt(const InputStmt& cp);
+    virtual AstNode::SharedPtr clone() const;
+
     Variant evaluate(Variant = {});
 
+    std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
 protected:
     std::string _ident;
     ValueType _type;
@@ -26,4 +36,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_INPUTSTATEMENT_H
+#endif //CDOT_INPUTSTATEMENT_H

@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#ifndef MATHPARSER_OPERATOR_H
-#define MATHPARSER_OPERATOR_H
+#ifndef CDOT_OPERATOR_H
+#define CDOT_OPERATOR_H
 
 
 #include <string>
@@ -15,6 +15,7 @@ class Operator : public Expression {
 public:
     virtual std::string get_operator() = 0;
     virtual Variant evaluate(Variant = {}) = 0;
+    virtual AstNode::SharedPtr clone() const = 0;
 
     typedef std::shared_ptr<Operator> SharedPtr;
     virtual void __dump(int) = 0;
@@ -25,4 +26,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_OPERATOR_H
+#endif //CDOT_OPERATOR_H

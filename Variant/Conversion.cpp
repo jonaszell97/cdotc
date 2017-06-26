@@ -4,6 +4,7 @@
 
 #include "Conversion.h"
 #include "../Util.h"
+#include "../StdLib/Objects/Object.h"
 
 namespace cdot {
 namespace var {
@@ -57,8 +58,8 @@ namespace var {
                     v.b_val = v.s_val != "false" && v.s_val != "0";
                 }
                 else {
-                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                      + " to " + util::types[target_type]);
+                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                      + " to " + val::typetostr(target_type));
                 }
 
                 break;
@@ -83,8 +84,8 @@ namespace var {
                     v.b_val = v.c_val != '0';
                 }
                 else {
-                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                      + " to " + util::types[target_type]);
+                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                      + " to " + val::typetostr(target_type));
                 }
 
                 break;
@@ -112,8 +113,8 @@ namespace var {
                     v.d_val = (v.type == INT_T ? v.int_val : v.long_val);
                 }
                 else {
-                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                      + " to " + util::types[target_type]);
+                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                      + " to " + val::typetostr(target_type));
                 }
 
                 break;
@@ -138,12 +139,18 @@ namespace var {
                 else if (target_type == FLOAT_T) {
                     v.float_val = (v.type == FLOAT_T ? v.float_val : float(v.d_val));
                 }
+                else if (target_type == INT_T) {
+                    v.int_val = int(v.type == FLOAT_T ? v.float_val : v.d_val);
+                }
+                else if (target_type == LONG_T) {
+                    v.long_val = long(v.type == FLOAT_T ? v.float_val : v.d_val);
+                }
                 else if (target_type == DOUBLE_T) {
                     v.d_val = (v.type == FLOAT_T ? v.float_val : v.d_val);
                 }
                 else {
-                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                      + " to " + util::types[target_type]);
+                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                      + " to " + val::typetostr(target_type));
                 }
                 break;
             case BOOL_T: {
@@ -166,15 +173,19 @@ namespace var {
                     v.d_val = v.b_val;
                 }
                 else {
-                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                      + " to " + util::types[target_type]);
+                    RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                      + " to " + val::typetostr(target_type));
                 }
 
                 break;
             }
+            case OBJECT_T: {
+                v.s_val = v.o_val->print();
+                break;
+            }
             default:
-                RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of v.type " + util::types[v.type]
-                                                  + " to " + util::types[target_type]);
+                RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type)
+                                                  + " to " + val::typetostr(target_type));
         }
 
         v.destroy();

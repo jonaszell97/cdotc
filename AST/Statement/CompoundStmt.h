@@ -2,33 +2,32 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#ifndef MATHPARSER_COMPOUNDSTATEMENT_H
-#define MATHPARSER_COMPOUNDSTATEMENT_H
+#ifndef CDOT_COMPOUNDSTATEMENT_H
+#define CDOT_COMPOUNDSTATEMENT_H
 
 
 #include <map>
 #include "../AstNode.h"
 #include "Statement.h"
-#include "../../Objects/Function.h"
+#include "../../StdLib/Objects/Function.h"
+#include "../Context.h"
 
 class CompoundStmt : public AstNode, public std::enable_shared_from_this<CompoundStmt> {
 public:
     CompoundStmt();
-    std::shared_ptr<CompoundStmt> instance();
+    CompoundStmt(const CompoundStmt& cp);
+    virtual AstNode::SharedPtr clone() const;
+
     void add_statement(AstNode::SharedPtr);
 
-    void set_variable(std::string, Variant);
-    Variant get_variable(std::string);
-    bool has_variable(std::string);
-    std::map<std::string, Variant::SharedPtr> get_variables();
-
-    void set_function(std::string, Function);
-    Variant get_function(std::string);
-    bool has_function(std::string);
-
-    Variant get_var_or_func(std::string);
-
     void terminate(Variant v);
+    inline void terminable(bool terminable) {
+        _terminable = terminable;
+    };
+    void continue_();
+    inline void continuable(bool continuable) {
+        _continuable = continuable;
+    }
 
     Variant evaluate(Variant = {});
 
@@ -36,18 +35,26 @@ public:
     typedef std::weak_ptr<CompoundStmt> WeakPtr;
     typedef std::unique_ptr<CompoundStmt> UniquePtr;
     std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
-protected:
-    bool _root_has_variable(std::string);
-    bool _root_has_function(std::string);
 
-    bool _return_reached;
+    void __dump(int);
+
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
+protected:
+
+    bool _return_reached = false;
+
+    bool _terminable = true;
+    bool _continuable = false;
+
     Variant _return_val;
-    std::map<std::string, Variant::SharedPtr> _variables;
-    std::map<std::string, Variant::SharedPtr> _global_functions;
     std::vector<AstNode::SharedPtr> _statements;
     std::string _class_name = "CompoundStmt";
 };
 
 
-#endif //MATHPARSER_COMPOUNDSTATEMENT_H
+#endif //CDOT_COMPOUNDSTATEMENT_H

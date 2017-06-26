@@ -5,7 +5,7 @@
 #include <iostream>
 #include "UnaryOperator.h"
 #include "../../Variant/Variant.h"
-#include "../../Objects/Object.h"
+#include "../../StdLib/Objects/Object.h"
 #include "../../Util.h"
 
 UnaryOperator::UnaryOperator(std::string op, std::string fix) :
@@ -19,13 +19,26 @@ UnaryOperator::UnaryOperator(Variant v, std::string fix) : UnaryOperator(v.get<s
 
 }
 
+UnaryOperator::UnaryOperator(const UnaryOperator& cp) {
+    _operator = cp._operator;
+    _child = std::static_pointer_cast<Expression>(cp._child->clone());
+    set_parent(cp._parent);
+}
+
+AstNode::SharedPtr UnaryOperator::clone() const {
+    return std::make_shared<UnaryOperator>(*this);
+}
+
 std::string UnaryOperator::get_operator() {
     return _operator;
 }
 
 Variant UnaryOperator::evaluate(Variant) {
     if (_operator == "typeof") {
-        return util::types[_child->evaluate().get_type()];
+        return val::type_name(_child->evaluate());
+    }
+    else if (_operator == "*") {
+        return *_child->evaluate();
     }
     else if (_operator == "&") {
         IdentifierRefExpr::SharedPtr child = std::static_pointer_cast<IdentifierRefExpr>(_child);
@@ -43,62 +56,39 @@ Variant UnaryOperator::evaluate(Variant) {
     else if (_operator == "!") {
         return !(_child->evaluate());
     }
-    else if (_operator == "++" && prefix) {
-        auto fst = _child->evaluate();
-
-        if (fst.get_type() == REF_T) {
-            fst.strict_equals(fst + Variant(1));
+    else if (_operator == "++" || _operator == "--") {
+        Variant fst;
+        IdentifierRefExpr::SharedPtr ref = std::dynamic_pointer_cast<IdentifierRefExpr>(_child);
+        if (ref != nullptr) {
+            ref->return_ref(true);
+            fst = ref->evaluate();
         }
         else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
+            fst = _child->evaluate();
+            if (!fst.is_ref()) {
+                RuntimeError::raise(ERR_OP_UNDEFINED,
+                                    "Cannot apply increment operator to value that is not a reference");
+            }
         }
 
-        return fst;
-    }
-    else if (_operator == "++") {
-        auto fst = _child->evaluate();
-        Variant return_val(fst);
+        if (prefix) {
+            fst.strict_equals(*fst + Variant(_operator == "++" ? 1 : -1));
 
-        if (fst.get_type() == REF_T) {
-            fst.strict_equals(fst + Variant(1));
-        }
-        else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
-        }
-
-        return return_val;
-    }
-    else if (_operator == "--" && prefix) {
-        auto fst = _child->evaluate();
-
-        if (fst.get_type() == REF_T) {
-            fst.strict_equals(fst - Variant(1));
+            return *fst;
         }
         else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
-        }
+            Variant return_val(*fst);
+            fst.strict_equals(*fst + Variant(_operator == "++" ? 1 : -1));
 
-        return fst;
-    }
-    else if (_operator == "--") {
-        auto fst = _child->evaluate();
-        Variant return_val(fst);
-
-        if (fst.get_type() == REF_T) {
-            fst.strict_equals(fst - Variant(1));
+            return return_val;
         }
-        else {
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Cannot apply increment operator to value that is not a reference");
-        }
-
-        return return_val;
     }
     else if (_operator == "~") {
         return ~_child->evaluate();
     }
 
     RuntimeError::raise(ERR_OP_UNDEFINED, "No definition found for unary operator " + _operator + " on type "
-                            + std::to_string(_child->evaluate().get_type()));
+                            + val::typetostr(_child->evaluate().get_type()));
 }
 
 std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {

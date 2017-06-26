@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#ifndef MATHPARSER_BINARYOPERATOR_H
-#define MATHPARSER_BINARYOPERATOR_H
+#ifndef CDOT_BINARYOPERATOR_H
+#define CDOT_BINARYOPERATOR_H
 
 
 #include "../AstNode.h"
@@ -14,6 +14,9 @@
 class BinaryOperator : public Operator {
 public:
     BinaryOperator(std::string);
+    BinaryOperator(const BinaryOperator& cp);
+    virtual AstNode::SharedPtr clone() const;
+
     Variant evaluate(Variant = {});
     std::string get_operator();
     std::vector<AstNode::SharedPtr> get_children();
@@ -23,6 +26,12 @@ public:
     typedef std::shared_ptr<BinaryOperator> SharedPtr;
     void __dump(int);
 
+    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
+        v.accept(this, f);
+    }
+
+    friend class Visitor;
+
 protected:
     Expression::SharedPtr _first_child;
     Expression::SharedPtr _second_child;
@@ -31,4 +40,4 @@ protected:
 };
 
 
-#endif //MATHPARSER_BINARYOPERATOR_H
+#endif //CDOT_BINARYOPERATOR_H

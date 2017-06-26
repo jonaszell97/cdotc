@@ -44,11 +44,8 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add option="-DMAGICKCORE_QUANTUM_DEPTH=16"/>
-					<Add option="-DMAGICKCORE_HDRI_ENABLE=0"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/usr/local/Cellar/imagemagick/7.0.6-0/include/ImageMagick-7"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/8.1.0/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
 					<Add directory="/usr/include"/>
@@ -69,11 +66,8 @@
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add option="-DMAGICKCORE_QUANTUM_DEPTH=16"/>
-					<Add option="-DMAGICKCORE_HDRI_ENABLE=0"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/usr/local/Cellar/imagemagick/7.0.6-0/include/ImageMagick-7"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/8.1.0/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
 					<Add directory="/usr/include"/>
@@ -190,6 +184,18 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h">
 			<Option target="MathParser"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h">
+			<Option target="MathParser"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.cpp">
 			<Option target="MathParser"/>
 		</Unit>
@@ -244,6 +250,12 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h">
 			<Option target="MathParser"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h">
+			<Option target="MathParser"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Debug.cpp">
 			<Option target="MathParser"/>
 		</Unit>
@@ -278,6 +290,12 @@
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Objects/Object.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.h">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.cpp">
