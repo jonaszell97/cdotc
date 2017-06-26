@@ -49,6 +49,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o"
   "CMakeFiles/MathParser.dir/StdLib/Class.cpp.o"
   "CMakeFiles/MathParser.dir/StdLib/Method.cpp.o"
+  "CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o"
+  "CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o"
   "MathParser.pdb"
   "MathParser"
 )

@@ -9,7 +9,8 @@
 #include <string>
 #include <vector>
 #include "../../Variant/Variant.h"
-#include "../Class.h"
+
+class Class;
 
 class Object {
 public:
@@ -20,6 +21,8 @@ public:
     Variant call_method(std::string, std::vector<Variant>);
 
     void set_property(std::string, Variant::SharedPtr = {});
+    void add_property(std::string, Variant::SharedPtr = {});
+
     inline Class* get_class() {
         return class_prototype;
     }

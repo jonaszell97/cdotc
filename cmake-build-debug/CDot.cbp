@@ -268,6 +268,18 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h">
 			<Option target="MathParser"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.h">
+			<Option target="MathParser"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.cpp">
 			<Option target="MathParser"/>
 		</Unit>

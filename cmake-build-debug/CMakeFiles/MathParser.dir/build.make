@@ -1257,6 +1257,54 @@ CMakeFiles/MathParser.dir/StdLib/Method.cpp.o.provides: CMakeFiles/MathParser.di
 CMakeFiles/MathParser.dir/StdLib/Method.cpp.o.provides.build: CMakeFiles/MathParser.dir/StdLib/Method.cpp.o
 
 
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Visitor/ContextVisitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp > CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.i
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp -o CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.s
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.requires:
+
+.PHONY : CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.requires
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.provides: CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.provides
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.provides.build: CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o
+
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Visitor/EvaluatingVisitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.cpp
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.cpp > CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.i
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.cpp -o CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.s
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.requires:
+
+.PHONY : CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.requires
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.provides: CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.provides
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.provides.build: CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
+
+
 # Object files for target MathParser
 MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/main.cpp.o" \
@@ -1308,7 +1356,9 @@ MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o" \
 "CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o" \
 "CMakeFiles/MathParser.dir/StdLib/Class.cpp.o" \
-"CMakeFiles/MathParser.dir/StdLib/Method.cpp.o"
+"CMakeFiles/MathParser.dir/StdLib/Method.cpp.o" \
+"CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o" \
+"CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o"
 
 # External object files for target MathParser
 MathParser_EXTERNAL_OBJECTS =
@@ -1363,9 +1413,11 @@ MathParser: CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o
 MathParser: CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o
 MathParser: CMakeFiles/MathParser.dir/StdLib/Class.cpp.o
 MathParser: CMakeFiles/MathParser.dir/StdLib/Method.cpp.o
+MathParser: CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o
+MathParser: CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
 MathParser: CMakeFiles/MathParser.dir/build.make
 MathParser: CMakeFiles/MathParser.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Linking CXX executable MathParser"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Linking CXX executable MathParser"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/MathParser.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -1423,6 +1475,8 @@ CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/GlobalConte
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/Class.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/Method.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o.requires
 
 .PHONY : CMakeFiles/MathParser.dir/requires
 

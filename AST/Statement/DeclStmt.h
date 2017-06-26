@@ -27,11 +27,13 @@ public:
     typedef std::shared_ptr<DeclStmt> SharedPtr;
     void __dump(int);
 
-    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
-        v.accept(this, f);
+    virtual inline Variant accept(Visitor& v) {
+        return v.visit(this);
     }
 
     friend class Visitor;
+    friend class EvaluatingVisitor;
+    friend class ContextVisitor;
 
 protected:
     Context::SharedPtr context;

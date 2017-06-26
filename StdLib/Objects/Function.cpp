@@ -6,6 +6,7 @@
 #include "Function.h"
 #include "../../AST/Statement/CompoundStmt.h"
 #include "../../Util.h"
+#include "../../AST/Visitor/ContextVisitor.h"
 
 Function::Function(std::string func_name, ValueType return_type) :
     function_name(func_name),
@@ -48,8 +49,8 @@ Variant Function::call(std::vector<Variant> args) {
     Context::SharedPtr ctx = std::make_shared<Context>(*context);
     CompoundStmt::SharedPtr inst = std::static_pointer_cast<CompoundStmt>(func_body->clone());
 
-    Visitor v(ctx);
-    v.accept(inst.get(), VisitorFlag::LINK_TREE);
+    ContextVisitor v(ctx);
+    v.visit(inst.get());
 
     for (int j = 0; j < arg_names.size(); ++j) {
         if (j >= args.size()) {

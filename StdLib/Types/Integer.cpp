@@ -21,8 +21,13 @@ namespace intgr {
             {"MIN_VALUE", std::make_shared<Variant>(INT32_MIN)}
     };
 
+    const std::vector<std::string> _integer_instance_props = {
+            {"value"}
+    };
+
     Class::UniquePtr init() {
-        Class::UniquePtr Integer = std::make_unique<Class>("Integer", std::vector<ValueType>{ INT_T },
+        Method int_construct = Method("construct", construct);
+        Class::UniquePtr Integer = std::make_unique<Class>("Integer", int_construct,
             AccessModifier::PUBLIC);
 
         for (auto method : _integer_static_methods) {
@@ -33,6 +38,9 @@ namespace intgr {
         }
         for (auto constant : _integer_class_constants) {
             Integer->add_static_property(constant.first, constant.second);
+        }
+        for (auto prop : _integer_instance_props) {
+            Integer->add_property(prop, {}, AccessModifier::PRIVATE);
         }
 
         return std::move(Integer);
@@ -46,6 +54,19 @@ namespace intgr {
 
     Variant parseInt(std::vector<Variant> args) {
         return { std::stoi(args[0].get<std::string>()) };
+    }
+
+    /******************************************/
+    /*                                        */
+    /*            INSTANCE METHODS            */
+    /*                                        */
+    /******************************************/
+
+    Variant construct(Object* this_arg, std::vector<Variant> args) {
+        assert_constr_args(1, { INT_T }, args, "Integer");
+        this_arg->set_property("value", std::make_shared<Variant>(args.front()));
+
+        return { };
     }
 
 } // namespace intgr

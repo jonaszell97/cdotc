@@ -29,6 +29,9 @@ public:
     virtual std::vector<AstNode::SharedPtr> get_children() = 0;
     virtual void __dump(int) = 0;
 
+    friend class Visitor;
+    friend class EvaluatingVisitor;
+    friend class ContextVisitor;
 protected:
     bool _implicit_ref = false;
     RefExpr::SharedPtr _member_expr;

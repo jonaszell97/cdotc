@@ -47,7 +47,9 @@ Variant MethodCallExpr::evaluate(Variant obj) {
         v = obj.get<Class*>()->call_static_method(_ident, _real_args);
     }
     else if (val::base_class(obj.get_type()) != "") {
-//        v = GlobalContext::get_class(val::base_class(obj.get_type()))->call_method(_ident, obj, _real_args);
+        Class* cl = GlobalContext::get_class(val::base_class(obj.get_type()));
+        Object::SharedPtr class_instance = cl->instantiate({obj});
+        v = class_instance->call_method(_ident, _real_args);
     }
     else {
         RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call method on primitve value.");

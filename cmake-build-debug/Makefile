@@ -960,6 +960,60 @@ AST/Statement/Statement.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.s
 .PHONY : AST/Statement/Statement.cpp.s
 
+AST/Visitor/ContextVisitor.o: AST/Visitor/ContextVisitor.cpp.o
+
+.PHONY : AST/Visitor/ContextVisitor.o
+
+# target to build an object file
+AST/Visitor/ContextVisitor.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o
+.PHONY : AST/Visitor/ContextVisitor.cpp.o
+
+AST/Visitor/ContextVisitor.i: AST/Visitor/ContextVisitor.cpp.i
+
+.PHONY : AST/Visitor/ContextVisitor.i
+
+# target to preprocess a source file
+AST/Visitor/ContextVisitor.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.i
+.PHONY : AST/Visitor/ContextVisitor.cpp.i
+
+AST/Visitor/ContextVisitor.s: AST/Visitor/ContextVisitor.cpp.s
+
+.PHONY : AST/Visitor/ContextVisitor.s
+
+# target to generate assembly for a file
+AST/Visitor/ContextVisitor.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.s
+.PHONY : AST/Visitor/ContextVisitor.cpp.s
+
+AST/Visitor/EvaluatingVisitor.o: AST/Visitor/EvaluatingVisitor.cpp.o
+
+.PHONY : AST/Visitor/EvaluatingVisitor.o
+
+# target to build an object file
+AST/Visitor/EvaluatingVisitor.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
+.PHONY : AST/Visitor/EvaluatingVisitor.cpp.o
+
+AST/Visitor/EvaluatingVisitor.i: AST/Visitor/EvaluatingVisitor.cpp.i
+
+.PHONY : AST/Visitor/EvaluatingVisitor.i
+
+# target to preprocess a source file
+AST/Visitor/EvaluatingVisitor.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.i
+.PHONY : AST/Visitor/EvaluatingVisitor.cpp.i
+
+AST/Visitor/EvaluatingVisitor.s: AST/Visitor/EvaluatingVisitor.cpp.s
+
+.PHONY : AST/Visitor/EvaluatingVisitor.s
+
+# target to generate assembly for a file
+AST/Visitor/EvaluatingVisitor.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.s
+.PHONY : AST/Visitor/EvaluatingVisitor.cpp.s
+
 AST/Visitor/Visitor.o: AST/Visitor/Visitor.cpp.o
 
 .PHONY : AST/Visitor/Visitor.o
@@ -1575,6 +1629,12 @@ help:
 	@echo "... AST/Statement/Statement.o"
 	@echo "... AST/Statement/Statement.i"
 	@echo "... AST/Statement/Statement.s"
+	@echo "... AST/Visitor/ContextVisitor.o"
+	@echo "... AST/Visitor/ContextVisitor.i"
+	@echo "... AST/Visitor/ContextVisitor.s"
+	@echo "... AST/Visitor/EvaluatingVisitor.o"
+	@echo "... AST/Visitor/EvaluatingVisitor.i"
+	@echo "... AST/Visitor/EvaluatingVisitor.s"
 	@echo "... AST/Visitor/Visitor.o"
 	@echo "... AST/Visitor/Visitor.i"
 	@echo "... AST/Visitor/Visitor.s"

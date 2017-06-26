@@ -16,11 +16,11 @@ public:
     AstNode();
 
     virtual ~AstNode() {}
-    virtual Variant evaluate(Variant = {}) = 0;
 
     typedef std::shared_ptr<AstNode> SharedPtr;
     typedef std::weak_ptr<AstNode> WeakPtr;
     virtual AstNode::SharedPtr clone() const = 0;
+    virtual Variant evaluate(Variant = {}) = 0;
 
     virtual std::vector<AstNode::SharedPtr> get_children();
     virtual void set_parent(AstNode*);
@@ -29,7 +29,7 @@ public:
         return _parent;
     }
 
-    virtual void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) = 0;
+    virtual Variant accept(Visitor& v) = 0;
 
     virtual void __dump(int) = 0;
     virtual void __tab(int);

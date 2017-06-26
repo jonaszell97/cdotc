@@ -25,11 +25,13 @@ public:
     typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
     void __dump(int);
 
-    virtual inline void visit(Visitor& v, VisitorFlag f = VisitorFlag::NONE) {
-        v.accept(this, f);
+    virtual inline Variant accept(Visitor& v) {
+        return v.visit(this);
     }
 
     friend class Visitor;
+    friend class EvaluatingVisitor;
+    friend class ContextVisitor;
     std::vector<AstNode::SharedPtr> get_children();
 
 protected:

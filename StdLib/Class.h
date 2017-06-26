@@ -34,9 +34,8 @@ namespace obj {
     /*                                        */
     /******************************************/
 
+    Variant construct(Object *this_arg, std::vector<Variant> args);
     Variant toString(Object *this_arg, std::vector<Variant> args);
-
-
 
     /******************************************/
     /*                                        */
@@ -53,7 +52,6 @@ namespace obj {
 class Class {
 public:
     Class(std::string, Method, AccessModifier);
-    Class(const Class&);
 
     /** Instance Properties */
     void add_property(std::string, Variant::SharedPtr = {}, AccessModifier = AccessModifier::PUBLIC);

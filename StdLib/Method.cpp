@@ -3,6 +3,8 @@
 //
 
 #include "Method.h"
+#include "../AST/Statement/CompoundStmt.h"
+#include "../AST/Visitor/ContextVisitor.h"
 
 Method::Method(std::string class_name, CompoundStmt::SharedPtr body,
        std::vector<std::pair<std::string, ValueType>> signature) :
@@ -13,14 +15,28 @@ Method::Method(std::string class_name, CompoundStmt::SharedPtr body,
 
 }
 
+Method::Method(std::string class_name, InstanceFunction body) :
+    class_name(class_name),
+    _internal_body(body),
+    body{},
+    signature{},
+    _is_lib_method(true)
+{
+
+}
+
 Variant Method::call(Object::SharedPtr this_arg, std::vector<Variant> args) {
+    if (_is_lib_method) {
+        return _internal_body(this_arg.get(), args);
+    }
+
     if (args.size() != signature.size()) {
         RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No matching call for method " + class_name + " found");
     }
 
     Context::SharedPtr ctx = std::make_shared<Context>();
-    Visitor v(ctx);
-    v.accept(body.get(), VisitorFlag::LINK_TREE);
+    ContextVisitor v(ctx);
+    v.visit(body.get());
 
     for (int i = 0; i < signature.size(); ++i) {
         auto real_arg = signature[i];

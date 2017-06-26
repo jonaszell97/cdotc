@@ -18,7 +18,9 @@ void GlobalContext::init() {
 
     initialized = true;
 
-    Class::UniquePtr Object = std::make_unique<Class>("Object", std::vector<ValueType>{}, AccessModifier::PUBLIC);
+    Class::UniquePtr Object = std::make_unique<Class>("Object", Method("construct", cdot::lib::obj::construct),
+        AccessModifier::PUBLIC);
+
     declare_class(std::move(Object));
 
     Class::UniquePtr Integer = cdot::lib::intgr::init();

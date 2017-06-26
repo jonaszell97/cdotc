@@ -6,6 +6,7 @@
 #include "Object.h"
 #include "../../Util.h"
 #include "Function.h"
+#include "../GlobalContext.h"
 
 Object::Object() {
     class_prototype = GlobalContext::get_class("Object");
@@ -34,6 +35,15 @@ void Object::set_property(std::string prop_name, Variant::SharedPtr prop) {
         }
 
         _properties.insert(std::pair<std::string, Variant::SharedPtr>(prop_name, prop));
+    }
+}
+
+void Object::add_property(std::string prop_name, Variant::SharedPtr value) {
+    if (_properties.find(prop_name) != _properties.end()) {
+        _properties[prop_name] = value;
+    }
+    else {
+        _properties.emplace(prop_name, value);
     }
 }
 

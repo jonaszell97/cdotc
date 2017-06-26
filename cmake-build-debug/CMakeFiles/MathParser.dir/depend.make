@@ -9,7 +9,6 @@ CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../AST/AstNode.cpp
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../AST/AstNode.h
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../Exceptions.h
-CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../Token.h
 CMakeFiles/MathParser.dir/AST/AstNode.cpp.o: ../Util.h
@@ -20,6 +19,9 @@ CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../AST/Context.h
 CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Context.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../AST/AstNode.h
@@ -31,6 +33,9 @@ CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../AST/Visitor/Visito
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/Expression.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../AST/AstNode.h
@@ -43,7 +48,9 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../AST/Visi
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/Objects/Array.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ArrayLiteral.cpp.o: ../Variant/Variant.h
@@ -58,6 +65,9 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../AST/Visit
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/LiteralExpr.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../AST/AstNode.h
@@ -71,6 +81,8 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../AST/Vis
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectLiteral.cpp.o: ../Variant/Variant.h
 
@@ -84,6 +96,8 @@ CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../AST/Vi
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/AST/Expression/Literal/ObjectPropExpr.cpp.o: ../Variant/Variant.h
@@ -100,7 +114,9 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../AST/V
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/Objects/Array.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o: ../Variant/Variant.h
 
@@ -116,6 +132,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../AST/Visitor/
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/CallExpr.cpp.o: ../Util.h
@@ -134,6 +151,7 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../AST
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o: ../Util.h
@@ -151,6 +169,8 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../AST/Vis
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MemberRefExpr.cpp.o: ../Variant/Variant.h
 
@@ -166,6 +186,8 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../AST/Vi
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/MethodCallExpr.cpp.o: ../Variant/Variant.h
 
@@ -179,6 +201,9 @@ CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../AST/Visitor/V
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Expression/RefExpr/RefExpr.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../AST/AstNode.h
@@ -193,6 +218,7 @@ CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../AST/Visitor/Visi
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Operator/BinaryOperator.cpp.o: ../Util.h
@@ -209,6 +235,9 @@ CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../AST/Visitor/Vi
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/AST/Operator/ExplicitCastExpr.cpp.o: ../Variant/Variant.h
 
@@ -222,6 +251,9 @@ CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Operator/Operator.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../AST/AstNode.h
@@ -236,6 +268,7 @@ CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../AST/Visitor/Vi
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Operator/TertiaryOperator.cpp.o: ../Variant/Variant.h
@@ -253,6 +286,8 @@ CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../AST/Visitor/Visit
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/AST/Operator/UnaryOperator.cpp.o: ../Variant/Variant.h
@@ -266,6 +301,7 @@ CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../AST/Visitor/Visit
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/CompoundStmt.cpp.o: ../Variant/Variant.h
@@ -283,6 +319,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../AST/Visi
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/BreakStmt.cpp.o: ../Variant/Variant.h
@@ -300,6 +337,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../AST/V
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ContinueStmt.cpp.o: ../Variant/Variant.h
@@ -315,6 +353,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../AST/Visito
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ForStmt.cpp.o: ../Variant/Variant.h
@@ -330,6 +369,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../AST/Visitor
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o: ../Variant/Variant.h
@@ -361,6 +401,7 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../Interpre
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../Option.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o: ../Token.h
@@ -382,6 +423,7 @@ CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/Objects/Array.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o: ../StdLib/Objects/Object.h
@@ -398,6 +440,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../AST/Visit
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o: ../Util.h
@@ -415,6 +458,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../AST/Visi
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o: ../Util.h
@@ -431,6 +475,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../AST/Visito
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o: ../Variant/Variant.h
@@ -450,6 +495,7 @@ CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../AST/Visitor/Visit
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o: ../Util.h
@@ -465,6 +511,9 @@ CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../AST/Visitor/Visi
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../AST/AstNode.h
@@ -475,7 +524,95 @@ CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../AST/Visitor/Visitor.
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o: ../Variant/Variant.h
+
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/AstNode.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Context.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/Expression.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/Literal/ArrayLiteral.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/Literal/LiteralExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/Literal/ObjectLiteral.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/Literal/ObjectPropExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/RefExpr/ArrayAccessExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/RefExpr/CallExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/RefExpr/IdentifierRefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/RefExpr/MemberRefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Expression/RefExpr/RefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Operator/BinaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Operator/ExplicitCastExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Operator/Operator.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Operator/TertiaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Operator/UnaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/CompoundStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/ControlFlow/BreakStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/ControlFlow/ContinueStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/ControlFlow/ForStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/ControlFlow/IfStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/ControlFlow/WhileStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/DeclStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/Function/FuncArgDecl.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/Function/FunctionDecl.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/Function/ReturnStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/IO/InputStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/IO/OutputStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Statement/Statement.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Visitor/ContextVisitor.cpp
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Visitor/ContextVisitor.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../AST/Visitor/Visitor.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../Exceptions.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../StdLib/Class.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../StdLib/Objects/Object.h
+CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o: ../Variant/Variant.h
+
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/AstNode.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Context.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/Expression.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/Literal/ArrayLiteral.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/Literal/LiteralExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/Literal/ObjectLiteral.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/Literal/ObjectPropExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/ArrayAccessExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/CallExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/IdentifierRefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/MemberRefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/MethodCallExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Expression/RefExpr/RefExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Operator/BinaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Operator/ExplicitCastExpr.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Operator/Operator.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Operator/TertiaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Operator/UnaryOperator.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/CompoundStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/ControlFlow/BreakStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/ControlFlow/ContinueStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/ControlFlow/ForStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/ControlFlow/IfStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/ControlFlow/WhileStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/DeclStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/Function/FuncArgDecl.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/Function/FunctionDecl.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/Function/ReturnStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/IO/InputStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/IO/OutputStmt.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Statement/Statement.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Visitor/EvaluatingVisitor.cpp
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Visitor/EvaluatingVisitor.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../AST/Visitor/Visitor.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../Exceptions.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/Class.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/Objects/Array.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../StdLib/Objects/Object.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../Util.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../AST/AstNode.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../AST/Context.h
@@ -512,6 +649,7 @@ CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o: ../Variant/Variant.h
@@ -553,6 +691,8 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Statement/Function/ReturnStm
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Statement/IO/InputStmt.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Statement/IO/OutputStmt.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Statement/Statement.h
+CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Visitor/ContextVisitor.h
+CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Visitor/EvaluatingVisitor.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Debug.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Exceptions.h
@@ -560,6 +700,7 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Interpreter.cpp
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Interpreter.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Token.h
@@ -570,11 +711,10 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o: ../Variant/Variant.h
 CMakeFiles/MathParser.dir/Option.cpp.o: ../Option.cpp
 CMakeFiles/MathParser.dir/Option.cpp.o: ../Option.h
 
-CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../AST/Context.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/Class.cpp
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/Class.h
-CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o: ../Variant/Variant.h
@@ -583,8 +723,26 @@ CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/GlobalContext.cpp
 CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../StdLib/Types/Integer.h
 CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o: ../Variant/Variant.h
+
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/AstNode.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/Context.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/Statement/CompoundStmt.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/Statement/Statement.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/Visitor/ContextVisitor.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../AST/Visitor/Visitor.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../Exceptions.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/Class.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/Method.cpp
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../StdLib/Objects/Object.h
+CMakeFiles/MathParser.dir/StdLib/Method.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../AST/AstNode.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../AST/Context.h
@@ -594,8 +752,10 @@ CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Objects/Array.cpp
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Objects/Array.h
+CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o: ../Variant/Variant.h
@@ -604,20 +764,22 @@ CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/AstNode.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/Context.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/Statement/CompoundStmt.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/Statement/Statement.h
+CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/Visitor/ContextVisitor.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/Objects/Function.cpp
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o: ../Variant/Variant.h
 
-CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../AST/Context.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/Objects/Object.cpp
 CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../StdLib/Objects/Object.h
@@ -626,6 +788,9 @@ CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Class.h
+CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Method.h
+CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Objects/Function.h
+CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Types/Integer.cpp
 CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../StdLib/Types/Integer.h
 CMakeFiles/MathParser.dir/StdLib/Types/Integer.cpp.o: ../Variant/Variant.h
@@ -660,6 +825,7 @@ CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../Interpreter.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../Token.h
@@ -680,7 +846,6 @@ CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o: ../Variant/Arithmetic.h
 CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o: ../Variant/Variant.h
 
 CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../Exceptions.h
-CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../Util.h
 CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o: ../Variant/Conversion.cpp
@@ -695,6 +860,7 @@ CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../AST/Visitor/Visitor.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/Objects/Array.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/Variant/Variant.cpp.o: ../StdLib/Objects/Object.h
@@ -729,6 +895,7 @@ CMakeFiles/MathParser.dir/main.cpp.o: ../Exceptions.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../Interpreter.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../StdLib/Class.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../StdLib/GlobalContext.h
+CMakeFiles/MathParser.dir/main.cpp.o: ../StdLib/Method.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../StdLib/Objects/Function.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../StdLib/Objects/Object.h
 CMakeFiles/MathParser.dir/main.cpp.o: ../Token.h

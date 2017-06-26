@@ -31,6 +31,8 @@
 #include "AST/Statement/ControlFlow/BreakStmt.h"
 #include "AST/Expression/RefExpr/MethodCallExpr.h"
 #include "StdLib/GlobalContext.h"
+#include "AST/Visitor/ContextVisitor.h"
+#include "AST/Visitor/EvaluatingVisitor.h"
 
 /**
  * Creates a new interpreter for an Xtreme Jonas Script program.
@@ -970,15 +972,16 @@ void Interpreter::run(bool debug = false) {
     parse();
 
     GlobalContext::init();
-    Visitor v;
-    v.accept(prog_root.get(), VisitorFlag::LINK_TREE);
+    ContextVisitor v;
+    v.visit(prog_root.get());
 
     if (debug) {
         prog_root->__dump(0);
         std::cout << std::endl << std::endl;
     }
 
-    prog_root->evaluate();
+    EvaluatingVisitor ev;
+    ev.visit(prog_root.get());
 }
 
 /**

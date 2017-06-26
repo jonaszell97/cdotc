@@ -10,8 +10,8 @@
 #include <vector>
 #include "../../Variant/Variant.h"
 #include "Object.h"
-#include "../../AST/Context.h"
 
+class Context;
 class CompoundStmt;
 
 class Function : public Object {
@@ -25,7 +25,7 @@ public:
     std::string get_name();
     Variant call(std::vector<Variant>);
     std::string print();
-    inline void set_context(Context::SharedPtr ctx) {
+    inline void set_context(std::shared_ptr<Context> ctx) {
         context = ctx;
     }
 
@@ -37,7 +37,7 @@ public:
     typedef std::unique_ptr<Function> UniquePtr;
 
 protected:
-    Context::SharedPtr context;
+    std::shared_ptr<Context> context;
     std::string function_name;
     ValueType return_type;
     std::shared_ptr<CompoundStmt> func_body;

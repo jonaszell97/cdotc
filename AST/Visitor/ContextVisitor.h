@@ -1,52 +1,22 @@
 //
-// Created by Jonas Zell on 25.06.17.
+// Created by Jonas Zell on 26.06.17.
 //
 
-#ifndef CDOT_VISITOR_H
-#define CDOT_VISITOR_H
+#ifndef CDOT_CONTEXTVISITOR_H
+#define CDOT_CONTEXTVISITOR_H
 
-#include <vector>
-#include "../Context.h"
 
-enum class VisitorFlag {
-    NONE,
-    LINK_TREE
-};
+#include "Visitor.h"
 
-class AstNode;
-class InputStmt;
-class FunctionDecl;
-class CompoundStmt;
-class IdentifierRefExpr;
-class DeclStmt;
-class ForStmt;
-class WhileStmt;
-class ArrayLiteral;
-class LiteralExpr;
-class ObjectLiteral;
-class ObjectPropExpr;
-class ArrayAccessExpr;
-class CallExpr;
-class MethodCallExpr;
-class MemberRefExpr;
-class BinaryOperator;
-class ExplicitCastExpr;
-class TertiaryOperator;
-class UnaryOperator;
-class BreakStmt;
-class ContinueStmt;
-class IfStmt;
-class FuncArgDecl;
-class ReturnStmt;
-class InputStmt;
-class OutputStmt;
-class Expression;
-class Statement;
-
-class Visitor {
+class ContextVisitor : public Visitor {
 public:
-    Visitor();
-    Visitor(const Visitor&);
+    ContextVisitor();
+    ContextVisitor(Context::SharedPtr);
+    ContextVisitor(const ContextVisitor&);
+
+    inline virtual Context::SharedPtr get_context() {
+        return context;
+    }
 
     virtual Variant visit(FunctionDecl*);
     virtual Variant visit(CompoundStmt*);
@@ -76,7 +46,14 @@ public:
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
 
+protected:
+    Context::SharedPtr context;
+    Statement *root_stmt;
+    std::string root_type;
+    CompoundStmt* func_context;
+    std::vector<std::string> declared_identifiers;
+    std::vector<std::string> referenced_identifiers;
 };
 
 
-#endif //CDOT_VISITOR_H
+#endif //CDOT_CONTEXTVISITOR_H

@@ -8,13 +8,13 @@ def fib(int n) => int {
 let obj = {string prop = "fucbyo" + 3 int peepee = 3}
 
 let x = 3
-x.toString()
-obj.toString(3)
-fib.toString()
 
-outln Integer.parseInt("3.14153")
-outln Object.hashCode(0x213)
+outln x.toString()
 
-outln Integer.MAX_VALUE
-Integer.MAX_VALUE = 15
-outln Integer.MAX_VALUE
+for (int i = 0; i < 5; i++) {
+    if (i == 2) {
+        break
+    }
+
+    outln i
+}

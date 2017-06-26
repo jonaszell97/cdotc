@@ -35,6 +35,8 @@ set(CMAKE_DEPENDS_CHECK_CXX
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Statement/IO/OutputStmt.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o"
+  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o"
+  "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Debug.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Debug.cpp.o"
   "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.cpp" "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/MathParser.dir/Exceptions.cpp.o"

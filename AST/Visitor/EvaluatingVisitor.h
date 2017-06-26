@@ -1,52 +1,25 @@
 //
-// Created by Jonas Zell on 25.06.17.
+// Created by Jonas Zell on 26.06.17.
 //
 
-#ifndef CDOT_VISITOR_H
-#define CDOT_VISITOR_H
+#ifndef CDOT_LITERALEXPRVISITOR_H
+#define CDOT_LITERALEXPRVISITOR_H
 
-#include <vector>
-#include "../Context.h"
 
-enum class VisitorFlag {
+#include "Visitor.h"
+#include "../Expression/Literal/ObjectPropExpr.h"
+#include "../Statement/Function/FuncArgDecl.h"
+
+enum class EvaluationFlag {
     NONE,
-    LINK_TREE
+    RETURN_NAME,
+    RETURN_PROP
 };
 
-class AstNode;
-class InputStmt;
-class FunctionDecl;
-class CompoundStmt;
-class IdentifierRefExpr;
-class DeclStmt;
-class ForStmt;
-class WhileStmt;
-class ArrayLiteral;
-class LiteralExpr;
-class ObjectLiteral;
-class ObjectPropExpr;
-class ArrayAccessExpr;
-class CallExpr;
-class MethodCallExpr;
-class MemberRefExpr;
-class BinaryOperator;
-class ExplicitCastExpr;
-class TertiaryOperator;
-class UnaryOperator;
-class BreakStmt;
-class ContinueStmt;
-class IfStmt;
-class FuncArgDecl;
-class ReturnStmt;
-class InputStmt;
-class OutputStmt;
-class Expression;
-class Statement;
-
-class Visitor {
+class EvaluatingVisitor : public Visitor {
 public:
-    Visitor();
-    Visitor(const Visitor&);
+    EvaluatingVisitor();
+    EvaluatingVisitor(const EvaluatingVisitor&);
 
     virtual Variant visit(FunctionDecl*);
     virtual Variant visit(CompoundStmt*);
@@ -60,9 +33,9 @@ public:
     virtual Variant visit(ObjectLiteral*);
     virtual Variant visit(ObjectPropExpr*);
     virtual Variant visit(ArrayAccessExpr*);
+    virtual Variant visit(MethodCallExpr*);
     virtual Variant visit(CallExpr*);
     virtual Variant visit(MemberRefExpr*);
-    virtual Variant visit(MethodCallExpr*);
     virtual Variant visit(BinaryOperator*);
     virtual Variant visit(ExplicitCastExpr*);
     virtual Variant visit(TertiaryOperator*);
@@ -76,7 +49,28 @@ public:
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
 
+protected:
+    /** Control flow */
+    bool return_reached = false;
+    bool loop_broken = false;
+    bool loop_continued = false;
+    bool current_context_returnable = false;
+    bool current_context_continuable = false;
+    bool current_context_breakable = false;
+
+    /** Function return value */
+    Variant return_val = {};
+
+    /** Identifier evaluation */
+    Variant current_obj_ref = {};
+
+    /** Flag visits */
+    EvaluationFlag flag = EvaluationFlag::NONE;
+
+    /** Object and function declarations */
+    ObjectProp current_prop;
+    FuncArg current_arg;
 };
 
 
-#endif //CDOT_VISITOR_H
+#endif //CDOT_LITERALEXPRVISITOR_H

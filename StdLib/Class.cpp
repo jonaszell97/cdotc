@@ -16,7 +16,7 @@ Class::Class(std::string name, Method constructor, AccessModifier am) :
     _class_name(name),
     access_modifier(am),
     constructor(constructor),
-    properties(std::vector<std::string>),
+    properties(std::vector<std::string>()),
     methods(std::map<std::string, Function::SharedPtr>()),
     static_properties(std::map<std::string, Variant::SharedPtr>()),
     static_methods(std::map<std::string, Function::SharedPtr>()),
@@ -31,17 +31,13 @@ Class::Class(std::string name, Method constructor, AccessModifier am) :
 
 }
 
-Class::Class(const Class &cp) {
-
-}
-
 void Class::add_method(std::string func_name, Function::SharedPtr func, AccessModifier am) {
     methods.insert(std::pair<std::string, Function::SharedPtr>(func_name, func));
     _access_modifiers.emplace(func_name, am);
 }
 
 void Class::add_property(std::string prop_name, Variant::SharedPtr prop, AccessModifier am) {
-    properties.insert(std::pair<std::string, Variant::SharedPtr>(prop_name, prop));
+    properties.push_back(prop_name);
     _access_modifiers.emplace(prop_name, am);
 }
 
@@ -113,6 +109,18 @@ namespace lib {
         }
     }
 
+    void assert_constr_args(int size, std::vector<ValueType> types, std::vector<Variant> args, std::string name) {
+        if (args.size() != size) {
+            RuntimeError::raise(ERR_WRONG_NUM_ARGS, "Wrong number of arguments supplied for call to constructor " + name);
+        }
+
+        for (int i = 0; i < args.size(); ++i) {
+            if (!val::is_compatible(args[i].get_type(), types[i])) {
+                RuntimeError::raise(ERR_TYPE_ERROR, "No matching call found for constructor " + name);
+            }
+        }
+    }
+
 namespace obj {
 
     /******************************************/
@@ -125,6 +133,10 @@ namespace obj {
         assert_args(0, {}, args, "toString");
 
         return this_arg->print();
+    }
+
+    Variant construct(Object *this_arg, std::vector<Variant> args) {
+        return {};
     }
 
     /******************************************/

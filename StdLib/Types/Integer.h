@@ -21,6 +21,8 @@ namespace intgr {
 
     Variant parseInt(std::vector<Variant> args);
 
+    Variant construct(Object*, std::vector<Variant> args);
+
 } // namespace intgr
 } // namespace lib
 } // namespace cdot
