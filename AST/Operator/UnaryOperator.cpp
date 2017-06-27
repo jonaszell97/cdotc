@@ -33,64 +33,6 @@ std::string UnaryOperator::get_operator() {
     return _operator;
 }
 
-Variant UnaryOperator::evaluate(Variant) {
-    if (_operator == "typeof") {
-        return val::type_name(_child->evaluate());
-    }
-    else if (_operator == "*") {
-        return *_child->evaluate();
-    }
-    else if (_operator == "&") {
-        IdentifierRefExpr::SharedPtr child = std::static_pointer_cast<IdentifierRefExpr>(_child);
-        child->return_ref(true);
-
-        return child->evaluate();
-
-    }
-    else if (_operator == "+") {
-        return _child->evaluate();
-    }
-    else if (_operator == "-") {
-        return -(_child->evaluate());
-    }
-    else if (_operator == "!") {
-        return !(_child->evaluate());
-    }
-    else if (_operator == "++" || _operator == "--") {
-        Variant fst;
-        IdentifierRefExpr::SharedPtr ref = std::dynamic_pointer_cast<IdentifierRefExpr>(_child);
-        if (ref != nullptr) {
-            ref->return_ref(true);
-            fst = ref->evaluate();
-        }
-        else {
-            fst = _child->evaluate();
-            if (!fst.is_ref()) {
-                RuntimeError::raise(ERR_OP_UNDEFINED,
-                                    "Cannot apply increment operator to value that is not a reference");
-            }
-        }
-
-        if (prefix) {
-            fst.strict_equals(*fst + Variant(_operator == "++" ? 1 : -1));
-
-            return *fst;
-        }
-        else {
-            Variant return_val(*fst);
-            fst.strict_equals(*fst + Variant(_operator == "++" ? 1 : -1));
-
-            return return_val;
-        }
-    }
-    else if (_operator == "~") {
-        return ~_child->evaluate();
-    }
-
-    RuntimeError::raise(ERR_OP_UNDEFINED, "No definition found for unary operator " + _operator + " on type "
-                            + val::typetostr(_child->evaluate().get_type()));
-}
-
 std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {
     std::vector<AstNode::SharedPtr> res;
     res.push_back(_child);

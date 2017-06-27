@@ -17,8 +17,6 @@ public:
     }
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
-
     typedef std::shared_ptr<TertiaryOperator> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);

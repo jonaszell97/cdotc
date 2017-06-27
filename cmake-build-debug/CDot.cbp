@@ -94,6 +94,12 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h">
 			<Option target="MathParser"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h">
+			<Option target="MathParser"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.cpp">
 			<Option target="MathParser"/>
 		</Unit>
@@ -220,34 +226,58 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h">
 			<Option target="MathParser"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h">
+			<Option target="MathParser"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.cpp">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.cpp">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.cpp">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.cpp">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.cpp">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.cpp">
@@ -298,16 +328,16 @@
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h">
 			<Option target="MathParser"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.cpp">
-			<Option target="MathParser"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h">
-			<Option target="MathParser"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.cpp">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.h">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.cpp">
+			<Option target="MathParser"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.h">
 			<Option target="MathParser"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.cpp">

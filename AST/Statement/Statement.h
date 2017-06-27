@@ -10,7 +10,6 @@
 
 class Statement : public AstNode {
 public:
-    virtual Variant evaluate(Variant = {}) = 0;
 
     typedef std::shared_ptr<AstNode> SharedPtr;
     virtual AstNode::SharedPtr clone() const = 0;

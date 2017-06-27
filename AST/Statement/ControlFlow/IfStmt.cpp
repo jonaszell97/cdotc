@@ -31,18 +31,6 @@ AstNode::SharedPtr IfStmt::clone() const {
     return std::make_shared<IfStmt>(*this);
 }
 
-Variant IfStmt::evaluate(Variant) {
-    bool cond = _condition->evaluate().get<bool>();
-    if (cond && _if_branch != nullptr) {
-        return _if_branch->evaluate();
-    }
-    else if (!cond && _else_branch != nullptr) {
-        return _else_branch->evaluate();
-    }
-
-    return {};
-}
-
 std::vector<AstNode::SharedPtr> IfStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
     children.push_back(_condition);

@@ -10,13 +10,8 @@
 
 class ContextVisitor : public Visitor {
 public:
-    ContextVisitor();
-    ContextVisitor(Context::SharedPtr);
+    ContextVisitor(bool = false);
     ContextVisitor(const ContextVisitor&);
-
-    inline virtual Context::SharedPtr get_context() {
-        return context;
-    }
 
     virtual Variant visit(FunctionDecl*);
     virtual Variant visit(CompoundStmt*);
@@ -45,12 +40,17 @@ public:
     virtual Variant visit(InputStmt*);
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
+    virtual Variant visit(InstantiationExpr*);
+    virtual Variant visit(ClassDecl*);
+    virtual Variant visit(MethodDecl*);
+    virtual Variant visit(FieldDecl*);
+    virtual Variant visit(ConstrDecl*);
 
 protected:
-    Context::SharedPtr context;
+    bool is_progr_root;
     Statement *root_stmt;
     std::string root_type;
-    CompoundStmt* func_context;
+    CompoundStmt* root;
     std::vector<std::string> declared_identifiers;
     std::vector<std::string> referenced_identifiers;
 };

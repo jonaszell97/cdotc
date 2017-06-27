@@ -7,10 +7,10 @@
 
 #include <string>
 #include "Token.h"
-#include "Interpreter.h"
+#include "Parser.h"
 #include <vector>
 
-class Interpreter;
+class Parser;
 
 enum TokenizerFlag {
     TFLAG_NONE,
@@ -21,11 +21,11 @@ class Tokenizer {
 public:
     Tokenizer(std::string);
 
-    friend class Interpreter;
+    friend class Parser;
     typedef std::unique_ptr<Tokenizer> UniquePtr;
 protected:
     std::vector<Token> tokens;
-    Interpreter *_interpreter;
+    Parser *_interpreter;
     std::string _program;
     int current_index;
     int current_line;

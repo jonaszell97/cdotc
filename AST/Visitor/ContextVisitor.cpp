@@ -7,14 +7,16 @@
 #include "../Statement/CompoundStmt.h"
 #include "../Expression/RefExpr/IdentifierRefExpr.h"
 #include "../Expression/RefExpr/MemberRefExpr.h"
-#include "../Statement/DeclStmt.h"
+#include "../Statement/Declaration/DeclStmt.h"
 #include "../Statement/ControlFlow/ForStmt.h"
 #include "../Statement/ControlFlow/WhileStmt.h"
-#include "../Statement/Function/FunctionDecl.h"
+#include "../Statement/Declaration/FunctionDecl.h"
 #include "../Expression/Expression.h"
 #include "../Expression/Literal/LiteralExpr.h"
 #include "../Expression/Literal/ObjectLiteral.h"
 #include "../Expression/RefExpr/ArrayAccessExpr.h"
+#include "../Expression/RefExpr/MethodCallExpr.h"
+#include "../Expression/Class/InstantiationExpr.h"
 #include "../Expression/RefExpr/CallExpr.h"
 #include "../Operator/BinaryOperator.h"
 #include "../Operator/UnaryOperator.h"
@@ -24,66 +26,66 @@
 #include "../Statement/ControlFlow/BreakStmt.h"
 #include "../Statement/ControlFlow/IfStmt.h"
 #include "../Statement/IO/OutputStmt.h"
-#include "../Statement/Function/ReturnStmt.h"
+#include "../Statement/ControlFlow/ReturnStmt.h"
 #include "../Statement/IO/InputStmt.h"
+#include "../Statement/Declaration/Class/ClassDecl.h"
+#include "../Statement/Declaration/Class/ConstrDecl.h"
+#include "../Statement/Declaration/Class/FieldDecl.h"
+#include "../Statement/Declaration/Class/MethodDecl.h"
 #include "../Expression/Literal/ArrayLiteral.h"
 
-ContextVisitor::ContextVisitor() :
-    context(std::make_shared<Context>()),
+ContextVisitor::ContextVisitor(bool root) :
     declared_identifiers(std::vector<std::string>()),
-    referenced_identifiers(std::vector<std::string>())
+    referenced_identifiers(std::vector<std::string>()),
+    is_progr_root(root)
 {
 
 }
 
 ContextVisitor::ContextVisitor(const ContextVisitor &v) : ContextVisitor() {
-    func_context = v.func_context;
-    context->set_parent_ctx(v.context);
-}
 
-ContextVisitor::ContextVisitor(Context::SharedPtr ctx) : ContextVisitor() {
-    context = ctx;
 }
 
 Variant ContextVisitor::visit(CompoundStmt *node) {
-    if (node->_terminable) {
-        func_context = node;
+    // program root
+    if (is_progr_root) {
+        root = node;
+        is_progr_root = false;
+        for (auto child : node->get_children()) {
+            child->set_parent(node);
+            child->set_root(root);
+            child->accept(*this);
+        }
     }
-
-    for (auto child : node->get_children()) {
-        child->set_parent(node);
-        child->accept(*this);
+    // every compound statement has its own context
+    else {
+        ContextVisitor cv;
+        cv.root = node;
+        node->context->set_parent_ctx(root->context);
+        for (auto child : node->get_children()) {
+            child->set_parent(node);
+            child->set_root(root);
+            child->accept(cv);
+        }
     }
-
-    context->capture();
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(FunctionDecl *node) {
-    node->set_context(context);
-    declared_identifiers.push_back(node->_func_name);
-    context->declare_variable(node->_func_name);
-
-    ContextVisitor v(*this);
-    node->_body->accept(v);
-
-    for (auto arg : node->_args) {
-        arg->accept(*this);
+    // don't visit body, will have to revisit later anyway
+    for (auto child : node->_args) {
+        child->set_parent(node);
+        child->set_root(root);
+        child->accept(*this);
     }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(IdentifierRefExpr *node) {
-    node->set_context(context);
-    if (std::find(declared_identifiers.begin(), declared_identifiers.end(), node->_ident)
-        == declared_identifiers.end())
-    {
-        context->add_capture(node->_ident);
-    }
-
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -91,11 +93,8 @@ Variant ContextVisitor::visit(IdentifierRefExpr *node) {
 }
 
 Variant ContextVisitor::visit(DeclStmt *node) {
-    node->set_context(context);
-    declared_identifiers.push_back(node->_ident);
-    context->declare_variable(node->_ident);
-
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -103,28 +102,26 @@ Variant ContextVisitor::visit(DeclStmt *node) {
 }
 
 Variant ContextVisitor::visit(ForStmt *node) {
-    ContextVisitor v(*this);
-    v.root_stmt = node;
-    v.root_type = "for";
     for (auto child : node->get_children()) {
-        child->accept(v);
+        child->set_root(root);
+        child->accept(*this);
     }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(WhileStmt *node) {
-    ContextVisitor v(*this);
-    v.root_stmt = node;
-    v.root_type = "while";
-    node->_condition->accept(*this);
-    node->_while_block->accept(v);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(ArrayLiteral *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -132,12 +129,18 @@ Variant ContextVisitor::visit(ArrayLiteral *node) {
 }
 
 Variant ContextVisitor::visit(LiteralExpr *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
     return nullptr;
 }
 
 Variant ContextVisitor::visit(ObjectLiteral *node) {
-    for (auto prop : node->get_children()) {
-        prop->accept(*this);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
     }
 
     return nullptr;
@@ -145,6 +148,7 @@ Variant ContextVisitor::visit(ObjectLiteral *node) {
 
 Variant ContextVisitor::visit(ObjectPropExpr *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -153,6 +157,7 @@ Variant ContextVisitor::visit(ObjectPropExpr *node) {
 
 Variant ContextVisitor::visit(ArrayAccessExpr *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -161,6 +166,7 @@ Variant ContextVisitor::visit(ArrayAccessExpr *node) {
 
 Variant ContextVisitor::visit(CallExpr *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -169,6 +175,7 @@ Variant ContextVisitor::visit(CallExpr *node) {
 
 Variant ContextVisitor::visit(MemberRefExpr *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -176,19 +183,8 @@ Variant ContextVisitor::visit(MemberRefExpr *node) {
 }
 
 Variant ContextVisitor::visit(BinaryOperator *node) {
-    if (node->_operator == ":") {
-        BinaryOperator::SharedPtr cond_op = std::dynamic_pointer_cast<BinaryOperator>(node->_first_child);
-        
-        if (cond_op == nullptr || cond_op->_operator != "?") {
-            ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Cannot use tertiary operators '?' and ':' alone");
-        }
-
-        Expression::SharedPtr cond = cond_op->_first_child;
-        Expression::SharedPtr if_br = cond_op->_second_child;
-        Expression::SharedPtr else_br = node->_second_child;
-    }
-
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -197,6 +193,7 @@ Variant ContextVisitor::visit(BinaryOperator *node) {
 
 Variant ContextVisitor::visit(ExplicitCastExpr *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -205,6 +202,7 @@ Variant ContextVisitor::visit(ExplicitCastExpr *node) {
 
 Variant ContextVisitor::visit(TertiaryOperator *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -213,6 +211,7 @@ Variant ContextVisitor::visit(TertiaryOperator *node) {
 
 Variant ContextVisitor::visit(UnaryOperator *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -220,28 +219,27 @@ Variant ContextVisitor::visit(UnaryOperator *node) {
 }
 
 Variant ContextVisitor::visit(BreakStmt *node) {
-    node->set_stmt(root_stmt, root_type);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(ContinueStmt *node) {
-    node->set_stmt(root_stmt, root_type);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(IfStmt *node) {
-    node->_condition->accept(*this);
-
-    if (node->_if_branch != nullptr) {
-        ContextVisitor v(*this);
-        node->_if_branch->accept(v);
-    }
-
-    if (node->_else_branch != nullptr) {
-        ContextVisitor v(*this);
-        node->_else_branch->accept(v);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
     }
 
     return nullptr;
@@ -249,6 +247,7 @@ Variant ContextVisitor::visit(IfStmt *node) {
 
 Variant ContextVisitor::visit(FuncArgDecl *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -256,14 +255,17 @@ Variant ContextVisitor::visit(FuncArgDecl *node) {
 }
 
 Variant ContextVisitor::visit(ReturnStmt *node) {
-    node->set_function(func_context);
-    node->_return_val->accept(*this);
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
 
     return nullptr;
 }
 
 Variant ContextVisitor::visit(InputStmt *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -272,6 +274,7 @@ Variant ContextVisitor::visit(InputStmt *node) {
 
 Variant ContextVisitor::visit(OutputStmt *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -280,6 +283,7 @@ Variant ContextVisitor::visit(OutputStmt *node) {
 
 Variant ContextVisitor::visit(Expression *node) {
     for (auto child : node->get_children()) {
+        child->set_root(root);
         child->accept(*this);
     }
 
@@ -287,5 +291,55 @@ Variant ContextVisitor::visit(Expression *node) {
 }
 
 Variant ContextVisitor::visit(MethodCallExpr *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
 
+    return nullptr;
+}
+
+Variant ContextVisitor::visit(InstantiationExpr *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
+    return nullptr;
+}
+
+Variant ContextVisitor::visit(ClassDecl *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
+    return nullptr;
+}
+
+Variant ContextVisitor::visit(ConstrDecl *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
+    return nullptr;
+}
+
+Variant ContextVisitor::visit(FieldDecl *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
+    return nullptr;
+}
+
+Variant ContextVisitor::visit(MethodDecl *node) {
+    for (auto child : node->get_children()) {
+        child->set_root(root);
+        child->accept(*this);
+    }
+
+    return nullptr;
 }

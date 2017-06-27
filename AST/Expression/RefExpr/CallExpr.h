@@ -14,7 +14,6 @@ public:
     CallExpr();
     CallExpr(const CallExpr& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
     void add_argument(Expression::SharedPtr);
 
     typedef std::shared_ptr<CallExpr> SharedPtr;

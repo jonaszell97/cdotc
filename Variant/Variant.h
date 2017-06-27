@@ -39,16 +39,6 @@ enum ValueType : unsigned int {
     REF_T
 };
 
-struct TypeSpecifier {
-    ValueType type;
-    std::string class_name;
-    std::shared_ptr<Expression> length;
-    bool is_array = false;
-    bool is_var_length = false;
-    bool is_primitive = true;
-    bool nullable = false;
-};
-
 struct Variant {
 protected:
     union {
@@ -166,5 +156,23 @@ namespace val {
     extern std::string type_name(Variant);
     extern bool is_compatible(ValueType , ValueType);
 }
+
+struct TypeSpecifier {
+    ValueType type;
+    std::string class_name;
+    std::shared_ptr<Expression> length;
+    bool is_array = false;
+    bool is_var_length = false;
+    bool is_primitive = true;
+    bool nullable = false;
+
+    std::string to_string() {
+        if (type == OBJECT_T) {
+            return class_name;
+        }
+
+        return val::typetostr(type);
+    }
+};
 
 #endif //VALUE_H

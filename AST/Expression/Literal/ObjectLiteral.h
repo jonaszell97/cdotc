@@ -17,7 +17,6 @@ public:
     virtual AstNode::SharedPtr clone() const;
     void add_prop(ObjectPropExpr);
     std::vector<ObjectPropExpr::SharedPtr> get_props();
-    Variant evaluate(Variant = {});
     std::vector<AstNode::SharedPtr> get_children();
 
     inline void set_class_prototype(Class* proto) {

@@ -18,12 +18,6 @@ AstNode::SharedPtr OutputStmt::clone() const {
     return std::make_shared<OutputStmt>(*this);
 }
 
-Variant OutputStmt::evaluate(Variant) {
-    std::cout << _value->evaluate().to_string() << (_newline ? "\n" : "");
-
-    return { };
-}
-
 std::vector<AstNode::SharedPtr> OutputStmt::get_children() {
     return std::vector<AstNode::SharedPtr> { _value };
 }

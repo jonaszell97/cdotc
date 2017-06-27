@@ -19,11 +19,6 @@ public:
     IdentifierRefExpr(Variant);
     IdentifierRefExpr(const IdentifierRefExpr& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
-
-    inline void set_context(Context::SharedPtr ctx) {
-        context = ctx;
-    }
 
     typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -39,7 +34,6 @@ public:
     friend class ContextVisitor;
 
 protected:
-    Context::SharedPtr context;
     std::string _ident;
 };
 

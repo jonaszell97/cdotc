@@ -14,7 +14,6 @@
 class Operator : public Expression {
 public:
     virtual std::string get_operator() = 0;
-    virtual Variant evaluate(Variant = {}) = 0;
     virtual AstNode::SharedPtr clone() const = 0;
 
     typedef std::shared_ptr<Operator> SharedPtr;

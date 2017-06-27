@@ -9,7 +9,9 @@
 ForStmt::ForStmt(Statement::SharedPtr init, Statement::SharedPtr term, Statement::SharedPtr inc) :
     _initialization(init),
     _termination(term),
-    _increment(inc)
+    _increment(inc),
+    init_context{},
+    body_context{}
 {
 
 }
@@ -27,24 +29,6 @@ ForStmt::ForStmt(const ForStmt& cp) {
 
 AstNode::SharedPtr ForStmt::clone() const {
     return std::make_shared<ForStmt>(*this);
-}
-
-Variant ForStmt::evaluate(Variant) {
-    _initialization->evaluate();
-
-    if (_body == nullptr) {
-        return {};
-    }
-
-    while (!_broke && _termination->evaluate().get<bool>()) {
-        _current_instance = new CompoundStmt(*_body);
-        _current_instance->evaluate();
-        delete _current_instance;
-
-        _increment->evaluate();
-    }
-
-    return {};
 }
 
 std::vector<AstNode::SharedPtr> ForStmt::get_children() {

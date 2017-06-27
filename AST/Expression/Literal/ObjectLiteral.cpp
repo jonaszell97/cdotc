@@ -29,16 +29,6 @@ std::vector<ObjectPropExpr::SharedPtr> ObjectLiteral::get_props() {
     return _props;
 }
 
-Variant ObjectLiteral::evaluate(Variant) {
-    Object::SharedPtr obj = std::make_shared<Object>();
-    for (auto prop : _props) {
-        ObjectProp op = prop->specific_eval();
-        obj->set_property(op.name, op.value);
-    }
-
-    return { obj };
-}
-
 std::vector<AstNode::SharedPtr> ObjectLiteral::get_children() {
     std::vector<AstNode::SharedPtr> res;
     for (int i = 0; i < _props.size(); i++) {

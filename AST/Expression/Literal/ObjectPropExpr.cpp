@@ -26,21 +26,6 @@ AstNode::SharedPtr ObjectPropExpr::clone() const {
     return std::make_shared<ObjectPropExpr>(*this);
 }
 
-Variant ObjectPropExpr::evaluate(Variant) {
-    return {};
-}
-
-ObjectProp ObjectPropExpr::specific_eval() {
-    ObjectProp op;
-    op.name = _prop_name;
-    op.value = std::make_shared<Variant>(_prop_val->evaluate());
-    if (_prop_type == ANY_T) {
-        op.value->is_any_type();
-    }
-
-    return op;
-}
-
 std::vector<AstNode::SharedPtr> ObjectPropExpr::get_children() {
     return { _prop_val };
 }

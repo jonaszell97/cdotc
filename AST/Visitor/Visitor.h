@@ -42,6 +42,11 @@ class InputStmt;
 class OutputStmt;
 class Expression;
 class Statement;
+class InstantiationExpr;
+class ClassDecl;
+class FieldDecl;
+class MethodDecl;
+class ConstrDecl;
 
 class Visitor {
 public:
@@ -75,7 +80,11 @@ public:
     virtual Variant visit(InputStmt*);
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
-
+    virtual Variant visit(InstantiationExpr*);
+    virtual Variant visit(ClassDecl*);
+    virtual Variant visit(MethodDecl*);
+    virtual Variant visit(FieldDecl*);
+    virtual Variant visit(ConstrDecl*);
 };
 
 

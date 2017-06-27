@@ -14,8 +14,6 @@ public:
     ContinueStmt(const ContinueStmt& cp);
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
-
     void set_stmt(Statement *stmt, std::string type);
 
     typedef std::shared_ptr<ContinueStmt> SharedPtr;

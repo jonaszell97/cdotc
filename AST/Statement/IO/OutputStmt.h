@@ -16,8 +16,6 @@ public:
     OutputStmt(const OutputStmt& cp);
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
-
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 

@@ -8,6 +8,7 @@
 #include <map>
 #include <unordered_map>
 #include "Variant/Variant.h"
+#include "StdLib/Class.h"
 
 namespace util {
     extern int min_op_precedence;
@@ -34,6 +35,7 @@ namespace util {
     extern std::map<ValueType, std::string> types;
     extern std::map<std::string, ValueType> typemap;
     extern std::map<ValueType, std::string> classmap;
+    extern std::map<AccessModifier, std::string> am_map;
 
     extern std::vector<std::string> binary_operators;
     extern std::vector<std::string> tertiary_operators;

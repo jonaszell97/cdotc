@@ -5,6 +5,7 @@
 #include "Method.h"
 #include "../AST/Statement/CompoundStmt.h"
 #include "../AST/Visitor/ContextVisitor.h"
+#include "../AST/Visitor/EvaluatingVisitor.h"
 
 Method::Method(std::string class_name, CompoundStmt::SharedPtr body,
        std::vector<std::pair<std::string, ValueType>> signature) :
@@ -35,8 +36,7 @@ Variant Method::call(Object::SharedPtr this_arg, std::vector<Variant> args) {
     }
 
     Context::SharedPtr ctx = std::make_shared<Context>();
-    ContextVisitor v(ctx);
-    v.visit(body.get());
+    ContextVisitor(true).visit(body.get());
 
     for (int i = 0; i < signature.size(); ++i) {
         auto real_arg = signature[i];
@@ -51,5 +51,5 @@ Variant Method::call(Object::SharedPtr this_arg, std::vector<Variant> args) {
 
     ctx->set_variable("this", { this_arg });
 
-    return body->evaluate();
+    return EvaluatingVisitor().visit(body.get());
 }

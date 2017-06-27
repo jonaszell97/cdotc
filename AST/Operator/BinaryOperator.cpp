@@ -16,7 +16,6 @@ BinaryOperator::BinaryOperator(const BinaryOperator& cp) {
     _operator = cp._operator;
     _first_child = std::static_pointer_cast<Expression>(cp._first_child->clone());
     _second_child = std::static_pointer_cast<Expression>(cp._second_child->clone());
-    //set_root(cp._root, true);
     set_parent(cp._parent);
 }
 
@@ -34,118 +33,6 @@ void BinaryOperator::set_snd_child(Expression::SharedPtr exp) {
 
 std::string BinaryOperator::get_operator() {
     return _operator;
-}
-
-Variant BinaryOperator::evaluate(Variant) {
-    if (!(util::in_vector(util::binary_operators, _operator))) {
-        RuntimeError::raise(ERR_OP_UNDEFINED, "Undefined binary operator " + _operator);
-    }
-
-    if (_operator == "=") {
-        auto fst = _first_child->evaluate();
-        auto snd = _second_child->evaluate();
-
-        fst.strict_equals(snd);
-
-        return fst;
-    }
-    else if (_operator == "+=") {
-        auto fst = _first_child->evaluate();
-        auto snd = _second_child->evaluate();
-
-        fst.strict_equals(fst + snd);
-
-        return fst;
-    }
-    else if (_operator == "-=") {
-        auto fst = _first_child->evaluate();
-        auto snd = _second_child->evaluate();
-
-        fst.strict_equals(fst - snd);
-
-        return fst;
-    }
-    else if (_operator == "*=") {
-        auto fst = _first_child->evaluate();
-        auto snd = _second_child->evaluate();
-
-        fst.strict_equals(fst * snd);
-
-        return fst;
-    }
-    else if (_operator == "/=") {
-        auto fst = _first_child->evaluate();
-        auto snd = _second_child->evaluate();
-
-        fst.strict_equals(fst - snd);
-
-        return fst;
-    }
-
-    auto fst = _first_child->evaluate();
-    auto snd = _second_child->evaluate();
-
-    if (_operator == "==") {
-        return fst == snd;
-    }
-    else if (_operator == "!=") {
-        return fst != snd;
-    }
-    else if (_operator == "<=") {
-        return fst <= snd;
-    }
-    else if (_operator == ">=") {
-        return fst >= snd;
-    }
-    else if (_operator == ">>") {
-        return fst >> snd;
-    }
-    else if (_operator == "<<") {
-        return fst << snd;
-    }
-    else if (_operator == "&&") {
-        return fst && snd;
-    }
-    else if (_operator == "||") {
-        return fst || snd;
-    }
-    else if (_operator == "**") {
-        return fst.pow(snd);
-    }
-    else switch (_operator[0]) {
-        case '+': {
-            return fst + snd;
-        }
-        case '-': {
-            return fst - snd;
-        }
-        case '*': {
-            return fst * snd;
-        }
-        case '/': {
-            return fst / snd;
-        }
-        case '%': {
-            return fst % snd;
-        }
-        case '<': {
-            return fst < snd;
-        }
-        case '>': {
-            return fst > snd;
-        }
-        case '&': {
-            return fst & snd;
-        }
-        case '|': {
-            return fst | snd;
-        }
-        case '^': {
-            return fst ^ snd;
-        }
-        default:
-            RuntimeError::raise(ERR_OP_UNDEFINED, "Undefined binary operator " + _operator);
-    }
 }
 
 std::vector<AstNode::SharedPtr> BinaryOperator::get_children() {

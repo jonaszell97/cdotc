@@ -16,7 +16,6 @@ public:
     LiteralExpr(const LiteralExpr& cp);
     virtual AstNode::SharedPtr clone() const;
     void set_val(Variant);
-    virtual Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<LiteralExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();

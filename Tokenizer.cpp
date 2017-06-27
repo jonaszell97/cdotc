@@ -182,7 +182,7 @@ void Tokenizer::backtrack_c(int length) {
 Token Tokenizer::get_next_token() {
     Token t = _get_next_token();
     tokens.push_back(t);
-    if (_flag == TFLAG_IGNORE_NEWLINE && t.is_punctuator('\n')) {
+    if (t.is_punctuator('\n')) {
         return get_next_token();
     }
 

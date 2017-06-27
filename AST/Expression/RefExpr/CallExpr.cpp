@@ -30,30 +30,6 @@ AstNode::SharedPtr CallExpr::clone() const {
     return std::make_shared<CallExpr>(*this);
 }
 
-Variant CallExpr::evaluate(Variant obj) {
-    Function::SharedPtr fun = std::dynamic_pointer_cast<Function>(obj.get<Object::SharedPtr>());
-    if (fun == nullptr) {
-        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call value of type " + val::typetostr(obj.get_type()));
-    }
-
-    std::vector<Variant> _real_args;
-    for (auto arg : _arguments) {
-        auto arg_val = arg->evaluate();
-
-        _real_args.push_back(arg_val);
-    }
-
-    Variant res = fun->call(_real_args);
-
-    if (_member_expr != nullptr) {
-        _member_expr->return_ref(_return_ref);
-        return _member_expr->evaluate(res);
-    }
-    else {
-        return _return_ref ? res : *res;
-    }
-}
-
 void CallExpr::add_argument(Expression::SharedPtr arg) {
     _arguments.push_back(arg);
 }

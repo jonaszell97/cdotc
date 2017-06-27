@@ -61,14 +61,6 @@ std::vector<AstNode::SharedPtr> LiteralExpr::get_children() {
     return {};
 }
 
-Variant LiteralExpr::evaluate(Variant) {
-    if (_value.get_type() == DOUBLE_T && _type != DOUBLE_T) {
-        _value.cast_to(FLOAT_T);
-    }
-
-    return _value;
-}
-
 void LiteralExpr::__dump(int depth) {
     for (int i = 0; i < depth; i++) {
         std::cout << "\t";

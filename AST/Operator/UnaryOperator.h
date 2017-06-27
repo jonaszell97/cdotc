@@ -16,7 +16,6 @@ public:
     UnaryOperator(const UnaryOperator& cp);
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
     std::string get_operator();
     std::vector<AstNode::SharedPtr> get_children();
 

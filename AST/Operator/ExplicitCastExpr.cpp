@@ -21,10 +21,6 @@ AstNode::SharedPtr ExplicitCastExpr::clone() const {
     return std::make_shared<ExplicitCastExpr>(*this);
 }
 
-Variant ExplicitCastExpr::evaluate(Variant) {
-    return _child->evaluate().cast_to(util::typemap[_operator]);
-}
-
 std::vector<AstNode::SharedPtr> ExplicitCastExpr::get_children() {
     if (_child != nullptr) {
         return {_child};

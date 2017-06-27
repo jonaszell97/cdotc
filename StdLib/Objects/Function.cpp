@@ -7,6 +7,7 @@
 #include "../../AST/Statement/CompoundStmt.h"
 #include "../../Util.h"
 #include "../../AST/Visitor/ContextVisitor.h"
+#include "../../AST/Visitor/EvaluatingVisitor.h"
 
 Function::Function(std::string func_name, ValueType return_type) :
     function_name(func_name),
@@ -44,14 +45,10 @@ std::string Function::get_name() {
 }
 
 Variant Function::call(std::vector<Variant> args) {
+    Context::SharedPtr ctx = std::make_shared<Context>();
+    ctx->set_parent_ctx(context);
+
     // check validity of passed arguments
-
-    Context::SharedPtr ctx = std::make_shared<Context>(*context);
-    CompoundStmt::SharedPtr inst = std::static_pointer_cast<CompoundStmt>(func_body->clone());
-
-    ContextVisitor v(ctx);
-    v.visit(inst.get());
-
     for (int j = 0; j < arg_names.size(); ++j) {
         if (j >= args.size()) {
             if (arg_defaults.find(j) != arg_defaults.end()) {
@@ -81,10 +78,14 @@ Variant Function::call(std::vector<Variant> args) {
         }
     }
 
-    Variant return_val = inst->evaluate();
+    CompoundStmt::SharedPtr cmp = std::make_shared<CompoundStmt>(*func_body);
+    cmp->set_context(ctx);
+    ContextVisitor(true).visit(cmp.get());
+    Variant return_val = EvaluatingVisitor().visit(cmp.get());
+
     if (!val::is_compatible(return_val.get_type(), return_type)) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Returning value of type " + val::typetostr(return_val.get_type())
-                                            + " from function with return type " + val::typetostr(return_type));
+            + " from function with return type " + val::typetostr(return_type));
     }
 
     return return_val;

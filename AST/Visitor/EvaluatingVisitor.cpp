@@ -10,15 +10,17 @@
 #include "../Expression/RefExpr/IdentifierRefExpr.h"
 #include "../Expression/RefExpr/MethodCallExpr.h"
 #include "../Expression/RefExpr/MemberRefExpr.h"
-#include "../Statement/DeclStmt.h"
+#include "../Statement/Declaration/DeclStmt.h"
 #include "../Statement/ControlFlow/ForStmt.h"
 #include "../Statement/ControlFlow/WhileStmt.h"
-#include "../Statement/Function/FunctionDecl.h"
+#include "../Statement/Declaration/FunctionDecl.h"
 #include "../Expression/Expression.h"
 #include "../Expression/Literal/LiteralExpr.h"
 #include "../Expression/Literal/ObjectLiteral.h"
 #include "../Expression/RefExpr/ArrayAccessExpr.h"
 #include "../Expression/RefExpr/CallExpr.h"
+#include "../Expression/RefExpr/MethodCallExpr.h"
+#include "../Expression/Class/InstantiationExpr.h"
 #include "../Operator/BinaryOperator.h"
 #include "../Operator/UnaryOperator.h"
 #include "../Operator/ExplicitCastExpr.h"
@@ -27,8 +29,12 @@
 #include "../Statement/ControlFlow/BreakStmt.h"
 #include "../Statement/ControlFlow/IfStmt.h"
 #include "../Statement/IO/OutputStmt.h"
-#include "../Statement/Function/ReturnStmt.h"
+#include "../Statement/ControlFlow/ReturnStmt.h"
 #include "../Statement/IO/InputStmt.h"
+#include "../Statement/Declaration/Class/ClassDecl.h"
+#include "../Statement/Declaration/Class/ConstrDecl.h"
+#include "../Statement/Declaration/Class/FieldDecl.h"
+#include "../Statement/Declaration/Class/MethodDecl.h"
 #include "../Expression/Literal/ArrayLiteral.h"
 #include "../../StdLib/Objects/Array.h"
 #include "../../StdLib/Objects/Object.h"
@@ -49,8 +55,12 @@ EvaluatingVisitor::EvaluatingVisitor(const EvaluatingVisitor &v) : EvaluatingVis
  * @return Variant
  */
 Variant EvaluatingVisitor::visit(CompoundStmt *node) {
+    current_context_returnable = node->_returnable;
     for (auto stmt : node->_statements) {
         stmt->accept(*this);
+        if (current_context_returnable && return_reached) {
+            return return_val;
+        }
         if (current_context_continuable && loop_continued) {
             break;
         }
@@ -58,7 +68,7 @@ Variant EvaluatingVisitor::visit(CompoundStmt *node) {
 
     return_reached = false;
 
-    return return_val;
+    return {};
 }
 
 /**
@@ -67,8 +77,7 @@ Variant EvaluatingVisitor::visit(CompoundStmt *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(FunctionDecl *node) {
-    Context::SharedPtr ctx = node->context;
-
+    Context::SharedPtr ctx = node->root->context;
     if (ctx == nullptr) {
         RuntimeError::raise(ERR_CONTEXT_ERROR, "Cannot create function in current context");
     }
@@ -80,7 +89,6 @@ Variant EvaluatingVisitor::visit(FunctionDecl *node) {
     for (auto arg : node->_args) {
         arg->accept(*this);
         func->add_argument(current_arg.name, current_arg.type, current_arg.default_val);
-        ctx->declare_variable(current_arg.name);
     }
 
     ctx->set_variable(node->_func_name, Variant(func));
@@ -94,7 +102,7 @@ Variant EvaluatingVisitor::visit(FunctionDecl *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(IdentifierRefExpr *node) {
-    Context::SharedPtr ctx = node->context;
+    Context::SharedPtr ctx = node->root->context;
 
     if (ctx != nullptr) {
         Variant var;
@@ -127,7 +135,7 @@ Variant EvaluatingVisitor::visit(IdentifierRefExpr *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(DeclStmt *node) {
-    Context::SharedPtr ctx = node->context;
+    Context::SharedPtr ctx = node->root->context;
     if (ctx != nullptr) {
 
         Variant res = node->_val != nullptr ? node->_val->accept(*this) : Variant();
@@ -173,6 +181,7 @@ Variant EvaluatingVisitor::visit(ForStmt *node) {
     }
 
     EvaluatingVisitor loop_evaluator;
+    loop_evaluator.current_context_returnable = current_context_returnable;
     loop_evaluator.current_context_breakable = true;
     loop_evaluator.current_context_continuable = true;
 
@@ -180,6 +189,7 @@ Variant EvaluatingVisitor::visit(ForStmt *node) {
         node->_body->accept(loop_evaluator);
         node->_increment->accept(loop_evaluator);
         loop_evaluator.loop_continued = false;
+        node->root->context->reset();
     }
 
     return nullptr;
@@ -191,13 +201,16 @@ Variant EvaluatingVisitor::visit(ForStmt *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(WhileStmt *node) {
+
     EvaluatingVisitor loop_evaluator;
+    loop_evaluator.current_context_returnable = current_context_returnable;
     loop_evaluator.current_context_breakable = true;
     loop_evaluator.current_context_continuable = true;
 
     while (!loop_evaluator.loop_broken && node->_condition->accept(loop_evaluator).get<bool>()) {
         node->_while_block->accept(loop_evaluator);
         loop_evaluator.loop_continued = false;
+        node->root->context->reset();
     }
 
     return nullptr;
@@ -523,6 +536,37 @@ Variant EvaluatingVisitor::visit(OutputStmt *node) {
  */
 Variant EvaluatingVisitor::visit(Expression *node) {
     return node->_child->accept(*this);
+}
+
+/**
+ * Evaluates a class instantiation
+ * @param node
+ * @return
+ */
+Variant EvaluatingVisitor::visit(InstantiationExpr *node) {
+    Class* class_ = GlobalContext::get_class(node->class_name);
+    std::vector<Variant> args;
+    for (auto arg : node->constr_args) {
+        args.push_back(arg->accept(*this));
+    }
+
+    return { class_->instantiate(args) };
+}
+
+Variant EvaluatingVisitor::visit(ClassDecl *node) {
+
+}
+
+Variant EvaluatingVisitor::visit(ConstrDecl *node) {
+
+}
+
+Variant EvaluatingVisitor::visit(FieldDecl *node) {
+
+}
+
+Variant EvaluatingVisitor::visit(MethodDecl *node) {
+
 }
 
 /**

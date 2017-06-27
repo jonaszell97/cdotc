@@ -30,22 +30,6 @@ AstNode::SharedPtr ArrayAccessExpr::clone() const {
     return std::make_shared<ArrayAccessExpr>(*this);
 }
 
-Variant ArrayAccessExpr::evaluate(Variant parent) {
-    Array::SharedPtr arr = std::dynamic_pointer_cast<Array>(parent.get<Object::SharedPtr>());
-    if (arr == nullptr) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index of non-array element");
-    }
-
-    Variant v = arr->at(_index->evaluate().get<int>());
-    if (_member_expr != nullptr) {
-        _member_expr->return_ref(_return_ref);
-        return _member_expr->evaluate(v);
-    }
-    else {
-        return (_return_ref) ? v : *v;
-    }
-}
-
 std::vector<AstNode::SharedPtr> ArrayAccessExpr::get_children() {
     std::vector<AstNode::SharedPtr> res;
     res.push_back(_index);

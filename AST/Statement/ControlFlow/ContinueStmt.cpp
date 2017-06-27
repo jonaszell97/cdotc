@@ -26,19 +26,6 @@ void ContinueStmt::set_stmt(Statement *stmt, std::string type) {
     _type = type;
 }
 
-Variant ContinueStmt::evaluate(Variant) {
-    if (_type == "for") {
-        ForStmt* for_stmt = static_cast<ForStmt*>(_stmt);
-        for_stmt->get_current_instance()->continue_();
-    }
-    else if (_type == "while") {
-        WhileStmt* while_stmt = static_cast<WhileStmt*>(_stmt);
-        while_stmt->get_current_instance()->continue_();
-    }
-
-    RuntimeError::raise(ERR_CONTEXT_ERROR, "Keyword 'continue' is only allowed in for and while statements");
-}
-
 std::vector<AstNode::SharedPtr> ContinueStmt::get_children() {
     return {};
 }

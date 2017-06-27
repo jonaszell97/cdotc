@@ -8,10 +8,10 @@
 #include "../Statement/CompoundStmt.h"
 #include "../Expression/RefExpr/IdentifierRefExpr.h"
 #include "../Expression/RefExpr/MemberRefExpr.h"
-#include "../Statement/DeclStmt.h"
+#include "../Statement/Declaration/DeclStmt.h"
 #include "../Statement/ControlFlow/ForStmt.h"
 #include "../Statement/ControlFlow/WhileStmt.h"
-#include "../Statement/Function/FunctionDecl.h"
+#include "../Statement/Declaration/FunctionDecl.h"
 #include "../Expression/Expression.h"
 #include "../Expression/Literal/LiteralExpr.h"
 #include "../Expression/Literal/ObjectLiteral.h"
@@ -25,9 +25,14 @@
 #include "../Statement/ControlFlow/BreakStmt.h"
 #include "../Statement/ControlFlow/IfStmt.h"
 #include "../Statement/IO/OutputStmt.h"
-#include "../Statement/Function/ReturnStmt.h"
+#include "../Statement/ControlFlow/ReturnStmt.h"
 #include "../Statement/IO/InputStmt.h"
 #include "../Expression/Literal/ArrayLiteral.h"
+#include "../Statement/Declaration/Class/ClassDecl.h"
+#include "../Statement/Declaration/Class/ConstrDecl.h"
+#include "../Statement/Declaration/Class/FieldDecl.h"
+#include "../Statement/Declaration/Class/MethodDecl.h"
+
 
 Visitor::Visitor() {
 
@@ -138,5 +143,25 @@ Variant Visitor::visit(OutputStmt *node) {
 }
 
 Variant Visitor::visit(Expression *node) {
+
+}
+
+Variant Visitor::visit(InstantiationExpr *node) {
+
+}
+
+Variant Visitor::visit(ClassDecl *node) {
+
+}
+
+Variant Visitor::visit(ConstrDecl *node) {
+
+}
+
+Variant Visitor::visit(FieldDecl *node) {
+
+}
+
+Variant Visitor::visit(MethodDecl *node) {
 
 }

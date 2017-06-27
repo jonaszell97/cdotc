@@ -26,24 +26,6 @@ void BreakStmt::set_stmt(Statement *stmt, std::string type) {
     _type = type;
 }
 
-Variant BreakStmt::evaluate(Variant) {
-    if (_type == "for") {
-        ForStmt* for_stmt = static_cast<ForStmt*>(_stmt);
-        for_stmt->get_current_instance()->continue_();
-        for_stmt->break_();
-    }
-    else if (_type == "while") {
-        WhileStmt* while_stmt = static_cast<WhileStmt*>(_stmt);
-        while_stmt->get_current_instance()->continue_();
-        while_stmt->break_();
-    }
-    else if (_type == "switch") {
-
-    }
-
-    RuntimeError::raise(ERR_CONTEXT_ERROR, "Keyword 'break' is only allowed in for, while and switch statements");
-}
-
 std::vector<AstNode::SharedPtr> BreakStmt::get_children() {
     return {};
 }

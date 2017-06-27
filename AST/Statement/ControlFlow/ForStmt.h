@@ -17,19 +17,12 @@ public:
     ForStmt(Statement::SharedPtr, Statement::SharedPtr, Statement::SharedPtr);
     ForStmt(const ForStmt& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
 
     inline void set_body(CompoundStmt::SharedPtr body) {
         _body = body;
     }
     inline CompoundStmt::SharedPtr get_body() {
         return _body;
-    }
-    inline CompoundStmt* get_current_instance() {
-        return _current_instance;
-    }
-    inline void break_() {
-        _broke = true;
     }
 
     typedef std::shared_ptr<ForStmt> SharedPtr;
@@ -45,12 +38,10 @@ public:
     friend class ContextVisitor;
 
 protected:
-    bool _broke = false;
     Statement::SharedPtr _initialization;
     Statement::SharedPtr _termination;
     Statement::SharedPtr _increment;
     CompoundStmt::SharedPtr _body;
-    CompoundStmt* _current_instance;
 };
 
 

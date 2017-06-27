@@ -14,7 +14,6 @@ public:
     ExplicitCastExpr(const ExplicitCastExpr& cp);
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
     inline std::string get_operator() {
         return _operator;
     }

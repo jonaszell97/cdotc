@@ -11,6 +11,7 @@
 #include "Conversion.h"
 #include "Arithmetic.h"
 #include <sstream>
+#include <iostream>
 
 Variant::~Variant() {
     destroy();

@@ -8,7 +8,7 @@
 
 #include "Visitor.h"
 #include "../Expression/Literal/ObjectPropExpr.h"
-#include "../Statement/Function/FuncArgDecl.h"
+#include "../Statement/Declaration/FuncArgDecl.h"
 
 enum class EvaluationFlag {
     NONE,
@@ -48,6 +48,11 @@ public:
     virtual Variant visit(InputStmt*);
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
+    virtual Variant visit(InstantiationExpr*);
+    virtual Variant visit(ClassDecl*);
+    virtual Variant visit(MethodDecl*);
+    virtual Variant visit(FieldDecl*);
+    virtual Variant visit(ConstrDecl*);
 
 protected:
     /** Control flow */

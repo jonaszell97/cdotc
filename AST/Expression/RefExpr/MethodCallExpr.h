@@ -17,8 +17,6 @@ public:
     MethodCallExpr(const CallExpr& cp, std::string);
     virtual AstNode::SharedPtr clone() const;
 
-    Variant evaluate(Variant = {});
-
     typedef std::shared_ptr<MethodCallExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);

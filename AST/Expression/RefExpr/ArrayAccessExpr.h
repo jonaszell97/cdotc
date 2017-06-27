@@ -16,7 +16,6 @@ public:
     ArrayAccessExpr(Expression::SharedPtr);
     ArrayAccessExpr(const ArrayAccessExpr& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<ArrayAccessExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();

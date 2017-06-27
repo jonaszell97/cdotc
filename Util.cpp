@@ -178,6 +178,12 @@ namespace util {
             {OBJECT_T, "Object"}
     };
 
+    std::map<AccessModifier, std::string> am_map = {
+            {AccessModifier::PUBLIC, "public"},
+            {AccessModifier::PRIVATE, "private"},
+            {AccessModifier::PROTECTED, "protected"}
+    };
+
     std::map<std::string, ValueType> typemap = {
             {"int", INT_T},
             {"long", LONG_T},

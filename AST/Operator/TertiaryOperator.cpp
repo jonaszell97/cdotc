@@ -25,15 +25,6 @@ AstNode::SharedPtr TertiaryOperator::clone() const {
     return std::make_shared<TertiaryOperator>(*this);
 }
 
-Variant TertiaryOperator::evaluate(Variant) {
-    if (_condition->evaluate().get<bool>()) {
-        return _if_branch->evaluate();
-    }
-    else {
-        return _else_branch->evaluate();
-    }
-}
-
 std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {
     return { _condition, _if_branch, _else_branch };
 }

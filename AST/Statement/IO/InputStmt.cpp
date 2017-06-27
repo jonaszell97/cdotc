@@ -29,16 +29,6 @@ AstNode::SharedPtr InputStmt::clone() const {
     return std::make_shared<InputStmt>(*this);
 }
 
-Variant InputStmt::evaluate(Variant) {
-    std::string s;
-    std::cin >> s;
-
-    _literal->set_val(Variant(s).cast_to(_type));
-    _decl->evaluate();
-
-    return { };
-}
-
 std::vector<AstNode::SharedPtr> InputStmt::get_children() {
     return { _literal, _decl };
 }

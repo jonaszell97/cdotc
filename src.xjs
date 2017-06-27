@@ -1,20 +1,20 @@
 
-def fib(int n) => int {
-    if (n == 0 || n == 1) return n
+class TestClass {
+    TestClass() {
+    }
 
-    return fib(n - 1) + fib(n - 2)
+    public static int prop = 3
+    private string fuckMeDadday(double covfefe$$$) {
+        outln "FUCK ME DADDY"
+    }
 }
-
-let obj = {string prop = "fucbyo" + 3 int peepee = 3}
 
 let x = 3
 
-outln x.toString()
+if (true) {
+    outln "hehe" + x
+}
 
-for (int i = 0; i < 5; i++) {
-    if (i == 2) {
-        break
-    }
+for (int i = 0; i < 2; i++) {
 
-    outln i
 }

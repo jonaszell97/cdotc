@@ -19,8 +19,6 @@ public:
     ObjectPropExpr(std::string, Expression::SharedPtr, ValueType = ANY_T);
     ObjectPropExpr(const ObjectPropExpr& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
-    ObjectProp specific_eval();
 
     typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
     void __dump(int);

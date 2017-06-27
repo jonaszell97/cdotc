@@ -24,8 +24,6 @@ public:
         _else_branch = else_branch;
     }
 
-    Variant evaluate(Variant = {});
-
     typedef std::unique_ptr<IfStmt> UniquePtr;
     typedef std::shared_ptr<IfStmt> SharedPtr;
 

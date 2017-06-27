@@ -18,7 +18,7 @@ public:
     Expression(const Expression& cp);
     virtual AstNode::SharedPtr clone() const;
     virtual void set_child(Expression::SharedPtr);
-    Variant evaluate(Variant = {});
+
     std::vector<AstNode::SharedPtr> get_children();
 
     virtual void __dump(int);

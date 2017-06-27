@@ -1,5 +1,5 @@
 #include <iostream>
-#include "Interpreter.h"
+#include "Parser.h"
 #include <fstream>
 #include <streambuf>
 
@@ -14,7 +14,7 @@ int main() {
     std::ifstream t("../src.xjs");
     std::string str((std::istreambuf_iterator<char>(t)),
                     std::istreambuf_iterator<char>());
-    Interpreter x(str);
+    Parser x(str);
     x.run(true);
 
     return 0;

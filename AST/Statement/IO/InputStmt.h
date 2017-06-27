@@ -7,7 +7,7 @@
 
 
 #include "../Statement.h"
-#include "../DeclStmt.h"
+#include "../Declaration/DeclStmt.h"
 #include "../../Expression/Literal/LiteralExpr.h"
 
 class InputStmt : public Statement {
@@ -16,8 +16,6 @@ public:
     InputStmt(Variant, ValueType = ANY_T);
     InputStmt(const InputStmt& cp);
     virtual AstNode::SharedPtr clone() const;
-
-    Variant evaluate(Variant = {});
 
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);

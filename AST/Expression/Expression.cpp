@@ -29,10 +29,6 @@ void Expression::set_child(Expression::SharedPtr child) {
     _child = child;
 }
 
-Variant Expression::evaluate(Variant t) {
-    return _child->evaluate(t);
-}
-
 std::vector<AstNode::SharedPtr> Expression::get_children() {
     return std::vector<AstNode::SharedPtr> { _child };
 }

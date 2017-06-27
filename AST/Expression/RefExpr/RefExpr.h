@@ -12,7 +12,6 @@
 
 class RefExpr : public Expression {
 public:
-    virtual Variant evaluate(Variant = {}) = 0;
     virtual AstNode::SharedPtr clone() const = 0;
 
     virtual inline void return_ref(bool ref) {

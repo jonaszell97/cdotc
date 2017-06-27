@@ -20,16 +20,9 @@ public:
 
     void add_statement(AstNode::SharedPtr);
 
-    void terminate(Variant v);
-    inline void terminable(bool terminable) {
-        _terminable = terminable;
+    inline void returnable(bool terminable) {
+        _returnable = terminable;
     };
-    void continue_();
-    inline void continuable(bool continuable) {
-        _continuable = continuable;
-    }
-
-    Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<CompoundStmt> SharedPtr;
     typedef std::weak_ptr<CompoundStmt> WeakPtr;
@@ -42,18 +35,21 @@ public:
         return v.visit(this);
     }
 
+    virtual inline void set_context(Context::SharedPtr ctx) {
+        context = ctx;
+    }
+
+    virtual inline Context::SharedPtr get_context() {
+        return context;
+    }
+
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class ContextVisitor;
 
 protected:
-
-    bool _return_reached = false;
-
-    bool _terminable = true;
-    bool _continuable = false;
-
-    Variant _return_val;
+    Context::SharedPtr context;
+    bool _returnable = true;
     std::vector<AstNode::SharedPtr> _statements;
     std::string _class_name = "CompoundStmt";
 };

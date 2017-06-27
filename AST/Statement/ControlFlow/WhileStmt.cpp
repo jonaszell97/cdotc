@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "WhileStmt.h"
-#include "../../../Interpreter.h"
+#include "../../../Parser.h"
 #include "../../../Option.h"
 
 WhileStmt::WhileStmt(Expression::SharedPtr cond, CompoundStmt::SharedPtr while_block) :
@@ -22,21 +22,6 @@ WhileStmt::WhileStmt(const WhileStmt& cp) {
 
 AstNode::SharedPtr WhileStmt::clone() const {
     return std::make_shared<WhileStmt>(*this);
-}
-
-Variant WhileStmt::evaluate(Variant) {
-    int i = 0;
-    while (!_broke && _condition->evaluate().get<bool>()) {
-        if (++i > cdot::opt::options[cdot::opt::CompilerOption::OPT_MAX_WHILE_COUNT]) {
-            break;
-        }
-
-        _current_instance = new CompoundStmt(*_while_block);
-        _current_instance->evaluate();
-        delete _current_instance;
-    }
-
-    return { };
 }
 
 std::vector<AstNode::SharedPtr> WhileStmt::get_children() {

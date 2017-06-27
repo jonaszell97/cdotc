@@ -26,8 +26,6 @@ public:
         _broke = true;
     }
 
-    Variant evaluate(Variant = {});
-
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
@@ -38,7 +36,9 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class ContextVisitor;
+
 protected:
+    Context::SharedPtr context;
     bool _broke = false;
     Expression::SharedPtr _condition;
     CompoundStmt::SharedPtr _while_block;

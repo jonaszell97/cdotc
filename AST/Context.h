@@ -17,7 +17,7 @@ class Class;
 class Context {
 public:
     Context();
-    Context(const Context&);
+    void reset();
 
     void set_variable(std::string, Variant);
     Variant::SharedPtr get_variable(std::string);
@@ -28,9 +28,10 @@ public:
 
     inline void set_parent_ctx(Context::SharedPtr parent_context) {
         _parent_context = parent_context;
+        parent_context->_child_contexts.push_back(this);
     }
     inline void add_capture(std::string ident) {
-        _captured_values.insert(ident);
+        variables_to_capture.insert(ident);
     }
     inline Context::SharedPtr get_parent_ctx() {
         return _parent_context;
@@ -38,15 +39,25 @@ public:
     inline std::unordered_map<std::string, Variant::SharedPtr> get_variables() {
         return _variables;
     }
+    inline Variant::SharedPtr& get_val_ref(std::string ident) {
+        return _uninitialized_variables[ident];
+    }
+    inline std::vector<Context*> _get_child_contexts() {
+            return _child_contexts;
+    };
 
-    void capture();
+    //void capture();
 
 protected:
+    //bool captured = false;
+
     Context::SharedPtr _parent_context;
+    std::vector<Context*> _child_contexts;
+
     std::unordered_map<std::string, Variant::SharedPtr> _variables;
 
     std::unordered_map<std::string, Variant::SharedPtr> _uninitialized_variables;
-    std::set<std::string> _captured_values;
+    std::set<std::string> variables_to_capture;
 };
 
 

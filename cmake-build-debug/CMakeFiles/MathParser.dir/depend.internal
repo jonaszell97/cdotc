@@ -10,6 +10,9 @@ CMakeFiles/MathParser.dir/AST/AstNode.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Token.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
@@ -17,6 +20,21 @@ CMakeFiles/MathParser.dir/AST/AstNode.cpp.o
 CMakeFiles/MathParser.dir/AST/Context.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Expression/Class/InstantiationExpr.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
@@ -374,9 +392,26 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/IfStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/ReturnStmt.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
@@ -393,13 +428,17 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
@@ -409,7 +448,78 @@ CMakeFiles/MathParser.dir/AST/Statement/ControlFlow/WhileStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/Class/ClassDecl.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/Class/FieldDecl.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/Class/MethodDecl.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/DeclStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
@@ -417,8 +527,8 @@ CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
@@ -430,12 +540,12 @@ CMakeFiles/MathParser.dir/AST/Statement/DeclStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/FuncArgDecl.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
@@ -446,14 +556,14 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FuncArgDecl.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o
+CMakeFiles/MathParser.dir/AST/Statement/Declaration/FunctionDecl.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
@@ -463,22 +573,6 @@ CMakeFiles/MathParser.dir/AST/Statement/Function/FunctionDecl.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/AST/Statement/Function/ReturnStmt.cpp.o
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
@@ -488,7 +582,7 @@ CMakeFiles/MathParser.dir/AST/Statement/IO/InputStmt.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
@@ -532,47 +626,7 @@ CMakeFiles/MathParser.dir/AST/Statement/Statement.cpp.o
 CMakeFiles/MathParser.dir/AST/Visitor/ContextVisitor.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectLiteral.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectPropExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/ArrayAccessExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/CallExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/MemberRefExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/BinaryOperator.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/ExplicitCastExpr.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/Operator.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/TertiaryOperator.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/UnaryOperator.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/BreakStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
@@ -594,11 +648,62 @@ CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
+CMakeFiles/MathParser.dir/AST/Visitor/EvaluatingVisitor.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectLiteral.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectPropExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/ArrayAccessExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/CallExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/IdentifierRefExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/MemberRefExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/MethodCallExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/RefExpr/RefExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/BinaryOperator.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/ExplicitCastExpr.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/Operator.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/TertiaryOperator.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Operator/UnaryOperator.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/BreakStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
@@ -637,11 +742,15 @@ CMakeFiles/MathParser.dir/AST/Visitor/Visitor.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
@@ -660,9 +769,13 @@ CMakeFiles/MathParser.dir/Debug.cpp.o
 CMakeFiles/MathParser.dir/Exceptions.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
-CMakeFiles/MathParser.dir/Interpreter.cpp.o
+CMakeFiles/MathParser.dir/Option.cpp.o
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.h
+CMakeFiles/MathParser.dir/Parser.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
@@ -684,11 +797,15 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ContinueStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ReturnStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/DeclStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/ReturnStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/DeclStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/InputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/IO/OutputStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
@@ -697,8 +814,8 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Debug.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.cpp
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
@@ -708,9 +825,6 @@ CMakeFiles/MathParser.dir/Interpreter.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
-CMakeFiles/MathParser.dir/Option.cpp.o
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.cpp
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Option.h
 CMakeFiles/MathParser.dir/StdLib/Class.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.cpp
@@ -732,9 +846,13 @@ CMakeFiles/MathParser.dir/StdLib/GlobalContext.cpp.o
 CMakeFiles/MathParser.dir/StdLib/Method.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectPropExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
@@ -763,9 +881,13 @@ CMakeFiles/MathParser.dir/StdLib/Objects/Array.cpp.o
 CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ObjectPropExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/CompoundStmt.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/ContextVisitor.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/EvaluatingVisitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
@@ -803,6 +925,7 @@ CMakeFiles/MathParser.dir/Token.cpp.o
 CMakeFiles/MathParser.dir/Tokenizer.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
@@ -818,12 +941,16 @@ CMakeFiles/MathParser.dir/Tokenizer.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
@@ -836,17 +963,28 @@ CMakeFiles/MathParser.dir/Tokenizer.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 CMakeFiles/MathParser.dir/Util.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 CMakeFiles/MathParser.dir/Variant/Arithmetic.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.cpp
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Arithmetic.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Variant.h
 CMakeFiles/MathParser.dir/Variant/Conversion.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Function.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Objects/Object.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Util.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Variant/Conversion.cpp
@@ -873,6 +1011,7 @@ CMakeFiles/MathParser.dir/Variant/Variant.cpp.o
 CMakeFiles/MathParser.dir/main.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/AstNode.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Context.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Class/InstantiationExpr.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Expression.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/ArrayLiteral.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Expression/Literal/LiteralExpr.h
@@ -888,12 +1027,16 @@ CMakeFiles/MathParser.dir/main.cpp.o
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/ForStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/IfStmt.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/ControlFlow/WhileStmt.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FuncArgDecl.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Function/FunctionDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ClassDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/ConstrDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/FieldDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/Class/MethodDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FuncArgDecl.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Declaration/FunctionDecl.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Statement/Statement.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/AST/Visitor/Visitor.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Exceptions.h
- /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Interpreter.h
+ /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Parser.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Class.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/GlobalContext.h
  /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/StdLib/Method.h

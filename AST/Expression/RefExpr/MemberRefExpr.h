@@ -18,7 +18,6 @@ public:
     MemberRefExpr(Variant);
     MemberRefExpr(const MemberRefExpr& cp);
     virtual AstNode::SharedPtr clone() const;
-    Variant evaluate(Variant = {});
 
     typedef std::shared_ptr<MemberRefExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();

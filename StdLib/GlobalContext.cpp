@@ -37,7 +37,7 @@ void GlobalContext::declare_class(Class::UniquePtr class_) {
 
 Class* GlobalContext::get_class(std::string class_name) {
     if (!is_declared_class(class_name)) {
-        RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Class " + class_name + " does not exist in current context");
+        RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Class " + class_name + " does not exist");
     }
 
     return classes[class_name].get();
