@@ -1,0 +1,55 @@
+//
+// Created by Jonas Zell on 25.06.17.
+//
+
+#include "GlobalContext.h"
+#include "Types/Integer.h"
+#include "Types/String.h"
+
+GlobalContext::GlobalContext() {}
+
+bool GlobalContext::initialized = false;
+std::string GlobalContext::program = "";
+
+std::unordered_map<std::string, std::unique_ptr<Class>> GlobalContext::classes =
+        std::unordered_map<std::string, std::unique_ptr<Class>>();
+
+void GlobalContext::init(std::string p) {
+    if (initialized) {
+        return;
+    }
+
+    program = p;
+    initialized = true;
+
+    Class::UniquePtr Object = std::make_unique<Class>("Object", Function(cdot::lib::obj::construct),
+        AccessModifier::PUBLIC);
+
+    declare_class(std::move(Object));
+
+    Class::UniquePtr Integer = cdot::lib::intgr::init();
+    declare_class(std::move(Integer));
+
+    Class::UniquePtr String = cdot::lib::str::init();
+    declare_class(std::move(String));
+}
+
+bool GlobalContext::is_declared_class(std::string class_name) {
+    return classes.find(class_name) != classes.end();
+}
+
+void GlobalContext::declare_class(Class::UniquePtr class_) {
+    if (is_declared_class(class_->class_name())) {
+        RuntimeError::raise(ERR_REDECLARED_VAR, "Cannot redeclare class " + class_->class_name());
+    }
+
+    classes.emplace(class_->class_name(), std::move(class_));
+}
+
+Class* GlobalContext::get_class(std::string class_name) {
+    if (!is_declared_class(class_name)) {
+        RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Class " + class_name + " does not exist");
+    }
+
+    return classes[class_name].get();
+}

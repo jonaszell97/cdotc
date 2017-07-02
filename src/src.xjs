@@ -1,0 +1,55 @@
+
+private class Math {
+    Math() {
+        this.henlo = (double)"3 . 1 14 1 5 92"
+    }
+
+    public static double PI = 3.1415926536
+    public static double E = 2.7182818285
+
+    public int henlo { get, set }
+    public int hi = 1
+
+    public static int round(double d) {
+        return (int)d
+    }
+
+    public static any max(any a, any b) {
+        return a > b ? a : b
+    }
+
+    public static string max() {
+        return "Hm?"
+    }
+
+    public static int floor(any d) {
+        return Math.round(d) < 0 ? Math.round(d - 1) : Math.round(d)
+    }
+
+    public static int ceil(any d) {
+        return Math.floor(d + 1)
+    }
+}
+
+outln Math.round(3 * Math.PI + 17 / 5 * Math.E)
+outln Math.max(1, 1.00000000000001)
+outln Math.floor(3.99999)
+outln Math.ceil(3.99999)
+outln Math.ceil(1.1)
+let x = new Math()
+let arr = [1,2,3]
+
+outln x.getHenlo()
+x.setHenlo(12)
+outln x.getHenlo()
+
+switch (3 + 4 + 1) {
+    case 10:
+    case 11:
+        outln "false"
+    case true:
+        outln "true"
+    default:
+        break
+        outln "fuck"
+}

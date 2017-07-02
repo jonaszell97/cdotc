@@ -48,5 +48,6 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
-  "CMakeFiles/MathParser.dir/DependInfo.cmake"
+  "CMakeFiles/CDotTest.dir/DependInfo.cmake"
+  "CMakeFiles/CDot.dir/DependInfo.cmake"
   )
