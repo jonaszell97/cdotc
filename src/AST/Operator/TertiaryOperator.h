@@ -11,11 +11,10 @@
 class TertiaryOperator : public Operator {
 public:
     TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
-    TertiaryOperator(const TertiaryOperator& cp);
+
     inline std::string get_operator() {
         return "?:";
     }
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<TertiaryOperator> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -28,6 +27,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 protected:
     Expression::SharedPtr _condition;
     Expression::SharedPtr _if_branch;

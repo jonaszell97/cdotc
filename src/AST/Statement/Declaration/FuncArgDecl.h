@@ -11,8 +11,6 @@ class FuncArgDecl : public Expression {
 public:
     FuncArgDecl();
     FuncArgDecl(std::string, TypeSpecifier, Expression::SharedPtr = {});
-    FuncArgDecl(const FuncArgDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
     
     void set_name(std::string);
     inline void set_type(TypeSpecifier type) {
@@ -34,6 +32,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _arg_name;

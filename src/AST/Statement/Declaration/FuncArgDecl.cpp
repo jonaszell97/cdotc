@@ -18,20 +18,6 @@ FuncArgDecl::FuncArgDecl() : FuncArgDecl("", TypeSpecifier(), {}) {
 
 }
 
-FuncArgDecl::FuncArgDecl(const FuncArgDecl& cp) {
-    _arg_name = cp._arg_name;
-    _arg_type = cp._arg_type;
-    if (cp._default_val != nullptr) {
-        _default_val = std::static_pointer_cast<Expression>(cp._default_val->clone());
-    }
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr FuncArgDecl::clone() const {
-    return std::make_shared<FuncArgDecl>(*this);
-}
-
 void FuncArgDecl::set_name(std::string name) {
     _arg_name = name;
 }

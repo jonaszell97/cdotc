@@ -41,11 +41,16 @@ public:
     inline virtual Class* get_class() {
         return class_prototype;
     }
+    inline virtual std::unordered_map<std::string, Variant::SharedPtr> get_properties() {
+        return _properties;
+    };
 
     typedef std::shared_ptr<Array> SharedPtr;
 
 protected:
     Class* class_prototype;
+    std::unordered_map<std::string, Variant::SharedPtr> _properties;
+
     int _length;
     bool _var_length;
     TypeSpecifier _type;

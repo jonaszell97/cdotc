@@ -11,8 +11,6 @@
 class GotoStmt : public Statement {
 public:
     GotoStmt(std::string);
-    GotoStmt(const GotoStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<GotoStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -25,6 +23,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string label_name;

@@ -12,8 +12,6 @@
 
 class RefExpr : public Expression {
 public:
-    virtual AstNode::SharedPtr clone() const = 0;
-
     virtual inline void return_ref(bool ref) {
         _return_ref = ref;
     }
@@ -31,6 +29,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool _implicit_ref = false;

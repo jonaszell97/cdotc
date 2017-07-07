@@ -3,7 +3,7 @@
 //
 
 #include <iostream>
-#include "../catch.h"
+#include "../catch/catch.h"
 #include "../../src/Parser.h"
 
 TEST_CASE("If statement") {

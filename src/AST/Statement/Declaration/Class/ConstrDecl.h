@@ -13,8 +13,6 @@ class ConstrDecl : public Statement {
 public:
     ConstrDecl();
     ConstrDecl(std::vector<FuncArgDecl::SharedPtr>, std::shared_ptr<CompoundStmt>, AccessModifier);
-    ConstrDecl(const ConstrDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<ConstrDecl> SharedPtr;
     typedef std::unique_ptr<ConstrDecl> UniquePtr;
@@ -29,6 +27,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool implicit = false;

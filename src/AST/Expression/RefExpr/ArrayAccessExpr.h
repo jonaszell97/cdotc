@@ -10,12 +10,10 @@
 #include "../Expression.h"
 #include "RefExpr.h"
 
-class ArrayAccessExpr : public RefExpr {
+class ArrayAccessExpr : public Expression {
 public:
     ArrayAccessExpr(int);
     ArrayAccessExpr(Expression::SharedPtr);
-    ArrayAccessExpr(const ArrayAccessExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<ArrayAccessExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -28,6 +26,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr _index;

@@ -6,15 +6,14 @@
 #define CDOT_LITERALEXPRESSION_H
 
 
-#include "../RefExpr/RefExpr.h"
+#include "../Expression.h"
 
-class LiteralExpr : public RefExpr {
+class LiteralExpr : public Expression {
 public:
     LiteralExpr();
     LiteralExpr(Variant);
     LiteralExpr(Variant, TypeSpecifier);
-    LiteralExpr(const LiteralExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
+
     void set_val(Variant);
 
     typedef std::shared_ptr<LiteralExpr> SharedPtr;
@@ -28,6 +27,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Variant _value;

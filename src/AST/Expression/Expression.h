@@ -15,9 +15,18 @@ public:
 
     Expression();
     Expression(Expression::SharedPtr);
-    Expression(const Expression& cp);
-    virtual AstNode::SharedPtr clone() const;
+
     virtual void set_child(Expression::SharedPtr);
+
+    virtual inline void return_ref(bool ref) {
+        _return_ref = ref;
+    }
+    virtual inline void implicit_ref(bool implicit) {
+        _implicit_ref = implicit;
+    }
+    virtual inline void set_member_expr(std::shared_ptr<Expression> ref_expr) {
+        _member_expr = ref_expr;
+    }
 
     std::vector<AstNode::SharedPtr> get_children();
 
@@ -30,9 +39,13 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr _child;
+    bool _implicit_ref = false;
+    Expression::SharedPtr _member_expr;
+    bool _return_ref = false;
 };
 
 

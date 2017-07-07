@@ -13,14 +13,6 @@ SwitchStmt::SwitchStmt(Expression::SharedPtr switch_val) :
 
 }
 
-SwitchStmt::SwitchStmt(const SwitchStmt& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr SwitchStmt::clone() const {
-    return std::make_shared<SwitchStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> SwitchStmt::get_children() {
     std::vector<AstNode::SharedPtr> children = { switch_val };
     for (auto case_ : cases) {

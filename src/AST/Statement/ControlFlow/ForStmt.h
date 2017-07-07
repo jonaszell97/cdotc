@@ -17,8 +17,6 @@ class ForStmt : public Statement {
 public:
     ForStmt(Statement::SharedPtr, Statement::SharedPtr, Statement::SharedPtr);
     ForStmt(IdentifierRefExpr::SharedPtr, Expression::SharedPtr);
-    ForStmt(const ForStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_body(CompoundStmt::SharedPtr body) {
         _body = body;
@@ -38,6 +36,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool range_based  = false;

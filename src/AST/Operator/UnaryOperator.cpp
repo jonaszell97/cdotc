@@ -19,16 +19,6 @@ UnaryOperator::UnaryOperator(Variant v, std::string fix) : UnaryOperator(v.get<s
 
 }
 
-UnaryOperator::UnaryOperator(const UnaryOperator& cp) {
-    _operator = cp._operator;
-    _child = std::static_pointer_cast<Expression>(cp._child->clone());
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr UnaryOperator::clone() const {
-    return std::make_shared<UnaryOperator>(*this);
-}
-
 std::string UnaryOperator::get_operator() {
     return _operator;
 }
@@ -36,6 +26,9 @@ std::string UnaryOperator::get_operator() {
 std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {
     std::vector<AstNode::SharedPtr> res;
     res.push_back(_child);
+    if (_member_expr != nullptr) {
+        res.push_back(_member_expr);
+    }
 
     return res;
 }
@@ -47,5 +40,7 @@ void UnaryOperator::__dump(int depth) {
 
     std::cout << "UnaryOperator ['" << _operator << "']" << std::endl;
 
-    _child->__dump(depth + 1);
+    for (auto child : get_children()) {
+        child->__dump(depth + 1);
+    }
 }

@@ -10,7 +10,8 @@ Array::Array(TypeSpecifier type, int length) :
     _type(type),
     _var_length(length == -1),
     _length(length),
-    _elements(std::vector<Variant::SharedPtr>())
+    _elements(std::vector<Variant::SharedPtr>()),
+    class_prototype(GlobalContext::get_class("Array"))
 {
 
 }

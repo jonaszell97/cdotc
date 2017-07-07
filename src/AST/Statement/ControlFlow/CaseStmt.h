@@ -13,8 +13,6 @@ class CaseStmt : public LabelStmt {
 public:
     CaseStmt(Expression::SharedPtr);
     CaseStmt();
-    CaseStmt(const CaseStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<CaseStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -27,6 +25,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool is_default = false;

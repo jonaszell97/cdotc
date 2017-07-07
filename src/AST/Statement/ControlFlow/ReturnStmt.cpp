@@ -12,23 +12,24 @@ ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : _return_val(return_va
 
 }
 
-ReturnStmt::ReturnStmt(const ReturnStmt& cp) {
-    _return_val = std::static_pointer_cast<Expression>(cp._return_val->clone());
-    func = cp.func;
-    set_parent(cp._parent);
-}
+ReturnStmt::ReturnStmt() {
 
-AstNode::SharedPtr ReturnStmt::clone() const {
-    return std::make_shared<ReturnStmt>(*this);
 }
 
 std::vector<AstNode::SharedPtr> ReturnStmt::get_children() {
-    return { _return_val };
+    if (_return_val) {
+        return { _return_val };
+    }
+    else {
+        return {};
+    }
 }
 
 void ReturnStmt::__dump(int depth) {
     AstNode::__tab(depth);
     std::cout << "ReturnStmt" << std::endl;
 
-    _return_val->__dump(depth + 1);
+    for (auto child : get_children()) {
+        child->__dump(depth + 1);
+    }
 }

@@ -12,8 +12,6 @@
 class FieldDecl : public Statement {
 public:
     FieldDecl(std::string, TypeSpecifier, AccessModifier = AccessModifier::PUBLIC, bool = false, Expression::SharedPtr = {});
-    FieldDecl(const FieldDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_default(Expression::SharedPtr expr) {
         default_val = expr;
@@ -36,6 +34,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool generate_getter = false;

@@ -17,8 +17,7 @@ struct ObjectProp {
 class ObjectPropExpr : public Expression {
 public:
     ObjectPropExpr(std::string, Expression::SharedPtr, TypeSpecifier);
-    ObjectPropExpr(const ObjectPropExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
+    ObjectPropExpr(std::string, TypeSpecifier);
 
     typedef std::shared_ptr<ObjectPropExpr> SharedPtr;
     void __dump(int);
@@ -30,6 +29,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
     std::vector<AstNode::SharedPtr> get_children();
 
 protected:

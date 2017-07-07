@@ -15,22 +15,6 @@ IfStmt::IfStmt(Expression::SharedPtr cond) : _condition(cond), _if_branch{}, _el
 
 }
 
-IfStmt::IfStmt(const IfStmt& cp) {
-    _condition = std::static_pointer_cast<Expression>(cp._condition->clone());
-    if (cp._if_branch != nullptr) {
-        _if_branch = std::static_pointer_cast<Statement>(cp._if_branch->clone());
-    }
-    if (cp._else_branch != nullptr) {
-        _else_branch = std::static_pointer_cast<Statement>(cp._else_branch->clone());
-    }
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr IfStmt::clone() const {
-    return std::make_shared<IfStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> IfStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
     children.push_back(_condition);

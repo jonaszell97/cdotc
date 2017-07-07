@@ -10,23 +10,16 @@ ExplicitCastExpr::ExplicitCastExpr(std::string type) : _operator(type), _child{}
 
 }
 
-ExplicitCastExpr::ExplicitCastExpr(const ExplicitCastExpr& cp) {
-    _operator = cp._operator;
-    _child = std::static_pointer_cast<Expression>(cp._child->clone());
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ExplicitCastExpr::clone() const {
-    return std::make_shared<ExplicitCastExpr>(*this);
-}
-
 std::vector<AstNode::SharedPtr> ExplicitCastExpr::get_children() {
+    std::vector<AstNode::SharedPtr> children;
     if (_child != nullptr) {
-        return {_child};
+        children.push_back(_child);
+    }
+    if (_member_expr != nullptr) {
+        children.push_back(_member_expr);
     }
 
-    return {};
+    return children;
 }
 
 void ExplicitCastExpr::__dump(int depth) {

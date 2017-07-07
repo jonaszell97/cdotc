@@ -14,8 +14,6 @@
 class SwitchStmt : public Statement {
 public:
     SwitchStmt(Expression::SharedPtr);
-    SwitchStmt(const SwitchStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void add_case(CaseStmt::SharedPtr case_) {
         cases.push_back(case_);
@@ -32,6 +30,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr switch_val;

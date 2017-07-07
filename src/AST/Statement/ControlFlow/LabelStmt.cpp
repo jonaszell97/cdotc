@@ -13,14 +13,6 @@ LabelStmt::LabelStmt(std::string label_name) : label_name(label_name), parent_cm
 
 }
 
-LabelStmt::LabelStmt(const LabelStmt& cp) {
-
-}
-
-AstNode::SharedPtr LabelStmt::clone() const {
-    return std::make_shared<LabelStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> LabelStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
     for (auto child : CompoundStmt::get_children()) {

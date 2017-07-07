@@ -13,8 +13,6 @@
 class OperatorDecl : public Statement {
 public:
     OperatorDecl(std::string, std::vector<FuncArgDecl::SharedPtr>, AccessModifier, bool);
-    OperatorDecl(const OperatorDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_body(CompoundStmt::SharedPtr _body) {
         body = _body;
@@ -37,7 +35,8 @@ public:
 
     friend class Visitor;
     friend class EvaluatingVisitor;
-    friend class ContextVisitor;
+    friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     TypeSpecifier return_type;

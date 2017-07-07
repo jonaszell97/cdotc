@@ -13,12 +13,10 @@
 
 class MemberRefExpr;
 
-class IdentifierRefExpr : public RefExpr {
+class IdentifierRefExpr : public Expression {
 public:
     IdentifierRefExpr(std::string);
     IdentifierRefExpr(Variant);
-    IdentifierRefExpr(const IdentifierRefExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -32,6 +30,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _ident;

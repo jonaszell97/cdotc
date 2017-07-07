@@ -8,13 +8,22 @@
 #include "Variant/Variant.h"
 
 Tokenizer::Tokenizer(std::string program) :
-        current_token(T_BOF, { }, 0, 0, 0),
-        _flag(TFLAG_NONE),
-        _program(program),
-        current_index(0),
-        current_line(0),
-        index_on_line(0) {
+    current_token(T_BOF, { }, 0, 0, 0),
+    _program(program),
+    current_index(0),
+    current_line(0),
+    index_on_line(0),
+    current_token_index(0)
+{
+    while (current_token.get_type() != T_EOF) {
+        current_token = _get_next_token(false);
+        tokens.push_back(current_token);
+    }
 
+    current_token_index = 0;
+    current_token = tokens.front();
+    last_token_index = 0;
+    current_index = current_token.get_start();
 }
 
 std::string Tokenizer::s_val() {
@@ -23,10 +32,6 @@ std::string Tokenizer::s_val() {
     }
 
     return current_token.get_value().get<std::string>();
-}
-
-void Tokenizer::set_flag(TokenizerFlag flag) {
-    _flag = flag;
 }
 
 /**
@@ -182,14 +187,7 @@ char Tokenizer::char_lookahead() {
  * Backtracks to the last token
  */
 void Tokenizer::backtrack() {
-    if (tokens.size() <= 1) {
-        current_index = 0;
-        return;
-    }
-
-    current_index = current_token.get_start();
-    tokens.pop_back();
-    current_token = tokens.back();
+    --current_token_index;
 }
 
 /**
@@ -205,14 +203,19 @@ void Tokenizer::backtrack_c(int length) {
  * @return
  */
 Token Tokenizer::get_next_token(bool ignore_newline) {
-    Token t = _get_next_token(ignore_newline);
-    if (t.is_punctuator('\n') && ignore_newline) {
+    if (current_token_index >= tokens.size() - 1) {
+        return tokens.back();
+    }
+
+    Token t = tokens[current_token_index++];
+    if (ignore_newline && t.is_punctuator('\n')) {
         return get_next_token(true);
     }
 
-    tokens.push_back(t);
+    last_token_index = t.get_start();
+    current_index = t.get_end();
 
-    return tokens.back();
+    return t;
 }
 
 char Tokenizer::escape_char(char c) {
@@ -273,7 +276,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         first = get_next_char();
         ignore_comment();
 
-        return get_next_token(ignore_newline);
+        return _get_next_token(ignore_newline);
     }
 
     // multi-line comment
@@ -282,7 +285,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         if (next == C_TIMES) {
             ignore_ml_comment();
 
-            return get_next_token(ignore_newline);
+            return _get_next_token(ignore_newline);
         } else {
             backtrack_c(1);
         }
@@ -366,7 +369,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         }
 
         // octal literal
-        if (first == '0' && t.length() != 1) {
+        if (first == '0' && t.length() != 1 && !decimal_point) {
             try {
                 backtrack_c(1);
                 return Token(T_LITERAL, {std::stoi(t, nullptr, 8)}, start_line, _start_index, current_index);
@@ -399,6 +402,10 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
                 get_next_char();
                 return Token(T_LITERAL, { std::stol(t) }, start_line, _start_index, current_index);
             }
+            else if (next == 'd' || next == 'D') {
+                get_next_char();
+                return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
+            }
             else {
                 return Token(T_LITERAL, { std::stoi(t) }, start_line, _start_index, current_index);
             }
@@ -409,9 +416,11 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
                 get_next_char();
                 return Token(T_LITERAL, { std::stof(t) }, start_line, _start_index, current_index);
             }
-            else {
-                return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
+            else if (next == 'd' || next == 'D') {
+                get_next_char();
             }
+
+            return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
         }
     }
     else if (is_letter(first)) {
@@ -442,6 +451,9 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         else if (is_bool_literal(t)) {
             return Token(T_LITERAL, { t == "true" }, start_line, _start_index, current_index);
         }
+        else if (t == "_") {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "'_' is a reserved identifier", this);
+        }
         else {
             return Token(T_IDENT, { t }, start_line, _start_index, current_index);
         }
@@ -469,8 +481,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         return Token(T_PUNCTUATOR, { first }, start_line, _start_index, current_index);
     }
     else {
-        ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Unexpected character " + util::str_escape(std::string(1, first))
-                , this);
+        ParseError::raise(ERR_UNEXPECTED_CHARACTER, u8"Unexpected character " + std::string(1, first), this);
     }
 
     return Token(T_EOF, {}, start_line, current_index, current_index);
@@ -500,15 +511,17 @@ void Tokenizer::advance(bool ignore_newline) {
  * @return
  */
 Token Tokenizer::lookahead(bool ignore_newline) {
-    int _current_index = current_index;
-    int _last_token_index = last_token_index;
-    Token t = get_next_token(ignore_newline);
-    tokens.pop_back();
+    if (current_token_index >= tokens.size() - 1) {
+        return tokens.back();
+    }
 
-    current_index = _current_index;
-    last_token_index = _last_token_index;
+    Token ret = tokens[current_token_index];
+    int  i = 1;
+    while (ignore_newline && ret.is_punctuator('\n')) {
+        ret = tokens[current_token_index + i++];
+    }
 
-    return t;
+    return ret;
 }
 
 /**
@@ -516,7 +529,11 @@ Token Tokenizer::lookahead(bool ignore_newline) {
  * @return
  */
 Token Tokenizer::lookbehind() {
-    return tokens.at(tokens.size() - 1);
+    if (current_token_index == 0) {
+        return tokens.front();
+    }
+
+    return tokens[current_token_index - 1];
 }
 
 /**
@@ -524,6 +541,7 @@ Token Tokenizer::lookbehind() {
  */
 void Tokenizer::ignore_comment() {
     char c = get_next_char();
+
     while (c != C_NEWLINE) {
         if (current_index >= _program.length()) {
             return;
@@ -552,46 +570,4 @@ void Tokenizer::ignore_ml_comment() {
     if (c != C_SLASH) {
         goto main_loop;
     }
-}
-
-/**
- * Returns an entire block, until parentheses even out
- * @return
- */
-std::string Tokenizer::get_next_block() {
-    set_flag(TFLAG_IGNORE_NEWLINE);
-    advance();
-    if (!(current_token.is_punctuator(C_OPEN_CURLY))) {
-        ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Expected '{' to start a block statement.", this);
-    }
-
-    int open_count = 1;
-    int close_count = 0;
-    int last_index = current_index;
-    int start = current_index;
-
-    while (close_count != open_count && current_token.get_type() != T_EOF) {
-        advance();
-        if (current_token.is_punctuator(C_OPEN_CURLY)) {
-            open_count++;
-        }
-        else if (current_token.is_punctuator(C_CLOSE_CURLY)) {
-            close_count++;
-            if (close_count == open_count) {
-                backtrack();
-                last_index = current_index;
-            }
-        }
-    }
-
-    if (close_count != open_count) {
-        ParseError::raise(ERR_EOF, "Expected '}' after block statement", this);
-    }
-
-    auto res = _program.substr(start, last_index - start);
-
-    advance();
-    set_flag(TFLAG_NONE);
-
-    return util::str_trim(res);
 }

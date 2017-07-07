@@ -12,15 +12,6 @@ ContinueStmt::ContinueStmt() {
 
 }
 
-ContinueStmt::ContinueStmt(const ContinueStmt& cp) {
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ContinueStmt::clone() const {
-    return std::make_shared<ContinueStmt>(*this);
-}
-
 void ContinueStmt::set_stmt(Statement *stmt, std::string type) {
     _stmt = stmt;
     _type = type;

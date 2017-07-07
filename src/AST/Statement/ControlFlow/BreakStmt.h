@@ -14,8 +14,6 @@
 class BreakStmt : public Statement {
 public:
     BreakStmt();
-    BreakStmt(const BreakStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     void set_stmt(Statement *stmt, std::string type);
 
@@ -30,6 +28,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _type;

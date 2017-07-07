@@ -9,20 +9,8 @@ ObjectLiteral::ObjectLiteral() {
     _props = std::vector<ObjectPropExpr::SharedPtr>();
 }
 
-ObjectLiteral::ObjectLiteral(const ObjectLiteral& cp) {
-    _props = std::vector<ObjectPropExpr::SharedPtr>();
-    for (auto prop : cp._props) {
-        _props.push_back(prop);
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ObjectLiteral::clone() const {
-    return std::make_shared<ObjectLiteral>(*this);
-}
-
-void ObjectLiteral::add_prop(ObjectPropExpr prop) {
-    _props.push_back(std::make_shared<ObjectPropExpr>(prop));
+void ObjectLiteral::add_prop(ObjectPropExpr::SharedPtr prop) {
+    _props.push_back(prop);
 }
 
 std::vector<ObjectPropExpr::SharedPtr> ObjectLiteral::get_props() {
@@ -33,6 +21,9 @@ std::vector<AstNode::SharedPtr> ObjectLiteral::get_children() {
     std::vector<AstNode::SharedPtr> res;
     for (int i = 0; i < _props.size(); i++) {
         res.emplace_back(_props.at(i));
+    }
+    if (_member_expr != nullptr) {
+        res.push_back(_member_expr);
     }
 
     return res;

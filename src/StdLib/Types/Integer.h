@@ -5,7 +5,7 @@
 #ifndef CDOT_INTEGER_H
 #define CDOT_INTEGER_H
 
-#include "../Class.h"
+#include "../Class/Class.h"
 
 namespace cdot {
 namespace lib {

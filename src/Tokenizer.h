@@ -12,11 +12,6 @@
 
 class Parser;
 
-enum TokenizerFlag {
-    TFLAG_NONE,
-    TFLAG_IGNORE_NEWLINE
-};
-
 class Tokenizer {
 public:
     Tokenizer(std::string);
@@ -45,6 +40,7 @@ public:
     int current_line;
     int index_on_line;
     int last_token_index;
+    int current_token_index;
     Token current_token;
 
     friend class Parser;
@@ -53,11 +49,8 @@ public:
 
 protected:
     std::vector<Token> tokens;
-    Parser *_interpreter;
     std::string _program;
-    TokenizerFlag _flag;
 
-    void set_flag(TokenizerFlag);
     Token get_next_token(bool);
     Token _get_next_token(bool);
     void ignore_comment();
@@ -72,8 +65,6 @@ protected:
     bool is_punctuator(char);
     bool is_bool_literal(std::string);
     char escape_char(char);
-
-    std::string get_next_block();
 };
 
 

@@ -8,17 +8,19 @@ namespace cdot {
 namespace lib {
 namespace intgr {
 
-    const std::unordered_map<std::string, StaticFunction> _integer_static_methods = {
-            {"parseInt", parseInt},
-            {"pareLong", parseLong}
+    const std::unordered_map<std::string, std::pair<StaticFunction, std::vector<TypeSpecifier>>>
+                _integer_static_methods = {
+            {"parseInt", {parseInt, {TypeSpecifier(STRING_T)}}},
+            {"parseLong", {parseLong, {TypeSpecifier(STRING_T)}}}
     };
 
-    const std::unordered_map<std::string, InstanceFunction> _integer_instance_methods = {
-            {"toString", toString},
-            {"toLong", toLong},
-            {"toDouble", toDouble},
-            {"toFloat", toFloat},
-            {"toBool", toBool},
+    const std::unordered_map<std::string, std::pair<InstanceFunction, std::vector<TypeSpecifier>>>
+                _integer_instance_methods = {
+            {"toString", {toString, {}}},
+            {"toLong", {toLong, {}}},
+            {"toDouble", {toDouble, {}}},
+            {"toFloat", {toFloat, {}}},
+            {"toBool", {toBool, {}}},
     };
 
     const std::unordered_map<std::string, std::pair<TypeSpecifier, Variant::SharedPtr>> _integer_class_constants = {
@@ -35,10 +37,11 @@ namespace intgr {
             AccessModifier::PUBLIC);
 
         for (auto method : _integer_static_methods) {
-            Integer->_add_static_builtin(method.first, method.second);
+            Integer->_add_static_builtin(method.first, method.second.first, AccessModifier::PUBLIC,
+                    method.second.second);
         }
         for (auto method : _integer_instance_methods) {
-            Integer->_add_builtin(method.first, method.second);
+            Integer->_add_builtin(method.first, method.second.first, AccessModifier::PUBLIC, method.second.second);
         }
         for (auto constant : _integer_class_constants) {
             Integer->add_static_property(constant.first, constant.second.first, constant.second.second);

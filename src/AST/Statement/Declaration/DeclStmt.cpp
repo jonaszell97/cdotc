@@ -9,51 +9,38 @@
 #include "../../Expression/Literal/ArrayLiteral.h"
 #include "../../../StdLib/Objects/Array.h"
 
-DeclStmt::DeclStmt(std::string ident, Expression::SharedPtr val, TypeSpecifier type) :
-        _ident(ident),
-        _val(val),
-        _type(type)
-{
+
+DeclStmt::DeclStmt() : declarations{}, decl_identifiers{} {
 
 }
 
-DeclStmt::DeclStmt(std::string ident, TypeSpecifier type) : DeclStmt(ident, {}, type) {
-
-}
-
-DeclStmt::DeclStmt(const DeclStmt& cp) {
-    _ident = cp._ident;
-    _type = cp._type;
-    if (cp._val != nullptr) {
-        _val = std::static_pointer_cast<Expression>(cp._val->clone());
+void DeclStmt::add_declaration(std::string ident, TypeSpecifier type, Expression::SharedPtr val) {
+    if (std::find(decl_identifiers.begin(), decl_identifiers.end(), ident) != decl_identifiers.end()) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Duplicate declaration of identifier " + ident);
     }
-    else {
-        new (&_val) std::shared_ptr<Expression>();
-    }
-    set_parent(cp._parent);
-}
 
-AstNode::SharedPtr DeclStmt::clone() const {
-    return std::make_shared<DeclStmt>(*this);
-}
-
-Expression::SharedPtr DeclStmt::get_expr() {
-    return _val;
+    declarations.push_back(std::pair<TypeSpecifier, Expression::SharedPtr>{type, val});
+    decl_identifiers.push_back(ident);
 }
 
 std::vector<AstNode::SharedPtr> DeclStmt::get_children() {
-    return _val == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{ _val };
+    std::vector<AstNode::SharedPtr> children;
+    for (auto decl : declarations) {
+        if (decl.second) {
+            children.push_back(decl.second);
+        }
+    }
+
+    return children;
 }
 
 void DeclStmt::__dump(int depth) {
-    for (int i = 0; i < depth; i++) {
-        std::cout << "\t";
-    }
-
-    std::cout << "DeclStmt [" << (_type.type == AUTO_T ? "auto" : val::typetostr(_type.type))
-              << (_type.nullable ? "?" : "") << " " << _ident << "]" << std::endl;
-
-    if (_val != nullptr) {
-        _val->__dump(depth + 1);
+    for (int i = 0; i < decl_identifiers.size(); ++i) {
+        AstNode::__tab(depth);
+        std::cout << "DeclStmt [" << declarations[i].first.to_string() << " " << decl_identifiers[i] << "]" <<
+                                                                                                            std::endl;
+        if (declarations[i].second) {
+            declarations[i].second->__dump(depth + 1);
+        }
     }
 }

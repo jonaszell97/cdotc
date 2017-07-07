@@ -1,4 +1,4 @@
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/rebuild_cache.dir
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/CDotTest.dir
 /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/CDot.dir
+/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles/CDotTest.dir

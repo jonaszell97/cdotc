@@ -12,14 +12,6 @@ LambdaExpr::LambdaExpr(TypeSpecifier return_type, std::vector<FuncArgDecl::Share
 
 }
 
-LambdaExpr::LambdaExpr(const LambdaExpr& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr LambdaExpr::clone() const {
-    return std::make_shared<LambdaExpr>(*this);
-}
-
 std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {
     std::vector<AstNode::SharedPtr> children;
     for (auto arg : _args) {

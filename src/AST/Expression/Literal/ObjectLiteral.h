@@ -13,9 +13,8 @@
 class ObjectLiteral : public Expression {
 public:
     ObjectLiteral();
-    ObjectLiteral(const ObjectLiteral& cp);
-    virtual AstNode::SharedPtr clone() const;
-    void add_prop(ObjectPropExpr);
+
+    void add_prop(ObjectPropExpr::SharedPtr);
     std::vector<ObjectPropExpr::SharedPtr> get_props();
     std::vector<AstNode::SharedPtr> get_children();
 
@@ -33,6 +32,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Class* _class_prototype;

@@ -14,19 +14,13 @@ TertiaryOperator::TertiaryOperator(Expression::SharedPtr cond, Expression::Share
 
 }
 
-TertiaryOperator::TertiaryOperator(const TertiaryOperator& cp) {
-    _condition = std::static_pointer_cast<Expression>(cp._condition->clone());
-    _if_branch = std::static_pointer_cast<Expression>(cp._if_branch->clone());
-    _else_branch = std::static_pointer_cast<Expression>(cp._else_branch->clone());
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr TertiaryOperator::clone() const {
-    return std::make_shared<TertiaryOperator>(*this);
-}
-
 std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {
-    return { _condition, _if_branch, _else_branch };
+    std::vector<AstNode::SharedPtr> children { _condition, _if_branch, _else_branch };
+    if (_member_expr != nullptr) {
+        children.push_back(_member_expr);
+    }
+
+    return children;
 }
 
 void TertiaryOperator::__dump(int depth) {

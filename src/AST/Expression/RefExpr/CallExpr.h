@@ -9,11 +9,11 @@
 #include "../Expression.h"
 #include "RefExpr.h"
 
-class CallExpr : public RefExpr {
+class CallExpr : public Expression {
 public:
     CallExpr();
-    CallExpr(const CallExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
+    CallExpr(std::vector<Expression::SharedPtr>);
+
     void add_argument(Expression::SharedPtr);
 
     typedef std::shared_ptr<CallExpr> SharedPtr;
@@ -27,6 +27,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
     friend class MethodCallExpr;
 protected:
     std::vector<Expression::SharedPtr> _arguments;

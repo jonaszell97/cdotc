@@ -15,19 +15,6 @@ ArrayLiteral::ArrayLiteral(TypeSpecifier ts) :
 
 }
 
-ArrayLiteral::ArrayLiteral(const ArrayLiteral& cp) {
-    type = cp.type;
-    _elements = std::vector<Expression::SharedPtr>();
-    for (auto el : cp._elements) {
-        _elements.push_back(std::static_pointer_cast<Expression>(el->clone()));
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ArrayLiteral::clone() const {
-    return std::make_shared<ArrayLiteral>(*this);
-}
-
 void ArrayLiteral::add_element(Expression::SharedPtr el) {
     _elements.push_back(el);
 }
@@ -40,6 +27,10 @@ std::vector<AstNode::SharedPtr> ArrayLiteral::get_children() {
 
     for (auto el : _elements) {
         res.push_back(el);
+    }
+
+    if (_member_expr != nullptr) {
+        res.push_back(_member_expr);
     }
 
     return res;

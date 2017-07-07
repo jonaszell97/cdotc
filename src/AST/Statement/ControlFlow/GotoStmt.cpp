@@ -10,14 +10,6 @@ GotoStmt::GotoStmt(std::string label_name) : label_name(label_name) {
 
 }
 
-GotoStmt::GotoStmt(const GotoStmt& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr GotoStmt::clone() const {
-    return std::make_shared<GotoStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> GotoStmt::get_children() {
     return { };
 }

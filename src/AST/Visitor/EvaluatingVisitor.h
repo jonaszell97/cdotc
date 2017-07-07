@@ -10,6 +10,8 @@
 #include "../Expression/Literal/ObjectPropExpr.h"
 #include "../Statement/Declaration/FuncArgDecl.h"
 #include "../Statement/ControlFlow/LabelStmt.h"
+#include "../../StdLib/Module.h"
+#include "../../StdLib/Class/Interface.h"
 
 class EvaluatingVisitor : public Visitor {
 public:
@@ -17,8 +19,15 @@ public:
     EvaluatingVisitor(std::shared_ptr<Context> ctx);
     EvaluatingVisitor(const EvaluatingVisitor&);
 
-    virtual Variant evaluate(Statement*);
+    inline void set_out_module(Module* mod) {
+        out_module = mod;
+    }
+
     virtual Variant evaluate(CompoundStmt*);
+
+    virtual Variant visit(ModuleDecl*);
+    virtual Variant visit(ImportStmt*);
+    virtual Variant visit(ExportStmt*);
 
     virtual Variant visit(FunctionDecl*);
     virtual Variant visit(CompoundStmt*);
@@ -34,6 +43,7 @@ public:
     virtual Variant visit(ObjectPropExpr*);
     virtual Variant visit(ArrayAccessExpr*);
     virtual Variant visit(MethodCallExpr*);
+    virtual Variant visit(FunctionCallExpr*);
     virtual Variant visit(CallExpr*);
     virtual Variant visit(MemberRefExpr*);
     virtual Variant visit(BinaryOperator*);
@@ -52,36 +62,43 @@ public:
     virtual Variant visit(InputStmt*);
     virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
-    virtual Variant visit(InstantiationExpr*);
     virtual Variant visit(ClassDecl*);
     virtual Variant visit(MethodDecl*);
     virtual Variant visit(FieldDecl*);
     virtual Variant visit(ConstrDecl*);
     virtual Variant visit(LambdaExpr*);
     virtual Variant visit(OperatorDecl*);
+    virtual Variant visit(StructDecl*);
+
+    virtual Variant evaluate_unary_op(UnaryOperator*);
+    virtual Variant evaluate_binary_op(BinaryOperator*);
 
     inline Context* get_ctx() {
         return context.get();
     }
-    inline void catch_undeclared_identifiers() {
-        catch_undeclared = true;
-        undeclared_identifiers = std::vector<std::string>();
-    }
-protected:
 
+    inline void set_implicit_return(bool ret) {
+        implicit_return = ret;
+    }
+
+protected:
     /** Context */
+    Module* out_module;
     std::shared_ptr<Context> context;
-    bool catch_undeclared = false;
-    std::vector<std::string> undeclared_identifiers;
+    std::unordered_map<std::string, Variant::SharedPtr> exports;
+
+    bool implicit_return = true;
 
     /** Identifier evaluation */
-    Variant::SharedPtr current_obj_ref;
+    std::vector<Variant::SharedPtr> current_ref = {};
 
     /** Object and function declarations */
     ObjectProp current_prop;
     FuncArg current_arg;
-    Function* current_constr;
     Class::UniquePtr current_class;
+
+    bool is_interface = false;
+    Interface::UniquePtr current_interface = {};
 
     /** Goto label */
     LabelStmt* current_label;

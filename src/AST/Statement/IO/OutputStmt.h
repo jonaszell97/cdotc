@@ -13,8 +13,6 @@
 class OutputStmt : public Statement {
 public:
     OutputStmt(Expression::SharedPtr, bool = false);
-    OutputStmt(const OutputStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
@@ -26,6 +24,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 protected:
     Expression::SharedPtr _value;
     bool _newline;

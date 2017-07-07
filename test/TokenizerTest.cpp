@@ -2,7 +2,7 @@
 // Created by Jonas Zell on 01.07.17.
 //
 
-#include "catch.h"
+#include "catch/catch.h"
 #include "../src/Tokenizer.h"
 
 TEST_CASE("Variable assignment") {

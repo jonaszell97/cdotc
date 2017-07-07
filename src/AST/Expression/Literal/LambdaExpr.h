@@ -6,14 +6,11 @@
 #define CDOT_LAMBDAEXPR_H
 
 #include "../../Statement/Declaration/FuncArgDecl.h"
-#include "../RefExpr/RefExpr.h"
 #include "../../Statement/CompoundStmt.h"
 
-class LambdaExpr : public RefExpr {
+class LambdaExpr : public Expression {
 public:
     LambdaExpr(TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>);
-    LambdaExpr(const LambdaExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_body(CompoundStmt::SharedPtr stmt) {
         _body = stmt;
@@ -32,7 +29,8 @@ public:
 
     friend class Visitor;
     friend class EvaluatingVisitor;
-    friend class ContextVisitor;
+    friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     TypeSpecifier _return_type;

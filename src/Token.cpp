@@ -46,6 +46,9 @@ bool Token::is_operator(std::string op) {
     return _type == T_OP && _value.get<std::string>() == op;
 }
 
+bool Token::is_separator() {
+    return _type == T_PUNCTUATOR && (_value.get<char>() == '\n' || _value.get<char>() == ';');
+}
 Token Token::set_literal_type(LiteralType type) {
     _literal_type = type;
 

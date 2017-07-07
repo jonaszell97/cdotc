@@ -11,8 +11,6 @@
 class ContinueStmt : public Statement {
 public:
     ContinueStmt();
-    ContinueStmt(const ContinueStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     void set_stmt(Statement *stmt, std::string type);
 
@@ -27,6 +25,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _type;

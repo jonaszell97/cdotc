@@ -11,13 +11,14 @@
 
 class DeclStmt : public Statement {
 public:
-    DeclStmt(std::string, Expression::SharedPtr, TypeSpecifier);
-    DeclStmt(std::string, TypeSpecifier);
-    DeclStmt(const DeclStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
+    DeclStmt();
+
+    void add_declaration(std::string, TypeSpecifier, Expression::SharedPtr = {});
+    inline size_t size() {
+        return decl_identifiers.size();
+    }
 
     std::vector<AstNode::SharedPtr> get_children();
-    Expression::SharedPtr get_expr();
 
     typedef std::shared_ptr<DeclStmt> SharedPtr;
     void __dump(int);
@@ -29,12 +30,11 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
-    std::string _ident;
-    Expression::SharedPtr _val;
-    TypeSpecifier _type;
-    std::string __class_name = "DeclStmt";
+    std::vector<std::string> decl_identifiers;
+    std::vector<std::pair<TypeSpecifier, Expression::SharedPtr>> declarations;
 };
 
 

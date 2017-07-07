@@ -12,17 +12,6 @@ BinaryOperator::BinaryOperator(std::string op) : _operator(op) {
 
 }
 
-BinaryOperator::BinaryOperator(const BinaryOperator& cp) {
-    _operator = cp._operator;
-    _first_child = std::static_pointer_cast<Expression>(cp._first_child->clone());
-    _second_child = std::static_pointer_cast<Expression>(cp._second_child->clone());
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr BinaryOperator::clone() const {
-    return std::make_shared<BinaryOperator>(*this);
-}
-
 void BinaryOperator::set_fst_child(Expression::SharedPtr exp) {
     _first_child = exp;
 }
@@ -39,6 +28,9 @@ std::vector<AstNode::SharedPtr> BinaryOperator::get_children() {
     std::vector<AstNode::SharedPtr> res;
     res.push_back(_first_child);
     res.push_back(_second_child);
+    if (_member_expr != nullptr) {
+        res.push_back(_member_expr);
+    }
 
     return res;
 }
@@ -50,6 +42,7 @@ void BinaryOperator::__dump(int depth) {
 
     std::cout << "BinaryOperator ['" + _operator << "']" << std::endl;
 
-    _first_child->__dump(depth + 1);
-    _second_child->__dump(depth + 1);
+    for (auto child : get_children()) {
+        child->__dump(depth + 1);
+    }
 }

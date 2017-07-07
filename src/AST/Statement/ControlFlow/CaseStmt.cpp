@@ -14,14 +14,6 @@ CaseStmt::CaseStmt() : is_default(true) {
 
 }
 
-CaseStmt::CaseStmt(const CaseStmt& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr CaseStmt::clone() const {
-    return std::make_shared<CaseStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> CaseStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
     if (case_val != nullptr) {

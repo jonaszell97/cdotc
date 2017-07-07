@@ -14,16 +14,9 @@ ObjectPropExpr::ObjectPropExpr(std::string prop_name, Expression::SharedPtr prop
 
 }
 
-ObjectPropExpr::ObjectPropExpr(const ObjectPropExpr& cp) {
-    _prop_name = cp._prop_name;
-    _prop_type = cp._prop_type;
-    _prop_val = std::static_pointer_cast<Expression>(cp._prop_val->clone());
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
+ObjectPropExpr::ObjectPropExpr(std::string prop_name, TypeSpecifier type) : _prop_name(prop_name), _prop_type(type),
+                                                                            _prop_val{} {
 
-AstNode::SharedPtr ObjectPropExpr::clone() const {
-    return std::make_shared<ObjectPropExpr>(*this);
 }
 
 std::vector<AstNode::SharedPtr> ObjectPropExpr::get_children() {

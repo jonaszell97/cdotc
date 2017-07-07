@@ -12,10 +12,7 @@
 
 class InputStmt : public Statement {
 public:
-    InputStmt(std::string, ValueType = ANY_T);
-    InputStmt(Variant, ValueType = ANY_T);
-    InputStmt(const InputStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
+    InputStmt(std::string);
 
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
@@ -27,12 +24,10 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
+
 protected:
     std::string _ident;
-    ValueType _type;
-    DeclStmt::SharedPtr _decl;
-    LiteralExpr::SharedPtr _literal;
-    std::string __class_name = "InputStmt";
 };
 
 

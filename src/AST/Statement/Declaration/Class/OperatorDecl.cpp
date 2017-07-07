@@ -11,14 +11,6 @@ OperatorDecl::OperatorDecl(std::string op, std::vector<FuncArgDecl::SharedPtr> a
 
 }
 
-OperatorDecl::OperatorDecl(const OperatorDecl& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr OperatorDecl::clone() const {
-    return std::make_shared<OperatorDecl>(*this);
-}
-
 std::vector<AstNode::SharedPtr> OperatorDecl::get_children() {
     std::vector<AstNode::SharedPtr> children;
     for (auto arg : args) {

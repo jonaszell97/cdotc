@@ -13,8 +13,6 @@
 class FunctionDecl : public Statement {
 public:
     FunctionDecl(std::string, TypeSpecifier = { ANY_T });
-    FunctionDecl(const FunctionDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_return_type(TypeSpecifier type) {
         _return_type = type;
@@ -35,6 +33,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _func_name;

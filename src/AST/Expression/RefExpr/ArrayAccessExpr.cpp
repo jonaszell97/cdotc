@@ -17,19 +17,6 @@ ArrayAccessExpr::ArrayAccessExpr(Expression::SharedPtr expr) {
     _index = expr;
 }
 
-ArrayAccessExpr::ArrayAccessExpr(const ArrayAccessExpr& cp) {
-    _index = std::static_pointer_cast<Expression>(cp._index->clone());;
-    _return_ref = cp._return_ref;
-    if (cp._member_expr != nullptr) {
-        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ArrayAccessExpr::clone() const {
-    return std::make_shared<ArrayAccessExpr>(*this);
-}
-
 std::vector<AstNode::SharedPtr> ArrayAccessExpr::get_children() {
     std::vector<AstNode::SharedPtr> res;
     res.push_back(_index);

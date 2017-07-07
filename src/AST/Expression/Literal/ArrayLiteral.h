@@ -12,8 +12,7 @@
 class ArrayLiteral : public Expression {
 public:
     ArrayLiteral(TypeSpecifier = {});
-    ArrayLiteral(const ArrayLiteral& cp);
-    virtual AstNode::SharedPtr clone() const;
+
     inline void is_var_length(bool var) {
         _var_length = var;
         _length = -1;
@@ -40,6 +39,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::vector<Expression::SharedPtr> _elements;

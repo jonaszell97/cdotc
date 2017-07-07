@@ -13,18 +13,6 @@
 class WhileStmt : public Statement {
 public:
     WhileStmt(Expression::SharedPtr, CompoundStmt::SharedPtr);
-    WhileStmt(const WhileStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
-
-    inline CompoundStmt::SharedPtr get_body() {
-        return _while_block;
-    }
-    inline CompoundStmt* get_current_instance() {
-        return _current_instance;
-    }
-    inline void break_() {
-        _broke = true;
-    }
 
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
@@ -36,14 +24,12 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Context::SharedPtr context;
-    bool _broke = false;
     Expression::SharedPtr _condition;
     CompoundStmt::SharedPtr _while_block;
-    std::string __class_name = "WhileStmt";
-    CompoundStmt* _current_instance;
 };
 
 

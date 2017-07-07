@@ -19,20 +19,6 @@ ForStmt::ForStmt(IdentifierRefExpr::SharedPtr ident, Expression::SharedPtr range
 
 }
 
-ForStmt::ForStmt(const ForStmt& cp) {
-    _initialization = std::static_pointer_cast<Statement>(cp._initialization->clone());
-    _termination = std::static_pointer_cast<Statement>(cp._termination->clone());
-    _increment = std::static_pointer_cast<Statement>(cp._increment->clone());
-    if (cp._body != nullptr) {
-        _body = std::static_pointer_cast<CompoundStmt>(cp._body->clone());
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ForStmt::clone() const {
-    return std::make_shared<ForStmt>(*this);
-}
-
 std::vector<AstNode::SharedPtr> ForStmt::get_children() {
     if (range_based) {
         std::vector<AstNode::SharedPtr> children = {ident, range};

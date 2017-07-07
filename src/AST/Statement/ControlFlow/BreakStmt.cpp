@@ -12,15 +12,6 @@ BreakStmt::BreakStmt() {
 
 }
 
-BreakStmt::BreakStmt(const BreakStmt& cp) {
-    //set_root(cp._root, true);
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr BreakStmt::clone() const {
-    return std::make_shared<BreakStmt>(*this);
-}
-
 void BreakStmt::set_stmt(Statement *stmt, std::string type) {
     _stmt = stmt;
     _type = type;

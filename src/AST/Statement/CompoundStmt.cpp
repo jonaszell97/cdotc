@@ -6,25 +6,12 @@
 #include "CompoundStmt.h"
 
 CompoundStmt::CompoundStmt() :
-    _statements(std::vector<AstNode::SharedPtr>())
+    _statements(std::vector<Statement::SharedPtr>())
 {
 
 }
 
-CompoundStmt::CompoundStmt(const CompoundStmt& cp) : CompoundStmt() {
-    for (auto stmt : cp._statements) {
-        _statements.push_back(stmt->clone());
-    }
-
-    _returnable = cp._returnable;
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr CompoundStmt::clone() const {
-    return std::make_shared<CompoundStmt>(*this);
-}
-
-void CompoundStmt::add_statement(AstNode::SharedPtr stmt) {
+void CompoundStmt::add_statement(Statement::SharedPtr stmt) {
     _statements.emplace_back(stmt);
 }
 

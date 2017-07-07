@@ -11,9 +11,8 @@
 
 class ReturnStmt : public Statement {
 public:
+    ReturnStmt();
     ReturnStmt(Expression::SharedPtr);
-    ReturnStmt(const ReturnStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_function(CompoundStmt* function) {
         func = function;
@@ -30,6 +29,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 protected:
     CompoundStmt* func;
     Expression::SharedPtr _return_val;

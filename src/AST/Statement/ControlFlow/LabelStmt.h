@@ -14,8 +14,6 @@ class LabelStmt : public CompoundStmt {
 public:
     LabelStmt();
     LabelStmt(std::string);
-    LabelStmt(const LabelStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     typedef std::shared_ptr<LabelStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -41,6 +39,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string label_name;

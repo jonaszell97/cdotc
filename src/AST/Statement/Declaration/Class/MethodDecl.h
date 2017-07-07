@@ -14,8 +14,8 @@ class MethodDecl : public Statement {
 public:
     MethodDecl(std::string, TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>, CompoundStmt::SharedPtr,
                AccessModifier = AccessModifier::PUBLIC, bool = false);
-    MethodDecl(const MethodDecl& cp);
-    virtual AstNode::SharedPtr clone() const;
+    MethodDecl(std::string, TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>, AccessModifier =
+    AccessModifier::PUBLIC, bool = false);
 
     typedef std::shared_ptr<MethodDecl> SharedPtr;
     typedef std::unique_ptr<MethodDecl> UniquePtr;
@@ -30,9 +30,11 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool is_static;
+    bool is_abstract;
     AccessModifier am;
     std::string method_name;
     TypeSpecifier return_type;

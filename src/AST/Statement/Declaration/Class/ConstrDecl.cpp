@@ -17,14 +17,6 @@ ConstrDecl::ConstrDecl(std::vector<FuncArgDecl::SharedPtr> args, CompoundStmt::S
 
 }
 
-ConstrDecl::ConstrDecl(const ConstrDecl& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr ConstrDecl::clone() const {
-    return std::make_shared<ConstrDecl>(*this);
-}
-
 std::vector<AstNode::SharedPtr> ConstrDecl::get_children() {
     if (implicit) {
         return {};

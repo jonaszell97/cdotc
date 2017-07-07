@@ -5,20 +5,25 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <map>
 #include <unordered_map>
 #include <set>
 #include "Variant/Variant.h"
-#include "StdLib/Class.h"
+#include "StdLib/Class/Class.h"
 
 namespace util {
     extern int min_op_precedence;
     extern int max_op_precedence;
-    extern std::map<std::string, int> op_precedence;
-    extern std::map<std::string, int> unary_op_precedence;
+    extern std::unordered_map<std::string, int> op_precedence;
+    extern std::unordered_map<std::string, int> unary_op_precedence;
 
     std::vector<std::string> str_split(std::string, char);
     std::string str_trim(std::string);
+
+    std::string field_to_symbol(std::string, TypeSpecifier, bool = false);
+    std::string method_to_symbol(std::string, std::vector<TypeSpecifier>, TypeSpecifier, bool = false);
+    std::string method_to_symbol(std::string, std::vector<TypeSpecifier>, bool = false);
+    std::string fun_to_symbol(std::string, std::vector<TypeSpecifier>, bool = false);
+    std::string type_to_symbol(TypeSpecifier);
 
     template <class T>
     bool in_vector(std::vector<T>, T);
@@ -38,12 +43,14 @@ namespace util {
     extern std::string token_names[];
     extern std::vector<std::string> keywords;
 
-    extern std::map<ValueType, std::string> types;
-    extern std::map<std::string, ValueType> typemap;
-    extern std::map<ValueType, std::string> classmap;
-    extern std::map<AccessModifier, std::string> am_map;
+    extern std::unordered_map<ValueType, std::string> types;
+    extern std::unordered_map<std::string, ValueType> typemap;
+    extern std::unordered_map<ValueType, std::string> classmap;
+    extern std::unordered_map<AccessModifier, std::string> am_map;
     extern std::unordered_map<std::string, ValueType> unary_op_return_types;
     extern std::unordered_map<std::string, ValueType> binary_op_return_types;
+
+    bool is_reversible(std::string);
 
     extern std::vector<std::string> binary_operators;
     extern std::vector<std::string> tertiary_operators;
@@ -55,7 +62,8 @@ namespace util {
     extern std::vector<char> operator_chars;
     extern std::vector<char> punctuators;
 
-    extern std::map<ValueType, std::vector<ValueType>> type_conversions;
+    extern std::unordered_map<ValueType, std::vector<ValueType>> implicit_type_conversions;
+    extern std::unordered_map<ValueType, std::vector<ValueType>> explicit_type_conversions;
 };
 
 

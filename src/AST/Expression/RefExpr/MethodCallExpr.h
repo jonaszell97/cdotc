@@ -12,10 +12,7 @@
 
 class MethodCallExpr : public CallExpr {
 public:
-    MethodCallExpr(std::string);
-    MethodCallExpr(const MethodCallExpr& cp);
-    MethodCallExpr(const CallExpr& cp, std::string);
-    virtual AstNode::SharedPtr clone() const;
+    MethodCallExpr(std::string, std::vector<Expression::SharedPtr>);
 
     typedef std::shared_ptr<MethodCallExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
@@ -28,8 +25,10 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
+    std::vector<Expression::SharedPtr> _arguments;
     std::string _ident;
 
 };

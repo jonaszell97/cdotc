@@ -98,6 +98,7 @@ class Token {
         bool is_literal(LiteralType);
         bool is_keyword(std::string);
         bool is_operator(std::string);
+        bool is_separator();
         Token set_literal_type(LiteralType);
         Token set_operator_type(OperatorType);
     protected:

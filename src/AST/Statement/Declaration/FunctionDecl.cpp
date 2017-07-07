@@ -14,20 +14,6 @@ FunctionDecl::FunctionDecl(std::string func_name, TypeSpecifier type) :
 
 }
 
-FunctionDecl::FunctionDecl(const FunctionDecl& cp) {
-    _func_name = cp._func_name;
-    _return_type = cp._return_type;
-    _args = std::vector<FuncArgDecl::SharedPtr>();
-    for (auto arg : cp._args) {
-        _args.push_back(std::static_pointer_cast<FuncArgDecl>(arg->clone()));
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr FunctionDecl::clone() const {
-    return std::make_shared<FunctionDecl>(*this);
-}
-
 void FunctionDecl::add_arg(FuncArgDecl::SharedPtr arg) {
     _args.push_back(arg);
 }

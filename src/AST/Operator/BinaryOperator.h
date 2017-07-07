@@ -14,8 +14,6 @@
 class BinaryOperator : public Operator {
 public:
     BinaryOperator(std::string);
-    BinaryOperator(const BinaryOperator& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     std::string get_operator();
     std::vector<AstNode::SharedPtr> get_children();
@@ -32,6 +30,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr _first_child;

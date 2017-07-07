@@ -14,20 +14,8 @@ CallExpr::CallExpr() :
 
 }
 
-CallExpr::CallExpr(const CallExpr& cp) {
-    _return_ref = cp._return_ref;
-    if (cp._member_expr != nullptr) {
-        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
-    }
-    _arguments = std::vector<Expression::SharedPtr>();
-    for (auto arg : cp._arguments) {
-        _arguments.push_back(std::static_pointer_cast<Expression>(arg->clone()));
-    }
-    set_parent(cp._parent);
-}
+CallExpr::CallExpr(std::vector<Expression::SharedPtr> args) : _arguments(args) {
 
-AstNode::SharedPtr CallExpr::clone() const {
-    return std::make_shared<CallExpr>(*this);
 }
 
 void CallExpr::add_argument(Expression::SharedPtr arg) {

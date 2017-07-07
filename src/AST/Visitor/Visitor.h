@@ -8,10 +8,6 @@
 #include <vector>
 #include "../Context.h"
 
-enum class VisitorFlag {
-    NONE,
-    LINK_TREE
-};
 
 class AstNode;
 class InputStmt;
@@ -28,6 +24,7 @@ class ObjectPropExpr;
 class ArrayAccessExpr;
 class CallExpr;
 class MethodCallExpr;
+class FunctionCallExpr;
 class MemberRefExpr;
 class BinaryOperator;
 class ExplicitCastExpr;
@@ -42,7 +39,6 @@ class InputStmt;
 class OutputStmt;
 class Expression;
 class Statement;
-class InstantiationExpr;
 class ClassDecl;
 class FieldDecl;
 class MethodDecl;
@@ -54,51 +50,57 @@ class GotoStmt;
 class StringLiteral;
 class LambdaExpr;
 class OperatorDecl;
+class ModuleDecl;
+class ImportStmt;
+class ExportStmt;
+class StructDecl;
 
 class Visitor {
 public:
-    Visitor();
-    Visitor(const Visitor&);
+    virtual Variant visit(ModuleDecl*) = 0;
 
-    virtual Variant visit(FunctionDecl*);
-    virtual Variant visit(CompoundStmt*);
-    virtual Variant visit(IdentifierRefExpr*);
-    virtual Variant visit(DeclStmt*);
-    virtual Variant visit(ForStmt*);
-    virtual Variant visit(WhileStmt*);
+    virtual Variant visit(FunctionDecl*) = 0;
+    virtual Variant visit(CompoundStmt*) = 0;
+    virtual Variant visit(IdentifierRefExpr*) = 0;
+    virtual Variant visit(DeclStmt*) = 0;
+    virtual Variant visit(ForStmt*) = 0;
+    virtual Variant visit(WhileStmt*) = 0;
+    virtual Variant visit(ImportStmt*) = 0;
+    virtual Variant visit(ExportStmt*) = 0;
 
-    virtual Variant visit(ArrayLiteral*);
-    virtual Variant visit(LiteralExpr*);
-    virtual Variant visit(StringLiteral*);
-    virtual Variant visit(ObjectLiteral*);
-    virtual Variant visit(ObjectPropExpr*);
-    virtual Variant visit(ArrayAccessExpr*);
-    virtual Variant visit(CallExpr*);
-    virtual Variant visit(MemberRefExpr*);
-    virtual Variant visit(MethodCallExpr*);
-    virtual Variant visit(BinaryOperator*);
-    virtual Variant visit(ExplicitCastExpr*);
-    virtual Variant visit(TertiaryOperator*);
-    virtual Variant visit(UnaryOperator*);
-    virtual Variant visit(BreakStmt*);
-    virtual Variant visit(ContinueStmt*);
-    virtual Variant visit(IfStmt*);
-    virtual Variant visit(SwitchStmt*);
-    virtual Variant visit(CaseStmt*);
-    virtual Variant visit(LabelStmt*);
-    virtual Variant visit(GotoStmt*);
-    virtual Variant visit(FuncArgDecl*);
-    virtual Variant visit(ReturnStmt*);
-    virtual Variant visit(InputStmt*);
-    virtual Variant visit(OutputStmt*);
-    virtual Variant visit(Expression*);
-    virtual Variant visit(InstantiationExpr*);
-    virtual Variant visit(ClassDecl*);
-    virtual Variant visit(MethodDecl*);
-    virtual Variant visit(FieldDecl*);
-    virtual Variant visit(ConstrDecl*);
-    virtual Variant visit(LambdaExpr*);
-    virtual Variant visit(OperatorDecl*);
+    virtual Variant visit(ArrayLiteral*) = 0;
+    virtual Variant visit(LiteralExpr*) = 0;
+    virtual Variant visit(StringLiteral*) = 0;
+    virtual Variant visit(ObjectLiteral*) = 0;
+    virtual Variant visit(ObjectPropExpr*) = 0;
+    virtual Variant visit(ArrayAccessExpr*) = 0;
+    virtual Variant visit(CallExpr*) = 0;
+    virtual Variant visit(MemberRefExpr*) = 0;
+    virtual Variant visit(MethodCallExpr*) = 0;
+    virtual Variant visit(FunctionCallExpr*) = 0;
+    virtual Variant visit(BinaryOperator*) = 0;
+    virtual Variant visit(ExplicitCastExpr*) = 0;
+    virtual Variant visit(TertiaryOperator*) = 0;
+    virtual Variant visit(UnaryOperator*) = 0;
+    virtual Variant visit(BreakStmt*) = 0;
+    virtual Variant visit(ContinueStmt*) = 0;
+    virtual Variant visit(IfStmt*) = 0;
+    virtual Variant visit(SwitchStmt*) = 0;
+    virtual Variant visit(CaseStmt*) = 0;
+    virtual Variant visit(LabelStmt*) = 0;
+    virtual Variant visit(GotoStmt*) = 0;
+    virtual Variant visit(FuncArgDecl*) = 0;
+    virtual Variant visit(ReturnStmt*) = 0;
+    virtual Variant visit(InputStmt*) = 0;
+    virtual Variant visit(OutputStmt*) = 0;
+    virtual Variant visit(Expression*) = 0;
+    virtual Variant visit(ClassDecl*) = 0;
+    virtual Variant visit(MethodDecl*) = 0;
+    virtual Variant visit(FieldDecl*) = 0;
+    virtual Variant visit(ConstrDecl*) = 0;
+    virtual Variant visit(LambdaExpr*) = 0;
+    virtual Variant visit(OperatorDecl*) = 0;
+    virtual Variant visit(StructDecl*) = 0;
 };
 
 

@@ -14,8 +14,6 @@ class IfStmt : public Statement {
 public:
     IfStmt(Expression::SharedPtr, Statement::SharedPtr);
     IfStmt(Expression::SharedPtr);
-    IfStmt(const IfStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline void set_if_branch(Statement::SharedPtr if_branch) {
         _if_branch = if_branch;
@@ -37,6 +35,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr _condition;

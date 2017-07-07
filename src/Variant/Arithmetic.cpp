@@ -340,7 +340,7 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type.type " + val::typetostr(v1.type.type));
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + val::typetostr(v1.type.type));
     }
 
     Variant Arithmetic::unary_not(Variant v1) {
@@ -359,7 +359,7 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type.type " + val::typetostr(v1.type.type));
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot negate value of type " + val::typetostr(v1.type.type));
     }
 
     Variant Arithmetic::bitwise_negate(Variant v1) {
@@ -372,7 +372,7 @@ namespace var {
                 break;
         }
 
-        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise negation to value of type.type " +
+        RuntimeError::raise(ERR_BAD_CAST, "Cannot apply bitwise negation to value of type " +
                 val::typetostr(v1.type.type));
     }
 

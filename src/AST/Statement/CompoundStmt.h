@@ -13,16 +13,20 @@
 class CompoundStmt : public Statement, public std::enable_shared_from_this<CompoundStmt> {
 public:
     CompoundStmt();
-    CompoundStmt(const CompoundStmt& cp);
-    virtual AstNode::SharedPtr clone() const;
 
-    void add_statement(AstNode::SharedPtr);
+    void add_statement(Statement::SharedPtr);
 
     inline void returnable(bool terminable) {
         _returnable = terminable;
     };
     inline void is_lambda_body(bool is_lambda) {
         _is_lambda_body = is_lambda;
+    }
+    inline Statement::SharedPtr at(size_t i) {
+        return _statements.at(i);
+    }
+    inline size_t size() {
+        return _statements.size();
     }
 
     typedef std::shared_ptr<CompoundStmt> SharedPtr;
@@ -39,11 +43,12 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     bool _is_lambda_body = false;
     bool _returnable = true;
-    std::vector<AstNode::SharedPtr> _statements;
+    std::vector<Statement::SharedPtr> _statements;
     std::string _class_name = "CompoundStmt";
 
     int goto_index = -1;

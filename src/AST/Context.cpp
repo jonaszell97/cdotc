@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "Context.h"
-#include "../StdLib/Class.h"
+#include "../StdLib/Class/Class.h"
 
 Context::Context() :
     _variables(std::unordered_map<std::string, Variant::SharedPtr>()),
@@ -95,8 +95,9 @@ Variant::SharedPtr Context::get_variable(std::string ident, AstNode* cause) {
     if (auto parent = _parent_context.lock()) {
         return parent->get_variable(ident);
     }
-
-    RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Reference to undeclared identifier " + ident, cause);
+    else {
+        return GlobalContext::get_global_var(ident);
+    }
 }
 
 bool Context::has_variable(std::string ident) {
@@ -104,6 +105,9 @@ bool Context::has_variable(std::string ident) {
     if (!self_has) {
         if (auto parent = _parent_context.lock()) {
             return parent->has_variable(ident);
+        }
+        else {
+            return GlobalContext::has_global_var(ident);
         }
     }
 

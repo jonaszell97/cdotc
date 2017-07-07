@@ -17,19 +17,6 @@ IdentifierRefExpr::IdentifierRefExpr(Variant val) : IdentifierRefExpr(val.get<st
 
 }
 
-IdentifierRefExpr::IdentifierRefExpr(const IdentifierRefExpr& cp) {
-    _ident = cp._ident;
-    _return_ref = cp._return_ref;
-    if (cp._member_expr != nullptr) {
-        _member_expr = std::static_pointer_cast<RefExpr>(cp._member_expr->clone());
-    }
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr IdentifierRefExpr::clone() const {
-    return std::make_shared<IdentifierRefExpr>(*this);
-}
-
 std::vector<AstNode::SharedPtr> IdentifierRefExpr::get_children() {
     if (_member_expr != nullptr) {
         return { _member_expr };

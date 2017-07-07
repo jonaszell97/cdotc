@@ -8,8 +8,7 @@
 #include <vector>
 #include "Util.h"
 #include <iostream>
-#include "Exceptions.h"
-#include "Debug.h"
+#include "Message/Exceptions.h"
 #include "StdLib/Objects/Object.h"
 #include "AST/Expression/RefExpr/IdentifierRefExpr.h"
 #include "AST/Operator/UnaryOperator.h"
@@ -36,16 +35,20 @@
 #include "AST/Visitor/EvaluatingVisitor.h"
 #include "AST/Statement/ControlFlow/GotoStmt.h"
 #include "AST/Expression/Literal/LambdaExpr.h"
+#include "AST/Statement/Declaration/ModuleDecl.h"
+#include "AST/Statement/ImportStmt.h"
+#include "AST/Statement/ExportStmt.h"
+#include "StdLib/Module.h"
+#include "AST/Visitor/TypeCheckVisitor.h"
+#include "AST/Expression/RefExpr/FunctionCallExpr.h"
 
 /**
  * Creates a new interpreter for an Xtreme Jonas Script program.
  * @param program
  */
 Parser::Parser(std::string program) :
-    tokenizer(new Tokenizer(program)),
-    prog_root(std::make_shared<CompoundStmt>())
+    tokenizer(new Tokenizer(program))
 {
-    prog_root->returnable(false);
     GlobalContext::init(program);
 }
 
@@ -76,12 +79,52 @@ void Parser::token_error(TokenType expected, TokenType found) {
  */
 TypeSpecifier Parser::parse_type() {
     TypeSpecifier ts;
+
+    // function type
+    if (tokenizer->current_token.is_punctuator('(')) {
+        tokenizer->advance();
+        while (!tokenizer->current_token.is_punctuator(')')) {
+            ts.args.push_back(parse_type());
+            tokenizer->advance();
+            if (tokenizer->current_token.is_punctuator(',')) {
+                tokenizer->advance();
+            }
+            else if (!tokenizer->current_token.is_punctuator(')')) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')' after function arguments", tokenizer);
+            }
+        }
+
+        tokenizer->advance();
+        if (!tokenizer->current_token.is_operator("-")) {
+            if (ts.args.size() == 1) {
+                tokenizer->backtrack();
+                return ts.args[0];
+            }
+
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '->' after function argument list", tokenizer);
+        }
+
+        ts.is_function = true;
+        ts.type = OBJECT_T;
+
+        tokenizer->advance();
+        if (!tokenizer->current_token.is_operator(">")) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '->' after function argument list", tokenizer);
+        }
+
+        tokenizer->advance();
+        ts.return_type = new TypeSpecifier(parse_type());
+
+        return ts;
+    }
+
     std::string type = tokenizer->current_token.get_value().get<std::string>();
     if (util::typemap.find(type) != util::typemap.end()) {
         ts.type = util::typemap[type];
         ts.is_primitive = true;
     }
     else {
+        ts.type = OBJECT_T;
         ts.class_name = type;
         ts.is_primitive = false;
     }
@@ -119,14 +162,15 @@ TypeSpecifier Parser::parse_type() {
  * Parses an identifier (wrapper function for lvalue check)
  * @return
  */
-RefExpr::SharedPtr Parser::parse_identifier() {
+Expression::SharedPtr Parser::parse_identifier() {
     int start = tokenizer->last_token_index;
-    RefExpr::SharedPtr ref_expr = __parse_identifier(true);
+    Expression::SharedPtr ref_expr = __parse_identifier(true);
     ref_expr->set_index(start, tokenizer->current_index);
 
     // check if lvalue
     Token next = tokenizer->lookahead();
-    if (next.get_type() == T_OP && next.get_value().get<std::string>() == "=") {
+    if (next.is_operator("=") || next.is_operator("+=") || next.is_operator("-=") || next.is_operator("*=") || next
+            .is_operator("/=")) {
         ref_expr->return_ref(true);
         ref_expr->implicit_ref(true);
     }
@@ -142,7 +186,7 @@ RefExpr::SharedPtr Parser::parse_identifier() {
  * @param ident_expr
  * @return
  */
-RefExpr::SharedPtr Parser::__parse_identifier(bool initial) {
+Expression::SharedPtr Parser::__parse_identifier(bool initial) {
     Token _next = tokenizer->lookahead(false);
     int start = tokenizer->last_token_index;
 
@@ -177,9 +221,8 @@ RefExpr::SharedPtr Parser::__parse_identifier(bool initial) {
         // method call
         _next = tokenizer->lookahead();
         if (_next.is_punctuator(C_OPEN_PAREN)) {
-            CallExpr::SharedPtr call = parse_function_call();
-            call->set_index(start, tokenizer->current_index);
-            MethodCallExpr::SharedPtr method_call = std::make_shared<MethodCallExpr>(*call, ident);
+            tokenizer->advance();
+            MethodCallExpr::SharedPtr method_call = std::make_shared<MethodCallExpr>(ident, parse_arguments());
             method_call->set_member_expr(__parse_identifier());
 
             return method_call;
@@ -211,81 +254,6 @@ RefExpr::SharedPtr Parser::__parse_identifier(bool initial) {
     }
 
     return {};
-}
-
-
-/**
- * Parses an object literal in the form of
- * {
- *    type prop_name = value
- *    type2 name2 = value2
- * }
- * @return
- */
-ObjectLiteral::SharedPtr Parser::parse_object_literal() {
-    int start = tokenizer->last_token_index;
-
-    // opening curly brace
-    tokenizer->advance();
-    if (tokenizer->current_token.is_punctuator('{')) {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '{' to begin an object literal", tokenizer);
-    }
-
-    ObjectLiteral::SharedPtr obj = std::make_shared<ObjectLiteral>();
-
-    Token _next = tokenizer->lookahead();
-    if (_next.is_punctuator(C_CLOSE_CURLY)) {
-        tokenizer->advance();
-        obj->set_index(start, tokenizer->current_index);
-
-        return obj;
-    }
-
-    while (!tokenizer->current_token.is_punctuator(C_CLOSE_CURLY)) {
-
-        // type definition
-        TypeSpecifier ts = parse_type();
-
-        // property name
-        tokenizer->advance(T_IDENT);
-
-        std::string _prop_name = tokenizer->current_token.get_value().get<std::string>();
-
-        // equals sign
-        tokenizer->advance(T_OP);
-        if (tokenizer->current_token.get_value().get<std::string>() != "=") {
-            token_error();
-        }
-
-        // value
-        if (ts.is_array) {
-            ArrayLiteral::SharedPtr arr = parse_array_literal();
-            arr->set_type(ts.type);
-            if (ts.is_var_length) {
-                arr->is_var_length(true);
-            }
-            else {
-                arr->set_length_expr(ts.length);
-            }
-
-            obj->add_prop(ObjectPropExpr(_prop_name, arr, OBJECT_T));
-        }
-        else {
-            Expression::SharedPtr val_node = parse_expression();
-
-            obj->add_prop(ObjectPropExpr(_prop_name, val_node, ts.type));
-        }
-
-        Token next = tokenizer->lookahead();
-        if (next.is_punctuator(C_CLOSE_CURLY)) {
-            tokenizer->advance();
-            break;
-        }
-    }
-
-    obj->set_index(start, tokenizer->current_index);
-
-    return obj;
 }
 
 /**
@@ -348,10 +316,7 @@ ArrayLiteral::SharedPtr Parser::parse_array_literal() {
 Expression::SharedPtr Parser::parse_unary_expr_target() {
     Token next = tokenizer->lookahead(false);
 
-    if (next.is_punctuator('{')) {
-        return parse_object_literal();
-    }
-    else if (next.is_punctuator('[')) {
+    if (next.is_punctuator('[')) {
         return parse_array_literal();
     }
     else if (next.is_punctuator('\\')) {
@@ -361,6 +326,23 @@ Expression::SharedPtr Parser::parse_unary_expr_target() {
         return parse_expression();
     }
     else if (next.get_type() == T_IDENT) {
+        int start = tokenizer->last_token_index;
+        tokenizer->advance(false);
+        next = tokenizer->lookahead(false);
+        // function call
+        if (next.is_punctuator('(')) {
+            std::string func_name = tokenizer->s_val();
+            tokenizer->advance();
+            auto args = parse_arguments();
+
+            FunctionCallExpr::SharedPtr func_call = std::make_shared<FunctionCallExpr>(func_name, args);
+            func_call->set_member_expr(__parse_identifier(false));
+            func_call->set_index(start, tokenizer->current_index);
+
+            return func_call;
+        }
+
+        tokenizer->backtrack();
         return parse_identifier();
     }
     else if (next.get_type() == T_LITERAL) {
@@ -368,7 +350,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target() {
         tokenizer->advance();
 
         if (tokenizer->current_token.get_value().get_type() == STRING_T) {
-            Token next = tokenizer->lookahead();
+            Token next = tokenizer->lookahead(false);
 
             // possible string modifier
             if (next.get_type() == T_IDENT) {
@@ -454,6 +436,27 @@ Expression::SharedPtr Parser::parse_unary_expr(Expression::SharedPtr literal, bo
 
             return cast_op;
         }
+        else if (_next.get_type() == T_IDENT) {
+            tokenizer->advance();
+            _next = tokenizer->lookahead();
+            if (_next.is_punctuator(')')) {
+                ExplicitCastExpr::SharedPtr cast_op = std::make_shared<ExplicitCastExpr>(tokenizer->s_val());
+
+                tokenizer->advance();
+                if (!tokenizer->current_token.is_punctuator(C_CLOSE_PAREN)) {
+                    ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')' after typecast operator",
+                            tokenizer);
+                }
+
+                cast_op->set_child(parse_expression({}, util::op_precedence["typecast"]));
+                cast_op->set_index(start, tokenizer->current_index);
+
+                return cast_op;
+            }
+            else {
+                tokenizer->backtrack();
+            }
+        }
         else {
             tokenizer->backtrack();
         }
@@ -533,10 +536,10 @@ Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs, int mi
             tokenizer->advance(false);
 
             // possible unary operator
-            auto expr = parse_expression(res, min_precedence);
-            expr->set_index(start, tokenizer->current_index);
+            res->set_member_expr(__parse_identifier(false));
+            res->set_index(start, tokenizer->current_index);
 
-            return expr;
+            return parse_expression(res, 0);
         }
     }
 
@@ -640,7 +643,7 @@ Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs, int mi
  * @param reassign
  * @return
  */
-Statement::SharedPtr Parser::parse_assignment(bool auto_type, CompoundStmt::SharedPtr cmp_stmt) {
+DeclStmt::SharedPtr Parser::parse_assignment(bool auto_type) {
 
     int start = tokenizer->last_token_index;
 
@@ -650,75 +653,47 @@ Statement::SharedPtr Parser::parse_assignment(bool auto_type, CompoundStmt::Shar
         ts = parse_type();
     }
 
-    // identifier for assignment
-    tokenizer->advance(T_IDENT);
-    std::string _ident = tokenizer->current_token.get_value().get<std::string>();
+    Token next = tokenizer->lookahead();
+    DeclStmt::SharedPtr decl_stmt = std::make_shared<DeclStmt>();
 
-    Token next = tokenizer->lookahead(false);
-    if (!ts.nullable && !next.is_operator("=")) {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '=' after non-nullable variable declaration",
-                tokenizer);
-    }
-    else if (!next.is_operator("=")) {
-        auto decl_stmt = std::make_shared<DeclStmt>(_ident, ts);
-        decl_stmt->set_index(start, tokenizer->current_index);
+    while (next.get_type() == T_IDENT) {
+        tokenizer->advance();
+        std::string _ident = tokenizer->current_token.get_value().get<std::string>();
 
-        return decl_stmt;
-    }
-    else if (!next.is_operator("=")) {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '=' after variable declaration",
-                tokenizer);
-    }
+        next = tokenizer->lookahead(false);
+        if (ts.type == AUTO_T && !next.is_operator("=")) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Type inferred variables must be initialized inline with their "
+                "definition", tokenizer);
+        }
+        else if (!next.is_operator("=")) {
+            decl_stmt->add_declaration(_ident, ts);
+            continue;
+        } else if (!next.is_operator("=")) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '=' after variable declaration",
+                    tokenizer);
+        }
 
-    // equals sign
-    tokenizer->advance(false);
-    DeclStmt::SharedPtr decl_stmt;
-    if (ts.is_array) {
-        ArrayLiteral::SharedPtr arr = parse_array_literal();
-        arr->set_type(ts.type);
-        if (ts.is_var_length) {
-            arr->is_var_length(true);
+        // equals sign
+        tokenizer->advance(false);
+
+        Expression::SharedPtr expr = parse_expression();
+        decl_stmt->add_declaration(_ident, ts, expr);
+
+        next = tokenizer->lookahead();
+        if (next.is_punctuator(',')) {
+            tokenizer->advance();
+            next = tokenizer->lookahead();
         }
         else {
-            arr->set_length_expr(ts.length);
+            break;
         }
-
-        ts.type = OBJECT_T;
-        decl_stmt = std::make_shared<DeclStmt>(_ident, arr, ts);
-    }
-    else {
-        Expression::SharedPtr expr = parse_expression();
-        decl_stmt = std::make_shared<DeclStmt>(_ident, expr, ts);
     }
 
-    if (cmp_stmt != nullptr) {
-        cmp_stmt->add_statement(decl_stmt);
+    if (decl_stmt->size() == 0) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected at least one declaration after 'let'", tokenizer);
     }
 
-    // multiple declarations
-    Token _next = tokenizer->lookahead();
-    if (_next.is_punctuator(',')) {
-        tokenizer->advance();
-
-        if (cmp_stmt == nullptr) {
-            cmp_stmt = std::make_shared<CompoundStmt>();
-            cmp_stmt->add_statement(decl_stmt);
-        }
-
-        auto assign = parse_assignment(auto_type, cmp_stmt);
-        assign->set_index(start, tokenizer->current_index);
-
-        return assign;
-    }
-    else if (cmp_stmt == nullptr) {
-        decl_stmt->set_index(start, tokenizer->current_index);
-
-        return decl_stmt;
-    }
-
-    cmp_stmt->set_index(start, tokenizer->current_index);
-
-    return cmp_stmt;
+    return decl_stmt;
 }
 
 /**
@@ -738,12 +713,12 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list() {
     bool def_arg = false;
     tokenizer->advance();
 
-    while (tokenizer->current_token.get_type() == T_TYPE) {
+    while (tokenizer->current_token.get_type() == T_TYPE || tokenizer->current_token.get_type() == T_IDENT) {
         FuncArgDecl::SharedPtr arg_dec = std::make_shared<FuncArgDecl>();
 
         // type declaration
         TypeSpecifier ts = parse_type();
-        arg_dec->set_type(ts.type);
+        arg_dec->set_type(ts);
 
         // identifier
         tokenizer->advance(T_IDENT);
@@ -804,8 +779,8 @@ FunctionDecl::SharedPtr Parser::parse_function_decl() {
 
     // optional return type
     Token _next = tokenizer->lookahead();
-    ValueType _type = VOID_T;
-    if (_next.get_type() == T_OP && _next.get_value().get<std::string>() == "-") {
+    TypeSpecifier ts;
+    if (_next.is_operator("-")) {
         tokenizer->advance();
 
         _next = tokenizer->lookahead();
@@ -816,17 +791,13 @@ FunctionDecl::SharedPtr Parser::parse_function_decl() {
 
         tokenizer->advance();
         tokenizer->advance();
-        TypeSpecifier ts = parse_type();
-
-        _type = ts.type;
+        ts = parse_type();
     }
 
-    fun_dec->set_return_type(_type);
+    fun_dec->set_return_type(ts);
 
     // function body
-    std::string body = tokenizer->get_next_block();
-    Parser _int(body);
-    CompoundStmt::SharedPtr func_body = _int.parse();
+    CompoundStmt::SharedPtr func_body = parse_block();
     func_body->returnable(true);
     fun_dec->set_body(func_body);
     fun_dec->set_index(start, tokenizer->current_index);
@@ -886,9 +857,7 @@ ConstrDecl::SharedPtr Parser::parse_constr_decl(AccessModifier am) {
     tokenizer->advance();
     std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
 
-    std::string body = tokenizer->get_next_block();
-    Parser _int(body);
-    CompoundStmt::SharedPtr constr_body = _int.parse();
+    CompoundStmt::SharedPtr constr_body = parse_block();
 
 
     auto constr = std::make_shared<ConstrDecl>(args, constr_body, am);
@@ -902,7 +871,10 @@ ConstrDecl::SharedPtr Parser::parse_constr_decl(AccessModifier am) {
  * @param is_static
  * @return
  */
-FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static, TypeSpecifier ts) {
+FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static, TypeSpecifier ts, bool is_interface) {
+    if (tokenizer->current_token.get_type() != T_IDENT) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Field name must be a valid identifier", tokenizer);
+    }
 
     std::string field_name = tokenizer->s_val();
     Token next = tokenizer->lookahead();
@@ -950,16 +922,18 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
 
     // optional default value
     if (next.get_type() == T_OP && next.get_value().get<std::string>() == "=") {
+        if (is_interface) {
+            tokenizer->advance();
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Default values for non-const fields cannot be defined in an "
+                    "interface", tokenizer);
+        }
+
         tokenizer->advance();
         field->set_default(parse_expression());
     }
-    else if (is_static && !ts.nullable) {
-        ParseError::raise(ERR_UNINITIALIZED_VAR, "Non-nullable static field " + field_name + " must have a default value",
-                tokenizer);
-    }
 
     tokenizer->advance(false);
-    if (!tokenizer->current_token.is_punctuator('\n')) {
+    if (!tokenizer->current_token.is_separator()) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Field declarations must be on seperate lines", tokenizer);
     }
 
@@ -973,7 +947,13 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
  * @param ts
  * @return
  */
-MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_static) {
+MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_static, bool is_interface) {
+    if (tokenizer->current_token.get_type() != T_IDENT) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Method name must be a valid identifier", tokenizer);
+    }
+
+    int start = tokenizer->last_token_index;
+
     std::string method_name = tokenizer->s_val();
     tokenizer->advance();
     std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
@@ -995,19 +975,37 @@ MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_stati
         ts = parse_type();
     }
 
-    std::string body = tokenizer->get_next_block();
-    Parser _int(body);
-    CompoundStmt::SharedPtr method_body = _int.parse();
-    method_body->returnable(true);
 
-    tokenizer->advance(false);
-    if (!tokenizer->current_token.is_punctuator('\n')) {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Method declarations must be on seperate lines", tokenizer);
+    if (tokenizer->lookahead().is_punctuator('{')) {
+        if (is_interface) {
+            tokenizer->advance();
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Methods cannot be defined in an interface", tokenizer);
+        }
+
+        CompoundStmt::SharedPtr method_body = parse_block();
+        method_body->returnable(true);
+
+        tokenizer->advance(false);
+        if (!tokenizer->current_token.is_separator()) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Method declarations must be on seperate lines", tokenizer);
+        }
+
+        auto method = std::make_shared<MethodDecl>(method_name, ts, args, method_body, am, is_static);
+        method->set_index(start, tokenizer->current_index);
+
+        return method;
     }
+    else if (!is_interface) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Abstract methods can only be declared in an interface or an abstract "
+                "class", tokenizer);
+    }
+    else {
+        auto method = std::make_shared<MethodDecl>(method_name, ts, args, am,
+            is_static);
+        method->set_index(start, tokenizer->current_index);
 
-    auto method = std::make_shared<MethodDecl>(method_name, ts, args, method_body, am, is_static);
-
-    return method;
+        return method;
+    }
 }
 
 /**
@@ -1015,7 +1013,7 @@ MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_stati
  * @param am
  * @return
  */
-OperatorDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, std::string class_name) {
+OperatorDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, std::string class_name, bool is_interface) {
     int start = tokenizer->last_token_index;
 
     std::string op = tokenizer->s_val();
@@ -1027,26 +1025,6 @@ OperatorDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, std::stri
 
     tokenizer->advance();
     std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
-    bool is_binary = args.size() == 1;
-
-    // could be binary or unary
-    if (op == "+" || op == "-") {
-        if (args.size() == 1) {
-            is_binary = true;
-        }
-    }
-    if (util::in_vector<std::string>(util::binary_operators, op) || is_binary) {
-        if (args.size() != 1) {
-            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Binary operator " + op + " requires exactly one argument",
-                    tokenizer);
-        }
-    }
-    if (util::in_vector<std::string>(util::unary_operators, op)) {
-        if (args.size() != 0) {
-            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unary operator " + op + " requires exactly zero arguments",
-                    tokenizer);
-        }
-    }
 
     // optional return type
     Token next = tokenizer->lookahead();
@@ -1067,14 +1045,22 @@ OperatorDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, std::stri
         type_specified = true;
     }
 
-    CompoundStmt::SharedPtr body = parse_block();
-    body->returnable(true);
-    OperatorDecl::SharedPtr op_decl = std::make_shared<OperatorDecl>(op, args, am, is_binary);
-    if (type_specified) {
-        op_decl->set_return_type(ts);
+    OperatorDecl::SharedPtr op_decl = std::make_shared<OperatorDecl>(op, args, am, args.size() == 1);
+    if (tokenizer->lookahead().is_punctuator('{')) {
+        CompoundStmt::SharedPtr body = parse_block();
+        body->returnable(true);
+
+        if (type_specified) {
+            op_decl->set_return_type(ts);
+        }
+
+        op_decl->set_body(body);
+    }
+    else if (!is_interface) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Abstract methods can only be declared in an interface or an abstract "
+                "class");
     }
 
-    op_decl->set_body(body);
     op_decl->set_index(start, tokenizer->current_index);
 
     return op_decl;
@@ -1089,28 +1075,91 @@ ClassDecl::SharedPtr Parser::parse_class_decl() {
     int start = tokenizer->last_token_index;
 
     AccessModifier am = AccessModifier::PRIVATE;
-    if (tokenizer->s_val() == "public") {
-        am = AccessModifier::PUBLIC;
-        tokenizer->advance();
-    }
-    else if (tokenizer->s_val() == "protected") {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Classes cannot be declared 'protected'", tokenizer);
-    }
-    else if (tokenizer->s_val() == "private") {
-        tokenizer->advance();
+    bool am_set = false;
+    bool is_abstract = false;
+    while (tokenizer->current_token.get_type() == T_KEYWORD) {
+        if (tokenizer->s_val() == "public") {
+            if (am_set) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "The access modifier for this class was already set",
+                        tokenizer);
+            }
+
+            am = AccessModifier::PUBLIC;
+            am_set = true;
+            tokenizer->advance();
+        }
+        else if (tokenizer->s_val() == "protected") {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Classes cannot be declared 'protected'", tokenizer);
+        }
+        else if (tokenizer->s_val() == "private") {
+            if (am_set) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "The access modifier for this class was already set",
+                        tokenizer);
+            }
+
+            am_set = true;
+            tokenizer->advance();
+        }
+        else if (tokenizer->s_val() == "abstract") {
+            if (is_abstract) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "The same class cannot be declared 'abstract' twice",
+                        tokenizer);
+            }
+
+            is_abstract = true;
+            tokenizer->advance();
+        }
+        else {
+            break;
+        }
     }
 
-    if (tokenizer->current_token.get_type() != T_KEYWORD || tokenizer->s_val() != "class") {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected keyword 'class' to start class declaration",
-                tokenizer);
-    }
+    bool is_interface = tokenizer->s_val() == "interface";
 
     tokenizer->advance(T_IDENT);
     std::string class_name = tokenizer->s_val();
-
-    //TODO extends, implements
+    std::string extends = "";
+    std::vector<std::string> implements;
 
     tokenizer->advance();
+    while (!tokenizer->current_token.is_punctuator('{') && tokenizer->current_token.get_type() != T_EOF) {
+        if (tokenizer->current_token.is_keyword("extends")) {
+            if (extends != "") {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Only one 'extends' statement is permitted per class",
+                        tokenizer);
+            }
+
+            tokenizer->advance();
+            if (tokenizer->current_token.get_type() != T_IDENT) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after 'extends'", tokenizer);
+            }
+
+            extends = tokenizer->s_val();
+            tokenizer->advance();
+        }
+        else if (tokenizer->current_token.is_keyword("implements")) {
+            tokenizer->advance();
+            if (tokenizer->current_token.get_type() != T_IDENT) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after 'implements'", tokenizer);
+            }
+
+            implements.push_back(tokenizer->s_val());
+            tokenizer->advance();
+            while (tokenizer->current_token.is_punctuator(',')) {
+                tokenizer->advance();
+                if (tokenizer->current_token.get_type() != T_IDENT) {
+                    ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after 'implements'", tokenizer);
+                }
+                implements.push_back(tokenizer->s_val());
+                tokenizer->advance();
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+
     if (!tokenizer->current_token.is_punctuator('{')) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '{' to start a block statement",
                 tokenizer);
@@ -1119,8 +1168,8 @@ ClassDecl::SharedPtr Parser::parse_class_decl() {
     ConstrDecl::SharedPtr constr;
     std::vector<FieldDecl::SharedPtr> fields;
     std::vector<MethodDecl::SharedPtr> methods;
-    std::unordered_map<std::string, OperatorDecl::SharedPtr> unary_operators;
-    std::unordered_map<std::string, OperatorDecl::SharedPtr> binary_operators;
+    std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> unary_operators;
+    std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> binary_operators;
     bool declaration_finished = false;
 
     while (!declaration_finished) {
@@ -1150,10 +1199,16 @@ ClassDecl::SharedPtr Parser::parse_class_decl() {
                 am_set = true;
             }
             else if (keyword == "protected") {
+                if (is_interface) {
+                    ParseError::raise(ERR_UNEXPECTED_TOKEN, "An interface cannot have protected members", tokenizer);
+                }
                 current_am = AccessModifier::PROTECTED;
                 am_set = true;
             }
             else if (keyword == "private") {
+                if (is_interface) {
+                    ParseError::raise(ERR_UNEXPECTED_TOKEN, "An interface cannot have private members", tokenizer);
+                }
                 current_am = AccessModifier::PRIVATE;
                 am_set = true;
             }
@@ -1163,53 +1218,79 @@ ClassDecl::SharedPtr Parser::parse_class_decl() {
             else if (keyword == "operator") {
                 is_operator = true;
             }
+            else {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unexpected keyword '" + keyword + "' in class declaration",
+                        tokenizer);
+            }
 
             tokenizer->advance();
         }
 
         if (is_operator) {
-            auto op = parse_operator_decl(current_am, class_name);
+            auto op = parse_operator_decl(current_am, class_name, is_interface);
             op->set_index(field_start, tokenizer->current_index);
 
             if (op->is_binary) {
-                binary_operators.emplace(op->get_operator(), op);
+                binary_operators.push_back({op->get_operator(), op});
             }
             else {
-                unary_operators.emplace(op->get_operator(), op);
+                unary_operators.push_back({op->get_operator(), op});
             }
         }
-        else if (tokenizer->current_token.get_type() == T_IDENT && tokenizer->s_val() == class_name) {
+        // constructor
+        else if (tokenizer->current_token.get_type() == T_IDENT && tokenizer->s_val() == class_name &&
+                tokenizer->lookahead(false).is_punctuator('(')) {
             if (is_static) {
-                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Constructor cannot be declared static",
-                        tokenizer);
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Constructor cannot be declared static", tokenizer);
+            }
+            if (is_interface) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Interfaces cannot define a constructor", tokenizer);
+            }
+            if (is_abstract) {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Abstract classes cannot declare a constructor", tokenizer);
             }
 
             constr = parse_constr_decl(current_am);
             constr->set_index(field_start, tokenizer->current_index);
         }
+        // field or method
         else if (!tokenizer->current_token.is_punctuator('}')) {
-
+            // field with primitive return type
             if (tokenizer->current_token.get_type() == T_TYPE) {
                 TypeSpecifier ts = parse_type();
                 tokenizer->advance();
 
-                auto field = parse_field_decl(current_am, is_static, ts);
+                auto field = parse_field_decl(current_am, is_static, ts, is_interface);
                 field->set_index(field_start, tokenizer->current_index);
                 fields.push_back(field);
             }
+            // field or metod with class return type
             else if (tokenizer->current_token.get_type() == T_IDENT) {
                 Token next = tokenizer->lookahead();
+                // method
                 if (next.is_punctuator('(')) {
-                    auto method = parse_method_decl(current_am, is_static);
+                    auto method = parse_method_decl(current_am, is_static, is_interface || is_abstract);
                     method->set_index(field_start, tokenizer->current_index);
                     methods.push_back(method);
                 }
+                // field
                 else {
                     TypeSpecifier ts = parse_type();
-                    auto field = parse_field_decl(current_am, is_static, ts);
+                    tokenizer->advance();
+
+                    auto field = parse_field_decl(current_am, is_static, ts, is_interface);
                     field->set_index(field_start, tokenizer->current_index);
                     fields.push_back(field);
                 }
+            }
+            // field with function type
+            else if (tokenizer->current_token.is_punctuator('(')) {
+                TypeSpecifier ts = parse_type();
+                tokenizer->advance();
+
+                auto field = parse_field_decl(current_am, is_static, ts, is_interface);
+                field->set_index(field_start, tokenizer->current_index);
+                fields.push_back(field);
             }
         }
         else {
@@ -1224,10 +1305,113 @@ ClassDecl::SharedPtr Parser::parse_class_decl() {
     }
 
     auto class_dec = std::make_shared<ClassDecl>(class_name, fields, methods, constr, am, unary_operators,
-            binary_operators);
+            binary_operators, is_interface, is_abstract, extends, implements);
     class_dec->set_index(start, tokenizer->current_index);
 
     return class_dec;
+}
+
+/**
+ * Parses a struct definition
+ * @return
+ */
+StructDecl::SharedPtr Parser::parse_struct_decl() {
+    int start = tokenizer->last_token_index;
+
+    tokenizer->advance();
+    if (!tokenizer->current_token.get_type() == T_IDENT) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after 'struct'", tokenizer);
+    }
+
+    std::string struct_name = tokenizer->s_val();
+
+    tokenizer->advance();
+    if (!tokenizer->current_token.is_punctuator('{')) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '{' to begin a struct definition", tokenizer);
+    }
+
+    ConstrDecl::SharedPtr constr;
+    std::vector<FieldDecl::SharedPtr> fields;
+    std::vector<MethodDecl::SharedPtr> methods;
+    std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> unary_operators;
+    std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> binary_operators;
+
+    tokenizer->advance();
+
+    while (!tokenizer->current_token.is_punctuator('}')) {
+        int field_start = tokenizer->current_index;
+        bool is_operator = false;
+
+        if (tokenizer->current_token.is_keyword("operator")) {
+            tokenizer->advance();
+            auto op = parse_operator_decl(AccessModifier::PUBLIC, struct_name, false);
+            op->set_index(field_start, tokenizer->current_index);
+
+            if (op->is_binary) {
+                binary_operators.push_back({op->get_operator(), op});
+            } else {
+                unary_operators.push_back({op->get_operator(), op});
+            }
+        }
+            // constructor
+        else if (tokenizer->current_token.get_type() == T_IDENT && tokenizer->s_val() == struct_name &&
+                tokenizer->lookahead(false).is_punctuator('(')) {
+            constr = parse_constr_decl(AccessModifier::PUBLIC);
+            constr->set_index(field_start, tokenizer->current_index);
+        }
+            // field or method
+        else {
+            // field with primitive return type
+            if (tokenizer->current_token.get_type() == T_TYPE) {
+                TypeSpecifier ts = parse_type();
+                tokenizer->advance();
+
+                auto field = parse_field_decl(AccessModifier::PUBLIC, false, ts, false);
+                field->set_index(field_start, tokenizer->current_index);
+                fields.push_back(field);
+            }
+            // field or metod with class return type
+            else if (tokenizer->current_token.get_type() == T_IDENT) {
+                Token next = tokenizer->lookahead();
+                // method
+                if (next.is_punctuator('(')) {
+                    auto method = parse_method_decl(AccessModifier::PUBLIC, false, false);
+                    method->set_index(field_start, tokenizer->current_index);
+                    methods.push_back(method);
+                }
+                // field
+                else {
+                    TypeSpecifier ts = parse_type();
+                    tokenizer->advance();
+
+                    auto field = parse_field_decl(AccessModifier::PUBLIC, false, ts, false);
+                    field->set_index(field_start, tokenizer->current_index);
+                    fields.push_back(field);
+                }
+            }
+            // field with function type
+            else if (tokenizer->current_token.is_punctuator('(')) {
+                TypeSpecifier ts = parse_type();
+                tokenizer->advance();
+
+                auto field = parse_field_decl(AccessModifier::PUBLIC, false, ts, false);
+                field->set_index(field_start, tokenizer->current_index);
+                fields.push_back(field);
+            }
+            else {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected field or method declaration", tokenizer);
+            }
+        }
+
+
+        tokenizer->advance();
+    }
+
+    auto struct_decl = std::make_shared<StructDecl>(struct_name, fields, methods, constr, unary_operators,
+        binary_operators);
+    struct_decl->set_index(start, tokenizer->current_index);
+
+    return struct_decl;
 }
 
 /**
@@ -1373,8 +1557,14 @@ ForStmt::SharedPtr Parser::parse_for_stmt() {
     tokenizer->advance();
     tokenizer->advance();
 
-    Statement::SharedPtr init = parse_next_stmt();
-    tokenizer->advance();
+    Statement::SharedPtr init;
+    if (tokenizer->current_token.is_punctuator(';')) {
+        init = std::make_shared<Expression>();
+    }
+    else {
+        init = parse_next_stmt();
+        tokenizer->advance();
+    }
 
     // range based for loop
     if (tokenizer->current_token.is_keyword("in")) {
@@ -1407,17 +1597,31 @@ ForStmt::SharedPtr Parser::parse_for_stmt() {
                 tokenizer);
     }
 
+    Statement::SharedPtr term;
     tokenizer->advance();
-    Statement::SharedPtr term = parse_next_stmt();
-    tokenizer->advance();
+    if (tokenizer->current_token.is_punctuator(';')) {
+        term = std::make_shared<LiteralExpr>(Variant(true));
+    }
+    else {
+        term = parse_next_stmt();
+        tokenizer->advance();
+    }
+
     if (!tokenizer->current_token.is_punctuator(C_SEMICOLON)) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ';' to seperate for loop arguments",
                 tokenizer);
     }
 
+    Statement::SharedPtr inc;
     tokenizer->advance();
-    Statement::SharedPtr inc = parse_next_stmt();
-    tokenizer->advance();
+    if (tokenizer->current_token.is_punctuator(')')) {
+        inc = std::make_shared<Expression>();
+    }
+    else {
+        inc = parse_next_stmt();
+        tokenizer->advance();
+    }
+
     if (!tokenizer->current_token.is_punctuator(C_CLOSE_PAREN)) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')' after loop arguments",
                 tokenizer);
@@ -1451,23 +1655,7 @@ Statement::SharedPtr Parser::parse_keyword() {
     else if (keyword == "in") {
         tokenizer->advance(T_IDENT);
 
-        Variant _ident = tokenizer->current_token.get_value();
-
-        Token _next = tokenizer->lookahead();
-        ValueType _type = ANY_T;
-        if (_next.is_punctuator(':')) {
-            tokenizer->advance();
-            tokenizer->advance();
-            std::string type = tokenizer->current_token.get_value().get<std::string>();
-
-            if (!tokenizer->is_type_keyword(type)) {
-                token_error();
-            }
-
-            _type = val::strtotype(type);
-        }
-
-        InputStmt::SharedPtr in_stmt = std::make_shared<InputStmt>(_ident, _type);
+        InputStmt::SharedPtr in_stmt = std::make_shared<InputStmt>(tokenizer->s_val());
         in_stmt->set_index(start, tokenizer->current_index);
 
         return in_stmt;
@@ -1535,15 +1723,29 @@ Statement::SharedPtr Parser::parse_keyword() {
 
         return break_stmt;
     }
-    else if (keyword == "public" || keyword == "private" || keyword == "protected" || keyword == "class") {
+    else if (keyword == "class" || keyword == "interface" || keyword == "public" || keyword == "private" || keyword
+            == "abstract") {
         return parse_class_decl();
     }
+    else if (keyword == "struct") {
+        return parse_struct_decl();
+    }
     else if (keyword == "return") {
-        Expression::SharedPtr expr = parse_expression();
-        ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>(expr);
-        return_stmt->set_index(start, tokenizer->current_index);
+        Token next = tokenizer->lookahead(false);
+        if (!next.is_separator()) {
+            Expression::SharedPtr expr = parse_expression();
+            ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>(expr);
+            return_stmt->set_index(start, tokenizer->current_index);
 
-        return return_stmt;
+            return return_stmt;
+        }
+        else {
+            ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>();
+            return_stmt->set_index(start, tokenizer->current_index);
+            tokenizer->advance(false);
+
+            return return_stmt;
+        }
     }
     else if (keyword == "goto") {
         tokenizer->advance();
@@ -1552,8 +1754,19 @@ Statement::SharedPtr Parser::parse_keyword() {
 
         return goto_stmt;
     }
+    else if (keyword == "export") {
+        tokenizer->advance();
+        auto export_stmt = parse_export_stmt();
+        export_stmt->set_index(start, tokenizer->current_index);
+
+        return export_stmt;
+    }
+    else if (keyword == "import" || keyword == "module") {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Keyword '" + keyword + "' is only allowed at the beginning of a "
+                "file", tokenizer);
+    }
     else {
-        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unknown keyword '" + keyword + "'", tokenizer);
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "'" + keyword + "' is a reserved keyword", tokenizer);
     }
 }
 
@@ -1564,40 +1777,68 @@ Statement::SharedPtr Parser::parse_keyword() {
 CallExpr::SharedPtr Parser::parse_function_call() {
     int start = tokenizer->last_token_index;
 
-    CallExpr::SharedPtr call = std::make_shared<CallExpr>();
-    tokenizer->advance(T_PUNCTUATOR);
+    tokenizer->advance();
+    if (!tokenizer->current_token.is_punctuator('(')) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '(' before function arguments", tokenizer);
+    }
+
+    CallExpr::SharedPtr call = std::make_shared<CallExpr>(parse_arguments());
+    call->set_index(start, tokenizer->current_index);
+
+    return call;
+}
+
+std::vector<Expression::SharedPtr> Parser::parse_arguments() {
+    std::vector<Expression::SharedPtr> args;
 
     // collect arguments
     Token _next = tokenizer->lookahead();
     if (!_next.is_punctuator(C_CLOSE_PAREN)) {
         parse_func_call_arg:
-        Expression::SharedPtr arg = parse_expression();
-        call->add_argument(arg);
+        args.push_back(parse_expression());
 
         _next = tokenizer->lookahead();
         if (_next.is_punctuator(C_COMMA)) {
             tokenizer->advance();
             goto parse_func_call_arg;
         } else if (!_next.is_punctuator(C_CLOSE_PAREN)) {
-            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected closing parenthesis after function call", tokenizer);
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected ')' after function call", tokenizer);
         }
     }
-
     tokenizer->advance();
-    call->set_index(start, tokenizer->current_index);
 
-    return call;
+    return args;
 }
 
 CompoundStmt::SharedPtr Parser::parse_block() {
     int start = tokenizer->last_token_index;
-    std::string block = tokenizer->get_next_block();
 
-    Parser interp(block);
-    CompoundStmt::SharedPtr cmp_stmt = interp.parse();
-    cmp_stmt->set_index(start, tokenizer->current_index);
+    tokenizer->advance();
+    if (!(tokenizer->current_token.is_punctuator('{'))) {
+        ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Expected '{' to start a block statement.", tokenizer);
+    }
+    tokenizer->advance();
 
-    return cmp_stmt;
+    CompoundStmt::SharedPtr block = std::make_shared<CompoundStmt>();
+    while (!tokenizer->current_token.is_punctuator('}')) {
+        while (tokenizer->current_token.is_separator()) {
+            tokenizer->advance();
+        }
+
+        if (tokenizer->current_token.get_type() == T_EOF) {
+            break;
+        }
+
+        Statement::SharedPtr stmt = parse_next_stmt();
+
+        block->add_statement(stmt);
+
+        tokenizer->advance();
+    }
+
+    block->set_index(start, tokenizer->current_index);
+
+    return block;
 }
 
 Statement::SharedPtr Parser::parse_next_stmt() {
@@ -1617,6 +1858,12 @@ Statement::SharedPtr Parser::parse_next_stmt() {
 
         return expr;
     }
+    // assignment with custom type
+    else if (tokenizer->current_token.get_type() == T_IDENT && tokenizer->lookahead(false).get_type() == T_IDENT) {
+        Statement::SharedPtr assign = parse_assignment(false);
+
+        return assign;
+    }
     else if (tokenizer->current_token.get_type() == T_IDENT && tokenizer->lookahead().is_operator(":")) {
         std::string label = tokenizer->s_val();
         tokenizer->advance();
@@ -1632,30 +1879,176 @@ Statement::SharedPtr Parser::parse_next_stmt() {
 }
 
 /**
+ * Parses the module declaration for the current file
+ * @return
+ */
+ModuleDecl::SharedPtr Parser::parse_module_decl() {
+    int start = tokenizer->last_token_index;
+
+    tokenizer->advance();
+    if (tokenizer->current_token.get_type() != T_IDENT) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected T_IDENT after 'module'", tokenizer);
+    }
+
+    auto mod = std::make_shared<ModuleDecl>(tokenizer->s_val());
+    mod->set_index(start, tokenizer->current_index);
+
+    return mod;
+}
+
+/**
+ * Parses a module import statement
+ * @return
+ */
+ImportStmt::SharedPtr Parser::parse_import_stmt() {
+    int start = tokenizer->last_token_index;
+
+    std::string path = "";
+    bool lib_import = false;
+    bool full_import = true;
+    std::vector<std::string> imports;
+
+    tokenizer->advance();
+    // library import (angled brackets)
+    if (tokenizer->current_token.is_operator("<")) {
+        tokenizer->advance();
+        if (!tokenizer->current_token.get_type() == T_IDENT) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after lib 'import'", tokenizer);
+        }
+
+        path = tokenizer->s_val();
+        lib_import = true;
+        tokenizer->advance();
+
+        if (!tokenizer->current_token.is_operator(">")) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected '>'", tokenizer);
+        }
+    }
+    // Identifier list with 'from'
+    else if (tokenizer->current_token.get_type() == T_IDENT) {
+        full_import = false;
+        while (tokenizer->current_token.get_type() == T_IDENT) {
+            imports.push_back(tokenizer->s_val());
+            tokenizer->advance();
+            if (tokenizer->current_token.is_punctuator(',')) {
+                continue;
+            }
+            else if (tokenizer->current_token.is_keyword("from")) {
+                break;
+            }
+            else {
+                ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected 'from' after import list", tokenizer);
+            }
+        }
+
+        tokenizer->advance(); // 'from'
+        if (tokenizer->current_token.is_keyword("from")) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected 'from' after import list", tokenizer);
+        }
+    }
+
+    if (!lib_import) {
+        if (!tokenizer->current_token.get_type() == T_LITERAL && tokenizer->current_token.get_value().get_type().type ==
+                STRING_T) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected string literal after 'import'", tokenizer);
+        } else {
+            path = tokenizer->s_val();
+        }
+    }
+
+    std::string as_name = "";
+
+    Token next = tokenizer->lookahead();
+    if (next.get_type() == T_KEYWORD && next.get_value().get<std::string>() == "as") {
+        tokenizer->advance();
+        if (lib_import) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "'as' is not allowed after lib import", tokenizer);
+        }
+        if (!full_import) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "'as' is only allowed after a full import", tokenizer);
+        }
+
+        tokenizer->advance();
+        if (!tokenizer->current_token.get_type() == T_IDENT) {
+            ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected identifier after 'as'", tokenizer);
+        }
+
+        as_name = tokenizer->s_val();
+    }
+
+    ImportStmt::SharedPtr import_stmt = std::make_shared<ImportStmt>(path, as_name, lib_import);
+    import_stmt->set_index(start, tokenizer->current_index);
+    for (auto imp : imports) {
+        import_stmt->add_import_ident(imp);
+    }
+
+    return import_stmt;
+}
+
+/**
+ * Parses an export statement
+ * @return
+ */
+ExportStmt::SharedPtr Parser::parse_export_stmt() {
+    int start = tokenizer->last_token_index;
+
+    if (tokenizer->current_token.get_type() != T_IDENT) {
+        ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected T_IDENT after 'export'", tokenizer);
+    }
+
+    auto export_stmt = std::make_shared<ExportStmt>(tokenizer->s_val());
+    export_stmt->set_index(start, tokenizer->current_index);
+
+    return export_stmt;
+}
+
+/**
  * Runs the program by tokenizing the program, creating the AST and finally evaluating it.
  * @return
  */
-void Parser::run(bool debug = false) {
-    parse();
+Module::UniquePtr Parser::run(bool debug = false) {
+    ModuleDecl::SharedPtr module = parse();
     delete tokenizer;
 
+    TypeCheckVisitor tc;
+    tc.visit(module.get());
+
+//    EvaluatingVisitor ev;
+//    Module::UniquePtr mod = std::make_unique<Module>();
+//    ev.set_out_module(mod.get());
+//    ev.visit(module.get());
+
     if (debug) {
-        prog_root->__dump(0);
+        module->__dump(0);
         std::cout << std::endl << std::endl;
     }
 
-    EvaluatingVisitor ev;
-    ev.evaluate(prog_root.get());
+    //    return std::move(mod);
 }
 
 /**
  * Parses the program into an AST
  * @return
  */
-CompoundStmt::SharedPtr Parser::parse() {
-    while(tokenizer->current_token.get_type() != T_EOF) {
+ModuleDecl::SharedPtr Parser::parse() {
+    tokenizer->advance();
+    ModuleDecl::SharedPtr module;
+
+    if (tokenizer->current_token.is_keyword("module")) {
+        module = parse_module_decl();
         tokenizer->advance();
-        while (tokenizer->current_token.is_punctuator('\n')) {
+    }
+    else {
+        module = std::make_shared<ModuleDecl>("default");
+    }
+
+    while (tokenizer->current_token.is_keyword("import")) {
+        module->add_import(parse_import_stmt());
+        tokenizer->advance();
+    }
+
+    while(tokenizer->current_token.get_type() != T_EOF) {
+        while (tokenizer->current_token.is_separator() || tokenizer->current_token.is_punctuator(';')) {
             tokenizer->advance();
         }
 
@@ -1665,8 +2058,10 @@ CompoundStmt::SharedPtr Parser::parse() {
 
         Statement::SharedPtr stmt = parse_next_stmt();
 
-        prog_root->add_statement(stmt);
+        module->add_statement(stmt);
+
+        tokenizer->advance();
     }
 
-    return prog_root;
+    return module;
 }

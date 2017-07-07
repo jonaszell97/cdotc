@@ -14,17 +14,22 @@ MethodDecl::MethodDecl(std::string method_name, TypeSpecifier return_type, std::
     args(args),
     body(body),
     am(am),
-    is_static(is_static)
+    is_static(is_static),
+    is_abstract(false)
 {
 
 }
 
-MethodDecl::MethodDecl(const MethodDecl& cp) {
-    set_parent(cp._parent);
-}
+MethodDecl::MethodDecl(std::string method_name, TypeSpecifier return_type, std::vector<FuncArgDecl::SharedPtr> args,
+        AccessModifier am, bool is_static) :
+    method_name(method_name),
+    return_type(return_type),
+    args(args),
+    am(am),
+    is_static(is_static),
+    is_abstract(true)
+{
 
-AstNode::SharedPtr MethodDecl::clone() const {
-    return std::make_shared<MethodDecl>(*this);
 }
 
 std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
@@ -33,15 +38,17 @@ std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
         children.push_back(arg);
     }
 
-    children.push_back(body);
+    if (!is_abstract) {
+        children.push_back(body);
+    }
 
     return children;
 }
 
 void MethodDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << (is_static ? "Static" : "") << "MethodDecl [" << util::am_map[am] << " " << method_name
-              << " => " << return_type.to_string() << "]" << std::endl;
+    std::cout << (is_static ? "Static" : "") << "MethodDecl [" << (is_abstract ? "abstract " : "") << util::am_map[am]
+            << " " << method_name << " => " << return_type.to_string() << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

@@ -6,6 +6,7 @@
 #include "Variant.h"
 #include "../StdLib/Objects/Object.h"
 #include "../Util.h"
+#include "../StdLib/Class/Interface.h"
 #include "../StdLib/Objects/Array.h"
 #include "../StdLib/Objects/Function.h"
 #include "Conversion.h"
@@ -69,6 +70,12 @@ Variant::Variant(Class* c) : Variant() {
     _is_null = false;
 }
 
+Variant::Variant(Interface* interf) : Variant() {
+    interface_val = interf;
+    type.type = INTERFACE_T;
+    _is_null = false;
+}
+
 Variant::Variant(std::string s) : Variant() {
     s_val = s;
     type.type = STRING_T;
@@ -78,6 +85,25 @@ Variant::Variant(std::string s) : Variant() {
 Variant::Variant(std::shared_ptr<Object> o) : Variant() {
     o_val = o;
     type.type = OBJECT_T;
+    type.class_name = o->get_class()->class_name();
+    _is_null = false;
+}
+
+Variant::Variant(TypeSpecifier ts) {
+    type = ts;
+    _is_null = true;
+    new (&o_val) std::shared_ptr<Object>();
+}
+
+Variant::Variant(std::shared_ptr<Function> fun) : Variant() {
+    o_val = fun;
+    type.type = OBJECT_T;
+    type.class_name = fun->get_class()->class_name();
+    type.is_function = true;
+    for (auto arg : fun->arg_types) {
+        type.args.push_back(arg);
+    }
+    type.return_type = new TypeSpecifier(fun->return_type);
     _is_null = false;
 }
 
@@ -90,7 +116,10 @@ Variant::Variant(std::shared_ptr<Variant> r): Variant() {
 void Variant::destroy() {
     switch (type.type) {
         case OBJECT_T:
-            o_val.~shared_ptr(); break;
+            if (o_val != nullptr) {
+                o_val.~shared_ptr();
+            }
+            break;
         case REF_T:
             ref.~shared_ptr(); break;
         default:
@@ -113,6 +142,35 @@ bool Variant::is_ref() {
     return type.type == REF_T;
 }
 
+void Variant::set_default() {
+    switch (type.type) {
+        case INT_T:
+            int_val = 0;
+            break;
+        case LONG_T:
+            long_val = 0l;
+            break;
+        case FLOAT_T:
+            float_val = 0.0f;
+            break;
+        case DOUBLE_T:
+            d_val = 0.0;
+            break;
+        case BOOL_T:
+            b_val = false;
+            break;
+        case CHAR_T:
+            c_val = '\0';
+            break;
+        case STRING_T:
+            s_val = "";
+            break;
+        default:
+            return;
+    }
+
+    _is_null = false;
+}
 Variant Variant::operator*() {
     if (type.type != REF_T) {
         return Variant(*this);
@@ -179,7 +237,7 @@ bool Variant::get<bool>() {
         if (ref->type.type != REF_T) return ref->ref->get<bool>();
     }
     if (type.type != BOOL_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not boolean");
+        return cast_to(BOOL_T).get<bool>();
     }
 
     return b_val;
@@ -236,6 +294,15 @@ Class* Variant::get<Class*>() {
     return class_val;
 }
 
+template<>
+Interface* Variant::get<Interface*>() {
+    if (type.type != INTERFACE_T) {
+        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not an interface");
+    }
+
+    return interface_val;
+}
+
 void Variant::check_numeric() {
     switch(type.type) {
         case INT_T:
@@ -262,6 +329,7 @@ Variant::Variant(const Variant &cp) {
         case BOOL_T:
             b_val = cp.b_val; break;
         case OBJECT_T:
+            type.class_name = cp.type.class_name;
             o_val = cp.o_val; break;
         case REF_T:
             ref = cp.ref; break;
@@ -275,6 +343,8 @@ Variant::Variant(const Variant &cp) {
             float_val = cp.float_val; break;
         case CLASS_T:
             class_val = cp.class_val; break;
+        case INTERFACE_T:
+            interface_val = cp.interface_val; break;
         case VOID_T:
             break;
         default:
@@ -283,8 +353,7 @@ Variant::Variant(const Variant &cp) {
     }
 
     _is_null = cp._is_null;
-    type.nullable = cp.type.nullable;
-    type.type = cp.type.type;
+    type = cp.type;
     check_numeric();
 }
 
@@ -302,7 +371,7 @@ std::string Variant::to_string(bool escape) {
         case BOOL_T:
             return b_val ? "true" : "false";
         case OBJECT_T:
-            return o_val->print();
+            return o_val->call_method("toString", std::vector<Variant>(), "").get<std::string>();
         case REF_T: {
             std::ostringstream ss;
             ss << &(*ref);
@@ -319,6 +388,8 @@ std::string Variant::to_string(bool escape) {
             return std::to_string(float_val);
         case CLASS_T:
             return class_val->class_name();
+        case INTERFACE_T:
+            return interface_val->get_name();
         case VOID_T:
             return "null";
         default:
@@ -400,7 +471,9 @@ Variant Variant::operator=(const Variant &v) {
 
             break;
         case CLASS_T:
-            class_val = v.class_val;
+            class_val = v.class_val; break;
+        case INTERFACE_T:
+            interface_val = v.interface_val; break;
         case VOID_T:
             _is_null = true;
             type.type = VOID_T;
@@ -411,8 +484,7 @@ Variant Variant::operator=(const Variant &v) {
 
     initialized = true;
     _is_null = v._is_null;
-    type.nullable = v.type.nullable;
-    type.type = v.type.type;
+    type = v.type;
     check_numeric();
 
     return *this;
@@ -513,7 +585,7 @@ namespace val {
     }
 
     std::string typetostr(TypeSpecifier type) {
-        return typetostr(type.type);
+        return type.to_string();
     }
 
     std::string base_class(ValueType v) {
@@ -533,11 +605,123 @@ namespace val {
     }
 
     bool is_compatible(ValueType v1, ValueType v2) {
-        return (v1 == ANY_T || v2 == ANY_T || (v1 == v2)) || util::in_vector<ValueType>(util::type_conversions[v1], v2);
+        return (v1 == ANY_T || v2 == ANY_T || (v1 == v2)) || util::in_vector<ValueType>(util::implicit_type_conversions[v1], v2);
     }
 
     bool is_compatible(TypeSpecifier t1, TypeSpecifier t2) {
-        return is_compatible(t1.type, t2.type) || (t1.nullable && t2.type == VOID_T) || (t2.nullable && t1.type ==
-                VOID_T);
+        if (t1.is_function || t2.is_function) {
+            return t1.to_string() == t2.to_string();
+        }
+        if (t1.type == OBJECT_T || t2.type == OBJECT_T) {
+            return t1.class_name == t2.class_name;
+        }
+
+        return t1.type == t2.type || implicitly_castable(t1.type, t2.type);
+    }
+
+    bool is_castable(TypeSpecifier t1, TypeSpecifier t2) {
+        if (t1 == t2) {
+            return true;
+        }
+        if (t1.type == OBJECT_T || t2.type == OBJECT_T) {
+            //TODO
+        }
+        if (t1.is_function || t2.is_function) {
+            return false;
+        }
+
+        auto conv = util::explicit_type_conversions[t1.type];
+
+        return std::find(conv.begin(), conv.end(), t2.type) != conv.end();
+    }
+
+    bool implicitly_castable(ValueType v1, ValueType v2) {
+        if (v1 == OBJECT_T || v1 == CLASS_T || v1 == INTERFACE_T || v1 == VOID_T) {
+            return false;
+        }
+        if (v1 == v2) {
+            return true;
+        }
+
+        auto conv = util::implicit_type_conversions[v1];
+        return std::find(conv.begin(), conv.end(), v2) != conv.end();
+    }
+
+    ValueType simple_arithmetic_return_type(TypeSpecifier t1, TypeSpecifier t2) {
+        if (t1.type == STRING_T || t2.type == STRING_T) {
+            return STRING_T;
+        }
+
+        if (!t1.is_primitive || !t2.is_primitive) {
+            return VOID_T;
+        }
+
+        if (t1.type == t2.type) {
+            return t1.type;
+        }
+
+        switch (t1.type) {
+            case INT_T:
+                switch (t2.type) {
+                    case LONG_T:
+                        return LONG_T;
+                    case DOUBLE_T:
+                        return DOUBLE_T;
+                    case FLOAT_T:
+                        return FLOAT_T;
+                    case BOOL_T:
+                    case CHAR_T:
+                        return INT_T;
+                    default:
+                        return VOID_T;
+                }
+                break;
+            case LONG_T:
+                switch (t2.type) {
+                    case INT_T:
+                    case BOOL_T:
+                    case CHAR_T:
+                        return LONG_T;
+                    case DOUBLE_T:
+                        return DOUBLE_T;
+                    case FLOAT_T:
+                        return FLOAT_T;
+                    default:
+                        return VOID_T;
+                }
+                break;
+            case FLOAT_T:
+                switch (t2.type) {
+                    case INT_T:
+                    case LONG_T:
+                    case BOOL_T:
+                    case CHAR_T:
+                        return FLOAT_T;
+                    case DOUBLE_T:
+                        return DOUBLE_T;
+                    default:
+                        return VOID_T;
+                }
+                break;
+            case DOUBLE_T:
+                return DOUBLE_T;
+            case CHAR_T:
+            case BOOL_T:
+                return simple_arithmetic_return_type(t2, t1);
+            default:
+                return VOID_T;
+        }
+    }
+
+    ValueType division_return_type(TypeSpecifier t1, TypeSpecifier t2) {
+        if (!t1.is_primitive || !t2.is_primitive) {
+            return VOID_T;
+        }
+
+        if (t1.type == DOUBLE_T || t2.type == DOUBLE_T) {
+            return DOUBLE_T;
+        }
+
+        return FLOAT_T;
     }
 };

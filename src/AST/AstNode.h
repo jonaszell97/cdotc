@@ -19,7 +19,6 @@ public:
 
     typedef std::shared_ptr<AstNode> SharedPtr;
     typedef std::weak_ptr<AstNode> WeakPtr;
-    virtual AstNode::SharedPtr clone() const = 0;
 
     virtual std::vector<AstNode::SharedPtr> get_children();
     virtual void set_parent(AstNode*);
@@ -46,6 +45,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     int start_index;

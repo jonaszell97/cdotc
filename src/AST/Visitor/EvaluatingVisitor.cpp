@@ -22,9 +22,9 @@
 #include "../Expression/Literal/ObjectLiteral.h"
 #include "../Expression/Literal/LambdaExpr.h"
 #include "../Expression/RefExpr/ArrayAccessExpr.h"
+#include "../Expression/RefExpr/FunctionCallExpr.h"
 #include "../Expression/RefExpr/CallExpr.h"
 #include "../Expression/RefExpr/MethodCallExpr.h"
-#include "../Expression/Class/InstantiationExpr.h"
 #include "../Operator/BinaryOperator.h"
 #include "../Operator/UnaryOperator.h"
 #include "../Operator/ExplicitCastExpr.h"
@@ -35,6 +35,7 @@
 #include "../Statement/IO/OutputStmt.h"
 #include "../Statement/ControlFlow/ReturnStmt.h"
 #include "../Statement/IO/InputStmt.h"
+#include "../Statement/Declaration/Class/StructDecl.h"
 #include "../Statement/Declaration/Class/ClassDecl.h"
 #include "../Statement/Declaration/Class/ConstrDecl.h"
 #include "../Statement/Declaration/Class/FieldDecl.h"
@@ -46,12 +47,18 @@
 #include "../../StdLib/Objects/Array.h"
 #include "../../StdLib/Objects/Object.h"
 #include "../../StdLib/Objects/Function.h"
+#include "../../StdLib/Class/Interface.h"
 #include "../../Util.h"
 #include "../Statement/ControlFlow/GotoStmt.h"
 #include "CaptureVisitor.h"
 #include "../../Parser.h"
+#include "../Statement/Declaration/ModuleDecl.h"
+#include "../Statement/ImportStmt.h"
+#include "../Statement/ExportStmt.h"
+#include "../../StdLib/Module.h"
 
-EvaluatingVisitor::EvaluatingVisitor() : context(std::make_shared<Context>()), current_label(nullptr) {
+EvaluatingVisitor::EvaluatingVisitor() : context(std::make_shared<Context>()), current_label(nullptr),
+    exports(std::unordered_map<std::string, Variant::SharedPtr>()) {
 
 }
 
@@ -70,14 +77,12 @@ EvaluatingVisitor::EvaluatingVisitor(const EvaluatingVisitor &v) : EvaluatingVis
     context->set_parent_ctx(v.context);
 }
 
-/**
- * Evaluates a root statement (without creating a new visitor)
- * @param root
- * @return
- */
-Variant EvaluatingVisitor::evaluate(CompoundStmt *root) {
-    context->returnable = root->_returnable;
+Variant EvaluatingVisitor::visit(ModuleDecl *root) {
     int goto_index = 0;
+    for (auto import : root->imports) {
+        import->accept(*this);
+    }
+
     for (int i = start_index; i < root->_statements.size(); i++) {
         if (root->_is_lambda_body && i == root->_statements.size() - 1) {
             return root->_statements[i]->accept(*this);
@@ -104,11 +109,24 @@ Variant EvaluatingVisitor::evaluate(CompoundStmt *root) {
         goto_index++;
     }
 
-    return context->returned ? context->return_val : Variant();
+    if (out_module != nullptr) {
+        out_module->set_name(root->module_name);
+        out_module->set_exports(exports);
+    }
+
+    return {};
 }
 
-Variant EvaluatingVisitor::evaluate(Statement *stmt) {
-    return stmt->accept(*this);
+Variant EvaluatingVisitor::visit(ImportStmt *node) {
+    GlobalContext::import_module(node->path, node->module_name, node->is_lib_import, node->import_identifiers);
+
+    return {};
+}
+
+Variant EvaluatingVisitor::visit(ExportStmt *node) {
+    exports.emplace(node->target, context->get_variable(node->target));
+
+    return {};
 }
 
 /**
@@ -122,12 +140,9 @@ Variant EvaluatingVisitor::visit(CompoundStmt *node) {
 
     // goto index
     int goto_index = 0;
+    Variant v;
     for (int i = start_index; i < node->_statements.size(); i++) {
-        if (node->_is_lambda_body && i == node->_statements.size() - 1) {
-            return node->_statements[i]->accept(*this);
-        }
-
-        node->_statements[i]->accept(ev);
+        v = node->_statements[i]->accept(ev);
         if (ev.context->returnable && ev.context->returned) {
             return ev.context->return_val;
         }
@@ -148,7 +163,42 @@ Variant EvaluatingVisitor::visit(CompoundStmt *node) {
         goto_index++;
     }
 
-    return ev.context->returned ? ev.context->return_val : Variant();
+    // return value of last statement / expression if no return found
+    return ev.context->returned ? ev.context->return_val : implicit_return ? v : Variant();
+}
+
+/**
+ * Evaluates a compound statement by evaluating all of its enclosed statements, until a ReturnStmt is reached
+ * @param node
+ * @return Variant
+ */
+Variant EvaluatingVisitor::evaluate(CompoundStmt *node) {
+    int goto_index = 0;
+    Variant v;
+    for (int i = start_index; i < node->_statements.size(); i++) {
+        v = node->_statements[i]->accept(*this);
+        if (context->returnable && context->returned) {
+            return context->return_val;
+        }
+        if ((context->continuable && context->continued) || context->goto_encountered) {
+            context->goto_encountered = false;
+            break;
+        }
+        if (context->breakable && context->broken) {
+            break;
+        }
+        if (current_label != nullptr) {
+            current_label->set_parent_cmpnd(node);
+            current_label->set_visitor(this);
+            node->goto_index = i;
+            current_label = nullptr;
+        }
+
+        goto_index++;
+    }
+
+    // return value of last statement / expression if no return found
+    return context->returned ? context->return_val : implicit_return ? v : Variant();
 }
 
 /**
@@ -173,7 +223,7 @@ Variant EvaluatingVisitor::visit(FunctionDecl *node) {
         func->add_argument(current_arg.name, current_arg.type, current_arg.default_val);
     }
 
-    return nullptr;
+    return {};
 }
 
 /**
@@ -184,20 +234,25 @@ Variant EvaluatingVisitor::visit(FunctionDecl *node) {
 Variant EvaluatingVisitor::visit(IdentifierRefExpr *node) {
 
     if (GlobalContext::is_declared_class(node->_ident)) {
-        current_obj_ref = std::make_shared<Variant>(GlobalContext::get_class(node->_ident));
+        current_ref.push_back(std::make_shared<Variant>(GlobalContext::get_class(node->_ident)));
+    }
+    else if (GlobalContext::is_declared_interface(node->_ident)) {
+        current_ref.push_back(std::make_shared<Variant>(GlobalContext::get_interface(node->_ident)));
     }
     else {
-        current_obj_ref = context->get_variable(node->_ident, node);
+        current_ref.push_back(context->get_variable(node->_ident, node));
     }
 
     if (node->_member_expr == nullptr) {
-        return node->_return_ref ? Variant(current_obj_ref) : *current_obj_ref;
+        auto return_val = node->_return_ref ? Variant(current_ref.back()) : *current_ref.back();
+        current_ref.pop_back();
+
+        return return_val;
     } else {
-        node->_member_expr->return_ref(node->_return_ref);
-        return node->_member_expr->accept(*this);
+        return node->_return_ref ? node->_member_expr->accept(*this) : *node->_member_expr->accept(*this);
     }
 
-    return nullptr;
+    return {};
 }
 
 /**
@@ -207,40 +262,63 @@ Variant EvaluatingVisitor::visit(IdentifierRefExpr *node) {
  */
 Variant EvaluatingVisitor::visit(DeclStmt *node) {
 
-    Variant res = node->_val != nullptr ? node->_val->accept(*this) : Variant();
-    res.is_nullable(node->_type.nullable);
-    if (node->_val == nullptr) {
-        res.set_type(node->_type);
-        res.is_null(true);
-    }
+    for (int i = 0; i < node->decl_identifiers.size(); ++i) {
+        auto& ident = node->decl_identifiers[i];
+        auto& decl = node->declarations[i];
 
-    // use float as default when type is not specified
-    if (res.get_type() == DOUBLE_T && node->_type.type != DOUBLE_T) {
-        res.cast_to(FLOAT_T);
-    }
+        if (decl.first.is_array) {
 
-    // type inference
-    if (node->_type.type == AUTO_T) {
-        node->_type = res.get_type();
-    }
-    else if (node->_type.type == ANY_T) {
-        res.is_any_type();
-    }
+            ArrayLiteral::SharedPtr arr = std::dynamic_pointer_cast<ArrayLiteral>(decl.second);
+            if (arr == nullptr) {
+                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign variable of type " + val::typetostr(decl.first
+                    ) + " to array of type " + val::typetostr(decl.first), node);
+            }
+            else if (arr->_var_length && !decl.first.is_var_length) {
+                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign variable length array to array of fixed length",
+                        node);
+            }
 
-    if (res.get_type().type != node->_type.type && !(node->_type.nullable && res.get_type() == VOID_T)) {
-        if (node->_val == nullptr) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Trying to assign value of type " + val::typetostr(res.get_type())
-                    + " to variable of type " + val::typetostr(node->_type), node);
+            arr->set_type(TypeSpecifier(decl.first.type));
+            if (decl.first.is_var_length) {
+                arr->is_var_length(true);
+            }
+            else {
+                arr->set_length_expr(decl.first.length);
+            }
+
+            context->set_variable(ident, arr->accept(*this));
+
+            continue;
+        }
+
+        Variant res;
+
+        // use default value
+        if (decl.second == nullptr) {
+            res.set_type(decl.first);
+            res.set_default();
         }
         else {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Trying to assign value of type " + val::typetostr(res.get_type())
-                    + " to variable of type " + val::typetostr(node->_type), node->_val.get());
+            res = decl.second->accept(*this);
+            res.is_nullable(decl.first.nullable);
+            if (decl.second == nullptr) {
+                res.set_type(decl.first);
+                res.is_null(true);
+            }
+
+            // type inference
+            if (decl.first.type == AUTO_T) {
+                decl.first = res.get_type();
+            }
+            else if (decl.first == ANY_T) {
+                res.is_any_type();
+            }
         }
+
+        context->set_variable(ident, res);
     }
 
-    context->set_variable(node->_ident, res);
-
-    return nullptr;
+    return {};
 }
 
 /**
@@ -291,7 +369,7 @@ Variant EvaluatingVisitor::visit(ForStmt *node) {
         }
     }
 
-    return nullptr;
+    return {};
 }
 
 /**
@@ -312,7 +390,7 @@ Variant EvaluatingVisitor::visit(WhileStmt *node) {
         loop_visitor.context->reset();
     }
 
-    return nullptr;
+    return {};
 }
 
 /**
@@ -363,7 +441,13 @@ Variant EvaluatingVisitor::visit(ArrayLiteral *node) {
         arr->set_type(ts);
     }
 
-    return { arr };
+    if (node->_member_expr == nullptr) {
+        return { arr };
+    }
+    else {
+        current_ref.push_back(std::make_shared<Variant>(arr));
+        return node->_member_expr->accept(*this);
+    }
 }
 
 /**
@@ -373,9 +457,9 @@ Variant EvaluatingVisitor::visit(ArrayLiteral *node) {
  */
 Variant EvaluatingVisitor::visit(LiteralExpr *node) {
     if (node->_member_expr != nullptr) {
-        current_obj_ref = std::make_shared<Variant>(node->_value);
+        current_ref.push_back(std::make_shared<Variant>(node->_value));
 
-        return node->_member_expr->accept(*this);
+        return *node->_member_expr->accept(*this);
     }
     else {
         return node->_value;
@@ -421,9 +505,9 @@ Variant EvaluatingVisitor::visit(StringLiteral *node) {
     }
 
     if (node->_member_expr != nullptr) {
-        current_obj_ref = std::make_shared<Variant>(val);
+        current_ref.push_back(std::make_shared<Variant>(val));
 
-        return node->_member_expr->accept(*this);
+        return *node->_member_expr->accept(*this);
     }
     else {
         return { val };
@@ -445,7 +529,13 @@ Variant EvaluatingVisitor::visit(ObjectLiteral *node) {
 
     current_prop = {};
 
-    return { obj };
+    if (node->_member_expr == nullptr) {
+        return { obj };
+    }
+    else {
+        current_ref.push_back(std::make_shared<Variant>(obj));
+        return *node->_member_expr->accept(*this);
+    }
 }
 
 /**
@@ -462,7 +552,7 @@ Variant EvaluatingVisitor::visit(ObjectPropExpr *node) {
     }
 
     current_prop = op;
-    return nullptr;
+    return {};
 }
 
 /**
@@ -471,23 +561,30 @@ Variant EvaluatingVisitor::visit(ObjectPropExpr *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(ArrayAccessExpr *node) {
-    Array::SharedPtr arr = std::dynamic_pointer_cast<Array>(current_obj_ref->get<Object::SharedPtr>());
+    Array::SharedPtr arr = std::dynamic_pointer_cast<Array>(current_ref.back()->get<Object::SharedPtr>());
     if (arr == nullptr) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index of non-array element", node);
     }
 
-    if (current_obj_ref->is_null()) {
+    if (current_ref.back()->is_null()) {
         RuntimeError::raise(ERR_NULL_POINTER_EXC, "Trying to access index on null", node);
     }
 
-    current_obj_ref = arr->at(node->_index->accept(*this).get<int>());
+    current_ref.push_back(arr->at(node->_index->accept(*this).get<int>()));
 
     if (node->_member_expr != nullptr) {
-        node->_member_expr->return_ref(node->_return_ref);
         return node->_member_expr->accept(*this);
     }
     else {
-        return node->_return_ref ? Variant(current_obj_ref) : *current_obj_ref;
+        auto return_val = current_ref[current_ref.size() - 1];
+        current_ref.pop_back();
+
+        if (return_val->is_ref()) {
+            return *return_val;
+        }
+        else {
+            return Variant(return_val);
+        }
     }
 }
 
@@ -497,15 +594,15 @@ Variant EvaluatingVisitor::visit(ArrayAccessExpr *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(CallExpr *node) {
-    if (current_obj_ref->is_null()) {
+    if (current_ref.back()->is_null()) {
         RuntimeError::raise(ERR_NULL_POINTER_EXC, "Trying to call null as a function", node);
     }
 
-    Function::SharedPtr fun = std::dynamic_pointer_cast<Function>(current_obj_ref->get<Object::SharedPtr>());
+    Function::SharedPtr fun = std::dynamic_pointer_cast<Function>(current_ref.back()->get<Object::SharedPtr>());
 
     if (fun == nullptr) {
-        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call value of type " + val::typetostr(current_obj_ref->get_type()
-        ), node);
+        RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call value of type " + val::typetostr(current_ref.back()
+            ->get_type()), node);
     }
 
     std::vector<Variant> _real_args;
@@ -514,16 +611,26 @@ Variant EvaluatingVisitor::visit(CallExpr *node) {
         _real_args.push_back(arg_val);
     }
 
-    current_obj_ref = std::make_shared<Variant>(fun->call(_real_args));
+    current_ref.push_back(std::make_shared<Variant>(fun->call(_real_args)));
 
     if (node->_member_expr != nullptr) {
-        node->_member_expr->return_ref(node->_return_ref);
-
         return node->_member_expr->accept(*this);
     }
     else {
-        return node->_return_ref ? Variant(current_obj_ref) : *current_obj_ref;
+        auto return_val = current_ref[current_ref.size() - 1];
+        current_ref.pop_back();
+
+        if (return_val->is_ref()) {
+            return *return_val;
+        }
+        else {
+            return Variant(return_val);
+        }
     }
+}
+
+Variant EvaluatingVisitor::visit(FunctionCallExpr *) {
+
 }
 
 /**
@@ -538,33 +645,42 @@ Variant EvaluatingVisitor::visit(MethodCallExpr *node) {
         _real_args.push_back(arg_val);
     }
 
-    if (current_obj_ref->is_null()) {
+    if (current_ref.back()->is_null()) {
         RuntimeError::raise(ERR_NULL_POINTER_EXC, "Trying to call method " + node->_ident + " on null", node);
     }
 
-    if (current_obj_ref->get_type().type == OBJECT_T) {
-        current_obj_ref = std::make_shared<Variant>(current_obj_ref->get<Object::SharedPtr>()
-                                         ->call_method(node->_ident, _real_args, context->class_context));
+    if (current_ref.back()->get_type().type == OBJECT_T) {
+        current_ref.push_back(std::make_shared<Variant>(current_ref.back()->get<Object::SharedPtr>()
+                                                                   ->call_method(node->_ident, _real_args,
+                                                                           context->class_context)));
     }
-    else if (current_obj_ref->get_type().type == CLASS_T) {
-        current_obj_ref = std::make_shared<Variant>(current_obj_ref->get<Class*>()
-                                         ->call_static_method(node->_ident, _real_args, context->class_context));
+    else if (current_ref.back()->get_type().type == CLASS_T) {
+        current_ref.push_back(std::make_shared<Variant>(current_ref.back()->get<Class*>()
+                                                                   ->call_static_method(node->_ident, _real_args,
+                                                                           context->class_context)));
     }
-    else if (val::base_class(current_obj_ref->get_type().type) != "") {
-        Class* cl = GlobalContext::get_class(val::base_class(current_obj_ref->get_type().type));
-        Object::SharedPtr class_instance = cl->instantiate({ *current_obj_ref });
-        current_obj_ref = std::make_shared<Variant>(class_instance->call_method(node->_ident, _real_args, 
-                                                                                context->class_context));
+    else if (val::base_class(current_ref.back()->get_type().type) != "") {
+        Class* cl = GlobalContext::get_class(val::base_class(current_ref.back()->get_type().type));
+        Object::SharedPtr class_instance = cl->instantiate({ *current_ref.back() });
+        current_ref.push_back(std::make_shared<Variant>(class_instance->call_method(node->_ident, _real_args,
+                context->class_context)));
     }
     else {
         RuntimeError::raise(ERR_BAD_ACCESS, "Cannot call method on primitive value", node);
     }
 
     if (node->_member_expr == nullptr) {
-        return node->_return_ref ? Variant(current_obj_ref) : *current_obj_ref;
+        auto return_val = current_ref[current_ref.size() - 1];
+        current_ref.pop_back();
+
+        if (return_val->is_ref()) {
+            return *return_val;
+        }
+        else {
+            return Variant(return_val);
+        }
     }
     else {
-        node->_member_expr->return_ref(node->_return_ref);
         return node->_member_expr->accept(*this);
     }
 }
@@ -576,35 +692,42 @@ Variant EvaluatingVisitor::visit(MethodCallExpr *node) {
  */
 Variant EvaluatingVisitor::visit(MemberRefExpr *node) {
 
-    if (current_obj_ref->is_null()) {
+    if (current_ref.back()->is_null()) {
         RuntimeError::raise(ERR_NULL_POINTER_EXC, "Trying to access property " + node->_ident + " on null", node);
     }
 
     // object property access
-    if (current_obj_ref->get_type().type == OBJECT_T) {
-        auto obj = current_obj_ref->get<Object::SharedPtr>();
-        current_obj_ref = obj->access_property(node->_ident, context->get_class_ctx());
+    if (current_ref.back()->get_type().type == OBJECT_T) {
+        auto obj = current_ref.back()->get<Object::SharedPtr>();
+        current_ref.push_back(obj->access_property(node->_ident, context->get_class_ctx()));
     }
     // static method call
-    else if (current_obj_ref->get_type().type == CLASS_T) {
-        auto cl = current_obj_ref->get<Class*>();
-        current_obj_ref = std::make_shared<Variant>(cl->access_static_property(node->_ident, context->class_context));
+    else if (current_ref.back()->get_type().type == CLASS_T) {
+        auto cl = current_ref.back()->get<Class*>();
+        current_ref.push_back(std::make_shared<Variant>(cl->access_static_property(node->_ident,
+                context->class_context)));
     }
     // autoboxing method call
-    else if (val::base_class(current_obj_ref->get_type().type) != "") {
-        current_obj_ref =
-                std::make_shared<Variant>(GlobalContext::get_class(val::base_class(current_obj_ref->get_type().type))
-                    ->access_static_property(node->_ident, context->class_context));
+    else if (val::base_class(current_ref.back()->get_type().type) != "") {
+        current_ref.push_back(std::make_shared<Variant>(GlobalContext::get_class(val::base_class(current_ref
+                .back()->get_type().type))->access_static_property(node->_ident, context->class_context)));
     }
     else {
         RuntimeError::raise(ERR_BAD_ACCESS, "Cannot access property on given value", node);
     }
 
     if (node->_member_expr == nullptr) {
-        return node->_return_ref ? Variant(current_obj_ref) : *current_obj_ref;
+        auto return_val = current_ref[current_ref.size() - 1];
+        current_ref.pop_back();
+
+        if (return_val->is_ref()) {
+            return *return_val;
+        }
+        else {
+            return Variant(return_val);
+        }
     }
     else {
-        node->_member_expr->return_ref(node->_return_ref);
         return node->_member_expr->accept(*this);
     }
 }
@@ -615,7 +738,14 @@ Variant EvaluatingVisitor::visit(MemberRefExpr *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(ExplicitCastExpr *node) {
-    return node->_child->accept(*this).cast_to(util::typemap[node->_operator]);
+    Variant res = node->_child->accept(*this).cast_to(util::typemap[node->_operator]);
+    if (node->_member_expr == nullptr) {
+        return res;
+    }
+    else {
+        current_ref.push_back(std::make_shared<Variant>(res));
+        return *node->_member_expr->accept(*this);
+    }
 }
 
 /**
@@ -672,12 +802,6 @@ Variant EvaluatingVisitor::visit(SwitchStmt *node) {
     bool case_entered = false;
 
     for (auto case_stmt : node->cases) {
-        if (ev.context->broken || ev.context->returned) {
-            context->broken = ev.context->broken;
-            context->returned = ev.context->returned;
-            context->return_val = ev.context->return_val;
-            break;
-        }
 
         if (case_stmt->is_default) {
             default_case = case_stmt;
@@ -693,6 +817,13 @@ Variant EvaluatingVisitor::visit(SwitchStmt *node) {
         }
         else {
             case_stmt->accept(ev);
+        }
+
+        if (ev.context->broken || ev.context->returned) {
+            context->broken = ev.context->broken;
+            context->returned = ev.context->returned;
+            context->return_val = ev.context->return_val;
+            break;
         }
     }
 
@@ -744,6 +875,7 @@ Variant EvaluatingVisitor::visit(GotoStmt *node) {
 
     int last_index = label->visitor->start_index;
     label->visitor->start_index = cmpnd->goto_index + 1;
+    label->visitor->context->goto_encountered = false;
 
     cmpnd->accept(*label->visitor);
 
@@ -783,6 +915,7 @@ Variant EvaluatingVisitor::visit(LambdaExpr *node) {
 
     func->set_body(node->_body);
     func->set_context(context);
+    func->is_lambda(true);
 
     for (auto arg : node->_args) {
         arg->accept(*this);
@@ -793,7 +926,7 @@ Variant EvaluatingVisitor::visit(LambdaExpr *node) {
         return {func};
     }
     else {
-        current_obj_ref = std::make_shared<Variant>(func);
+        current_ref.push_back(std::make_shared<Variant>(func));
         return node->_member_expr->accept(*this);
     }
 }
@@ -818,8 +951,7 @@ Variant EvaluatingVisitor::visit(InputStmt *node) {
     std::string s;
     std::cin >> s;
 
-    DeclStmt decl(node->_ident, std::make_shared<LiteralExpr>(Variant(s).cast_to(node->_type)), TypeSpecifier());
-    decl.accept(*this);
+    context->get_variable(node->_ident)->strict_equals({ s });
 
     return { };
 }
@@ -844,33 +976,17 @@ Variant EvaluatingVisitor::visit(Expression *node) {
     return node->_child->accept(*this);
 }
 
+
 /**
- * Evaluates a class instantiation
+ * Evaluates a struct declaration
  * @param node
  * @return
  */
-Variant EvaluatingVisitor::visit(InstantiationExpr *node) {
-    Class* class_ = GlobalContext::get_class(node->class_name);
-    std::vector<Variant> args;
-    for (auto arg : node->constr_args) {
-        args.push_back(arg->accept(*this));
-    }
-
-    return { class_->instantiate(args) };
-}
-
-/**
- * Evaluates a class declaration
- * @param node
- * @return
- */
-Variant EvaluatingVisitor::visit(ClassDecl *node) {
-
+Variant EvaluatingVisitor::visit(StructDecl *node) {
     EvaluatingVisitor field_visitor;
     field_visitor.context->class_context = std::string(node->class_name);
 
     Function::SharedPtr constr;
-    // evaluate constructor
     if (node->constr == nullptr) {
         constr = std::make_shared<Function>("construct", TypeSpecifier());
     }
@@ -878,7 +994,8 @@ Variant EvaluatingVisitor::visit(ClassDecl *node) {
         constr = std::static_pointer_cast<Function>(node->constr->accept(field_visitor).get<Object::SharedPtr>());
     }
 
-    field_visitor.current_class = std::make_unique<Class>(node->class_name, *constr, node->am);
+    field_visitor.current_class = std::make_unique<Class>(node->class_name, *constr, AccessModifier::PUBLIC, false,
+            true);
 
     for (auto field : node->fields) {
         field->accept(field_visitor);
@@ -897,6 +1014,70 @@ Variant EvaluatingVisitor::visit(ClassDecl *node) {
     }
 
     GlobalContext::declare_class(std::move(field_visitor.current_class));
+
+    return {};
+}
+
+/**
+ * Evaluates a class declaration
+ * @param node
+ * @return
+ */
+Variant EvaluatingVisitor::visit(ClassDecl *node) {
+
+    EvaluatingVisitor field_visitor;
+    field_visitor.context->class_context = std::string(node->class_name);
+
+    if (node->is_interface) {
+        field_visitor.current_interface = std::make_unique<Interface>(node->class_name);
+        field_visitor.is_interface = true;
+    }
+    else if (node->is_abstract) {
+        field_visitor.current_class = std::make_unique<Class>(node->class_name, node->am, true);
+    }
+    else {
+        Function::SharedPtr constr;
+        // evaluate constructor
+        if (node->constr == nullptr) {
+            constr = std::make_shared<Function>("construct", TypeSpecifier());
+        }
+        else {
+            constr = std::static_pointer_cast<Function>(node->constr->accept(field_visitor).get<Object::SharedPtr>());
+        }
+
+        field_visitor.current_class = std::make_unique<Class>(node->class_name, *constr, node->am);
+    }
+
+    for (auto field : node->fields) {
+        field->accept(field_visitor);
+    }
+
+    for (auto method : node->methods) {
+        method->accept(field_visitor);
+    }
+
+    for (auto op : node->unary_operators) {
+        op.second->accept(field_visitor);
+    }
+
+    for (auto op : node->binary_operators) {
+        op.second->accept(field_visitor);
+    }
+
+    if (node->is_interface) {
+        GlobalContext::declare_interface(std::move(field_visitor.current_interface));
+    }
+    else {
+        if (node->extends != "") {
+            field_visitor.current_class->extend(node->extends);
+        }
+        for (auto impl : node->implements) {
+            field_visitor.current_class->implement(impl);
+        }
+
+        field_visitor.current_class->finalize();
+        GlobalContext::declare_class(std::move(field_visitor.current_class));
+    }
 
     return {};
 }
@@ -928,6 +1109,11 @@ Variant EvaluatingVisitor::visit(ConstrDecl *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(FieldDecl *node) {
+    if (is_interface) {
+        current_interface->declare_field(node->field_name, node->type, node->is_static);
+        return {};
+    }
+
     Variant::SharedPtr default_val = (node->default_val == nullptr) ? std::make_shared<Variant>() :
          std::make_shared<Variant>(node->default_val->accept(*this));
 
@@ -938,14 +1124,14 @@ Variant EvaluatingVisitor::visit(FieldDecl *node) {
         std::string get_name = util::generate_getter_name(node->field_name);
         const std::string field_name = node->field_name;
 
-        current_class->_add_dynamic_method(get_name, [field_name, get_name](Object* this_arg, std::vector<Variant> args)
+        current_class->add_method(get_name, Function([field_name, get_name](Object* this_arg, std::vector<Variant> args)
                 -> Variant {
             if (args.size() != 0) {
                 RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No matching call for function " + get_name + " found");
             }
 
             return *this_arg->access_property(field_name, "", true);
-        });
+        }, std::vector<TypeSpecifier>{}, TypeSpecifier(node->type)));
     }
 
     if (node->generate_setter || (public_class && !node->generate_getter && !node->generate_setter)) {
@@ -953,24 +1139,29 @@ Variant EvaluatingVisitor::visit(FieldDecl *node) {
         const std::string field_name = node->field_name;
         const TypeSpecifier type = node->type;
 
-        current_class->_add_dynamic_method(set_name, [field_name, type, set_name](Object* this_arg, std::vector<Variant>args)
-                -> Variant {
+        current_class->add_method(set_name, Function([field_name, type, set_name](Object* this_arg,
+                std::vector<Variant>args) -> Variant {
             if (args.size() != 1) {
                 RuntimeError::raise(ERR_WRONG_NUM_ARGS, "No matching call for function " + set_name + " found");
             }
             else if (!val::is_compatible(type, args[0].get_type())) {
-                RuntimeError::raise(ERR_TYPE_ERROR, "Trying to assign value of type " + val::typetostr(args[0].get_type())
-                    +  " to field of type " + val::typetostr(type));
+                RuntimeError::raise(ERR_TYPE_ERROR, "Trying to assign value of type " +
+                        val::typetostr(args[0].get_type()) + " to field of type " + val::typetostr(type));
             }
 
             this_arg->access_property(field_name, "", true)->strict_equals(args[0]);
 
             return {};
-        });
+        }, std::vector<TypeSpecifier>{type}, TypeSpecifier(VOID_T)));
     }
 
     current_class->declare_type(node->field_name, node->type);
     if (node->is_static) {
+        if (!node->type.nullable && default_val->is_null()) {
+            default_val->set_type(node->type);
+            default_val->set_default();
+
+        }
         current_class->add_static_property(node->field_name, node->type, default_val, node->am);
     }
     else {
@@ -986,6 +1177,17 @@ Variant EvaluatingVisitor::visit(FieldDecl *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(MethodDecl *node) {
+    if (is_interface) {
+        std::vector<TypeSpecifier> args;
+        for (auto arg : node->args) {
+            arg->accept(*this);
+            args.push_back(current_arg.type);
+        }
+
+        current_interface->declare_method(node->method_name, args, node->return_type, node->is_static);
+        return {};
+    }
+
     Function fun(node->method_name, node->return_type);
     Context::SharedPtr method_ctx = std::make_shared<Context>();
     method_ctx->class_context = context->class_context;
@@ -1014,6 +1216,17 @@ Variant EvaluatingVisitor::visit(MethodDecl *node) {
  * @return
  */
 Variant EvaluatingVisitor::visit(OperatorDecl *node) {
+    if (is_interface) {
+        std::vector<TypeSpecifier> args;
+        for (auto arg : node->args) {
+            arg->accept(*this);
+            args.push_back(current_arg.type);
+        }
+
+        current_interface->declare_method(node->_operator, args, node->return_type, false);
+        return {};
+    }
+
     TypeSpecifier return_type = node->return_type.type == VOID_T
         ? (node->is_binary ? util::binary_op_return_types[node->_operator]
                            : util::unary_op_return_types[node->_operator])
@@ -1042,14 +1255,26 @@ Variant EvaluatingVisitor::visit(OperatorDecl *node) {
     return {};
 }
 
+Variant EvaluatingVisitor::visit(UnaryOperator *node) {
+    if (node->_member_expr == nullptr) {
+        return evaluate_unary_op(node);
+    }
+    else {
+        current_ref.push_back(std::make_shared<Variant>(evaluate_unary_op(node)));
+        return *node->_member_expr->accept(*this);
+    }
+}
+
 /**
  * Evaluates a unary operator expression
  * @param node 
  * @return 
  */
-Variant EvaluatingVisitor::visit(UnaryOperator *node) {
+Variant EvaluatingVisitor::evaluate_unary_op(UnaryOperator *node) {
     std::string _operator = node->_operator;
-
+    
+    Variant result;
+    
     // stateful operators first
     if (_operator == "++" || _operator == "--") {
         Variant fst;
@@ -1103,7 +1328,13 @@ Variant EvaluatingVisitor::visit(UnaryOperator *node) {
 
         Class* class_ = GlobalContext::get_class(class_ident->_ident);
 
-        return { class_->instantiate(args) };
+        if (call == nullptr || call->_member_expr == nullptr) {
+            return {class_->instantiate(args)};
+        }
+        else {
+            current_ref.push_back(std::make_shared<Variant>(class_->instantiate(args)));
+            return call->_member_expr->accept(*this);
+        }
     }
     else if (_operator == "&") {
         IdentifierRefExpr::SharedPtr ident = std::static_pointer_cast<IdentifierRefExpr>(node->_child);
@@ -1132,7 +1363,7 @@ Variant EvaluatingVisitor::visit(UnaryOperator *node) {
     }
 
     if (_operator == "typeof") {
-        return val::type_name(child);
+        return child.get_type().to_string();
     }
     else if (_operator == "*") {
         return *child;
@@ -1153,12 +1384,22 @@ Variant EvaluatingVisitor::visit(UnaryOperator *node) {
     RuntimeError::raise(ERR_OP_UNDEFINED, "No definition found for unary operator " + _operator, node);
 }
 
+Variant EvaluatingVisitor::visit(BinaryOperator *node) {
+    if (node->_member_expr == nullptr) {
+        return evaluate_binary_op(node);
+    }
+    else {
+        current_ref.push_back(std::make_shared<Variant>(evaluate_binary_op(node)));
+        return *node->_member_expr->accept(*this);
+    }
+}
+
 /**
  * Evaluates a binary operator epxression
  * @param node 
  * @return 
  */
-Variant EvaluatingVisitor::visit(BinaryOperator *node) {
+Variant EvaluatingVisitor::evaluate_binary_op(BinaryOperator *node) {
     std::string _operator = node->get_operator();
     if (!(util::in_vector(util::binary_operators, _operator))) {
         RuntimeError::raise(ERR_OP_UNDEFINED, "Undefined binary operator " + _operator, node);
@@ -1167,9 +1408,9 @@ Variant EvaluatingVisitor::visit(BinaryOperator *node) {
     auto fst = node->_first_child->accept(*this);
     if (fst.get_type().type == OBJECT_T) {
         Object::SharedPtr obj = fst.get<Object::SharedPtr>();
-        if (obj->get_class()->has_binary_operator(_operator)) {
-            return obj->get_class()->call_binary_operator(_operator, obj, node->_second_child->accept(*this),
-                context->class_context);
+        auto snd = node->_second_child->accept(*this);
+        if (obj->get_class()->has_binary_operator(_operator, snd)) {
+            return obj->get_class()->call_binary_operator(_operator, obj, snd, context->class_context);
         }
     }
 

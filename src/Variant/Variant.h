@@ -7,13 +7,15 @@
 
 #include <string>
 #include <cmath>
-#include "../Exceptions.h"
+#include <vector>
+#include "../Message/Exceptions.h"
 
 class Function;
 class Object;
 class Array;
 class Expression;
 class Class;
+class Interface;
 
 namespace cdot {
 namespace var {
@@ -38,6 +40,7 @@ enum ValueType : unsigned int {
     VOID_T,
     AUTO_T,
     CLASS_T,
+    INTERFACE_T,
     REF_T
 };
 
@@ -51,6 +54,11 @@ namespace val {
     extern std::string type_name(Variant);
     extern bool is_compatible(ValueType , ValueType);
     extern bool is_compatible(TypeSpecifier , TypeSpecifier);
+    extern bool is_castable(TypeSpecifier, TypeSpecifier);
+    extern bool implicitly_castable(ValueType, ValueType);
+
+    extern ValueType simple_arithmetic_return_type(TypeSpecifier, TypeSpecifier);
+    extern ValueType division_return_type(TypeSpecifier, TypeSpecifier);
 }
 
 struct TypeSpecifier {
@@ -80,7 +88,7 @@ struct TypeSpecifier {
     }
 
     bool operator==(TypeSpecifier ts) {
-        return (type == OBJECT_T && ts.type == OBJECT_T && class_name == ts.class_name) || type == ts.type;
+        return type == ts.type && class_name == ts.class_name;
     }
     bool operator!=(TypeSpecifier ts) {
         return !operator==(ts);
@@ -100,13 +108,34 @@ struct TypeSpecifier {
     bool is_primitive = true;
     bool is_numeric = false;
     bool nullable = false;
+    bool is_function = false;
+    std::vector<TypeSpecifier> args = std::vector<TypeSpecifier>();
+    TypeSpecifier* return_type = nullptr;
 
     std::string to_string() {
-        if (type == OBJECT_T) {
-            return class_name;
+        std::string _nullable = nullable ? "?" : "";
+        if (is_array) {
+            return type == OBJECT_T ? class_name : val::typetostr(type) + "[]" + _nullable;
+        }
+        if (type == OBJECT_T && !is_function) {
+            return class_name + _nullable;
+        }
+        if (type == CLASS_T) return "Class";
+        if (type == INTERFACE_T) return "Interface";
+
+        if (is_function) {
+            std::string str = "(";
+            for (int i = 0; i < args.size(); ++i) {
+                str += args.at(i).to_string();
+                if (i < args.size() - 1) {
+                    str += ", ";
+                }
+            }
+
+            return str + ") -> " + return_type->to_string();
         }
 
-        return val::typetostr(type);
+        return val::typetostr(type) + _nullable;
     }
 };
 
@@ -127,6 +156,7 @@ protected:
         std::shared_ptr<Object> o_val;
         std::shared_ptr<Variant> ref;
         Class* class_val;
+        Interface* interface_val;
     };
 
     std::string s_val;
@@ -146,6 +176,7 @@ public:
 
     ~Variant();
     Variant();
+    Variant(TypeSpecifier);
     Variant(const Variant&);
     Variant(double);
     Variant(int);
@@ -154,13 +185,16 @@ public:
     Variant(char);
     Variant(bool);
     Variant(std::shared_ptr<Object>);
+    Variant(std::shared_ptr<Function>);
     Variant(std::shared_ptr<Variant>);
     Variant(Class*);
+    Variant(Interface*);
     Variant(std::string);
 
     TypeSpecifier get_type() const;
     void is_any_type(bool = true);
     bool is_ref();
+    void set_default();
     void is_initialized(bool init) {
         initialized = init;
     }

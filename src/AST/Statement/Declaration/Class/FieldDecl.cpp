@@ -18,14 +18,6 @@ FieldDecl::FieldDecl(std::string field_name, TypeSpecifier type, AccessModifier 
 
 }
 
-FieldDecl::FieldDecl(const FieldDecl& cp) {
-    set_parent(cp._parent);
-}
-
-AstNode::SharedPtr FieldDecl::clone() const {
-    return std::make_shared<FieldDecl>(*this);
-}
-
 std::vector<AstNode::SharedPtr> FieldDecl::get_children() {
     return (default_val != nullptr) ? std::vector<AstNode::SharedPtr>{ default_val } : std::vector<AstNode::SharedPtr>{};
 }

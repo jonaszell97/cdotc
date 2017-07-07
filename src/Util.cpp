@@ -9,7 +9,7 @@
 namespace util {
     int min_op_precedence = 0;
 
-    std::map<std::string, int> op_precedence {
+    std::unordered_map<std::string, int> op_precedence {
             {"?", 0},
             {":", 0},
             {"=", 0},
@@ -41,7 +41,7 @@ namespace util {
             {"..", 12}
     };
 
-    std::map<std::string, int> unary_op_precedence {
+    std::unordered_map<std::string, int> unary_op_precedence {
             {"!", 0},
             {"&", 0},
             {"*", 0},
@@ -189,6 +189,11 @@ namespace util {
             "private",
             "protected",
             "static",
+            "abstract",
+            "extends",
+            "interface",
+            "enum",
+            "implements",
             "namespace",
             "typeof",
             "continue",
@@ -196,10 +201,15 @@ namespace util {
             "get",
             "set",
             "goto",
-            "operator"
+            "operator",
+            "module",
+            "export",
+            "import",
+            "as",
+            "from"
     };
 
-    std::map<ValueType, std::string> types = {
+    std::unordered_map<ValueType, std::string> types = {
             {INT_T, "int"},
             {LONG_T, "long"},
             {FLOAT_T, "float"},
@@ -214,7 +224,7 @@ namespace util {
             {REF_T, "reference"}
     };
 
-    std::map<ValueType, std::string> classmap = {
+    std::unordered_map<ValueType, std::string> classmap = {
             {INT_T, "Integer"},
             {LONG_T, "Integer"},
             {FLOAT_T, "Double"},
@@ -225,13 +235,13 @@ namespace util {
             {OBJECT_T, "Object"}
     };
 
-    std::map<AccessModifier, std::string> am_map = {
+    std::unordered_map<AccessModifier, std::string> am_map = {
             {AccessModifier::PUBLIC, "public"},
             {AccessModifier::PRIVATE, "private"},
             {AccessModifier::PROTECTED, "protected"}
     };
 
-    std::map<std::string, ValueType> typemap = {
+    std::unordered_map<std::string, ValueType> typemap = {
             {"int", INT_T},
             {"long", LONG_T},
             {"double", DOUBLE_T},
@@ -335,8 +345,6 @@ namespace util {
                     res += "\\t"; break;
                 case '\b':
                     res += "\\b"; break;
-                case '\e':
-                    res += "\\e"; break;
                 default:
                     res += c; break;
             }
@@ -345,7 +353,11 @@ namespace util {
         return res;
     }
 
-    std::map<ValueType, std::vector<ValueType>> type_conversions = {
+    bool is_reversible(std::string op) {
+        return op == "*" || op == "+" || op == "&" || op == "|" || op == "^";
+    }
+
+    std::unordered_map<ValueType, std::vector<ValueType>> implicit_type_conversions = {
             {INT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
             {LONG_T, {DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
             {FLOAT_T, {DOUBLE_T, STRING_T}},
@@ -353,5 +365,77 @@ namespace util {
             {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, STRING_T, CHAR_T, INT_T}},
             {CHAR_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, INT_T}},
             {STRING_T, {}},
+            {VOID_T, {BOOL_T}},
     };
+
+    std::unordered_map<ValueType, std::vector<ValueType>> explicit_type_conversions = {
+            {INT_T, {INT_T, LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
+            {LONG_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {FLOAT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {DOUBLE_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {CHAR_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T, INT_T}},
+            {STRING_T, {}},
+    };
+
+    std::string field_to_symbol(std::string name, TypeSpecifier type, bool is_static) {
+        return "__F_" + name + "_" + type_to_symbol(type) + "_" + (is_static ? "_st" : "");
+    }
+
+    std::string method_to_symbol(std::string name, std::vector<TypeSpecifier> args, TypeSpecifier return_type, bool
+        is_static) {
+        std::string symbol = "$M_" + name + "_" + type_to_symbol(return_type);
+        for (auto arg : args) {
+            symbol += "_" + type_to_symbol(arg);
+        }
+
+        if (is_static) {
+            symbol += "_st";
+        }
+
+        return symbol;
+    }
+
+    std::string fun_to_symbol(std::string name, std::vector<TypeSpecifier> args, bool is_static) {
+        std::string symbol = "$F_" + std::to_string(name.length()) + name + (args.size() > 0 ? "_" : "");
+        for (auto arg : args) {
+            symbol += type_to_symbol(arg);
+        }
+
+        if (is_static) {
+            symbol += "_st";
+        }
+
+        return symbol;
+    }
+
+    std::string method_to_symbol(std::string name, std::vector<TypeSpecifier> args, bool is_static) {
+        std::string symbol = "$M_" + name;
+        for (auto arg : args) {
+            symbol += "_" + type_to_symbol(arg);
+        }
+
+        if (is_static) {
+            symbol += "_st";
+        }
+
+        return symbol;
+    }
+
+    std::string type_to_symbol(TypeSpecifier type) {
+        switch (type.type) {
+            case INT_T: return "1i";
+            case LONG_T: return "1l";
+            case FLOAT_T: return "1f";
+            case DOUBLE_T: return "1d";
+            case BOOL_T: return "1b";
+            case CHAR_T: return "1c";
+            case VOID_T: return "1v";
+            case STRING_T: return "6String";
+        }
+
+        std::string type_name = type.to_string();
+
+        return std::to_string(type_name.length()) + type_name;
+    }
 }

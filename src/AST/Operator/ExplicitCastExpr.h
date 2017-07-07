@@ -11,8 +11,6 @@
 class ExplicitCastExpr : public Operator {
 public:
     ExplicitCastExpr(std::string);
-    ExplicitCastExpr(const ExplicitCastExpr& cp);
-    virtual AstNode::SharedPtr clone() const;
 
     inline std::string get_operator() {
         return _operator;
@@ -32,6 +30,7 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class TypeCheckVisitor;
 
 protected:
     std::string _operator;
