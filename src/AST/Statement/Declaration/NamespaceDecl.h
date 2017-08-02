@@ -5,7 +5,6 @@
 #ifndef CDOT_MODULEDECL_H
 #define CDOT_MODULEDECL_H
 
-
 #include "../CompoundStmt.h"
 
 class ImportStmt;
@@ -23,13 +22,32 @@ public:
         exports.push_back(_export);
     }
 
+    inline void add_statements(std::vector<Statement::SharedPtr> stmts) {
+        _statements.reserve(stmts.size());
+        _statements.insert(_statements.begin(), stmts.begin(), stmts.end());
+    }
+
+    inline std::vector<Statement::SharedPtr> get_statements() {
+        return _statements;
+    }
+
     typedef std::shared_ptr<ModuleDecl> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::MODULE_DECL;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;

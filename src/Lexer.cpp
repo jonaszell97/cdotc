@@ -236,6 +236,8 @@ char Tokenizer::escape_char(char c) {
             return '\"';
         case '\'':
             return '\'';
+        case '0':
+            return '\0';
         default:
             return c;
     }

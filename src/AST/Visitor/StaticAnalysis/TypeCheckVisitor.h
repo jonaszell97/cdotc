@@ -5,17 +5,31 @@
 #ifndef CDOT_TYPECHECKVISITOR_H
 #define CDOT_TYPECHECKVISITOR_H
 
-#include "Visitor.h"
-#include "../../Message/Warning.h"
+#include "../Visitor.h"
+#include "../../../Message/Warning.h"
 
 class AstNode;
+
+enum class ClassPropType {
+    METHOD,
+    FIELD
+};
+
+struct ClassProp {
+    typedef std::unique_ptr<ClassProp> UniquePtr;
+private:
+    ClassProp();
+};
+
+struct ClassField : public ClassProp {
+
+    typedef std::unique_ptr<ClassField> UniquePtr;
+};
 
 class TypeCheckVisitor : public Visitor {
 public:
     TypeCheckVisitor(TypeCheckVisitor *parent = nullptr);
-    ~TypeCheckVisitor() {
-        dump();
-    }
+
     void dump();
 
     virtual Variant visit(ModuleDecl*);
@@ -32,8 +46,6 @@ public:
     virtual Variant visit(ArrayLiteral*);
     virtual Variant visit(LiteralExpr*);
     virtual Variant visit(StringLiteral*);
-    virtual Variant visit(ObjectLiteral*);
-    virtual Variant visit(ObjectPropExpr*);
     virtual Variant visit(ArrayAccessExpr*);
     virtual Variant visit(CallExpr*);
     virtual Variant visit(MemberRefExpr*);
@@ -67,8 +79,10 @@ protected:
 
     std::unordered_multimap<std::string, TypeSpecifier> variables = {};
 
-    static std::vector<std::string> classes;
     static std::vector<std::string> interfaces;
+    static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> interface_props;
+
+    static std::vector<std::string> classes;
     static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> class_props;
     static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> static_class_props;
 
@@ -80,11 +94,14 @@ protected:
     bool fun_call_compatible(TypeSpecifier, std::vector<TypeSpecifier>);
 
     TypeSpecifier latest_type();
-    TypeSpecifier get_var(std::string, AstNode* = nullptr);
-    TypeSpecifier get_fun(std::string, std::vector<TypeSpecifier>, AstNode* = nullptr);
+    std::pair<TypeSpecifier, std::string> get_var(std::string, AstNode* = nullptr);
+    std::pair<TypeSpecifier, std::string> get_fun(std::string, std::vector<TypeSpecifier>, AstNode* = nullptr);
+
+    std::string decl_ident;
 
     TypeCheckVisitor *parent;
     std::vector<TypeCheckVisitor*> children = {};
+    std::string scope = "0";
 
     inline void add_child(TypeCheckVisitor *child) {
         children.push_back(child);
@@ -102,12 +119,14 @@ protected:
     int branches = 1;
     int returned = 0;
     void return_(TypeSpecifier ret_type, AstNode *cause = nullptr);
+
     inline void reset() {
         branches = 1;
         returned = 0;
         return_type = TypeSpecifier();
         newly_created = true;
     }
+
     bool continuable = false;
     bool breakable = false;
 };

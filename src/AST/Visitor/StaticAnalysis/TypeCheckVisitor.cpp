@@ -4,50 +4,12 @@
 
 #include <iostream>
 #include "TypeCheckVisitor.h"
-#include "../AstNode.h"
-#include "../Statement/CompoundStmt.h"
-#include "../Expression/RefExpr/IdentifierRefExpr.h"
-#include "../Expression/RefExpr/MemberRefExpr.h"
-#include "../Statement/Declaration/DeclStmt.h"
-#include "../Statement/ControlFlow/ForStmt.h"
-#include "../Statement/ControlFlow/WhileStmt.h"
-#include "../Statement/Declaration/FunctionDecl.h"
-#include "../Expression/Expression.h"
-#include "../Expression/Literal/LiteralExpr.h"
-#include "../Expression/Literal/StringLiteral.h"
-#include "../Expression/Literal/ObjectLiteral.h"
-#include "../Expression/Literal/LambdaExpr.h"
-#include "../Expression/RefExpr/ArrayAccessExpr.h"
-#include "../Expression/RefExpr/MethodCallExpr.h"
-#include "../Expression/RefExpr/FunctionCallExpr.h"
-#include "../Expression/RefExpr/CallExpr.h"
-#include "../Operator/BinaryOperator.h"
-#include "../Operator/UnaryOperator.h"
-#include "../Operator/ExplicitCastExpr.h"
-#include "../Operator/TertiaryOperator.h"
-#include "../Statement/ControlFlow/ContinueStmt.h"
-#include "../Statement/ControlFlow/BreakStmt.h"
-#include "../Statement/ControlFlow/IfStmt.h"
-#include "../Statement/IO/OutputStmt.h"
-#include "../Statement/ControlFlow/ReturnStmt.h"
-#include "../Statement/IO/InputStmt.h"
-#include "../Statement/ControlFlow/SwitchStmt.h"
-#include "../Statement/ControlFlow/CaseStmt.h"
-#include "../Statement/Declaration/Class/StructDecl.h"
-#include "../Statement/Declaration/Class/ClassDecl.h"
-#include "../Statement/Declaration/Class/ConstrDecl.h"
-#include "../Statement/Declaration/Class/FieldDecl.h"
-#include "../Statement/Declaration/Class/MethodDecl.h"
-#include "../Statement/Declaration/Class/OperatorDecl.h"
-#include "../Expression/Literal/ArrayLiteral.h"
-#include "../Statement/Declaration/ModuleDecl.h"
-#include "../Statement/ImportStmt.h"
-#include "../Statement/ExportStmt.h"
-#include "../../Util.h"
-#include "../../Message/Warning.h"
+#include "../Visitor.cpp"
+#include "../../SymbolTable.h"
 
 std::vector<std::string> TypeCheckVisitor::classes = {};
 std::vector<std::string> TypeCheckVisitor::interfaces = {};
+std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> TypeCheckVisitor::interface_props = {};
 std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> TypeCheckVisitor::class_props = {};
 std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> TypeCheckVisitor::static_class_props = {};
 
@@ -56,6 +18,7 @@ TypeCheckVisitor::TypeCheckVisitor(TypeCheckVisitor *parent) : parent(parent), v
         parent->add_child(this);
         continuable = parent->continuable;
         breakable = parent->breakable;
+        scope = parent->scope + std::to_string(parent->children.size());
     }
 }
 
@@ -84,6 +47,7 @@ void TypeCheckVisitor::declare_var(std::string name, TypeSpecifier type, AstNode
         RuntimeError::raise(ERR_REDECLARED_VAR, "Redeclaration of variable " + name, cause);
     }
 
+    SymbolTable::insert(name, type, scope);
     variables.emplace(name, type);
 }
 
@@ -94,14 +58,16 @@ void TypeCheckVisitor::declare_var(std::string name, TypeSpecifier type, AstNode
  * @param ret
  * @param cause
  */
-void TypeCheckVisitor::declare_fun(std::string fun, std::vector<TypeSpecifier> args, TypeSpecifier ret, AstNode *cause) {
+void TypeCheckVisitor::declare_fun(std::string fun, std::vector<TypeSpecifier> args, TypeSpecifier ret,
+        AstNode *cause) {
     auto overloads = variables.equal_range(fun);
     for (auto it = overloads.first; it != overloads.second; ++it) {
         auto& overload = it->second;
         if (overload.args.size() == args.size()) {
             bool clash = true;
-            for (int i = 0; i < args.size(); ++i) {
-                if (!val::is_compatible(overload.args.at(i), args.at(i))) {
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (!val::is_compatible(overload.args.at(i), args.at(i)) && !val::is_compatible(args.at(i), overload
+                        .args.at(i))) {
                     clash = false;
                 }
             }
@@ -118,6 +84,7 @@ void TypeCheckVisitor::declare_fun(std::string fun, std::vector<TypeSpecifier> a
     ts.args = args;
     ts.return_type = new TypeSpecifier(ret);
 
+    SymbolTable::insert(fun, new TypeSpecifier(ret), args, scope);
     variables.emplace(fun, ts);
 }
 
@@ -158,26 +125,29 @@ TypeSpecifier TypeCheckVisitor::latest_type() {
  * @param cause
  * @return
  */
-TypeSpecifier TypeCheckVisitor::get_var(std::string ident, AstNode* cause) {
+std::pair<TypeSpecifier, std::string> TypeCheckVisitor::get_var(std::string ident, AstNode* cause) {
     if (std::find(classes.begin(), classes.end(), ident) != classes.end()) {
         TypeSpecifier ts(CLASS_T);
         ts.class_name = ident;
 
-        return ts;
+        return { ts, "0" };
     }
 
     TypeCheckVisitor *current = this;
+    std::string context = scope;
 
     while (current != nullptr && current->variables.find(ident) == current->variables.end()) {
         current = current->parent;
     }
 
-    if (current == nullptr) {
+    if (current == nullptr || current->variables.find(ident) == current->variables.end()) {
         RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Reference to undeclared identifier " + ident, cause);
     }
 
-    auto var = variables.equal_range(ident);
-    return var.first->second;
+    context = current->scope;
+
+    auto var = current->variables.equal_range(ident);
+    return { var.first->second, context };
 }
 
 /**
@@ -187,18 +157,28 @@ TypeSpecifier TypeCheckVisitor::get_var(std::string ident, AstNode* cause) {
  * @param cause
  * @return
  */
-TypeSpecifier TypeCheckVisitor::get_fun(std::string fun, std::vector<TypeSpecifier> args, AstNode* cause) {
-    if (variables.find(fun) == variables.end()) {
+std::pair<TypeSpecifier, std::string> TypeCheckVisitor::get_fun(std::string fun, std::vector<TypeSpecifier> args,
+        AstNode* cause) {
+
+    TypeCheckVisitor* current = this;
+    std::string context;
+    while (current != nullptr && current->variables.find(fun) == current->variables.end()) {
+        current = current->parent;
+    }
+
+    if (current == nullptr || current->variables.find(fun) == current->variables.end()) {
         RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Function " + fun + " does not exist", cause);
     }
 
-    auto overloads = variables.equal_range(fun);
+    context = current->scope;
+
+    auto overloads = current->variables.equal_range(fun);
     TypeSpecifier match;
     bool found_match = false;
     for (auto it = overloads.first; it != overloads.second; ++it) {
         auto& overload = it->second;
         int broke = false;
-        for (int i = 0; i < overload.args.size(); ++i) {
+        for (size_t i = 0; i < overload.args.size(); ++i) {
             if (i < args.size()) {
                 if (!val::is_compatible(args.at(i), overload.args.at(i))) {
                     broke = true;
@@ -215,12 +195,12 @@ TypeSpecifier TypeCheckVisitor::get_fun(std::string fun, std::vector<TypeSpecifi
             }
         }
 
-        if (found_match) {
+        if (found_match && !broke) {
             RuntimeError::raise(ERR_TYPE_ERROR, "Call to function " + fun + " is ambiguous", cause);
         }
 
         if (!broke) {
-            match = *overload.return_type;
+            match = overload;
             found_match = true;
         }
     }
@@ -229,7 +209,7 @@ TypeSpecifier TypeCheckVisitor::get_fun(std::string fun, std::vector<TypeSpecifi
         RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "No matching call for function " + fun + " found", cause);
     }
 
-    return match;
+    return { match, context };
 }
 
 /**
@@ -319,6 +299,7 @@ void TypeCheckVisitor::return_(TypeSpecifier ret_type, AstNode *cause) {
  * @return
  */
 Variant TypeCheckVisitor::visit(ModuleDecl *node) {
+    newly_created = false;
     for (auto child : node->get_children()) {
         child->accept(*this);
     }
@@ -362,7 +343,7 @@ Variant TypeCheckVisitor::visit(CompoundStmt *node) {
  */
 Variant TypeCheckVisitor::visit(FunctionDecl *node) {
     std::vector<TypeSpecifier> arg_types;
-    TypeCheckVisitor t(*this);
+    TypeCheckVisitor t(this);
     t.check_return_type = true;
     t.declared_return_type = node->_return_type;
     t.returnable = true;
@@ -390,12 +371,14 @@ Variant TypeCheckVisitor::visit(FunctionDecl *node) {
  * @return
  */
 Variant TypeCheckVisitor::visit(IdentifierRefExpr *node) {
+    auto res = get_var(node->_ident, node);
+    node->bind(SymbolTable::symbol_from_var(node->_ident, res.second));
     if (node->_member_expr == nullptr) {
-        return get_var(node->_ident, node);
+        return res.first;
     }
     else {
-        Variant v = get_var(node->_ident, node);
-        push_type(v.get_type());
+        push_type(res.first);
+        decl_ident = node->_ident;
 
         return node->_member_expr->accept(*this);
     }
@@ -411,27 +394,41 @@ Variant TypeCheckVisitor::visit(DeclStmt *node) {
         auto& ident = node->decl_identifiers[i];
         auto& decl = node->declarations[i];
 
+        if (decl.first.is_array) {
+            if (decl.first.length == nullptr) {
+                RuntimeError::raise(ERR_TYPE_ERROR, "Array length must be a static constant", node);
+            }
+
+            TypeSpecifier length = decl.first.length->accept(*this).get_type();
+            if (!length.static_const) {
+                RuntimeError::raise(ERR_TYPE_ERROR, "Array length must be a static constant", node);
+            }
+        }
+
         if (decl.second != nullptr) {
 
             push_type(decl.first);
 
+            decl_ident = ident;
             TypeSpecifier given_type = decl.second->accept(*this).get_type();
+            decl.first.static_const = given_type.static_const;
 
             if (decl.first.type == AUTO_T) {
                 decl.first = given_type;
             }
             else if (given_type != decl.first) {
                 RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible types " + given_type.to_string() + " and " +
-                        decl.first.to_string());
+                    decl.first.to_string(), node);
             }
 
             pop_type();
         }
-        else if (!decl.first.nullable) {
+        else if (!decl.first.nullable && !decl.first.is_primitive) {
             RuntimeError::raise(ERR_TYPE_ERROR, "Expected non-nullable variable " + ident + " to be defined",
                 node);
         }
 
+        node->bind(SymbolTable::symbol_from_var(ident, scope));
         declare_var(ident, decl.first, node);
     }
 
@@ -444,7 +441,7 @@ Variant TypeCheckVisitor::visit(DeclStmt *node) {
  * @return
  */
 Variant TypeCheckVisitor::visit(ForStmt *node) {
-    TypeCheckVisitor init_visitor(*this);
+    TypeCheckVisitor init_visitor(this);
     node->_initialization->accept(init_visitor);
     node->_increment->accept(init_visitor);
     node->_termination->accept(init_visitor);
@@ -514,29 +511,10 @@ Variant TypeCheckVisitor::visit(LiteralExpr *node) {
  * @return
  */
 Variant TypeCheckVisitor::visit(StringLiteral *node) {
-    return { TypeSpecifier(STRING_T) };
-}
+    TypeSpecifier res = TypeSpecifier(STRING_T);
+    res.static_const = true;
 
-/**
- * to be removed
- * @param node
- * @return
- */
-[[deprecated]]
-Variant TypeCheckVisitor::visit(ObjectLiteral *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
-}
-
-Variant TypeCheckVisitor::visit(ObjectPropExpr *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
+    return { res };
 }
 
 /**
@@ -585,15 +563,14 @@ Variant TypeCheckVisitor::visit(FunctionCallExpr *node) {
         arg_types.push_back(arg->accept(*this).get_type());
     }
 
-    if (!latest_type().is_function) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Cannot call value of type " + latest_type().to_string(), node);
-    }
-
+    auto func = get_fun(node->_ident, arg_types, node);
+    node->bind(SymbolTable::symbol_from_fun(node->_ident, func.first.args, func.second));
     if (node->_member_expr == nullptr) {
-        return get_fun(node->_ident, arg_types, node);
+        return { func.first };
     }
     else {
-        push_type(get_fun(node->_ident, arg_types, node));
+        push_type(func.first);
+
         return node->_member_expr->accept(*this);
     }
 }
@@ -611,6 +588,12 @@ Variant TypeCheckVisitor::visit(MemberRefExpr *node) {
 
     auto props = latest_type().type == CLASS_T ? static_class_props.equal_range(latest_type().class_name)
                                                : class_props.equal_range(latest_type().class_name);
+
+    std::string symbol = SymbolTable::symbol_from_var(latest_type().type == CLASS_T ? latest_type().class_name :
+          decl_ident + "_" + node->_ident, scope);
+    node->bind(symbol);
+
+    decl_ident += "_" + node->_ident;
     for (auto it = props.first; it != props.second; ++it) {
         if (it->second.first == node->_ident) {
             if (node->_member_expr == nullptr) {
@@ -642,6 +625,7 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
         std::vector<TypeSpecifier> arg_types{ snd };
         for (auto it = props.first; it != props.second; ++it) {
             if (it->second.first == op &&  fun_call_compatible(it->second.second, arg_types)) {
+                node->bind(SymbolTable::symbol_from_fun(fst.class_name + "_" + op, it->second.second.args, scope));
                 return *it->second.second.return_type;
             }
         }
@@ -651,6 +635,7 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
         std::vector<TypeSpecifier> arg_types{ fst };
         for (auto it = props.first; it != props.second; ++it) {
             if (it->second.first == op &&  fun_call_compatible(it->second.second, arg_types)) {
+                node->bind(SymbolTable::symbol_from_fun(snd.class_name + "_" + op, it->second.second.args, scope));
                 return *it->second.second.return_type;
             }
         }
@@ -692,7 +677,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                 .to_string() + " and " + snd.to_string(), node);
         }
 
-        return { TypeSpecifier(ret_type) };
+        TypeSpecifier res = TypeSpecifier(ret_type);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
     else if (op == "/") {
         ValueType ret_type = val::division_return_type(fst, snd);
@@ -701,7 +689,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                 snd.to_string(), node);
         }
 
-        return { TypeSpecifier(ret_type) };
+        TypeSpecifier res = TypeSpecifier(ret_type);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
     // only applicable to int and long
     else if (op == "%" || op == "&" || op == "|" || op == "^" || op == "<<" || op == ">>") {
@@ -714,8 +705,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                 .to_string() + " and " + snd.to_string(), node);
         }
 
-        return (fst.type == LONG_T || snd.type == LONG_T) ? Variant{ TypeSpecifier(LONG_T) } :
-           Variant{ TypeSpecifier(INT_T) };
+        TypeSpecifier res = TypeSpecifier((fst.type == LONG_T || snd.type == LONG_T) ? LONG_T : INT_T);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
     // only applicable to bool
     else if (op == "&&" || op == "||") {
@@ -724,7 +717,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                 .to_string() + " and " + snd.to_string(), node);
         }
 
-        return { TypeSpecifier(BOOL_T) };
+        TypeSpecifier res = TypeSpecifier(BOOL_T);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
     else if (op == "..") {
         if (!val::implicitly_castable(fst.type, INT_T) && !val::implicitly_castable(fst.type, LONG_T)) {
@@ -739,6 +735,7 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
         TypeSpecifier ts;
         ts.type = (fst.type == LONG_T || snd.type == LONG_T) ? LONG_T : INT_T;
         ts.is_array = true;
+        ts.static_const = fst.static_const && snd.static_const;
 
         return ts;
     }
@@ -755,7 +752,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                 .to_string() + " and " + snd.to_string() + " for equality", node);
         }
 
-        return { TypeSpecifier(BOOL_T) };
+        TypeSpecifier res = TypeSpecifier(BOOL_T);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
     else if (op == "<=" || op == ">=" || op == "<" || op == ">") {
         if (!fst.is_primitive || !snd.is_primitive) {
@@ -763,7 +763,10 @@ Variant TypeCheckVisitor::visit(BinaryOperator *node) {
                     .to_string() + " and " + snd.to_string(), node);
         }
 
-        return { TypeSpecifier(BOOL_T) };
+        TypeSpecifier res = TypeSpecifier(BOOL_T);
+        res.static_const = fst.static_const && snd.static_const;
+
+        return { res };
     }
 
     RuntimeError::raise(ERR_TYPE_ERROR, "Unknown binary operator '" + op + "'", node);
@@ -808,6 +811,7 @@ Variant TypeCheckVisitor::visit(TertiaryOperator *node) {
         std::vector<TypeSpecifier> arg_types{};
         for (auto it = props.first; it != props.second; ++it) {
             if (it->second.first == "toBool" && fun_call_compatible(it->second.second, arg_types)) {
+                node->bind(SymbolTable::symbol_from_fun(cond.class_name + "_toBool", it->second.second.args, scope));
                 return *it->second.second.return_type;
             }
         }
@@ -859,6 +863,16 @@ Variant TypeCheckVisitor::visit(UnaryOperator *node) {
                 ref_expr.get());
         }
 
+        if (decl_ident != "") {
+            auto props = class_props.equal_range(ref_expr->_ident);
+            for (auto it = props.first; it != props.second; ++it) {
+                if (it->second.second.is_method) {
+                    continue;
+                }
+                SymbolTable::insert(decl_ident + "_" + it->second.first, it->second.second, scope);
+            }
+        }
+
         TypeSpecifier ts(OBJECT_T);
         ts.class_name = ref_expr->_ident;
 
@@ -871,7 +885,10 @@ Variant TypeCheckVisitor::visit(UnaryOperator *node) {
         }
     }
     else if (op == "typeof") {
-        return { TypeSpecifier(STRING_T) };
+        TypeSpecifier res = TypeSpecifier(STRING_T);
+        res.static_const = true;
+
+        return { res };
     }
 
     Variant target = node->_child->accept(*this);
@@ -881,6 +898,8 @@ Variant TypeCheckVisitor::visit(UnaryOperator *node) {
         std::vector<TypeSpecifier> arg_types{};
         for (auto it = props.first; it != props.second; ++it) {
             if (it->second.first == op && fun_call_compatible(it->second.second, arg_types)) {
+                node->bind(SymbolTable::symbol_from_fun(target.get_type().class_name + "_" + op,
+                    it->second.second.args, scope));
                 return *it->second.second.return_type;
             }
         }
@@ -914,7 +933,10 @@ Variant TypeCheckVisitor::visit(UnaryOperator *node) {
             Warning::issue("Implicit cast to boolean", node->_child.get());
         }
 
-        return { TypeSpecifier(BOOL_T) };
+        TypeSpecifier res = TypeSpecifier(BOOL_T);
+        res.static_const = target.get_type().static_const;
+
+        return { res };
     }
     else if (op == "*") {
         return { target.get_type() };
@@ -1189,10 +1211,14 @@ Variant TypeCheckVisitor::visit(MethodCallExpr *node) {
         arg_types.push_back(arg->accept(*this).get_type());
     }
 
-    auto props = latest_type().type == CLASS_T ? static_class_props.equal_range(latest_type().class_name)
+    bool static_ = latest_type().type == CLASS_T;
+    auto props = static_ ? static_class_props.equal_range(latest_type().class_name)
                                                : class_props.equal_range(latest_type().class_name);
+
     for (auto it = props.first; it != props.second; ++it) {
         if (it->second.first == node->_ident) {
+            node->bind(SymbolTable::symbol_from_fun(latest_type().class_name + "_" + node->_ident + (static_ ? "!st"
+                    : ""), it->second.second.args, scope));
             if (node->_member_expr == nullptr) {
                 return *it->second.second.return_type;
             }
@@ -1219,6 +1245,8 @@ Variant TypeCheckVisitor::visit(ClassDecl *node) {
     t.class_name = node->class_name;
     push_type(t);
 
+    SymbolTable::declare_class(node->class_name);
+
     if (node->constr) {
         node->constr->accept(*this);
     }
@@ -1239,6 +1267,8 @@ Variant TypeCheckVisitor::visit(ClassDecl *node) {
         op.second->accept(*this);
     }
 
+    SymbolTable::insert(node->class_name, t, scope);
+
     return {};
 }
 
@@ -1248,7 +1278,15 @@ Variant TypeCheckVisitor::visit(ClassDecl *node) {
  * @return
  */
 Variant TypeCheckVisitor::visit(ConstrDecl *node) {
-    declare_var(latest_type().class_name + "_constr", TypeSpecifier(OBJECT_T), node);
+    TypeCheckVisitor t(this);
+    // constructor is not returnable
+    node->body->accept(t);
+
+    TypeSpecifier* ts = new TypeSpecifier(OBJECT_T);
+    ts->class_name = latest_type().class_name;
+
+    SymbolTable::insert(latest_type().class_name, ts, std::vector<TypeSpecifier>(), scope);
+    SymbolTable::get_class(latest_type().class_name)->add_method("construct", ts, node->am, false, {}, {}, {});
 
     return {};
 }
@@ -1281,6 +1319,7 @@ Variant TypeCheckVisitor::visit(FieldDecl *node) {
     }
 
     if (node->is_static) {
+        SymbolTable::insert(latest_type().class_name + "_" + node->field_name + "!st", node->type, scope);
         static_class_props.emplace(latest_type().class_name,
             std::pair<std::string, TypeSpecifier>(node->field_name, node->type));
     }
@@ -1288,6 +1327,9 @@ Variant TypeCheckVisitor::visit(FieldDecl *node) {
         class_props.emplace(latest_type().class_name,
             std::pair<std::string, TypeSpecifier>(node->field_name, node->type));
     }
+
+    SymbolTable::get_class(latest_type().class_name)->add_field(node->field_name, node->type, node->am,
+        node->is_static);
 
     return {};
 }
@@ -1299,8 +1341,12 @@ Variant TypeCheckVisitor::visit(FieldDecl *node) {
  */
 Variant TypeCheckVisitor::visit(MethodDecl *node) {
     std::vector<TypeSpecifier> arg_types;
+    std::vector<std::string> arg_names;
+    std::vector<Expression::SharedPtr> arg_defaults;
     for (auto arg : node->args) {
         arg_types.push_back(arg->accept(*this).get_type());
+        arg_names.push_back(arg->_arg_name);
+        arg_defaults.push_back(arg->_default_val);
     }
 
     auto overloads = (node->is_static) ? static_class_props.equal_range(node->method_name)
@@ -1333,15 +1379,23 @@ Variant TypeCheckVisitor::visit(MethodDecl *node) {
     method_type.is_function = true;
     method_type.args = arg_types;
     method_type.return_type = new TypeSpecifier(node->return_type);
+    method_type.is_method = true;
 
     if (node->is_static) {
+        SymbolTable::insert(latest_type().class_name + "_" + node->method_name + "!st",
+            new TypeSpecifier(node->return_type), arg_types, scope);
         static_class_props.emplace(latest_type().class_name,
             std::pair<std::string, TypeSpecifier>(node->method_name, method_type));
     }
     else {
+        SymbolTable::insert(latest_type().class_name + "_" + node->method_name, new TypeSpecifier(node->return_type),
+            arg_types, scope);
         class_props.emplace(latest_type().class_name,
             std::pair<std::string, TypeSpecifier>(node->method_name, method_type));
     }
+
+    SymbolTable::get_class(latest_type().class_name)->add_method(node->method_name, node->return_type, node->am,
+        node->is_static, arg_names, arg_types, arg_defaults);
 
     return {};
 }
@@ -1353,8 +1407,12 @@ Variant TypeCheckVisitor::visit(MethodDecl *node) {
  */
 Variant TypeCheckVisitor::visit(OperatorDecl *node) {
     std::vector<TypeSpecifier> arg_types;
+    std::vector<std::string> arg_names;
+    std::vector<Expression::SharedPtr> arg_defaults;
     for (auto arg : node->args) {
         arg_types.push_back(arg->accept(*this).get_type());
+        arg_names.push_back(arg->_arg_name);
+        arg_defaults.push_back(arg->_default_val);
     }
 
     auto overloads = class_props.equal_range(node->_operator);
@@ -1386,9 +1444,15 @@ Variant TypeCheckVisitor::visit(OperatorDecl *node) {
     method_type.is_function = true;
     method_type.args = arg_types;
     method_type.return_type = new TypeSpecifier(node->return_type);
+    method_type.is_method = true;
 
+    SymbolTable::insert(latest_type().class_name + "_" + node->_operator, new TypeSpecifier(node->return_type),
+            arg_types, scope);
     class_props.emplace(latest_type().class_name, std::pair<std::string, TypeSpecifier>(node->_operator, method_type));
 
+    SymbolTable::get_class(latest_type().class_name)->add_method(node->_operator, node->return_type, node->am,
+        false, arg_names, arg_types, arg_defaults);
+    
     return {};
 }
 
@@ -1403,7 +1467,7 @@ Variant TypeCheckVisitor::visit(LambdaExpr *node) {
         arg_types.push_back(arg->accept(*this).get_type());
     }
 
-    TypeCheckVisitor t(*this);
+    TypeCheckVisitor t(this);
     t.check_return_type = true;
     t.declared_return_type = node->_return_type;
     t.returnable = true;
@@ -1485,6 +1549,8 @@ Variant TypeCheckVisitor::visit(StructDecl *node) {
     for (auto op : node->binary_operators) {
         op.second->accept(*this);
     }
+
+    SymbolTable::insert(node->class_name, t, scope);
 
     return {};
 }
