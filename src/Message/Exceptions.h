@@ -33,7 +33,7 @@ enum RuntimeErrors {
     ERR_NULL_POINTER_EXC
 };
 
-class Tokenizer;
+class Lexer;
 extern std::map<ParseErrors, std::string> _parse_errors;
 extern std::map<RuntimeErrors, std::string> _runtime_errors;
 
@@ -43,7 +43,7 @@ private:
     std::string message_;
 
 public:
-    static void raise(ParseErrors , std::string, Tokenizer* = nullptr);
+    static void raise(ParseErrors , std::string, Lexer* = nullptr);
     virtual const char* what() const throw() {
         return message_.c_str();
     }

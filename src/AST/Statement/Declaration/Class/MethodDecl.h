@@ -8,13 +8,14 @@
 
 #include "../../Statement.h"
 #include "../FuncArgDecl.h"
-#include "../../CompoundStmt.h"
+#include "../../Block/CompoundStmt.h"
+#include "../../../Visitor/StaticAnalysis/Class.h"
 
 class MethodDecl : public Statement {
 public:
-    MethodDecl(std::string, TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>, CompoundStmt::SharedPtr,
+    MethodDecl(std::string, TypeRef::SharedPtr, std::vector<FuncArgDecl::SharedPtr>, CompoundStmt::SharedPtr,
                AccessModifier = AccessModifier::PUBLIC, bool = false);
-    MethodDecl(std::string, TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>, AccessModifier =
+    MethodDecl(std::string, TypeRef::SharedPtr, std::vector<FuncArgDecl::SharedPtr>, AccessModifier =
     AccessModifier::PUBLIC, bool = false);
 
     typedef std::shared_ptr<MethodDecl> SharedPtr;
@@ -23,13 +24,25 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::METHOD_DECL;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
@@ -37,9 +50,18 @@ protected:
     bool is_abstract;
     AccessModifier am;
     std::string method_name;
-    TypeSpecifier return_type;
+    TypeRef::SharedPtr return_type;
     std::vector<FuncArgDecl::SharedPtr> args;
     CompoundStmt::SharedPtr body;
+
+    bool declared = false;
+
+    // codegen
+    std::string class_name;
+    std::string this_binding;
+    bool is_virtual = false;
+    llvm::Function* cg_function;
+    cdot::cl::Method* method;
 };
 
 

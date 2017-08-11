@@ -2,8 +2,8 @@
 <project version="4">
   <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true" buildAllGenerated="true">
     <generated>
-      <config projectName="CDot" targetName="CDotTest" />
       <config projectName="CDot" targetName="CDot" />
+      <config projectName="CDot" targetName="CDotTest" />
     </generated>
   </component>
   <component name="CMakeSettings" AUTO_RELOAD="true">
@@ -13,51 +13,75 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bad35111-2bc5-48f5-b183-5734787faa3f" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/ModuleDecl.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/ModuleDecl.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/ExportStmt.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/ExportStmt.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/Message/Warning.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/Message/Warning.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Class/Interface.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Class/Interface.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Module.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Module.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Types/Array.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Types/Array.h" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Types/Function.cpp" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/StdLib/Types/Function.h" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/Class/InstantiationExpr.cpp" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/Class/InstantiationExpr.h" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/Debug.cpp" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/Debug.h" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/Option.cpp" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/Option.h" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/src/src.xjs" afterPath="" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/src/Exceptions.cpp" afterPath="$PROJECT_DIR$/src/Message/Exceptions.cpp" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/src/Exceptions.h" afterPath="$PROJECT_DIR$/src/Message/Exceptions.h" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/src/StdLib/Class.cpp" afterPath="$PROJECT_DIR$/src/StdLib/Class/Class.cpp" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/src/StdLib/Class.h" afterPath="$PROJECT_DIR$/src/StdLib/Class/Class.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/misc.xml" afterPath="$PROJECT_DIR$/.idea/misc.xml" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Expression/TypeRef.cpp" />
+      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/src/AST/Expression/TypeRef.h" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CMakeCCompiler.cmake" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CMakeCXXCompiler.cmake" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CMakeDetermineCompilerABI_C.bin" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CMakeDetermineCompilerABI_CXX.bin" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CMakeSystem.cmake" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CompilerIdC/CMakeCCompilerId.c" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CompilerIdC/a.out" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CompilerIdCXX/CMakeCXXCompilerId.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.7.2/CompilerIdCXX/a.out" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/DependInfo.cmake" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/build.make" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/cmake_clean.cmake" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/depend.make" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/flags.make" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/link.txt" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/MathParser.dir/progress.make" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Class/Class.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Class/Class.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Class/Interface.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Class/Interface.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/GlobalContext.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/GlobalContext.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Method.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Method.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Module.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Module.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Array.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Array.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Function.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Function.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Object.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Object.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Array.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Array.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Function.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Function.h" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Integer.cpp" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/src/StdLib/Types/Integer.h" afterPath="" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.cpp" />
+      <change type="MOVED" beforePath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/modules.xml" afterPath="$PROJECT_DIR$/.idea/modules.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/CMakeLists.txt" afterPath="$PROJECT_DIR$/CMakeLists.txt" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CDot.cbp" afterPath="$PROJECT_DIR$/cmake-build-debug/CDot.cbp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeCache.txt" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeCache.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeDirectoryInformation.cmake" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeDirectoryInformation.cmake" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeOutput.log" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeOutput.log" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile2" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile2" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/TargetDirectories.txt" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/TargetDirectories.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-environment.txt" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-environment.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/cmake-build-debug/Makefile" afterPath="$PROJECT_DIR$/cmake-build-debug/Makefile" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/AstNode.cpp" afterPath="$PROJECT_DIR$/src/AST/AstNode.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/AstNode.h" afterPath="$PROJECT_DIR$/src/AST/AstNode.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Context.cpp" afterPath="$PROJECT_DIR$/src/AST/Context.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Expression.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/Expression.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Context.h" afterPath="$PROJECT_DIR$/src/AST/Context.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Expression.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Expression.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.h" />
@@ -65,10 +89,6 @@
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectLiteral.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectLiteral.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectLiteral.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectLiteral.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectPropExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectPropExpr.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectPropExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/Literal/ObjectPropExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp" />
@@ -77,39 +97,29 @@
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MethodCallExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/RefExpr.h" afterPath="$PROJECT_DIR$/src/AST/Expression/RefExpr/RefExpr.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Namespace.cpp" afterPath="$PROJECT_DIR$/src/AST/Namespace.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Namespace.h" afterPath="$PROJECT_DIR$/src/AST/Namespace.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.cpp" afterPath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h" afterPath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/ExplicitCastExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Operator/ExplicitCastExpr.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/ExplicitCastExpr.h" afterPath="$PROJECT_DIR$/src/AST/Operator/ExplicitCastExpr.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/Operator.h" afterPath="$PROJECT_DIR$/src/AST/Operator/Operator.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/ImplicitCastExpr.cpp" afterPath="$PROJECT_DIR$/src/AST/Operator/ImplicitCastExpr.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/ImplicitCastExpr.h" afterPath="$PROJECT_DIR$/src/AST/Operator/ImplicitCastExpr.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.cpp" afterPath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.h" afterPath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.cpp" afterPath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h" afterPath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/SwitchStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/SwitchStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/SwitchStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/SwitchStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.h" />
@@ -117,52 +127,68 @@
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ConstrDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ConstrDecl.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/InterfaceDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/InterfaceDecl.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/OperatorDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/OperatorDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/OperatorDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/OperatorDecl.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/ExtendStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/ExtendStmt.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/ExtendStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/ExtendStmt.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/FuncArgDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/FuncArgDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/FuncArgDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/FuncArgDecl.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/FunctionDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/FunctionDecl.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/FunctionDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/FunctionDecl.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/IO/OutputStmt.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Statement.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Statement.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.h" afterPath="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ExportStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ExportStmt.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.cpp" afterPath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.h" afterPath="$PROJECT_DIR$/src/AST/Statement/ImportStmt.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGBinaryOperator.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGBinaryOperator.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGClass.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGClass.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGClass.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGClass.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/Internal/CGInternal.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/CodeGen/Internal/CGInternal.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/Visitor.cpp" afterPath="$PROJECT_DIR$/src/AST/Visitor/Visitor.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/AST/Visitor/Visitor.h" afterPath="$PROJECT_DIR$/src/AST/Visitor/Visitor.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Lexer.cpp" afterPath="$PROJECT_DIR$/src/Lexer.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Lexer.h" afterPath="$PROJECT_DIR$/src/Lexer.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Message/Exceptions.cpp" afterPath="$PROJECT_DIR$/src/Message/Exceptions.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Message/Exceptions.h" afterPath="$PROJECT_DIR$/src/Message/Exceptions.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Message/Warning.cpp" afterPath="$PROJECT_DIR$/src/Message/Warning.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Message/Warning.h" afterPath="$PROJECT_DIR$/src/Message/Warning.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Parser.cpp" afterPath="$PROJECT_DIR$/src/Parser.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Parser.h" afterPath="$PROJECT_DIR$/src/Parser.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/GlobalContext.cpp" afterPath="$PROJECT_DIR$/src/StdLib/GlobalContext.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/GlobalContext.h" afterPath="$PROJECT_DIR$/src/StdLib/GlobalContext.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Array.cpp" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Array.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Array.h" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Array.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Function.cpp" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Function.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Function.h" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Function.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Object.cpp" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Object.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Objects/Object.h" afterPath="$PROJECT_DIR$/src/StdLib/Objects/Object.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Types/Integer.cpp" afterPath="$PROJECT_DIR$/src/StdLib/Types/Integer.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/StdLib/Types/Integer.h" afterPath="$PROJECT_DIR$/src/StdLib/Types/Integer.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Token.cpp" afterPath="$PROJECT_DIR$/src/Token.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Token.h" afterPath="$PROJECT_DIR$/src/Token.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Tokenizer.cpp" afterPath="$PROJECT_DIR$/src/Tokenizer.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Tokenizer.h" afterPath="$PROJECT_DIR$/src/Tokenizer.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Util.cpp" afterPath="$PROJECT_DIR$/src/Util.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Util.h" afterPath="$PROJECT_DIR$/src/Util.h" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Variant/Arithmetic.cpp" afterPath="$PROJECT_DIR$/src/Variant/Arithmetic.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Variant/Conversion.cpp" afterPath="$PROJECT_DIR$/src/Variant/Conversion.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Variant/Variant.cpp" afterPath="$PROJECT_DIR$/src/Variant/Variant.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/Variant/Variant.h" afterPath="$PROJECT_DIR$/src/Variant/Variant.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/build/CMakeFiles/MathParser.dir/build.make" afterPath="$PROJECT_DIR$/src/build/CMakeFiles/MathParser.dir/build.make" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/build/CMakeFiles/MathParser.dir/link.txt" afterPath="$PROJECT_DIR$/src/build/CMakeFiles/MathParser.dir/link.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/build/Makefile" afterPath="$PROJECT_DIR$/src/build/Makefile" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main.cpp" afterPath="$PROJECT_DIR$/src/main.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/test/ControlFlow/IfTest.cpp" afterPath="$PROJECT_DIR$/test/ControlFlow/IfTest.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/test/Functions.cpp" afterPath="$PROJECT_DIR$/test/Functions.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/test/TokenizerTest.cpp" afterPath="$PROJECT_DIR$/test/TokenizerTest.cpp" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/test/main.cpp" afterPath="$PROJECT_DIR$/test/main.cpp" />
     </list>
     <ignored path="$PROJECT_DIR$/cmake-build-debug/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -172,181 +198,76 @@
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
+  <component name="FavoritesManager">
+    <favorites_list name="CDot" />
+  </component>
   <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="TypeCheckVisitor.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="5220">
-              <caret line="348" column="22" lean-forward="false" selection-start-line="348" selection-start-column="22" selection-end-line="348" selection-end-column="22" />
-              <folding>
-                <element signature="e#45#64#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Parser.h" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Parser.h">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="960">
-              <caret line="64" column="0" lean-forward="false" selection-start-line="64" selection-start-column="0" selection-end-line="64" selection-end-column="0" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Variant.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Variant/Variant.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="9225">
-              <caret line="615" column="50" lean-forward="false" selection-start-line="615" selection-start-column="50" selection-end-line="615" selection-end-column="50" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Variant.h" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Variant/Variant.h">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2055">
-              <caret line="137" column="44" lean-forward="false" selection-start-line="137" selection-start-column="42" selection-end-line="137" selection-end-column="44" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Parser.cpp" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/src/Parser.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="411">
-              <caret line="675" column="22" lean-forward="true" selection-start-line="675" selection-start-column="22" selection-end-line="675" selection-end-column="22" />
-              <folding>
-                <element signature="e#45#62#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Exceptions.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Message/Exceptions.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2175">
-              <caret line="145" column="0" lean-forward="false" selection-start-line="145" selection-start-column="0" selection-end-line="145" selection-end-column="0" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Tokenizer.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Tokenizer.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="6810">
-              <caret line="454" column="90" lean-forward="false" selection-start-line="454" selection-start-column="90" selection-end-line="454" selection-end-column="90" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="main.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/main.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="255">
-              <caret line="17" column="22" lean-forward="false" selection-start-line="17" selection-start-column="22" selection-end-line="17" selection-end-column="22" />
-              <folding>
-                <element signature="e#0#19#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Token.h" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Token.h">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1485">
-              <caret line="99" column="20" lean-forward="false" selection-start-line="99" selection-start-column="20" selection-end-line="99" selection-end-column="20" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Token.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Token.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="735">
-              <caret line="49" column="94" lean-forward="false" selection-start-line="49" selection-start-column="94" selection-end-line="49" selection-end-column="94" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300" />
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>LambdaEx</find>
-      <find>parse_class_decl</find>
-      <find>parse_struct</find>
-      <find>identifierr</find>
-      <find>ClassDecl</find>
-      <find>MethodDecl</find>
-      <find>get_props</find>
-      <find>variables.</find>
-      <find>methodcall</find>
-      <find>Binary</find>
-      <find>parse_op</find>
-      <find>Binar</find>
-      <find>MemberRef</find>
-      <find>new</find>
-      <find>unaryo</find>
-      <find>Identi</find>
-      <find>Unary</find>
-      <find>und</find>
-      <find>und class</find>
-      <find>parse_assi</find>
-      <find>parse_clas</find>
-      <find>is_punctuator('\n')</find>
-      <find>FunctionDecl</find>
-      <find>La</find>
-      <find>Lambda</find>
-      <find>Lam</find>
-      <find>ReturnStmt</find>
-      <find>returned</find>
-      <find>Compoun</find>
+      <find>String</find>
+      <find>ArrayAcc</find>
+      <find>reserve(</find>
+      <find>needs_generic</find>
+      <find>IdentifierRef</find>
+      <find>MutableValues</find>
+      <find>MutableValues.emplace</find>
+      <find>Array</find>
+      <find>BinaryO</find>
+      <find>ConstrD</find>
+      <find>CallExpr</find>
+      <find>ArrayLi</find>
+      <find>heap_alloc =</find>
+      <find>parse_assignment</find>
+      <find>parse_next_stmt</find>
+      <find>TypeChc</find>
+      <find>Compound</find>
+      <find>firstd</find>
+      <find>first</find>
+      <find>-&gt;declaration</find>
       <find>parse_ass</find>
+      <find>Compo</find>
+      <find>Functino</find>
+      <find>ForStmt</find>
+      <find>Compoun</find>
+      <find>ReturnStmt</find>
+      <find>DeclStmt</find>
+      <find>Identif</find>
+      <find>ReturnStt</find>
+      <find>&quot;UnsafePtr&quot;</find>
     </findStrings>
     <replaceStrings>
-      <replace>accept(*this)</replace>
-      <replace>current_obj_ref</replace>
-      <replace>node-&gt;_member</replace>
-      <replace>//child-&gt;set_root</replace>
-      <replace>context-&gt;</replace>
-      <replace>type.type =</replace>
-      <replace>type.type</replace>
-      <replace>Trying to assign value of type.type</replace>
-      <replace>values of type</replace>
-      <replace>obj_ref-&gt;</replace>
-      <replace>, start_line, _start_index, current_index);</replace>
-      <replace>int start = tokenizer-&gt;last_token_index;</replace>
-      <replace>tokenizer);</replace>
-      <replace>set_body</replace>
-      <replace>std::unordered_map</replace>
-      <replace>visit($1) = 0;</replace>
+      <replace>CGValue</replace>
+      <replace>$1\n    virtual TypeSpecifier accept(TypeCheckVisitor&amp; v) {\n        return v.visit(this);\n    }</replace>
+      <replace>TypeSpecifier visit</replace>
+      <replace>TypeSpecifier Type</replace>
+      <replace>c</replace>
+      <replace>, false, var_arg</replace>
+      <replace>, var_arg</replace>
+      <replace>false</replace>
+      <replace>return { $1 };</replace>
+      <replace>for (auto&amp; child</replace>
+      <replace>for (const auto&amp; child</replace>
+      <replace>func_visitor.</replace>
+      <replace>ident</replace>
+      <replace>latest_val.back().val</replace>
+      <replace>latest_val.back()-&gt;val</replace>
+      <replace>&quot;using&quot;</replace>
+      <replace>current_namespace-&gt;</replace>
+      <replace>set_index(start, lexer-&gt;current_index, source_files.size() - 1);</replace>
+      <replace>type</replace>
+      <replace>source_id</replace>
+      <replace>init</replace>
       <replace>;</replace>
-      <replace>result =</replace>
-      <replace>_fun</replace>
-      <replace>of type</replace>
-      <replace>wchar_t</replace>
-      <replace>public Expression</replace>
-      <replace>char</replace>
-      <replace>return_val-&gt;is_ref()</replace>
-      <replace>_array</replace>
-      <replace>return {}</replace>
-      <replace>friend class CaptureVisitor;\n    friend class TypeCheckVisitor;</replace>
-      <replace />
-      <replace>TypeCheck</replace>
-      <replace>is_separator()</replace>
+      <replace>return $1;</replace>
+      <replace>decl_type</replace>
+      <replace>field_type</replace>
+      <replace>target</replace>
+      <replace>string</replace>
+      <replace>if (!node-&gt;lvalue &amp;&amp; ret.lvalue) {</replace>
+      <replace>val</replace>
+      <replace>&quot;Unsafe&quot;</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$PROJECT_DIR$/AST/Visitor</dir>
@@ -362,57 +283,57 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/StringLiteral.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.cpp" />
         <option value="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.cpp" />
+        <option value="$PROJECT_DIR$/src/Variant/Conversion.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.h" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h" />
+        <option value="$PROJECT_DIR$/src/Lexer.cpp" />
         <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.cpp" />
         <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ClassDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/StructDecl.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/GlobalContext.cpp" />
-        <option value="$PROJECT_DIR$/src/StdLib/Class/Interface.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/Class/Interface.cpp" />
-        <option value="$PROJECT_DIR$/src/StdLib/Objects/Object.cpp" />
-        <option value="$PROJECT_DIR$/src/StdLib/Objects/Object.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/Objects/Function.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/Objects/Function.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/AstNode.h" />
-        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h" />
-        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/StringLiteral.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.cpp" />
-        <option value="$PROJECT_DIR$/src/StdLib/Types/Array.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/Class/Class.h" />
-        <option value="$PROJECT_DIR$/src/StdLib/Class/Class.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/OperatorDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h" />
-        <option value="$PROJECT_DIR$/src/AST/Expression/Expression.cpp" />
-        <option value="$PROJECT_DIR$/src/Parser.h" />
-        <option value="$PROJECT_DIR$/src/Message/Warning.h" />
-        <option value="$PROJECT_DIR$/src/Message/Warning.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.h" />
-        <option value="$PROJECT_DIR$/src/Variant/Variant.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.cpp" />
-        <option value="$PROJECT_DIR$/src/Variant/new/NVariant.h" />
-        <option value="$PROJECT_DIR$/CMakeLists.txt" />
-        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/Visitor.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/CaptureVisitor.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/CaptureVisitor.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.cpp" />
-        <option value="$PROJECT_DIR$/src/Message/Exceptions.cpp" />
-        <option value="$PROJECT_DIR$/src/Util.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.h" />
         <option value="$PROJECT_DIR$/src/Util.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h" />
-        <option value="$PROJECT_DIR$/src/Token.h" />
-        <option value="$PROJECT_DIR$/src/Token.cpp" />
-        <option value="$PROJECT_DIR$/src/Variant/Variant.h" />
-        <option value="$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.cpp" />
-        <option value="$PROJECT_DIR$/src/Tokenizer.cpp" />
         <option value="$PROJECT_DIR$/src/main.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h" />
+        <option value="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.h" />
+        <option value="$PROJECT_DIR$/src/AST/Namespace.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.h" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.h" />
+        <option value="$PROJECT_DIR$/CMakeLists.txt" />
+        <option value="$PROJECT_DIR$/src/AST/Namespace.cpp" />
+        <option value="$PROJECT_DIR$/src/Util.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Expression/Expression.h" />
+        <option value="$PROJECT_DIR$/src/Variant/Variant.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.cpp" />
+        <option value="$PROJECT_DIR$/src/Variant/Variant.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/AstNode.h" />
+        <option value="$PROJECT_DIR$/src/Parser.h" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.h" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/CompoundStmt.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h" />
+        <option value="$PROJECT_DIR$/src/AST/AstNode.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp" />
         <option value="$PROJECT_DIR$/src/Parser.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/Visitor.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/Visitor.h" />
+        <option value="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.h" />
       </list>
     </option>
   </component>
@@ -423,7 +344,7 @@
     <sorting>DEFINITION_ORDER</sorting>
   </component>
   <component name="OCFindUsagesOptions" text="true" ivars="false" properties="true" derivedClasses="false" />
-  <component name="ProjectFrameBounds">
+  <component name="ProjectFrameBounds" fullScreen="true">
     <option name="width" value="1280" />
     <option name="height" value="800" />
   </component>
@@ -438,33 +359,60 @@
             <id>C/C++</id>
           </State>
           <State>
+            <id>Control flow issuesJavaScript</id>
+          </State>
+          <State>
             <id>Data flow analysisC/C++</id>
+          </State>
+          <State>
+            <id>Data flow issuesJavaScript</id>
           </State>
           <State>
             <id>Declaration orderC/C++</id>
           </State>
           <State>
-            <id>FunctionsC/C++</id>
+            <id>Error handlingJavaScript</id>
           </State>
           <State>
-            <id>General</id>
+            <id>FunctionsC/C++</id>
           </State>
           <State>
             <id>GeneralC/C++</id>
           </State>
           <State>
-            <id>Spelling</id>
+            <id>GeneralJavaScript</id>
+          </State>
+          <State>
+            <id>JavaScript</id>
+          </State>
+          <State>
+            <id>JavaScript function metricsJavaScript</id>
+          </State>
+          <State>
+            <id>JavaScript validity issuesJavaScript</id>
+          </State>
+          <State>
+            <id>Probable bugsJavaScript</id>
+          </State>
+          <State>
+            <id>Python</id>
           </State>
           <State>
             <id>Type checksC/C++</id>
           </State>
           <State>
+            <id>TypeScript</id>
+          </State>
+          <State>
             <id>Unused codeC/C++</id>
+          </State>
+          <State>
+            <id>XPath</id>
           </State>
         </expanded-state>
         <selected-state>
           <State>
-            <id>FunctionsC/C++</id>
+            <id>SignednessMismatch</id>
           </State>
         </selected-state>
       </profile-state>
@@ -490,332 +438,103 @@
     <panes>
       <pane id="ProjectPane">
         <subPane>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Variant" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Message" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Visitor" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Statement" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Statement" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="IO" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Statement" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Declaration" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Statement" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Declaration" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Class" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Statement" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="ControlFlow" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Operator" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Expression" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Expression" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="RefExpr" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="CDot" />
-              <option name="myItemType" value="com.jetbrains.cidr.projectView.CidrFilesViewHelper$MyProjectTreeStructure$1" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="XtremeJonasScript" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="src" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="AST" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Expression" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="Literal" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
+          <expand>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Expression" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Expression" type="462c0819:PsiDirectoryNode" />
+              <item name="Literal" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Expression" type="462c0819:PsiDirectoryNode" />
+              <item name="RefExpr" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Statement" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Statement" type="462c0819:PsiDirectoryNode" />
+              <item name="Block" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Visitor" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Visitor" type="462c0819:PsiDirectoryNode" />
+              <item name="CodeGen" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+              <item name="Visitor" type="462c0819:PsiDirectoryNode" />
+              <item name="StaticAnalysis" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Message" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="StdLib" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="dad4c3:CidrFilesViewHelper$MyProjectTreeStructure$1" />
+              <item name="XtremeJonasScript" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Variant" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
         </subPane>
       </pane>
     </panes>
@@ -823,18 +542,20 @@
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
-    <property name="settings.editor.selected.configurable" value="editing.templates" />
+    <property name="settings.editor.selected.configurable" value="Errors" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
-    <property name="FullScreen" value="true" />
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="ObjectiveC" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/AST/Statement/Block" />
+      <recent name="$PROJECT_DIR$/src/AST/Visitor/CodeGen" />
+      <recent name="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis" />
+      <recent name="$PROJECT_DIR$/src/AST/Visitor/Static Analysis" />
       <recent name="$PROJECT_DIR$/src/Message" />
-      <recent name="$PROJECT_DIR$/src/StdLib/Class" />
-      <recent name="$PROJECT_DIR$/test/catch" />
-      <recent name="$PROJECT_DIR$" />
-      <recent name="$PROJECT_DIR$/src" />
+    </key>
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis" />
     </key>
   </component>
   <component name="RunDashboard">
@@ -850,6 +571,74 @@
     </option>
   </component>
   <component name="RunManager" selected="Application.CDot">
+    <configuration name="CDot" type="CMakeRunConfiguration" factoryName="Application" WORKING_DIR="file://$PROJECT_DIR$/src" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDot" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDot">
+      <envs />
+    </configuration>
+    <configuration name="CDotTest" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDotTest" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDotTest">
+      <envs />
+    </configuration>
+    <configuration default="false" name="CDotTest" type="CMakeCatchTestRunConfigurationType" factoryName="Catch Test" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDotTest" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDotTest" TEST_MODE="SUITE_TEST">
+      <envs />
+      <method />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Doctests">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="MathParser" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="CLASS_NAME" value="" />
+      <option name="METHOD_NAME" value="" />
+      <option name="FOLDER_NAME" value="" />
+      <option name="TEST_TYPE" value="TEST_SCRIPT" />
+      <option name="PATTERN" value="" />
+      <option name="USE_PATTERN" value="false" />
+    </configuration>
+    <configuration default="true" type="js.build_tools.grunt" factoryName="Grunt.js">
+      <node-interpreter value="project" />
+      <envs />
+    </configuration>
+    <configuration default="true" type="js.build_tools.gulp" factoryName="Gulp.js">
+      <node-interpreter>project</node-interpreter>
+      <node-options />
+      <gulpfile />
+      <tasks />
+      <arguments />
+      <envs />
+    </configuration>
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="MathParser" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+    </configuration>
+    <configuration default="true" type="Tox" factoryName="Tox">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="MathParser" />
+    </configuration>
     <configuration default="true" type="CLion_Remote" factoryName="GDB Remote Debug" remoteCommand="" symbolFile="" sysroot="">
       <method />
     </configuration>
@@ -893,40 +682,10 @@
     <configuration default="true" type="NodeWebKit" factoryName="NW.js">
       <method />
     </configuration>
-    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="MathParser" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <method />
-    </configuration>
     <configuration default="true" type="ReactNative" factoryName="React Native">
       <node-interpreter value="project" />
       <platform value="ANDROID" />
       <envs />
-      <method />
-    </configuration>
-    <configuration default="true" type="Tox" factoryName="Tox">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="MathParser" />
       <method />
     </configuration>
     <configuration default="true" type="XSLT" factoryName="XSLT">
@@ -945,44 +704,11 @@
       <JdkChoice value="FROM_MODULE" />
       <method />
     </configuration>
-    <configuration default="true" type="js.build_tools.grunt" factoryName="Grunt.js">
-      <node-interpreter value="project" />
-      <envs />
-      <method />
-    </configuration>
-    <configuration default="true" type="js.build_tools.gulp" factoryName="Gulp.js">
-      <node-interpreter>project</node-interpreter>
-      <node-options />
-      <gulpfile />
-      <tasks />
-      <arguments />
-      <envs />
-      <method />
-    </configuration>
     <configuration default="true" type="js.build_tools.npm" factoryName="npm">
       <command value="run" />
       <scripts />
       <node-interpreter value="project" />
       <envs />
-      <method />
-    </configuration>
-    <configuration default="true" type="tests" factoryName="Doctests">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="MathParser" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="CLASS_NAME" value="" />
-      <option name="METHOD_NAME" value="" />
-      <option name="FOLDER_NAME" value="" />
-      <option name="TEST_TYPE" value="TEST_SCRIPT" />
-      <option name="PATTERN" value="" />
-      <option name="USE_PATTERN" value="false" />
       <method />
     </configuration>
     <configuration default="true" type="tests" factoryName="Nosetests">
@@ -1032,22 +758,9 @@
       <option name="_new_targetType" value="&quot;PATH&quot;" />
       <method />
     </configuration>
-    <configuration default="false" name="CDotTest" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDotTest" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDotTest">
-      <envs />
-      <method />
-    </configuration>
-    <configuration default="false" name="CDotTest" type="CMakeCatchTestRunConfigurationType" factoryName="Catch Test" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDotTest" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDotTest" TEST_MODE="SUITE_TEST">
-      <envs />
-      <method />
-    </configuration>
-    <configuration default="false" name="CDot" type="CMakeRunConfiguration" factoryName="Application" WORKING_DIR="file://$PROJECT_DIR$/src" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="CDot" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="CDot">
-      <envs />
-      <method />
-    </configuration>
-    <list size="3">
+    <list size="2">
       <item index="0" class="java.lang.String" itemvalue="Application.CDotTest" />
-      <item index="1" class="java.lang.String" itemvalue="Catch Test.CDotTest" />
-      <item index="2" class="java.lang.String" itemvalue="Application.CDot" />
+      <item index="1" class="java.lang.String" itemvalue="Application.CDot" />
     </list>
   </component>
   <component name="ShelveChangesManager" show_recycled="false">
@@ -1100,8 +813,41 @@
       <workItem from="1498909564994" duration="21703000" />
       <workItem from="1498989037790" duration="52448000" />
       <workItem from="1499118410975" duration="68649000" />
-      <workItem from="1499451787458" duration="56000" />
+      <workItem from="1499451787458" duration="12350000" />
+      <workItem from="1499624331799" duration="5000000" />
+      <workItem from="1499629370325" duration="3006000" />
+      <workItem from="1499632426118" duration="15182000" />
+      <workItem from="1499798396887" duration="6392000" />
+      <workItem from="1499808987615" duration="60404000" />
+      <workItem from="1500141017079" duration="25961000" />
+      <workItem from="1500321089944" duration="34296000" />
+      <workItem from="1500482783638" duration="52000" />
+      <workItem from="1500482924707" duration="15863000" />
+      <workItem from="1500570738095" duration="10631000" />
+      <workItem from="1500841607638" duration="9757000" />
+      <workItem from="1501003946055" duration="26863000" />
+      <workItem from="1501183686144" duration="10465000" />
+      <workItem from="1501262966111" duration="460000" />
+      <workItem from="1501263463900" duration="11926000" />
+      <workItem from="1501347193646" duration="14877000" />
+      <workItem from="1501435615901" duration="22124000" />
+      <workItem from="1501589775462" duration="32733000" />
+      <workItem from="1501755747810" duration="16000" />
+      <workItem from="1501755807532" duration="31703000" />
+      <workItem from="1501916943782" duration="4582000" />
+      <workItem from="1501946347849" duration="77491000" />
+      <workItem from="1502118815384" duration="23998000" />
+      <workItem from="1502178157566" duration="3995000" />
+      <workItem from="1502197433066" duration="70957000" />
     </task>
+    <task id="LOCAL-00001" summary="bunch of stuff">
+      <created>1499451876486</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1499451876486</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TestHistory">
@@ -1137,457 +883,523 @@
     </history-entry>
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="662283000" />
+    <option name="totallyTimeSpent" value="1193311000" />
+  </component>
+  <component name="TodoView">
+    <todo-panel id="selected-file">
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
+    <todo-panel id="all">
+      <are-packages-shown value="true" />
+      <is-autoscroll-to-source value="true" />
+    </todo-panel>
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="0" width="1280" height="800" extended-state="0" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.24232633" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
-      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
-      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.35342467" sideWeight="0.50646204" order="1" side_tool="true" content_ui="tabs" />
-      <window_info id="Version Control" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24931507" sideWeight="0.49353796" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3287483" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.27647868" sideWeight="0.4838449" order="11" side_tool="false" content_ui="tabs" />
+      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3287483" sideWeight="0.48707592" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5129241" order="1" side_tool="true" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.22420909" sideWeight="0.49030694" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.26164383" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.15993538" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24071527" sideWeight="0.49676898" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24959612" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3219178" sideWeight="0.49676898" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Data View" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.303989" sideWeight="0.49676898" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Data View" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32956383" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="8" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.27534246" sideWeight="0.49353796" order="11" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="3" side_tool="false" content_ui="combo" />
       <window_info id="Inspection Results" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="12" side_tool="false" content_ui="tabs" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.26164383" sideWeight="0.49676898" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
     </layout>
     <layout-to-restore>
-      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
+      <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="8" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.27534246" sideWeight="0.49353796" order="11" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.27372766" sideWeight="0.4838449" order="11" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
-      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.48707592" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.35342467" sideWeight="0.50646204" order="1" side_tool="true" content_ui="tabs" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5129241" order="1" side_tool="true" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24931507" sideWeight="0.49353796" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.22859451" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24896836" sideWeight="0.49030694" order="6" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.26164383" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.17043619" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="3" side_tool="false" content_ui="combo" />
       <window_info id="Inspection Results" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32876712" sideWeight="0.5" order="12" side_tool="false" content_ui="tabs" />
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.26164383" sideWeight="0.49676898" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24959612" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Debug" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.3219178" sideWeight="0.49676898" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
-      <window_info id="Data View" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.32599726" sideWeight="0.49676898" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Data View" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32956383" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
     </layout-to-restore>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
-    <option name="processedProjectFiles" value="true" />
+    <option name="version" value="1" />
   </component>
   <component name="VcsContentAnnotationSettings">
     <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <MESSAGE value="bunch of stuff" />
+    <option name="LAST_COMMIT_MESSAGE" value="bunch of stuff" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/StdLib/Objects/Object.cpp</url>
-          <line>61</line>
-          <option name="timeStamp" value="1269" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/StdLib/Class/Class.cpp</url>
-          <line>347</line>
-          <option name="timeStamp" value="1285" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Message/Exceptions.cpp</url>
-          <line>145</line>
-          <option name="timeStamp" value="1348" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/Message/Exceptions.cpp</url>
-          <line>87</line>
+          <line>86</line>
           <option name="timeStamp" value="1354" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.cpp</url>
-          <line>392</line>
-          <option name="timeStamp" value="1373" />
+          <url>file://$PROJECT_DIR$/src/Message/Exceptions.cpp</url>
+          <line>139</line>
+          <option name="timeStamp" value="1954" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/AST/Namespace.cpp</url>
+          <line>206</line>
+          <option name="timeStamp" value="2601" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp</url>
+          <line>546</line>
+          <option name="timeStamp" value="2774" />
         </line-breakpoint>
       </breakpoints>
-      <option name="time" value="1379" />
+      <breakpoints-dialog>
+        <breakpoints-dialog />
+      </breakpoints-dialog>
+      <default-breakpoints>
+        <breakpoint enabled="true" type="CidrExceptionBreakpoint">
+          <properties />
+        </breakpoint>
+      </default-breakpoints>
+      <option name="time" value="2775" />
     </breakpoint-manager>
-    <watches-manager>
-      <configuration name="CMakeRunConfiguration">
-        <watch expression="tokenizer.get()-&gt;current_token" language="ObjectiveC" />
-      </configuration>
-    </watches-manager>
+    <watches-manager />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h">
+    <entry file="file://$PROJECT_DIR$/src/Variant/Variant.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="180">
-          <caret line="14" column="62" lean-forward="false" selection-start-line="14" selection-start-column="62" selection-end-line="14" selection-end-column="62" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Expression.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="11" column="6" lean-forward="false" selection-start-line="11" selection-start-column="6" selection-end-line="11" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Statement.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" column="6" lean-forward="false" selection-start-line="10" selection-start-column="6" selection-end-line="10" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Expression.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="260">
-          <caret line="26" column="26" lean-forward="false" selection-start-line="26" selection-start-column="26" selection-end-line="26" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="350">
-          <caret line="26" column="0" lean-forward="false" selection-start-line="26" selection-start-column="0" selection-end-line="26" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Message/Warning.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="240">
-          <caret line="16" column="7" lean-forward="true" selection-start-line="16" selection-start-column="7" selection-end-line="16" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/CompoundStmt.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="156">
-          <caret line="39" column="0" lean-forward="false" selection-start-line="39" selection-start-column="0" selection-end-line="39" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="435">
-          <caret line="31" column="0" lean-forward="false" selection-start-line="31" selection-start-column="0" selection-end-line="31" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="195">
-          <caret line="14" column="10" lean-forward="true" selection-start-line="14" selection-start-column="10" selection-end-line="14" selection-end-column="10" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="345">
-          <caret line="23" column="0" lean-forward="false" selection-start-line="23" selection-start-column="0" selection-end-line="23" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Message/Warning.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="418">
-          <caret line="60" column="46" lean-forward="false" selection-start-line="60" selection-start-column="46" selection-end-line="60" selection-end-column="46" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="420">
-          <caret line="32" column="33" lean-forward="false" selection-start-line="32" selection-start-column="33" selection-end-line="32" selection-end-column="33" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Variant/new/NVariant.cpp" />
-    <entry file="file://$PROJECT_DIR$/src/Variant/new/NVariant.h" />
-    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="240">
-          <caret line="16" column="566" lean-forward="false" selection-start-line="16" selection-start-column="566" selection-end-line="16" selection-end-column="566" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CDot.dir/src/Parser.cpp.o">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-37756">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/memory">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="201">
-          <caret line="4605" column="0" lean-forward="false" selection-start-line="4605" selection-start-column="0" selection-end-line="4605" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/FunctionDecl.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="405">
-          <caret line="29" column="0" lean-forward="false" selection-start-line="29" selection-start-column="0" selection-end-line="29" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-151">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="129">
-          <caret line="9" column="13" lean-forward="false" selection-start-line="9" selection-start-column="13" selection-end-line="9" selection-end-column="13" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/Visitor.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="149">
-          <caret line="79" column="43" lean-forward="false" selection-start-line="79" selection-start-column="43" selection-end-line="79" selection-end-column="43" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="155">
-          <caret line="45" column="42" lean-forward="false" selection-start-line="45" selection-start-column="42" selection-end-line="45" selection-end-column="42" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CaptureVisitor.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="199">
-          <caret line="34" column="42" lean-forward="false" selection-start-line="34" selection-start-column="42" selection-end-line="34" selection-end-column="42" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CaptureVisitor.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="278">
-          <caret line="20" column="0" lean-forward="false" selection-start-line="20" selection-start-column="0" selection-end-line="20" selection-end-column="51" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="474">
-          <caret line="634" column="0" lean-forward="false" selection-start-line="634" selection-start-column="0" selection-end-line="634" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/vector">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="156">
-          <caret line="1616" column="0" lean-forward="false" selection-start-line="1616" selection-start-column="0" selection-end-line="1616" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Util.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="365">
-          <caret line="411" column="25" lean-forward="false" selection-start-line="411" selection-start-column="25" selection-end-line="411" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/unordered_map">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="1267" column="48" lean-forward="false" selection-start-line="1267" selection-start-column="48" selection-end-line="1267" selection-end-column="48" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Util.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="189">
-          <caret line="24" column="83" lean-forward="false" selection-start-line="24" selection-start-column="83" selection-end-line="24" selection-end-column="83" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/FunctionCallExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="405">
-          <caret line="27" column="0" lean-forward="false" selection-start-line="27" selection-start-column="0" selection-end-line="27" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="330">
-          <caret line="23" column="0" lean-forward="false" selection-start-line="23" selection-start-column="0" selection-end-line="23" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="168">
-          <caret line="67" column="56" lean-forward="false" selection-start-line="67" selection-start-column="56" selection-end-line="67" selection-end-column="56" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="345">
-          <caret line="26" column="0" lean-forward="false" selection-start-line="26" selection-start-column="0" selection-end-line="26" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/__functional_base">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="156">
-          <caret line="86" column="0" lean-forward="false" selection-start-line="86" selection-start-column="0" selection-end-line="86" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/string">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="246">
-          <caret line="3792" column="0" lean-forward="false" selection-start-line="3792" selection-start-column="0" selection-end-line="3792" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="165">
-          <caret line="18" column="33" lean-forward="false" selection-start-line="18" selection-start-column="31" selection-end-line="18" selection-end-column="33" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="315">
-          <caret line="23" column="0" lean-forward="false" selection-start-line="23" selection-start-column="0" selection-end-line="23" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="315">
-          <caret line="25" column="0" lean-forward="false" selection-start-line="25" selection-start-column="0" selection-end-line="25" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="170">
-          <caret line="26" column="0" lean-forward="false" selection-start-line="26" selection-start-column="0" selection-end-line="26" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="212">
-          <caret line="19" column="0" lean-forward="false" selection-start-line="19" selection-start-column="0" selection-end-line="19" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Tokenizer.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="43" column="7" lean-forward="false" selection-start-line="43" selection-start-column="7" selection-end-line="43" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Token.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="735">
-          <caret line="49" column="94" lean-forward="false" selection-start-line="49" selection-start-column="94" selection-end-line="49" selection-end-column="94" />
+        <state relative-caret-position="178">
+          <caret line="168" column="9" lean-forward="false" selection-start-line="168" selection-start-column="9" selection-end-line="168" selection-end-column="9" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/Token.h">
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/ConstrDecl.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1485">
-          <caret line="99" column="20" lean-forward="false" selection-start-line="99" selection-start-column="20" selection-end-line="99" selection-end-column="20" />
+        <state relative-caret-position="-301">
+          <caret line="12" column="6" lean-forward="false" selection-start-line="12" selection-start-column="6" selection-end-line="12" selection-end-column="6" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1447">
+          <caret line="70" column="56" lean-forward="false" selection-start-line="70" selection-start-column="56" selection-end-line="70" selection-end-column="56" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/Class.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="341">
+          <caret line="105" column="44" lean-forward="false" selection-start-line="105" selection-start-column="44" selection-end-line="105" selection-end-column="44" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/Variant/Variant.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="9225">
-          <caret line="615" column="50" lean-forward="false" selection-start-line="615" selection-start-column="50" selection-end-line="615" selection-end-column="50" />
+        <state relative-caret-position="84">
+          <caret line="448" column="50" lean-forward="false" selection-start-line="448" selection-start-column="50" selection-end-line="448" selection-end-column="50" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/Variant/Variant.h">
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2055">
-          <caret line="137" column="44" lean-forward="false" selection-start-line="137" selection-start-column="42" selection-end-line="137" selection-end-column="44" />
+        <state relative-caret-position="193">
+          <caret line="23" column="34" lean-forward="true" selection-start-line="23" selection-start-column="34" selection-end-line="23" selection-end-column="34" />
           <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Parser.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="960">
-          <caret line="64" column="0" lean-forward="false" selection-start-line="64" selection-start-column="0" selection-end-line="64" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/TypeCheckVisitor.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="5220">
-          <caret line="348" column="22" lean-forward="false" selection-start-line="348" selection-start-column="22" selection-end-line="348" selection-end-column="22" />
-          <folding>
-            <element signature="e#45#64#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Tokenizer.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="6810">
-          <caret line="454" column="90" lean-forward="false" selection-start-line="454" selection-start-column="90" selection-end-line="454" selection-end-column="90" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/main.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="255">
-          <caret line="17" column="22" lean-forward="false" selection-start-line="17" selection-start-column="22" selection-end-line="17" selection-end-column="22" />
-          <folding>
-            <element signature="e#0#19#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/Message/Exceptions.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2175">
-          <caret line="145" column="0" lean-forward="false" selection-start-line="145" selection-start-column="0" selection-end-line="145" selection-end-column="0" />
+        <state relative-caret-position="160">
+          <caret line="86" column="0" lean-forward="false" selection-start-line="86" selection-start-column="0" selection-end-line="86" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-78">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/vector">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="174">
+          <caret line="660" column="0" lean-forward="false" selection-start-line="660" selection-start-column="0" selection-end-line="660" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="315">
+          <caret line="23" column="0" lean-forward="false" selection-start-line="23" selection-start-column="0" selection-end-line="23" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="160">
+          <caret line="36" column="0" lean-forward="false" selection-start-line="36" selection-start-column="0" selection-end-line="36" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/4.0.0_1/include/llvm/Support/Casting.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="160">
+          <caret line="94" column="0" lean-forward="false" selection-start-line="94" selection-start-column="0" selection-end-line="94" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Namespace.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="160">
+          <caret line="96" column="0" lean-forward="false" selection-start-line="96" selection-start-column="0" selection-end-line="96" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="216">
+          <caret line="63" column="0" lean-forward="false" selection-start-line="63" selection-start-column="0" selection-end-line="63" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="450">
+          <caret line="33" column="0" lean-forward="false" selection-start-line="33" selection-start-column="0" selection-end-line="33" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="45">
+          <caret line="3" column="0" lean-forward="false" selection-start-line="3" selection-start-column="0" selection-end-line="3" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/DeclStmt.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="507">
+          <caret line="44" column="32" lean-forward="false" selection-start-line="44" selection-start-column="32" selection-end-line="44" selection-end-column="32" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/new">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="166">
+          <caret line="168" column="0" lean-forward="false" selection-start-line="168" selection-start-column="0" selection-end-line="168" selection-end-column="0" />
+          <folding>
+            <element signature="e#5614#5652#0" expanded="false" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="160">
+          <caret line="32" column="0" lean-forward="false" selection-start-line="32" selection-start-column="0" selection-end-line="32" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="240">
+          <caret line="26" column="0" lean-forward="false" selection-start-line="26" selection-start-column="0" selection-end-line="26" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGType.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="160">
+          <caret line="111" column="0" lean-forward="false" selection-start-line="111" selection-start-column="0" selection-end-line="111" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="960">
+          <caret line="66" column="102" lean-forward="false" selection-start-line="66" selection-start-column="102" selection-end-line="66" selection-end-column="102" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/IO/InputStmt.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="120">
+          <caret line="10" column="49" lean-forward="false" selection-start-line="10" selection-start-column="49" selection-end-line="10" selection-end-column="49" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/Visitor.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="360">
+          <caret line="24" column="47" lean-forward="false" selection-start-line="24" selection-start-column="47" selection-end-line="24" selection-end-column="47" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/Parser.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="411">
-          <caret line="675" column="22" lean-forward="true" selection-start-line="675" selection-start-column="22" selection-end-line="675" selection-end-column="22" />
+        <state relative-caret-position="302">
+          <caret line="32" column="38" lean-forward="false" selection-start-line="32" selection-start-column="38" selection-end-line="32" selection-end-column="38" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Util.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-3838">
+          <caret line="422" column="0" lean-forward="false" selection-start-line="422" selection-start-column="0" selection-end-line="422" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-13">
+          <caret line="6" column="0" lean-forward="false" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="32">
+          <caret line="70" column="0" lean-forward="false" selection-start-line="70" selection-start-column="0" selection-end-line="70" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-2285">
+          <caret line="1641" column="1" lean-forward="false" selection-start-line="1641" selection-start-column="1" selection-end-line="1641" selection-end-column="1" />
           <folding>
-            <element signature="e#45#62#0" expanded="true" />
+            <element signature="e#45#72#0" expanded="false" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGMemory.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGClass.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGBinaryOperator.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CGCast.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="497">
+          <caret line="586" column="1" lean-forward="true" selection-start-line="586" selection-start-column="1" selection-end-line="586" selection-end-column="1" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Namespace.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-958">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Util.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Parser.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-403">
+          <caret line="90" column="38" lean-forward="false" selection-start-line="90" selection-start-column="38" selection-end-line="90" selection-end-column="38" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/EvaluatingVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CaptureVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="750">
+          <caret line="50" column="45" lean-forward="false" selection-start-line="50" selection-start-column="45" selection-end-line="50" selection-end-column="45" />
+          <folding>
+            <element signature="e#110#134#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/ArrayLiteral.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-418">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/LiteralExpr.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/Literal/StringLiteral.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/ArrayAccessExpr.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="360">
+          <caret line="27" column="0" lean-forward="false" selection-start-line="27" selection-start-column="0" selection-end-line="27" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="159">
+          <caret line="41" column="0" lean-forward="false" selection-start-line="41" selection-start-column="0" selection-end-line="41" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/CodeGen/CodeGenVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1044">
+          <caret line="62" column="39" lean-forward="false" selection-start-line="62" selection-start-column="39" selection-end-line="62" selection-end-column="39" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression/TypeRef.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="226">
+          <caret line="32" column="36" lean-forward="false" selection-start-line="32" selection-start-column="36" selection-end-line="32" selection-end-column="36" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/Visitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-299">
+          <caret line="10" column="14" lean-forward="false" selection-start-line="10" selection-start-column="14" selection-end-line="10" selection-end-column="14" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="105">
+          <caret line="8" column="8" lean-forward="false" selection-start-line="8" selection-start-column="8" selection-end-line="8" selection-end-column="8" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="357">
+          <caret line="39" column="39" lean-forward="false" selection-start-line="39" selection-start-column="39" selection-end-line="39" selection-end-column="39" />
+          <folding />
         </state>
       </provider>
     </entry>

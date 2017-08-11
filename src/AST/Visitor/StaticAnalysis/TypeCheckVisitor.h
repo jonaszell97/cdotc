@@ -5,130 +5,168 @@
 #ifndef CDOT_TYPECHECKVISITOR_H
 #define CDOT_TYPECHECKVISITOR_H
 
+#include <unordered_map>
 #include "../Visitor.h"
-#include "../../../Message/Warning.h"
 
-class AstNode;
+using std::string;
+using std::pair;
+class Namespace;
+class Expression;
 
-enum class ClassPropType {
-    METHOD,
-    FIELD
-};
-
-struct ClassProp {
-    typedef std::unique_ptr<ClassProp> UniquePtr;
-private:
-    ClassProp();
-};
-
-struct ClassField : public ClassProp {
-
-    typedef std::unique_ptr<ClassField> UniquePtr;
-};
-
-class TypeCheckVisitor : public Visitor {
+class TypeCheckVisitor {
 public:
-    TypeCheckVisitor(TypeCheckVisitor *parent = nullptr);
+    TypeCheckVisitor(TypeCheckVisitor *parent = nullptr, bool = false);
 
     void dump();
 
-    virtual Variant visit(ModuleDecl*);
-    virtual Variant visit(ImportStmt*);
-    virtual Variant visit(ExportStmt*);
+    virtual TypeSpecifier visit(NamespaceDecl*);
+    virtual TypeSpecifier visit(ImportStmt*);
+    virtual TypeSpecifier visit(ExportStmt*);
 
-    virtual Variant visit(FunctionDecl*);
-    virtual Variant visit(CompoundStmt*);
-    virtual Variant visit(IdentifierRefExpr*);
-    virtual Variant visit(DeclStmt*);
-    virtual Variant visit(ForStmt*);
-    virtual Variant visit(WhileStmt*);
+    virtual TypeSpecifier visit(FunctionDecl*);
+    virtual TypeSpecifier visit(CompoundStmt*);
+    virtual TypeSpecifier visit(IdentifierRefExpr*);
+    virtual TypeSpecifier visit(DeclStmt*);
+    virtual TypeSpecifier visit(ForStmt*);
+    virtual TypeSpecifier visit(WhileStmt*);
 
-    virtual Variant visit(ArrayLiteral*);
-    virtual Variant visit(LiteralExpr*);
-    virtual Variant visit(StringLiteral*);
-    virtual Variant visit(ArrayAccessExpr*);
-    virtual Variant visit(CallExpr*);
-    virtual Variant visit(MemberRefExpr*);
-    virtual Variant visit(MethodCallExpr*);
-    virtual Variant visit(FunctionCallExpr*);
-    virtual Variant visit(BinaryOperator*);
-    virtual Variant visit(ExplicitCastExpr*);
-    virtual Variant visit(TertiaryOperator*);
-    virtual Variant visit(UnaryOperator*);
-    virtual Variant visit(BreakStmt*);
-    virtual Variant visit(ContinueStmt*);
-    virtual Variant visit(IfStmt*);
-    virtual Variant visit(SwitchStmt*);
-    virtual Variant visit(CaseStmt*);
-    virtual Variant visit(LabelStmt*);
-    virtual Variant visit(GotoStmt*);
-    virtual Variant visit(FuncArgDecl*);
-    virtual Variant visit(ReturnStmt*);
-    virtual Variant visit(InputStmt*);
-    virtual Variant visit(OutputStmt*);
-    virtual Variant visit(Expression*);
-    virtual Variant visit(ClassDecl*);
-    virtual Variant visit(MethodDecl*);
-    virtual Variant visit(FieldDecl*);
-    virtual Variant visit(ConstrDecl*);
-    virtual Variant visit(LambdaExpr*);
-    virtual Variant visit(OperatorDecl*);
-    virtual Variant visit(StructDecl*);
+    virtual TypeSpecifier visit(ArrayLiteral*);
+    virtual TypeSpecifier visit(LiteralExpr*);
+    virtual TypeSpecifier visit(StringLiteral*);
+    virtual TypeSpecifier visit(ArrayAccessExpr*);
+    virtual TypeSpecifier visit(CallExpr*);
+    virtual TypeSpecifier visit(MemberRefExpr*);
+    virtual TypeSpecifier visit(BinaryOperator*);
+    virtual TypeSpecifier visit(ExplicitCastExpr*);
+    virtual TypeSpecifier visit(TertiaryOperator*);
+    virtual TypeSpecifier visit(UnaryOperator*);
+    virtual TypeSpecifier visit(BreakStmt*);
+    virtual TypeSpecifier visit(ContinueStmt*);
+    virtual TypeSpecifier visit(IfStmt*);
+    virtual TypeSpecifier visit(SwitchStmt*);
+    virtual TypeSpecifier visit(CaseStmt*);
+    virtual TypeSpecifier visit(LabelStmt*);
+    virtual TypeSpecifier visit(GotoStmt*);
+    virtual TypeSpecifier visit(FuncArgDecl*);
+    virtual TypeSpecifier visit(ReturnStmt*);
+    virtual TypeSpecifier visit(Expression*);
+    virtual TypeSpecifier visit(ClassDecl*);
+    virtual TypeSpecifier visit(MethodDecl*);
+    virtual TypeSpecifier visit(FieldDecl*);
+    virtual TypeSpecifier visit(ConstrDecl*);
+    virtual TypeSpecifier visit(LambdaExpr*);
+    virtual TypeSpecifier visit(OperatorDecl*);
+    virtual TypeSpecifier visit(InterfaceDecl*);
+    virtual TypeSpecifier visit(ImplicitCastExpr*);
+    virtual TypeSpecifier visit(ExtendStmt*);
+    virtual TypeSpecifier visit(TypedefDecl*);
+    virtual TypeSpecifier visit(TypeRef*);
 
 protected:
 
-    std::unordered_multimap<std::string, TypeSpecifier> variables = {};
+    std::unordered_multimap<string, TypeSpecifier> variables = {};
+    std::unordered_map<string, DeclStmt*> declarations = {};
 
-    static std::vector<std::string> interfaces;
-    static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> interface_props;
 
-    static std::vector<std::string> classes;
-    static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> class_props;
-    static std::unordered_multimap<std::string, std::pair<std::string, TypeSpecifier>> static_class_props;
+    static std::vector<string> interfaces;
+    bool current_decl_is_interface = false;
+    bool current_method_is_static = false;
 
-    void declare_var(std::string, TypeSpecifier, AstNode* = nullptr);
-    void declare_fun(std::string, std::vector<TypeSpecifier>, TypeSpecifier, AstNode* = nullptr);
-    void push_type(TypeSpecifier);
-    TypeSpecifier pop_type();
-    void check_fun_call(std::string, TypeSpecifier, std::vector<TypeSpecifier>, AstNode* = nullptr);
-    bool fun_call_compatible(TypeSpecifier, std::vector<TypeSpecifier>);
+    static std::unordered_multimap<string, TypeSpecifier> GlobalVariables;
+    static std::vector<string> classes;
+    static std::unordered_multimap<string, std::pair<string, TypeSpecifier>> class_props;
+    static std::unordered_multimap<string, std::pair<string, TypeSpecifier>> static_class_props;
 
-    TypeSpecifier latest_type();
-    std::pair<TypeSpecifier, std::string> get_var(std::string, AstNode* = nullptr);
-    std::pair<TypeSpecifier, std::string> get_fun(std::string, std::vector<TypeSpecifier>, AstNode* = nullptr);
+    void declare_var(string&, TypeSpecifier&, bool = false, AstNode* = nullptr);
+    TypeSpecifier& declare_fun(string&, std::vector<TypeSpecifier>&, TypeSpecifier&, AstNode* = nullptr);
+    void push_type(TypeSpecifier&);
+    void pop_type();
 
-    std::string decl_ident;
+    string current_fun;
+
+    inline void resolve(TypeSpecifier&);
+
+    TypeSpecifier& latest_type();
+    std::pair<TypeSpecifier, string> get_var(string&, AstNode* = nullptr);
+    std::pair<TypeSpecifier, string> get_fun(string&, std::vector<std::shared_ptr<Expression>>&);
+
+    bool has_var(string);
 
     TypeCheckVisitor *parent;
     std::vector<TypeCheckVisitor*> children = {};
-    std::string scope = "0";
+    string scope = "0";
 
     inline void add_child(TypeCheckVisitor *child) {
         children.push_back(child);
     }
 
-    std::vector<TypeSpecifier> type_refs = {};
-    std::string current_class;
+    std::vector<TypeSpecifier*> type_refs = {};
+    string current_class;
+    string current_this;
+
+    std::vector<string> labels = {};
+    inline bool has_label(string label) {
+        if (std::find(labels.begin(), labels.end(), label) != labels.end()) {
+            return true;
+        }
+        else if (parent) {
+            return parent->has_label(label);
+        }
+
+        return false;
+    }
 
     TypeSpecifier declared_return_type;
     bool check_return_type = false;
+    bool is_function_body_visitor = false;
+    bool is_nested_function = false;
+    void update_ret_type(TypeSpecifier);
+
+    std::vector<std::pair<string,string>> captures = {};
+    std::vector<TypeSpecifier> capture_types = {};
+    std::vector<string> copy_targets = {};
+
     bool newly_created = true;
 
     TypeSpecifier return_type;
     bool returnable = false;
     int branches = 1;
     int returned = 0;
-    void return_(TypeSpecifier ret_type, AstNode *cause = nullptr);
+    void return_(TypeSpecifier& ret_type, AstNode *cause = nullptr, bool = true);
 
     inline void reset() {
         branches = 1;
         returned = 0;
+        broken = false;
+        continued = false;
         return_type = TypeSpecifier();
         newly_created = true;
     }
 
     bool continuable = false;
     bool breakable = false;
+    bool continued = false;
+    bool broken = false;
+
+    unsigned int lambda_count = 0;
+
+    static std::vector<Namespace*> namespaces;
+    std::vector<string> attributes = {};
+
+    bool has_attribute(string attr) {
+        auto current = this;
+        while (current != nullptr) {
+            if (std::find(current->attributes.begin(), current->attributes.end(), attr) != current->attributes.end()) {
+                return true;
+            }
+
+            current = current->parent;
+        }
+
+        return false;
+    }
+
+    void import_builtin(std::vector<string> name);
 };
 
 

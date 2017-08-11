@@ -22,25 +22,25 @@ void LiteralExpr::set_val(Variant val) {
     switch (val.get_type().type) {
         case INT_T:
         case LONG_T:
-            __class_name = "IntegerLiteral";
+            class_name = "IntegerLiteral";
             break;
         case FLOAT_T:
         case DOUBLE_T:
-            __class_name = "FloatingPointLiteral";
+            class_name = "FloatingPointLiteral";
             break;
         case BOOL_T:
-            __class_name = "BoolLiteral";
+            class_name = "BoolLiteral";
             break;
         case CHAR_T:
-            __class_name = "CharLiteral";
+            class_name = "CharLiteral";
             break;
         case STRING_T:
-            __class_name = "StringLiteral";
+            class_name = "StringLiteral";
             break;
         case OBJECT_T:
-            __class_name = "ObjectLiteral";
+            class_name = "ObjectLiteral";
         case VOID_T:
-            __class_name = "NullLiteral";
+            class_name = "NullLiteral";
             break;
 
     }
@@ -54,7 +54,7 @@ void LiteralExpr::__dump(int depth) {
     for (int i = 0; i < depth; i++) {
         std::cout << "\t";
     }
-    std::cout << __class_name << " ['" << _value.to_string(true) << "']" << std::endl;
+    std::cout << class_name << " ['" << _value.to_string(true) << "']" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

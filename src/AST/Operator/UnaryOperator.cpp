@@ -5,7 +5,6 @@
 #include <iostream>
 #include "UnaryOperator.h"
 #include "../../Variant/Variant.h"
-#include "../../StdLib/Objects/Object.h"
 #include "../../Util.h"
 
 UnaryOperator::UnaryOperator(std::string op, std::string fix) :

@@ -12,7 +12,7 @@
 
 class RefExpr : public Expression {
 public:
-    virtual inline void return_ref(bool ref) {
+    virtual inline void return_lvalue(bool ref) {
         _return_ref = ref;
     }
     virtual inline void implicit_ref(bool implicit) {
@@ -29,6 +29,8 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:

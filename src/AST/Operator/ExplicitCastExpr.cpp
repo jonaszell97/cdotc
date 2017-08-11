@@ -6,7 +6,11 @@
 #include "ExplicitCastExpr.h"
 #include "../../Util.h"
 
-ExplicitCastExpr::ExplicitCastExpr(std::string type) : _operator(type), _child{} {
+ExplicitCastExpr::ExplicitCastExpr(TypeSpecifier to) : to(to), _child{} {
+
+}
+
+ExplicitCastExpr::ExplicitCastExpr(TypeSpecifier to, Expression::SharedPtr target) : to(to), _child(target) {
 
 }
 
@@ -24,7 +28,7 @@ std::vector<AstNode::SharedPtr> ExplicitCastExpr::get_children() {
 
 void ExplicitCastExpr::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "ExplicitCastExpr [(" << _operator << ")]" << std::endl;
+    std::cout << "ExplicitCastExpr [(" << to.to_string() << ")]" << std::endl;
 
     _child->__dump(depth + 1);
 }

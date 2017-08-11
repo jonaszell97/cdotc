@@ -7,7 +7,7 @@
 
 #include <iostream>
 
-MethodDecl::MethodDecl(std::string method_name, TypeSpecifier return_type, std::vector<FuncArgDecl::SharedPtr> args,
+MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
         CompoundStmt::SharedPtr body, AccessModifier am, bool is_static) :
     method_name(method_name),
     return_type(return_type),
@@ -20,7 +20,7 @@ MethodDecl::MethodDecl(std::string method_name, TypeSpecifier return_type, std::
 
 }
 
-MethodDecl::MethodDecl(std::string method_name, TypeSpecifier return_type, std::vector<FuncArgDecl::SharedPtr> args,
+MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
         AccessModifier am, bool is_static) :
     method_name(method_name),
     return_type(return_type),
@@ -48,7 +48,7 @@ std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
 void MethodDecl::__dump(int depth) {
     AstNode::__tab(depth);
     std::cout << (is_static ? "Static" : "") << "MethodDecl [" << (is_abstract ? "abstract " : "") << util::am_map[am]
-            << " " << method_name << " => " << return_type.to_string() << "]" << std::endl;
+            << " " << method_name << " => " << return_type->to_string() << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

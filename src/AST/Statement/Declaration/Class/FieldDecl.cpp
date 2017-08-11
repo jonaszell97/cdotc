@@ -7,7 +7,7 @@
 
 #include <iostream>
 
-FieldDecl::FieldDecl(std::string field_name, TypeSpecifier type, AccessModifier am, bool is_static,
+FieldDecl::FieldDecl(std::string field_name, TypeRef::SharedPtr type, AccessModifier am, bool is_static,
          Expression::SharedPtr def_val):
     field_name(field_name),
     type(type),
@@ -24,6 +24,7 @@ std::vector<AstNode::SharedPtr> FieldDecl::get_children() {
 
 void FieldDecl::__dump(int depth) {
     AstNode::__tab(depth);
+
     std::string get_set = "";
     if (generate_getter || generate_setter) {
         get_set = " (";
@@ -37,7 +38,7 @@ void FieldDecl::__dump(int depth) {
         get_set += ")";
     }
 
-    std::cout << (is_static ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type.to_string()
+    std::cout << (is_static ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type->to_string()
               << " " << field_name << get_set << "]" << std::endl;
 
     for (auto c : get_children()) {

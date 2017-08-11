@@ -1,0 +1,48 @@
+
+def println() {
+    printf(@CString "\n")
+}
+
+def print(s: String) {
+    printf(s.AsCString())
+}
+
+def println(str: String) {
+    print(str)
+    println()
+}
+
+def print(i: Int) {
+    printf(@CString "%d", i)
+}
+
+def println(i: Int) {
+    print(i)
+    println()
+}
+
+def print(c: Char) {
+    printf(@CString "%c", c)
+}
+
+def println(c: Char) {
+    print(c)
+    println()
+}
+
+def print(d: Double) {
+    printf(@CString "%f", d)
+}
+
+def println(d: Double) {
+    print(d)
+    println()
+}
+
+def print(f: Float) {
+    print((Double)f)
+}
+
+def println(f: Float) {
+    println((Double)f)
+}

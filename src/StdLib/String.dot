@@ -1,0 +1,20 @@
+
+class String {
+    let charArray: [Char] { get }
+
+    init() {
+        
+    }
+
+    init(str: [Char]) {
+        charArray = str
+    }
+
+    def AsCString() {
+        return charArray.GetRaw()
+    }
+
+    operator + (s: String) {
+        # return String(charArray + s.charArray)
+    }
+}

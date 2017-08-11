@@ -5,33 +5,14 @@
 #ifndef CDOT_MODULEDECL_H
 #define CDOT_MODULEDECL_H
 
-#include "../CompoundStmt.h"
+#include "../Statement.h"
+#include "../Block/CompoundStmt.h"
 
-class ImportStmt;
-class ExportStmt;
-
-class ModuleDecl : public CompoundStmt {
+class NamespaceDecl : public Statement {
 public:
-    ModuleDecl(std::string);
+    NamespaceDecl(string, CompoundStmt::SharedPtr);
 
-    inline void add_import(std::shared_ptr<ImportStmt> import) {
-        imports.push_back(import);
-    }
-
-    inline void add_export(std::shared_ptr<ExportStmt> _export) {
-        exports.push_back(_export);
-    }
-
-    inline void add_statements(std::vector<Statement::SharedPtr> stmts) {
-        _statements.reserve(stmts.size());
-        _statements.insert(_statements.begin(), stmts.begin(), stmts.end());
-    }
-
-    inline std::vector<Statement::SharedPtr> get_statements() {
-        return _statements;
-    }
-
-    typedef std::shared_ptr<ModuleDecl> SharedPtr;
+    typedef std::shared_ptr<NamespaceDecl> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
@@ -50,12 +31,13 @@ public:
 
 
     friend class Visitor;
-    friend class EvaluatingVisitor;
+    friend class TypeCheckVisitor;
+    friend class CodeGenVisitor;
+
 
 protected:
-    std::string module_name;
-    std::vector<std::shared_ptr<ImportStmt>> imports;
-    std::vector<std::shared_ptr<ExportStmt>> exports;
+    string ns_name;
+    CompoundStmt::SharedPtr contents;
 };
 
 

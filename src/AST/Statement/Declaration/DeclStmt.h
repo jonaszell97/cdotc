@@ -11,30 +11,40 @@
 
 class DeclStmt : public Statement {
 public:
-    DeclStmt();
+    DeclStmt(string, TypeRef::SharedPtr, bool, bool, Expression::SharedPtr = nullptr);
 
-    void add_declaration(std::string, TypeSpecifier, Expression::SharedPtr = {});
-    inline size_t size() {
-        return decl_identifiers.size();
-    }
-
-    std::vector<AstNode::SharedPtr> get_children();
+    std::vector<AstNode::SharedPtr> get_children() override;
 
     typedef std::shared_ptr<DeclStmt> SharedPtr;
-    void __dump(int);
+    void __dump(int) override;
 
-    virtual inline Variant accept(Visitor& v) {
+    inline virtual NodeType get_type() override {
+        return NodeType::DECLARATION;
+    }
+    virtual inline Variant accept(Visitor& v) override {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) override {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    std::vector<std::string> decl_identifiers;
-    std::vector<std::pair<TypeSpecifier, Expression::SharedPtr>> declarations;
+    string identifier;
+    TypeRef::SharedPtr type;
+    Expression::SharedPtr value;
+    bool is_const;
+    bool is_global;
 };
 
 

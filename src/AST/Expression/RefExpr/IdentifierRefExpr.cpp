@@ -5,7 +5,7 @@
 #include <iostream>
 #include "IdentifierRefExpr.h"
 #include "../../../Variant/Variant.h"
-#include "../../Statement/CompoundStmt.h"
+#include "../../Statement/Block/CompoundStmt.h"
 #include "../../../Util.h"
 #include "MemberRefExpr.h"
 
@@ -34,7 +34,7 @@ void IdentifierRefExpr::__dump(int depth) {
         std::cout << "ImplicitRefExpr" << " [" << _ident << "]" << std::endl;
     }
     else {
-        std::cout << "Identifier" << (_return_ref ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
+        std::cout << "Identifier" << (lvalue ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
     }
 
     if (_member_expr != nullptr) {

@@ -8,7 +8,7 @@
 
 #include "../Statement.h"
 #include "../../Expression/Expression.h"
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 #include "CaseStmt.h"
 
 class SwitchStmt : public Statement {
@@ -23,18 +23,34 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::SWITCH_STMT;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     Expression::SharedPtr switch_val;
     std::vector<CaseStmt::SharedPtr> cases;
+
+    // codegen
+    bool has_default = false;
+    int default_index = -1;
 };
 
 

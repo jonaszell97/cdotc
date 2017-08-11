@@ -1,0 +1,37 @@
+def Main() {
+    let a = @RawArray [69, 88, 212]
+    a[0] = 1
+    a[1] = 2
+    a[2] = 5
+    println(a[0])
+    println(a[1])
+    println(a[2])
+
+    let b = @RawArray [Int(69), Int(88), Int(212)]
+    println(b[0].Unbox())
+    println(b[1].Unbox())
+    println(b[2].Unbox())
+
+    let y = [3, 404, 500]
+    println(y[0])
+    println(y[1])
+    println(y[2])
+
+    let z = ['c', 'a', 't']
+    z[0] = 'd'
+    z[1] = 'o'
+    z[2] = 'g'
+    println(z[0])
+    println(z[1])
+    println(z[2])
+
+    let λ = [Int(69), Int(88), Int(212)]
+    println(λ[0].Unbox())
+    println(λ[1].Unbox())
+    println(λ[2].Unbox())
+
+    let π = [3.0, 404.0, 500.0]
+    println(π[0])
+    println(π[1])
+    println(π[2])
+}

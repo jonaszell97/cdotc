@@ -1500,32 +1500,32 @@ Token.cpp.s:
 	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Token.cpp.s
 .PHONY : Token.cpp.s
 
-Tokenizer.o: Tokenizer.cpp.o
+Lexer.o: Lexer.cpp.o
 
-.PHONY : Tokenizer.o
+.PHONY : Lexer.o
 
 # target to build an object file
-Tokenizer.cpp.o:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Tokenizer.cpp.o
-.PHONY : Tokenizer.cpp.o
+Lexer.cpp.o:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Lexer.cpp.o
+.PHONY : Lexer.cpp.o
 
-Tokenizer.i: Tokenizer.cpp.i
+Lexer.i: Lexer.cpp.i
 
-.PHONY : Tokenizer.i
+.PHONY : Lexer.i
 
 # target to preprocess a source file
-Tokenizer.cpp.i:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Tokenizer.cpp.i
-.PHONY : Tokenizer.cpp.i
+Lexer.cpp.i:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Lexer.cpp.i
+.PHONY : Lexer.cpp.i
 
-Tokenizer.s: Tokenizer.cpp.s
+Lexer.s: Lexer.cpp.s
 
-.PHONY : Tokenizer.s
+.PHONY : Lexer.s
 
 # target to generate assembly for a file
-Tokenizer.cpp.s:
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Tokenizer.cpp.s
-.PHONY : Tokenizer.cpp.s
+Lexer.cpp.s:
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Lexer.cpp.s
+.PHONY : Lexer.cpp.s
 
 Util.o: Util.cpp.o
 
@@ -1824,9 +1824,9 @@ help:
 	@echo "... Token.o"
 	@echo "... Token.i"
 	@echo "... Token.s"
-	@echo "... Tokenizer.o"
-	@echo "... Tokenizer.i"
-	@echo "... Tokenizer.s"
+	@echo "... Lexer.o"
+	@echo "... Lexer.i"
+	@echo "... Lexer.s"
 	@echo "... Util.o"
 	@echo "... Util.i"
 	@echo "... Util.s"

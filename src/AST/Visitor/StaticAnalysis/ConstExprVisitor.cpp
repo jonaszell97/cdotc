@@ -6,7 +6,7 @@
 #include "../Visitor.cpp"
 
 
-Variant ConstExprVisitor::visit(ModuleDecl *node) {
+Variant ConstExprVisitor::visit(NamespaceDecl *node) {
     for (auto child : node->get_children()) {
         child->accept(*this);
     }
@@ -36,16 +36,12 @@ Variant ConstExprVisitor::visit(IdentifierRefExpr *node) {
     }
 
     return {};
-
-    return {};
 }
 
 Variant ConstExprVisitor::visit(DeclStmt *node) {
     for (auto child : node->get_children()) {
         child->accept(*this);
     }
-
-    return {};
 
     return {};
 }
@@ -84,11 +80,7 @@ Variant ConstExprVisitor::visit(LiteralExpr *node) {
 }
 
 Variant ConstExprVisitor::visit(StringLiteral *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
+    return { node->value };
 }
 
 Variant ConstExprVisitor::visit(ArrayAccessExpr *node) {
@@ -116,11 +108,10 @@ Variant ConstExprVisitor::visit(MemberRefExpr *node) {
 }
 
 Variant ConstExprVisitor::visit(BinaryOperator *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
+    if (node->_first_child->accept(*this).get_type().static_const
+            && node->_second_child->accept(*this).get_type().static_const) {
+        return Variant();
     }
-
-    return {};
 }
 
 Variant ConstExprVisitor::visit(ExplicitCastExpr *node) {
@@ -211,39 +202,7 @@ Variant ConstExprVisitor::visit(ReturnStmt *node) {
     return {};
 }
 
-Variant ConstExprVisitor::visit(InputStmt *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
-}
-
-Variant ConstExprVisitor::visit(OutputStmt *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
-}
-
 Variant ConstExprVisitor::visit(Expression *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
-}
-
-Variant ConstExprVisitor::visit(MethodCallExpr *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
-
-    return {};
-}
-
-Variant ConstExprVisitor::visit(FunctionCallExpr *node) {
     for (auto child : node->get_children()) {
         child->accept(*this);
     }
@@ -315,10 +274,22 @@ Variant ConstExprVisitor::visit(ExportStmt *node) {
     return {};
 }
 
-Variant ConstExprVisitor::visit(StructDecl *node) {
-    for (auto child : node->get_children()) {
-        child->accept(*this);
-    }
+Variant ConstExprVisitor::visit(InterfaceDecl *node) {
 
-    return {};
+}
+
+Variant ConstExprVisitor::visit(ImplicitCastExpr *) {
+
+}
+
+Variant ConstExprVisitor::visit(ExtendStmt *) {
+
+}
+
+Variant ConstExprVisitor::visit(TypedefDecl *) {
+
+}
+
+Variant ConstExprVisitor::visit(TypeRef *) {
+
 }

@@ -3,8 +3,6 @@
 //
 
 #include "ArrayAccessExpr.h"
-#include "../../../StdLib/Objects/Array.h"
-#include "../../../StdLib/Objects/Object.h"
 #include "../Literal/LiteralExpr.h"
 
 #include <iostream>

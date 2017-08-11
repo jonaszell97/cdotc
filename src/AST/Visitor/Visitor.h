@@ -6,11 +6,9 @@
 #define CDOT_VISITOR_H
 
 #include <vector>
-#include "../Context.h"
-
+#include "../../Variant/Variant.h"
 
 class AstNode;
-class InputStmt;
 class FunctionDecl;
 class CompoundStmt;
 class IdentifierRefExpr;
@@ -19,12 +17,8 @@ class ForStmt;
 class WhileStmt;
 class ArrayLiteral;
 class LiteralExpr;
-class ObjectLiteral;
-class ObjectPropExpr;
 class ArrayAccessExpr;
 class CallExpr;
-class MethodCallExpr;
-class FunctionCallExpr;
 class MemberRefExpr;
 class BinaryOperator;
 class ExplicitCastExpr;
@@ -35,8 +29,6 @@ class ContinueStmt;
 class IfStmt;
 class FuncArgDecl;
 class ReturnStmt;
-class InputStmt;
-class OutputStmt;
 class Expression;
 class Statement;
 class ClassDecl;
@@ -50,14 +42,18 @@ class GotoStmt;
 class StringLiteral;
 class LambdaExpr;
 class OperatorDecl;
-class ModuleDecl;
+class NamespaceDecl;
 class ImportStmt;
 class ExportStmt;
-class StructDecl;
+class InterfaceDecl;
+class ImplicitCastExpr;
+class ExtendStmt;
+class TypedefDecl;
+class TypeRef;
 
 class Visitor {
 public:
-    virtual Variant visit(ModuleDecl*) = 0;
+    virtual Variant visit(NamespaceDecl*) = 0;
 
     virtual Variant visit(FunctionDecl*) = 0;
     virtual Variant visit(CompoundStmt*) = 0;
@@ -71,13 +67,9 @@ public:
     virtual Variant visit(ArrayLiteral*) = 0;
     virtual Variant visit(LiteralExpr*) = 0;
     virtual Variant visit(StringLiteral*) = 0;
-    virtual Variant visit(ObjectLiteral*) = 0;
-    virtual Variant visit(ObjectPropExpr*) = 0;
     virtual Variant visit(ArrayAccessExpr*) = 0;
     virtual Variant visit(CallExpr*) = 0;
     virtual Variant visit(MemberRefExpr*) = 0;
-    virtual Variant visit(MethodCallExpr*) = 0;
-    virtual Variant visit(FunctionCallExpr*) = 0;
     virtual Variant visit(BinaryOperator*) = 0;
     virtual Variant visit(ExplicitCastExpr*) = 0;
     virtual Variant visit(TertiaryOperator*) = 0;
@@ -91,8 +83,6 @@ public:
     virtual Variant visit(GotoStmt*) = 0;
     virtual Variant visit(FuncArgDecl*) = 0;
     virtual Variant visit(ReturnStmt*) = 0;
-    virtual Variant visit(InputStmt*) = 0;
-    virtual Variant visit(OutputStmt*) = 0;
     virtual Variant visit(Expression*) = 0;
     virtual Variant visit(ClassDecl*) = 0;
     virtual Variant visit(MethodDecl*) = 0;
@@ -100,7 +90,11 @@ public:
     virtual Variant visit(ConstrDecl*) = 0;
     virtual Variant visit(LambdaExpr*) = 0;
     virtual Variant visit(OperatorDecl*) = 0;
-    virtual Variant visit(StructDecl*) = 0;
+    virtual Variant visit(InterfaceDecl*) = 0;
+    virtual Variant visit(ImplicitCastExpr*) = 0;
+    virtual Variant visit(ExtendStmt*) = 0;
+    virtual Variant visit(TypedefDecl*) = 0;
+    virtual Variant visit(TypeRef*) = 0;
 };
 
 

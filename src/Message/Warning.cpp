@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include "Warning.h"
+#include "../AST/AstNode.h"
 
 void Warning::issue(std::string msg, AstNode* cause, WarningLevel severity) {
     std::string err = "\033[33mWarning";
@@ -17,7 +18,7 @@ void Warning::issue(std::string msg, AstNode* cause, WarningLevel severity) {
     err += msg;
 
     if (cause != nullptr) {
-        std::string program = GlobalContext::program;
+        std::string program = cause->get_source();
         // get line number
         int err_index = cause->get_start();
         int err_end = cause->get_end();
@@ -44,16 +45,16 @@ void Warning::issue(std::string msg, AstNode* cause, WarningLevel severity) {
             ++end;
         }
 
-        std::string details = program.substr(start, end - start) + "\n";
-        for (int i = start; i < err_index; ++i) {
-            details += "~";
+        std::string line_num = std::to_string(lines) + " | ";
+        std::string details = line_num + program.substr(start, end - start) + "\n";
+        while (details[err_index - start + line_num.length()] == ' ') {
+            --start;
         }
-        for (int j = err_index; j < err_end; ++j) {
-            details += "^";
+
+        for (int i = 0; i < err_index - start + line_num.length(); ++i) {
+            details += " ";
         }
-        for (int k = err_end; k < end; ++k) {
-            details += "~";
-        }
+        details += "^";
 
         err += details;
     }

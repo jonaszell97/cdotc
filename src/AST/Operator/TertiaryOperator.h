@@ -6,7 +6,7 @@
 #define CDOT_TERTIARYOPERATOR_H
 
 #include "Operator.h"
-#include "../Statement/CompoundStmt.h"
+#include "../Statement/Block/CompoundStmt.h"
 
 class TertiaryOperator : public Operator {
 public:
@@ -20,19 +20,33 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::TERTIARY_OPERATOR;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 protected:
-    Expression::SharedPtr _condition;
-    Expression::SharedPtr _if_branch;
-    Expression::SharedPtr _else_branch;
-    std::string __class_name = "TertiaryOperator";
+    Expression::SharedPtr condition;
+    Expression::SharedPtr lhs;
+    Expression::SharedPtr rhs;
+
+    // codegen
+    TypeSpecifier result_type;
 };
 
 

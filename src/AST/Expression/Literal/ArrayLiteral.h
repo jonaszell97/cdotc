@@ -13,18 +13,8 @@ class ArrayLiteral : public Expression {
 public:
     ArrayLiteral(TypeSpecifier = {});
 
-    inline void is_var_length(bool var) {
-        _var_length = var;
-        _length = -1;
-    }
-    inline void set_type(TypeSpecifier _type) {
-        type = _type;
-    }
     inline void set_length(int len) {
         _length = len;
-    }
-    inline void set_length_expr(Expression::SharedPtr len) {
-        _length_expr = len;
     }
     void add_element(Expression::SharedPtr);
 
@@ -32,13 +22,25 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::ARRAY_LITERAL;
+    }
+
     virtual inline Variant accept(Visitor& v) {
+        return v.visit(this);
+    }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
         return v.visit(this);
     }
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
@@ -46,7 +48,10 @@ protected:
     Expression::SharedPtr _length_expr;
     TypeSpecifier type;
     int _length;
-    bool _var_length = false;
+    bool var_length = false;
+
+    // codegen
+    llvm::Value* preinit = nullptr;
 };
 
 

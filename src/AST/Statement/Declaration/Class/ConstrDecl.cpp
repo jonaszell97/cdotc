@@ -3,7 +3,7 @@
 //
 
 #include "ConstrDecl.h"
-#include "../../CompoundStmt.h"
+#include "../../Block/CompoundStmt.h"
 #include "../FuncArgDecl.h"
 
 #include <iostream>

@@ -5,7 +5,7 @@
 #ifndef CDOT_LABELSTMT_H
 #define CDOT_LABELSTMT_H
 
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 #include "../../Visitor/EvaluatingVisitor.h"
 
 class EvaluatingVisitor;
@@ -22,6 +22,13 @@ public:
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     inline void set_parent_cmpnd(CompoundStmt* parent) {
         parent_cmpnd = parent;
@@ -32,6 +39,9 @@ public:
     inline void set_visitor(EvaluatingVisitor* v) {
         visitor = v;
     }
+    inline virtual NodeType get_type() {
+        return NodeType::LABEL_STMT;
+    }
     inline EvaluatingVisitor* get_visitor() {
         return visitor;
     }
@@ -39,6 +49,8 @@ public:
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:

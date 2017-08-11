@@ -10,13 +10,13 @@
 class FuncArgDecl : public Expression {
 public:
     FuncArgDecl();
-    FuncArgDecl(std::string, TypeSpecifier, Expression::SharedPtr = {});
+    FuncArgDecl(std::string, TypeRef::SharedPtr, Expression::SharedPtr = {});
     
     void set_name(std::string);
-    inline void set_type(TypeSpecifier type) {
+    inline void set_type(TypeRef::SharedPtr type) {
         _arg_type = type;
     }
-    inline TypeSpecifier get_type() {
+    inline TypeRef::SharedPtr get_arg_type() {
         return _arg_type;
     }
     void set_default(Expression::SharedPtr);
@@ -25,18 +25,30 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::FUNC_ARG_DECL;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     std::string _arg_name;
-    TypeSpecifier _arg_type;
+    TypeRef::SharedPtr _arg_type;
     Expression::SharedPtr _default_val;
 };
 

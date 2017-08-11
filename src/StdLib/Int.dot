@@ -1,0 +1,19 @@
+
+/**
+ * Use @Boxed annotation to get a boxed integer
+ */
+class Int {
+    let val: Int
+
+    init (i: Int) {
+        val = i
+    }
+
+    def Unbox() {
+        return val
+    }
+
+    let static Max = 2_147_483_647
+    let static Min = -2_147_483_647
+    let static Bits = 32
+}

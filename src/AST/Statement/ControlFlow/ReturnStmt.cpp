@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "ReturnStmt.h"
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 
 #include <iostream>
 

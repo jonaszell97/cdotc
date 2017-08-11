@@ -6,7 +6,7 @@
 #include "FunctionDecl.h"
 #include "../../../Util.h"
 
-FunctionDecl::FunctionDecl(std::string func_name, TypeSpecifier type) :
+FunctionDecl::FunctionDecl(std::string func_name, TypeRef::SharedPtr type) :
     _func_name(func_name),
     _return_type(type),
     _args(std::vector<FuncArgDecl::SharedPtr>())
@@ -32,7 +32,7 @@ std::vector<AstNode::SharedPtr> FunctionDecl::get_children() {
 
 void FunctionDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "FunctionDecl ["<< _func_name << " => " << val::typetostr(_return_type)  << "]" << std::endl;
+    std::cout << "FunctionDecl ["<< _func_name << " => " << _return_type->to_string()  << "]" << std::endl;
 
     for (auto arg : _args) {
         arg->__dump(depth + 1);

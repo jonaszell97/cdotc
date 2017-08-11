@@ -8,13 +8,13 @@
 
 #include "../Statement.h"
 #include "FuncArgDecl.h"
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 
 class FunctionDecl : public Statement {
 public:
-    FunctionDecl(std::string, TypeSpecifier = { ANY_T });
+    FunctionDecl(std::string, TypeRef::SharedPtr = nullptr);
 
-    inline void set_return_type(TypeSpecifier type) {
+    inline void set_return_type(TypeRef::SharedPtr type) {
         _return_type = type;
     }
     inline void set_body(CompoundStmt::SharedPtr body) {
@@ -26,20 +26,37 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::FUNCTION_DECL;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     std::string _func_name;
-    TypeSpecifier _return_type;
+    TypeRef::SharedPtr _return_type;
     std::vector<FuncArgDecl::SharedPtr> _args;
     CompoundStmt::SharedPtr _body;
+
+    // codegen
+    std::vector<std::pair<std::string,std::string>> captures = {};
+    std::vector<TypeSpecifier> capture_types = {};
+    std::vector<std::string> copy_targets = {};
 };
 
 

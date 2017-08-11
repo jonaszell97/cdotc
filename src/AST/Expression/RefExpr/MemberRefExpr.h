@@ -22,18 +22,39 @@ public:
 
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::MEMBER_EXPR;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     std::string _ident;
-    std::string __class_name = "MemberRefExpr";
+
+    // codegen
+    std::string class_name;
+    TypeSpecifier field_type;
+    bool is_static = false;
+    bool is_ns_member = false;
+    TypeSpecifier generic_return_type;
+    bool needs_generic_cast = false;
+
+
 };
 
 

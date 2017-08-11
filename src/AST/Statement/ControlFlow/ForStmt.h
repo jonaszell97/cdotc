@@ -10,7 +10,7 @@
 #include "../../AstNode.h"
 #include "../Statement.h"
 #include "../../Expression/Expression.h"
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 #include "../../Expression/RefExpr/IdentifierRefExpr.h"
 
 class ForStmt : public Statement {
@@ -29,13 +29,25 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::FOR_STMT;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:

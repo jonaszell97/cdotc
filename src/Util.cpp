@@ -3,13 +3,13 @@
 //
 
 #include "Util.h"
+#include "AST/Visitor/StaticAnalysis/Class.h"
 #include <string>
 #include <vector>
 
 namespace util {
-    int min_op_precedence = 0;
 
-    std::unordered_map<std::string, int> op_precedence {
+    std::unordered_map<string, int> op_precedence {
             {"?", 0},
             {":", 0},
             {"=", 0},
@@ -38,25 +38,11 @@ namespace util {
             {"%", 9},
             {"**", 10},
             {"typecast", 11},
-            {"..", 12}
+            {"..", 12},
+            {"infix", 13}
     };
 
-    std::unordered_map<std::string, int> unary_op_precedence {
-            {"!", 0},
-            {"&", 0},
-            {"*", 0},
-            {"~", 0},
-            {"-", 0},
-            {"+", 0},
-            {"typeof", 0},
-            {"--pre", 1},
-            {"++pre", 1},
-            {"--post", 1},
-            {"++post", 1},
-            {"new", 2}
-    };
-
-    std::string token_names[] = {
+    string token_names[] = {
             "T_KEYWORD",
             "T_TYPE",
             "T_IDENT",
@@ -67,7 +53,7 @@ namespace util {
             "T_EOF"
     };
 
-    std::vector<std::string> binary_operators = {
+    std::vector<string> binary_operators = {
             "=",
             "+=",
             "-=",
@@ -93,51 +79,16 @@ namespace util {
             "**",
             "..",
             "??",
-            "^"
-    };
-
-    std::unordered_map<std::string, ValueType> binary_op_return_types = {
-            {"=", VOID_T},
-            {"+=", VOID_T},
-            {"-=", VOID_T},
-            {"*=", VOID_T},
-            {"/=", VOID_T},
-            {"||", BOOL_T},
-            {"&&", BOOL_T},
-            {"&", INT_T},
-            {"|", INT_T},
-            {"!=", BOOL_T},
-            {"==", BOOL_T},
-            {"<=", BOOL_T},
-            {">=", BOOL_T},
-            {"<", BOOL_T},
-            {">", BOOL_T},
-            {"<<", INT_T},
-            {">>", INT_T},
-            {"+", INT_T},
-            {"-", INT_T},
-            {"*", INT_T},
-            {"/", FLOAT_T},
-            {"%", INT_T},
-            {"**", INT_T},
-            {"..", OBJECT_T},
-            {"??", ANY_T},
-            {"^", INT_T},
+            "^",
+            "->",
+            "=>"
     };
 
     std::vector<char> operator_chars = {
         '+', '-', '=', '<', '>', '&', '|', '%', '!', '*', '/', '~', '?', ':', '.', '^'
     };
 
-    std::vector<std::string> equality_operators = {
-            "=",
-            "*=",
-            "/=",
-            "+=",
-            "-="
-    };
-
-    std::vector<std::string> unary_operators = {
+    std::vector<string> unary_operators = {
             "!",
             "+",
             "-",
@@ -147,84 +98,68 @@ namespace util {
             "&",
             "*",
             "typeof",
-            "new"
+            "new",
+            "..."
     };
 
-    std::unordered_map<std::string, ValueType> unary_op_return_types = {
-            {"!", BOOL_T},
-            {"+", INT_T},
-            {"-", INT_T},
-            {"~", INT_T},
-            {"++", INT_T},
-            {"--", INT_T},
-            {"&", REF_T},
-            {"*", ANY_T},
-            {"typeof", STRING_T},
-            {"new", OBJECT_T}
-    };
-
-    std::vector<std::string> tertiary_operators = {
+    std::vector<string> tertiary_operators = {
             "?",
             ":"
     };
 
-    std::vector<std::string> keywords = {
-            "def",
-            "in",
-            "out",
-            "outln",
-            "return",
-            "if",
-            "else",
-            "while",
-            "do",
-            "switch",
-            "for",
-            "case",
-            "default",
-            "struct",
-            "throw",
-            "class",
-            "public",
-            "private",
-            "protected",
-            "static",
-            "abstract",
-            "extends",
-            "interface",
-            "enum",
-            "implements",
-            "namespace",
-            "typeof",
-            "continue",
-            "break",
-            "get",
-            "set",
-            "goto",
-            "operator",
-            "module",
-            "export",
-            "import",
-            "as",
-            "from"
+    std::vector<string> keywords = {
+        "def",
+        "return",
+        "if",
+        "else",
+        "while",
+        "do",
+        "switch",
+        "for",
+        "case",
+        "default",
+        "struct",
+        "throw",
+        "class",
+        "public",
+        "private",
+        "protected",
+        "static",
+        "abstract",
+        "interface",
+        "enum",
+        "with",
+        "namespace",
+        "typeof",
+        "continue",
+        "break",
+        "get",
+        "set",
+        "goto",
+        "operator",
+        "export",
+        "using",
+        "from",
+        "let",
+        "const",
+        "extend",
+        "typedef",
+        "init",
+        "delete"
     };
 
-    std::unordered_map<ValueType, std::string> types = {
-            {INT_T, "int"},
-            {LONG_T, "long"},
-            {FLOAT_T, "float"},
-            {DOUBLE_T, "double"},
-            {STRING_T, "string"},
-            {BOOL_T, "bool"},
-            {CHAR_T, "char"},
-            {OBJECT_T, "object"},
-            {ANY_T, "any"},
-            {VOID_T, "void"},
-            {AUTO_T, "let"},
-            {REF_T, "reference"}
+    std::unordered_map<ValueType, string> types = {
+            {INT_T, "Int"},
+            {FLOAT_T, "Float"},
+            {DOUBLE_T, "Double"},
+            {STRING_T, "String"},
+            {BOOL_T, "Bool"},
+            {CHAR_T, "Char"},
+            {OBJECT_T, "Object"},
+            {VOID_T, "Void"}
     };
 
-    std::unordered_map<ValueType, std::string> classmap = {
+    std::unordered_map<ValueType, string> classmap = {
             {INT_T, "Integer"},
             {LONG_T, "Integer"},
             {FLOAT_T, "Double"},
@@ -235,25 +170,30 @@ namespace util {
             {OBJECT_T, "Object"}
     };
 
-    std::unordered_map<AccessModifier, std::string> am_map = {
+    std::unordered_map<AccessModifier, string> am_map = {
             {AccessModifier::PUBLIC, "public"},
             {AccessModifier::PRIVATE, "private"},
             {AccessModifier::PROTECTED, "protected"}
     };
 
-    std::unordered_map<std::string, ValueType> typemap = {
-            {"int", INT_T},
-            {"long", LONG_T},
-            {"double", DOUBLE_T},
-            {"float", FLOAT_T},
-            {"string", STRING_T},
-            {"bool", BOOL_T},
-            {"char", CHAR_T},
-            {"object", OBJECT_T},
-            {"void", VOID_T},
-            {"any", ANY_T},
-            {"let", AUTO_T},
-            {"reference", REF_T}
+    std::unordered_map<string, ValueType> typemap = {
+            {"Int", INT_T},
+            {"UInt", INT_T},
+            {"Int8", INT_T},
+            {"UInt8", INT_T},
+            {"Int16", INT_T},
+            {"UInt16", INT_T},
+            {"Int32", INT_T},
+            {"UInt32", INT_T},
+            {"Int64", INT_T},
+            {"UInt64", INT_T},
+
+            {"Double", DOUBLE_T},
+            {"Float", FLOAT_T},
+            {"Bool", BOOL_T},
+            {"Char", CHAR_T},
+            {"Object", OBJECT_T},
+            {"Void", VOID_T}
     };
 
     std::vector<char> punctuators = {
@@ -267,28 +207,66 @@ namespace util {
         '}',
         '\n',
         '.',
-        '\\'
+        '\\',
+        '@'
     };
 
-    std::set<std::string> string_modifiers = {
+    std::set<string> string_modifiers = {
             "f",
             "u",
             "e"
     };
 
-    template <>
-    bool in_vector<std::string>(std::vector<std::string> vec, std::string el) {
+    std::vector<string> attributes = {
+        "UnsafePtr",
+        "NoStdLib",
+        "Suppress",
+        "RawArray",
+        "CString",
+        "Boxed"
+    };
+
+    template <class T>
+    bool in_vector(std::vector<T> vec, T el) {
         return std::find(vec.begin(), vec.end(), el) != vec.end();
     }
+    
+    template bool in_vector<string>(std::vector<string>, string);
+
+    template<class T, class R>
+    bool in_pair_vector(std::vector<std::pair<T, R>> vec, T el) {
+        return std::find_if(vec.begin(), vec.end(), [el](const std::pair<T, R> pair) {
+            return pair.first == el;
+        }) != vec.end();
+    };
+
+    template<class T, class R>
+    R get_second(std::vector<std::pair<T, R>> vec, T el) {
+        auto pos = std::find_if(vec.begin(), vec.end(), [el](const std::pair<T, R> pair) {
+            return pair.first == el;
+        });
+
+        return pos->second;
+    };
+
+    template bool in_pair_vector<string, cdot::cl::Method*>(std::vector<pair<string, cdot::cl::Method*>>, string);
+    template cdot::cl::Method* get_second<string, cdot::cl::Method*>(std::vector<pair<string, cdot::cl::Method*>>, string);
+
+    template bool in_pair_vector<string, cdot::cl::Field*>(std::vector<pair<string, cdot::cl::Field*>>, string);
+    template cdot::cl::Field* get_second<string, cdot::cl::Field*>(std::vector<pair<string, cdot::cl::Field*>>,
+        string);
+
+    template bool in_pair_vector<string, string>(std::vector<pair<string, string>>, string);
+    template string get_second<string, string>(std::vector<pair<string, string>>, string);
 
     template <>
     bool in_vector<ValueType>(std::vector<ValueType> vec, ValueType el) {
         return std::find(vec.begin(), vec.end(), el) != vec.end();
     }
 
-    std::vector<std::string> str_split(std::string source, char delimiter) {
-        auto res = std::vector<std::string>();
-        std::string s = "";
+    std::vector<string> str_split(string source, char delimiter) {
+        auto res = std::vector<string>();
+        string s = "";
         for (int i = 0; i < source.length(); i++) {
             if (source[i] == delimiter) {
                 res.push_back(s);
@@ -305,7 +283,7 @@ namespace util {
         return res;
     }
 
-    std::string str_trim(std::string target) {
+    string str_trim(string target) {
         while (target[0] == ' ' || target[0] == '\n' || target[0] == '\t') {
             target = target.substr(1);
         }
@@ -317,20 +295,20 @@ namespace util {
         return target;
     }
 
-    std::string generate_getter_name(std::string field_name) {
+    string generate_getter_name(string field_name) {
         return (std::find(field_name.begin(), field_name.end(), '_') != field_name.end())
             ? "get_" + field_name
-            : "get" + std::string(1, toupper(field_name[0])) + field_name.substr(1, field_name.length() - 1);
+            : "Get" + string(1, toupper(field_name[0])) + field_name.substr(1, field_name.length() - 1);
     }
 
-    std::string generate_setter_name(std::string field_name) {
+    string generate_setter_name(string field_name) {
         return (std::find(field_name.begin(), field_name.end(), '_') != field_name.end())
                ? "set_" + field_name
-               : "set" + std::string(1, toupper(field_name[0])) + field_name.substr(1, field_name.length() - 1);
+               : "Set" + string(1, toupper(field_name[0])) + field_name.substr(1, field_name.length() - 1);
     }
 
-    std::string str_escape(std::string str) {
-        std::string res = "";
+    string str_escape(string str) {
+        string res = "";
         for (char c : str) {
             switch (c) {
                 case '\n':
@@ -353,17 +331,17 @@ namespace util {
         return res;
     }
 
-    bool is_reversible(std::string op) {
+    bool is_reversible(string op) {
         return op == "*" || op == "+" || op == "&" || op == "|" || op == "^";
     }
 
     std::unordered_map<ValueType, std::vector<ValueType>> implicit_type_conversions = {
-            {INT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
-            {LONG_T, {DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, CHAR_T}},
+            {INT_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T}},
+            {LONG_T, {DOUBLE_T, FLOAT_T, BOOL_T, STRING_T}},
             {FLOAT_T, {DOUBLE_T, STRING_T}},
             {DOUBLE_T, {STRING_T}},
-            {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, STRING_T, CHAR_T, INT_T}},
-            {CHAR_T, {LONG_T, DOUBLE_T, FLOAT_T, BOOL_T, STRING_T, INT_T}},
+            {BOOL_T, {LONG_T, DOUBLE_T, FLOAT_T, STRING_T, INT_T}},
+            {CHAR_T, {}},
             {STRING_T, {}},
             {VOID_T, {BOOL_T}},
     };
@@ -378,51 +356,7 @@ namespace util {
             {STRING_T, {}},
     };
 
-    std::string field_to_symbol(std::string name, TypeSpecifier type, bool is_static) {
-        return "__F_" + name + "_" + type_to_symbol(type) + "_" + (is_static ? "_st" : "");
-    }
-
-    std::string method_to_symbol(std::string name, std::vector<TypeSpecifier> args, TypeSpecifier return_type, bool
-        is_static) {
-        std::string symbol = "$M_" + name + "_" + type_to_symbol(return_type);
-        for (auto arg : args) {
-            symbol += "_" + type_to_symbol(arg);
-        }
-
-        if (is_static) {
-            symbol += "_st";
-        }
-
-        return symbol;
-    }
-
-    std::string fun_to_symbol(std::string name, std::vector<TypeSpecifier> args, bool is_static) {
-        std::string symbol = "$F_" + std::to_string(name.length()) + name + (args.size() > 0 ? "_" : "");
-        for (auto arg : args) {
-            symbol += type_to_symbol(arg);
-        }
-
-        if (is_static) {
-            symbol += "_st";
-        }
-
-        return symbol;
-    }
-
-    std::string method_to_symbol(std::string name, std::vector<TypeSpecifier> args, bool is_static) {
-        std::string symbol = "$M_" + name;
-        for (auto arg : args) {
-            symbol += "_" + type_to_symbol(arg);
-        }
-
-        if (is_static) {
-            symbol += "_st";
-        }
-
-        return symbol;
-    }
-
-    std::string type_to_symbol(TypeSpecifier type) {
+    string type_to_symbol(TypeSpecifier type) {
         switch (type.type) {
             case INT_T: return "1i";
             case LONG_T: return "1l";
@@ -434,8 +368,341 @@ namespace util {
             case STRING_T: return "6String";
         }
 
-        std::string type_name = type.to_string();
+        string type_name = type.to_string();
 
         return std::to_string(type_name.length()) + type_name;
+    }
+
+    string args_to_string(std::vector<TypeSpecifier>&args) {
+        string str = "(";
+        for (int i = 0; i < args.size(); ++i) {
+            str += args.at(i).to_string();
+            if (i < args.size() - 1) {
+                str += ", ";
+            }
+        }
+
+        return str + ")";
+    }
+
+    std::unordered_map<string, TypeSpecifier> builtin_functions = {
+        {"printf", TypeSpecifier(INT_T)},
+        {"puts", TypeSpecifier(INT_T)},
+        {"scanf", TypeSpecifier(INT_T)},
+        {"sprintf", TypeSpecifier(INT_T)},
+        {"snprintf", TypeSpecifier(INT_T)},
+        {"time", TypeSpecifier(INT_T)},
+        {"srand", TypeSpecifier(VOID_T)},
+        {"rand", TypeSpecifier(INT_T)},
+        {"free", TypeSpecifier(VOID_T)}
+    };
+
+    std::vector<string> builtin_namespaces = {
+        "Primitive"
+    };
+
+    bool resolve_generic(TypeSpecifier& given, TypeSpecifier& needed, std::vector<TypeSpecifier>& given_generics,
+        std::vector<pair<string, TypeSpecifier>>& needed_generics)
+    {
+        if (needed.element_type != nullptr && given.element_type != nullptr && needed.element_type->is_generic) {
+            std::vector<TypeSpecifier> new_given;
+            auto res = resolve_generic(*given.element_type, *needed.element_type, new_given, needed_generics);
+            if (new_given.size() != given_generics.size()) {
+                given_generics.insert(given_generics.begin(), new_given.begin(), new_given.end());
+            }
+
+            return res;
+        }
+
+        if (!needed.is_generic) {
+            return true;
+        }
+
+        if (given_generics.size() < needed_generics.size()) {
+            given_generics.push_back(given);
+        }
+
+        auto covariance = get_second(needed_generics, needed.generic_class_name);
+        if (!val::is_compatible(given, covariance)) {
+            return false;
+        }
+
+        if (util::typemap.find(covariance.class_name) != util::typemap.end()) {
+            covariance.type = util::typemap[covariance.class_name];
+        }
+
+        return true;
+    }
+
+    /**
+     * Returns:
+     *  -1 if compatible
+     *  -2 if incompatible argument count
+     *  index of first incompatible arg otherwise
+     * @param given
+     * @param needed
+     * @param given_generics
+     * @param needed_generics
+     * @return
+     */
+    CallCompatability func_call_compatible(std::vector<TypeSpecifier>& given_args, std::vector<TypeSpecifier>& needed_args,
+        std::vector<TypeSpecifier>& given_generics, std::vector<pair<string, TypeSpecifier>>& needed_generics)
+    {
+        CallCompatability comp;
+        size_t given_size = given_args.size();
+        size_t needed_size = needed_args.size();
+        size_t i = 0;
+        bool perfect_match = true;
+
+        if (given_size == 0 && needed_size == 0 && given_generics.empty() && needed_generics.empty()) {
+            comp.is_compatible = true;
+            comp.compat_score = 0;
+            return comp;
+        }
+
+        auto var_arg = needed_size > 0 && needed_args.back().is_vararg;
+        if (given_size > needed_size && !var_arg) {
+            return comp;
+        }
+
+        if (var_arg) {
+            goto var_arg;
+        }
+
+        for (auto& needed : needed_args) {
+            if (i < given_size) {
+                auto& given = given_args.at(i);
+
+                if (!resolve_generic(given, needed, given_generics, needed_generics)) {
+                    comp.incomp_arg = i;
+                    return comp;
+                }
+
+                if (!val::is_compatible(given, needed)) {
+                    comp.incomp_arg = i;
+                    return comp;
+                }
+                if (given != needed) {
+                    perfect_match = false;
+                }
+            }
+            else if (!needed.nullable) {
+                comp.incomp_arg = i;
+                return comp;
+            }
+
+            ++i;
+        }
+
+        end:
+        comp.is_compatible = true;
+        comp.compat_score = func_score(needed_args);
+        comp.perfect_match = perfect_match;
+
+        return comp;
+
+        var_arg:
+        auto& va_type = needed_args.back();
+        for (auto& given : given_args) {
+            auto& needed = i < needed_size - 1 ? needed_args.at(i) : va_type;
+
+            if (!resolve_generic(given, needed, given_generics, needed_generics)) {
+                comp.incomp_arg = i;
+                return comp;
+            }
+
+            if (!val::is_compatible(given, needed)) {
+                comp.incomp_arg = i;
+                return comp;
+            }
+            if (given != needed) {
+                perfect_match = false;
+            }
+
+            ++i;
+        }
+
+        goto end;
+    }
+
+    /**
+     * Returns:
+     *  -1 if compatible
+     *  -2 if incompatible argument count
+     *  index of first incompatible arg otherwise
+     * @param given
+     * @param needed
+     * @param given_generics
+     * @param needed_generics
+     * @return
+     */
+    CallCompatability func_call_compatible(std::vector<Expression::SharedPtr>& given_args, std::vector<TypeSpecifier>&
+        needed_args, TypeCheckVisitor& Visitor, std::vector<TypeSpecifier>& given_generics,
+        std::vector<pair<string, TypeSpecifier>>& needed_generics)
+    {
+        size_t given_size = given_args.size();
+        size_t needed_size = needed_args.size();
+        size_t i = 0;
+        std::vector<TypeSpecifier> given;
+
+        if (given_size > needed_size && !(needed_size > 0 && needed_args.back().is_vararg)) {
+            return CallCompatability();
+        }
+
+        if (needed_size > 0 && needed_args.back().is_vararg) {
+            goto var_arg;
+        }
+
+        for (auto& needed : needed_args) {
+            if (i < given_size) {
+                auto& given_expr = given_args.at(i);
+
+                given_expr->checkIfReturnable(needed);
+                given.push_back(given_expr->accept(Visitor));
+                given_expr->doneCheck();
+            }
+
+            ++i;
+        }
+
+        end:
+        return func_call_compatible(given, needed_args, given_generics, needed_generics);
+
+        var_arg:
+        auto& va_type = needed_args.back();
+        for (auto& given_expr : given_args) {
+            auto& needed = i < needed_size - 1 ? needed_args.at(i) : va_type;
+
+            given_expr->checkIfReturnable(needed);
+            given.push_back(given_expr->accept(Visitor));
+            given_expr->doneCheck();
+            ++i;
+        }
+
+        goto end;
+    }
+
+    CallCompatability func_call_compatible(std::vector<TypeSpecifier>& given_args, std::vector<TypeSpecifier>&needed_args) {
+        CallCompatability comp;
+        size_t given_size = given_args.size();
+        size_t needed_size = needed_args.size();
+        size_t i = 0;
+        bool perfect_match = true;
+
+        if (given_size == 0 && needed_size == 0) {
+            comp.is_compatible = true;
+            comp.compat_score = 0;
+            return comp;
+        }
+
+        auto var_arg = needed_size > 0 && needed_args.back().is_vararg;
+        if (given_size > needed_size && !var_arg) {
+            return comp;
+        }
+
+        if (var_arg) {
+            goto var_arg;
+        }
+
+        for (auto& needed : needed_args) {
+            if (i < given_size) {
+                auto& given = given_args.at(i);
+                if (!val::is_compatible(given, needed)) {
+                    comp.incomp_arg = i;
+                    return comp;
+                }
+                if (given != needed) {
+                    perfect_match = false;
+                }
+            }
+            else if (!needed.nullable) {
+                comp.incomp_arg = i;
+                return comp;
+            }
+
+            ++i;
+        }
+
+        end:
+        comp.is_compatible = true;
+        comp.compat_score = func_score(needed_args);
+        comp.perfect_match = perfect_match;
+
+        return comp;
+
+        var_arg:
+        auto& va_type = needed_args.back();
+        for (auto& given : given_args) {
+            auto& needed = i < needed_size - 1 ? needed_args.at(i) : va_type;
+            if (!val::is_compatible(given, needed)) {
+                comp.incomp_arg = i;
+                return comp;
+            }
+            if (given != needed) {
+                perfect_match = false;
+            }
+
+            ++i;
+        }
+
+        goto end;
+    }
+
+    CallCompatability func_call_compatible(std::vector<std::shared_ptr<Expression>>& given_args, std::vector<TypeSpecifier>&
+        needed_args, TypeCheckVisitor& Visitor)
+    {
+        size_t given_size = given_args.size();
+        size_t needed_size = needed_args.size();
+        size_t i = 0;
+        std::vector<TypeSpecifier> given;
+
+        if (needed_size > 0 && needed_args.back().is_vararg) {
+            goto var_arg;
+        }
+
+        for (auto& needed : needed_args) {
+            if (i < given_size) {
+                auto& given_expr = given_args.at(i);
+
+                given_expr->checkIfReturnable(needed);
+                given.push_back(given_expr->accept(Visitor));
+                given_expr->doneCheck();
+            }
+
+            ++i;
+        }
+
+        end:
+        return func_call_compatible(given, needed_args);
+
+        var_arg:
+        auto& va_type = needed_args.back();
+        for (auto& given_expr : given_args) {
+            auto& needed = i < needed_size - 1 ? needed_args.at(i) : va_type;
+
+            given_expr->checkIfReturnable(needed);
+            given.push_back(given_expr->accept(Visitor));
+            given_expr->doneCheck();
+            ++i;
+        }
+
+        goto end;
+    }
+
+    int func_score(std::vector<TypeSpecifier>& args) {
+        int score = 0;
+        for (const auto& arg : args) {
+            if (arg.type == OBJECT_T && !arg.raw_array) {
+                score += Namespace::global()->get_class(arg.class_name)->getDepth();
+            }
+            else if (!arg.raw_array) {
+                score += Namespace::global()->get_class(types[arg.type])->getDepth();
+            }
+            else {
+                score += Namespace::global()->get_class(arg.element_type->class_name)->getDepth();
+            }
+        }
+
+        return score;
     }
 }

@@ -4,27 +4,21 @@
 
 #include <iostream>
 #include "CallExpr.h"
-#include "../../Statement/CompoundStmt.h"
-#include "../../../StdLib/Objects/Object.h"
+#include "../../Statement/Block/CompoundStmt.h"
 #include "../../../Util.h"
 
-CallExpr::CallExpr() :
-    _arguments(std::vector<Expression::SharedPtr>())
-{
-
-}
-
-CallExpr::CallExpr(std::vector<Expression::SharedPtr> args) : _arguments(args) {
+CallExpr::CallExpr(CallType type, std::vector<Expression::SharedPtr> args, std::string ident) : type(type), args
+    (args), ident(ident) {
 
 }
 
 void CallExpr::add_argument(Expression::SharedPtr arg) {
-    _arguments.push_back(arg);
+    args.push_back(arg);
 }
 
 std::vector<AstNode::SharedPtr> CallExpr::get_children() {
     std::vector<AstNode::SharedPtr> res;
-    for (auto arg : _arguments) {
+    for (auto arg : args) {
         res.push_back(arg);
     }
     if (_member_expr != nullptr) {

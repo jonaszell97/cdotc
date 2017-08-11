@@ -12,9 +12,9 @@
 
 class Parser;
 
-class Tokenizer {
+class Lexer {
 public:
-    Tokenizer(std::string);
+    Lexer(std::string);
 
     void advance(TokenType, bool = true);
     void advance(bool = true);
@@ -45,7 +45,7 @@ public:
 
     friend class Parser;
     friend class ParseError;
-    typedef std::unique_ptr<Tokenizer> UniquePtr;
+    typedef std::unique_ptr<Lexer> UniquePtr;
 
 protected:
     std::vector<Token> tokens;
@@ -55,7 +55,7 @@ protected:
     Token _get_next_token(bool);
     void ignore_comment();
     void ignore_ml_comment();
-    bool is_letter(char);
+    bool is_identifier_char(char);
     bool is_operator_char(char);
     bool is_operator(std::string);
     bool is_number(char, bool);

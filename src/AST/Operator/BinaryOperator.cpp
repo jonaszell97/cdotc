@@ -4,9 +4,8 @@
 
 #include <iostream>
 #include "BinaryOperator.h"
-#include "../../StdLib/Objects/Object.h"
 #include "../../Util.h"
-#include "../Statement/CompoundStmt.h"
+#include "../Statement/Block/CompoundStmt.h"
 
 BinaryOperator::BinaryOperator(std::string op) : _operator(op) {
 

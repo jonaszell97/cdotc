@@ -8,14 +8,28 @@
 #include <iostream>
 #include <cmath>
 #include "../Message/Exceptions.h"
-#include "../StdLib/Objects/Object.h"
 #include "../Util.h"
 #include "../Token.h"
-#include "./Statement/CompoundStmt.h"
+#include "Statement/Block/CompoundStmt.h"
 #include "Visitor/Visitor.h"
+#include "../Parser.h"
 
 AstNode::AstNode() {
 
+}
+
+void AstNode::alloc_on_heap() {
+    heap_alloc = true;
+    for (const auto& child : get_children()) {
+        child->alloc_on_heap();
+        if (child->declaration != nullptr) {
+            child->declaration->heap_alloc = true;
+        }
+    }
+}
+
+string AstNode::get_source() {
+    return Parser::get_source_file(source_file);
 }
 
 std::vector<AstNode::SharedPtr> AstNode::get_children() {

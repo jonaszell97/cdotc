@@ -3,10 +3,10 @@
 //
 
 #include "catch/catch.h"
-#include "../src/Tokenizer.h"
+#include "../src/Lexer.h"
 
 TEST_CASE("Variable assignment") {
-    Tokenizer t("let x = 3");
+    Lexer t("let x = 3");
     t.advance();
     REQUIRE(t.current_token.get_type() == T_TYPE);
     REQUIRE(t.s_val() == "let");
@@ -23,7 +23,7 @@ TEST_CASE("Variable assignment") {
 }
 
 TEST_CASE("Function declaration") {
-    Tokenizer t(
+    Lexer t(
         "def fun(int x) {"
             "return x + 3"
         "}"
@@ -62,7 +62,7 @@ TEST_CASE("Function declaration") {
 }
 
 TEST_CASE("Numeric literals") {
-    Tokenizer t(
+    Lexer t(
         "3 3L 3l 0xabcA3 0721 0b10100 1.1e-3 3E2 1.1 1.13131f 1.13131F"
     );
     t.advance();
@@ -104,7 +104,7 @@ TEST_CASE("Numeric literals") {
 }
 
 TEST_CASE("String literals") {
-    Tokenizer t(
+    Lexer t(
         "\"hello there, good sir\" "
     );
     t.advance();
@@ -116,7 +116,7 @@ TEST_CASE("String literals") {
 }
 
 TEST_CASE("Char literals") {
-    Tokenizer t(
+    Lexer t(
         "'c' '0' '+' '\n' 'xxx'"
     );
     t.advance();
@@ -137,7 +137,7 @@ TEST_CASE("Char literals") {
 }
 
 TEST_CASE("Bool literals") {
-    Tokenizer t(
+    Lexer t(
         "true false"
     );
     t.advance();
@@ -152,7 +152,7 @@ TEST_CASE("Bool literals") {
 }
 
 TEST_CASE("Null literal") {
-    Tokenizer t(
+    Lexer t(
         "null"
     );
     t.advance();
@@ -164,7 +164,7 @@ TEST_CASE("Null literal") {
 }
 
 TEST_CASE("Operators") {
-    Tokenizer t(
+    Lexer t(
         "!! &&& +++ - +!+ ^|new**??:typeof?"
     );
     t.advance();
@@ -192,7 +192,7 @@ TEST_CASE("Operators") {
 }
 
 TEST_CASE("Punctuators") {
-    Tokenizer t(
+    Lexer t(
             ",;(} [."
     );
     t.advance();

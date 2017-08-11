@@ -11,30 +11,33 @@
 
 class ImportStmt : public Statement {
 public:
-    ImportStmt(std::string, std::string = "", bool = false);
-
-    virtual inline void add_import_ident(std::string ident) {
-        import_identifiers.push_back(ident);
-        is_full_import = false;
-    }
+    ImportStmt(std::vector<string>);
 
     typedef std::shared_ptr<ImportStmt> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::IMPORT_STMT;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
+    friend class TypeCheckVisitor;
+    friend class CodeGenVisitor;
 
 protected:
-    bool is_full_import = true;
-    std::string module_name;
-    std::string path;
-    std::vector<std::string> import_identifiers;
-    bool is_lib_import;
+    std::vector<string> import;
 };
 
 

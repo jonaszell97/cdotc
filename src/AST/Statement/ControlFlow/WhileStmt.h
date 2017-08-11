@@ -8,7 +8,7 @@
 
 #include "../Statement.h"
 #include "../../Expression/Expression.h"
-#include "../CompoundStmt.h"
+#include "../Block/CompoundStmt.h"
 
 class WhileStmt : public Statement {
 public:
@@ -17,17 +17,28 @@ public:
     std::vector<AstNode::SharedPtr> get_children();
     void __dump(int);
 
+    inline virtual NodeType get_type() {
+        return NodeType::WHILE_STMT;
+    }
     virtual inline Variant accept(Visitor& v) {
         return v.visit(this);
     }
+    virtual inline CGValue accept(CodeGenVisitor& v) {
+        return v.visit(this);
+    }
+    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+        return v.visit(this);
+    }
+
 
     friend class Visitor;
     friend class EvaluatingVisitor;
     friend class CaptureVisitor;
+    friend class ConstExprVisitor;
+    friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    Context::SharedPtr context;
     Expression::SharedPtr _condition;
     CompoundStmt::SharedPtr _while_block;
 };

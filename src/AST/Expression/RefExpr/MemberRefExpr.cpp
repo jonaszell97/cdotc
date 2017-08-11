@@ -4,7 +4,6 @@
 
 #include <iostream>
 #include "MemberRefExpr.h"
-#include "../../../StdLib/Objects/Object.h"
 
 MemberRefExpr::MemberRefExpr(std::string ident) :  _ident(ident) {
 

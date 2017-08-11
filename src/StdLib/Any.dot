@@ -1,0 +1,6 @@
+
+class Any {
+    def hello() {
+        return 3
+    }
+}

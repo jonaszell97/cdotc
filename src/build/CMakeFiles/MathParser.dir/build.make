@@ -201,28 +201,28 @@ CMakeFiles/MathParser.dir/Debug.cpp.o.provides: CMakeFiles/MathParser.dir/Debug.
 CMakeFiles/MathParser.dir/Debug.cpp.o.provides.build: CMakeFiles/MathParser.dir/Debug.cpp.o
 
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.o: CMakeFiles/MathParser.dir/flags.make
-CMakeFiles/MathParser.dir/Tokenizer.cpp.o: ../Tokenizer.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/MathParser.dir/Tokenizer.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Tokenizer.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.cpp
+CMakeFiles/MathParser.dir/Lexer.cpp.o: CMakeFiles/MathParser.dir/flags.make
+CMakeFiles/MathParser.dir/Lexer.cpp.o: ../Lexer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/MathParser.dir/Lexer.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/MathParser.dir/Lexer.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Lexer.cpp
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Tokenizer.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.cpp > CMakeFiles/MathParser.dir/Tokenizer.cpp.i
+CMakeFiles/MathParser.dir/Lexer.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/MathParser.dir/Lexer.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Lexer.cpp > CMakeFiles/MathParser.dir/Lexer.cpp.i
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Tokenizer.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Tokenizer.cpp -o CMakeFiles/MathParser.dir/Tokenizer.cpp.s
+CMakeFiles/MathParser.dir/Lexer.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/MathParser.dir/Lexer.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/Lexer.cpp -o CMakeFiles/MathParser.dir/Lexer.cpp.s
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.o.requires:
+CMakeFiles/MathParser.dir/Lexer.cpp.o.requires:
 
-.PHONY : CMakeFiles/MathParser.dir/Tokenizer.cpp.o.requires
+.PHONY : CMakeFiles/MathParser.dir/Lexer.cpp.o.requires
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.o.provides: CMakeFiles/MathParser.dir/Tokenizer.cpp.o.requires
-	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Tokenizer.cpp.o.provides.build
-.PHONY : CMakeFiles/MathParser.dir/Tokenizer.cpp.o.provides
+CMakeFiles/MathParser.dir/Lexer.cpp.o.provides: CMakeFiles/MathParser.dir/Lexer.cpp.o.requires
+	$(MAKE) -f CMakeFiles/MathParser.dir/build.make CMakeFiles/MathParser.dir/Lexer.cpp.o.provides.build
+.PHONY : CMakeFiles/MathParser.dir/Lexer.cpp.o.provides
 
-CMakeFiles/MathParser.dir/Tokenizer.cpp.o.provides.build: CMakeFiles/MathParser.dir/Tokenizer.cpp.o
+CMakeFiles/MathParser.dir/Lexer.cpp.o.provides.build: CMakeFiles/MathParser.dir/Lexer.cpp.o
 
 
 CMakeFiles/MathParser.dir/Parser.cpp.o: CMakeFiles/MathParser.dir/flags.make
@@ -1433,7 +1433,7 @@ MathParser_OBJECTS = \
 "CMakeFiles/MathParser.dir/Util.cpp.o" \
 "CMakeFiles/MathParser.dir/Exceptions.cpp.o" \
 "CMakeFiles/MathParser.dir/Debug.cpp.o" \
-"CMakeFiles/MathParser.dir/Tokenizer.cpp.o" \
+"CMakeFiles/MathParser.dir/Lexer.cpp.o" \
 "CMakeFiles/MathParser.dir/Parser.cpp.o" \
 "CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o" \
 "CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o" \
@@ -1494,7 +1494,7 @@ MathParser: CMakeFiles/MathParser.dir/Variant/Variant.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Util.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Exceptions.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Debug.cpp.o
-MathParser: CMakeFiles/MathParser.dir/Tokenizer.cpp.o
+MathParser: CMakeFiles/MathParser.dir/Lexer.cpp.o
 MathParser: CMakeFiles/MathParser.dir/Parser.cpp.o
 MathParser: CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o
 MathParser: CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o
@@ -1561,7 +1561,7 @@ CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Variant/Variant.cp
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Util.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Exceptions.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Debug.cpp.o.requires
-CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Tokenizer.cpp.o.requires
+CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Lexer.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/Parser.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/Objects/Object.cpp.o.requires
 CMakeFiles/MathParser.dir/requires: CMakeFiles/MathParser.dir/StdLib/Objects/Function.cpp.o.requires

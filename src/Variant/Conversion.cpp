@@ -4,7 +4,6 @@
 
 #include "Conversion.h"
 #include "../Util.h"
-#include "../StdLib/Objects/Object.h"
 
 namespace cdot {
 namespace var {
@@ -12,9 +11,6 @@ namespace var {
     Variant Converter::cast(Variant v, ValueType target_type) {
         if (v.type.type == target_type || target_type == ANY_T) {
             return v;
-        }
-        if (v.type.type == REF_T) {
-            return v.ref->cast_to(target_type);
         }
 
         switch (v.type.type) {
@@ -66,6 +62,7 @@ namespace var {
             }
             case CHAR_T: {
                 if (target_type == STRING_T) {
+                    v.type.computed_length = 1;
                     v.s_val = std::string(1, v.c_val);
                 }
                 else if (target_type == INT_T) {
@@ -94,6 +91,7 @@ namespace var {
             case LONG_T: {
                 if (target_type == STRING_T) {
                     v.s_val = std::to_string(v.type.type == INT_T ? v.int_val : v.long_val);
+                    v.type.computed_length = v.s_val.length();
                 }
                 else if (target_type == CHAR_T) {
                     if ((v.type.type == INT_T ? v.int_val : v.long_val) > UINT8_MAX) {
@@ -123,6 +121,7 @@ namespace var {
             case DOUBLE_T:
                 if (target_type == STRING_T) {
                     v.s_val = std::to_string(v.type.type == FLOAT_T ? v.float_val : v.d_val);
+                    v.type.computed_length = v.s_val.length();
                 }
                 else if (target_type == CHAR_T) {
                     if ((v.type.type == FLOAT_T ? v.float_val : v.d_val) > UINT8_MAX) {
@@ -156,6 +155,7 @@ namespace var {
             case BOOL_T: {
                 if (target_type == STRING_T) {
                     v.s_val = (v.b_val ? "true" : "false");
+                    v.type.computed_length = v.s_val.length();
                 }
                 else if( target_type == CHAR_T) {
                     v.c_val = v.b_val ? '1' : '0';
@@ -179,16 +179,11 @@ namespace var {
 
                 break;
             }
-            case OBJECT_T: {
-                v.s_val = v.o_val->print();
-                break;
-            }
             default:
                 RuntimeError::raise(ERR_BAD_CAST, "Cannot cast value of type " + val::typetostr(v.type.type)
                                                   + " to " + val::typetostr(target_type));
         }
 
-        v.destroy();
         v.type.type = target_type;
         v.check_numeric();
 

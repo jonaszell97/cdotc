@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../MathInterpreter/.idea/MathParser.iml" filepath="$PROJECT_DIR$/../MathInterpreter/.idea/MathParser.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/XtremeJonasScript.iml" filepath="$PROJECT_DIR$/.idea/XtremeJonasScript.iml" />
     </modules>
   </component>

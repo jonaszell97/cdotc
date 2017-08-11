@@ -8,7 +8,11 @@
 #include <string>
 #include <cmath>
 #include <vector>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <unordered_map>
 #include "../Message/Exceptions.h"
+#include "../Util.h"
 
 class Function;
 class Object;
@@ -24,14 +28,17 @@ namespace var {
 }
 }
 
+using std::string;
+using std::pair;
+using std::unordered_map;
 class Variant;
+class Namespace;
 
 enum ValueType : unsigned int {
     INT_T,
     LONG_T,
     FLOAT_T,
     DOUBLE_T,
-    NUMBER_T,
     STRING_T,
     BOOL_T,
     CHAR_T,
@@ -40,8 +47,7 @@ enum ValueType : unsigned int {
     VOID_T,
     AUTO_T,
     CLASS_T,
-    INTERFACE_T,
-    REF_T
+    INTERFACE_T
 };
 
 struct TypeSpecifier;
@@ -53,18 +59,18 @@ namespace val {
     extern std::string base_class(ValueType);
     extern std::string type_name(Variant);
     extern bool is_compatible(ValueType , ValueType);
-    extern bool is_compatible(TypeSpecifier , TypeSpecifier);
-    extern bool is_castable(TypeSpecifier, TypeSpecifier);
+    extern bool is_compatible(TypeSpecifier& , TypeSpecifier&);
+    extern bool is_castable(TypeSpecifier&, TypeSpecifier&);
     extern bool implicitly_castable(ValueType, ValueType);
+    extern bool has_default(TypeSpecifier);
 
-    extern ValueType simple_arithmetic_return_type(TypeSpecifier, TypeSpecifier);
-    extern ValueType division_return_type(TypeSpecifier, TypeSpecifier);
+    extern TypeSpecifier simple_arithmetic_return_type(TypeSpecifier&, TypeSpecifier&);
+    extern ValueType division_return_type(TypeSpecifier&, TypeSpecifier&);
 }
 
 struct TypeSpecifier {
     TypeSpecifier() {
         type = VOID_T;
-        is_numeric = false;
     }
 
     TypeSpecifier(ValueType t) {
@@ -74,7 +80,6 @@ struct TypeSpecifier {
             case FLOAT_T:
             case LONG_T:
             case DOUBLE_T:
-                is_numeric = true;
                 is_primitive = true;
                 break;
             case CHAR_T:
@@ -87,10 +92,12 @@ struct TypeSpecifier {
         }
     }
 
-    bool operator==(TypeSpecifier ts) {
-        return type == ts.type && class_name == ts.class_name;
-    }
-    bool operator!=(TypeSpecifier ts) {
+    TypeSpecifier& resolve(Namespace*);
+    static void resolveGeneric(TypeSpecifier &ts, unordered_map<string, TypeSpecifier>&);
+
+    bool operator==(TypeSpecifier& ts);
+
+    bool operator!=(TypeSpecifier& ts) {
         return !operator==(ts);
     }
     bool operator==(ValueType v) {
@@ -100,43 +107,70 @@ struct TypeSpecifier {
         return type != v;
     }
 
+    TypeSpecifier& operator=(const TypeSpecifier&) = default;
+
     ValueType type = VOID_T;
     std::string class_name;
-    std::shared_ptr<Expression> length;
-    bool is_array = false;
-    bool is_var_length = false;
+    std::shared_ptr<Expression> arr_length = nullptr;
+
+    bool invalid_ns_ref = false;
+
+    bool raw_array = false;
+    bool cstring = false;
+
     bool is_primitive = true;
-    bool is_numeric = false;
+    size_t computed_length = 0;
+
+    int bitwidth = 32;
+    bool is_unsigned = false;
+
+    bool is_generic = false;
+    string generic_class_name;
+
+    bool is_vararg = false;
+
+    std::unordered_map<string, TypeSpecifier> concrete_generic_types = {};
+
     bool nullable = false;
+
+    bool static_const = false;
+    bool is_const = false;
+
     bool is_function = false;
-    std::vector<TypeSpecifier> args = std::vector<TypeSpecifier>();
-    TypeSpecifier* return_type = nullptr;
+    bool is_pointer = false;
+    bool is_reference = false;
+    bool is_lambda = false;
+    bool resolved = false;
+    unsigned int lambda_id;
 
-    std::string to_string() {
-        std::string _nullable = nullable ? "?" : "";
-        if (is_array) {
-            return type == OBJECT_T ? class_name : val::typetostr(type) + "[]" + _nullable;
-        }
-        if (type == OBJECT_T && !is_function) {
-            return class_name + _nullable;
-        }
-        if (type == CLASS_T) return "Class";
-        if (type == INTERFACE_T) return "Interface";
+    std::vector<string> ns_name;
+    std::vector<TypeSpecifier> args;
 
-        if (is_function) {
-            std::string str = "(";
-            for (int i = 0; i < args.size(); ++i) {
-                str += args.at(i).to_string();
-                if (i < args.size() - 1) {
-                    str += ", ";
-                }
-            }
+    union {
+        TypeSpecifier* return_type = nullptr;
+        TypeSpecifier* element_type;
+    };
 
-            return str + ") -> " + return_type->to_string();
-        }
+    std::string to_string() const;
+};
 
-        return val::typetostr(type) + _nullable;
+struct CGValue {
+    CGValue() {
+
     }
+
+    CGValue(llvm::Value *val, bool lvalue = true) : val(val), lvalue(lvalue) {
+
+    }
+
+    llvm::Value* val = nullptr;
+
+    size_t arr_size = 0;
+    bool lvalue = true;
+    bool needs_alloc = true;
+    bool const_arr_size = false;
+
+    unsigned int alignment = 8;
 };
 
 struct Variant {
@@ -152,20 +186,12 @@ protected:
 
     bool any_type = false;
 
-    union {
-        std::shared_ptr<Object> o_val;
-        std::shared_ptr<Variant> ref;
-        Class* class_val;
-        Interface* interface_val;
-    };
-
     std::string s_val;
     TypeSpecifier type;
     bool _is_null = false;
     bool is_numeric = false;
     bool initialized = true;
     void check_numeric();
-    void destroy();
 
 public:
     typedef std::shared_ptr<Variant> SharedPtr;
@@ -174,7 +200,6 @@ public:
     friend class cdot::var::Converter;
     friend class cdot::var::Arithmetic;
 
-    ~Variant();
     Variant();
     Variant(TypeSpecifier);
     Variant(const Variant&);
@@ -184,25 +209,15 @@ public:
     Variant(float);
     Variant(char);
     Variant(bool);
-    Variant(std::shared_ptr<Object>);
-    Variant(std::shared_ptr<Function>);
-    Variant(std::shared_ptr<Variant>);
-    Variant(Class*);
-    Variant(Interface*);
     Variant(std::string);
 
-    TypeSpecifier get_type() const;
+    TypeSpecifier& get_type();
     void is_any_type(bool = true);
-    bool is_ref();
     void set_default();
     void is_initialized(bool init) {
         initialized = init;
     }
     inline bool is_initialized() const {
-        if (type.type == REF_T) {
-            return ref->is_initialized();
-        }
-
         return initialized;
     }
 
@@ -210,10 +225,6 @@ public:
         type.nullable = nullable;
     }
     inline bool is_null() const {
-        if (type.type == REF_T) {
-            return ref->is_null();
-        }
-
         return _is_null;
     }
     inline void is_null(bool is_null) {
@@ -258,11 +269,8 @@ public:
     Variant operator<<(Variant v1);
     Variant operator>>(Variant v1);
 
-    // dereference operator
-    Variant operator*();
-
     // assignment operator
-    Variant operator=(const Variant& v);
+    Variant& operator=(const Variant& v);
     Variant strict_equals(const Variant& v);
 
     // unary operators

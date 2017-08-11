@@ -4,8 +4,7 @@
 
 #include <iostream>
 #include "Exceptions.h"
-#include "../StdLib/GlobalContext.h"
-#include "../Tokenizer.h"
+#include "../Lexer.h"
 
 std::map<ParseErrors, std::string> _parse_errors = {
         {ERR_UNEXPECTED_TOKEN, "Unexpected Token"},
@@ -31,7 +30,7 @@ ParseError::ParseError(const std::string& message) : message_(message) {
 
 }
 
-void ParseError::raise(ParseErrors error, std::string msg, Tokenizer* tokenizer) {
+void ParseError::raise(ParseErrors error, std::string msg, Lexer* tokenizer) {
     std::string err = "\033[21;31m" + _parse_errors[error] + ": " + msg;
     if (tokenizer != nullptr) {
         std::string program = tokenizer->_program;
@@ -71,16 +70,16 @@ void ParseError::raise(ParseErrors error, std::string msg, Tokenizer* tokenizer)
             str_line = str_line.substr(0, str_line.length() - 1);
         }
 
-        std::string details = str_line + "\n";
-        for (int i = start; i < err_index; ++i) {
-            details += "~";
+        std::string line_num = std::to_string(lines) + " | ";
+        std::string details = line_num + program.substr(start, end - start) + "\n";
+        while (details[err_index - start + line_num.length()] == ' ') {
+            --start;
         }
-        for (int j = err_index; j < err_end; ++j) {
-            details += "^";
+
+        for (int i = 0; i < err_index - start + line_num.length(); ++i) {
+            details += " ";
         }
-        for (int k = err_end; k < end; ++k) {
-            details += "~";
-        }
+        details += "^";
 
         err += details;
     }
@@ -95,7 +94,7 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 void RuntimeError::raise(RuntimeErrors error, std::string msg, AstNode* cause) {
     std::string err = "\033[21;31m" + _runtime_errors[error] + ": " + msg;
     if (cause != nullptr) {
-        std::string program = GlobalContext::program;
+        std::string program = cause->get_source();
         // get line number
         int err_index = cause->get_start();
         int err_end = cause->get_end();
@@ -122,25 +121,20 @@ void RuntimeError::raise(RuntimeErrors error, std::string msg, AstNode* cause) {
             ++end;
         }
 
-        std::string details = program.substr(start, end - start) + "\n";
-        const int max_length = int(details.length());
-        bool non_ws = false;
-        for (int i = start; i < err_index; ++i) {
-            non_ws = non_ws || details[i - start] != ' ';
-            if (non_ws) {
-                details += "~";
-            } else {
+        std::string line_num = std::to_string(lines) + " | ";
+        if (program.length() >= end - 1) {
+            std::string details = line_num + program.substr(start, end - start) + "\n";
+            while (details[err_index - start + line_num.length()] == ' ') {
+                --start;
+            }
+
+            for (int i = 0; i < err_index - start + line_num.length(); ++i) {
                 details += " ";
             }
-        }
-        for (int j = err_index; j < std::min(err_end, err_index + max_length); ++j) {
             details += "^";
-        }
-        for (int k = err_end; k < max_length; ++k) {
-            details += "~";
-        }
 
-        err += details;
+            err += details;
+        }
     }
 
     throw RuntimeError(err + "\033[0m");

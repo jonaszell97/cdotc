@@ -7,18 +7,16 @@
 #include <iostream>
 
 ClassDecl::ClassDecl(std::string class_name, std::vector<FieldDecl::SharedPtr> fields,
-        std::vector<MethodDecl::SharedPtr> methods, ConstrDecl::SharedPtr constr, AccessModifier am,
-        std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> unary_operators,
-        std::vector<std::pair<std::string, OperatorDecl::SharedPtr>> binary_operators, bool is_interface,
+        std::vector<MethodDecl::SharedPtr> methods, std::vector<ConstrDecl::SharedPtr> constr,
+    std::vector<TypedefDecl::SharedPtr> typedefs, std::vector<pair<string, TypeSpecifier>> generics, AccessModifier am,
         bool is_abstract, std::string extends, std::vector<std::string> implements) :
     class_name(class_name),
     fields(fields),
     methods(methods),
-    constr(constr),
-    unary_operators(unary_operators),
-    binary_operators(binary_operators),
+    constructors(constr),
+    generics(generics),
+    typedefs(typedefs),
     am(am),
-    is_interface(is_interface),
     is_abstract(is_abstract),
     extends(extends),
     implements(implements)
@@ -28,20 +26,17 @@ ClassDecl::ClassDecl(std::string class_name, std::vector<FieldDecl::SharedPtr> f
 
 std::vector<AstNode::SharedPtr> ClassDecl::get_children() {
     std::vector<AstNode::SharedPtr> children;
-    if (constr != nullptr) {
+    for (const auto& td : typedefs) {
+        children.push_back(td);
+    }
+    for (const auto& constr : constructors) {
         children.push_back(constr);
     }
-    for (auto field : fields) {
+    for (const auto& field : fields) {
         children.push_back(field);
     }
-    for (auto method : methods) {
+    for (const auto& method : methods) {
         children.push_back(method);
-    }
-    for (auto op : unary_operators) {
-        children.push_back(op.second);
-    }
-    for (auto op : binary_operators) {
-        children.push_back(op.second);
     }
 
     return children;
@@ -58,7 +53,7 @@ void ClassDecl::__dump(int depth) {
         }
     }
 
-    std::cout << (is_interface ? "InterfaceDecl" : "ClassDecl") << " [" << (is_abstract ? "abstract " : "") <<
+    std::cout << "ClassDecl" << " [" << (is_abstract ? "abstract " : "") <<
               class_name << extends_str << implements_str << "]" << std::endl;
 
     for (auto c : get_children()) {

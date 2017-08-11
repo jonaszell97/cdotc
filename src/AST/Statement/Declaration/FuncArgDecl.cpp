@@ -6,7 +6,7 @@
 #include "FuncArgDecl.h"
 #include "../../../Util.h"
 
-FuncArgDecl::FuncArgDecl(std::string name, TypeSpecifier type, Expression::SharedPtr def) :
+FuncArgDecl::FuncArgDecl(std::string name, TypeRef::SharedPtr type, Expression::SharedPtr def) :
     _arg_name(name),
     _arg_type(type),
     _default_val(def)
@@ -14,7 +14,7 @@ FuncArgDecl::FuncArgDecl(std::string name, TypeSpecifier type, Expression::Share
 
 }
 
-FuncArgDecl::FuncArgDecl() : FuncArgDecl("", TypeSpecifier(), {}) {
+FuncArgDecl::FuncArgDecl() : FuncArgDecl("", nullptr, nullptr) {
 
 }
 
@@ -37,7 +37,7 @@ std::vector<AstNode::SharedPtr> FuncArgDecl::get_children() {
 void FuncArgDecl::__dump(int depth) {
     AstNode::__tab(depth);
 
-    std::cout << "FuncArgDecl [" << val::typetostr(_arg_type) << " " << _arg_name << "]" << std::endl;
+    std::cout << "FuncArgDecl [" << _arg_type->to_string() << " " << _arg_name << "]" << std::endl;
 
     if (_default_val != nullptr) {
         _default_val->__dump(depth + 1);

@@ -6,7 +6,8 @@
 #define CDOT_WARNING_H
 
 #include <string>
-#include "../AST/AstNode.h"
+
+class AstNode;
 
 enum class WarningLevel {
     SEVERE,

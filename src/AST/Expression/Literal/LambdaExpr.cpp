@@ -31,12 +31,12 @@ void LambdaExpr::__dump(int depth) {
     AstNode::__tab(depth);
     std::string signature = "(";
     for (int i = 0; i < _args.size(); ++i) {
-        signature += val::typetostr(_args[i]->get_type());
+        signature += _args[i]->get_arg_type()->to_string();
         if (i < _args.size() - 1) {
             signature += ", ";
         }
     }
-    signature += ") -> " + val::typetostr(_return_type);
+    signature += ") -> " + _return_type.to_string();
 
     std::cout << "LambdaExpr [" << signature << "]" << std::endl;
 

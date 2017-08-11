@@ -8,7 +8,7 @@
 #include "../Visitor.h"
 
 class ConstExprVisitor : public Visitor {
-    virtual Variant visit(ModuleDecl*);
+    virtual Variant visit(NamespaceDecl*);
     virtual Variant visit(ImportStmt*);
     virtual Variant visit(ExportStmt*);
 
@@ -25,8 +25,6 @@ class ConstExprVisitor : public Visitor {
     virtual Variant visit(ArrayAccessExpr*);
     virtual Variant visit(CallExpr*);
     virtual Variant visit(MemberRefExpr*);
-    virtual Variant visit(MethodCallExpr*);
-    virtual Variant visit(FunctionCallExpr*);
     virtual Variant visit(BinaryOperator*);
     virtual Variant visit(ExplicitCastExpr*);
     virtual Variant visit(TertiaryOperator*);
@@ -40,8 +38,6 @@ class ConstExprVisitor : public Visitor {
     virtual Variant visit(GotoStmt*);
     virtual Variant visit(FuncArgDecl*);
     virtual Variant visit(ReturnStmt*);
-    virtual Variant visit(InputStmt*);
-    virtual Variant visit(OutputStmt*);
     virtual Variant visit(Expression*);
     virtual Variant visit(ClassDecl*);
     virtual Variant visit(MethodDecl*);
@@ -49,7 +45,11 @@ class ConstExprVisitor : public Visitor {
     virtual Variant visit(ConstrDecl*);
     virtual Variant visit(LambdaExpr*);
     virtual Variant visit(OperatorDecl*);
-    virtual Variant visit(StructDecl*);
+    virtual Variant visit(InterfaceDecl*);
+    virtual Variant visit(ImplicitCastExpr*);
+    virtual Variant visit(ExtendStmt*);
+    virtual Variant visit(TypedefDecl*);
+    virtual Variant visit(TypeRef*);
 };
 
 

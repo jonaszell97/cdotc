@@ -2,12 +2,11 @@
 // Created by Jonas Zell on 18.06.17.
 //
 
-#include "Tokenizer.h"
+#include "Lexer.h"
 #include "Util.h"
-#include "StdLib/Objects/Object.h"
 #include "Variant/Variant.h"
 
-Tokenizer::Tokenizer(std::string program) :
+Lexer::Lexer(std::string program) :
     current_token(T_BOF, { }, 0, 0, 0),
     _program(program),
     current_index(0),
@@ -26,8 +25,8 @@ Tokenizer::Tokenizer(std::string program) :
     current_index = current_token.get_start();
 }
 
-std::string Tokenizer::s_val() {
-    if (current_token.get_value().get_type().type != STRING_T) {
+std::string Lexer::s_val() {
+    if (current_token.get_value().get_type().class_name != "String") {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unexpected token " + util::token_names[current_token.get_type()], this);
     }
 
@@ -40,13 +39,13 @@ std::string Tokenizer::s_val() {
  * @param allowDecimalPoint Whether to allow a decimal point or not
  * @return
  */
-bool Tokenizer::is_number(char _c, bool allowDecimalPoint) {
+bool Lexer::is_number(char _c, bool allowDecimalPoint) {
     int c = int(_c);
     // digits and dot
     return (c >= 48 && c <= 57) || (allowDecimalPoint && c == C_DOT);
 }
 
-bool Tokenizer::is_hex(char _c) {
+bool Lexer::is_hex(char _c) {
     int c = int(_c);
 
     return (c >= C_CAP_A && c <= C_CAP_F) || (c >= C_A && c <= C_F) || (c >= 48 && c <= 57);
@@ -57,11 +56,10 @@ bool Tokenizer::is_hex(char _c) {
  * @param _c
  * @return
  */
-bool Tokenizer::is_letter(char _c) {
+bool Lexer::is_identifier_char(char _c) {
     int c = int(_c);
-    // valid identifiers contain letters, _, $ and numbers
-    return (c >= C_CAP_A && c <= C_CAP_Z) || (c >= C_A && c <= C_Z)
-           || c == C_UNDERSCORE || c == C_DOLLAR_SIGN || is_number(c, false);
+    // valid identifiers contain ANYTHING (almost)
+    return !is_operator_char(c) && !is_punctuator(c) && c != ' ' && c != '\0';
 }
 
 /**
@@ -69,7 +67,7 @@ bool Tokenizer::is_letter(char _c) {
  * @param _c
  * @return
  */
-bool Tokenizer::is_operator(std::string s) {
+bool Lexer::is_operator(std::string s) {
     for (int i = 0; i < util::binary_operators.size(); i++) {
         if (s == util::binary_operators[i]) {
             return true;
@@ -89,7 +87,7 @@ bool Tokenizer::is_operator(std::string s) {
     return false;
 }
 
-bool Tokenizer::is_operator_char(char c) {
+bool Lexer::is_operator_char(char c) {
     for (int i = 0; i < util::operator_chars.size(); i++) {
         if (c == util::operator_chars[i]) {
             return true;
@@ -104,7 +102,7 @@ bool Tokenizer::is_operator_char(char c) {
  * @param s
  * @return
  */
-bool Tokenizer::is_keyword(std::string s) {
+bool Lexer::is_keyword(std::string s) {
     for (int i = 0; i < util::keywords.size(); i++) {
         if (s == util::keywords[i]) {
             return true;
@@ -114,7 +112,7 @@ bool Tokenizer::is_keyword(std::string s) {
     return false;
 }
 
-bool Tokenizer::is_type_keyword(std::string s) {
+bool Lexer::is_type_keyword(std::string s) {
     if (s.back() == C_CLOSE_SQUARE) {
         s.pop_back();
         while (s.back() > '0' && s.back() < '9') {
@@ -123,8 +121,8 @@ bool Tokenizer::is_type_keyword(std::string s) {
         s.pop_back();
     }
 
-    for (auto type : util::types) {
-        if (s == type.second) {
+    for (auto type : util::typemap) {
+        if (s == type.first) {
             return true;
         }
     }
@@ -132,7 +130,7 @@ bool Tokenizer::is_type_keyword(std::string s) {
     return false;
 }
 
-bool Tokenizer::is_punctuator(char c) {
+bool Lexer::is_punctuator(char c) {
     for (int i = 0; i < util::punctuators.size(); i++) {
         if (c == util::punctuators[i]) {
             return true;
@@ -142,7 +140,7 @@ bool Tokenizer::is_punctuator(char c) {
     return false;
 }
 
-bool Tokenizer::is_bool_literal(std::string s) {
+bool Lexer::is_bool_literal(std::string s) {
     return s == "true" || s == "false";
 }
 
@@ -151,7 +149,7 @@ bool Tokenizer::is_bool_literal(std::string s) {
  * Gets the next character in the program
  * @return
  */
-char Tokenizer::get_next_char() {
+char Lexer::get_next_char() {
     if (current_index >= _program.length()) {
         current_index++;
         return '\0';
@@ -167,7 +165,7 @@ char Tokenizer::get_next_char() {
     return c;
 }
 
-char Tokenizer::char_lookahead() {
+char Lexer::char_lookahead() {
     if (current_index >= _program.length()) {
         current_index++;
         return '\0';
@@ -186,15 +184,16 @@ char Tokenizer::char_lookahead() {
 /**
  * Backtracks to the last token
  */
-void Tokenizer::backtrack() {
+void Lexer::backtrack() {
     --current_token_index;
+    current_index = last_token_index;
 }
 
 /**
  * Backtracks by the passed amount of characters
  * @param length
  */
-void Tokenizer::backtrack_c(int length) {
+void Lexer::backtrack_c(int length) {
     current_index -= length;
 }
 
@@ -202,7 +201,7 @@ void Tokenizer::backtrack_c(int length) {
  * Returns the next token
  * @return
  */
-Token Tokenizer::get_next_token(bool ignore_newline) {
+Token Lexer::get_next_token(bool ignore_newline) {
     if (current_token_index >= tokens.size() - 1) {
         return tokens.back();
     }
@@ -218,7 +217,7 @@ Token Tokenizer::get_next_token(bool ignore_newline) {
     return t;
 }
 
-char Tokenizer::escape_char(char c) {
+char Lexer::escape_char(char c) {
     switch (c) {
         case 'n':
             return '\n';
@@ -247,7 +246,7 @@ char Tokenizer::escape_char(char c) {
  * Parses the next token
  * @return
  */
-Token Tokenizer::_get_next_token(bool ignore_newline) {
+Token Lexer::_get_next_token(bool ignore_newline) {
     if (current_token.get_type() == T_EOF) {
         return current_token;
     }
@@ -275,7 +274,6 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
 
     // check for comment
     if (first == C_HASH) {
-        first = get_next_char();
         ignore_comment();
 
         return _get_next_token(ignore_newline);
@@ -358,7 +356,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
         // advance integer or floating point number
         next = first;
         bool decimal_point = false;
-        while ((next >= '0' && next <= '9') || next == '\'' || next == '.') {
+        while ((next >= '0' && next <= '9') || next == '_' || next == '.') {
             if (next == '.' && !decimal_point) {
                 if (char_lookahead() < '0' || char_lookahead() > '9') {
                     break;
@@ -366,7 +364,9 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
                 decimal_point = true;
             }
 
-            t += next;
+            if (next != '_') {
+                t += next;
+            }
             next = get_next_char();
         }
 
@@ -425,10 +425,10 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
             return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
         }
     }
-    else if (is_letter(first)) {
+    else if (is_identifier_char(first)) {
         // advance keyword or identifier
         next = first;
-        while (is_letter(next)) {
+        while (is_identifier_char(next)) {
             t += next;
             next = get_next_char();
         }
@@ -448,7 +448,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
             return Token(T_KEYWORD, { t }, start_line, _start_index, current_index);
         }
         else if (is_type_keyword(t)) {
-            return Token(T_TYPE, { t }, start_line, _start_index, current_index);
+            return Token(T_IDENT, { t }, start_line, _start_index, current_index);
         }
         else if (is_bool_literal(t)) {
             return Token(T_LITERAL, { t == "true" }, start_line, _start_index, current_index);
@@ -493,7 +493,7 @@ Token Tokenizer::_get_next_token(bool ignore_newline) {
  * Advances to the next token, while expecting 'type'
  * @param type
  */
-void Tokenizer::advance(TokenType type, bool ignore_newline) {
+void Lexer::advance(TokenType type, bool ignore_newline) {
     current_token = get_next_token(ignore_newline);
     if (current_token.get_type() != type) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected " + util::token_names[type]
@@ -504,7 +504,7 @@ void Tokenizer::advance(TokenType type, bool ignore_newline) {
 /**
  * Advances to the next token without restriction
  */
-void Tokenizer::advance(bool ignore_newline) {
+void Lexer::advance(bool ignore_newline) {
     current_token = get_next_token(ignore_newline);
 }
 
@@ -512,7 +512,7 @@ void Tokenizer::advance(bool ignore_newline) {
  * Looks ahead to the next token without influencing the parsing
  * @return
  */
-Token Tokenizer::lookahead(bool ignore_newline) {
+Token Lexer::lookahead(bool ignore_newline) {
     if (current_token_index >= tokens.size() - 1) {
         return tokens.back();
     }
@@ -530,7 +530,7 @@ Token Tokenizer::lookahead(bool ignore_newline) {
  * Returns the last token
  * @return
  */
-Token Tokenizer::lookbehind() {
+Token Lexer::lookbehind() {
     if (current_token_index == 0) {
         return tokens.front();
     }
@@ -541,7 +541,7 @@ Token Tokenizer::lookbehind() {
 /**
  * Skips to the end of a comment
  */
-void Tokenizer::ignore_comment() {
+void Lexer::ignore_comment() {
     char c = get_next_char();
 
     while (c != C_NEWLINE) {
@@ -556,7 +556,7 @@ void Tokenizer::ignore_comment() {
 /**
  * Skips to the end of a multiline comment
  */
-void Tokenizer::ignore_ml_comment() {
+void Lexer::ignore_ml_comment() {
     char c = get_next_char();
 
     main_loop:

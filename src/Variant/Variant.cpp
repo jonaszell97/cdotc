@@ -4,21 +4,15 @@
 
 #include <regex>
 #include "Variant.h"
-#include "../StdLib/Objects/Object.h"
 #include "../Util.h"
-#include "../StdLib/Class/Interface.h"
-#include "../StdLib/Objects/Array.h"
-#include "../StdLib/Objects/Function.h"
 #include "Conversion.h"
 #include "Arithmetic.h"
 #include <sstream>
 #include <iostream>
+#include "../AST/Visitor/StaticAnalysis/Class.h"
+#include "../AST/Namespace.h"
 
-Variant::~Variant() {
-    destroy();
-}
-
-Variant::Variant() : o_val{}, type{} {
+Variant::Variant() : type{} {
     type.type = VOID_T;
     _is_null = true;
 }
@@ -26,20 +20,26 @@ Variant::Variant() : o_val{}, type{} {
 Variant::Variant(bool b) : Variant() {
     b_val = b;
     is_numeric = true;
+    type.class_name = "Bool";
     type.type = BOOL_T;
+    type.static_const = true;
     _is_null = false;
 }
 
 Variant::Variant(double d) : Variant() {
     is_numeric = true;
     d_val = d;
+    type.class_name = "Double";
     type.type = DOUBLE_T;
+    type.static_const = true;
     _is_null = false;
 }
 
 Variant::Variant(int i) : Variant() {
     int_val = i;
     is_numeric = true;
+    type.class_name = "Int";
+    type.static_const = true;
     type.type = INT_T;
     _is_null = false;
 }
@@ -47,7 +47,9 @@ Variant::Variant(int i) : Variant() {
 Variant::Variant(float f) : Variant() {
     float_val = f;
     is_numeric = true;
+    type.class_name = "Float";
     type.type = FLOAT_T;
+    type.static_const = true;
     _is_null = false;
 }
 
@@ -55,91 +57,32 @@ Variant::Variant(long l) : Variant() {
     is_numeric = true;
     _is_null = false;
     long_val = l;
+    type.static_const = true;
     type.type = LONG_T;
 }
 
 Variant::Variant(char c) : Variant() {
     c_val = c;
     type.type = CHAR_T;
-    _is_null = false;
-}
-
-Variant::Variant(Class* c) : Variant() {
-    class_val = c;
-    type.type = CLASS_T;
-    _is_null = false;
-}
-
-Variant::Variant(Interface* interf) : Variant() {
-    interface_val = interf;
-    type.type = INTERFACE_T;
+    type.class_name = "Char";
+    type.static_const = true;
     _is_null = false;
 }
 
 Variant::Variant(std::string s) : Variant() {
     s_val = s;
-    type.type = STRING_T;
-    _is_null = false;
-}
-
-Variant::Variant(std::shared_ptr<Object> o) : Variant() {
-    o_val = o;
     type.type = OBJECT_T;
-    type.class_name = o->get_class()->class_name();
+    type.class_name = "String";
     _is_null = false;
 }
 
 Variant::Variant(TypeSpecifier ts) {
     type = ts;
     _is_null = true;
-    new (&o_val) std::shared_ptr<Object>();
 }
 
-Variant::Variant(std::shared_ptr<Function> fun) : Variant() {
-    o_val = fun;
-    type.type = OBJECT_T;
-    type.class_name = fun->get_class()->class_name();
-    type.is_function = true;
-    for (auto arg : fun->arg_types) {
-        type.args.push_back(arg);
-    }
-    type.return_type = new TypeSpecifier(fun->return_type);
-    _is_null = false;
-}
-
-Variant::Variant(std::shared_ptr<Variant> r): Variant() {
-    ref = r;
-    type.type = REF_T;
-    _is_null = false;
-}
-
-void Variant::destroy() {
-    switch (type.type) {
-        case OBJECT_T:
-            if (o_val != nullptr) {
-                o_val.~shared_ptr();
-            }
-            break;
-        case REF_T:
-            ref.~shared_ptr(); break;
-        default:
-            break;
-    }
-
-    new (&o_val) std::shared_ptr<Object>();
-    type.type = VOID_T;
-}
-
-TypeSpecifier Variant::get_type() const {
-    if (type.type == REF_T) {
-        return ref->type;
-    }
-
+TypeSpecifier& Variant::get_type() {
     return type;
-}
-
-bool Variant::is_ref() {
-    return type.type == REF_T;
 }
 
 void Variant::set_default() {
@@ -171,13 +114,6 @@ void Variant::set_default() {
 
     _is_null = false;
 }
-Variant Variant::operator*() {
-    if (type.type != REF_T) {
-        return Variant(*this);
-    }
-
-    return Variant(*ref);
-}
 
 void Variant::is_any_type(bool any) {
     any_type = any;
@@ -185,9 +121,6 @@ void Variant::is_any_type(bool any) {
 
 template <>
 double Variant::get<double>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->get<double>();
-    }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to double");
     }
@@ -197,9 +130,6 @@ double Variant::get<double>() {
 
 template <>
 int Variant::get<int>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->ref->get<int>();
-    }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to int");
     }
@@ -209,9 +139,6 @@ int Variant::get<int>() {
 
 template <>
 long Variant::get<long>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->ref->get<long>();
-    }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to long");
     }
@@ -221,9 +148,6 @@ long Variant::get<long>() {
 
 template <>
 float Variant::get<float>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->ref->get<float>();
-    }
     if (!is_numeric) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to float");
     }
@@ -233,9 +157,6 @@ float Variant::get<float>() {
 
 template <>
 bool Variant::get<bool>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->ref->get<bool>();
-    }
     if (type.type != BOOL_T) {
         return cast_to(BOOL_T).get<bool>();
     }
@@ -245,9 +166,6 @@ bool Variant::get<bool>() {
 
 template <>
 char Variant::get<char>() {
-    if (type.type == REF_T) {
-        if (ref->type.type != REF_T) return ref->ref->get<char>();
-    }
     if (type.type != CHAR_T) {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value cannot be converted to char");
     }
@@ -257,51 +175,13 @@ char Variant::get<char>() {
 
 template <>
 std::string Variant::get<std::string>() {
-    if (type.type != STRING_T) {
+    if (type.class_name != "String") {
         RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a string");
     }
 
     return s_val;
 }
 
-template <>
-Object::SharedPtr Variant::get<Object::SharedPtr>() {
-    if (type.type == REF_T) {
-        return ref->get<Object::SharedPtr>();
-    }
-    if (type.type != OBJECT_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not an object");
-    }
-
-    return o_val;
-}
-
-template <>
-Variant::SharedPtr Variant::get<Variant::SharedPtr>() {
-    if (type.type != REF_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a reference");
-    }
-
-    return ref;
-}
-
-template <>
-Class* Variant::get<Class*>() {
-    if (type.type != CLASS_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not a class");
-    }
-
-    return class_val;
-}
-
-template<>
-Interface* Variant::get<Interface*>() {
-    if (type.type != INTERFACE_T) {
-        RuntimeError::raise(ERR_TYPE_ERROR, "Value is not an interface");
-    }
-
-    return interface_val;
-}
 
 void Variant::check_numeric() {
     switch(type.type) {
@@ -320,9 +200,9 @@ void Variant::check_numeric() {
 }
 
 Variant::Variant(const Variant &cp) {
-    new (&o_val) std::shared_ptr<Object>();
     switch (cp.type.type) {
         case STRING_T:
+            type.computed_length = cp.type.computed_length;
             s_val = cp.s_val; break;
         case CHAR_T:
             c_val = cp.c_val; break;
@@ -330,9 +210,6 @@ Variant::Variant(const Variant &cp) {
             b_val = cp.b_val; break;
         case OBJECT_T:
             type.class_name = cp.type.class_name;
-            o_val = cp.o_val; break;
-        case REF_T:
-            ref = cp.ref; break;
         case INT_T:
             int_val = cp.int_val; break;
         case LONG_T:
@@ -341,15 +218,15 @@ Variant::Variant(const Variant &cp) {
             d_val = cp.d_val; break;
         case FLOAT_T:
             float_val = cp.float_val; break;
-        case CLASS_T:
-            class_val = cp.class_val; break;
-        case INTERFACE_T:
-            interface_val = cp.interface_val; break;
         case VOID_T:
             break;
         default:
             d_val = cp.d_val;
             break;
+    }
+
+    if (cp.type.class_name == "String") {
+        s_val = cp.s_val;
     }
 
     _is_null = cp._is_null;
@@ -362,22 +239,15 @@ std::string Variant::to_string(bool escape) {
         return "null";
     }
 
+    if (type.class_name == "String") {
+        return escape ? util::str_escape(s_val) : s_val;
+    }
+
     switch (type.type) {
-        case STRING_T: {
-            return escape ? util::str_escape(s_val) : s_val;
-        }
         case CHAR_T:
             return escape ? util::str_escape(std::string(1,c_val)) : std::string(1,c_val);
         case BOOL_T:
             return b_val ? "true" : "false";
-        case OBJECT_T:
-            return o_val->call_method("toString", std::vector<Variant>(), "").get<std::string>();
-        case REF_T: {
-            std::ostringstream ss;
-            ss << &(*ref);
-
-            return ss.str();
-        }
         case INT_T:
             return std::to_string(int_val);
         case LONG_T:
@@ -386,10 +256,6 @@ std::string Variant::to_string(bool escape) {
             return std::to_string(d_val);
         case FLOAT_T:
             return std::to_string(float_val);
-        case CLASS_T:
-            return class_val->class_name();
-        case INTERFACE_T:
-            return interface_val->get_name();
         case VOID_T:
             return "null";
         default:
@@ -439,7 +305,7 @@ Variant Variant::operator-() {
     return cdot::var::Arithmetic::unary_minus(*this);
 }
 
-Variant Variant::operator=(const Variant &v) {
+Variant& Variant::operator=(const Variant &v) {
 
     switch (v.type.type) {
         case INT_T:
@@ -451,6 +317,7 @@ Variant Variant::operator=(const Variant &v) {
         case FLOAT_T:
             float_val = v.float_val; break;
         case STRING_T:
+            type.computed_length = v.type.computed_length;
             s_val = v.s_val;
             break;
         case BOOL_T:
@@ -458,28 +325,16 @@ Variant Variant::operator=(const Variant &v) {
         case CHAR_T:
             c_val = v.c_val;
             break;
-        case REF_T:
-            ref = v.ref;
-            break;
-        case OBJECT_T:
-            if (o_val == nullptr) {
-                o_val = v.o_val;
-            }
-            else {
-                o_val->operator=(*v.o_val);
-            }
-
-            break;
-        case CLASS_T:
-            class_val = v.class_val; break;
-        case INTERFACE_T:
-            interface_val = v.interface_val; break;
         case VOID_T:
             _is_null = true;
             type.type = VOID_T;
             return *this;
         default:
             break;
+    }
+
+    if (v.type.class_name == "String") {
+        s_val = v.s_val;
     }
 
     initialized = true;
@@ -491,8 +346,8 @@ Variant Variant::operator=(const Variant &v) {
 }
 
 Variant Variant::strict_equals(const Variant &v) {
-    if (get_type().type != v.get_type().type && !any_type  && initialized && !(type.nullable && v.is_null())) {
-        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + val::typetostr(v.get_type())
+    if (get_type().type != v.type.type && !any_type  && initialized && !(type.nullable && v.is_null())) {
+        RuntimeError::raise(ERR_BAD_CAST, "Trying to assign value of type " + val::typetostr(v.type)
              + " to variable of type " + val::typetostr(get_type()));
     }
 
@@ -571,6 +426,126 @@ Variant Variant::operator^(Variant v1) {
     return cdot::var::Arithmetic::bitwise_xor(*this, v1);
 }
 
+TypeSpecifier& TypeSpecifier::resolve(Namespace* ns) {
+    if (resolved) {
+        return *this;
+    }
+
+    ns->resolve_typedef(*this);
+    if (return_type != nullptr) {
+        ns->resolve_typedef(*return_type);
+        invalid_ns_ref = return_type->invalid_ns_ref;
+    }
+
+    resolved = true;
+    return *this;
+}
+
+void TypeSpecifier::resolveGeneric(TypeSpecifier &ts, unordered_map<string, TypeSpecifier> &concrete_generics) {
+    if (concrete_generics.empty() || !ts.is_generic) {
+        return;
+    }
+
+    ts.concrete_generic_types = concrete_generics;
+
+    if (!ts.generic_class_name.empty()) {
+        ts.operator=(concrete_generics[ts.generic_class_name]);
+    }
+
+    if (ts.element_type != nullptr) {
+        resolveGeneric(*ts.element_type, concrete_generics);
+    }
+
+    for (auto& arg : ts.args) {
+        resolveGeneric(arg, concrete_generics);
+    }
+}
+
+std::string TypeSpecifier::to_string() const {
+    std::string _nullable = nullable ? "?" : "";
+    if (raw_array) {
+        return "["  + element_type->to_string() + "]";
+    }
+    if (type == OBJECT_T && !is_function) {
+        return class_name + _nullable;
+    }
+    if (type == CLASS_T) return class_name;
+    if (type == INTERFACE_T) return class_name;
+
+    if (is_function) {
+        std::string str = "(";
+        for (int i = 0; i < args.size(); ++i) {
+            str += args.at(i).to_string();
+            if (i < args.size() - 1) {
+                str += ", ";
+            }
+        }
+
+        return str + ") -> " + return_type->to_string();
+    }
+
+    return val::typetostr(type) + _nullable;
+}
+
+//TypeSpecifier& TypeSpecifier::operator=(const TypeSpecifier &other) {
+//    type = other.type;
+//    class_name = other.class_name;
+//    arr_length = other.arr_length;
+//    invalid_ns_ref = other.invalid_ns_ref;
+//    raw_array = other.raw_array;
+//    cstring = other.cstring;
+//    is_primitive = other.is_primitive;
+//    computed_length = other.computed_length;
+//    bitwidth = other.bitwidth;
+//    is_unsigned = other.is_unsigned;
+//    is_generic = other.is_generic;
+//    generic_class_name = other.generic_class_name;
+//    is_vararg = other.is_vararg;
+//    concrete_generic_types.clear();
+//    for (const auto& gen : other.concrete_generic_types) {
+//        concrete_generic_types.emplace(gen.first, gen.second);
+//    }
+//    nullable = other.nullable;
+//    static_const = other.static_const;
+//    is_const = other.is_const;
+//    is_function = other.is_function;
+//    is_pointer = other.is_pointer;
+//    is_lambda = other.is_lambda;
+//    resolved = other.resolved;
+//    lambda_id = other.lambda_id;
+//    ns_name = other.ns_name;
+//    args = other.args;
+//    element_type = other.element_type;
+//}
+
+bool TypeSpecifier::operator==(TypeSpecifier& ts) {
+    if (type == INT_T && ts.type == INT_T) {
+        return bitwidth == ts.bitwidth && is_unsigned == ts.is_unsigned;
+    }
+
+    if (type == ts.type && type != OBJECT_T) {
+        return true;
+    }
+
+    if (type != ts.type) {
+        return false;
+    }
+
+    if (raw_array != ts.raw_array) {
+        return false;
+    }
+
+    if (raw_array) {
+        return *element_type == *ts.element_type;
+    }
+
+    if (cstring != ts.cstring) {
+        return false;
+    }
+
+    return class_name == ts.class_name;
+}
+
 namespace val {
     ValueType strtotype(std::string type) {
         return util::typemap[type];
@@ -597,10 +572,6 @@ namespace val {
     }
 
     std::string type_name(Variant v) {
-        if (v.get_type().type == OBJECT_T) {
-            return v.get<Object::SharedPtr>()->get_class()->class_name();
-        }
-
         return typetostr(v.get_type().type);
     }
 
@@ -608,23 +579,73 @@ namespace val {
         return (v1 == ANY_T || v2 == ANY_T || (v1 == v2)) || util::in_vector<ValueType>(util::implicit_type_conversions[v1], v2);
     }
 
-    bool is_compatible(TypeSpecifier t1, TypeSpecifier t2) {
-        if (t1.is_function || t2.is_function) {
-            return t1.to_string() == t2.to_string();
+    bool is_compatible(TypeSpecifier& given, TypeSpecifier& needed) {
+
+        // nullable
+        if ((given.nullable && needed.type == VOID_T) || needed.nullable && given.type == VOID_T) {
+            return true;
         }
-        if (t1.type == OBJECT_T || t2.type == OBJECT_T) {
-            return t1.class_name == t2.class_name;
+        if (given.type == VOID_T && needed.type == VOID_T) {
+            return true;
+        }
+        if (given.type == VOID_T && needed.type != VOID_T) {
+            return false;
         }
 
-        return t1.type == t2.type || implicitly_castable(t1.type, t2.type);
+        // function type
+        if (given.is_function || needed.is_function) {
+            return given.to_string() == needed.to_string();
+        }
+
+        // raw arrays
+        if (given.raw_array != needed.raw_array) {
+            return false;
+        }
+        if (given.raw_array && needed.raw_array) {
+            return val::is_compatible(*given.element_type, *needed.element_type);
+        }
+
+        // class implements interface
+        if (needed.type == INTERFACE_T) {
+            if (given.type == INTERFACE_T) {
+                return needed.class_name == given.class_name;
+            }
+
+            return Namespace::latest()->get_class(given.class_name)->implements(needed.class_name);
+        }
+
+        // autoboxing
+        if (given.type != OBJECT_T && needed.type == OBJECT_T) {
+            return Namespace::global()->get_class(needed.class_name)->is_base_class_of(util::types[given.type]);
+        }
+
+        // two primitive types
+        if (given.type != OBJECT_T && needed.type == OBJECT_T) {
+            return given.type == needed.type;
+        }
+
+        // base class
+        if (given.type == OBJECT_T && needed.type == OBJECT_T) {
+            if (given.class_name == needed.class_name) {
+                return true;
+            }
+
+            return Namespace::latest()->get_class(needed.class_name)->is_base_class_of(given.class_name);
+        }
+
+        return given.type == needed.type || implicitly_castable(given.type, needed.type);
     }
 
-    bool is_castable(TypeSpecifier t1, TypeSpecifier t2) {
+    bool is_castable(TypeSpecifier& t1, TypeSpecifier& t2) {
         if (t1 == t2) {
             return true;
         }
-        if (t1.type == OBJECT_T || t2.type == OBJECT_T) {
-            //TODO
+        if (t1.type == OBJECT_T && t2.type == OBJECT_T) {
+            if (t1.class_name == t2.class_name) {
+                return true;
+            }
+
+            return Namespace::latest()->get_class(t1.class_name)->is_base_class_of(t2.class_name);
         }
         if (t1.is_function || t2.is_function) {
             return false;
@@ -647,13 +668,54 @@ namespace val {
         return std::find(conv.begin(), conv.end(), v2) != conv.end();
     }
 
-    ValueType simple_arithmetic_return_type(TypeSpecifier t1, TypeSpecifier t2) {
-        if (t1.type == STRING_T || t2.type == STRING_T) {
-            return STRING_T;
+    bool has_default(TypeSpecifier t) {
+        if (t.is_primitive) {
+            return true;
+        }
+
+        if (t.raw_array) {
+            return true;
+        }
+
+        if (t.cstring) {
+            return true;
+        }
+
+        if (t.type == OBJECT_T) {
+            return Namespace::latest()->get_class(t.class_name)->has_method("init", {}) != "";
+        }
+
+        return false;
+    }
+
+    TypeSpecifier simple_arithmetic_return_type(TypeSpecifier& t1, TypeSpecifier& t2) {
+        if (t1.class_name == "String" || t2.class_name == "String") {
+            TypeSpecifier ts(OBJECT_T);
+            ts.class_name = "String";
+
+            return ts;
+        }
+
+        if (t1.raw_array && t2.raw_array) {
+            if (!val::is_compatible(*t1.element_type, *t2.element_type)) {
+                return VOID_T;
+            }
+
+            return t1;
         }
 
         if (!t1.is_primitive || !t2.is_primitive) {
             return VOID_T;
+        }
+
+        if (t1.type == INT_T && t2.type == INT_T) {
+            int bitwidth = t1.bitwidth >= t2.bitwidth ? t1.bitwidth : t2.bitwidth;
+            bool is_unsigned = t1.is_unsigned && t2.is_unsigned;
+            TypeSpecifier ret(INT_T);
+            ret.bitwidth = bitwidth;
+            ret.is_unsigned = is_unsigned;
+
+            return ret;
         }
 
         if (t1.type == t2.type) {
@@ -663,8 +725,6 @@ namespace val {
         switch (t1.type) {
             case INT_T:
                 switch (t2.type) {
-                    case LONG_T:
-                        return LONG_T;
                     case DOUBLE_T:
                         return DOUBLE_T;
                     case FLOAT_T:
@@ -713,7 +773,7 @@ namespace val {
         }
     }
 
-    ValueType division_return_type(TypeSpecifier t1, TypeSpecifier t2) {
+    ValueType division_return_type(TypeSpecifier& t1, TypeSpecifier& t2) {
         if (!t1.is_primitive || !t2.is_primitive) {
             return VOID_T;
         }
