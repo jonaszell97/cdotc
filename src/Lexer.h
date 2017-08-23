@@ -14,27 +14,17 @@ class Parser;
 
 class Lexer {
 public:
-    Lexer(std::string);
+    explicit Lexer(string&);
 
-    void advance(TokenType, bool = true);
-    void advance(bool = true);
-    Token lookahead(bool = true);
-    Token lookbehind();
+    void advance(TokenType, bool = true, bool = false);
+    void advance(bool = true, bool = false);
+    Token lookahead(bool = true, size_t i = 0);
     char get_next_char();
     char char_lookahead();
     void backtrack_c(int);
     void backtrack();
 
     std::string s_val();
-    inline double d_val() {
-        return current_token.get_value().get<double>();
-    }
-    inline bool b_val() {
-        return current_token.get_value().get<bool>();
-    }
-    inline char c_val() {
-        return current_token.get_value().get<char>();
-    }
 
     int current_index;
     int current_line;
@@ -51,8 +41,8 @@ protected:
     std::vector<Token> tokens;
     std::string _program;
 
-    Token get_next_token(bool);
-    Token _get_next_token(bool);
+    Token get_next_token(bool, bool);
+    Token _get_next_token(bool, bool);
     void ignore_comment();
     void ignore_ml_comment();
     bool is_identifier_char(char);
@@ -61,7 +51,7 @@ protected:
     bool is_number(char, bool);
     bool is_hex(char);
     bool is_keyword(std::string);
-    bool is_type_keyword(std::string);
+
     bool is_punctuator(char);
     bool is_bool_literal(std::string);
     char escape_char(char);

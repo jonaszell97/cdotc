@@ -2,24 +2,15 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "IdentifierRefExpr.h"
-#include "../../../Variant/Variant.h"
-#include "../../Statement/Block/CompoundStmt.h"
-#include "../../../Util.h"
-#include "MemberRefExpr.h"
 
-IdentifierRefExpr::IdentifierRefExpr(std::string ident) : _ident(ident) {
-
-}
-
-IdentifierRefExpr::IdentifierRefExpr(Variant val) : IdentifierRefExpr(val.get<std::string>()) {
-
+IdentifierRefExpr::IdentifierRefExpr(string ident) {
+    this->ident = ident;
 }
 
 std::vector<AstNode::SharedPtr> IdentifierRefExpr::get_children() {
-    if (_member_expr != nullptr) {
-        return { _member_expr };
+    if (memberExpr != nullptr) {
+        return { memberExpr };
     }
     else {
         return { };
@@ -27,17 +18,11 @@ std::vector<AstNode::SharedPtr> IdentifierRefExpr::get_children() {
 }
 
 void IdentifierRefExpr::__dump(int depth) {
-    for (int i = 0; i < depth; i++) {
-        std::cout << "\t";
-    }
-    if (_implicit_ref) {
-        std::cout << "ImplicitRefExpr" << " [" << _ident << "]" << std::endl;
-    }
-    else {
-        std::cout << "Identifier" << (lvalue ? "Ref" : "") << "Expr" << " [" << _ident << "]" << std::endl;
-    }
+    AstNode::__tab(depth);
 
-    if (_member_expr != nullptr) {
-        _member_expr->__dump(depth + 1);
+    std::cout << "Identifier" << (lvalue ? "Ref" : "") << "Expr" << " [" << ident << "]" << std::endl;
+
+    if (memberExpr != nullptr) {
+        memberExpr->__dump(depth + 1);
     }
 }

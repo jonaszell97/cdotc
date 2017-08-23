@@ -6,31 +6,24 @@
 #include "Util.h"
 #include "Variant/Variant.h"
 
-Lexer::Lexer(std::string program) :
-    current_token(T_BOF, { }, 0, 0, 0),
+Lexer::Lexer(string& program) :
     _program(program),
     current_index(0),
     current_line(0),
     index_on_line(0),
-    current_token_index(0)
+    current_token_index(0),
+    last_token_index(0)
 {
-    while (current_token.get_type() != T_EOF) {
-        current_token = _get_next_token(false);
-        tokens.push_back(current_token);
-    }
 
-    current_token_index = 0;
-    current_token = tokens.front();
-    last_token_index = 0;
-    current_index = current_token.get_start();
 }
 
 std::string Lexer::s_val() {
-    if (current_token.get_value().get_type().class_name != "String") {
+    if (current_token.get_type() != T_IDENT && current_token.get_type() != T_KEYWORD && current_token.get_type() !=
+            T_OP && current_token.get_type() != T_LITERAL) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unexpected token " + util::token_names[current_token.get_type()], this);
     }
 
-    return current_token.get_value().get<std::string>();
+    return current_token.get_value().getString();
 }
 
 /**
@@ -39,16 +32,13 @@ std::string Lexer::s_val() {
  * @param allowDecimalPoint Whether to allow a decimal point or not
  * @return
  */
-bool Lexer::is_number(char _c, bool allowDecimalPoint) {
-    int c = int(_c);
+bool Lexer::is_number(char c, bool allowDecimalPoint) {
     // digits and dot
-    return (c >= 48 && c <= 57) || (allowDecimalPoint && c == C_DOT);
+    return (c >= '0' && c <= '9') || (allowDecimalPoint && c == '.');
 }
 
-bool Lexer::is_hex(char _c) {
-    int c = int(_c);
-
-    return (c >= C_CAP_A && c <= C_CAP_F) || (c >= C_A && c <= C_F) || (c >= 48 && c <= 57);
+bool Lexer::is_hex(char c) {
+    return (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') || (c >= '0' && c <= '9');
 }
 
 /**
@@ -56,8 +46,7 @@ bool Lexer::is_hex(char _c) {
  * @param _c
  * @return
  */
-bool Lexer::is_identifier_char(char _c) {
-    int c = int(_c);
+bool Lexer::is_identifier_char(char c) {
     // valid identifiers contain ANYTHING (almost)
     return !is_operator_char(c) && !is_punctuator(c) && c != ' ' && c != '\0';
 }
@@ -68,30 +57,28 @@ bool Lexer::is_identifier_char(char _c) {
  * @return
  */
 bool Lexer::is_operator(std::string s) {
-    for (int i = 0; i < util::binary_operators.size(); i++) {
-        if (s == util::binary_operators[i]) {
-            return true;
-        }
+    if (util::in_vector(util::binary_operators, s)) {
+        return true;
     }
-    for (int i = 0; i < util::unary_operators.size(); i++) {
-        if (s == util::unary_operators[i]) {
-            return true;
-        }
+    if (util::in_vector(util::assignmentOperators, s)) {
+        return true;
     }
-    for (int i = 0; i < util::tertiary_operators.size(); i++) {
-        if (s == util::tertiary_operators[i]) {
-            return true;
-        }
+    if (util::in_vector(util::PrefixUnaryOperators, s)) {
+        return true;
+    }
+    if (util::in_vector(util::PostfixUnaryOperators, s)) {
+        return true;
+    }
+    if (util::in_vector(util::tertiary_operators, s)) {
+        return true;
     }
 
     return false;
 }
 
 bool Lexer::is_operator_char(char c) {
-    for (int i = 0; i < util::operator_chars.size(); i++) {
-        if (c == util::operator_chars[i]) {
-            return true;
-        }
+    if (util::in_vector(util::operator_chars, c)) {
+        return true;
     }
 
     return false;
@@ -103,28 +90,8 @@ bool Lexer::is_operator_char(char c) {
  * @return
  */
 bool Lexer::is_keyword(std::string s) {
-    for (int i = 0; i < util::keywords.size(); i++) {
-        if (s == util::keywords[i]) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool Lexer::is_type_keyword(std::string s) {
-    if (s.back() == C_CLOSE_SQUARE) {
-        s.pop_back();
-        while (s.back() > '0' && s.back() < '9') {
-            s.pop_back();
-        }
-        s.pop_back();
-    }
-
-    for (auto type : util::typemap) {
-        if (s == type.first) {
-            return true;
-        }
+    if (util::in_vector(util::keywords, s)) {
+        return true;
     }
 
     return false;
@@ -157,7 +124,8 @@ char Lexer::get_next_char() {
 
     char c = _program[current_index++];
     index_on_line++;
-    if (c == C_NEWLINE) {
+
+    if (c == '\n') {
         current_line++;
         index_on_line = 0;
     }
@@ -173,7 +141,8 @@ char Lexer::char_lookahead() {
 
     char c = _program[current_index];
     index_on_line++;
-    if (c == C_NEWLINE) {
+
+    if (c == '\n') {
         current_line++;
         index_on_line = 0;
     }
@@ -195,26 +164,6 @@ void Lexer::backtrack() {
  */
 void Lexer::backtrack_c(int length) {
     current_index -= length;
-}
-
-/**
- * Returns the next token
- * @return
- */
-Token Lexer::get_next_token(bool ignore_newline) {
-    if (current_token_index >= tokens.size() - 1) {
-        return tokens.back();
-    }
-
-    Token t = tokens[current_token_index++];
-    if (ignore_newline && t.is_punctuator('\n')) {
-        return get_next_token(true);
-    }
-
-    last_token_index = t.get_start();
-    current_index = t.get_end();
-
-    return t;
 }
 
 char Lexer::escape_char(char c) {
@@ -246,7 +195,7 @@ char Lexer::escape_char(char c) {
  * Parses the next token
  * @return
  */
-Token Lexer::_get_next_token(bool ignore_newline) {
+Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
     if (current_token.get_type() == T_EOF) {
         return current_token;
     }
@@ -257,10 +206,15 @@ Token Lexer::_get_next_token(bool ignore_newline) {
         return Token(T_EOF, { }, start_line, current_index, current_index);
     }
 
-    std::string t = "";
+    string t = "";
 
     int _start_index = current_index;
     char first = get_next_char();
+
+    if (first == ' ' && significantWhiteSpace) {
+        return Token(T_PUNCTUATOR, { first }, start_line, current_index, current_index);
+    }
+
     while (first == ' ') {
         first = get_next_char();
         _start_index++;
@@ -273,29 +227,28 @@ Token Lexer::_get_next_token(bool ignore_newline) {
     char next;
 
     // check for comment
-    if (first == C_HASH) {
+    if (first == '#') {
         ignore_comment();
 
-        return _get_next_token(ignore_newline);
+        return _get_next_token(ignore_newline, significantWhiteSpace);
     }
 
     // multi-line comment
-    if (first == C_SLASH) {
+    if (first == '/') {
         next = get_next_char();
-        if (next == C_TIMES) {
+        if (next == '*') {
             ignore_ml_comment();
 
-            return _get_next_token(ignore_newline);
+            return _get_next_token(ignore_newline, significantWhiteSpace);
         } else {
             backtrack_c(1);
         }
     }
 
-
     // character literal
-    if (first == C_SINGLE_QUOTE) {
+    if (first == '\'') {
         next = get_next_char();
-        if (next == C_BACKSLASH) {
+        if (next == '\\') {
             next = escape_char(get_next_char());
         }
 
@@ -306,11 +259,12 @@ Token Lexer::_get_next_token(bool ignore_newline) {
 
         return Token(T_LITERAL, { next }, start_line, _start_index, current_index);
     }
+
     // string literal
-    else if (first == C_DOUBLE_QUOTE) {
+    if (first == '\"') {
         next = get_next_char();
-        while (next != C_DOUBLE_QUOTE && current_index < _program.length()) {
-            if (next == C_BACKSLASH) {
+        while (next != '\"' && current_index < _program.length()) {
+            if (next == '\\') {
                 next = get_next_char();
                 t += escape_char(next);
             } else {
@@ -322,12 +276,25 @@ Token Lexer::_get_next_token(bool ignore_newline) {
 
         return Token(T_LITERAL, { t }, start_line, _start_index, current_index);
     }
+
+    // escape sequence
+    if (first == '`') {
+        next = get_next_char();
+        while (next != '`' && current_index < _program.length()) {
+            t += next;
+            next = get_next_char();
+
+        }
+
+        return Token(T_IDENT, { t }, start_line, _start_index, current_index);
+    }
+
     // number literal (decimal, octal, hexadecimal or binary; with or without exponent or floating point)
-    else if (is_number(first, false)) {
+    if (is_number(first, false)) {
         char _pref = get_next_char();
         if (first == '0' && (_pref == 'x' || _pref == 'X')) {
             // hexadecimal literal
-            std::string hex_s = "0x";
+            string hex_s = "0x";
             next = get_next_char();
             while (is_hex(next)) {
                 hex_s += next;
@@ -340,7 +307,7 @@ Token Lexer::_get_next_token(bool ignore_newline) {
 
         if (first == '0' && (_pref == 'b' || _pref == 'B')) {
             // binary literal
-            std::string bin_s = "";
+            string bin_s = "";
             next = get_next_char();
             while (next == '0' || next == '1') {
                 bin_s += next;
@@ -371,20 +338,17 @@ Token Lexer::_get_next_token(bool ignore_newline) {
         }
 
         // octal literal
-        if (first == '0' && t.length() != 1 && !decimal_point) {
-            try {
-                backtrack_c(1);
-                return Token(T_LITERAL, {std::stoi(t, nullptr, 8)}, start_line, _start_index, current_index);
-            } catch(...) {
-                ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Invalid octal literal", this);
-            }
+        if (util::matches("0[0-7]+", t)) {
+            backtrack_c(1);
+            return Token(T_LITERAL, { std::stoi(t, nullptr, 8) }, start_line, _start_index,
+                current_index);
         }
 
         // exponent
         if (next == 'e' || next == 'E') {
             std::string _exp = "";
             next = get_next_char();
-            while (next == C_MINUS || is_number(next, false)) {
+            while (next == '-' || is_number(next, false)) {
                 _exp += next;
                 next = get_next_char();
             }
@@ -400,17 +364,43 @@ Token Lexer::_get_next_token(bool ignore_newline) {
 
         if (!decimal_point) {
             next = char_lookahead();
-            if (next == 'l' || next == 'L') {
+
+            bool isUnsigned = false;
+            bool isIntegral = false;
+            Variant val;
+
+            if (next == 'u' || next == 'U') {
                 get_next_char();
-                return Token(T_LITERAL, { std::stol(t) }, start_line, _start_index, current_index);
+                isUnsigned = true;
+                isIntegral = true;
+                next = char_lookahead();
             }
-            else if (next == 'd' || next == 'D') {
+
+            if (next == 'l' || next == 'L') {
+                isIntegral = true;
                 get_next_char();
-                return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
+                val = Variant(std::stol(t));
+                next = char_lookahead();
+            }
+
+            if ((next == 'u' || next == 'U') && !isUnsigned) {
+                get_next_char();
+                isUnsigned = true;
+                isIntegral = true;
+                next = char_lookahead();
+            }
+
+            if ((next == 'd' || next == 'D') && !isIntegral) {
+                get_next_char();
+                val = Variant(std::stod(t));
             }
             else {
-                return Token(T_LITERAL, { std::stoi(t) }, start_line, _start_index, current_index);
+                val = Variant(std::stoi(t));
             }
+
+            val.isUnsigned(isUnsigned, this);
+
+            return Token(T_LITERAL, val, start_line, _start_index, current_index);
         }
         else {
             next = char_lookahead();
@@ -425,7 +415,8 @@ Token Lexer::_get_next_token(bool ignore_newline) {
             return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
         }
     }
-    else if (is_identifier_char(first)) {
+
+    if (is_identifier_char(first)) {
         // advance keyword or identifier
         next = first;
         while (is_identifier_char(next)) {
@@ -433,12 +424,14 @@ Token Lexer::_get_next_token(bool ignore_newline) {
             next = get_next_char();
         }
 
+        if (t == "as" && next == '!') {
+            get_next_char();
+            t = "as!";
+        }
+
         backtrack_c(1);
 
-        if (t == "typeof") {
-            return Token(T_OP, { t }, start_line, _start_index, current_index);
-        }
-        else if (t == "new") {
+        if (is_operator(t)) {
             return Token(T_OP, { t }, start_line, _start_index, current_index);
         }
         else if (t == "null") {
@@ -447,20 +440,15 @@ Token Lexer::_get_next_token(bool ignore_newline) {
         else if (is_keyword(t)) {
             return Token(T_KEYWORD, { t }, start_line, _start_index, current_index);
         }
-        else if (is_type_keyword(t)) {
-            return Token(T_IDENT, { t }, start_line, _start_index, current_index);
-        }
         else if (is_bool_literal(t)) {
             return Token(T_LITERAL, { t == "true" }, start_line, _start_index, current_index);
-        }
-        else if (t == "_") {
-            ParseError::raise(ERR_UNEXPECTED_TOKEN, "'_' is a reserved identifier", this);
         }
         else {
             return Token(T_IDENT, { t }, start_line, _start_index, current_index);
         }
     }
-    else if (is_operator_char(first)) {
+
+    if (is_operator_char(first)) {
         while (is_operator_char(first)) {
             t += first;
             first = get_next_char();
@@ -479,22 +467,21 @@ Token Lexer::_get_next_token(bool ignore_newline) {
 
         return Token(T_OP, Variant(t), start_line, _start_index, current_index);
     }
-    else if (is_punctuator(first)) {
+
+    if (is_punctuator(first)) {
         return Token(T_PUNCTUATOR, { first }, start_line, _start_index, current_index);
     }
-    else {
-        ParseError::raise(ERR_UNEXPECTED_CHARACTER, u8"Unexpected character " + std::string(1, first), this);
-    }
 
-    return Token(T_EOF, {}, start_line, current_index, current_index);
+    ParseError::raise(ERR_UNEXPECTED_CHARACTER, u8"Unexpected character " + std::string(1, first), this);
+    llvm_unreachable("see error above");
 }
 
 /**
  * Advances to the next token, while expecting 'type'
  * @param type
  */
-void Lexer::advance(TokenType type, bool ignore_newline) {
-    current_token = get_next_token(ignore_newline);
+void Lexer::advance(TokenType type, bool ignore_newline, bool significantWhiteSpace) {
+    current_token = get_next_token(ignore_newline, significantWhiteSpace);
     if (current_token.get_type() != type) {
         ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected " + util::token_names[type]
                 + " but got " + util::token_names[current_token.get_type()], this);
@@ -504,38 +491,53 @@ void Lexer::advance(TokenType type, bool ignore_newline) {
 /**
  * Advances to the next token without restriction
  */
-void Lexer::advance(bool ignore_newline) {
-    current_token = get_next_token(ignore_newline);
+void Lexer::advance(bool ignore_newline, bool significantWhiteSpace) {
+    current_token = get_next_token(ignore_newline, significantWhiteSpace);
+}
+
+/**
+ * Returns the next token
+ * @return
+ */
+Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace) {
+    if (!tokens.empty() && tokens.back().get_type() == T_EOF) {
+        return tokens.back();
+    }
+
+    if (current_token_index >= tokens.size()) {
+        tokens.push_back(_get_next_token(ignore_newline, significantWhiteSpace));
+    }
+
+    Token t = tokens[current_token_index++];
+    if (ignore_newline && t.is_punctuator('\n')) {
+        return get_next_token(true, significantWhiteSpace);
+    }
+
+    last_token_index = t.get_start();
+    current_index = t.get_end();
+
+    return t;
 }
 
 /**
  * Looks ahead to the next token without influencing the parsing
  * @return
  */
-Token Lexer::lookahead(bool ignore_newline) {
-    if (current_token_index >= tokens.size() - 1) {
+Token Lexer::lookahead(bool ignore_newline, size_t offset) {
+    if (!tokens.empty() && tokens.back().get_type() == T_EOF) {
         return tokens.back();
     }
 
-    Token ret = tokens[current_token_index];
-    int  i = 1;
-    while (ignore_newline && ret.is_punctuator('\n')) {
-        ret = tokens[current_token_index + i++];
+    if ((current_token_index + offset) >= tokens.size()) {
+        tokens.push_back(_get_next_token(ignore_newline, false));
     }
 
-    return ret;
-}
-
-/**
- * Returns the last token
- * @return
- */
-Token Lexer::lookbehind() {
-    if (current_token_index == 0) {
-        return tokens.front();
+    Token t = tokens[current_token_index + offset];
+    if (ignore_newline && t.is_punctuator('\n')) {
+        return lookahead(ignore_newline, offset + 1);
     }
 
-    return tokens[current_token_index - 1];
+    return t;
 }
 
 /**
@@ -544,7 +546,7 @@ Token Lexer::lookbehind() {
 void Lexer::ignore_comment() {
     char c = get_next_char();
 
-    while (c != C_NEWLINE) {
+    while (c != '\n') {
         if (current_index >= _program.length()) {
             return;
         }
@@ -560,7 +562,7 @@ void Lexer::ignore_ml_comment() {
     char c = get_next_char();
 
     main_loop:
-    while (c != C_TIMES) {
+    while (c != '*') {
         if (current_index >= _program.length()) {
             return;
         }
@@ -569,7 +571,7 @@ void Lexer::ignore_ml_comment() {
     }
 
     c = get_next_char();
-    if (c != C_SLASH) {
+    if (c != '/') {
         goto main_loop;
     }
 }

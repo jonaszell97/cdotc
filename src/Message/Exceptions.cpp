@@ -5,6 +5,7 @@
 #include <iostream>
 #include "Exceptions.h"
 #include "../Lexer.h"
+#include "../AST/AstNode.h"
 
 std::map<ParseErrors, std::string> _parse_errors = {
         {ERR_UNEXPECTED_TOKEN, "Unexpected Token"},
@@ -94,10 +95,10 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 void RuntimeError::raise(RuntimeErrors error, std::string msg, AstNode* cause) {
     std::string err = "\033[21;31m" + _runtime_errors[error] + ": " + msg;
     if (cause != nullptr) {
-        std::string program = cause->get_source();
+        std::string program = cause->getSourceFile();
         // get line number
-        int err_index = cause->get_start();
-        int err_end = cause->get_end();
+        int err_index = cause->getStartIndex();
+        int err_end = cause->getEndIndex();
         int lines = 1;
         int last_newline = 0;
         for (int l = 0; l < err_index; ++l) {

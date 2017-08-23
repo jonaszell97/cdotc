@@ -5,54 +5,50 @@
 #ifndef CDOT_MEMBERREFEXPR_H
 #define CDOT_MEMBERREFEXPR_H
 
-
-#include <string>
-#include "../../../Variant/Variant.h"
 #include "../Expression.h"
-#include "IdentifierRefExpr.h"
-#include "RefExpr.h"
+
+class CallExpr;
 
 class MemberRefExpr : public Expression {
 public:
-    MemberRefExpr(std::string);
-    MemberRefExpr(Variant);
+    explicit MemberRefExpr(string);
+
+    ~MemberRefExpr() override {
+
+    }
 
     typedef std::shared_ptr<MemberRefExpr> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
+    std::vector<AstNode::SharedPtr> get_children() override;
 
-    void __dump(int);
+    void __dump(int) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::MEMBER_EXPR;
     }
-    virtual inline Variant accept(Visitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+    Type* accept(TypeCheckVisitor& v) override {
         return v.visit(this);
     }
 
-
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    std::string _ident;
-
     // codegen
-    std::string class_name;
-    TypeSpecifier field_type;
-    bool is_static = false;
-    bool is_ns_member = false;
-    TypeSpecifier generic_return_type;
-    bool needs_generic_cast = false;
+    string className;
+    Type* fieldType = nullptr;
+    bool isStatic = false;
+
+    std::shared_ptr<CallExpr> getterOrSetterCall = nullptr;
+
+    bool isNsMember = false;
+
+    Type* genericReturnType = nullptr;
+    bool needsGenericCast = false;
 
 
 };

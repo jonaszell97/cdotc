@@ -3,43 +3,41 @@
 //
 
 #include "FieldDecl.h"
-#include "../../../../Util.h"
+#include "../../../Expression/TypeRef.h"
 
-#include <iostream>
-
-FieldDecl::FieldDecl(std::string field_name, TypeRef::SharedPtr type, AccessModifier am, bool is_static,
+FieldDecl::FieldDecl(std::string field_name, std::shared_ptr<TypeRef> type, AccessModifier am, bool is_static,
          Expression::SharedPtr def_val):
-    field_name(field_name),
+    fieldName(field_name),
     type(type),
     am(am),
-    is_static(is_static),
-    default_val(def_val)
+    isStatic(is_static),
+    defaultVal(def_val)
 {
 
 }
 
 std::vector<AstNode::SharedPtr> FieldDecl::get_children() {
-    return (default_val != nullptr) ? std::vector<AstNode::SharedPtr>{ default_val } : std::vector<AstNode::SharedPtr>{};
+    return (defaultVal != nullptr) ? std::vector<AstNode::SharedPtr>{ defaultVal } : std::vector<AstNode::SharedPtr>{};
 }
 
 void FieldDecl::__dump(int depth) {
     AstNode::__tab(depth);
 
     std::string get_set = "";
-    if (generate_getter || generate_setter) {
+    if (hasGetter || hasSetter) {
         get_set = " (";
-        if (generate_getter) {
+        if (hasGetter) {
             get_set += "get,";
         }
-        if (generate_setter) {
+        if (hasSetter) {
             get_set += "set,";
         }
         get_set.pop_back();
         get_set += ")";
     }
 
-    std::cout << (is_static ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type->to_string()
-              << " " << field_name << get_set << "]" << std::endl;
+    std::cout << (isStatic ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type->toString()
+              << " " << fieldName << get_set << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

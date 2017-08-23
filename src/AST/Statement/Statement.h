@@ -5,15 +5,11 @@
 #ifndef STATEMENT_H
 #define STATEMENT_H
 
-
 #include "../AstNode.h"
 
 class Statement : public AstNode {
 public:
-
     typedef std::shared_ptr<Statement> SharedPtr;
-
-    virtual void __dump(int) = 0;
 };
 
 

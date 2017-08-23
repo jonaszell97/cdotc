@@ -2,20 +2,15 @@
 // Created by Jonas Zell on 20.06.17.
 //
 
-#include <iostream>
 #include "MemberRefExpr.h"
 
-MemberRefExpr::MemberRefExpr(std::string ident) :  _ident(ident) {
-
-}
-
-MemberRefExpr::MemberRefExpr(Variant val) : MemberRefExpr(val.get<std::string>()) {
-
+MemberRefExpr::MemberRefExpr(std::string ident) {
+    this->ident = ident;
 }
 
 std::vector<AstNode::SharedPtr> MemberRefExpr::get_children() {
-    if (_member_expr != nullptr) {
-        return { _member_expr };
+    if (memberExpr != nullptr) {
+        return { memberExpr };
     }
     else {
         return { };
@@ -24,9 +19,9 @@ std::vector<AstNode::SharedPtr> MemberRefExpr::get_children() {
 
 void MemberRefExpr::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "MemberRefExpr [" << _ident << "]" << std::endl;
+    std::cout << "MemberRefExpr [" << ident << "]\n";
 
-    if (_member_expr != nullptr) {
-        _member_expr->__dump(depth + 1);
+    if (memberExpr != nullptr) {
+        memberExpr->__dump(depth + 1);
     }
 }

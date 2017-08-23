@@ -5,53 +5,53 @@
 #ifndef CDOT_CONSTRDECL_H
 #define CDOT_CONSTRDECL_H
 
-
 #include "../../Statement.h"
-#include "../FuncArgDecl.h"
-#include "../../../Visitor/StaticAnalysis/Class.h"
+
+class FuncArgDecl;
+class CompoundStmt;
+
+namespace cdot {
+    namespace cl {
+        struct Method;
+    }
+}
 
 class ConstrDecl : public Statement {
 public:
     ConstrDecl();
-    ConstrDecl(std::vector<FuncArgDecl::SharedPtr>, std::shared_ptr<CompoundStmt>, AccessModifier);
+    ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>>, std::shared_ptr<CompoundStmt>, AccessModifier);
 
     typedef std::shared_ptr<ConstrDecl> SharedPtr;
     typedef std::unique_ptr<ConstrDecl> UniquePtr;
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<std::shared_ptr<AstNode>> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::CONSTR_DECL;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    bool implicit = false;
+    bool memberwise = false;
     AccessModifier am;
-    std::vector<FuncArgDecl::SharedPtr> args;
+    std::vector<std::shared_ptr<FuncArgDecl>> args;
     std::shared_ptr<CompoundStmt> body;
-    bool declared = false;
 
     // codegen
-    std::string this_binding;
-    string class_name;
+    std::string selfBinding;
+    string className;
     cdot::cl::Method* method;
 };
 

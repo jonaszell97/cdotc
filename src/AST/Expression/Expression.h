@@ -5,74 +5,93 @@
 #ifndef EXPRESSION_H
 #define EXPRESSION_H
 
-
-#include "../AstNode.h"
+#include <llvm/IR/GlobalVariable.h>
 #include "../Statement/Statement.h"
-#include "TypeRef.h"
 
 class Expression : public Statement {
 public:
     typedef std::shared_ptr<Expression> SharedPtr;
+    typedef std::unique_ptr<Expression> UniquePtr;
 
-    Expression();
-    Expression(Expression::SharedPtr);
-
-    virtual void set_child(Expression::SharedPtr);
-
-    virtual inline void return_lvalue(bool ref) {
-        lvalue = ref;
+    virtual inline void returnLvalue(bool lval) {
+        lvalue = lval;
     }
-    virtual inline void implicit_ref(bool implicit) {
-        _implicit_ref = implicit;
+
+    inline void setParent(AstNode* p) {
+        parent = p;
     }
-    virtual inline void set_member_expr(std::shared_ptr<Expression> ref_expr) {
-        _member_expr = ref_expr;
-        if (_member_expr != nullptr) {
-            _member_expr->_parent_expr = this;
-            _member_expr->lvalue = true;
+
+    virtual inline void setMemberExpr(std::shared_ptr<Expression> ref_expr) {
+        memberExpr = ref_expr;
+        if (memberExpr != nullptr) {
+            memberExpr->parentExpr = this;
+            memberExpr->lvalue = true;
+            children.push_back(&memberExpr);
+            memberExpr->parent = this;
         }
     }
-    inline virtual NodeType get_type() {
+
+    virtual inline void setGlobalVar(llvm::GlobalVariable* glob) {
+        globalVar = glob;
+        if (memberExpr != nullptr) {
+            memberExpr->setGlobalVar(glob);
+        }
+
+        isGlobal(true);
+        heapAllocate();
+    }
+
+    inline void isGlobal(bool gl) {
+        isGlobal_ = gl;
+        if (memberExpr != nullptr) {
+            memberExpr->isGlobal(gl);
+        }
+    }
+
+    inline void isLhsOfAssigment() {
+        isLhsOfAssigment_ = true;
+        if (memberExpr != nullptr) {
+            memberExpr->isLhsOfAssigment();
+        }
+    }
+
+    void isHiddenReturnValue() override;
+
+    NodeType get_type() override {
         return NodeType::EXPRESSION;
     }
-    std::vector<AstNode::SharedPtr> get_children();
 
-    virtual void __dump(int);
-
-    virtual inline Variant accept(Visitor& v) {
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
+
+    Type* accept(TypeCheckVisitor& v) override {
         return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
-        return v.visit(this);
-    }
-    inline void is_lvalue() {
-        lvalue = true;
-        if (_member_expr) {
-            _member_expr->is_lvalue();
-        }
     }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr _child;
-    bool _implicit_ref = false;
-    Expression::SharedPtr _member_expr;
-    Expression* _parent_expr = nullptr;
+    Expression::SharedPtr memberExpr;
+    Expression* parentExpr = nullptr;
     bool lvalue = false;
+    string ident;
+
+    Type* castFrom = nullptr;
+    Type* needsCastTo = nullptr;
+
+    bool lvalueCast = false;
+    bool needsLvalueToRvalueConversion = false;
+    bool needsByValPass = false;
+
+    bool isLhsOfAssigment_ = false;
+    bool isSetterCall = false;
+    string setterName;
 
     // codegen
-    Variant::UniquePtr static_val;
-    bool cast_needed = false;
-    TypeSpecifier cast_to;
+    llvm::GlobalVariable* globalVar = nullptr;
 };
 
 

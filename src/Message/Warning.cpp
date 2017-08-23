@@ -18,10 +18,10 @@ void Warning::issue(std::string msg, AstNode* cause, WarningLevel severity) {
     err += msg;
 
     if (cause != nullptr) {
-        std::string program = cause->get_source();
+        std::string program = cause->getSourceFile();
         // get line number
-        int err_index = cause->get_start();
-        int err_end = cause->get_end();
+        int err_index = cause->getStartIndex();
+        int err_end = cause->getEndIndex();
         int lines = 1;
         int last_newline = 0;
         for (int l = 0; l < err_index; ++l) {

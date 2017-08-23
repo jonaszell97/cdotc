@@ -6,20 +6,30 @@
 #define CDOT_TYPEREF_H
 
 
-#include "../Statement/Statement.h"
+#include "../Expression/Expression.h"
 
-class TypeRef : public Statement {
+class TypeRef : public Expression {
 public:
-    TypeRef();
-    TypeRef(TypeSpecifier);
+    explicit TypeRef();
+    explicit TypeRef(Type*);
 
-    string to_string();
+    ~TypeRef() override {
 
-    inline TypeSpecifier& getTypeSpecifier() {
+    }
+
+    string toString();
+
+    inline Type*& getType(bool force = false) {
+        assert((force || resolved) && "Resolve type before accessing!");
         return type;
     }
 
-    inline void setTypeSpeicifer(TypeSpecifier t) {
+    inline void setType(Type* t) {
+        if (type == t) {
+            return;
+        }
+
+        delete type;
         type = t;
     }
 
@@ -27,30 +37,25 @@ public:
     std::vector<AstNode::SharedPtr> get_children() override;
     void __dump(int) override;
 
-    inline virtual NodeType get_type() override {
+    NodeType get_type() override {
         return NodeType::TYPE_REF;
     }
-    virtual inline Variant accept(Visitor& v) override {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) override {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
-    friend class MethodCallExpr;
 
 protected:
-    TypeSpecifier type;
+    bool resolved = false;
+    Type* type = nullptr;
 };
 
 

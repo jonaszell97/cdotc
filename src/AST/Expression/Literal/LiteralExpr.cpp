@@ -2,59 +2,50 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "LiteralExpr.h"
+#include "../../../Variant/Type/IntegerType.h"
 
-LiteralExpr::LiteralExpr() : LiteralExpr(Variant()) {
+LiteralExpr::LiteralExpr(Variant v) : LiteralExpr(v, v.getType()) {
 
 }
 
-LiteralExpr::LiteralExpr(Variant v) : _value(v), _type(v.get_type()) {
-    set_val(v);
-}
-
-LiteralExpr::LiteralExpr(Variant v, TypeSpecifier type) : _value(v), _type(type) {
-    set_val(v);
-}
-
-void LiteralExpr::set_val(Variant val) {
-    _value = val;
-    switch (val.get_type().type) {
-        case INT_T:
-        case LONG_T:
-            class_name = "IntegerLiteral";
+LiteralExpr::LiteralExpr(Variant v, Type* type) : value(v), type(type) {
+    switch (type->getTypeID()) {
+        case TypeID::IntegerTypeID:
+            switch (cast<IntegerType>(type)->getBitwidth()) {
+                case 1:
+                    className = "BoolLiteral"; break;
+                case 8:
+                    className = "CharLiteral"; break;
+                case 16:
+                case 32:
+                case 64:
+                default:
+                    className = "IntegerLiteral"; break;
+            }
+            className = "IntegerLiteral";
             break;
-        case FLOAT_T:
-        case DOUBLE_T:
-            class_name = "FloatingPointLiteral";
+        case TypeID::FPTypeID:
+            className = "FloatingPointLiteral";
             break;
-        case BOOL_T:
-            class_name = "BoolLiteral";
+        case TypeID::VoidTypeID:
+            className = "NullLiteral";
             break;
-        case CHAR_T:
-            class_name = "CharLiteral";
-            break;
-        case STRING_T:
-            class_name = "StringLiteral";
-            break;
-        case OBJECT_T:
-            class_name = "ObjectLiteral";
-        case VOID_T:
-            class_name = "NullLiteral";
-            break;
+        default:
+            assert(false && "Unknown literal type!");
 
     }
 }
 
 std::vector<AstNode::SharedPtr> LiteralExpr::get_children() {
-    return _member_expr == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{_member_expr };
+    return memberExpr == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{memberExpr };
 }
 
 void LiteralExpr::__dump(int depth) {
     for (int i = 0; i < depth; i++) {
         std::cout << "\t";
     }
-    std::cout << class_name << " ['" << _value.to_string(true) << "']" << std::endl;
+    std::cout << className << " ['" << value.to_string(true) << "']" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

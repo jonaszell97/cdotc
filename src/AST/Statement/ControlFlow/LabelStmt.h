@@ -5,58 +5,35 @@
 #ifndef CDOT_LABELSTMT_H
 #define CDOT_LABELSTMT_H
 
-#include "../Block/CompoundStmt.h"
-#include "../../Visitor/EvaluatingVisitor.h"
+#include "../Statement.h"
 
-class EvaluatingVisitor;
-
-class LabelStmt : public CompoundStmt {
+class LabelStmt : public Statement {
 public:
-    LabelStmt();
-    LabelStmt(std::string);
+    explicit LabelStmt(string);
 
     typedef std::shared_ptr<LabelStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    inline void set_parent_cmpnd(CompoundStmt* parent) {
-        parent_cmpnd = parent;
-    }
-    inline CompoundStmt* get_cmpnd() {
-        return parent_cmpnd;
-    }
-    inline void set_visitor(EvaluatingVisitor* v) {
-        visitor = v;
-    }
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::LABEL_STMT;
     }
-    inline EvaluatingVisitor* get_visitor() {
-        return visitor;
-    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    std::string label_name;
-    CompoundStmt* parent_cmpnd;
-    EvaluatingVisitor* visitor;
+    string labelName;
 };
 
 

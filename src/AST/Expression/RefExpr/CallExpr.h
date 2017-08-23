@@ -7,8 +7,13 @@
 
 
 #include "../Expression.h"
-#include "RefExpr.h"
-#include "../../Visitor/StaticAnalysis/Class.h"
+
+namespace cdot {
+namespace cl {
+    class Class;
+    class Method;
+}
+}
 
 enum class CallType {
     METHOD_CALL,
@@ -19,75 +24,78 @@ enum class CallType {
 
 class CallExpr : public Expression {
 public:
-    CallExpr(CallType, std::vector<Expression::SharedPtr>, std::string = "");
+    CallExpr(CallType, std::vector<Expression::SharedPtr>, string = "");
 
-    void add_argument(Expression::SharedPtr);
+    virtual ~CallExpr() {
+//        delete genericReturnType;
+//        delete protocolType;
+    }
 
-    inline void set_generics(std::vector<TypeSpecifier> generics) {
+    inline void set_generics(std::vector<Type*> generics) {
         this->generics = generics;
     }
 
     inline void isLamdbaCall(bool lambda) {
-        is_lambda_call = lambda;
+        isLambdaCall = lambda;
     }
 
     typedef std::shared_ptr<CallExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children() override;
     void __dump(int) override;
 
-    inline virtual NodeType get_type() override {
+    NodeType get_type() override {
         return NodeType::CALL_EXPR;
     }
-    virtual inline Variant accept(Visitor& v) override {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) override {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
-    friend class MethodCallExpr;
 
 protected:
     CallType type;
-    std::string ident;
     std::vector<Expression::SharedPtr> args;
 
     // codegen
-    TypeSpecifier ret_type;
-    bool is_call_op = false;
-    std::string call_op_binding;
+    bool isCallOp = false;
+    string callOpBinding;
 
-    bool is_lambda_call = false;
+    bool isLambdaCall = false;
+
+    bool hasHiddenParamReturn = false;
+    Type* hiddenParamType = nullptr;
 
     // method call
-    bool is_static = false;
-    TypeSpecifier return_type;
+    bool isStatic = false;
+    Type* returnType = nullptr;
     bool is_virtual = false;
-    int vtable_pos;
-    std::string class_name;
+
+    string class_name;
     cdot::cl::Method* method;
 
-    TypeSpecifier generic_return_type;
-    bool needs_generic_cast = false;
+    Type* genericReturnType = nullptr;
+    bool needsGenericCast = false;
 
-    std::vector<TypeSpecifier> generics;
+    std::vector<Type*> generics;
+    std::vector<Type*> argTypes;
 
-    bool implicit_this_call = false;
-    std::string this_val;
-    bool is_ns_member = false;
-    string autobox_constr;
+    bool implicitSelfCall = false;
+    string selfBinding;
 
-    bool interface_shift = false;
+    string autoboxConstr;
+
+    bool protocolShift = false;
+    bool reverseProtoShift = false;
+    Type* protocolType = nullptr;
+
+    bool castToBase = false;
 };
 
 

@@ -3,13 +3,11 @@
 //
 
 #include "NamespaceDecl.h"
-#include "../ImportStmt.h"
-#include "../ExportStmt.h"
+#include "../Block/CompoundStmt.h"
 
-#include <iostream>
 
 NamespaceDecl::NamespaceDecl(std::string ns_name, CompoundStmt::SharedPtr content) :
-    ns_name(ns_name),
+    nsName(ns_name),
     contents(content)
 {
 
@@ -21,7 +19,7 @@ std::vector<AstNode::SharedPtr> NamespaceDecl::get_children() {
 
 void NamespaceDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout <<  "NameSpaceDecl [" << ns_name << "]" << std::endl;
+    std::cout <<  "NameSpaceDecl [" << nsName << "]" << std::endl;
 
     contents->__dump(depth + 1);
 }

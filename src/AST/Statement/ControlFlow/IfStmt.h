@@ -5,55 +5,45 @@
 #ifndef IFSTATEMENT_H
 #define IFSTATEMENT_H
 
-
 #include "../Statement.h"
-#include "../../Expression/Expression.h"
-#include "../Block/CompoundStmt.h"
+
+class Expression;
 
 class IfStmt : public Statement {
 public:
-    IfStmt(Expression::SharedPtr, Statement::SharedPtr);
-    IfStmt(Expression::SharedPtr);
+    IfStmt(std::shared_ptr<Expression>, Statement::SharedPtr);
+    IfStmt(std::shared_ptr<Expression>);
 
-    inline void set_if_branch(Statement::SharedPtr if_branch) {
-        _if_branch = if_branch;
-    }
-    inline void set_else_branch(Statement::SharedPtr else_branch) {
-        _else_branch = else_branch;
+    inline void setElseBranch(Statement::SharedPtr else_branch) {
+        elseBranch = else_branch;
     }
 
     typedef std::unique_ptr<IfStmt> UniquePtr;
     typedef std::shared_ptr<IfStmt> SharedPtr;
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::IF_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr _condition;
-    Statement::SharedPtr _if_branch;
-    Statement::SharedPtr _else_branch;
-    std::string __class_name = "IfStmt";
+    std::shared_ptr<Expression> condition;
+    Statement::SharedPtr ifBranch;
+    Statement::SharedPtr elseBranch;
 };
 
 

@@ -3,16 +3,13 @@
 //
 
 #include "StringLiteral.h"
-#include "../../../Util.h"
-
-#include <iostream>
 
 StringLiteral::StringLiteral(std::string value, char modifier) : value(value), modifier(modifier) {
 
 }
 
 std::vector<AstNode::SharedPtr> StringLiteral::get_children() {
-    return _member_expr == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{_member_expr };
+    return memberExpr == nullptr ? std::vector<AstNode::SharedPtr>() : std::vector<AstNode::SharedPtr>{memberExpr };
 }
 
 void StringLiteral::__dump(int depth) {

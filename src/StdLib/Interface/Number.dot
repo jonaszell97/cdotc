@@ -1,4 +1,19 @@
 
-interface Number {
-    # operator +(Number)
+protocol Number with Equatable, Comparable, Hashable {
+
+    def prefix + -> Self
+    def prefix - -> Self
+
+    def prefix ++ -> Self
+    def prefix -- -> Self
+
+    def postfix ++ -> Self
+    def postfix -- -> Self
+
+    def infix + (Self) -> Self
+    def infix - (Self) -> Self
+
+    def infix * (Self) -> Self
+    def infix / (Self) -> Double
+    def infix % (Self) -> Self
 }

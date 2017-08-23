@@ -5,43 +5,40 @@
 #ifndef CDOT_STRINGLITERAL_H
 #define CDOT_STRINGLITERAL_H
 
-#include "../RefExpr/RefExpr.h"
+#include "../Expression.h"
 
 class StringLiteral : public Expression {
 public:
-    StringLiteral(std::string, char = 'f');
+    explicit StringLiteral(string, char = 'f');
 
     typedef std::shared_ptr<StringLiteral> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int) override;
 
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
-    inline virtual NodeType get_type() {
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
+
+    inline virtual NodeType get_type() override {
         return NodeType::STRING_LITERAL;
     }
     virtual inline char get_modifier() {
         return modifier;
     }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     char modifier;
-    std::string value;
+    string value;
+
+    bool raw = false;
 };
 
 

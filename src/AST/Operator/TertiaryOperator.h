@@ -5,48 +5,39 @@
 #ifndef CDOT_TERTIARYOPERATOR_H
 #define CDOT_TERTIARYOPERATOR_H
 
-#include "Operator.h"
-#include "../Statement/Block/CompoundStmt.h"
+#include "../Expression/Expression.h"
 
-class TertiaryOperator : public Operator {
+class TertiaryOperator : public Expression {
 public:
     TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
 
-    inline std::string get_operator() {
-        return "?:";
-    }
-
     typedef std::shared_ptr<TertiaryOperator> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int) override ;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::TERTIARY_OPERATOR;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
+
 protected:
     Expression::SharedPtr condition;
     Expression::SharedPtr lhs;
     Expression::SharedPtr rhs;
 
     // codegen
-    TypeSpecifier result_type;
+    Type* resultType;
 };
 
 

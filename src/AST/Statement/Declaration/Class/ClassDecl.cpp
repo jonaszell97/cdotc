@@ -3,14 +3,16 @@
 //
 
 #include "ClassDecl.h"
+#include "ConstrDecl.h"
+#include "FieldDecl.h"
+#include "MethodDecl.h"
+#include "../TypedefDecl.h"
 
-#include <iostream>
-
-ClassDecl::ClassDecl(std::string class_name, std::vector<FieldDecl::SharedPtr> fields,
-        std::vector<MethodDecl::SharedPtr> methods, std::vector<ConstrDecl::SharedPtr> constr,
-    std::vector<TypedefDecl::SharedPtr> typedefs, std::vector<pair<string, TypeSpecifier>> generics, AccessModifier am,
-        bool is_abstract, std::string extends, std::vector<std::string> implements) :
-    class_name(class_name),
+ClassDecl::ClassDecl(string class_name, std::vector<std::shared_ptr<FieldDecl>>&& fields,
+        std::vector<std::shared_ptr<MethodDecl>>&& methods, std::vector<std::shared_ptr<ConstrDecl>>&& constr,
+    std::vector<std::shared_ptr<TypedefDecl>>&& typedefs, std::vector<GenericType*>&& generics, AccessModifier am,
+        bool is_abstract, ObjectType* extends, std::vector<ObjectType*>&& implements) :
+    className(class_name),
     fields(fields),
     methods(methods),
     constructors(constr),
@@ -18,14 +20,31 @@ ClassDecl::ClassDecl(std::string class_name, std::vector<FieldDecl::SharedPtr> f
     typedefs(typedefs),
     am(am),
     is_abstract(is_abstract),
-    extends(extends),
-    implements(implements)
+    parentClass(extends),
+    conformsTo(implements)
 {
 
 }
 
-std::vector<AstNode::SharedPtr> ClassDecl::get_children() {
-    std::vector<AstNode::SharedPtr> children;
+ClassDecl::ClassDecl(string className, std::vector<std::shared_ptr<FieldDecl>>&& fields, std::vector<std::shared_ptr<MethodDecl>>&&
+        methods, std::vector<std::shared_ptr<ConstrDecl>>&& constructors, std::vector<std::shared_ptr<TypedefDecl>>&&typedefs,
+        std::vector<GenericType *>&& generics, AccessModifier am, std::vector<ObjectType*>&& conformsTo) :
+    className(className),
+    fields(fields),
+    methods(methods),
+    constructors(constructors),
+    typedefs(typedefs),
+    generics(generics),
+    am(am),
+    is_abstract(true),
+    is_protocol(true),
+    conformsTo(conformsTo)
+{
+
+}
+
+std::vector<std::shared_ptr<AstNode>> ClassDecl::get_children() {
+    std::vector<std::shared_ptr<AstNode>> children;
     for (const auto& td : typedefs) {
         children.push_back(td);
     }
@@ -44,17 +63,17 @@ std::vector<AstNode::SharedPtr> ClassDecl::get_children() {
 
 void ClassDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::string extends_str = extends != "" ? " extends " + extends : "";
-    std::string implements_str = implements.size() > 0 ? " implements " : "";
-    for (int i = 0; i < implements.size(); ++i) {
-        implements_str += implements[i];
-        if (i != implements.size() - 1) {
+    string extends_str = parentClass != nullptr ? ": " + parentClass->getClassName() : "";
+    string implements_str = conformsTo.size() > 0 ? " with " : "";
+    for (int i = 0; i < conformsTo.size(); ++i) {
+        implements_str += conformsTo[i]->getClassName();
+        if (i != conformsTo.size() - 1) {
             implements_str += ", ";
         }
     }
 
     std::cout << "ClassDecl" << " [" << (is_abstract ? "abstract " : "") <<
-              class_name << extends_str << implements_str << "]" << std::endl;
+              className << extends_str << implements_str << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

@@ -1,7 +1,8 @@
+
 #include <iostream>
 #include "Parser.h"
+#include "Message/Exceptions.h"
 #include <fstream>
-#include <streambuf>
 #include <codecvt>
 #include <execinfo.h>
 
@@ -19,20 +20,13 @@ void  handler()
     exit(1);
 }
 
-std::string cin_readline() {
-    std::string res;
-    std::getline(std::cin, res);
-
-    return res;
-}
-
 int main() {
     std::set_terminate(handler);
     std::ifstream t("/Users/Jonas/CDotProjects/ex/main.dot");
     std::string str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
     try {
         Parser x(str);
-        x.run(false);
+        x.run(0);
     } catch(ParseError& p) {
         std::cout << p.what() << std::endl;
     } catch(RuntimeError& r) {

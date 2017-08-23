@@ -5,57 +5,50 @@
 #ifndef CDOT_LAMBDAEXPR_H
 #define CDOT_LAMBDAEXPR_H
 
-#include "../../Statement/Declaration/FuncArgDecl.h"
-#include "../../Statement/Block/CompoundStmt.h"
+#include "../Expression.h"
+
+class FuncArgDecl;
+class TypeRef;
 
 class LambdaExpr : public Expression {
 public:
-    LambdaExpr(TypeSpecifier, std::vector<FuncArgDecl::SharedPtr>);
+    LambdaExpr(std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>);
 
     inline void set_body(Statement::SharedPtr stmt) {
         _body = stmt;
-    }
-    inline void add_arg(FuncArgDecl::SharedPtr arg) {
-        _args.push_back(arg);
     }
     inline void isSingleExpr(bool single) {
         is_single_expr = single;
     }
 
     typedef std::shared_ptr<LambdaExpr> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::LAMBDA_EXPR;
     }
 
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    TypeSpecifier _return_type;
-    std::vector<FuncArgDecl::SharedPtr> _args;
+    std::shared_ptr<TypeRef> _return_type;
+    std::vector<std::shared_ptr<FuncArgDecl>> _args;
     Statement::SharedPtr _body;
 
     // codegen
-    std::vector<std::pair<std::string,std::string>> captures;
-    std::vector<TypeSpecifier> capture_types;
+    std::vector<pair<string, string>> captures;
+    std::vector<Type*> capture_types;
     std::string env_binding;
     unsigned int lambda_id;
     std::string self_ident;

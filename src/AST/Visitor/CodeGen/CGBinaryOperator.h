@@ -12,11 +12,11 @@
 class CGBinaryOperator {
 public:
     // arithmetic
-    static llvm::Value* CreateAdd(TypeSpecifier&, CGValue&, CGValue&, llvm::IRBuilder<>&);
-    static llvm::Value* CreateSub(TypeSpecifier&, CGValue&, CGValue&, llvm::IRBuilder<>&);
-    static llvm::Value* CreateMul(TypeSpecifier&, CGValue&, CGValue&, llvm::IRBuilder<>&);
-    static llvm::Value* CreateDiv(TypeSpecifier&, CGValue&, CGValue&, llvm::IRBuilder<>&);
-    static llvm::Value* CreateRem(TypeSpecifier&, CGValue&, CGValue&, llvm::IRBuilder<>&);
+    static llvm::Value* CreateAdd(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+    static llvm::Value* CreateSub(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+    static llvm::Value* CreateMul(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+    static llvm::Value* CreateDiv(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+    static llvm::Value* CreateRem(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
 };
 
 

@@ -3,9 +3,9 @@
 //
 
 #include "LambdaExpr.h"
-#include <iostream>
+#include "../../Statement/Declaration/FuncArgDecl.h"
 
-LambdaExpr::LambdaExpr(TypeSpecifier return_type, std::vector<FuncArgDecl::SharedPtr> args) :
+LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::shared_ptr<FuncArgDecl>> args) :
     _return_type(return_type),
     _args(args)
 {
@@ -20,27 +20,13 @@ std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {
     if (_body != nullptr) {
         children.push_back(_body);
     }
-    if (_member_expr != nullptr) {
-        children.push_back(_member_expr);
+    if (memberExpr != nullptr) {
+        children.push_back(memberExpr);
     }
 
     return children;
 }
 
 void LambdaExpr::__dump(int depth) {
-    AstNode::__tab(depth);
-    std::string signature = "(";
-    for (int i = 0; i < _args.size(); ++i) {
-        signature += _args[i]->get_arg_type()->to_string();
-        if (i < _args.size() - 1) {
-            signature += ", ";
-        }
-    }
-    signature += ") -> " + _return_type.to_string();
 
-    std::cout << "LambdaExpr [" << signature << "]" << std::endl;
-
-    for (auto c : get_children()) {
-        c->__dump(depth + 1);
-    }
 }

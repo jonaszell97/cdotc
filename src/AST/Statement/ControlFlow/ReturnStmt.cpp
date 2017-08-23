@@ -2,14 +2,11 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "ReturnStmt.h"
-#include "../Block/CompoundStmt.h"
+#include "../../Expression/Expression.h"
 
-#include <iostream>
-
-ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : _return_val(return_val) {
-
+ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : returnValue(return_val) {
+    children.push_back(&returnValue);
 }
 
 ReturnStmt::ReturnStmt() {
@@ -17,8 +14,8 @@ ReturnStmt::ReturnStmt() {
 }
 
 std::vector<AstNode::SharedPtr> ReturnStmt::get_children() {
-    if (_return_val) {
-        return { _return_val };
+    if (returnValue) {
+        return { returnValue };
     }
     else {
         return {};

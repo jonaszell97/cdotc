@@ -2,19 +2,18 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "WhileStmt.h"
-#include "../../../Parser.h"
+#include "../../Expression/Expression.h"
 
-WhileStmt::WhileStmt(Expression::SharedPtr cond, CompoundStmt::SharedPtr while_block) :
-    _condition(cond),
-    _while_block(while_block)
+WhileStmt::WhileStmt(Expression::SharedPtr cond, Statement::SharedPtr while_block) :
+    condition(cond),
+    body(while_block)
 {
-
+    children.push_back(&condition);
 }
 
 std::vector<AstNode::SharedPtr> WhileStmt::get_children() {
-    return { _condition, _while_block };
+    return { condition, body };
 }
 
 void WhileStmt::__dump(int depth) {

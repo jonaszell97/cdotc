@@ -5,67 +5,97 @@
 #ifndef CDOT_CLASSDECLEXPR_H
 #define CDOT_CLASSDECLEXPR_H
 
+#include "../../../Statement/Statement.h"
 
-#include "../../../Expression/Expression.h"
-#include "FieldDecl.h"
-#include "MethodDecl.h"
-#include "ConstrDecl.h"
-#include "OperatorDecl.h"
-#include "../TypedefDecl.h"
+class FieldDecl;
+class MethodDecl;
+class ConstrDecl;
+class TypedefDecl;
 
-class ClassDecl : public Expression {
+namespace cdot {
+    namespace cl {
+        struct Method;
+        class Class;
+    }
+}
+
+class ClassDecl : public Statement {
 public:
-    ClassDecl(std::string, std::vector<FieldDecl::SharedPtr>, std::vector<MethodDecl::SharedPtr>,
-        std::vector<ConstrDecl::SharedPtr>, std::vector<TypedefDecl::SharedPtr>, std::vector<pair<string, TypeSpecifier>>,
-        AccessModifier = AccessModifier::PUBLIC, bool = false, std::string = "", std::vector<std::string> = {});
+    ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
+        std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
+        std::vector<GenericType*>&&, AccessModifier, bool, ObjectType*, std::vector<ObjectType*>&&);
+
+    ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
+        std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
+        std::vector<GenericType*>&&, AccessModifier, std::vector<ObjectType*>&&);
+
+    virtual inline bool isStruct() {
+        return is_struct;
+    }
+
+    virtual inline void isStruct(bool str) {
+        is_struct = str;
+    }
+
+    virtual inline bool isExtension() {
+        return is_extension;
+    }
+
+    virtual inline void isExtension(bool ext) {
+        is_extension = ext;
+    }
+
+    virtual inline ObjectType* getParentClass() {
+        return parentClass;
+    }
 
     typedef std::shared_ptr<ClassDecl> SharedPtr;
     typedef std::unique_ptr<ClassDecl> UniquePtr;
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<std::shared_ptr<AstNode>> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::CLASS_DECL;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
     friend class cdot::cl::Class;
 
 protected:
-    std::string extends;
-    std::vector<std::string> implements;
+    ObjectType* parentClass = nullptr;
+    std::vector<ObjectType*> conformsTo;
 
-    bool is_abstract;
+    bool is_abstract = false;
+    bool is_protocol = false;
+    bool is_struct = false;
+    bool is_extension = false;
+
     AccessModifier am;
-    std::string class_name;
+    string className;
+    string qualifiedName;
 
-    std::vector<ConstrDecl::SharedPtr> constructors;
-    std::vector<FieldDecl::SharedPtr> fields;
-    std::vector<MethodDecl::SharedPtr> methods;
-    std::vector<TypedefDecl::SharedPtr> typedefs;
+    std::vector<std::shared_ptr<ConstrDecl>> constructors;
+    std::vector<std::shared_ptr<FieldDecl>> fields;
+    std::vector<std::shared_ptr<MethodDecl>> methods;
+    std::vector<std::shared_ptr<TypedefDecl>> typedefs;
 
-    std::vector<pair<string, TypeSpecifier>> generics;
+    std::vector<GenericType*> generics;
 
     // codegen
-    std::string this_binding;
-    bool needs_vtable;
-    cdot::cl::Class* class_decl;
+    string selfBinding;
+    cdot::cl::Class* declaredClass;
+    cdot::cl::Method* defaultConstr = nullptr;
 };
 
 

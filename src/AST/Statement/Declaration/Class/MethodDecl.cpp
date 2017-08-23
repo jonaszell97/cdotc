@@ -3,31 +3,40 @@
 //
 
 #include "MethodDecl.h"
-#include "../../../../Util.h"
-
-#include <iostream>
+#include "../../../Expression/TypeRef.h"
+#include "../../Block/CompoundStmt.h"
+#include "../../Declaration/FuncArgDecl.h"
 
 MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
         CompoundStmt::SharedPtr body, AccessModifier am, bool is_static) :
-    method_name(method_name),
-    return_type(return_type),
+    methodName(method_name),
+    returnType(return_type),
     args(args),
     body(body),
     am(am),
-    is_static(is_static),
-    is_abstract(false)
+    isStatic(is_static),
+    isAbstract(false)
 {
 
 }
 
 MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
         AccessModifier am, bool is_static) :
-    method_name(method_name),
-    return_type(return_type),
+    methodName(method_name),
+    returnType(return_type),
     args(args),
     am(am),
-    is_static(is_static),
-    is_abstract(true)
+    isStatic(is_static),
+    isAbstract(true)
+{
+
+}
+
+MethodDecl::MethodDecl(string alias, string originMethod, std::vector<std::shared_ptr<FuncArgDecl>> args) :
+    methodName(originMethod),
+    alias(alias),
+    args(args),
+    isAlias(true)
 {
 
 }
@@ -38,7 +47,7 @@ std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
         children.push_back(arg);
     }
 
-    if (!is_abstract) {
+    if (body != nullptr) {
         children.push_back(body);
     }
 
@@ -47,8 +56,8 @@ std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
 
 void MethodDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << (is_static ? "Static" : "") << "MethodDecl [" << (is_abstract ? "abstract " : "") << util::am_map[am]
-            << " " << method_name << " => " << return_type->to_string() << "]" << std::endl;
+    std::cout << (isStatic ? "Static" : "") << "MethodDecl [" << (isAbstract ? "abstract " : "") << util::am_map[am]
+            << " " << methodName << " => " << returnType->toString() << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

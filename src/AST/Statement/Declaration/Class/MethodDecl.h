@@ -7,60 +7,64 @@
 
 
 #include "../../Statement.h"
-#include "../FuncArgDecl.h"
-#include "../../Block/CompoundStmt.h"
-#include "../../../Visitor/StaticAnalysis/Class.h"
+
+class TypeRef;
+class CompoundStmt;
+class FuncArgDecl;
+
+namespace cdot {
+    namespace cl {
+        struct Method;
+    }
+}
 
 class MethodDecl : public Statement {
 public:
-    MethodDecl(std::string, TypeRef::SharedPtr, std::vector<FuncArgDecl::SharedPtr>, CompoundStmt::SharedPtr,
-               AccessModifier = AccessModifier::PUBLIC, bool = false);
-    MethodDecl(std::string, TypeRef::SharedPtr, std::vector<FuncArgDecl::SharedPtr>, AccessModifier =
-    AccessModifier::PUBLIC, bool = false);
+    MethodDecl(std::string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, std::shared_ptr<CompoundStmt>,
+           AccessModifier = AccessModifier::PUBLIC, bool = false);
+    MethodDecl(std::string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, AccessModifier =
+        AccessModifier::PUBLIC, bool = false);
+    MethodDecl(string, string, std::vector<std::shared_ptr<FuncArgDecl>>);
 
     typedef std::shared_ptr<MethodDecl> SharedPtr;
     typedef std::unique_ptr<MethodDecl> UniquePtr;
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::METHOD_DECL;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    bool is_static;
-    bool is_abstract;
+    bool isStatic;
+    bool isAbstract;
+    bool isAlias = false;
     AccessModifier am;
-    std::string method_name;
-    TypeRef::SharedPtr return_type;
-    std::vector<FuncArgDecl::SharedPtr> args;
-    CompoundStmt::SharedPtr body;
+    string methodName;
+    std::shared_ptr<TypeRef> returnType;
+    std::vector<std::shared_ptr<FuncArgDecl>> args;
+    std::shared_ptr<CompoundStmt> body;
 
-    bool declared = false;
+    std::vector<GenericType*> generics;
+
+    string alias;
 
     // codegen
     std::string class_name;
-    std::string this_binding;
-    bool is_virtual = false;
-    llvm::Function* cg_function;
+    std::string selfBinding;
     cdot::cl::Method* method;
 };
 

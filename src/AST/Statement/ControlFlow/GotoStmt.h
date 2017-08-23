@@ -5,40 +5,34 @@
 #ifndef CDOT_GOTOSTMT_H
 #define CDOT_GOTOSTMT_H
 
-
 #include "../Statement.h"
 
 class GotoStmt : public Statement {
 public:
-    GotoStmt(std::string);
+    explicit GotoStmt(string);
 
     typedef std::shared_ptr<GotoStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::GOTO_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    std::string label_name;
+    string labelName;
 };
 
 

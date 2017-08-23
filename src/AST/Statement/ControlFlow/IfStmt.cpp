@@ -3,27 +3,29 @@
 //
 
 #include "IfStmt.h"
-
-#include <iostream>
+#include "../../Expression/Expression.h"
 
 IfStmt::IfStmt(Expression::SharedPtr cond, Statement::SharedPtr if_branch) :
-        _condition(cond), _if_branch(if_branch), _else_branch{} {
-
+    condition(cond),
+    ifBranch(if_branch),
+    elseBranch{}
+{
+    children.push_back(&cond);
 }
 
-IfStmt::IfStmt(Expression::SharedPtr cond) : _condition(cond), _if_branch{}, _else_branch{} {
-
+IfStmt::IfStmt(Expression::SharedPtr cond) : condition(cond), ifBranch{}, elseBranch{} {
+    children.push_back(&cond);
 }
 
 std::vector<AstNode::SharedPtr> IfStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
-    children.push_back(_condition);
+    children.push_back(condition);
 
-    if (_if_branch != nullptr) {
-        children.push_back(_if_branch);
+    if (ifBranch != nullptr) {
+        children.push_back(ifBranch);
     }
-    if (_else_branch != nullptr) {
-        children.push_back(_else_branch);
+    if (elseBranch != nullptr) {
+        children.push_back(elseBranch);
     }
 
     return children;

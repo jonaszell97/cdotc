@@ -70,13 +70,13 @@
 //    return {};
 //}
 //
-//Variant EvaluatingVisitor::visit(ImportStmt *node) {
+//Variant EvaluatingVisitor::visit(UsingStmt *node) {
 //    GlobalContext::import_module(node->path, node->module_name, node->is_lib_import, node->import_identifiers);
 //
 //    return {};
 //}
 //
-//Variant EvaluatingVisitor::visit(ExportStmt *node) {
+//Variant EvaluatingVisitor::visit(EndOfFileStmt *node) {
 //    exports.emplace(node->target, context->get_variable(node->target));
 //
 //    return {};
@@ -221,7 +221,7 @@
 //
 //        if (decl.first.raw_array) {
 //
-//            ArrayLiteral::SharedPtr arr = std::dynamic_pointer_cast<ArrayLiteral>(decl.second);
+//            CollectionLiteral::SharedPtr arr = std::dynamic_pointer_cast<CollectionLiteral>(decl.second);
 //            if (arr == nullptr) {
 //                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign variable of type " + val::typetostr(decl.first
 //                    ) + " to array of type " + val::typetostr(decl.first), node);
@@ -347,11 +347,11 @@
 //}
 //
 ///**
-// * Creates an Array from an ArrayLiteral node
+// * Creates an Array from an CollectionLiteral node
 // * @param node
 // * @return
 // */
-//Variant EvaluatingVisitor::visit(ArrayLiteral *node) {
+//Variant EvaluatingVisitor::visit(CollectionLiteral *node) {
 //    int length = node->_length;
 //
 //    if (node->_length_expr != nullptr) {
@@ -472,7 +472,7 @@
 // * @param node
 // * @return
 // */
-//Variant EvaluatingVisitor::visit(ArrayAccessExpr *node) {
+//Variant EvaluatingVisitor::visit(SubscriptExpr *node) {
 //    Array::SharedPtr arr = std::dynamic_pointer_cast<Array>(current_ref.back()->get<Object::SharedPtr>());
 //    if (arr == nullptr) {
 //        RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index of non-array element", node);
@@ -1025,7 +1025,7 @@
 //    bool public_class = current_class->get_access_modifier() == AccessModifier::PUBLIC;
 //
 //    // if class is public and no mutators are specified, generate them by default
-//    if (node->generate_getter || (public_class && !node->generate_getter && !node->generate_setter)) {
+//    if (node->hasGetter || (public_class && !node->hasGetter && !node->generate_setter)) {
 //        std::string get_name = util::generate_getter_name(node->field_name);
 //        const std::string field_name = node->field_name;
 //
@@ -1039,7 +1039,7 @@
 //        }, std::vector<TypeSpecifier>{}, TypeSpecifier(node->type)));
 //    }
 //
-//    if (node->generate_setter || (public_class && !node->generate_getter && !node->generate_setter)) {
+//    if (node->generate_setter || (public_class && !node->hasGetter && !node->generate_setter)) {
 //        std::string set_name = util::generate_setter_name(node->field_name);
 //        const std::string field_name = node->field_name;
 //        TypeSpecifier type = node->type;

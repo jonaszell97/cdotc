@@ -13,7 +13,7 @@ namespace var {
 
     class Converter {
     public:
-        static Variant cast(Variant, ValueType);
+//        static Variant cast(Variant, ValueType);
     };
 
 } // namespace var

@@ -1,6 +1,6 @@
 
 class Any {
-    def hello() {
-        return 3
-    }
+    # def toString() -> Int8* unsafe {
+    #     return self as! Int8*
+    # }
 }

@@ -13,10 +13,8 @@
 class CGMemory {
 public:
     static llvm::BasicBlock* CurrentEntryBlock;
-    static llvm::Value* CreateAlloca(llvm::Type*, std::string = "", llvm::Value* = nullptr,
-        unsigned short = 0, bool = false, llvm::BasicBlock* = nullptr);
-    static llvm::Value* CreateAlloca(TypeSpecifier&, std::string = "", llvm::Value* = nullptr, bool = false,
-        llvm::BasicBlock* = nullptr);
+
+    static llvm::Value* CreateAlloca(llvm::Type*, bool = false, string = "", llvm::Value* = nullptr);
 };
 
 

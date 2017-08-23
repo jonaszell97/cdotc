@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include "../Message/Exceptions.h"
 #include "../Util.h"
+#include "Type/Type.h"
+#include "Type/AutoType.h"
 
 class Function;
 class Object;
@@ -32,7 +34,7 @@ using std::string;
 using std::pair;
 using std::unordered_map;
 class Variant;
-class Namespace;
+class SymbolTable;
 
 enum ValueType : unsigned int {
     INT_T,
@@ -47,10 +49,12 @@ enum ValueType : unsigned int {
     VOID_T,
     AUTO_T,
     CLASS_T,
-    INTERFACE_T
+    INTERFACE_T,
+    CARRAY_T
 };
 
 struct TypeSpecifier;
+class Lexer;
 
 namespace val {
     extern ValueType strtotype(std::string);
@@ -92,8 +96,11 @@ struct TypeSpecifier {
         }
     }
 
-    TypeSpecifier& resolve(Namespace*);
+    TypeSpecifier(const TypeSpecifier& other);
+
+    TypeSpecifier& resolve(std::vector<string>&);
     static void resolveGeneric(TypeSpecifier &ts, unordered_map<string, TypeSpecifier>&);
+    static TypeSpecifier& mostGeneral(TypeSpecifier& fst, TypeSpecifier& snd);
 
     bool operator==(TypeSpecifier& ts);
 
@@ -115,7 +122,6 @@ struct TypeSpecifier {
 
     bool invalid_ns_ref = false;
 
-    bool raw_array = false;
     bool cstring = false;
 
     bool is_primitive = true;
@@ -128,6 +134,7 @@ struct TypeSpecifier {
     string generic_class_name;
 
     bool is_vararg = false;
+    bool cstyle_vararg = false;
 
     std::unordered_map<string, TypeSpecifier> concrete_generic_types = {};
 
@@ -139,11 +146,12 @@ struct TypeSpecifier {
     bool is_function = false;
     bool is_pointer = false;
     bool is_reference = false;
+
+    bool is_assignable = false;
     bool is_lambda = false;
     bool resolved = false;
     unsigned int lambda_id;
 
-    std::vector<string> ns_name;
     std::vector<TypeSpecifier> args;
 
     union {
@@ -154,44 +162,19 @@ struct TypeSpecifier {
     std::string to_string() const;
 };
 
-struct CGValue {
-    CGValue() {
-
-    }
-
-    CGValue(llvm::Value *val, bool lvalue = true) : val(val), lvalue(lvalue) {
-
-    }
-
-    llvm::Value* val = nullptr;
-
-    size_t arr_size = 0;
-    bool lvalue = true;
-    bool needs_alloc = true;
-    bool const_arr_size = false;
-
-    unsigned int alignment = 8;
-};
-
 struct Variant {
 protected:
     union {
-        int int_val;
-        long long_val;
-        float float_val;
-        double d_val;
-        bool b_val;
+        long int_val;
+        double float_val;
         char c_val;
     };
 
-    bool any_type = false;
+    bool isUnsigned_ = false;
 
     std::string s_val;
-    TypeSpecifier type;
-    bool _is_null = false;
-    bool is_numeric = false;
-    bool initialized = true;
-    void check_numeric();
+    TypeSpecifier _type;
+    Type* type = new AutoType();
 
 public:
     typedef std::shared_ptr<Variant> SharedPtr;
@@ -200,9 +183,12 @@ public:
     friend class cdot::var::Converter;
     friend class cdot::var::Arithmetic;
 
+    inline Type* getType() {
+        return type;
+    }
+
     Variant();
-    Variant(TypeSpecifier);
-    Variant(const Variant&);
+    Variant(const Variant&) = default;
     Variant(double);
     Variant(int);
     Variant(long);
@@ -211,72 +197,65 @@ public:
     Variant(bool);
     Variant(std::string);
 
-    TypeSpecifier& get_type();
-    void is_any_type(bool = true);
-    void set_default();
-    void is_initialized(bool init) {
-        initialized = init;
-    }
-    inline bool is_initialized() const {
-        return initialized;
+    inline string getString() {
+        return s_val;
     }
 
-    inline void is_nullable(bool nullable) {
-        type.nullable = nullable;
+    inline void setInt(long l) {
+        int_val = l;
     }
-    inline bool is_null() const {
-        return _is_null;
+
+    inline void setFloat(double d) {
+        float_val = d;
     }
-    inline void is_null(bool is_null) {
-        _is_null = is_null;
+
+    void isUnsigned(bool uns, Lexer* lexer);
+
+    inline double getFloat() {
+        return float_val;
     }
-    inline void set_type(TypeSpecifier ts) {
-        type = ts;
+
+    inline long getInt() {
+        return int_val;
     }
 
     std::string to_string(bool = false);
-    long hash();
-
-    template <class T>
-    T get();
-
-    Variant cast_to(ValueType target_type);
 
     // binary math operators
-    Variant operator+(Variant v1);
-    Variant operator-(Variant v1);
-    Variant operator*(Variant v1);
-    Variant operator/(Variant v1);
-    Variant operator%(Variant v1);
-    Variant pow(Variant v1);
-
-    // equality operators
-    Variant operator==(Variant v1);
-    Variant operator!=(Variant v1);
-    Variant operator<=(Variant v1);
-    Variant operator>=(Variant v1);
-    Variant operator<(Variant v1);
-    Variant operator>(Variant v1);
-
-    // logical operators
-    Variant operator&&(Variant v1);
-    Variant operator||(Variant v1);
-
-    // bitwise operators
-    Variant operator&(Variant v1);
-    Variant operator|(Variant v1);
-    Variant operator^(Variant v1);
-    Variant operator<<(Variant v1);
-    Variant operator>>(Variant v1);
-
-    // assignment operator
-    Variant& operator=(const Variant& v);
-    Variant strict_equals(const Variant& v);
-
-    // unary operators
-    Variant operator!();
-    Variant operator-();
-    Variant operator~();
+//    Variant operator+(Variant v1);
+//    Variant operator-(Variant v1);
+//    Variant operator*(Variant v1);
+//    Variant operator/(Variant v1);
+//    Variant operator%(Variant v1);
+//    Variant pow(Variant v1);
+//
+//    // equality operators
+//    Variant operator==(Variant v1);
+//    Variant operator!=(Variant v1);
+//    Variant operator<=(Variant v1);
+//    Variant operator>=(Variant v1);
+//    Variant operator<(Variant v1);
+//    Variant operator>(Variant v1);
+//
+//    // logical operators
+//    Variant operator&&(Variant v1);
+//    Variant operator||(Variant v1);
+//
+//    // bitwise operators
+//    Variant operator&(Variant v1);
+//    Variant operator|(Variant v1);
+//    Variant operator^(Variant v1);
+//    Variant operator<<(Variant v1);
+//    Variant operator>>(Variant v1);
+//
+//    // assignment operator
+//    Variant& operator=(const Variant& v) = default;
+//    Variant strict_equals(const Variant& v);
+//
+//    // unary operators
+//    Variant operator!();
+//    Variant operator-();
+//    Variant operator~();
 
     friend std::ostream& operator<<(std::ostream& str, Variant& v) {
         return str << v.to_string(true);

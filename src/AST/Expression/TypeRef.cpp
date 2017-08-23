@@ -4,26 +4,34 @@
 
 #include "TypeRef.h"
 
-
-TypeRef::TypeRef() : type(TypeSpecifier(AUTO_T)) {
-
-}
-
-TypeRef::TypeRef(TypeSpecifier t) : type(t) {
+TypeRef::TypeRef() : type(new AutoType) {
 
 }
 
-string TypeRef::to_string() {
-    return type.to_string();
+TypeRef::TypeRef(Type* t) : type(t) {
+
+}
+
+string TypeRef::toString() {
+    return type->toString();
 }
 
 std::vector<AstNode::SharedPtr> TypeRef::get_children() {
-    return {};
+    std::vector<AstNode::SharedPtr> children;
+
+    if (isa<PointerType>(type)) {
+        auto asPtr = cast<PointerType>(type);
+        if (asPtr->getLengthExpr() != nullptr) {
+            children.push_back(asPtr->getLengthExpr());
+        }
+    }
+
+    return children;
 }
 
 void TypeRef::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "TypeRef [" << type.to_string() << "]" << std::endl;
+    std::cout << "TypeRef [" << type->toString() << "]" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

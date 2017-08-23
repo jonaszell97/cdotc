@@ -3,11 +3,13 @@
 //
 
 #include "Class.h"
-#include "../../Namespace.h"
+#include "../../SymbolTable.h"
 #include "../../Expression/Expression.h"
 #include "../../../Message/Warning.h"
 #include "../../Statement/Declaration/Class/ClassDecl.h"
-#include "../CodeGen/CGType.h"
+#include "../../../Variant/Type/ObjectType.h"
+#include "../../../Util.h"
+#include "../../../Variant/Type/GenericType.h"
 
 namespace cdot {
 namespace cl {
@@ -18,8 +20,9 @@ namespace cl {
      * @param type
      * @param access_modifier
      */
-    Field::Field(std::string name, TypeSpecifier type, AccessModifier access_modifier, Expression::SharedPtr def) :
-        field_name(name), field_type(type), access_modifier(access_modifier), def_val(def) {
+    Field::Field(string name, Type* type, AccessModifier access_modifier, Expression::SharedPtr def) :
+        fieldName(name), fieldType(type), accessModifier(access_modifier), defaultVal(def)
+    {
 
     }
 
@@ -32,51 +35,24 @@ namespace cl {
      * @param arg_types
      * @param arg_defaults
      */
-    Method::Method(std::string name, TypeSpecifier ret_type, AccessModifier access_modifier, std::vector<std::string>
-        arg_names, std::vector<TypeSpecifier> arg_types, std::vector<Expression::SharedPtr> arg_defaults) :
-            method_name(name), return_type(ret_type), access_modifier(access_modifier),
-            argument_def_values(arg_defaults), argument_names(arg_names), argument_types(arg_types)
+    Method::Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<string>
+        arg_names, std::vector<Type*> arg_types, std::vector<Expression::SharedPtr> arg_defaults,
+        std::vector<GenericType*>& generics, bool isStatic) :
+            methodName(name), returnType(ret_type), accessModifier(access_modifier),
+            argumentDefaults(arg_defaults), argumentNames(arg_names), argumentTypes(arg_types), isStatic(isStatic),
+            generics(generics)
     {
 
     }
 
-    /**
-     * Instantiates an interface
-     * @param name
-     */
-    Interface::Interface(std::string name) : interface_name(name), field_symbols{}, method_symbols{}, field_names{},
-                                             method_names{} {
-
-    }
-
-    /**
-     * Adds a field declaration to an interface
-     * @param name
-     * @param type
-     * @param is_static
-     */
-    void Interface::add_field(std::string name, TypeSpecifier type) {
-        field_symbols.push_back(Namespace::symbol_from_var(name, type, false));
-        field_names.push_back(name);
-    }
-
-    /**
-     * Adds a method declaration ot an interface
-     * @param name
-     * @param ret_type
-     * @param is_static
-     * @param arg_types
-     */
-    void Interface::add_method(std::string name, TypeSpecifier ret_type, std::vector<TypeSpecifier> arg_types, AstNode* caller)
+    Method::Method(string name, Type *ret_type, std::vector<Type *> argTypes, std::vector<GenericType*>& generics) :
+        methodName(name),
+        returnType(ret_type),
+        argumentTypes(argTypes),
+        isStatic(false),
+        generics(generics)
     {
-        auto symb = Namespace::fun_with_ret_type(name, arg_types, ret_type);
-        if (std::find(method_symbols.begin(), method_symbols.end(), symb) != method_symbols.end()) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Method " + name + " cannot be redeclared with a similar "
-                "signature to a previous declaration", caller);
-        }
 
-        method_symbols.push_back(symb);
-        method_names.push_back(name);
     }
 
     /**
@@ -85,25 +61,37 @@ namespace cl {
      * @param parent
      * @param implements
      */
-    Class::Class(std::string& class_name, Class* parent, std::vector<std::string>& implements,
-        std::vector<pair<string, TypeSpecifier>>& generics, ClassDecl* decl,
-        Namespace* ns, bool is_abstract) :
-        class_name(class_name), parent_class(parent), implements_(implements), field_symbols{}, method_symbols{},
-        declaration(decl), _namespace(ns), is_abstract(is_abstract), generics(generics)
+    Class::Class(string& class_name, ObjectType* parent, std::vector<ObjectType*>& conformsTo_,
+        std::vector<GenericType*>& generics, ClassDecl* decl, bool is_abstract) :
+        className(class_name),
+        extends(parent),
+        declaration(decl),
+        conformsTo_(conformsTo_),
+        is_abstract(is_abstract),
+        generics(generics)
     {
-        if (parent != nullptr) {
-            inherit();
-            depth = parent->depth + 1;
-            auto current = parent;
-            while (current != nullptr) {
-                current->extended_by.push_back(this);
-                current = current->parent_class;
-            }
+        type = ObjectType::get(class_name);
+        for (const auto& gen : generics) {
+            type->specifyGenericType(gen->getGenericClassName(), gen->getCovariance());
         }
+    }
 
-        type.type = OBJECT_T;
-        type.class_name = class_name;
-        type.is_generic = !generics.empty();
+    Class::Class(string &class_name, std::vector<ObjectType *> &conformsTo_, std::vector<GenericType *> &generics,
+            bool isProtocol, ClassDecl *decl) :
+        className(class_name),
+        extends(ObjectType::get("Any")),
+        declaration(decl),
+        is_struct(!isProtocol),
+        is_protocol(isProtocol),
+        conformsTo_(conformsTo_),
+        generics(generics)
+    {
+        type = ObjectType::get(class_name);
+        type->isStruct(is_struct);
+        parentClass = SymbolTable::getClass("Any");
+        for (const auto& gen : generics) {
+            type->specifyGenericType(gen->getGenericClassName(), gen->getCovariance());
+        }
     }
 
     /**
@@ -113,14 +101,41 @@ namespace cl {
      * @param access
      * @param is_static
      */
-    void Class::declare_field(std::string name, TypeSpecifier type, AccessModifier access, Expression::SharedPtr
-        def_val)
-    {
-        auto field = new Field(name, type, access, def_val);
-        field->symbol_name = "." + class_name + "." + name;
-        fields.emplace_back(name, field);
-        field_symbols.push_back(Namespace::symbol_from_var(name, type, false));
-        field_names.push_back(name);
+    Field* Class::declareField(
+        string name,
+        Type *type,
+        AccessModifier access,
+        Expression::SharedPtr def_val
+    ) {
+        auto field = std::make_shared<Field>(name, type, access, def_val);
+        auto ptr = field.get();
+
+        field->mangledName = "." + className + "." + name;
+        fields.emplace_back(name, std::move(field));
+
+        return ptr;
+    }
+
+    void Class::defineParentClass() {
+        if (extends != nullptr) {
+            parentClass = SymbolTable::getClass(extends->getClassName());
+            depth = parentClass->depth + 1;
+
+            auto current = parentClass;
+            while (current != nullptr) {
+                current->extendedBy.push_back(this);
+                current = current->parentClass;
+            }
+
+            std::vector<ObjectType*> conformsToExcl;
+            for (const auto& prot : conformsTo_) {
+                if (!parentClass->conformsTo(prot->getClassName())) {
+                    conformsToExcl.push_back(prot);
+                }
+            }
+
+            conformsTo_ = conformsToExcl;
+        }
     }
 
     /**
@@ -133,42 +148,71 @@ namespace cl {
      * @param arg_types
      * @param arg_defaults
      */
-    Method* Class::declare_method(std::string name, TypeSpecifier ret_type, AccessModifier access,
-        std::vector<std::string>
-        arg_names, std::vector<TypeSpecifier> arg_types, std::vector<Expression::SharedPtr> arg_defaults, AstNode *caller)
-    {
+    Method* Class::declareMethod(
+        string name,
+        Type *ret_type,
+        AccessModifier access,
+        std::vector<string> arg_names,
+        std::vector<Type *> arg_types,
+        std::vector<Expression::SharedPtr> arg_defaults,
+        std::vector<GenericType *> generics,
+        bool isStatic
+    ) {
         auto overloads = methods.equal_range(name);
         auto score = util::func_score(arg_types);
 
         for (auto it = overloads.first; it != overloads.second; ++it) {
             auto& overload = it->second;
-            auto res = util::func_call_compatible(arg_types, overload->argument_types);
-            if (res.is_compatible && res.compat_score >= score) {
-                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot redeclare function " + name + " with a similar name to a "
-                    "previous declaration", caller);
-            }
+//            auto res = util::func_call_compatible(overload->argument_types, arg_types);
+//            if (res.is_compatible && res.compat_score >= score) {
+//                RuntimeError::raise(ERR_TYPE_ERROR, "Cannot redeclare method " + name + " with a similar name to a "
+//                    "previous declaration", caller);
+//            }
         }
 
-        auto symb = Namespace::symbol_from_method(class_name, name, arg_types);
-        auto method = std::make_unique<Method>(name, ret_type, access, arg_names, arg_types, arg_defaults);
-        method->symbol_name = symb;
+        if (name == "init") {
+            generics = this->generics;
+        }
+
+        auto symb = SymbolTable::mangleMethod(className, name, arg_types);
+        auto method = std::make_shared<Method>(name, ret_type, access, arg_names,
+            arg_types, arg_defaults, generics, isStatic);
+
+        method->mangledName = symb;
 
         auto ptr = method.get();
 
-
         methods.emplace(name, std::move(method));
-        method_names.push_back(name);
 
-        if (name != "init") {
-            auto symb_name = Namespace::symbol_from_fun(name, arg_types, "");
-            method_symbols.emplace_back(symb_name, ptr);
-            method_ret_types.emplace(symb_name, ret_type);
-            ptr->ret_type_ref = &method_ret_types[symb_name];
+        if (name != "init" && name != "init.def") {
+            auto mangledName = SymbolTable::mangleFunction(name, arg_types, "");
+            mangledMethods.emplace(mangledName, ptr);
         }
         else {
             constructors.push_back(ptr);
         }
 
+        return ptr;
+    }
+
+    Method* Class::declareMemberwiseInitializer() {
+        std::vector<Type*> argTypes;
+
+        for (const auto& field : fields) {
+            argTypes.push_back(field.second->fieldType->deepCopy());
+        }
+
+        string constrName = "init";
+        auto mangled = SymbolTable::mangleMethod(className, constrName, argTypes);
+        auto method = std::make_shared<Method>(constrName, type->toRvalue(), argTypes, generics);
+
+        method->mangledName = mangled;
+        auto ptr = method.get();
+
+        methods.emplace("init", std::move(method));
+        constructors.push_back(ptr);
+
+        memberwiseInitializer = ptr;
         return ptr;
     }
 
@@ -178,13 +222,15 @@ namespace cl {
      * @param is_static
      * @return
      */
-    bool Class::has_field(std::string field_name) {
-        if (util::in_pair_vector(fields, field_name)) {
-            return true;
+    bool Class::hasField(string &field_name) {
+        for (const auto& f : fields) {
+            if (f.first == field_name) {
+                return true;
+            }
         }
 
-        if (parent_class != nullptr) {
-            return parent_class->has_field(field_name);
+        if (parentClass != nullptr) {
+            return parentClass->hasField(field_name);
         }
 
         return false;
@@ -196,160 +242,138 @@ namespace cl {
      * @param is_static
      * @return
      */
-    std::string Class::has_method(std::string method_name, std::vector<Expression::SharedPtr> args,
-            TypeCheckVisitor& Visitor, AstNode* caller, std::vector<AstNode*> arg_nodes, bool check_parent) {
+    MethodResult Class::hasMethod(
+        string method_name,
+        std::vector<Type *> args,
+        std::vector<Type *> &concrete_generics,
+        bool check_parent,
+        bool checkProtocols,
+        bool strict
+    ) {
         auto overloads = methods.equal_range(method_name);
-        bool found_match = false;
-        for (auto it = overloads.first; it != overloads.second; ++it) {
-            auto& overload = it->second;
-            if (args.size() == 0 && overload->argument_types.size() == 0) {
-                return overload->symbol_name;
-            }
-            if (args.size() > overload->argument_types.size()) {
-                continue;
-            }
+        MethodResult result;
+        int bestMatch = 0;
 
-            bool broke = false;
-            for (size_t i = 0; i < overload->argument_types.size(); ++i) {
-                broke = true;
-
-                if (i < args.size()) {
-                    args[i]->set_inferred_type(overload->argument_types.at(i));
-                    auto arg = args[i]->accept(Visitor);
-                    if (!val::is_compatible(arg, overload->argument_types.at(i))) {
-                        break;
-                    }
-                    else if (arg != overload->argument_types.at(i)) {
-                        Warning::issue("Implicit cast from " + arg.to_string() + " to " +
-                                overload->argument_types.at(i).to_string(), arg_nodes.size() > i ? arg_nodes.at(i) : caller);
-                    }
-                }
-                else if (!overload->argument_types.at(i).nullable) {
-                    break;
-                }
-
-                broke = false;
-            }
-
-            if (broke) {
-                continue;
-            }
-
-            return overload->symbol_name;
+        if (overloads.first == overloads.second) {
+            goto check_parent;
         }
 
-        if (parent_class != nullptr && check_parent && method_name != "init") {
-            return parent_class->has_method(method_name, args, Visitor, caller, arg_nodes, check_parent);
-        }
-
-        return "";
-    }
-
-    /**
-     * Returns whether or not a class or its base class has a method
-     * @param method_name
-     * @param is_static
-     * @return
-     */
-    std::string Class::has_method(std::string method_name, std::vector<Expression::SharedPtr> args,
-        std::vector<TypeSpecifier>& concrete_generics, TypeCheckVisitor& Visitor, AstNode* caller,
-        std::vector<AstNode*> arg_nodes, bool check_parent)
-    {
-        auto overloads = methods.equal_range(method_name);
-        bool found_match = false;
-        pair<int, string> best_match;
+        result.compatibility = CompatibilityType::NO_MATCHING_CALL;
 
         for (auto it = overloads.first; it != overloads.second; ++it) {
             auto& overload = it->second;
+            std::vector<Type*> givenArgs;
+            std::vector<Type*>& neededArgs = overload->argumentTypes;
 
-            auto res = util::func_call_compatible(args, overload->argument_types, Visitor, concrete_generics, generics);
-            if (res.is_compatible) {
-                found_match = true;
-                if (res.perfect_match) {
-                    return overload->symbol_name;
+            givenArgs.reserve(args.size());
+
+            size_t i = 0;
+            for (const auto& arg : args) {
+                if (neededArgs.size() <= i || (!neededArgs.at(i)->isReference() && arg->isLvalue()
+                    && !arg->isCStyleArray()))
+                {
+                    givenArgs.push_back(arg->toRvalue());
                 }
-                if (res.compat_score >= best_match.first) {
-                    best_match.first = res.compat_score;
-                    best_match.second = overload->symbol_name;
+                else {
+                    givenArgs.push_back(arg);
+                }
+            }
+
+            auto res = util::func_call_compatible(givenArgs, neededArgs, concrete_generics, overload->generics);
+
+            if (res.perfect_match) {
+                result.compatibility = CompatibilityType::COMPATIBLE;
+                result.method = overload.get();
+                result.neededCasts = res.needed_casts;
+
+                return result;
+            }
+
+            if (res.is_compatible && res.compat_score >= bestMatch && !strict) {
+                result.compatibility = CompatibilityType::COMPATIBLE;
+                result.method = overload.get();
+                result.neededCasts = res.needed_casts;
+
+                bestMatch = res.compat_score;
+            }
+        }
+
+        check_parent:
+        if (result.compatibility != CompatibilityType::COMPATIBLE && parentClass != nullptr && check_parent
+            && method_name != "init")
+        {
+            auto parentRes = parentClass->hasMethod(method_name, args, concrete_generics,
+                check_parent, checkProtocols, strict);
+            if (parentRes.compatibility == CompatibilityType::COMPATIBLE) {
+                return parentRes;
+            }
+        }
+
+        if (result.compatibility != CompatibilityType::COMPATIBLE && checkProtocols) {
+            for (const auto& prot : conformsTo_) {
+                auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args, concrete_generics,
+                    check_parent, checkProtocols, strict);
+
+                if (res.compatibility == CompatibilityType::COMPATIBLE) {
+                    return res;
                 }
             }
         }
 
-        if (found_match) {
-            return best_match.second;
-        }
-
-        if (parent_class != nullptr && check_parent && method_name != "init") {
-            return parent_class->has_method(method_name, args, Visitor, caller, arg_nodes, check_parent);
-        }
-
-        return "";
+        return result;
     }
 
-    string Class::has_method(string method_name, std::vector<TypeSpecifier> args, AstNode *caller,
-            std::vector<AstNode *> arg_nodes, bool check_parent) {
-        auto overloads = methods.equal_range(method_name);
-        bool found_match = false;
-        for (auto it = overloads.first; it != overloads.second; ++it) {
-            auto& overload = it->second;
-            if (args.size() == 0 && overload->argument_types.size() == 0) {
-                return overload->symbol_name;
-            }
-            if (args.size() > overload->argument_types.size()) {
-                continue;
-            }
-
-            bool broke = false;
-            for (size_t i = 0; i < overload->argument_types.size(); ++i) {
-                broke = true;
-
-                if (i < args.size()) {
-                    auto arg = args.at(i);
-                    if (!val::is_compatible(arg, overload->argument_types.at(i))) {
-                        break;
-                    }
-                    else if (arg != overload->argument_types.at(i)) {
-                        Warning::issue("Implicit cast from " + arg.to_string() + " to " +
-                            overload->argument_types.at(i).to_string(), arg_nodes.size() > i ? arg_nodes.at(i) : caller);
-                    }
-                }
-                else if (!overload->argument_types.at(i).nullable) {
-                    break;
-                }
-
-                broke = false;
-            }
-
-            if (broke) {
-                continue;
-            }
-
-            return overload->symbol_name;
-        }
-
-        if (parent_class != nullptr && check_parent) {
-            return parent_class->has_method(method_name, args, caller, arg_nodes, check_parent);
-        }
-
-        return "";
+    MethodResult Class::hasMethod(
+        string method_name,
+        std::vector<Type *> args,
+        bool check_parent,
+        bool checkProtocols,
+        bool strict
+    ) {
+        std::vector<Type*> concreteGenerics;
+        return hasMethod(method_name, args, concreteGenerics, check_parent, checkProtocols, strict);
     }
 
-    std::string Class::ancestor_has_method(std::string name, std::vector<TypeSpecifier> args) {
-        if (parent_class) {
-            string method;
-            if (!(method = parent_class->has_method(name, args)).empty()) {
-                return method;
+    MethodResult Class::hasMethod(
+        string method_name,
+        std::vector<Type *> args,
+        std::unordered_map<string, Type*>& unorderedGenerics,
+        bool check_parent,
+        bool checkProtocols,
+        bool strict
+    ) {
+        std::vector<Type*> concreteGenerics;
+        concreteGenerics.reserve(generics.size());
+
+        for (const auto& gen : generics) {
+            if (unorderedGenerics.find(gen->getGenericClassName()) != unorderedGenerics.end()) {
+                concreteGenerics.push_back(unorderedGenerics[gen->getGenericClassName()]->deepCopy());
+            }
+            else {
+                return MethodResult();
             }
         }
-        for (const auto& impl : implements_) {
-            Class* interface = Namespace::latest()->get_class(impl);
-            string method;
-            if (!(method = interface->has_method(name, args)).empty()) {
+
+        return hasMethod(method_name, args, concreteGenerics, check_parent, checkProtocols, strict);
+    }
+
+    MethodResult Class::ancestorHasMethod(string &name, std::vector<Type *> &args) {
+        if (parentClass != nullptr) {
+            MethodResult method;
+            if ((method = parentClass->hasMethod(name, args)).compatibility == CompatibilityType::COMPATIBLE) {
                 return method;
             }
         }
 
-        return "";
+        for (const auto& impl : conformsTo_) {
+            Class* interface = SymbolTable::getClass(impl->getClassName());
+            MethodResult method;
+            if ((method = parentClass->hasMethod(name, args)).compatibility == CompatibilityType::COMPATIBLE) {
+                return method;
+            }
+        }
+
+        return MethodResult();
     }
 
     /**
@@ -358,16 +382,16 @@ namespace cl {
      * @param is_static
      * @return
      */
-    Method* Class::get_method(std::string method_name) {
+    Method* Class::getMethod(string method_name) {
 
         for (auto& method : methods) {
-            if (method.second->symbol_name == method_name) {
+            if (method.second->mangledName == method_name) {
                 return method.second.get();
             }
         }
 
-        if (parent_class != nullptr) {
-            return parent_class->get_method(method_name);
+        if (parentClass != nullptr) {
+            return parentClass->getMethod(method_name);
         }
 
         return nullptr;
@@ -379,107 +403,173 @@ namespace cl {
      * @param is_static
      * @return
      */
-    Field* Class::get_field(std::string field_name) {
-        if (util::in_pair_vector(fields, field_name)) {
-            return util::get_second(fields, field_name);
+    Field* Class::getField(string &field_name) {
+        for (const auto& f : fields) {
+            if (f.first == field_name) {
+                return f.second.get();
+            }
         }
 
-        if (parent_class != nullptr) {
-            return parent_class->get_field(field_name);
+        if (parentClass != nullptr) {
+            return parentClass->getField(field_name);
         }
 
         return nullptr;
     }
 
-    TypeSpecifier& Class::getType() {
-        return type;
+    ObjectType* Class::getType() {
+        return cast<ObjectType>(type->deepCopy());
+    }
+
+    bool Class::conformsTo(string &name) {
+        for (const auto& proto : conformsTo_) {
+            if (proto->getClassName() == name) {
+                return true;
+            }
+            if (SymbolTable::getClass(proto->getClassName())->conformsTo(name)) {
+                return true;
+            }
+        }
+
+        if (parentClass != nullptr && parentClass->conformsTo(name)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    namespace {
+
+        void inheritProtocols(std::vector<ObjectType*>& protocols, ObjectType* current, bool initial = true) {
+            if (!initial) {
+                protocols.push_back(current);
+            }
+
+            auto prot = SymbolTable::getClass(current->getClassName());
+            for (const auto& proto : prot->getConformedToProtocols()) {
+                inheritProtocols(protocols, proto, false);
+            }
+        }
+
     }
 
     /**
      * Checks a class for correct implementation of all interfaces
      * @return An error, if it occurs
      */
-    std::string Class::finalize() {
-        for (const auto& interface_name : implements_) {
-            if (!Namespace::latest()->has_class(interface_name)) {
-                return "Interface " + interface_name + " does not exist";
+    void Class::finalize() {
+        if (finalized) {
+            return;
+        }
+        
+        if (is_protocol) {
+
+            for (const auto& field : fields) {
+                if (!field.second->hasGetter && !field.second->hasSetter) {
+                    throw "Protocol property " + field.first +  " has to require either a getter or a setter";
+                }
             }
 
-            Class* interface = Namespace::latest()->get_class(interface_name);
-            if (!interface->is_abstract) {
-                return "Class " + interface_name + " is not an interface";
+            findVirtualMethods();
+            finalized = true;
+
+            return;
+        }
+
+        if (parentClass != nullptr) {
+            parentClass->finalize();
+        }
+
+        for (const auto& proto : conformsTo_) {
+            inheritProtocols(conformsTo_, proto);
+        }
+
+        for (const auto& interf : conformsTo_) {
+
+            auto& interfaceName = interf->getClassName();
+            Class* interface = SymbolTable::getClass(interfaceName);
+
+            for (auto& field : interface->fields) {
+                if (!hasField(field.first)) {
+                    throw "Class " + className + " does not correctly implement interface " + interfaceName +
+                        ": Required field " + field.first + " is missing";
+                }
+
+                for (const auto& f : fields) {
+                    if (f.first == field.first) {
+                        if (field.second->hasGetter && !f.second->hasGetter) {
+                            throw "Protocol " + interfaceName + " requires member " + field.first + " to define a "
+                                "getter method";
+                        }
+                        if (field.second->hasSetter && !f.second->hasSetter) {
+                            throw "Protocol " + interfaceName + " requires member " + field.first + " to define a "
+                                "setter method";
+                        }
+
+                        field.second->isInheritedField = true;
+                        break;
+                    }
+                }
             }
 
-//            int i = 0;
-//            for (auto field : interface->field_symbols) {
-//                if (std::find(field_symbols.begin(), field_symbols.end(), field) == field_symbols.end()) {
-//                    return "Class " + class_name + " does not correctly implement "
-//                        "interface " + interface_name + ": Required field " + interface->field_names[i] + " is missing";
-//                }
-//
-//                ++i;
-//            }
-
-            interface_methods.emplace(interface_name, std::vector<string>());
-            auto& int_methods = interface_methods[interface_name];
+            protocolMethods.emplace(interfaceName, std::vector<string>());
+            auto& int_methods = protocolMethods[interfaceName];
+            auto& concreteGenerics = interf->getConcreteGenericTypes();
+            concreteGenerics.emplace("Self", type);
 
             int i = 0;
-            for (const auto& method : interface->method_symbols) {
-                auto current = this;
-                bool found = false;
+            for (const auto& method : interface->methods) {
+                std::vector<Type*> argTypes;
+                argTypes.reserve(method.second->argumentTypes.size());
 
-                while (current != nullptr && !util::in_pair_vector(current->method_symbols, method.first)) {
-                    current = current->parent_class;
+                for (const auto& arg : method.second->argumentTypes) {
+                    auto needed = arg->deepCopy();
+                    Type::resolveGeneric(&needed, concreteGenerics);
+
+                    argTypes.push_back(needed);
                 }
 
-                if (current == nullptr) {
-                    return "Class " + class_name + " does not correctly implement interface " + interface_name +
-                        ": Required method " + interface->method_names[i] + " is missing or has incompatible signature";
+                auto methodRes = hasMethod(method.second->methodName, argTypes, true, false, false);
+                if (methodRes.compatibility != CompatibilityType::COMPATIBLE) {
+                    throw "Class " + className + " does not correctly implement interface " + interfaceName +
+                        ": Required method " + method.second->methodName + " is missing or has incompatible signature";
                 }
 
-                auto& given = current->method_ret_types[method.first];
-                auto& needed = interface->method_ret_types[method.first];
+                auto& given = methodRes.method->returnType;
+                auto needed = method.second->returnType;
 
-                if (!val::is_compatible(given, needed)) {
-                    return "Class " + class_name + " does not correctly implement interface " + interface_name +
-                        ": Required method " + interface->method_names[i] + " has incompatible return type (Expected " +
-                        needed.to_string() + ", found " + given.to_string() + ")";
+                Type::resolveGeneric(&needed, concreteGenerics);
+
+                if (!given->implicitlyCastableTo(needed)) {
+                    throw "Class " + className + " does not correctly implement interface " + interfaceName +
+                        ": Required method " + method.second->methodName + " has incompatible return type (Expected " +
+                        needed->toString() + ", found " + given->toString() + ")";
                 }
 
-                int_methods.push_back(util::get_second(current->method_symbols, method.first)->symbol_name);
-                ignore_in_vtable.push_back(method.first);
+                int_methods.push_back(methodRes.method->mangledName);
+
+                for (const auto& m : mangledMethods) {
+                    if (m.second->methodName == method.second->methodName) {
+                        methodRes.method->isProtocolMethod = true;
+                        methodRes.method->protocolName = interfaceName;
+                    }
+                }
 
                 ++i;
             }
         }
 
-        assign_vpos();
+        for (auto& field : fields) {
+            field.second->llvmType = field.second->fieldType->getLlvmType();
 
-        return "";
-    }
-
-    void Class::inherit() {
-        for (const auto& field : parent_class->fields) {
-            fields.push_back(field);
-        }
-
-        implements_.insert(implements_.begin(), parent_class->implements_.begin(), parent_class->implements_.end());
-    }
-
-    void Class::implement(std::vector<llvm::Type*>& prop_types, unordered_map<string, int>& field_info) {
-        size_t i = prop_types.size() - 1;
-        for (const auto& impl : implements_) {
-            auto interf = _namespace->get_class(impl);
-            prop_types.push_back(llvm::ArrayType::get(CodeGenVisitor::Builder.getInt8PtrTy(),
-                interface_methods[impl].size())->getPointerTo());
-
-            vtable_offset.emplace(impl, ++i);
-
-            for (const auto& field : interf->fields) {
-                prop_types.push_back(CGType::getType(field.second->field_type));
-                field_info.emplace(field.first, i++);
+            if (parentClass != nullptr && parentClass->hasField(field.first)) {
+                field.second->isInheritedField = true;
             }
         }
+
+        findVirtualMethods();
+
+        finalized = true;
     }
 
     /**
@@ -487,13 +577,13 @@ namespace cl {
      * @param class_context
      * @return
      */
-    bool Class::protected_prop_accessible_from(std::string class_context) {
-        if (class_context == class_name) {
+    bool Class::protectedPropAccessibleFrom(string &class_context) {
+        if (class_context == className) {
             return true;
         }
 
-        for (auto child : extended_by) {
-            if (child->protected_prop_accessible_from(class_context)) {
+        for (auto child : extendedBy) {
+            if (child->protectedPropAccessibleFrom(class_context)) {
                 return true;
             }
         }
@@ -506,63 +596,71 @@ namespace cl {
      * @param class_context
      * @return
      */
-    bool Class::private_prop_accessible_from(std::string class_context) {
-        return class_context == class_name;
+    bool Class::privatePropAccessibleFrom(string &class_context) {
+        return class_context == className;
     }
 
     /**
      * Returns whether or not this class extends the given class
      * @return
      */
-    bool Class::is_base_class_of(std::string child) {
-        auto base = Namespace::global()->get_class(child);
+    bool Class::is_base_class_of(string& child) {
+        auto base = SymbolTable::getClass(child);
         auto current = base;
         while (current != nullptr) {
             if (this == current) {
                 return true;
             }
-            current = current->parent_class;
+            current = current->parentClass;
         }
 
         return false;
     }
 
-    void Class::assign_vpos() {
+    void Class::findVirtualMethods() {
         if (is_abstract) {
+            for (const auto& method : mangledMethods) {
+                virtualMethods.emplace_back(method.first, method.second->mangledName);
+            }
+
             return;
         }
 
         Class* base = this;
         int depth = 0;
-        while (base->parent_class != nullptr) {
-            base = base->parent_class;
+        while (base->parentClass != nullptr) {
+            base = base->parentClass;
             ++depth;
         }
 
         while (base != this) {
-            for (const auto &method : base->method_symbols) {
-                if (util::in_vector(base->ignore_in_vtable, method.first)) {
-                    continue;
-                }
-
+            for (const auto &method : base->mangledMethods) {
                 auto current = this;
                 while (current != nullptr) {
                     if (current == base) {
                         break;
                     }
-                    if (util::in_pair_vector(current->method_symbols, method.first)) {
-                        if (!util::in_pair_vector(virtual_methods, method.first)) {
-                            auto symb = util::get_second(current->method_symbols, method.first)->symbol_name;
-                            virtual_methods.emplace_back(method.first, symb);
+
+                    if (current->mangledMethods.find(method.first) != current->mangledMethods.end()) {
+                        if (!util::in_pair_vector(virtualMethods, method.first)) {
+                            virtualMethods.emplace_back(method.first,
+                                current->mangledMethods[method.first]->mangledName);
                         }
-                        if (!util::in_pair_vector(base->virtual_methods, method.first)) {
-                            auto symb = util::get_second(base->method_symbols, method.first)->symbol_name;
-                            base->virtual_methods.emplace_back(method.first, symb);
+                        if (!util::in_pair_vector(base->virtualMethods, method.first)) {
+                            base->virtualMethods.emplace_back(method.first,
+                                base->mangledMethods[method.first]->mangledName);
                         }
+
+                        // place it in the protocol vtable as well as the normal one
+                        if (method.second->isProtocolMethod) {
+                            auto& protoName = method.second->protocolName;
+                            protocolMethods[protoName].push_back(current->mangledMethods[method.first]->mangledName);
+                        }
+
                         break;
                     }
 
-                    current = current->parent_class;
+                    current = current->parentClass;
                 }
             }
 
@@ -570,18 +668,195 @@ namespace cl {
 
             base = this;
             for (int i = 0; i < depth; ++i) {
-                base = base->parent_class;
+                base = base->parentClass;
             }
         }
     }
 
+    void Class::generateMemoryLayout(llvm::IRBuilder<>& Builder) {
+
+        if (layoutGenerated) {
+            return;
+        }
+
+        if (is_protocol) {
+            return generateProtocolMemoryLayout(Builder);
+        }
+
+        short alignment = 1;
+
+        size_t i = 0;
+        bool hasVtable = false;
+        if (!virtualMethods.empty()) {
+            // virtual table for the inheritance tree, no protocol methods included
+            hasVtable = true;
+            vtableOffsets.emplace(className, i++);
+            memoryLayout.push_back(
+                llvm::ArrayType::get(Builder.getInt8PtrTy(), virtualMethods.size())->getPointerTo()
+            );
+        }
+
+        if (parentClass != nullptr) {
+            parentClass->generateMemoryLayout(Builder);
+            auto& parentLayout = parentClass->memoryLayout;
+
+            baseClassOffsets.insert(parentClass->baseClassOffsets.begin(), parentClass->baseClassOffsets.end());
+            baseClassOffsets.emplace(parentClass->className, 0);
+
+            if (!is_struct) {
+                alignment = parentClass->alignment;
+            }
+
+            // dont copy default padding
+            if (!parentClass->emptyLayout) {
+                auto isVirtual = !virtualMethods.empty();
+                auto it = !isVirtual ? parentLayout.begin() : ++parentLayout.begin();
+
+                memoryLayout.insert(memoryLayout.end(), it, parentLayout.end());
+                fieldOffsets.insert(parentClass->fieldOffsets.begin(), parentClass->fieldOffsets.end());
+                vtableOffsets.insert(parentClass->vtableOffsets.begin(), parentClass->vtableOffsets.end());
+
+                i += parentLayout.size();
+
+                // parents vtable
+                if (isVirtual) {
+                    i -= 1;
+                }
+            }
+        }
+
+        if (hasVtable) {
+            baseClassOffsets.emplace(className, i - 1);
+        }
+        else {
+            baseClassOffsets.emplace(className, i);
+        }
+
+        auto classType = ObjectType::getStructureType(className);
+        auto unqualPtr = llvm::PointerType::getUnqual(classType);
+
+        for (const auto& fieldPair : fields) {
+            const auto& field = fieldPair.second;
+
+            if (field->isInheritedField) {
+                continue;
+            }
+
+            if (field->fieldType->getAlignment() > alignment) {
+                alignment = field->fieldType->getAlignment();
+            }
+
+            if (isa<ObjectType>(field->fieldType) && field->fieldType->getClassName() == className) {
+                field->llvmType = unqualPtr;
+            }
+            else {
+                field->llvmType = field->fieldType->getAllocaType();
+            }
+
+            memoryLayout.push_back(field->llvmType);
+            fieldOffsets.emplace(field->fieldName, i++);
+        }
+
+        if (memoryLayout.empty()) {
+            memoryLayout.push_back(Builder.getInt8PtrTy());
+            emptyLayout = true;
+        }
+
+        if (is_struct) {
+            this->alignment = alignment;
+        }
+
+        layoutGenerated = true;
+    }
+
+    void Class::generateProtocolMemoryLayout(llvm::IRBuilder<> &Builder) {
+
+        // vtable
+        memoryLayout.push_back(
+            llvm::ArrayType::get(Builder.getInt8PtrTy(), methods.size())->getPointerTo()
+        );
+
+        // pointer to concrete type conforming to the protocol
+        memoryLayout.push_back(
+            Builder.getInt8PtrTy()
+        );
+    }
+
+    namespace {
+
+        void emplaceProtoVtables(
+            unordered_map<string, string>& synonymousVtables,
+            string& originalProto,
+            string& currentProto
+        ) {
+            synonymousVtables.emplace(currentProto, originalProto);
+
+            auto Protocol = SymbolTable::getClass(currentProto);
+            for (const auto& prot : Protocol->getConformedToProtocols()) {
+                emplaceProtoVtables(synonymousVtables, originalProto, prot->getClassName());
+            }
+        }
+
+    }
+
+    void Class::generateVTables(llvm::IRBuilder<> &Builder, llvm::Module &Module) {
+        if (is_protocol) {
+            size_t i = 0;
+            for (const auto& method : methods) {
+                methodOffsets.emplace(method.second->mangledName, i++);
+            }
+
+            return;
+        }
+
+        if (!virtualMethods.empty()) {
+            std::vector<llvm::Constant*> vMethods;
+            vMethods.reserve(virtualMethods.size());
+
+            size_t i = 0;
+            for (const auto& method : virtualMethods) {
+                methodOffsets.emplace(method.second, i++);
+                vMethods.push_back(llvm::cast<llvm::Constant>(
+                    Builder.CreateBitCast(getMethod(method.second)->llvmFunc, Builder.getInt8PtrTy())
+                ));
+            }
+
+            auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), virtualMethods.size());
+            vtable = new llvm::GlobalVariable(Module, vtableType, true, llvm::GlobalValue::ExternalLinkage,
+                llvm::ConstantArray::get(vtableType, vMethods), "." + className + ".vtbl"
+            );
+        }
+
+        for (const auto& prot : protocolMethods) {
+            auto& methods = prot.second;
+
+            std::vector<llvm::Constant*> vMethods;
+            vMethods.reserve(prot.second.size());
+
+            for (const auto& method : methods) {
+                vMethods.push_back(llvm::cast<llvm::Constant>(
+                    Builder.CreateBitCast(getMethod(method)->llvmFunc, Builder.getInt8PtrTy()))
+                );
+            }
+
+            auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), methods.size());
+            auto glob = new llvm::GlobalVariable(Module, vtableType, true,
+                llvm::GlobalValue::ExternalLinkage, llvm::ConstantArray::get(vtableType, vMethods),
+                "." + className + "." + prot.first + ".vtbl"
+            );
+
+            auto protoName = prot.first;
+            protocolVtables.emplace(prot.first, glob);
+        }
+    }
+
     bool Class::is_virtual(Method* method) {
-        if (util::in_pair_vector(virtual_methods, Namespace::symbol_from_fun(method->method_name,
-                method->argument_types, ""))) {
+        if (util::in_pair_vector(virtualMethods, SymbolTable::mangleFunction(method->methodName,
+            method->argumentTypes, ""))) {
             return true;
         }
 
-        for (const auto& child : extended_by) {
+        for (const auto& child : extendedBy) {
             if (child->is_virtual(method)) {
                 return true;
             }

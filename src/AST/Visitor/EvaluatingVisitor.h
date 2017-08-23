@@ -25,8 +25,8 @@
 //    virtual Variant evaluate(CompoundStmt*);
 //
 //    virtual Variant visit(ModuleDecl*);
-//    virtual Variant visit(ImportStmt*);
-//    virtual Variant visit(ExportStmt*);
+//    virtual Variant visit(UsingStmt*);
+//    virtual Variant visit(EndOfFileStmt*);
 //
 //    virtual Variant visit(FunctionDecl*);
 //    virtual Variant visit(CompoundStmt*);
@@ -35,10 +35,10 @@
 //    virtual Variant visit(ForStmt*);
 //    virtual Variant visit(WhileStmt*);
 //
-//    virtual Variant visit(ArrayLiteral*);
+//    virtual Variant visit(CollectionLiteral*);
 //    virtual Variant visit(LiteralExpr*);
 //    virtual Variant visit(StringLiteral*);
-//    virtual Variant visit(ArrayAccessExpr*);
+//    virtual Variant visit(SubscriptExpr*);
 //    virtual Variant visit(MethodCallExpr*);
 //    virtual Variant visit(FunctionCallExpr*);
 //    virtual Variant visit(CallExpr*);

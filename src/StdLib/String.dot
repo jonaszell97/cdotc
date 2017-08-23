@@ -1,20 +1,46 @@
 
 class String {
-    let charArray: [Char] { get }
+    let length: Int { get }
+    let charArray: Char[] { get }
 
     init() {
-        
+        length = 0
     }
 
-    init(str: [Char]) {
+    init(str: Char[], len: Int) {
         charArray = str
+        length = len
     }
 
-    def AsCString() {
-        return charArray.GetRaw()
+    def asCString -> Int8[] unsafe {
+        let cstr: Int8[length]
+        for (let i = 0; i < length; ++i) {
+            cstr[i] = charArray[i].val
+        }
+
+        return cstr
     }
 
-    operator + (s: String) {
-        # return String(charArray + s.charArray)
+    # def postfix []&(index: Int) -> ref Char {
+    #     return charArray[index]
+    # }
+
+    def postfix [](index: Int) -> Char {
+        return charArray[index]
+    }
+
+    def infix + (s: String) -> String {
+        let newStr: Char[length + s.length - 1]
+        # skip null terminator
+        for (let i = 0; i < length - 1; ++i) {
+            __debug
+            newStr[i] = charArray[i]
+        }
+
+        for (let i = 0; i < s.length; ++i) {
+            newStr[i + length - 1] = s.charArray[i]
+        }
+        
+        return String(newStr, length + s.length - 1)
     }
 }

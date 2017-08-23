@@ -2,46 +2,75 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "BinaryOperator.h"
-#include "../../Util.h"
-#include "../Statement/Block/CompoundStmt.h"
 
-BinaryOperator::BinaryOperator(std::string op) : _operator(op) {
+namespace cdot {
+    BinaryOperatorType getBinaryOpType(string op) {
+        if (!util::isAssignmentOperator(op).empty()) {
+            return BinaryOperatorType::ASSIGNMENT;
+        }
+        if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op == "**") {
+            return BinaryOperatorType::ARITHMETIC;
+        }
+        if (op == "&" || op == "|" || op == "^" || op == "<<" || op == ">>" || op == ">>>") {
+            return BinaryOperatorType::BITWISE;
+        }
+        if (op == "&&" || op == "||") {
+            return BinaryOperatorType::LOGICAL;
+        }
+        if (op == "==" || op == "!=" || op == "===" || op == "!==") {
+            return BinaryOperatorType::EQUALITY;
+        }
+        if (op == "<=" || op == ">=" || op == "<" || op == ">") {
+            return BinaryOperatorType::COMPARISON;
+        }
+        if (op == "as" || op == "as!") {
+            return BinaryOperatorType::CAST;
+        }
 
-}
-
-void BinaryOperator::set_fst_child(Expression::SharedPtr exp) {
-    _first_child = exp;
-}
-
-void BinaryOperator::set_snd_child(Expression::SharedPtr exp) {
-    _second_child = exp;
-}
-
-std::string BinaryOperator::get_operator() {
-    return _operator;
-}
-
-std::vector<AstNode::SharedPtr> BinaryOperator::get_children() {
-    std::vector<AstNode::SharedPtr> res;
-    res.push_back(_first_child);
-    res.push_back(_second_child);
-    if (_member_expr != nullptr) {
-        res.push_back(_member_expr);
+        return BinaryOperatorType::OTHER;
     }
 
-    return res;
-}
+    BinaryOperator::BinaryOperator(string op) : op(op) {
 
-void BinaryOperator::__dump(int depth) {
-    for (int i = 0; i < depth; i++) {
-        std::cout << "\t";
     }
 
-    std::cout << "BinaryOperator ['" + _operator << "']" << std::endl;
+    BinaryOperator::BinaryOperator(string op, Expression::SharedPtr lhs, Expression::SharedPtr rhs) :
+        op(op),
+        lhs(lhs),
+        rhs(rhs) {
 
-    for (auto child : get_children()) {
-        child->__dump(depth + 1);
     }
+
+    void BinaryOperator::setLhs(Expression::SharedPtr exp) {
+        lhs = exp;
+        children.push_back(&lhs);
+    }
+
+    void BinaryOperator::setRhs(Expression::SharedPtr exp) {
+        rhs = exp;
+        children.push_back(&rhs);
+    }
+
+    std::vector<AstNode::SharedPtr> BinaryOperator::get_children() {
+        std::vector<AstNode::SharedPtr> res;
+        res.push_back(lhs);
+        res.push_back(rhs);
+        if (memberExpr != nullptr) {
+            res.push_back(memberExpr);
+        }
+
+        return res;
+    }
+
+    void BinaryOperator::__dump(int depth) {
+        AstNode::__tab(depth);
+
+        std::cout << "BinaryOperator ['" + op << "']" << std::endl;
+
+        for (auto child : get_children()) {
+            child->__dump(depth + 1);
+        }
+    }
+
 }

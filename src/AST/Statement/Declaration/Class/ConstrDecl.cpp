@@ -6,23 +6,21 @@
 #include "../../Block/CompoundStmt.h"
 #include "../FuncArgDecl.h"
 
-#include <iostream>
-
-ConstrDecl::ConstrDecl() : args{}, body{}, implicit(true), am(AccessModifier::PUBLIC) {
+ConstrDecl::ConstrDecl() : args{}, body{}, memberwise(true), am(AccessModifier::PUBLIC) {
 
 }
 
-ConstrDecl::ConstrDecl(std::vector<FuncArgDecl::SharedPtr> args, CompoundStmt::SharedPtr body, AccessModifier am) :
+ConstrDecl::ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>> args, CompoundStmt::SharedPtr body, AccessModifier am) :
         args(args), body(body), am(am) {
 
 }
 
-std::vector<AstNode::SharedPtr> ConstrDecl::get_children() {
-    if (implicit) {
+std::vector<std::shared_ptr<AstNode>> ConstrDecl::get_children() {
+    if (memberwise) {
         return {};
     }
 
-    std::vector<AstNode::SharedPtr> children;
+    std::vector<std::shared_ptr<AstNode>> children;
     for (auto arg : args) {
         children.push_back(arg);
     }
@@ -34,7 +32,7 @@ std::vector<AstNode::SharedPtr> ConstrDecl::get_children() {
 
 void ConstrDecl::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << (implicit ? "Implicit" : "") << "ConstrDecl" << std::endl;
+    std::cout << (memberwise ? "Implicit" : "") << "ConstrDecl" << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

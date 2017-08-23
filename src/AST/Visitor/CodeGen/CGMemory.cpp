@@ -3,66 +3,82 @@
 //
 
 #include "CGMemory.h"
-#include "CGType.h"
 #include "CodeGenVisitor.h"
+
+#define POINTER_SIZE sizeof(int*)
 
 llvm::BasicBlock* CGMemory::CurrentEntryBlock = nullptr;
 
-llvm::Value* CGMemory::CreateAlloca(llvm::Type *type, std::string name,
-    llvm::Value* arr_size, unsigned short align, bool heap_alloc, llvm::BasicBlock* alloc_block)
-{
-//    heap_alloc = true;
-    if (alloc_block == nullptr) {
-        if (CurrentEntryBlock == nullptr) {
-            auto glob = new llvm::GlobalVariable(*CodeGenVisitor::Module, type, false, llvm::GlobalVariable::ExternalLinkage,
-                llvm::ConstantAggregateZero::get(type));
+llvm::Value* CGMemory::CreateAlloca(
+    llvm::Type *type,
+    bool heapAlloc,
+    string name,
+    llvm::Value* arr_size
+) {
+    assert(CodeGenVisitor::MALLOC != nullptr && "No malloc?");
 
-            return glob;
-        }
+    if (CurrentEntryBlock == nullptr) {
+        auto glob = new llvm::GlobalVariable(*CodeGenVisitor::Module, type, false, llvm::GlobalVariable::ExternalLinkage,
+            llvm::ConstantAggregateZero::get(type), name);
 
-        alloc_block = CurrentEntryBlock;
+        return glob;
     }
 
+    auto alloc_block = CurrentEntryBlock;
     auto& Builder = CodeGenVisitor::Builder;
-
-    if (heap_alloc && llvm::isa<llvm::StructType>(type)) {
-        auto struct_type = llvm::cast<llvm::StructType>(type);
-
-        // getelementptr hack to get type size
-        auto type_size = Builder.CreatePtrToInt(
-            Builder.CreateGEP(llvm::ConstantPointerNull::get(struct_type->getPointerTo()),
-            { llvm::ConstantInt::get(Builder.getInt64Ty(), 1) }), Builder.getInt64Ty()
-        );
-
-        auto alloc = Builder.CreateCall(CodeGenVisitor::Functions["malloc"], { type_size });
-        return Builder.CreateBitCast(alloc, struct_type->getPointerTo());
-    }
-
-    if (heap_alloc) {
-        llvm::Value* alloc_size = llvm::ConstantInt::get(Builder.getInt64Ty(), 8);
-        if (arr_size != nullptr) {
-            alloc_size = Builder.CreateNSWMul(alloc_size, arr_size);
-        }
-
-        auto alloc = Builder.CreateCall(CodeGenVisitor::Functions["malloc"], { alloc_size });
-        return Builder.CreateBitCast(alloc, type->getPointerTo());
-    }
-
     auto ip = Builder.GetInsertBlock();
+    bool isClass = false;
+    llvm::StructType* structTy = nullptr;
+    auto ptrSize = Builder.getInt64(POINTER_SIZE);
+
+    if (heapAlloc && alloc_block->getNextNode() != nullptr) {
+        alloc_block = alloc_block->getNextNode();
+    }
+
+    if (llvm::isa<llvm::StructType>(type)) {
+        isClass = true;
+        structTy = llvm::cast<llvm::StructType>(type);
+    }
 
     // can't create it in alloc block because we need the arr_size variable
     if (arr_size == nullptr || llvm::isa<llvm::Constant>(arr_size)) {
         Builder.SetInsertPoint(alloc_block);
     }
 
-    llvm::AllocaInst* alloca = Builder.CreateAlloca(type, arr_size, name);
+    llvm::Value* alloca;
+
+    if (heapAlloc && isClass) {
+        auto type_size = Builder.CreatePtrToInt(
+            Builder.CreateGEP(llvm::ConstantPointerNull::get(structTy->getPointerTo()), Builder.getInt64(1)),
+            Builder.getIntNTy(POINTER_SIZE * 8)
+        );
+
+        auto allocSize = arr_size == nullptr ? type_size : Builder.CreateMul(type_size, arr_size);
+        llvm::Value* struct_alloc = Builder.CreateBitCast(
+            Builder.CreateCall(CodeGenVisitor::MALLOC, { allocSize }),
+            structTy->getPointerTo(),
+            name
+        );
+
+        alloca = struct_alloc;
+    }
+    else if (heapAlloc) {
+        auto allocSize = arr_size == nullptr ? ptrSize : Builder.CreateMul(ptrSize, arr_size);
+        auto alloc = Builder.CreateBitCast(
+            Builder.CreateCall(CodeGenVisitor::MALLOC, { allocSize }),
+            type->getPointerTo(),
+            name
+        );
+
+        alloca = alloc;
+    }
+    else {
+        auto alloc = Builder.CreateAlloca(type, arr_size, name);
+        alloc->setAlignment(CodeGenVisitor::getAlignment(type));
+
+        alloca = alloc;
+    }
 
     Builder.SetInsertPoint(ip);
-
     return alloca;
-}
-
-llvm::Value* CGMemory::CreateAlloca(TypeSpecifier &type, std::string name,
-        llvm::Value* arr_size, bool heap_alloc, llvm::BasicBlock* alloc_block) {
-    return CreateAlloca(CGType::getType(type), name, arr_size, CGType::getAlignment(type), heap_alloc, alloc_block);
 }

@@ -2,22 +2,23 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "TertiaryOperator.h"
 
 TertiaryOperator::TertiaryOperator(Expression::SharedPtr cond, Expression::SharedPtr if_br,
-                                   Expression::SharedPtr else_br) :
+       Expression::SharedPtr else_br) :
     condition(cond),
     lhs(if_br),
     rhs(else_br)
 {
-
+    children.push_back(&condition);
+    children.push_back(&lhs);
+    children.push_back(&rhs);
 }
 
 std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {
     std::vector<AstNode::SharedPtr> children { condition, lhs, rhs };
-    if (_member_expr != nullptr) {
-        children.push_back(_member_expr);
+    if (memberExpr != nullptr) {
+        children.push_back(memberExpr);
     }
 
     return children;

@@ -3,21 +3,21 @@
 //
 
 #include "CaseStmt.h"
+#include "../../Expression/Expression.h"
 
-#include <iostream>
-
-CaseStmt::CaseStmt(Expression::SharedPtr case_val) : case_val(case_val) {
-
+CaseStmt::CaseStmt(std::shared_ptr<Expression> case_val) : LabelStmt("case") {
+    caseVal = case_val;
+    children.push_back(&caseVal);
 }
 
-CaseStmt::CaseStmt() : is_default(true) {
-
+CaseStmt::CaseStmt() : LabelStmt("default") {
+    isDefault = true;
 }
 
 std::vector<AstNode::SharedPtr> CaseStmt::get_children() {
     std::vector<AstNode::SharedPtr> children;
-    if (case_val != nullptr) {
-        children.push_back(case_val);
+    if (caseVal != nullptr) {
+        children.push_back(caseVal);
     }
     for (auto child : LabelStmt::get_children()) {
         children.push_back(child);
@@ -28,7 +28,7 @@ std::vector<AstNode::SharedPtr> CaseStmt::get_children() {
 
 void CaseStmt::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << (is_default ? "DefaultStmt" : "CaseStmt") << std::endl;
+    std::cout << (isDefault ? "DefaultStmt" : "CaseStmt") << std::endl;
 
     for (auto c : get_children()) {
         c->__dump(depth + 1);

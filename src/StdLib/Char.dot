@@ -1,4 +1,14 @@
 
-class Char {
-    
+using Builtin.Primitive
+
+struct Char {
+    let val: int8 { get }
+
+    init () {
+        val = '\0'
+    }
+
+    def infix as int8 {
+        return val
+    }
 }

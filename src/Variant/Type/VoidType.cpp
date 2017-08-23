@@ -1,0 +1,75 @@
+//
+// Created by Jonas Zell on 13.08.17.
+//
+
+#include "VoidType.h"
+#include "ObjectType.h"
+
+namespace cdot {
+
+    VoidType::VoidType(Type *type) : pointeeType(type) {
+        id = TypeID::VoidTypeID;
+        isNullable_ = true;
+        isNull_ = true;
+    }
+
+    Type *VoidType::deepCopy() {
+        return new VoidType(*this);
+    }
+
+    bool VoidType::operator==(Type *&other) {
+        if (!isa<VoidType>(other)) {
+            return false;
+        }
+
+        auto asVoid = cast<VoidType>(other);
+
+        if (pointeeType == nullptr && asVoid->pointeeType == nullptr) {
+            return true;
+        }
+
+        if (pointeeType != nullptr) {
+            return asVoid->pointeeType != nullptr && *pointeeType == asVoid->pointeeType;
+        }
+
+        return true;
+    }
+
+    bool VoidType::implicitlyCastableTo(Type *type) {
+        if (pointeeType != nullptr) {
+            return type->isNullable() && pointeeType->implicitlyCastableTo(type);
+        }
+
+        return type->isNullable();
+    }
+
+    llvm::Value* VoidType::castTo(llvm::Value *val, Type *ty) {
+        switch (ty->getTypeID()) {
+            case TypeID::ObjectTypeID:
+            case TypeID::GenericTypeID: {
+                auto nullTy = ty->getLlvmType();
+                if (!nullTy->isPointerTy()) {
+                    nullTy = nullTy->getPointerTo();
+                }
+
+                return llvm::ConstantPointerNull::get(
+                    llvm::cast<llvm::PointerType>(nullTy)
+                );
+            }
+            case TypeID::PointerTypeID: {
+                return llvm::ConstantPointerNull::get(
+                    llvm::cast<llvm::PointerType>(ty->getLlvmType())
+                );
+            }
+            default:
+                break;
+        }
+
+        llvm_unreachable("Incompatible cast should have been caught before");
+    }
+
+    llvm::Type *VoidType::getLlvmType() { return Builder->getVoidTy(); }
+
+    string VoidType::toString() { return "Void"; }
+
+} // namespace cdot

@@ -8857,7 +8857,7 @@ namespace Detail {
                 } u;
 
                 u.asInt = 1;
-                return ( u.asChar[sizeof(int)-1] == 1 ) ? Big : Little;
+                return ( u.asChar[sizeof(int*) * 8-1] == 1 ) ? Big : Little;
             }
         };
     }

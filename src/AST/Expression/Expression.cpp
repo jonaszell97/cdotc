@@ -2,34 +2,18 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "Expression.h"
+#include "../Statement/Declaration/DeclStmt.h"
 
-#include <iostream>
-
-Expression::Expression(Expression::SharedPtr child) : _child(child) {
-
-}
-
-Expression::Expression() : _child{} {
-
-}
-
-void Expression::set_child(Expression::SharedPtr child) {
-    _child = child;
-}
-
-std::vector<AstNode::SharedPtr> Expression::get_children() {
-    if (_child == nullptr) {
-        return {};
+void Expression::isHiddenReturnValue() {
+    if (memberExpr) {
+        memberExpr->isHiddenReturnValue();
     }
     else {
-        return { _child };
-    }
-}
-
-void Expression::__dump(int depth) {
-    for (auto c : get_children()) {
-        c->__dump(depth);
+        isHiddenReturnValue_ = true;
+        isReturnValue_ = true;
+        if (declaration) {
+            declaration->isHiddenReturnValue();
+        }
     }
 }

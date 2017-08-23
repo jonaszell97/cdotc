@@ -5,48 +5,90 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
-#include "Token.h"
-#include "Lexer.h"
-#include "AST/Statement/Block/CompoundStmt.h"
-#include "AST/Expression/Expression.h"
-#include "AST/Operator/UnaryOperator.h"
-#include "AST/Expression/Literal/LiteralExpr.h"
-#include "AST/Expression/Literal/ArrayLiteral.h"
-#include "AST/Expression/RefExpr/IdentifierRefExpr.h"
-#include "AST/Expression/RefExpr/CallExpr.h"
-#include "Util.h"
-#include "AST/Statement/Declaration/FunctionDecl.h"
-#include "AST/Statement/ControlFlow/IfStmt.h"
-#include "AST/Statement/ControlFlow/WhileStmt.h"
-#include "AST/Statement/ControlFlow/ForStmt.h"
-#include "AST/Operator/TertiaryOperator.h"
-#include "AST/Statement/Declaration/Class/ClassDecl.h"
-#include "AST/Statement/ControlFlow/SwitchStmt.h"
-#include "AST/Statement/ControlFlow/LabelStmt.h"
-#include "AST/Expression/Literal/LambdaExpr.h"
-#include "AST/Statement/Declaration/Class/OperatorDecl.h"
-#include "AST/Statement/Declaration/NamespaceDecl.h"
-#include "AST/Statement/ImportStmt.h"
-#include "AST/Statement/ExportStmt.h"
-#include "AST/Statement/Declaration/DeclStmt.h"
-#include "AST/Statement/Declaration/Class/InterfaceDecl.h"
-#include "AST/Operator/ExplicitCastExpr.h"
-#include "AST/Statement/Declaration/ExtendStmt.h"
-#include "AST/Expression/TypeRef.h"
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include "AST/Attribute/Attribute.h"
 
+enum class AccessModifier : unsigned int;
 class Lexer;
+
+class AstNode;
+class FunctionDecl;
+class CompoundStmt;
+class IdentifierRefExpr;
+class DeclStmt;
+class ForStmt;
+class WhileStmt;
+class CollectionLiteral;
+class LiteralExpr;
+class SubscriptExpr;
+class CallExpr;
+class MemberRefExpr;
+class ExplicitCastExpr;
+class TertiaryOperator;
+class UnaryOperator;
+class BreakStmt;
+class ContinueStmt;
+class IfStmt;
+class FuncArgDecl;
+class ReturnStmt;
+class Expression;
+class Statement;
+class ClassDecl;
+class FieldDecl;
+class MethodDecl;
+class ConstrDecl;
+class SwitchStmt;
+class CaseStmt;
+class LabelStmt;
+class GotoStmt;
+class StringLiteral;
+class LambdaExpr;
+class NamespaceDecl;
+class UsingStmt;
+class EndOfFileStmt;
+class ImplicitCastExpr;
+class ExtendStmt;
+class TypedefDecl;
+class TypeRef;
+class DeclareStmt;
+class LvalueToRvalue;
+class DebugStmt;
+
+namespace cdot {
+    class Type;
+    class ObjectType;
+    class GenericType;
+    class BinaryOperator;
+    struct Attribute;
+}
+
+using namespace cdot;
+using std::string;
+using std::unordered_map;
 
 enum class ParenExprType {
     LAMBDA,
     EXPR,
-    TYPECAST
+    TUPLE
+};
+
+struct ClassHead {
+    AccessModifier am;
+    string class_name;
+    ObjectType* extends;
+    std::vector<ObjectType*> with;
+    std::vector<GenericType*> generics;
+    bool isAbstract;
 };
 
 class Parser {
 public:
-    Parser(string);
+    explicit Parser(string);
+
     void run(bool);
-    CompoundStmt::SharedPtr parse();
+    std::shared_ptr<CompoundStmt> parse();
 
     static string get_source_file(size_t source) {
         return source_files[source];
@@ -57,16 +99,16 @@ public:
 
 protected:
     static std::vector<string> type_names;
-    static std::vector<string> infix_functions;
     static std::vector<string> namespaces;
     static std::vector<string> source_files;
-    static std::unordered_map<string, TypeSpecifier> current_generics;
+    static std::vector<std::shared_ptr<ClassDecl>> class_declarations;
+    static unordered_map<string, GenericType*> CurrentClassGenerics;
 
-    std::vector<Statement::SharedPtr> implicit_main_stmts;
+    std::vector<std::shared_ptr<Statement>> implicit_main_stmts;
 
     size_t source_id;
 
-    std::vector<string> attributes = {};
+    std::vector<Attribute> attributes;
     
     bool top_level = true;
     bool main_method_defined = false;
@@ -74,73 +116,68 @@ protected:
 
     Lexer* lexer;
 
-    inline bool is_declared_type(string ident) {
-        return std::find(type_names.begin(), type_names.end(), ident) != type_names.end();
-    }
+    std::shared_ptr<Statement> parse_next_stmt();
 
-    inline bool is_infix_function(string ident) {
-        return std::find(infix_functions.begin(), infix_functions.end(), ident) != infix_functions.end();
-    }
+    std::shared_ptr<NamespaceDecl> parse_namespace_decl();
+    std::shared_ptr<UsingStmt> parse_import_stmt();
+    std::shared_ptr<EndOfFileStmt> parse_export_stmt();
 
-    Statement::SharedPtr parse_next_stmt();
+    std::shared_ptr<Statement> parse_assignment(bool = false, bool = false);
+    std::shared_ptr<Statement> parse_keyword();
 
-    NamespaceDecl::SharedPtr parse_namespace_decl();
-    ImportStmt::SharedPtr parse_import_stmt();
-    ExportStmt::SharedPtr parse_export_stmt();
+    std::shared_ptr<Expression> parse_expression(std::shared_ptr<Expression> = nullptr, int = 0);
+    std::shared_ptr<CompoundStmt> parse_block(bool = false);
 
-    Statement::SharedPtr parse_assignment(bool = false);
-    Statement::SharedPtr parse_keyword();
+    std::shared_ptr<TertiaryOperator> parse_tertiary_operator(std::shared_ptr<Expression>);
 
-    ExplicitCastExpr::SharedPtr parse_typecast();
-    Expression::SharedPtr parse_expression(Expression::SharedPtr = {}, int = 0);
-    CompoundStmt::SharedPtr parse_block();
+    std::shared_ptr<CollectionLiteral> parse_array_literal();
 
-    TertiaryOperator::SharedPtr parse_tertiary_operator(Expression::SharedPtr);
+    std::vector<Type*> parse_tuple_type();
+    std::vector<std::shared_ptr<FuncArgDecl>> parse_arg_list(bool = false);
 
-    ArrayLiteral::SharedPtr parse_array_literal();
+    std::shared_ptr<FunctionDecl> parse_function_decl(bool = false);
+    std::shared_ptr<LambdaExpr> parse_lambda_expr();
+    std::shared_ptr<CallExpr> parse_function_call();
+    std::vector<std::shared_ptr<Expression>> parse_arguments();
 
-    std::vector<FuncArgDecl::SharedPtr> parse_arg_list(bool = false);
-
-    FunctionDecl::SharedPtr parse_function_decl();
-    LambdaExpr::SharedPtr parse_lambda_expr();
-    CallExpr::SharedPtr parse_function_call();
-    std::vector<Expression::SharedPtr> parse_arguments();
-
-    Expression::SharedPtr parse_paren_expr();
+    std::shared_ptr<Expression> parse_paren_expr();
     ParenExprType get_paren_expr_type();
 
     bool is_generic_call();
 
-    ClassDecl::SharedPtr parse_class_decl(bool = false);
-    ClassDecl::SharedPtr parse_struct_decl();
-    ClassDecl::SharedPtr parse_interface_decl();
-    ConstrDecl::SharedPtr parse_constr_decl(AccessModifier);
-    MethodDecl::SharedPtr parse_method_decl(AccessModifier, bool, bool);
-    FieldDecl::SharedPtr parse_field_decl(AccessModifier, bool, bool);
-    MethodDecl::SharedPtr parse_operator_decl(AccessModifier, string, bool);
+    ClassHead parse_class_head();
+    std::shared_ptr<ClassDecl> parse_class_decl(bool = false);
+    std::shared_ptr<ClassDecl> parse_struct_decl();
+    std::shared_ptr<ConstrDecl> parse_constr_decl(AccessModifier);
+    std::shared_ptr<MethodDecl> parse_method_decl(AccessModifier, bool, bool);
+    std::shared_ptr<FieldDecl> parse_field_decl(AccessModifier, bool, bool);
+    std::shared_ptr<MethodDecl> parse_operator_decl(AccessModifier, bool);
 
-    std::vector<pair<string, TypeSpecifier>> parse_generics();
-    std::vector<TypeSpecifier> parse_concrete_generics();
+    std::vector<GenericType*> parse_generics();
+    std::vector<Type*> parse_concrete_generics();
 
-    std::vector<Statement::SharedPtr> parse_class_inner(string, bool, bool = false);
+    std::vector<std::shared_ptr<Statement>> parse_class_inner(string, bool, bool = false);
+    std::shared_ptr<ClassDecl> parse_extend_stmt();
 
-    ExtendStmt::SharedPtr parse_extend_stmt();
+    std::shared_ptr<TypeRef> parse_type();
+    Type* __parse_type();
+    std::shared_ptr<Expression> parse_identifier();
+    std::shared_ptr<Expression> __parse_identifier(bool = false);
 
-    TypeRef::SharedPtr parse_type(bool = false);
-    Expression::SharedPtr parse_identifier();
-    Expression::SharedPtr __parse_identifier(bool = false);
+    std::shared_ptr<Expression> parse_unary_expr(std::shared_ptr<UnaryOperator> = {}, bool = false);
+    std::shared_ptr<Expression> parse_unary_expr_target();
 
-    Expression::SharedPtr parse_unary_expr(Expression::SharedPtr = {}, bool = false);
-    Expression::SharedPtr parse_unary_expr_target();
+    std::shared_ptr<CaseStmt> parse_case_stmt(bool = false);
 
-    CaseStmt::SharedPtr parse_case_stmt(bool = false);
+    std::shared_ptr<IfStmt> parse_if_stmt();
+    std::shared_ptr<WhileStmt> parse_while_stmt();
+    std::shared_ptr<ForStmt> parse_for_stmt();
+    std::shared_ptr<SwitchStmt> parse_switch_stmt();
 
-    IfStmt::SharedPtr parse_if_stmt();
-    WhileStmt::SharedPtr parse_while_stmt();
-    ForStmt::SharedPtr parse_for_stmt();
-    SwitchStmt::SharedPtr parse_switch_stmt();
+    std::vector<Attribute> parse_attributes();
 
-    std::vector<string> parse_attributes();
+    std::shared_ptr<CompoundStmt> parse_multiple_declare_stmt();
+    std::shared_ptr<Statement> parse_declare_stmt();
 };
 
 #endif //INTERPRETER_H

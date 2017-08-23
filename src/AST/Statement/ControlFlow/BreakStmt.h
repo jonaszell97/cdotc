@@ -5,46 +5,31 @@
 #ifndef CDOT_BREAKSTMT_H
 #define CDOT_BREAKSTMT_H
 
-
-#include "../../Visitor/Visitor.h"
-#include "../../AstNode.h"
-#include "WhileStmt.h"
-#include "ForStmt.h"
+#include "../Statement.h"
 
 class BreakStmt : public Statement {
 public:
-    BreakStmt();
-
-    void set_stmt(Statement *stmt, std::string type);
+    explicit BreakStmt();
 
     typedef std::shared_ptr<BreakStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override ;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::BREAK_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
-
-protected:
-    std::string _type;
-    Statement* _stmt;
 };
 
 

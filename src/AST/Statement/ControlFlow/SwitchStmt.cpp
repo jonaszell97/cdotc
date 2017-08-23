@@ -3,18 +3,18 @@
 //
 
 #include "SwitchStmt.h"
-
-#include <iostream>
+#include "../../Expression/Expression.h"
+#include "CaseStmt.h"
 
 SwitchStmt::SwitchStmt(Expression::SharedPtr switch_val) :
-    switch_val(switch_val),
+    switchValue(switch_val),
     cases(std::vector<CaseStmt::SharedPtr>())
 {
-
+    children.push_back(&this->switchValue);
 }
 
 std::vector<AstNode::SharedPtr> SwitchStmt::get_children() {
-    std::vector<AstNode::SharedPtr> children = { switch_val };
+    std::vector<AstNode::SharedPtr> children = { switchValue };
     for (auto case_ : cases) {
         children.push_back(case_);
     }

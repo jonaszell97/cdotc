@@ -2,18 +2,16 @@
 // Created by Jonas Zell on 21.06.17.
 //
 
-#include <iostream>
 #include "CallExpr.h"
-#include "../../Statement/Block/CompoundStmt.h"
-#include "../../../Util.h"
 
-CallExpr::CallExpr(CallType type, std::vector<Expression::SharedPtr> args, std::string ident) : type(type), args
-    (args), ident(ident) {
-
-}
-
-void CallExpr::add_argument(Expression::SharedPtr arg) {
-    args.push_back(arg);
+CallExpr::CallExpr(CallType type, std::vector<Expression::SharedPtr> args, std::string _ident) :
+    type(type),
+    args(args)
+{
+    ident = _ident;
+    for (auto& arg : this->args) {
+        children.push_back(&arg);
+    }
 }
 
 std::vector<AstNode::SharedPtr> CallExpr::get_children() {
@@ -21,8 +19,8 @@ std::vector<AstNode::SharedPtr> CallExpr::get_children() {
     for (auto arg : args) {
         res.push_back(arg);
     }
-    if (_member_expr != nullptr) {
-        res.push_back(_member_expr);
+    if (memberExpr != nullptr) {
+        res.push_back(memberExpr);
     }
 
     return res;

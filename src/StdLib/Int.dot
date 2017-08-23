@@ -1,19 +1,225 @@
 
-/**
- * Use @Boxed annotation to get a boxed integer
- */
-class Int {
-    let val: Int
+using Builtin.Primitive
 
-    init (i: Int) {
-        val = i
+/**
+ * Wrapper class for primitive integers,
+ * since it is a single element struct there is little to no 
+ * runtime overhead
+ */
+@inline(always)
+struct Int with IntegerProtocol {
+    let val: int64
+
+    /**
+     * Default initializer, usually implicitly called by the compiler
+     */
+    init (val: int64) {
+        self.val = val
     }
 
-    def Unbox() {
+    /**
+     * This integers value
+     */
+    def hashCode -> UInt64 {
+        return val as UInt64
+    }
+
+    /**
+     * Adds two integer values
+     */
+    def infix +(@nocopy e: Int) -> Int {
+        return Int(val + e.val)
+    }
+
+    /**
+     * Subtracts two integer values
+     */
+    def infix -(@nocopy e: Int) -> Int {
+        return Int(val - e.val)
+    }
+    
+    /**
+     * Multiplies two integer values
+     */
+    def infix * (e: Int) -> Int {
+        return Int(val * e.val)
+    }
+
+    /**
+     * Diviedes two integer values
+     */
+    def infix / (e: Int) -> Double {
+        return val / e.val
+    }
+
+    /**
+     * Calculates the remainder of two integers
+     */
+    def infix % (e: Int) -> Int {
+        return Int(val % e.val)
+    }
+
+    /**
+     * Returns the value itself
+     */
+    def prefix + -> Int {
+        return Int(val)
+    }
+
+    /**
+     * Returns the negated value
+     */
+    def prefix - -> Int {
+        return Int(-val)
+    }
+
+    /**
+     * Pre-Increment
+     */
+    def prefix ++ -> Int {
+        ++val
+        return Int(val)
+    }
+
+    /**
+     * Pre-Decrement
+     */
+    def prefix -- -> Int {
+        --val
+        return Int(val)
+    }
+
+    /**
+     * Post-Increment
+     */
+    def postfix ++ -> Int {
+        let tmp = val
+        ++val
+        return Int(tmp)
+    }
+
+    /**
+     * Post-Decrement
+     */
+    def postfix -- -> Int {
+        let tmp = val
+        --val
+        return Int(tmp)
+    }
+
+    /**
+     * True if and only if both values are equal
+     */
+    def infix ==(@nocopy e: Int) -> Bool { 
+        return val == e.val
+    }
+
+    /**
+     * True if and only if both values are not equal
+     */
+    def infix !=(@nocopy e: Int) -> Bool {
+        return val != e.val
+    }
+
+    /**
+     * @return Bool
+     */
+    def infix <(@nocopy e: Int) -> Bool {
+        return val < e.val
+    }
+
+    /**
+     * @return Bool
+     */
+    def infix <=(@nocopy e: Int) -> Bool {
+        return val <= e.val
+    }
+
+    /**
+     * @return Bool
+     */
+    def infix >(@nocopy e: Int) -> Bool {
+        return val > e.val
+    }
+
+    /**
+     * @return Bool
+     */
+    def infix >=(@nocopy e: Int) -> Bool {
+        return val >= e.val
+    }
+
+    /**
+     * Returns the primitive integer value
+     */
+    def infix as Int64 {
         return val
     }
 
-    let static Max = 2_147_483_647
-    let static Min = -2_147_483_647
-    let static Bits = 32
+    /**
+     * Arithmetic shift left
+     */
+    def infix << (@nocopy e: Int) -> Int {
+        return Int(val << e.val)
+    }
+
+    /**
+     * Arithmetic shift right
+     */
+    def infix >> (@nocopy e: Int) -> Int {
+        return Int(val >> e.val)
+    }
+
+    /**
+     * Logical shift right
+     */
+    def infix >>> (@nocopy e: Int) -> Int {
+        return Int(val >>> e.val)
+    }
+
+    /**
+     * Bitwise 'and'
+     */
+    def infix & (@nocopy e: Int) -> Int {
+        return Int(val & e.val)
+    }
+
+    /**
+     * Bitwise 'or'
+     */
+    def infix | (@nocopy e: Int) -> Int {
+        return Int(val | e.val)
+    }
+
+    /**
+     * Bitwise 'xor'
+     */
+    def infix ^ (@nocopy e: Int) -> Int {
+        return Int(val ^ e.val)
+    }
+
+    /**
+     * Bitwise negation
+     */
+    def prefix ~ -> Int {
+        return Int(~val)
+    }
+
+    /**
+     * Quadratic root
+     */
+    def sqrt -> Double {
+        return Extern.Llvm.`llvm.sqrt.f64`(val as Double)
+    }
+
+    def prefix √ = sqrt
+
+    /**
+     * Cubic root
+     */
+    def cbrt -> Double {
+        return Extern.Llvm.`llvm.pow.f64`(val as Double, 1 / 3)
+    }
+
+    def prefix ∛ = cbrt
 }

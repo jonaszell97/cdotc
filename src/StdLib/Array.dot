@@ -1,34 +1,112 @@
 
-class Array<T> {
-    @RawArray
-    let raw: [T] { get }
-    let length: Int { get }
+class Array<T> with Printable /*Iterable<T>*/ {
+    let raw: T[] { get }
+    let size: Int { get }
 
-    init (@RawArray arr: [T], len: Int) {
-        raw = arr
-        length = len
+    private let capacity: Int { get } = 0
+
+    static def initRaw(ref arr: T[], len: Int) unsafe {
+        let newArr: T[len]
+        arr = newArr
     }
 
-    operator [](index: Int) {
+    init (arr: T[], len: Int) {
+        raw = arr
+        size = len
+        capacity = len
+    }
+
+    init (i: Int) {
+        capacity = i
+        size = 0
+        initRaw(raw, i)
+    }
+
+    init () {
+        capacity = 1
+        size = 0
+        initRaw(raw, 1)
+    }
+
+    # def getIterator() -> ArrayIterator<T> {
+    #     return ArrayIterator(self)
+    # }
+
+    def push(t: T) unsafe {
+        if (size + 1 > capacity) {
+            capacity = capacity << 1
+            let newArr: T[capacity]
+            copyTo(newArr)
+            raw = newArr
+        }
+
+        raw[size] = t
+        ++size
+    }
+
+    def pop -> T {
+        let back = raw[size - 1]
+        --size
+
+        return back
+    }
+
+    def reserve (i: Int) unsafe {
+        capacity = i
+        let newArr: T[capacity]
+        copyTo(newArr)
+        raw = newArr
+    }
+
+    def first -> T {
+        return raw[0]
+    }
+
+    def last -> T {
+        return raw[size - 1]
+    }
+
+    def at(i: Int) -> T {
+        return self[i]
+    }
+
+    private def copyTo(lhs: T[]) {
+        for (let i = 0; i < size; ++i) {
+            lhs[i] = raw[i]
+        }
+    }
+
+    def postfix [](index: Int) -> T {
         return raw[index]
     }
 
-    @UnsafePtr
-    operator []&(index: Int) {
-        return &raw[index]
+    def postfix []&(index: Int) -> ref T unsafe {
+        return raw[index]
     }
 
-    operator +(rhs: Array) {
-        @RawArray
-        let newArr: [T (length + rhs.length)]
+    def infix +(rhs: Array<T>) -> Array<T> unsafe {
+        let newArr = Array(raw, size)
+        newArr += rhs
+        
+        return newArr
+    }
+
+    def infix +=(rhs: Array<T>) unsafe {
+        let newArr: T[size + rhs.size]
         let i = 0
-        for (; i < length; ++i) {
-            newArr[i] = raw[i]
-        }
-        for (; i < length + rhs.length; ++i) {
-            newArr[i] = rhs.raw[i - length]
-        }
 
-        return Array(newArr, i)
+        copyTo(newArr)
+        for (; i < rhs.size; ++i) {
+            newArr[i + size] = rhs.raw[i]
+        }
+        
+        raw = newArr
+        size = i + size
     }
+
+    def toString -> String {
+        return "[]"
+    }
+
+    def infix as String = toString
 }

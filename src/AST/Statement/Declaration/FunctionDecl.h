@@ -7,56 +7,84 @@
 
 
 #include "../Statement.h"
-#include "FuncArgDecl.h"
-#include "../Block/CompoundStmt.h"
+
+class FuncArgDecl;
+class TypeRef;
+class CompoundStmt;
 
 class FunctionDecl : public Statement {
 public:
-    FunctionDecl(std::string, TypeRef::SharedPtr = nullptr);
+    FunctionDecl(string, std::shared_ptr<TypeRef> = nullptr);
 
-    inline void set_return_type(TypeRef::SharedPtr type) {
-        _return_type = type;
+    ~FunctionDecl() override {
+        int  i = 3;
     }
-    inline void set_body(CompoundStmt::SharedPtr body) {
-        _body = body;
+    void setReturnType(std::shared_ptr<TypeRef> type) {
+        returnType = type;
     }
-    void add_arg(FuncArgDecl::SharedPtr);
+
+    string getName() {
+        return funcName;
+    }
+
+    std::vector<std::shared_ptr<FuncArgDecl>> getArgs() {
+        return args;
+    }
+
+    std::shared_ptr<TypeRef> getReturnType() {
+        return returnType;
+    }
+
+    void setBody(std::shared_ptr<CompoundStmt> _body) {
+        body = _body;
+    }
+
+    void setGenerics(std::vector<GenericType *> &&gen) {
+        generics = gen;
+    }
+
+    std::vector<GenericType*> getGenerics() {
+        return generics;
+    }
+
+    void addArgument(std::shared_ptr<FuncArgDecl> arg) {
+        args.push_back(arg);
+    }
 
     typedef std::shared_ptr<FunctionDecl> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::FUNCTION_DECL;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    std::string _func_name;
-    TypeRef::SharedPtr _return_type;
-    std::vector<FuncArgDecl::SharedPtr> _args;
-    CompoundStmt::SharedPtr _body;
+    string funcName;
+    std::shared_ptr<TypeRef> returnType;
+    std::vector<std::shared_ptr<FuncArgDecl>> args;
+    std::shared_ptr<CompoundStmt> body;
+
+    std::vector<GenericType*> generics;
+
+    bool hasHiddenParam = false;
 
     // codegen
-    std::vector<std::pair<std::string,std::string>> captures = {};
-    std::vector<TypeSpecifier> capture_types = {};
-    std::vector<std::string> copy_targets = {};
+    std::vector<std::pair<string,string>> captures = {};
+    std::vector<Type*> captureTypes = {};
+    std::vector<string> copyTargets = {};
 };
 
 

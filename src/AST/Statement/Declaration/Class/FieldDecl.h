@@ -7,73 +7,82 @@
 
 
 #include "../../Statement.h"
-#include "../../../Expression/Expression.h"
+
+class TypeRef;
+class Expression;
 
 namespace cdot {
 namespace cl {
-    class Method;
+    struct Method;
+    struct Field;
 }
 }
 
 class FieldDecl : public Statement {
 public:
-    FieldDecl(std::string, TypeRef::SharedPtr, AccessModifier = AccessModifier::PUBLIC, bool = false,
-        Expression::SharedPtr = {});
+    FieldDecl(std::string, std::shared_ptr<TypeRef>, AccessModifier = AccessModifier::PUBLIC, bool = false,
+        std::shared_ptr<Expression> = {});
 
-    inline void set_default(Expression::SharedPtr expr) {
-        default_val = expr;
-    }
-
-    inline string get_name() const {
-        return field_name;
+    inline void setDefault(std::shared_ptr<Expression> expr) {
+        defaultVal = expr;
     }
 
     typedef std::shared_ptr<FieldDecl> SharedPtr;
     typedef std::unique_ptr<FieldDecl> UniquePtr;
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<std::shared_ptr<AstNode>> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::FIELD_DECL;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
-    virtual inline void generate(bool get, bool set) {
-        generate_getter = get;
-        generate_setter = set;
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
     }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
+    virtual inline void addGetter(std::shared_ptr<CompoundStmt> body = nullptr) {
+        hasGetter = true;
+        getterBody = body;
+    }
+
+    virtual inline void addSetter(std::shared_ptr<CompoundStmt> body = nullptr) {
+        hasSetter = true;
+        setterBody = body;
+    }
+
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    bool generate_getter = false;
-    bool generate_setter = false;
-    bool is_static;
+    bool hasGetter = false;
+    bool hasSetter = false;
+    std::shared_ptr<CompoundStmt> getterBody = nullptr;
+    std::shared_ptr<CompoundStmt> setterBody = nullptr;
+    string getterSelfBinding;
+    string setterSelfBinding;
+    cdot::cl::Method *getterMethod;
+    cdot::cl::Method *setterMethod;
+    std::shared_ptr<FuncArgDecl> newVal = nullptr;
+
+    bool isStatic;
     AccessModifier am;
-    TypeRef::SharedPtr type;
-    std::string field_name;
-    Expression::SharedPtr default_val;
+    std::shared_ptr<TypeRef> type;
+    string fieldName;
+    std::shared_ptr<Expression> defaultVal;
+    Type** declaredType;
+
+    bool isProtocolField = false;
 
     // codegen
-    std::string class_name;
-    std::string getter_binding;
-    std::string setter_binding;
-    cdot::cl::Method* getter;
-    cdot::cl::Method* setter;
+    string className;
+    string getterBinding;
+    string setterBinding;
 };
 
 

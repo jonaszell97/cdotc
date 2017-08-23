@@ -4,31 +4,25 @@
 
 #include <iostream>
 #include "FuncArgDecl.h"
-#include "../../../Util.h"
+#include "../../Expression/TypeRef.h"
 
 FuncArgDecl::FuncArgDecl(std::string name, TypeRef::SharedPtr type, Expression::SharedPtr def) :
-    _arg_name(name),
-    _arg_type(type),
-    _default_val(def)
+    argName(name),
+    argType(type),
+    defaultVal(def)
 {
-
+    if (defaultVal != nullptr) {
+        children.push_back(&defaultVal);
+    }
 }
 
-FuncArgDecl::FuncArgDecl() : FuncArgDecl("", nullptr, nullptr) {
+FuncArgDecl::FuncArgDecl(bool mut) : mut(mut) {
 
-}
-
-void FuncArgDecl::set_name(std::string name) {
-    _arg_name = name;
-}
-
-void FuncArgDecl::set_default(Expression::SharedPtr def) {
-    _default_val = def;
 }
 
 std::vector<AstNode::SharedPtr> FuncArgDecl::get_children() {
-    if (_default_val != nullptr) {
-        return { _default_val };
+    if (defaultVal != nullptr) {
+        return { defaultVal };
     }
 
     return {};
@@ -37,9 +31,9 @@ std::vector<AstNode::SharedPtr> FuncArgDecl::get_children() {
 void FuncArgDecl::__dump(int depth) {
     AstNode::__tab(depth);
 
-    std::cout << "FuncArgDecl [" << _arg_type->to_string() << " " << _arg_name << "]" << std::endl;
+    std::cout << "FuncArgDecl [" << argType->toString() << " " << argName << "]" << std::endl;
 
-    if (_default_val != nullptr) {
-        _default_val->__dump(depth + 1);
+    if (defaultVal != nullptr) {
+        defaultVal->__dump(depth + 1);
     }
 }

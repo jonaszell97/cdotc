@@ -7,44 +7,55 @@
 
 
 #include "../Statement.h"
-#include "../../Expression/RefExpr/IdentifierRefExpr.h"
+
+class TypeRef;
+class Expression;
 
 class DeclStmt : public Statement {
 public:
-    DeclStmt(string, TypeRef::SharedPtr, bool, bool, Expression::SharedPtr = nullptr);
+    DeclStmt(string, std::shared_ptr<TypeRef>, bool, bool, std::shared_ptr<Expression> = nullptr);
+
+    ~DeclStmt() override {
+
+    }
 
     std::vector<AstNode::SharedPtr> get_children() override;
 
     typedef std::shared_ptr<DeclStmt> SharedPtr;
     void __dump(int) override;
 
-    inline virtual NodeType get_type() override {
+    NodeType get_type() override {
         return NodeType::DECLARATION;
     }
-    virtual inline Variant accept(Visitor& v) override {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) override {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
+    string getIdentifier() {
+        return identifier;
+    }
+
+    std::shared_ptr<TypeRef> getType() {
+        return type;
+    }
+
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
     string identifier;
-    TypeRef::SharedPtr type;
-    Expression::SharedPtr value;
+    std::shared_ptr<TypeRef> type;
+    std::shared_ptr<Expression> value = nullptr;
     bool is_const;
     bool is_global;
+    bool isStructAlloca = false;
+    bool declared = false;
 };
 
 

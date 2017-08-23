@@ -5,42 +5,37 @@
 #ifndef CDOT_WHILESTATEMENT_H
 #define CDOT_WHILESTATEMENT_H
 
-
 #include "../Statement.h"
-#include "../../Expression/Expression.h"
-#include "../Block/CompoundStmt.h"
+class Expression;
 
 class WhileStmt : public Statement {
 public:
-    WhileStmt(Expression::SharedPtr, CompoundStmt::SharedPtr);
+    WhileStmt(std::shared_ptr<Expression>, Statement::SharedPtr);
 
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::WHILE_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
+    typedef std::shared_ptr<WhileStmt> SharedPtr;
+
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr _condition;
-    CompoundStmt::SharedPtr _while_block;
+    std::shared_ptr<Expression> condition;
+    Statement::SharedPtr body;
 };
 
 

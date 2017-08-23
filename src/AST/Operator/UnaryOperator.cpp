@@ -2,31 +2,24 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include <iostream>
 #include "UnaryOperator.h"
-#include "../../Variant/Variant.h"
-#include "../../Util.h"
 
-UnaryOperator::UnaryOperator(std::string op, std::string fix) :
-        _operator(op),
+UnaryOperator::UnaryOperator(string op, string fix) :
+        op(op),
         prefix(fix == "prefix")
 {
 
 }
 
-UnaryOperator::UnaryOperator(Variant v, std::string fix) : UnaryOperator(v.get<std::string>(), fix) {
+UnaryOperator::UnaryOperator(Variant v, string fix) : UnaryOperator(v.getString(), fix) {
 
-}
-
-std::string UnaryOperator::get_operator() {
-    return _operator;
 }
 
 std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {
     std::vector<AstNode::SharedPtr> res;
-    res.push_back(_child);
-    if (_member_expr != nullptr) {
-        res.push_back(_member_expr);
+    res.push_back(target);
+    if (memberExpr != nullptr) {
+        res.push_back(memberExpr);
     }
 
     return res;
@@ -37,7 +30,7 @@ void UnaryOperator::__dump(int depth) {
         std::cout << "\t";
     }
 
-    std::cout << "UnaryOperator ['" << _operator << "']" << std::endl;
+    std::cout << "UnaryOperator ['" << op << "']" << std::endl;
 
     for (auto child : get_children()) {
         child->__dump(depth + 1);

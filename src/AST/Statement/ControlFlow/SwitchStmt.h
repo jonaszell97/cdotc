@@ -5,52 +5,46 @@
 #ifndef CDOT_SWITCHSTMT_H
 #define CDOT_SWITCHSTMT_H
 
-
 #include "../Statement.h"
-#include "../../Expression/Expression.h"
-#include "../Block/CompoundStmt.h"
-#include "CaseStmt.h"
+
+class Expression;
+class CaseStmt;
 
 class SwitchStmt : public Statement {
 public:
-    SwitchStmt(Expression::SharedPtr);
+    SwitchStmt(std::shared_ptr<Expression>);
 
-    inline void add_case(CaseStmt::SharedPtr case_) {
+    inline void addCase(std::shared_ptr<CaseStmt> case_) {
         cases.push_back(case_);
     }
 
     typedef std::shared_ptr<SwitchStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::SWITCH_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr switch_val;
-    std::vector<CaseStmt::SharedPtr> cases;
+    std::shared_ptr<Expression> switchValue;
+    std::vector<std::shared_ptr<CaseStmt>> cases;
 
     // codegen
-    bool has_default = false;
-    int default_index = -1;
+    bool hasDefault = false;
+    int defaultIndex = -1;
 };
 
 

@@ -1,48 +1,51 @@
 
-def println() {
-    printf(@CString "\n")
+using Extern.C
+
+def print() {
+    printf(@cstring "\n")
 }
 
-def print(s: String) {
-    printf(s.AsCString())
+def print(a: Any, separator: Char = '\n') {
+    printf(@cstring "0x%08x%c", a as Int8, separator.val)
 }
 
-def println(str: String) {
-    print(str)
-    println()
+# def print(s: String, separator: Char = '\n') {
+#     printf(@cstring "%s%c", s.asCString, separator.val)
+# }
+
+def print(c: Int8*, separator: Char = '\n') {
+    printf(c)
+    printf(@cstring "%c", separator.val)
 }
 
-def print(i: Int) {
-    printf(@CString "%d", i)
+def print(ref i: Int, separator: Char = '\n') {
+    printf(@cstring "%d%c", i.val, separator.val)
 }
 
-def println(i: Int) {
-    print(i)
-    println()
+def print(i: Int8, separator: Char = '\n') {
+    printf(@cstring "%c%c", i, separator.val)
 }
 
-def print(c: Char) {
-    printf(@CString "%c", c)
+def print(c: Char, separator: Char = '\n') {
+    printf(@cstring "%c%c", c.val, separator.val)
 }
 
-def println(c: Char) {
-    print(c)
-    println()
+def print(i: Int64, separator: Char = '\n') {
+    printf(@cstring "%d%c", i, separator.val)
 }
 
-def print(d: Double) {
-    printf(@CString "%f", d)
+def print(d: Double, separator: Char = '\n') {
+    printf(@cstring "%f%c", d, separator.val)
 }
 
-def println(d: Double) {
-    print(d)
-    println()
+def print(f: Float, separator: Char = '\n') {
+    printf(@cstring "%f%c", f as Double, separator.val)
 }
 
-def print(f: Float) {
-    print((Double)f)
-}
-
-def println(f: Float) {
-    println((Double)f)
+def print(b: Bool, separator: Char = '\n') {
+    if (b) {
+        printf(@cstring "%s%c", @cstring "true", separator.val)
+    } else {
+        printf(@cstring "%s%c", @cstring "false", separator.val)
+    }
 }

@@ -3,30 +3,16 @@
 //
 
 #include "LabelStmt.h"
-#include <iostream>
 
-LabelStmt::LabelStmt() : parent_cmpnd{}, visitor{} {
-
-}
-
-LabelStmt::LabelStmt(std::string label_name) : label_name(label_name), parent_cmpnd{}, visitor{} {
+LabelStmt::LabelStmt(std::string label_name) : labelName(label_name) {
 
 }
 
 std::vector<AstNode::SharedPtr> LabelStmt::get_children() {
-    std::vector<AstNode::SharedPtr> children;
-    for (auto child : CompoundStmt::get_children()) {
-        children.push_back(child);
-    }
-
-    return children;
+    return {};
 }
 
 void LabelStmt::__dump(int depth) {
     AstNode::__tab(depth);
-    std::cout << "LabelStmt [" << label_name << "]" << std::endl;
-
-    for (auto c : get_children()) {
-        c->__dump(depth + 1);
-    }
+    std::cout << "LabelStmt [" << labelName << "]" << std::endl;
 }

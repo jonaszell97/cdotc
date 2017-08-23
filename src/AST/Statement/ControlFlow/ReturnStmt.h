@@ -5,49 +5,48 @@
 #ifndef CDOT_RETURNSTATEMENT_H
 #define CDOT_RETURNSTATEMENT_H
 
-
 #include "../Statement.h"
-#include "../../Expression/Expression.h"
+
+class Expression;
 
 class ReturnStmt : public Statement {
 public:
     ReturnStmt();
-    ReturnStmt(Expression::SharedPtr);
+    explicit ReturnStmt(std::shared_ptr<Expression>);
 
-    inline void set_function(CompoundStmt* function) {
-        func = function;
+    ~ReturnStmt() override {
+//        delete returnType;
     }
 
     typedef std::shared_ptr<ReturnStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::RETURN_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 protected:
-    CompoundStmt* func;
-    Expression::SharedPtr _return_val;
+    std::shared_ptr<Expression> returnValue;
+
+    bool interfaceShift = false;
+    string originTy;
+
+    bool hiddenParamReturn = false;
 
     // codegen
-    TypeSpecifier ret_type;
+    Type* returnType;
 };
 
 

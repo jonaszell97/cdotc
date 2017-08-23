@@ -88,7 +88,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(ArrayLiteral *node) {
+//Variant CaptureVisitor::visit(CollectionLiteral *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }
@@ -112,7 +112,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(ArrayAccessExpr *node) {
+//Variant CaptureVisitor::visit(SubscriptExpr *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }
@@ -320,7 +320,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(ImportStmt *node) {
+//Variant CaptureVisitor::visit(UsingStmt *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }
@@ -328,7 +328,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(ExportStmt *node) {
+//Variant CaptureVisitor::visit(EndOfFileStmt *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }

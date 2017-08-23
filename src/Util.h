@@ -7,15 +7,31 @@
 
 #include <unordered_map>
 #include <set>
-#include "Variant/Variant.h"
+#include <llvm/IR/Type.h>
+#include <regex>
+
+namespace cdot {
+    class Type;
+    class GenericType;
+
+    enum class CompatibilityType {
+        COMPATIBLE,
+        FUNC_NOT_FOUND,
+        NO_MATCHING_CALL
+    };
+}
 
 struct TypeSpecifier;
 class TypeCheckVisitor;
 class Expression;
+using std::pair;
+using std::string;
+using std::unordered_map;
+using namespace cdot;
 
 enum ValueType : unsigned int;
 
-enum class AccessModifier {
+enum class AccessModifier : unsigned int {
     PUBLIC,
     PRIVATE,
     PROTECTED
@@ -26,87 +42,97 @@ struct CallCompatability {
     size_t incomp_arg;
     int compat_score;
     bool perfect_match = false;
+
+    unordered_map<size_t, Type*> needed_casts;
 };
 
-using std::pair;
-using std::string;
-
 namespace util {
-    extern std::unordered_map<std::string, int> op_precedence;
+    extern std::unordered_map<string, int> op_precedence;
 
-    std::vector<std::string> str_split(std::string, char);
-    std::string str_trim(std::string);
+    std::vector<string> str_split(string, char);
+    string str_trim(string);
 
-    std::string args_to_string(std::vector<TypeSpecifier>&);
+    string args_to_string(std::vector<Type*>&);
 
-    extern std::unordered_map<std::string, TypeSpecifier> builtin_functions;
-    extern std::vector<std::string> builtin_namespaces;
+    extern std::vector<string> stdLibImports;
 
-    inline bool is_builtin_import(std::string name) {
-        return std::find(builtin_namespaces.begin(), builtin_namespaces.end(), name) != builtin_namespaces.end();
+    extern std::vector<string> assignmentOperators;
+    string isAssignmentOperator(string&);
+
+    template <class T>
+    bool in_vector(std::vector<T>& vec, T el) {
+        return std::find(vec.begin(), vec.end(), el) != vec.end();
     }
 
-    template <class T>
-    bool in_vector(std::vector<T>, T);
-    std::string str_escape(std::string);
+    string str_escape(string);
 
     template<class T, class R>
-    bool in_pair_vector(std::vector<std::pair<T, R>>, T);
+    bool in_pair_vector(std::vector<std::pair<T, R>> vec, T el) {
+        return std::find_if(vec.begin(), vec.end(), [el](const std::pair<T, R> pair) {
+            return pair.first == el;
+        }) != vec.end();
+    };
 
     template<class T, class R>
-    R get_second(std::vector<std::pair<T, R>>, T);
+    R get_second(std::vector<std::pair<T, R>> vec, T el) {
+        auto pos = std::find_if(vec.begin(), vec.end(), [el](const std::pair<T, R> pair) {
+            return pair.first == el;
+        });
+
+        return pos->second;
+    };
 
     template <class T>
-    std::unordered_map<std::string, T> merge_maps(std::unordered_map<std::string, T> m1,
-         std::unordered_map<std::string, T> m2)
+    std::unordered_map<string, T> merge_maps(std::unordered_map<string, T> m1,
+         std::unordered_map<string, T> m2)
     {
         m1.insert(m2.begin(), m2.end());
         return m1;
     };
 
-    std::string generate_getter_name(std::string);
-    std::string generate_setter_name(std::string);
+    bool matches(string pattern, string& subject);
+    std::smatch get_match(string pattern, string& subject);
 
-    std::string type_to_symbol(TypeSpecifier type);
+    string generate_getter_name(string);
+    string generate_setter_name(string);
 
-    extern std::string token_names[];
-    extern std::vector<std::string> keywords;
+    extern string token_names[];
+    extern std::vector<string> keywords;
 
-    extern std::unordered_map<ValueType, std::string> types;
-    extern std::unordered_map<std::string, ValueType> typemap;
-    extern std::unordered_map<ValueType, std::string> classmap;
-    extern std::unordered_map<AccessModifier, std::string> am_map;
-    bool is_reversible(std::string);
+    extern std::unordered_map<ValueType, string> types;
+    extern std::unordered_map<string, ValueType> typemap;
+    extern std::unordered_map<ValueType, unsigned int> type_hierarchy;
+    extern std::unordered_map<ValueType, string> classmap;
+    extern std::unordered_map<AccessModifier, string> am_map;
+    bool is_reversible(string);
 
-    extern std::vector<std::string> binary_operators;
-    extern std::vector<std::string> tertiary_operators;
-    extern std::vector<std::string> unary_operators;
+    extern std::vector<string> binary_operators;
+    extern std::vector<string> tertiary_operators;
+    extern std::vector<string> PrefixUnaryOperators;
+    extern std::vector<string> PostfixUnaryOperators;
 
-    extern std::set<std::string> string_modifiers;
+    extern std::set<string> string_modifiers;
 
     extern std::vector<char> operator_chars;
     extern std::vector<char> punctuators;
 
-    extern std::vector<std::string> attributes;
+    extern std::vector<string> attributes;
 
     extern std::unordered_map<ValueType, std::vector<ValueType>> implicit_type_conversions;
     extern std::unordered_map<ValueType, std::vector<ValueType>> explicit_type_conversions;
 
-    bool resolve_generic(TypeSpecifier& given, TypeSpecifier& needed,
-        std::vector<TypeSpecifier>& given_generics, std::vector<pair<string, TypeSpecifier>>& needed_generics);
+    bool resolve_generic(std::vector<Type*>& given, std::vector<Type*>& needed,
+        std::vector<Type*>& given_generics, std::vector<GenericType*>& needed_generics, unordered_map<size_t, Type*>&
+        needed_casts, size_t argNum);
 
-    CallCompatability func_call_compatible(std::vector<TypeSpecifier>& given_args, std::vector<TypeSpecifier>& needed_args,
-        std::vector<TypeSpecifier>& given_generics, std::vector<pair<string, TypeSpecifier>>& needed_generics);
+    CallCompatability func_call_compatible(std::vector<Type*>& given_args, std::vector<Type*>& needed_args,
+        std::vector<Type*>& given_generics, std::vector<GenericType*>& needed_generics);
 
-    CallCompatability func_call_compatible(std::vector<TypeSpecifier>& given_args, std::vector<TypeSpecifier>& needed_args);
-    CallCompatability func_call_compatible(std::vector<std::shared_ptr<Expression>>& given_args, std::vector<TypeSpecifier>&
-        needed_args, TypeCheckVisitor& Visitor);
+    CallCompatability func_call_compatible(std::vector<Type*>& given_args, std::vector<Type*>& needed_args);
 
-    CallCompatability func_call_compatible(std::vector<std::shared_ptr<Expression>>& given_args,
-        std::vector<TypeSpecifier>& needed_args, TypeCheckVisitor& Visitor, std::vector<TypeSpecifier>& given_generics,
-        std::vector<pair<string, TypeSpecifier>>&needed_generics);
+    int func_score(std::vector<Type*>&);
 
-    int func_score(std::vector<TypeSpecifier>&);
+    int pointerDepth(llvm::Type*);
 };
 
 

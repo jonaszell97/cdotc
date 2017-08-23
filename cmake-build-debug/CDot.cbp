@@ -138,6 +138,14 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
@@ -154,11 +162,11 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -186,14 +194,6 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
@@ -218,11 +218,11 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -234,14 +234,6 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
@@ -250,27 +242,19 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -378,6 +362,10 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/DebugStmt.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
@@ -402,14 +390,6 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
@@ -418,19 +398,19 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -474,19 +454,7 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.h">
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/EndOfFileStmt.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -495,6 +463,22 @@
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -514,35 +498,11 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -554,19 +514,19 @@
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.h">
-			<Option target="CDot"/>
-			<Option target="CDotTest"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Builtin.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Builtin.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -583,6 +543,14 @@
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Function.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Function.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>
@@ -663,6 +631,94 @@
 			<Option target="CDotTest"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/CollectionType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/CollectionType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.h">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp">
+			<Option target="CDot"/>
+			<Option target="CDotTest"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.h">
 			<Option target="CDot"/>
 			<Option target="CDotTest"/>
 		</Unit>

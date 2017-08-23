@@ -5,60 +5,46 @@
 #ifndef CDOT_FORSTMT_H
 #define CDOT_FORSTMT_H
 
-
-#include <memory>
-#include "../../AstNode.h"
 #include "../Statement.h"
-#include "../../Expression/Expression.h"
-#include "../Block/CompoundStmt.h"
-#include "../../Expression/RefExpr/IdentifierRefExpr.h"
+
+class IdentifierRefExpr;
 
 class ForStmt : public Statement {
 public:
     ForStmt(Statement::SharedPtr, Statement::SharedPtr, Statement::SharedPtr);
-    ForStmt(IdentifierRefExpr::SharedPtr, Expression::SharedPtr);
 
-    inline void set_body(CompoundStmt::SharedPtr body) {
-        _body = body;
-    }
-    inline CompoundStmt::SharedPtr get_body() {
-        return _body;
+    void setBody(Statement::SharedPtr _body) {
+        body = _body;
     }
 
     typedef std::shared_ptr<ForStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children();
-    void __dump(int);
+    std::vector<AstNode::SharedPtr> get_children() override;
+    void __dump(int depth) override;
 
-    inline virtual NodeType get_type() {
+    NodeType get_type() override {
         return NodeType::FOR_STMT;
     }
-    virtual inline Variant accept(Visitor& v) {
-        return v.visit(this);
-    }
-    virtual inline CGValue accept(CodeGenVisitor& v) {
-        return v.visit(this);
-    }
-    virtual TypeSpecifier accept(TypeCheckVisitor& v) {
+
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
 
-    friend class Visitor;
-    friend class EvaluatingVisitor;
-    friend class CaptureVisitor;
     friend class ConstExprVisitor;
     friend class CodeGenVisitor;
     friend class TypeCheckVisitor;
 
 protected:
-    bool range_based  = false;
-    IdentifierRefExpr::SharedPtr ident;
-    Expression::SharedPtr range;
+    bool rangeBased  = false;
+    std::shared_ptr<Expression> range;
 
-    Statement::SharedPtr _initialization;
-    Statement::SharedPtr _termination;
-    Statement::SharedPtr _increment;
-    CompoundStmt::SharedPtr _body;
+    Statement::SharedPtr initialization;
+    Statement::SharedPtr termination;
+    Statement::SharedPtr increment;
+    Statement::SharedPtr body;
 };
 
 
