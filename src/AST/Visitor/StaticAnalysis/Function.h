@@ -13,57 +13,78 @@ using namespace cdot;
 
 class Function {
 public:
-    Function(string&, Type*, std::vector<GenericType*>&, bool = false);
+   Function(string&, Type*, std::vector<ObjectType*>&);
+   Function(string&, Type*);
 
-    inline void addArgument(Type* type, std::shared_ptr<Expression> def_val = nullptr) {
-        arg_types.push_back(type);
-        arg_defaults.push_back(def_val);
-    }
+   void addArgument(Type* type, string& name) {
+      arg_types.push_back(type);
+      argNames.push_back(name);
+   }
+   
+   void addArgument(Type* type, std::shared_ptr<Expression> def_val, string& name) {
+      arg_types.push_back(type);
+      arg_defaults.push_back(def_val);
+      argNames.push_back(name);
+   }
 
-    inline string& getName() {
-        return name;
-    }
+   string& getName() {
+      return name;
+   }
 
-    inline Type*& getReturnType() {
-        return returnType;
-    }
+   string& getMangledName() {
+      return mangledName;
+   }
 
-    inline std::vector<Type*>& getArgTypes() {
-        return arg_types;
-    }
+   void setMangledName(string mangled) {
+      mangledName = mangled;
+   }
 
-    inline std::vector<std::shared_ptr<Expression>>& getArgDefaults() {
-        return arg_defaults;
-    }
+   Type*& getReturnType() {
+      return returnType;
+   }
 
-    void hasHiddenParam(bool b) {
-        hasHiddenParam_ = b;
-    }
+   std::vector<string>& getArgNames() {
+      return argNames;
+   }
 
-    bool hasHiddenParam() {
-        return hasHiddenParam_;
-    }
+   std::vector<Type*>& getArgTypes() {
+      return arg_types;
+   }
 
-    inline std::vector<GenericType*>& getGenerics() {
-        return generics;
-    }
+   std::vector<std::shared_ptr<Expression>>& getArgDefaults() {
+      return arg_defaults;
+   }
 
-    inline bool isLambda() {
-        return isLambda_;
-    }
+   void hasHiddenParam(bool b) {
+      hasHiddenParam_ = b;
+   }
 
-    typedef std::unique_ptr<Function> UniquePtr;
+   bool hasHiddenParam() {
+      return hasHiddenParam_;
+   }
+
+   std::vector<ObjectType*>& getGenerics() {
+      return generics;
+   }
+
+   bool isLambda() {
+      return isLambda_;
+   }
+
+   typedef std::unique_ptr<Function> UniquePtr;
 
 protected:
-    string name;
+   string name;
+   string mangledName;
 
-    Type* returnType;
-    std::vector<Type*> arg_types;
-    std::vector<std::shared_ptr<Expression>> arg_defaults;
-    std::vector<GenericType*>& generics;
+   Type* returnType;
+   std::vector<Type*> arg_types;
+   std::vector<std::shared_ptr<Expression>> arg_defaults;
+   std::vector<string> argNames;
+   std::vector<ObjectType*> generics;
 
-    bool isLambda_;
-    bool hasHiddenParam_ = false;
+   bool isLambda_;
+   bool hasHiddenParam_ = false;
 };
 
 

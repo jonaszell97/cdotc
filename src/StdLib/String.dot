@@ -1,46 +1,78 @@
 
+using Builtin.Primitive
+
 class String {
     let length: Int { get }
-    let charArray: Char[] { get }
+    let charArray: int8* { get }
 
-    init() {
+    public init {
         length = 0
+        charArray = null
     }
 
-    init(str: Char[], len: Int) {
+    public init (str: int8*, len: Int) {
         charArray = str
         length = len
     }
 
-    def asCString -> Int8[] unsafe {
-        let cstr: Int8[length]
-        for (let i = 0; i < length; ++i) {
-            cstr[i] = charArray[i].val
+    public def postfix [] (index: Int) -> ref int8 unsafe {
+        if (index > length) {
+            print("no can do bby doll")
+            return '\0'
         }
-
-        return cstr
+        
+        return &charArray[index]
     }
 
-    # def postfix []&(index: Int) -> ref Char {
-    #     return charArray[index]
-    # }
+    public def infix + (s: String) -> String unsafe {
+        let newStr = Extern.C.malloc(length + s.length) as int8*
 
-    def postfix [](index: Int) -> Char {
-        return charArray[index]
-    }
-
-    def infix + (s: String) -> String {
-        let newStr: Char[length + s.length - 1]
-        # skip null terminator
-        for (let i = 0; i < length - 1; ++i) {
-            __debug
+        for (let i = 0; i < length; ++i) {
             newStr[i] = charArray[i]
         }
 
         for (let i = 0; i < s.length; ++i) {
-            newStr[i + length - 1] = s.charArray[i]
+            newStr[i + length] = s.charArray[i]
         }
         
-        return String(newStr, length + s.length - 1)
+        return String(newStr, length + s.length)
+    }
+
+    public def substr(begin: Int, len: Int = length) -> String unsafe {
+        if (begin + len > length) {
+            print("Nice try, sucker")
+            Extern.C.exit(69.val as Int32)
+        }
+
+        let newStr = Extern.C.malloc(len) as int8*
+        for (let i = 0; i < len; ++i) {
+            newStr[i] = charArray[i + begin]
+        }
+
+        return String(newStr, len)
+    }
+}
+
+class StringIterator with Iterator<Char> {
+    let str: String
+    var curr: Int
+
+    public init (str: String) {
+        self.str = str
+        self.curr = 0
+    }
+
+    public def next -> Char? {
+        if (curr >= str.length) {
+            return null
+        }
+
+        return Char(str[curr++])
+    }
+}
+
+extend String with Iterable<Char> {
+    public def getIterator -> StringIterator {
+        return StringIterator(self)
     }
 }

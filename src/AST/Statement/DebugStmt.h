@@ -10,31 +10,35 @@
 
 class DebugStmt : public Statement {
 public:
-    DebugStmt() {
+   DebugStmt(bool unreachable = false) : isUnreachable(unreachable) {
 
-    }
+   }
 
-    std::vector<AstNode::SharedPtr> get_children() override {
-        return {};
-    }
+   std::vector<AstNode::SharedPtr> get_children() override {
+      return {};
+   }
 
-    void __dump(int) override {}
+   void __dump(int) override {}
 
-    NodeType get_type() override {
-        return NodeType::DEBUG_STMT;
-    }
+   NodeType get_type() override {
+      return NodeType::DEBUG_STMT;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class TypeCheckVisitor;
+   friend class TypeCheckVisitor;
+   friend class CodeGenVisitor;
 
-    typedef std::shared_ptr<DebugStmt> SharedPtr;
+   typedef std::shared_ptr<DebugStmt> SharedPtr;
+
+protected:
+   bool isUnreachable;
 };
 
 

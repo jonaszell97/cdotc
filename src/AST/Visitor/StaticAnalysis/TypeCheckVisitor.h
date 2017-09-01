@@ -21,221 +21,286 @@ using std::string;
 using std::pair;
 
 namespace cdot {
-    class Type;
-    class GenericType;
-    class BinaryOperator;
-    enum class BinaryOperatorType : unsigned int;
+   class Type;
+   class BinaryOperator;
+   enum class BinaryOperatorType : unsigned int;
 
-    namespace cl {
-        class Class;
-    }
+   namespace cl {
+      class Class;
+      class Method;
+      class Enum;
+   }
 
-    struct FunctionResult {
-        CompatibilityType compatibility;
-        Function* func = nullptr;
+   struct FunctionResult {
+      CompatibilityType compatibility;
+      Function* func = nullptr;
 
-        std::unordered_map<size_t, Type*> neededCasts;
-    };
+      std::unordered_map<size_t, pair<Type*, Type*>> neededCasts;
+      std::vector<pair<string, std::shared_ptr<Expression>>> orderedArgs;
+      string expectedType;
+      string foundType;
+      size_t incompArg = 0;
+   };
+
+   struct Scope {
+      size_t id;
+
+      string currentClass;
+      string currentSelf;
+      string currentFunction;
+
+      bool isFunctionRoot = false;
+      bool isLambdaRoot = false;
+
+      bool continuable = false;
+      bool breakable = false;
+
+      Type* declaredReturnType = nullptr;
+      bool returnable = false;
+
+      Scope* enclosingScope = nullptr;
+   };
 }
 
 using namespace cdot;
 
 class TypeCheckVisitor {
 public:
-    TypeCheckVisitor();
-    TypeCheckVisitor(TypeCheckVisitor *parent);
+   TypeCheckVisitor();
+   TypeCheckVisitor(TypeCheckVisitor *parent);
 
-    TypeCheckVisitor makeFunctionVisitor(Type*);
-    TypeCheckVisitor makeMethodVisitor(Type*, string&);
+   TypeCheckVisitor makeFunctionVisitor(Type*);
+   TypeCheckVisitor makeMethodVisitor(Type*, string&);
 
-    void dump();
+   void dump();
 
-    static void connectTree(AstNode*);
+   static void connectTree(AstNode*);
 
-    virtual Type* visit(NamespaceDecl*);
-    virtual Type* visit(UsingStmt*);
-    virtual Type* visit(EndOfFileStmt*);
+   virtual Type* visit(NamespaceDecl*);
+   virtual Type* visit(UsingStmt*);
+   virtual Type* visit(EndOfFileStmt*);
 
-    virtual Type* visit(FunctionDecl*);
-    virtual Type* visit(CompoundStmt*);
-    virtual Type* visit(IdentifierRefExpr*);
-    virtual Type* visit(DeclStmt*);
-    virtual Type* visit(ForStmt*);
-    virtual Type* visit(WhileStmt*);
+   virtual Type* visit(FunctionDecl*);
+   virtual Type* visit(CompoundStmt*);
+   virtual Type* visit(IdentifierRefExpr*);
+   virtual Type* visit(DeclStmt*);
+   virtual Type* visit(ForStmt*);
+   virtual Type* visit(WhileStmt*);
 
-    virtual Type* visit(CollectionLiteral*);
-    virtual Type* visit(LiteralExpr*);
-    virtual Type* visit(StringLiteral*);
-    virtual Type* visit(SubscriptExpr*);
-    virtual Type* visit(CallExpr*);
-    virtual Type* visit(MemberRefExpr*);
-    virtual Type* visit(BinaryOperator*);
-    virtual Type* visit(TertiaryOperator*);
-    virtual Type* visit(UnaryOperator*);
-    virtual Type* visit(BreakStmt*);
-    virtual Type* visit(ContinueStmt*);
-    virtual Type* visit(IfStmt*);
-    virtual Type* visit(SwitchStmt*);
-    virtual Type* visit(CaseStmt*);
-    virtual Type* visit(LabelStmt*);
-    virtual Type* visit(GotoStmt*);
-    virtual Type* visit(FuncArgDecl*);
-    virtual Type* visit(ReturnStmt*);
-    virtual Type* visit(Expression*);
-    virtual Type* visit(ClassDecl*);
-    virtual Type* visit(MethodDecl*);
-    virtual Type* visit(FieldDecl*);
-    virtual Type* visit(ConstrDecl*);
-    virtual Type* visit(LambdaExpr*);
-    virtual Type* visit(ImplicitCastExpr*);
-    virtual Type* visit(ExtendStmt*);
-    virtual Type* visit(TypedefDecl*);
-    virtual Type* visit(TypeRef*);
-    virtual Type* visit(DeclareStmt*);
-    virtual Type* visit(LvalueToRvalue*);
-    virtual Type* visit(DebugStmt*);
+   virtual Type* visit(CollectionLiteral*);
+   virtual Type* visit(NumericLiteral*);
+   virtual Type* visit(NoneLiteral*);
+   virtual Type* visit(StringLiteral*);
+   virtual Type* visit(SubscriptExpr*);
+   virtual Type* visit(CallExpr*);
+   virtual Type* visit(MemberRefExpr*);
+   virtual Type* visit(BinaryOperator*);
+   virtual Type* visit(TertiaryOperator*);
+   virtual Type* visit(UnaryOperator*);
+   virtual Type* visit(BreakStmt*);
+   virtual Type* visit(ContinueStmt*);
+   virtual Type* visit(IfStmt*);
+   virtual Type* visit(MatchStmt*);
+   virtual Type* visit(CaseStmt*);
+   virtual Type* visit(LabelStmt*);
+   virtual Type* visit(GotoStmt*);
+   virtual Type* visit(FuncArgDecl*);
+   virtual Type* visit(ReturnStmt*);
+   virtual Type* visit(Expression*);
+   virtual Type* visit(ClassDecl*);
+   virtual Type* visit(MethodDecl*);
+   virtual Type* visit(FieldDecl*);
+   virtual Type* visit(ConstrDecl*);
+   virtual Type* visit(LambdaExpr*);
+   virtual Type* visit(ImplicitCastExpr*);
+   virtual Type* visit(ExtendStmt*);
+   virtual Type* visit(TypedefDecl*);
+   virtual Type* visit(TypeRef*);
+   virtual Type* visit(DeclareStmt*);
+   virtual Type* visit(LvalueToRvalue*);
+   virtual Type* visit(DebugStmt*);
+   virtual Type* visit(TupleLiteral*);
+   virtual Type* visit(EnumDecl*);
 
-    void DeclareClasses(std::shared_ptr<CompoundStmt>);
-    cdot::cl::Class* DeclareClass(ClassDecl*);
-    cdot::cl::Class* DeclareClassMethods(ClassDecl*);
+   virtual Type* visit(Statement*);
+
+   void DeclareClasses(std::shared_ptr<CompoundStmt>);
+   cdot::cl::Class* DeclareClass(ClassDecl*);
+   cdot::cl::Class* DeclareClassMethods(ClassDecl*);
+
+   cdot::cl::Enum* DeclareEnum(EnumDecl*);
+   cdot::cl::Enum* DeclareEnumMethods(EnumDecl*);
 
 protected:
-    std::unordered_map<string, DeclStmt*> declarations = {};
+   std::unordered_map<string, DeclStmt*> declarations = {};
+   std::stack<Scope> Scopes;
 
-    string declare_var(string&, Type*, bool = false, AstNode* = nullptr);
-    Type*& declare_fun(Function::UniquePtr&&, std::vector<GenericType*>&, AstNode* = nullptr);
+   Scope* latestScope;
 
-    void pushTy(Type *);
-    Type* popTy();
+   void pushFunctionScope(Type* returnType, bool isLambda = false);
+   void pushMethodScope(Type* returnType, string& className);
+   void pushLoopScope(bool continuable = true, bool breakable = true);
+   void popScope();
 
-    inline void resolve(Type**);
-    inline void checkExistance(ObjectType*, AstNode*);
+   string declare_var(string&, Type*, bool = false, AstNode* = nullptr);
+   Type*& declare_fun(Function::UniquePtr&&, std::vector<ObjectType*>&, AstNode* = nullptr);
 
-    std::pair<Type*, string> get_var(string&, AstNode* = nullptr);
-    FunctionResult get_fun(string&, std::vector<Type*>&, std::vector<Type*>&);
+   void pushTy(Type *);
+   Type* popTy();
 
-    bool has_var(string);
+   inline void resolve(Type**);
+   inline void checkExistance(ObjectType*, AstNode*);
 
-    void wrapImplicitCast(std::shared_ptr<Expression>& target, Type*& originTy, Type*& destTy);
+   pair<pair<Type*, string>, bool> get_var(string&, AstNode* = nullptr);
+   FunctionResult get_fun(string&, std::vector<Type*>&, std::vector<Type*>&, std::vector<string>&,
+      std::vector<pair<string, std::shared_ptr<Expression>>>&);
 
-    TypeCheckVisitor *parent = nullptr;
-    std::vector<TypeCheckVisitor*> children = {};
-    string scope = "";
+   bool has_var(string);
 
-    inline void addChild(TypeCheckVisitor *child) {
-        children.push_back(child);
-    }
+   void wrapImplicitCast(std::shared_ptr<Expression>& target, Type*& originTy, Type* destTy);
+   void lvalueToRvalue(std::shared_ptr<Expression>& target);
+   void toRvalueIfNecessary(Type *&ty, std::shared_ptr<Expression> &target, bool preCond = true);
 
-    std::stack<Type*> typeStack;
-    string currentClass;
-    string currentSelf;
+   bool castGenericIfNecessary(
+      Expression *node,
+      unordered_map<string, Type *> &concreteGenerics,
+      Type *&ty,
+      bool preCond = true
+   );
 
-    std::vector<string> labels = {};
+   TypeCheckVisitor *parent = nullptr;
+   std::vector<TypeCheckVisitor*> children = {};
+   string scope = "";
 
-    inline bool has_label(string label) {
-        if (std::find(labels.begin(), labels.end(), label) != labels.end()) {
-            return true;
-        }
-        if (parent) {
-            return parent->has_label(label);
-        }
+   inline void addChild(TypeCheckVisitor *child) {
+      children.push_back(child);
+   }
 
-        return false;
-    }
+   std::stack<Type*> typeStack;
+   string currentClass;
+   string currentSelf;
+   string currentFunction;
 
-    inline Type* ReturnMemberExpr(Expression*, Type*);
+   std::vector<string> labels = {};
 
-    Type* declaredReturnType;
-    bool isNestedFunction = false;
+   inline bool has_label(string label) {
+      if (std::find(labels.begin(), labels.end(), label) != labels.end()) {
+         return true;
+      }
+      if (parent) {
+         return parent->has_label(label);
+      }
 
-    std::vector<std::pair<string,string>> captures = {};
-    std::vector<Type*> captureTypes = {};
-    std::vector<string> copy_targets = {};
+      return false;
+   }
 
-    bool isNewlyCreated = true;
+   inline Type* ReturnMemberExpr(Expression*, Type*);
 
-    bool returnable = false;
-    int branches = 1;
-    int returned = 0;
-    void return_(Type* ret_type, AstNode *cause = nullptr);
+   Type* declaredReturnType;
+   bool isLambdaVisitor = false;
+   bool isLambdaRoot = false;
 
-    bool continuable = false;
-    bool breakable = false;
+   std::vector<pair<string, Type*>>* capturedVariables;
 
-    unsigned int lambda_count = 0;
+   bool isNewlyCreated = true;
 
-    std::vector<Attribute> attributes = {};
+   bool returnable = false;
+   int branches = 1;
+   int returned = 0;
+   void return_(Type* ret_type, AstNode *cause = nullptr);
 
-    bool hasAttribute(Attr kind) {
-        auto current = this;
-        while (current != nullptr) {
-            for (const auto& attr : current->attributes) {
-                if (attr.kind == kind) {
-                    return true;
-                }
+   void continue_();
+   void break_();
+
+   bool isContinueRoot = false;
+   bool isBreakRoot = false;
+   bool continued = false;
+   bool broken = false;
+
+   bool continuable = false;
+   bool breakable = false;
+
+   unsigned int lambda_count = 0;
+
+   std::vector<Attribute> attributes = {};
+
+   bool hasAttribute(Attr kind) {
+      auto current = this;
+      while (current != nullptr) {
+         for (const auto& attr : current->attributes) {
+            if (attr.kind == kind) {
+               return true;
             }
+         }
 
-            current = current->parent;
-        }
+         current = current->parent;
+      }
 
-        return false;
-    }
+      return false;
+   }
 
-    static std::vector<string> currentNamespace;
-    static std::vector<string> importedNamespaces;
+   static std::vector<string> currentNamespace;
+   static std::vector<string> importedNamespaces;
 
-    static std::vector<GenericType*>* currentClassGenerics;
-    static bool inProtocolDefinition;
+   static std::vector<ObjectType*>* currentClassGenerics;
+   static bool inProtocolDefinition;
 
-    static inline void pushNamespace(string &ns);
-    static inline void popNamespace();
+   static inline void pushNamespace(string &ns);
+   static inline void popNamespace();
 
-    bool currentBlockUnsafe = false;
+   bool checkLambdaCompatibility(LambdaExpr*, Type*);
 
-    static inline string ns_prefix() {
-        return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
-    }
+   bool currentBlockUnsafe = false;
 
-    pair<Type*, std::vector<Type*>> unify(std::vector<std::shared_ptr<Expression>>&);
+   static inline string ns_prefix() {
+      return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
+   }
 
-    void DeclareFunction(FunctionDecl*);
+   pair<Type*, std::vector<Type*>> unify(std::vector<std::shared_ptr<Expression>>&);
 
-    void DefineClass(ClassDecl*, cdot::cl::Class*);
+   void DeclareFunction(FunctionDecl*);
 
-    void DeclareField(FieldDecl*, cdot::cl::Class*);
-    void DefineField(FieldDecl*, cdot::cl::Class*);
+   void DefineClass(ClassDecl*, cdot::cl::Class*);
 
-    void DeclareMethod(MethodDecl*, cdot::cl::Class*);
-    void DefineMethod(MethodDecl*, cdot::cl::Class*);
+   void DeclareField(FieldDecl*, cdot::cl::Class*);
+   void DefineField(FieldDecl*, cdot::cl::Class*);
 
-    std::vector<string>* uninitializedFields = nullptr;
-    void DeclareConstr(ConstrDecl*, cdot::cl::Class*);
-    void DefineConstr(ConstrDecl*, cdot::cl::Class*);
+   void DeclareMethod(MethodDecl*, cdot::cl::Class*);
+   void DefineMethod(MethodDecl*, cdot::cl::Class*);
 
-    void PrepareCallArgs(std::vector<std::shared_ptr<Expression>>&, std::vector<Type*>&, std::vector<Type*>&,
-        std::vector<std::shared_ptr<Expression>>&);
-    void PrepareCallArgs(std::vector<std::shared_ptr<Expression>>&, std::vector<Type*>&, std::vector<Type*>&);
+   std::vector<string>* uninitializedFields = nullptr;
+   void DeclareConstr(ConstrDecl*, cdot::cl::Class*);
+   void DefineConstr(ConstrDecl*, cdot::cl::Class*);
 
-    Type* HandleBinaryOperator(Type*, Type*, BinaryOperatorType, BinaryOperator *node);
-    Type* HandleCastOp(Type*, BinaryOperator*);
-    Type* HandleAssignmentOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleArithmeticOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleBitwiseOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleLogicalOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleEqualityOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleComparisonOp(Type*fst, Type*snd, BinaryOperator*node);
-    Type* HandleOtherOp(Type*fst, Type*snd, BinaryOperator*node);
+   void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&,
+      std::vector<Type*>&, std::vector<std::shared_ptr<Expression>>&);
+   void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&, std::vector<Type*>&);
 
-    void HandleFunctionCall(CallExpr*);
-    void HandleMethodCall(CallExpr*);
-    void HandleConstructorCall(CallExpr*);
-    void HandleCallOperator(CallExpr*);
-    void HandleAnonCall(CallExpr*);
+   Type* HandleBinaryOperator(Type*, Type*, BinaryOperatorType, BinaryOperator *node);
+   Type* HandleCastOp(Type*, BinaryOperator*);
+   Type* HandleAssignmentOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleArithmeticOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleBitwiseOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleLogicalOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleEqualityOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleComparisonOp(Type *fst, Type *snd, BinaryOperator *node);
+   Type* HandleOtherOp(Type *fst, Type *snd, BinaryOperator *node);
 
-    void ApplyCasts(std::vector<std::shared_ptr<Expression>>&, std::vector<Type*>&, unordered_map<size_t,
-        Type*>&);
+   void HandleEnumComp(Type *fst, Type *snd, BinaryOperator *node);
+   void HandleTupleComp(Type *fst, Type *snd, BinaryOperator *node);
 
-    void CopyNodeProperties(Expression *src, Expression *dst);
+   void HandleFunctionCall(CallExpr*);
+   void HandleMethodCall(CallExpr*);
+   void HandleConstructorCall(CallExpr*);
+   void HandleCallOperator(CallExpr*);
+   void HandleAnonCall(CallExpr*);
+
+   void ApplyCasts(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&,
+      unordered_map<size_t, pair<Type*, Type*>>&);
+
+   void CopyNodeProperties(Expression *src, Expression *dst);
+
+   bool matchableAgainst(Type*& matchVal, std::shared_ptr<CaseStmt> const& caseVal);
 };
 
 

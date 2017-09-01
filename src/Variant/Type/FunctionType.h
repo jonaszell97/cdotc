@@ -8,88 +8,117 @@
 
 #include "Type.h"
 
+class Function;
+class TypeRef;
+using std::pair;
+
 namespace cdot {
 
-    class GenericType;
+   class ObjectType;
 
-    class FunctionType : public Type {
-    public:
-        FunctionType(Type*, std::vector<Type*>&&, std::vector<GenericType*>&&);
-        FunctionType(Type*, std::vector<Type*>&, std::vector<GenericType*>&);
-        FunctionType(Type*, std::vector<Type*>&&);
+   class FunctionType : public Type {
+   public:
+      FunctionType(std::shared_ptr<TypeRef>, std::vector<pair<string, std::shared_ptr<TypeRef>>>&&,
+         std::vector<ObjectType*>&&);
+      FunctionType(std::shared_ptr<TypeRef>, std::vector<pair<string, std::shared_ptr<TypeRef>>>&);
 
-        ~FunctionType() override {
-//            delete returnType;
-//            for (const auto& gen : genericTypes) {
-//                delete gen;
-//            }
-//            for (const auto& gen : argTypes) {
-//                delete gen;
-//            }
-        }
+      FunctionType(Type*, std::vector<Type*>&&, std::vector<ObjectType*>&&);
+      FunctionType(Type*, std::vector<Type*>&, std::vector<ObjectType*>&);
+      FunctionType(Type*, std::vector<Type*>&);
 
-        inline bool isLambda() {
-            return isLambda_;
-        }
+      ~FunctionType() override;
 
-        inline Type* getReturnType() {
-            return returnType;
-        }
+      inline bool isLambda() {
+         return isLambda_;
+      }
 
-        inline std::vector<Type*>& getArgTypes() {
-            return argTypes;
-        }
+      inline Type* getReturnType() {
+         return returnType;
+      }
 
-        inline std::vector<GenericType*> getGenericTypes() {
-            return genericTypes;
-        }
+      inline std::vector<Type*>& getArgTypes() {
+         return argTypes;
+      }
 
-        inline bool isGeneric() override {
-            if (returnType->isGeneric()) {
-                return true;
+      inline std::vector<ObjectType*> getGenericTypes() {
+         return genericTypes;
+      }
+
+      inline bool isGeneric() override {
+         if (returnType->isGeneric()) {
+            return true;
+         }
+
+         for (const auto& arg : argTypes) {
+            if (arg->isGeneric()) {
+               return true;
             }
+         }
 
-            for (const auto& arg : argTypes) {
-                if (arg->isGeneric()) {
-                    return true;
-                }
-            }
+         return false;
+      }
 
-            return false;
-        }
+      Function* getFunction() {
+         return declaredFunc;
+      }
 
-        bool operator==(Type*& other) override;
-        inline bool operator!=(Type*& other) override {
-            return !operator==(other);
-        }
+      void setFunction(Function* func) {
+         declaredFunc = func;
+      }
 
-        std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
-        std::vector<Type**> getTypeReferences() override;
+      bool isFunctionTy() override {
+         return true;
+      }
 
-        string toString() override;
-        llvm::Type* getLlvmType() override;
+      bool isStruct() override {
+         return true;
+      }
 
-        bool implicitlyCastableTo(Type*) override;
+      void visitContained(TypeCheckVisitor& v) override;
 
-        Type* deepCopy() override;
+      bool operator==(Type*& other) override;
+      inline bool operator!=(Type*& other) override {
+         return !operator==(other);
+      }
 
-        static inline bool classof(FunctionType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::FunctionTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+      std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
+      std::vector<Type**> getTypeReferences() override;
 
-    protected:
-        Type* returnType;
-        std::vector<Type*> argTypes;
-        std::vector<GenericType*> genericTypes;
+      string& getClassName() override {
+         return className;
+      }
 
-        bool isLambda_;
-    };
+      string toString() override;
+      llvm::Type* _getLlvmType() override;
+
+      bool implicitlyCastableTo(Type*) override;
+
+      Type* deepCopy() override;
+
+      static inline bool classof(FunctionType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::FunctionTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
+
+      typedef std::unique_ptr<FunctionType> UniquePtr;
+      typedef std::shared_ptr<FunctionType> SharedPtr;
+
+   protected:
+      Type* returnType;
+      std::vector<Type*> argTypes;
+      std::vector<ObjectType*> genericTypes;
+      Function* declaredFunc;
+
+      std::shared_ptr<TypeRef> rawReturnType;
+      std::vector<pair<string, std::shared_ptr<TypeRef>>> rawArgTypes;
+
+      bool isLambda_;
+   };
 
 } // namespace cdot
 

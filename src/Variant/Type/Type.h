@@ -12,226 +12,412 @@
 
 using std::string;
 using std::unordered_map;
+using std::pair;
 
-class Variant;
+class Expression;
+class TypeCheckVisitor;
+class CodeGenVisitor;
 
 namespace cdot {
 
-    class PointerType;
+   class Variant;
+   class PointerType;
+   class ObjectType;
 
-    enum class TypeID {
-        AutoTypeID,
-        VoidTypeID,
-        PrimitiveTypeID,
-        FunctionTypeID,
-        PointerTypeID,
-        ObjectTypeID,
-        GenericTypeID,
-        CollectionTypeID,
-        IntegerTypeID,
-        FPTypeID
-    };
+   namespace cl {
+      struct EnumCase;
+   }
 
-    class Type {
-    public:
+   enum class TypeID {
+      AutoTypeID,
+      VoidTypeID,
+      PrimitiveTypeID,
+      FunctionTypeID,
+      PointerTypeID,
+      ObjectTypeID,
+      EnumTypeID,
+      CollectionTypeID,
+      IntegerTypeID,
+      FPTypeID,
+      TupleTypeID
+   };
 
-        virtual ~Type() = default;
+   using cdot::cl::EnumCase;
 
-        virtual llvm::Type* getLlvmType() = 0;
-        virtual llvm::Type* getAllocaType() {
-            return getLlvmType();
-        }
+   class Type {
+   public:
 
-        inline bool isReference() {
-            return isReference_;
-        }
+      static llvm::IRBuilder<>* Builder;
+      static inline bool classof(Type const* T) { return true; }
+      static bool GenericTypesCompatible(Type* given, Type* needed);
 
-        inline void isReference(bool ref) {
-            isReference_ = ref;
-            lvalue = ref;
-        }
+      static void CopyProperties(Type *src, Type *dst);
 
-        inline bool isNull() {
-            return isNull_;
-        }
+      typedef std::unique_ptr<Type> UniquePtr;
+      typedef std::shared_ptr<Type> SharedPtr;
 
-        inline void isNull(bool null_) {
-            isNull_ = null_;
-        }
+      virtual ~Type() = default;
 
-        inline bool isNullable() {
-            return isNullable_;
-        }
+      virtual llvm::Type* getLlvmType() {
+         auto ty = _getLlvmType();
+         if (lvalue) {
+            return ty->getPointerTo();
+         }
 
-        inline void isNullable(bool nullable) {
-            isNullable_ = nullable;
-        }
+         return ty;
+      }
 
-        inline bool isConst() {
-            return isConst_;
-        }
+      inline bool isNull() {
+         return isNull_;
+      }
 
-        inline void isConst(bool const_) {
-            isConst_ = const_;
-        }
+      inline void isNull(bool null_) {
+         isNull_ = null_;
+      }
 
-        virtual inline bool isLvalue() {
-            return lvalue;
-        }
+      inline bool isNullable() {
+         return isNullable_;
+      }
 
-        virtual inline void isLvalue(bool lval) {
-            lvalue = lval;
-        }
+      inline void isNullable(bool nullable) {
+         isNullable_ = nullable;
+      }
 
-        virtual inline bool isCStyleArray() {
-            return false;
-        }
+      inline bool isConst() {
+         return isConst_;
+      }
 
-        virtual inline void isCStyleArray(bool) {
-            assert(false && "Should only be called on pointer types");
-        }
+      inline void isConst(bool const_) {
+         isConst_ = const_;
+      }
 
-        inline bool isInferred() {
-            return isInferred_;
-        }
+      virtual inline bool isLvalue() {
+         return lvalue;
+      }
 
-        inline bool isVararg() {
-            return vararg;
-        }
+      virtual inline void isLvalue(bool lval) {
+         lvalue = lval;
+      }
 
-        inline void isVararg(bool va) {
-            vararg = va;
-        }
+      virtual bool needsLvalueToRvalueConv() {
+         return lvalue && !isStruct() && !cstyleArray && !carrayElement ;
+      }
 
-        inline bool isCStyleVararg() {
-            return cstyleVararg;
-        }
+      inline bool isInferred() {
+         return isInferred_;
+      }
 
-        inline void isCStyleVararg(bool va) {
-            cstyleVararg = va;
-            vararg = va;
-        }
+      inline bool isVararg() {
+         return vararg;
+      }
 
-        inline virtual bool isObject() {
-            return false;
-        }
+      inline void isVararg(bool va) {
+         vararg = va;
+      }
 
-        inline virtual bool isStruct() {
-            return false;
-        }
+      inline bool isCStyleVararg() {
+         return cstyleVararg;
+      }
 
-        inline virtual unordered_map<string, Type*>& getConcreteGenericTypes() {
-            assert(false && "Call isObject first");
-        }
+      inline void isCStyleVararg(bool va) {
+         cstyleVararg = va;
+         vararg = va;
+      }
 
-        inline virtual string& getClassName() {
-            return className;
-        }
+      inline virtual unordered_map<string, Type*>& getConcreteGenericTypes() {
+         assert(false && "Call isObject first");
+      }
 
-        virtual inline bool isGeneric() {
-            return false;
-        }
+      inline virtual string& getClassName() {
+         return className;
+      }
 
-        virtual PointerType* getPointerTo();
+      virtual inline bool isGeneric() {
+         return false;
+      }
 
-        virtual Type& operator=(const Type& other) = default;
-        virtual std::vector<Type*> getContainedTypes(bool includeSelf = false);
-        virtual std::vector<Type**> getTypeReferences();
+      virtual void isGeneric(bool gen) {}
 
-        static void resolveGeneric(Type**, unordered_map<string, Type*>);
-        static void resolveUnqualified(Type*);
+      virtual Type* getCovariance() {
+         return nullptr;
+      }
 
-        virtual bool operator==(Type*& other);
-        virtual inline bool operator!=(Type*& other) {
-            return !operator==(other);
-        }
+      virtual Type* getContravariance() {
+         return nullptr;
+      }
 
-        virtual string toString();
+      virtual void setCovariance(Type* cov) {}
+      virtual void setContravariance(Type* con) {}
 
-        virtual bool implicitlyCastableTo(Type*) {
-            return false;
-        }
+      virtual string& getGenericClassName() {
+         return className;
+      }
 
-        virtual bool explicitlyCastableTo(Type*) {
-            return false;
-        }
+      virtual Type*& getPointeeType() {
+         llvm_unreachable("Call isPointerTy() first");
+      }
 
-        virtual inline Type* toRvalue() {
-            return this;
-        }
+      virtual void setGenericClassName(string name) {}
 
-        virtual inline bool hasDefaultArgVal() {
-            return hasDefaultArg;
-        }
+      virtual bool isPointerToStruct() {
+         return false;
+      }
 
-        virtual inline void hasDefaultArgVal(bool defVal) {
-            hasDefaultArg = defVal;
-        }
+      virtual PointerType* getPointerTo();
 
-        virtual inline bool hasDefaultValue() {
-            return false;
-        }
+      virtual Type& operator=(const Type& other) = default;
+      virtual std::vector<Type*> getContainedTypes(bool includeSelf = false);
+      virtual std::vector<Type**> getTypeReferences();
 
-        virtual Type* deepCopy();
+      static void resolveGeneric(Type**, unordered_map<string, Type*>);
+      static void resolveUnqualified(Type*);
+      static unordered_map<string, Type*> resolveUnqualified(std::vector<Type*>&, std::vector<ObjectType*>&);
 
-        virtual llvm::Value* getDefaultVal() {
-            return nullptr;
-        }
+      virtual bool operator==(Type*& other);
+      virtual inline bool operator!=(Type*& other) {
+         return !operator==(other);
+      }
 
-        virtual llvm::Constant* getConstantVal(Variant&) {
-            assert(false && "Can't emit constant val for type");
-        }
+      virtual string toString() = 0;
 
-        virtual short getAlignment();
+      virtual bool implicitlyCastableTo(Type*) {
+         return false;
+      }
 
-        virtual llvm::Value* castTo(llvm::Value*, Type*) {
-            assert(false && "can't be casted");
-        }
+      virtual bool explicitlyCastableTo(Type*) {
+         return false;
+      }
 
-        virtual inline bool isUnsafePointer() {
-            return false;
-        }
+      virtual inline Type* toRvalue() {
+         lvalue = false;
+         return this;
+      }
 
-        virtual inline TypeID getTypeID() const {
-            return id;
-        }
+      virtual inline bool hasDefaultArgVal() {
+         return hasDefaultArg;
+      }
 
-        virtual bool isBoxedEquivOf(Type*&) {
-            return false;
-        }
+      virtual inline void hasDefaultArgVal(bool defVal) {
+         hasDefaultArg = defVal;
+      }
 
-        static llvm::IRBuilder<>* Builder;
+      virtual inline bool hasDefaultValue() {
+         return false;
+      }
 
-        static inline bool classof(Type const* T) { return true; }
+      virtual Type* deepCopy();
 
-    protected:
+      virtual llvm::Value* getDefaultVal() {
+         return nullptr;
+      }
 
-        TypeID id;
-        bool isReference_ = false;
-        bool isNull_ = false;
-        bool isNullable_ = false;
-        bool isInferred_ = false;
-        bool isConst_ = false;
-        bool lvalue = false;
+      virtual llvm::Constant* getConstantVal(Variant&) {
+         llvm_unreachable("Can't emit constant val for type");
+      }
 
-        string className = "";
+      virtual short getAlignment();
+      virtual size_t getSize() {
+         return getAlignment();
+      }
 
-        bool hasDefaultArg = false;
+      virtual llvm::Value* castTo(llvm::Value*, Type*) {
+         llvm_unreachable("can't be casted");
+      }
 
-        bool vararg = false;
-        bool cstyleVararg = false;
-    };
+      virtual inline bool isUnsafePointer() {
+         return false;
+      }
 
-    template <class T>
-    bool isa(const Type* t) {
-        return T::classof(t);
-    }
+      virtual inline TypeID getTypeID() const {
+         return id;
+      }
 
-    template<class T>
-    T* cast(Type* t) {
-        assert(T::classof(t) && "Check isa<> before casting");
-        return static_cast<T*>(t);
-    }
+      virtual bool isBoxedEquivOf(Type*&) {
+         return false;
+      }
+
+      virtual bool isCStyleArray() {
+         return cstyleArray;
+      }
+
+      virtual void isCStyleArray(bool cstyle) {
+         cstyleArray = cstyle;
+      }
+
+      virtual void setLengthExpr(std::shared_ptr<Expression> expr) {
+         lengthExpr = expr;
+      }
+
+      std::shared_ptr<Expression>& getLengthExpr() {
+         return lengthExpr;
+      }
+
+      virtual void setLength(long len) {
+         length = len;
+      }
+
+      virtual long getLength() {
+         return length;
+      }
+
+      virtual bool isPointerTy() {
+         return false;
+      }
+
+      virtual bool isIntegerTy() {
+         return false;
+      }
+
+      virtual bool isInt64Ty(bool isUnsigned = false) {
+         return false;
+      }
+
+      virtual bool isInt8Ty(bool isUnsigned = false) {
+         return false;
+      }
+
+      virtual bool isInt1Ty(bool isUnsigned = false) {
+         return false;
+      }
+
+      virtual bool isIntNTy(unsigned n, bool isUnsigned = false) {
+         return false;
+      }
+
+      virtual bool isFloatTy() {
+         return false;
+      }
+
+      virtual bool isDoubleTy() {
+         return false;
+      }
+
+      virtual bool isFPType() {
+         return false;
+      }
+
+      virtual bool isObject() {
+         return false;
+      }
+
+      virtual bool isProtocol() {
+         return false;
+      }
+
+      virtual bool isStruct() {
+         return false;
+      }
+
+      virtual bool isEnum() {
+         return false;
+      }
+
+      virtual void isEnum(bool) {
+
+      }
+
+      virtual void setKnownEnumCase(EnumCase *eCase, std::vector<pair<string, std::shared_ptr<Expression>>>
+         associatedTypes = {}, std::vector<Type*> argTypes = {}) {
+
+      }
+
+      virtual EnumCase* getKnownEnumCase() {
+         llvm_unreachable("Call hasKnownEnumCase first!");
+      }
+
+      virtual std::vector<pair<string, std::shared_ptr<Expression>>>& getAssociatedTypes() {
+         llvm_unreachable("Call hasKnownEnumCase first!");
+      }
+
+      virtual std::vector<Type*>& getKnownEnumCaseTypes() {
+         llvm_unreachable("Call hasKnownEnumCase first!");
+      }
+
+      virtual bool hasKnownEnumCase() {
+         return false;
+      }
+
+      virtual bool isOptionTy() {
+         return false;
+      }
+
+      virtual bool isOptionOf(string&) {
+         return false;
+      }
+
+      virtual bool isFunctionTy() {
+         return false;
+      }
+
+      virtual bool isTupleTy() {
+         return false;
+      }
+
+      virtual void isCarrayElement(bool el) {
+         carrayElement = el;
+      }
+
+      virtual bool isCarrayElement() {
+         return carrayElement;
+      }
+
+      virtual void hasConstantSize(bool constSize) {
+         constantSize = constSize;
+      }
+
+      virtual bool hasConstantSize() {
+         return constantSize;
+      }
+
+      virtual void visitContained(TypeCheckVisitor& t) {}
+      virtual Type* visitLengthExpr(TypeCheckVisitor* v);
+      virtual llvm::Value* visitLengthExpr(CodeGenVisitor* v);
+
+      Type* getLengthExprType() {
+         return lengthExprType;
+      }
+
+      llvm::Value* getLengthExprVal() {
+         return lengthExprValue;
+      }
+
+   protected:
+      TypeID id;
+
+      bool isNull_ = false;
+      bool isNullable_ = false;
+      bool isInferred_ = false;
+      bool isConst_ = false;
+      bool lvalue = false;
+
+      string className = "";
+
+      bool hasDefaultArg = false;
+
+      bool vararg = false;
+      bool cstyleVararg = false;
+      bool cstyleArray = false;
+      bool carrayElement = false;
+
+      std::shared_ptr<Expression> lengthExpr = nullptr;
+      Type* lengthExprType = nullptr;
+      llvm::Value* lengthExprValue = nullptr;
+      bool constantSize = false;
+      long length = -1;
+
+      virtual llvm::Type* _getLlvmType() = 0;
+   };
+
+   template <class T>
+   bool isa(const Type* t) {
+      return t == nullptr ? false : T::classof(t);
+   }
+
+   template<class T>
+   T* cast(Type* t) {
+      assert(T::classof(t) && "Check isa<> before casting");
+      return static_cast<T*>(t);
+   }
 
 } // namespace cdot
 

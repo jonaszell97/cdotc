@@ -10,33 +10,38 @@
 
 namespace cdot {
 
-    class AutoType : public Type {
-    public:
-        explicit AutoType();
+   class AutoType : public Type {
+   public:
+      explicit AutoType();
 
-        string toString() override;
-        llvm::Type* getLlvmType() override;
+      string toString() override;
+      llvm::Type* _getLlvmType() override;
 
-        bool implicitlyCastableTo(Type*) override;
+      Type* deepCopy() override;
 
-        llvm::Value* getDefaultVal() override;
-        llvm::Value* castTo(llvm::Value*, Type*) override;
+      bool implicitlyCastableTo(Type*) override;
 
-        bool operator==(Type*& other) override;
-        inline bool operator!=(Type*& other) override {
-            return !operator==(other);
-        }
+      llvm::Value* getDefaultVal() override;
+      llvm::Value* castTo(llvm::Value*, Type*) override;
 
-        static inline bool classof(AutoType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::AutoTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
-    };
+      bool operator==(Type*& other) override;
+      inline bool operator!=(Type*& other) override {
+         return !operator==(other);
+      }
+
+      static inline bool classof(AutoType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::AutoTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
+
+      typedef std::unique_ptr<AutoType> UniquePtr;
+      typedef std::shared_ptr<AutoType> SharedPtr;
+   };
 
 } // namespace cdot
 

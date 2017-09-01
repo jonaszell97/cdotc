@@ -8,37 +8,59 @@
 #include "LabelStmt.h"
 class Expression;
 
+namespace cdot {
+   namespace cl {
+      struct EnumCase;
+   }
+}
+
 class CaseStmt : public LabelStmt {
 public:
-    explicit CaseStmt(std::shared_ptr<Expression>);
-    CaseStmt();
+   explicit CaseStmt(std::shared_ptr<Expression>);
+   CaseStmt();
+   ~CaseStmt() override;
 
-    typedef std::shared_ptr<CaseStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int depth) override;
+   void setBody(Statement::SharedPtr stmt) {
+      body = stmt;
+   }
 
-    NodeType get_type() override {
-        return NodeType::CASE_STMT;
-    }
+   typedef std::shared_ptr<CaseStmt> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int depth) override;
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   NodeType get_type() override {
+      return NodeType::CASE_STMT;
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    bool isDefault = false;
-    std::shared_ptr<Expression> caseVal;
+   bool isDefault = false;
+   std::shared_ptr<Expression> caseVal;
+   std::shared_ptr<Statement> body;
+   Type *caseType;
 
-    // codegen
-    bool fallthrough = false;
+   // codegen
+   bool fallthrough = false;
+   bool isEnumLetCase = false;
+   bool isEnumVarCase = false;
+   bool needsGenericCast = false;
+   Type* genericOriginTy = nullptr;
+   Type* genericDestTy = nullptr;
+
+   cdot::cl::EnumCase* enumCaseVal;
+   std::vector<pair<string, Type*>> letIdentifiers;
+   std::vector<string> letBindings;
 };
 
 

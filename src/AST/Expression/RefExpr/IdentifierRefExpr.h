@@ -11,37 +11,55 @@ class MemberRefExpr;
 
 class IdentifierRefExpr : public Expression {
 public:
-    explicit IdentifierRefExpr(string);
+   explicit IdentifierRefExpr(string);
 
-    typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
+   void isLetExpr(bool letExpr) {
+      isLetExpr_ = letExpr;
+   }
 
-    void __dump(int) override ;
+   void isVarExpr(bool varExpr) {
+      isVarExpr_ = varExpr;
+   }
 
-    NodeType get_type() override {
-        return NodeType::IDENTIFIER_EXPR;
-    }
+   bool isUnderscore() override {
+      return ident == "_";
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   void __dump(int) override ;
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   NodeType get_type() override {
+      return NodeType::IDENTIFIER_EXPR;
+   }
+
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
+
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    // codegen
-    bool isNonMutableArg = false;
+   // codegen
+   bool isNonMutableArg = false;
 
-    bool isCapturedVar = false;
-    bool isNamespace = false;
-    bool isSuper = false;
-    string superClassName;
+   bool isCapturedVar = false;
+   Type* capturedType; // unowned
+
+   bool isLetExpr_ = false;
+   bool isVarExpr_ = false;
+
+   bool isNamespace = false;
+   bool isSuper = false;
+   bool isFunction = false;
+   string superClassName;
 };
 
 

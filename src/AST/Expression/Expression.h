@@ -10,88 +10,102 @@
 
 class Expression : public Statement {
 public:
-    typedef std::shared_ptr<Expression> SharedPtr;
-    typedef std::unique_ptr<Expression> UniquePtr;
+   typedef std::shared_ptr<Expression> SharedPtr;
+   typedef std::unique_ptr<Expression> UniquePtr;
 
-    virtual inline void returnLvalue(bool lval) {
-        lvalue = lval;
-    }
+   inline void setParent(AstNode* p) {
+      parent = p;
+   }
 
-    inline void setParent(AstNode* p) {
-        parent = p;
-    }
+   virtual inline void setMemberExpr(std::shared_ptr<Expression> ref_expr) {
+      if (ref_expr == nullptr) {
+        return;
+      }
+      
+      if (memberExpr == nullptr) {
+         memberExpr = ref_expr;
+         children.push_back(&memberExpr);
+         memberExpr->parent = this;
+         memberExpr->parentExpr = this;
+      }
+      else {
+         memberExpr->setMemberExpr(ref_expr);
+      }
+   }
 
-    virtual inline void setMemberExpr(std::shared_ptr<Expression> ref_expr) {
-        memberExpr = ref_expr;
-        if (memberExpr != nullptr) {
-            memberExpr->parentExpr = this;
-            memberExpr->lvalue = true;
-            children.push_back(&memberExpr);
-            memberExpr->parent = this;
-        }
-    }
+   virtual inline void setGlobalVar(llvm::GlobalVariable* glob) {
+      globalVar = glob;
+      if (memberExpr != nullptr) {
+         memberExpr->setGlobalVar(glob);
+      }
 
-    virtual inline void setGlobalVar(llvm::GlobalVariable* glob) {
-        globalVar = glob;
-        if (memberExpr != nullptr) {
-            memberExpr->setGlobalVar(glob);
-        }
+      isGlobal(true);
+      heapAllocate();
+   }
 
-        isGlobal(true);
-        heapAllocate();
-    }
+   inline void isGlobal(bool gl) {
+      isGlobal_ = gl;
+      if (memberExpr != nullptr) {
+         memberExpr->isGlobal(gl);
+      }
+   }
 
-    inline void isGlobal(bool gl) {
-        isGlobal_ = gl;
-        if (memberExpr != nullptr) {
-            memberExpr->isGlobal(gl);
-        }
-    }
+   virtual void isLhsOfAssigment() {
+      isLhsOfAssigment_ = true;
+      if (memberExpr != nullptr) {
+         memberExpr->isLhsOfAssigment();
+      }
+   }
 
-    inline void isLhsOfAssigment() {
-        isLhsOfAssigment_ = true;
-        if (memberExpr != nullptr) {
-            memberExpr->isLhsOfAssigment();
-        }
-    }
+   void isEnumCase_(bool b) {
+      isEnumCase = b;
+   }
 
-    void isHiddenReturnValue() override;
+   bool needsContextualInformation() override {
+      return isEnumCase;
+   }
 
-    NodeType get_type() override {
-        return NodeType::EXPRESSION;
-    }
+   void isHiddenReturnValue() override;
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   NodeType get_type() override {
+      return NodeType::EXPRESSION;
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr memberExpr;
-    Expression* parentExpr = nullptr;
-    bool lvalue = false;
-    string ident;
+   Expression::SharedPtr memberExpr;
+   Expression* parentExpr = nullptr;
+   bool lvalue = false;
+   string ident;
 
-    Type* castFrom = nullptr;
-    Type* needsCastTo = nullptr;
+   bool needsCast = false;
+   Type* castFrom = nullptr;
+   Type* castTo = nullptr;
+   bool castHandled = false;
 
-    bool lvalueCast = false;
-    bool needsLvalueToRvalueConversion = false;
-    bool needsByValPass = false;
+   bool lvalueCast = false;
+   bool needsLvalueToRvalueConversion = false;
+   bool needsByValPass = false;
 
-    bool isLhsOfAssigment_ = false;
-    bool isSetterCall = false;
-    string setterName;
+   bool isLhsOfAssigment_ = false;
+   bool isSetterCall = false;
+   string setterName;
 
-    // codegen
-    llvm::GlobalVariable* globalVar = nullptr;
+   // codegen
+   llvm::GlobalVariable* globalVar = nullptr;
+   bool isEnumCase = false;
+   long caseVal;
 };
 
 

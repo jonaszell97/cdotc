@@ -27,340 +27,389 @@ using std::vector;
 namespace cdot {
 namespace cl {
 
-    struct Field {
-        Field(string name, Type* type, AccessModifier access_modifier, Expression::SharedPtr);
-        typedef std::unique_ptr<Field> UniquePtr;
-        typedef std::shared_ptr<Field> SharedPtr;
+   struct Field {
+      Field(string name, Type* type, AccessModifier access_modifier, Expression::SharedPtr, bool isConst, FieldDecl*);
+      typedef std::unique_ptr<Field> UniquePtr;
+      typedef std::shared_ptr<Field> SharedPtr;
 
-        string fieldName;
-        string mangledName;
-        Type* fieldType;
-        AccessModifier  accessModifier;
-        Expression::SharedPtr defaultVal;
+      string fieldName;
+      string mangledName;
+      Type* fieldType;
+      AccessModifier  accessModifier;
+      Expression::SharedPtr defaultVal;
+      bool isConst = false;
 
-        bool hasGetter = false;
-        bool hasSetter = false;
-        string getterName;
-        string setterName;
+      bool hasGetter = false;
+      bool hasSetter = false;
+      string getterName;
+      string setterName;
 
-        bool isInheritedField = false;
+      bool isInheritedField = false;
 
-        llvm::Type* llvmType = nullptr;
-    };
+      FieldDecl* declaration;
+      llvm::Type* llvmType = nullptr;
+   };
 
-    struct Method {
-        Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<string>,
-            std::vector<Type*>, std::vector<std::shared_ptr<Expression>>, std::vector<GenericType*>& generics, bool);
+   struct Method {
+      Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<string>,
+         std::vector<Type*>, std::vector<std::shared_ptr<Expression>>, std::vector<ObjectType*>& generics, bool,
+         MethodDecl*);
 
-        Method(string name, Type* ret_type, std::vector<Type*>, std::vector<GenericType*>& generics);
+      Method(string name, Type* ret_type, std::vector<Type*>, std::vector<ObjectType*>& generics, MethodDecl*);
 
-        typedef std::unique_ptr<Method> UniquePtr;
-        typedef std::shared_ptr<Method> SharedPtr;
+      typedef std::unique_ptr<Method> UniquePtr;
+      typedef std::shared_ptr<Method> SharedPtr;
 
-        string methodName;
-        string mangledName;
-        Type* returnType;
+      string methodName;
+      string mangledName;
+      Type* returnType;
 
-        std::vector<string> argumentNames;
-        std::vector<Type*> argumentTypes;
-        std::vector<std::shared_ptr<Expression>> argumentDefaults;
-        AccessModifier  accessModifier;
-        std::vector<GenericType*> generics = {};
+      std::vector<string> argumentNames;
+      std::vector<Type*> argumentTypes;
+      std::vector<std::shared_ptr<Expression>> argumentDefaults;
+      AccessModifier  accessModifier;
+      std::vector<ObjectType*> generics = {};
 
-        bool isStatic = false;
-        bool isProtocolMethod = false;
-        string protocolName;
+      bool isStatic = false;
+      bool isProtocolMethod = false;
+      string protocolName;
 
-        llvm::Function* llvmFunc;
-        bool hasHiddenParam = false;
-    };
+      MethodDecl* declaration;
+      llvm::Function* llvmFunc;
+      bool hasHiddenParam = false;
+   };
 
-    struct MethodResult {
-        CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
-        Method* method = nullptr;
+   struct MethodResult {
+      CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
+      Method* method = nullptr;
 
-        std::unordered_map<size_t, Type*> neededCasts;
-    };
+      std::unordered_map<size_t, pair<Type*, Type*>> neededCasts;
+      string expectedType;
+      string foundType;
+      size_t incompArg = 0;
+   };
 
-    class Class {
-    public:
-        Class(string&, ObjectType*, std::vector<ObjectType*>&, std::vector<GenericType*>&, ClassDecl*, bool = false);
-        Class(string &, std::vector<ObjectType *> &, std::vector<GenericType *> &, bool, ClassDecl *);
+   class Class {
+   public:
+      Class(string&, ObjectType*, std::vector<ObjectType*>&, std::vector<ObjectType*>&, ClassDecl*, bool = false);
+      Class(string &, std::vector<ObjectType *> &, std::vector<ObjectType *> &, bool, ClassDecl *);
 
+      Field* declareField(
+         string name,
+         Type *type,
+         AccessModifier access,
+         Expression::SharedPtr def_val,
+         bool isConst,
+         FieldDecl* declaration
+      );
 
+      Method* declareMethod(
+         string name,
+         Type *ret_type,
+         AccessModifier access,
+         std::vector<string> arg_names,
+         std::vector<Type *> arg_types,
+         std::vector<Expression::SharedPtr> arg_defaults,
+         std::vector<ObjectType *> generics,
+         bool isStatic,
+         MethodDecl* declaration
+      );
 
-        Field* declareField(
-            string name,
-            Type *type,
-            AccessModifier access,
-            Expression::SharedPtr def_val
-        );
+      void finalize();
 
-        Method* declareMethod(
-            string name,
-            Type *ret_type,
-            AccessModifier access,
-            std::vector<string> arg_names,
-            std::vector<Type *> arg_types,
-            std::vector<Expression::SharedPtr> arg_defaults,
-            std::vector<GenericType *> generics,
-            bool isStatic
-        );
+      MethodResult hasMethod(
+         string method_name,
+         std::vector<Type *> args,
+         std::vector<Type *> &concrete_generics,
+         bool check_parent = true,
+         bool checkProtocols = true,
+         bool strict = false,
+         bool swap = false
+      );
 
-        void finalize();
+      MethodResult hasMethod(
+         string method_name,
+         std::vector<Type *> args,
+         std::unordered_map<string, Type*> &concrete_generics,
+         std::vector<Type *> methodGenerics = {},
+         bool check_parent = true,
+         bool checkProtocols = true,
+         bool strict = false,
+         bool swap = false
+      );
 
-        MethodResult hasMethod(
-            string method_name,
-            std::vector<Type *> args,
-            std::vector<Type *> &concrete_generics,
-            bool check_parent = true,
-            bool checkProtocols = true,
-            bool strict = false
-        );
+      MethodResult hasMethod(
+         string method_name,
+         std::vector<Type *> args,
+         bool check_parent = true,
+         bool checkProtocols = true,
+         bool strict = false,
+         bool swap = false
+      );
 
-        MethodResult hasMethod(
-            string method_name,
-            std::vector<Type *> args,
-            std::unordered_map<string, Type*> &concrete_generics,
-            bool check_parent = true,
-            bool checkProtocols = true,
-            bool strict = false
-        );
+      Method* declareMemberwiseInitializer();
 
-        MethodResult hasMethod(
-            string method_name,
-            std::vector<Type *> args,
-            bool check_parent = true,
-            bool checkProtocols = true,
-            bool strict = false
-        );
+      MethodResult ancestorHasMethod(string &name, std::vector<Type *> &args);
 
-        Method* declareMemberwiseInitializer();
+      void addConformity(ObjectType* proto) {
+         conformsTo_.push_back(proto);
+      }
 
-        MethodResult ancestorHasMethod(string &name, std::vector<Type *> &args);
+      bool hasField(string &field_name);
 
-        void addConformity(ObjectType* proto) {
-            conformsTo_.push_back(proto);
-        }
+      Method* getMethod(string method_name);
+      Field* getField(string &field_name);
 
-        bool hasField(string &field_name);
+      unordered_map<string, Method*>& getMethods() {
+         return mangledMethods;
+      };
 
-        Method* getMethod(string method_name);
-        Field* getField(string &field_name);
+      bool isAbstract() {
+         return is_abstract;
+      }
 
-        inline unordered_map<string, Method*>& getMethods() {
-            return mangledMethods;
-        };
+      bool isProtocol() {
+         return is_protocol;
+      }
 
-        inline bool isAbstract() {
-            return is_abstract;
-        }
+      bool isStruct() {
+         return is_struct;
+      }
 
-        inline bool isProtocol() {
-            return is_protocol;
-        }
+      bool isGeneric() {
+         return !generics.empty();
+      }
 
-        inline bool isStruct() {
-            return is_struct;
-        }
+      virtual bool isEnum() {
+         return false;
+      }
 
-        inline bool isGeneric() {
-            return !generics.empty();
-        }
+      std::vector<ObjectType*>& getGenerics() {
+         return generics;
+      }
 
-        inline std::vector<GenericType*>& getGenerics() {
-            return generics;
-        }
+      ClassDecl* getDeclaration() {
+         return declaration;
+      }
 
-        inline ClassDecl* getDeclaration() {
-            return declaration;
-        }
-
-        void declareMethodAlias(string& name, string& mangledOriginal) {
-            for (const auto& method : methods) {
-                if (method.second->mangledName == mangledOriginal) {
-                    methods.emplace(name, method.second);
-                    break;
-                }
+      void declareMethodAlias(string& name, string& mangledOriginal) {
+         for (const auto& method : methods) {
+            if (method.second->mangledName == mangledOriginal) {
+               methods.emplace(name, method.second);
+               break;
             }
-        }
+         }
+      }
 
-        void defineParentClass();
+      void defineParentClass();
 
-        short getAlignment() {
-            return alignment;
-        }
+      short getAlignment() {
+         return alignment;
+      }
 
-        inline string& getName() {
-            return className;
-        }
+      string& getName() {
+         return className;
+      }
 
-        bool conformsTo(string &name);
+      string& getTypeName() {
+         return typeName;
+      }
 
-        bool protectedPropAccessibleFrom(string &class_context);
-        bool privatePropAccessibleFrom(string &class_context);
-        bool is_base_class_of(string& child);
+      size_t getTypeID() {
+         return typeID;
+      }
 
-        inline Class* get_parent() {
-            return parentClass;
-        }
+      bool conformsTo(string &name);
 
-        void findVirtualMethods();
-        bool is_virtual(Method*);
+      bool protectedPropAccessibleFrom(string &class_context);
+      bool privatePropAccessibleFrom(string &class_context);
+      bool isBaseClassOf(string &child);
 
-        inline void setDefaultConstructor(llvm::Function* constr) {
-            defaultConstructor = constr;
-        }
+      Class* getParent() {
+         return parentClass;
+      }
 
-        inline llvm::Function* getDefaultContructor() {
-            return defaultConstructor;
-        }
+      void findVirtualMethods();
+      bool isVirtual(Method *);
 
-        inline std::vector<pair<string, Field::SharedPtr>>& getFields() {
-            return fields;
-        }
+      void setDefaultConstructor(llvm::Function* constr) {
+         defaultConstructor = constr;
+      }
 
-        inline std::map<string, std::vector<string>>& getInterfMethods() {
-            return protocolMethods;
-        }
+      llvm::Function* getDefaultContructor() {
+         return defaultConstructor;
+      }
 
-        inline size_t getVTableOffset(string& interface_name) {
-            return vtableOffsets[interface_name];
-        }
+      std::vector<pair<string, Field::SharedPtr>>& getFields() {
+         return fields;
+      }
 
-        inline size_t getVTableOffset(const string& interface_name) {
-            return vtableOffsets[interface_name];
-        }
+      std::map<string, std::vector<string>>& getInterfMethods() {
+         return protocolMethods;
+      }
 
-        inline size_t getFieldOffset(string& fieldName) {
-            return fieldOffsets[fieldName];
-        }
+      size_t getVTableOffset(string& interface_name) {
+         return vtableOffsets[interface_name];
+      }
 
-        inline size_t getMethodOffset(string& methodName) {
-            return methodOffsets[methodName];
-        }
+      size_t getVTableOffset(const string& interface_name) {
+         return vtableOffsets[interface_name];
+      }
 
-        inline unsigned int getDepth() {
-            return depth;
-        }
+      size_t getFieldOffset(string& fieldName) {
+         return fieldOffsets[fieldName];
+      }
 
-        inline std::vector<Method*>& getConstructors() {
-            return constructors;
-        }
+      size_t getMethodOffset(string& methodName) {
+         return methodOffsets[methodName];
+      }
 
-        inline std::vector<llvm::Type*>& getMemoryLayout() {
-            return memoryLayout;
-        }
+      unsigned int getDepth() {
+         return depth;
+      }
 
-        inline unordered_map<string, size_t> getFieldOffsets() {
-            return fieldOffsets;
-        }
+      std::vector<Method*>& getConstructors() {
+         return constructors;
+      }
 
-        inline llvm::GlobalVariable* getVtable() {
-            return vtable;
-        }
+      std::vector<llvm::Type*>& getMemoryLayout() {
+         return memoryLayout;
+      }
 
-        inline unordered_map<string, llvm::GlobalVariable*>& getProtocolVtables() {
-            return protocolVtables;
-        }
+      unordered_map<string, size_t>& getFieldOffsets() {
+         return fieldOffsets;
+      }
 
-        llvm::GlobalVariable*& getProtocolVtable(string& protoName) {
-            return protocolVtables[protoName];
-        }
+      llvm::GlobalVariable* getVtable() {
+         return vtable;
+      }
 
-        inline bool isEmpty() {
-            return emptyLayout;
-        }
+      unordered_map<string, llvm::GlobalVariable*>& getProtocolVtables() {
+         return protocolVtables;
+      }
 
-        inline size_t getBaseClassOffset(string& className) {
-            return baseClassOffsets[className];
-        }
+      llvm::GlobalVariable*& getProtocolVtable(string& protoName) {
+         return protocolVtables[protoName];
+      }
 
-        inline void defineConcreteGeneric(string genericClassName, Type* type) {
-            concreteGenerics.emplace(genericClassName, type);
-        }
+      bool isEmpty() {
+         return emptyLayout;
+      }
 
-        inline unordered_map<string, Type*> getConcreteGenerics() {
-            return concreteGenerics;
-        }
+      size_t getBaseClassOffset(string& className) {
+         return baseClassOffsets[className];
+      }
 
-        inline Method*& getMemberwiseInitializer() {
-            return memberwiseInitializer;
-        }
+      void defineConcreteGeneric(string genericClassName, Type* type) {
+         concreteGenerics.emplace(genericClassName, type);
+      }
 
-        inline string& getOriginalProtocol(string& methodName) {
-            if (inheritedProtocolMethods.find(methodName) != inheritedProtocolMethods.end()) {
-                return SymbolTable::getClass(inheritedProtocolMethods[methodName])
-                    ->getOriginalProtocol(methodName);
-            }
+      unordered_map<string, Type*> getConcreteGenerics() {
+         return concreteGenerics;
+      }
 
-            return className;
-        }
+      Method*& getMemberwiseInitializer() {
+         return memberwiseInitializer;
+      }
 
-        std::vector<ObjectType*>& getConformedToProtocols() {
-            return conformsTo_;
-        }
+      string& getOriginalProtocol(string& methodName) {
+         if (inheritedProtocolMethods.find(methodName) != inheritedProtocolMethods.end()) {
+            return SymbolTable::getClass(inheritedProtocolMethods[methodName])
+               ->getOriginalProtocol(methodName);
+         }
 
-        void generateMemoryLayout(llvm::IRBuilder<>& Builder);
-        void generateProtocolMemoryLayout(llvm::IRBuilder<>& Builder);
-        void generateVTables(llvm::IRBuilder<> &Builder, llvm::Module &Module);
+         return className;
+      }
 
-        ObjectType* getType();
+      size_t getOccupiedBytes(bool packed = true) {
+         if (packed) {
+            return occupiedBytes;
+         }
 
-        typedef std::unique_ptr<Class> UniquePtr;
+         return (short)(occupiedBytes + (8 - occupiedBytes % 8));
+      }
 
-    protected:
-        unsigned int depth = 0;
+      std::vector<ObjectType*>& getConformedToProtocols() {
+         return conformsTo_;
+      }
 
-        string className;
+      virtual llvm::Constant*  generateTypeInfo(llvm::IRBuilder<>& Builder);
+      virtual void generateMemoryLayout(llvm::IRBuilder<>& Builder);
+      virtual void generateProtocolMemoryLayout(llvm::IRBuilder<>& Builder);
+      virtual void generateVTables(llvm::IRBuilder<> &Builder, llvm::Module &Module);
 
-        ObjectType* extends = nullptr;
-        Class* parentClass = nullptr;
-        std::vector<Class*> extendedBy;
-        unordered_map<string, size_t> baseClassOffsets;
+      void needsTypeInfoGen(bool gen) {
+         needsTypeInfo = gen;
+         if (parentClass != nullptr) {
+            parentClass->needsTypeInfoGen(gen);
+         }
+      }
 
-        ClassDecl* declaration;
+      static llvm::StructType* TypeInfoType;
 
-        std::vector<ObjectType*> conformsTo_;
-        map<string, std::vector<string>> protocolMethods;
+      ObjectType* getType();
 
-        std::vector<pair<string, Field::SharedPtr>> fields;
-        unordered_multimap<string, Method::SharedPtr> methods;
-        std::vector<Method*> constructors;
+      typedef std::unique_ptr<Class> UniquePtr;
 
-        unordered_map<string, string> inheritedProtocolMethods;
+   protected:
+      static size_t lastTypeID;
+      unsigned int depth = 0;
 
-        unordered_map<string, Type*> concreteGenerics;
+      size_t typeID;
+      string className;
+      string typeName;
 
-        Method* memberwiseInitializer = nullptr;
-        llvm::Function* defaultConstructor;
+      ObjectType* extends = nullptr;
+      Class* parentClass = nullptr;
+      std::vector<Class*> extendedBy;
+      unordered_map<string, size_t> baseClassOffsets;
 
-        unordered_map<string, Method*> mangledMethods;
+      ClassDecl* declaration;
 
-        unordered_map<string, size_t> fieldOffsets;
-        unordered_map<string, size_t> methodOffsets;
-        unordered_map<string, size_t> vtableOffsets;
+      std::vector<ObjectType*> conformsTo_;
+      map<string, std::vector<string>> protocolMethods;
 
-        std::vector<pair<string, string>> virtualMethods;
+      std::vector<pair<string, Field::SharedPtr>> fields;
+      unordered_multimap<string, Method::SharedPtr> methods;
+      std::vector<Method*> constructors;
 
-        ObjectType* type;
+      unordered_map<string, string> inheritedProtocolMethods;
 
-        std::vector<GenericType*> generics;
-        bool is_abstract = false;
-        bool is_protocol = false;
-        bool is_struct = false;
+      unordered_map<string, Type*> concreteGenerics;
 
-        bool finalized = false;
+      Method* memberwiseInitializer = nullptr;
+      llvm::Function* defaultConstructor;
 
-        std::vector<llvm::Type*> memoryLayout;
-        bool layoutGenerated = false;
-        bool emptyLayout = false;
+      unordered_map<string, Method*> mangledMethods;
 
-        short alignment = 8;
-        llvm::GlobalVariable* vtable = nullptr;
-        unordered_map<string, llvm::GlobalVariable*> protocolVtables;
+      unordered_map<string, size_t> fieldOffsets;
+      unordered_map<string, size_t> methodOffsets;
+      unordered_map<string, size_t> vtableOffsets;
 
-    };
+      std::vector<pair<string, string>> virtualMethods;
+
+      ObjectType* type;
+
+      std::vector<ObjectType*> generics;
+      bool is_abstract = false;
+      bool is_protocol = false;
+      bool is_struct = false;
+
+      bool finalized = false;
+
+      std::vector<llvm::Type*> memoryLayout;
+      bool layoutGenerated = false;
+      bool emptyLayout = false;
+
+      bool needsTypeInfo;
+
+      size_t occupiedBytes = 0;
+      short alignment = 1;
+      llvm::GlobalVariable* vtable = nullptr;
+      llvm::GlobalVariable* typeInfo = nullptr;
+      unordered_map<string, llvm::GlobalVariable*> protocolVtables;
+
+   };
 
 } // namespace cl
 } // namespace cdot

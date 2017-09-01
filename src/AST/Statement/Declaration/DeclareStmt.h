@@ -20,8 +20,8 @@ enum class DeclarationType {
 class DeclareStmt : public Statement {
 public:
     DeclareStmt(string, std::shared_ptr<TypeRef>, bool);
-    DeclareStmt(string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, std::vector<GenericType*>);
-    DeclareStmt(AccessModifier, string, ObjectType*, std::vector<ObjectType*>, bool, std::vector<GenericType*>);
+    DeclareStmt(string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, std::vector<ObjectType*>);
+    DeclareStmt(AccessModifier, string, ObjectType*, std::vector<ObjectType*>, bool, std::vector<ObjectType*>);
 
     std::vector<AstNode::SharedPtr> get_children() override;
 
@@ -49,7 +49,7 @@ protected:
     string declaredName;
 
     // class declaration
-    std::vector<GenericType*> generics;
+    std::vector<ObjectType*> generics;
     ObjectType* extends;
     std::vector<ObjectType*> conformsTo;
     AccessModifier am;

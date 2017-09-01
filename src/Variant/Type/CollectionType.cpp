@@ -58,7 +58,7 @@ namespace cdot {
         llvm_unreachable("Unknown collection type");
     }
 
-    llvm::Type* CollectionType::getLlvmType() {
+    llvm::Type* CollectionType::_getLlvmType() {
         if (collectionType == CollectionKind::ARRAY) {
             return ObjectType::getStructureType("Array")->getPointerTo();
         }

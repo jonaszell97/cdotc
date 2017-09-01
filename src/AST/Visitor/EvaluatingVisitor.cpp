@@ -408,7 +408,7 @@
 // * @param node
 // * @return
 // */
-//Variant EvaluatingVisitor::visit(LiteralExpr *node) {
+//Variant EvaluatingVisitor::visit(NumericLiteral *node) {
 //    if (node->_member_expr != nullptr) {
 //        current_ref.push_back(std::make_shared<Variant>(node->_value));
 //
@@ -705,7 +705,7 @@
 // * @param node
 // * @return
 // */
-//Variant EvaluatingVisitor::visit(SwitchStmt *node) {
+//Variant EvaluatingVisitor::visit(MatchStmt *node) {
 //    EvaluatingVisitor ev(*this);
 //    ev.context->returnable = context->returnable;
 //    ev.context->breakable = true;

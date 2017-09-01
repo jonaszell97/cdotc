@@ -11,42 +11,40 @@ class Expression;
 
 class ReturnStmt : public Statement {
 public:
-    ReturnStmt();
-    explicit ReturnStmt(std::shared_ptr<Expression>);
+   ReturnStmt();
+   explicit ReturnStmt(std::shared_ptr<Expression>);
 
-    ~ReturnStmt() override {
-//        delete returnType;
-    }
+   ~ReturnStmt() override;
 
-    typedef std::shared_ptr<ReturnStmt> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int depth) override;
+   typedef std::shared_ptr<ReturnStmt> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int depth) override;
 
-    NodeType get_type() override {
-        return NodeType::RETURN_STMT;
-    }
+   NodeType get_type() override {
+      return NodeType::RETURN_STMT;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 protected:
-    std::shared_ptr<Expression> returnValue;
+   std::shared_ptr<Expression> returnValue;
 
-    bool interfaceShift = false;
-    string originTy;
+   bool interfaceShift = false;
+   string originTy;
 
-    bool hiddenParamReturn = false;
+   bool hiddenParamReturn = false;
 
-    // codegen
-    Type* returnType;
+   // codegen
+   Type* returnType;
 };
 
 

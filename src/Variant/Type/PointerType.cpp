@@ -8,110 +8,95 @@
 #include "IntegerType.h"
 #include "ObjectType.h"
 #include "FPType.h"
+#include "VoidType.h"
 
 namespace cdot {
 
-    PointerType::PointerType(Type *pointeeType, Expression::SharedPtr lengthExpr) :
-        pointeeType(pointeeType),
-        lengthExpr(lengthExpr)
-    {
-        id = TypeID::PointerTypeID;
-        lvalue = true;
-        if (lengthExpr) {
-            lengthExpr->setInferredType(IntegerType::get(64));
-        }
-    }
+   PointerType::PointerType(Type *pointeeType) :
+      pointeeType(pointeeType)
+   {
+      id = TypeID::PointerTypeID;
+   }
 
-    PointerType::PointerType(Type *pointeeType, size_t len) :
-        pointeeType(pointeeType),
-        length(len)
-    {
-        id = TypeID::PointerTypeID;
-        lvalue = true;
-    }
+   bool PointerType::operator==(Type *&other) {
+      switch (other->getTypeID()) {
+         case TypeID::PointerTypeID: {
+            auto asPtr = cast<PointerType>(other);
+            return *pointeeType == asPtr->pointeeType && Type::operator==(other);
+         }
+         default:
+            return false;
+      }
+   }
 
-    bool PointerType::operator==(Type *&other) {
-        switch (other->getTypeID()) {
-            case TypeID::PointerTypeID: {
-                auto asPtr = cast<PointerType>(other);
-                return *pointeeType == asPtr->pointeeType && Type::operator==(other);
-            }
-            default:
-                return false;
-        }
-    }
+   bool PointerType::isLvalue() {
+      return lvalue;
+   }
 
-    bool PointerType::isLvalue() {
-        return lvalue;
-    }
+   std::vector<Type*> PointerType::getContainedTypes(bool includeSelf) {
+      if (includeSelf) {
+         return { this, pointeeType };
+      }
 
-    std::vector<Type*> PointerType::getContainedTypes(bool includeSelf) {
-        if (includeSelf) {
-            return { this, pointeeType };
-        }
+      return { pointeeType };
+   }
 
-        return { pointeeType };
-    }
+   std::vector<Type**> PointerType::getTypeReferences() {
+      return { &pointeeType };
+   }
 
-    std::vector<Type**> PointerType::getTypeReferences() {
-        return { &pointeeType };
-    }
+   Type* PointerType::deepCopy() {
+      auto newTy = new PointerType(*this);
+      newTy->pointeeType = pointeeType->deepCopy();
 
-    Type* PointerType::deepCopy() {
-        auto newTy = new PointerType(*this);
+      return newTy;
+   }
 
-        for (auto& ty : newTy->getTypeReferences()) {
-            *ty = (*ty)->deepCopy();
-        }
+   llvm::Value* PointerType::castTo(llvm::Value *val, Type *destTy) {
+      switch (destTy->getTypeID()) {
+         case TypeID::IntegerTypeID:
+            return Builder->CreatePtrToInt(val, destTy->getLlvmType());
+         case TypeID::FPTypeID:
+            return Builder->CreateLoad(Builder->CreateBitCast(val, destTy->getLlvmType()->getPointerTo()));
+         default:
+            return Builder->CreateBitCast(val, destTy->getLlvmType());
+      }
+   }
 
-        return newTy;
-    }
+   bool PointerType::implicitlyCastableTo(Type *other) {
+      if (isa<PointerType>(other)) {
+         return pointeeType->implicitlyCastableTo(cast<PointerType>(other)->getPointeeType());
+      }
+      if (isa<VoidType>(other)) {
+         return true;
+      }
 
-    llvm::Value* PointerType::castTo(llvm::Value *val, Type *destTy) {
-        switch (destTy->getTypeID()) {
-            case TypeID::IntegerTypeID:
-                return Builder->CreatePtrToInt(val, destTy->getLlvmType());
-            case TypeID::FPTypeID:
-                return Builder->CreateLoad(Builder->CreateBitCast(val, destTy->getLlvmType()->getPointerTo()));
-            default:
-                return Builder->CreateBitCast(val, destTy->getLlvmType());
-        }
-    }
+      return false;
+   }
 
-    bool PointerType::implicitlyCastableTo(Type *other) {
-        if (isa<PointerType>(other)) {
-            return pointeeType->implicitlyCastableTo(cast<PointerType>(other)->getPointeeType());
-        }
+   bool PointerType::explicitlyCastableTo(Type *other) {
+      return isa<PointerType>(other) || isa<IntegerType>(other);
+   }
 
-        return false;
-    }
+   Type* PointerType::toRvalue() {
+      return pointeeType;
+   }
 
-    bool PointerType::explicitlyCastableTo(Type *other) {
-        return isa<PointerType>(other) || isa<IntegerType>(other);
-    }
+   llvm::Type* PointerType::_getLlvmType() {
+      return pointeeType->getLlvmType()->getPointerTo();
+   }
 
-    llvm::Type* PointerType::getLlvmType() {
-        return pointeeType->getLlvmType()->getPointerTo();
-    }
+   string PointerType::toString() {
+      string res;
 
-    llvm::Type* PointerType::getAllocaType() {
-        return pointeeType->getAllocaType()->getPointerTo();
-    }
+      if (lvalue) {
+         res = "ref " + pointeeType->toString();
+      }
+      else {
+         res = pointeeType->toString() + "*";
+      }
 
-    string PointerType::toString() {
-        string res;
-        if (isa<ObjectType>(pointeeType)) {
-            res = pointeeType->toString();
-        }
-        else {
-            res = pointeeType->toString() + "*";
-        }
-
-        if (cstyleArray) {
-            res += "[]";
-        }
-
-        return res;
-    }
+      return res;
+   }
 
 } // namespace cdot

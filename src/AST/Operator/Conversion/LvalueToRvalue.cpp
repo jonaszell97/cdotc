@@ -5,11 +5,6 @@
 #include "LvalueToRvalue.h"
 
 
-LvalueToRvalue::LvalueToRvalue()
-{
-
-}
-
 LvalueToRvalue::LvalueToRvalue(Expression::SharedPtr expr) :
     target(expr)
 {

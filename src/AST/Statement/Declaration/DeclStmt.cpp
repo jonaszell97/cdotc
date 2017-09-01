@@ -28,7 +28,7 @@ std::vector<AstNode::SharedPtr> DeclStmt::get_children() {
 void DeclStmt::__dump(int depth) {
     AstNode::__tab(depth);
     std::cout << (is_const ? "Const" : "") << "DeclStmt [" << identifier << ": " +
-        type->getType()->toString() + "]" << std::endl;
+        type->getType(true)->toString() + "]" << std::endl;
 
     if (value) {
         value->__dump(depth + 1);

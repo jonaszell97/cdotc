@@ -8,7 +8,7 @@ using Builtin.Primitive
  */
 @inline(always)
 struct Int with IntegerProtocol {
-    let val: int64
+    var val: int64
 
     /**
      * Default initializer, usually implicitly called by the compiler
@@ -27,36 +27,36 @@ struct Int with IntegerProtocol {
     /**
      * Adds two integer values
      */
-    def infix +(@nocopy e: Int) -> Int {
-        return Int(val + e.val)
+    def infix + (rhs: Int) -> Int {
+        return Int(val + rhs.val)
     }
 
     /**
      * Subtracts two integer values
      */
-    def infix -(@nocopy e: Int) -> Int {
-        return Int(val - e.val)
+    def infix - (rhs: Int) -> Int {
+        return Int(val - rhs.val)
     }
     
     /**
      * Multiplies two integer values
      */
-    def infix * (e: Int) -> Int {
-        return Int(val * e.val)
+    def infix * (rhs: Int) -> Int {
+        return Int(val * rhs.val)
     }
 
     /**
      * Diviedes two integer values
      */
-    def infix / (e: Int) -> Double {
-        return val / e.val
+    def infix / (rhs: Int) -> Double {
+        return val / rhs.val
     }
 
     /**
      * Calculates the remainder of two integers
      */
-    def infix % (e: Int) -> Int {
-        return Int(val % e.val)
+    def infix % (rhs: Int) -> Int {
+        return Int(val % rhs.val)
     }
 
     /**
@@ -78,7 +78,7 @@ struct Int with IntegerProtocol {
      */
     def prefix ++ -> Int {
         ++val
-        return Int(val)
+        return self
     }
 
     /**
@@ -86,67 +86,67 @@ struct Int with IntegerProtocol {
      */
     def prefix -- -> Int {
         --val
-        return Int(val)
+        return self
     }
 
     /**
      * Post-Increment
      */
     def postfix ++ -> Int {
-        let tmp = val
+        let tmp = Int(val)
         ++val
-        return Int(tmp)
+        return tmp
     }
 
     /**
      * Post-Decrement
      */
     def postfix -- -> Int {
-        let tmp = val
+        let tmp = Int(val)
         --val
-        return Int(tmp)
+        return tmp
     }
 
     /**
      * True if and only if both values are equal
      */
-    def infix ==(@nocopy e: Int) -> Bool { 
-        return val == e.val
+    def infix == (rhs: Int) -> Bool { 
+        return val == rhs.val
     }
 
     /**
      * True if and only if both values are not equal
      */
-    def infix !=(@nocopy e: Int) -> Bool {
-        return val != e.val
+    def infix != (rhs: Int) -> Bool {
+        return val != rhs.val
     }
 
     /**
      * @return Bool
      */
-    def infix <(@nocopy e: Int) -> Bool {
-        return val < e.val
+    def infix < (rhs: Int) -> Bool {
+        return val < rhs.val
     }
 
     /**
      * @return Bool
      */
-    def infix <=(@nocopy e: Int) -> Bool {
-        return val <= e.val
+    def infix <= (rhs: Int) -> Bool {
+        return val <= rhs.val
     }
 
     /**
      * @return Bool
      */
-    def infix >(@nocopy e: Int) -> Bool {
-        return val > e.val
+    def infix > (rhs: Int) -> Bool {
+        return val > rhs.val
     }
 
     /**
      * @return Bool
      */
-    def infix >=(@nocopy e: Int) -> Bool {
-        return val >= e.val
+    def infix >= (rhs: Int) -> Bool {
+        return val >= rhs.val
     }
 
     /**
@@ -159,43 +159,43 @@ struct Int with IntegerProtocol {
     /**
      * Arithmetic shift left
      */
-    def infix << (@nocopy e: Int) -> Int {
-        return Int(val << e.val)
+    def infix << (rhs: Int) -> Int {
+        return Int(val << rhs.val)
     }
 
     /**
      * Arithmetic shift right
      */
-    def infix >> (@nocopy e: Int) -> Int {
-        return Int(val >> e.val)
+    def infix >> (rhs: Int) -> Int {
+        return Int(val >> rhs.val)
     }
 
     /**
      * Logical shift right
      */
-    def infix >>> (@nocopy e: Int) -> Int {
-        return Int(val >>> e.val)
+    def infix >>> (rhs: Int) -> Int {
+        return Int(val >>> rhs.val)
     }
 
     /**
      * Bitwise 'and'
      */
-    def infix & (@nocopy e: Int) -> Int {
-        return Int(val & e.val)
+    def infix & (rhs: Int) -> Int {
+        return Int(val & rhs.val)
     }
 
     /**
      * Bitwise 'or'
      */
-    def infix | (@nocopy e: Int) -> Int {
-        return Int(val | e.val)
+    def infix | (rhs: Int) -> Int {
+        return Int(val | rhs.val)
     }
 
     /**
      * Bitwise 'xor'
      */
-    def infix ^ (@nocopy e: Int) -> Int {
-        return Int(val ^ e.val)
+    def infix ^ (rhs: Int) -> Int {
+        return Int(val ^ rhs.val)
     }
 
     /**

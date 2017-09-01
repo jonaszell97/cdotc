@@ -10,44 +10,47 @@
 
 namespace cdot {
 
-    enum class CollectionKind {
-        ARRAY,
-        DICTIONARY
-    };
+   enum class CollectionKind {
+      ARRAY,
+      DICTIONARY
+   };
 
-    class CollectionType : public ObjectType {
-    public:
-        explicit CollectionType(Type*);
-        explicit CollectionType(Type*, Type*);
+   class CollectionType : public ObjectType {
+   public:
+      explicit CollectionType(Type*);
+      explicit CollectionType(Type*, Type*);
 
-        inline CollectionKind getKind() {
-            return collectionType;
-        }
+      inline CollectionKind getKind() {
+         return collectionType;
+      }
 
-        string toString() override;
-        llvm::Type* getLlvmType() override;
+      string toString() override;
+      llvm::Type* _getLlvmType() override;
 
-        bool implicitlyCastableTo(Type*) override;
+      bool implicitlyCastableTo(Type*) override;
 
-        llvm::Value* getDefaultVal() override;
+      llvm::Value* getDefaultVal() override;
 
-        Type* deepCopy() override;
+      Type* deepCopy() override;
 
-        static inline bool classof(CollectionType const*) { return true; }
-        static inline bool classof(ObjectType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::CollectionTypeID:
-                case TypeID::ObjectTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+      static inline bool classof(CollectionType const*) { return true; }
+      static inline bool classof(ObjectType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::CollectionTypeID:
+            case TypeID::ObjectTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
 
-    protected:
-        CollectionKind collectionType;
-    };
+      typedef std::unique_ptr<CollectionType> UniquePtr;
+      typedef std::shared_ptr<CollectionType> SharedPtr;
+
+   protected:
+      CollectionKind collectionType;
+   };
 
 } // namespace cdot
 

@@ -3,95 +3,178 @@
 //
 
 #include "Type.h"
-#include "GenericType.h"
 #include "ObjectType.h"
 #include "../../AST/SymbolTable.h"
 #include "../../AST/Visitor/StaticAnalysis/Class.h"
 
 namespace cdot {
 
-    llvm::IRBuilder<>* Type::Builder = nullptr;
+   llvm::IRBuilder<>* Type::Builder = nullptr;
 
-    std::vector<Type*> Type::getContainedTypes(bool includeSelf) {
-        if (includeSelf) {
-            return {this};
-        }
+   std::vector<Type*> Type::getContainedTypes(bool includeSelf) {
+      if (includeSelf) {
+         return {this};
+      }
 
-        return {};
-    }
+      return {};
+   }
 
-    std::vector<Type**> Type::getTypeReferences() {
-        return {};
-    }
+   std::vector<Type**> Type::getTypeReferences() {
+      return {};
+   }
 
-    PointerType* Type::getPointerTo() {
-        return new PointerType(this);
-    }
+   PointerType* Type::getPointerTo() {
+      return new PointerType(this);
+   }
 
-    void Type::resolveGeneric(Type** ty, unordered_map<string, Type *> concreteGenerics) {
-        for (auto& cont : (*ty)->getTypeReferences()) {
-            resolveGeneric(cont, concreteGenerics);
-        }
+   void Type::resolveGeneric(Type** ty, unordered_map<string, Type *> concreteGenerics) {
+      for (auto& cont : (*ty)->getTypeReferences()) {
+         resolveGeneric(cont, concreteGenerics);
+      }
 
-        if (isa<GenericType>(*ty)) {
-            auto& className = cast<GenericType>(*ty)->getGenericClassName();
-            assert(concreteGenerics.find(className) != concreteGenerics.end() && "Incompatible generics should have "
-                "been caught before");
+      if ((*ty)->isGeneric()) {
+         auto& className = (*ty)->getGenericClassName();
+         assert(concreteGenerics.find(className) != concreteGenerics.end() && "Incompatible generics should have "
+            "been caught before");
 
-            *ty = concreteGenerics.at(className)->deepCopy();
-        }
-    }
+         auto backup = *ty;
+         *ty = concreteGenerics.at(className)->deepCopy();
+         CopyProperties(backup, *ty);
+      }
+   }
 
-    void Type::resolveUnqualified(Type *ty) {
+   bool Type::GenericTypesCompatible(Type *given, Type *needed) {
+      auto& neededClassname = needed->getClassName();
 
-        for (const auto& cont : ty->getContainedTypes()) {
-            resolveUnqualified(cont);
-        }
+      if (SymbolTable::hasClass(neededClassname) && SymbolTable::getClass(neededClassname)->isProtocol()) {
+         if (given->getClassName() == needed->getClassName()) {
+            return true;
+         }
 
-        if (!isa<ObjectType>(ty)) {
-            return;
-        }
+         if (needed->getClassName() == "Any") {
+            return true;
+         }
 
-        auto asObj = cast<ObjectType>(ty);
-        auto& unqal = asObj->getUnqualifiedGenerics();
+         if (given->getClassName().empty()) {
+            return false;
+         }
 
-        if (unqal.empty()) {
-            return;
-        }
+         return SymbolTable::getClass(given->getClassName())->conformsTo(needed->getClassName());
+      }
 
-        assert(SymbolTable::hasClass(asObj->getClassName()) && "Invalid class name should have been caught before!");
+      if (needed->getContravariance() != nullptr) {
+         auto contraVar = SymbolTable::getClass(given->getClassName());
+         if (!contraVar->isBaseClassOf(needed->getContravariance()->getClassName())) {
+            return false;
+         }
+      }
 
-        auto cl = SymbolTable::getClass(asObj->getClassName());
-        size_t i = 0;
+      if (needed->getClassName() == "Any") {
+         return true;
+      }
 
-        assert(cl->getGenerics().size() == unqal.size() && "Should have been caught before!");
+      auto coVar = SymbolTable::getClass(needed->getClassName());
+      return coVar->isBaseClassOf(given->getClassName());
+   }
 
-        for (const auto& gen : cl->getGenerics()) {
-            asObj->specifyGenericType(gen->getGenericClassName(), unqal.at(i));
-        }
+   void Type::resolveUnqualified(Type *ty) {
 
-        unqal.clear();
-    }
+      for (const auto& cont : ty->getContainedTypes()) {
+         resolveUnqualified(cont);
+      }
 
-    bool Type::operator==(Type *&other) {
-        return (
-            isNullable_ == other->isNullable_ &&
-            isConst_ == other->isConst_ &&
-            vararg == other->vararg &&
-            cstyleVararg == other->cstyleVararg
-        );
-    }
+      if (!isa<ObjectType>(ty)) {
+         return;
+      }
 
-    short Type::getAlignment() {
-        return 8;
-    }
+      auto asObj = cast<ObjectType>(ty);
+      auto& unqal = asObj->getUnqualifiedGenerics();
 
-    Type* Type::deepCopy() {
-        return this;
-    }
+      if (unqal.empty()) {
+         return;
+      }
 
-    string Type::toString() {
-        return isReference_ ? "&" : "";
-    }
+      // should throw later
+      if (!SymbolTable::hasClass(asObj->getClassName())) {
+         return;
+      }
+
+      auto cl = SymbolTable::getClass(asObj->getClassName());
+      size_t i = 0;
+
+      assert(cl->getGenerics().size() == unqal.size() && "Should have been caught before!");
+
+      for (const auto& gen : cl->getGenerics()) {
+         asObj->specifyGenericType(gen->getGenericClassName(), unqal.at(i));
+      }
+
+      unqal.clear();
+   }
+
+   unordered_map<string, Type*> Type::resolveUnqualified(std::vector<Type*>& given, std::vector<ObjectType*>& needed) {
+      assert(given.size() == needed.size() && "should be checked before");
+
+      unordered_map<string, Type*> resolved;
+
+      size_t i = 0;
+      for (const auto& gen : needed) {
+         resolved.emplace(gen->getGenericClassName(), given[i]);
+         ++i;
+      }
+
+      return resolved;
+   }
+
+   void Type::CopyProperties(Type *src, Type *dst) {
+      dst->isNull_ = src->isNull_;
+      dst->isNullable_ = src->isNullable_;
+      dst->isInferred_ = src->isInferred_;
+      dst->isConst_ = src->isConst_;
+      dst->lvalue = src->lvalue;
+      dst->hasDefaultArg = src->hasDefaultArg;
+      dst->vararg = src->vararg;
+      dst->cstyleVararg = src->cstyleVararg;
+      dst->cstyleArray = src->cstyleArray;
+      dst->carrayElement = src->carrayElement;
+      dst->lengthExpr = src->lengthExpr;
+      dst->lengthExprType = src->lengthExprType;
+      dst->lengthExprValue = src->lengthExprValue;
+      dst->constantSize = src->constantSize;
+      dst->length = src->length;
+   }
+
+   bool Type::operator==(Type *&other) {
+      if (isNull_ && !other->isNullable_) {
+         return false;
+      }
+
+      return true;
+   }
+
+   Type* Type::visitLengthExpr(TypeCheckVisitor *v) {
+      if (lengthExprType != nullptr) {
+         return lengthExprType;
+      }
+
+      lengthExprType = lengthExpr->accept(*v);
+      return lengthExprType;
+   }
+
+   llvm::Value* Type::visitLengthExpr(CodeGenVisitor *v) {
+      if (lengthExprValue != nullptr) {
+         return lengthExprValue;
+      }
+
+      lengthExprValue = lengthExpr->accept(*v);
+      return lengthExprValue;
+   }
+
+   short Type::getAlignment() {
+      return 8;
+   }
+
+   Type* Type::deepCopy() {
+      return this;
+   }
 
 } // namespace cdot

@@ -11,26 +11,21 @@ using namespace cdot;
 
 class LvalueToRvalue : public Expression {
 public:
-    explicit LvalueToRvalue();
     explicit LvalueToRvalue(Expression::SharedPtr expr);
-
-    inline void setTarget(Expression::SharedPtr expr) {
-        target = expr;
-        children.push_back(&target);
-    }
 
     typedef std::shared_ptr<LvalueToRvalue> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int) override;
+    void __dump(int depth) override;
 
-    virtual inline llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
-    virtual inline Type* accept(TypeCheckVisitor& v) override {
+    llvm::Value* accept(CodeGenVisitor& v) override {
         return v.visit(this);
     }
 
-    virtual NodeType get_type() override {
+    Type* accept(TypeCheckVisitor& v) override {
+        return v.visit(this);
+    }
+
+    NodeType get_type() override {
         return NodeType::LVALUE_TO_RVALUE;
     }
 

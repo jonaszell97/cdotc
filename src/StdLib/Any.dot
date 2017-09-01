@@ -1,6 +1,4 @@
 
-class Any {
-    # def toString() -> Int8* unsafe {
-    #     return self as! Int8*
-    # }
+protocol Any {
+    
 }

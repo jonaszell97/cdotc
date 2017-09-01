@@ -10,7 +10,6 @@ namespace cdot {
         { "inline", Attr::Inline },
         { "carray", Attr::CArray },
         { "cstring", Attr::CString },
-        { "nocopy", Attr::NoCopy },
         { "primitive", Attr::Primitive }
     };
 

@@ -9,56 +9,74 @@
 
 namespace cdot {
 
-    class FPType : public PrimitiveType {
-    public:
-        explicit FPType(unsigned int = 64);
-        static FPType* getFloatTy();
-        static FPType* getDoubleTy();
+   class FPType : public PrimitiveType {
+   public:
+      explicit FPType(unsigned int = 64);
+      static FPType* getFloatTy();
+      static FPType* getDoubleTy();
 
-        inline unsigned int getPrecision() {
-            return precision;
-        }
+      inline unsigned int getPrecision() {
+         return precision;
+      }
+      
+      bool isFloatTy() override {
+         return precision == 32;
+      }
 
-        string toString() override;
-        llvm::Type* getLlvmType() override;
+      bool isDoubleTy() override {
+         return precision == 64;
+      }
 
-        Type* ArithmeticReturnType(string&, Type*) override;
+      bool isFPType() override {
+         return true;
+      }
 
-        bool implicitlyCastableTo(Type*) override;
-        bool explicitlyCastableTo(Type*) override;
+      string toString() override;
+      llvm::Type* _getLlvmType() override;
 
-        llvm::Value* getDefaultVal() override;
-        llvm::Constant* getConstantVal(Variant&) override;
+      Type* ArithmeticReturnType(string &op, Type *rhsTy) override;
 
-        short getAlignment() override;
-        llvm::Value* castTo(llvm::Value*, Type*) override;
+      bool implicitlyCastableTo(Type *destTy) override;
+      bool explicitlyCastableTo(Type *destTy) override;
 
-        Type* deepCopy() override;
+      llvm::Value* getDefaultVal() override;
+      llvm::Constant* getConstantVal(Variant &val) override;
 
-        bool operator==(Type*& other) override;
-        inline bool operator!=(Type*& other) override {
-            return !operator==(other);
-        }
+      short getAlignment() override;
+      llvm::Value* castTo(llvm::Value *val, Type *destTy) override;
 
-        inline string& getClassName() override {
-            return className;
-        }
+      Type* deepCopy() override;
 
-        static inline bool classof(FPType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::FPTypeID:
-                case TypeID::PrimitiveTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+      bool operator==(Type*& other) override;
+      inline bool operator!=(Type*& other) override {
+         return !operator==(other);
+      }
 
-    protected:
-        int precision;
-        string className;
-    };
+      inline string& getClassName() override {
+         return className;
+      }
+
+      static inline bool classof(FPType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::FPTypeID:
+            case TypeID::PrimitiveTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
+
+      static FPType* ConstFloatTy;
+      static FPType* ConstDoubleTy;
+
+      typedef std::unique_ptr<FPType> UniquePtr;
+      typedef std::shared_ptr<FPType> SharedPtr;
+
+   protected:
+      int precision;
+      string className;
+   };
 
 } // namespace cdot
 

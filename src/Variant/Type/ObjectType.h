@@ -13,142 +13,219 @@ using std::unordered_map;
 
 namespace cdot {
 
-    class PointerType;
+   class PointerType;
 
-    namespace cl {
-        class Class;
-    }
+   namespace cl {
+      class Class;
+   }
 
-    class ObjectType : public Type {
-    public:
-        ObjectType(string&&, unordered_map<string, Type*>&);
-        ObjectType(string&&);
-        ObjectType(string&);
+   class ObjectType : public Type {
+   public:
+      ObjectType(string&&, unordered_map<string, Type*>&);
+      ObjectType(string&&);
+      ObjectType(string&);
 
-        ~ObjectType() override {
-            for (const auto& gen : concreteGenericTypes) {
-                delete gen.second;
-            }
+      ~ObjectType() override {
+         for (const auto& gen : concreteGenericTypes) {
+            delete gen.second;
+         }
 
-            for (const auto& gen : unqualifiedGenerics) {
-                delete gen;
-            }
-        }
+         for (const auto& gen : unqualifiedGenerics) {
+            delete gen;
+         }
+      }
 
-        static ObjectType* get(string className);
+      static ObjectType* get(string className);
+      static ObjectType* getOptionOf(Type *T);
 
-        inline string& getClassName() override {
-            return className;
-        }
+      inline string& getClassName() override {
+         return className;
+      }
 
-        inline bool isObject() override {
-            return true;
-        }
+      inline bool isObject() override {
+         return true;
+      }
 
-        inline void isStruct(bool str) {
-            is_struct = str;
-        }
+      inline void isStruct(bool str) {
+         is_struct = str;
+      }
 
-        inline bool isStruct() override {
-            return is_struct;
-        }
+      inline bool isStruct() override {
+         return is_struct;
+      }
 
-        inline unordered_map<string, Type*>& getConcreteGenericTypes() override {
-            return concreteGenericTypes;
-        }
+      bool isProtocol() override;
 
-        inline Type* getConcreteGeneric(string genericName) {
-            return concreteGenericTypes[genericName];
-        }
+      inline unordered_map<string, Type*>& getConcreteGenericTypes() override {
+         return concreteGenericTypes;
+      }
 
-        inline std::vector<Type*>& getUnqualifiedGenerics() {
-            return unqualifiedGenerics;
-        }
+      inline Type* getConcreteGeneric(string genericName) {
+         return concreteGenericTypes[genericName];
+      }
 
-        inline void specifyGenericType(string genericName, Type* type) {
-            concreteGenericTypes.emplace(genericName, type);
-        }
+      inline std::vector<Type*>& getUnqualifiedGenerics() {
+         return unqualifiedGenerics;
+      }
 
-        inline void setUnqualGenerics(std::vector<Type*> unqual) {
-            unqualifiedGenerics = unqual;
-        }
+      inline void specifyGenericType(string genericName, Type* type) {
+         concreteGenericTypes.emplace(genericName, type);
+      }
 
-        inline Type* toRvalue() override {
-            lvalue = false;
-            return this;
-        }
+      inline void setUnqualGenerics(std::vector<Type*> unqual) {
+         unqualifiedGenerics = unqual;
+      }
 
-        bool hasDefaultValue() override;
+      inline Type* toRvalue() override {
+         lvalue = false;
+         return this;
+      }
 
-        bool isBoxedEquivOf(Type*& other) override;
+      bool hasDefaultValue() override;
 
-        bool operator==(Type*& other) override;
-        inline bool operator!=(Type*& other) override {
-            return !operator==(other);
-        }
+      bool isBoxedEquivOf(Type*& other) override;
 
-        std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
-        std::vector<Type**> getTypeReferences() override;
+      bool operator==(Type*& other) override;
+      inline bool operator!=(Type*& other) override {
+         return !operator==(other);
+      }
 
-        string toString() override;
+      std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
+      std::vector<Type**> getTypeReferences() override;
 
-        llvm::Type* getLlvmType() override;
-        llvm::Type* getAllocaType() override;
+      string toString() override;
 
-        bool implicitlyCastableTo(Type*) override;
-        bool explicitlyCastableTo(Type*) override;
+      llvm::Type* _getLlvmType() override;
 
-        short getAlignment() override;
+      bool implicitlyCastableTo(Type*) override;
+      bool explicitlyCastableTo(Type*) override;
 
-        Type* deepCopy() override;
+      short getAlignment() override;
+      size_t getSize() override;
 
-        llvm::Value* castTo(llvm::Value*, Type*) override;
+      Type* deepCopy() override;
 
-        bool isGeneric() override {
-            for (const auto& ty : concreteGenericTypes) {
-                if (ty.second->isGeneric()) {
-                    return true;
-                }
-            }
+      llvm::Value* castTo(llvm::Value*, Type*) override;
 
-            return false;
-        }
+      bool isGeneric() override {
+         return isGeneric_;
+      }
 
-        llvm::Value* getDefaultVal() override;
+      void isGeneric(bool gen) override {
+         isGeneric_ = gen;
+      }
 
-        static std::unordered_map<std::string, llvm::StructType*> StructureTypes;
+      Type* getContravariance() override {
+         return contravariance;
+      }
 
-        static inline void declareStructureType(string& name, llvm::StructType* type) {
-            StructureTypes.emplace(name, type);
-        }
+      string& getGenericClassName() override {
+         return genericClassName;
+      }
 
-        static inline bool hasStructureType(string& name) {
-            return StructureTypes.find(name) != StructureTypes.end();
-        }
+      void setContravariance(Type* con) override {
+         contravariance = con;
+      }
 
-        static inline llvm::StructType* getStructureType(string name) {
-            assert(StructureTypes.find(name) != StructureTypes.end() && "Undeclared structure type");
-            return StructureTypes[name];
-        }
+      void setGenericClassName(string name) override {
+         genericClassName = name;
+      }
 
-        static inline bool classof(ObjectType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::ObjectTypeID:
-                case TypeID::CollectionTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+      void setClassName(string name) {
+         className = name;
+      }
 
-    protected:
-        bool is_struct = false;
-        unordered_map<string, Type*> concreteGenericTypes;
-        cl::Class* declaredClass = nullptr;
+      bool isEnum() override {
+         return is_enum;
+      }
 
-        std::vector<Type*> unqualifiedGenerics;
-    };
+      void isEnum(bool en) override {
+         is_enum = en;
+         is_struct = en;
+      }
+
+      void setKnownEnumCase(EnumCase *eCase,
+         std::vector<pair<string, std::shared_ptr<Expression>>> associatedValues = {},
+         std::vector<Type*> argTypes = {}) override
+      {
+         knownCase = eCase;
+         this->associatedValues = associatedValues;
+         enumCaseTypes = argTypes;
+      }
+
+      std::vector<pair<string, std::shared_ptr<Expression>>>& getAssociatedTypes() override {
+         return associatedValues;
+      }
+
+      std::vector<Type*>& getKnownEnumCaseTypes() override {
+         return enumCaseTypes;
+      }
+
+      EnumCase* getKnownEnumCase() override {
+         return knownCase;
+      }
+
+      bool hasKnownEnumCase() override {
+         return knownCase != nullptr;
+      }
+
+      bool isOptionTy() override {
+         return is_enum && className == "Option";
+      }
+
+      bool isOptionOf(string& className) override {
+         return isOptionTy()
+            && concreteGenericTypes.find("T") != concreteGenericTypes.end()
+            && concreteGenericTypes["T"]->getClassName() == className;
+      }
+
+      llvm::Value* getDefaultVal() override;
+
+      static std::unordered_map<std::string, llvm::StructType*> StructureTypes;
+
+      static inline void declareStructureType(string& name, llvm::StructType* type) {
+         StructureTypes.emplace(name, type);
+      }
+
+      static inline bool hasStructureType(string& name) {
+         return StructureTypes.find(name) != StructureTypes.end();
+      }
+
+      static inline llvm::StructType* getStructureType(string name) {
+         assert(StructureTypes.find(name) != StructureTypes.end() && "Undeclared structure type");
+         return StructureTypes[name];
+      }
+
+      static inline bool classof(ObjectType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::ObjectTypeID:
+            case TypeID::CollectionTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
+
+      typedef std::unique_ptr<ObjectType> UniquePtr;
+      typedef std::shared_ptr<ObjectType> SharedPtr;
+
+   protected:
+      bool is_struct = false;
+      bool is_enum = false;
+      unordered_map<string, Type*> concreteGenericTypes;
+      cl::Class* declaredClass = nullptr;
+      
+      bool isGeneric_ = false;
+      Type *contravariance = nullptr;
+      string genericClassName;
+
+      EnumCase *knownCase = nullptr;
+      std::vector<pair<string, std::shared_ptr<Expression>>> associatedValues;
+      std::vector<Type*> enumCaseTypes;
+
+      std::vector<Type*> unqualifiedGenerics;
+   };
 
 } // namespace cdot
 

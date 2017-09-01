@@ -6,14 +6,14 @@
 #include "../Statement/Declaration/DeclStmt.h"
 
 void Expression::isHiddenReturnValue() {
-    if (memberExpr) {
-        memberExpr->isHiddenReturnValue();
-    }
-    else {
-        isHiddenReturnValue_ = true;
-        isReturnValue_ = true;
-        if (declaration) {
-            declaration->isHiddenReturnValue();
-        }
-    }
+   if (memberExpr) {
+      memberExpr->isHiddenReturnValue();
+   }
+   else {
+      isHiddenReturnValue_ = true;
+      isReturnValue_ = true;
+      if (declaration) {
+         declaration->isHiddenReturnValue();
+      }
+   }
 }

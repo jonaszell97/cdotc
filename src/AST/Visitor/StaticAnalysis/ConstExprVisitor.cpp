@@ -71,7 +71,7 @@
 //    return {};
 //}
 //
-//Variant ConstExprVisitor::visit(LiteralExpr *node) {
+//Variant ConstExprVisitor::visit(NumericLiteral *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }
@@ -159,7 +159,7 @@
 //    return {};
 //}
 //
-//Variant ConstExprVisitor::visit(SwitchStmt *node) {
+//Variant ConstExprVisitor::visit(MatchStmt *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }

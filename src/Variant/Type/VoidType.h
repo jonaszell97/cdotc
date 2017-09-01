@@ -9,58 +9,61 @@
 
 namespace cdot {
 
-    class VoidType : public Type {
-    public:
-        explicit VoidType(Type* = nullptr);
+   class VoidType : public Type {
+   public:
+      explicit VoidType(Type* = nullptr);
 
-        virtual ~VoidType() override {
-            delete pointeeType;
-        }
+      Type*& getPointeeType() override {
+         return pointeeType;
+      }
+      
+      inline void setPointeeType(Type* pointee) {
+        pointeeType = pointee;
+      }
 
-        inline Type* getPointeeType() {
-            return pointeeType;
-        }
+      string toString() override;
+      llvm::Type* _getLlvmType() override;
 
-        string toString() override;
-        llvm::Type* getLlvmType() override;
+      bool implicitlyCastableTo(Type*) override;
+      bool operator==(Type*& other) override;
 
-        bool implicitlyCastableTo(Type*) override;
-        bool operator==(Type*& other) override;
-
-        llvm::Constant* getConstantVal(Variant&) override {
-            llvm::PointerType* ptrTy;
-            if (pointeeType != nullptr) {
-                auto pointee = pointeeType->getLlvmType();
-                if (!pointee->isPointerTy()) {
-                    pointee = pointee->getPointerTo();
-                }
-
-                ptrTy = llvm::cast<llvm::PointerType>(pointee);
-            }
-            else {
-                ptrTy = Builder->getVoidTy()->getPointerTo();
+      llvm::Constant* getConstantVal(Variant&) override {
+         llvm::PointerType* ptrTy;
+         if (pointeeType != nullptr) {
+            auto pointee = pointeeType->getLlvmType();
+            if (!pointee->isPointerTy()) {
+               pointee = pointee->getPointerTo();
             }
 
-            return llvm::ConstantPointerNull::get(ptrTy);
-        }
+            ptrTy = llvm::cast<llvm::PointerType>(pointee);
+         }
+         else {
+            ptrTy = Builder->getVoidTy()->getPointerTo();
+         }
 
-        llvm::Value* castTo(llvm::Value*, Type*) override;
+         return llvm::ConstantPointerNull::get(ptrTy);
+      }
 
-        Type* deepCopy() override;
+      llvm::Value* castTo(llvm::Value*, Type*) override;
 
-        static inline bool classof(VoidType const*) { return true; }
-        static inline bool classof(Type const* T) {
-            switch(T->getTypeID()) {
-                case TypeID::VoidTypeID:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+      Type* deepCopy() override;
 
-    protected:
-        Type* pointeeType;
-    };
+      static inline bool classof(VoidType const*) { return true; }
+      static inline bool classof(Type const* T) {
+         switch(T->getTypeID()) {
+            case TypeID::VoidTypeID:
+               return true;
+            default:
+               return false;
+         }
+      }
+
+      typedef std::unique_ptr<VoidType> UniquePtr;
+      typedef std::shared_ptr<VoidType> SharedPtr;
+
+   protected:
+      Type* pointeeType;
+   };
 
 } // namespace cdot
 

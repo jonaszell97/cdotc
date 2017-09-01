@@ -11,50 +11,60 @@ class CallExpr;
 
 namespace cdot {
 namespace cl {
-    struct Method;
+   struct Method;
 }
 }
 
 class UnaryOperator : public Expression {
 public:
-    UnaryOperator(string, string);
-    UnaryOperator(Variant, string);
+   UnaryOperator(string, string);
+   ~UnaryOperator() override;
 
-    void setTarget(Expression::SharedPtr t) {
-        target = t;
-    }
+   void setTarget(Expression::SharedPtr t) {
+      target = t;
+   }
 
-    std::vector<AstNode::SharedPtr> get_children() override;
+   void isLhsOfAssigment() override {
+      isLhsOfAssigment_ = true;
+      if (memberExpr != nullptr) {
+         memberExpr->isLhsOfAssigment();
+      }
+      if (target != nullptr) {
+         target->isLhsOfAssigment();
+      }
+   }
 
-    typedef std::shared_ptr<UnaryOperator> SharedPtr;
-    void __dump(int depth) override;
+   std::vector<AstNode::SharedPtr> get_children() override;
 
-    NodeType get_type() override {
-        return NodeType::UNARY_OPERATOR;
-    }
+   typedef std::shared_ptr<UnaryOperator> SharedPtr;
+   void __dump(int depth) override;
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   NodeType get_type() override {
+      return NodeType::UNARY_OPERATOR;
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr target;
-    string op;
-    Type* operandType;
-    bool prefix;
+   Expression::SharedPtr target;
+   string op;
+   Type* operandType;
+   bool prefix;
 
-    // codegen
-    std::shared_ptr<CallExpr> overridenCall;
-    cdot::cl::Method* method;
-    string className;
+   // codegen
+   std::shared_ptr<CallExpr> overridenCall;
+   cdot::cl::Method* method;
+   string className;
 };
 
 

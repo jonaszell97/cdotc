@@ -16,7 +16,7 @@ DeclareStmt::DeclareStmt(string var_name, TypeRef::SharedPtr var_type, bool is_c
 }
 
 DeclareStmt::DeclareStmt(AccessModifier access, string class_name, ObjectType *extends, std::vector<ObjectType*> with,
-        bool is_abstract, std::vector<GenericType*> generics) :
+        bool is_abstract, std::vector<ObjectType*> generics) :
     declKind(DeclarationType::CLASS_DECL),
     declaredName(class_name),
     generics(generics),
@@ -29,7 +29,7 @@ DeclareStmt::DeclareStmt(AccessModifier access, string class_name, ObjectType *e
 }
 
 DeclareStmt::DeclareStmt(string func_name, TypeRef::SharedPtr ret_type, std::vector<FuncArgDecl::SharedPtr> args,
-    std::vector<GenericType*> generics) :
+    std::vector<ObjectType*> generics) :
     declKind(DeclarationType::FUNC_DECL),
     declaredName(func_name),
     generics(generics),

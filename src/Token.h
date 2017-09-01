@@ -6,13 +6,11 @@
 #define TOKEN_H
 
 #include <string>
-#include "Variant/Variant.h"
 #include <map>
+#include "Variant/Variant.h"
 
-/**
- * Tokens with K_ represent keywords
- * Tokens with T_ represent other Tokens
- */
+using std::string;
+
 enum TokenType {
     T_KEYWORD,
     T_IDENT,
@@ -22,6 +20,8 @@ enum TokenType {
     T_BOF,
     T_EOF
 };
+
+using cdot::Variant;
 
 class Token {
     public:

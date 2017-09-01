@@ -10,52 +10,50 @@
 
 class TypeRef : public Expression {
 public:
-    explicit TypeRef();
-    explicit TypeRef(Type*);
+   explicit TypeRef();
+   explicit TypeRef(Type*);
+   
+   ~TypeRef() override;
 
-    ~TypeRef() override {
+   string toString();
 
-    }
+   inline Type*& getType(bool force = false) {
+      assert((force || resolved) && "Resolve type before accessing!");
+      return type;
+   }
 
-    string toString();
+   inline void setType(Type* t) {
+      if (type == t) {
+         return;
+      }
 
-    inline Type*& getType(bool force = false) {
-        assert((force || resolved) && "Resolve type before accessing!");
-        return type;
-    }
+      delete type;
+      type = t;
+   }
 
-    inline void setType(Type* t) {
-        if (type == t) {
-            return;
-        }
+   typedef std::shared_ptr<TypeRef> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int) override;
 
-        delete type;
-        type = t;
-    }
+   NodeType get_type() override {
+      return NodeType::TYPE_REF;
+   }
 
-    typedef std::shared_ptr<TypeRef> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int) override;
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    NodeType get_type() override {
-        return NodeType::TYPE_REF;
-    }
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
-
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
-
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    bool resolved = false;
-    Type* type = nullptr;
+   bool resolved = false;
+   Type* type = nullptr;
 };
 
 

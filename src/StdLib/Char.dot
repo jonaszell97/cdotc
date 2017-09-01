@@ -1,10 +1,11 @@
 
 using Builtin.Primitive
 
-struct Char {
+class Char {
+    memberwise init
     let val: int8 { get }
 
-    init () {
+    init {
         val = '\0'
     }
 

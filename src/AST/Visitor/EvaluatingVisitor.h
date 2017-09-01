@@ -36,7 +36,7 @@
 //    virtual Variant visit(WhileStmt*);
 //
 //    virtual Variant visit(CollectionLiteral*);
-//    virtual Variant visit(LiteralExpr*);
+//    virtual Variant visit(NumericLiteral*);
 //    virtual Variant visit(StringLiteral*);
 //    virtual Variant visit(SubscriptExpr*);
 //    virtual Variant visit(MethodCallExpr*);
@@ -50,7 +50,7 @@
 //    virtual Variant visit(BreakStmt*);
 //    virtual Variant visit(ContinueStmt*);
 //    virtual Variant visit(IfStmt*);
-//    virtual Variant visit(SwitchStmt*);
+//    virtual Variant visit(MatchStmt*);
 //    virtual Variant visit(CaseStmt*);
 //    virtual Variant visit(LabelStmt*);
 //    virtual Variant visit(GotoStmt*);

@@ -9,35 +9,36 @@
 
 class TertiaryOperator : public Expression {
 public:
-    TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
+   TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
+   ~TertiaryOperator() override;
 
-    typedef std::shared_ptr<TertiaryOperator> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int) override ;
+   typedef std::shared_ptr<TertiaryOperator> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int) override ;
 
-    NodeType get_type() override {
-        return NodeType::TERTIARY_OPERATOR;
-    }
+   NodeType get_type() override {
+      return NodeType::TERTIARY_OPERATOR;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    Expression::SharedPtr condition;
-    Expression::SharedPtr lhs;
-    Expression::SharedPtr rhs;
+   Expression::SharedPtr condition;
+   Expression::SharedPtr lhs;
+   Expression::SharedPtr rhs;
 
-    // codegen
-    Type* resultType;
+   // codegen
+   Type* resultType;
 };
 
 

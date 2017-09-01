@@ -26,7 +26,7 @@ int main() {
     std::string str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
     try {
         Parser x(str);
-        x.run(0);
+        x.run(1);
     } catch(ParseError& p) {
         std::cout << p.what() << std::endl;
     } catch(RuntimeError& r) {

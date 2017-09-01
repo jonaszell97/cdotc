@@ -1,42 +1,44 @@
 
-class Array<T> with Printable /*Iterable<T>*/ {
-    let raw: T[] { get }
-    let size: Int { get }
+class Array<T> with Printable, Iterable<T> {
+    var raw: T* { get }
+    var size: Int { get }
 
-    private let capacity: Int { get } = 0
+    var capacity: Int { get } = 0
 
-    static def initRaw(ref arr: T[], len: Int) unsafe {
+    static def initRaw(arr: ref T*, len: Int) unsafe {
         let newArr: T[len]
         arr = newArr
     }
 
-    init (arr: T[], len: Int) {
+    public init (arr: T*, len: Int) {
         raw = arr
         size = len
         capacity = len
     }
 
-    init (i: Int) {
+    public init (i: Int) {
         capacity = i
         size = 0
         initRaw(raw, i)
     }
 
-    init () {
+    public init {
         capacity = 1
         size = 0
         initRaw(raw, 1)
     }
 
-    # def getIterator() -> ArrayIterator<T> {
-    #     return ArrayIterator(self)
-    # }
+    public def getIterator() -> ArrayIterator<T> {
+        return ArrayIterator<T>(self)
+    }
 
-    def push(t: T) unsafe {
+    public def push(t: T) unsafe {
         if (size + 1 > capacity) {
             capacity = capacity << 1
-            let newArr: T[capacity]
+            let newArr = Extern.C.malloc(capacity) as T*
             copyTo(newArr)
+            
+            Extern.C.free(raw as Int8*)
             raw = newArr
         }
 
@@ -44,69 +46,74 @@ class Array<T> with Printable /*Iterable<T>*/ {
         ++size
     }
 
-    def pop -> T {
+    public def pop -> T {
         let back = raw[size - 1]
         --size
-
+        
         return back
     }
 
-    def reserve (i: Int) unsafe {
-        capacity = i
-        let newArr: T[capacity]
+    public def reserve (i: Int) unsafe {
+        capacity = capacity + i
+        let newArr = Extern.C.malloc(capacity) as T*
         copyTo(newArr)
+
+        Extern.C.free(raw as Int8*)
         raw = newArr
     }
 
-    def first -> T {
+    public def first -> T {
         return raw[0]
     }
 
-    def last -> T {
+    public def last -> T {
         return raw[size - 1]
     }
 
-    def at(i: Int) -> T {
+    public def at(i: Int) -> T {
         return self[i]
     }
 
-    private def copyTo(lhs: T[]) {
+    def copyTo(lhs: T*) {
         for (let i = 0; i < size; ++i) {
             lhs[i] = raw[i]
         }
     }
 
-    def postfix [](index: Int) -> T {
-        return raw[index]
+    public def postfix [](index: Int) -> ref T unsafe {
+        if (index >= size) {
+            print("No can do baby doll")
+            Extern.C.exit(69.val as Int32)
+        }
+
+        return &raw[index]
     }
 
-    def postfix []&(index: Int) -> ref T unsafe {
-        return raw[index]
-    }
-
-    def infix +(rhs: Array<T>) -> Array<T> unsafe {
-        let newArr = Array(raw, size)
+    public def infix +(rhs: Array<T>) -> Array<T> unsafe {
+        var newArr = Array(raw, size)
         newArr += rhs
         
         return newArr
     }
 
-    def infix +=(rhs: Array<T>) unsafe {
-        let newArr: T[size + rhs.size]
-        let i = 0
+    public def infix +=(rhs: Array<T>) unsafe {
+        var newArr = Extern.C.malloc(size + rhs.size) as T*
+        var i = 0
 
         copyTo(newArr)
         for (; i < rhs.size; ++i) {
             newArr[i + size] = rhs.raw[i]
         }
         
+        Extern.C.free(raw as Int8*)
         raw = newArr
         size = i + size
+        capacity = size
     }
 
-    def toString -> String {
+    public def toString -> String {
         return "[]"
     }
 
-    def infix as String = toString
+    public def infix as String = toString
 }

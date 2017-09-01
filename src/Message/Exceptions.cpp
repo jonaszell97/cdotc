@@ -32,7 +32,7 @@ ParseError::ParseError(const std::string& message) : message_(message) {
 }
 
 void ParseError::raise(ParseErrors error, std::string msg, Lexer* tokenizer) {
-    std::string err = "\033[21;31m" + _parse_errors[error] + ": " + msg;
+    std::string err = "\033[21;31mError: " + msg;
     if (tokenizer != nullptr) {
         std::string program = tokenizer->_program;
         // get line number
@@ -93,7 +93,7 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 }
 
 void RuntimeError::raise(RuntimeErrors error, std::string msg, AstNode* cause) {
-    std::string err = "\033[21;31m" + _runtime_errors[error] + ": " + msg;
+    std::string err = "\033[21;31mError: " + msg;
     if (cause != nullptr) {
         std::string program = cause->getSourceFile();
         // get line number

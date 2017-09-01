@@ -23,11 +23,11 @@ class ClassDecl : public Statement {
 public:
     ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
         std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
-        std::vector<GenericType*>&&, AccessModifier, bool, ObjectType*, std::vector<ObjectType*>&&);
+        std::vector<ObjectType*>&&, AccessModifier, bool, ObjectType*, std::vector<ObjectType*>&&);
 
     ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
         std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
-        std::vector<GenericType*>&&, AccessModifier, std::vector<ObjectType*>&&);
+        std::vector<ObjectType*>&&, AccessModifier, std::vector<ObjectType*>&&);
 
     virtual inline bool isStruct() {
         return is_struct;
@@ -90,7 +90,7 @@ protected:
     std::vector<std::shared_ptr<MethodDecl>> methods;
     std::vector<std::shared_ptr<TypedefDecl>> typedefs;
 
-    std::vector<GenericType*> generics;
+    std::vector<ObjectType*> generics;
 
     // codegen
     string selfBinding;

@@ -1,51 +1,52 @@
 
 using Extern.C
+using Builtin.Primitive
 
 def print() {
     printf(@cstring "\n")
 }
 
-def print(a: Any, separator: Char = '\n') {
-    printf(@cstring "0x%08x%c", a as Int8, separator.val)
+def print(a: Any, separator: int8 = '\n') {
+    printf(@cstring "0x%08x%c", a as Int8, separator)
 }
 
-# def print(s: String, separator: Char = '\n') {
-#     printf(@cstring "%s%c", s.asCString, separator.val)
-# }
+def print(s: String, separator: int8 = '\n') {
+    printf(@cstring "%s%c", s.charArray, separator)
+}
 
-def print(c: Int8*, separator: Char = '\n') {
+def print(c: Int8*, separator: int8 = '\n') {
     printf(c)
-    printf(@cstring "%c", separator.val)
+    printf(@cstring "%c", separator)
 }
 
-def print(ref i: Int, separator: Char = '\n') {
-    printf(@cstring "%d%c", i.val, separator.val)
+def print(i: Int, separator: int8 = '\n') {
+    printf(@cstring "%d%c", i.val, separator)
 }
 
-def print(i: Int8, separator: Char = '\n') {
-    printf(@cstring "%c%c", i, separator.val)
+def print(i: Int8, separator: int8 = '\n') {
+    printf(@cstring "%c%c", i, separator)
 }
 
-def print(c: Char, separator: Char = '\n') {
-    printf(@cstring "%c%c", c.val, separator.val)
+def print(c: Char, separator: int8 = '\n') {
+    printf(@cstring "%c%c", c.val, separator)
 }
 
-def print(i: Int64, separator: Char = '\n') {
-    printf(@cstring "%d%c", i, separator.val)
+def print(i: Int64, separator: int8 = '\n') {
+    printf(@cstring "%d%c", i, separator)
 }
 
-def print(d: Double, separator: Char = '\n') {
-    printf(@cstring "%f%c", d, separator.val)
+def print(d: Double, separator: int8 = '\n') {
+    printf(@cstring "%f%c", d, separator)
 }
 
-def print(f: Float, separator: Char = '\n') {
-    printf(@cstring "%f%c", f as Double, separator.val)
+def print(f: Float, separator: int8 = '\n') {
+    printf(@cstring "%f%c", f as Double, separator)
 }
 
-def print(b: Bool, separator: Char = '\n') {
+def print(b: Bool, separator: int8 = '\n') {
     if (b) {
-        printf(@cstring "%s%c", @cstring "true", separator.val)
+        printf(@cstring "%s%c", @cstring "true", separator)
     } else {
-        printf(@cstring "%s%c", @cstring "false", separator.val)
+        printf(@cstring "%s%c", @cstring "false", separator)
     }
 }

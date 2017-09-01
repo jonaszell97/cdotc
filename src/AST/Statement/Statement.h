@@ -9,7 +9,15 @@
 
 class Statement : public AstNode {
 public:
-    typedef std::shared_ptr<Statement> SharedPtr;
+   typedef std::shared_ptr<Statement> SharedPtr;
+
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
+
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 };
 
 

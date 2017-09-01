@@ -96,7 +96,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(LiteralExpr *node) {
+//Variant CaptureVisitor::visit(NumericLiteral *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }
@@ -192,7 +192,7 @@
 //    return {};
 //}
 //
-//Variant CaptureVisitor::visit(SwitchStmt *node) {
+//Variant CaptureVisitor::visit(MatchStmt *node) {
 //    for (auto child : node->get_children()) {
 //        child->accept(*this);
 //    }

@@ -7,37 +7,41 @@
 
 namespace cdot {
 
-    AutoType::AutoType() {
-        id = TypeID::AutoTypeID;
-        isInferred_ = true;
-    }
+   AutoType::AutoType() {
+      id = TypeID::AutoTypeID;
+      isInferred_ = true;
+   }
 
-    bool AutoType::operator==(Type *&other) {
-        switch (other->getTypeID()) {
-            case TypeID::AutoTypeID:
-                return true;
-            default:
-                return false;
-        }
-    }
+   bool AutoType::operator==(Type *&other) {
+      switch (other->getTypeID()) {
+         case TypeID::AutoTypeID:
+            return true;
+         default:
+            return false;
+      }
+   }
+   
+   Type* AutoType::deepCopy() {
+      return new AutoType;
+   }
 
-    llvm::Type* AutoType::getLlvmType() {
-        assert(false && "Resolve first!");
-    }
+   llvm::Type* AutoType::_getLlvmType() {
+      llvm_unreachable("resolve first!");
+   }
 
-    llvm::Value* AutoType::castTo(llvm::Value *, Type *) {
-        assert(false && "Resolve first!");
-    }
+   llvm::Value* AutoType::castTo(llvm::Value *, Type *) {
+      llvm_unreachable("resolve first!");
+   }
 
-    bool AutoType::implicitlyCastableTo(Type *) {
-        assert(false && "Resolve first!");
-    }
+   bool AutoType::implicitlyCastableTo(Type *) {
+      return true;
+   }
 
-    llvm::Value* AutoType::getDefaultVal() {
-        assert(false && "Resolve first!");
-    }
+   llvm::Value* AutoType::getDefaultVal() {
+      llvm_unreachable("resolve first!");
+   }
 
-    string AutoType::toString() {
-        return "Auto";
-    }
+   string AutoType::toString() {
+      return "Auto";
+   }
 }

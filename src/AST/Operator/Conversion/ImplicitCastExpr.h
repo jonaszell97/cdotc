@@ -11,9 +11,7 @@ class ImplicitCastExpr : public Expression {
 public:
     ImplicitCastExpr(Type* from, Type* to, Expression::SharedPtr);
 
-    ~ImplicitCastExpr() override {
-
-    }
+    ~ImplicitCastExpr() override;
 
     typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
     std::vector<AstNode::SharedPtr> get_children() override;

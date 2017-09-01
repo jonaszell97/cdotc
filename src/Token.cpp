@@ -3,7 +3,6 @@
 //
 
 #include "Token.h"
-#include "Variant/Variant.h"
 
 Token::Token() {}
 
@@ -21,21 +20,17 @@ TokenType Token::get_type() {
 }
 
 bool Token::is_punctuator(char c) {
-    return _type == T_PUNCTUATOR && _value.getInt() == c;
-}
-
-char Token::get_punctuator() {
-    return (char)_value.getInt();
+    return _type == T_PUNCTUATOR && _value.charVal == c;
 }
 
 bool Token::is_keyword(std::string keyword) {
-    return _type == T_KEYWORD && _value.getString() == keyword;
+    return _type == T_KEYWORD && _value.strVal == keyword;
 }
 
 bool Token::is_operator(std::string op) {
-    return _type == T_OP && _value.getString() == op;
+    return _type == T_OP && _value.strVal == op;
 }
 
 bool Token::is_separator() {
-    return _type == T_PUNCTUATOR && (_value.getInt() == '\n' || _value.getInt() == ';');
+    return _type == T_PUNCTUATOR && (_value.intVal == '\n' || _value.intVal == ';');
 }

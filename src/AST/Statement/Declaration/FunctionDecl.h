@@ -14,77 +14,71 @@ class CompoundStmt;
 
 class FunctionDecl : public Statement {
 public:
-    FunctionDecl(string, std::shared_ptr<TypeRef> = nullptr);
+   FunctionDecl(string, std::shared_ptr<TypeRef> = nullptr);
+   ~FunctionDecl() override;
 
-    ~FunctionDecl() override {
-        int  i = 3;
-    }
-    void setReturnType(std::shared_ptr<TypeRef> type) {
-        returnType = type;
-    }
+   void setReturnType(std::shared_ptr<TypeRef> type) {
+      returnType = type;
+   }
 
-    string getName() {
-        return funcName;
-    }
+   string getName() {
+      return funcName;
+   }
 
-    std::vector<std::shared_ptr<FuncArgDecl>> getArgs() {
-        return args;
-    }
+   std::vector<std::shared_ptr<FuncArgDecl>> getArgs() {
+      return args;
+   }
 
-    std::shared_ptr<TypeRef> getReturnType() {
-        return returnType;
-    }
+   std::shared_ptr<TypeRef> getReturnType() {
+      return returnType;
+   }
 
-    void setBody(std::shared_ptr<CompoundStmt> _body) {
-        body = _body;
-    }
+   void setBody(std::shared_ptr<CompoundStmt> _body) {
+      body = _body;
+   }
 
-    void setGenerics(std::vector<GenericType *> &&gen) {
-        generics = gen;
-    }
+   void setGenerics(std::vector<ObjectType *> &&gen) {
+      generics = gen;
+   }
 
-    std::vector<GenericType*> getGenerics() {
-        return generics;
-    }
+   std::vector<ObjectType*> getGenerics() {
+      return generics;
+   }
 
-    void addArgument(std::shared_ptr<FuncArgDecl> arg) {
-        args.push_back(arg);
-    }
+   void addArgument(std::shared_ptr<FuncArgDecl> arg) {
+      args.push_back(arg);
+   }
 
-    typedef std::shared_ptr<FunctionDecl> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int depth) override;
+   typedef std::shared_ptr<FunctionDecl> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int depth) override;
 
-    NodeType get_type() override {
-        return NodeType::FUNCTION_DECL;
-    }
+   NodeType get_type() override {
+      return NodeType::FUNCTION_DECL;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGenVisitor& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckVisitor& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   friend class ConstExprVisitor;
+   friend class CodeGenVisitor;
+   friend class TypeCheckVisitor;
 
 protected:
-    string funcName;
-    std::shared_ptr<TypeRef> returnType;
-    std::vector<std::shared_ptr<FuncArgDecl>> args;
-    std::shared_ptr<CompoundStmt> body;
+   string funcName;
+   std::shared_ptr<TypeRef> returnType;
+   std::vector<std::shared_ptr<FuncArgDecl>> args;
+   std::shared_ptr<CompoundStmt> body;
 
-    std::vector<GenericType*> generics;
+   std::vector<ObjectType*> generics;
 
-    bool hasHiddenParam = false;
-
-    // codegen
-    std::vector<std::pair<string,string>> captures = {};
-    std::vector<Type*> captureTypes = {};
-    std::vector<string> copyTargets = {};
+   Function* declaredFunction;
+   bool hasHiddenParam = false;
 };
 
 

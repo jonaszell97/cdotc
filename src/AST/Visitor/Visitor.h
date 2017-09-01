@@ -13,7 +13,7 @@ class DeclStmt;
 class ForStmt;
 class WhileStmt;
 class CollectionLiteral;
-class LiteralExpr;
+class NumericLiteral;
 class SubscriptExpr;
 class CallExpr;
 class MemberRefExpr;
@@ -30,7 +30,7 @@ class ClassDecl;
 class FieldDecl;
 class MethodDecl;
 class ConstrDecl;
-class SwitchStmt;
+class MatchStmt;
 class CaseStmt;
 class LabelStmt;
 class GotoStmt;
@@ -46,5 +46,9 @@ class TypeRef;
 class DeclareStmt;
 class LvalueToRvalue;
 class DebugStmt;
+class TupleLiteral;
+class EnumDecl;
+class Statement;
+class NoneLiteral;
 
 #endif //CDOT_VISITOR_H

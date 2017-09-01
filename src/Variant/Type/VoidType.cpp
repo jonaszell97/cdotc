@@ -7,69 +7,81 @@
 
 namespace cdot {
 
-    VoidType::VoidType(Type *type) : pointeeType(type) {
-        id = TypeID::VoidTypeID;
-        isNullable_ = true;
-        isNull_ = true;
-    }
+   VoidType::VoidType(Type *type) : pointeeType(type) {
+      id = TypeID::VoidTypeID;
+      isNullable_ = true;
+      isNull_ = true;
+   }
 
-    Type *VoidType::deepCopy() {
-        return new VoidType(*this);
-    }
+   Type *VoidType::deepCopy() {
+      auto newTy = new VoidType(*this);
+      newTy->pointeeType = pointeeType == nullptr ? nullptr : pointeeType->deepCopy();
 
-    bool VoidType::operator==(Type *&other) {
-        if (!isa<VoidType>(other)) {
-            return false;
-        }
+      return newTy;
+   }
 
-        auto asVoid = cast<VoidType>(other);
+   bool VoidType::operator==(Type *&other) {
+      if (!isa<VoidType>(other)) {
+         return false;
+      }
 
-        if (pointeeType == nullptr && asVoid->pointeeType == nullptr) {
-            return true;
-        }
+      auto asVoid = cast<VoidType>(other);
 
-        if (pointeeType != nullptr) {
-            return asVoid->pointeeType != nullptr && *pointeeType == asVoid->pointeeType;
-        }
+      if (pointeeType == nullptr && asVoid->pointeeType == nullptr) {
+         return true;
+      }
 
-        return true;
-    }
+      if (pointeeType != nullptr) {
+         return asVoid->pointeeType != nullptr && *pointeeType == asVoid->pointeeType;
+      }
 
-    bool VoidType::implicitlyCastableTo(Type *type) {
-        if (pointeeType != nullptr) {
-            return type->isNullable() && pointeeType->implicitlyCastableTo(type);
-        }
+      return true;
+   }
 
-        return type->isNullable();
-    }
+   bool VoidType::implicitlyCastableTo(Type *type) {
+      if (!type->isNullable() || type->isStruct()) {
+         return false;
+      }
 
-    llvm::Value* VoidType::castTo(llvm::Value *val, Type *ty) {
-        switch (ty->getTypeID()) {
-            case TypeID::ObjectTypeID:
-            case TypeID::GenericTypeID: {
-                auto nullTy = ty->getLlvmType();
-                if (!nullTy->isPointerTy()) {
-                    nullTy = nullTy->getPointerTo();
-                }
+      if (pointeeType != nullptr) {
+         return pointeeType->implicitlyCastableTo(type);
+      }
 
-                return llvm::ConstantPointerNull::get(
-                    llvm::cast<llvm::PointerType>(nullTy)
-                );
+      return true;
+   }
+
+   llvm::Value* VoidType::castTo(llvm::Value *val, Type *ty) {
+      switch (ty->getTypeID()) {
+         case TypeID::ObjectTypeID:{
+            auto nullTy = ty->getLlvmType();
+            if (!nullTy->isPointerTy()) {
+               nullTy = nullTy->getPointerTo();
             }
-            case TypeID::PointerTypeID: {
-                return llvm::ConstantPointerNull::get(
-                    llvm::cast<llvm::PointerType>(ty->getLlvmType())
-                );
-            }
-            default:
-                break;
-        }
 
-        llvm_unreachable("Incompatible cast should have been caught before");
-    }
+            return llvm::ConstantPointerNull::get(
+               llvm::cast<llvm::PointerType>(nullTy)
+            );
+         }
+         case TypeID::PointerTypeID: {
+            return llvm::ConstantPointerNull::get(
+               llvm::cast<llvm::PointerType>(ty->getLlvmType())
+            );
+         }
+         default:
+            break;
+      }
 
-    llvm::Type *VoidType::getLlvmType() { return Builder->getVoidTy(); }
+      llvm_unreachable("Incompatible cast should have been caught before");
+   }
 
-    string VoidType::toString() { return "Void"; }
+   llvm::Type *VoidType::_getLlvmType() { return Builder->getVoidTy(); }
+
+   string VoidType::toString() {
+      if (pointeeType) {
+         return pointeeType->toString() + "*";
+      }
+
+      return "Void"; 
+   }
 
 } // namespace cdot
