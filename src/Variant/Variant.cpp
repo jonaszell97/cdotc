@@ -10,7 +10,7 @@ namespace cdot {
 
    }
 
-   Variant::Variant(string&& s) :
+   Variant::Variant(string s) :
       strVal(s),
       type(VariantType::STRING) {
    }

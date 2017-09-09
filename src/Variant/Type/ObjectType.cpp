@@ -16,11 +16,16 @@ namespace cdot {
 
    std::unordered_map<std::string, llvm::StructType*> ObjectType::StructureTypes = {};
 
+   ObjectType* AnyTy = nullptr;
+
    ObjectType::ObjectType(string &&className, unordered_map<string, Type*>& concreteGenerics) :
       concreteGenericTypes(concreteGenerics)
    {
       id = TypeID::ObjectTypeID;
       this->className = className;
+      for (const auto& gen : concreteGenerics) {
+         gen.second->isGeneric(true);
+      }
    }
 
    ObjectType::ObjectType(string &&className) {
@@ -33,6 +38,16 @@ namespace cdot {
       this->className = className;
    }
 
+   ObjectType::~ObjectType() {
+      for (const auto& gen : concreteGenericTypes) {
+         delete gen.second;
+      }
+
+      for (const auto& gen : unqualifiedGenerics) {
+         delete gen;
+      }
+   }
+
    ObjectType* ObjectType::get(string className) {
       return new ObjectType(className);
    }
@@ -43,6 +58,14 @@ namespace cdot {
       opt->getConcreteGenericTypes().emplace("T", T);
 
       return opt;
+   }
+
+   ObjectType* ObjectType::getAnyTy() {
+      if (AnyTy == nullptr) {
+         AnyTy = get("Any");
+      }
+
+      return AnyTy;
    }
 
    bool ObjectType::operator==(Type *&other) {
@@ -107,6 +130,39 @@ namespace cdot {
       return newTy;
    }
 
+   Type* ObjectType::unbox() {
+      assert(util::matches(
+         "(Bool|Char|Float|Double|U?Int(1|8|16|32|64)?)",
+         className
+      ) && "Not a primitive!");
+
+      if (className == "Bool") {
+         return IntegerType::get(1);
+      }
+      if (className == "Char") {
+         return IntegerType::get(8);
+      }
+      if (className == "Float") {
+         return FPType::getFloatTy();
+      }
+      if (className == "Double") {
+         return FPType::getDoubleTy();
+      }
+
+      bool isUnsigned = false;
+      if (className.front() == 'U') {
+         isUnsigned = true;
+         className = className.substr(1);
+      }
+
+      if (className.length() <= 3) {
+         return IntegerType::get();
+      }
+
+      auto bitwidth = std::stoi(className.substr(3));
+      return IntegerType::get(bitwidth, isUnsigned);
+   }
+
    namespace {
 
       llvm::Value* CastToProtocol(
@@ -155,31 +211,30 @@ namespace cdot {
       {
          const auto Int8PtrTy = Builder.getInt8PtrTy();
          const auto ZERO = Builder.getInt64(0);
-         const auto& TypeInfoTy = Class::TypeInfoType;
+         const auto& TypeInfoTy = CodeGen::TypeInfoType;
 
          // the ID we're looking for while going up the tree
          auto baseID = Builder.getInt64(other->getTypeID());
-         auto vtbl = CodeGenVisitor::CreateLoad(CodeGenVisitor::AccessField(0, val));
+         auto classInfo = CodeGen::AccessField(0, val);
          llvm::Value* currentTypeInfo = CGMemory::CreateAlloca(TypeInfoTy->getPointerTo());
 
-         auto firstTypeInfo = Builder.CreateBitCast(
-            CodeGenVisitor::CreateLoad(Builder.CreateInBoundsGEP(vtbl, { ZERO, ZERO })),
-            TypeInfoTy->getPointerTo()
+         auto firstTypeInfo = Builder.CreateStructGEP(
+            CodeGen::ClassInfoType, classInfo, 2
          );
 
-         CodeGenVisitor::CreateStore(
+         CodeGen::CreateStore(
             firstTypeInfo,
             currentTypeInfo
          );
 
-         auto mergeBB = CodeGenVisitor::CreateBasicBlock("dyncast.merge");
-         auto successBB = CodeGenVisitor::CreateBasicBlock("dyncast.success");
-         auto failBB = CodeGenVisitor::CreateBasicBlock("dyncast.fail");
-         auto loadBB = CodeGenVisitor::CreateBasicBlock("dyncast.load");
-         auto compBB = CodeGenVisitor::CreateBasicBlock("dyncast.comp");
+         auto mergeBB = CodeGen::CreateBasicBlock("dyncast.merge");
+         auto successBB = CodeGen::CreateBasicBlock("dyncast.success");
+         auto failBB = CodeGen::CreateBasicBlock("dyncast.fail");
+         auto loadBB = CodeGen::CreateBasicBlock("dyncast.load");
+         auto compBB = CodeGen::CreateBasicBlock("dyncast.comp");
 
          // inital comparison
-         auto parentTypeID = CodeGenVisitor::CreateLoad(
+         auto parentTypeID = CodeGen::CreateLoad(
             Builder.CreateStructGEP(
                TypeInfoTy,
                firstTypeInfo,
@@ -192,9 +247,9 @@ namespace cdot {
 
          // check if the parent vtable is null
          Builder.SetInsertPoint(loadBB);
-         auto parentTypeInfo = CodeGenVisitor::CreateLoad(Builder.CreateStructGEP(
+         auto parentTypeInfo = CodeGen::CreateLoad(Builder.CreateStructGEP(
             TypeInfoTy,
-            CodeGenVisitor::CreateLoad(currentTypeInfo),
+            CodeGen::CreateLoad(currentTypeInfo),
             0
          ));
 
@@ -205,7 +260,7 @@ namespace cdot {
 
          // check if we have reached the ID we're looking for
          Builder.SetInsertPoint(compBB);
-         parentTypeID = CodeGenVisitor::CreateLoad(
+         parentTypeID = CodeGen::CreateLoad(
             Builder.CreateStructGEP(
                TypeInfoTy,
                parentTypeInfo,
@@ -214,7 +269,7 @@ namespace cdot {
          );
 
          // store the new type info
-         CodeGenVisitor::CreateStore(
+         CodeGen::CreateStore(
             parentTypeInfo,
             currentTypeInfo
          );
@@ -234,11 +289,11 @@ namespace cdot {
          phi->addIncoming(Builder.getInt64(1), successBB);
 
          auto alloca = CGMemory::CreateAlloca(ObjectType::getStructureType("Option"));
-         CodeGenVisitor::SetField(0, alloca, phi);
+         CodeGen::SetField(0, alloca, phi);
 
          auto anyProto = CGMemory::CreateAlloca(ObjectType::getStructureType("Any"));
-         CodeGenVisitor::SetField(1, anyProto, Builder.CreateBitCast(val, Int8PtrTy));
-         CodeGenVisitor::SetField(1, alloca, Builder.CreateBitCast(anyProto, Int8PtrTy));
+         CodeGen::SetField(1, anyProto, Builder.CreateBitCast(val, Int8PtrTy));
+         CodeGen::SetField(1, alloca, Builder.CreateBitCast(anyProto, Int8PtrTy));
 
          return alloca;
       }
@@ -253,7 +308,7 @@ namespace cdot {
       auto castOp = cl->hasMethod(op, argTypes);
 
       if (castOp.compatibility == CompatibilityType::COMPATIBLE) {
-         return Builder->CreateCall(CodeGenVisitor::getFunction(castOp.method->mangledName), { val });
+         return Builder->CreateCall(CodeGen::getFunction(castOp.method->mangledName), { val });
       }
 
       switch (destTy->getTypeID()) {
@@ -263,11 +318,11 @@ namespace cdot {
             // this one is a bit more tricky as there is no "ptrtodouble" instruction
             auto alloca = CGMemory::CreateAlloca(Builder->getInt64Ty());
             auto ptrToInt = Builder->CreatePtrToInt(val, Builder->getInt64Ty());
-            CodeGenVisitor::CreateStore(ptrToInt, alloca);
+            CodeGen::CreateStore(ptrToInt, alloca);
 
             auto asFloatPtr = Builder->CreateBitCast(alloca, destTy->getLlvmType()->getPointerTo());
 
-            return CodeGenVisitor::CreateLoad(asFloatPtr);
+            return CodeGen::CreateLoad(asFloatPtr);
          }
          case TypeID::PointerTypeID: {
             return Builder->CreateBitCast(val, destTy->getLlvmType());
@@ -331,6 +386,10 @@ namespace cdot {
          case TypeID::CollectionTypeID: {
             auto asObj = cast<ObjectType>(other);
             auto& otherClassName = asObj->getClassName();
+
+            if (!SymbolTable::hasClass(otherClassName)) {
+               return false;
+            }
 
             if (SymbolTable::getClass(otherClassName)->isProtocol()) {
                if (className == otherClassName) {
@@ -411,17 +470,28 @@ namespace cdot {
       switch (other->getTypeID()) {
          case TypeID::IntegerTypeID: {
             auto asInt = cast<IntegerType>(other);
-            string boxedCl = string(asInt->isUnsigned() ? "U" : "") + "Int" + std::to_string(asInt->getBitwidth());
+            if (className == "Bool") {
+               return asInt->getBitwidth() == 1;
+            }
+            if (className == "Char") {
+               return asInt->getBitwidth() == 8;
+            }
 
+            string boxedCl = string(asInt->isUnsigned() ? "U" : "") + "Int" + std::to_string(asInt->getBitwidth());
             return className == boxedCl || (asInt->getBitwidth() == sizeof(int*) * 8 && className == "Int");
          }
          case TypeID::FPTypeID: {
             auto asFloat = cast<FPType>(other);
-            return className == asFloat->toString();
+            return (className == "Double" && asFloat->getPrecision() == 64) ||
+               (className == "Float" && asFloat->getPrecision() == 32);
          }
          default:
             return false;
       }
+   }
+
+   bool ObjectType::isRefcounted() {
+      return SymbolTable::hasClass(className) && SymbolTable::getClass(className)->isClass();
    }
 
    bool ObjectType::hasDefaultValue() {
@@ -432,15 +502,17 @@ namespace cdot {
    }
 
    llvm::Value* ObjectType::getDefaultVal() {
-      auto alloca = CGMemory::CreateAlloca(StructureTypes[className]);
-      auto cl = SymbolTable::getClass(className);
-      auto constr = cl->hasMethod("init", {});
+      if (is_struct) {
+         auto& fields = SymbolTable::getClass(className)->getFields();
+         std::vector<llvm::Constant*> vals;
+         for (const auto& field : fields) {
+            vals.push_back(llvm::cast<llvm::Constant>(field.second->fieldType->getDefaultVal()));
+         }
 
-      assert(constr.compatibility == CompatibilityType::COMPATIBLE && "Should have been detected before");
+         return llvm::ConstantStruct::get(ObjectType::getStructureType(className), vals);
+      }
 
-      Builder->CreateCall(constr.method->llvmFunc, { alloca });
-
-      return alloca;
+      return llvm::ConstantPointerNull::get(ObjectType::getStructureType(className)->getPointerTo());
    }
 
    bool ObjectType::isProtocol() {
@@ -456,7 +528,7 @@ namespace cdot {
          return SymbolTable::getClass(className)->getOccupiedBytes();
       }
 
-      return 8;
+      return sizeof(int*);
    }
 
    llvm::Type* ObjectType::_getLlvmType() {
@@ -468,7 +540,7 @@ namespace cdot {
       }
    }
 
-   string ObjectType::toString() {
+   string ObjectType::_toString() {
       auto str = className;
       if (!concreteGenericTypes.empty()) {
          str += "<";

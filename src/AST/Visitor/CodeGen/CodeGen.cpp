@@ -3,7 +3,7 @@
 //
 
 #include <fstream>
-#include "CodeGenVisitor.h"
+#include "CodeGen.h"
 #include "../Visitor.cpp"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
@@ -38,45 +38,85 @@ using std::unordered_map;
 using std::vector;
 
 /** The LLVM Context used for code generation*/
-llvm::LLVMContext CodeGenVisitor::Context = {};
+llvm::LLVMContext CodeGen::Context = {};
 
 /** The LLVM IR Builder */
-llvm::IRBuilder<> CodeGenVisitor::Builder = llvm::IRBuilder<>(CodeGenVisitor::Context);
+llvm::IRBuilder<> CodeGen::Builder = llvm::IRBuilder<>(CodeGen::Context);
 
 /** The LLVM Module */
-std::unique_ptr<llvm::Module> CodeGenVisitor::Module = llvm::make_unique<llvm::Module>("Main", CodeGenVisitor::Context);
+std::unique_ptr<llvm::Module> CodeGen::Module = llvm::make_unique<llvm::Module>("Main", CodeGen::Context);
 
 /** Mutable values */
-std::unordered_map<std::string, llvm::Value*> CodeGenVisitor::MutableValues = {};
+std::unordered_map<std::string, llvm::Value*> CodeGen::MutableValues = {};
 
 /** Functions */
-std::unordered_map<std::string, llvm::Constant*> CodeGenVisitor::Functions = {};
-unordered_map<string, llvm::FunctionType*> CodeGenVisitor::FunctionTypes = {};
-std::vector<llvm::Function*> CodeGenVisitor::functions = {};
+std::unordered_map<std::string, llvm::Constant*> CodeGen::Functions = {};
+unordered_map<string, llvm::FunctionType*> CodeGen::FunctionTypes = {};
+std::vector<llvm::Function*> CodeGen::functions = {};
 
-std::vector<Expression*> CodeGenVisitor::global_initializers = {};
-llvm::Function* CodeGenVisitor::MALLOC = nullptr;
-unordered_map<string, pair<unsigned short, size_t>> CodeGenVisitor::StructSizes = {};
+std::vector<pair<Expression*, Type*>> CodeGen::global_initializers = {};
+llvm::Function* CodeGen::MALLOC = nullptr;
+llvm::Function* CodeGen::FREE = nullptr;
+llvm::Function* CodeGen::PRINTF = nullptr;
+llvm::Function* CodeGen::ARC_INC = nullptr;
+llvm::Function* CodeGen::ARC_DEC = nullptr;
+llvm::StructType* CodeGen::RefcountedType = nullptr;
+llvm::StructType* CodeGen::ClassInfoType = nullptr;
+llvm::StructType* CodeGen::TypeInfoType = nullptr;
+llvm::IntegerType* CodeGen::WordTy = nullptr;
+unordered_map<string, pair<unsigned short, size_t>> CodeGen::StructSizes = {};
+
+namespace {
+   std::stack<pair<llvm::Value*, string>> Cleanups = {};
+}
 
 class powi;
 using cdot::Type;
 
-CodeGenVisitor::CodeGenVisitor() :
+CodeGen::CodeGen() :
    ONE(llvm::ConstantInt::get(Builder.getInt32Ty(), 1)),
    ZERO(llvm::ConstantInt::get(Builder.getInt32Ty(), 0)),
    ONE_64(llvm::ConstantInt::get(Builder.getInt64Ty(), 1)),
    ZERO_64(llvm::ConstantInt::get(Builder.getInt64Ty(), 0))
 {
    Type::Builder = &Builder;
+   WordTy = Builder.getIntNTy(sizeof(int*) * 8);
    MALLOC = llvm::cast<llvm::Function>(Module->getOrInsertFunction("malloc",
       llvm::FunctionType::get(Builder.getInt8PtrTy(), { Builder.getInt64Ty() }, false)
    ));
+   FREE = llvm::cast<llvm::Function>(Module->getOrInsertFunction("free",
+      llvm::FunctionType::get(Builder.getVoidTy(), { Builder.getInt8PtrTy() }, false)
+   ));
+   PRINTF = llvm::cast<llvm::Function>(Module->getOrInsertFunction("printf",
+      llvm::FunctionType::get(Builder.getInt32Ty(), { Builder.getInt8PtrTy() }, true)
+   ));
+
+   // first element - pointer to base class type info, or null
+   // second element - this classes unique type ID
+   // third element - this classes name
+   TypeInfoType = llvm::StructType::create(
+      CodeGen::Context,
+      { Builder.getInt8PtrTy(), Builder.getInt64Ty(), Builder.getInt8PtrTy() },
+      "struct.__TypeInfo"
+   );
+
+   ClassInfoType = llvm::StructType::create(CodeGen::Context,
+      {
+         Builder.getInt8PtrTy(), // vtable
+         Builder.getInt64Ty(), // refcount
+         TypeInfoType->getPointerTo() // typeinfo
+      },
+      "cdot.Class"
+   );
+
+   RefcountedType = llvm::StructType::create(Context, { ClassInfoType }, "cdot.refcounted");
 }
 
 /**
  * Runs final passes and outputs object files
  */
-void CodeGenVisitor::finalize() {
+void CodeGen::finalize()
+{
    if (!global_initializers.empty()) {
       auto init = llvm::Function::Create(llvm::FunctionType::get(Builder.getVoidTy(), false),
          llvm::Function::InternalLinkage, "", Module.get());
@@ -87,7 +127,14 @@ void CodeGenVisitor::finalize() {
       Builder.SetInsertPoint(insert);
       CGMemory::CurrentEntryBlock = alloc;
       for (const auto& val : global_initializers) {
-         val->accept(*this);
+         auto res = val.first->accept(*this);
+         if (val.second->isStruct()) {
+            Builder.CreateMemCpy(val.first->globalVar, res, val.second->getSize(),
+               val.second->getAlignment());
+         }
+         else {
+            CreateStore(res, val.first->globalVar);
+         }
       }
 
       Builder.CreateRetVoid();
@@ -158,7 +205,8 @@ void CodeGenVisitor::finalize() {
    dest.flush();
 }
 
-void CodeGenVisitor::DeclareClasses(CompoundStmt::SharedPtr root) {
+void CodeGen::DeclareClasses(CompoundStmt::SharedPtr root)
+{
    for (const auto& stmt : root->getStatements()) {
       if (stmt->get_type() == NodeType::CLASS_DECL) {
          auto cl_dec = std::static_pointer_cast<ClassDecl>(stmt);
@@ -181,6 +229,12 @@ void CodeGenVisitor::DeclareClasses(CompoundStmt::SharedPtr root) {
    }
 }
 
+llvm::Value* CodeGen::toInt8Ptr(llvm::Value *val)
+{
+   return Builder.CreateBitCast(val, Builder.getInt8PtrTy());
+}
+
+
 /**
  * Returns the value of a structure field
  * @param struct_name
@@ -188,7 +242,11 @@ void CodeGenVisitor::DeclareClasses(CompoundStmt::SharedPtr root) {
  * @param structure
  * @return
  */
-llvm::Value* CodeGenVisitor::AccessField(string struct_name, string field_name, llvm::Value *structure) {
+llvm::Value* CodeGen::AccessField(
+   string struct_name,
+   string field_name,
+   llvm::Value *structure)
+{
    auto index = SymbolTable::getClass(struct_name)->getFieldOffset(field_name);
    return AccessField(index, structure);
 }
@@ -200,7 +258,9 @@ llvm::Value* CodeGenVisitor::AccessField(string struct_name, string field_name, 
  * @param structure
  * @return
  */
-llvm::Value* CodeGenVisitor::AccessField(size_t field_index, llvm::Value *structure) {
+llvm::Value* CodeGen::AccessField(
+   size_t field_index,llvm::Value *structure)
+{
    return Builder.CreateStructGEP(structure->getType()->getPointerElementType(), structure, (unsigned)field_index);
 }
 
@@ -211,8 +271,12 @@ llvm::Value* CodeGenVisitor::AccessField(size_t field_index, llvm::Value *struct
  * @param structure
  * @param val
  */
-void CodeGenVisitor::SetField(string struct_name, string field_name, llvm::Value *structure, llvm::Value *val, bool
-   useMemCpy
+void CodeGen::SetField(
+   string struct_name,
+   string field_name,
+   llvm::Value *structure,
+   llvm::Value *val,
+   bool useMemCpy
 ) {
    auto index = SymbolTable::getClass(struct_name)->getFieldOffset(field_name);
    SetField(index, structure, val, useMemCpy);
@@ -225,7 +289,12 @@ void CodeGenVisitor::SetField(string struct_name, string field_name, llvm::Value
  * @param structure
  * @param val
  */
-void CodeGenVisitor::SetField(size_t field_index, llvm::Value *structure, llvm::Value *val, bool useMemCpy) {
+void CodeGen::SetField(
+   size_t field_index,
+   llvm::Value *structure,
+   llvm::Value *val,
+   bool useMemCpy)
+{
    auto gep = Builder.CreateStructGEP(structure->getType()->getPointerElementType(), structure, (unsigned)field_index);
 
    if (useMemCpy && llvm::isa<llvm::StructType>(structure->getType()->getPointerElementType())) {
@@ -236,42 +305,35 @@ void CodeGenVisitor::SetField(size_t field_index, llvm::Value *structure, llvm::
    }
 }
 
-/// Shifts a class to the position where a protocol implementation is at
-/// The applied offset is stored at the first position in the protocols vtable for reversal
-llvm::Value* CodeGenVisitor::ApplyProtocolShift(Type *protoTy, string& originTy, llvm::Value *val) {
-   assert(isa<ObjectType>(protoTy)  && "Invalid protocol type");
+llvm::Value* CodeGen::ExtractFromOption(
+   llvm::Value *opt,
+   Type *destTy)
+{
+   auto from = ObjectType::getAnyTy();
 
-   auto& protocolName = protoTy->getClassName();
-
-   auto cl = SymbolTable::getClass(originTy);
-   auto offset = cl->getVTableOffset(protocolName);
-
-   // store applied offset in vtable so we can reverse it later
-   auto gep = Builder.CreateStructGEP(ObjectType::getStructureType(originTy), val, offset);
-   auto offsetPtr = Builder.CreateInBoundsGEP(CreateLoad(gep), { ZERO_64, ZERO_64 });
-   CreateStore(
-      Builder.CreateIntToPtr(
-         GetFieldOffset(originTy, offset), // offset of this protocols vtable
-         Builder.getInt8PtrTy()
-      ),
-      offsetPtr
+   auto val = CGCast::applyCast(
+      from,
+      destTy,
+      AccessField(1, opt),
+      Builder
    );
 
-   return Builder.CreateBitCast(gep, ObjectType::getStructureType(protocolName)->getPointerTo());
+   return val;
 }
 
 /// Reverses a protocol shift by getting the offset from the vtable and substracting it from the pointer
-llvm::CallInst* CodeGenVisitor::DispatchProtocolCall(
+llvm::Value* CodeGen::DispatchProtocolCall(
    Type *protoTy,
    string& methodName,
    llvm::Value *val,
-   std::vector<llvm::Value*>& args
-) {
+   std::vector<llvm::Value*>& args,
+   Type* returnType)
+{
    assert(isa<ObjectType>(protoTy) && "Invalid protocol type");
    auto& protocolName = protoTy->getClassName();
    auto Protocol = SymbolTable::getClass(protocolName);
 
-   auto vtable = CreateLoad(AccessField(0, val));
+   auto vtable = CreateLoad(AccessField(Class::ProtoVtblPos, val));
    auto vMethodGep = Builder.CreateGEP(
       vtable, {
          ZERO_64,
@@ -280,28 +342,95 @@ llvm::CallInst* CodeGenVisitor::DispatchProtocolCall(
    );
 
    auto vMethodLoad = CreateLoad(vMethodGep);
-
-   auto vMethod = Builder.CreateBitCast(vMethodLoad, FunctionTypes[methodName]->getPointerTo());
-
-   auto& originalProto = Protocol->getOriginalProtocol(methodName);
-
    auto objGEP = AccessField(1, val);
-   auto obj = Builder.CreateBitCast(
+   args[0] = Builder.CreateBitCast(
       CreateLoad(objGEP),
-      ObjectType::getStructureType(originalProto)->getPointerTo()
+      FunctionTypes[methodName]->getContainedType(1)
    );
 
-   args[0] = obj;
+   // check if this method
+   if (returnType->isStruct()) {
+      auto functionTy = FunctionTypes[methodName];
+      std::vector<llvm::Type*> params = functionTy->params();
+      params.insert(++params.begin(), functionTy->getReturnType());
 
+      auto vMethod = Builder.CreateBitCast(
+         vMethodLoad,
+         llvm::FunctionType::get(Builder.getVoidTy(), params, false)->getPointerTo()
+      );
+
+      auto SRetAlloca = Builder.CreateBitCast(
+         CGMemory::CreateAlloca(returnType->getLlvmType()),
+         functionTy->getReturnType()
+      );
+
+      args.insert(++args.begin(), SRetAlloca);
+      auto call = Builder.CreateCall(vMethod, args);
+      call->addAttribute(2, llvm::Attribute::NoAlias);
+      call->addAttribute(2, llvm::Attribute::StructRet);
+
+      return SRetAlloca;
+   }
+   // check if this value is a struct and the method returns a 'Self' parameter
+   else if (returnType->isGeneric() && returnType->getGenericClassName() == "Self") {
+      auto functionTy = FunctionTypes[methodName];
+      std::vector<llvm::Type*> params = functionTy->params();
+      params.insert(++params.begin(), functionTy->getReturnType());
+
+      auto size = CreateLoad(AccessField(Class::ProtoSizePos, val));
+      llvm::BasicBlock* structBB = CreateBasicBlock("pcall.sret");
+      llvm::BasicBlock* classBB = CreateBasicBlock("pcall.nosret");
+      llvm::BasicBlock* mergeBB = CreateBasicBlock("pcall.merge");
+
+      auto isStruct = Builder.CreateICmpSGT(size, wordSizedInt(0));
+      Builder.CreateCondBr(isStruct, structBB, classBB);
+
+      // without sret
+      Builder.SetInsertPoint(classBB);
+      auto vMethodWithoutSRet = Builder.CreateBitCast(
+         vMethodLoad,
+         FunctionTypes[methodName]->getPointerTo()
+      );
+
+      auto classRet = Builder.CreateCall(vMethodWithoutSRet, args);
+      Builder.CreateBr(mergeBB);
+
+      // with sret
+      Builder.SetInsertPoint(structBB);
+      llvm::Value* SRetAlloca = Builder.CreateCall(MALLOC, size);
+      SRetAlloca = Builder.CreateBitCast(SRetAlloca, functionTy->getReturnType());
+      args.insert(++args.begin(), SRetAlloca);
+
+      auto vMethodWithSRet = Builder.CreateBitCast(
+         vMethodLoad,
+         llvm::FunctionType::get(Builder.getVoidTy(), params, false)->getPointerTo()
+      );
+
+      auto structCall = Builder.CreateCall(vMethodWithSRet, args);
+      structCall->addAttribute(2, llvm::Attribute::NoAlias);
+      structCall->addAttribute(2, llvm::Attribute::StructRet);
+
+      Builder.CreateBr(mergeBB);
+
+      Builder.SetInsertPoint(mergeBB);
+      auto phi = Builder.CreatePHI(functionTy->getReturnType(), 2);
+      phi->addIncoming(classRet, classBB);
+      phi->addIncoming(SRetAlloca, structBB);
+
+      return phi;
+   }
+
+
+   auto vMethod = Builder.CreateBitCast(vMethodLoad, FunctionTypes[methodName]->getPointerTo());
    return Builder.CreateCall(vMethod, args);
 }
 
 /// Upcasts to a base class
-llvm::Value* CodeGenVisitor::ApplyStaticUpCast(
+llvm::Value* CodeGen::ApplyStaticUpCast(
    Type *baseTy,
    string &originTy,
-   llvm::Value *val
-) {
+   llvm::Value *val)
+{
    assert(isa<ObjectType>(baseTy)  && "Invalid protocol type");
 
    auto& baseClassName = baseTy->getClassName();
@@ -317,21 +446,28 @@ llvm::Value* CodeGenVisitor::ApplyStaticUpCast(
 }
 
 /// Retrieves the correct method from the vtable and bitcasts it to the correct signature
-llvm::CallInst* CodeGenVisitor::DispatchVirtualCall(
+llvm::CallInst* CodeGen::DispatchVirtualCall(
    string &className,
    string &methodName,
-   std::vector<llvm::Value*>& args
-) {
+   std::vector<llvm::Value*>& args)
+{
    assert(!args.empty() && "No self arg?");
 
    auto& self = args.front();
-   auto vtable = CreateLoad(AccessField(0, self));
+   auto classInfo = CreateLoad(AccessField(0, self));
+   auto vtable = CreateLoad(AccessField(0, classInfo));
+   auto cl = SymbolTable::getClass(className);
+
+   vtable = Builder.CreateBitCast(
+      vtable,
+      cl->getVtable()->getType()
+   );
 
    auto vMethodGep = Builder.CreateGEP(vtable, {
       ZERO_64,
       llvm::ConstantInt::get(
          Builder.getInt64Ty(),
-         SymbolTable::getClass(className)->getMethodOffset(methodName)
+         cl->getMethodOffset(methodName)
       )
    });
 
@@ -345,7 +481,10 @@ llvm::CallInst* CodeGenVisitor::DispatchVirtualCall(
 }
 
 /// Returns a fields offset (in bytes) in the classes memory layout
-llvm::Value* CodeGenVisitor::GetFieldOffset(string &structName, unsigned fieldOffset) {
+llvm::Value* CodeGen::GetFieldOffset(
+   string &structName,
+   unsigned fieldOffset)
+{
    auto structTy = ObjectType::getStructureType(structName);
    auto gep = Builder.CreateStructGEP(structTy, llvm::ConstantPointerNull::get(structTy->getPointerTo()), fieldOffset);
 
@@ -353,12 +492,14 @@ llvm::Value* CodeGenVisitor::GetFieldOffset(string &structName, unsigned fieldOf
 }
 
 /// Returns the size of a struct (in bytes)
-llvm::Value* CodeGenVisitor::GetStructSize(string &structName) {
+llvm::Value* CodeGen::GetStructSize(string &structName)
+{
    return Builder.getInt64(StructSizes[structName].second);
 }
 
 /// Returns the size of a struct (in bytes)
-llvm::Value* CodeGenVisitor::GetStructSize(llvm::Type* structTy) {
+llvm::Value* CodeGen::GetStructSize(llvm::Type* structTy)
+{
    while (structTy->isPointerTy()) {
       structTy = structTy->getPointerElementType();
    }
@@ -379,11 +520,13 @@ llvm::Value* CodeGenVisitor::GetStructSize(llvm::Type* structTy) {
    }
 }
 
-unsigned short CodeGenVisitor::getAlignment(llvm::Value *val) {
+unsigned short CodeGen::getAlignment(llvm::Value *val)
+{
    return getAlignment(val->getType());
 }
 
-unsigned short CodeGenVisitor::getAlignment(llvm::Type *ty) {
+unsigned short CodeGen::getAlignment(llvm::Type *ty)
+{
    if (ty->isPointerTy()) {
       return sizeof(int*);
    }
@@ -422,21 +565,28 @@ unsigned short CodeGenVisitor::getAlignment(llvm::Type *ty) {
    return 8;
 }
 
-llvm::Value* CodeGenVisitor::CreateStore(llvm::Value *val, llvm::Value *ptr) {
+llvm::Value* CodeGen::CreateStore(
+   llvm::Value *val,
+   llvm::Value *ptr)
+{
    auto store = Builder.CreateStore(val, ptr);
    store->setAlignment(getAlignment(val));
 
    return store;
 }
 
-llvm::Value* CodeGenVisitor::CreateLoad(llvm::Value *ptr) {
+llvm::Value* CodeGen::CreateLoad(llvm::Value *ptr)
+{
    auto load = Builder.CreateLoad(ptr);
    load->setAlignment(getAlignment(load));
 
    return load;
 }
 
-llvm::BasicBlock* CodeGenVisitor::CreateBasicBlock(string name, llvm::Function *func) {
+llvm::BasicBlock* CodeGen::CreateBasicBlock(
+   string name,
+   llvm::Function *func)
+{
    if (func == nullptr) {
       assert(!functions.empty() && "Can't emit basic block here!");
       func = functions.back();
@@ -445,7 +595,14 @@ llvm::BasicBlock* CodeGenVisitor::CreateBasicBlock(string name, llvm::Function *
    return llvm::BasicBlock::Create(Context, name, func);
 }
 
-llvm::Value* CodeGenVisitor::GetString(string &str, bool heap_alloc, bool raw) {
+llvm::ConstantInt* CodeGen::wordSizedInt(int val) {
+   return Builder.getIntN(sizeof(int*) * 8, val);
+}
+
+llvm::Value* CodeGen::GetString(
+   string &str,
+   bool raw)
+{
    if (Strings.find(str) == Strings.end()) {
       auto glob_str = Builder.CreateGlobalString(llvm::StringRef(str), ".str");
       glob_str->setAlignment(1);
@@ -461,12 +618,16 @@ llvm::Value* CodeGenVisitor::GetString(string &str, bool heap_alloc, bool raw) {
    }
 
    auto StringType = ObjectType::getStructureType("String");
-   auto alloca = CGMemory::CreateAlloca(StringType);
+   auto alloca = CGMemory::CreateAlloca(StringType, true);
 
    auto String = SymbolTable::getClass("String");
    auto constr = String->getConstructors().at(1);
 
    Builder.CreateCall(constr->llvmFunc, { alloca, cstring, GetInteger(str.length()) });
+
+   IncrementRefCount(alloca, String->getName());
+   Cleanups.push({ alloca, "String" });
+
    return alloca;
 }
 
@@ -480,7 +641,7 @@ llvm::Value* CodeGenVisitor::GetString(string &str, bool heap_alloc, bool raw) {
  * @param skip_first_arg
  * @return
  */
-llvm::Function * CodeGenVisitor::DeclareFunction(
+llvm::Function * CodeGen::DeclareFunction(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    llvm::Type *return_type,
@@ -489,8 +650,9 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
    string this_binding,
    std::vector<Attribute> attrs,
    bool hiddenParam,
-   bool envParam
-) {
+   bool envParam,
+   bool isVirtualOrProtocolMethod)
+{
    std::vector<llvm::Type*> arg_types;
    std::vector<size_t> neededAllocas;
    std::vector<size_t> byVal;
@@ -511,7 +673,9 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
    for (const auto& arg : args) {
       auto type = arg->argType->getType()->getLlvmType();
       if (arg->isStruct) {
-         byVal.push_back(i);
+         if (!isVirtualOrProtocolMethod) {
+            byVal.push_back(i);
+         }
          type = type->getPointerTo();
       }
 
@@ -524,9 +688,13 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
       Module.get()
    );
 
-   func->addFnAttr(llvm::Attribute::NoUnwind); // TODO only when function cant throw
-   func->addFnAttr(llvm::Attribute::StackProtect); // TODO always?
-   func->addFnAttr(llvm::Attribute::UWTable); // TODO only on x86-64
+   func->addFnAttr(llvm::Attribute::NoUnwind);
+   func->addFnAttr(llvm::Attribute::StackProtect);
+   func->addFnAttr(llvm::Attribute::UWTable);
+
+   for (const auto& attr : util::LlvmFunctionAttrs) {
+      func->addFnAttr(attr.first, attr.second);
+   }
 
    for (const auto& i : byVal) {
       func->addAttribute(i, llvm::Attribute::ByVal);
@@ -588,7 +756,7 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
    return func;
 }
 
-llvm::Function * CodeGenVisitor::DeclareFunction(
+llvm::Function * CodeGen::DeclareFunction(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    Type *return_type,
@@ -597,15 +765,16 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
    string this_binding,
    std::vector<Attribute> attrs,
    bool hiddenParam,
-   bool envParam
-) {
+   bool envParam,
+   bool isVirtualOrProtocolMethod)
+{
    auto retType = return_type->getLlvmType();
    if (return_type->isStruct()) {
       retType = retType->getPointerTo();
    }
 
    return DeclareFunction(bound_name, args, retType, set_this_arg, this_val,
-      this_binding, attrs, hiddenParam, envParam);
+      this_binding, attrs, hiddenParam, envParam, isVirtualOrProtocolMethod);
 }
 
 /**
@@ -619,24 +788,32 @@ llvm::Function * CodeGenVisitor::DeclareFunction(
  * @param body
  * @return
  */
-llvm::Function* CodeGenVisitor::DeclareMethod(
+llvm::Function* CodeGen::DeclareMethod(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    Type *return_type,
    llvm::StructType *this_val,
    string &this_binding,
    std::vector<Attribute> attrs,
-   bool hiddenParam
-) {
+   bool hiddenParam,
+   bool isVirtualOrProtocolMethod)
+{
    return DeclareFunction(bound_name, args, return_type, true, this_val, this_binding,
-      attrs, hiddenParam);
+      attrs, hiddenParam, false, isVirtualOrProtocolMethod);
 }
 
-void CodeGenVisitor::DefineFunction(string &bound_name, std::shared_ptr<Statement> body) {
+void CodeGen::DefineFunction(
+   string &bound_name,
+   std::shared_ptr<Statement> body)
+{
    DefineFunction(llvm::cast<llvm::Function>(Functions[bound_name]), body, bound_name);
 }
 
-void CodeGenVisitor::DefineFunction(llvm::Function* func, std::shared_ptr<Statement> body, string bound_name) {
+void CodeGen::DefineFunction(
+   llvm::Function* func,
+   std::shared_ptr<Statement> body,
+   string bound_name)
+{
    llvm::BasicBlock* entry;
    llvm::BasicBlock* alloc_block;
    llvm::BasicBlock* args_block;
@@ -653,9 +830,11 @@ void CodeGenVisitor::DefineFunction(llvm::Function* func, std::shared_ptr<Statem
 
    auto prevInsertBlock = Builder.GetInsertBlock();
    auto prevAllocaBlock = CGMemory::CurrentEntryBlock;
+   bool hasHiddenParam = false;
 
    if (hiddenParams.find(bound_name) != hiddenParams.end()) {
       HiddenParamStack.push(hiddenParams[bound_name]);
+      hasHiddenParam = true;
    }
 
    functions.push_back(func);
@@ -689,42 +868,10 @@ void CodeGenVisitor::DefineFunction(llvm::Function* func, std::shared_ptr<Statem
    CGMemory::CurrentEntryBlock = prevAllocaBlock;
    labels.empty();
    functions.pop_back();
-}
 
-void CodeGenVisitor::InitializeFields(llvm::Function *func, cdot::cl::Class *cl) {
-   auto self = &*func->arg_begin();
-   Builder.SetInsertPoint(&func->getBasicBlockList().back());
-   CGMemory::CurrentEntryBlock = &func->getBasicBlockList().back();
-
-   auto parentClass = cl->getParent();
-   if (parentClass != nullptr && !parentClass->isEmpty()) {
-      // call parent class contructor
-      auto parentTy = ObjectType::getStructureType(parentClass->getName());
-      auto parentCast = Builder.CreateBitCast(self, parentTy->getPointerTo());
-
-      Builder.CreateCall(
-         parentClass->getDefaultContructor(),
-         parentCast
-      );
+   if (hasHiddenParam) {
+      HiddenParamStack.pop();
    }
-
-   if (cl->getVtable() != nullptr) {
-      SetField(0, self, cl->getVtable());
-   }
-
-   auto& className = cl->getName();
-   for (const auto& field : cl->getFields()) {
-      if (field.second->defaultVal != nullptr) {
-         SetField(className, field.second->fieldName, self,
-            field.second->defaultVal->accept(*this), field.second->fieldType->isStruct());
-      }
-      else if (field.second->fieldType->hasDefaultValue()) {
-         SetField(className, field.second->fieldName, self,
-            field.second->fieldType->getDefaultVal(), field.second->fieldType->isStruct());
-      }
-   }
-
-   CGMemory::CurrentEntryBlock = nullptr;
 }
 
 /**
@@ -738,37 +885,185 @@ void CodeGenVisitor::InitializeFields(llvm::Function *func, cdot::cl::Class *cl)
  * @param body
  * @return
  */
-llvm::Function* CodeGenVisitor::DeclareDefaultConstructor(
+llvm::Function* CodeGen::DeclareDefaultConstructor(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    Type *return_type,
    llvm::StructType *this_val,
    string &this_binding,
-   cdot::cl::Class *cl
-) {
+   cdot::cl::Class *cl)
+{
    auto func = DeclareMethod(bound_name, args, return_type, this_val, this_binding, {});
    func->addFnAttr(llvm::Attribute::AlwaysInline);
+   func->getBasicBlockList().front().removeFromParent();
+   func->getBasicBlockList().front().removeFromParent();
 
    cl->setDefaultConstructor(func);
 
    return func;
 }
 
-void CodeGenVisitor::DefineDefaultConstructor(
-   string &bound_name,
-   string &this_binding,
-   cdot::cl::Class *cl
-) {
-   DefineFunction(bound_name, nullptr);
-   InitializeFields(cl->getDefaultContructor(), cl);
-   Builder.CreateRetVoid();
+llvm::Function* CodeGen::DeclareDefaultDestructor(
+   llvm::StructType *selfArg,
+   string& selfBinding,
+   cdot::cl::Class *cl)
+{
+   string name = cl->getName() + ".deinit";
+   auto func = DeclareMethod(name, {}, new VoidType, RefcountedType, selfBinding, {});
+   func->getBasicBlockList().front().removeFromParent();
+   func->getBasicBlockList().front().removeFromParent();
+
+   cl->setDestructor(func);
+
+   return func;
 }
 
-llvm::Value* CodeGenVisitor::GetInteger(
+void CodeGen::DefineDefaultConstructor(
+   string &bound_name,
+   string &this_binding,
+   cdot::cl::Class *cl)
+{
+   auto prevInsert = Builder.GetInsertBlock();
+   auto func = cl->getDefaultContructor();
+   auto self = &*func->arg_begin();
+
+   Builder.SetInsertPoint(&func->getEntryBlock());
+   CGMemory::CurrentEntryBlock = &func->getBasicBlockList().back();
+
+   Builder.CreateLifetimeStart(self, Builder.getInt64(cl->getOccupiedBytes()));
+   Builder.CreateMemSet(self, Builder.getInt8(0), GetStructSize(self->getType()), 8);
+
+   auto parentClass = cl->getParent();
+   if (parentClass != nullptr && !parentClass->isEmpty()) {
+      // call parent class contructor
+      auto parentTy = ObjectType::getStructureType(parentClass->getName());
+      auto parentCast = Builder.CreateBitCast(self, parentTy->getPointerTo());
+
+      Builder.CreateCall(
+         parentClass->getDefaultContructor(),
+         parentCast
+      );
+   }
+
+   if (cl->isClass()) {
+      llvm::Value *ClassInfo = AccessField(0, self);
+      auto vtableGEP = Builder.CreateStructGEP(ClassInfoType, ClassInfo, 0);
+      CreateStore(toInt8Ptr(cl->getVtable()), vtableGEP);
+
+      auto refcountGEP = Builder.CreateStructGEP(ClassInfoType, ClassInfo, 1);
+      CreateStore(Builder.getIntN(sizeof(int*) * 8, 1), refcountGEP);
+
+      auto typeInfoGEP = Builder.CreateStructGEP(ClassInfoType, ClassInfo, 2);
+      CreateStore(cl->getTypeInfo(), typeInfoGEP);
+   }
+
+   auto& className = cl->getName();
+   for (const auto& field : cl->getFields()) {
+      if (field.second->defaultVal != nullptr) {
+         SetField(className, field.second->fieldName, self,
+            field.second->defaultVal->accept(*this), field.second->fieldType->isStruct());
+      }
+   }
+
+   Builder.CreateRetVoid();
+
+   Builder.SetInsertPoint(prevInsert);
+   CGMemory::CurrentEntryBlock = nullptr;
+}
+
+void CodeGen::DefineDefaultDestructor(
+   string &selfBinding,
+   cdot::cl::Class *cl,
+   std::shared_ptr<CompoundStmt> body)
+{
+   auto destr = cl->getDestructor();
+
+   Builder.SetInsertPoint(&destr->getEntryBlock());
+   llvm::Value* val = Builder.CreateBitCast(
+      &*destr->arg_begin(),
+      ObjectType::getStructureType(cl->getName())->getPointerTo()
+   );
+
+   MutableValues[selfBinding] = val;
+   CGMemory::CurrentEntryBlock = &destr->getEntryBlock();
+   functions.push_back(destr);
+
+   if (body != nullptr) {
+      body->accept(*this);
+   }
+
+   auto structTy = ObjectType::getStructureType(cl->getName());
+   for (auto& field : cl->getRefCountedFields()) {
+      auto gep = Builder.CreateStructGEP(structTy, val, field.first);
+      DecrementRefCount(CreateLoad(gep), field.second);
+   }
+
+   Builder.CreateLifetimeEnd(val, Builder.getInt64(cl->getOccupiedBytes()));
+   Builder.CreateCall(FREE, { toInt8Ptr(val) });
+   Builder.CreateRetVoid();
+
+   functions.pop_back();
+   CGMemory::CurrentEntryBlock = nullptr;
+}
+
+void CodeGen::DebugPrint(
+   llvm::Value *val,
+   string msg)
+{
+   msg += " ";
+   auto ty = val->getType();
+   if (ty->isIntegerTy()) {
+      if (ty->getIntegerBitWidth() == 8) {
+         msg += "%c";
+      }
+      else {
+         msg += "%d";
+      }
+   }
+   else if (ty->isFloatingPointTy()) {
+      msg += "%f";
+      if (ty->isFloatTy()) {
+         val = Builder.CreateFPExt(val, Builder.getDoubleTy());
+      }
+   }
+   else if (ty->isPointerTy()) {
+      if (ty->getPointerElementType()->isIntegerTy(8)) {
+         msg += "%s";
+      }
+      else {
+         msg += "%p";
+      }
+   }
+   else {
+      msg += "%p";
+   }
+
+   msg += "\n";
+   Builder.CreateCall(PRINTF, {
+      Builder.CreateBitCast(Builder.CreateGlobalString(msg), Builder.getInt8PtrTy()),
+      val }
+   );
+}
+
+bool CodeGen::addStrMetadata(
+   llvm::Value *inst,
+   string str)
+{
+   if (!llvm::isa<llvm::Instruction>(inst)) {
+      return false;
+   }
+
+   llvm::cast<llvm::Instruction>(inst)->setMetadata(str, llvm::MDNode::get(Context,
+      llvm::MDString::get(Context, "")));
+
+   return true;
+}
+
+llvm::Value* CodeGen::GetInteger(
    long val,
    unsigned short bits,
-   bool isUnsigned
-) {
+   bool isUnsigned)
+{
    string className = isUnsigned ? "UInt" : "Int";
    if (bits != sizeof(int*) * 8) {
       className += std::to_string(bits);
@@ -786,8 +1081,179 @@ llvm::Value* CodeGenVisitor::GetInteger(
    return alloca;
 }
 
-llvm::Value* CodeGenVisitor::ReturnMemberRef(Expression* node, llvm::Value* value) {
+void CodeGen::IncrementRefCount(
+   llvm::Value *val,
+   string &className)
+{
+   assert(val->getType()->isPointerTy() && "Can't refcount a non-pointer type");
 
+   if (ARC_INC == nullptr) {
+      ARC_INC = llvm::Function::Create(
+         llvm::FunctionType::get(Builder.getVoidTy(), { RefcountedType->getPointerTo() }, false),
+         llvm::Function::PrivateLinkage,
+         "cdot.refc.inc",
+         Module.get()
+      );
+
+      ARC_INC->addFnAttr(llvm::Attribute::AlwaysInline);
+      ARC_INC->addFnAttr(llvm::Attribute::NoUnwind);
+      ARC_INC->addFnAttr(llvm::Attribute::NoRecurse);
+      ARC_INC->addFnAttr(llvm::Attribute::StackProtect);
+
+      functions.push_back(ARC_INC);
+
+      auto prevInsert = Builder.GetInsertBlock();
+      auto arg = &*ARC_INC->arg_begin();
+
+      llvm::BasicBlock *entryBB = CreateBasicBlock("entry");
+      llvm::BasicBlock *incBB = CreateBasicBlock("arc.inc");
+      llvm::BasicBlock *mergeBB = CreateBasicBlock("arc.inc.merge");
+
+      Builder.SetInsertPoint(entryBB);
+      auto isNull = Builder.CreateICmpEQ(arg,
+         llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(arg->getType()))
+      );
+      Builder.CreateCondBr(isNull, mergeBB, incBB);
+
+      Builder.SetInsertPoint(incBB);
+      auto classInfoGep = Builder.CreateStructGEP(
+         RefcountedType,
+         arg,
+         0
+      );
+      auto refCountGep = Builder.CreateStructGEP(
+         ClassInfoType,
+         classInfoGep,
+         1
+      );
+
+      auto inc = Builder.CreateAdd(CreateLoad(refCountGep), Builder.getIntN(sizeof(int *) * 8, 1));
+      CreateStore(inc, refCountGep);
+      Builder.CreateBr(mergeBB);
+
+      Builder.SetInsertPoint(mergeBB);
+      Builder.CreateRetVoid();
+
+      functions.pop_back();
+      Builder.SetInsertPoint(prevInsert);
+   }
+
+   if (!llvm::isa<llvm::ConstantPointerNull>(val)) {
+      Builder.CreateCall(ARC_INC, { Builder.CreateBitCast(val, RefcountedType->getPointerTo()) });
+   }
+}
+
+void CodeGen::DecrementRefCount(
+   llvm::Value *val,
+   string &className)
+{
+   auto cl = SymbolTable::getClass(className);
+   if (ARC_DEC == nullptr) {
+      ARC_DEC = llvm::Function::Create(
+         llvm::FunctionType::get(Builder.getVoidTy(), {RefcountedType->getPointerTo(), Builder.getInt8PtrTy()}, false),
+         llvm::Function::PrivateLinkage,
+         "cdot.refc.dec",
+         Module.get()
+      );
+
+      ARC_DEC->addFnAttr(llvm::Attribute::AlwaysInline);
+      ARC_DEC->addFnAttr(llvm::Attribute::NoUnwind);
+      ARC_DEC->addFnAttr(llvm::Attribute::NoRecurse);
+      ARC_DEC->addFnAttr(llvm::Attribute::StackProtect);
+
+      functions.push_back(ARC_DEC);
+
+      auto prevInsert = Builder.GetInsertBlock();
+      auto destrPtr = &*(++ARC_DEC->arg_begin());
+      auto arg = &*ARC_DEC->arg_begin();
+
+      // call destructor if refcount reaches zero
+      llvm::BasicBlock *entryBB = CreateBasicBlock("entry");
+      llvm::BasicBlock *decBB = CreateBasicBlock("arc.dec");
+      llvm::BasicBlock *destrBB = CreateBasicBlock("arc.dec.deinit");
+      llvm::BasicBlock *mergeBB = CreateBasicBlock("arc.dec.merge");
+
+      Builder.SetInsertPoint(entryBB);
+      auto isNull = Builder.CreateICmpEQ(arg,
+         llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(arg->getType()))
+      );
+      Builder.CreateCondBr(isNull, mergeBB, decBB);
+
+      Builder.SetInsertPoint(decBB);
+      auto classInfoGep = Builder.CreateStructGEP(
+         RefcountedType,
+         arg,
+         0
+      );
+      auto refCountGep = Builder.CreateStructGEP(
+         ClassInfoType,
+         classInfoGep,
+         1
+      );
+
+      auto dec = Builder.CreateSub(CreateLoad(refCountGep), Builder.getIntN(sizeof(int *) * 8, 1));
+      CreateStore(dec, refCountGep);
+
+      auto cond = Builder.CreateICmpEQ(dec, Builder.getIntN(sizeof(int *) * 8, 0));
+      Builder.CreateCondBr(cond, destrBB, mergeBB);
+
+      Builder.SetInsertPoint(destrBB);
+      auto destr = Builder.CreateBitCast(destrPtr,
+         llvm::FunctionType::get(Builder.getVoidTy(), { RefcountedType->getPointerTo() }, false)->getPointerTo()
+      );
+
+      Builder.CreateCall(destr, { arg });
+      Builder.CreateBr(mergeBB);
+
+      Builder.SetInsertPoint(mergeBB);
+      Builder.CreateRetVoid();
+
+      functions.pop_back();
+      Builder.SetInsertPoint(prevInsert);
+   }
+
+   if (!llvm::isa<llvm::ConstantPointerNull>(val)) {
+      Builder.CreateCall(ARC_DEC, {
+         Builder.CreateBitCast(val, RefcountedType->getPointerTo()),
+         toInt8Ptr(cl->getDestructor()) //FIXME virtual destructors
+      });
+   }
+}
+
+void CodeGen::CreateCleanup(long count)
+{
+   if (count <= 0) {
+      return;
+   }
+
+   llvm::BasicBlock* cleanupBB = CreateBasicBlock("cleanup");
+   llvm::BasicBlock* mergeBB = CreateBasicBlock("cleanup.merge");
+
+   auto term = Builder.GetInsertBlock()->getTerminator();
+   if (term != nullptr) {
+      term->removeFromParent();
+   }
+
+   Builder.CreateBr(cleanupBB);
+   Builder.SetInsertPoint(cleanupBB);
+
+   while (count > 0) {
+      auto top = Cleanups.top();
+      DecrementRefCount(top.first, top.second);
+      Cleanups.pop();
+      --count;
+   }
+
+   Builder.CreateBr(mergeBB);
+   Builder.SetInsertPoint(mergeBB);
+
+   if (term != nullptr) {
+      mergeBB->getInstList().push_back(term);
+   }
+}
+
+llvm::Value* CodeGen::ReturnMemberRef(Expression* node, llvm::Value* value)
+{
    if (node->memberExpr != nullptr) {
       if (node->lvalueCast) {
          assert(value->getType()->isPointerTy() && "Can't load non-pointer type value!");
@@ -810,6 +1276,18 @@ llvm::Value* CodeGenVisitor::ReturnMemberRef(Expression* node, llvm::Value* valu
       value = CGCast::applyCast(node->castFrom, node->castTo, value, Builder);
    }
 
+   if (node->needsProtocolExtraction_) {
+      auto ty = value->getType();
+      if (node->loadBeforeExtract) {
+         value = CreateLoad(value);
+      }
+
+      value = AccessField(1, value);
+      value = Builder.CreateBitCast(value, ty);
+      addStrMetadata(value, "ProtoExtract");
+      node->needsProtocolExtraction_ = false;
+   }
+
    return value;
 }
 
@@ -818,25 +1296,33 @@ llvm::Value* CodeGenVisitor::ReturnMemberRef(Expression* node, llvm::Value* valu
  * @param node
  * @return
  */
-llvm::Value* CodeGenVisitor::visit(NamespaceDecl *node) {
+llvm::Value* CodeGen::visit(NamespaceDecl *node)
+{
    node->contents->accept(*this);
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(CompoundStmt *node) {
+llvm::Value* CodeGen::visit(CompoundStmt *node)
+{
+   long cleanupSize = Cleanups.size();
    for (auto& child : node->get_children()) {
       child->accept(*this);
    }
 
+   long currentSize = Cleanups.size();
+   CreateCleanup(currentSize - cleanupSize);
+
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(FunctionDecl *node) {
+llvm::Value* CodeGen::visit(FunctionDecl *node)
+{
    DefineFunction(node->binding, node->body);
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(IdentifierRefExpr *node) {
+llvm::Value* CodeGen::visit(IdentifierRefExpr *node)
+{
    llvm::Value* value;
 
    if (node->isCapturedVar) {
@@ -874,13 +1360,13 @@ llvm::Value* CodeGenVisitor::visit(IdentifierRefExpr *node) {
    return ReturnMemberRef(node, value);
 }
 
-llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
-   bool heapAlloc = node->isHeapAllocated;
+llvm::Value* CodeGen::visit(DeclStmt *node)
+{
    auto& declType = node->type->getType();
+   bool heapAlloc = node->isReturnValue_;
    auto& val = node->value;
 
    if (val) {
-
       llvm::Value* ret;
 
       if (node->is_global) {
@@ -890,7 +1376,7 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
          val->setGlobalVar(glob);
          ret = glob;
 
-         global_initializers.push_back(val.get());
+         global_initializers.emplace_back(val.get(), node->type->getType());
          MutableValues.emplace(node->binding, ret);
 
          return nullptr;
@@ -902,11 +1388,44 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
 
       ret = val->accept(*this);
 
-      if (node->isStructAlloca) {
+      if (node->isProtocolDecl) {
+         // check if the wrapped type is a struct, and do a memcpy instead of a store
+         // if it is
+
+         auto resAlloc = CGMemory::CreateAlloca(ret->getType());
+         auto protoAlloc = CGMemory::CreateAlloca(ret->getType()->getPointerElementType(), true);
+         Builder.CreateMemCpy(protoAlloc, ret, 24, 8); //FIXME don't hardcode protocol sizes
+
+         llvm::BasicBlock* structBB = CreateBasicBlock("decl.struct");
+         llvm::BasicBlock* mergeBB = CreateBasicBlock("decl.merge");
+
+         auto size = CreateLoad(AccessField(Class::ProtoSizePos, ret));
+         auto cmp = Builder.CreateICmpSGT(size, wordSizedInt(0));
+         Builder.CreateCondBr(cmp, structBB, mergeBB);
+
+         Builder.SetInsertPoint(structBB);
+         llvm::Value* structAlloca = Builder.CreateCall(MALLOC, size);
+         auto objGep = CreateLoad(AccessField(Class::ProtoObjPos, ret));
+         Builder.CreateMemCpy(structAlloca, objGep, size, node->type->getType()->getAlignment());
+
+         CreateStore(
+            structAlloca,
+            AccessField(Class::ProtoObjPos, protoAlloc)
+         );
+
+         Builder.CreateBr(mergeBB);
+
+         Builder.SetInsertPoint(mergeBB);
+         CreateStore(protoAlloc, resAlloc);
+
+         ret = resAlloc;
+
+      }
+      else if (node->isStructAlloca) {
          //FIXME find better way to determine if value is newly created
          if (!ret->getName().empty()) {
             auto structTy = ret->getType()->getPointerElementType();
-            auto alloca = CGMemory::CreateAlloca(structTy, node->isReturnValue_);
+            auto alloca = CGMemory::CreateAlloca(structTy, heapAlloc);
             Builder.CreateMemCpy(alloca, ret, GetStructSize(structTy), getAlignment(structTy));
 
             ret = alloca;
@@ -921,7 +1440,7 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
                auto numElements = arrTy->getNumElements();
                auto elSize = getAlignment(arrTy->getElementType());
 
-               auto alloca = CGMemory::CreateAlloca(arrTy, node->isReturnValue_);
+               auto alloca = CGMemory::CreateAlloca(arrTy, heapAlloc);
                Builder.CreateMemCpy(
                   alloca,
                   ret,
@@ -937,7 +1456,7 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
                auto elSize = getAlignment(allocaTy);
 
                auto alloca = CGMemory::CreateAlloca(allocaTy->getAllocatedType(),
-                  node->isReturnValue_, "", numElements
+                  heapAlloc, "", numElements
                );
 
                Builder.CreateMemCpy(
@@ -956,7 +1475,12 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
       }
       else if (!node->isHiddenReturnValue_) {
          auto allocType = ret->getType();
-         auto alloca = CGMemory::CreateAlloca(allocType, node->isReturnValue_);
+         if (node->incRefCount) {
+            Cleanups.push({ ret, node->className });
+            IncrementRefCount(ret, node->className);
+         }
+
+         auto alloca = CGMemory::CreateAlloca(allocType, heapAlloc);
          CreateStore(ret, alloca);
 
          ret = alloca;
@@ -970,64 +1494,118 @@ llvm::Value* CodeGenVisitor::visit(DeclStmt *node) {
       llvm::Value* arrSize = declType->getLengthExpr() != nullptr ? declType->visitLengthExpr(this)
                                                                   : nullptr;
 
-      llvm::Value* alloca = CGMemory::CreateAlloca(allocType, node->isReturnValue_, node->identifier, arrSize);
+      llvm::Value* alloca = CGMemory::CreateAlloca(allocType, heapAlloc, node->identifier, arrSize);
       MutableValues.emplace(node->binding, alloca);
    }
 
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(ForStmt *node) {
-   if (!node->rangeBased) {
-      auto term_block = llvm::BasicBlock::Create(Context, "for_term", functions.back());
-      auto body_block = llvm::BasicBlock::Create(Context, "for_loop", functions.back());
-      auto incr_block = llvm::BasicBlock::Create(Context, "for_incr", functions.back());
-      auto merge_block = llvm::BasicBlock::Create(Context, "for_merge", functions.back());
+llvm::Value* CodeGen::visit(ForStmt *node)
+{
+   auto term_block = llvm::BasicBlock::Create(Context, "for.term", functions.back());
+   auto body_block = llvm::BasicBlock::Create(Context, "for.loop", functions.back());
+   auto incr_block = llvm::BasicBlock::Create(Context, "for.incr", functions.back());
+   auto merge_block = llvm::BasicBlock::Create(Context, "for.merge", functions.back());
 
-      // add targets for continue and break statements
-      BreakContinueStack.push({ merge_block, incr_block });
+   // add targets for continue and break statements
+   BreakContinueStack.push({ merge_block, incr_block });
 
-      // initialize the for loop in the current block
-      if (node->initialization) {
-         node->initialization->accept(*this);
-      }
-      Builder.CreateBr(term_block);
-
-      // check if termination condition is true
-      Builder.SetInsertPoint(term_block);
-      if (node->termination) {
-         Builder.CreateCondBr(node->termination->accept(*this), body_block, merge_block);
-      }
-      else {
-         Builder.CreateBr(body_block);
-      }
-
-      // execute loop body and go to increment
-      Builder.SetInsertPoint(body_block);
-      if (node->body) {
-         node->body->accept(*this);
-      }
-      Builder.CreateBr(incr_block);
-
-      // increment and go back to termination check
-      Builder.SetInsertPoint(incr_block);
-      if (node->increment) {
-         node->increment->accept(*this);
-      }
-      Builder.CreateBr(term_block);
-
-      Builder.SetInsertPoint(merge_block);
-
-      BreakContinueStack.pop();
+   // initialize the for loop in the current block
+   if (node->initialization) {
+      node->initialization->accept(*this);
    }
+   Builder.CreateBr(term_block);
+
+   // check if termination condition is true
+   Builder.SetInsertPoint(term_block);
+   if (node->termination) {
+      Builder.CreateCondBr(node->termination->accept(*this), body_block, merge_block);
+   }
+   else {
+      Builder.CreateBr(body_block);
+   }
+
+   // execute loop body and go to increment
+   Builder.SetInsertPoint(body_block);
+   if (node->body) {
+      node->body->accept(*this);
+   }
+   if (Builder.GetInsertBlock()->getTerminator() == nullptr) {
+      Builder.CreateBr(incr_block);
+   }
+
+   // increment and go back to termination check
+   Builder.SetInsertPoint(incr_block);
+   if (node->increment) {
+      node->increment->accept(*this);
+   }
+   Builder.CreateBr(term_block);
+
+   Builder.SetInsertPoint(merge_block);
+
+   BreakContinueStack.pop();
 
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(WhileStmt *node) {
-   auto cond_block = llvm::BasicBlock::Create(Context, "while_cond", functions.back());
-   auto body_block = llvm::BasicBlock::Create(Context, "while_body", functions.back());
-   auto merge_block = llvm::BasicBlock::Create(Context, "while_merge", functions.back());
+llvm::Value* CodeGen::visit(ForInStmt *node)
+{
+   llvm::Value* range = node->rangeExpr->accept(*this);
+   llvm::Value* it = Builder.CreateCall(Functions[node->iteratorGetter], { range });
+   if (node->rangeIsRefcounted) {
+      IncrementRefCount(range, node->rangeClassName);
+   }
+
+   llvm::BasicBlock* nextBB = CreateBasicBlock("forin.next");
+   llvm::BasicBlock* bodyBB = CreateBasicBlock("forin.body");
+   llvm::BasicBlock* mergeBB = CreateBasicBlock("forin.merge");
+
+   // get the next value from the iterator and check if it is 'None'
+   Builder.CreateBr(nextBB);
+   Builder.SetInsertPoint(nextBB);
+
+   llvm::Value* next = CGMemory::CreateAlloca(ObjectType::getStructureType("Option"));
+   // since next always returns an option, we use a by-value pass of the return param
+   Builder.CreateCall(Functions[node->nextFunc], { it, next });
+
+   llvm::Value* enumRawVal = CreateLoad(AccessField(0, next));
+   auto isNone = Builder.CreateICmpEQ(enumRawVal, Builder.getInt64(0));
+   Builder.CreateCondBr(isNone, mergeBB, bodyBB);
+
+   // codegen the loop body
+   Builder.SetInsertPoint(bodyBB);
+
+   llvm::Value* val;
+   // aka - is a class instance
+   if (node->iteratedType->isRefcounted()) {
+      val = ExtractFromOption(next, node->iteratedType);
+   }
+   else {
+      val = CreateLoad(ExtractFromOption(next, node->iteratedType->getPointerTo()));
+   }
+
+   MutableValues.emplace(node->binding, val);
+   BreakContinueStack.push({ mergeBB, nextBB });
+   node->body->accept(*this);
+
+   if (Builder.GetInsertBlock()->getTerminator() == nullptr) {
+      Builder.CreateBr(nextBB);
+   }
+
+   Builder.SetInsertPoint(mergeBB);
+   Builder.CreateCall(SymbolTable::getClass(node->iteratorClass)->getDestructor(), {
+      Builder.CreateBitCast(it, RefcountedType->getPointerTo())
+   });
+
+   return nullptr;
+}
+
+llvm::Value* CodeGen::visit(WhileStmt *node)
+{
+   auto cond_block = llvm::BasicBlock::Create(Context, "while.cond", functions.back());
+   auto body_block = llvm::BasicBlock::Create(Context, "while.body", functions.back());
+   auto merge_block = llvm::BasicBlock::Create(Context, "while.merge", functions.back());
 
    BreakContinueStack.push({ merge_block, cond_block });
 
@@ -1049,7 +1627,7 @@ llvm::Value* CodeGenVisitor::visit(WhileStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::CreateCStyleArray(
+llvm::Value* CodeGen::CreateCStyleArray(
    Type* type,
    llvm::Value* size,
    bool heapAlloc
@@ -1058,10 +1636,14 @@ llvm::Value* CodeGenVisitor::CreateCStyleArray(
    return CGMemory::CreateAlloca(elTy, true, "", size);
 }
 
-llvm::Value* CodeGenVisitor::CreateCStyleArray(
+llvm::Value* CodeGen::CreateCStyleArray(
    Type* type,
-   std::vector<std::shared_ptr<Expression>> &elements
-) {
+   std::vector<std::shared_ptr<Expression>> &elements)
+{
+   bool isPrimitive = isa<PrimitiveType>(type);
+   if (!type->isRefcounted()) {
+      type = type->getPointerTo();
+   }
 
    size_t i = 0;
    llvm::Value* carr = CreateCStyleArray(type, Builder.getInt64(elements.size()));
@@ -1084,22 +1666,18 @@ llvm::Value* CodeGenVisitor::CreateCStyleArray(
          gep = Builder.CreateInBoundsGEP(carr, Builder.getInt64(i));
       }
 
-      // avoid unneccessary memcpys if the element is a constructor call
-      if (isStruct && el->get_type() == NodeType::CALL_EXPR) {
-         auto asCall = std::static_pointer_cast<CallExpr>(el);
-         asCall->isHiddenReturnValue();
-         HiddenParamStack.push(gep);
+      auto val = el->accept(*this);
+      if (isPrimitive) {
+         auto alloca = CGMemory::CreateAlloca(val->getType());
+         CreateStore(val, alloca);
+         val = alloca;
+      }
 
-         asCall->accept(*this);
+      if (type->isRefcounted()) {
+         IncrementRefCount(val, type->getClassName());
       }
-      else if (isStruct && false) {
-         auto val = el->accept(*this);
-         Builder.CreateMemCpy(gep, val, structSize, align);
-      }
-      else {
-         auto val = el->accept(*this);
-         CreateStore(val, gep);
-      }
+
+      CreateStore(val, gep);
 
       ++i;
    }
@@ -1107,7 +1685,7 @@ llvm::Value* CodeGenVisitor::CreateCStyleArray(
    return carr;
 }
 
-llvm::Value* CodeGenVisitor::CreateCStyleArray(
+llvm::Value* CodeGen::CreateCStyleArray(
    Type *type,
    std::vector<llvm::Value*> &elements
 ) {
@@ -1133,6 +1711,10 @@ llvm::Value* CodeGenVisitor::CreateCStyleArray(
          gep = Builder.CreateInBoundsGEP(carr, Builder.getInt64(i));
       }
 
+      if (type->isRefcounted()) {
+         IncrementRefCount(el, type->getClassName());
+      }
+
       if (isStruct && false) {
          Builder.CreateMemCpy(gep, el, structSize, align);
       }
@@ -1146,15 +1728,13 @@ llvm::Value* CodeGenVisitor::CreateCStyleArray(
    return carr;
 }
 
-llvm::Value* CodeGenVisitor::CreateArray(
+llvm::Value* CodeGen::CreateArray(
    CollectionType *type,
-   std::vector<llvm::Value *> &elements
-) {
+   std::vector<llvm::Value *> &elements)
+{
    auto elPtrTy = new PointerType(type->getConcreteGeneric("T"));
    auto carr = CreateCStyleArray(elPtrTy, elements);
 
-   delete elPtrTy;
-
    auto ArrayType = ObjectType::getStructureType("Array");
    auto arr_alloc = CGMemory::CreateAlloca(ArrayType, true);
 
@@ -1164,21 +1744,18 @@ llvm::Value* CodeGenVisitor::CreateArray(
    carr = Builder.CreateBitCast(carr, AnyTy->getPointerTo()->getPointerTo());
 
    auto constr = Array->getConstructors().front();
-
    Builder.CreateCall(constr->llvmFunc, { arr_alloc, carr, GetInteger(elements.size()) });
 
    return arr_alloc;
 }
 
-llvm::Value* CodeGenVisitor::CreateArray(
+llvm::Value* CodeGen::CreateArray(
    CollectionType *type,
-   std::vector<std::shared_ptr<Expression>> &elements
-) {
+   std::vector<std::shared_ptr<Expression>> &elements)
+{
    auto elPtrTy = type->getConcreteGeneric("T");
    auto carr = CreateCStyleArray(elPtrTy, elements);
 
-   delete elPtrTy;
-
    auto ArrayType = ObjectType::getStructureType("Array");
    auto arr_alloc = CGMemory::CreateAlloca(ArrayType, true);
 
@@ -1194,8 +1771,8 @@ llvm::Value* CodeGenVisitor::CreateArray(
    return arr_alloc;
 }
 
-llvm::Value* CodeGenVisitor::visit(CollectionLiteral *node) {
-
+llvm::Value* CodeGen::visit(CollectionLiteral *node)
+{
    Type* elTy = node->type->getType();
    bool carray = elTy->isCStyleArray();
    llvm::Value* arr;
@@ -1203,8 +1780,6 @@ llvm::Value* CodeGenVisitor::visit(CollectionLiteral *node) {
    if (node->hasAttribute(Attr::CArray) && !carray) {
       auto elPtrTy = new PointerType(cast<CollectionType>(elTy)->getConcreteGeneric("T"));
       arr = CreateCStyleArray(elPtrTy, node->elements);
-
-      delete elPtrTy;
    }
    else if (carray) {
       arr = CreateCStyleArray(elTy, node->elements);
@@ -1226,16 +1801,16 @@ llvm::Value* CodeGenVisitor::visit(CollectionLiteral *node) {
  * @param node
  * @return
  */
-llvm::Value* CodeGenVisitor::visit(NumericLiteral *node) {
-
+llvm::Value* CodeGen::visit(NumericLiteral *node)
+{
    llvm::Value* literal = node->type->getConstantVal(node->value);
 
    if (!node->isPrimitive) {
       auto structTy = ObjectType::getStructureType(node->className);
       auto structAlloc = CGMemory::CreateAlloca(structTy);
 
-      Builder.CreateCall(SymbolTable::getClass(node->className)
-         ->getMemberwiseInitializer()->llvmFunc, { structAlloc, literal });
+      Builder.CreateCall(SymbolTable::getClass(node->className)->getMemberwiseInitializer()->llvmFunc,
+         { structAlloc, literal });
       literal = structAlloc;
    }
 
@@ -1250,7 +1825,8 @@ llvm::Value* CodeGenVisitor::visit(NumericLiteral *node) {
 
 }
 
-llvm::Value* CodeGenVisitor::visit(NoneLiteral *node) {
+llvm::Value* CodeGen::visit(NoneLiteral *node)
+{
    auto OptionTy = ObjectType::getStructureType("Option");
    auto alloca = CGMemory::CreateAlloca(OptionTy);
    Builder.CreateMemSet(alloca, Builder.getInt8(0), GetStructSize(OptionTy), sizeof(int*));
@@ -1258,11 +1834,12 @@ llvm::Value* CodeGenVisitor::visit(NoneLiteral *node) {
    return alloca;
 }
 
-llvm::Value* CodeGenVisitor::visit(StringLiteral *node) {
+llvm::Value* CodeGen::visit(StringLiteral *node)
+{
    auto isInferredCString = node->contextualType != nullptr && node->contextualType->isPointerTy() &&
       cast<PointerType>(node->contextualType)->getPointeeType()->isInt8Ty();
 
-   auto str = GetString(node->value, node->isHeapAllocated, node->raw || isInferredCString);
+   auto str = GetString(node->value, node->raw || isInferredCString);
    if (isInferredCString && !node->raw) {
       node->castHandled = true;
    }
@@ -1270,8 +1847,8 @@ llvm::Value* CodeGenVisitor::visit(StringLiteral *node) {
    return ReturnMemberRef(node, str);
 }
 
-llvm::Value* CodeGenVisitor::visit(SubscriptExpr *node) {
-
+llvm::Value* CodeGen::visit(SubscriptExpr *node)
+{
    llvm::Value* ret;
 
    if (node->isSubscriptOp) {
@@ -1292,7 +1869,8 @@ llvm::Value* CodeGenVisitor::visit(SubscriptExpr *node) {
    return ReturnMemberRef(node, ret);
 }
 
-llvm::Value* CodeGenVisitor::CopyByVal(llvm::Value *val) {
+llvm::Value* CodeGen::CopyByVal(llvm::Value *val)
+{
    auto structTy = val->getType()->getPointerElementType();
    auto size = GetStructSize(structTy);
 
@@ -1302,9 +1880,10 @@ llvm::Value* CodeGenVisitor::CopyByVal(llvm::Value *val) {
    return alloca;
 }
 
-llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
+llvm::Value* CodeGen::visit(CallExpr *node) {
    std::vector<llvm::Value*> args;
    bool increaseArgCount = false;
+   bool noByVal = false;
 
    unsigned int i = 1;
    std::vector<unsigned int> byVal;
@@ -1360,13 +1939,16 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
          lambda = Builder.CreateBitCast(Builder.CreateLoad(lambda),
             ObjectType::getStructureType("__lambda")->getPointerTo());
       }
+      else if (node->binding.empty()) {
+         lambda = pop();
+      }
       else {
          lambda = MutableValues[node->binding];
       }
 
       llvm::Value* func = Builder.CreateLoad(AccessField(0, lambda));
       llvm::Value* env = Builder.CreateLoad(AccessField(1, lambda));
-      func = Builder.CreateBitCast(func, node->functionType->getLlvmType()->getPointerTo());
+      func = Builder.CreateBitCast(func, node->functionType->getLlvmFunctionType()->getPointerTo());
 
       args.insert(args.begin(), env);
       call = Builder.CreateCall(func, args);
@@ -1378,10 +1960,14 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
 
       if (node->isHiddenReturnValue_) {
          alloca = HiddenParamStack.top();
-         HiddenParamStack.pop();
       }
       else {
          alloca = CGMemory::CreateAlloca(ObjectType::getStructureType(node->ident), !isStruct);
+      }
+
+      if (cl->isClass() && !node->isReturnValue_) {
+         //FIXME
+//         Cleanups.push({ alloca, cl->getName() });
       }
 
       args.insert(args.begin(), alloca);
@@ -1399,7 +1985,7 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
          return nullptr;
       }
    }
-   else if (node->type == CallType::METHOD_CALL && node->isNsMember) {
+   else if (node->type == CallType::METHOD_CALL && node->isNsMember && !node->isStatic) {
       auto enumTy = ObjectType::getStructureType(node->className);
 
       auto alloca = CGMemory::CreateAlloca(enumTy);
@@ -1419,7 +2005,7 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
    }
    else if (node->type == CallType::METHOD_CALL) {
 
-      if (node->hasHiddenParamReturn) {
+      if (node->hasHiddenParamReturn && !node->reverseProtoShift) {
          llvm::Value* structAlloc;
          auto allocTy = node->hiddenParamType->getLlvmType();
          structAlloc = CGMemory::CreateAlloca(allocTy);
@@ -1428,7 +2014,7 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
          args.insert(args.begin(), structAlloc);
       }
 
-      if (!node->isNsMember) {
+      if (!node->isStatic) {
          llvm::Value* target;
          increaseArgCount = true;
 
@@ -1442,7 +2028,7 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
          args.insert(args.begin(), target);
 
          if (node->reverseProtoShift) {
-            call = DispatchProtocolCall(node->castFrom, node->binding, target, args);
+            ret = DispatchProtocolCall(node->castFrom, node->binding, target, args, node->returnType);
          }
          else if (node->is_virtual) {
             call = DispatchVirtualCall(node->className, node->binding, args);
@@ -1454,7 +2040,9 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
             call = Builder.CreateCall(func, args);
          }
 
-         if (node->hasHiddenParamReturn) {
+         noByVal = node->method->isVirtual || node->method->isProtocolMethod;
+
+         if (node->hasHiddenParamReturn && call != nullptr) {
             call->addAttribute(2, llvm::Attribute::NoAlias);
             call->addAttribute(2, llvm::Attribute::StructRet);
          }
@@ -1469,6 +2057,10 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
    }
 
    for (auto j : byVal) {
+      if (noByVal) {
+         break;
+      }
+
       auto k = increaseArgCount ? j + 1 : j;
       k = node->hasHiddenParamReturn ? k + 1 : k;
 
@@ -1479,7 +2071,7 @@ llvm::Value* CodeGenVisitor::visit(CallExpr *node) {
    return ReturnMemberRef(node, ret);
 }
 
-llvm::Value* CodeGenVisitor::visit(MemberRefExpr *node) {
+llvm::Value* CodeGen::visit(MemberRefExpr *node) {
    llvm::Value* value;
 
    if (node->isEnumCase) {
@@ -1512,10 +2104,14 @@ llvm::Value* CodeGenVisitor::visit(MemberRefExpr *node) {
       value = AccessField(node->className, node->ident, val);
    }
 
+   if (value->getName().empty()) {
+      value->setName(node->ident);
+   }
+
    return ReturnMemberRef(node, value);
 }
 
-llvm::Value* CodeGenVisitor::HandleBinaryOperator(llvm::Value *lhs, llvm::Value *rhs, BinaryOperatorType opTy,
+llvm::Value* CodeGen::HandleBinaryOperator(llvm::Value *lhs, llvm::Value *rhs, BinaryOperatorType opTy,
    BinaryOperator *node)
 {
    if (node->isEnumComp) {
@@ -1526,10 +2122,10 @@ llvm::Value* CodeGenVisitor::HandleBinaryOperator(llvm::Value *lhs, llvm::Value 
          }
       }
 
-      return HandleEnumComp(lhs, rhs, assocValues, node->caseTypes);
+      return HandleEnumComp(lhs, rhs, assocValues, node->caseTypes, node->op == "!=");
    }
    if (node->isTupleComp) {
-      return HandleTupleComp(lhs, rhs, node);
+      return HandleTupleComp(lhs, rhs, node, node->op == "!=");
    }
 
    switch (opTy) {
@@ -1548,7 +2144,11 @@ llvm::Value* CodeGenVisitor::HandleBinaryOperator(llvm::Value *lhs, llvm::Value 
    }
 }
 
-llvm::Value* CodeGenVisitor::HandleAssignmentOp(llvm::Value *lhs, llvm::Value *rhs, BinaryOperator *node) {
+llvm::Value* CodeGen::HandleAssignmentOp(
+   llvm::Value *lhs,
+   llvm::Value *rhs,
+   BinaryOperator *node)
+{
    auto preAssignOp = util::isAssignmentOperator(node->op);
 
    if (preAssignOp != "=") {
@@ -1556,7 +2156,35 @@ llvm::Value* CodeGenVisitor::HandleAssignmentOp(llvm::Value *lhs, llvm::Value *r
       rhs = HandleBinaryOperator(CreateLoad(lhs), rhs, cdot::getBinaryOpType(preAssignOp), node);
    }
 
-   if (!node->isStructAssignment) {
+   if (node->updateRefCount) {
+      IncrementRefCount(rhs, node->operandType->getClassName());
+      DecrementRefCount(CreateLoad(lhs), node->operandType->getClassName());
+   }
+
+   if (node->isProtocolAssignment) {
+      // check if the wrapped type is a struct, and do a memcpy instead of a store
+      // if it is
+      llvm::BasicBlock* structBB = CreateBasicBlock("assign.struct");
+      llvm::BasicBlock* classBB = CreateBasicBlock("assign.class");
+      llvm::BasicBlock* mergeBB = CreateBasicBlock("assign.merge");
+
+      auto ld = CreateLoad(lhs);
+      auto size = CreateLoad(AccessField(Class::ProtoSizePos, ld));
+      auto cmp = Builder.CreateICmpSGT(size, wordSizedInt(0));
+      Builder.CreateCondBr(cmp, structBB, classBB);
+
+      Builder.SetInsertPoint(structBB);
+      auto objGep = Builder.CreateBitCast(CreateLoad(AccessField(Class::ProtoObjPos, ld)), ld->getType());
+      Builder.CreateMemCpy(objGep, rhs, size, node->operandType->getAlignment());
+      Builder.CreateBr(mergeBB);
+
+      Builder.SetInsertPoint(classBB);
+      CreateStore(rhs, lhs);
+      Builder.CreateBr(mergeBB);
+
+      Builder.SetInsertPoint(mergeBB);
+   }
+   else if (!node->isStructAssignment) {
       CreateStore(rhs, lhs);
    }
    else if (node->isNullAssignment) {
@@ -1569,7 +2197,7 @@ llvm::Value* CodeGenVisitor::HandleAssignmentOp(llvm::Value *lhs, llvm::Value *r
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::HandleArithmeticOp(llvm::Value *lhs, llvm::Value *rhs, BinaryOperator *node) {
+llvm::Value* CodeGen::HandleArithmeticOp(llvm::Value *lhs, llvm::Value *rhs, BinaryOperator *node) {
    auto& op = node->op;
 
    if (op == "+") {
@@ -1590,19 +2218,18 @@ llvm::Value* CodeGenVisitor::HandleArithmeticOp(llvm::Value *lhs, llvm::Value *r
    else if (op == "**") {
       llvm::Function* fun = llvm::Intrinsic::getDeclaration(Module.get(), llvm::Intrinsic::ID::powi,
          std::vector<llvm::Type*>{
-            node->operandType->getLlvmType(),
-            Builder.getInt32Ty()
+            node->operandType->getLlvmType()
          }
       );
 
-      return Builder.CreateCall(fun, { lhs, rhs });
+      return Builder.CreateCall(fun, { lhs, Builder.CreateSExtOrTrunc(rhs, Builder.getInt32Ty()) });
    }
 
    assert(false && "unknown binary operator");
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::HandleBitwiseOp(llvm::Value *lhs, llvm::Value *rhs, string& op) {
+llvm::Value* CodeGen::HandleBitwiseOp(llvm::Value *lhs, llvm::Value *rhs, string& op) {
    if (op == "&") {
       return Builder.CreateAnd(lhs, rhs);
    }
@@ -1626,64 +2253,64 @@ llvm::Value* CodeGenVisitor::HandleBitwiseOp(llvm::Value *lhs, llvm::Value *rhs,
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::HandleLogicalOp(llvm::Value *lhs, BinaryOperator* node) {
+llvm::Value* CodeGen::HandleLogicalOp(llvm::Value *lhs, BinaryOperator* node) {
    auto& op = node->op;
 
    if (op == "||") {
       auto begin = Builder.GetInsertBlock();
-      auto lor_rhs = llvm::BasicBlock::Create(Context, "", functions.back());
-      auto lor_false = llvm::BasicBlock::Create(Context, "", functions.back());
-      auto lor_merge = llvm::BasicBlock::Create(Context, "", functions.back());
+      auto rhsBB = CreateBasicBlock("log_or.rhs");
+      auto falseBB = CreateBasicBlock("log_or.false");
+      auto mergeBB = CreateBasicBlock("log_or.merge");
 
       // if lhs is true, go to merge immediately
-      Builder.CreateCondBr(lhs, lor_merge, lor_rhs);
+      Builder.CreateCondBr(lhs, mergeBB, rhsBB);
 
       // if rhs is true, go to merge, otherwise go to false block
-      Builder.SetInsertPoint(lor_rhs);
+      Builder.SetInsertPoint(rhsBB);
       auto rhs = node->rhs->accept(*this);
       // rhs codegen can change current block
-      lor_rhs = Builder.GetInsertBlock();
-      Builder.CreateCondBr(rhs, lor_merge, lor_false);
+      rhsBB = Builder.GetInsertBlock();
+      Builder.CreateCondBr(rhs, mergeBB, falseBB);
 
       // from false block, go to merge immediately, needed for phi node
-      Builder.SetInsertPoint(lor_false);
-      Builder.CreateBr(lor_merge);
+      Builder.SetInsertPoint(falseBB);
+      Builder.CreateBr(mergeBB);
 
-      Builder.SetInsertPoint(lor_merge);
+      Builder.SetInsertPoint(mergeBB);
       auto bool_ty = Builder.getInt1Ty();
 
       auto phi = Builder.CreatePHI(bool_ty, 3);
-      phi->addIncoming(llvm::ConstantInt::get(bool_ty, 0), lor_false);
-      phi->addIncoming(llvm::ConstantInt::get(bool_ty, 1), begin);
-      phi->addIncoming(llvm::ConstantInt::get(bool_ty, 1), lor_rhs);
+      phi->addIncoming(Builder.getFalse(), falseBB);
+      phi->addIncoming(Builder.getTrue(), begin);
+      phi->addIncoming(Builder.getTrue(), rhsBB);
 
       return phi;
    }
    if (op == "&&") {
-      auto lor_rhs = llvm::BasicBlock::Create(Context, "", functions.back());
-      auto lor_false = llvm::BasicBlock::Create(Context, "", functions.back());
-      auto lor_merge = llvm::BasicBlock::Create(Context, "", functions.back());
+      auto rhsBB = CreateBasicBlock("log_and.rhs");
+      auto falseBB = CreateBasicBlock("log_and.false");
+      auto mergeBB = CreateBasicBlock("log_and.merge");
 
       // if lhs is true, go to rhs, else to false
-      Builder.CreateCondBr(lhs, lor_rhs, lor_false);
+      Builder.CreateCondBr(lhs, rhsBB, falseBB);
 
       // if rhs is true, go to merge, otherwise to false
-      Builder.SetInsertPoint(lor_rhs);
+      Builder.SetInsertPoint(rhsBB);
       auto rhs = node->rhs->accept(*this);
       // rhs codegen can change the insert block (e.g. in nested expressions)
-      lor_rhs = Builder.GetInsertBlock();
-      Builder.CreateCondBr(rhs, lor_merge, lor_false);
+      rhsBB = Builder.GetInsertBlock();
+      Builder.CreateCondBr(rhs, mergeBB, falseBB);
 
       // from false block, go to merge immediately, needed for phi node
-      Builder.SetInsertPoint(lor_false);
-      Builder.CreateBr(lor_merge);
+      Builder.SetInsertPoint(falseBB);
+      Builder.CreateBr(mergeBB);
 
-      Builder.SetInsertPoint(lor_merge);
+      Builder.SetInsertPoint(mergeBB);
       auto bool_ty = Builder.getInt1Ty();
 
       auto phi = Builder.CreatePHI(bool_ty, 2);
-      phi->addIncoming(llvm::ConstantInt::get(bool_ty, 0), lor_false);
-      phi->addIncoming(llvm::ConstantInt::get(bool_ty, 1), lor_rhs);
+      phi->addIncoming(Builder.getFalse(), falseBB);
+      phi->addIncoming(Builder.getTrue(), rhsBB);
 
       return phi;
    }
@@ -1691,11 +2318,12 @@ llvm::Value* CodeGenVisitor::HandleLogicalOp(llvm::Value *lhs, BinaryOperator* n
    llvm_unreachable("Unknown logical operator");
 }
 
-llvm::Value* CodeGenVisitor::HandleEnumComp(
+llvm::Value* CodeGen::HandleEnumComp(
    llvm::Value *lhs,
    llvm::Value *rhs,
    std::vector<llvm::Value*>& assocValues,
-   std::vector<Type*>& assocTypes)
+   std::vector<Type*>& assocTypes,
+   bool neq)
 {
    assert(assocTypes.size() == assocValues.size() && "Value count mismatch");
 
@@ -1754,16 +2382,17 @@ llvm::Value* CodeGenVisitor::HandleEnumComp(
 
    Builder.SetInsertPoint(mergeBB);
    auto phi = Builder.CreatePHI(Builder.getInt1Ty(), 2);
-   phi->addIncoming(Builder.getTrue(), succBB);
-   phi->addIncoming(Builder.getFalse(), failBB);
+   phi->addIncoming(neq ? Builder.getFalse() : Builder.getTrue(), succBB);
+   phi->addIncoming(neq ? Builder.getTrue()  : Builder.getFalse(), failBB);
 
    return phi;
 }
 
-llvm::Value* CodeGenVisitor::HandleTupleComp(
+llvm::Value* CodeGen::HandleTupleComp(
    llvm::Value *lhs,
    llvm::Value *rhs,
-   BinaryOperator *node)
+   BinaryOperator *node,
+   bool neq)
 {
    std::vector<llvm::BasicBlock*> compBlocks;
    for (int i = 0; i < node->arity; ++i) {
@@ -1798,13 +2427,13 @@ llvm::Value* CodeGenVisitor::HandleTupleComp(
 
    Builder.SetInsertPoint(mergeBB);
    auto phi = Builder.CreatePHI(Builder.getInt1Ty(), 2);
-   phi->addIncoming(Builder.getTrue(), eqBB);
-   phi->addIncoming(Builder.getFalse(), neqBB);
+   phi->addIncoming(neq ? Builder.getFalse() : Builder.getTrue(), eqBB);
+   phi->addIncoming(neq ? Builder.getTrue()  : Builder.getFalse(), neqBB);
 
    return phi;
 }
 
-llvm::Value* CodeGenVisitor::HandleComparisonOp(
+llvm::Value* CodeGen::HandleComparisonOp(
    llvm::Value *lhs,
    llvm::Value *rhs,
    BinaryOperator* node)
@@ -1882,7 +2511,7 @@ llvm::Value* CodeGenVisitor::HandleComparisonOp(
    return Builder.CreateICmp(pred, lhs, rhs);
 }
 
-llvm::Value* CodeGenVisitor::HandleOtherOp(llvm::Value *lhs, llvm::Value *rhs, BinaryOperator *node) {
+llvm::Value* CodeGen::HandleOtherOp(llvm::Value *lhs, llvm::Value *rhs, BinaryOperator *node) {
    auto& op = node->op;
    if (op == "..") {
       // this one's the easy part
@@ -1935,18 +2564,35 @@ llvm::Value* CodeGenVisitor::HandleOtherOp(llvm::Value *lhs, llvm::Value *rhs, B
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::HandleCastOp(llvm::Value *lhs, BinaryOperator *node) {
-   auto toType = std::static_pointer_cast<TypeRef>(node->rhs)->getType();
-
+llvm::Value* CodeGen::HandleCastOp(llvm::Value *lhs, BinaryOperator *node)
+{
    if (node->overridenCall != nullptr) {
       push(lhs);
       return node->overridenCall->accept(*this);
    }
 
-   return CGCast::applyCast(node->operandType, toType, lhs, Builder);
+   return CGCast::applyCast(node->operandType, node->castTo, lhs, Builder);
 }
 
-llvm::Value* CodeGenVisitor::visit(BinaryOperator *node) {
+llvm::Value* CodeGen::visit(BinaryOperator *node)
+{
+   if (!node->staticVal.isVoid()) {
+      // "Primitive" types
+      if (node->operandType->isObject()) {
+         auto& className = node->operandType->getClassName();
+
+         if (className == "String") {
+            return GetString(node->staticVal.strVal, false);
+         }
+
+         if (className == "Int") {
+            return GetInteger(node->staticVal.intVal, node->staticVal.bitwidth, node->staticVal.isUnsigned);
+         }
+      }
+
+      return node->staticVal.getLlvmValue(Builder);
+   }
+
    auto& opType = node->opType;
    auto lhs = node->lhs->accept(*this);
 
@@ -1956,25 +2602,37 @@ llvm::Value* CodeGenVisitor::visit(BinaryOperator *node) {
       return node->overridenCall->accept(*this);
    }
 
+   llvm::Value* res;
    if (opType == BinaryOperatorType::LOGICAL) {
-      return HandleLogicalOp(lhs, node);
+      res = HandleLogicalOp(lhs, node);
+   }
+   else if (opType == BinaryOperatorType::CAST) {
+      res = HandleCastOp(lhs, node);
+   }
+   else {
+      auto rhs = node->rhs->accept(*this);
+      res = HandleBinaryOperator(lhs, rhs, opType, node);
    }
 
-   if (opType == BinaryOperatorType::CAST) {
-      return HandleCastOp(lhs, node);
-   }
-
-   auto rhs = node->rhs->accept(*this);
-
-   auto res = HandleBinaryOperator(lhs, rhs, opType, node);
    if (node->pointerArithmeticType != nullptr) {
       return Builder.CreateIntToPtr(res, node->pointerArithmeticType->getLlvmType());
    }
+   if (node->boxedPrimitiveOp && !node->boxedResultType.empty()) {
+      auto structTy = ObjectType::getStructureType(node->boxedResultType);
+      auto alloca = CGMemory::CreateAlloca(structTy);
 
-   return res;
+      Builder.CreateCall(
+         SymbolTable::getClass(node->boxedResultType)->getMemberwiseInitializer()->llvmFunc,
+         { alloca, res }
+      );
+
+      res = alloca;
+   }
+
+   return ReturnMemberRef(node, res);
 }
 
-llvm::Value* CodeGenVisitor::visit(TertiaryOperator *node) {
+llvm::Value* CodeGen::visit(TertiaryOperator *node) {
    auto cond = node->condition->accept(*this);
    auto if_block = llvm::BasicBlock::Create(Context, "tertiary.lhs", functions.back());
    auto else_block = llvm::BasicBlock::Create(Context, "tertiary.rhs", functions.back());
@@ -1997,14 +2655,37 @@ llvm::Value* CodeGenVisitor::visit(TertiaryOperator *node) {
    }
 
    Builder.SetInsertPoint(merge_block);
-   auto phi = Builder.CreatePHI(node->resultType->getLlvmType(), 2);
+   auto resType = node->resultType->getLlvmType();
+   if (resType->isStructTy()) {
+      resType = resType->getPointerTo();
+   }
+
+   auto phi = Builder.CreatePHI(resType, 2);
    phi->addIncoming(if_val, if_block);
    phi->addIncoming(else_val, else_block);
 
    return phi;
 }
 
-llvm::Value* CodeGenVisitor::visit(UnaryOperator *node) {
+llvm::Value* CodeGen::visit(UnaryOperator *node)
+{
+   if (!node->staticVal.isVoid()) {
+      // "Primitive" types
+      if (node->operandType->isObject()) {
+         auto& className = node->operandType->getClassName();
+
+         if (className == "String") {
+            return GetString(node->staticVal.strVal, false);
+         }
+
+         if (className == "Int") {
+            return GetInteger(node->staticVal.intVal, node->staticVal.bitwidth, node->staticVal.isUnsigned);
+         }
+      }
+
+      return node->staticVal.getLlvmValue(Builder);
+   }
+
    if (node->overridenCall != nullptr) {
       auto lhs = node->target->accept(*this);
       push(lhs);
@@ -2075,7 +2756,7 @@ llvm::Value* CodeGenVisitor::visit(UnaryOperator *node) {
    return ReturnMemberRef(node, res);
 }
 
-llvm::Value* CodeGenVisitor::visit(BreakStmt *node) {
+llvm::Value* CodeGen::visit(BreakStmt *node) {
    assert(!BreakContinueStack.empty() && BreakContinueStack.top().first != nullptr && "No target for break!");
 
    Builder.CreateBr(BreakContinueStack.top().first);
@@ -2084,7 +2765,7 @@ llvm::Value* CodeGenVisitor::visit(BreakStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(ContinueStmt *node) {
+llvm::Value* CodeGen::visit(ContinueStmt *node) {
    assert(!BreakContinueStack.empty() && BreakContinueStack.top().second != nullptr && "No target for continue!");
 
    Builder.CreateBr(BreakContinueStack.top().second);
@@ -2093,11 +2774,15 @@ llvm::Value* CodeGenVisitor::visit(ContinueStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(IfStmt *node) {
+llvm::Value* CodeGen::visit(IfStmt *node) {
+   auto cond = node->condition->accept(*this);
+   if (node->needsPrimitiveExtraction) {
+      cond = CreateLoad(AccessField(0, cond));
+   }
+
    if (node->elseBranch) {
-      auto cond = node->condition->accept(*this);
-      auto if_block = llvm::BasicBlock::Create(Context, "if", functions.back());
-      auto else_block = llvm::BasicBlock::Create(Context, "else", functions.back());
+      auto if_block = llvm::BasicBlock::Create(Context, "if.true", functions.back());
+      auto else_block = llvm::BasicBlock::Create(Context, "if.false", functions.back());
       llvm::BasicBlock* merge_block = nullptr;
 
       Builder.CreateCondBr(cond, if_block, else_block);
@@ -2128,9 +2813,8 @@ llvm::Value* CodeGenVisitor::visit(IfStmt *node) {
       }
    }
    else {
-      auto cond = node->condition->accept(*this);
-      auto if_block = llvm::BasicBlock::Create(Context, "if", functions.back());
-      auto merge_block = llvm::BasicBlock::Create(Context, "if_merge", functions.back());
+      auto if_block = llvm::BasicBlock::Create(Context, "if.true", functions.back());
+      auto merge_block = llvm::BasicBlock::Create(Context, "if.merge", functions.back());
 
       Builder.CreateCondBr(cond, if_block, merge_block);
 
@@ -2146,7 +2830,7 @@ llvm::Value* CodeGenVisitor::visit(IfStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy) {
+llvm::Value* CodeGen::CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy) {
    if (isa<FPType>(compTy)) {
       return Builder.CreateFCmp(llvm::CmpInst::Predicate::FCMP_OEQ, lhs, rhs);
    }
@@ -2165,7 +2849,7 @@ llvm::Value* CodeGenVisitor::CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, 
    return Builder.CreateCall(equals->llvmFunc, { lhs, rhs });
 }
 
-llvm::Value* CodeGenVisitor::visit(MatchStmt *node) {
+llvm::Value* CodeGen::visit(MatchStmt *node) {
    auto switchVal = node->switchValue->accept(*this);
    auto mergeBB = CreateBasicBlock("switch.merge");
    size_t numCases = node->cases.size();
@@ -2367,11 +3051,11 @@ llvm::Value* CodeGenVisitor::visit(MatchStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(CaseStmt *node) {
+llvm::Value* CodeGen::visit(CaseStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(LabelStmt *node) {
+llvm::Value* CodeGen::visit(LabelStmt *node) {
 
    llvm::BasicBlock* label_block = llvm::BasicBlock::Create(Context, node->labelName, functions.back());
    Builder.CreateBr(label_block);
@@ -2381,13 +3065,13 @@ llvm::Value* CodeGenVisitor::visit(LabelStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(GotoStmt *node) {
+llvm::Value* CodeGen::visit(GotoStmt *node) {
    Builder.CreateBr(labels[node->labelName]);
 
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(FuncArgDecl *node) {
+llvm::Value* CodeGen::visit(FuncArgDecl *node) {
    for (const auto& child : node->get_children()) {
       child->accept(*this);
    }
@@ -2395,7 +3079,7 @@ llvm::Value* CodeGenVisitor::visit(FuncArgDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(ReturnStmt *node) {
+llvm::Value* CodeGen::visit(ReturnStmt *node) {
 
    if (node->returnValue) {
       auto size = HiddenParamStack.size();
@@ -2405,9 +3089,9 @@ llvm::Value* CodeGenVisitor::visit(ReturnStmt *node) {
          if (size == HiddenParamStack.size() && size != 0) {
             // couldn't use the value so far? make a copy
             auto retTarget = HiddenParamStack.top();
-            HiddenParamStack.pop();
-
-            Builder.CreateMemCpy(retTarget, val, GetStructSize(val->getType()), getAlignment(val));
+            if (retTarget != val) {
+               Builder.CreateMemCpy(retTarget, val, GetStructSize(val->getType()), getAlignment(val));
+            }
          }
 
          goto ret_void;
@@ -2424,7 +3108,7 @@ llvm::Value* CodeGenVisitor::visit(ReturnStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(Expression *node) {
+llvm::Value* CodeGen::visit(Expression *node) {
    for (auto& child : node->get_children()) {
       child->accept(*this);
    }
@@ -2432,41 +3116,42 @@ llvm::Value* CodeGenVisitor::visit(Expression *node) {
    return nullptr;
 }
 
-void CodeGenVisitor::DeclareClass(ClassDecl *node) {
-
-   if (node->is_extension) {
-      return;
-   }
-
+void CodeGen::DeclareClass(ClassDecl *node)
+{
    const auto& cl = node->declaredClass;
-   for (const auto& method : cl->getMethods()) {
-      if (method.second->declaration != nullptr) {
-         DeclareMethod(method.second->declaration);
-      }
+   llvm::StructType* classType;
+   if (!cl->isAbstract()) {
+      classType = ObjectType::getStructureType(node->qualifiedName);
    }
 
-   for (const auto& field : cl->getFields()) {
-      if (field.second->declaration != nullptr) {
-         DeclareField(field.second->declaration);
-      }
+   for (const auto& field : node->fields) {
+      DeclareField(field.get());
    }
 
-   auto class_type = ObjectType::getStructureType(node->qualifiedName);
+   for (const auto& method : node->methods) {
+      DeclareMethod(method.get());
+   }
 
-   cl->generateMemoryLayout(Builder);
-   cl->generateVTables(Builder, *Module);
-
-   string prefix = cl->isStruct() ? "struct." : (cl->isProtocol() ? "protocol." : "class.");
-   StructSizes.emplace(prefix + cl->getName(),
-      pair<unsigned short, size_t>{ cl->getAlignment(), cl->getOccupiedBytes() });
-
-   class_type->setBody(cl->getMemoryLayout(), /*packed*/ true);
+   if (!node->is_extension && node->declaredClass->getMemberwiseInitializer() != nullptr &&
+      !node->explicitMemberwiseInitializer)
+   {
+      DeclareMemberwiseInitializer(node->declaredClass);
+   }
 
    if (!node->is_abstract && !node->is_extension) {
       auto name = node->qualifiedName + ".init.def";
-      DeclareDefaultConstructor(name, {}, new VoidType, class_type, node->selfBinding, cl);
+      DeclareDefaultConstructor(name, {}, new VoidType, classType, node->selfBinding, cl);
 
       node->defaultConstr->llvmFunc = cl->getDefaultContructor();
+   }
+
+   if (!node->is_extension && cl->isClass() && !cl->isAbstract()) {
+      if (node->destructor) {
+         DeclareDefaultDestructor(classType, node->destructor->selfBinding, cl);
+      }
+      else {
+         DeclareDefaultDestructor(classType, node->selfBinding, cl);
+      }
    }
 
    if (!node->constructors.empty()) {
@@ -2478,9 +3163,29 @@ void CodeGenVisitor::DeclareClass(ClassDecl *node) {
          DeclareConstr(constr.get());
       }
    }
+
+   auto& outstanding = cl->getOutstandingExtensions();
+   if (node->is_extension) {
+      outstanding.erase(std::find(outstanding.begin(), outstanding.end(), node));
+   }
+
+   if (!outstanding.empty()) {
+      return;
+   }
+
+   if (!cl->isAbstract()) {
+      cl->generateMemoryLayout(Builder);
+      cl->generateVTables(Builder, *Module);
+
+      string prefix = cl->isStruct() ? "struct." : (cl->isProtocol() ? "protocol." : "class.");
+      StructSizes.emplace(prefix + cl->getName(),
+         pair<unsigned short, size_t>{cl->getAlignment(), cl->getOccupiedBytes()});
+
+      classType->setBody(cl->getMemoryLayout(), /*packed*/ true);
+   }
 }
 
-void CodeGenVisitor::DeclareEnum(EnumDecl *node)
+void CodeGen::DeclareEnum(EnumDecl *node)
 {
    const auto& en = node->declaredEnum;
    for (const auto& method : en->getMethods()) {
@@ -2499,8 +3204,24 @@ void CodeGenVisitor::DeclareEnum(EnumDecl *node)
    enumType->setBody(en->getMemoryLayout());
 }
 
-void CodeGenVisitor::DefineField(FieldDecl *node) {
+void CodeGen::DefineField(FieldDecl *node)
+{
    auto& field_type = node->type->getType();
+   if (node->isStatic) {
+      auto llvmTy = field_type->getLlvmType();
+      llvm::GlobalVariable* global = new llvm::GlobalVariable(*Module, llvmTy,
+         field_type->isConst(), llvm::GlobalVariable::ExternalLinkage, nullptr, node->binding);
+
+      if (node->defaultVal) {
+         node->defaultVal->setGlobalVar(global);
+         global_initializers.emplace_back(node->defaultVal.get(), field_type);
+      }
+
+      global->setInitializer(llvm::cast<llvm::Constant>(field_type->getDefaultVal()));
+
+      MutableValues.emplace(node->binding, global);
+      return;
+   }
 
    if (node->isProtocolField) {
       return;
@@ -2540,24 +3261,11 @@ void CodeGenVisitor::DefineField(FieldDecl *node) {
    }
 }
 
-void CodeGenVisitor::DeclareField(FieldDecl *node) {
+void CodeGen::DeclareField(FieldDecl *node)
+{
    auto& field_type = node->type->getType();
 
    if (node->isStatic) {
-      llvm::Constant* def_val;
-
-      if (node->defaultVal) {
-         def_val = llvm::cast<llvm::Constant>(node->defaultVal->accept(*this));
-      }
-      else {
-         def_val = llvm::cast<llvm::Constant>(field_type->getDefaultVal());
-      }
-
-      auto global = new llvm::GlobalVariable(*Module, field_type->getLlvmType(),
-         field_type->isConst(), llvm::GlobalVariable::ExternalLinkage, def_val, node->binding);
-
-      MutableValues.emplace(node->binding, global);
-
       return;
    }
 
@@ -2632,8 +3340,8 @@ void CodeGenVisitor::DeclareField(FieldDecl *node) {
    }
 }
 
-void CodeGenVisitor::DeclareMethod(MethodDecl *node) {
-
+void CodeGen::DeclareMethod(MethodDecl *node)
+{
    if (node->isAlias) {
       return;
    }
@@ -2646,9 +3354,12 @@ void CodeGenVisitor::DeclareMethod(MethodDecl *node) {
          args.push_back(arg->argType->getType()->getLlvmType());
       }
 
-      llvm::FunctionType *func_type = llvm::FunctionType::get(node->returnType->getType()->getLlvmType(),
-         args, false);
+      auto retType = node->returnType->getType()->getLlvmType();
+      if (retType->isStructTy()) {
+         retType = retType->getPointerTo();
+      }
 
+      llvm::FunctionType *func_type = llvm::FunctionType::get(retType, args, false);
       FunctionTypes.emplace(node->binding, func_type);
       return;
    }
@@ -2656,7 +3367,7 @@ void CodeGenVisitor::DeclareMethod(MethodDecl *node) {
    if (!node->isStatic) {
       auto func = DeclareMethod(node->binding, node->args, node->returnType->getType(),
          ObjectType::getStructureType(node->class_name), node->selfBinding, node->attributes,
-         node->method->hasHiddenParam
+         node->method->hasHiddenParam, node->method->isProtocolMethod || node->method->isVirtual
       );
 
       node->method->llvmFunc = func;
@@ -2667,7 +3378,7 @@ void CodeGenVisitor::DeclareMethod(MethodDecl *node) {
    }
 }
 
-void CodeGenVisitor::DeclareConstr(ConstrDecl *node) {
+void CodeGen::DeclareConstr(ConstrDecl *node) {
    auto name = node->binding;
 
    auto constr = DeclareMethod(name, node->args, new VoidType, ObjectType::getStructureType(node->className),
@@ -2676,13 +3387,14 @@ void CodeGenVisitor::DeclareConstr(ConstrDecl *node) {
    node->method->llvmFunc = constr;
 }
 
-void CodeGenVisitor::DefineClass(ClassDecl *node) {
-
+void CodeGen::DefineClass(ClassDecl *node)
+{
    const auto& cl = node->declaredClass;
 
    for (const auto& field : node->fields) {
       DefineField(field.get());
    }
+
    for (const auto& method : node->methods) {
       DefineMethod(method.get());
 
@@ -2703,13 +3415,23 @@ void CodeGenVisitor::DefineClass(ClassDecl *node) {
       }
    }
 
+   if (!node->is_extension && node->declaredClass->getMemberwiseInitializer() != nullptr &&
+      !node->explicitMemberwiseInitializer)
+   {
+      DefineMemberwiseInitializer(node->declaredClass);
+   }
+
    if (!node->is_abstract && !node->is_extension) {
       auto name = node->qualifiedName + ".init.def";
       DefineDefaultConstructor(name, node->selfBinding, node->declaredClass);
    }
 
-   if (!node->is_extension && node->declaredClass->getMemberwiseInitializer() != nullptr) {
-      DefineMemberwiseInitializer(node->declaredClass);
+   if (!node->is_extension && cl->isClass() && !cl->isAbstract()) {
+      if (node->destructor != nullptr) {
+         DefineDefaultDestructor(node->destructor->selfBinding, cl, node->destructor->body);
+      } else {
+         DefineDefaultDestructor(node->selfBinding, cl);
+      }
    }
 
    for (const auto& constr : node->constructors) {
@@ -2726,7 +3448,7 @@ void CodeGenVisitor::DefineClass(ClassDecl *node) {
    }
 }
 
-void CodeGenVisitor::DefineMethod(MethodDecl *node) {
+void CodeGen::DefineMethod(MethodDecl *node) {
    if (node->body == nullptr || node->isAlias) {
       return;
    }
@@ -2734,11 +3456,30 @@ void CodeGenVisitor::DefineMethod(MethodDecl *node) {
    DefineFunction(node->binding, node->body);
 }
 
-void CodeGenVisitor::DefineConstr(ConstrDecl *node) {
+void CodeGen::DefineConstr(ConstrDecl *node) {
    DefineFunction(node->binding, node->body);
 }
 
-void CodeGenVisitor::DefineMemberwiseInitializer(cdot::cl::Class* cl) {
+void CodeGen::DefineMemberwiseInitializer(cdot::cl::Class *cl)
+{
+   auto& func = cl->getMemberwiseInitializer()->llvmFunc;
+   auto &fields = cl->getFields();
+
+   Builder.SetInsertPoint(&func->getEntryBlock());
+
+   auto it = func->arg_begin();
+   auto self = &*it;
+   ++it;
+
+   for (size_t i = 0; i < cl->getFields().size() && it != func->arg_end(); ++i, ++it) {
+      SetField(i, self, &*it, fields.at(i).second->fieldType->isStruct());
+   }
+
+   Builder.CreateRetVoid();
+}
+
+void CodeGen::DeclareMemberwiseInitializer(cdot::cl::Class* cl)
+{
    auto &init = cl->getMemberwiseInitializer();
    auto &fields = cl->getFields();
 
@@ -2772,39 +3513,32 @@ void CodeGenVisitor::DefineMemberwiseInitializer(cdot::cl::Class* cl) {
    func->addFnAttr(llvm::Attribute::AlwaysInline);
    func->addFnAttr(llvm::Attribute::NoRecurse);
 
-   Builder.SetInsertPoint(&func->getEntryBlock());
-
-   auto it = func->arg_begin();
-   auto self = &*it;
-   ++it;
-
-   for (size_t i = 0; i < cl->getFields().size() && it != func->arg_end(); ++i, ++it) {
-      SetField(i, self, &*it, fields.at(i).second->fieldType->isStruct());
-   }
-
-   Builder.CreateRetVoid();
    Functions.emplace(init->mangledName, func);
    init->llvmFunc = func;
 }
 
-llvm::Value* CodeGenVisitor::visit(ClassDecl *node) {
+llvm::Value* CodeGen::visit(ClassDecl *node) {
    DefineClass(node);
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(ConstrDecl *node) {
+llvm::Value* CodeGen::visit(ConstrDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(FieldDecl *node) {
+llvm::Value* CodeGen::visit(DestrDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(MethodDecl *node) {
+llvm::Value* CodeGen::visit(FieldDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(EnumDecl *node) {
+llvm::Value* CodeGen::visit(MethodDecl *node) {
+   return nullptr;
+}
+
+llvm::Value* CodeGen::visit(EnumDecl *node) {
    for (const auto& method : node->methods) {
       DefineMethod(method.get());
 
@@ -2828,8 +3562,8 @@ llvm::Value* CodeGenVisitor::visit(EnumDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(LambdaExpr *node) {
-
+llvm::Value* CodeGen::visit(LambdaExpr *node)
+{
    string lambdaName = "__anon";
    auto lambda = DeclareFunction(lambdaName, node->args, node->lambdaType->getReturnType(), false, nullptr, "",
       node->attributes, false, true);
@@ -2882,16 +3616,16 @@ llvm::Value* CodeGenVisitor::visit(LambdaExpr *node) {
    return alloca;
 }
 
-llvm::Value* CodeGenVisitor::visit(UsingStmt *node) {
+llvm::Value* CodeGen::visit(UsingStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(EndOfFileStmt *node) {
+llvm::Value* CodeGen::visit(EndOfFileStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(ImplicitCastExpr *node) {
-
+llvm::Value* CodeGen::visit(ImplicitCastExpr *node)
+{
    // for strings and literals this can void the need for a cast
    node->target->setContextualType(node->to);
    auto target = node->target->accept(*this);
@@ -2903,7 +3637,7 @@ llvm::Value* CodeGenVisitor::visit(ImplicitCastExpr *node) {
    return target;
 }
 
-llvm::Value* CodeGenVisitor::visit(ExtendStmt *node) {
+llvm::Value* CodeGen::visit(ExtendStmt *node) {
    for (const auto& field : node->fields) {
       field->accept(*this);
    }
@@ -2919,15 +3653,15 @@ llvm::Value* CodeGenVisitor::visit(ExtendStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(TypedefDecl *node) {
+llvm::Value* CodeGen::visit(TypedefDecl *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(TypeRef *node) {
+llvm::Value* CodeGen::visit(TypeRef *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(DeclareStmt *node) {
+llvm::Value* CodeGen::visit(DeclareStmt *node) {
    switch (node->declKind) {
       case DeclarationType::VAR_DECL: {
          new llvm::GlobalVariable(*Module, node->type->getType()->getLlvmType(), true,
@@ -2963,25 +3697,29 @@ llvm::Value* CodeGenVisitor::visit(DeclareStmt *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(LvalueToRvalue *node) {
+llvm::Value* CodeGen::visit(LvalueToRvalue *node) {
    auto val = node->target->accept(*this);
    val = CreateLoad(val);
 
    return val;
 }
 
-llvm::Value* CodeGenVisitor::visit(DebugStmt *node) {
+llvm::Value* CodeGen::visit(DebugStmt *node) {
    if (!node->isUnreachable) {
       int i = 3;
    }
+   else {
+      Builder.CreateUnreachable();
+   }
+
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(Statement *node) {
+llvm::Value* CodeGen::visit(Statement *node) {
    return nullptr;
 }
 
-llvm::Value* CodeGenVisitor::visit(TupleLiteral *node) {
+llvm::Value* CodeGen::visit(TupleLiteral *node) {
    llvm::StructType* tupleTy = llvm::cast<llvm::StructType>(node->tupleType->getLlvmType());
    string name = tupleTy->getStructName();
 

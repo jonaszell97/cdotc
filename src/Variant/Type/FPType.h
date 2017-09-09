@@ -31,7 +31,7 @@ namespace cdot {
          return true;
       }
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       Type* ArithmeticReturnType(string &op, Type *rhsTy) override;

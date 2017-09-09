@@ -6,7 +6,7 @@
 #include "ObjectType.h"
 #include "IntegerType.h"
 #include "VoidType.h"
-#include "../../AST/Visitor/CodeGen/CodeGenVisitor.h"
+#include "../../AST/Visitor/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
 #include "../../AST/Visitor/StaticAnalysis/Class.h"
 #include "../../Token.h"
@@ -26,7 +26,7 @@ namespace cdot {
 
    FPType::FPType(unsigned int precision) :
       precision(precision),
-      className(precision == 32 ? "Float" : "Double")
+      className(precision == 32 ? "float" : "double")
    {
       assert((precision == 32 || precision == 64) && "Invalid FP precision!");
       id = TypeID::FPTypeID;
@@ -158,7 +158,7 @@ namespace cdot {
       return nullptr;
    }
 
-   string FPType::toString() {
+   string FPType::_toString() {
       return precision == 64 ? "double" : "float";
    }
 

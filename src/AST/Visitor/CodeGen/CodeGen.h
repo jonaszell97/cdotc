@@ -39,9 +39,11 @@ namespace cdot {
 
 }
 
-class CodeGenVisitor {
+using cdot::cl::Class;
+
+class CodeGen {
 public:
-   CodeGenVisitor();
+   CodeGen();
 
    virtual llvm::Value* visit(NamespaceDecl*);
    virtual llvm::Value* visit(UsingStmt*);
@@ -52,6 +54,7 @@ public:
    virtual llvm::Value* visit(IdentifierRefExpr*);
    virtual llvm::Value* visit(DeclStmt*);
    virtual llvm::Value* visit(ForStmt*);
+   virtual llvm::Value* visit(ForInStmt*);
    virtual llvm::Value* visit(WhileStmt*);
 
    virtual llvm::Value* visit(CollectionLiteral*);
@@ -78,6 +81,7 @@ public:
    virtual llvm::Value* visit(MethodDecl*);
    virtual llvm::Value* visit(FieldDecl*);
    virtual llvm::Value* visit(ConstrDecl*);
+   virtual llvm::Value* visit(DestrDecl*);
    virtual llvm::Value* visit(EnumDecl*);
    virtual llvm::Value* visit(LambdaExpr*);
    virtual llvm::Value* visit(ImplicitCastExpr*);
@@ -112,6 +116,8 @@ public:
    static llvm::Value* CreateLoad(llvm::Value* ptr);
    static llvm::BasicBlock* CreateBasicBlock(string name, llvm::Function* func = nullptr);
 
+   static llvm::ConstantInt* wordSizedInt(int val);
+
    // classes
    static llvm::Value* AccessField(string ,string, llvm::Value*);
    static llvm::Value* AccessField(size_t, llvm::Value *);
@@ -119,11 +125,20 @@ public:
    static void SetField(size_t, llvm::Value*, llvm::Value*, bool = false);
    static void SetField(string, string, llvm::Value*, llvm::Value*, bool = false);
 
+   static llvm::Value* ExtractFromOption(llvm::Value* opt, Type* destTy);
+
+   static void DebugPrint(llvm::Value* val, string msg = "");
+
+   static llvm::Value* toInt8Ptr(llvm::Value *val);
+
+   static bool addStrMetadata(llvm::Value* inst, string str);
+
    static unordered_map<string, pair<unsigned short, size_t>> StructSizes;
 
    friend class CGType;
    friend class CGMemory;
-   friend class TypeCheckVisitor;
+   friend class TypeCheckPass;
+   friend class DeclPass;
    friend class InternalClass;
    friend class CGInternal;
    friend class cdot::cl::Class;
@@ -131,14 +146,23 @@ public:
 
    static llvm::LLVMContext Context;
    static llvm::IRBuilder<> Builder;
+   static llvm::StructType* ClassInfoType;
+   static llvm::StructType* TypeInfoType;
+   static llvm::IntegerType* WordTy;
 
 protected:
    static unique_ptr<llvm::Module> Module;
    static unordered_map<string, llvm::Value*> MutableValues;
    static unordered_map<string, llvm::Constant*> Functions;
    static unordered_map<string, llvm::FunctionType*> FunctionTypes;
-   static std::vector<Expression*> global_initializers;
+   static std::vector<pair<Expression*, Type*>> global_initializers;
    static llvm::Function* MALLOC;
+   static llvm::Function* FREE;
+   static llvm::Function* PRINTF;
+
+   static llvm::Function* ARC_INC;
+   static llvm::Function* ARC_DEC;
+   static llvm::StructType* RefcountedType;
 
 
    // function stack
@@ -185,7 +209,8 @@ protected:
       string this_binding = "",
       std::vector<Attribute> attrs = {},
       bool hiddenParam = false,
-      bool envParam = false
+      bool envParam = false,
+      bool isVirtualOrProtocolMethod = false
    );
 
    llvm::Function *DeclareFunction(
@@ -197,7 +222,8 @@ protected:
       string this_binding = "",
       std::vector<Attribute> attrs = {},
       bool hiddenParam = false,
-      bool envParam = false
+      bool envParam = false,
+      bool isVirtualOrProtocolMethod = false
    );
 
    llvm::Function* DeclareMethod(
@@ -207,7 +233,8 @@ protected:
       llvm::StructType *this_arg,
       string &this_binding,
       std::vector<Attribute> attrs = {},
-      bool hiddenParam = false
+      bool hiddenParam = false,
+      bool isVirtualOrProtocolMethod = false
    );
 
    void DefineFunction(llvm::Function*, std::shared_ptr<Statement> body, string name = "");
@@ -230,12 +257,22 @@ protected:
       cdot::cl::Class *cl
    );
 
-   llvm::Value* ApplyProtocolShift(Type *, string&, llvm::Value *);
-   llvm::CallInst* DispatchProtocolCall(Type *, string&, llvm::Value *, std::vector<llvm::Value*>& args);
+   llvm::Function* DeclareDefaultDestructor(
+      llvm::StructType* selfArg,
+      string& selfBinding,
+      cdot::cl::Class* cl
+   );
+
+   void DefineDefaultDestructor(
+      string& selfBinding,
+      cdot::cl::Class* cl,
+      std::shared_ptr<CompoundStmt> body = nullptr
+   );
+
+   llvm::Value* DispatchProtocolCall(Type *, string&, llvm::Value *, std::vector<llvm::Value*>& args, Type*
+      returnType);
 
    llvm::Value* ApplyStaticUpCast(Type *, string&, llvm::Value *);
-   llvm::Value* ApplyStaticDownCast(Type *, llvm::Value *);
-   llvm::Value* ApplyDynamicDownCast(Type *, llvm::Value *);
 
    llvm::CallInst* DispatchVirtualCall(string &className, string &methodName,
       std::vector<llvm::Value*>& args);
@@ -250,7 +287,9 @@ protected:
 
    void DeclareConstr(ConstrDecl*);
    void DefineConstr(ConstrDecl*);
-   void DefineMemberwiseInitializer(cdot::cl::Class*);
+
+   void DeclareMemberwiseInitializer(cdot::cl::Class *cl);
+   void DefineMemberwiseInitializer(cdot::cl::Class *cl);
 
    // utility
    llvm::ConstantInt* ONE;
@@ -263,11 +302,15 @@ protected:
 
    llvm::Value* CopyByVal(llvm::Value*);
 
+   void IncrementRefCount(llvm::Value*, string& className);
+   void DecrementRefCount(llvm::Value*, string& className);
+   void CreateCleanup(long count);
+
    unordered_map<string, llvm::Value*> hiddenParams;
    std::stack<llvm::Value*> HiddenParamStack;
 
    // reusable values
-   llvm::Value* GetString(string&, bool = false, bool = false);
+   llvm::Value* GetString(string&, bool = false);
    unordered_map<string, llvm::Value*> Strings = {};
 
    // collections
@@ -290,8 +333,8 @@ protected:
 
    // enum & tuple comparison
    llvm::Value* HandleEnumComp(llvm::Value*lhs, llvm::Value*rhs, std::vector<llvm::Value*>& assocValues,
-      std::vector<Type*>& assocTypes);
-   llvm::Value* HandleTupleComp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node);
+      std::vector<Type*>& assocTypes, bool neq = false);
+   llvm::Value* HandleTupleComp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node, bool neq = false);
 
    // pattern matching
    llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy);

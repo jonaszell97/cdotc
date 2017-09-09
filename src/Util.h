@@ -21,7 +21,7 @@ namespace cdot {
    };
 }
 
-class TypeCheckVisitor;
+class TypeCheckPass;
 class Expression;
 using std::pair;
 using std::string;
@@ -59,6 +59,8 @@ namespace util {
 
    extern std::vector<string> assignmentOperators;
    string isAssignmentOperator(string&);
+
+   extern std::vector<pair<string, string>> LlvmFunctionAttrs;
 
    template <class T>
    bool in_vector(std::vector<T>& vec, T el) {

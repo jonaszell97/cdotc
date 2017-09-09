@@ -1,8 +1,7 @@
 
 using Builtin.Primitive
 
-class Char {
-    memberwise init
+struct Char {
     let val: int8 { get }
 
     init {
@@ -11,5 +10,11 @@ class Char {
 
     def infix as int8 {
         return val
+    }
+}
+
+extend Char with StringRepresentable {
+    def infix as String {
+        return String(self)
     }
 }

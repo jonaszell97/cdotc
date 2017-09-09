@@ -76,7 +76,7 @@ namespace cdot {
 
    llvm::Type *VoidType::_getLlvmType() { return Builder->getVoidTy(); }
 
-   string VoidType::toString() {
+   string VoidType::_toString() {
       if (pointeeType) {
          return pointeeType->toString() + "*";
       }

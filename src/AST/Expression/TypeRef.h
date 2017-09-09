@@ -17,6 +17,10 @@ public:
 
    string toString();
 
+   void isGenericConstraint(bool constr) {
+      isGenericConstraint_ = constr;
+   }
+
    inline Type*& getType(bool force = false) {
       assert((force || resolved) && "Resolve type before accessing!");
       return type;
@@ -39,19 +43,29 @@ public:
       return NodeType::TYPE_REF;
    }
 
-   llvm::Value* accept(CodeGenVisitor& v) override {
+   llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   void accept(DeclPass& v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
+   bool isGenericConstraint_ = false;
    bool resolved = false;
    Type* type = nullptr;
 };

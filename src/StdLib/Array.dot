@@ -1,38 +1,33 @@
 
-class Array<T> with Printable, Iterable<T> {
+class Array<T> with Iterable<T> {
     var raw: T* { get }
     var size: Int { get }
-
     var capacity: Int { get } = 0
 
-    static def initRaw(arr: ref T*, len: Int) unsafe {
+    private static def initRaw(arr: ref T*, len: Int) unsafe {
         let newArr: T[len]
         arr = newArr
     }
 
-    public init (arr: T*, len: Int) {
+    init (arr: T*, len: Int) {
         raw = arr
         size = len
         capacity = len
     }
 
-    public init (i: Int) {
+    init (i: Int) {
         capacity = i
         size = 0
         initRaw(raw, i)
     }
 
-    public init {
+    init {
         capacity = 1
         size = 0
         initRaw(raw, 1)
     }
 
-    public def getIterator() -> ArrayIterator<T> {
-        return ArrayIterator<T>(self)
-    }
-
-    public def push(t: T) unsafe {
+    def push(t: T) unsafe {
         if (size + 1 > capacity) {
             capacity = capacity << 1
             let newArr = Extern.C.malloc(capacity) as T*
@@ -46,14 +41,14 @@ class Array<T> with Printable, Iterable<T> {
         ++size
     }
 
-    public def pop -> T {
+    def pop -> T {
         let back = raw[size - 1]
         --size
         
         return back
     }
 
-    public def reserve (i: Int) unsafe {
+    def reserve (i: Int) unsafe {
         capacity = capacity + i
         let newArr = Extern.C.malloc(capacity) as T*
         copyTo(newArr)
@@ -62,15 +57,15 @@ class Array<T> with Printable, Iterable<T> {
         raw = newArr
     }
 
-    public def first -> T {
+    def first -> T {
         return raw[0]
     }
 
-    public def last -> T {
+    def last -> T {
         return raw[size - 1]
     }
 
-    public def at(i: Int) -> T {
+    def at(i: Int) -> T {
         return self[i]
     }
 
@@ -80,23 +75,23 @@ class Array<T> with Printable, Iterable<T> {
         }
     }
 
-    public def postfix [](index: Int) -> ref T unsafe {
+    def postfix [](index: Int) -> ref T unsafe {
         if (index >= size) {
             print("No can do baby doll")
             Extern.C.exit(69.val as Int32)
         }
 
-        return &raw[index]
+        return raw[index]
     }
 
-    public def infix +(rhs: Array<T>) -> Array<T> unsafe {
+    def infix +(rhs: Array<T>) -> Array<T> unsafe {
         var newArr = Array(raw, size)
         newArr += rhs
         
         return newArr
     }
 
-    public def infix +=(rhs: Array<T>) unsafe {
+    def infix +=(rhs: Array<T>) unsafe {
         var newArr = Extern.C.malloc(size + rhs.size) as T*
         var i = 0
 
@@ -110,10 +105,16 @@ class Array<T> with Printable, Iterable<T> {
         size = i + size
         capacity = size
     }
+}
 
-    public def toString -> String {
+extend Array with Iterable<T> {
+    def getIterator() -> ArrayIterator<T> {
+        return ArrayIterator<T>(self)
+    }
+}
+
+extend Array with StringRepresentable {
+    def infix as String {
         return "[]"
     }
-
-    public def infix as String = toString
 }

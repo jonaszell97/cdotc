@@ -15,7 +15,7 @@ Lexer::Lexer(string& program) :
    current_token_index(0),
    last_token_index(0)
 {
-
+   current_token = Token(T_BOF, {}, 0, 0, 0);
 }
 
 std::string Lexer::s_val() {
@@ -251,7 +251,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          next = get_next_char();
       }
 
-      return Token(T_LITERAL, { std::move(t) }, start_line, _start_index, current_index);
+      return Token(T_LITERAL, { t }, start_line, _start_index, current_index);
    }
 
    // escape sequence
@@ -263,7 +263,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 
       }
 
-      return Token(T_IDENT, { std::move(t) }, start_line, _start_index, current_index);
+      return Token(T_IDENT, { t }, start_line, _start_index, current_index);
    }
 
    // number literal (decimal, octal, hexadecimal or binary; with or without exponent or floating point)
@@ -409,19 +409,19 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       backtrack_c(1);
 
       if (is_operator(t)) {
-         return Token(T_OP, { std::move(t) }, start_line, _start_index, current_index);
+         return Token(T_OP, { t }, start_line, _start_index, current_index);
       }
       else if (t == "none") {
          return Token(T_LITERAL, { }, start_line, _start_index, current_index);
       }
       else if (is_keyword(t)) {
-         return Token(T_KEYWORD, { std::move(t) }, start_line, _start_index, current_index);
+         return Token(T_KEYWORD, { t }, start_line, _start_index, current_index);
       }
       else if (is_bool_literal(t)) {
          return Token(T_LITERAL, { t == "true" }, start_line, _start_index, current_index);
       }
       else {
-         return Token(T_IDENT, { std::move(t) }, start_line, _start_index, current_index);
+         return Token(T_IDENT, { t }, start_line, _start_index, current_index);
       }
    }
 
@@ -442,7 +442,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          backtrack_c(1);
       }
 
-      return Token(T_OP, { std::move(t) }, start_line, _start_index, current_index);
+      return Token(T_OP, { t }, start_line, _start_index, current_index);
    }
 
    if (is_punctuator(first)) {

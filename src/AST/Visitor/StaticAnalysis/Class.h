@@ -72,6 +72,7 @@ namespace cl {
 
       bool isStatic = false;
       bool isProtocolMethod = false;
+      bool isVirtual = false;
       string protocolName;
 
       MethodDecl* declaration;
@@ -115,6 +116,8 @@ namespace cl {
          MethodDecl* declaration
       );
 
+      void inheritProtocols(std::vector<ObjectType*>& protocols, ObjectType* current, bool initial = true);
+      void checkProtocolConformance(ObjectType *protoObj);
       void finalize();
 
       MethodResult hasMethod(
@@ -147,11 +150,11 @@ namespace cl {
          bool swap = false
       );
 
-      Method* declareMemberwiseInitializer();
+      bool declareMemberwiseInitializer();
 
       MethodResult ancestorHasMethod(string &name, std::vector<Type *> &args);
 
-      void addConformity(ObjectType* proto) {
+      void addConformance(ObjectType *proto) {
          conformsTo_.push_back(proto);
       }
 
@@ -174,6 +177,10 @@ namespace cl {
 
       bool isStruct() {
          return is_struct;
+      }
+
+      bool isClass() {
+         return is_class;
       }
 
       bool isGeneric() {
@@ -201,6 +208,19 @@ namespace cl {
          }
       }
 
+      bool isEmptyProtocol() {
+         if (!is_protocol || !methods.empty()) {
+            return false;
+         }
+         for (const auto& prot : conformsTo_) {
+            if (!SymbolTable::getClass(prot->getClassName())->isEmptyProtocol()) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+
       void defineParentClass();
 
       short getAlignment() {
@@ -219,7 +239,7 @@ namespace cl {
          return typeID;
       }
 
-      bool conformsTo(string &name);
+      bool conformsTo(string name);
 
       bool protectedPropAccessibleFrom(string &class_context);
       bool privatePropAccessibleFrom(string &class_context);
@@ -280,7 +300,7 @@ namespace cl {
          return fieldOffsets;
       }
 
-      llvm::GlobalVariable* getVtable() {
+      llvm::Constant* getVtable() {
          return vtable;
       }
 
@@ -333,10 +353,12 @@ namespace cl {
          return conformsTo_;
       }
 
-      virtual llvm::Constant*  generateTypeInfo(llvm::IRBuilder<>& Builder);
+      virtual void generateTypeInfo(llvm::IRBuilder<>& Builder);
       virtual void generateMemoryLayout(llvm::IRBuilder<>& Builder);
       virtual void generateProtocolMemoryLayout(llvm::IRBuilder<>& Builder);
       virtual void generateVTables(llvm::IRBuilder<> &Builder, llvm::Module &Module);
+
+      virtual void collectProtocolVTableOffsets(ObjectType *proto, size_t &pos);
 
       void needsTypeInfoGen(bool gen) {
          needsTypeInfo = gen;
@@ -345,11 +367,49 @@ namespace cl {
          }
       }
 
-      static llvm::StructType* TypeInfoType;
+      llvm::Function* getDestructor() {
+         return destructor;
+      }
+
+      std::vector<pair<size_t, string>>& getRefCountedFields() {
+         return refCountedFields;
+      }
+
+      void setDestructor(llvm::Function* destr) {
+         destructor = destr;
+      }
+
+      size_t getRefCountOffset() {
+         return refCountOffset;
+      }
+
+      llvm::Value* getTypeInfo() {
+         return typeInfo;
+      }
+
+      bool hasAssociatedTypes() {
+         return hasAssociatedTypes_;
+      }
+
+      void hasAssociatedTypes(bool assoc) {
+         hasAssociatedTypes_ = assoc;
+      }
 
       ObjectType* getType();
 
+      void extend(ClassDecl* extension) {
+         outstandingExtensions.push_back(extension);
+      }
+
+      std::vector<ClassDecl*>& getOutstandingExtensions() {
+         return outstandingExtensions;
+      }
+
       typedef std::unique_ptr<Class> UniquePtr;
+
+      static unsigned int ProtoVtblPos;
+      static unsigned int ProtoObjPos;
+      static unsigned int ProtoSizePos;
 
    protected:
       static size_t lastTypeID;
@@ -358,6 +418,8 @@ namespace cl {
       size_t typeID;
       string className;
       string typeName;
+
+      std::vector<ClassDecl*> outstandingExtensions;
 
       ObjectType* extends = nullptr;
       Class* parentClass = nullptr;
@@ -385,6 +447,8 @@ namespace cl {
       unordered_map<string, size_t> fieldOffsets;
       unordered_map<string, size_t> methodOffsets;
       unordered_map<string, size_t> vtableOffsets;
+      size_t refCountOffset;
+      std::vector<pair<size_t, string>> refCountedFields;
 
       std::vector<pair<string, string>> virtualMethods;
 
@@ -394,6 +458,8 @@ namespace cl {
       bool is_abstract = false;
       bool is_protocol = false;
       bool is_struct = false;
+      bool is_class = false;
+      bool hasAssociatedTypes_ = false;
 
       bool finalized = false;
 
@@ -401,11 +467,13 @@ namespace cl {
       bool layoutGenerated = false;
       bool emptyLayout = false;
 
+      llvm::Function* destructor = nullptr;
+
       bool needsTypeInfo;
 
       size_t occupiedBytes = 0;
       short alignment = 1;
-      llvm::GlobalVariable* vtable = nullptr;
+      llvm::Constant* vtable = nullptr;
       llvm::GlobalVariable* typeInfo = nullptr;
       unordered_map<string, llvm::GlobalVariable*> protocolVtables;
 

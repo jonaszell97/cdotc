@@ -19,17 +19,22 @@ public:
         return NodeType::CONTINUE_STMT;
     }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
+    llvm::Value* accept(CodeGen& v) override {
         return v.visit(this);
     }
 
-    Type* accept(TypeCheckVisitor& v) override {
+    Type* accept(TypeCheckPass& v) override {
         return v.visit(this);
     }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+    friend class ConstExprPass;
+    friend class CodeGen;
+    friend class TypeCheckPass;
+   friend class DeclPass;
 };
 
 

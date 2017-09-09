@@ -30,6 +30,7 @@ namespace cdot {
       SymbolTable::declareTypedef("Builtin.Primitive.int16", IntegerType::get(16));
       SymbolTable::declareTypedef("Builtin.Primitive.int8", IntegerType::ConstInt8);
       SymbolTable::declareTypedef("Builtin.Primitive.int1", IntegerType::ConstInt1);
+      SymbolTable::declareTypedef("Builtin.Primitive.word", IntegerType::get(sizeof(int*) * 8));
 
       SymbolTable::declareTypedef("Builtin.Primitive.uint64", IntegerType::get(64, true));
       SymbolTable::declareTypedef("Builtin.Primitive.uint32", IntegerType::get(32, true));
@@ -56,7 +57,7 @@ namespace cdot {
          ImportPrimitive();
       }
       if (fullImport || name == "Builtin.RawPointer") {
-         ImportRawPointer(CodeGenVisitor::Builder, CodeGenVisitor::Context);
+         ImportRawPointer(CodeGen::Builder, CodeGen::Context);
       }
    }
 

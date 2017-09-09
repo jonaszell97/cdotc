@@ -24,9 +24,10 @@ public:
       return NodeType::ENUM_CASE_DECL;
    }
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
    friend class cdot::cl::Class;
 
 protected:

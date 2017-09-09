@@ -21,17 +21,22 @@ public:
         return NodeType::NAMESPACE_DECL;
     }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
+    llvm::Value* accept(CodeGen& v) override {
         return v.visit(this);
     }
 
-    Type* accept(TypeCheckVisitor& v) override {
+    Type* accept(TypeCheckPass& v) override {
         return v.visit(this);
     }
 
-    friend class ConstExprVisitor;
-    friend class TypeCheckVisitor;
-    friend class CodeGenVisitor;
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+    friend class ConstExprPass;
+    friend class TypeCheckPass;
+   friend class DeclPass;
+    friend class CodeGen;
 
 
 protected:

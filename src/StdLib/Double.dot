@@ -1,4 +1,60 @@
 
-class Double {
-    
+using Builtin.Primitive
+using Extern.C
+
+struct Double {
+    var val: double
+
+    init (f: float) {
+        val = f as double
+    }
+}
+
+extend Double with StringRepresentable {
+    def toString (precision: Int) -> String {
+        if val == 0 {
+            return "0." + String(chr: '0', repeat: precision)
+        }
+        
+        let negative = val < 0
+        var num = Math.round(self * (10 ** precision))
+        
+        if (negative) {
+            num = -num
+        }
+
+        var powerOfTen = Math.floor(Math.log10(num as Double))
+        var strLen = powerOfTen + 2
+        if (negative) {
+            strLen = strLen + 1
+        }
+        
+        let str = String(strLen)
+        var i = 0
+        if (negative) {
+            str[0] = '-'
+            ++i
+        }
+        
+        while powerOfTen > 0 {
+            if i == strLen - precision - 1 {
+                ++i
+            }
+
+            var fits = Math.floor(num / (10 ** powerOfTen))
+            str[i] = (fits + 48) as int8
+
+            num = Math.round(num - fits * (10 ** powerOfTen))
+            --powerOfTen
+            ++i
+        }
+
+        str[i] = (num + 48) as int8
+        str[strLen - precision - 1] = '.'
+        return str
+    }
+
+    def infix as String {
+        return toString(2)
+    }
 }

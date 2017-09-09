@@ -41,7 +41,7 @@ namespace cdot {
       llvm_unreachable("resolve first!");
    }
 
-   string AutoType::toString() {
-      return "Auto";
+   string AutoType::_toString() {
+      return "auto";
    }
 }

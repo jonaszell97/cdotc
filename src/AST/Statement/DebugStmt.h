@@ -24,16 +24,22 @@ public:
       return NodeType::DEBUG_STMT;
    }
 
-   llvm::Value* accept(CodeGenVisitor& v) override {
+   llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   friend class TypeCheckVisitor;
-   friend class CodeGenVisitor;
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class TypeCheckPass;
+   friend class DeclPass;
+   friend class CodeGen;
+   friend class ConstExprPass;
 
    typedef std::shared_ptr<DebugStmt> SharedPtr;
 

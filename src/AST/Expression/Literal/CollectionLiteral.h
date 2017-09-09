@@ -11,33 +11,38 @@ class TypeRef;
 
 class CollectionLiteral : public Expression {
 public:
-    explicit CollectionLiteral(std::shared_ptr<TypeRef>);
+   explicit CollectionLiteral(std::shared_ptr<TypeRef>);
 
-    void add_element(Expression::SharedPtr);
+   void add_element(Expression::SharedPtr);
 
-    typedef std::shared_ptr<CollectionLiteral> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int) override;
+   typedef std::shared_ptr<CollectionLiteral> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int) override;
 
-    NodeType get_type() override {
-        return NodeType::COLLECTION_LITERAL;
-    }
+   NodeType get_type() override {
+      return NodeType::COLLECTION_LITERAL;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGen& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckPass& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
-    std::vector<Expression::SharedPtr> elements;
-    std::shared_ptr<TypeRef> type;
+   std::vector<Expression::SharedPtr> elements;
+   std::shared_ptr<TypeRef> type;
 };
 
 

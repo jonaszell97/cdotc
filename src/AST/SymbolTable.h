@@ -90,8 +90,8 @@ public:
       unordered_multimap<string, std::unique_ptr<Function>>::iterator> getFunction(string &, std::vector<string> &);
 
    static string mangleVariable(string &, Type *);
-   static string mangleVariable(string &, string = "");
-   static string mangleFunction(string &, std::vector<Type *> &, string = "");
+   static string mangleVariable(string &, size_t = 0);
+   static string mangleFunction(string &, std::vector<Type *> &);
 
    static string mangleMethod(string &, string &, std::vector<Type *> &);
 

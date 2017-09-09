@@ -1,225 +1,200 @@
 
 using Builtin.Primitive
+using Extern.C
 
 /**
- * Wrapper class for primitive integers,
- * since it is a single element struct there is little to no 
- * runtime overhead
+ * Wrapper class for native word-sized integers
  */
 @inline(always)
-struct Int with IntegerProtocol {
+struct Int {
     var val: int64
 
-    /**
-     * Default initializer, usually implicitly called by the compiler
-     */
-    init (val: int64) {
-        self.val = val
+    def infix as Int64 {
+        return val
     }
 
-    /**
-     * This integers value
-     */
+    def sqrt -> Double {
+        return Extern.Llvm.`llvm.sqrt.f64`(val as double)
+    }
+
+    def prefix √ = sqrt
+
+    def cbrt -> Double {
+        return Extern.Llvm.`llvm.pow.f64`(val as double, 1 / 3)
+    }
+
+    def prefix ∛ = cbrt
+}
+
+extend Int with Comparable {
+    def infix < (rhs: Int) -> Bool {
+        return Bool(val < rhs.val)
+    }
+
+    def infix <= (rhs: Int) -> Bool {
+        return Bool(val <= rhs.val)
+    }
+
+    def infix > (rhs: Int) -> Bool {
+        return Bool(val > rhs.val)
+    }
+
+    def infix >= (rhs: Int) -> Bool {
+        return Bool(val >= rhs.val)
+    }
+}
+
+extend Int with Equatable {
+    def infix == (rhs: Int) -> Bool {
+        return Bool(val == rhs.val)
+    }
+
+    def infix != (rhs: Int) -> Bool {
+        return Bool(val != rhs.val)
+    }
+}
+
+extend Int with Hashable {
     def hashCode -> UInt64 {
         return val as UInt64
     }
+}
 
-    /**
-     * Adds two integer values
-     */
+extend Int with Number {
     def infix + (rhs: Int) -> Int {
         return Int(val + rhs.val)
     }
 
-    /**
-     * Subtracts two integer values
-     */
     def infix - (rhs: Int) -> Int {
         return Int(val - rhs.val)
     }
     
-    /**
-     * Multiplies two integer values
-     */
     def infix * (rhs: Int) -> Int {
         return Int(val * rhs.val)
     }
 
-    /**
-     * Diviedes two integer values
-     */
     def infix / (rhs: Int) -> Double {
-        return val / rhs.val
+        return Double(val / rhs.val)
     }
 
-    /**
-     * Calculates the remainder of two integers
-     */
     def infix % (rhs: Int) -> Int {
         return Int(val % rhs.val)
     }
 
-    /**
-     * Returns the value itself
-     */
     def prefix + -> Int {
         return Int(val)
     }
 
-    /**
-     * Returns the negated value
-     */
     def prefix - -> Int {
         return Int(-val)
     }
-
-    /**
-     * Pre-Increment
-     */
+    
     def prefix ++ -> Int {
         ++val
         return self
     }
 
-    /**
-     * Pre-Decrement
-     */
     def prefix -- -> Int {
         --val
         return self
     }
 
-    /**
-     * Post-Increment
-     */
     def postfix ++ -> Int {
         let tmp = Int(val)
         ++val
         return tmp
     }
 
-    /**
-     * Post-Decrement
-     */
     def postfix -- -> Int {
         let tmp = Int(val)
         --val
         return tmp
     }
 
-    /**
-     * True if and only if both values are equal
-     */
-    def infix == (rhs: Int) -> Bool { 
-        return val == rhs.val
+    def infix ** (rhs: Int) -> Double {
+        return Extern.Llvm.`llvm.powi.f64`(val as double, rhs.val as int32)
     }
+}
 
-    /**
-     * True if and only if both values are not equal
-     */
-    def infix != (rhs: Int) -> Bool {
-        return val != rhs.val
-    }
-
-    /**
-     * @return Bool
-     */
-    def infix < (rhs: Int) -> Bool {
-        return val < rhs.val
-    }
-
-    /**
-     * @return Bool
-     */
-    def infix <= (rhs: Int) -> Bool {
-        return val <= rhs.val
-    }
-
-    /**
-     * @return Bool
-     */
-    def infix > (rhs: Int) -> Bool {
-        return val > rhs.val
-    }
-
-    /**
-     * @return Bool
-     */
-    def infix >= (rhs: Int) -> Bool {
-        return val >= rhs.val
-    }
-
-    /**
-     * Returns the primitive integer value
-     */
-    def infix as Int64 {
-        return val
-    }
-
-    /**
-     * Arithmetic shift left
-     */
+extend Int with IntegerProtocol {
     def infix << (rhs: Int) -> Int {
         return Int(val << rhs.val)
     }
 
-    /**
-     * Arithmetic shift right
-     */
     def infix >> (rhs: Int) -> Int {
         return Int(val >> rhs.val)
     }
 
-    /**
-     * Logical shift right
-     */
     def infix >>> (rhs: Int) -> Int {
         return Int(val >>> rhs.val)
     }
 
-    /**
-     * Bitwise 'and'
-     */
     def infix & (rhs: Int) -> Int {
         return Int(val & rhs.val)
     }
 
-    /**
-     * Bitwise 'or'
-     */
     def infix | (rhs: Int) -> Int {
         return Int(val | rhs.val)
     }
 
-    /**
-     * Bitwise 'xor'
-     */
     def infix ^ (rhs: Int) -> Int {
         return Int(val ^ rhs.val)
     }
 
-    /**
-     * Bitwise negation
-     */
     def prefix ~ -> Int {
         return Int(~val)
     }
+}
 
-    /**
-     * Quadratic root
-     */
-    def sqrt -> Double {
-        return Extern.Llvm.`llvm.sqrt.f64`(val as Double)
+extend Int with Ordered {
+    def next -> Int {
+        return advanced(by: 1)
     }
 
-    def prefix √ = sqrt
-
-    /**
-     * Cubic root
-     */
-    def cbrt -> Double {
-        return Extern.Llvm.`llvm.pow.f64`(val as Double, 1 / 3)
+    def prev -> Int {
+        return advanced(by: -1)
     }
 
-    def prefix ∛ = cbrt
+    def advanced(by: Int) -> Int {
+        return self + by
+    }
+}
+
+extend Int with StringRepresentable {
+    def infix as String {
+        if val == 0 {
+            return "0"
+        }
+
+        let negative = val < 0
+        var num = val
+        if negative {
+            num = -num
+        }
+
+        var powerOfTen = Math.floor(Math.log10(num as double))
+        var strLen = powerOfTen + 1
+        if negative {
+            strLen = strLen + 1
+        }
+        
+        let str = String(strLen)
+        var i = 0
+        if negative {
+            str[0] = '-'
+            ++i
+        }
+
+        while powerOfTen > 0 {
+            var fits = Math.floor(num / (10 ** powerOfTen).val)
+            str[i] = (fits.val + 48) as int8
+
+            num = (num - (fits.val as double) * (10 ** powerOfTen).val) as int64
+            --powerOfTen
+            ++i
+        }
+
+        str[i] = (num + 48) as int8
+        return str
+    }
 }

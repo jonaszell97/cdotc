@@ -2,54 +2,97 @@
 using Builtin.Primitive
 
 class String {
-    let length: Int { get }
-    let charArray: int8* { get }
+    var length: Int { get }
+    var charArray: int8* { get }
 
-    public init {
+    init() unsafe {
+        charArray = 0x0 as int8*
         length = 0
-        charArray = null
     }
 
-    public init (str: int8*, len: Int) {
+    init (str: int8*, len: Int) {
         charArray = str
         length = len
     }
 
-    public def postfix [] (index: Int) -> ref int8 unsafe {
-        if (index > length) {
-            print("no can do bby doll")
-            return '\0'
-        }
-        
-        return &charArray[index]
+    init (len: Int) unsafe {
+        charArray = Extern.C.malloc(len + 1) as int8*
+        charArray[len] = '\0'
+        length = len
     }
 
-    public def infix + (s: String) -> String unsafe {
-        let newStr = Extern.C.malloc(length + s.length) as int8*
+    init (c: Char) unsafe {
+        charArray = Extern.C.malloc(2) as int8*
+        charArray[0] = c.val
+        charArray[1] = '\0'
+        length = 1
+    }
 
-        for (let i = 0; i < length; ++i) {
+    init (chr: Char, repeat: Int) unsafe {
+        charArray = Extern.C.malloc(repeat + 1) as int8*
+        for var i = 0; i < repeat; ++i {
+            charArray[i] = chr.val
+        }
+
+        charArray[repeat] = '\0'
+        length = repeat
+    }
+
+    deinit {
+        Extern.C.printf("Deinitializing...\n")
+        // Extern.C.free(charArray) FIXME
+    }
+
+    def postfix [] (index: Int) -> ref int8 unsafe {
+        if (index > length) {
+            print("no can do bby doll")
+            Extern.C.exit(11 as int32)
+            __unreachable
+        }
+        
+        return charArray[index]
+    }
+
+    def infix + (p: StringRepresentable) -> String unsafe {
+        var copy = String(charArray, length)
+        copy += p
+
+        return copy
+    }
+
+    def infix += (p: StringRepresentable) unsafe {
+        let s = p as String
+        let newStr = Extern.C.malloc(length + s.length + 1) as int8*
+
+        for var i = 0; i < length; ++i {
             newStr[i] = charArray[i]
         }
 
-        for (let i = 0; i < s.length; ++i) {
+        for var i = 0; i < s.length; ++i {
             newStr[i + length] = s.charArray[i]
         }
-        
-        return String(newStr, length + s.length)
+
+        charArray = newStr
+        length = length + s.length
+        newStr[length] = '\0'
     }
 
-    public def substr(begin: Int, len: Int = length) -> String unsafe {
+    def substr(begin: Int, len: Int = length) -> String unsafe {
         if (begin + len > length) {
             print("Nice try, sucker")
             Extern.C.exit(69.val as Int32)
         }
 
         let newStr = Extern.C.malloc(len) as int8*
-        for (let i = 0; i < len; ++i) {
+        for var i = 0; i < len; ++i {
             newStr[i] = charArray[i + begin]
         }
 
         return String(newStr, len)
+    }
+
+    def _raw -> int8* {
+        return charArray
     }
 }
 
@@ -57,22 +100,93 @@ class StringIterator with Iterator<Char> {
     let str: String
     var curr: Int
 
-    public init (str: String) {
+    init (str: String) {
         self.str = str
         self.curr = 0
     }
 
-    public def next -> Char? {
-        if (curr >= str.length) {
-            return null
+    def next -> Char? {
+        if curr >= str.length {
+            return none
         }
-
-        return Char(str[curr++])
+        
+        return .Some(Char(str[curr++]))
     }
 }
 
 extend String with Iterable<Char> {
-    public def getIterator -> StringIterator {
+    def getIterator -> StringIterator {
         return StringIterator(self)
+    }
+}
+
+extend String with StringRepresentable {
+    def infix as String {
+        return self
+    }
+}
+
+extend String with Hashable {
+    /// djb2 hash - see http://www.cse.yorku.ca/~oz/hash.html
+    def hashCode -> UInt64 {
+        var hash: uint64 = 5381
+        for var i = 0; i < length; ++i {
+            hash = ((hash << (5.val as int64)) + hash) + charArray[i]
+        }
+
+        return hash
+    }
+}
+
+extend String with Equatable {
+    def infix == (s: String) -> Bool {
+        if length != s.length {
+            return false
+        }
+
+        for let i = 0; i < length; ++i {
+            if charArray[i] != s.charArray[i] {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    def infix != (s: String) -> Bool {
+        return !(self == s)
+    }
+}
+
+extend String with Comparable {
+    def infix > (s: String) -> Bool {
+        let maxLen = length > s.length ? length : s.length
+        for let i = 0; i < maxLen; ++i {
+            if length <= i {
+                return false
+            }
+            if s.length <= i {
+                return true
+            }
+            if self[i] == s[i] {
+                continue
+            }
+            
+            return Bool(self[i] > s[i])
+        }
+
+        return false
+    }
+
+    def infix < (s: String) -> Bool {
+        return !(self > s) && self != s
+    }
+
+    def infix >= (s: String) -> Bool {
+        return self == s || self > s
+    }
+
+    def infix <= (s: String) -> Bool {
+        return self == s || self < s
     }
 }

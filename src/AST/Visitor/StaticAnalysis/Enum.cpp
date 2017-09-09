@@ -12,6 +12,7 @@ namespace cl {
    {
       type->isEnum(true);
       needsTypeInfo = false;
+      is_class = false;
    }
 
    void Enum::generateMemoryLayout(llvm::IRBuilder<> &Builder)

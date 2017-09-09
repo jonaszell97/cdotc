@@ -25,18 +25,11 @@ namespace cdot {
       ObjectType(string&&);
       ObjectType(string&);
 
-      ~ObjectType() override {
-         for (const auto& gen : concreteGenericTypes) {
-            delete gen.second;
-         }
-
-         for (const auto& gen : unqualifiedGenerics) {
-            delete gen;
-         }
-      }
+      ~ObjectType() override;
 
       static ObjectType* get(string className);
       static ObjectType* getOptionOf(Type *T);
+      static ObjectType* getAnyTy();
 
       inline string& getClassName() override {
          return className;
@@ -69,6 +62,11 @@ namespace cdot {
       }
 
       inline void specifyGenericType(string genericName, Type* type) {
+         type->isGeneric(true);
+         if (type->isObject() && type->getGenericClassName().empty()) {
+            type->setGenericClassName(type->getClassName());
+         }
+
          concreteGenericTypes.emplace(genericName, type);
       }
 
@@ -80,6 +78,8 @@ namespace cdot {
          lvalue = false;
          return this;
       }
+
+      bool isRefcounted() override;
 
       bool hasDefaultValue() override;
 
@@ -93,8 +93,7 @@ namespace cdot {
       std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
       std::vector<Type**> getTypeReferences() override;
 
-      string toString() override;
-
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       bool implicitlyCastableTo(Type*) override;
@@ -179,6 +178,16 @@ namespace cdot {
             && concreteGenericTypes["T"]->getClassName() == className;
       }
 
+      bool hasSelfRequirement() override {
+         return hasSelfRequirement_;
+      }
+
+      void hasSelfRequirement(bool selfReq) override {
+         hasSelfRequirement_ = selfReq;
+      }
+
+      Type* unbox() override;
+
       llvm::Value* getDefaultVal() override;
 
       static std::unordered_map<std::string, llvm::StructType*> StructureTypes;
@@ -219,6 +228,8 @@ namespace cdot {
       bool isGeneric_ = false;
       Type *contravariance = nullptr;
       string genericClassName;
+
+      bool hasSelfRequirement_ = false;
 
       EnumCase *knownCase = nullptr;
       std::vector<pair<string, std::shared_ptr<Expression>>> associatedValues;

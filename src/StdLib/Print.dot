@@ -6,47 +6,6 @@ def print() {
     printf(@cstring "\n")
 }
 
-def print(a: Any, separator: int8 = '\n') {
-    printf(@cstring "0x%08x%c", a as Int8, separator)
-}
-
-def print(s: String, separator: int8 = '\n') {
-    printf(@cstring "%s%c", s.charArray, separator)
-}
-
-def print(c: Int8*, separator: int8 = '\n') {
-    printf(c)
-    printf(@cstring "%c", separator)
-}
-
-def print(i: Int, separator: int8 = '\n') {
-    printf(@cstring "%d%c", i.val, separator)
-}
-
-def print(i: Int8, separator: int8 = '\n') {
-    printf(@cstring "%c%c", i, separator)
-}
-
-def print(c: Char, separator: int8 = '\n') {
-    printf(@cstring "%c%c", c.val, separator)
-}
-
-def print(i: Int64, separator: int8 = '\n') {
-    printf(@cstring "%d%c", i, separator)
-}
-
-def print(d: Double, separator: int8 = '\n') {
-    printf(@cstring "%f%c", d, separator)
-}
-
-def print(f: Float, separator: int8 = '\n') {
-    printf(@cstring "%f%c", f as Double, separator)
-}
-
-def print(b: Bool, separator: int8 = '\n') {
-    if (b) {
-        printf(@cstring "%s%c", @cstring "true", separator)
-    } else {
-        printf(@cstring "%s%c", @cstring "false", separator)
-    }
+def print(p: StringRepresentable, separator: int8 = '\n') {
+    printf("%s%c", (p as String).charArray, separator)
 }

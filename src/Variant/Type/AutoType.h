@@ -14,7 +14,7 @@ namespace cdot {
    public:
       explicit AutoType();
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       Type* deepCopy() override;

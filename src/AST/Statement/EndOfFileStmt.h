@@ -23,15 +23,20 @@ public:
         return NodeType::EOF_STMT;
     }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
+    llvm::Value* accept(CodeGen& v) override {
         return v.visit(this);
     }
 
-    Type* accept(TypeCheckVisitor& v) override {
+    Type* accept(TypeCheckPass& v) override {
         return v.visit(this);
     }
 
-    friend class TypeCheckVisitor;
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+    friend class TypeCheckPass;
+   friend class DeclPass;
 };
 
 

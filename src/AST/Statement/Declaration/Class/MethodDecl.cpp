@@ -8,58 +8,63 @@
 #include "../../Declaration/FuncArgDecl.h"
 
 MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
-        CompoundStmt::SharedPtr body, AccessModifier am, bool is_static) :
-    methodName(method_name),
-    returnType(return_type),
-    args(args),
-    body(body),
-    am(am),
-    isStatic(is_static),
-    isAbstract(false)
+      CompoundStmt::SharedPtr body, AccessModifier am, bool is_static) :
+   methodName(method_name),
+   returnType(return_type),
+   args(args),
+   body(body),
+   am(am),
+   isStatic(is_static),
+   isAbstract(false)
 {
 
 }
 
 MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
-        AccessModifier am, bool is_static) :
-    methodName(method_name),
-    returnType(return_type),
-    args(args),
-    am(am),
-    isStatic(is_static),
-    isAbstract(true)
+      AccessModifier am, bool is_static) :
+   methodName(method_name),
+   returnType(return_type),
+   args(args),
+   am(am),
+   isStatic(is_static),
+   isAbstract(true)
 {
 
 }
 
 MethodDecl::MethodDecl(string alias, string originMethod, std::vector<std::shared_ptr<FuncArgDecl>> args) :
-    methodName(originMethod),
-    alias(alias),
-    args(args),
-    isAlias(true)
+   methodName(originMethod),
+   alias(alias),
+   args(args),
+   isAlias(true)
 {
 
 }
 
 std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
-    std::vector<AstNode::SharedPtr> children;
-    for (auto arg : args) {
-        children.push_back(arg);
-    }
+   std::vector<AstNode::SharedPtr> children;
+   for (auto arg : args) {
+      children.push_back(arg);
+   }
 
-    if (body != nullptr) {
-        children.push_back(body);
-    }
+   if (body != nullptr) {
+      children.push_back(body);
+   }
 
-    return children;
+   return children;
 }
 
 void MethodDecl::__dump(int depth) {
-    AstNode::__tab(depth);
-    std::cout << (isStatic ? "Static" : "") << "MethodDecl [" << (isAbstract ? "abstract " : "") << util::am_map[am]
-            << " " << methodName << " => " << returnType->toString() << "]" << std::endl;
+   AstNode::__tab(depth);
+   if (!isAlias) {
+      std::cout << (isStatic ? "Static" : "") << "MethodDecl [" << (isAbstract ? "abstract " : "") << util::am_map[am]
+              << " " << methodName << " => " << returnType->toString() << "]" << std::endl;
+   }
+   else {
+      std::cout << "MethodAlias [" + methodName + " = " + alias + "]\n";
+   }
 
-    for (auto c : get_children()) {
-        c->__dump(depth + 1);
-    }
+   for (auto c : get_children()) {
+      c->__dump(depth + 1);
+   }
 }

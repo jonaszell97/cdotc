@@ -37,22 +37,22 @@ void SymbolTable::resolveTypedef(Type *&ts, std::vector<string> &namespaces) {
    }
 }
 
-string SymbolTable::mangleVariable(string &id, string scope) {
-   return "_V" + std::to_string(id.length()) + id + scope;
+string SymbolTable::mangleVariable(string &id, size_t scope) {
+   return "_V" + std::to_string(id.length()) + id + std::to_string(scope);
 }
 
 string SymbolTable::mangleVariable(string &id, Type *type) {
    return "_V" + std::to_string(id.length()) + id + "_" + type->toString();
 }
 
-string SymbolTable::mangleFunction(string &id, std::vector<Type *> &args, string scope) {
+string SymbolTable::mangleFunction(string &id, std::vector<Type *> &args) {
    string symbol = "_F" + std::to_string(id.length()) + id;
    for (auto arg : args) {
       auto str =  arg->toString();
       symbol += std::to_string(str.length()) + str;
    }
 
-   return symbol + scope;
+   return symbol;
 }
 
 
@@ -78,7 +78,12 @@ bool SymbolTable::isNamespace(string &name) {
 }
 
 void SymbolTable::declareVariable(string &name, Type *type) {
-   variables.emplace(name, type);
+   if (variables.find(name) != variables.end()) {
+      variables[name] = type;
+   }
+   else {
+      variables.emplace(name, type);
+   }
 }
 
 void SymbolTable::declareFunction(string &name, Function::UniquePtr &&fun) {
@@ -235,7 +240,7 @@ cdot::cl::Class* SymbolTable::getClass(string name, string prefix) {
       return classes[name].get();
    }
 
-   return nullptr;
+   llvm_unreachable("Call hasClass first!");
 }
 
 cdot::cl::Class* SymbolTable::getClass(string name) {
@@ -243,7 +248,7 @@ cdot::cl::Class* SymbolTable::getClass(string name) {
       return classes[name].get();
    }
 
-   return nullptr;
+   llvm_unreachable("Call hasClass first!");
 }
 
 cdot::cl::Class* SymbolTable::getClass(string name, std::vector<string> &namespaces) {
@@ -253,7 +258,7 @@ cdot::cl::Class* SymbolTable::getClass(string name, std::vector<string> &namespa
       }
    }
 
-   return nullptr;
+   llvm_unreachable("Call hasClass first!");
 }
 
 Type* SymbolTable::getTypedef(string name, string prefix) {

@@ -23,7 +23,7 @@ namespace cdot {
    struct Variant {
 
       Variant();
-      Variant(string&& s);
+      Variant(string s);
       Variant(long l);
       Variant(int l);
       Variant(bool b);
@@ -33,6 +33,10 @@ namespace cdot {
 
       string toString();
       llvm::Value* getLlvmValue(llvm::IRBuilder<>& Builder);
+
+      bool isVoid() {
+         return type == VariantType::VOID;
+      }
 
       // binary math operators
 //   Variant operator+(Variant v1);

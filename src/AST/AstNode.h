@@ -7,8 +7,10 @@
 
 #include <iostream>
 #include "Attribute/Attribute.h"
-#include "Visitor/StaticAnalysis/TypeCheckVisitor.h"
-#include "Visitor/CodeGen/CodeGenVisitor.h"
+#include "Visitor/StaticAnalysis/TypeCheckPass.h"
+#include "Visitor/CodeGen/CodeGen.h"
+#include "Visitor/StaticAnalysis/ConstExprPass.h"
+#include "Visitor/Declaration/DeclPass.h"
 #include "../Variant/Type/Type.h"
 
 namespace cdot {
@@ -30,10 +32,10 @@ enum class NodeType {
    EXPLICIT_CAST_EXPR, IMPLICIT_CAST_EXPR, LVALUE_TO_RVALUE,
 
    BREAK_STMT, CASE_STMT, CONTINUE_STMT, FOR_STMT, GOTO_STMT, IF_STMT, LABEL_STMT, RETURN_STMT, SWITCH_STMT,
-   WHILE_STMT,
+   WHILE_STMT, FOR_IN_STMT,
 
    CLASS_DECL, ENUM_DECL, ENUM_CASE_DECL, CONSTR_DECL, FIELD_DECL, METHOD_DECL, OPERATOR_DECL, INTERFACE_DECL,
-   STRUCT_DECL, FUNC_ARG_DECL,
+   STRUCT_DECL, FUNC_ARG_DECL, DESTR_DECL,
    FUNCTION_DECL, NAMESPACE_DECL, TYPEDEF_DECL, DECLARATION, DECLARE_STMT,
 
    USING_STMT, EOF_STMT, DEBUG_STMT,
@@ -122,19 +124,22 @@ public:
 
    virtual void heapAllocate();
 
-   virtual string getSourceFile();
+   virtual pair<string, string> getSourceFile();
 
    virtual NodeType get_type() = 0;
 
-   virtual llvm::Value* accept(CodeGenVisitor& v) = 0;
-   virtual Type* accept(TypeCheckVisitor& v) = 0;
+   virtual llvm::Value* accept(CodeGen& v) = 0;
+   virtual Type* accept(TypeCheckPass& v) = 0;
+   virtual Variant accept(ConstExprPass& v) = 0;
+   virtual void accept(DeclPass& v) = 0;
 
    virtual void __dump(int depth) = 0;
    virtual void __tab(int depth);
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
    int startIndex;

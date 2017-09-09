@@ -8,7 +8,7 @@
 #include "../Expression/Expression.h"
 
 class CallExpr;
-class ConstExprVisitor;
+class ConstExprPass;
 
 namespace cdot {
 
@@ -54,19 +54,22 @@ namespace cdot {
          return NodeType::BINARY_OPERATOR;
       }
 
-      llvm::Value *accept(CodeGenVisitor &v) override {
+      llvm::Value *accept(CodeGen &v) override {
          return v.visit(this);
       }
 
-      Type *accept(TypeCheckVisitor &v) override {
+      Type *accept(TypeCheckPass &v) override {
          return v.visit(this);
       }
 
-      friend class ::ConstExprVisitor;
+      Variant accept(ConstExprPass &v) override {
+         return v.visit(this);
+      }
 
-      friend class ::CodeGenVisitor;
-
-      friend class ::TypeCheckVisitor;
+      friend class ::ConstExprPass;
+      friend class ::CodeGen;
+      friend class ::TypeCheckPass;
+      friend class ::DeclPass;
 
    protected:
       Expression::SharedPtr lhs;
@@ -83,6 +86,12 @@ namespace cdot {
       cdot::cl::Method *method;
       bool isStructAssignment = false;
       bool isNullAssignment = false;
+      bool isProtocolAssignment = false;
+
+      bool boxedPrimitiveOp = false;
+      bool lhsIsBoxed = false;
+      bool rhsIsBoxed = false;
+      string boxedResultType;
 
       // special comparison operators
       bool isEnumComp = false;
@@ -94,6 +103,8 @@ namespace cdot {
       size_t arity;
       std::vector<Type*> tupleTypes;
       llvm::Type* llvmTupleType;
+
+      bool updateRefCount = false;
    };
 
 }

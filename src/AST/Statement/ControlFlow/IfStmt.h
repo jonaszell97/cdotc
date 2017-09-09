@@ -11,39 +11,42 @@ class Expression;
 
 class IfStmt : public Statement {
 public:
-    IfStmt(std::shared_ptr<Expression>, Statement::SharedPtr);
-    IfStmt(std::shared_ptr<Expression>);
+   IfStmt(std::shared_ptr<Expression>, Statement::SharedPtr);
+   IfStmt(std::shared_ptr<Expression>);
 
-    inline void setElseBranch(Statement::SharedPtr else_branch) {
-        elseBranch = else_branch;
-    }
+   inline void setElseBranch(Statement::SharedPtr else_branch) {
+      elseBranch = else_branch;
+   }
 
-    typedef std::unique_ptr<IfStmt> UniquePtr;
-    typedef std::shared_ptr<IfStmt> SharedPtr;
+   typedef std::unique_ptr<IfStmt> UniquePtr;
+   typedef std::shared_ptr<IfStmt> SharedPtr;
 
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int depth) override;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int depth) override;
 
-    NodeType get_type() override {
-        return NodeType::IF_STMT;
-    }
+   NodeType get_type() override {
+      return NodeType::IF_STMT;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGen& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckPass& v) override {
+      return v.visit(this);
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
-    std::shared_ptr<Expression> condition;
-    Statement::SharedPtr ifBranch;
-    Statement::SharedPtr elseBranch;
+   std::shared_ptr<Expression> condition;
+   Statement::SharedPtr ifBranch;
+   Statement::SharedPtr elseBranch;
+   
+   bool needsPrimitiveExtraction = false;
 };
 
 

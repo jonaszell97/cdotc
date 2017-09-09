@@ -4,7 +4,7 @@
 
 #include "TupleType.h"
 #include "../../Util.h"
-#include "../../AST/Visitor/CodeGen/CodeGenVisitor.h"
+#include "../../AST/Visitor/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
 #include "../../AST/Visitor/StaticAnalysis/Class.h"
 #include "../../AST/Visitor/CodeGen/CGMemory.h"
@@ -72,7 +72,7 @@ namespace cdot {
       }
    }
 
-   void TupleType::visitContained(TypeCheckVisitor &v) {
+   void TupleType::visitContained(TypeCheckPass &v) {
       for (const auto& raw : rawTypes) {
          raw.second->accept(v);
          containedTypes.emplace_back(raw.first, raw.second->getType()->deepCopy());
@@ -163,7 +163,7 @@ namespace cdot {
       return cont;
    }
 
-   string TupleType::toString() {
+   string TupleType::_toString() {
       string str = "(";
       size_t i = 0;
 
@@ -189,7 +189,7 @@ namespace cdot {
          cont.push_back(ty.second->getLlvmType());
       }
 
-      llvm::StructType* tupleTy = llvm::StructType::get(CodeGenVisitor::Context, cont, true);
+      llvm::StructType* tupleTy = llvm::StructType::get(CodeGen::Context, cont, true);
       TupleTypes.emplace(className, tupleTy);
 
       return tupleTy;
@@ -215,7 +215,7 @@ namespace cdot {
             Builder->CreateMemCpy(dstGep, srcGep, from->getSize(), from->getAlignment());
          }
          else {
-            llvm::Value* castVal = CodeGenVisitor::CreateLoad(srcGep);
+            llvm::Value* castVal = CodeGen::CreateLoad(srcGep);
             if (*from != to) {
                castVal = from->castTo(castVal, to);
             }

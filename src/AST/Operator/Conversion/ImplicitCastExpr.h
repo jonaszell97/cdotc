@@ -17,13 +17,17 @@ public:
     std::vector<AstNode::SharedPtr> get_children() override;
     void __dump(int) override;
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
+    llvm::Value* accept(CodeGen& v) override {
         return v.visit(this);
     }
 
-    Type* accept(TypeCheckVisitor& v) override {
+    Type* accept(TypeCheckPass& v) override {
         return v.visit(this);
     }
+
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
 
     NodeType get_type() override {
         return target->get_type();
@@ -34,9 +38,10 @@ public:
         target->isHiddenReturnValue();
     }
 
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
-    friend class ConstExprVisitor;
+    friend class CodeGen;
+    friend class TypeCheckPass;
+   friend class DeclPass;
+    friend class ConstExprPass;
 
 protected:
     Type* from = nullptr;

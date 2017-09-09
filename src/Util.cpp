@@ -156,6 +156,7 @@ namespace util {
       "do",
       "match",
       "for",
+      "in",
       "case",
       "default",
       "struct",
@@ -187,7 +188,7 @@ namespace util {
       "extend",
       "typedef",
       "init",
-      "delete",
+      "deinit",
       "ref",
       "unsafe",
       "memberwise",
@@ -202,7 +203,6 @@ namespace util {
    };
 
    std::vector<string> types = {
-//         {"Int", INT_T},
          "UInt",
          "Int8",
          "UInt8",
@@ -213,10 +213,7 @@ namespace util {
          "Int64",
          "UInt64",
 
-         "Double",
          "Float",
-         "Bool",
-//         {"Char", CHAR_T},
          "Object",
          "Void"
    };
@@ -226,23 +223,26 @@ namespace util {
       "Any",
       "Lambda",
       "Option",
-      "Interface/Equatable",
-      "Interface/Comparable",
-      "Interface/Hashable",
-      "Interface/Number",
-      "Interface/IntegerProtocol",
-      "Interface/Iterable",
-      "Interface/Iterator",
-//      "Interface/Printable",
+      "Protocol/Equatable",
+      "Protocol/Comparable",
+      "Protocol/Ordered",
+      "Protocol/Hashable",
+      "Protocol/Number",
+      "Protocol/IntegerProtocol",
+      "Protocol/Iterable",
+      "Protocol/Iterator",
+      "Protocol/StringRepresentable",
       "Int",
+      "Math",
 //      "Float",
-//      "Double",
-//      "Bool",
-//      "Char",
-//      "Array",
-//      "ArrayIterator",
-//      "String",
-//      "Print"
+      "Double",
+      "Bool",
+      "Char",
+      "Array",
+      "ArrayIterator",
+      "String",
+      "Range",
+      "Print"
    };
 
    std::vector<char> punctuators = {
@@ -549,19 +549,24 @@ namespace util {
             orderedTypes.push_back(givenArgs[ind]);
             orderedArgs.emplace_back(arg, util::get_second(argValues, arg));
          }
-         else if (defaultValues[i] != nullptr) {
-            orderedTypes.push_back(nullptr);
-            orderedArgs.emplace_back(arg, defaultValues[i]);
-         }
          else if (givenArgs.size() > i) {
             orderedTypes.push_back(givenArgs[i]);
             orderedArgs.emplace_back(arg, argValues[i].second);
+         }
+         else if (defaultValues[i] != nullptr) {
+            orderedTypes.push_back(nullptr);
+            orderedArgs.emplace_back(arg, defaultValues[i]);
          }
          else {
             orderedTypes.push_back(nullptr);
          }
 
          ++i;
+      }
+
+      for (; i < givenArgs.size(); ++i) {
+         orderedTypes.push_back(givenArgs[i]);
+         orderedArgs.emplace_back(givenLabels[i], argValues[i].second);
       }
 
       givenArgs = orderedTypes;
@@ -594,4 +599,19 @@ namespace util {
    bool matches(string pattern, string& subject) {
       return std::regex_match(subject, std::regex(pattern));
    }
+
+   std::vector<pair<string, string>> LlvmFunctionAttrs = {
+      { "correctly-rounded-divide-sqrt-fp-math", "false" },
+      { "disable-tail-calls", "false" },
+      { "less-precise-fpmad" , "false" },
+      { "no-frame-pointer-elim", "false" },
+      { "no-frame-pointer-elim-non-leaf", "" },
+      { "no-infs-fp-math", "false" },
+      { "no-jump-tables", "false" },
+      { "no-nans-fp-math", "false" },
+      { "no-signed-zeros-fp-math", "false" },
+      { "stack-protector-buffer-size", "8" },
+      { "unsafe-fp-math", "false" },
+      { "use-soft-float", "false" }
+   };
 }

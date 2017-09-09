@@ -108,13 +108,13 @@ namespace cdot {
    }
 
    llvm::Value* IntegerType::getDefaultVal() {
-      auto intTy = llvm::IntegerType::get(CodeGenVisitor::Context, bitWidth);
+      auto intTy = llvm::IntegerType::get(CodeGen::Context, bitWidth);
 
       return llvm::ConstantInt::get(intTy, 0);
    }
 
    llvm::Constant* IntegerType::getConstantVal(Variant& val) {
-      return llvm::ConstantInt::get(CodeGenVisitor::Context, llvm::APInt(bitWidth, val.intVal,
+      return llvm::ConstantInt::get(CodeGen::Context, llvm::APInt(bitWidth, val.intVal,
          !isUnsigned_));
    }
 
@@ -148,7 +148,7 @@ namespace cdot {
       return nullptr;
    }
 
-   string IntegerType::toString() {
+   string IntegerType::_toString() {
       return string(isUnsigned_ ? "u" : "") + "int" + std::to_string(bitWidth);
    }
 

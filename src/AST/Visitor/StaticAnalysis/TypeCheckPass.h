@@ -49,28 +49,34 @@ namespace cdot {
       string currentSelf;
       string currentFunction;
 
+      bool inProtocol = false;
       bool isFunctionRoot = false;
       bool isLambdaRoot = false;
 
       bool continuable = false;
       bool breakable = false;
+      bool continued = false;
+      bool broken = false;
+
+      bool unsafe = false;
 
       Type* declaredReturnType = nullptr;
       bool returnable = false;
+      bool inLambda = false;
+      int branches = 1;
+      int returned = 0;
 
       Scope* enclosingScope = nullptr;
+      std::vector<string>* uninitializedFields = nullptr;
+      std::vector<pair<string, Type*>>* captures = nullptr;
    };
 }
 
 using namespace cdot;
 
-class TypeCheckVisitor {
+class TypeCheckPass {
 public:
-   TypeCheckVisitor();
-   TypeCheckVisitor(TypeCheckVisitor *parent);
-
-   TypeCheckVisitor makeFunctionVisitor(Type*);
-   TypeCheckVisitor makeMethodVisitor(Type*, string&);
+   TypeCheckPass();
 
    void dump();
 
@@ -85,6 +91,7 @@ public:
    virtual Type* visit(IdentifierRefExpr*);
    virtual Type* visit(DeclStmt*);
    virtual Type* visit(ForStmt*);
+   virtual Type* visit(ForInStmt*);
    virtual Type* visit(WhileStmt*);
 
    virtual Type* visit(CollectionLiteral*);
@@ -111,6 +118,7 @@ public:
    virtual Type* visit(MethodDecl*);
    virtual Type* visit(FieldDecl*);
    virtual Type* visit(ConstrDecl*);
+   virtual Type* visit(DestrDecl*);
    virtual Type* visit(LambdaExpr*);
    virtual Type* visit(ImplicitCastExpr*);
    virtual Type* visit(ExtendStmt*);
@@ -134,16 +142,19 @@ public:
 protected:
    std::unordered_map<string, DeclStmt*> declarations = {};
    std::stack<Scope> Scopes;
+   std::stack<pair<string, string>> Cleanups;
 
-   Scope* latestScope;
+   Scope* latestScope = nullptr;
 
+   size_t lastScopeID = 0;
+   void pushScope();
    void pushFunctionScope(Type* returnType, bool isLambda = false);
    void pushMethodScope(Type* returnType, string& className);
    void pushLoopScope(bool continuable = true, bool breakable = true);
    void popScope();
 
-   string declare_var(string&, Type*, bool = false, AstNode* = nullptr);
-   Type*& declare_fun(Function::UniquePtr&&, std::vector<ObjectType*>&, AstNode* = nullptr);
+   string declareVariable(string &name, Type *type, bool isGlobal = false, AstNode *cause = nullptr);
+   Type*& declareFunction(Function::UniquePtr &&func, std::vector<ObjectType *> &generics, AstNode *decl = nullptr);
 
    void pushTy(Type *);
    Type* popTy();
@@ -151,11 +162,11 @@ protected:
    inline void resolve(Type**);
    inline void checkExistance(ObjectType*, AstNode*);
 
-   pair<pair<Type*, string>, bool> get_var(string&, AstNode* = nullptr);
-   FunctionResult get_fun(string&, std::vector<Type*>&, std::vector<Type*>&, std::vector<string>&,
-      std::vector<pair<string, std::shared_ptr<Expression>>>&);
+   pair<pair<Type*, string>, bool> getVariable(string &name, AstNode *cause = nullptr);
+   FunctionResult getFunction(string &, std::vector<Type *> &, std::vector<Type *> &, std::vector<string> &,
+      std::vector<pair<string, std::shared_ptr<Expression>>> &);
 
-   bool has_var(string);
+   bool hasVariable(string name);
 
    void wrapImplicitCast(std::shared_ptr<Expression>& target, Type*& originTy, Type* destTy);
    void lvalueToRvalue(std::shared_ptr<Expression>& target);
@@ -168,18 +179,7 @@ protected:
       bool preCond = true
    );
 
-   TypeCheckVisitor *parent = nullptr;
-   std::vector<TypeCheckVisitor*> children = {};
-   string scope = "";
-
-   inline void addChild(TypeCheckVisitor *child) {
-      children.push_back(child);
-   }
-
    std::stack<Type*> typeStack;
-   string currentClass;
-   string currentSelf;
-   string currentFunction;
 
    std::vector<string> labels = {};
 
@@ -187,53 +187,24 @@ protected:
       if (std::find(labels.begin(), labels.end(), label) != labels.end()) {
          return true;
       }
-      if (parent) {
-         return parent->has_label(label);
-      }
 
       return false;
    }
 
    inline Type* ReturnMemberExpr(Expression*, Type*);
 
-   Type* declaredReturnType;
-   bool isLambdaVisitor = false;
-   bool isLambdaRoot = false;
-
-   std::vector<pair<string, Type*>>* capturedVariables;
-
-   bool isNewlyCreated = true;
-
-   bool returnable = false;
-   int branches = 1;
-   int returned = 0;
    void return_(Type* ret_type, AstNode *cause = nullptr);
 
-   void continue_();
-   void break_();
-
-   bool isContinueRoot = false;
-   bool isBreakRoot = false;
-   bool continued = false;
-   bool broken = false;
-
-   bool continuable = false;
-   bool breakable = false;
-
-   unsigned int lambda_count = 0;
+   void continue_(ContinueStmt* continueStmt);
+   void break_(BreakStmt* breakStmt);
 
    std::vector<Attribute> attributes = {};
 
    bool hasAttribute(Attr kind) {
-      auto current = this;
-      while (current != nullptr) {
-         for (const auto& attr : current->attributes) {
-            if (attr.kind == kind) {
-               return true;
-            }
+      for (const auto& attr : attributes) {
+         if (attr.kind == kind) {
+            return true;
          }
-
-         current = current->parent;
       }
 
       return false;
@@ -243,14 +214,11 @@ protected:
    static std::vector<string> importedNamespaces;
 
    static std::vector<ObjectType*>* currentClassGenerics;
-   static bool inProtocolDefinition;
 
    static inline void pushNamespace(string &ns);
    static inline void popNamespace();
 
    bool checkLambdaCompatibility(LambdaExpr*, Type*);
-
-   bool currentBlockUnsafe = false;
 
    static inline string ns_prefix() {
       return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
@@ -268,16 +236,16 @@ protected:
    void DeclareMethod(MethodDecl*, cdot::cl::Class*);
    void DefineMethod(MethodDecl*, cdot::cl::Class*);
 
-   std::vector<string>* uninitializedFields = nullptr;
    void DeclareConstr(ConstrDecl*, cdot::cl::Class*);
    void DefineConstr(ConstrDecl*, cdot::cl::Class*);
+   void DefineDestr(DestrDecl*, cdot::cl::Class*);
 
    void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&,
       std::vector<Type*>&, std::vector<std::shared_ptr<Expression>>&);
    void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&, std::vector<Type*>&);
 
    Type* HandleBinaryOperator(Type*, Type*, BinaryOperatorType, BinaryOperator *node);
-   Type* HandleCastOp(Type*, BinaryOperator*);
+   Type* HandleCastOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleAssignmentOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleArithmeticOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleBitwiseOp(Type *fst, Type *snd, BinaryOperator *node);
@@ -285,6 +253,9 @@ protected:
    Type* HandleEqualityOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleComparisonOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleOtherOp(Type *fst, Type *snd, BinaryOperator *node);
+
+   Type* tryOperatorMethod(Type *fst, Type *snd, BinaryOperator *node, string& opName, bool isAssignment);
+   Type* tryFreeStandingOp(Type *fst, Type *snd, BinaryOperator *node, string& opName, bool isAssignment);
 
    void HandleEnumComp(Type *fst, Type *snd, BinaryOperator *node);
    void HandleTupleComp(Type *fst, Type *snd, BinaryOperator *node);

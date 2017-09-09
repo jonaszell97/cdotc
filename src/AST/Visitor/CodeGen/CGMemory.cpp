@@ -3,7 +3,7 @@
 //
 
 #include "CGMemory.h"
-#include "CodeGenVisitor.h"
+#include "CodeGen.h"
 
 #define POINTER_SIZE sizeof(int*)
 
@@ -15,17 +15,17 @@ llvm::Value* CGMemory::CreateAlloca(
    string name,
    llvm::Value* arr_size
 ) {
-   assert(CodeGenVisitor::MALLOC != nullptr && "No malloc?");
+   assert(CodeGen::MALLOC != nullptr && "No malloc?");
 
    if (CurrentEntryBlock == nullptr) {
-      auto glob = new llvm::GlobalVariable(*CodeGenVisitor::Module, type, false, llvm::GlobalVariable::ExternalLinkage,
+      auto glob = new llvm::GlobalVariable(*CodeGen::Module, type, false, llvm::GlobalVariable::ExternalLinkage,
          llvm::ConstantAggregateZero::get(type), name);
 
       return glob;
    }
 
    auto alloc_block = CurrentEntryBlock;
-   auto& Builder = CodeGenVisitor::Builder;
+   auto& Builder = CodeGen::Builder;
    auto ip = Builder.GetInsertBlock();
    bool isClass = false;
    llvm::Type* structTy = nullptr;
@@ -48,14 +48,16 @@ llvm::Value* CGMemory::CreateAlloca(
    llvm::Value* alloca;
 
    if (heapAlloc && isClass) {
-      auto type_size = Builder.CreatePtrToInt(
-         Builder.CreateGEP(llvm::ConstantPointerNull::get(structTy->getPointerTo()), Builder.getInt64(1)),
-         Builder.getIntNTy(POINTER_SIZE * 8)
-      );
+//      auto type_size = Builder.CreatePtrToInt(
+//         Builder.CreateGEP(llvm::ConstantPointerNull::get(structTy->getPointerTo()), Builder.getInt64(1)),
+//         Builder.getIntNTy(POINTER_SIZE * 8)
+//      );
 
-      auto allocSize = arr_size == nullptr ? type_size : Builder.CreateMul(type_size, arr_size);
+      auto typeSize = CodeGen::GetStructSize(type);
+
+      auto allocSize = arr_size == nullptr ? typeSize : Builder.CreateMul(typeSize, arr_size);
       llvm::Value* struct_alloc = Builder.CreateBitCast(
-         Builder.CreateCall(CodeGenVisitor::MALLOC, { allocSize }),
+         Builder.CreateCall(CodeGen::MALLOC, { allocSize }),
          structTy->getPointerTo(),
          name
       );
@@ -66,7 +68,7 @@ llvm::Value* CGMemory::CreateAlloca(
       auto allocSize = arr_size == nullptr ? ptrSize : Builder.CreateMul(ptrSize, arr_size);
 
       auto alloc = Builder.CreateBitCast(
-         Builder.CreateCall(CodeGenVisitor::MALLOC, { allocSize }),
+         Builder.CreateCall(CodeGen::MALLOC, { allocSize }),
          type->getPointerTo(),
          name
       );
@@ -89,7 +91,7 @@ llvm::Value* CGMemory::CreateAlloca(
       }
 
       alloc->setName(name);
-      alloc->setAlignment(CodeGenVisitor::getAlignment(type));
+      alloc->setAlignment(CodeGen::getAlignment(type));
 
       if (constSize) {
          // later code never expects an array type

@@ -8,7 +8,7 @@
 #include "Type.h"
 
 class TypeRef;
-class TypeCheckVisitor;
+class TypeCheckPass;
 using std::pair;
 
 namespace cdot {
@@ -46,7 +46,7 @@ namespace cdot {
          return size;
       }
 
-      void visitContained(TypeCheckVisitor& t) override;
+      void visitContained(TypeCheckPass& t) override;
 
       bool operator==(Type*& other) override;
       inline bool operator!=(Type*& other) override {
@@ -56,7 +56,7 @@ namespace cdot {
       std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
       std::vector<Type**> getTypeReferences() override;
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       llvm::Value* castTo(llvm::Value*, Type*) override;

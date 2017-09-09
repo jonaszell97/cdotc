@@ -21,23 +21,28 @@ public:
       return NodeType::LITERAL_EXPR;
    }
 
-   llvm::Value* accept(CodeGenVisitor& v) override{
+   llvm::Value* accept(CodeGen& v) override{
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
    cdot::Variant value;
    Type* type = nullptr;
    string className;
-   string constructor;
+   string literalType;
 
    // codegen
    bool isPrimitive = false;

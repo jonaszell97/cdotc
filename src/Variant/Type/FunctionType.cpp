@@ -68,7 +68,11 @@ namespace cdot {
       }
    }
 
-   void FunctionType::visitContained(TypeCheckVisitor &v) {
+   void FunctionType::visitContained(TypeCheckPass &v) {
+      if (returnType != nullptr) {
+         return;
+      }
+
       rawReturnType->accept(v);
       returnType = rawReturnType->getType()->deepCopy();
 
@@ -196,6 +200,10 @@ namespace cdot {
    }
 
    llvm::Type* FunctionType::_getLlvmType() {
+      return ObjectType::getStructureType("__lambda");
+   }
+
+   llvm::Type* FunctionType::getLlvmFunctionType() {
       llvm::Type* ret = returnType->getLlvmType();
       std::vector<llvm::Type*> args{ Builder->getInt8PtrTy()->getPointerTo() };
 
@@ -206,7 +214,7 @@ namespace cdot {
       return llvm::FunctionType::get(ret, args, false);
    }
 
-   string FunctionType::toString() {
+   string FunctionType::_toString() {
       string res = "(";
 
       size_t i = 0;

@@ -11,6 +11,7 @@ class CompoundStmt;
 class IdentifierRefExpr;
 class DeclStmt;
 class ForStmt;
+class ForInStmt;
 class WhileStmt;
 class CollectionLiteral;
 class NumericLiteral;
@@ -30,6 +31,7 @@ class ClassDecl;
 class FieldDecl;
 class MethodDecl;
 class ConstrDecl;
+class DestrDecl;
 class MatchStmt;
 class CaseStmt;
 class LabelStmt;
@@ -50,5 +52,9 @@ class TupleLiteral;
 class EnumDecl;
 class Statement;
 class NoneLiteral;
+
+namespace cdot {
+   class BinaryOperator;
+}
 
 #endif //CDOT_VISITOR_H

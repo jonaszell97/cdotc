@@ -13,49 +13,58 @@ class Expression;
 
 class DeclStmt : public Statement {
 public:
-    DeclStmt(string, std::shared_ptr<TypeRef>, bool, bool, std::shared_ptr<Expression> = nullptr);
+   DeclStmt(string, std::shared_ptr<TypeRef>, bool, bool, std::shared_ptr<Expression> = nullptr);
 
-    ~DeclStmt() override {
+   ~DeclStmt() override {
 
-    }
+   }
 
-    std::vector<AstNode::SharedPtr> get_children() override;
+   std::vector<AstNode::SharedPtr> get_children() override;
 
-    typedef std::shared_ptr<DeclStmt> SharedPtr;
-    void __dump(int) override;
+   typedef std::shared_ptr<DeclStmt> SharedPtr;
+   void __dump(int) override;
 
-    NodeType get_type() override {
-        return NodeType::DECLARATION;
-    }
+   NodeType get_type() override {
+      return NodeType::DECLARATION;
+   }
 
-    llvm::Value* accept(CodeGenVisitor& v) override {
-        return v.visit(this);
-    }
+   llvm::Value* accept(CodeGen& v) override {
+      return v.visit(this);
+   }
 
-    Type* accept(TypeCheckVisitor& v) override {
-        return v.visit(this);
-    }
+   Type* accept(TypeCheckPass& v) override {
+      return v.visit(this);
+   }
 
-    string getIdentifier() {
-        return identifier;
-    }
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
 
-    std::shared_ptr<TypeRef> getType() {
-        return type;
-    }
+   string getIdentifier() {
+      return identifier;
+   }
 
-    friend class ConstExprVisitor;
-    friend class CodeGenVisitor;
-    friend class TypeCheckVisitor;
+   std::shared_ptr<TypeRef> getType() {
+      return type;
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
-    string identifier;
-    std::shared_ptr<TypeRef> type;
-    std::shared_ptr<Expression> value = nullptr;
-    bool is_const;
-    bool is_global;
-    bool isStructAlloca = false;
-    bool declared = false;
+   string identifier;
+   std::shared_ptr<TypeRef> type;
+   std::shared_ptr<Expression> value = nullptr;
+   bool is_const;
+   bool is_global;
+   bool isStructAlloca = false;
+   bool isProtocolDecl = false;
+   bool declared = false;
+
+   bool incRefCount = false;
+   string className;
 };
 
 

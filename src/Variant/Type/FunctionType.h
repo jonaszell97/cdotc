@@ -74,7 +74,7 @@ namespace cdot {
          return true;
       }
 
-      void visitContained(TypeCheckVisitor& v) override;
+      void visitContained(TypeCheckPass& v) override;
 
       bool operator==(Type*& other) override;
       inline bool operator!=(Type*& other) override {
@@ -88,8 +88,9 @@ namespace cdot {
          return className;
       }
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
+      llvm::Type* getLlvmFunctionType() override;
 
       bool implicitlyCastableTo(Type*) override;
 
@@ -109,7 +110,7 @@ namespace cdot {
       typedef std::shared_ptr<FunctionType> SharedPtr;
 
    protected:
-      Type* returnType;
+      Type* returnType = nullptr;
       std::vector<Type*> argTypes;
       std::vector<ObjectType*> genericTypes;
       Function* declaredFunc;

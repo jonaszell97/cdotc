@@ -21,7 +21,7 @@ namespace cdot {
         pointeeType = pointee;
       }
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       bool implicitlyCastableTo(Type*) override;

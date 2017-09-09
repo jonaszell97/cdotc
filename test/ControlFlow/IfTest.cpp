@@ -23,8 +23,8 @@ TEST_CASE("If statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
-    p2.run(false);
+   p.parse(false);
+   p2.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -45,7 +45,7 @@ TEST_CASE("If/else statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -67,7 +67,7 @@ TEST_CASE("If/else if/else statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -94,7 +94,7 @@ TEST_CASE("Switch statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -115,7 +115,7 @@ TEST_CASE("Switch default statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -135,7 +135,7 @@ TEST_CASE("For loop") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -159,8 +159,8 @@ TEST_CASE("For in loop") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
-    p2.run(false);
+   p.parse(false);
+   p2.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -180,7 +180,7 @@ TEST_CASE("while statement") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 

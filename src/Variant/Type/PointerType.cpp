@@ -78,15 +78,11 @@ namespace cdot {
       return isa<PointerType>(other) || isa<IntegerType>(other);
    }
 
-   Type* PointerType::toRvalue() {
-      return pointeeType;
-   }
-
    llvm::Type* PointerType::_getLlvmType() {
       return pointeeType->getLlvmType()->getPointerTo();
    }
 
-   string PointerType::toString() {
+   string PointerType::_toString() {
       string res;
 
       if (lvalue) {

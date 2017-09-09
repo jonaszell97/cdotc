@@ -58,13 +58,10 @@ namespace cdot {
          return true;
       }
 
-      Type* toRvalue() override;
-
       std::vector<Type*> getContainedTypes(bool includeSelf) override;
       std::vector<Type**> getTypeReferences() override;
 
-      string toString() override;
-
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       Type* deepCopy() override;

@@ -34,13 +34,21 @@ namespace cdot {
 
       if ((*ty)->isGeneric()) {
          auto& className = (*ty)->getGenericClassName();
-         assert(concreteGenerics.find(className) != concreteGenerics.end() && "Incompatible generics should have "
-            "been caught before");
+         if (concreteGenerics.find(className) == concreteGenerics.end()) {
+            return;
+         }
 
          auto backup = *ty;
          *ty = concreteGenerics.at(className)->deepCopy();
          CopyProperties(backup, *ty);
       }
+   }
+
+   bool Type::isBoxedPrimitive() {
+      return isObject() && util::matches(
+         "(Bool|Char|Float|Double|U?Int(1|8|16|32|64)?)",
+         className
+      );
    }
 
    bool Type::GenericTypesCompatible(Type *given, Type *needed) {
@@ -143,6 +151,80 @@ namespace cdot {
       dst->length = src->length;
    }
 
+   namespace {
+      ObjectType* typeIsGeneric(
+         std::vector<ObjectType*>& generics,
+         Type*& obj)
+      {
+         if (!obj->isObject() || generics.empty()) {
+            return nullptr;
+         }
+
+         auto index = std::find_if(generics.begin(), generics.end(), [obj](ObjectType* gen) {
+            return gen->getGenericClassName() == obj->getClassName();
+         });
+
+         if (index != generics.end()) {
+            return *index;
+         }
+
+         return nullptr;
+      }
+   }
+
+   void Type::resolve(
+      Type **ty,
+      string& className,
+      std::vector<ObjectType*>* generics,
+      std::vector<string>& namespaces)
+   {
+      // resolve unqalified generic types, for example:
+      //   let x: Array<Int> will be parsed as having one generic Type Int,
+      //   but the parser doesn't know that this corresponds to the generic
+      //   parameter "T" of class Array
+      Type::resolveUnqualified(*ty);
+
+      if (isa<ObjectType>(*ty) && (*ty)->getClassName() == "Self" && !className.empty()) {
+         *ty = ObjectType::get(className);
+         (*ty)->isGeneric(true);
+         (*ty)->setGenericClassName("Self");
+         (*ty)->setContravariance(ObjectType::get(className));
+         (*ty)->hasSelfRequirement(true);
+      }
+
+      if (generics != nullptr) {
+         if (auto gen = typeIsGeneric(*generics, *ty)) {
+            auto backup = *ty;
+            *ty = gen->deepCopy();
+            Type::CopyProperties(backup, *ty);
+         }
+      }
+
+      SymbolTable::resolveTypedef(*ty, namespaces);
+      for (const auto& cont : (*ty)->getTypeReferences()) {
+         resolve(cont, className, generics, namespaces);
+      }
+
+      if ((*ty)->getLengthExpr() != nullptr) {
+         auto &lengthExpr = (*ty)->getLengthExpr();
+      }
+
+      if (isa<ObjectType>(*ty)) {
+         auto asObj = cast<ObjectType>(*ty);
+         if (!SymbolTable::hasClass(asObj->getClassName())) {
+            return;
+         }
+
+         auto cl = SymbolTable::getClass(asObj->getClassName());
+         if (cl->isStruct()) {
+            asObj->isStruct(true);
+         }
+         else if (cl->isEnum()) {
+            asObj->isEnum(true);
+         }
+      }
+   }
+
    bool Type::operator==(Type *&other) {
       if (isNull_ && !other->isNullable_) {
          return false;
@@ -151,7 +233,7 @@ namespace cdot {
       return true;
    }
 
-   Type* Type::visitLengthExpr(TypeCheckVisitor *v) {
+   Type* Type::visitLengthExpr(TypeCheckPass *v) {
       if (lengthExprType != nullptr) {
          return lengthExprType;
       }
@@ -160,7 +242,7 @@ namespace cdot {
       return lengthExprType;
    }
 
-   llvm::Value* Type::visitLengthExpr(CodeGenVisitor *v) {
+   llvm::Value* Type::visitLengthExpr(CodeGen *v) {
       if (lengthExprValue != nullptr) {
          return lengthExprValue;
       }

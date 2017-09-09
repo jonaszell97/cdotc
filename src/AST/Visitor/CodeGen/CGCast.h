@@ -29,6 +29,7 @@ namespace codegen {
       static MethodResult hasCastOperator(Type* from, Type* to, llvm::IRBuilder<> &Builder);
       static llvm::Value *castOperator(Type *from, Type *to, llvm::Value *val, MethodResult&, llvm::IRBuilder<> &Builder);
 
+      static llvm::Value *protoToProtoCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
       static llvm::Value *castFromProtocol(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
       static llvm::Value *castToProtocol(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
 

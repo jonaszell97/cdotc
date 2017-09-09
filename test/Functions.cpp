@@ -19,7 +19,7 @@ TEST_CASE("Recursion test") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
@@ -54,12 +54,12 @@ TEST_CASE("Variable capture") {
     std::streambuf* p_cout_streambuf = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
 
-    p.run(false);
+   p.parse(false);
 
     std::cout.rdbuf(p_cout_streambuf);
 
     REQUIRE(oss);
     REQUIRE(oss.str() == "3\n");
 
-    REQUIRE_THROWS(p2.run(false));
+    REQUIRE_THROWS(p2.parse(false));
 }

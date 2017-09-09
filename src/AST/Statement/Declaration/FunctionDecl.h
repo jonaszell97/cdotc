@@ -21,6 +21,10 @@ public:
       returnType = type;
    }
 
+   void isOperatorDecl(bool op) {
+      isOperatorDeclaration = op;
+   }
+
    string getName() {
       return funcName;
    }
@@ -57,17 +61,26 @@ public:
       return NodeType::FUNCTION_DECL;
    }
 
-   llvm::Value* accept(CodeGenVisitor& v) override {
+   llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   void accept(DeclPass& v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
    string funcName;
@@ -79,6 +92,7 @@ protected:
 
    Function* declaredFunction;
    bool hasHiddenParam = false;
+   bool isOperatorDeclaration = false;
 };
 
 

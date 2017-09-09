@@ -35,7 +35,7 @@ void AstNode::isHiddenReturnValue() {
     }
 }
 
-string AstNode::getSourceFile() {
+pair<string, string> AstNode::getSourceFile() {
     return Parser::get_source_file(sourceFileId);
 }
 

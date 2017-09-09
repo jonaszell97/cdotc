@@ -39,6 +39,7 @@ class ClassDecl;
 class FieldDecl;
 class MethodDecl;
 class ConstrDecl;
+class DestrDecl;
 class MatchStmt;
 class CaseStmt;
 class LabelStmt;
@@ -88,22 +89,28 @@ struct ClassHead {
 
 class Parser {
 public:
-   explicit Parser(string);
+   explicit Parser(string &fileName, string &src);
+   ~Parser();
 
-   void run(bool);
    std::shared_ptr<CompoundStmt> parse();
 
-   static string get_source_file(size_t source) {
+   static pair<string, string> get_source_file(size_t source) {
       return source_files[source];
+   }
+
+   std::vector<std::shared_ptr<Statement>> getImplicitMainStmts() {
+      return implicit_main_stmts;
    }
 
    friend class Lexer;
    friend class EvaluatingVisitor;
 
+   static bool main_method_defined;
+
 protected:
    static std::vector<string> type_names;
    static std::vector<string> namespaces;
-   static std::vector<string> source_files;
+   static std::vector<pair<string, string>> source_files;
    static std::vector<std::shared_ptr<ClassDecl>> class_declarations;
    static unordered_map<string, ObjectType*> CurrentClassGenerics;
 
@@ -114,8 +121,6 @@ protected:
    std::vector<Attribute> attributes;
    
    bool top_level = true;
-   bool main_method_defined = false;
-   static bool lib_imports_disabled;
 
    Lexer* lexer;
 
@@ -154,6 +159,7 @@ protected:
    std::shared_ptr<ClassDecl> parse_struct_decl();
    std::shared_ptr<EnumDecl> parse_enum_decl();
    std::shared_ptr<ConstrDecl> parse_constr_decl(AccessModifier);
+   std::shared_ptr<DestrDecl> parse_destr_decl();
    std::shared_ptr<MethodDecl> parse_method_decl(AccessModifier, bool, bool);
    std::shared_ptr<FieldDecl> parse_field_decl(AccessModifier, bool, bool);
    std::shared_ptr<MethodDecl> parse_operator_decl(AccessModifier, bool);
@@ -177,7 +183,7 @@ protected:
 
    std::shared_ptr<IfStmt> parse_if_stmt();
    std::shared_ptr<WhileStmt> parse_while_stmt();
-   std::shared_ptr<ForStmt> parse_for_stmt();
+   std::shared_ptr<Statement> parse_for_stmt();
    std::shared_ptr<MatchStmt> parse_match_stmt();
 
    std::vector<Attribute> parse_attributes();

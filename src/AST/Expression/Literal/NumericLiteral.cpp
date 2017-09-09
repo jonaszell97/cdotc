@@ -12,24 +12,24 @@ NumericLiteral::NumericLiteral(cdot::Variant v) : value(v) {
       case VariantType::INT:
          switch (v.bitwidth) {
             case 1:
-               className = "BoolLiteral"; break;
+               literalType = "BoolLiteral"; break;
             case 8:
-               className = "CharLiteral"; break;
+               literalType = "CharLiteral"; break;
             case 16:
             case 32:
             case 64:
             default:
-               className = "IntegerLiteral"; break;
+               literalType = "IntegerLiteral"; break;
          }
-         className = "IntegerLiteral";
+         literalType = "IntegerLiteral";
          type = IntegerType::get(v.bitwidth, v.isUnsigned);
          break;
       case VariantType::FLOAT:
-         className = "FloatingPointLiteral";
+         literalType = "FloatingPointLiteral";
          type = new FPType(v.bitwidth);
          break;
       case VariantType::VOID:
-         className = "NullLiteral";
+         literalType = "NullLiteral";
          type = new VoidType;
          break;
       default:

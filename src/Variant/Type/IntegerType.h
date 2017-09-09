@@ -17,15 +17,15 @@ namespace cdot {
       explicit IntegerType(unsigned int = sizeof(int*) * 8, bool = false);
       static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
 
-      inline unsigned int getBitwidth() {
+      unsigned int getBitwidth() {
          return bitWidth;
       }
 
-      inline bool isUnsigned() {
+      bool isUnsigned() override {
          return isUnsigned_;
       }
 
-      inline void isUnsigned(bool uns) {
+      void isUnsigned(bool uns) {
          isUnsigned_ = uns;
       }
 
@@ -49,7 +49,7 @@ namespace cdot {
          return bitWidth == n && isUnsigned_ == isUnsigned;
       }
 
-      string toString() override;
+      string _toString() override;
 
       Type* ArithmeticReturnType(string&, Type*) override;
 

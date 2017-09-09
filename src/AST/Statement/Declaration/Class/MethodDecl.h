@@ -25,7 +25,10 @@ public:
    MethodDecl(std::string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, AccessModifier =
       AccessModifier::PUBLIC, bool = false);
    MethodDecl(string, string, std::vector<std::shared_ptr<FuncArgDecl>>);
-   
+
+   ~MethodDecl() {
+      int i = 3;
+   }
    void setGenerics(std::vector<ObjectType*> gen) {
       generics = gen;
    }
@@ -40,17 +43,26 @@ public:
       return NodeType::METHOD_DECL;
    }
 
-   llvm::Value* accept(CodeGenVisitor& v) override {
+   llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprVisitor;
-   friend class CodeGenVisitor;
-   friend class TypeCheckVisitor;
+   void accept(DeclPass& v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   friend class ConstExprPass;
+   friend class CodeGen;
+   friend class TypeCheckPass;
+   friend class DeclPass;
 
 protected:
    bool isStatic;

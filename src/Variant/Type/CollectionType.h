@@ -20,18 +20,20 @@ namespace cdot {
       explicit CollectionType(Type*);
       explicit CollectionType(Type*, Type*);
 
+      ~CollectionType() override {
+         int i = 3;
+      }
+
       inline CollectionKind getKind() {
          return collectionType;
       }
 
-      string toString() override;
+      string _toString() override;
       llvm::Type* _getLlvmType() override;
 
       bool implicitlyCastableTo(Type*) override;
 
       llvm::Value* getDefaultVal() override;
-
-      Type* deepCopy() override;
 
       static inline bool classof(CollectionType const*) { return true; }
       static inline bool classof(ObjectType const*) { return true; }

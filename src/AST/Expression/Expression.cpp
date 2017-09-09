@@ -17,3 +17,12 @@ void Expression::isHiddenReturnValue() {
       }
    }
 }
+
+void Expression::isReturnValue() {
+   isReturnValue_ = true;
+   if (declaration != nullptr) {
+      declaration->isReturnValue();
+   }
+
+   isPartOfReturnValue(true);
+}

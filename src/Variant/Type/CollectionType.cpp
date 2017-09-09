@@ -30,16 +30,6 @@ namespace cdot {
         return ObjectType::implicitlyCastableTo(other);
     }
 
-    Type* CollectionType::deepCopy() {
-        auto newTy = new CollectionType(*this);
-
-        for (const auto& ty : newTy->getTypeReferences()) {
-            *ty = (*ty)->deepCopy();
-        }
-
-        return newTy;
-    }
-
     llvm::Value* CollectionType::getDefaultVal() {
         if (collectionType == CollectionKind::ARRAY) {
             auto arrayTy = ObjectType::getStructureType("Array");
@@ -70,7 +60,7 @@ namespace cdot {
         llvm_unreachable("Unknown collection type");
     }
 
-    string CollectionType::toString() {
+    string CollectionType::_toString() {
         if (collectionType == CollectionKind::ARRAY) {
             return "[" + concreteGenericTypes["T"]->toString() + "]";
         }

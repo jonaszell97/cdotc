@@ -15,8 +15,8 @@ using std::unordered_map;
 using std::pair;
 
 class Expression;
-class TypeCheckVisitor;
-class CodeGenVisitor;
+class TypeCheckPass;
+class CodeGen;
 
 namespace cdot {
 
@@ -48,10 +48,16 @@ namespace cdot {
    public:
 
       static llvm::IRBuilder<>* Builder;
-      static inline bool classof(Type const* T) { return true; }
+      static bool classof(Type const* T) { return true; }
       static bool GenericTypesCompatible(Type* given, Type* needed);
 
       static void CopyProperties(Type *src, Type *dst);
+      static void resolve(
+         Type **ty,
+         string& className,
+         std::vector<ObjectType*>* generics,
+         std::vector<string>& namespaces
+      );
 
       typedef std::unique_ptr<Type> UniquePtr;
       typedef std::shared_ptr<Type> SharedPtr;
@@ -67,35 +73,35 @@ namespace cdot {
          return ty;
       }
 
-      inline bool isNull() {
+      bool isNull() {
          return isNull_;
       }
 
-      inline void isNull(bool null_) {
+      void isNull(bool null_) {
          isNull_ = null_;
       }
 
-      inline bool isNullable() {
+      bool isNullable() {
          return isNullable_;
       }
 
-      inline void isNullable(bool nullable) {
+      void isNullable(bool nullable) {
          isNullable_ = nullable;
       }
 
-      inline bool isConst() {
+      bool isConst() {
          return isConst_;
       }
 
-      inline void isConst(bool const_) {
+      void isConst(bool const_) {
          isConst_ = const_;
       }
 
-      virtual inline bool isLvalue() {
+      virtual bool isLvalue() {
          return lvalue;
       }
 
-      virtual inline void isLvalue(bool lval) {
+      virtual void isLvalue(bool lval) {
          lvalue = lval;
       }
 
@@ -103,38 +109,48 @@ namespace cdot {
          return lvalue && !isStruct() && !cstyleArray && !carrayElement ;
       }
 
-      inline bool isInferred() {
+      bool isInferred() {
          return isInferred_;
       }
 
-      inline bool isVararg() {
+      bool isVararg() {
          return vararg;
       }
 
-      inline void isVararg(bool va) {
+      void isVararg(bool va) {
          vararg = va;
       }
 
-      inline bool isCStyleVararg() {
+      bool isCStyleVararg() {
          return cstyleVararg;
       }
 
-      inline void isCStyleVararg(bool va) {
+      void isCStyleVararg(bool va) {
          cstyleVararg = va;
          vararg = va;
       }
 
-      inline virtual unordered_map<string, Type*>& getConcreteGenericTypes() {
+      virtual bool hasSelfRequirement() {
+         return false;
+      }
+
+      virtual void hasSelfRequirement(bool selfReq) {
+
+      }
+
+      virtual unordered_map<string, Type*>& getConcreteGenericTypes() {
          assert(false && "Call isObject first");
       }
 
-      inline virtual string& getClassName() {
+      virtual string& getClassName() {
          return className;
       }
 
-      virtual inline bool isGeneric() {
+      virtual bool isGeneric() {
          return false;
       }
+
+      virtual bool isBoxedPrimitive();
 
       virtual void isGeneric(bool gen) {}
 
@@ -174,11 +190,17 @@ namespace cdot {
       static unordered_map<string, Type*> resolveUnqualified(std::vector<Type*>&, std::vector<ObjectType*>&);
 
       virtual bool operator==(Type*& other);
-      virtual inline bool operator!=(Type*& other) {
+      virtual bool operator!=(Type*& other) {
          return !operator==(other);
       }
 
-      virtual string toString() = 0;
+      string toString() {
+         if (lvalue) {
+            return "ref " + _toString();
+         }
+
+         return _toString();
+      }
 
       virtual bool implicitlyCastableTo(Type*) {
          return false;
@@ -188,20 +210,24 @@ namespace cdot {
          return false;
       }
 
-      virtual inline Type* toRvalue() {
+      virtual Type* unbox() {
+         return this;
+      }
+
+      virtual Type* toRvalue() {
          lvalue = false;
          return this;
       }
 
-      virtual inline bool hasDefaultArgVal() {
+      virtual bool hasDefaultArgVal() {
          return hasDefaultArg;
       }
 
-      virtual inline void hasDefaultArgVal(bool defVal) {
+      virtual void hasDefaultArgVal(bool defVal) {
          hasDefaultArg = defVal;
       }
 
-      virtual inline bool hasDefaultValue() {
+      virtual bool hasDefaultValue() {
          return false;
       }
 
@@ -224,11 +250,11 @@ namespace cdot {
          llvm_unreachable("can't be casted");
       }
 
-      virtual inline bool isUnsafePointer() {
+      virtual bool isUnsafePointer() {
          return false;
       }
 
-      virtual inline TypeID getTypeID() const {
+      virtual TypeID getTypeID() const {
          return id;
       }
 
@@ -265,6 +291,10 @@ namespace cdot {
       }
 
       virtual bool isIntegerTy() {
+         return false;
+      }
+
+      virtual bool isUnsigned() {
          return false;
       }
 
@@ -369,9 +399,13 @@ namespace cdot {
          return constantSize;
       }
 
-      virtual void visitContained(TypeCheckVisitor& t) {}
-      virtual Type* visitLengthExpr(TypeCheckVisitor* v);
-      virtual llvm::Value* visitLengthExpr(CodeGenVisitor* v);
+      virtual bool isRefcounted() {
+         return false;
+      }
+
+      virtual void visitContained(TypeCheckPass& t) {}
+      virtual Type* visitLengthExpr(TypeCheckPass* v);
+      virtual llvm::Value* visitLengthExpr(CodeGen* v);
 
       Type* getLengthExprType() {
          return lengthExprType;
@@ -406,6 +440,10 @@ namespace cdot {
       long length = -1;
 
       virtual llvm::Type* _getLlvmType() = 0;
+      virtual llvm::Type* getLlvmFunctionType() {
+         llvm_unreachable("Not a function type!");
+      }
+      virtual string _toString() = 0;
    };
 
    template <class T>

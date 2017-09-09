@@ -11,12 +11,20 @@ class Statement : public AstNode {
 public:
    typedef std::shared_ptr<Statement> SharedPtr;
 
-   llvm::Value* accept(CodeGenVisitor& v) override {
+   llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckVisitor& v) override {
+   Type* accept(TypeCheckPass& v) override {
       return v.visit(this);
+   }
+
+   Variant accept(ConstExprPass& v) override {
+      return v.visit(this);
+   }
+
+   void accept(DeclPass& v) override {
+      v.visit(this);
    }
 };
 
