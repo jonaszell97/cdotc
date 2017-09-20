@@ -12,24 +12,19 @@ NumericLiteral::NumericLiteral(cdot::Variant v) : value(v) {
       case VariantType::INT:
          switch (v.bitwidth) {
             case 1:
-               literalType = "BoolLiteral"; break;
+               isBool = true; break;
             case 8:
-               literalType = "CharLiteral"; break;
-            case 16:
-            case 32:
-            case 64:
+               isChar = true; break;
             default:
-               literalType = "IntegerLiteral"; break;
+               break;
          }
-         literalType = "IntegerLiteral";
+
          type = IntegerType::get(v.bitwidth, v.isUnsigned);
          break;
       case VariantType::FLOAT:
-         literalType = "FloatingPointLiteral";
          type = new FPType(v.bitwidth);
          break;
       case VariantType::VOID:
-         literalType = "NullLiteral";
          type = new VoidType;
          break;
       default:
@@ -40,6 +35,23 @@ NumericLiteral::NumericLiteral(cdot::Variant v) : value(v) {
 
 NumericLiteral::~NumericLiteral() {
    delete type;
+}
+
+bool NumericLiteral::canReturn(Type *ty)
+{
+   if (ty->isBoxedPrimitive()) {
+      ty = ty->unbox();
+   }
+
+   switch (value.type) {
+      case VariantType::INT:
+         return isa<PrimitiveType>(ty);
+      case VariantType::FLOAT: {
+         return ty->isFPType();
+      }
+      default:
+         return false;
+   }
 }
 
 std::vector<AstNode::SharedPtr> NumericLiteral::get_children() {

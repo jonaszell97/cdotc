@@ -11,6 +11,7 @@
 #include "AST/Attribute/Attribute.h"
 
 enum class AccessModifier : unsigned int;
+enum class CallType : unsigned int;
 class Lexer;
 
 class AstNode;
@@ -85,6 +86,8 @@ struct ClassHead {
    std::vector<ObjectType*> conformsTo;
    std::vector<ObjectType*> generics;
    bool isAbstract;
+
+   std::shared_ptr<TypeRef> enumRawType;
 };
 
 class Parser {
@@ -127,8 +130,7 @@ protected:
    std::shared_ptr<Statement> parse_next_stmt();
 
    std::shared_ptr<NamespaceDecl> parse_namespace_decl();
-   std::shared_ptr<UsingStmt> parse_import_stmt();
-   std::shared_ptr<EndOfFileStmt> parse_export_stmt();
+   std::shared_ptr<UsingStmt> parse_using_stmt();
 
    std::shared_ptr<Statement> parse_assignment(bool = false, bool = false);
    std::shared_ptr<Statement> parse_keyword();
@@ -138,14 +140,14 @@ protected:
 
    std::shared_ptr<TertiaryOperator> parse_tertiary_operator(std::shared_ptr<Expression>);
 
-   std::shared_ptr<CollectionLiteral> parse_array_literal();
+   std::shared_ptr<CollectionLiteral> parse_collection_literal();
 
    std::vector<pair<string, std::shared_ptr<TypeRef>>> parse_tuple_type();
    std::vector<std::shared_ptr<FuncArgDecl>> parse_arg_list(bool = false, bool = false);
 
    std::shared_ptr<FunctionDecl> parse_function_decl(bool = false);
    std::shared_ptr<LambdaExpr> parse_lambda_expr();
-   std::shared_ptr<CallExpr> parse_function_call();
+   std::shared_ptr<CallExpr> parse_function_call(CallType callTy, bool allowLet = false);
    std::vector<pair<string, std::shared_ptr<Expression>>> parse_arguments(bool = false);
 
    std::shared_ptr<Expression> parse_paren_expr();
@@ -154,11 +156,11 @@ protected:
 
    std::shared_ptr<TupleLiteral> parse_tuple_literal();
 
-   ClassHead parse_class_head();
+   ClassHead parse_class_head(bool isEnum = false);
    std::shared_ptr<ClassDecl> parse_class_decl(bool = false, bool = false);
    std::shared_ptr<ClassDecl> parse_struct_decl();
    std::shared_ptr<EnumDecl> parse_enum_decl();
-   std::shared_ptr<ConstrDecl> parse_constr_decl(AccessModifier);
+   std::shared_ptr<ConstrDecl> parse_constr_decl(AccessModifier, bool optionalNames = false);
    std::shared_ptr<DestrDecl> parse_destr_decl();
    std::shared_ptr<MethodDecl> parse_method_decl(AccessModifier, bool, bool);
    std::shared_ptr<FieldDecl> parse_field_decl(AccessModifier, bool, bool);
@@ -175,14 +177,15 @@ protected:
    Type* __parse_type();
 
    std::shared_ptr<Expression> parse_identifier();
-   std::shared_ptr<Expression> __parse_identifier(bool = false);
+   std::shared_ptr<Expression> try_parse_member_expr();
+
    std::shared_ptr<Expression> parse_unary_expr(std::shared_ptr<UnaryOperator> = {}, bool = false);
    std::shared_ptr<Expression> parse_unary_expr_target();
 
    std::shared_ptr<CaseStmt> parse_case_stmt(bool = false);
 
    std::shared_ptr<IfStmt> parse_if_stmt();
-   std::shared_ptr<WhileStmt> parse_while_stmt();
+   std::shared_ptr<WhileStmt> parse_while_stmt(bool conditionBefore = true);
    std::shared_ptr<Statement> parse_for_stmt();
    std::shared_ptr<MatchStmt> parse_match_stmt();
 

@@ -19,7 +19,8 @@ ClassDecl::ClassDecl(
       bool is_abstract,
       ObjectType* extends,
       std::vector<ObjectType*>&& implements,
-      std::shared_ptr<DestrDecl> &&destr) :
+      std::shared_ptr<DestrDecl> &&destr,
+      std::vector<Statement::SharedPtr>&& innerDeclarations) :
    className(class_name),
    fields(fields),
    methods(methods),
@@ -30,7 +31,8 @@ ClassDecl::ClassDecl(
    am(am),
    is_abstract(is_abstract),
    parentClass(extends),
-   conformsTo(implements)
+   conformsTo(implements),
+   innerDeclarations(innerDeclarations)
 {
 
 }
@@ -44,7 +46,8 @@ ClassDecl::ClassDecl(
       std::vector<ObjectType *>&& generics,
       AccessModifier am,
       std::vector<ObjectType*>&& conformsTo,
-      std::shared_ptr<DestrDecl> &&destr) :
+      std::shared_ptr<DestrDecl> &&destr,
+      std::vector<Statement::SharedPtr>&& innerDeclarations) :
    className(className),
    fields(fields),
    methods(methods),
@@ -55,7 +58,8 @@ ClassDecl::ClassDecl(
    am(am),
    is_abstract(true),
    is_protocol(true),
-   conformsTo(conformsTo)
+   conformsTo(conformsTo),
+   innerDeclarations(innerDeclarations)
 {
 
 }
@@ -73,6 +77,9 @@ std::vector<std::shared_ptr<AstNode>> ClassDecl::get_children() {
    }
    for (const auto& method : methods) {
       children.push_back(method);
+   }
+   for (const auto& inner : innerDeclarations) {
+      children.push_back(inner);
    }
 
    return children;

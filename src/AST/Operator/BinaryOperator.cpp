@@ -43,7 +43,7 @@ namespace cdot {
    }
 
    BinaryOperator::~BinaryOperator() {
-
+      delete preAssignmentOp;
    }
 
    void BinaryOperator::setLhs(Expression::SharedPtr exp) {

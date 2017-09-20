@@ -52,17 +52,6 @@ namespace cdot {
       return newTy;
    }
 
-   llvm::Value* PointerType::castTo(llvm::Value *val, Type *destTy) {
-      switch (destTy->getTypeID()) {
-         case TypeID::IntegerTypeID:
-            return Builder->CreatePtrToInt(val, destTy->getLlvmType());
-         case TypeID::FPTypeID:
-            return Builder->CreateLoad(Builder->CreateBitCast(val, destTy->getLlvmType()->getPointerTo()));
-         default:
-            return Builder->CreateBitCast(val, destTy->getLlvmType());
-      }
-   }
-
    bool PointerType::implicitlyCastableTo(Type *other) {
       if (isa<PointerType>(other)) {
          return pointeeType->implicitlyCastableTo(cast<PointerType>(other)->getPointeeType());

@@ -22,14 +22,10 @@ namespace cdot {
    }
    
    Type* AutoType::deepCopy() {
-      return new AutoType;
+      return new AutoType(*this);
    }
 
    llvm::Type* AutoType::_getLlvmType() {
-      llvm_unreachable("resolve first!");
-   }
-
-   llvm::Value* AutoType::castTo(llvm::Value *, Type *) {
       llvm_unreachable("resolve first!");
    }
 

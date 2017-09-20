@@ -4,13 +4,14 @@
 
 #include "MemberRefExpr.h"
 
-MemberRefExpr::MemberRefExpr(string ident) {
+MemberRefExpr::MemberRefExpr(string ident, bool pointerAccess) : isPointerAccess(pointerAccess) {
    this->ident = ident;
 }
 
-MemberRefExpr::MemberRefExpr(size_t index) :
+MemberRefExpr::MemberRefExpr(size_t index, bool pointerAccess) :
    tupleIndex(index),
-   isTupleAccess(true)
+   isTupleAccess(true),
+   isPointerAccess(pointerAccess)
 {
 
 }

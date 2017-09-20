@@ -9,6 +9,7 @@
 #include "../../../Variant/Type/FPType.h"
 #include "../../../Variant/Type/TupleType.h"
 #include "CGMemory.h"
+#include "../../Visitor/StaticAnalysis/Enum.h"
 
 namespace cdot {
 namespace codegen {
@@ -19,9 +20,9 @@ namespace codegen {
       llvm::Value *val,
       llvm::IRBuilder<> &Builder)
    {
-      if (to->needsLvalueToRvalueConv()) {
-         to->isLvalue(false);
-         to = to->getPointerTo();
+      if (from->needsLvalueToRvalueConv() && !to->isLvalue()) {
+         val = CodeGen::CreateLoad(val);
+         from->isLvalue(false);
       }
 
       if (to->isBoxedEquivOf(from)) {
@@ -43,7 +44,7 @@ namespace codegen {
 
       if (from->isBoxedPrimitive() && isa<PrimitiveType>(to)) {
          val = CodeGen::CreateLoad(CodeGen::AccessField(0, val));
-         if (from->unbox()->isIntegerTy()) {
+         if (to->isIntegerTy()) {
             return integralCast(from->unbox(), to, val, Builder);
          }
          else {
@@ -53,14 +54,22 @@ namespace codegen {
 
       if (to->isBoxedPrimitive() && isa<PrimitiveType>(from)) {
          llvm::Value* cast;
-         if (to->isIntegerTy()) {
-            cast = integralCast(from->unbox(), to, val, Builder);
+         if (from->isIntegerTy()) {
+            cast = integralCast(from, to->unbox(), val, Builder);
          }
          else {
-            cast = floatingPointCast(from->unbox(), to, val, Builder);
+            cast = floatingPointCast(from, to->unbox(), val, Builder);
          }
 
-         auto structTy = ObjectType::getStructureType(to->getClassName());
+         //FIXME remove once integer types implemented
+         llvm::StructType* structTy;
+         if (!SymbolTable::hasClass(to->getClassName())) {
+            structTy = ObjectType::getStructureType("Int");
+         }
+         else {
+            structTy = ObjectType::getStructureType(to->getClassName());
+         }
+
          auto alloca = CGMemory::CreateAlloca(structTy);
          Builder.CreateCall(SymbolTable::getClass(to->getClassName())->getMemberwiseInitializer()->llvmFunc, {
             alloca, cast });
@@ -93,15 +102,6 @@ namespace codegen {
          if (to->isProtocol()) {
             return protoToProtoCast(from, to, val, Builder);
          }
-         // should have already been handled via protocol extraction
-         if (from->isGeneric()) {
-            auto toTy = to->getLlvmType();
-            if (!toTy->isPointerTy()) {
-               toTy = toTy->getPointerTo();
-            }
-
-            return Builder.CreateBitCast(val, toTy);
-         }
 
          return castFromProtocol(from, to, val, Builder);
       }
@@ -129,7 +129,13 @@ namespace codegen {
             return staticUpcast(from, to, val, Builder);
          }
 
-         llvm_unreachable("Unsupported object cast!");
+         // TODO unsafe cast
+         auto destTy = to->getLlvmType();
+         if (!destTy->isPointerTy()) {
+            destTy = destTy->getPointerTo();
+         }
+
+         return Builder.CreateBitCast(val, destTy);
       }
 
       llvm_unreachable("Unsupported cast!");
@@ -149,8 +155,9 @@ namespace codegen {
       }
 
       switch (to->getTypeID()) {
-         case TypeID::IntegerTypeID:
+         case TypeID::IntegerTypeID: {
             return Builder.CreateSExtOrTrunc(val, toType);
+         }
          case TypeID::FPTypeID:
             if (asInt->isUnsigned()) {
                return Builder.CreateUIToFP(val, toType);
@@ -165,10 +172,16 @@ namespace codegen {
                auto AnyTy = ObjectType::getStructureType("Any");
                auto alloca = CGMemory::CreateAlloca(AnyTy);
 
-               auto objPtr = Builder.CreateStructGEP(AnyTy, alloca, 1);
+               auto objPtr = Builder.CreateStructGEP(AnyTy, alloca, Class::ProtoObjPos);
                Builder.CreateStore(
-                  Builder.CreateIntToPtr(val, Builder.getInt8PtrTy()),
-                  objPtr
+                  val,
+                  Builder.CreateBitCast(objPtr, val->getType()->getPointerTo())
+               );
+
+               auto sizePtr = Builder.CreateStructGEP(AnyTy, alloca, Class::ProtoSizePos);
+               Builder.CreateStore(
+                  CodeGen::wordSizedInt(CodeGen::getAlignment(val)),
+                  sizePtr
                );
 
                return alloca;
@@ -211,15 +224,17 @@ namespace codegen {
                assert(other->getName() == "Any" && "Floats only conform to any!");
                auto AnyTy = ObjectType::getStructureType("Any");
                auto alloca = CGMemory::CreateAlloca(AnyTy);
-               auto floatAlloca = CGMemory::CreateAlloca(from->getLlvmType());
-               CodeGen::CreateStore(val, floatAlloca);
-
-               floatAlloca = Builder.CreateBitCast(floatAlloca, Builder.getIntNTy(sizeof(int*))->getPointerTo());
 
                auto objPtr = Builder.CreateStructGEP(AnyTy, alloca, 1);
                Builder.CreateStore(
-                  Builder.CreateBitCast(floatAlloca, Builder.getInt8PtrTy()),
-                  objPtr
+                  val,
+                  Builder.CreateBitCast(objPtr, val->getType()->getPointerTo())
+               );
+
+               auto sizePtr = Builder.CreateStructGEP(AnyTy, alloca, Class::ProtoSizePos);
+               Builder.CreateStore(
+                  CodeGen::wordSizedInt(CodeGen::getAlignment(val)),
+                  sizePtr
                );
 
                return alloca;
@@ -246,8 +261,18 @@ namespace codegen {
       }
 
       switch (to->getTypeID()) {
-         case TypeID::IntegerTypeID:
+         case TypeID::IntegerTypeID: {
+            if (SymbolTable::hasClass(from->getClassName())) {
+               auto cl = SymbolTable::getClass(from->getClassName());
+               if (cl->isEnum() && !static_cast<cdot::cl::Enum*>(cl)->hasAssociatedValues()) {
+                  val = CodeGen::CreateLoad(CodeGen::AccessField(0, val));
+                  val = Builder.CreateSExtOrTrunc(val, toType);
+
+                  return val;
+               }
+            }
             return Builder.CreatePtrToInt(val, toType);
+         }
          case TypeID::FPTypeID: {
             val = Builder.CreateBitCast(val, toType->getPointerTo());
             return CodeGen::CreateLoad(val);
@@ -286,7 +311,7 @@ namespace codegen {
          else {
             llvm::Value* castVal = CodeGen::CreateLoad(srcGep);
             if (*from != to) {
-               castVal = from->castTo(castVal, to);
+               castVal = CGCast::applyCast(from, to, castVal, Builder);
             }
 
             Builder.CreateStore(castVal, dstGep);
@@ -308,9 +333,7 @@ namespace codegen {
       auto cl = SymbolTable::getClass(from->getClassName());
       auto op = "infix as " + to->toString();
 
-      std::vector<Type*> argTypes;
-      auto castOp = cl->hasMethod(op, argTypes);
-
+      auto castOp = cl->hasMethod(op);
       return castOp;
    }
 
@@ -360,15 +383,6 @@ namespace codegen {
          val = alloca;
       }
 
-      // special case where no additional proto alloca is neccessary,
-      // as long as we handle it the same way when casting from the protocol
-      if (proto->isEmptyProtocol() || to->getGenericClassName() == "Self") {
-         return Builder.CreateBitCast(
-            val,
-            to->getLlvmType()
-         );
-      }
-
       auto protoTy = ObjectType::getStructureType(proto->getName());
       auto alloca = CGMemory::CreateAlloca(protoTy, true);
       auto& vtbl = self->getProtocolVtable(proto->getName());
@@ -382,10 +396,19 @@ namespace codegen {
       }
 
       auto objPtr = Builder.CreateStructGEP(protoTy, alloca, Class::ProtoObjPos);
-      Builder.CreateStore(
-         Builder.CreateBitCast(val, Builder.getInt8PtrTy()),
-         objPtr
-      );
+
+      if (isa<PrimitiveType>(from)) {
+         Builder.CreateStore(
+            val,
+            Builder.CreateBitCast(objPtr, val->getType()->getPointerTo())
+         );
+      }
+      else {
+         Builder.CreateStore(
+            Builder.CreateBitCast(val, Builder.getInt8PtrTy()),
+            objPtr
+         );
+      }
 
       auto sizeGep = Builder.CreateStructGEP(protoTy, alloca, Class::ProtoSizePos);
       if (proto->isClass()) {
@@ -405,46 +428,32 @@ namespace codegen {
       llvm::IRBuilder<> &Builder)
    {
       auto protoTy = ObjectType::getStructureType(from->getClassName());
+      auto ty = to->getLlvmType();
 
-      // special case where no additional proto alloca is neccessary,
-      // as long as we handle it the same way when casting to the protocol
-      if (SymbolTable::getClass(from->getClassName())->isEmptyProtocol()) {
-         auto toType = to->getLlvmType();
-         if (!toType->isPointerTy() || to->needsLvalueToRvalueConv()) {
-            toType = toType->getPointerTo();
-         }
+      if (from->needsLvalueToRvalueConv()) {
+         val = CodeGen::CreateLoad(val);
+      }
 
-         if (!to->isLvalue() && from->needsLvalueToRvalueConv()) {
-            val = CodeGen::CreateLoad(val);
-         }
-
-         return Builder.CreateBitCast(
-            val,
-            toType
-         );
+      // in case of a struct or primitive type
+      if (!ty->isPointerTy()) {
+         ty = ty->getPointerTo();
       }
 
       auto selfGep = Builder.CreateStructGEP(protoTy, val, Class::ProtoObjPos);
-      if (to->isLvalue()) {
-         return Builder.CreateBitCast(
-            selfGep,
-            to->getLlvmType()
-         );
-      }
+      if (to->isIntegerTy() || to->isFPType()) {
+         auto intPtr = Builder.CreateBitCast(selfGep, ty);
+         if (to->isLvalue()) {
+            return intPtr;
+         }
 
-      auto ty = to->getLlvmType();
-      if (ty->isFloatingPointTy()) {
-         auto intPtr = Builder.CreateBitCast(Builder.CreateLoad(selfGep), ty->getPointerTo());
          return CodeGen::CreateLoad(intPtr);
       }
 
-      if (ty->isIntegerTy()) {
-         return Builder.CreatePtrToInt(Builder.CreateLoad(selfGep), ty);
-      }
-
-      // in case of a struct
-      if (!ty->isPointerTy()) {
-         ty = ty->getPointerTo();
+      if (to->isLvalue()) {
+         return Builder.CreateBitCast(
+            selfGep,
+            to->isRefcounted() ? ty : ty->getPointerTo()
+         );
       }
 
       return Builder.CreateBitCast(
@@ -459,24 +468,6 @@ namespace codegen {
       llvm::Value *val,
       llvm::IRBuilder<> &Builder)
    {
-      auto toCl = SymbolTable::getClass(to->getClassName());
-
-      // If we are passing a protocol to a function argument with type 'Self',
-      // inside the function we won't be expecting a wrapped protocol type,
-      // but rather the raw value itself (ensuring that it is of the appropriate 'Self' type
-      // must be ensured elsewhere)
-      if (to->getGenericClassName() == "Self") {
-         size_t index = toCl->isEmptyProtocol() ? 0 : 1;
-         return Builder.CreateBitCast(
-            CodeGen::CreateLoad(CodeGen::AccessField(index, val)),
-            ObjectType::getStructureType(to->getClassName())->getPointerTo()
-         );
-      }
-
-      if (toCl->isEmptyProtocol()) {
-         return Builder.CreateBitCast(val, ObjectType::getStructureType(to->getClassName())->getPointerTo());
-      }
-
       auto fromProto = SymbolTable::getClass(from->getClassName());
       auto offset = fromProto->getVTableOffset(to->getClassName());
 

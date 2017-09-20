@@ -85,8 +85,8 @@ namespace cdot {
       return coVar->isBaseClassOf(given->getClassName());
    }
 
-   void Type::resolveUnqualified(Type *ty) {
-
+   void Type::resolveUnqualified(Type *ty)
+   {
       for (const auto& cont : ty->getContainedTypes()) {
          resolveUnqualified(cont);
       }
@@ -110,10 +110,13 @@ namespace cdot {
       auto cl = SymbolTable::getClass(asObj->getClassName());
       size_t i = 0;
 
-      assert(cl->getGenerics().size() == unqal.size() && "Should have been caught before!");
+      if (cl->getGenerics().size() != unqal.size()) {
+         return;
+      }
 
       for (const auto& gen : cl->getGenerics()) {
          asObj->specifyGenericType(gen->getGenericClassName(), unqal.at(i));
+         ++i;
       }
 
       unqal.clear();
@@ -144,11 +147,6 @@ namespace cdot {
       dst->cstyleVararg = src->cstyleVararg;
       dst->cstyleArray = src->cstyleArray;
       dst->carrayElement = src->carrayElement;
-      dst->lengthExpr = src->lengthExpr;
-      dst->lengthExprType = src->lengthExprType;
-      dst->lengthExprValue = src->lengthExprValue;
-      dst->constantSize = src->constantSize;
-      dst->length = src->length;
    }
 
    namespace {
@@ -172,17 +170,19 @@ namespace cdot {
       }
    }
 
-   void Type::resolve(
+   bool Type::resolve(
       Type **ty,
       string& className,
       std::vector<ObjectType*>* generics,
       std::vector<string>& namespaces)
    {
-      // resolve unqalified generic types, for example:
-      //   let x: Array<Int> will be parsed as having one generic Type Int,
-      //   but the parser doesn't know that this corresponds to the generic
-      //   parameter "T" of class Array
-      Type::resolveUnqualified(*ty);
+      for (const auto& cont : (*ty)->getTypeReferences()) {
+         if (!resolve(cont, className, generics, namespaces)) {
+            return false;
+         }
+      }
+
+      SymbolTable::resolveTypedef(*ty, namespaces);
 
       if (isa<ObjectType>(*ty) && (*ty)->getClassName() == "Self" && !className.empty()) {
          *ty = ObjectType::get(className);
@@ -190,6 +190,26 @@ namespace cdot {
          (*ty)->setGenericClassName("Self");
          (*ty)->setContravariance(ObjectType::get(className));
          (*ty)->hasSelfRequirement(true);
+      }
+
+      if ((*ty)->isObject()) {
+         auto asObj = cast<ObjectType>(*ty);
+         auto& unqual = asObj->getUnqualifiedGenerics();
+         if (!unqual.empty()) {
+            auto cl = SymbolTable::getClass(asObj->getClassName(), namespaces);
+            if (cl->getGenerics().size() != unqual.size()) {
+               return false;
+            }
+
+            size_t i = 0;
+            for (const auto& gen : cl->getGenerics()) {
+               resolve(&unqual[i], className, generics, namespaces);
+               asObj->specifyGenericType(gen->getGenericClassName(), unqual[i]);
+               ++i;
+            }
+
+            unqual.clear();
+         }
       }
 
       if (generics != nullptr) {
@@ -200,29 +220,26 @@ namespace cdot {
          }
       }
 
-      SymbolTable::resolveTypedef(*ty, namespaces);
-      for (const auto& cont : (*ty)->getTypeReferences()) {
-         resolve(cont, className, generics, namespaces);
-      }
+      if ((*ty)->isObject()) {
+         auto& declaredClassName = (*ty)->getClassName();
+         if (SymbolTable::hasClass(declaredClassName, namespaces)) {
+            auto cl = SymbolTable::getClass(declaredClassName, namespaces);
+            auto asObj = cast<ObjectType>(*ty);
+            asObj->setClassName(cl->getName());
 
-      if ((*ty)->getLengthExpr() != nullptr) {
-         auto &lengthExpr = (*ty)->getLengthExpr();
-      }
-
-      if (isa<ObjectType>(*ty)) {
-         auto asObj = cast<ObjectType>(*ty);
-         if (!SymbolTable::hasClass(asObj->getClassName())) {
-            return;
+            if (cl->isStruct()) {
+               asObj->isStruct(true);
+            }
+            else if (cl->isEnum()) {
+               asObj->isEnum(true);
+            }
          }
-
-         auto cl = SymbolTable::getClass(asObj->getClassName());
-         if (cl->isStruct()) {
-            asObj->isStruct(true);
-         }
-         else if (cl->isEnum()) {
-            asObj->isEnum(true);
+         else {
+            return false;
          }
       }
+
+      return true;
    }
 
    bool Type::operator==(Type *&other) {
@@ -231,24 +248,6 @@ namespace cdot {
       }
 
       return true;
-   }
-
-   Type* Type::visitLengthExpr(TypeCheckPass *v) {
-      if (lengthExprType != nullptr) {
-         return lengthExprType;
-      }
-
-      lengthExprType = lengthExpr->accept(*v);
-      return lengthExprType;
-   }
-
-   llvm::Value* Type::visitLengthExpr(CodeGen *v) {
-      if (lengthExprValue != nullptr) {
-         return lengthExprValue;
-      }
-
-      lengthExprValue = lengthExpr->accept(*v);
-      return lengthExprValue;
    }
 
    short Type::getAlignment() {

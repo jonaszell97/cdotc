@@ -10,9 +10,13 @@
 #include <llvm/IR/Type.h>
 #include <regex>
 
+
 namespace cdot {
    class Type;
    class ObjectType;
+   enum class BuiltinFn : unsigned int;
+
+   struct Argument;
 
    enum class CompatibilityType {
       COMPATIBLE,
@@ -40,7 +44,10 @@ struct CallCompatability {
    int compat_score;
    bool perfect_match = false;
 
-   unordered_map<size_t, pair<Type*, Type*>> needed_casts;
+   std::vector<size_t> needed_casts;
+   std::vector<pair<size_t, bool>> argOrder;
+
+   std::vector<Type*> generics;
 
    size_t incomp_arg = 0;
    string expectedType;
@@ -53,7 +60,7 @@ namespace util {
    std::vector<string> str_split(string, char);
    string str_trim(string);
 
-   string args_to_string(std::vector<Type*>&);
+   string args_to_string(std::vector<Argument>&);
 
    extern std::vector<string> stdLibImports;
 
@@ -99,6 +106,11 @@ namespace util {
    string generate_getter_name(string);
    string generate_setter_name(string);
 
+   std::vector<pair<size_t, string>> findInterpolations(string& str);
+
+   extern std::vector<string> builtinFunctions;
+   extern unordered_map<string, pair<cdot::BuiltinFn, std::vector<Type*>>> builtinTypes;
+
    extern string token_names[];
    extern std::vector<string> keywords;
 
@@ -111,31 +123,59 @@ namespace util {
    extern std::vector<string> PrefixUnaryOperators;
    extern std::vector<string> PostfixUnaryOperators;
 
-   extern std::set<string> string_modifiers;
-
    extern std::vector<char> operator_chars;
    extern std::vector<char> punctuators;
 
    extern std::vector<string> attributes;
 
-   bool resolve_generic(Type* given, Type* needed,
-      std::vector<Type*>& given_generics, std::vector<ObjectType*>& needed_generics, unordered_map<size_t,
-      pair<Type*, Type*>>& needed_casts, size_t argNum);
-
-   CallCompatability func_call_compatible(std::vector<Type*>& given_args, std::vector<Type*>& needed_args,
-      std::vector<Type*>& given_generics, std::vector<ObjectType*>& needed_generics);
-
-   CallCompatability func_call_compatible(std::vector<Type*>& given_args, std::vector<Type*>& needed_args);
-
-   int func_score(std::vector<Type*>&);
-
-   std::vector<pair<string, std::shared_ptr<Expression>>> orderArgs(
-      std::vector<string>& givenLabels,
-      std::vector<Type*>&givenArgs,
-      std::vector<string>&  declaredArgs,
-      std::vector<pair<string, std::shared_ptr<Expression>>>& argValues,
-      std::vector<std::shared_ptr<Expression>>& defaultValues
+   bool resolveGeneric(
+      Type* given,
+      Type* needed,
+      std::vector<Type*>& givenGenerics,
+      std::vector<ObjectType*>& neededGenerics
    );
+
+   int resolveGenerics(
+      std::vector<Argument>& givenArgs,
+      std::vector<Argument>& neededArgs,
+      std::vector<Type*>& givenGenerics,
+      std::vector<ObjectType*>& neededGenerics
+   );
+
+   CallCompatability funcCallCompatible(
+      std::vector<Argument> &givenArgs,
+      std::vector<Argument> &neededArgs
+   );
+
+   CallCompatability varargCallCompatible(
+      std::vector<Argument> &givenArgs,
+      std::vector<Argument> &neededArgs
+   );
+
+   CallCompatability findMatchingCall(
+      std::vector<Argument>& givenArgs,
+      std::vector<Argument>& neededArgs,
+
+      std::vector<Type*> givenGenerics,
+      std::vector<ObjectType*> neededGenerics
+   );
+
+   CallCompatability findMatchingCall(
+      std::vector<Argument>& givenArgs,
+      std::vector<Argument>& neededArgs,
+
+      std::vector<Type*> givenGenerics,
+      std::vector<ObjectType*> neededGenerics,
+
+      unordered_map<string, Type*> classGenerics
+   );
+
+   std::vector<pair<size_t, bool>> orderArgs(
+      std::vector<Argument>& givenArgs,
+      std::vector<Argument>& neededArgs
+   );
+
+   string nextAnonymousNamespace();
 };
 
 

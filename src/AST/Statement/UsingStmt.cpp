@@ -4,15 +4,20 @@
 
 #include "UsingStmt.h"
 
-UsingStmt::UsingStmt(string ns_name) : nsName(ns_name) {
-
+UsingStmt::UsingStmt(
+   string&& importNamespace,
+   std::vector<string>&& item) :
+   importNamespace(importNamespace),
+   importedItems(item)
+{
+   
 }
 
 std::vector<AstNode::SharedPtr> UsingStmt::get_children() {
-    return { };
+   return { };
 }
 
 void UsingStmt::__dump(int depth) {
-    AstNode::__tab(depth);
-    std::cout << "UsingStmt [" << "]" << std::endl;
+   AstNode::__tab(depth);
+   std::cout << "UsingStmt [" << "]" << std::endl;
 }

@@ -51,19 +51,23 @@ namespace cdot {
       void __dump(int depth) override;
 
       NodeType get_type() override {
-         return NodeType::BINARY_OPERATOR;
+        return NodeType::BINARY_OPERATOR;
       }
 
       llvm::Value *accept(CodeGen &v) override {
-         return v.visit(this);
+        return v.visit(this);
       }
 
       Type *accept(TypeCheckPass &v) override {
-         return v.visit(this);
+        return v.visit(this);
+      }
+
+      void accept(DeclPass &v) override {
+        v.visit(this);
       }
 
       Variant accept(ConstExprPass &v) override {
-         return v.visit(this);
+        return v.visit(this);
       }
 
       friend class ::ConstExprPass;
@@ -80,11 +84,19 @@ namespace cdot {
 
       Type *pointerArithmeticType = nullptr;
 
+      BinaryOperator* preAssignmentOp = nullptr;
+      Type *lhsType = nullptr;
+      Type *rhsType = nullptr;
+
+      llvm::Value* lhsVal = nullptr;
+      llvm::Value* rhsVal = nullptr;
+
       // codegen
       std::shared_ptr<CallExpr> overridenCall = nullptr;
       string className;
       cdot::cl::Method *method;
       bool isStructAssignment = false;
+      bool isSelfAssignment = false;
       bool isNullAssignment = false;
       bool isProtocolAssignment = false;
 

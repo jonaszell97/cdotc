@@ -11,8 +11,8 @@ class CallExpr;
 
 class MemberRefExpr : public Expression {
 public:
-   explicit MemberRefExpr(string);
-   explicit MemberRefExpr(size_t);
+   explicit MemberRefExpr(string, bool pointerAccess = false);
+   explicit MemberRefExpr(size_t, bool pointerAccess = false);
 
    ~MemberRefExpr() override;
 
@@ -32,7 +32,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
@@ -54,6 +58,8 @@ protected:
 
    bool isNsMember = false;
    bool isEnumRawValue = false;
+
+   bool isPointerAccess = false;
 
    Type* genericOriginTy = nullptr;
    Type* genericDestTy = nullptr;

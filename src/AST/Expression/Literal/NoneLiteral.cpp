@@ -8,6 +8,11 @@ NoneLiteral::NoneLiteral() {
 
 }
 
+bool NoneLiteral::canReturn(Type *ty)
+{
+   return ty->isObject() && ty->getClassName() == "Option";
+}
+
 std::vector<AstNode::SharedPtr> NoneLiteral::get_children() {
    return {};
 }

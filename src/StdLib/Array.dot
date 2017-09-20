@@ -1,40 +1,48 @@
 
+using Builtin.Primitive.{ int8, word, int32 }
+using Extern.C.{ malloc, free, exit }
+
 class Array<T> with Iterable<T> {
-    var raw: T* { get }
-    var size: Int { get }
-    var capacity: Int { get } = 0
+    static let INITIAL_CAPACITY = 8
 
-    private static def initRaw(arr: ref T*, len: Int) unsafe {
-        let newArr: T[len]
-        arr = newArr
-    }
+    var raw: T*       { get } = __nullptr(T)
+    var capacity: Int { get } = INITIAL_CAPACITY
+    var size: Int     { get } = 0
 
-    init (arr: T*, len: Int) {
+    private init (arr: T*, len: Int) {
         raw = arr
         size = len
         capacity = len
     }
 
-    init (i: Int) {
-        capacity = i
-        size = 0
-        initRaw(raw, i)
+    init (cap: Int) {
+        capacity = cap
+        raw = malloc(sizeof(word*) * capacity) as T*
     }
 
     init {
-        capacity = 1
-        size = 0
-        initRaw(raw, 1)
+        raw = malloc(sizeof(word*) * capacity) as T*
+    }
+
+    @inline(always)
+    private def copyTo(lhs: T*) {
+        for let i in 0..size {
+            lhs[i] = raw[i]
+        }
+    }
+
+    private def resize (cap: Int) {
+        let newArr = malloc(sizeof(word*) * cap) as T*
+        copyTo(newArr)
+
+        free(raw as int8*)
+        raw = newArr
+        capacity = cap
     }
 
     def push(t: T) unsafe {
         if (size + 1 > capacity) {
-            capacity = capacity << 1
-            let newArr = Extern.C.malloc(capacity) as T*
-            copyTo(newArr)
-            
-            Extern.C.free(raw as Int8*)
-            raw = newArr
+            resize(capacity << 1)
         }
 
         raw[size] = t
@@ -48,68 +56,77 @@ class Array<T> with Iterable<T> {
         return back
     }
 
-    def reserve (i: Int) unsafe {
-        capacity = capacity + i
-        let newArr = Extern.C.malloc(capacity) as T*
-        copyTo(newArr)
+    def reserve (cap: Int) {
+        if capacity > cap {
+            return
+        }
 
-        Extern.C.free(raw as Int8*)
-        raw = newArr
+        resize(cap)
     }
 
-    def first -> T {
+    def first () -> T {
         return raw[0]
     }
 
-    def last -> T {
+    def last () -> T {
         return raw[size - 1]
     }
 
-    def at(i: Int) -> T {
+    def at (i: Int) -> T {
         return self[i]
     }
 
-    def copyTo(lhs: T*) {
-        for (let i = 0; i < size; ++i) {
-            lhs[i] = raw[i]
-        }
-    }
-
-    def postfix [](index: Int) -> ref T unsafe {
+    def postfix [] (index: Int) -> ref T {
         if (index >= size) {
             print("No can do baby doll")
-            Extern.C.exit(69.val as Int32)
+            exit(69 as int32)
         }
 
         return raw[index]
     }
 
-    def infix +(rhs: Array<T>) -> Array<T> unsafe {
+    def infix + (rhs: Array<T>) -> Array<T> unsafe {
         var newArr = Array(raw, size)
         newArr += rhs
         
         return newArr
     }
 
-    def infix +=(rhs: Array<T>) unsafe {
-        var newArr = Extern.C.malloc(size + rhs.size) as T*
-        var i = 0
+    def infix += (rhs: Array<T>) unsafe {
+        var newArr = malloc(size + rhs.size) as T*
 
         copyTo(newArr)
-        for (; i < rhs.size; ++i) {
+        for let i in 0..rhs.size {
             newArr[i + size] = rhs.raw[i]
         }
         
-        Extern.C.free(raw as Int8*)
+        free(raw as int8*)
         raw = newArr
-        size = i + size
+        size = rhs.size + size
         capacity = size
     }
 }
 
 extend Array with Iterable<T> {
-    def getIterator() -> ArrayIterator<T> {
-        return ArrayIterator<T>(self)
+    class Iterator<T> with Iterator<T> {
+        let arr: [T]
+        var index = 0
+
+        public init (_arr: [T]) {
+            arr = _arr
+        }
+
+        public def next -> T? {
+            if (index >= arr.size) {
+                return none
+            }
+            
+            return .Some(arr[index++])
+        }
+    }
+
+    def getIterator() -> Iterator<T> {
+        return Iterator<T>(self)
     }
 }
 

@@ -6,15 +6,17 @@
 #include "MethodDecl.h"
 #include "EnumCaseDecl.h"
 
-EnumDecl::EnumDecl(AccessModifier am, string &&enumName, std::vector<std::shared_ptr<MethodDecl>>&& methods,
-   std::vector<ObjectType *> &&conformsTo, std::vector<ObjectType *> &&generics,
-   std::vector<std::shared_ptr<EnumCaseDecl>> &&cases) :
+EnumDecl::EnumDecl(AccessModifier am, string &&enumName, std::shared_ptr<TypeRef>& rawType,
+   std::vector<std::shared_ptr<MethodDecl>>&&methods, std::vector<ObjectType *> &&conformsTo, std::vector<ObjectType *> &&generics,
+   std::vector<std::shared_ptr<EnumCaseDecl>> &&cases, std::vector<Statement::SharedPtr>&& innerDeclarations) :
       className(enumName),
       am(am),
+      rawType(rawType),
       methods(methods),
       conformsTo(conformsTo),
       generics(generics),
-      cases(cases)
+      cases(cases),
+      innerDeclarations(innerDeclarations)
 {
 
 }
@@ -26,6 +28,9 @@ std::vector<std::shared_ptr<AstNode>> EnumDecl::get_children() {
    }
    for (const auto& case_ : cases) {
       children.push_back(case_);
+   }
+   for (const auto& inner : innerDeclarations) {
+      children.push_back(inner);
    }
 
    return children;

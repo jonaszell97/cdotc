@@ -9,44 +9,48 @@
 
 class ImplicitCastExpr : public Expression {
 public:
-    ImplicitCastExpr(Type* from, Type* to, Expression::SharedPtr);
+   ImplicitCastExpr(Type* from, Type* to, Expression::SharedPtr);
 
-    ~ImplicitCastExpr() override;
+   ~ImplicitCastExpr() override;
 
-    typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
-    std::vector<AstNode::SharedPtr> get_children() override;
-    void __dump(int) override;
+   typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
+   std::vector<AstNode::SharedPtr> get_children() override;
+   void __dump(int) override;
 
-    llvm::Value* accept(CodeGen& v) override {
-        return v.visit(this);
-    }
-
-    Type* accept(TypeCheckPass& v) override {
-        return v.visit(this);
-    }
-
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   llvm::Value* accept(CodeGen& v) override {
+      return v.visit(this);
    }
 
-    NodeType get_type() override {
-        return target->get_type();
-    }
+   Type* accept(TypeCheckPass& v) override {
+      return v.visit(this);
+   }
 
-    void isHiddenReturnValue() override {
-        isHiddenReturnValue_ = true;
-        target->isHiddenReturnValue();
-    }
+   void accept(DeclPass &v) override {
+     v.visit(this);
+   }
 
-    friend class CodeGen;
-    friend class TypeCheckPass;
+   Variant accept(ConstExprPass &v) override {
+     return v.visit(this);
+   }
+
+   NodeType get_type() override {
+      return target->get_type();
+   }
+
+   void isHiddenReturnValue() override {
+      isHiddenReturnValue_ = true;
+      target->isHiddenReturnValue();
+   }
+
+   friend class CodeGen;
+   friend class TypeCheckPass;
    friend class DeclPass;
-    friend class ConstExprPass;
+   friend class ConstExprPass;
 
 protected:
-    Type* from = nullptr;
-    Type* to = nullptr;
-    Expression::SharedPtr target;
+   Type* from = nullptr;
+   Type* to = nullptr;
+   Expression::SharedPtr target;
 };
 
 

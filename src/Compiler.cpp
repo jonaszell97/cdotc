@@ -7,6 +7,7 @@
 #include "Parser.h"
 #include "AST/Statement/Block/CompoundStmt.h"
 #include "AST/Statement/EndOfFileStmt.h"
+#include "Preprocessor.h"
 
 namespace cdot {
 
@@ -47,6 +48,9 @@ namespace cdot {
             std::ifstream ifs(dir_path);
             string content((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
 
+            Preprocessor pp(content, fileName);
+            pp.run();
+
             auto Import = Parser(fileName, content).parse();
             root->addStatements(Import->getStatements());
             root->addStatement(std::make_shared<EndOfFileStmt>());
@@ -57,23 +61,26 @@ namespace cdot {
          std::ifstream t(fileName);
          string src((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
 
+         Preprocessor(src, fileName).run(true);
+
          Parser parser(fileName, src);
          root->addStatements(parser.parse()->getStatements());
       }
 
       DeclPass decl;
-      decl.doInitialPass(root);
+      decl.doInitialPass(root->getStatements());
       decl.visit(root.get());
 
       TypeCheckPass::connectTree(root.get());
       TypeCheckPass tc;
       CodeGen cg;
 
+      tc.doInitialPass(root->getStatements());
       tc.visit(root.get());
 
       {
-//         ConstExprPass ce;
-//         ce.visit(root.get());
+         ConstExprPass ce;
+         ce.visit(root.get());
       }
 
       if (astDump) {
@@ -81,7 +88,7 @@ namespace cdot {
          std::cout << "\n\n";
       }
 
-      cg.DeclareClasses(root);
+      cg.DeclareClasses(root->getStatements());
       cg.visit(root.get());
 
       cg.finalize();

@@ -3,6 +3,7 @@
 //
 
 #include "Variant.h"
+#include "../AST/Visitor/CodeGen/CodeGen.h"
 
 namespace cdot {
 
@@ -65,7 +66,7 @@ namespace cdot {
             return llvm::ConstantFP::get(ty, floatVal);
          }
          case VariantType::STRING: {
-            return Builder.CreateGlobalString(strVal);
+            return CodeGen::GetString(strVal, rawStr);
          }
          case VariantType::VOID: {
             return llvm::ConstantPointerNull::get(Builder.getInt8PtrTy());
@@ -86,13 +87,142 @@ namespace cdot {
       switch (type) {
          case VariantType::INT: {
             if (bitwidth == 8) {
-               return std::string(1, (char)(intVal));
+               return "'" + std::string(1, (char)(intVal)) + "'";
             }
+            if (bitwidth == 1) {
+               return intVal ? "true" : "false";
+            }
+
             return std::to_string(intVal);
          }
          case VariantType::STRING: return strVal;
          case VariantType::FLOAT: return std::to_string(floatVal);
          case VariantType::VOID: return "Void";
       }
+   }
+
+#define BINARY_OPERATOR_INT(OP) \
+   if(#OP == op) {\
+      return Variant(intVal OP rhs.intVal);\
+   }
+
+#define BINARY_OPERATOR_FLOAT(OP) \
+   if(#OP == op) {\
+      return Variant(floatVal OP rhs.floatVal);\
+   }
+
+#define BINARY_OPERATOR_STRING(OP) \
+   if(#OP == op) {\
+      return Variant(strVal OP rhs.strVal);\
+   }
+
+   Variant Variant::applyBinaryOp(Variant &rhs, string &op)
+   {
+      if (isVoid() || rhs.isVoid()) {
+         return {};
+      }
+      
+      if (type == VariantType::INT && rhs.type == VariantType::INT) {
+         BINARY_OPERATOR_INT(+);
+         BINARY_OPERATOR_INT(-);
+         BINARY_OPERATOR_INT(*);
+         BINARY_OPERATOR_INT(/);
+         BINARY_OPERATOR_INT(&);
+         BINARY_OPERATOR_INT(|);
+         BINARY_OPERATOR_INT(&&);
+         BINARY_OPERATOR_INT(||);
+         BINARY_OPERATOR_INT(%);
+         BINARY_OPERATOR_INT(<<);
+         BINARY_OPERATOR_INT(>>);
+
+         BINARY_OPERATOR_INT(==);
+         BINARY_OPERATOR_INT(!=);
+         BINARY_OPERATOR_INT(<);
+         BINARY_OPERATOR_INT(>);
+         BINARY_OPERATOR_INT(<=);
+         BINARY_OPERATOR_INT(>=);
+
+         if (op == "**") {
+            return Variant((long)std::pow(intVal, rhs.intVal));
+         }
+      }
+      else if (type == VariantType::FLOAT || rhs.type == VariantType::FLOAT) {
+         BINARY_OPERATOR_FLOAT(+);
+         BINARY_OPERATOR_FLOAT(-);
+         BINARY_OPERATOR_FLOAT(*);
+         BINARY_OPERATOR_FLOAT(/);
+
+         BINARY_OPERATOR_FLOAT(==);
+         BINARY_OPERATOR_FLOAT(!=);
+         BINARY_OPERATOR_FLOAT(<);
+         BINARY_OPERATOR_FLOAT(>);
+         BINARY_OPERATOR_FLOAT(<=);
+         BINARY_OPERATOR_FLOAT(>=);
+
+         if (op == "**") {
+            auto leftOperand = type == VariantType::FLOAT ? floatVal : intVal;
+            auto rightOperand = rhs.type == VariantType::FLOAT ? rhs.floatVal : rhs.intVal;
+
+            return Variant(std::pow(leftOperand, rightOperand));
+         }
+      }
+      else if (type == VariantType::STRING && rhs.type == VariantType::STRING) {
+         BINARY_OPERATOR_STRING(==);
+         BINARY_OPERATOR_STRING(!=);
+         BINARY_OPERATOR_STRING(<);
+         BINARY_OPERATOR_STRING(>);
+         BINARY_OPERATOR_STRING(<=);
+         BINARY_OPERATOR_STRING(>=);
+         BINARY_OPERATOR_STRING(+);
+      }
+      else if  (type == VariantType::STRING) {
+         if (op == "+") {
+            if (rhs.type == VariantType::INT) {
+               return Variant(strVal + std::to_string(rhs.intVal));
+            }
+            if (rhs.type == VariantType::FLOAT) {
+               return Variant(strVal + std::to_string(rhs.floatVal));
+            }
+         }
+      }
+      else if  (rhs.type == VariantType::STRING) {
+         if (op == "+") {
+            if (type == VariantType::INT) {
+               return Variant(std::to_string(intVal) + rhs.strVal);
+            }
+            if (type == VariantType::FLOAT) {
+               return Variant(std::to_string(floatVal) + rhs.strVal);
+            }
+         }
+      }
+
+      return {};
+   }
+
+#define UNARY_OPERATOR_INT(OP) \
+   if (op == #OP) {\
+      return Variant(OP intVal);\
+   }
+
+#define UNARY_OPERATOR_FLOAT(OP) \
+   if (op == #OP) {\
+      return Variant(OP floatVal);\
+   }
+
+   Variant Variant::applyUnaryOp(string &op)
+   {
+      if (type == VariantType::INT) {
+         UNARY_OPERATOR_INT(+);
+         UNARY_OPERATOR_INT(-);
+         UNARY_OPERATOR_INT(!);
+         UNARY_OPERATOR_INT(~);
+      }
+
+      if (type == VariantType::FLOAT) {
+         UNARY_OPERATOR_FLOAT(+);
+         UNARY_OPERATOR_FLOAT(-);
+      }
+
+      return {};
    }
 }

@@ -42,7 +42,6 @@ class NamespaceDecl;
 class UsingStmt;
 class EndOfFileStmt;
 class ImplicitCastExpr;
-class ExtendStmt;
 class TypedefDecl;
 class TypeRef;
 class DeclareStmt;
@@ -52,6 +51,7 @@ class TupleLiteral;
 class EnumDecl;
 class Statement;
 class NoneLiteral;
+class StringInterpolation;
 
 namespace cdot {
    class BinaryOperator;

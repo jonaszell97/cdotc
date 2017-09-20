@@ -2,11 +2,53 @@
 using Builtin.Primitive
 using Extern.C
 
+struct Float {
+    var val: float
+}
+
 struct Double {
     var val: double
 
     init (f: float) {
         val = f as double
+    }
+}
+
+extend Double with Equatable {
+    def infix == (rhs: Double) -> Bool {
+        return Bool(val == rhs.val)
+    }
+}
+
+extend Double with Comparable {
+    def infix > (rhs: Double) -> Bool {
+        return Bool(val > rhs.val)
+    }
+
+    def infix >= (rhs: Double) -> Bool {
+        return (self > rhs) || self == rhs
+    }
+
+    def infix < (rhs: Double) -> Bool {
+        return !(self >= rhs)
+    }
+
+    def infix <= (rhs: Double) -> Bool {
+        return !(self > rhs)
+    }
+}
+
+extend Double with Ordered {
+    def next -> Double {
+        return advanced(by: 1)
+    }
+
+    def prev -> Double {
+        return advanced(by: -1)
+    }
+
+    def advanced(by: Int) -> Double {
+        return self + by
     }
 }
 
@@ -44,7 +86,7 @@ extend Double with StringRepresentable {
             var fits = Math.floor(num / (10 ** powerOfTen))
             str[i] = (fits + 48) as int8
 
-            num = Math.round(num - fits * (10 ** powerOfTen))
+            num = num - fits * (10 ** powerOfTen)
             --powerOfTen
             ++i
         }
@@ -56,5 +98,19 @@ extend Double with StringRepresentable {
 
     def infix as String {
         return toString(2)
+    }
+}
+
+extend Double with Randomizable {
+    static def random(min: Int, max: Int) -> Double {
+        let rand = Int.random()
+        let range = max - min
+        let div = (2 ** 32) / range
+
+        return Double(min + rand() / div)
+    }
+
+    static def random() -> Double {
+        return random(0, 1)
     }
 }

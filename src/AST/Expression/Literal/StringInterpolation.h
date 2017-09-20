@@ -1,19 +1,18 @@
 //
-// Created by Jonas Zell on 15.08.17.
+// Created by Jonas Zell on 10.09.17.
 //
 
-#ifndef CDOT_LVALUETORVALUECONV_H
-#define CDOT_LVALUETORVALUECONV_H
+#ifndef CDOT_STRINGINTERPOLATION_H
+#define CDOT_STRINGINTERPOLATION_H
 
 
-#include "../../Expression/Expression.h"
-using namespace cdot;
+#include "../Expression.h"
 
-class LvalueToRvalue : public Expression {
+class StringInterpolation: public Expression {
 public:
-   explicit LvalueToRvalue(Expression::SharedPtr expr);
+   StringInterpolation(std::vector<Expression::SharedPtr>&& strings);
 
-   typedef std::shared_ptr<LvalueToRvalue> SharedPtr;
+   typedef std::shared_ptr<StringInterpolation> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int depth) override;
 
@@ -33,18 +32,18 @@ public:
       return v.visit(this);
    }
 
-   NodeType get_type() override {
-      return NodeType::LVALUE_TO_RVALUE;
+   inline virtual NodeType get_type() override {
+      return NodeType::STRING_INTERPOLATION;
    }
 
+   friend class ConstExprPass;
    friend class CodeGen;
    friend class TypeCheckPass;
    friend class DeclPass;
-   friend class ConstExprPass;
 
 protected:
-   Expression::SharedPtr target;
+   std::vector<Expression::SharedPtr> strings;
 };
 
 
-#endif //CDOT_LVALUETORVALUECONV_H
+#endif //CDOT_STRINGINTERPOLATION_H

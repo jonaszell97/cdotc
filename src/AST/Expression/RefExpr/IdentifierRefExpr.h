@@ -42,7 +42,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 

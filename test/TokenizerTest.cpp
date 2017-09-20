@@ -6,7 +6,7 @@
 #include "../src/Lexer.h"
 
 TEST_CASE("Variable assignment") {
-    Lexer t("let x = 3");
+    Lexer t("let x = 3", <#initializer#>);
     t.advance();
     REQUIRE(t.current_token.get_type() == T_TYPE);
     REQUIRE(t.s_val() == "let");
@@ -23,11 +23,9 @@ TEST_CASE("Variable assignment") {
 }
 
 TEST_CASE("Function declaration") {
-    Lexer t(
-        "def fun(int x) {"
-            "return x + 3"
-        "}"
-    );
+    Lexer t("def fun(int x) {"
+       "return x + 3"
+       "}", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.is_keyword("def")); t.advance();
@@ -62,9 +60,7 @@ TEST_CASE("Function declaration") {
 }
 
 TEST_CASE("Numeric literals") {
-    Lexer t(
-        "3 3L 3l 0xabcA3 0721 0b10100 1.1e-3 3E2 1.1 1.13131f 1.13131F"
-    );
+    Lexer t("3 3L 3l 0xabcA3 0721 0b10100 1.1e-3 3E2 1.1 1.13131f 1.13131F", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.get_type() == T_LITERAL);
@@ -104,9 +100,7 @@ TEST_CASE("Numeric literals") {
 }
 
 TEST_CASE("String literals") {
-    Lexer t(
-        "\"hello there, good sir\" "
-    );
+    Lexer t("\"hello there, good sir\" ", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.get_type() == T_LITERAL);
@@ -116,9 +110,7 @@ TEST_CASE("String literals") {
 }
 
 TEST_CASE("Char literals") {
-    Lexer t(
-        "'c' '0' '+' '\n' 'xxx'"
-    );
+    Lexer t("'c' '0' '+' '\n' 'xxx'", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.get_type() == T_LITERAL);
@@ -137,9 +129,7 @@ TEST_CASE("Char literals") {
 }
 
 TEST_CASE("Bool literals") {
-    Lexer t(
-        "true false"
-    );
+    Lexer t("true false", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.get_type() == T_LITERAL);
@@ -152,9 +142,7 @@ TEST_CASE("Bool literals") {
 }
 
 TEST_CASE("Null literal") {
-    Lexer t(
-        "null"
-    );
+    Lexer t("null", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.get_type() == T_LITERAL);
@@ -164,9 +152,7 @@ TEST_CASE("Null literal") {
 }
 
 TEST_CASE("Operators") {
-    Lexer t(
-        "!! &&& +++ - +!+ ^|new**??:typeof?"
-    );
+    Lexer t("!! &&& +++ - +!+ ^|new**??:typeof?", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.is_operator("!")); t.advance();
@@ -192,9 +178,7 @@ TEST_CASE("Operators") {
 }
 
 TEST_CASE("Punctuators") {
-    Lexer t(
-            ",;(} [."
-    );
+    Lexer t(",;(} [.", <#initializer#>);
     t.advance();
 
     REQUIRE(t.current_token.is_punctuator(',')); t.advance();

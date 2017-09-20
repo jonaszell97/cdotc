@@ -36,7 +36,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
@@ -48,12 +52,18 @@ public:
       return type;
    }
 
+   void setAccess(AccessModifier access) {
+      this->access = access;
+   }
+
    friend class ConstExprPass;
    friend class CodeGen;
    friend class TypeCheckPass;
    friend class DeclPass;
 
 protected:
+   AccessModifier access;
+
    string identifier;
    std::shared_ptr<TypeRef> type;
    std::shared_ptr<Expression> value = nullptr;

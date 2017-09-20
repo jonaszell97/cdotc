@@ -29,14 +29,17 @@ namespace cdot {
       class Class;
       class Method;
       class Enum;
+
+      struct MethodResult;
    }
 
    struct FunctionResult {
       CompatibilityType compatibility;
       Function* func = nullptr;
 
-      std::unordered_map<size_t, pair<Type*, Type*>> neededCasts;
-      std::vector<pair<string, std::shared_ptr<Expression>>> orderedArgs;
+      std::vector<size_t> neededCasts;
+      std::vector<Type*> generics;
+      std::vector<pair<size_t, bool>> argOrder;
       string expectedType;
       string foundType;
       size_t incompArg = 0;
@@ -45,7 +48,6 @@ namespace cdot {
    struct Scope {
       size_t id;
 
-      string currentClass;
       string currentSelf;
       string currentFunction;
 
@@ -59,6 +61,7 @@ namespace cdot {
       bool broken = false;
 
       bool unsafe = false;
+      bool mutableSelf = false;
 
       Type* declaredReturnType = nullptr;
       bool returnable = false;
@@ -78,93 +81,102 @@ class TypeCheckPass {
 public:
    TypeCheckPass();
 
-   void dump();
+   void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
 
    static void connectTree(AstNode*);
 
-   virtual Type* visit(NamespaceDecl*);
-   virtual Type* visit(UsingStmt*);
-   virtual Type* visit(EndOfFileStmt*);
+   virtual Type* visit(NamespaceDecl *node);
+   virtual Type* visit(UsingStmt *node);
+   virtual Type* visit(CompoundStmt *node);
 
-   virtual Type* visit(FunctionDecl*);
-   virtual Type* visit(CompoundStmt*);
-   virtual Type* visit(IdentifierRefExpr*);
-   virtual Type* visit(DeclStmt*);
-   virtual Type* visit(ForStmt*);
-   virtual Type* visit(ForInStmt*);
-   virtual Type* visit(WhileStmt*);
+   virtual Type* visit(DeclStmt *node);
+   virtual Type* visit(FunctionDecl *node);
+   virtual Type* visit(DeclareStmt *node);
 
-   virtual Type* visit(CollectionLiteral*);
-   virtual Type* visit(NumericLiteral*);
-   virtual Type* visit(NoneLiteral*);
-   virtual Type* visit(StringLiteral*);
-   virtual Type* visit(SubscriptExpr*);
-   virtual Type* visit(CallExpr*);
-   virtual Type* visit(MemberRefExpr*);
-   virtual Type* visit(BinaryOperator*);
-   virtual Type* visit(TertiaryOperator*);
-   virtual Type* visit(UnaryOperator*);
-   virtual Type* visit(BreakStmt*);
-   virtual Type* visit(ContinueStmt*);
-   virtual Type* visit(IfStmt*);
-   virtual Type* visit(MatchStmt*);
-   virtual Type* visit(CaseStmt*);
-   virtual Type* visit(LabelStmt*);
-   virtual Type* visit(GotoStmt*);
-   virtual Type* visit(FuncArgDecl*);
-   virtual Type* visit(ReturnStmt*);
-   virtual Type* visit(Expression*);
-   virtual Type* visit(ClassDecl*);
-   virtual Type* visit(MethodDecl*);
-   virtual Type* visit(FieldDecl*);
-   virtual Type* visit(ConstrDecl*);
-   virtual Type* visit(DestrDecl*);
-   virtual Type* visit(LambdaExpr*);
-   virtual Type* visit(ImplicitCastExpr*);
-   virtual Type* visit(ExtendStmt*);
-   virtual Type* visit(TypedefDecl*);
-   virtual Type* visit(TypeRef*);
-   virtual Type* visit(DeclareStmt*);
-   virtual Type* visit(LvalueToRvalue*);
-   virtual Type* visit(DebugStmt*);
-   virtual Type* visit(TupleLiteral*);
-   virtual Type* visit(EnumDecl*);
+   virtual Type* visit(ClassDecl *node);
+   virtual Type* visit(MethodDecl *node);
+   virtual Type* visit(FieldDecl *node);
+   virtual Type* visit(ConstrDecl *node);
+   virtual Type* visit(DestrDecl *node);
+   virtual Type* visit(EnumDecl *node);
 
-   virtual Type* visit(Statement*);
+   virtual Type* visit(IdentifierRefExpr *node);
+   virtual Type* visit(SubscriptExpr *node);
+   virtual Type* visit(CallExpr *node);
+   virtual Type* visit(MemberRefExpr *node);
 
-   void DeclareClasses(std::shared_ptr<CompoundStmt>);
-   cdot::cl::Class* DeclareClass(ClassDecl*);
-   cdot::cl::Class* DeclareClassMethods(ClassDecl*);
+   virtual Type* visit(ForStmt *node);
+   virtual Type* visit(ForInStmt *node);
+   virtual Type* visit(WhileStmt *node);
+   virtual Type* visit(IfStmt *node);
+   virtual Type* visit(MatchStmt *node);
+   virtual Type* visit(CaseStmt *node);
+   virtual Type* visit(LabelStmt *node);
+   virtual Type* visit(GotoStmt *node);
 
-   cdot::cl::Enum* DeclareEnum(EnumDecl*);
-   cdot::cl::Enum* DeclareEnumMethods(EnumDecl*);
+   virtual Type* visit(ReturnStmt *node);
+   virtual Type* visit(BreakStmt *node);
+   virtual Type* visit(ContinueStmt *node);
+
+   virtual Type* visit(CollectionLiteral *node);
+   virtual Type* visit(NumericLiteral *node);
+   virtual Type* visit(NoneLiteral *node);
+   virtual Type* visit(StringLiteral *node);
+   virtual Type* visit(StringInterpolation *node);
+   virtual Type* visit(TupleLiteral *node);
+
+   virtual Type* visit(BinaryOperator *node);
+   virtual Type* visit(TertiaryOperator *node);
+   virtual Type* visit(UnaryOperator *node);
+
+
+   virtual Type* visit(FuncArgDecl *node);
+   virtual Type* visit(Expression *node);
+   virtual Type* visit(LambdaExpr *node);
+   virtual Type* visit(ImplicitCastExpr *node);
+   virtual Type* visit(TypedefDecl *node);
+   virtual Type* visit(TypeRef *node);
+   virtual Type* visit(LvalueToRvalue *node);
+
+   virtual Type* visit(EndOfFileStmt *node);
+   virtual Type* visit(DebugStmt *node);
+   
+   virtual Type* visit(Statement *node);
 
 protected:
    std::unordered_map<string, DeclStmt*> declarations = {};
    std::stack<Scope> Scopes;
    std::stack<pair<string, string>> Cleanups;
 
+   string& currentClass() {
+      return currentNamespace.back();
+   }
+
    Scope* latestScope = nullptr;
 
    size_t lastScopeID = 0;
    void pushScope();
    void pushFunctionScope(Type* returnType, bool isLambda = false);
-   void pushMethodScope(Type* returnType, string& className);
+   void pushMethodScope(Type* returnType);
    void pushLoopScope(bool continuable = true, bool breakable = true);
    void popScope();
 
+   void pushClassScope(cl::Class* cl, string& className);
+   void popClassScope();
+
    string declareVariable(string &name, Type *type, bool isGlobal = false, AstNode *cause = nullptr);
-   Type*& declareFunction(Function::UniquePtr &&func, std::vector<ObjectType *> &generics, AstNode *decl = nullptr);
 
    void pushTy(Type *);
    Type* popTy();
 
-   inline void resolve(Type**);
-   inline void checkExistance(ObjectType*, AstNode*);
+   inline void resolve(Type**, AstNode *node = nullptr);
 
    pair<pair<Type*, string>, bool> getVariable(string &name, AstNode *cause = nullptr);
-   FunctionResult getFunction(string &, std::vector<Type *> &, std::vector<Type *> &, std::vector<string> &,
-      std::vector<pair<string, std::shared_ptr<Expression>>> &);
+   FunctionResult getFunction(
+      string& funcName,
+      std::vector<Argument>& args,
+      std::vector<Type*> generics = {}
+   );
 
    bool hasVariable(string name);
 
@@ -213,7 +225,7 @@ protected:
    static std::vector<string> currentNamespace;
    static std::vector<string> importedNamespaces;
 
-   static std::vector<ObjectType*>* currentClassGenerics;
+   static std::stack<std::vector<ObjectType*>*> GenericsStack;
 
    static inline void pushNamespace(string &ns);
    static inline void popNamespace();
@@ -226,23 +238,12 @@ protected:
 
    pair<Type*, std::vector<Type*>> unify(std::vector<std::shared_ptr<Expression>>&);
 
-   void DeclareFunction(FunctionDecl*);
 
    void DefineClass(ClassDecl*, cdot::cl::Class*);
-
-   void DeclareField(FieldDecl*, cdot::cl::Class*);
    void DefineField(FieldDecl*, cdot::cl::Class*);
-
-   void DeclareMethod(MethodDecl*, cdot::cl::Class*);
    void DefineMethod(MethodDecl*, cdot::cl::Class*);
-
-   void DeclareConstr(ConstrDecl*, cdot::cl::Class*);
    void DefineConstr(ConstrDecl*, cdot::cl::Class*);
    void DefineDestr(DestrDecl*, cdot::cl::Class*);
-
-   void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&,
-      std::vector<Type*>&, std::vector<std::shared_ptr<Expression>>&);
-   void PrepareCallArgs(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&, std::vector<Type*>&);
 
    Type* HandleBinaryOperator(Type*, Type*, BinaryOperatorType, BinaryOperator *node);
    Type* HandleCastOp(Type *fst, Type *snd, BinaryOperator *node);
@@ -254,24 +255,64 @@ protected:
    Type* HandleComparisonOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleOtherOp(Type *fst, Type *snd, BinaryOperator *node);
 
-   Type* tryOperatorMethod(Type *fst, Type *snd, BinaryOperator *node, string& opName, bool isAssignment);
-   Type* tryFreeStandingOp(Type *fst, Type *snd, BinaryOperator *node, string& opName, bool isAssignment);
+   Type* tryBinaryOperatorMethod(
+      Type *fst,
+      Type *snd,
+      BinaryOperator *node,
+      string &opName,
+      bool isAssignment
+   );
+   Type* tryFreeStandingBinaryOp(
+      Type *fst,
+      Type *snd,
+      BinaryOperator *node,
+      string &opName,
+      bool isAssignment
+   );
+   Type* tryFreeStandingUnaryOp(
+      Type *lhs,
+      UnaryOperator *node,
+      string &opName
+   );
 
    void HandleEnumComp(Type *fst, Type *snd, BinaryOperator *node);
    void HandleTupleComp(Type *fst, Type *snd, BinaryOperator *node);
 
    void HandleFunctionCall(CallExpr*);
+   void HandleBuiltinCall(CallExpr*);
+
    void HandleMethodCall(CallExpr*);
+   void HandleEnumCase(CallExpr *node);
+
+   void throwMethodNotFound(cdot::cl::MethodResult& res, CallExpr *node, cdot::cl::Class *cl);
+
    void HandleConstructorCall(CallExpr*);
    void HandleCallOperator(CallExpr*);
    void HandleAnonCall(CallExpr*);
 
-   void ApplyCasts(std::vector<pair<string, std::shared_ptr<Expression>>>&, std::vector<Type*>&,
-      unordered_map<size_t, pair<Type*, Type*>>&);
+   void checkClassAccessibility(cdot::cl::Class*& cl, Expression* cause);
+   void checkMemberAccessibility(cdot::cl::Class*& cl, string& memberName, AccessModifier& access, Expression* cause);
+
+   void PrepareCallArgs(
+      std::vector<pair<string, std::shared_ptr<Expression>>>& args,
+      std::vector<Argument>& givenArgs,
+      std::vector<Argument>& declaredArgs,
+      std::vector<pair<size_t, bool>> &argOrder,
+      bool isProtocolDefaultImpl = false
+   );
+
+   void ApplyCasts(
+      std::vector<pair<string, std::shared_ptr<Expression>>> &args,
+      std::vector<Argument> &givenArgs,
+      std::vector<Argument> &declaredArgs,
+      std::vector<size_t> &casts
+   );
 
    void CopyNodeProperties(Expression *src, Expression *dst);
 
    bool matchableAgainst(Type*& matchVal, std::shared_ptr<CaseStmt> const& caseVal);
+
+   Type* HandleDictionaryLiteral(CollectionLiteral *node);
 };
 
 

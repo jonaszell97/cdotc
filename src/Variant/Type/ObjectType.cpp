@@ -8,6 +8,7 @@
 #include "FPType.h"
 #include "../../AST/Visitor/CodeGen/CGMemory.h"
 #include "../../AST/Visitor/StaticAnalysis/Class.h"
+#include "../../AST/Visitor/StaticAnalysis/Enum.h"
 #include "PointerType.h"
 
 namespace cdot {
@@ -150,6 +151,8 @@ namespace cdot {
       }
 
       bool isUnsigned = false;
+      string className = this->className;
+
       if (className.front() == 'U') {
          isUnsigned = true;
          className = className.substr(1);
@@ -299,67 +302,6 @@ namespace cdot {
       }
    }
 
-   llvm::Value* ObjectType::castTo(llvm::Value *val, Type *destTy) {
-
-      auto cl = SymbolTable::getClass(className);
-      auto op = "infix as " + destTy->toString();
-
-      std::vector<Type*> argTypes;
-      auto castOp = cl->hasMethod(op, argTypes);
-
-      if (castOp.compatibility == CompatibilityType::COMPATIBLE) {
-         return Builder->CreateCall(CodeGen::getFunction(castOp.method->mangledName), { val });
-      }
-
-      switch (destTy->getTypeID()) {
-         case TypeID::IntegerTypeID:
-            return Builder->CreatePtrToInt(val, destTy->getLlvmType());
-         case TypeID::FPTypeID: {
-            // this one is a bit more tricky as there is no "ptrtodouble" instruction
-            auto alloca = CGMemory::CreateAlloca(Builder->getInt64Ty());
-            auto ptrToInt = Builder->CreatePtrToInt(val, Builder->getInt64Ty());
-            CodeGen::CreateStore(ptrToInt, alloca);
-
-            auto asFloatPtr = Builder->CreateBitCast(alloca, destTy->getLlvmType()->getPointerTo());
-
-            return CodeGen::CreateLoad(asFloatPtr);
-         }
-         case TypeID::PointerTypeID: {
-            return Builder->CreateBitCast(val, destTy->getLlvmType());
-         }
-         case TypeID::ObjectTypeID: {
-            auto asObj = cast<ObjectType>(destTy);
-            auto other = SymbolTable::getClass(destTy->getClassName());
-
-            if (className == asObj->className) {
-               return val;
-            }
-
-            auto self = SymbolTable::getClass(className);
-
-            if (self->isProtocol()) {
-               return CastFromProtocol(val, self, other, *Builder);
-            }
-
-            if (other->isProtocol()) {
-               return CastToProtocol(val, self, other, *Builder);
-            }
-
-            // apply down cast, returns optional
-            if (self->isBaseClassOf(other->getName())) {
-               return ApplyDynamicDownCast(val, other, *Builder);
-            }
-         }
-         default: {
-            if (destTy->isStruct()) {
-               destTy = destTy->getPointerTo();
-            }
-
-            return Builder->CreateBitCast(val, destTy->getLlvmType());
-         }
-      }
-   }
-
    bool ObjectType::implicitlyCastableTo(Type *other) {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
@@ -434,15 +376,36 @@ namespace cdot {
             return true;
          }
          case TypeID::IntegerTypeID: {
+            if (is_enum) {
+               auto en = SymbolTable::getClass(className);
+               return !static_cast<cdot::cl::Enum*>(en)->hasAssociatedValues();
+            }
+
+            if (isBoxedEquivOf(other)) {
+               return true;
+            }
+
+            if (isBoxedPrimitive()) {
+               auto unboxed = unbox();
+               if (unboxed->implicitlyCastableTo(other)) {
+                  delete unboxed;
+                  return true;
+               }
+
+               delete unboxed;
+            }
+
             auto cl = SymbolTable::getClass(className);
             auto op = "infix as " + other->toString();
 
-            std::vector<Type*> argTypes;
-            auto castOp = cl->hasMethod(op, argTypes);
-
+            auto castOp = cl->hasMethod(op);
             return castOp.compatibility == CompatibilityType::COMPATIBLE;
          }
-         case TypeID::FPTypeID:{
+         case TypeID::FPTypeID: {
+            if (isBoxedEquivOf(other)) {
+               return true;
+            }
+
             auto asFloat = cast<FPType>(other);
             string boxedCl = asFloat->getPrecision() == 64 ? "Double" : "Float";
 
@@ -496,7 +459,8 @@ namespace cdot {
 
    bool ObjectType::hasDefaultValue() {
       auto cl = SymbolTable::getClass(className);
-      auto constr = cl->hasMethod("init", {}, concreteGenericTypes);
+
+      auto constr = cl->hasMethod("init", {}, {}, concreteGenericTypes);
 
       return constr.compatibility == CompatibilityType::COMPATIBLE;
    }
@@ -513,6 +477,19 @@ namespace cdot {
       }
 
       return llvm::ConstantPointerNull::get(ObjectType::getStructureType(className)->getPointerTo());
+   }
+
+   llvm::Constant* ObjectType::getConstantVal(Variant &val)
+   {
+      assert(isBoxedPrimitive() && "Can't emit constant val otherwise");
+
+      auto unboxed = unbox();
+      auto intVal = unboxed->getConstantVal(val);
+
+      return llvm::ConstantStruct::get(
+         ObjectType::getStructureType(className),
+         { intVal }
+      );
    }
 
    bool ObjectType::isProtocol() {

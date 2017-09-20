@@ -14,12 +14,13 @@ namespace cl {
    class Class;
    class Method;
    struct EnumCase;
+   struct MethodResult;
 }
 }
 
 using cdot::cl::EnumCase;
 
-enum class CallType {
+enum class CallType : unsigned int {
    METHOD_CALL,
    FUNC_CALL,
    CONSTR_CALL,
@@ -35,6 +36,10 @@ public:
 
    void set_generics(std::vector<Type*> generics) {
       this->generics = generics;
+   }
+
+   void isPointerAccess(bool ptr) {
+      isPointerAccess_ = ptr;
    }
 
    typedef std::shared_ptr<CallExpr> SharedPtr;
@@ -53,7 +58,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
@@ -76,11 +85,22 @@ protected:
    bool hasHiddenParamReturn = false;
    Type* hiddenParamType = nullptr;
 
+   bool isPointerAccess_ = false;
+
+   union {
+      cdot::cl::MethodResult *methodRes = nullptr;
+      FunctionResult *functionRes;
+   };
+
    // method call
    bool isNsMember = false;
    bool isStatic = false;
    Type* returnType = nullptr;
    bool is_virtual = false;
+
+   bool isBuiltin = false;
+   BuiltinFn builtinType;
+   size_t alignment;
 
    string className;
    cdot::cl::Method* method;
@@ -90,7 +110,9 @@ protected:
    bool needsGenericCast = false;
 
    std::vector<Type*> generics;
-   std::vector<Type*> argTypes;
+   std::vector<Argument> resolvedArgs;
+
+   std::vector<Argument>* declaredArgTypes = nullptr;
 
    FunctionType* functionType; // unowned
    bool implicitSelfCall = false;

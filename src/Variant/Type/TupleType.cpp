@@ -194,36 +194,4 @@ namespace cdot {
 
       return tupleTy;
    }
-
-   llvm::Value* TupleType::castTo(llvm::Value *val, Type *destTy) {
-      assert(destTy->isTupleTy() && "cast shouldn't be allowed otherwise");
-      auto asTuple = cast<TupleType>(destTy);
-
-      assert(arity == asTuple->arity && "cast shouldn't be allowed otherwise");
-      auto srcTy = getLlvmType();
-      auto llvmTy = asTuple->getLlvmType();
-      auto alloca = CGMemory::CreateAlloca(llvmTy);
-
-      for (size_t i = 0; i < arity; ++i) {
-         Type* from = containedTypes[i].second;
-         Type* to = asTuple->containedTypes[i].second;
-
-         llvm::Value* srcGep = Builder->CreateStructGEP(srcTy, val, i);
-         llvm::Value* dstGep = Builder->CreateStructGEP(llvmTy, alloca, i);
-
-         if (from->isStruct()) {
-            Builder->CreateMemCpy(dstGep, srcGep, from->getSize(), from->getAlignment());
-         }
-         else {
-            llvm::Value* castVal = CodeGen::CreateLoad(srcGep);
-            if (*from != to) {
-               castVal = from->castTo(castVal, to);
-            }
-
-            Builder->CreateStore(castVal, dstGep);
-         }
-      }
-
-      return alloca;
-   }
 }

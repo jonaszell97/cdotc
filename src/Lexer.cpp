@@ -7,21 +7,41 @@
 #include "Variant/Variant.h"
 #include "Message/Exceptions.h"
 
-Lexer::Lexer(string& program) :
-   _program(program),
-   current_index(0),
-   current_line(0),
-   index_on_line(0),
-   current_token_index(0),
-   last_token_index(0)
-{
-   current_token = Token(T_BOF, {}, 0, 0, 0);
+namespace {
+   string empty;
 }
 
-std::string Lexer::s_val() {
-   if (current_token.get_type() != T_IDENT && current_token.get_type() != T_KEYWORD && current_token.get_type() !=
-         T_OP && current_token.get_type() != T_LITERAL) {
-      ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unexpected token " + util::token_names[current_token.get_type()], this);
+Lexer::Lexer(string &program, string &fileName) :
+   src(program),
+   current_index(0),
+   index_on_line(0),
+   current_token_index(0),
+   last_token_index(0),
+   fileName(fileName)
+{
+   current_token = Token(T_BOF, {}, 0, 0);
+}
+
+Lexer::Lexer() : src(empty), fileName(empty)
+{
+
+}
+
+void Lexer::reset(string &src, string &fileName)
+{
+   this->src = src;
+   this->fileName = fileName;
+   current_index = 0;
+   current_token_index = 0;
+   last_token_index = 0;
+   tokens.clear();
+   current_token = Token(T_BOF, {}, 0, 0);
+}
+
+std::string Lexer::s_val()
+{
+   if (current_token.get_value().strVal.empty() && current_token.get_type() != T_LITERAL) {
+      ParseError::raise("Unexpected token " + current_token.toString(), this);
    }
 
    return current_token.get_value().strVal;
@@ -52,12 +72,17 @@ bool Lexer::is_identifier_char(char c) {
    return !is_operator_char(c) && !is_punctuator(c) && c != ' ' && c != '\0';
 }
 
+std::regex validOp(R"_(([\+\-\*/%&\|!=<>~\^,\?:]|\.\.)+)_");
+
 /**
  * Decides whether a value can be an identifier or not.
  * @param _c
  * @return
  */
 bool Lexer::is_operator(std::string s) {
+   if (std::regex_match(s, validOp)) {
+      return true;
+   }
    if (util::in_vector(util::binary_operators, s)) {
       return true;
    }
@@ -68,9 +93,6 @@ bool Lexer::is_operator(std::string s) {
       return true;
    }
    if (util::in_vector(util::PostfixUnaryOperators, s)) {
-      return true;
-   }
-   if (util::in_vector(util::tertiary_operators, s)) {
       return true;
    }
 
@@ -112,21 +134,21 @@ bool Lexer::is_bool_literal(std::string s) {
  * @return
  */
 char Lexer::get_next_char() {
-   if (current_index >= _program.length()) {
+   if (current_index >= src.length()) {
       current_index++;
       return '\0';
    }
 
-   return _program[current_index++];
+   return src[current_index++];
 }
 
 char Lexer::char_lookahead() {
-   if (current_index >= _program.length()) {
+   if (current_index >= src.length()) {
       current_index++;
       return '\0';
    }
 
-   return _program[current_index];
+   return src[current_index];
 }
 
 /**
@@ -135,6 +157,12 @@ char Lexer::char_lookahead() {
 void Lexer::backtrack() {
    --current_token_index;
    current_index = last_token_index;
+   if (current_token_index <= 0) {
+      current_token_index = 0;
+      return;
+   }
+
+   current_token = tokens[current_token_index - 1];
 }
 
 /**
@@ -170,28 +198,74 @@ char Lexer::escape_char(char c) {
    }
 }
 
+string Lexer::unescape_char(char c) {
+   switch (c) {
+      case '\n':
+         return "\\n";
+      case '\a':
+         return "\\a";
+      case '\r':
+         return "\\r";
+      case '\v':
+         return "\\v";
+      case '\t':
+         return "\\t";
+      case '\b':
+         return "\\b";
+      case '\0':
+         return "\\0";
+      default:
+         return string(1,c);
+   }
+}
+
 /**
  * Parses the next token
  * @return
  */
 Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
    if (current_token.get_type() == T_EOF) {
-      ParseError::raise(ERR_UNEXPECTED_TOKEN, "Unexpected end of file", this);
+      ParseError::raise("Unexpected end of file", this);
    }
 
    last_token_index = current_index;
-   int start_line = current_line;
-   if (current_index >= _program.length()) {
-      return Token(T_EOF, { }, start_line, current_index, current_index);
+   if (current_index >= src.length()) {
+      return Token(T_EOF, { }, current_index, current_index);
    }
 
    string t;
+   bool beginningOfLine = true;
+   auto index = current_index - 1;
+   while (index > 0) {
+      char c = src[index--];
+      if (c == '\n') {
+         break;
+      }
+      if (c != ' ') {
+         beginningOfLine = false;
+         break;
+      }
+   }
 
    int _start_index = current_index;
+   int indent = 0;
    char first = get_next_char();
 
+   if (first == ' ') {
+      index = current_index;
+      while (src[index] == ' ' && index < src.length()) {
+         ++index;
+      }
+
+      if (src[index] == '#' && src[index + 1] != '{') {
+         indent = current_index - index;
+         current_index = index + 1;
+         first = '#';
+      }
+   }
+
    if (first == ' ' && significantWhiteSpace) {
-      return Token(T_PUNCTUATOR, { first }, start_line, current_index, current_index);
+      return Token(T_PUNCTUATOR, { first }, current_index, current_index);
    }
 
    while (first == ' ') {
@@ -199,8 +273,8 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       _start_index++;
    }
 
-   if (first == '\0' && current_index >= _program.length()) {
-      return Token(T_EOF, { }, start_line, current_index, current_index);
+   if (first == '\0' && current_index >= src.length()) {
+      return Token(T_EOF, { }, current_index, current_index);
    }
 
    char next;
@@ -222,6 +296,33 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       }
    }
 
+   // preprocessor variable
+   if (first == '#' && char_lookahead() == '{') {
+      get_next_char();
+      next = get_next_char();
+
+      while (next != '}' && current_index < src.length()) {
+         t += next;
+         next = get_next_char();
+      }
+
+      return Token(T_PREPROC_VAR, { t }, _start_index, current_index);
+   }
+
+   // preprocessor directive
+   if (beginningOfLine && first == '#') {
+      next = get_next_char();
+      while (next != ' ' && next != '\n' && next != '\0') {
+         t += next;
+         next = get_next_char();
+      }
+
+      auto tok = Token(T_DIRECTIVE, { t }, _start_index, current_index);
+      tok.setIndent(indent < 0 ? 0 : indent);
+
+      return tok;
+   }
+
    // character literal
    if (first == '\'') {
       next = get_next_char();
@@ -231,19 +332,25 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 
       char _c = get_next_char();
       if (_c != '\'') {
-         ParseError::raise(ERR_UNEXPECTED_CHARACTER, "Expected \"'\" after character literal", this);
+         ParseError::raise("Expected \"'\" after character literal", this);
       }
 
-      return Token(T_LITERAL, { next }, start_line, _start_index, current_index);
+      return Token(T_LITERAL, { next }, _start_index, current_index);
    }
 
    // string literal
    if (first == '\"') {
       next = get_next_char();
-      while (next != '\"' && current_index < _program.length()) {
+      while (next != '\"' && current_index < src.length()) {
          if (next == '\\') {
             next = get_next_char();
-            t += escape_char(next);
+            auto esc = escape_char(next);
+            if (esc != next) {
+               t += esc;
+            }
+            else {
+               t += "\\" + string(1, next);
+            }
          } else {
             t += next;
          }
@@ -251,19 +358,28 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          next = get_next_char();
       }
 
-      return Token(T_LITERAL, { t }, start_line, _start_index, current_index);
+      return Token(T_LITERAL, { t }, _start_index, current_index);
    }
 
    // escape sequence
    if (first == '`') {
       next = get_next_char();
-      while (next != '`' && current_index < _program.length()) {
+      while (next != '`' && current_index < src.length()) {
          t += next;
          next = get_next_char();
 
       }
 
-      return Token(T_IDENT, { t }, start_line, _start_index, current_index);
+      return Token(T_IDENT, { t }, _start_index, current_index, true);
+   }
+
+   if (first == '-') {
+      next = char_lookahead();
+      if (next >= 48 && next <= 57) {
+         t += "-";
+         first = next;
+         get_next_char();
+      }
    }
 
    // number literal (decimal, octal, hexadecimal or binary; with or without exponent or floating point)
@@ -279,7 +395,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          }
 
          backtrack_c(1);
-         return Token(T_LITERAL, { long(std::stoul(hex_s, nullptr, 16)) }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { long(std::stoul(hex_s, nullptr, 16)) }, _start_index, current_index);
       }
 
       if (first == '0' && (_pref == 'b' || _pref == 'B')) {
@@ -291,8 +407,12 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
             next = get_next_char();
          }
 
+         if (bin_s.empty()) {
+            bin_s = "0";
+         }
+
          backtrack_c(1);
-         return Token(T_LITERAL, { long(std::stoul(bin_s, nullptr, 2)) }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { long(std::stoul(bin_s, nullptr, 2)) }, _start_index, current_index);
       }
 
       backtrack_c(1); // undo _pref
@@ -301,8 +421,8 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       next = first;
       bool decimal_point = false;
       while ((next >= '0' && next <= '9') || next == '_' || next == '.') {
-         if (next == '.' && !decimal_point) {
-            if (char_lookahead() < '0' || char_lookahead() > '9') {
+         if (next == '.') {
+            if (char_lookahead() < '0' || char_lookahead() > '9' || decimal_point) {
                break;
             }
             decimal_point = true;
@@ -317,8 +437,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       // octal literal
       if (util::matches("0[0-7]+", t)) {
          backtrack_c(1);
-         return Token(T_LITERAL, { std::stoi(t, nullptr, 8) }, start_line, _start_index,
-            current_index);
+         return Token(T_LITERAL, { std::stoi(t, nullptr, 8) }, _start_index, current_index);
       }
 
       // exponent
@@ -334,7 +453,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          double base = std::stod(t);
          double exp = pow(10, std::stoi(_exp));
 
-         return Token(T_LITERAL, { base * exp }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { base * exp }, _start_index, current_index);
       }
 
       backtrack_c(1);
@@ -372,24 +491,24 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
             val = Variant(std::stod(t));
          }
          else {
-            val = Variant(std::stoi(t));
+            val = Variant((long)std::stoul(t));
          }
 
          val.isUnsigned = isUnsigned;
 
-         return Token(T_LITERAL, val, start_line, _start_index, current_index);
+         return Token(T_LITERAL, std::move(val), _start_index, current_index);
       }
       else {
          next = char_lookahead();
          if (next == 'f' || next == 'F') {
             get_next_char();
-            return Token(T_LITERAL, { std::stof(t) }, start_line, _start_index, current_index);
+            return Token(T_LITERAL, { std::stof(t) }, _start_index, current_index);
          }
          else if (next == 'd' || next == 'D') {
             get_next_char();
          }
 
-         return Token(T_LITERAL, { std::stod(t) }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { std::stod(t) }, _start_index, current_index);
       }
    }
 
@@ -409,19 +528,19 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       backtrack_c(1);
 
       if (is_operator(t)) {
-         return Token(T_OP, { t }, start_line, _start_index, current_index);
+         return Token(T_OP, { t }, _start_index, current_index);
       }
       else if (t == "none") {
-         return Token(T_LITERAL, { }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { }, _start_index, current_index);
       }
       else if (is_keyword(t)) {
-         return Token(T_KEYWORD, { t }, start_line, _start_index, current_index);
+         return Token(T_KEYWORD, { t }, _start_index, current_index);
       }
       else if (is_bool_literal(t)) {
-         return Token(T_LITERAL, { t == "true" }, start_line, _start_index, current_index);
+         return Token(T_LITERAL, { t == "true" }, _start_index, current_index);
       }
       else {
-         return Token(T_IDENT, { t }, start_line, _start_index, current_index);
+         return Token(T_IDENT, { t }, _start_index, current_index);
       }
    }
 
@@ -434,7 +553,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       backtrack_c(1);
 
       if (t == ".") {
-         return Token(T_PUNCTUATOR, { '.' }, start_line, _start_index, current_index);
+         return Token(T_PUNCTUATOR, { '.' }, _start_index, current_index);
       }
 
       while (!is_operator(t) && t.length() > 0) {
@@ -442,14 +561,14 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          backtrack_c(1);
       }
 
-      return Token(T_OP, { t }, start_line, _start_index, current_index);
+      return Token(T_OP, { t }, _start_index, current_index);
    }
 
    if (is_punctuator(first)) {
-      return Token(T_PUNCTUATOR, { first }, start_line, _start_index, current_index);
+      return Token(T_PUNCTUATOR, { first }, _start_index, current_index);
    }
 
-   ParseError::raise(ERR_UNEXPECTED_CHARACTER, u8"Unexpected character " + std::string(1, first), this);
+   ParseError::raise(u8"Unexpected character " + std::string(1, first), this);
    llvm_unreachable("see error above");
 }
 
@@ -460,8 +579,8 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 void Lexer::advance(TokenType type, bool ignore_newline, bool significantWhiteSpace) {
    current_token = get_next_token(ignore_newline, significantWhiteSpace);
    if (current_token.get_type() != type) {
-      ParseError::raise(ERR_UNEXPECTED_TOKEN, "Expected " + util::token_names[type]
-            + " but got " + util::token_names[current_token.get_type()], this);
+      ParseError::raise("Expected " + util::token_names[type]
+         + " but got " + util::token_names[current_token.get_type()], this);
    }
 }
 
@@ -486,13 +605,13 @@ Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace) {
    }
 
    Token t = tokens[current_token_index++];
-   current_index = t.get_end();
+   current_index = t.getEnd();
 
    if (ignore_newline && t.is_punctuator('\n')) {
       return get_next_token(true, significantWhiteSpace);
    }
 
-   last_token_index = t.get_start();
+   last_token_index = t.getStart();
 
    return t;
 }
@@ -506,12 +625,12 @@ Token Lexer::lookahead(bool ignore_newline, size_t offset) {
       return tokens.back();
    }
 
-   if ((current_token_index + offset) >= tokens.size()) {
+   while ((current_token_index + offset) >= tokens.size()) {
       tokens.push_back(_get_next_token(ignore_newline, false));
    }
 
    Token t = tokens[current_token_index + offset];
-   current_index = t.get_end();
+   current_index = t.getEnd();
    if (ignore_newline && t.is_punctuator('\n')) {
       return lookahead(ignore_newline, offset + 1);
    }
@@ -526,7 +645,7 @@ void Lexer::ignore_comment() {
    char c = get_next_char();
 
    while (c != '\n') {
-      if (current_index >= _program.length()) {
+      if (current_index >= src.length()) {
          return;
       }
 
@@ -542,7 +661,7 @@ void Lexer::ignore_ml_comment() {
 
    main_loop:
    while (c != '*') {
-      if (current_index >= _program.length()) {
+      if (current_index >= src.length()) {
          return;
       }
 

@@ -12,38 +12,22 @@
 class Token;
 class AstNode;
 
-enum ParseErrors {
-    ERR_UNEXPECTED_TOKEN,
-    ERR_UNEXPECTED_CHARACTER,
-    ERR_UNINITIALIZED_VAR,
-    ERR_EOF
-};
-
-enum RuntimeErrors {
-    ERR_CONTEXT_ERROR,
-    ERR_UNDECLARED_VARIABLE,
-    ERR_BAD_CAST,
-    ERR_BAD_ACCESS,
-    ERR_OP_UNDEFINED,
-    ERR_REDECLARED_VAR,
-    ERR_WRONG_NUM_ARGS,
-    ERR_TYPE_ERROR,
-    ERR_VAL_TOO_LARGE,
-    ERR_PRIVATE_PROPERTY,
-    ERR_NULL_POINTER_EXC
-};
-
 class Lexer;
-extern std::map<ParseErrors, std::string> _parse_errors;
-extern std::map<RuntimeErrors, std::string> _runtime_errors;
+using std::string;
+
+namespace cdot {
+   namespace err {
+      string prepareLine(string& src, string& fileName, int errIndex);
+   }
+}
 
 class ParseError : public std::exception {
 private:
-    explicit ParseError(const std::string& message);
-    std::string message_;
+    explicit ParseError(const string& message);
+    string message_;
 
 public:
-    static void raise(ParseErrors , std::string, Lexer* = nullptr);
+    static void raise(string, Lexer *);
     virtual const char* what() const throw() {
         return message_.c_str();
     }
@@ -51,11 +35,11 @@ public:
 
 class RuntimeError : public std::exception {
 private:
-    explicit RuntimeError(const std::string& message);
-    std::string message_;
+    explicit RuntimeError(const string& message);
+    string message_;
 
 public:
-    static void raise(RuntimeErrors , std::string, AstNode* = nullptr);
+    static void raise(string, AstNode *);
     virtual const char* what() const throw() {
         return message_.c_str();
     }

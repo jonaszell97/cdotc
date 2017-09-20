@@ -104,8 +104,6 @@ namespace cdot {
 
       Type* deepCopy() override;
 
-      llvm::Value* castTo(llvm::Value*, Type*) override;
-
       bool isGeneric() override {
          return isGeneric_;
       }
@@ -189,6 +187,7 @@ namespace cdot {
       Type* unbox() override;
 
       llvm::Value* getDefaultVal() override;
+      llvm::Constant* getConstantVal(Variant&) override;
 
       static std::unordered_map<std::string, llvm::StructType*> StructureTypes;
 

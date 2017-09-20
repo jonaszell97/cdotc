@@ -57,6 +57,8 @@ namespace cdot {
 
       Type* deepCopy() override;
 
+      Type* box() override;
+
       bool implicitlyCastableTo(Type*) override;
       bool explicitlyCastableTo(Type*) override;
 
@@ -64,7 +66,6 @@ namespace cdot {
       llvm::Constant* getConstantVal(Variant& val) override;
 
       short getAlignment() override;
-      llvm::Value* castTo(llvm::Value*, Type*) override;
 
       bool operator==(Type*& other) override;
       inline bool operator!=(Type*& other) override {

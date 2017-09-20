@@ -38,45 +38,12 @@ namespace cdot {
          return type == VariantType::VOID;
       }
 
-      // binary math operators
-//   Variant operator+(Variant v1);
-//   Variant operator-(Variant v1);
-//   Variant operator*(Variant v1);
-//   Variant operator/(Variant v1);
-//   Variant operator%(Variant v1);
-//   Variant pow(Variant v1);
-//
-//   // equality operators
-//   Variant operator==(Variant v1);
-//   Variant operator!=(Variant v1);
-//   Variant operator<=(Variant v1);
-//   Variant operator>=(Variant v1);
-//   Variant operator<(Variant v1);
-//   Variant operator>(Variant v1);
-//
-//   // logical operators
-//   Variant operator&&(Variant v1);
-//   Variant operator||(Variant v1);
-//
-//   // bitwise operators
-//   Variant operator&(Variant v1);
-//   Variant operator|(Variant v1);
-//   Variant operator^(Variant v1);
-//   Variant operator<<(Variant v1);
-//   Variant operator>>(Variant v1);
-//
-//   // assignment operator
-//   Variant& operator=(const Variant& v) = default;
-//   Variant strict_equals(const Variant& v);
-//
-//   // unary operators
-//   Variant operator!();
-//   Variant operator-();
-//   Variant operator~();
-
       VariantType type;
       int bitwidth;
       bool isUnsigned;
+
+      bool isBoxed = false;
+      bool rawStr = false;
 
       string strVal;
       union {
@@ -86,6 +53,8 @@ namespace cdot {
       };
 
       static string typeToString(VariantType type);
+      Variant applyBinaryOp(Variant& rhs, string& op);
+      Variant applyUnaryOp(string& op);
    };
 }
 

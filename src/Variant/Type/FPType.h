@@ -31,6 +31,8 @@ namespace cdot {
          return true;
       }
 
+      Type* box() override;
+
       string _toString() override;
       llvm::Type* _getLlvmType() override;
 
@@ -43,7 +45,6 @@ namespace cdot {
       llvm::Constant* getConstantVal(Variant &val) override;
 
       short getAlignment() override;
-      llvm::Value* castTo(llvm::Value *val, Type *destTy) override;
 
       Type* deepCopy() override;
 

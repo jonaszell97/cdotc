@@ -10,8 +10,14 @@ llvm::Value* CGBinaryOperator::CreateAdd(Type* operand_type, llvm::Value* lhs, l
    Builder)
 {
    switch (operand_type->getTypeID()) {
-      case TypeID::IntegerTypeID:
-         return Builder.CreateAdd(lhs, rhs);
+      case TypeID::IntegerTypeID: {
+         if (operand_type->isUnsigned()) {
+            return Builder.CreateAdd(lhs, rhs);
+         }
+         else {
+            return Builder.CreateNSWAdd(lhs, rhs);
+         }
+      }
       case TypeID::FPTypeID:
          return Builder.CreateFAdd(lhs, rhs);
       default:
@@ -37,7 +43,12 @@ llvm::Value* CGBinaryOperator::CreateMul(Type* operand_type, llvm::Value* lhs, l
 {
    switch (operand_type->getTypeID()) {
       case TypeID::IntegerTypeID:
-         return Builder.CreateMul(lhs, rhs);
+         if (operand_type->isUnsigned()) {
+            return Builder.CreateMul(lhs, rhs);
+         }
+         else {
+            return Builder.CreateNSWMul(lhs, rhs);
+         }
       case TypeID::FPTypeID:
          return Builder.CreateFMul(lhs, rhs);
       default:

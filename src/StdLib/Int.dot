@@ -7,11 +7,10 @@ using Extern.C
  */
 @inline(always)
 struct Int {
+    static let MAX = 9_223_372_036_854_775_807
+    static let MIN = -9_223_372_036_854_775_808
+    
     var val: int64
-
-    def infix as Int64 {
-        return val
-    }
 
     def sqrt -> Double {
         return Extern.Llvm.`llvm.sqrt.f64`(val as double)
@@ -48,15 +47,11 @@ extend Int with Equatable {
     def infix == (rhs: Int) -> Bool {
         return Bool(val == rhs.val)
     }
-
-    def infix != (rhs: Int) -> Bool {
-        return Bool(val != rhs.val)
-    }
 }
 
 extend Int with Hashable {
     def hashCode -> UInt64 {
-        return val as UInt64
+        return UInt64(self.val as uint64)
     }
 }
 
@@ -184,17 +179,31 @@ extend Int with StringRepresentable {
             str[0] = '-'
             ++i
         }
-
+        
         while powerOfTen > 0 {
-            var fits = Math.floor(num / (10 ** powerOfTen).val)
+            var fits = Math.floor(num / (10 ** powerOfTen))
             str[i] = (fits.val + 48) as int8
-
-            num = (num - (fits.val as double) * (10 ** powerOfTen).val) as int64
+            
+            num -= (fits * (10 ** powerOfTen)) as int64
             --powerOfTen
             ++i
         }
-
+        
         str[i] = (num + 48) as int8
         return str
+    }
+}
+
+extend Int with Randomizable {
+    static var Twister: Random.MersenneTwister = __nullptr(Random.MersenneTwister)
+    static var TwisterInitialized = false
+
+    static def random() -> Int {
+        if !TwisterInitialized {
+            Twister = Random.MersenneTwister()
+            TwisterInitialized = true
+        }
+
+        return Twister.nextInt()
     }
 }

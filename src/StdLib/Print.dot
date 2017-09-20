@@ -3,9 +3,22 @@ using Extern.C
 using Builtin.Primitive
 
 def print() {
-    printf(@cstring "\n")
+    printf("\n")
+}
+
+def print(s: String, separator: int8 = '\n') {
+    printf("%s%c", s.charArray, separator)
 }
 
 def print(p: StringRepresentable, separator: int8 = '\n') {
     printf("%s%c", (p as String).charArray, separator)
 }
+
+def print(i: int64, separator: int8 = '\n') {
+    printf("%li%c", i, separator)
+}
+
+def print(d: double, separator: int8 = '\n') {
+    printf("%f%c", d, separator)
+}
+

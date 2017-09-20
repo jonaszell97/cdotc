@@ -27,8 +27,17 @@ public:
    MethodDecl(string, string, std::vector<std::shared_ptr<FuncArgDecl>>);
 
    ~MethodDecl() {
-      int i = 3;
+
    }
+
+   void isMutating(bool mut) {
+      isMutating_ = mut;
+   }
+
+   bool hasDefinition() {
+      return body != nullptr;
+   }
+
    void setGenerics(std::vector<ObjectType*> gen) {
       generics = gen;
    }
@@ -77,11 +86,14 @@ protected:
    std::vector<ObjectType*> generics;
 
    string alias;
+   bool isMutating_ = false;
 
    // codegen
    std::string class_name;
    std::string selfBinding;
    cdot::cl::Method* method;
+
+   bool isUsed = false;
 };
 
 

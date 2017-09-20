@@ -35,7 +35,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
@@ -46,7 +50,7 @@ public:
 
 protected:
    std::shared_ptr<Expression> switchValue;
-   Type *switchType;
+   Type *switchType = nullptr;
    std::vector<std::shared_ptr<CaseStmt>> cases;
 
    // codegen

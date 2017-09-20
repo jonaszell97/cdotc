@@ -22,7 +22,6 @@ namespace cdot {
       bool implicitlyCastableTo(Type*) override;
 
       llvm::Value* getDefaultVal() override;
-      llvm::Value* castTo(llvm::Value*, Type*) override;
 
       bool operator==(Type*& other) override;
       inline bool operator!=(Type*& other) override {

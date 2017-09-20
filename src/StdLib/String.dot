@@ -1,5 +1,6 @@
 
 using Builtin.Primitive
+using Extern.C
 
 class String {
     var length: Int { get }
@@ -16,13 +17,13 @@ class String {
     }
 
     init (len: Int) unsafe {
-        charArray = Extern.C.malloc(len + 1) as int8*
+        charArray = malloc(len + 1) as int8*
         charArray[len] = '\0'
         length = len
     }
 
     init (c: Char) unsafe {
-        charArray = Extern.C.malloc(2) as int8*
+        charArray = malloc(2) as int8*
         charArray[0] = c.val
         charArray[1] = '\0'
         length = 1
@@ -80,7 +81,7 @@ class String {
     def substr(begin: Int, len: Int = length) -> String unsafe {
         if (begin + len > length) {
             print("Nice try, sucker")
-            Extern.C.exit(69.val as Int32)
+            Extern.C.exit(69.val as int32)
         }
 
         let newStr = Extern.C.malloc(len) as int8*
@@ -129,9 +130,9 @@ extend String with StringRepresentable {
 extend String with Hashable {
     /// djb2 hash - see http://www.cse.yorku.ca/~oz/hash.html
     def hashCode -> UInt64 {
-        var hash: uint64 = 5381
+        var hash: UInt64 = 5381
         for var i = 0; i < length; ++i {
-            hash = ((hash << (5.val as int64)) + hash) + charArray[i]
+            hash = ((hash << 5) + hash) + charArray[i]
         }
 
         return hash
@@ -188,5 +189,38 @@ extend String with Comparable {
 
     def infix <= (s: String) -> Bool {
         return self == s || self < s
+    }
+}
+
+extend String with Randomizable {
+    enum RandomStringKind {
+        case AlphaNumeric
+    }
+
+    static def random(length: Int, kind: RandomStringKind) -> String {
+        srand(time(__nullptr(int64)) as int32)
+
+        let charArray = malloc(length + 1) as int8*
+        match kind {
+        case .AlphaNumeric:
+            for let i in 0..length {
+                var c: int8 = '\0'
+                while c == '\0' {
+                    let next = 48 + (Int.random() % (122 - 48))
+                    if !(next > 57 && next < 65) && !(next > 90 && next < 97) {
+                        c = next.val as int8
+                    }
+                }
+
+                charArray[i] = c
+            }
+        }
+
+        charArray[length] = '\0'
+        return String(charArray, length)
+    }
+
+    static def random() -> String {
+        return String.random(10, RandomStringKind.AlphaNumeric)
     }
 }

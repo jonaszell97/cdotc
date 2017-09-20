@@ -45,61 +45,69 @@ class CodeGen {
 public:
    CodeGen();
 
-   virtual llvm::Value* visit(NamespaceDecl*);
-   virtual llvm::Value* visit(UsingStmt*);
-   virtual llvm::Value* visit(EndOfFileStmt*);
+   virtual llvm::Value* visit(NamespaceDecl *node);
+   virtual llvm::Value* visit(UsingStmt *node);
+   virtual llvm::Value* visit(CompoundStmt *node);
 
-   virtual llvm::Value* visit(FunctionDecl*);
-   virtual llvm::Value* visit(CompoundStmt*);
-   virtual llvm::Value* visit(IdentifierRefExpr*);
-   virtual llvm::Value* visit(DeclStmt*);
-   virtual llvm::Value* visit(ForStmt*);
-   virtual llvm::Value* visit(ForInStmt*);
-   virtual llvm::Value* visit(WhileStmt*);
+   virtual llvm::Value* visit(DeclStmt *node);
+   virtual llvm::Value* visit(FunctionDecl *node);
+   virtual llvm::Value* visit(DeclareStmt *node);
 
-   virtual llvm::Value* visit(CollectionLiteral*);
-   virtual llvm::Value* visit(NumericLiteral*);
-   virtual llvm::Value* visit(NoneLiteral*);
-   virtual llvm::Value* visit(StringLiteral*);
-   virtual llvm::Value* visit(SubscriptExpr*);
-   virtual llvm::Value* visit(CallExpr*);
-   virtual llvm::Value* visit(MemberRefExpr*);
-   virtual llvm::Value* visit(BinaryOperator*);
-   virtual llvm::Value* visit(TertiaryOperator*);
-   virtual llvm::Value* visit(UnaryOperator*);
-   virtual llvm::Value* visit(BreakStmt*);
-   virtual llvm::Value* visit(ContinueStmt*);
-   virtual llvm::Value* visit(IfStmt*);
-   virtual llvm::Value* visit(MatchStmt*);
-   virtual llvm::Value* visit(CaseStmt*);
-   virtual llvm::Value* visit(LabelStmt*);
-   virtual llvm::Value* visit(GotoStmt*);
-   virtual llvm::Value* visit(FuncArgDecl*);
-   virtual llvm::Value* visit(ReturnStmt*);
-   virtual llvm::Value* visit(Expression*);
-   virtual llvm::Value* visit(ClassDecl*);
-   virtual llvm::Value* visit(MethodDecl*);
-   virtual llvm::Value* visit(FieldDecl*);
-   virtual llvm::Value* visit(ConstrDecl*);
-   virtual llvm::Value* visit(DestrDecl*);
-   virtual llvm::Value* visit(EnumDecl*);
-   virtual llvm::Value* visit(LambdaExpr*);
-   virtual llvm::Value* visit(ImplicitCastExpr*);
-   virtual llvm::Value* visit(ExtendStmt*);
-   virtual llvm::Value* visit(TypedefDecl*);
-   virtual llvm::Value* visit(TypeRef*);
-   virtual llvm::Value* visit(DeclareStmt*);
-   virtual llvm::Value* visit(LvalueToRvalue*);
-   virtual llvm::Value* visit(DebugStmt*);
-   virtual llvm::Value* visit(TupleLiteral*);
+   virtual llvm::Value* visit(ClassDecl *node);
+   virtual llvm::Value* visit(MethodDecl *node);
+   virtual llvm::Value* visit(FieldDecl *node);
+   virtual llvm::Value* visit(ConstrDecl *node);
+   virtual llvm::Value* visit(DestrDecl *node);
+   virtual llvm::Value* visit(EnumDecl *node);
 
-   virtual llvm::Value* visit(Statement*);
+   virtual llvm::Value* visit(IdentifierRefExpr *node);
+   virtual llvm::Value* visit(SubscriptExpr *node);
+   virtual llvm::Value* visit(CallExpr *node);
+   virtual llvm::Value* visit(MemberRefExpr *node);
+
+   virtual llvm::Value* visit(ForStmt *node);
+   virtual llvm::Value* visit(ForInStmt *node);
+   virtual llvm::Value* visit(WhileStmt *node);
+   virtual llvm::Value* visit(IfStmt *node);
+   virtual llvm::Value* visit(MatchStmt *node);
+   virtual llvm::Value* visit(CaseStmt *node);
+   virtual llvm::Value* visit(LabelStmt *node);
+   virtual llvm::Value* visit(GotoStmt *node);
+
+   virtual llvm::Value* visit(ReturnStmt *node);
+   virtual llvm::Value* visit(BreakStmt *node);
+   virtual llvm::Value* visit(ContinueStmt *node);
+
+   virtual llvm::Value* visit(CollectionLiteral *node);
+   virtual llvm::Value* visit(NumericLiteral *node);
+   virtual llvm::Value* visit(NoneLiteral *node);
+   virtual llvm::Value* visit(StringLiteral *node);
+   virtual llvm::Value* visit(StringInterpolation *node);
+   virtual llvm::Value* visit(TupleLiteral *node);
+
+   virtual llvm::Value* visit(BinaryOperator *node);
+   virtual llvm::Value* visit(TertiaryOperator *node);
+   virtual llvm::Value* visit(UnaryOperator *node);
+
+
+   virtual llvm::Value* visit(FuncArgDecl *node);
+   virtual llvm::Value* visit(Expression *node);
+   virtual llvm::Value* visit(LambdaExpr *node);
+   virtual llvm::Value* visit(ImplicitCastExpr *node);
+   virtual llvm::Value* visit(TypedefDecl *node);
+   virtual llvm::Value* visit(TypeRef *node);
+   virtual llvm::Value* visit(LvalueToRvalue *node);
+
+   virtual llvm::Value* visit(EndOfFileStmt *node);
+   virtual llvm::Value* visit(DebugStmt *node);
+
+   virtual llvm::Value* visit(Statement *node);
 
    void finalize();
 
    void DeclareClass(ClassDecl*);
    void DeclareEnum(EnumDecl*);
-   void DeclareClasses(std::shared_ptr<CompoundStmt>);
+   void DeclareClasses(std::vector<std::shared_ptr<Statement>>& statements);
 
    static llvm::Constant* getFunction(string& name) {
       return Functions[name];
@@ -117,6 +125,9 @@ public:
    static llvm::BasicBlock* CreateBasicBlock(string name, llvm::Function* func = nullptr);
 
    static llvm::ConstantInt* wordSizedInt(int val);
+
+   static llvm::Value* GetString(string&, bool = false);
+   static llvm::Value* getStaticVal(Variant& v, Type*& ty, bool global = false);
 
    // classes
    static llvm::Value* AccessField(string ,string, llvm::Value*);
@@ -277,6 +288,10 @@ protected:
    llvm::CallInst* DispatchVirtualCall(string &className, string &methodName,
       std::vector<llvm::Value*>& args);
 
+   llvm::Value* HandleBuiltinCall(CallExpr *node);
+
+   // declarations
+
    void DefineClass(ClassDecl*);
 
    void DeclareField(FieldDecl*);
@@ -297,34 +312,29 @@ protected:
    llvm::ConstantInt* ONE_64;
    llvm::ConstantInt* ZERO_64;
 
-   llvm::Value* GetInteger(long val, unsigned short bits = 64, bool isUnsigned = false);
-   llvm::Value* GetFloat(double val, unsigned short bits = 64);
+   static llvm::Value* GetInteger(long val, unsigned short bits = 64, bool isUnsigned = false);
+   static llvm::Value* GetFloat(double val, unsigned short bits = 64);
 
    llvm::Value* CopyByVal(llvm::Value*);
 
-   void IncrementRefCount(llvm::Value*, string& className);
-   void DecrementRefCount(llvm::Value*, string& className);
+   static void IncrementRefCount(llvm::Value*, const string& className);
+   static void DecrementRefCount(llvm::Value*, string& className);
    void CreateCleanup(long count);
 
    unordered_map<string, llvm::Value*> hiddenParams;
    std::stack<llvm::Value*> HiddenParamStack;
 
    // reusable values
-   llvm::Value* GetString(string&, bool = false);
-   unordered_map<string, llvm::Value*> Strings = {};
+   static unordered_map<string, llvm::Value*> Strings;
 
    // collections
    llvm::Value* CreateCStyleArray(Type* type, std::vector<std::shared_ptr<Expression>>& elements);
-   llvm::Value* CreateCStyleArray(Type* type, std::vector<llvm::Value*>& elements);
-   llvm::Value* CreateCStyleArray(Type* type, llvm::Value* size, bool heapAlloc = false);
-
    llvm::Value* CreateArray(CollectionType* type, std::vector<std::shared_ptr<Expression>>& elements);
-   llvm::Value* CreateArray(CollectionType* type, std::vector<llvm::Value*>& elements);
    
    // binary operators
    llvm::Value* HandleBinaryOperator(llvm::Value *lhs, llvm::Value *rhs, BinaryOperatorType, BinaryOperator* node);
    llvm::Value* HandleCastOp(llvm::Value *lhs, BinaryOperator *node);
-   llvm::Value* HandleAssignmentOp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator *node);
+   llvm::Value* HandleAssignmentOp(llvm::Value*lhs, BinaryOperator *node);
    llvm::Value* HandleArithmeticOp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node);
    llvm::Value* HandleBitwiseOp(llvm::Value*lhs, llvm::Value*rhs, string& op);
    llvm::Value* HandleLogicalOp(llvm::Value*lhs, BinaryOperator* node);
@@ -338,6 +348,8 @@ protected:
 
    // pattern matching
    llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy);
+
+   llvm::Value* HandleDictionaryLiteral(CollectionLiteral *node);
 };
 
 

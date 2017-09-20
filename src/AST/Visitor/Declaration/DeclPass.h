@@ -6,21 +6,24 @@
 #define CDOT_DECLPASS_H
 
 #include <string>
+#include <stack>
 #include "../Visitor.h"
 #include "../StaticAnalysis/Function.h"
 
+enum class AccessModifier : unsigned int;
 using std::string;
 
 class DeclPass {
 public:
    DeclPass();
 
-   void doInitialPass(std::shared_ptr<CompoundStmt>& root);
+   void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
 
    virtual void visit(CompoundStmt *node);
 
    virtual void visit(NamespaceDecl *node);
    virtual void visit(UsingStmt *node);
+   virtual void visit(EndOfFileStmt *node);
 
    virtual void visit(FunctionDecl *node);
    virtual void visit(FuncArgDecl *node);
@@ -37,6 +40,7 @@ public:
    virtual void visit(DeclareStmt *node);
    virtual void visit(EnumDecl *node);
 
+   virtual void visit(DebugStmt *node);
    virtual void visit(Statement *node);
    virtual void visit(Expression *node);
 
@@ -45,7 +49,7 @@ public:
       return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
    }
 
-   string declareVariable(string &name, Type *type, AstNode *cause);
+   string declareVariable(string &name, Type *type, AccessModifier access, AstNode *cause);
    Type*& declareFunction(Function::UniquePtr &&func, std::vector<ObjectType *> &generics, AstNode *cause);
 
 protected:
@@ -55,10 +59,9 @@ protected:
    std::vector<string> UserTypes;
    std::vector<string> Typedefs;
 
-   std::vector<ObjectType*>* currentClassGenerics = nullptr;
-   string currentClass;
+   std::stack<std::vector<ObjectType*>*> GenericsStack = {};
 
-   void pushNamespace(string &ns);
+   void pushNamespace(string &ns, bool declare = true);
    void popNamespace();
 };
 

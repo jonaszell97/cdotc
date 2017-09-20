@@ -59,8 +59,6 @@ namespace cdot {
       string _toString() override;
       llvm::Type* _getLlvmType() override;
 
-      llvm::Value* castTo(llvm::Value*, Type*) override;
-
       bool implicitlyCastableTo(Type*) override;
 
       Type* deepCopy() override;

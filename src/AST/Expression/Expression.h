@@ -108,6 +108,10 @@ public:
       return isEnumCase;
    }
 
+   virtual bool canReturn(Type *ty) {
+      return false;
+   }
+
    void isHiddenReturnValue() override;
 
    NodeType get_type() override {

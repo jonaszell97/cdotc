@@ -20,6 +20,12 @@ public:
    LambdaExpr(std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, Statement::SharedPtr);
    ~LambdaExpr();
 
+   bool needsContextualInformation() override {
+      return true;
+   }
+
+   bool canReturn(Type* ty) override;
+
    typedef std::shared_ptr<LambdaExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int) override;
@@ -36,7 +42,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 

@@ -21,7 +21,7 @@ namespace cdot {
       explicit CollectionType(Type*, Type*);
 
       ~CollectionType() override {
-         int i = 3;
+
       }
 
       inline CollectionKind getKind() {

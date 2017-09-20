@@ -23,11 +23,21 @@ public:
    EnumDecl(
       AccessModifier am,
       string&& enumName,
+      std::shared_ptr<TypeRef>& rawType,
       std::vector<std::shared_ptr<MethodDecl>>&& methods,
       std::vector<ObjectType*>&& conformsTo,
       std::vector<ObjectType*>&& generics,
-      std::vector<std::shared_ptr<EnumCaseDecl>>&& cases
+      std::vector<std::shared_ptr<EnumCaseDecl>>&& cases,
+      std::vector<Statement::SharedPtr>&& innerDeclarations
    );
+
+   string& getClassName() {
+      return className;
+   }
+
+   void setClassName(string&& name) {
+      className = name;
+   }
 
    typedef std::shared_ptr<EnumDecl> SharedPtr;
    typedef std::unique_ptr<EnumDecl> UniquePtr;
@@ -65,12 +75,16 @@ protected:
    std::vector<std::shared_ptr<EnumCaseDecl>> cases;
    std::vector<ObjectType*> conformsTo;
 
+   std::shared_ptr<TypeRef> rawType;
+
    AccessModifier am;
    string className;
    string qualifiedName;
 
    std::vector<std::shared_ptr<MethodDecl>> methods;
    std::vector<ObjectType*> generics;
+
+   std::vector<Statement::SharedPtr> innerDeclarations;
 
    // codegen
    string selfBinding;

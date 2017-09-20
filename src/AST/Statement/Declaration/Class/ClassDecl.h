@@ -25,11 +25,12 @@ public:
    ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
       std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
       std::vector<ObjectType*>&&, AccessModifier, bool, ObjectType*, std::vector<ObjectType*>&&,
-      std::shared_ptr<DestrDecl>&&);
+      std::shared_ptr<DestrDecl>&&,std::vector<Statement::SharedPtr>&& innerDeclarations);
 
    ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
       std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
-      std::vector<ObjectType*>&&, AccessModifier, std::vector<ObjectType*>&&, std::shared_ptr<DestrDecl>&&);
+      std::vector<ObjectType*>&&, AccessModifier, std::vector<ObjectType*>&&, std::shared_ptr<DestrDecl>&&,
+      std::vector<Statement::SharedPtr> &&innerDeclarations);
 
    virtual inline bool isStruct() {
       return is_struct;
@@ -41,6 +42,14 @@ public:
 
    virtual inline bool isExtension() {
       return is_extension;
+   }
+
+   string& getClassName() {
+      return className;
+   }
+
+   void setClassName(string&& name) {
+      className = name;
    }
 
    virtual inline void isExtension(bool ext) {
@@ -105,12 +114,12 @@ protected:
    std::vector<std::shared_ptr<FieldDecl>> fields;
    std::vector<std::shared_ptr<MethodDecl>> methods;
    std::vector<std::shared_ptr<TypedefDecl>> typedefs;
-   
-   bool explicitMemberwiseInitializer = false;
 
    std::vector<ObjectType*> generics;
+   std::vector<Statement::SharedPtr> innerDeclarations;
 
    // codegen
+   bool explicitMemberwiseInitializer = false;
    string selfBinding;
    cdot::cl::Class* declaredClass;
    cdot::cl::Method* defaultConstr = nullptr;

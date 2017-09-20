@@ -6,6 +6,7 @@
 #include "../../Statement/Declaration/FuncArgDecl.h"
 #include "../../Statement/ControlFlow/ReturnStmt.h"
 #include "../../../Variant/Type/FunctionType.h"
+#include "../TypeRef.h"
 
 LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::shared_ptr<FuncArgDecl>> args,
        Statement::SharedPtr body) :
@@ -18,6 +19,29 @@ LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::sh
 
 LambdaExpr::~LambdaExpr() {
    delete lambdaType;
+}
+
+bool LambdaExpr::canReturn(Type *ty)
+{
+   if (!ty->isFunctionTy()) {
+      return false;
+   }
+
+   auto fun = cast<FunctionType>(ty);
+   auto& otherArgs = fun->getArgTypes();
+
+   if (otherArgs.size() != otherArgs.size()) {
+      return false;
+   }
+
+   size_t i = 0;
+   for (const auto& arg : args) {
+      if (!arg->getArgType()->getType(true)->implicitlyCastableTo(otherArgs[i])) {
+         return false;
+      }
+   }
+
+   return returnType->getType(true)->implicitlyCastableTo(fun->getReturnType());
 }
 
 std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {

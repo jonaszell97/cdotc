@@ -10,7 +10,6 @@
 #include "Class.h"
 #include "Enum.h"
 #include "../../../Message/Warning.h"
-#include "../../Statement/Declaration/ExtendStmt.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Variant/Type/PointerType.h"
@@ -28,11 +27,66 @@ using namespace cdot::cl;
 
 string self_str = "self";
 std::vector<string> TypeCheckPass::currentNamespace = { "" };
-std::vector<string> TypeCheckPass::importedNamespaces = {""};
-std::vector<ObjectType*>* TypeCheckPass::currentClassGenerics = nullptr;
+std::vector<string> TypeCheckPass::importedNamespaces = { "" };
+std::stack<std::vector<ObjectType*>*> TypeCheckPass::GenericsStack = {};
 
 TypeCheckPass::TypeCheckPass() {
    pushScope();
+}
+
+void TypeCheckPass::pushClassScope(cl::Class *cl, string& className)
+{
+   pushNamespace(className);
+   latestScope->inProtocol = cl->isProtocol();
+   GenericsStack.push(&cl->getGenerics());
+}
+
+void TypeCheckPass::popClassScope()
+{
+   popNamespace();
+   latestScope->inProtocol = false;
+   GenericsStack.pop();
+}
+
+void TypeCheckPass::doInitialPass(std::vector<std::shared_ptr<Statement>>& statements)
+{
+   for (const auto& stmt : statements) {
+      switch (stmt->get_type()) {
+         case NodeType::CLASS_DECL: {
+            auto node = std::static_pointer_cast<ClassDecl>(stmt);
+            auto cl = node->declaredClass;
+            if (node->className == "X") {
+               int i=3;
+            }
+
+            pushClassScope(cl, node->className);
+
+            doInitialPass(node->innerDeclarations);
+            for (const auto& field : node->fields) {
+               DefineField(field.get(), cl);
+            }
+
+            popClassScope();
+
+            break;
+         }
+         case NodeType::NAMESPACE_DECL: {
+            auto ns = std::static_pointer_cast<NamespaceDecl>(stmt);
+            pushNamespace(ns->nsName);
+            doInitialPass(ns->contents->getStatements());
+            popNamespace();
+            break;
+         }
+         case NodeType::USING_STMT:
+         case NodeType::EOF_STMT:
+            stmt->accept(*this);
+         default:
+            break;
+      }
+   }
+
+   importedNamespaces.empty();
+   currentNamespace.empty();
 }
 
 namespace {
@@ -44,7 +98,6 @@ namespace {
          return;
       }
 
-      dst->currentClass = src->currentClass;
       dst->currentSelf = src->currentSelf;
       dst->currentFunction = src->currentFunction;
       dst->enclosingScope = src;
@@ -53,6 +106,15 @@ namespace {
       dst->declaredReturnType = src->declaredReturnType;
       dst->uninitializedFields = src->uninitializedFields;
       dst->captures = src->captures;
+      dst->mutableSelf = src->mutableSelf;
+   }
+
+   bool warnCast(Type *&lhs, Type *&rhs) {
+      return !lhs->isBoxedEquivOf(rhs) && !rhs->isBoxedEquivOf(lhs);
+   }
+
+   void raiseTypeError(Type* lhs, Type* rhs, AstNode* cause) {
+      RuntimeError::raise("Incompatible types " + lhs->toString() + " and " + rhs->toString(), cause);
    }
 }
 
@@ -84,8 +146,7 @@ void TypeCheckPass::pushFunctionScope(
 }
 
 void TypeCheckPass::pushMethodScope(
-   Type *returnType,
-   string &className)
+   Type *returnType)
 {
    Scope scope;
    scope.id = lastScopeID++;
@@ -93,7 +154,6 @@ void TypeCheckPass::pushMethodScope(
    scope.returnable = true;
 
    CopyScopeProps(latestScope, &scope);
-   scope.currentClass = className;
    scope.declaredReturnType = returnType;
 
    Scopes.push(scope);
@@ -129,62 +189,6 @@ void TypeCheckPass::connectTree(
    }
 }
 
-void TypeCheckPass::DeclareClasses(
-   CompoundStmt::SharedPtr root)
-{
-   for (const auto& stmt : root->getStatements()) {
-      if (stmt->get_type() == NodeType::CLASS_DECL) {
-         auto cl_dec = std::static_pointer_cast<ClassDecl>(stmt);
-         DeclareClass(cl_dec.get());
-      }
-      else if (stmt->get_type() == NodeType::ENUM_DECL) {
-         auto enumDecl = std::static_pointer_cast<EnumDecl>(stmt);
-         DeclareEnum(enumDecl.get());
-      }
-      else if (stmt->get_type() == NodeType::NAMESPACE_DECL) {
-         auto ns_dec = std::static_pointer_cast<NamespaceDecl>(stmt);
-         pushNamespace(ns_dec->nsName);
-         DeclareClasses(ns_dec->contents);
-         popNamespace();
-      }
-      else if (stmt->get_type() == NodeType::USING_STMT) {
-         stmt->accept(*this);
-      }
-      else if (stmt->get_type() == NodeType::TYPEDEF_DECL) {
-         stmt->accept(*this);
-      }
-      else if (stmt->get_type() == NodeType::EOF_STMT) {
-         stmt->accept(*this);
-      }
-   }
-
-   for (const auto& stmt : root->getStatements()) {
-      if (stmt->get_type() == NodeType::CLASS_DECL) {
-         auto cl = std::static_pointer_cast<ClassDecl>(stmt);
-         DeclareClassMethods(cl.get());
-      }
-      else if (stmt->get_type() == NodeType::ENUM_DECL) {
-         auto enumDecl = std::static_pointer_cast<EnumDecl>(stmt);
-         DeclareEnumMethods(enumDecl.get());
-      }
-      else if (stmt->get_type() == NodeType::NAMESPACE_DECL) {
-         auto ns_dec = std::static_pointer_cast<NamespaceDecl>(stmt);
-         pushNamespace(ns_dec->nsName);
-         DeclareClasses(ns_dec->contents);
-         popNamespace();
-      }
-      else if (stmt->get_type() == NodeType::FUNCTION_DECL) {
-         DeclareFunction(std::static_pointer_cast<FunctionDecl>(stmt).get());
-      }
-      else if (stmt->get_type() == NodeType::USING_STMT) {
-         stmt->accept(*this);
-      }
-      else if (stmt->get_type() == NodeType::EOF_STMT) {
-         stmt->accept(*this);
-      }
-   }
-}
-
 /**
  * Declares a variable in the current context
  * @param name
@@ -206,48 +210,12 @@ string TypeCheckPass::declareVariable(
    }
 
    if (SymbolTable::hasVariable(var_name, importedNamespaces)) {
-      RuntimeError::raise(ERR_REDECLARED_VAR, "Redeclaration of variable " + name, cause);
+      RuntimeError::raise("Redeclaration of variable " + name, cause);
    }
 
-   SymbolTable::declareVariable(var_name, type);
+   SymbolTable::declareVariable(var_name, type, AccessModifier::PUBLIC, currentNamespace.back());
 
    return var_name;
-}
-
-/**
- * Declares a function (overload) in the current context
- * @param fun
- * @param args
- * @param ret
- * @param cause
- */
-Type*& TypeCheckPass::declareFunction(
-   Function::UniquePtr &&func,
-   std::vector<ObjectType *> &generics,
-   AstNode *decl)
-{
-   auto overloads = SymbolTable::getFunction(func->getName(), currentNamespace.back());
-   auto& args = func->getArgTypes();
-   auto score = util::func_score(args);
-
-   for (auto it = overloads.first; it != overloads.second; ++it) {
-      auto& overload = it->second;
-
-//      auto res = util::func_call_compatible(func->getArgTypes(), overload->getArgTypes(), generics,
-//         overload->getGenerics());
-//
-//      if (res.perfect_match) {
-//         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot redeclare function " + func->getName() + " with the same "
-//            "signature as a previous declaration", decl);
-//      }
-   }
-
-   auto& name = func->getName();
-   auto& ret = func->getReturnType();
-
-   SymbolTable::declareFunction(name, std::move(func));
-
-   return ret;
 }
 
 /**
@@ -280,7 +248,6 @@ pair<pair<Type*, string>, bool> TypeCheckPass::getVariable(
    AstNode *cause)
 {
    auto current = latestScope;
-   auto& ns = currentNamespace.back();
    string curr;
    bool escapesLambdaScope = false;
 
@@ -299,21 +266,30 @@ pair<pair<Type*, string>, bool> TypeCheckPass::getVariable(
 
    if (current == nullptr) {
       if (SymbolTable::hasVariable(ident, importedNamespaces)) {
-         return { SymbolTable::getVariable(ident, importedNamespaces), false };
+         auto var = SymbolTable::getVariable(ident, importedNamespaces);
+         if (var.first.access == AccessModifier::PRIVATE && std::find(currentNamespace.begin(),
+            currentNamespace.end(), var.first.declaredNamespace) == currentNamespace.end())
+         {
+            RuntimeError::raise("Variable " + ident + " is inaccessible", cause);
+         }
+
+         return { { var.first.type, var.second }, false };
       }
 
-      RuntimeError::raise(ERR_UNDECLARED_VARIABLE, "Reference to undeclared identifier " + ident, cause);
+      RuntimeError::raise("Reference to undeclared identifier " + ident, cause);
    }
 
-   return { SymbolTable::getVariable(curr, ns), escapesLambdaScope };
+   return { { SymbolTable::getVariable(curr).type, curr }, escapesLambdaScope };
 }
 
-bool TypeCheckPass::hasVariable(string ident) {
+bool TypeCheckPass::hasVariable(string ident)
+{
    auto current = latestScope;
    auto& ns = currentNamespace.back();
 
    while (current != nullptr) {
-      if (SymbolTable::hasVariable(ident + std::to_string(current->id), ns)) {
+      auto scopedName = ident + std::to_string(current->id);
+      if (SymbolTable::hasVariable(scopedName)) {
          break;
       }
 
@@ -335,19 +311,15 @@ bool TypeCheckPass::hasVariable(string ident) {
  * @return
  */
 FunctionResult TypeCheckPass::getFunction(
-   string &fun,
-   std::vector<Type *> &args,
-   std::vector<Type *> &generics,
-   std::vector<string> &argLabels,
-   std::vector<pair<string, std::shared_ptr<Expression>>> &argValues)
+   string& funcName,
+   std::vector<Argument>& args,
+   std::vector<Type*> generics)
 {
    string context;
-   auto overloads = SymbolTable::getFunction(fun, importedNamespaces);
+   auto overloads = SymbolTable::getFunction(funcName, importedNamespaces);
 
    FunctionResult result;
    result.compatibility = CompatibilityType::FUNC_NOT_FOUND;
-
-   int bestMatch = 0;
 
    if (overloads.first == overloads.second) {
       return result;
@@ -355,48 +327,19 @@ FunctionResult TypeCheckPass::getFunction(
 
    result.compatibility = CompatibilityType::NO_MATCHING_CALL;
 
+   size_t bestMatch = 0;
    for (auto it = overloads.first; it != overloads.second; ++it) {
       auto& overload = it->second;
-      std::vector<Type*> givenArgs;
-      std::vector<Type*>& neededArgs = overload->getArgTypes();
 
-      givenArgs.reserve(args.size());
-
-      size_t i = 0;
-      for (const auto& arg : args) {
-         // lambda expression not yet evaluated
-         if (arg == nullptr) {
-            auto& needed = neededArgs[i];
-            auto lambda = std::static_pointer_cast<LambdaExpr>(argValues[i].second);
-            if (!checkLambdaCompatibility(lambda.get(), needed)) {
-               continue;
-            }
-
-            givenArgs.push_back(needed->deepCopy());
-         }
-         else if (neededArgs.size() <= i || (!neededArgs.at(i)->isLvalue() && arg->isLvalue())) {
-            givenArgs.push_back(arg->deepCopy()->toRvalue());
-         }
-         else {
-            givenArgs.push_back(arg->deepCopy());
-         }
-         ++i;
-      }
-
-      auto order = util::orderArgs(argLabels, givenArgs, overload->getArgNames(), argValues, overload->getArgDefaults());
-      auto res = util::func_call_compatible(givenArgs, neededArgs, generics, overload->getGenerics());
-
+      auto res = util::findMatchingCall(args, overload->getArguments(), generics, overload->getGenerics());
       result.expectedType = res.expectedType;
       result.foundType = res.foundType;
       result.incompArg = res.incomp_arg;
-      result.orderedArgs = order;
-
-      for (const auto& arg : givenArgs) {
-         delete arg;
-      }
+      result.argOrder = res.argOrder;
 
       if (res.is_compatible) {
          result.compatibility = CompatibilityType::COMPATIBLE;
+         result.generics = res.generics;
       }
 
       if (res.perfect_match) {
@@ -406,9 +349,10 @@ FunctionResult TypeCheckPass::getFunction(
          return result;
       }
 
-      if (res.is_compatible && res.compat_score >= bestMatch) {
+      if (res.is_compatible && res.needed_casts.size() >= bestMatch) {
          result.func = overload.get();
          result.neededCasts = res.needed_casts;
+         bestMatch = result.neededCasts.size();
       }
    }
 
@@ -416,13 +360,16 @@ FunctionResult TypeCheckPass::getFunction(
 }
 
 void TypeCheckPass::ApplyCasts(
-   std::vector<pair<string, std::shared_ptr<Expression>>>& args,
-   std::vector<Type*>& argTypes,
-   unordered_map<size_t, pair<Type*, Type*>>& casts)
+   std::vector<pair<string, std::shared_ptr<Expression>>> &args,
+   std::vector<Argument> &givenArgs,
+   std::vector<Argument> &declaredArgs,
+   std::vector<size_t> &casts)
 {
-   for (auto& _cast : casts) {
-      assert(args.size() > _cast.first && "Invalid cast index!");
-      wrapImplicitCast(args.at(_cast.first).second, _cast.second.first, _cast.second.second);
+   for (const auto& cast : casts) {
+      assert(givenArgs.size() > cast && args.size() > cast && "Invalid cast index");
+
+      auto to = declaredArgs.size() > cast ? declaredArgs[cast].type : declaredArgs.back().type;
+      wrapImplicitCast(args[cast].second, givenArgs[cast].type, to);
    }
 }
 
@@ -442,14 +389,14 @@ void TypeCheckPass::return_(
    }
 
    if (current == nullptr) {
-      RuntimeError::raise(ERR_CONTEXT_ERROR, "Keyword 'return' is only allowed in function bodies", cause);
+      RuntimeError::raise("Keyword 'return' is only allowed in function bodies", cause);
    }
 
    if (!ret_type->implicitlyCastableTo(current->declaredReturnType) ||
       (current->declaredReturnType->isLvalue() && !ret_type->isLvalue()))
    {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Returned value of type " + ret_type->toString() + " is not "
-         "compatible with declared return type " + current->declaredReturnType->toString(), cause);
+      RuntimeError::raise("Returned value of type " + ret_type->toString() + " is not "
+               "compatible with declared return type " + current->declaredReturnType->toString(), cause);
    }
 
    ++current->returned;
@@ -462,7 +409,7 @@ void TypeCheckPass::continue_(ContinueStmt* continueStmt) {
    }
 
    if (current == nullptr) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "'continue' is only valid in loops and switch statements", continueStmt);
+      RuntimeError::raise("'continue' is only valid in loops and switch statements", continueStmt);
    }
 
    current->continued = true;
@@ -475,27 +422,27 @@ void TypeCheckPass::break_(BreakStmt *breakStmt) {
    }
 
    if (current == nullptr) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "'break' is only valid in loops and switch statements", breakStmt);
+      RuntimeError::raise("'break' is only valid in loops and switch statements", breakStmt);
    }
 
    current->broken = true;
 }
 
-void TypeCheckPass::resolve(Type** ty)
+void TypeCheckPass::resolve(Type** ty, AstNode* node)
 {
    if ((*ty)->isFunctionTy()) {
       (*ty)->visitContained(*this);
    }
 
-   Type::resolve(ty, latestScope->currentClass, currentClassGenerics, importedNamespaces);
-}
+   auto generics = GenericsStack.empty() ? nullptr : GenericsStack.top();
+   auto isValid = Type::resolve(ty, currentClass(), generics, importedNamespaces);
+   if (node != nullptr && !isValid) {
+      RuntimeError::raise("Type " + (*ty)->toString() + " does not exist", node);
+   }
 
-void TypeCheckPass::checkExistance(
-   ObjectType *objTy,
-   AstNode* cause)
-{
-   if (!SymbolTable::hasClass(objTy->getClassName())) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Class " + objTy->getClassName() + " does not exist", cause);
+   if ((*ty)->isObject()) {
+      auto cl = SymbolTable::getClass((*ty)->getClassName());
+      cl->addUse();
    }
 }
 
@@ -503,8 +450,6 @@ void TypeCheckPass::pushNamespace(string &ns) {
    auto newNs = currentNamespace.size() == 1 ? ns : currentNamespace.back() + "." + ns;
    currentNamespace.push_back(newNs);
    importedNamespaces.push_back(newNs + ".");
-
-   SymbolTable::declareNamespace(newNs);
 }
 
 void TypeCheckPass::popNamespace() {
@@ -528,15 +473,6 @@ Type* TypeCheckPass::ReturnMemberExpr(
       if (node->memberExpr->needsProtocolExtraction_) {
          maybeProtocolExtract = false;
       }
-   }
-
-   // If the generic type has a protocol constraint, extract the actual value
-   // from the protocol container
-   if (maybeProtocolExtract && ty->isGeneric() && ty->isProtocol() && node->isPartOfReturnValue_
-      && !SymbolTable::getClass(ty->getClassName())->isEmptyProtocol())
-   {
-      node->needsProtocolExtraction_ = true;
-      node->loadBeforeExtract = ty->needsLvalueToRvalueConv();
    }
 
    return ty;
@@ -613,17 +549,7 @@ bool TypeCheckPass::castGenericIfNecessary(
    }
 
    node->needsCast = true;
-
-   // extraction from the protocol will already be handled inside
-   // of the generic class
-   if (fromTy->isProtocol()) {
-      node->castFrom = ObjectType::getAnyTy();
-      delete fromTy;
-   }
-   else {
-      node->castFrom = fromTy;
-   }
-
+   node->castFrom = fromTy;
    node->castTo = toTy;
 
    return true;
@@ -637,6 +563,10 @@ bool TypeCheckPass::castGenericIfNecessary(
 Type* TypeCheckPass::visit(NamespaceDecl *node)
 {
    pushNamespace(node->nsName);
+   if (node->isAnonymousNamespace) {
+      importedNamespaces.push_back(currentNamespace.back());
+   }
+
    node->contents->accept(*this);
    popNamespace();
 
@@ -699,63 +629,34 @@ namespace {
    }
 }
 
-void TypeCheckPass::DeclareFunction(FunctionDecl *node)
+void TypeCheckPass::checkClassAccessibility(
+   cdot::cl::Class *&cl,
+   Expression *cause)
 {
-   if (SymbolTable::hasClass(node->funcName)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot declare a function with the same name as a class declaration",
-         node);
+   if (cl->isAbstract()) {
+      RuntimeError::raise("Class " + cl->getName() + " is abstract and cannot be initialized", cause);
    }
-   if (isReservedIdentifier(node->funcName)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, node->funcName + " is a reserved identifier", node);
+   if (cl->isPrivate() && std::find(currentNamespace.begin(), currentNamespace.end(), cl->getDeclarationNamespace())
+      == currentNamespace.end())
+   {
+      RuntimeError::raise("Class " + cl->getName() + " is not accessible", cause);
    }
+}
 
-   currentClassGenerics = &node->generics;
-
-   node->returnType->accept(*this);
-   auto& return_type = node->returnType->getType();
-
-   auto qualified_name = ns_prefix() + node->funcName;
-   if (qualified_name == "main") {
-      if (!isa<IntegerType>(return_type) && !isa<VoidType>(return_type)) {
-         Warning::issue("Declared return type of main function is always ignored", node);
-      }
-
-      return_type = IntegerType::get(64);
-      node->returnType->setType(return_type->deepCopy());
+void TypeCheckPass::checkMemberAccessibility(
+   cdot::cl::Class *&cl,
+   string& memberName,
+   AccessModifier &access,
+   Expression *cause)
+{
+   if (access == AccessModifier::PROTECTED && !cl->protectedPropAccessibleFrom(currentClass())) {
+      RuntimeError::raise("Protected member " + memberName + " of class " +
+               cl->getName() + " is not accessible", cause);
    }
-
-   Function::UniquePtr fun = std::make_unique<Function>(qualified_name, return_type, node->generics);
-   node->declaredFunction = fun.get();
-
-   if (return_type->isStruct()) {
-      node->hasHiddenParam = true;
-      fun->hasHiddenParam(true);
+   else if (access == AccessModifier::PRIVATE && !cl->privatePropAccessibleFrom(currentClass())) {
+      RuntimeError::raise("Private member " + memberName + " of class " +
+               cl->getName() + " is not accessible", cause);
    }
-
-   std::vector<Type*> argTypes;
-   for (const auto &arg : node->args) {
-      if (isReservedIdentifier(arg->argName)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, arg->argName + " is a reserved identifier", arg.get());
-      }
-
-      arg->accept(*this);
-      auto& resolvedArg = arg->argType->getType();
-      argTypes.push_back(resolvedArg);
-
-      fun->addArgument(resolvedArg, arg->defaultVal, arg->argName);
-   }
-
-   declareFunction(std::move(fun), node->generics, node);
-
-   if (qualified_name == "main") {
-      node->binding = qualified_name;
-   }
-   else {
-      node->binding = SymbolTable::mangleFunction(qualified_name, argTypes);
-   }
-
-   currentClassGenerics = nullptr;
-   node->declaredFunction->setMangledName(node->binding);
 }
 
 /**
@@ -766,9 +667,8 @@ void TypeCheckPass::DeclareFunction(FunctionDecl *node)
  */
 Type* TypeCheckPass::visit(FunctionDecl *node)
 {
-   currentClassGenerics = &node->generics;
+   GenericsStack.push(&node->generics);
 
-   node->returnType->accept(*this);
    auto& return_type = node->returnType->getType();
    pushFunctionScope(return_type);
 
@@ -785,7 +685,7 @@ Type* TypeCheckPass::visit(FunctionDecl *node)
    if (latestScope->branches - latestScope->returned > 0 && !return_type->isNullable() &&
       !isa<VoidType>(return_type) && node->funcName != "main")
    {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Not all code paths return a value", node);
+      RuntimeError::raise("Not all code paths return a value", node);
    }
    // implicit 0 return for main function
    else if (latestScope->branches - latestScope->returned > 0 && node->funcName == "main") {
@@ -794,7 +694,7 @@ Type* TypeCheckPass::visit(FunctionDecl *node)
    }
 
    popScope();
-   currentClassGenerics = nullptr;
+   GenericsStack.pop();
    return nullptr;
 }
 
@@ -823,7 +723,7 @@ void TypeCheckPass::CopyNodeProperties(
 Type* TypeCheckPass::visit(IdentifierRefExpr *node)
 {
    if (node->isLetExpr_ || node->isVarExpr_) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Unexpected 'let' / 'var' expression", node);
+      RuntimeError::raise("Unexpected 'let' / 'var' expression", node);
    }
 
    string ns_name = node->ident;
@@ -836,7 +736,8 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
       }
    }
 
-   if (SymbolTable::isNamespace(ns_name)) {
+   if (SymbolTable::isNamespace(ns_name))
+   {
       auto current = node->memberExpr;
 
       while (current != nullptr && current->get_type() == NodeType::MEMBER_EXPR) {
@@ -854,7 +755,14 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
       node->memberExpr = current;
 
       if (node->memberExpr == nullptr) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot use a namespace as a value", node);
+         RuntimeError::raise("Cannot use a namespace as a value", node);
+      }
+
+      if (SymbolTable::hasTypedef(ns_name, importedNamespaces)) {
+         auto td = SymbolTable::getTypedef(ns_name, importedNamespaces);
+         if (td.aliasedType->isObject()) {
+            ns_name = td.aliasedType->getClassName();
+         }
       }
 
       if (node->memberExpr->get_type() == NodeType::MEMBER_EXPR) {
@@ -871,7 +779,7 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
          member_expr->type = CallType::METHOD_CALL;
       }
       else if (node->memberExpr->get_type() == NodeType::ARRAY_ACCESS_EXPR) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index on a namespace", node);
+         RuntimeError::raise("Cannot access index on a namespace", node);
       }
       else {
          assert(false && "Unknown operation");
@@ -883,13 +791,13 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
    }
 
    if (node->ident == "super") {
-      if (latestScope->currentClass.empty()) {
-         RuntimeError::raise(ERR_CONTEXT_ERROR, "'super' can only be used in instance methods", node);
+      if (currentClass().empty()) {
+         RuntimeError::raise("'super' can only be used in instance methods", node);
       }
 
-      auto currentCl = SymbolTable::getClass(latestScope->currentClass);
+      auto currentCl = SymbolTable::getClass(currentClass());
       if (currentCl->getParent() == nullptr) {
-         RuntimeError::raise(ERR_CONTEXT_ERROR, "Class " + latestScope->currentClass + " does not have a base class", node);
+         RuntimeError::raise("Class " + currentClass() + " does not have a base class", node);
       }
 
       node->binding = latestScope->currentSelf;
@@ -928,7 +836,11 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
          node->binding = result->getMangledName();
          node->isFunction = true;
 
-         auto argTypes = copyTypeVector(result->getArgTypes());
+         std::vector<Type*> argTypes;
+         for (const auto& arg : result->getArguments()) {
+            argTypes.push_back(arg.type->deepCopy());
+         }
+
          auto funcTy = new FunctionType(result->getReturnType()->deepCopy(), argTypes);
          funcTy->setFunction(result);
 
@@ -936,7 +848,7 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
       }
 
       for (auto it = overloads.first; it != overloads.second; ++it) {
-         auto& argTypes = it->second->getArgTypes();
+         auto& argTypes = it->second->getArguments();
          if (argTypes.size() != args.size()) {
             continue;
          }
@@ -944,7 +856,7 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
          size_t i = 0;
          bool matches = true;
          for (const auto& arg : argTypes) {
-            if (!args.at(i)->implicitlyCastableTo(arg)) {
+            if (!args.at(i)->implicitlyCastableTo(arg.type)) {
                matches = false;
                break;
             }
@@ -969,7 +881,11 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
          node->binding = result->getMangledName();
          node->isFunction = true;
 
-         auto argTypes = copyTypeVector(result->getArgTypes());
+         std::vector<Type*> argTypes;
+         for (const auto& arg : result->getArguments()) {
+            argTypes.push_back(arg.type->deepCopy());
+         }
+
          auto funcTy = new FunctionType(result->getReturnType()->deepCopy(), argTypes);
          funcTy->setFunction(result);
 
@@ -977,10 +893,10 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
       }
    }
 
-   bool implicit_this = node->ident != "self" && !hasVariable(node->ident) && !latestScope->currentClass.empty();
+   bool implicit_this = node->ident != "self" && !hasVariable(node->ident) && !currentClass().empty();
    if (node->ident == "self" || implicit_this) {
-      if (latestScope->currentClass.empty()) {
-         RuntimeError::raise(ERR_CONTEXT_ERROR, "'this' can only be used in instance methods", node);
+      if (currentClass().empty()) {
+         RuntimeError::raise("'this' can only be used in instance methods", node);
       }
 
       if (implicit_this) {
@@ -995,8 +911,10 @@ Type* TypeCheckPass::visit(IdentifierRefExpr *node)
       node->binding = latestScope->currentSelf;
       node->ident = "self";
 
-      //TODO check if 'self' is mutable
-      auto type = SymbolTable::getClass(latestScope->currentClass)->getType()->toRvalue();
+      auto type = SymbolTable::getClass(currentClass())->getType();
+      type->isLvalue(latestScope->mutableSelf);
+      type->isSelf(true);
+
       return ReturnMemberExpr(node, type);
    }
 
@@ -1029,19 +947,22 @@ Type* TypeCheckPass::visit(DeclStmt *node)
    auto& ident = node->identifier;
 
    if (isReservedIdentifier(ident)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, ident + " is a reserved identifier", node);
+      RuntimeError::raise(ident + " is a reserved identifier", node);
    }
 
    node->type->accept(*this);
    auto& declType = node->type->getType();
    auto& val = node->value;
 
-   if (declType->isUnsafePointer() && !latestScope->unsafe) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Raw Pointer types and C-Style arrays are only allowed in 'unsafe' "
-         "blocks", node);
-   }
+//   if (declType->isUnsafePointer() && !latestScope->unsafe) {
+//      RuntimeError::raise(ERR_TYPE_ERROR, "Raw Pointer types and C-Style arrays are only allowed in 'unsafe' "
+//         "blocks", node);
+//   }
 
    if (val != nullptr) {
+      if (node->is_global) {
+         int i=3;
+      }
       val->isGlobal(node->is_global);
       if (!isa<AutoType>(declType)) {
          val->setContextualType(declType);
@@ -1057,19 +978,19 @@ Type* TypeCheckPass::visit(DeclStmt *node)
 
       if (declType->isInferred()) {
          if (givenType->isNull()) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign value of type void", val.get());
+            RuntimeError::raise("Cannot assign value of type void", val.get());
          }
 
          delete declType;
          declType = givenType->deepCopy();
       }
       else if (isa<VoidType>(givenType) && !declType->isNullable()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign null to non-nullable variable of type " +
-            declType->toString(), val.get());
+         RuntimeError::raise("Cannot assign null to non-nullable variable of type " +
+                     declType->toString(), val.get());
       }
       else if (!givenType->implicitlyCastableTo(declType)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible types " + givenType->toString() + " and " +
-            declType->toString(), val.get());
+         RuntimeError::raise("Incompatible types " + givenType->toString() + " and " +
+                     declType->toString(), val.get());
       }
 
       if (*declType != givenType) {
@@ -1077,25 +998,10 @@ Type* TypeCheckPass::visit(DeclStmt *node)
       }
    }
    else if (!declType->hasDefaultValue()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Expected non-nullable variable " + ident + " to be defined",
-         node);
+      RuntimeError::raise("Expected non-nullable variable " + ident + " to be defined", node);
    }
 
    resolve(&declType);
-
-   if (declType->getLengthExpr() != nullptr) {
-      declType->getLengthExpr()->setContextualType(IntegerType::ConstInt64);
-
-      Type* ty = declType->visitLengthExpr(this);
-      toRvalueIfNecessary(ty, declType->getLengthExpr());
-
-      if (!ty->implicitlyCastableTo(IntegerType::ConstInt64)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Array length has to be integral", declType->getLengthExpr().get());
-      }
-      else if (*IntegerType::ConstInt64 != ty) {
-         wrapImplicitCast(declType->getLengthExpr(), ty, IntegerType::get(64));
-      }
-   }
 
    auto allocType = declType;
    node->isStructAlloca = declType->isStruct();
@@ -1105,7 +1011,13 @@ Type* TypeCheckPass::visit(DeclStmt *node)
    allocType->isLvalue(true);
    allocType->isConst(node->is_const);
 
-   node->binding = declareVariable(ident, allocType, node->is_global, node);
+   if (!node->is_global) {
+      node->binding = declareVariable(ident, allocType, node->is_global, node);
+   }
+   else {
+      SymbolTable::setVariable(node->binding, allocType);
+   }
+
    declarations.emplace(node->binding, node);
 
    if (node->incRefCount) {
@@ -1142,7 +1054,7 @@ Type* TypeCheckPass::visit(ForStmt *node)
          wrapImplicitCast(node->termination, cond, boolTy);
       }
       else if (!cond->implicitlyCastableTo(boolTy)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Condition must be boolean", node->termination.get());
+         RuntimeError::raise("Condition must be boolean", node->termination.get());
       }
    }
 
@@ -1160,30 +1072,37 @@ Type* TypeCheckPass::visit(ForInStmt *node)
 {
    auto range = node->rangeExpr->accept(*this);
    if (!range->isObject() || !SymbolTable::getClass(range->getClassName())->conformsTo("Iterable")) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Range expression in for-in statement must conform to "
-            "'Iterable' protocol", node->rangeExpr.get());
+      RuntimeError::raise("Range expression in for-in statement must conform to "
+         "'Iterable' protocol", node->rangeExpr.get());
    }
 
    toRvalueIfNecessary(range, node->rangeExpr);
 
    auto cl = SymbolTable::getClass(range->getClassName());
+   cl->addUse();
+
    auto& prot = cl->getConformedToProtocols();
    Type* itType = nullptr;
    for (const auto& p : prot) {
       if (p->getClassName() == "Iterable") {
-         itType = p->getConcreteGeneric("T");
+         itType = p->getConcreteGeneric("T")->deepCopy();
+         break;
       }
    }
 
    assert(itType && "Iterable conformance shouldn't be possible otherwise!");
 
+   // e.g. for let i in 1..5 { ... }
+   // NOT  for let i in [1, 2, 3] { ... }
+   if (itType->isProtocol()/* && !SymbolTable::getClass(itType->getClassName())->isEmptyProtocol()*/) {
+      node->protocolTy = itType;
+   }
+
    Type::resolveGeneric(&itType, range->getConcreteGenericTypes());
    node->decl->type->accept(*this);
    if (!node->decl->type->getType()->implicitlyCastableTo(itType)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Iterated type " + itType->toString()
-         + " is not compatible with expected ""type " + node->decl->type->getType()->toString(),
-         node->decl.get()
-      );
+      RuntimeError::raise("Iterated type " + itType->toString()
+               + " is not compatible with expected type " + node->decl->type->getType()->toString(), node->decl.get());
    }
 
    pushLoopScope();
@@ -1194,14 +1113,20 @@ Type* TypeCheckPass::visit(ForInStmt *node)
    node->body->accept(*this);
    popScope();
 
-   auto getIterator = cl->hasMethod("getIterator", {});
+   auto getIterator = cl->hasMethod("getIterator");
    assert(getIterator.compatibility == CompatibilityType::COMPATIBLE
       && "Iterable not implemented correctly?");
 
+   ++getIterator.method->uses;
+
    auto iteratorCl = SymbolTable::getClass(getIterator.method->returnType->getClassName());
-   auto nextFunc = iteratorCl->hasMethod("next", {});
+   iteratorCl->addUse();
+
+   auto nextFunc = iteratorCl->hasMethod("next");
    assert(nextFunc.compatibility == CompatibilityType::COMPATIBLE
       && "Iterator<> not implemented correctly?");
+
+   ++nextFunc.method->uses;
 
    node->iteratorGetter = getIterator.method->mangledName;
    node->iteratorClass = getIterator.method->returnType->getClassName();
@@ -1230,7 +1155,7 @@ Type* TypeCheckPass::visit(
       wrapImplicitCast(node->condition, cond, boolTy);
    }
    else if (!cond->implicitlyCastableTo(boolTy)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Condition must be boolean", node->condition.get());
+      RuntimeError::raise("Condition must be boolean", node->condition.get());
    }
 
    pushLoopScope();
@@ -1278,6 +1203,86 @@ pair<Type*, std::vector<Type*>> TypeCheckPass::unify(
    return { unified->deepCopy(), evaledTypes };
 }
 
+Type* TypeCheckPass::HandleDictionaryLiteral(CollectionLiteral *node)
+{
+   node->type->accept(*this);
+   auto& dictTy = node->type->getType();
+   auto HashableTy = ObjectType::get("Hashable");
+   auto AnyTy = ObjectType::getAnyTy();
+
+   auto& keys = node->keys;
+   auto& values = node->values;
+
+   assert(keys.size() == values.size() && "Should have raised a parse error");
+
+   if (node->contextualType != nullptr && isa<CollectionType>(node->contextualType)) {
+      auto dict = cast<CollectionType>(node->contextualType);
+      if (dict->getKind() != CollectionKind::DICTIONARY) {
+         raiseTypeError(node->contextualType, dictTy, node);
+      }
+
+      auto keyTy = dict->getConcreteGeneric("K");
+      auto valTy = dict->getConcreteGeneric("V");
+
+      for (auto& key : keys) {
+         auto ty = key->accept(*this);
+         toRvalueIfNecessary(ty, key);
+
+         if (!ty->implicitlyCastableTo(keyTy)) {
+            raiseTypeError(ty, keyTy, key.get());
+         }
+         else if (*ty != keyTy) {
+            wrapImplicitCast(key, ty, keyTy);
+         }
+
+         wrapImplicitCast(key, keyTy, HashableTy);
+      }
+
+      for (auto& val : values) {
+         auto ty = val->accept(*this);
+         toRvalueIfNecessary(ty, val);
+
+         if (!ty->implicitlyCastableTo(valTy)) {
+            raiseTypeError(ty, valTy, val.get());
+         }
+         else if (*ty != valTy) {
+            wrapImplicitCast(val, ty, valTy);
+         }
+
+         wrapImplicitCast(val, valTy, AnyTy);
+      }
+
+      return dictTy->deepCopy();
+   }
+
+   auto keyTy = unify(keys);
+   auto valTy = unify(values);
+
+   if (!keyTy.first->isObject() ||
+      !SymbolTable::getClass(keyTy.first->getClassName())->conformsTo("Hashable"))
+   {
+      RuntimeError::raise("Dictionary keys must conform to 'Hashable'", node);
+   }
+
+   size_t i = 0;
+   for (auto& key : node->keys) {
+      toRvalueIfNecessary(keyTy.second[i++], key);
+      wrapImplicitCast(key, keyTy.first, HashableTy);
+   }
+
+   i = 0;
+   for (auto& val : node->values) {
+      toRvalueIfNecessary(valTy.second[i++], val);
+      wrapImplicitCast(val, valTy.first, AnyTy);
+   }
+
+   auto obj = cast<ObjectType>(dictTy);
+   obj->specifyGenericType("K", keyTy.first);
+   obj->specifyGenericType("V", valTy.first);
+
+   return dictTy->deepCopy();
+}
+
 /**
  * Checks an array literal
  * @param node
@@ -1285,22 +1290,26 @@ pair<Type*, std::vector<Type*>> TypeCheckPass::unify(
  */
 Type* TypeCheckPass::visit(CollectionLiteral *node)
 {
+   if (node->isDictionary) {
+      return HandleDictionaryLiteral(node);
+   }
+
    auto isInferred = node->contextualType != nullptr;
    if (!isInferred || node->contextualType->isInferred()) {
       Type* elTy;
-      if (node->elements.empty()) {
+      if (node->values.empty()) {
          elTy = ObjectType::get("Any")->getPointerTo();
       }
       else {
-         elTy = unify(node->elements).first;
-         for (auto& el : node->elements) {
+         elTy = unify(node->values).first;
+         for (auto& el : node->values) {
             toRvalueIfNecessary(elTy, el);
+            wrapImplicitCast(el, elTy, ObjectType::getAnyTy());
          }
       }
 
       if (node->hasAttribute(Attr::CArray)) {
          elTy->isCStyleArray(true);
-         elTy->setLength(0);
 
          node->type = std::make_shared<TypeRef>(elTy);
          node->type->accept(*this);
@@ -1315,8 +1324,8 @@ Type* TypeCheckPass::visit(CollectionLiteral *node)
 
    if (!node->contextualType->isPointerTy() && !isa<CollectionType>(node->contextualType))
    {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Collection literal cannot return value of type " +
-         node->contextualType->toString(), node);
+      RuntimeError::raise("Collection literal cannot return value of type " +
+               node->contextualType->toString(), node);
    }
 
    bool isCarray = false;
@@ -1330,26 +1339,31 @@ Type* TypeCheckPass::visit(CollectionLiteral *node)
       elType = ptrType->getConcreteGeneric("T")->deepCopy();
    }
 
-   if (!node->elements.empty()) {
-      auto givenType = unify(node->elements).first;
-      for (auto& el : node->elements) {
+   if (!node->values.empty()) {
+      auto givenType = unify(node->values).first;
+      for (auto& el : node->values) {
          toRvalueIfNecessary(givenType, el);
       }
 
       if (!givenType->implicitlyCastableTo(elType)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible collection elements: Expected " + elType->toString() +
-            ", but got " + givenType->toString(), node);
+         RuntimeError::raise("Incompatible collection elements: Expected " + elType->toString() +
+                     ", but got " + givenType->toString(), node);
       }
       else if (*elType != givenType) {
-         for (auto &el : node->elements) {
+         for (auto &el : node->values) {
             wrapImplicitCast(el, givenType, elType);
+         }
+      }
+
+      if (!elType->isObject() || elType->getClassName() != "Any") {
+         for (auto &el : node->values) {
+            wrapImplicitCast(el, elType, ObjectType::getAnyTy());
          }
       }
    }
 
    auto ty = elType->getPointerTo();
    ty->isCStyleArray(isa<PointerType>(node->contextualType));
-   ty->setLength(0);
 
    if (isCarray) {
       node->type = std::make_shared<TypeRef>(ty);
@@ -1373,7 +1387,19 @@ Type* TypeCheckPass::visit(NumericLiteral *node)
       node->hasAttribute(Attr::Primitive))
    {
       node->isPrimitive = true;
+
+      if (node->contextualType != nullptr) {
+         node->type = node->contextualType->deepCopy();
+         return node->contextualType->deepCopy();
+      }
+
       return node->type->deepCopy();
+   }
+
+   if (node->contextualType != nullptr) {
+      if (node->contextualType->isBoxedPrimitive()) {
+         node->type = node->contextualType->unbox();
+      }
    }
 
    switch (node->type->getTypeID()) {
@@ -1385,15 +1411,13 @@ Type* TypeCheckPass::visit(NumericLiteral *node)
          }
 
          auto bitWidth = asInt->getBitwidth();
-         if (bitWidth != (sizeof(int *) * 8)) {
-            className += std::to_string(bitWidth);
-         }
+         className += std::to_string(bitWidth);
 
-         if (className == "Int8") {
+         if (node->isChar) {
             className = "Char";
          }
 
-         if (className == "Int1") {
+         if (node->isBool) {
             className = "Bool";
          }
 
@@ -1415,14 +1439,11 @@ Type* TypeCheckPass::visit(NumericLiteral *node)
          cast<VoidType>(node->type)->setPointeeType(node->contextualType);
          return node->type->deepCopy();
       }
+      case TypeID::ObjectTypeID:
+         node->className = node->type->getClassName();
+         break;
       default:
          llvm_unreachable("Unknown literal type");
-   }
-
-   // TODO remove this
-   if (!SymbolTable::hasClass(node->className)) {
-      node->isPrimitive = true;
-      return node->type->deepCopy();
    }
 
    assert(node->isPrimitive || !node->className.empty() && "Unknown primitive type");
@@ -1434,10 +1455,10 @@ Type* TypeCheckPass::visit(NumericLiteral *node)
 Type* TypeCheckPass::visit(NoneLiteral *node)
 {
    if (node->contextualType == nullptr || isa<AutoType>(node->contextualType)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "'none' requires a contextual type", node);
+      RuntimeError::raise("'none' requires a contextual type", node);
    }
    if (!node->contextualType->isOptionTy()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "'none' can only be assigned to option types", node);
+      RuntimeError::raise("'none' can only be assigned to option types", node);
    }
 
    return node->contextualType->deepCopy();
@@ -1451,8 +1472,8 @@ Type* TypeCheckPass::visit(StringLiteral *node)
             node->raw = true;
             break;
          default:
-            RuntimeError::raise(ERR_TYPE_ERROR, "Attribute " + attr.name + " is not applicable on string literals",
-               node);
+            RuntimeError::raise("Attribute " + attr.name + " is not applicable"
+               "to string literals", node);
       }
    }
 
@@ -1462,14 +1483,53 @@ Type* TypeCheckPass::visit(StringLiteral *node)
 
    if (node->raw) {
       auto ty = new PointerType(IntegerType::get(8));
-      ty->setLength(node->value.length());
       ty->isCStyleArray(true);
 
       return ty;
    }
 
-   auto str = ObjectType::get("String")->toRvalue();
-   return ReturnMemberExpr(node, str);
+   return ReturnMemberExpr(node, ObjectType::get("String"));
+}
+
+Type* TypeCheckPass::visit(StringInterpolation *node)
+{
+   bool first = true;
+   size_t i = 0;
+   for (auto& expr : node->strings) {
+      auto val = expr->accept(*this);
+      auto StringRepr = ObjectType::get("StringRepresentable");
+
+      toRvalueIfNecessary(val, expr);
+
+      if (val->isObject()) {
+         auto cl = SymbolTable::getClass(val->getClassName());
+         if (cl->conformsTo("StringRepresentable")) {
+            if (!first) {
+               wrapImplicitCast(expr, val, StringRepr);
+            }
+
+            first = false;
+            ++i;
+            continue;
+         }
+      }
+      else if (isa<PrimitiveType>(val)) {
+         assert(!first && "first element should always be string");
+
+         auto boxed = val->box();
+         wrapImplicitCast(expr, val, boxed);
+         wrapImplicitCast(expr, boxed, StringRepr);
+
+         first = false;
+         ++i;
+         continue;
+      }
+
+      RuntimeError::raise("Values used in string interpolation must conform to "
+               "'StringRepresentable'", expr.get());
+   }
+
+   return ReturnMemberExpr(node, ObjectType::get("String"));
 }
 
 /**
@@ -1487,14 +1547,14 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
    }
 
    Type* index = node->_index->accept(*this);
-   if (isa<ObjectType>(ts) && !ts->isCStyleArray()) {
-
+   if (isa<ObjectType>(ts) && !ts->isCStyleArray())
+   {
       auto& className = ts->getClassName();
       
       auto cl = SymbolTable::getClass(className, importedNamespaces);
-      std::vector<Type*> argTypes{ index };
+      std::vector<Argument> args{ {"", index} };
       string op = "postfix []";
-      cdot::cl::MethodResult methodResult = cl->hasMethod(op, argTypes);
+      cdot::cl::MethodResult methodResult = cl->hasMethod(op, args);
 
       if (methodResult.compatibility == CompatibilityType::COMPATIBLE) {
          auto call = std::make_shared<CallExpr>(
@@ -1503,12 +1563,10 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
             op
          );
 
-         ApplyCasts(call->args, argTypes, methodResult.neededCasts);
-
          call->setIndex(node->startIndex, node->endIndex, node->sourceFileId);
          call->parentExpr = node;
          call->parent = node;
-         call->argTypes.push_back(index);
+         call->resolvedArgs.push_back(std::move(args.front()));
 
          auto expr = std::static_pointer_cast<Expression>(call);
          node->children.push_back(&expr);
@@ -1522,8 +1580,8 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
          return ReturnMemberExpr(node, type);
       }
       else {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Operator [](" + index->toString() + ") is not defined on class " +
-            ts->toString(), node);
+         RuntimeError::raise("Operator [](" + index->toString() + ") is not defined on class " +
+                     ts->toString(), node);
       }
    }
 
@@ -1535,15 +1593,16 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
       ts = ptr;
    }
    else if (!ts->isCStyleArray()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Operator [](" + index->toString() + ") is not defined on type " +
-         ts->toString(), node);
+      RuntimeError::raise("Operator [](" + index->toString() + ") is not defined on type " +
+               ts->toString(), node);
    }
 
    toRvalueIfNecessary(index, node->_index);
 
    Type* int64Ty = IntegerType::get(64);
-   if (!index->implicitlyCastableTo(int64Ty)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Array indices have to be integral, " + index->toString() + " given", node);
+   Type* uint64Ty = IntegerType::get(64, true);
+   if (!index->isIntegerTy() && !index->implicitlyCastableTo(int64Ty) && !index->implicitlyCastableTo(uint64Ty)) {
+      RuntimeError::raise("Array indices have to be integral, " + index->toString() + " given", node);
    }
    else if (*index != int64Ty) {
       wrapImplicitCast(node->_index, index, int64Ty);
@@ -1552,6 +1611,8 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
       delete int64Ty;
    }
 
+   delete uint64Ty;
+
    ts->isLvalue(true);
    ts->isCStyleArray(false);
 
@@ -1559,79 +1620,81 @@ Type* TypeCheckPass::visit(SubscriptExpr *node)
 }
 
 void TypeCheckPass::PrepareCallArgs(
-   std::vector<pair<string, std::shared_ptr<Expression>>> &args,
-   std::vector<Type*> &declaredArgTypes,
-   std::vector<Type*> &argTypes)
+   std::vector<pair<string, std::shared_ptr<Expression>>>& args,
+   std::vector<Argument>& givenArgs,
+   std::vector<Argument>& declaredArgs,
+   std::vector<pair<size_t, bool>> &argOrder,
+   bool isProtocolDefaultImpl)
 {
    size_t i = 0;
+   std::vector<pair<string, std::shared_ptr<Expression>>> realArgs;
+   for (const auto &order : argOrder) {
+      if (order.second) {
+         auto& arg = declaredArgs[order.first];
+         realArgs.emplace_back(arg.label, arg.defaultVal);
+      }
+      else {
+         realArgs.push_back(args[order.first]);
+      }
+   }
+
+   args = realArgs;
+
+   i = 0;
    for (auto& arg : args) {
-      if (i >= argTypes.size()) {
+      if (i >= givenArgs.size()) {
          break;
       }
-      if (i >= declaredArgTypes.size()) {
+
+      auto &given = givenArgs[i].type;
+      auto &declared = i >= declaredArgs.size() ? declaredArgs.back().type : declaredArgs[i].type;
+
+      if (args[i].second->needsContextualInformation()) {
+         args[i].second->setContextualType(declared);
+         givenArgs[i].type = args[i].second->accept(*this);
+      }
+
+      if (i >= declaredArgs.size()) {
          // assume that c style varargs do not require an lvalue
-         toRvalueIfNecessary(argTypes.at(i), arg.second);
-
+         toRvalueIfNecessary(given, arg.second);
          continue;
       }
 
-      if (argTypes.at(i) == nullptr) {
-         continue;
-      }
-
-      if (args[i].second->get_type() == NodeType::LAMBDA_EXPR) {
-         args[i].second->setContextualType(declaredArgTypes[i]);
-         args[i].second->accept(*this);
-      }
-
-      if (declaredArgTypes.at(i)->isStruct() && argTypes.at(i)->isStruct() && !declaredArgTypes.at(i)->isLvalue()) {
+      if (declared->isStruct() && given->isStruct() && !declared->isLvalue()) {
          arg.second->needsByValPass = true;
       }
 
-      toRvalueIfNecessary(argTypes.at(i), arg.second, !declaredArgTypes.at(i)->isLvalue());
+      toRvalueIfNecessary(given, arg.second, !declared->isLvalue());
 
-      ++i;
-   }
-}
-
-void TypeCheckPass::PrepareCallArgs(
-   std::vector<pair<string, std::shared_ptr<Expression>>> &args,
-   std::vector<Type*> &declaredArgTypes,
-   std::vector<Type*> &argTypes,
-   std::vector<Expression::SharedPtr> &defaultValues)
-{
-   size_t i = 0;
-   while (args.size() < declaredArgTypes.size()) {
-      auto defVal = defaultValues[args.size() + i];
-      if (defVal == nullptr) {
-         break;
+      // If we are passing a protocol to a function argument with type 'Self',
+      // inside the function we won't be expecting a wrapped protocol type,
+      // but rather the raw value itself (ensuring that it is of the appropriate 'Self' type
+      // must be ensured elsewhere)
+      if (!isProtocolDefaultImpl && declared->isGeneric() && declared->getGenericClassName() == "Self") {
+         arg.second->needsProtocolExtraction_ = true;
       }
 
-      args.emplace_back("", defVal);
-      argTypes.push_back(declaredArgTypes[i]);
       ++i;
    }
-
-   PrepareCallArgs(args, declaredArgTypes, argTypes);
 }
 
 void TypeCheckPass::HandleFunctionCall(CallExpr *node)
 {
-   std::vector<string> argLabels;
-   for (const auto& arg : node->args) {
-      argLabels.push_back(arg.first);
+   if (util::in_vector(util::builtinFunctions, node->ident)) {
+      return HandleBuiltinCall(node);
    }
 
-   auto& argTypes = node->argTypes;
-   FunctionResult result = getFunction(node->ident, argTypes, node->generics, argLabels, node->args);
+   auto& resolvedArgs = node->resolvedArgs;
+   FunctionResult result = getFunction(node->ident, resolvedArgs, node->generics);
 
    if (result.compatibility != CompatibilityType::COMPATIBLE) {
       // possible implicit method call
-      if (!latestScope->currentClass.empty()) {
-         auto cl = SymbolTable::getClass(latestScope->currentClass);
-         auto compat = cl->hasMethod(node->ident, argTypes);
+      auto& currentCl = currentClass();
+      if (!currentCl.empty() && SymbolTable::hasClass(currentCl)) {
+         auto cl = SymbolTable::getClass(currentCl);
+         auto compat = cl->hasMethod(node->ident, resolvedArgs);
          if (compat.compatibility == CompatibilityType::COMPATIBLE) {
-            pushTy(ObjectType::get(latestScope->currentClass));
+            pushTy(ObjectType::get(currentCl));
 
             node->type = CallType::METHOD_CALL;
             node->implicitSelfCall = true;
@@ -1643,7 +1706,7 @@ void TypeCheckPass::HandleFunctionCall(CallExpr *node)
 
       // lambda or saved function call
       if (hasVariable(node->ident)) {
-         auto var = getVariable(node->ident);
+         auto var = getVariable(node->ident, node);
          auto fun = var.first.first->deepCopy();
 
          if (fun->isLvalue()) {
@@ -1674,37 +1737,33 @@ void TypeCheckPass::HandleFunctionCall(CallExpr *node)
          }
 
          if (!result.foundType.empty() && !result.expectedType.empty()) {
-            RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
+            RuntimeError::raise(
                "No matching call for function " + node->ident + " found: Candidate function not viable: No known "
-                  "conversion from " + result.foundType + " to " + result.expectedType + " ",
-               cause
-            );
+                              "conversion from " + result.foundType + " to " + result.expectedType + " ", cause);
          }
          else {
-            RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
-               "No matching call for function " + node->ident + " found",
-               cause
-            );
+            RuntimeError::raise("No matching call for function " + node->ident + " found", cause);
          }
       }
       if (result.compatibility == CompatibilityType::FUNC_NOT_FOUND) {
-         RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
-            "Function " + node->ident + " does not exist", node);
+         RuntimeError::raise("Function " + node->ident + " does not exist", node);
       }
 
       llvm_unreachable("No other options possible");
    }
 
-   node->args = result.orderedArgs;
+   node->generics = result.generics;
 
    auto& func = result.func;
-   auto& declaredArgTypes = func->getArgTypes();
-   auto& defaultValues = func->getArgDefaults();
+   func->addUse();
 
-   PrepareCallArgs(node->args, declaredArgTypes, argTypes, defaultValues);
-   ApplyCasts(node->args, argTypes, result.neededCasts);
+   auto& declaredArgs = func->getArguments();
 
-   node->binding = SymbolTable::mangleFunction(func->getName(), func->getArgTypes());
+   PrepareCallArgs(node->args, resolvedArgs, declaredArgs, result.argOrder);
+   ApplyCasts(node->args, resolvedArgs, declaredArgs, result.neededCasts);
+
+   node->binding = SymbolTable::mangleFunction(func->getName(), declaredArgs);
+   node->declaredArgTypes = &func->getArguments();
 
    if (func->hasHiddenParam()) {
       node->hasHiddenParamReturn = true;
@@ -1748,85 +1807,190 @@ void TypeCheckPass::HandleFunctionCall(CallExpr *node)
    }
 }
 
+void TypeCheckPass::HandleBuiltinCall(CallExpr *node)
+{
+   node->isBuiltin = true;
+
+   auto& Builtin = util::builtinTypes[node->ident];
+   if (!Builtin.second.empty()) {
+      node->returnType = Builtin.second[0]->deepCopy();
+   }
+
+   node->builtinType = Builtin.first;
+
+   switch (node->builtinType) {
+      case BuiltinFn::ALIGNOF:
+      case BuiltinFn::SIZEOF:
+      case BuiltinFn::NULLPTR: {
+         if (node->args.size() != 1 || node->args.front().second->get_type() != NodeType::TYPE_REF) {
+            RuntimeError::raise("Expected type as argument to " + node->ident, node);
+         }
+         if (node->builtinType == BuiltinFn::NULLPTR) {
+            auto ty = std::static_pointer_cast<TypeRef>(node->args.at(0).second)->getType()->deepCopy();
+            bool refcounted = false;
+            if (ty->isObject()) {
+               refcounted = SymbolTable::getClass(ty->getClassName())->isClass();
+            }
+
+            if (!refcounted) {
+               node->returnType = ty->getPointerTo();
+            }
+            else {
+               node->returnType = ty;
+            }
+         }
+
+         break;
+      }
+      case BuiltinFn::BITCAST: {
+         if (node->args.size() != 2 || node->args.at(1).second->get_type() != NodeType::TYPE_REF) {
+            RuntimeError::raise("Expected type as second argument to " + node->ident, node);
+         }
+
+         node->returnType = std::static_pointer_cast<TypeRef>(node->args.at(1).second)->getType()->deepCopy();
+         break;
+      }
+      default: {
+         if (node->args.size() != Builtin.second.size() - 1) {
+            goto err;
+         }
+         for (int i = 1; i < Builtin.second.size(); ++i) {
+            auto given = node->resolvedArgs[i - 1].type;
+            if (!given->implicitlyCastableTo(Builtin.second[i])) {
+               goto err;
+            }
+            else if (*given != Builtin.second[i]) {
+               wrapImplicitCast(node->args[i - 1].second, given, Builtin.second[i]);
+            }
+         }
+
+         break;
+
+         err:
+         RuntimeError::raise("No matching call for function " + node->ident + " found", node);
+      }
+   }
+}
+
+namespace {
+   bool enumImplicitlyIntegerConvertible(Type*& ty, Enum*& en) {
+      return ty != nullptr && ty->isIntegerTy() && !en->hasAssociatedValues();
+   }
+}
+
+void TypeCheckPass::HandleEnumCase(CallExpr *node)
+{
+   auto cl = SymbolTable::getClass(node->className);
+   string className = node->className;
+
+   // enum case
+   if (cl->isEnum()) {
+      auto en = static_cast<Enum*>(cl);
+      auto res = en->hasCase(node->ident, node->resolvedArgs, node->generics);
+      if (res.compatibility != CompatibilityType::COMPATIBLE) {
+         RuntimeError::raise("Enum " + node->className + " does not define case " + node->ident +
+            util::args_to_string(node->resolvedArgs), node);
+      }
+
+      auto& case_ = en->getCase(node->ident);
+      std::vector<Argument> neededArgs;
+      for (const auto& ty : case_.associatedValues) {
+         neededArgs.emplace_back(ty.first, ty.second->deepCopy());
+      }
+
+      PrepareCallArgs(node->args, node->resolvedArgs, neededArgs, res.argOrder);
+      ApplyCasts(node->args, node->resolvedArgs, neededArgs, res.neededCasts);
+
+      node->isEnumCase = true;
+      node->caseVal = case_.rawValue;
+
+      std::vector<Type*> enumCaseTypes;
+      for (const auto& arg : neededArgs) {
+         enumCaseTypes.push_back(arg.type);
+      }
+
+      auto obj = ObjectType::get(node->className);
+      obj->isEnum(true);
+      obj->setKnownEnumCase(&en->getCase(node->ident), node->args, enumCaseTypes);
+
+      std::vector<Type*> generics;
+      for (const auto& gen : node->generics) {
+         generics.push_back(gen->deepCopy());
+      }
+
+      obj->setUnqualGenerics(generics);
+      Type::resolveUnqualified(obj);
+      node->returnType = obj;
+
+      return;
+   }
+}
+
 void TypeCheckPass::HandleMethodCall(
    CallExpr *node)
 {
    Class* cl;
    string className;
+   string fullName;
    Type* latest;
 
    if (node->parentExpr == nullptr && node->isEnumCase) {
       auto& inf = node->contextualType;
 
       if (node->contextualType == nullptr || !SymbolTable::hasClass(inf->getClassName())) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Could not infer type of enum case " + node->ident, node);
+         RuntimeError::raise("Could not infer type of enum case " + node->ident, node);
       }
 
       node->className = inf->getClassName();
       node->isNsMember = true;
 
-      goto enum_case;
+      return HandleEnumCase(node);
    }
 
    if (node->isNsMember) {
-      if (!SymbolTable::hasClass(node->className)) {
+      fullName = node->className + "." + node->ident;
+
+      if (SymbolTable::hasClass(fullName)) {
+         node->type = CallType::CONSTR_CALL;
+         node->ident = fullName;
+
+         return HandleConstructorCall(node);
+      }
+
+      if (SymbolTable::numFunctionsWithName(fullName) > 0) {
          node->type = CallType::FUNC_CALL;
-         node->ident = node->className + "." + node->ident;
+         node->ident = fullName;
 
          return HandleFunctionCall(node);
       }
 
-      enum_case:
-      cl = SymbolTable::getClass(node->className);
-      className = node->className;
-
-      // enum case
-      if (cl->isEnum()) {
-         auto en = static_cast<Enum*>(cl);
-         auto res = en->hasCase(node->ident, node->argTypes, node->generics);
-         if (res.compatibility != CompatibilityType::COMPATIBLE) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Enum " + node->className + " does not define case " + node->ident +
-               util::args_to_string(node->argTypes), node);
-         }
-
-         auto& case_ = en->getCase(node->ident);
-         std::vector<Type*> neededTypes;
-         for (const auto& ty : case_.associatedValues) {
-            neededTypes.push_back(ty.second);
-         }
-
-         PrepareCallArgs(node->args, neededTypes, node->argTypes);
-         ApplyCasts(node->args, node->argTypes, res.neededCasts);
-
-         node->isEnumCase = true;
-         node->caseVal = case_.rawValue;
-
-         auto obj = ObjectType::get(node->className);
-         obj->isEnum(true);
-         obj->setKnownEnumCase(&en->getCase(node->ident), node->args, node->argTypes);
-
-         std::vector<Type*> generics;
-         for (const auto& gen : node->generics) {
-            generics.push_back(gen->deepCopy());
-         }
-
-         obj->setUnqualGenerics(generics);
-         Type::resolveUnqualified(obj);
-         node->returnType = obj;
+      HandleEnumCase(node);
+      if (node->returnType != nullptr) {
          return;
       }
+
+      cl = SymbolTable::getClass(node->className);
+      className = node->className;
    }
    else {
       assert(!typeStack.empty() && "Nothing to call method on!");
 
       latest = popTy();
+      if (node->isPointerAccess_) {
+         if (!latest->isPointerTy()) {
+            RuntimeError::raise("Value is not a pointer", node);
+         }
+
+         latest = latest->getPointeeType();
+      }
+
       if (!latest->isObject()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot call method on value of type " + latest->toString(), node);
+         RuntimeError::raise("Cannot call method on value of type " + latest->toString(), node);
       }
 
       className = latest->getClassName();
       if (!SymbolTable::hasClass(className)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Class " + latest->toString() + " does not exist", node);
+         RuntimeError::raise("Class " + latest->toString() + " does not exist", node);
       }
 
       cl = SymbolTable::getClass(className, importedNamespaces);
@@ -1840,45 +2004,30 @@ void TypeCheckPass::HandleMethodCall(
       }
    }
 
-   auto &argTypes = node->argTypes;
-   auto methodResult = cl->hasMethod(node->ident, argTypes, node->generics);
-   if (methodResult.compatibility != CompatibilityType::COMPATIBLE) {
-      Expression *cause = node;
-      if (node->args.size() > methodResult.incompArg) {
-         cause = node->args[methodResult.incompArg].second.get();
-      }
+   checkClassAccessibility(cl, node);
 
-      if (!methodResult.foundType.empty() && !methodResult.expectedType.empty()) {
-         RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
-            "No matching call for method " + node->ident + " found: Candidate function not viable: No known "
-               "conversion from " + methodResult.foundType + " to " + methodResult.expectedType + " ",
-            cause
-         );
-      } else {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Method " + node->ident + " does not exist on class " +
-            className, cause);
-      }
+   auto &givenArgs = node->resolvedArgs;
+   auto methodResult = node->isNsMember
+                       ? cl->hasMethod(node->ident, givenArgs, node->generics)
+                       : cl->hasMethod(node->ident, givenArgs, node->generics, latest->getConcreteGenericTypes());
+
+   if (methodResult.compatibility != CompatibilityType::COMPATIBLE) {
+      throwMethodNotFound(methodResult, node, cl);
    }
 
+   node->generics = methodResult.generics;
    auto& method = methodResult.method;
+   ++method->uses;
 
    // check if method is accessible from current context
-   if (method->accessModifier == AccessModifier::PROTECTED && !cl->protectedPropAccessibleFrom(latestScope->currentClass))
-   {
-      RuntimeError::raise(ERR_CONTEXT_ERROR, "Protected method " + method->methodName + " of class " +
-         className + " is not accessible", node);
-   }
-   else if (method->accessModifier == AccessModifier::PRIVATE && !cl->privatePropAccessibleFrom(latestScope->currentClass))
-   {
-      RuntimeError::raise(ERR_CONTEXT_ERROR, "Private method " + method->methodName + " of class " +
-         className + " is not accessible", node);
-   }
+   checkMemberAccessibility(cl, method->methodName, method->accessModifier, node);
 
    unordered_map<string, Type*> concreteGenerics;
    if (!node->generics.empty()) {
       for (auto& gen : node->generics) {
          resolve(&gen);
       }
+
       concreteGenerics = Type::resolveUnqualified(node->generics, method->generics);
    }
    else if (!method->isStatic) {
@@ -1886,10 +2035,15 @@ void TypeCheckPass::HandleMethodCall(
    }
 
    auto ty = method->returnType->deepCopy();
-   auto isGeneric = castGenericIfNecessary(node, concreteGenerics, ty, latestScope->currentClass != cl->getName());
-
-   node->returnType = ty;
-   node->lvalueCast = isGeneric;
+   auto isGeneric = castGenericIfNecessary(node, concreteGenerics, ty, currentClass() != cl->getName());
+   if (isGeneric) {
+      delete ty;
+      node->returnType = node->castTo->deepCopy();
+      node->returnType->isLvalue(method->returnType->isLvalue());
+   }
+   else {
+      node->returnType = ty;
+   }
 
    // returning an object with non-resolved generics
    if (method->returnType->isObject()) {
@@ -1899,6 +2053,13 @@ void TypeCheckPass::HandleMethodCall(
       }
    }
 
+   if (method->isProtocolDefaultImpl) {
+      assert(node->parentExpr != nullptr && "No parent expression to cast!");
+      node->parentExpr->needsCast = true;
+      node->parentExpr->castFrom = latest;
+      node->parentExpr->castTo = ObjectType::get(method->protocolName);
+   }
+
    // methods with 'ref' return type
    node->returnType->isLvalue(method->returnType->isLvalue());
    node->binding = method->mangledName;
@@ -1906,75 +2067,56 @@ void TypeCheckPass::HandleMethodCall(
    node->is_virtual = cl->isAbstract() || cl->isVirtual(method);
    node->isStatic = method->isStatic;
 
-   auto& declaredArgTypes = method->argumentTypes;
-   auto& defaultValues = method->argumentDefaults;
+   auto& declaredArgs = method->arguments;
 
-   PrepareCallArgs(node->args, declaredArgTypes, argTypes, defaultValues);
-   ApplyCasts(node->args, argTypes, methodResult.neededCasts);
+   PrepareCallArgs(node->args, givenArgs, declaredArgs, methodResult.argOrder, method->isProtocolDefaultImpl);
+   ApplyCasts(node->args, givenArgs, declaredArgs, methodResult.neededCasts);
+
+   node->declaredArgTypes = &method->arguments;
 
    // check if this method has a hidden byval struct parameter
    if (method->hasHiddenParam) {
       node->hasHiddenParamReturn = true;
       node->hiddenParamType = method->returnType;
    }
+
+   // if we call another constructor, we can assume that all fields
+   // will be initialized there, otherwise that constructor will fail.
+   // this will accept circular calls as valid, but those will cause
+   // other problems anyway
+   // FIXME calls in conditions
+   auto& uninitializedFields = latestScope->uninitializedFields;
+   if (method->methodName == "init" && currentClass() == cl->getName() &&
+      uninitializedFields != nullptr)
+   {
+      uninitializedFields->clear();
+   }
 }
 
 void TypeCheckPass::HandleConstructorCall(CallExpr *node)
 {
    Class* cl = SymbolTable::getClass(node->ident, importedNamespaces);
-   if (cl->isAbstract()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Class " + node->ident + " is abstract and cannot be initialized",
-         node);
-   }
+   checkClassAccessibility(cl, node);
 
-   auto& argTypes = node->argTypes;
-   auto constrResult = cl->hasMethod("init", argTypes, node->generics);
+   auto& givenArgs = node->resolvedArgs;
+   auto constrResult = cl->hasMethod("init", givenArgs, node->generics);
 
    if (constrResult.compatibility != CompatibilityType::COMPATIBLE) {
-      Expression* cause = node;
-      if (node->args.size() > constrResult.incompArg) {
-         cause = node->args[constrResult.incompArg].second.get();
-      }
-
-      if (node->generics.size() != cl->getGenerics().size()) {
-         auto missingGeneric = cl->getGenerics().at(node->generics.size());
-
-         RuntimeError::raise(ERR_TYPE_ERROR, "Could not infer generic type " +
-            missingGeneric->getGenericClassName() + " of class " + node->ident +  " from context", cause
-         );
-      }
-
-      if (!constrResult.foundType.empty() && !constrResult.expectedType.empty()) {
-         RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
-            "No matching call for constructor " + node->ident + " found: Candidate function not viable: No known "
-               "conversion from " + constrResult.foundType + " to " + constrResult.expectedType + " ",
-            cause
-         );
-      }
-      else {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Class " + node->ident + " does not define a constructor with "
-            "given signature", cause);
-      }
+      throwMethodNotFound(constrResult, node, cl);
    }
+
+   node->generics = constrResult.generics;
 
    auto& method = constrResult.method;
+   ++method->uses;
+   cl->addUse();
 
    // check accessibility
-   if (method->accessModifier == AccessModifier::PROTECTED &&
-      !cl->protectedPropAccessibleFrom(latestScope->currentClass))
-   {
-      RuntimeError::raise(ERR_CONTEXT_ERROR, "Protected method " + method->methodName + " of class " +
-         node->ident + " is not accessible", node);
-   }
-   else if (method->accessModifier == AccessModifier::PRIVATE &&
-      !cl->privatePropAccessibleFrom(latestScope->currentClass))
-   {
-      RuntimeError::raise(ERR_CONTEXT_ERROR, "Private method " + method->methodName + " of class " +
-         node->ident + " is not accessible", node);
-   }
+   checkMemberAccessibility(cl, method->methodName, method->accessModifier, node);
 
+   node->ident = cl->getName();
    if (cl->isAbstract()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot instantiate abstract class " + node->ident, node);
+      RuntimeError::raise("Cannot instantiate abstract class " + node->ident, node);
    }
 
    ObjectType* returnType = ObjectType::get(node->ident);
@@ -1998,11 +2140,45 @@ void TypeCheckPass::HandleConstructorCall(CallExpr *node)
    node->type = CallType::CONSTR_CALL;
    node->binding = method->mangledName;
 
-   auto& declaredArgTypes = method->argumentTypes;
-   auto& defaultValues = method->argumentDefaults;
+   auto& declaredArgs = method->arguments;
 
-   PrepareCallArgs(node->args, declaredArgTypes, argTypes, defaultValues);
-   ApplyCasts(node->args, argTypes, constrResult.neededCasts);
+   PrepareCallArgs(node->args, givenArgs, declaredArgs, constrResult.argOrder);
+   ApplyCasts(node->args, givenArgs, declaredArgs, constrResult.neededCasts);
+
+   node->declaredArgTypes = &method->arguments;
+}
+
+void TypeCheckPass::throwMethodNotFound(
+   MethodResult &res,
+   CallExpr *node,
+   Class *cl)
+{
+   Expression* cause = node;
+   if (node->args.size() > res.incompArg) {
+      cause = node->args[res.incompArg].second.get();
+   }
+
+   if (node->generics.size() < cl->getGenerics().size()) {
+      auto missingGeneric = cl->getGenerics().at(node->generics.size());
+
+      RuntimeError::raise("Could not infer generic type " +
+         missingGeneric->getGenericClassName() + " of class " + node->ident + " from context", node);
+   }
+   else if (node->generics.size() > cl->getGenerics().size()) {
+      RuntimeError::raise("Mismatched generic type count: Expected " +
+            std::to_string(cl->getGenerics().size()) + " but found " + std::to_string(node->generics.size()),
+         node);
+   }
+
+   if (!res.foundType.empty() && !res.expectedType.empty()) {
+      RuntimeError::raise(
+         "No matching call for constructor " + node->ident + " found: Candidate function not viable: No known "
+            "conversion from " + res.foundType + " to " + res.expectedType + " ", cause);
+   }
+   else {
+      RuntimeError::raise("Class " + node->ident + " does not define a constructor with "
+         "given signature", cause);
+   }
 }
 
 void TypeCheckPass::HandleCallOperator(CallExpr *node)
@@ -2016,12 +2192,12 @@ void TypeCheckPass::HandleCallOperator(CallExpr *node)
    auto& className = latest->getClassName();
    auto cl = SymbolTable::getClass(className, importedNamespaces);
 
-   auto& argTypes = node->argTypes;
-   auto callOpResult = cl->hasMethod("postfix ()", argTypes);
+   auto& givenArgs = node->resolvedArgs;
+   auto callOpResult = cl->hasMethod("postfix ()", givenArgs);
 
    if (callOpResult.compatibility != CompatibilityType::COMPATIBLE) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Call operator with signature " + util::args_to_string(argTypes) + " does"
-         " not exist on class " + className, node);
+      RuntimeError::raise("Call operator with signature " + util::args_to_string(givenArgs) + " does"
+               " not exist on class " + className, node);
    }
 
    auto& method = callOpResult.method;
@@ -2030,43 +2206,38 @@ void TypeCheckPass::HandleCallOperator(CallExpr *node)
    node->ident = "postfix ()";
    node->binding = method->mangledName;
 
-   auto& declaredArgTypes = method->argumentTypes;
-   auto& defaultValues = method->argumentDefaults;
+   auto& declaredArgs = method->arguments;
 
-   PrepareCallArgs(node->args, declaredArgTypes, argTypes, defaultValues);
-   ApplyCasts(node->args, argTypes, callOpResult.neededCasts);
+   PrepareCallArgs(node->args, givenArgs, declaredArgs, callOpResult.argOrder);
+   ApplyCasts(node->args, givenArgs, declaredArgs, callOpResult.neededCasts);
 
    node->returnType = method->returnType;
+   node->declaredArgTypes = &method->arguments;
 }
 
 void TypeCheckPass::HandleAnonCall(CallExpr *node)
 {
    auto latest = popTy();
-   auto& argTypes = node->argTypes;
+   auto& givenArgs = node->resolvedArgs;
 
    if (isa<PointerType>(latest)) {
       latest = cast<PointerType>(latest)->getPointeeType();
    }
 
    if (!isa<FunctionType>(latest)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Given object of type " + latest->toString() + " is not callable", node);
-   }
-
-   std::vector<string> argLabels;
-   for (const auto& arg : node->args) {
-      argLabels.push_back(arg.first);
+      RuntimeError::raise("Given object of type " + latest->toString() + " is not callable", node);
    }
 
    auto func = cast<FunctionType>(latest);
 
-   if (func->getFunction() != nullptr) {
-      auto ordered = util::orderArgs(argLabels, argTypes, func->getFunction()->getArgNames(), node->args,
-         func->getFunction()->getArgDefaults());
-
-      node->args = ordered;
+   std::vector<Type*> givenGenerics;
+   std::vector<ObjectType*> neededGenerics;
+   std::vector<Argument> neededArgs;
+   for (const auto& arg : func->getArgTypes()) {
+      neededArgs.emplace_back("", arg);
    }
 
-   auto result = util::func_call_compatible(argTypes, func->getArgTypes());
+   auto result = util::findMatchingCall(givenArgs, neededArgs, givenGenerics, neededGenerics);
    if (!result.is_compatible) {
       Expression* cause = node;
       if (node->args.size() > result.incomp_arg) {
@@ -2074,25 +2245,21 @@ void TypeCheckPass::HandleAnonCall(CallExpr *node)
       }
 
       if (!result.foundType.empty() && !result.expectedType.empty()) {
-         RuntimeError::raise(ERR_UNDECLARED_VARIABLE,
-            "No matching call for function " + node->ident + " found: No known "
-               "conversion from " + result.foundType + " to " + result.expectedType + " ",
-            cause
-         );
+         RuntimeError::raise("No matching call for function " + node->ident + " found: No known "
+            "conversion from " + result.foundType + " to " + result.expectedType + " ", cause);
       }
       else {
-         RuntimeError::raise(ERR_TYPE_ERROR, "No matching call for function " + node->ident + " found", cause);
+         RuntimeError::raise("No matching call for function " + node->ident + " found", cause);
       }
    }
 
    node->type = CallType::ANON_CALL;
-   auto asFun = cast<FunctionType>(latest);
 
-   auto& declaredArgTypes = asFun->getArgTypes();
-   PrepareCallArgs(node->args, declaredArgTypes, argTypes);
+   PrepareCallArgs(node->args, givenArgs, neededArgs, result.argOrder);
+   ApplyCasts(node->args, givenArgs, neededArgs, result.needed_casts);
 
-   node->returnType = asFun->getReturnType()->deepCopy();
-   node->functionType = asFun;
+   node->returnType = func->getReturnType()->deepCopy();
+   node->functionType = func;
 }
 
 /**
@@ -2104,18 +2271,19 @@ Type* TypeCheckPass::visit(
    CallExpr *node)
 {
    //MAINCALL
-   auto& givenArgs = node->argTypes;
+   auto& givenArgs = node->resolvedArgs;
    givenArgs.reserve(node->args.size());
 
    for (size_t i = givenArgs.size(); i < node->args.size(); ++i) {
       const auto& arg = node->args.at(i);
       arg.second->isFunctionArgument();
-      if (arg.second->get_type() == NodeType::LAMBDA_EXPR) {
-         givenArgs.push_back(nullptr);
+
+      if (arg.second->needsContextualInformation()) {
+         givenArgs.emplace_back(arg.first, nullptr, arg.second);
       }
       else {
          auto ty = arg.second->accept(*this);
-         givenArgs.push_back(ty);
+         givenArgs.emplace_back(arg.first, ty, arg.second);
       }
    }
 
@@ -2123,7 +2291,7 @@ Type* TypeCheckPass::visit(
       if (node->ident.empty()) {
          HandleCallOperator(node);
       }
-      else if (SymbolTable::hasClass(node->ident)) {
+      else if (SymbolTable::hasClass(node->ident, importedNamespaces)) {
          HandleConstructorCall(node);
       }
       else {
@@ -2152,7 +2320,7 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
       auto& inf = node->contextualType;
 
       if (node->contextualType == nullptr || !SymbolTable::hasClass(inf->getClassName())) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Could not infer type of enum case " + node->ident, node);
+         RuntimeError::raise("Could not infer type of enum case " + node->ident, node);
       }
 
       node->className = inf->getClassName();
@@ -2161,28 +2329,38 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
 
    if (node->isNsMember) {
       if (hasVariable(node->ident)) {
-         auto var = getVariable(node->ident);
+         auto var = getVariable(node->ident, node);
          node->binding = var.first.second;
 
-         return ReturnMemberExpr(node, var.first.first);
+         auto res = var.first.first->deepCopy();
+         res->isLvalue(true);
+
+         return ReturnMemberExpr(node, res);
       }
+
+      cl = SymbolTable::getClass(node->className);
+      checkClassAccessibility(cl, node);
+
       if (!hasVariable(node->ident) && SymbolTable::hasClass(node->className)) {
          enum_case:
-         cl = SymbolTable::getClass(node->className);
+
+         node->ident = node->ident.substr(node->ident.find_last_of('.') + 1);
 
          if (cl->isEnum()) {
             auto en = static_cast<Enum*>(cl);
 
-            auto genericParamsGiven = node->contextualType == nullptr ? 0
-                 : node->contextualType->getConcreteGenericTypes().size();
+            size_t genericParamsGiven = 0;
+            if (node->contextualType != nullptr && node->contextualType->isObject()) {
+               genericParamsGiven = node->contextualType->getConcreteGenericTypes().size();
+            }
 
             if (en->isGeneric() && genericParamsGiven < en->getGenerics().size()) {
-               RuntimeError::raise(ERR_TYPE_ERROR, "Could not infer generic type " +
-                  en->getGenerics()[genericParamsGiven]->getGenericClassName(), node);
+               RuntimeError::raise("Could not infer generic type " +
+                                 en->getGenerics()[genericParamsGiven]->getGenericClassName(), node);
             }
             if (!en->hasCase(node->ident)) {
-               RuntimeError::raise(ERR_TYPE_ERROR, "Enum " + node->className + " does not have a case '" +
-                  node->ident + "'", node);
+               RuntimeError::raise("Enum " + node->className + " does not have a case '" +
+                                 node->ident + "'", node);
             }
 
             auto obj = ObjectType::get(node->className);
@@ -2209,18 +2387,26 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
    }
 
    latest = popTy();
+   if (node->isPointerAccess) {
+      if (!latest->isPointerTy()) {
+         RuntimeError::raise("Value is not a pointer", node);
+      }
+
+      latest = latest->getPointeeType();
+   }
+
    className = latest->getClassName();
 
    if (node->isTupleAccess) {
       if (!latest->isTupleTy()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access indexed property on non-tuple value of type "
-            + latest->toString(), node);
+         RuntimeError::raise("Cannot access indexed property on non-tuple value of type "
+                     + latest->toString(), node);
       }
 
       auto asTuple = cast<TupleType>(latest);
       if (asTuple->getArity() <= node->tupleIndex) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access index " + std::to_string(node->tupleIndex) + " on tuple "
-            "with arity " + std::to_string(asTuple->getArity()), node);
+         RuntimeError::raise("Cannot access index " + std::to_string(node->tupleIndex) + " on tuple "
+                     "with arity " + std::to_string(asTuple->getArity()), node);
       }
 
       node->fieldType = asTuple->getContainedType(node->tupleIndex)->deepCopy();
@@ -2231,12 +2417,14 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
    }
 
    if (className.empty()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot access property " + node->ident + " on value of type "
-         + latest->toString(), node);
+      RuntimeError::raise("Cannot access property " + node->ident + " on value of type "
+               + latest->toString(), node);
    }
 
    cl = SymbolTable::getClass(className, importedNamespaces);
    node->className = className;
+
+   checkClassAccessibility(cl, node);
 
    if (cl->isEnum()) {
       if (node->ident == "rawValue") {
@@ -2254,7 +2442,7 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
       // if this field needed initializing and we're in a constructor, erase it from the needed fields
       bool isUninitializedField = false;
       auto& uninitializedFields = latestScope->uninitializedFields;
-      if (latestScope->currentClass == className && node->isLhsOfAssigment_ && uninitializedFields != nullptr) {
+      if (currentClass() == className && node->isLhsOfAssigment_ && uninitializedFields != nullptr) {
          auto index = std::find(uninitializedFields->begin(), uninitializedFields->end(), node->ident);
          if (index != uninitializedFields->end()) {
             uninitializedFields->erase(index);
@@ -2264,15 +2452,11 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
 
       // Check if we're trying to assign a const field
       if (field->isConst && node->isLhsOfAssigment_ && !isUninitializedField) {
-         RuntimeError::raise(
-            ERR_TYPE_ERROR,
-            "Field " + field->fieldName + " of " + cl->getTypeName() + " is constant",
-            node
-         );
+         RuntimeError::raise("Field " + field->fieldName + " of " + cl->getTypeName() + " is constant", node);
       }
 
       // Use a getter if available
-      if (field->hasGetter && !node->isLhsOfAssigment_ && latestScope->currentClass != className) {
+      if (field->hasGetter && !node->isLhsOfAssigment_ && currentClass() != className) {
          auto call = std::make_shared<CallExpr>(
             CallType::METHOD_CALL,
             std::vector<Expression::SharedPtr>{},
@@ -2290,7 +2474,7 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
       }
 
       // Use a setter if available (and we're on the left side of an assignment)
-      if (field->hasSetter && node->isLhsOfAssigment_ && latestScope->currentClass != className) {
+      if (field->hasSetter && node->isLhsOfAssigment_ && currentClass() != className) {
          Expression* current = node;
          node->isSetterCall = true;
 
@@ -2308,7 +2492,7 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
       auto& concreteGenerics = latest->getConcreteGenericTypes();
 
       Type* ty = field->fieldType->deepCopy();
-      auto isGeneric = castGenericIfNecessary(node, concreteGenerics, ty, latestScope->currentClass != cl->getName());
+      auto isGeneric = castGenericIfNecessary(node, concreteGenerics, ty, currentClass() != cl->getName());
 
       node->fieldType = ty;
       node->lvalueCast = isGeneric;
@@ -2323,14 +2507,7 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
 
       node->binding = field->mangledName;
 
-      if (field->accessModifier == AccessModifier::PROTECTED && !cl->protectedPropAccessibleFrom(latestScope->currentClass)) {
-         RuntimeError::raise(ERR_CONTEXT_ERROR, "Protected field " + field->fieldName + " of class " +
-            className + " is not accessible", node);
-      }
-      else if (field->accessModifier == AccessModifier::PRIVATE && !cl->privatePropAccessibleFrom(latestScope->currentClass)) {
-         RuntimeError::raise(ERR_CONTEXT_ERROR, "Private field " + field->fieldName + " of class " +
-            className + " is not accessible", node);
-      }
+      checkMemberAccessibility(cl, field->fieldName, field->accessModifier, node);
 
       node->fieldType->isLvalue(true);
       node->fieldType->isConst(field->isConst && !isUninitializedField);
@@ -2354,8 +2531,8 @@ Type* TypeCheckPass::visit(MemberRefExpr *node)
       }
    }
 
-   RuntimeError::raise(ERR_TYPE_ERROR, "Field " + node->ident + " does not exist on class " +
-      latest->toString(), node);
+   RuntimeError::raise("Field " + node->ident + " does not exist on class " +
+         latest->toString(), node);
    llvm_unreachable("");
 }
 
@@ -2365,19 +2542,15 @@ Type* TypeCheckPass::HandleCastOp(
    BinaryOperator *node)
 {
    if (node->rhs->get_type() != NodeType::TYPE_REF) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Expected type name after 'as'", node->rhs.get());
-   }
-   if (snd->isUnsafePointer() && !latestScope->unsafe) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Raw Pointer types and C-Style arrays are only allowed inside unsafe "
-         "blocks", node);
+      RuntimeError::raise("Expected type name after 'as'", node->rhs.get());
    }
 
    toRvalueIfNecessary(fst, node->lhs);
    node->operandType = fst->deepCopy();
 
    if (node->op != "as!" && !fst->explicitlyCastableTo(snd)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot cast from " + fst->toString() + " to " +
-         snd->toString(), node);
+      RuntimeError::raise("Cannot cast from " + fst->toString() + " to " +
+               snd->toString(), node);
    }
 
    // check if cast returns an optional
@@ -2400,14 +2573,17 @@ Type* TypeCheckPass::HandleAssignmentOp(
 {
    if (fst->isCStyleArray()) {
       //TODO check if sizes are comatible
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot reassign c-style array", node->lhs.get());
+      RuntimeError::raise("Cannot reassign c-style array", node->lhs.get());
    }
    else if (!snd->implicitlyCastableTo(fst)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign value of type " + snd->toString() + " to variable of "
-         "type " + fst->toString(), node->lhs.get());
+      RuntimeError::raise("Cannot assign value of type " + snd->toString() + " to variable of "
+               "type " + fst->toString(), node->lhs.get());
    }
-   else if (*fst != snd || (snd->isCStyleArray() && fst->isPointerTy())) {
-      Warning::issue("Implicit cast from " + snd->toString() + " to " + fst->toString(), node);
+   else if (*fst != snd) {
+      if (warnCast(fst, snd)) {
+         Warning::issue("Implicit cast from " + snd->toString() + " to " + fst->toString(), node);
+      }
+
       wrapImplicitCast(node->rhs, snd, fst);
    }
 
@@ -2415,16 +2591,26 @@ Type* TypeCheckPass::HandleAssignmentOp(
    auto op = util::isAssignmentOperator(prevOp);
 
    if (op != "=") {
-      node->op = op;
-      HandleBinaryOperator(fst, snd, cdot::getBinaryOpType(op), node);
-      node->op = prevOp;
+      auto binOp = new BinaryOperator(op);
+      CopyNodeProperties(node, binOp);
+
+      binOp->setLhs(node->lhs);
+      binOp->setRhs(node->rhs);
+
+      binOp->lhsType = fst;
+      binOp->rhsType = snd;
+      binOp->lhsIsBoxed = node->lhsIsBoxed;
+      binOp->rhsIsBoxed = node->rhsIsBoxed;
+
+      node->preAssignmentOp = binOp;
+      binOp->accept(*this);
    }
 
    if (isa<VoidType>(snd)) {
       node->isNullAssignment = true;
    }
 
-   if (fst->isProtocol() && !SymbolTable::getClass(fst->getClassName())->isEmptyProtocol()) {
+   if (fst->isProtocol() /*&& !SymbolTable::getClass(fst->getClassName())->isEmptyProtocol()*/) {
       if (snd->isStruct() || (snd->isGeneric() && snd->getGenericClassName() == "Self")) {
          node->isProtocolAssignment = true;
       }
@@ -2446,7 +2632,7 @@ Type* TypeCheckPass::HandleArithmeticOp(
 
    if ((op == "+" || op == "-") && fst->isPointerTy() && snd->isPointerTy()) {
       if (!latestScope->unsafe) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Pointer arithmetic is only allowed in unsafe blocks", node);
+         RuntimeError::raise("Pointer arithmetic is only allowed in unsafe blocks", node);
       }
 
       Type* ptr;
@@ -2507,14 +2693,14 @@ Type* TypeCheckPass::HandleArithmeticOp(
 
    if (op == "**") {
       if (!snd->implicitlyCastableTo(IntegerType::ConstInt64)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Right hand side of '**' must be of type integer",
-            node->rhs.get());
+         RuntimeError::raise("Right hand side of '**' must be of type integer", node->rhs.get());
       }
 
-      Type* retType = FPType::getDoubleTy();
+      Type* retType = fst->isIntegerTy() ? fst : FPType::getDoubleTy();
+      Type* doubleTy = FPType::ConstDoubleTy;
 
-      if (*fst != retType) {
-         wrapImplicitCast(node->lhs, fst, retType);
+      if (*fst != doubleTy) {
+         wrapImplicitCast(node->lhs, fst, FPType::ConstDoubleTy);
       }
       if (!snd->isInt64Ty()) {
          wrapImplicitCast(node->rhs, snd, IntegerType::ConstInt64);
@@ -2527,8 +2713,8 @@ Type* TypeCheckPass::HandleArithmeticOp(
    }
 
    err:
-   RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + op + "' values of type " + fst
-      ->toString() + " and " + snd->toString(), node);
+   RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " + fst
+         ->toString() + " and " + snd->toString(), node);
    llvm_unreachable("");
 }
 
@@ -2538,26 +2724,18 @@ Type* TypeCheckPass::HandleBitwiseOp(
    BinaryOperator *node)
 {
    auto& op = node->op;
-   if (fst->isUnsigned()) {
-      cast<IntegerType>(fst)->isUnsigned(false);
+
+   if (!fst->isIntegerTy() || !snd->isIntegerTy()) {
+      RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " + fst
+               ->toString() + " and " + snd->toString(), node);
    }
 
-   if (!fst->implicitlyCastableTo(IntegerType::ConstInt64) ||
-      !snd->implicitlyCastableTo(IntegerType::ConstInt64))
-   {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + op + "' values of type " + fst
-         ->toString() + " and " + snd->toString(), node);
+   if (*snd != fst) {
+      wrapImplicitCast(node->rhs, snd, fst);
    }
 
-   if (!fst->isInt64Ty()) {
-      wrapImplicitCast(node->lhs, fst, IntegerType::ConstInt64);
-   }
-   if (!snd->isInt64Ty()) {
-      wrapImplicitCast(node->rhs, snd, IntegerType::ConstInt64);
-   }
-
-   node->operandType = IntegerType::ConstInt64;
-   return IntegerType::get(64);
+   node->operandType = fst;
+   return fst;
 }
 
 Type* TypeCheckPass::HandleLogicalOp(
@@ -2566,8 +2744,8 @@ Type* TypeCheckPass::HandleLogicalOp(
    BinaryOperator *node)
 {
    if (!fst->implicitlyCastableTo(IntegerType::ConstInt1) && !snd->implicitlyCastableTo(IntegerType::ConstInt1)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + node->op + "' to values of type " + fst
-         ->toString() + " and " + snd->toString(), node);
+      RuntimeError::raise("Cannot apply binary operator '" + node->op + "' to values of type " + fst
+               ->toString() + " and " + snd->toString(), node);
    }
 
    if (!fst->isInt1Ty()) {
@@ -2633,15 +2811,14 @@ Type* TypeCheckPass::HandleEqualityOp(
    // pointer comparison operators
    if (node->op.length() == 3) {
       if (!isa<PointerType>(fst) && !isa<PointerType>(snd) && !isa<ObjectType>(fst) && !isa<ObjectType>(snd)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Expected at least one operand of " + node->op + " to be a pointer",
-            node);
+         RuntimeError::raise("Expected at least one operand of " + node->op + " to be a pointer", node);
       }
 
       if (!fst->explicitlyCastableTo(IntegerType::ConstInt64) ||
          !fst->explicitlyCastableTo(IntegerType::ConstInt64)
       ) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Binary operator " + node->op + " is not applicable to types " +
-            fst->toString() + " and " + snd->toString(), node);
+         RuntimeError::raise("Binary operator " + node->op + " is not applicable to types " +
+                     fst->toString() + " and " + snd->toString(), node);
       }
 
       if (!fst->isInt64Ty()) {
@@ -2656,14 +2833,14 @@ Type* TypeCheckPass::HandleEqualityOp(
       return IntegerType::get(1);
    }
 
-   if ((!isa<PrimitiveType>(fst) && !fst->isEnum()) && !fst->isTupleTy()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot compare values of type " + fst
-         ->toString() + " and " + snd->toString() + " for equality", node);
+   if ((!isa<PrimitiveType>(fst) && !fst->isEnum()) && !fst->isTupleTy() && !fst->isPointerTy()) {
+      RuntimeError::raise("Cannot compare values of type " + fst
+               ->toString() + " and " + snd->toString() + " for equality", node);
    }
 
    if (!snd->implicitlyCastableTo(fst)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot compare values of type " + fst
-         ->toString() + " and " + snd->toString() + " for equality", node);
+      RuntimeError::raise("Cannot compare values of type " + fst
+               ->toString() + " and " + snd->toString() + " for equality", node);
    }
 
    if (fst->isEnum()) {
@@ -2688,8 +2865,8 @@ Type* TypeCheckPass::HandleComparisonOp(
    BinaryOperator *node)
 {
    if (!isa<PrimitiveType>(fst) || !isa<PrimitiveType>(snd)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + node->op + "' to values of type " + fst
-         ->toString() + " and " + snd->toString(), node);
+      RuntimeError::raise("Cannot apply binary operator '" + node->op + "' to values of type " + fst
+               ->toString() + " and " + snd->toString(), node);
    }
 
    if (*snd != fst) {
@@ -2714,12 +2891,12 @@ Type* TypeCheckPass::HandleOtherOp(
    if (op == "..") {
       Type *intTy = IntegerType::get(64);
       if (!fst->implicitlyCastableTo(intTy)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + op + "' values of type " + fst
-            ->toString() + " and " + snd->toString(), node);
+         RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " + fst
+                     ->toString() + " and " + snd->toString(), node);
       }
       if (!snd->implicitlyCastableTo(intTy)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply binary operator '" + op + "' values of type " + fst
-            ->toString() + " and " + snd->toString(), node);
+         RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " + fst
+                     ->toString() + " and " + snd->toString(), node);
       }
 
       if (*fst != intTy) {
@@ -2736,8 +2913,8 @@ Type* TypeCheckPass::HandleOtherOp(
       return collTy;
    }
 
-   RuntimeError::raise(ERR_TYPE_ERROR, "Binary operator " + node->op + " is not defined for arguments of type " +
-      fst->toString() + " and " + snd->toString(), node);
+   RuntimeError::raise("Binary operator " + node->op + " is not defined for arguments of type " +
+         fst->toString() + " and " + snd->toString(), node);
 
    return nullptr;
 }
@@ -2748,6 +2925,25 @@ Type* TypeCheckPass::HandleBinaryOperator(
    BinaryOperatorType opTy,
    BinaryOperator *node)
 {
+   if (opTy != BinaryOperatorType::CAST) {
+      if (lhs->isEnum()) {
+         auto en = static_cast<cl::Enum *>(SymbolTable::getClass(lhs->getClassName()));
+         if (!en->hasAssociatedValues()) {
+            auto rawTy = en->getRawType()->deepCopy();
+            wrapImplicitCast(node->lhs, lhs, rawTy);
+            lhs = rawTy;
+         }
+      }
+      if (rhs->isEnum()) {
+         auto en = static_cast<cl::Enum *>(SymbolTable::getClass(rhs->getClassName()));
+         if (!en->hasAssociatedValues()) {
+            auto rawTy = en->getRawType()->deepCopy();
+            wrapImplicitCast(node->rhs, rhs, rawTy);
+            rhs = rawTy;
+         }
+      }
+   }
+
    switch (opTy) {
       case BinaryOperatorType::ASSIGNMENT:
          return HandleAssignmentOp(lhs, rhs, node);
@@ -2768,21 +2964,21 @@ Type* TypeCheckPass::HandleBinaryOperator(
    }
 }
 
-Type* TypeCheckPass::tryOperatorMethod(
+Type* TypeCheckPass::tryBinaryOperatorMethod(
    Type *fst,
    Type *snd,
    BinaryOperator *node,
-   string& opName,
+   string &opName,
    bool isAssignment)
 {
-   std::vector<Type*> argTypes{ snd };
+   std::vector<Argument> args{ Argument { "", snd } };
    if (node->opType == BinaryOperatorType::CAST) {
-      argTypes.pop_back();
+      args.pop_back();
    }
 
    cdot::cl::Class* cl = SymbolTable::getClass(fst->getClassName(), importedNamespaces);
-   auto binOpResult = cl->hasMethod(opName, argTypes, fst->getConcreteGenericTypes());
 
+   auto binOpResult = cl->hasMethod(opName, args, {}, fst->getConcreteGenericTypes());
    if (binOpResult.compatibility == CompatibilityType::COMPATIBLE) {
       // custom operators need rvalue argument
       if (isAssignment) {
@@ -2797,7 +2993,7 @@ Type* TypeCheckPass::tryOperatorMethod(
          call->args.pop_back();
       }
       else {
-         call->argTypes.push_back(snd);
+         call->resolvedArgs.push_back(std::move(args.back()));
       }
 
       // we already resolved the argument, don't want to visit it again
@@ -2814,19 +3010,16 @@ Type* TypeCheckPass::tryOperatorMethod(
    return nullptr;
 }
 
-Type* TypeCheckPass::tryFreeStandingOp(
+Type* TypeCheckPass::tryFreeStandingBinaryOp(
    Type *fst,
    Type *snd,
    BinaryOperator *node,
-   string& opName,
+   string &opName,
    bool isAssignment)
 {
-   std::vector<Type*> argTypes{ fst, snd };
-   std::vector<Type*> generics;
-   std::vector<string> argLabels{ "", "" };
-   std::vector<pair<string, std::shared_ptr<Expression>>> args{{ "", node->lhs }, { "", node->rhs }};
-   auto freeOp = getFunction(opName, argTypes, generics, argLabels, args);
+   std::vector<Argument> args{ Argument{ "", fst }, Argument{ "", snd } };
 
+   auto freeOp = getFunction(opName, args);
    if (freeOp.compatibility == CompatibilityType::COMPATIBLE) {
       // custom operators need rvalue argument
       if (isAssignment) {
@@ -2838,8 +3031,7 @@ Type* TypeCheckPass::tryFreeStandingOp(
          node->rhs }, freeOp.func->getName());
 
       // we already resolved the argument, don't want to visit it again
-      call->argTypes.push_back(fst);
-      call->argTypes.push_back(snd);
+      call->resolvedArgs = args;
       call->memberExpr = node->memberExpr;
       call->parentExpr = node;
       CopyNodeProperties(node, call.get());
@@ -2877,7 +3069,13 @@ Type* TypeCheckPass::visit(BinaryOperator *node)
       node->rhs = _lhs;
    }
 
-   Type* fst = node->lhs->accept(*this);
+   if (node->contextualType != nullptr) {
+      node->lhs->setContextualType(node->contextualType);
+   }
+
+   bool isPreAssignmentOp = node->lhsType != nullptr;
+   Type* fst = isPreAssignmentOp ? node->lhsType
+                                 : node->lhs->accept(*this);
 
    if (node->lhs->isSetterCall) {
       auto call = std::make_shared<CallExpr>(
@@ -2899,34 +3097,37 @@ Type* TypeCheckPass::visit(BinaryOperator *node)
 
    if (isAssignment) {
       if (fst->isConst() && !fst->isCarrayElement()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Trying to reassign constant", node->lhs.get());
+         RuntimeError::raise("Trying to reassign constant", node->lhs.get());
       }
       else if (!fst->isLvalue()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot assign to rvalue of type " + fst->toString(),
-            node->lhs.get());
+         if (fst->isSelf()) {
+            RuntimeError::raise("Cannot assign to 'self' in non-mutating function", node->lhs.get());
+         }
+
+         RuntimeError::raise("Cannot assign to rvalue of type " + fst->toString(), node->lhs.get());
       }
 
       // now that we know it's an lvalue, use the pointee type for compatibilty checks
       fst->isLvalue(false);
       node->isStructAssignment = fst->isStruct();
+      node->isSelfAssignment = fst->isSelf();
    }
    else {
       toRvalueIfNecessary(fst, node->lhs);
    }
 
-   if (!isa<PrimitiveType>(fst)) {
-      node->rhs->setContextualType(fst);
-   }
+   node->rhs->setContextualType(fst);
+   Type* snd = isPreAssignmentOp ? node->rhsType
+                                 : node->rhs->accept(*this);
 
-   Type* snd = node->rhs->accept(*this);
    if (opType == BinaryOperatorType::CAST && node->rhs->get_type() == NodeType::TYPE_REF) {
       node->boxedResultType = std::static_pointer_cast<TypeRef>(node->rhs)
          ->getType()->getClassName();
    }
 
-   if (opType == BinaryOperatorType::ARITHMETIC || opType == BinaryOperatorType::EQUALITY || opType ==
-      BinaryOperatorType::COMPARISON || opType == BinaryOperatorType::CAST ||
-      opType == BinaryOperatorType::BITWISE || opType == BinaryOperatorType::LOGICAL)
+   if (!isPreAssignmentOp && (opType == BinaryOperatorType::ARITHMETIC || opType == BinaryOperatorType::EQUALITY ||
+      opType == BinaryOperatorType::COMPARISON || opType == BinaryOperatorType::CAST ||
+      opType == BinaryOperatorType::BITWISE || opType == BinaryOperatorType::LOGICAL))
    {
       node->lhsIsBoxed = fst->isBoxedPrimitive();
       node->rhsIsBoxed = snd->isBoxedPrimitive();
@@ -2948,13 +3149,13 @@ Type* TypeCheckPass::visit(BinaryOperator *node)
    string opName = opType == BinaryOperatorType::CAST ? "infix as " + snd->toString()
                                                       : "infix " + node->op;
    if (fst->isObject() && SymbolTable::hasClass(fst->getClassName())) {
-      auto methodRes = tryOperatorMethod(fst, snd, node, opName, isAssignment);
+      auto methodRes = tryBinaryOperatorMethod(fst, snd, node, opName, isAssignment);
       if (methodRes != nullptr) {
          return methodRes;
       }
    }
 
-   auto freeOpRes = tryFreeStandingOp(fst, snd, node, opName, isAssignment);
+   auto freeOpRes = tryFreeStandingBinaryOp(fst, snd, node, opName, isAssignment);
    if (freeOpRes != nullptr) {
       return freeOpRes;
    }
@@ -2962,7 +3163,7 @@ Type* TypeCheckPass::visit(BinaryOperator *node)
    toRvalueIfNecessary(snd, node->rhs);
 
    auto res = HandleBinaryOperator(fst, snd, opType, node);
-   if (node->boxedPrimitiveOp) {
+   if (!isPreAssignmentOp && node->boxedPrimitiveOp) {
       string className;
       if (opType == BinaryOperatorType::ARITHMETIC || opType == BinaryOperatorType::BITWISE) {
          if (res->isFloatTy()) {
@@ -3016,24 +3217,57 @@ Type* TypeCheckPass::visit(TertiaryOperator *node)
       wrapImplicitCast(node->condition, cond, IntegerType::ConstInt1);
    }
    else if (!cond->implicitlyCastableTo(IntegerType::ConstInt1)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Condition of tertiary operator '?:' must be boolean or implicitly castable"
-         " to bool", node);
+      RuntimeError::raise("Condition of tertiary operator '?:' must be boolean or implicitly castable"
+               " to bool", node);
    }
+
+   toRvalueIfNecessary(cond, node->condition);
 
    Type* fst = node->lhs->accept(*this);
    Type* snd = node->rhs->accept(*this);
 
    if (!fst->implicitlyCastableTo(snd)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply tertiary operator '?:' to values of type " + fst->toString() +
-         " and " + snd->toString(), node);
+      RuntimeError::raise("Cannot apply tertiary operator '?:' to values of type " + fst->toString() +
+               " and " + snd->toString(), node);
    }
    else if (*fst != snd) {
-      Warning::issue("Implicit cast from " + snd->toString() + " to " + fst->toString(), node->rhs.get());
+      if (warnCast(fst, snd)) {
+         Warning::issue("Implicit cast from " + snd->toString() + " to " + fst->toString(), node->rhs.get());
+      }
       wrapImplicitCast(node->rhs, snd, fst);
    }
 
    node->resultType = fst;
    return fst;
+}
+
+Type* TypeCheckPass::tryFreeStandingUnaryOp(
+   Type *lhs,
+   UnaryOperator *node,
+   string &opName)
+{
+   std::vector<Argument> args{ Argument{"", lhs} };
+   string methodName = (node->prefix ? "prefix " : "postfix ") + opName;
+
+   auto freeOp = getFunction(methodName, args);
+   if (freeOp.compatibility == CompatibilityType::COMPATIBLE) {
+      pushTy(lhs);
+      auto call = std::make_shared<CallExpr>(CallType::FUNC_CALL, std::vector<Expression::SharedPtr>{ node->target },
+         freeOp.func->getName());
+
+      // we already resolved the argument, don't want to visit it again
+      call->resolvedArgs = args;
+      call->memberExpr = node->memberExpr;
+      call->parentExpr = node;
+      CopyNodeProperties(node, call.get());
+
+      node->overridenCall = call;
+      node->operandType = lhs;
+
+      return call->accept(*this);;
+   }
+
+   return nullptr;
 }
 
 /**
@@ -3046,12 +3280,16 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
    string op = node->op;
    Type* target = node->target->accept(*this);
 
+   auto freeStanding = tryFreeStandingUnaryOp(target, node, op);
+   if (freeStanding != nullptr) {
+      return freeStanding;
+   }
+
    if (target->isObject()) {
       auto& className = target->getClassName();
 
-      std::vector<Type*> argTypes;
       auto class_decl = SymbolTable::getClass(className, importedNamespaces);
-      auto unOpResult = class_decl->hasMethod((node->prefix ? "prefix " : "postfix ") + op, argTypes);
+      auto unOpResult = class_decl->hasMethod((node->prefix ? "prefix " : "postfix ") + op);
 
       if (unOpResult.compatibility == CompatibilityType::COMPATIBLE) {
          auto call = std::make_shared<CallExpr>(CallType::METHOD_CALL, std::vector<Expression::SharedPtr>{},
@@ -3070,17 +3308,16 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
 
    if (op == "++" || op == "--") {
       if (!target->isLvalue()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator " + op + " cannot be applied to rvalue of "
-            "type " + target->toString(), node->target.get());
+         RuntimeError::raise("Unary operator " + op + " cannot be applied to rvalue of "
+                     "type " + target->toString(), node->target.get());
       }
       if (target->isConst()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator " + op + " cannot be applied to 'let' constant",
-            node->target.get());
+         RuntimeError::raise("Unary operator " + op + " cannot be applied to 'let' constant", node->target.get());
       }
 
       auto pointee = target->toRvalue();
       if (!isa<PrimitiveType>(pointee)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator " + op + " is not applicable to type " + target->toString(),
+         RuntimeError::raise("Unary operator " + op + " is not applicable to type " + target->toString(),
             node->target.get());
       }
 
@@ -3089,14 +3326,14 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
    }
 
    if (op == "*") {
-      if (!latestScope->unsafe) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Pointer operators are only allowed inside unsafe blocks", node);
-      }
+//      if (!latestScope->unsafe) {
+//         RuntimeError::raise(ERR_TYPE_ERROR, "Pointer operators are only allowed inside unsafe blocks", node);
+//      }
 
       toRvalueIfNecessary(target, node->target, !node->isLhsOfAssigment_);
 
       if (!isa<PointerType>(target)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Trying to dereference non-pointer type", node->target.get());
+         RuntimeError::raise("Trying to dereference non-pointer type", node->target.get());
       }
 
       target = cast<PointerType>(target)->getPointeeType();
@@ -3109,13 +3346,12 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
    }
 
    if (op == "&") {
-      if (!latestScope->unsafe) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Pointer operators are only allowed inside unsafe blocks", node);
-      }
+//      if (!latestScope->unsafe) {
+//         RuntimeError::raise(ERR_TYPE_ERROR, "Pointer operators are only allowed inside unsafe blocks", node);
+//      }
 
       if (!target->isLvalue()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot apply unary operator '&' to non-reference value",
-            node->target.get());
+         RuntimeError::raise("Cannot apply unary operator '&' to non-reference value", node->target.get());
       }
 
       target->isLvalue(false);
@@ -3132,19 +3368,18 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
 
    if (op == "+" || op == "-") {
       if (!isa<PrimitiveType>(target)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator " + op + " is not applicable to type " + target->toString(),
+         RuntimeError::raise("Unary operator " + op + " is not applicable to type " + target->toString(),
             node->target.get());
       }
       if (op == "-" && isa<IntegerType>(target) && cast<IntegerType>(target)->isUnsigned()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator '-' cannot be applied to unsigned integer",
-            node->target.get());
+         RuntimeError::raise("Unary operator '-' cannot be applied to unsigned integer", node->target.get());
       }
 
       result = target;
    }
    else if (op == "~") {
       if (!isa<IntegerType>(target)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator '~' is only applicable to type Int", node->target.get());
+         RuntimeError::raise("Unary operator '~' is only applicable to type Int", node->target.get());
       }
 
       result = target;
@@ -3152,19 +3387,21 @@ Type* TypeCheckPass::visit(UnaryOperator *node)
    else if (op == "!") {
       auto boolTy = IntegerType::get(1);
       if (!target->implicitlyCastableTo(boolTy)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator '!' is not applicable to type " + target
-            ->toString(), node->target.get());
+         RuntimeError::raise("Unary operator '!' is not applicable to type " + target
+                     ->toString(), node->target.get());
       }
 
       if (target != boolTy) {
-         Warning::issue("Implicit cast to boolean", node->target.get());
+         if (!target->isObject() && target->getClassName() == "Bool") {
+            Warning::issue("Implicit cast to boolean", node->target.get());
+         }
       }
 
       result = boolTy;
    }
    else {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Unary operator " + node->op + " is not defined on class " +
-         target->toString(), node);
+      RuntimeError::raise("Unary operator " + node->op + " is not defined on class " +
+               target->toString(), node);
    }
 
    return ReturnMemberExpr(node, result);
@@ -3207,7 +3444,7 @@ Type* TypeCheckPass::visit(IfStmt *node)
       wrapImplicitCast(node->condition, cond, boolTy);
    }
    else if (!cond->implicitlyCastableTo(boolTy)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Condition must be boolean", node->condition.get());
+      RuntimeError::raise("Condition must be boolean", node->condition.get());
    }
 
    // if there's no else, the remaining code path needs to return either way
@@ -3279,7 +3516,7 @@ bool TypeCheckPass::matchableAgainst(
       }
 
       auto en = static_cast<Enum*>(SymbolTable::getClass(matchTy->getClassName()));
-      auto& givenArgs = callExpr->argTypes;
+      auto& givenArgs = callExpr->resolvedArgs;
       givenArgs.reserve(callExpr->args.size());
       std::vector<string> letIdents;
 
@@ -3297,7 +3534,7 @@ bool TypeCheckPass::matchableAgainst(
          }
 
          if (isLetExpr) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Expected all arguments to be 'let' expressions", arg.second.get());
+            RuntimeError::raise("Expected all arguments to be 'let' expressions", arg.second.get());
          }
       }
 
@@ -3327,10 +3564,10 @@ bool TypeCheckPass::matchableAgainst(
       for (size_t i = givenArgs.size(); i < callExpr->args.size(); ++i) {
          const auto& arg = callExpr->args.at(i);
          if (arg.second->get_type() == NodeType::LAMBDA_EXPR) {
-            givenArgs.push_back(nullptr);
+            givenArgs.emplace_back(arg.first, nullptr);
          }
          else {
-            givenArgs.push_back(arg.second->accept(*this));
+            givenArgs.emplace_back(arg.first, arg.second->accept(*this));
          }
       }
 
@@ -3368,13 +3605,13 @@ Type* TypeCheckPass::visit(MatchStmt *node)
       string protName = "Equatable";
 
       if (!cl->conformsTo(protName)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Types used as a match value must conform to 'Equatable'", node);
+         RuntimeError::raise("Types used as a match value must conform to 'Equatable'", node);
       }
    }
    else if (!isa<IntegerType>(switchType) && !isa<FPType>(switchType) &&
       !switchType->isTupleTy() && !switchType->isEnum())
    {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Types used as a match value must conform to 'Equatable'", node);
+      RuntimeError::raise("Types used as a match value must conform to 'Equatable'", node);
    }
 
    std::vector<long> rawCaseValues;
@@ -3384,8 +3621,8 @@ Type* TypeCheckPass::visit(MatchStmt *node)
    bool allCasesReturn = true;
    for (const auto& case_ : node->cases) {
       if (!matchableAgainst(switchType, case_)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot match given value against value of type " +
-            switchType->toString(), case_->caseVal.get());
+         RuntimeError::raise("Cannot match given value against value of type " +
+                     switchType->toString(), case_->caseVal.get());
       }
       else if (case_->caseType != nullptr && *case_->caseType != switchType) {
          wrapImplicitCast(case_->caseVal, case_->caseType, switchType);
@@ -3404,7 +3641,7 @@ Type* TypeCheckPass::visit(MatchStmt *node)
          if (std::find(rawCaseValues.begin(), rawCaseValues.end(), case_->enumCaseVal->rawValue)
             != rawCaseValues.end())
          {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Duplicate case " + case_->enumCaseVal->name, case_.get());
+            RuntimeError::raise("Duplicate case " + case_->enumCaseVal->name, case_.get());
          }
 
          rawCaseValues.push_back(case_->enumCaseVal->rawValue);
@@ -3414,7 +3651,7 @@ Type* TypeCheckPass::visit(MatchStmt *node)
 
             for (auto& val : case_->letIdentifiers) {
                auto ty = val.second->deepCopy();
-               if (ty->isGeneric() && latestScope->currentClass != en->getName()) {
+               if (ty->isGeneric() && currentClass() != en->getName()) {
                   case_->needsGenericCast = true;
                   case_->genericOriginTy = ty->deepCopy();
 
@@ -3435,7 +3672,7 @@ Type* TypeCheckPass::visit(MatchStmt *node)
       case_->body->accept(*this);
 
       if (i == numCases - 1 && latestScope->continued) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot continue from last case statement", case_.get());
+         RuntimeError::raise("Cannot continue from last case statement", case_.get());
       }
       if (latestScope->continued && i < numCases - 1) {
          checkIfContinuable.push_back(i);
@@ -3454,7 +3691,7 @@ Type* TypeCheckPass::visit(MatchStmt *node)
    for (const auto& ind : checkIfContinuable) {
       auto nextCase = node->cases[ind + 1];
       if (nextCase->isEnumLetCase) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot continue to case with 'let' expression", nextCase.get());
+         RuntimeError::raise("Cannot continue to case with 'let' expression", nextCase.get());
       }
    }
 
@@ -3468,7 +3705,7 @@ Type* TypeCheckPass::visit(MatchStmt *node)
    }
 
    if (!isExhaustive) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Match statements must be exhaustive", node);
+      RuntimeError::raise("Match statements must be exhaustive", node);
    }
    if (allCasesReturn) {
       ++latestScope->returned;
@@ -3499,7 +3736,7 @@ Type* TypeCheckPass::visit(CaseStmt *node)
 Type* TypeCheckPass::visit(LabelStmt *node)
 {
    if (std::find(labels.begin(), labels.end(), node->labelName) != labels.end()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Label '" + node->labelName + "' already exists in the same scope", node);
+      RuntimeError::raise("Label '" + node->labelName + "' already exists in the same scope", node);
    }
 
    labels.push_back(node->labelName);
@@ -3514,7 +3751,7 @@ Type* TypeCheckPass::visit(LabelStmt *node)
 Type* TypeCheckPass::visit(GotoStmt *node)
 {
    if (!has_label(node->labelName)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "No label '" + node->labelName + "' to go to", node);
+      RuntimeError::raise("No label '" + node->labelName + "' to go to", node);
    }
 
    return nullptr;
@@ -3542,8 +3779,8 @@ Type* TypeCheckPass::visit(FuncArgDecl *node)
       Type* def_type = node->defaultVal->accept(*this);
 
       if (!ts->implicitlyCastableTo(def_type)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Default value for parameter " + node->argName + " must be of type "
-            "" + node->argType->toString(), node->defaultVal.get());
+         RuntimeError::raise("Default value for parameter " + node->argName + " must be of type "
+                     "" + node->argType->toString(), node->defaultVal.get());
       }
    }
 
@@ -3558,15 +3795,7 @@ Type* TypeCheckPass::visit(FuncArgDecl *node)
 Type* TypeCheckPass::visit(ReturnStmt *node)
 {
    if (node->returnValue) {
-      bool isSelfReturn = node->returnValue->get_type() == NodeType::IDENTIFIER_EXPR &&
-         std::static_pointer_cast<IdentifierRefExpr>(node->returnValue)->ident == "self";
-
-      if (isSelfReturn) {
-         SymbolTable::getClass(latestScope->currentClass)
-            ->getMethod(latestScope->currentFunction)->hasHiddenParam = false;
-      }
-
-      if (latestScope->declaredReturnType->isStruct() && !isSelfReturn) {
+      if (latestScope->declaredReturnType->isStruct()) {
          node->returnValue->isHiddenReturnValue();
          node->returnValue->isPartOfReturnValue(true);
          node->hiddenParamReturn = true;
@@ -3586,10 +3815,7 @@ Type* TypeCheckPass::visit(ReturnStmt *node)
       if (node->returnValue->declaration) {
          node->returnValue->declaration->isReturnValue();
          if (latestScope->declaredReturnType->isStruct()) {
-            // don't clone a 'self' return
-            if (!isSelfReturn) {
-               node->returnValue->declaration->isHiddenReturnValue();
-            }
+            node->returnValue->declaration->isHiddenReturnValue();
          }
       }
 
@@ -3615,311 +3841,6 @@ Type* TypeCheckPass::visit(Expression *node)
    return nullptr;
 }
 
-cdot::cl::Class* TypeCheckPass::DeclareClass(ClassDecl *node)
-{
-   node->qualifiedName = ns_prefix() + node->className;
-
-   if (node->isExtension()) {
-      auto cl = SymbolTable::getClass(node->qualifiedName);
-      node->declaredClass = cl;
-
-      for (const auto& proto : node->conformsTo) {
-         cl->addConformance(proto);
-      }
-
-      return cl;
-   }
-
-   if (isReservedIdentifier(node->className)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, node->className + " is a reserved identifier", node);
-   }
-
-   latestScope->currentClass = node->qualifiedName;
-
-   cdot::cl::Class* cl;
-   if (node->is_protocol || node->is_struct) {
-      cl = SymbolTable::declareClass(node->qualifiedName, node->conformsTo, node->generics, node->is_protocol, node);
-   }
-   else {
-      cl = SymbolTable::declareClass(node->qualifiedName, node->parentClass, node->conformsTo, node->generics, node,
-         node->is_abstract);
-   }
-
-   string anyStr = "Any";
-   if (node->className != anyStr && !cl->conformsTo(anyStr)) {
-      cl->addConformance(ObjectType::get(anyStr));
-   }
-
-   node->declaredClass = cl;
-   latestScope->currentClass = "";
-
-   return cl;
-}
-
-cdot::cl::Class* TypeCheckPass::DeclareClassMethods(ClassDecl *node)
-{
-   auto cl = node->declaredClass;
-
-   if (!node->is_extension) {
-      cl->defineParentClass();
-      latestScope->currentClass = node->qualifiedName;
-   }
-
-   latestScope->inProtocol = cl->isProtocol();
-
-   if (!node->is_extension && node->parentClass != nullptr) {
-      if (!SymbolTable::hasClass(node->parentClass->getClassName())) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Class " + node->parentClass->getClassName() + " does not exist", node);
-      }
-
-      auto parentClass = SymbolTable::getClass(node->parentClass->getClassName());
-      Type::resolveUnqualified(node->parentClass);
-
-      auto &concreteGenerics = node->parentClass->getConcreteGenericTypes();
-      auto givenCount = concreteGenerics.size();
-      auto neededCount = parentClass->getGenerics().size();
-
-      if (givenCount != neededCount) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Class " + node->parentClass->getClassName() + " expects " + std::to_string
-            (neededCount) + " generic type parameter(s), " + std::to_string(givenCount) + " were given", node
-         );
-      }
-
-//      size_t i = 0;
-//      for (const auto &needed : parentClass->getGenerics()) {
-//         auto &given = concreteGenerics[needed->getGenericClassName()];
-//         resolve(&given);
-//
-//         if (isa<ObjectType>(given)) {
-//            checkExistance(cast<ObjectType>(given), node);
-//         }
-//
-//         if (!Type::GenericTypesCompatible(given, needed)) {
-//            RuntimeError::raise(ERR_TYPE_ERROR, "Given type parameter " + given->toString() + " is not compatible"
-//               " with needed parameter " + needed->getGenericClassName() + " of class " +
-//               node->parentClass->getClassName(), node
-//            );
-//         }
-//
-//         cl->defineConcreteGeneric(needed->getGenericClassName(), given);
-//      }
-   }
-
-   for (const auto& prot : node->conformsTo) {
-      auto& protocolName = prot->getClassName();
-
-      if (!SymbolTable::hasClass(protocolName)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Protocol " + protocolName + " does not exist", node);
-      }
-
-      Type::resolveUnqualified(prot);
-
-      auto protocol = SymbolTable::getClass(protocolName);
-      if (!protocol->isProtocol()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, protocolName + " is not a protocol", node);
-      }
-
-      auto& concreteGenerics = prot->getConcreteGenericTypes();
-      auto givenCount = concreteGenerics.size();
-      auto neededCount = protocol->getGenerics().size();
-
-      if (givenCount != neededCount) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Protocol " + protocolName + " expects " + std::to_string
-            (neededCount) + " generic type parameter(s), " + std::to_string(givenCount) + " were given", node);
-      }
-
-      size_t i = 0;
-      for (const auto& needed : protocol->getGenerics()) {
-         auto& given = concreteGenerics[needed->getGenericClassName()];
-         resolve(&given);
-
-         if (!Type::GenericTypesCompatible(given, needed)) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Given type parameter " + given->toString() + " is not compatible"
-               " with needed parameter " + needed->getGenericClassName() + " of protocol " + protocolName, node);
-         }
-      }
-   }
-
-   pushNamespace(node->className);
-   node->declaredClass = cl;
-   currentClassGenerics = &cl->getGenerics();
-
-   for (const auto& td : node->typedefs) {
-      td->accept(*this);
-   }
-   for (const auto& field : node->fields) {
-      DeclareField(field.get(), cl);
-   }
-   for (const auto& method : node->methods) {
-      DeclareMethod(method.get(), cl);
-   }
-
-   if (node->isStruct() || (node->is_extension && cl->isStruct())) {
-      node->explicitMemberwiseInitializer = !cl->declareMemberwiseInitializer();
-   }
-
-   if (!node->constructors.empty()) {
-      for (const auto& constr : node->constructors) {
-         DeclareConstr(constr.get(), cl);
-      }
-   }
-
-   if (!node->is_extension && !node->is_abstract) {
-      node->defaultConstr = cl->declareMethod("init.def", cl->getType()->toRvalue(),
-         AccessModifier::PUBLIC, {}, {}, {}, {}, false, nullptr
-      );
-
-      node->selfBinding = SymbolTable::mangleVariable(self_str, ++lastScopeID);
-   }
-
-   popNamespace();
-   latestScope->currentClass = "";
-   latestScope->inProtocol = false;
-   currentClassGenerics = nullptr;
-
-   if (!node->is_extension && !ObjectType::hasStructureType(node->qualifiedName)) {
-      auto prefix = node->is_struct ? "struct." : (node->is_protocol ? "proto." : "class.");
-      auto class_type = llvm::StructType::create(CodeGen::Context, prefix + node->qualifiedName);
-      ObjectType::declareStructureType(node->qualifiedName, class_type);
-   }
-
-   return cl;
-}
-
-cdot::cl::Enum* TypeCheckPass::DeclareEnum(EnumDecl *node)
-{
-   node->qualifiedName = ns_prefix() + node->className;
-   if (isReservedIdentifier(node->className)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, node->className + " is a reserved identifier", node);
-   }
-
-   node->conformsTo.push_back(ObjectType::get("Any"));
-
-   auto en = SymbolTable::declareEnum(node->qualifiedName, node->conformsTo, node->generics);
-   node->declaredEnum = en;
-
-   return en;
-}
-
-cdot::cl::Enum* TypeCheckPass::DeclareEnumMethods(EnumDecl *node)
-{
-   auto& en = node->declaredEnum;
-   for (const auto& method : node->methods) {
-      DeclareMethod(method.get(), en);
-   }
-
-   long last;
-   bool first = true;
-   std::vector<long> caseVals;
-
-   for (const auto& case_ : node->cases) {
-      EnumCase c;
-      c.name = case_->caseName;
-      for (const auto& assoc : case_->associatedTypes) {
-         assoc.second->accept(*this);
-         c.associatedValues.emplace_back(assoc.first, assoc.second->getType());
-      }
-
-      if (case_->hasRawValue) {
-         last = case_->rawValue;
-      }
-      else if (first) {
-         last = 0;
-      }
-      else {
-         ++last;
-      }
-
-      if (std::find(caseVals.begin(), caseVals.end(), last) != caseVals.end()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Duplicate case value " + std::to_string(last), case_.get());
-      }
-
-      c.rawValue = last;
-      caseVals.push_back(last);
-      first = false;
-
-      en->addCase(case_->caseName, std::move(c));
-   }
-
-   ObjectType::declareStructureType(node->qualifiedName,
-      llvm::StructType::create(CodeGen::Context, "enum." + node->qualifiedName));
-
-   return en;
-}
-
-void TypeCheckPass::DeclareField(
-   FieldDecl *node,
-   cdot::cl::Class *cl)
-{
-   node->type->accept(*this);
-   auto field_type = node->type->getType()->deepCopy();
-
-   if (cl->isStruct() && isa<ObjectType>(field_type) && field_type->getClassName() == cl->getName()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Structs cannot have members of their own type (use a pointer instead)",
-         node);
-   }
-
-   if (!cl->isProtocol() && cl->getDeclaration()->constructors.empty() && !field_type->hasDefaultValue() &&
-      node->defaultVal == nullptr && !field_type->isNullable()
-   ){
-      RuntimeError::raise(ERR_TYPE_ERROR, "Member " + node->fieldName + " does not have a default constructor and "
-         "has to be explicitly initialized", node);
-   }
-   if (node->isConst && node->hasSetter) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Constant fields cannot define setters", node);
-   }
-
-   auto& qualified_name = cl->getName();
-   node->className = qualified_name;
-
-   if (node->isStatic) {
-      node->binding = qualified_name + node->fieldName;
-      return;
-   }
-
-   if (node->am == AccessModifier::DEFAULT) {
-      if (cl->isProtocol() || cl->isEnum() || cl->isStruct()) {
-         node->am = AccessModifier::PUBLIC;
-      }
-      else {
-         node->am = AccessModifier::PRIVATE;
-      }
-   }
-
-   auto field = cl->declareField(node->fieldName, field_type, node->am, node->defaultVal, node->isConst, node);
-   node->declaredType = &field->fieldType;
-   if (cl->isProtocol()) {
-      node->isProtocolField = true;
-   }
-
-   if (node->hasGetter) {
-      std::vector<Type*> argTypes;
-      string getterName = "__" + util::generate_getter_name(node->fieldName);
-      node->getterBinding = SymbolTable::mangleMethod(node->className, getterName, argTypes);
-
-      auto getterRetType = field_type->deepCopy();
-
-      node->getterMethod = cl->declareMethod(getterName, getterRetType, AccessModifier::PUBLIC, {}, {}, {}, {},
-         false, nullptr);
-
-      field->hasGetter = true;
-      field->getterName = getterName;
-   }
-
-   if (node->hasSetter) {
-      std::vector<Type*> argTypes{ field_type->deepCopy() };
-      string setterName = "__" + util::generate_setter_name(node->fieldName);
-      auto setterRetType = new VoidType;
-      node->setterBinding = SymbolTable::mangleMethod(node->className, setterName, argTypes);
-
-      node->setterMethod = cl->declareMethod(setterName, setterRetType, AccessModifier::PUBLIC, {node->fieldName},
-         argTypes, {}, {}, false, nullptr);
-
-      field->hasSetter = true;
-      field->setterName = setterName;
-   }
-}
-
 void TypeCheckPass::DefineField(
    FieldDecl *node,
    cdot::cl::Class *cl)
@@ -3931,24 +3852,41 @@ void TypeCheckPass::DefineField(
       Type* def_type = node->defaultVal->accept(*this);
       resolve(&def_type);
 
-      if (field_type->isInferred()) {
-         field_type = def_type;
+      toRvalueIfNecessary(def_type, node->defaultVal);
+      auto declaredField = cl->getField(node->fieldName);
+      if (declaredField != nullptr) {
+         declaredField->defaultVal = node->defaultVal;
+      }
 
-         if (!node->isStatic) {
-            *node->declaredType = field_type;
-            cl->getField(node->fieldName)->fieldType = field_type;
+      if (field_type->isInferred()) {
+         field_type = def_type->deepCopy();
+
+         if (node->isStatic) {
+            auto ty = field_type->deepCopy();
+            ty->isLvalue(true);
+
+            SymbolTable::declareVariable(node->binding, ty, node->am, currentNamespace.back());
          }
          else {
-            SymbolTable::declareVariable(node->binding, field_type);
+            auto ty = field_type->deepCopy();
+            cl->getField(node->fieldName)->fieldType = ty;
+            if (node->hasGetter) {
+               node->getterMethod->returnType = ty;
+            }
+            if (node->hasSetter) {
+               node->setterMethod->arguments.front().type = ty;
+            }
          }
       }
       else if (!field_type->implicitlyCastableTo(def_type)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Default value for field " + node->fieldName + " must be of type " +
-            node->type->toString(), node->defaultVal.get());
+         RuntimeError::raise("Default value for field " + node->fieldName + " must be of type " +
+                     node->type->toString(), node->defaultVal.get());
       }
       else if (*def_type != field_type) {
-         Warning::issue("Implicit cast from " + def_type->toString() + " to " + node->type->toString(),
-            node->defaultVal.get());
+         if (warnCast(def_type, field_type)) {
+            Warning::issue("Implicit cast from " + def_type->toString() + " to " + node->type->toString(),
+               node->defaultVal.get());
+         }
       }
    }
 
@@ -3958,26 +3896,26 @@ void TypeCheckPass::DefineField(
    }
 
    if (node->hasGetter && node->getterBody != nullptr) {
-      pushMethodScope(node->getterMethod->returnType, node->className);
+      pushMethodScope(node->getterMethod->returnType);
       latestScope->currentSelf = SymbolTable::mangleVariable(self_str, latestScope->id);
 
       node->getterBody->accept(*this);
       node->getterSelfBinding = latestScope->currentSelf;
 
       if (latestScope->returned == 0) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Returning Void from a method with declared return type " +
-            node->getterMethod->returnType->toString(), node);
+         RuntimeError::raise("Returning Void from a method with declared return type " +
+                     node->getterMethod->returnType->toString(), node);
       }
 
       if (latestScope->branches - latestScope->returned > 0) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Not all code paths return a value", node->getterBody.get());
+         RuntimeError::raise("Not all code paths return a value", node->getterBody.get());
       }
 
       popScope();
    }
 
    if (node->hasSetter && node->setterBody != nullptr) {
-      pushMethodScope(node->setterMethod->returnType, node->className);
+      pushMethodScope(node->setterMethod->returnType);
       string newValStr = "newVal";
 
       auto typeref = std::make_shared<TypeRef>(field_type->deepCopy());
@@ -3995,109 +3933,19 @@ void TypeCheckPass::DefineField(
    }
 }
 
-void TypeCheckPass::DeclareMethod(
-   MethodDecl *node,
-   cdot::cl::Class *cl)
-{
-   std::vector<Type*> argTypes;
-   std::vector<string> argNames;
-   std::vector<Expression::SharedPtr> argDefaults;
-
-   for (const auto &arg : node->args) {
-      arg->accept(*this);
-      auto& resolvedArg = arg->argType->getType();
-
-      argTypes.push_back(resolvedArg);
-      argNames.push_back(arg->argName);
-      argDefaults.push_back(arg->defaultVal);
-   }
-
-   node->class_name = cl->getName();
-   node->binding = SymbolTable::mangleMethod(node->class_name, node->methodName, argTypes);
-
-   auto result = cl->hasMethod(node->methodName, argTypes, false, false);
-   if (result.compatibility == CompatibilityType::COMPATIBLE) {
-      if (node->isAlias) {
-         cl->declareMethodAlias(node->alias, result.method->mangledName);
-         return;
-      }
-
-      RuntimeError::raise(ERR_TYPE_ERROR, "Method " + node->methodName + " cannot be redeclared with a "
-         "similar signature to a previous declaration", node);
-   }
-   else if (node->isAlias) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Aliased method " + node->methodName + " does not exist", node);
-   }
-
-   if (node->am == AccessModifier::DEFAULT) {
-      node->am = AccessModifier::PUBLIC;
-   }
-
-   node->returnType->accept(*this);
-   auto returnType = node->returnType->getType()->deepCopy();
-
-   node->method = cl->declareMethod(node->methodName, returnType, node->am, argNames,
-      argTypes, argDefaults, node->generics, node->isStatic, node);
-
-   if (returnType->isStruct()) {
-      node->method->hasHiddenParam = true;
-   }
-}
-
-void TypeCheckPass::DeclareConstr(
-   ConstrDecl *node,
-   cdot::cl::Class *cl)
-{
-   if (node->memberwise && cl->isAbstract()) {
-      cl->declareMemberwiseInitializer();
-      return;
-   }
-
-   std::vector<Type*> argTypes;
-   std::vector<string> argNames;
-   std::vector<Expression::SharedPtr> argDefaults;
-
-   for (auto arg : node->args) {
-      arg->accept(*this);
-      auto& resolvedArg = arg->argType->getType();
-      argTypes.push_back(resolvedArg);
-
-      argNames.push_back(arg->argName);
-      argDefaults.push_back(arg->defaultVal);
-   }
-
-   string method_name = "init";
-   node->className = cl->getName();
-   auto prevDecl = cl->hasMethod(method_name, argTypes,
-      /*Check parent*/ true, /*Check proto*/ false, /*strict*/ true);
-
-   if (prevDecl.compatibility == CompatibilityType::COMPATIBLE) {
-      if (prevDecl.method == cl->getMemberwiseInitializer()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Cannot declare method with the same signature as a previous declaration "
-            "(Previous declaration is the implicit memberwise initializer)", node);
-      }
-
-      RuntimeError::raise(ERR_TYPE_ERROR, "Cannot declare method with the same signature as a previous declaration",
-         node);
-   }
-
-   node->binding = SymbolTable::mangleMethod(node->className, method_name, argTypes);
-   node->method = cl->declareMethod(method_name, cl->getType()->toRvalue(), node->am, argNames,
-      argTypes, argDefaults, {}, false, nullptr);
-}
-
 void TypeCheckPass::DefineClass(
    ClassDecl *node,
    cdot::cl::Class *cl)
 {
-   pushNamespace(node->className);
-   latestScope->currentClass = node->qualifiedName;
-   latestScope->inProtocol = cl->isProtocol();
-   currentClassGenerics = &cl->getGenerics();
+   pushClassScope(cl, node->className);
 
-   for (const auto& field : node->fields) {
-      DefineField(field.get(), cl);
+   for (const auto& decl : node->innerDeclarations) {
+      decl->accept(*this);
    }
+
+//   for (const auto& field : node->fields) {
+//      DefineField(field.get(), cl);
+//   }
 
    for (const auto& method : node->methods) {
       DefineMethod(method.get(), cl);
@@ -4111,15 +3959,12 @@ void TypeCheckPass::DefineClass(
       DefineDestr(node->destructor.get(), cl);
    }
 
-   popNamespace();
-   latestScope->currentClass.clear();
-   latestScope->inProtocol = false;
-   currentClassGenerics = nullptr;
+   popClassScope();
 
    try {
       cl->finalize();
    } catch (string& err) {
-      RuntimeError::raise(ERR_TYPE_ERROR, err, node);
+      RuntimeError::raise(err, node);
    }
 }
 
@@ -4131,12 +3976,8 @@ void TypeCheckPass::DefineMethod(
       return;
    }
 
-   if (node->methodName == "postfix []") {
-      int i = 3;
-   }
-
    auto& return_type = node->returnType->getType();
-   pushMethodScope(return_type, cl->getName());
+   pushMethodScope(return_type);
 
    if (!node->isStatic) {
       latestScope->currentSelf = SymbolTable::mangleVariable(self_str, latestScope->id);
@@ -4152,13 +3993,14 @@ void TypeCheckPass::DefineMethod(
          arg->binding = declareVariable(arg->argName, arg->argType->getType());
       }
 
+      latestScope->mutableSelf = node->isMutating_;
       latestScope->currentFunction = node->method->mangledName;
       node->body->accept(*this);
 
       if (latestScope->returned == 0) {
          if (!isa<VoidType>(node->returnType->getType())) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "Returning Void from a method with declared return type " +
-               node->returnType->getType()->toString(), node->returnType.get());
+            RuntimeError::raise("Returning Void from a method with declared return type " +
+                           node->returnType->getType()->toString(), node->returnType.get());
          }
       }
       else {
@@ -4170,7 +4012,7 @@ void TypeCheckPass::DefineMethod(
       if (latestScope->branches - latestScope->returned > 0 && !isa<VoidType>(return_type) &&
          !latestScope->declaredReturnType->isNullable())
       {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Not all code paths return a value", node->body.get());
+         RuntimeError::raise("Not all code paths return a value", node->body.get());
       }
    }
    else if (return_type->isInferred()) {
@@ -4182,26 +4024,24 @@ void TypeCheckPass::DefineMethod(
 }
 
 namespace {
-
    using cdot::cl::Field;
 
    bool fieldNeedsInitializing(const Field::SharedPtr& field)
    {
-      return (!field->fieldType->hasDefaultValue() || field->isConst)
-         && field->defaultVal == nullptr;
+      return field->defaultVal == nullptr;
    }
-
 }
+
 void TypeCheckPass::DefineConstr(
    ConstrDecl *node,
    cdot::cl::Class *cl)
 {
-   if (node->memberwise) {
+   if (node->memberwise || node->body == nullptr) {
       return;
    }
 
    auto voidTy = new VoidType;
-   pushMethodScope(voidTy, cl->getName());
+   pushMethodScope(voidTy);
    latestScope->currentSelf = SymbolTable::mangleVariable(self_str, latestScope->id);
    node->selfBinding = latestScope->currentSelf;
 
@@ -4213,6 +4053,8 @@ void TypeCheckPass::DefineConstr(
    }
 
    latestScope->uninitializedFields = &uninitialized;
+   latestScope->mutableSelf = true;
+
    for (auto& arg : node->args) {
       arg->binding = declareVariable(arg->argName, arg->argType->getType());
    }
@@ -4220,9 +4062,8 @@ void TypeCheckPass::DefineConstr(
    node->body->accept(*this);
 
    if (!uninitialized.empty()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Non-nullable member " + uninitialized.front() + " of "
-         "class " + cl->getName() + " does not define a default constructor and has to be explicitly initialized "
-         "in every constructor", node->body.get());
+      RuntimeError::raise("Member " + uninitialized.front() + " of "
+               "class " + cl->getName() + " needs to be initialized", node->body.get());
    }
 
    popScope();
@@ -4232,7 +4073,7 @@ void TypeCheckPass::DefineConstr(
 void TypeCheckPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
 {
    auto voidTy = new VoidType;
-   pushMethodScope(voidTy, cl->getName());
+   pushMethodScope(voidTy);
    latestScope->currentSelf = SymbolTable::mangleVariable(self_str, latestScope->id);
    node->selfBinding = latestScope->currentSelf;
 
@@ -4249,10 +4090,7 @@ void TypeCheckPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
  */
 Type* TypeCheckPass::visit(ClassDecl *node)
 {
-   currentClassGenerics = &node->generics;
    DefineClass(node, node->declaredClass);
-
-   currentClassGenerics = nullptr;
    return nullptr;
 }
 
@@ -4293,23 +4131,27 @@ Type* TypeCheckPass::visit(MethodDecl *node)
 
 Type* TypeCheckPass::visit(EnumDecl *node)
 {
-   auto en = node->declaredEnum;
    pushNamespace(node->className);
-   latestScope->currentClass = node->qualifiedName;
-   currentClassGenerics = &en->getGenerics();
+
+   for (const auto& inner : node->innerDeclarations) {
+      inner->accept(*this);
+   }
+
+   popNamespace();
+
+   auto en = node->declaredEnum;
+   pushClassScope(en, node->className);
 
    for (const auto& method : node->methods) {
       DefineMethod(method.get(), en);
    }
 
-   popNamespace();
-   latestScope->currentClass.clear();
-   currentClassGenerics = nullptr;
+   popClassScope();
 
    try {
       en->finalize();
    } catch (string err) {
-      RuntimeError::raise(ERR_TYPE_ERROR, err, node);
+      RuntimeError::raise(err, node);
    }
 
    return nullptr;
@@ -4335,10 +4177,8 @@ bool TypeCheckPass::checkLambdaCompatibility(
    }
 
    if (neededArgs.size() != node->args.size()) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible argument counts: Expected " +
-            std::to_string(neededArgs.size()) + ", but found " + std::to_string(node->args.size()),
-         node
-      );
+      RuntimeError::raise("Incompatible argument counts: Expected " +
+         std::to_string(neededArgs.size()) + ", but found " + std::to_string(node->args.size()), node);
    }
 
    size_t i = 0;
@@ -4373,10 +4213,8 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
       returnType = asFunc->getReturnType();
 
       if (neededArgs.size() != node->args.size()) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible argument counts: Expected " +
-            std::to_string(neededArgs.size()) + ", but found " + std::to_string(node->args.size()),
-            node
-         );
+         RuntimeError::raise("Incompatible argument counts: Expected " +
+                     std::to_string(neededArgs.size()) + ", but found " + std::to_string(node->args.size()), node);
       }
 
       size_t i = 0;
@@ -4386,9 +4224,8 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
                arg->accept(*this);
             }
             if (!arg->argType->getType()->implicitlyCastableTo(neededArgs[i])) {
-               RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible argument types: No implicit conversion from " +
-                  arg->argType->getType()->toString() + " to " + neededArgs[i]->toString(), arg.get()
-               );
+               RuntimeError::raise("Incompatible argument types: No implicit conversion from " +
+                                 arg->argType->getType()->toString() + " to " + neededArgs[i]->toString(), arg.get());
             }
          }
          else {
@@ -4408,8 +4245,7 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
    if (isSingleStmt && !isa<VoidType>(returnType) && !isa<AutoType>(returnType)) {
       auto asExpr = std::dynamic_pointer_cast<Expression>(node->body);
       if (!asExpr) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Expected single-statement lambda to contain a valid expression",
-            node->body.get());
+         RuntimeError::raise("Expected single-statement lambda to contain a valid expression", node->body.get());
       }
 
       node->body = std::make_shared<ReturnStmt>(asExpr);
@@ -4425,7 +4261,7 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
 
    for (const auto& arg : node->args) {
       if (arg->argType == nullptr || isa<AutoType>(arg->argType->getType(true))) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Could not infer type of argument " + arg->argName, arg.get());
+         RuntimeError::raise("Could not infer type of argument " + arg->argName, arg.get());
       }
       if (!arg->argType->resolved) {
          arg->accept(*this);
@@ -4452,12 +4288,12 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
          }
       }
       else {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Not all code paths return a value", node);
+         RuntimeError::raise("Not all code paths return a value", node);
       }
    }
    else if (ret && !ret->implicitlyCastableTo(returnType)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Returning value of type " + ret->toString() + " from function with "
-         "declared return type " + returnType->toString(), node);
+      RuntimeError::raise("Returning value of type " + ret->toString() + " from function with "
+               "declared return type " + returnType->toString(), node);
    }
 
    auto funcTy = new FunctionType(returnType->deepCopy(), argTypes);
@@ -4477,7 +4313,17 @@ Type* TypeCheckPass::visit(LambdaExpr *node)
  */
 Type* TypeCheckPass::visit(UsingStmt *node)
 {
-   importedNamespaces.push_back(node->nsName + ".");
+   if (node->kind == UsingKind::NAMESPACE) {
+      importedNamespaces.push_back(node->importNamespace + ".");
+   }
+   else {
+      size_t i = 0;
+      for (auto& item : node->importedItems) {
+         SymbolTable::declareTemporaryAlias(item, node->fullNames[i]);
+         ++i;
+      }
+   }
+
    return nullptr;
 }
 
@@ -4490,6 +4336,7 @@ Type* TypeCheckPass::visit(EndOfFileStmt *node)
 {
    importedNamespaces.clear();
    importedNamespaces.push_back("");
+   SymbolTable::clearTemporaryAliases();
 
    return nullptr;
 }
@@ -4502,39 +4349,8 @@ Type* TypeCheckPass::visit(ImplicitCastExpr *node)
    return node->to;
 }
 
-Type* TypeCheckPass::visit(ExtendStmt *node)
-{
-   if (!SymbolTable::hasClass(node->extended_class)) {
-      RuntimeError::raise(ERR_TYPE_ERROR, "Class " + node->extended_class + " does not exist", node);
-   }
-
-   auto cl = SymbolTable::getClass(node->extended_class, importedNamespaces);
-   latestScope->currentClass = cl->getName();
-   currentClassGenerics = &cl->getGenerics();
-
-   for (const auto& field : node->fields) {
-      field->accept(*this);
-   }
-
-   for (const auto& method : node->methods) {
-      method->accept(*this);
-   }
-
-   for (const auto& method : node->methods) {
-      method->accept(*this);
-   }
-
-   latestScope->currentClass.clear();
-   currentClassGenerics = nullptr;
-
-   return nullptr;
-}
-
 Type* TypeCheckPass::visit(TypedefDecl *node)
 {
-   node->origin->accept(*this);
-   SymbolTable::declareTypedef(currentNamespace.back() + node->alias, node->origin->getType());
-
    return nullptr;
 }
 
@@ -4545,27 +4361,24 @@ Type* TypeCheckPass::visit(TypeRef *node)
    if (!node->resolved) {
       if (isa<ObjectType>(node->type) && node->type->getClassName() == "Self") {
          if (!latestScope->inProtocol) {
-            RuntimeError::raise(ERR_TYPE_ERROR, "'Self' is only valid in protocol definitions", node);
+            RuntimeError::raise("'Self' is only valid in protocol definitions", node);
          }
 
-         SymbolTable::getClass(latestScope->currentClass)->hasAssociatedTypes(true);
+         SymbolTable::getClass(currentClass())->hasAssociatedTypes(true);
       }
 
-      resolve(&node->type);
+      resolve(&node->type, node);
       node->resolved = true;
 
       if (node->type->isObject() && !SymbolTable::hasClass(node->type->getClassName())) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Unknown typename " + node->type->toString(), node);
+         RuntimeError::raise("Unknown typename " + node->type->toString(), node);
       }
       if (node->type->isObject() && !node->type->isGeneric() &&
          SymbolTable::getClass(node->type->getClassName())->hasAssociatedTypes() &&
          !node->isGenericConstraint_ && !latestScope->inProtocol)
       {
-//         RuntimeError::raise(ERR_TYPE_ERROR, "Protocols with associated types or self constraints can only be used as"
-//            " generic constraints", node);
-      }
-      if (node->type->isCStyleArray() && node->type->getLengthExpr() == nullptr && node->type->getLength() == -1) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "C-Style arrays have to have a specified length", node);
+         RuntimeError::raise("Protocols with associated types or self constraints can only be used as"
+                     " generic constraints", node);
       }
    }
 
@@ -4619,8 +4432,8 @@ Type* TypeCheckPass::visit(TupleLiteral* node)
    auto tupleTy = new TupleType(containedTypes);
    if (node->contextualType && !isa<AutoType>(node->contextualType)) {
       if (!tupleTy->implicitlyCastableTo(node->contextualType)) {
-         RuntimeError::raise(ERR_TYPE_ERROR, "Incompatible types " + tupleTy->toString() + " and " +
-            node->contextualType->toString(), node);
+         RuntimeError::raise("Incompatible types " + tupleTy->toString() + " and " +
+                     node->contextualType->toString(), node);
       }
 
       auto asTuple = cast<TupleType>(node->contextualType);

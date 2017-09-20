@@ -11,20 +11,37 @@
 using std::string;
 using namespace cdot;
 
+namespace cdot {
+   struct Argument {
+      Argument(string label, Type* ty, std::shared_ptr<Expression> defVal = nullptr) :
+         label(label), type(ty), defaultVal(defVal)
+      {
+         if (ty != nullptr) {
+            isVararg = ty->isVararg();
+            cstyleVararg = ty->isCStyleVararg();
+         }
+      }
+
+      string label;
+      Type* type;
+      std::shared_ptr<Expression> defaultVal;
+
+      bool isVararg = false;
+      bool cstyleVararg = false;
+   };
+}
+
 class Function {
 public:
    Function(string&, Type*, std::vector<ObjectType*>&);
    Function(string&, Type*);
 
    void addArgument(Type* type, string& name) {
-      arg_types.push_back(type);
-      argNames.push_back(name);
+      arguments.push_back(Argument{ name, type });
    }
    
    void addArgument(Type* type, std::shared_ptr<Expression> def_val, string& name) {
-      arg_types.push_back(type);
-      arg_defaults.push_back(def_val);
-      argNames.push_back(name);
+      arguments.push_back(Argument{ name, type, def_val });
    }
 
    string& getName() {
@@ -43,23 +60,15 @@ public:
       return returnType;
    }
 
-   std::vector<string>& getArgNames() {
-      return argNames;
-   }
-
-   std::vector<Type*>& getArgTypes() {
-      return arg_types;
-   }
-
-   std::vector<std::shared_ptr<Expression>>& getArgDefaults() {
-      return arg_defaults;
+   std::vector<Argument>& getArguments() {
+      return arguments;
    }
 
    void hasHiddenParam(bool b) {
       hasHiddenParam_ = b;
    }
 
-   bool hasHiddenParam() {
+   bool& hasHiddenParam() {
       return hasHiddenParam_;
    }
 
@@ -71,6 +80,14 @@ public:
       return isLambda_;
    }
 
+   void addUse() {
+      ++uses;
+   }
+
+   size_t& getNumUses() {
+      return uses;
+   }
+
    typedef std::unique_ptr<Function> UniquePtr;
 
 protected:
@@ -78,10 +95,10 @@ protected:
    string mangledName;
 
    Type* returnType;
-   std::vector<Type*> arg_types;
-   std::vector<std::shared_ptr<Expression>> arg_defaults;
-   std::vector<string> argNames;
+   std::vector<Argument> arguments;
    std::vector<ObjectType*> generics;
+
+   size_t uses = 0;
 
    bool isLambda_;
    bool hasHiddenParam_ = false;

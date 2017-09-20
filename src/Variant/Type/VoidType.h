@@ -44,8 +44,6 @@ namespace cdot {
          return llvm::ConstantPointerNull::get(ptrTy);
       }
 
-      llvm::Value* castTo(llvm::Value*, Type*) override;
-
       Type* deepCopy() override;
 
       static inline bool classof(VoidType const*) { return true; }

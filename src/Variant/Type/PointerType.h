@@ -69,8 +69,6 @@ namespace cdot {
       bool implicitlyCastableTo(Type*) override;
       bool explicitlyCastableTo(Type*) override;
 
-      llvm::Value* castTo(llvm::Value*, Type*) override;
-
       static inline bool classof(PointerType const*) { return true; }
       static inline bool classof(Type const* T) {
          switch(T->getTypeID()) {

@@ -44,3 +44,4 @@
 #include "../Statement/Declaration/Class/EnumDecl.h"
 #include "../Statement/Declaration/Class/EnumCaseDecl.h"
 #include "../Expression/Literal/NoneLiteral.h"
+#include "../Expression/Literal/StringInterpolation.h"

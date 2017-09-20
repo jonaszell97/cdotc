@@ -15,24 +15,25 @@ using std::string;
 
 namespace cdot {
 
-    enum class Attr : unsigned int {
-        None,
-        Inline,
-        CArray,
-        NoCopy,
-        CString,
-        Primitive
-    };
+   enum class Attr : unsigned int {
+      None,
+      Inline,
+      CArray,
+      NoCopy,
+      CString,
+      Primitive,
+      NeverOmit
+   };
 
-    extern unordered_map<string, Attr> AttributeMap;
+   extern unordered_map<string, Attr> AttributeMap;
 
-    struct Attribute {
-        Attr kind;
-        string name;
-        std::vector<string> args;
-    };
+   struct Attribute {
+      Attr kind;
+      string name;
+      std::vector<string> args;
+   };
 
-    string isValidAttribute(Attribute attr);
+   string isValidAttribute(Attribute attr);
 
 }
 

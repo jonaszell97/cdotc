@@ -13,6 +13,12 @@ public:
    NumericLiteral(cdot::Variant);
    ~NumericLiteral();
 
+   bool needsContextualInformation() override {
+      return true;
+   }
+
+   bool canReturn(Type* ty) override;
+
    typedef std::shared_ptr<NumericLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int) override;
@@ -42,7 +48,9 @@ protected:
    cdot::Variant value;
    Type* type = nullptr;
    string className;
-   string literalType;
+
+   bool isChar = false;
+   bool isBool = false;
 
    // codegen
    bool isPrimitive = false;

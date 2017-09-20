@@ -63,6 +63,20 @@ namespace cdot {
       }
    }
 
+   Type* IntegerType::box() {
+      string boxedCl = string(isUnsigned_ ? "U" : "") + "Int";
+      if (bitWidth != sizeof(int*) * 8) {
+         boxedCl += std::to_string(bitWidth);;
+      }
+
+      // FIXME remove once all integer types implemented
+      if (!SymbolTable::hasClass(boxedCl)) {
+         return ObjectType::get("Int");
+      }
+
+      return ObjectType::get(boxedCl);
+   }
+
    Type* IntegerType::deepCopy() {
       return new IntegerType(*this);
    }
@@ -73,12 +87,7 @@ namespace cdot {
             return rhs;
          }
 
-         if (isa<IntegerType>(rhs)) {
-            IntegerType* asInt = cast<IntegerType>(rhs);
-
-            return IntegerType::get(bitWidth >= asInt->bitWidth ? bitWidth : asInt->bitWidth, isUnsigned_ &&
-               asInt->isUnsigned_);
-         }
+         return this;
       }
 
       if (op == "/") {
@@ -124,28 +133,6 @@ namespace cdot {
 
    llvm::Type* IntegerType::_getLlvmType() {
       return Builder->getIntNTy(bitWidth);
-   }
-
-   llvm::Value* IntegerType::castTo(llvm::Value *val, Type *target) {
-      switch (target->getTypeID()) {
-         case TypeID::IntegerTypeID: {
-            return Builder->CreateSExtOrTrunc(val, target->getLlvmType());
-         }
-         case TypeID::FPTypeID: {
-            if (isUnsigned_) {
-               return Builder->CreateUIToFP(val, target->getLlvmType());
-            }
-
-            return Builder->CreateSIToFP(val, target->getLlvmType());
-         }
-         case TypeID::ObjectTypeID:
-         case TypeID::PointerTypeID:
-            return Builder->CreateIntToPtr(val, target->getLlvmType());
-         default:
-            assert(false && "Unsupported cast!");
-      }
-
-      return nullptr;
    }
 
    string IntegerType::_toString() {

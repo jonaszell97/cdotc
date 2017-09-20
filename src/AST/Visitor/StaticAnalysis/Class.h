@@ -39,6 +39,8 @@ namespace cl {
       Expression::SharedPtr defaultVal;
       bool isConst = false;
 
+      bool isStatic = false;
+
       bool hasGetter = false;
       bool hasSetter = false;
       string getterName;
@@ -51,11 +53,11 @@ namespace cl {
    };
 
    struct Method {
-      Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<string>,
-         std::vector<Type*>, std::vector<std::shared_ptr<Expression>>, std::vector<ObjectType*>& generics, bool,
-         MethodDecl*);
+      Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<Argument>&& args,
+         std::vector<ObjectType*>& generics, bool, MethodDecl *decl);
 
-      Method(string name, Type* ret_type, std::vector<Type*>, std::vector<ObjectType*>& generics, MethodDecl*);
+      Method(string name, Type* ret_type, std::vector<Argument>&& args, std::vector<ObjectType*>& generics,
+         MethodDecl *decl);
 
       typedef std::unique_ptr<Method> UniquePtr;
       typedef std::shared_ptr<Method> SharedPtr;
@@ -64,15 +66,19 @@ namespace cl {
       string mangledName;
       Type* returnType;
 
-      std::vector<string> argumentNames;
-      std::vector<Type*> argumentTypes;
-      std::vector<std::shared_ptr<Expression>> argumentDefaults;
+      std::vector<Argument> arguments;
       AccessModifier  accessModifier;
-      std::vector<ObjectType*> generics = {};
+      std::vector<ObjectType*> generics;
 
       bool isStatic = false;
       bool isProtocolMethod = false;
       bool isVirtual = false;
+      bool mutableSelf = false;
+
+      size_t uses = 0;
+
+      bool isProtocolDefaultImpl = false;
+      bool hasDefinition = false;
       string protocolName;
 
       MethodDecl* declaration;
@@ -84,7 +90,11 @@ namespace cl {
       CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
       Method* method = nullptr;
 
-      std::unordered_map<size_t, pair<Type*, Type*>> neededCasts;
+      std::vector<size_t> neededCasts;
+      std::vector<pair<size_t, bool>> argOrder;
+
+      std::vector<Type*> generics;
+
       string expectedType;
       string foundType;
       size_t incompArg = 0;
@@ -92,8 +102,22 @@ namespace cl {
 
    class Class {
    public:
-      Class(string&, ObjectType*, std::vector<ObjectType*>&, std::vector<ObjectType*>&, ClassDecl*, bool = false);
-      Class(string &, std::vector<ObjectType *> &, std::vector<ObjectType *> &, bool, ClassDecl *);
+      Class(AccessModifier am,
+         string&,
+         ObjectType*,
+         std::vector<ObjectType*>&,
+         std::vector<ObjectType*>&,
+         ClassDecl*,
+         bool = false
+      );
+      Class(
+         AccessModifier am,
+         string &,
+         std::vector<ObjectType *> &,
+         std::vector<ObjectType *> &,
+         bool,
+         ClassDecl *
+      );
 
       Field* declareField(
          string name,
@@ -101,6 +125,7 @@ namespace cl {
          AccessModifier access,
          Expression::SharedPtr def_val,
          bool isConst,
+         bool isStatic,
          FieldDecl* declaration
       );
 
@@ -108,9 +133,7 @@ namespace cl {
          string name,
          Type *ret_type,
          AccessModifier access,
-         std::vector<string> arg_names,
-         std::vector<Type *> arg_types,
-         std::vector<Expression::SharedPtr> arg_defaults,
+         std::vector<Argument>&& args,
          std::vector<ObjectType *> generics,
          bool isStatic,
          MethodDecl* declaration
@@ -122,28 +145,9 @@ namespace cl {
 
       MethodResult hasMethod(
          string method_name,
-         std::vector<Type *> args,
-         std::vector<Type *> &concrete_generics,
-         bool check_parent = true,
-         bool checkProtocols = true,
-         bool strict = false,
-         bool swap = false
-      );
-
-      MethodResult hasMethod(
-         string method_name,
-         std::vector<Type *> args,
-         std::unordered_map<string, Type*> &concrete_generics,
-         std::vector<Type *> methodGenerics = {},
-         bool check_parent = true,
-         bool checkProtocols = true,
-         bool strict = false,
-         bool swap = false
-      );
-
-      MethodResult hasMethod(
-         string method_name,
-         std::vector<Type *> args,
+         std::vector<Argument> args = {},
+         std::vector<Type*> givenGenerics = {},
+         unordered_map<string, Type*> classGenerics = {},
          bool check_parent = true,
          bool checkProtocols = true,
          bool strict = false,
@@ -151,8 +155,6 @@ namespace cl {
       );
 
       bool declareMemberwiseInitializer();
-
-      MethodResult ancestorHasMethod(string &name, std::vector<Type *> &args);
 
       void addConformance(ObjectType *proto) {
          conformsTo_.push_back(proto);
@@ -163,7 +165,7 @@ namespace cl {
       Method* getMethod(string method_name);
       Field* getField(string &field_name);
 
-      unordered_map<string, Method*>& getMethods() {
+      const unordered_map<string, Method*>& getMethods() {
          return mangledMethods;
       };
 
@@ -221,17 +223,15 @@ namespace cl {
          return true;
       }
 
-      void defineParentClass();
-
       short getAlignment() {
          return alignment;
       }
 
-      string& getName() {
+      const string& getName() {
          return className;
       }
 
-      string& getTypeName() {
+      const string& getTypeName() {
          return typeName;
       }
 
@@ -239,11 +239,19 @@ namespace cl {
          return typeID;
       }
 
+      bool isPrivate() {
+         return access == AccessModifier::PRIVATE;
+      }
+
+      bool isProtected() {
+         return access == AccessModifier::PROTECTED;
+      }
+
       bool conformsTo(string name);
 
-      bool protectedPropAccessibleFrom(string &class_context);
-      bool privatePropAccessibleFrom(string &class_context);
-      bool isBaseClassOf(string &child);
+      bool protectedPropAccessibleFrom(const string &class_context);
+      bool privatePropAccessibleFrom(const string &class_context);
+      bool isBaseClassOf(const string &child);
 
       Class* getParent() {
          return parentClass;
@@ -260,11 +268,11 @@ namespace cl {
          return defaultConstructor;
       }
 
-      std::vector<pair<string, Field::SharedPtr>>& getFields() {
+      const std::vector<pair<string, Field::SharedPtr>>& getFields() {
          return fields;
       }
 
-      std::map<string, std::vector<string>>& getInterfMethods() {
+      const std::map<string, std::vector<string>>& getInterfMethods() {
          return protocolMethods;
       }
 
@@ -284,15 +292,11 @@ namespace cl {
          return methodOffsets[methodName];
       }
 
-      unsigned int getDepth() {
-         return depth;
-      }
-
-      std::vector<Method*>& getConstructors() {
+      const std::vector<Method*>& getConstructors() {
          return constructors;
       }
 
-      std::vector<llvm::Type*>& getMemoryLayout() {
+      const std::vector<llvm::Type*>& getMemoryLayout() {
          return memoryLayout;
       }
 
@@ -308,7 +312,7 @@ namespace cl {
          return protocolVtables;
       }
 
-      llvm::GlobalVariable*& getProtocolVtable(string& protoName) {
+      llvm::GlobalVariable*& getProtocolVtable(const string& protoName) {
          return protocolVtables[protoName];
       }
 
@@ -351,6 +355,10 @@ namespace cl {
 
       std::vector<ObjectType*>& getConformedToProtocols() {
          return conformsTo_;
+      }
+
+      const string& getDeclarationNamespace() {
+         return declarationNamespace;
       }
 
       virtual void generateTypeInfo(llvm::IRBuilder<>& Builder);
@@ -405,6 +413,25 @@ namespace cl {
          return outstandingExtensions;
       }
 
+      llvm::PointerType* getOpaquePointer() {
+         return opaquePtr;
+      }
+
+      bool hasInnerClass(const string &inner);
+
+      void addInnerClass(Class* inner) {
+         innerDeclarations.push_back(inner);
+         inner->outerClass = this;
+      }
+
+      void addUse() {
+         ++uses;
+      }
+
+      size_t& getNumUses() {
+         return uses;
+      }
+
       typedef std::unique_ptr<Class> UniquePtr;
 
       static unsigned int ProtoVtblPos;
@@ -413,13 +440,20 @@ namespace cl {
 
    protected:
       static size_t lastTypeID;
-      unsigned int depth = 0;
+      size_t uses = 0;
+
+      AccessModifier access;
 
       size_t typeID;
       string className;
       string typeName;
 
+      string declarationNamespace;
+
       std::vector<ClassDecl*> outstandingExtensions;
+
+      std::vector<Class*> innerDeclarations;
+      Class* outerClass = nullptr;
 
       ObjectType* extends = nullptr;
       Class* parentClass = nullptr;
@@ -466,6 +500,9 @@ namespace cl {
       std::vector<llvm::Type*> memoryLayout;
       bool layoutGenerated = false;
       bool emptyLayout = false;
+
+      llvm::StructType* classLlvmType = nullptr;
+      llvm::PointerType* opaquePtr = nullptr;
 
       llvm::Function* destructor = nullptr;
 

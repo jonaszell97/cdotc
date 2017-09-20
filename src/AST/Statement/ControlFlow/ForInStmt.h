@@ -29,7 +29,11 @@ public:
       return v.visit(this);
    }
 
-   Variant accept(ConstExprPass& v) override {
+   void accept(DeclPass &v) override {
+      v.visit(this);
+   }
+
+   Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
@@ -50,6 +54,8 @@ protected:
    Type* iteratedType = nullptr;
    bool rangeIsRefcounted = false;
    string rangeClassName;
+
+   Type* protocolTy = nullptr;
 };
 
 

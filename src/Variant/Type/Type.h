@@ -52,7 +52,7 @@ namespace cdot {
       static bool GenericTypesCompatible(Type* given, Type* needed);
 
       static void CopyProperties(Type *src, Type *dst);
-      static void resolve(
+      static bool resolve(
          Type **ty,
          string& className,
          std::vector<ObjectType*>* generics,
@@ -106,7 +106,7 @@ namespace cdot {
       }
 
       virtual bool needsLvalueToRvalueConv() {
-         return lvalue && !isStruct() && !cstyleArray && !carrayElement ;
+         return lvalue && !isStruct() && !cstyleArray && !carrayElement && !isSelf_;
       }
 
       bool isInferred() {
@@ -214,6 +214,10 @@ namespace cdot {
          return this;
       }
 
+      virtual Type* box() {
+         return this;
+      }
+
       virtual Type* toRvalue() {
          lvalue = false;
          return this;
@@ -246,10 +250,6 @@ namespace cdot {
          return getAlignment();
       }
 
-      virtual llvm::Value* castTo(llvm::Value*, Type*) {
-         llvm_unreachable("can't be casted");
-      }
-
       virtual bool isUnsafePointer() {
          return false;
       }
@@ -268,22 +268,6 @@ namespace cdot {
 
       virtual void isCStyleArray(bool cstyle) {
          cstyleArray = cstyle;
-      }
-
-      virtual void setLengthExpr(std::shared_ptr<Expression> expr) {
-         lengthExpr = expr;
-      }
-
-      std::shared_ptr<Expression>& getLengthExpr() {
-         return lengthExpr;
-      }
-
-      virtual void setLength(long len) {
-         length = len;
-      }
-
-      virtual long getLength() {
-         return length;
       }
 
       virtual bool isPointerTy() {
@@ -391,29 +375,19 @@ namespace cdot {
          return carrayElement;
       }
 
-      virtual void hasConstantSize(bool constSize) {
-         constantSize = constSize;
-      }
-
-      virtual bool hasConstantSize() {
-         return constantSize;
-      }
-
       virtual bool isRefcounted() {
          return false;
       }
 
+      virtual bool isSelf() {
+         return isSelf_;
+      }
+
+      virtual void isSelf(bool self) {
+         isSelf_ = self;
+      }
+
       virtual void visitContained(TypeCheckPass& t) {}
-      virtual Type* visitLengthExpr(TypeCheckPass* v);
-      virtual llvm::Value* visitLengthExpr(CodeGen* v);
-
-      Type* getLengthExprType() {
-         return lengthExprType;
-      }
-
-      llvm::Value* getLengthExprVal() {
-         return lengthExprValue;
-      }
 
    protected:
       TypeID id;
@@ -424,7 +398,7 @@ namespace cdot {
       bool isConst_ = false;
       bool lvalue = false;
 
-      string className = "";
+      string className;
 
       bool hasDefaultArg = false;
 
@@ -433,11 +407,7 @@ namespace cdot {
       bool cstyleArray = false;
       bool carrayElement = false;
 
-      std::shared_ptr<Expression> lengthExpr = nullptr;
-      Type* lengthExprType = nullptr;
-      llvm::Value* lengthExprValue = nullptr;
-      bool constantSize = false;
-      long length = -1;
+      bool isSelf_ = false;
 
       virtual llvm::Type* _getLlvmType() = 0;
       virtual llvm::Type* getLlvmFunctionType() {

@@ -9,6 +9,7 @@
 #include "../../../Variant/Variant.h"
 
 namespace cdot {
+   struct Argument;
 namespace cl {
 
    struct EnumCase {
@@ -20,6 +21,7 @@ namespace cl {
    class Enum : public Class {
    public:
       Enum(
+         AccessModifier am,
          string& name,
          std::vector<ObjectType*>& conformsTo,
          std::vector<ObjectType*>& generics
@@ -32,14 +34,14 @@ namespace cl {
          }
 
          if (!case_.associatedValues.empty()) {
-            std::vector<Type*> argTypes;
-            std::vector<string> argNames;
+            hasAssociatedValues_ = true;
+
+            std::vector<Argument> args;
             for (const auto& assoc : case_.associatedValues) {
-               argNames.push_back(assoc.first);
-               argTypes.push_back(assoc.second);
+               args.emplace_back(assoc.first, assoc.second);
             }
 
-            declareMethod(name, nullptr, AccessModifier::PUBLIC, argNames, argTypes, {}, generics, false, nullptr);
+            declareMethod(name, nullptr, AccessModifier::PUBLIC, std::move(args), generics, false, nullptr);
          }
       }
 
@@ -61,7 +63,7 @@ namespace cl {
          return cases.find(caseName) != cases.end();
       }
 
-      MethodResult hasCase(string& caseName, std::vector<Type*>& assocTypes, std::vector<Type*>& generics) {
+      MethodResult hasCase(string& caseName, std::vector<Argument>& assocTypes, std::vector<Type*>& generics) {
          MethodResult res;
          res.compatibility = CompatibilityType::FUNC_NOT_FOUND;
 
@@ -78,6 +80,18 @@ namespace cl {
          return hasMethod(caseName, assocTypes, generics);
       }
 
+      bool hasAssociatedValues() {
+         return hasAssociatedValues_;
+      }
+
+      Type* getRawType() {
+         return rawType;
+      }
+
+      void setRawType(Type* raw) {
+         rawType = raw;
+      }
+
       EnumCase& getCase(string& caseName) {
          assert(hasCase(caseName) && "Call hasCase first!");
          return cases[caseName];
@@ -86,6 +100,9 @@ namespace cl {
    protected:
       unordered_map<string, EnumCase> cases;
       size_t maxAssociatedValues = 0;
+
+      Type* rawType;
+      bool hasAssociatedValues_ = false;
    };
 
 }

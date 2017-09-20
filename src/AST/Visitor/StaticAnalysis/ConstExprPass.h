@@ -24,65 +24,69 @@ class ConstExprPass {
 public:
    ConstExprPass();
 
-   virtual Variant visit(NamespaceDecl*);
+   virtual Variant visit(NamespaceDecl *node);
+   virtual Variant visit(CompoundStmt *node);
 
-   virtual Variant visit(FunctionDecl*);
-   virtual Variant visit(CompoundStmt*);
-   virtual Variant visit(IdentifierRefExpr*);
-   virtual Variant visit(DeclStmt*);
-   virtual Variant visit(ForStmt*);
-   virtual Variant visit(ForInStmt*);
-   virtual Variant visit(WhileStmt*);
+   virtual Variant visit(DeclStmt *node);
+   virtual Variant visit(FunctionDecl *node);
+   virtual Variant visit(DeclareStmt *node);
 
-   virtual Variant visit(CollectionLiteral*);
-   virtual Variant visit(NumericLiteral*);
-   virtual Variant visit(NoneLiteral*);
-   virtual Variant visit(StringLiteral*);
-   virtual Variant visit(SubscriptExpr*);
-   virtual Variant visit(CallExpr*);
-   virtual Variant visit(MemberRefExpr*);
-   virtual Variant visit(BinaryOperator*);
-   virtual Variant visit(TertiaryOperator*);
-   virtual Variant visit(UnaryOperator*);
-   virtual Variant visit(BreakStmt*);
-   virtual Variant visit(ContinueStmt*);
-   virtual Variant visit(IfStmt*);
-   virtual Variant visit(MatchStmt*);
-   virtual Variant visit(CaseStmt*);
-   virtual Variant visit(LabelStmt*);
-   virtual Variant visit(GotoStmt*);
-   virtual Variant visit(FuncArgDecl*);
-   virtual Variant visit(ReturnStmt*);
-   virtual Variant visit(Expression*);
-   virtual Variant visit(ClassDecl*);
-   virtual Variant visit(MethodDecl*);
-   virtual Variant visit(FieldDecl*);
-   virtual Variant visit(ConstrDecl*);
-   virtual Variant visit(DestrDecl*);
-   virtual Variant visit(LambdaExpr*);
-   virtual Variant visit(ImplicitCastExpr*);
-   virtual Variant visit(ExtendStmt*);
-   virtual Variant visit(TypedefDecl*);
-   virtual Variant visit(TypeRef*);
-   virtual Variant visit(DeclareStmt*);
-   virtual Variant visit(LvalueToRvalue*);
-   virtual Variant visit(DebugStmt*);
-   virtual Variant visit(TupleLiteral*);
-   virtual Variant visit(EnumDecl*);
+   virtual Variant visit(ClassDecl *node);
+   virtual Variant visit(MethodDecl *node);
+   virtual Variant visit(FieldDecl *node);
+   virtual Variant visit(ConstrDecl *node);
+   virtual Variant visit(DestrDecl *node);
+   virtual Variant visit(EnumDecl *node);
 
-   virtual Variant visit(Statement*);
+   virtual Variant visit(IdentifierRefExpr *node);
+   virtual Variant visit(SubscriptExpr *node);
+   virtual Variant visit(CallExpr *node);
+   virtual Variant visit(MemberRefExpr *node);
+
+   virtual Variant visit(ForStmt *node);
+   virtual Variant visit(ForInStmt *node);
+   virtual Variant visit(WhileStmt *node);
+   virtual Variant visit(IfStmt *node);
+   virtual Variant visit(MatchStmt *node);
+   virtual Variant visit(CaseStmt *node);
+   virtual Variant visit(LabelStmt *node);
+   virtual Variant visit(GotoStmt *node);
+
+   virtual Variant visit(ReturnStmt *node);
+   virtual Variant visit(BreakStmt *node);
+   virtual Variant visit(ContinueStmt *node);
+
+   virtual Variant visit(CollectionLiteral *node);
+   virtual Variant visit(NumericLiteral *node);
+   virtual Variant visit(NoneLiteral *node);
+   virtual Variant visit(StringLiteral *node);
+   virtual Variant visit(StringInterpolation *node);
+   virtual Variant visit(TupleLiteral *node);
+
+   virtual Variant visit(BinaryOperator *node);
+   virtual Variant visit(TertiaryOperator *node);
+   virtual Variant visit(UnaryOperator *node);
+
+
+   virtual Variant visit(FuncArgDecl *node);
+   virtual Variant visit(Expression *node);
+   virtual Variant visit(LambdaExpr *node);
+   virtual Variant visit(ImplicitCastExpr *node);
+   virtual Variant visit(TypedefDecl *node);
+   virtual Variant visit(TypeRef *node);
+   virtual Variant visit(LvalueToRvalue *node);
+
+   virtual Variant visit(DebugStmt *node);
+
+   virtual Variant visit(Statement *node);
 
 protected:
-   static size_t latestScope;
-
-   void pushScope();
-   void popScope();
+   static size_t ConditionStack;
 
    long hasVariable(string& varName);
    Variant& getVariable(string& varName);
    void setVariable(string& varName, Variant& val);
 
-   std::vector<string> Scopes;
    unordered_map<string, Variant> Variables;
 };
 

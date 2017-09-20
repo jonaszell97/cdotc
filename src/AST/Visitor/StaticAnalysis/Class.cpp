@@ -6,6 +6,7 @@
 #include "../../SymbolTable.h"
 #include "../../Expression/Expression.h"
 #include "../../../Message/Warning.h"
+#include "../../Statement/Declaration/Class/MethodDecl.h"
 #include "../../Statement/Declaration/Class/ClassDecl.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Util.h"
@@ -37,24 +38,24 @@ namespace cl {
     * @param arg_types
     * @param arg_defaults
     */
-   Method::Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<string>
-      arg_names, std::vector<Type*> arg_types, std::vector<Expression::SharedPtr> arg_defaults,
-      std::vector<ObjectType*>& generics, bool isStatic, MethodDecl* declaration) :
-         methodName(name), returnType(ret_type), accessModifier(access_modifier),
-         argumentDefaults(arg_defaults), argumentNames(arg_names), argumentTypes(arg_types), isStatic(isStatic),
-         generics(generics), declaration(declaration)
+   Method::Method(string name, Type* ret_type, AccessModifier access_modifier, std::vector<Argument>&& args,
+         std::vector<ObjectType*>& generics, bool isStatic, MethodDecl* declaration) :
+      methodName(name), returnType(ret_type), accessModifier(access_modifier),
+      arguments(args), isStatic(isStatic), generics(generics), declaration(declaration),
+      hasDefinition(declaration == nullptr || declaration->hasDefinition())
    {
 
    }
 
-   Method::Method(string name, Type *ret_type, std::vector<Type *> argTypes, std::vector<ObjectType*>& generics,
-      MethodDecl* declaration) :
+   Method::Method(string name, Type *ret_type, std::vector<Argument>&& args, std::vector<ObjectType*>& generics,
+         MethodDecl* declaration) :
       methodName(name),
       returnType(ret_type),
-      argumentTypes(argTypes),
+      arguments(args),
       isStatic(false),
       generics(generics),
-      declaration(declaration)
+      declaration(declaration),
+      hasDefinition(declaration == nullptr || declaration->hasDefinition())
    {
 
    }
@@ -70,8 +71,9 @@ namespace cl {
     * @param parent
     * @param implements
     */
-   Class::Class(string& class_name, ObjectType* parent, std::vector<ObjectType*>& conformsTo_,
+   Class::Class(AccessModifier am, string& class_name, ObjectType* parent, std::vector<ObjectType*>& conformsTo_,
       std::vector<ObjectType*>& generics, ClassDecl* decl, bool is_abstract) :
+      access(am),
       className(class_name),
       extends(parent),
       declaration(decl),
@@ -80,7 +82,9 @@ namespace cl {
       is_class(true),
       generics(generics),
       typeName("class " + class_name),
-      typeID(lastTypeID++)
+      typeID(lastTypeID++),
+      declarationNamespace(class_name.find('.') != string::npos ? class_name.substr(0, class_name.find_last_of('.'))
+                                                                : "")
    {
       type = ObjectType::get(class_name);
       for (const auto& gen : generics) {
@@ -88,8 +92,9 @@ namespace cl {
       }
    }
 
-   Class::Class(string &class_name, std::vector<ObjectType *> &conformsTo_, std::vector<ObjectType *> &generics,
-         bool isProtocol, ClassDecl *decl) :
+   Class::Class(AccessModifier am, string &class_name, std::vector<ObjectType *> &conformsTo_,
+      std::vector<ObjectType *> &generics, bool isProtocol, ClassDecl *decl) :
+      access(am),
       className(class_name),
       declaration(decl),
       is_struct(!isProtocol),
@@ -97,7 +102,9 @@ namespace cl {
       conformsTo_(conformsTo_),
       generics(generics),
       typeName((isProtocol ? "protocol " : "struct ") + class_name),
-      typeID(lastTypeID++)
+      typeID(lastTypeID++),
+      declarationNamespace(class_name.find('.') != string::npos ? class_name.substr(0, class_name.find_last_of('.'))
+                                                                : "")
    {
       type = ObjectType::get(class_name);
       type->isStruct(is_struct);
@@ -122,37 +129,18 @@ namespace cl {
       AccessModifier access,
       Expression::SharedPtr def_val,
       bool isConst,
+      bool isStatic,
       FieldDecl* decl
    ) {
       auto field = std::make_shared<Field>(name, type, access, def_val, isConst, decl);
+      field->isStatic = isStatic;
+
       auto ptr = field.get();
 
       field->mangledName = "." + className + "." + name;
       fields.emplace_back(name, std::move(field));
 
       return ptr;
-   }
-
-   void Class::defineParentClass() {
-      if (extends != nullptr) {
-         parentClass = SymbolTable::getClass(extends->getClassName());
-         depth = parentClass->depth + 1;
-
-         auto current = parentClass;
-         while (current != nullptr) {
-            current->extendedBy.push_back(this);
-            current = current->parentClass;
-         }
-
-         std::vector<ObjectType*> conformsToExcl;
-         for (const auto& prot : conformsTo_) {
-            if (!parentClass->conformsTo(prot->getClassName())) {
-               conformsToExcl.push_back(prot);
-            }
-         }
-
-         conformsTo_ = conformsToExcl;
-      }
    }
 
    /**
@@ -169,29 +157,31 @@ namespace cl {
       string name,
       Type *ret_type,
       AccessModifier access,
-      std::vector<string> arg_names,
-      std::vector<Type *> arg_types,
-      std::vector<Expression::SharedPtr> arg_defaults,
+      std::vector<Argument>&& args,
       std::vector<ObjectType *> generics,
       bool isStatic,
-      MethodDecl* decl
-   ) {
+      MethodDecl* decl)
+   {
       if (name == "init") {
          generics = this->generics;
       }
 
-      auto symb = SymbolTable::mangleMethod(className, name, arg_types);
-      auto method = std::make_shared<Method>(name, ret_type, access, arg_names,
-         arg_types, arg_defaults, generics, isStatic, decl);
+      auto symb = SymbolTable::mangleMethod(className, name, args);
+      auto method = std::make_shared<Method>(name, ret_type, access, std::move(args), generics, isStatic, decl);
 
       method->mangledName = symb;
+      method->isProtocolDefaultImpl = is_protocol && (decl == nullptr || decl->hasDefinition());
+      if (method->isProtocolDefaultImpl) {
+         method->protocolName = className;
+         ++method->uses;
+      }
 
       auto ptr = method.get();
 
       methods.emplace(name, std::move(method));
 
       if (name != "init" && name != "init.def") {
-         auto mangledName = SymbolTable::mangleFunction(name, arg_types);
+         auto mangledName = SymbolTable::mangleFunction(name, args);
          mangledMethods.emplace(mangledName, ptr);
       }
       else {
@@ -203,22 +193,26 @@ namespace cl {
 
    bool Class::declareMemberwiseInitializer()
    {
-      std::vector<Type*> argTypes;
+      std::vector<Argument> args;
       string constrName = "init";
 
       for (const auto& field : fields) {
-         argTypes.push_back(field.second->fieldType->deepCopy());
+         if (field.second->defaultVal != nullptr) {
+            continue;
+         }
+
+         args.push_back(Argument{ field.second->fieldName, field.second->fieldType->deepCopy() });
       }
 
       // check if memberwise initializer already explicitly defined
-      auto res = hasMethod(constrName, argTypes);
+      auto res = hasMethod(constrName, args);
       if (res.compatibility == CompatibilityType::COMPATIBLE) {
          memberwiseInitializer = res.method;
          return false;
       }
 
-      auto mangled = SymbolTable::mangleMethod(className, constrName, argTypes);
-      auto method = std::make_shared<Method>(constrName, type->toRvalue(), argTypes, generics, nullptr);
+      auto mangled = SymbolTable::mangleMethod(className, constrName, args);
+      auto method = std::make_shared<Method>(constrName, type->toRvalue(), std::move(args), generics, nullptr);
 
       method->mangledName = mangled;
       auto ptr = method.get();
@@ -250,130 +244,18 @@ namespace cl {
       return false;
    }
 
-   /**
-    * Returns whether or not a class or its base class has a method
-    * @param method_name
-    * @param is_static
-    * @return
-    */
    MethodResult Class::hasMethod(
       string method_name,
-      std::vector<Type *> args,
-      std::vector<Type *> &concrete_generics,
-      bool check_parent,
-      bool checkProtocols,
-      bool strict,
-      bool swap
-   ) {
-      auto overloads = methods.equal_range(method_name);
-      MethodResult result;
-      int bestMatch = 0;
-
-      if (overloads.first == overloads.second) {
-         goto check_parent;
-      }
-
-      result.compatibility = CompatibilityType::NO_MATCHING_CALL;
-
-      for (auto it = overloads.first; it != overloads.second; ++it) {
-         auto& overload = it->second;
-         std::vector<Type*> givenArgs;
-         std::vector<Type*> neededArgs = overload->argumentTypes;
-
-         givenArgs.reserve(args.size());
-
-         size_t i = 0;
-         for (const auto& arg : args) {
-            if (neededArgs.size() <= i || (!neededArgs.at(i)->isLvalue() && arg->isLvalue())) {
-               givenArgs.push_back(arg->deepCopy()->toRvalue());
-            }
-            else {
-               givenArgs.push_back(arg->deepCopy());
-            }
-         }
-
-         CallCompatability res;
-         if (swap) {
-            res = util::func_call_compatible(neededArgs, givenArgs, concrete_generics, overload->generics);
-         }
-         else {
-            res = util::func_call_compatible(givenArgs, neededArgs, concrete_generics, overload->generics);
-         }
-
-         for (const auto& arg : givenArgs) {
-            delete arg;
-         }
-
-         result.expectedType = res.expectedType;
-         result.foundType = res.foundType;
-         result.incompArg = res.incomp_arg;
-
-         if (res.perfect_match) {
-            result.compatibility = CompatibilityType::COMPATIBLE;
-            result.method = overload.get();
-            result.neededCasts = res.needed_casts;
-
-            return result;
-         }
-
-         if (res.is_compatible && res.compat_score >= bestMatch && !strict) {
-            result.compatibility = CompatibilityType::COMPATIBLE;
-            result.method = overload.get();
-            result.neededCasts = res.needed_casts;
-
-            bestMatch = res.compat_score;
-         }
-      }
-
-      check_parent:
-      if (result.compatibility != CompatibilityType::COMPATIBLE && parentClass != nullptr && check_parent
-         && method_name != "init")
-      {
-         auto parentRes = parentClass->hasMethod(method_name, args, concrete_generics,
-            check_parent, checkProtocols, strict);
-         if (parentRes.compatibility == CompatibilityType::COMPATIBLE) {
-            return parentRes;
-         }
-      }
-
-      if (result.compatibility != CompatibilityType::COMPATIBLE && checkProtocols) {
-         for (const auto& prot : conformsTo_) {
-            auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args, concrete_generics,
-               check_parent, checkProtocols, strict);
-
-            if (res.compatibility == CompatibilityType::COMPATIBLE) {
-               return res;
-            }
-         }
-      }
-
-      return result;
-   }
-
-   MethodResult Class::hasMethod(
-      string method_name,
-      std::vector<Type *> args,
-      bool check_parent,
-      bool checkProtocols,
-      bool strict,
-      bool swap
-   ) {
-      std::vector<Type*> concreteGenerics;
-      return hasMethod(method_name, args, concreteGenerics, check_parent, checkProtocols, strict, swap);
-   }
-
-   MethodResult Class::hasMethod(
-      string method_name,
-      std::vector<Type *> args,
-      std::unordered_map<string, Type*>& classGenerics,
-      std::vector<Type *> methodGenerics,
+      std::vector<Argument> args,
+      std::vector<Type*> concreteGenerics,
+      unordered_map<string, Type*> classGenerics,
       bool check_parent,
       bool checkProtocols,
       bool strict,
       bool swap)
    {
-      auto overloads = methods.equal_range(method_name);
       MethodResult result;
+      auto overloads = methods.equal_range(method_name);
       int bestMatch = 0;
 
       if (overloads.first == overloads.second) {
@@ -384,53 +266,17 @@ namespace cl {
 
       for (auto it = overloads.first; it != overloads.second; ++it) {
          auto& overload = it->second;
-         std::vector<Type*> givenArgs;
-         std::vector<Type*> neededArgs;
 
-         givenArgs.reserve(args.size());
 
-         size_t i = 0;
-         for (const auto& arg : args) {
-            if (neededArgs.size() <= i || (!neededArgs.at(i)->isLvalue() && arg->isLvalue())) {
-               givenArgs.push_back(arg->deepCopy()->toRvalue());
-            }
-            else {
-               givenArgs.push_back(arg->deepCopy());
-            }
-         }
-
-         if (method_name != "init") {
-            for (const auto& arg : overload->argumentTypes) {
-               auto needed = arg->deepCopy();
-               Type::resolveGeneric(&needed, classGenerics);
-               neededArgs.push_back(needed);
-            }
-         }
-         else {
-            neededArgs = overload->argumentTypes;
-         }
-
-         CallCompatability res;
-         if (swap) {
-            res = util::func_call_compatible(neededArgs, givenArgs, methodGenerics, overload->generics);
-         }
-         else {
-            res = util::func_call_compatible(givenArgs, neededArgs, methodGenerics, overload->generics);
-         }
-
-         for (const auto& arg : givenArgs) {
-            delete arg;
-         }
-
-         if (method_name != "init") {
-            for (const auto& needed : neededArgs) {
-               delete needed;
-            }
-         }
+         CallCompatability res = swap
+            ? util::findMatchingCall(overload->arguments, args, concreteGenerics, overload->generics)
+            : util::findMatchingCall(args, overload->arguments, concreteGenerics, overload->generics);
 
          result.expectedType = res.expectedType;
          result.foundType = res.foundType;
          result.incompArg = res.incomp_arg;
+         result.argOrder = res.argOrder;
+         result.generics = res.generics;
 
          if (res.perfect_match) {
             result.compatibility = CompatibilityType::COMPATIBLE;
@@ -453,7 +299,7 @@ namespace cl {
       if (result.compatibility != CompatibilityType::COMPATIBLE && parentClass != nullptr && check_parent
          && method_name != "init")
       {
-         auto parentRes = parentClass->hasMethod(method_name, args, methodGenerics,
+         auto parentRes = parentClass->hasMethod(method_name, args, concreteGenerics, classGenerics,
             check_parent, checkProtocols, strict);
          if (parentRes.compatibility == CompatibilityType::COMPATIBLE) {
             return parentRes;
@@ -462,35 +308,16 @@ namespace cl {
 
       if (result.compatibility != CompatibilityType::COMPATIBLE && checkProtocols) {
          for (const auto& prot : conformsTo_) {
-            auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args, methodGenerics,
-               check_parent, checkProtocols, strict);
+            auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args, concreteGenerics,
+               classGenerics, check_parent, checkProtocols, strict);
 
-            if (res.compatibility == CompatibilityType::COMPATIBLE) {
+            if (res.compatibility == CompatibilityType::COMPATIBLE && (res.method->hasDefinition || is_protocol)) {
                return res;
             }
          }
       }
 
       return result;
-   }
-
-   MethodResult Class::ancestorHasMethod(string &name, std::vector<Type *> &args) {
-      if (parentClass != nullptr) {
-         MethodResult method;
-         if ((method = parentClass->hasMethod(name, args)).compatibility == CompatibilityType::COMPATIBLE) {
-            return method;
-         }
-      }
-
-      for (const auto& impl : conformsTo_) {
-         Class* interface = SymbolTable::getClass(impl->getClassName());
-         MethodResult method;
-         if ((method = parentClass->hasMethod(name, args)).compatibility == CompatibilityType::COMPATIBLE) {
-            return method;
-         }
-      }
-
-      return MethodResult();
    }
 
    /**
@@ -499,11 +326,17 @@ namespace cl {
     * @param is_static
     * @return
     */
-   Method* Class::getMethod(string method_name) {
-
+   Method* Class::getMethod(string method_name)
+   {
       for (auto& method : methods) {
          if (method.second->mangledName == method_name) {
             return method.second.get();
+         }
+      }
+
+      for (auto& method : mangledMethods) {
+         if (method.first == method_name) {
+            return method.second;
          }
       }
 
@@ -520,7 +353,8 @@ namespace cl {
     * @param is_static
     * @return
     */
-   Field* Class::getField(string &field_name) {
+   Field* Class::getField(string &field_name)
+   {
       for (const auto& f : fields) {
          if (f.first == field_name) {
             return f.second.get();
@@ -576,18 +410,36 @@ namespace cl {
       auto proto = SymbolTable::getClass(protoObj->getClassName());
       auto& protoName = proto->getName();
 
+      proto->addUse();
+
       if (protocolMethods.find(protoName) != protocolMethods.end()) {
          return;
       }
       
       for (auto& field : proto->fields) {
+         if (field.second->isStatic) {
+            auto fieldName = className + "." + field.second->fieldName;
+
+            if (!SymbolTable::hasVariable(fieldName)) {
+               throw "Class " + className + " does not correctly implement interface " + protoName +
+                  ": Required field " + field.first + " is missing";
+            }
+
+            auto ty = SymbolTable::getVariable(fieldName).type;
+            if (!ty->implicitlyCastableTo(field.second->fieldType)) {
+               throw "Incompatible types " + field.second->fieldType->toString() + " and " + ty->toString();
+            }
+
+            continue;
+         }
+
          if (!hasField(field.first)) {
             throw "Class " + className + " does not correctly implement interface " + protoName +
                ": Required field " + field.first + " is missing";
          }
 
          for (const auto& f : fields) {
-            if (f.first == field.first) {
+             if (f.first == field.first) {
                if (field.second->hasGetter && !f.second->hasGetter) {
                   throw "Protocol " + protoName + " requires member " + field.first + " to define a "
                      "getter method";
@@ -604,30 +456,43 @@ namespace cl {
       }
 
       protocolMethods.emplace(protoName, std::vector<string>());
-      auto& int_methods = protocolMethods[protoName];
-      auto& concreteGenerics = protoObj->getConcreteGenericTypes();
-      concreteGenerics.emplace("Self", type->deepCopy());
+      auto& protoMethods = protocolMethods[protoName];
+      auto concreteGenerics = protoObj->getConcreteGenericTypes();
+      concreteGenerics.emplace("Self", ObjectType::get(className));
 
       int i = 0;
       for (const auto& method : proto->methods) {
-         std::vector<Type*> argTypes;
-         argTypes.reserve(method.second->argumentTypes.size());
+         std::vector<Argument> args;
+         args.reserve(method.second->arguments.size());
 
-         for (const auto& arg : method.second->argumentTypes) {
-            auto needed = arg->deepCopy();
+         for (const auto& arg : method.second->arguments) {
+            auto needed = arg.type->deepCopy();
             Type::resolveGeneric(&needed, concreteGenerics);
 
-            argTypes.push_back(needed);
+            args.emplace_back(arg.label, needed, arg.defaultVal);
          }
 
-         auto methodRes = hasMethod(method.second->methodName, argTypes, true, false, true, true);
+         auto methodRes = hasMethod(method.second->methodName, args, {}, {}, true, false, true, true);
          if (methodRes.compatibility != CompatibilityType::COMPATIBLE) {
+            if (method.second->hasDefinition) {
+               protoMethods.push_back(method.second->mangledName);
+               mangledMethods.emplace(method.second->mangledName, method.second.get());
+
+               continue;
+            }
+
             throw "Class " + className + " does not correctly implement interface " + protoName +
                ": Required method " + method.second->methodName + " is missing or has incompatible signature";
+         }
+         if (methodRes.method->isStatic != method.second->isStatic) {
+            string str = method.second->isStatic ? "" : " not";
+            throw "Class " + className + " does not correctly implement interface " + protoName +
+               ": Method " + method.second->methodName + " must" + str + " be static";
          }
 
          auto& given = methodRes.method->returnType;
          auto needed = method.second->returnType->deepCopy();
+         ++methodRes.method->uses;
 
          Type::resolveGeneric(&needed, concreteGenerics);
 
@@ -639,7 +504,7 @@ namespace cl {
 
          delete needed;
 
-         int_methods.push_back(methodRes.method->mangledName);
+         protoMethods.push_back(methodRes.method->mangledName);
 
          for (const auto& m : mangledMethods) {
             if (m.second->methodName == method.second->methodName) {
@@ -668,12 +533,6 @@ namespace cl {
       }
       
       if (is_protocol) {
-         for (const auto& field : fields) {
-            if (!field.second->hasGetter && !field.second->hasSetter) {
-               throw "Protocol property " + field.first +  " has to require either a getter or a setter";
-            }
-         }
-
          for (const auto& proto : conformsTo_) {
             auto prot = SymbolTable::getClass(proto->getClassName());
             if (prot->conformsTo(className)) {
@@ -691,11 +550,6 @@ namespace cl {
          return;
       }
 
-//      auto cp = conformsTo_;
-//      for (const auto& proto : cp) {
-//         inheritProtocols(conformsTo_, proto);
-//      }
-
       if (parentClass != nullptr) {
          parentClass->finalize();
       }
@@ -703,6 +557,9 @@ namespace cl {
       for (const auto& proto : conformsTo_) {
          checkProtocolConformance(proto);
       }
+
+      classLlvmType = ObjectType::getStructureType(className);
+      opaquePtr = llvm::PointerType::getUnqual(classLlvmType);
 
       for (auto& field : fields) {
          field.second->llvmType = field.second->fieldType->getLlvmType();
@@ -717,18 +574,14 @@ namespace cl {
       finalized = true;
    }
 
-   /**
-    * Returns whether or not a protected property of this class can be accessed from within the given class
-    * @param class_context
-    * @return
-    */
-   bool Class::protectedPropAccessibleFrom(string &class_context) {
-      if (class_context == className) {
+   bool Class::hasInnerClass(const string &inner) {
+      auto innerCl = SymbolTable::getClass(inner);
+      if(util::in_vector(innerDeclarations, innerCl)) {
          return true;
       }
 
-      for (auto child : extendedBy) {
-         if (child->protectedPropAccessibleFrom(class_context)) {
+      for (const auto& innerDecl : innerDeclarations) {
+         if (innerDecl->hasInnerClass(inner)) {
             return true;
          }
       }
@@ -741,7 +594,30 @@ namespace cl {
     * @param class_context
     * @return
     */
-   bool Class::privatePropAccessibleFrom(string &class_context) {
+   bool Class::protectedPropAccessibleFrom(const string &class_context) {
+      if (class_context == className) {
+         return true;
+      }
+
+      for (auto child : extendedBy) {
+         if (child->protectedPropAccessibleFrom(class_context)) {
+            return true;
+         }
+      }
+
+      if (hasInnerClass(class_context)) {
+         return true;
+      }
+
+      return false;
+   }
+
+   /**
+    * Returns whether or not a protected property of this class can be accessed from within the given class
+    * @param class_context
+    * @return
+    */
+   bool Class::privatePropAccessibleFrom(const string &class_context) {
       return class_context == className;
    }
 
@@ -749,12 +625,14 @@ namespace cl {
     * Returns whether or not this class extends the given class
     * @return
     */
-   bool Class::isBaseClassOf(string &child) {
-      if (!SymbolTable::hasClass(child)) {
+   bool Class::isBaseClassOf(const string &child) {
+      string name(child);
+
+      if (!SymbolTable::hasClass(name)) {
          return false;
       }
 
-      auto base = SymbolTable::getClass(child);
+      auto base = SymbolTable::getClass(name);
       auto current = base;
       while (current != nullptr) {
          if (this == current) {
@@ -769,6 +647,7 @@ namespace cl {
    void Class::findVirtualMethods() {
       if (is_abstract) {
          for (const auto& method : mangledMethods) {
+            ++method.second->uses;
             virtualMethods.emplace_back(method.first, method.second->mangledName);
          }
 
@@ -792,12 +671,16 @@ namespace cl {
 
                if (current->mangledMethods.find(method.first) != current->mangledMethods.end()) {
                   if (!util::in_pair_vector(virtualMethods, method.first)) {
-                     virtualMethods.emplace_back(method.first,
-                        current->mangledMethods[method.first]->mangledName);
+                     auto& currentMethod = current->mangledMethods[method.first];
+                     ++currentMethod->uses;
+
+                     virtualMethods.emplace_back(method.first, currentMethod->mangledName);
                   }
                   if (!util::in_pair_vector(base->virtualMethods, method.first)) {
-                     base->virtualMethods.emplace_back(method.first,
-                        base->mangledMethods[method.first]->mangledName);
+                     auto& baseMethod = base->mangledMethods[method.first];
+                     ++baseMethod->uses;
+
+                     base->virtualMethods.emplace_back(method.first, baseMethod->mangledName);
                   }
 
                   method.second->isVirtual = true;
@@ -805,7 +688,10 @@ namespace cl {
                   // place it in the protocol vtable as well as the normal one
                   if (method.second->isProtocolMethod) {
                      auto& protoName = method.second->protocolName;
-                     protocolMethods[protoName].push_back(current->mangledMethods[method.first]->mangledName);
+                     auto& currentMethod = current->mangledMethods[method.first];
+                     ++currentMethod->uses;
+
+                     protocolMethods[protoName].push_back(currentMethod->mangledName);
                   }
 
                   break;
@@ -843,7 +729,7 @@ namespace cl {
             generateTypeInfo(Builder);
          }
 
-         memoryLayout.push_back(CodeGen::ClassInfoType);
+         memoryLayout.push_back(std::move(CodeGen::ClassInfoType));
          size += 2 * sizeof(int*) + 8;
          ++i;
       }
@@ -888,9 +774,6 @@ namespace cl {
 
       baseClassOffsets.emplace(className, i - 1);
 
-      auto classType = ObjectType::getStructureType(className);
-      auto unqualPtr = llvm::PointerType::getUnqual(classType);
-
       for (const auto& fieldPair : fields) {
          const auto& field = fieldPair.second;
 
@@ -906,7 +789,7 @@ namespace cl {
          size += field->fieldType->getSize();
 
          if (isa<ObjectType>(field->fieldType) && field->fieldType->getClassName() == className) {
-            field->llvmType = unqualPtr;
+            field->llvmType = opaquePtr;
          }
          else {
             field->llvmType = field->fieldType->getLlvmType();
@@ -952,6 +835,7 @@ namespace cl {
          remaining = sizeof(int*) - size;
       }
 
+      // pad to a multiple of 1 byte
       int remainder = (size - size % sizeof(int*) + sizeof(int*)) - size;
       while (remainder % 8 != 0) {
          if (remainder > 4) {
@@ -994,18 +878,16 @@ namespace cl {
       unsigned methodCount = 0;
       getTotalMethods(nullptr, &methodCount, this);
 
-//      if (methodCount > 0) {
-         // vtable
-         memoryLayout.push_back(
-            llvm::ArrayType::get(Builder.getInt8PtrTy(), methodCount)->getPointerTo()
-         );
-//      }
+      // vtable
+      memoryLayout.push_back(
+         llvm::ArrayType::get(Builder.getInt8PtrTy(), methodCount)->getPointerTo()
+      );
 
       // pointer to concrete type conforming to the protocol
       memoryLayout.push_back(Builder.getInt8PtrTy());
 
       // 0 if the conforming type is a class, or its size in bytes if its a struct
-      memoryLayout.push_back(CodeGen::WordTy);
+      memoryLayout.push_back(std::move(CodeGen::WordTy));
 
       occupiedBytes = 2 * sizeof(int*);
    }
@@ -1036,6 +918,8 @@ namespace cl {
          llvm::GlobalVariable::ExternalLinkage,
          llvm::ConstantDataArray::getString(CodeGen::Context, className)
       );
+
+      _typeName = llvm::cast<llvm::Constant>(Builder.CreateBitCast(_typeName, Builder.getInt8PtrTy()));
 
 
       auto TypeInfoArr = llvm::ConstantStruct::get(CodeGen::TypeInfoType,
@@ -1085,11 +969,13 @@ namespace cl {
 
          for (const auto& method : virtualMethods) {
             methodOffsets.emplace(method.second, i++);
+            auto declaredMethod = getMethod(method.second);
             vMethods.push_back(llvm::cast<llvm::Constant>(
-               Builder.CreateBitCast(getMethod(method.second)->llvmFunc, Builder.getInt8PtrTy())
+               Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
             ));
          }
 
+         auto pairTy = llvm::StructType::get(CodeGen::Context, { Builder.getInt8PtrTy(), Builder.getInt1Ty() });
          auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), virtualMethods.size() + (size_t)needsTypeInfo);
          vtable = new llvm::GlobalVariable(Module, vtableType, true, llvm::GlobalValue::ExternalLinkage,
             llvm::ConstantArray::get(vtableType, vMethods), "." + className + ".vtbl"
@@ -1110,9 +996,10 @@ namespace cl {
          vMethods.reserve(prot.second.size());
 
          for (const auto& method : methods) {
+            auto declaredMethod = getMethod(method);
             vMethods.push_back(llvm::cast<llvm::Constant>(
-               Builder.CreateBitCast(getMethod(method)->llvmFunc, Builder.getInt8PtrTy()))
-            );
+               Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
+            ));
          }
 
          auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), methods.size());
@@ -1127,8 +1014,9 @@ namespace cl {
    }
 
    bool Class::isVirtual(Method *method) {
-      if (util::in_pair_vector(virtualMethods, SymbolTable::mangleFunction(method->methodName,
-         method->argumentTypes))) {
+      if (util::in_pair_vector(virtualMethods,
+         SymbolTable::mangleFunction(method->methodName, method->arguments)))
+      {
          return true;
       }
 

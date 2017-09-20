@@ -6,20 +6,21 @@
 #include "../Block/CompoundStmt.h"
 
 
-NamespaceDecl::NamespaceDecl(std::string ns_name, CompoundStmt::SharedPtr content) :
-    nsName(ns_name),
-    contents(content)
+NamespaceDecl::NamespaceDecl(std::string ns_name, CompoundStmt::SharedPtr content, bool anonymous) :
+   nsName(ns_name),
+   contents(content),
+   isAnonymousNamespace(anonymous)
 {
 
 }
 
 std::vector<AstNode::SharedPtr> NamespaceDecl::get_children() {
-    return { contents };
+   return { contents };
 }
 
 void NamespaceDecl::__dump(int depth) {
-    AstNode::__tab(depth);
-    std::cout <<  "NameSpaceDecl [" << nsName << "]" << std::endl;
+   AstNode::__tab(depth);
+   std::cout <<  "NameSpaceDecl [" << nsName << "]" << std::endl;
 
-    contents->__dump(depth + 1);
+   contents->__dump(depth + 1);
 }

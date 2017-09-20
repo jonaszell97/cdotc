@@ -24,13 +24,6 @@ string TypeRef::toString() {
 std::vector<AstNode::SharedPtr> TypeRef::get_children() {
    std::vector<AstNode::SharedPtr> children;
 
-   if (isa<PointerType>(type)) {
-      auto asPtr = cast<PointerType>(type);
-      if (asPtr->getLengthExpr() != nullptr) {
-         children.push_back(asPtr->getLengthExpr());
-      }
-   }
-
    return children;
 }
 

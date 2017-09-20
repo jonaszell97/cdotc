@@ -32,6 +32,10 @@ namespace cdot {
       id = TypeID::FPTypeID;
    }
 
+   Type* FPType::box() {
+      return ObjectType::get(precision == 32 ? "Float" : "Double");
+   }
+
    bool FPType::operator==(Type *&other) {
       switch (other->getTypeID()) {
          case TypeID::FPTypeID: {
@@ -68,7 +72,7 @@ namespace cdot {
             return false;
          case TypeID::FPTypeID: {
             auto asFloat = cast<FPType>(other);
-            return asFloat->precision == precision;
+            return asFloat->precision >= precision;
          }
          default:
             return false;
@@ -123,39 +127,6 @@ namespace cdot {
          default:
             return Builder->getDoubleTy();
       }
-   }
-
-   llvm::Value* FPType::castTo(llvm::Value *val, Type *target) {
-      switch (target->getTypeID()) {
-         case TypeID::IntegerTypeID: {
-            auto asInt = cast<IntegerType>(target);
-            if (asInt->isUnsigned()) {
-               return Builder->CreateFPToSI(val, target->getLlvmType());
-            }
-
-            return Builder->CreateFPToUI(val, target->getLlvmType());
-         }
-         case TypeID::FPTypeID: {
-            auto asFloat = cast<FPType>(target);
-            if (asFloat->precision == precision) {
-               return val;
-            }
-
-            if (asFloat->precision > precision) {
-               return Builder->CreateFPExt(val, target->getLlvmType());
-            }
-
-            return Builder->CreateFPTrunc(val, target->getLlvmType());
-         }
-         case TypeID::ObjectTypeID: {
-            auto intCast = Builder->CreateBitCast(val, Builder->getIntNTy(sizeof(int*)));
-            return Builder->CreateIntToPtr(intCast, target->getLlvmType());
-         }
-         default:
-            return Builder->CreateBitCast(val, target->getLlvmType());
-      }
-
-      return nullptr;
    }
 
    string FPType::_toString() {

@@ -85,7 +85,6 @@ protected:
    std::shared_ptr<TypeRef> type;
    string fieldName;
    std::shared_ptr<Expression> defaultVal;
-   Type** declaredType;
 
    bool isProtocolField = false;
 

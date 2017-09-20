@@ -50,30 +50,6 @@ namespace cdot {
       return true;
    }
 
-   llvm::Value* VoidType::castTo(llvm::Value *val, Type *ty) {
-      switch (ty->getTypeID()) {
-         case TypeID::ObjectTypeID:{
-            auto nullTy = ty->getLlvmType();
-            if (!nullTy->isPointerTy()) {
-               nullTy = nullTy->getPointerTo();
-            }
-
-            return llvm::ConstantPointerNull::get(
-               llvm::cast<llvm::PointerType>(nullTy)
-            );
-         }
-         case TypeID::PointerTypeID: {
-            return llvm::ConstantPointerNull::get(
-               llvm::cast<llvm::PointerType>(ty->getLlvmType())
-            );
-         }
-         default:
-            break;
-      }
-
-      llvm_unreachable("Incompatible cast should have been caught before");
-   }
-
    llvm::Type *VoidType::_getLlvmType() { return Builder->getVoidTy(); }
 
    string VoidType::_toString() {

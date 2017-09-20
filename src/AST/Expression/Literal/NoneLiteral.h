@@ -16,6 +16,8 @@ public:
       return true;
    }
 
+   bool canReturn(Type* ty) override;
+
    typedef std::shared_ptr<NoneLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int depth) override;
