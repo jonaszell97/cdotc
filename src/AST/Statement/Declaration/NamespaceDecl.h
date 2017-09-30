@@ -29,19 +29,15 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-     v.visit(this);
+   void accept(AbstractPass* v) override {
+     v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class TypeCheckPass;
-   friend class DeclPass;
-   friend class CodeGen;
-
+   ADD_FRIEND_PASSES
 
 protected:
    string nsName;

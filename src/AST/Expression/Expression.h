@@ -17,9 +17,15 @@ public:
    typedef std::shared_ptr<Expression> SharedPtr;
    typedef std::unique_ptr<Expression> UniquePtr;
 
+   ~Expression();
+
    inline void setParent(AstNode* p) {
       parent = p;
    }
+
+   virtual void saveOrResetState() {}
+
+   Expression& operator=(const Expression &rhs) = default;
 
    virtual inline void setMemberExpr(std::shared_ptr<Expression> ref_expr) {
       if (ref_expr == nullptr) {
@@ -108,10 +114,6 @@ public:
       return isEnumCase;
    }
 
-   virtual bool canReturn(Type *ty) {
-      return false;
-   }
-
    void isHiddenReturnValue() override;
 
    NodeType get_type() override {
@@ -130,10 +132,7 @@ public:
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr memberExpr;
@@ -158,6 +157,7 @@ protected:
    string setterName;
 
    Variant staticVal;
+   Expression *prevState = nullptr;
 
    // codegen
    llvm::GlobalVariable* globalVar = nullptr;

@@ -10,17 +10,17 @@
 
 ClassDecl::ClassDecl(
       string class_name,
-      std::vector<std::shared_ptr<FieldDecl>>&& fields,
-      std::vector<std::shared_ptr<MethodDecl>>&& methods,
-      std::vector<std::shared_ptr<ConstrDecl>>&& constr,
-      std::vector<std::shared_ptr<TypedefDecl>>&& typedefs,
-      std::vector<ObjectType*>&& generics,
+      std::vector<std::shared_ptr<FieldDecl>> &&fields,
+      std::vector<std::shared_ptr<MethodDecl>> &&methods,
+      std::vector<std::shared_ptr<ConstrDecl>> &&constr,
+      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
+      std::vector<ObjectType*> &&generics,
       AccessModifier am,
       bool is_abstract,
       ObjectType* extends,
-      std::vector<ObjectType*>&& implements,
+      std::vector<ObjectType*> &&implements,
       std::shared_ptr<DestrDecl> &&destr,
-      std::vector<Statement::SharedPtr>&& innerDeclarations) :
+      std::vector<Statement::SharedPtr> &&innerDeclarations) :
    className(class_name),
    fields(fields),
    methods(methods),
@@ -39,15 +39,15 @@ ClassDecl::ClassDecl(
 
 ClassDecl::ClassDecl(
       string className,
-      std::vector<std::shared_ptr<FieldDecl>>&& fields,
+      std::vector<std::shared_ptr<FieldDecl>> &&fields,
       std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<ConstrDecl>>&& constructors,
+      std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
       std::vector<std::shared_ptr<TypedefDecl>>&&typedefs,
-      std::vector<ObjectType *>&& generics,
+      std::vector<ObjectType *> &&generics,
       AccessModifier am,
-      std::vector<ObjectType*>&& conformsTo,
+      std::vector<ObjectType*> &&conformsTo,
       std::shared_ptr<DestrDecl> &&destr,
-      std::vector<Statement::SharedPtr>&& innerDeclarations) :
+      std::vector<Statement::SharedPtr> &&innerDeclarations) :
    className(className),
    fields(fields),
    methods(methods),

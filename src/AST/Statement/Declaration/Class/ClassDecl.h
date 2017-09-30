@@ -22,15 +22,35 @@ namespace cdot {
 
 class ClassDecl : public Statement {
 public:
-   ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
-      std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
-      std::vector<ObjectType*>&&, AccessModifier, bool, ObjectType*, std::vector<ObjectType*>&&,
-      std::shared_ptr<DestrDecl>&&,std::vector<Statement::SharedPtr>&& innerDeclarations);
+   // class or struct
+   ClassDecl(
+      string class_name,
+      std::vector<std::shared_ptr<FieldDecl>> &&fields,
+      std::vector<std::shared_ptr<MethodDecl>> &&methods,
+      std::vector<std::shared_ptr<ConstrDecl>> &&constr,
+      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
+      std::vector<ObjectType*> &&generics,
+      AccessModifier am,
+      bool is_abstract,
+      ObjectType* extends,
+      std::vector<ObjectType*> &&conformsTo,
+      std::shared_ptr<DestrDecl> &&destr,
+      std::vector<Statement::SharedPtr> &&innerDeclarations
+   );
 
-   ClassDecl(string, std::vector<std::shared_ptr<FieldDecl>>&&, std::vector<std::shared_ptr<MethodDecl>>&&,
-      std::vector<std::shared_ptr<ConstrDecl>>&&, std::vector<std::shared_ptr<TypedefDecl>>&&,
-      std::vector<ObjectType*>&&, AccessModifier, std::vector<ObjectType*>&&, std::shared_ptr<DestrDecl>&&,
-      std::vector<Statement::SharedPtr> &&innerDeclarations);
+   // protocol
+   ClassDecl(
+      string className,
+      std::vector<std::shared_ptr<FieldDecl>> &&fields,
+      std::vector<std::shared_ptr<MethodDecl>> &&methods,
+      std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
+      std::vector<std::shared_ptr<TypedefDecl>>&&typedefs,
+      std::vector<ObjectType *> &&generics,
+      AccessModifier am,
+      std::vector<ObjectType*> &&conformsTo,
+      std::shared_ptr<DestrDecl> &&destr,
+      std::vector<Statement::SharedPtr> &&innerDeclarations
+   );
 
    virtual inline bool isStruct() {
       return is_struct;
@@ -48,7 +68,7 @@ public:
       return className;
    }
 
-   void setClassName(string&& name) {
+   void setClassName(string &&name) {
       className = name;
    }
 
@@ -82,18 +102,15 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass& v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
    friend class cdot::cl::Class;
 
 protected:

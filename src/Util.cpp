@@ -3,7 +3,7 @@
 //
 
 #include "Util.h"
-#include "AST/Visitor/StaticAnalysis/Class.h"
+#include "AST/Passes/StaticAnalysis/Class.h"
 #include "Variant/Type/PointerType.h"
 #include "Variant/Type/ObjectType.h"
 #include "Variant/Type/IntegerType.h"
@@ -219,9 +219,10 @@ namespace util {
    };
 
    std::vector<string> stdLibImports = {
+      "Macro",
+
       "Extern",
       "Any",
-      "Lambda",
       "Option",
       "Protocol/Equatable",
       "Protocol/Comparable",
@@ -244,7 +245,9 @@ namespace util {
       "Dictionary",
       "String",
       "Range",
-      "Print"
+      "Print",
+      "Time",
+      "Thread"
    };
 
    std::vector<char> punctuators = {
@@ -387,6 +390,8 @@ namespace util {
       return str + ")";
    }
 
+   TypeCheckPass* TCPass = nullptr;
+
    bool resolveGeneric(
       Type* given,
       Type* needed,
@@ -428,6 +433,8 @@ namespace util {
          return false;
       }
 
+      givenGenerics.back()->setGenericClassName(needed->getGenericClassName());
+
       return true;
    }
 
@@ -453,17 +460,6 @@ namespace util {
       return -1;
    }
 
-   /**
-    * Returns:
-    *  -1 if compatible
-    *  -2 if incompatible argument count
-    *  index of first incompatible arg otherwise
-    * @param given
-    * @param needed
-    * @param given_generics
-    * @param needed_generics
-    * @return
-    */
    CallCompatability funcCallCompatible(
       std::vector<Argument> &given_args,
       std::vector<Argument> &needed_args)
@@ -475,8 +471,8 @@ namespace util {
       bool perfect_match = true;
 
       if (given_size == 0 && needed_size == 0) {
-         comp.is_compatible = true;
-         comp.perfect_match = true;
+         comp.compatibility = CompatibilityType::COMPATIBLE;
+         comp.perfectMatch = true;
 
          return comp;
       }
@@ -497,26 +493,27 @@ namespace util {
             auto& given = givenArg.type;
 
             if (!given->implicitlyCastableTo(needed)) {
-               comp.incomp_arg = i;
+               comp.incompatibleArg = i;
                comp.foundType = given->toString();
                comp.expectedType = needed->toString();
                return comp;
             }
             else if (*given != needed) {
                perfect_match = false;
-               comp.needed_casts.push_back(i);
+               comp.neededCasts.push_back(i);
+               ++comp.castPenalty;
             }
          }
          else if (!needed->hasDefaultArgVal()) {
-            comp.incomp_arg = i;
+            comp.incompatibleArg = i;
             return comp;
          }
 
          ++i;
       }
 
-      comp.is_compatible = true;
-      comp.perfect_match = perfect_match;
+      comp.compatibility = CompatibilityType::COMPATIBLE;
+      comp.perfectMatch = perfect_match;
 
       return comp;
    }
@@ -541,36 +538,37 @@ namespace util {
       }
 
       auto novararg = funcCallCompatible(noVarargGiven, noVarargNeeded);
-      if (!novararg.is_compatible) {
+      if (!novararg.isCompatible()) {
          return novararg;
       }
 
       bool cstyle = neededArgs.back().cstyleVararg;
       if (cstyle) {
-         comp.is_compatible = true;
+         comp.compatibility = CompatibilityType::COMPATIBLE;
          return comp;
       }
 
-      bool perfectMatch = novararg.perfect_match;
+      bool perfectMatch = novararg.perfectMatch;
       auto vaTy = neededArgs.back().type;
       for (size_t i = 0; i < givenArgs.size(); ++i) {
          auto& given = givenArgs[i];
 
          if (!given.type->implicitlyCastableTo(vaTy)) {
-            comp.incomp_arg = i;
+            comp.incompatibleArg = i;
             comp.foundType = given.type->toString();
             comp.expectedType = vaTy->toString();
 
             return comp;
          }
          else if (*given.type != vaTy) {
-            comp.needed_casts.push_back(i);
+            comp.neededCasts.push_back(i);
+            ++comp.castPenalty;
             perfectMatch = false;
          }
       }
 
-      comp.is_compatible = true;
-      comp.perfect_match = perfectMatch;
+      comp.compatibility = CompatibilityType::COMPATIBLE;
+      comp.perfectMatch = perfectMatch;
 
       return comp;
    }
@@ -642,6 +640,7 @@ namespace util {
       std::vector<Type*> givenGenerics,
       std::vector<ObjectType*> neededGenerics)
    {
+      assert(TCPass != nullptr && "No TypeCheck Visitor!");
       CallCompatability comp;
       std::vector<Argument> resolvedGivenArgs;
       std::vector<Argument> resolvedNeededArgs;
@@ -655,28 +654,35 @@ namespace util {
             continue;
          }
 
-         Type* needed = neededArgs.size() > i ? neededArgs[i].type : nullptr;
          auto& argVal = arg.defaultVal;
+         Type* needed = neededArgs.size() > i ? neededArgs[i].type : nullptr;
+         if (needed == nullptr) {
+            if (cstyleVararg) {
+               resolvedGivenArgs.emplace_back(arg.label, new AutoType, argVal);
+               ++i;
 
-         if (argVal != nullptr && argVal->needsContextualInformation()) {
-            if (needed == nullptr || !argVal->canReturn(needed)) {
-               if (cstyleVararg) {
-                  resolvedGivenArgs.emplace_back(arg.label, new AutoType, argVal);
-                  continue;
-               }
-               else if (vararg) {
-                  auto& arg = neededArgs.back();
-                  resolvedGivenArgs.emplace_back(arg.label, arg.type->deepCopy(), arg.defaultVal);
-                  continue;
-               }
-
-               comp.incomp_arg = i;
+               continue;
+            }
+            if (neededArgs.empty()) {
+               comp.incompatibleArg = i;
                return comp;
             }
 
-            resolvedGivenArgs.emplace_back(arg.label, needed->deepCopy(), argVal);
+            // vararg
+            needed = neededArgs.back().type;
          }
-         else if (needed != nullptr && arg.type->isLvalue() && !needed->isLvalue()) {
+
+         if (needed != nullptr && argVal != nullptr && argVal->needsContextualInformation()) {
+//            argVal->saveOrResetState();
+            argVal->setContextualType(needed);
+            resolvedGivenArgs.emplace_back(arg.label, argVal->accept(*TCPass), argVal);
+
+            ++i;
+            continue;
+         }
+
+         assert(arg.type != nullptr && "No argument type or value");
+         if (needed != nullptr && arg.type->isLvalue() && !needed->isLvalue()) {
             resolvedGivenArgs.emplace_back(arg.label, arg.type->deepCopy()->toRvalue(), argVal);
          }
          else {
@@ -689,7 +695,7 @@ namespace util {
       auto order = orderArgs(resolvedGivenArgs, neededArgs);
       auto genComp = resolveGenerics(resolvedGivenArgs, neededArgs, givenGenerics, neededGenerics);
       if (genComp != -1) {
-         comp.incomp_arg = genComp;
+         comp.incompatibleArg = genComp;
          return comp;
       }
 
@@ -697,15 +703,19 @@ namespace util {
          auto newTy = arg.type->deepCopy();
          if (newTy->isObject()) {
             auto asObj = cast<ObjectType>(newTy);
-            std::vector<Type*> unqual;
-            for (const auto& ty : givenGenerics) {
-               unqual.push_back(ty->deepCopy());
+            auto cl = SymbolTable::getClass(asObj->getClassName());
+
+            if (givenGenerics.size() == cl->getGenerics().size()) {
+               for (const auto &gen : cl->getGenerics()) {
+                  auto index = std::find_if(givenGenerics.begin(), givenGenerics.end(), [gen](Type*& ty) {
+                     return ty->getGenericClassName() == gen->getGenericClassName();
+                  });
+
+                  asObj->specifyGenericType(gen->getGenericClassName(), (*index)->deepCopy());
+               }
+
+               asObj->getUnqualifiedGenerics().clear();
             }
-
-            asObj->setUnqualGenerics(unqual);
-
-            Type::resolveUnqualified(newTy);
-            Type::resolveGeneric(&newTy, newTy->getConcreteGenericTypes());
          }
 
          resolvedNeededArgs.emplace_back(arg.label, newTy, arg.defaultVal);
@@ -719,8 +729,8 @@ namespace util {
       res.argOrder = order;
       res.generics = givenGenerics;
 
-      for (const auto& arg : resolvedGivenArgs) {
-         delete arg.type;
+      if (res.isCompatible()) {
+         res.resolvedArgs = resolvedGivenArgs;
       }
 
       for (const auto& arg : resolvedNeededArgs) {

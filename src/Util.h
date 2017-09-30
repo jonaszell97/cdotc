@@ -39,17 +39,36 @@ enum class AccessModifier : unsigned int {
    PROTECTED
 };
 
-struct CallCompatability {
-   bool is_compatible = false;
-   int compat_score;
-   bool perfect_match = false;
+class Function;
 
-   std::vector<size_t> needed_casts;
+namespace cdot {
+   namespace cl {
+      struct Method;
+   }
+}
+
+struct CallCompatability {
+   CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
+   bool isCompatible() {
+      return compatibility == CompatibilityType::COMPATIBLE;
+   }
+
+   int castPenalty = 0;
+   bool perfectMatch = false;
+
+   std::vector<size_t> neededCasts;
    std::vector<pair<size_t, bool>> argOrder;
 
+   std::vector<Argument> resolvedArgs;
    std::vector<Type*> generics;
 
-   size_t incomp_arg = 0;
+   union {
+      Function* func;
+      cl::Method* method;
+   };
+
+   size_t incompatibleArg = 0;
+
    string expectedType;
    string foundType;
 };
@@ -127,6 +146,8 @@ namespace util {
    extern std::vector<char> punctuators;
 
    extern std::vector<string> attributes;
+
+   extern TypeCheckPass* TCPass;
 
    bool resolveGeneric(
       Type* given,

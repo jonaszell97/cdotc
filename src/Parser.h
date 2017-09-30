@@ -61,6 +61,8 @@ class TupleLiteral;
 class EnumDecl;
 class EnumCaseDecl;
 
+enum class ExternKind : unsigned int;
+
 namespace cdot {
    class Type;
    class ObjectType;
@@ -97,7 +99,7 @@ public:
 
    std::shared_ptr<CompoundStmt> parse();
 
-   static pair<string, string> get_source_file(size_t source) {
+   static pair<string, string>& get_source_file(size_t source) {
       return source_files[source];
    }
 
@@ -143,9 +145,10 @@ protected:
    std::shared_ptr<CollectionLiteral> parse_collection_literal();
 
    std::vector<pair<string, std::shared_ptr<TypeRef>>> parse_tuple_type();
-   std::vector<std::shared_ptr<FuncArgDecl>> parse_arg_list(bool = false, bool = false);
+   std::vector<std::shared_ptr<FuncArgDecl>> parse_arg_list(bool optionalNames = false,
+      bool optionalTypes = false);
 
-   std::shared_ptr<FunctionDecl> parse_function_decl(bool = false);
+   std::shared_ptr<FunctionDecl> parse_function_decl(bool isDeclaration = false);
    std::shared_ptr<LambdaExpr> parse_lambda_expr();
    std::shared_ptr<CallExpr> parse_function_call(CallType callTy, bool allowLet = false);
    std::vector<pair<string, std::shared_ptr<Expression>>> parse_arguments(bool = false);
@@ -157,21 +160,51 @@ protected:
    std::shared_ptr<TupleLiteral> parse_tuple_literal();
 
    ClassHead parse_class_head(bool isEnum = false);
-   std::shared_ptr<ClassDecl> parse_class_decl(bool = false, bool = false);
+   std::shared_ptr<ClassDecl> parse_class_decl(bool isStruct = false, bool isProtocol = false,
+      bool isDeclaration = false);
    std::shared_ptr<ClassDecl> parse_struct_decl();
-   std::shared_ptr<EnumDecl> parse_enum_decl();
-   std::shared_ptr<ConstrDecl> parse_constr_decl(AccessModifier, bool optionalNames = false);
+
+   std::shared_ptr<EnumDecl> parse_enum_decl(
+      bool isDeclaration = false
+   );
+
+   std::shared_ptr<ConstrDecl> parse_constr_decl(
+      AccessModifier,
+      bool optionalNames = false
+   );
+
    std::shared_ptr<DestrDecl> parse_destr_decl();
-   std::shared_ptr<MethodDecl> parse_method_decl(AccessModifier, bool, bool);
-   std::shared_ptr<FieldDecl> parse_field_decl(AccessModifier, bool, bool);
-   std::shared_ptr<MethodDecl> parse_operator_decl(AccessModifier, bool);
+
+   std::shared_ptr<MethodDecl> parse_method_decl(
+      AccessModifier,
+      bool isStatic,
+      bool allowOmittedBody
+   );
+
+   std::shared_ptr<FieldDecl> parse_field_decl(
+      AccessModifier,
+      bool isStatic,
+      bool isConst,
+      bool isDeclaration = false
+   );
+
+   std::shared_ptr<MethodDecl> parse_operator_decl(
+      AccessModifier,
+      bool isProtocol
+   );
+
    std::shared_ptr<EnumCaseDecl> parse_enum_case();
 
    std::vector<ObjectType*> parse_generics();
    std::vector<Type*> parse_concrete_generics();
 
-   std::vector<std::shared_ptr<Statement>> parse_class_inner(bool, bool, bool = false);
-   std::shared_ptr<ClassDecl> parse_extend_stmt();
+   std::vector<std::shared_ptr<Statement>> parse_class_inner(
+      bool isStruct,
+      bool isProtocol,
+      bool isExtension = false,
+      bool isDeclaration = false
+   );
+   std::shared_ptr<ClassDecl> parse_extend_stmt(bool isDeclaration = false);
 
    std::shared_ptr<TypeRef> parse_type();
    Type* __parse_type();
@@ -191,8 +224,9 @@ protected:
 
    std::vector<Attribute> parse_attributes();
 
-   std::shared_ptr<CompoundStmt> parse_multiple_declare_stmt();
-   std::shared_ptr<Statement> parse_declare_stmt();
+   std::shared_ptr<DeclareStmt> parse_multiple_declare_stmt(ExternKind externKind);
+   std::shared_ptr<DeclareStmt> parse_declare_stmt(ExternKind externKind,
+      std::shared_ptr<DeclareStmt> decl = nullptr);
 };
 
 #endif //INTERPRETER_H

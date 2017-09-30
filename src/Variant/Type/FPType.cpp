@@ -6,9 +6,9 @@
 #include "ObjectType.h"
 #include "IntegerType.h"
 #include "VoidType.h"
-#include "../../AST/Visitor/CodeGen/CodeGen.h"
+#include "../../AST/Passes/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
 #include "../../Token.h"
 
 namespace cdot {
@@ -130,7 +130,12 @@ namespace cdot {
    }
 
    string FPType::_toString() {
-      return precision == 64 ? "double" : "float";
+      string str = precision == 64 ? "double" : "float";
+      if (PrimitiveType::PrintSpecificTypes) {
+         str = "Builtin.Primitive." + str;
+      }
+
+      return str;
    }
 
 } // namespace cdot

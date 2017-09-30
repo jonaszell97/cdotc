@@ -57,18 +57,15 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass& v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
    friend class cdot::cl::Class;
 
 protected:

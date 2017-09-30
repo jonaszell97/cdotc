@@ -13,13 +13,10 @@ namespace {
 
 Lexer::Lexer(string &program, string &fileName) :
    src(program),
-   current_index(0),
-   index_on_line(0),
-   current_token_index(0),
-   last_token_index(0),
+   srcLength(src.length()),
    fileName(fileName)
 {
-   current_token = Token(T_BOF, {}, 0, 0);
+   current_token = Token(T_BOF, {}, 0, 0, 0, 0);
 }
 
 Lexer::Lexer() : src(empty), fileName(empty)
@@ -31,11 +28,14 @@ void Lexer::reset(string &src, string &fileName)
 {
    this->src = src;
    this->fileName = fileName;
+   srcLength = src.length();
    current_index = 0;
+   currentLine = 0;
+   indexOnLine = 0;
    current_token_index = 0;
    last_token_index = 0;
    tokens.clear();
-   current_token = Token(T_BOF, {}, 0, 0);
+   current_token = Token(T_BOF, {}, 0, 0, 0, 0);
 }
 
 std::string Lexer::s_val()
@@ -139,7 +139,14 @@ char Lexer::get_next_char() {
       return '\0';
    }
 
-   return src[current_index++];
+   ++indexOnLine;
+   auto next = src[current_index++];
+   if (next == '\n') {
+      ++currentLine;
+      indexOnLine = 0;
+   }
+
+   return next;
 }
 
 char Lexer::char_lookahead() {
@@ -161,6 +168,10 @@ void Lexer::backtrack() {
       current_token_index = 0;
       return;
    }
+   if (current_token.is_punctuator('\n')) {
+      --currentLine;
+      indexOnLine = current_token.getIndexOnLine();
+   }
 
    current_token = tokens[current_token_index - 1];
 }
@@ -170,7 +181,16 @@ void Lexer::backtrack() {
  * @param length
  */
 void Lexer::backtrack_c(int length) {
-   current_index -= length;
+   auto until = current_index - length;
+   while (current_index > until) {
+      indexOnLine = indexOnLine == 0 ? 0 : indexOnLine - 1;
+      if (src[current_index] == '\n') {
+         --currentLine;
+         indexOnLine = current_token.getIndexOnLine();
+      }
+
+      --current_index;
+   }
 }
 
 char Lexer::escape_char(char c) {
@@ -230,12 +250,12 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 
    last_token_index = current_index;
    if (current_index >= src.length()) {
-      return Token(T_EOF, { }, current_index, current_index);
+      return makeToken(T_EOF, { }, current_index, current_index);
    }
 
    string t;
    bool beginningOfLine = true;
-   auto index = current_index - 1;
+   auto index = current_index == 0 ? 0 : current_index - 1;
    while (index > 0) {
       char c = src[index--];
       if (c == '\n') {
@@ -247,10 +267,16 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       }
    }
 
-   int _start_index = current_index;
-   int indent = 0;
-   char first = get_next_char();
+   size_t _start_index = current_index;
+   size_t indent = 0;
+   char first;
+   char next;
 
+   if (continueInterpolation) {
+      goto string_literal;
+   }
+
+   first = get_next_char();;
    if (first == ' ') {
       index = current_index;
       while (src[index] == ' ' && index < src.length()) {
@@ -258,15 +284,16 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       }
 
       if (src[index] == '#' && src[index + 1] != '{') {
-         indent = current_index - index;
+         indent = index >= current_index ? current_index - index : 0;
          current_index = index + 1;
          first = '#';
       }
    }
 
    if (first == ' ' && significantWhiteSpace) {
-      return Token(T_PUNCTUATOR, { first }, current_index, current_index);
+      return makeToken(T_PUNCTUATOR, { first }, current_index, current_index);
    }
+
 
    while (first == ' ') {
       first = get_next_char();
@@ -274,10 +301,8 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
    }
 
    if (first == '\0' && current_index >= src.length()) {
-      return Token(T_EOF, { }, current_index, current_index);
+      return makeToken(T_EOF, { }, current_index, current_index);
    }
-
-   char next;
 
    // comment
    if (first == '/') {
@@ -306,7 +331,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          next = get_next_char();
       }
 
-      return Token(T_PREPROC_VAR, { t }, _start_index, current_index);
+      return makeToken(T_PREPROC_VAR, { t }, _start_index, current_index);
    }
 
    // preprocessor directive
@@ -317,8 +342,8 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          next = get_next_char();
       }
 
-      auto tok = Token(T_DIRECTIVE, { t }, _start_index, current_index);
-      tok.setIndent(indent < 0 ? 0 : indent);
+      auto tok = makeToken(T_DIRECTIVE, { t }, _start_index, current_index);
+      tok.setIndent(indent);
 
       return tok;
    }
@@ -335,30 +360,40 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          ParseError::raise("Expected \"'\" after character literal", this);
       }
 
-      return Token(T_LITERAL, { next }, _start_index, current_index);
+      return makeToken(T_LITERAL, { next }, _start_index, current_index);
    }
 
    // string literal
    if (first == '\"') {
-      next = get_next_char();
-      while (next != '\"' && current_index < src.length()) {
-         if (next == '\\') {
-            next = get_next_char();
-            auto esc = escape_char(next);
-            if (esc != next) {
-               t += esc;
-            }
-            else {
-               t += "\\" + string(1, next);
-            }
-         } else {
-            t += next;
-         }
-
+      string_literal:
+      while (current_index < srcLength) {
          next = get_next_char();
+         switch (next) {
+            case '\"':
+               goto done;
+            case '\\': {
+               auto esc = escape_char(next);
+               if (esc != next) {
+                  t += esc;
+               } else {
+                  t += "\\" + string(1, next);
+               }
+               break;
+            }
+            case '$': {
+               auto tok = makeToken(T_LITERAL, {t}, _start_index, current_index);
+               tok.isInterpolationStart = true;
+
+               return tok;
+            }
+            default:
+               t += next;
+         }
       }
 
-      return Token(T_LITERAL, { t }, _start_index, current_index);
+      done:
+      continueInterpolation = false;
+      return makeToken(T_LITERAL, { t }, _start_index, current_index);
    }
 
    // escape sequence
@@ -370,7 +405,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 
       }
 
-      return Token(T_IDENT, { t }, _start_index, current_index, true);
+      return makeToken(T_IDENT, { t }, _start_index, current_index, true);
    }
 
    if (first == '-') {
@@ -395,7 +430,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          }
 
          backtrack_c(1);
-         return Token(T_LITERAL, { long(std::stoul(hex_s, nullptr, 16)) }, _start_index, current_index);
+         return makeToken(T_LITERAL, { long(std::stoul(hex_s, nullptr, 16)) }, _start_index, current_index);
       }
 
       if (first == '0' && (_pref == 'b' || _pref == 'B')) {
@@ -412,7 +447,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          }
 
          backtrack_c(1);
-         return Token(T_LITERAL, { long(std::stoul(bin_s, nullptr, 2)) }, _start_index, current_index);
+         return makeToken(T_LITERAL, { long(std::stoul(bin_s, nullptr, 2)) }, _start_index, current_index);
       }
 
       backtrack_c(1); // undo _pref
@@ -437,7 +472,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       // octal literal
       if (util::matches("0[0-7]+", t)) {
          backtrack_c(1);
-         return Token(T_LITERAL, { std::stoi(t, nullptr, 8) }, _start_index, current_index);
+         return makeToken(T_LITERAL, { std::stoi(t, nullptr, 8) }, _start_index, current_index);
       }
 
       // exponent
@@ -453,7 +488,7 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          double base = std::stod(t);
          double exp = pow(10, std::stoi(_exp));
 
-         return Token(T_LITERAL, { base * exp }, _start_index, current_index);
+         return makeToken(T_LITERAL, { base * exp }, _start_index, current_index);
       }
 
       backtrack_c(1);
@@ -496,19 +531,19 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
 
          val.isUnsigned = isUnsigned;
 
-         return Token(T_LITERAL, std::move(val), _start_index, current_index);
+         return makeToken(T_LITERAL, std::move(val), _start_index, current_index);
       }
       else {
          next = char_lookahead();
          if (next == 'f' || next == 'F') {
             get_next_char();
-            return Token(T_LITERAL, { std::stof(t) }, _start_index, current_index);
+            return makeToken(T_LITERAL, { std::stof(t) }, _start_index, current_index);
          }
          else if (next == 'd' || next == 'D') {
             get_next_char();
          }
 
-         return Token(T_LITERAL, { std::stod(t) }, _start_index, current_index);
+         return makeToken(T_LITERAL, { std::stod(t) }, _start_index, current_index);
       }
    }
 
@@ -528,32 +563,38 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
       backtrack_c(1);
 
       if (is_operator(t)) {
-         return Token(T_OP, { t }, _start_index, current_index);
+         return makeToken(T_OP, { t }, _start_index, current_index);
       }
       else if (t == "none") {
-         return Token(T_LITERAL, { }, _start_index, current_index);
+         return makeToken(T_LITERAL, { }, _start_index, current_index);
       }
       else if (is_keyword(t)) {
-         return Token(T_KEYWORD, { t }, _start_index, current_index);
+         return makeToken(T_KEYWORD, { t }, _start_index, current_index);
       }
       else if (is_bool_literal(t)) {
-         return Token(T_LITERAL, { t == "true" }, _start_index, current_index);
+         return makeToken(T_LITERAL, { t == "true" }, _start_index, current_index);
       }
       else {
-         return Token(T_IDENT, { t }, _start_index, current_index);
+         return makeToken(T_IDENT, { t }, _start_index, current_index);
       }
    }
 
    if (is_operator_char(first)) {
+      bool lastWasPeriod = first == '.';
       while (is_operator_char(first)) {
          t += first;
          first = get_next_char();
+         if (lastWasPeriod && first != '.') {
+            break;
+         }
+
+         lastWasPeriod = first == '.';
       }
 
       backtrack_c(1);
 
       if (t == ".") {
-         return Token(T_PUNCTUATOR, { '.' }, _start_index, current_index);
+         return makeToken(T_PUNCTUATOR, { '.' }, _start_index, current_index);
       }
 
       while (!is_operator(t) && t.length() > 0) {
@@ -561,15 +602,15 @@ Token Lexer::_get_next_token(bool ignore_newline, bool significantWhiteSpace) {
          backtrack_c(1);
       }
 
-      return Token(T_OP, { t }, _start_index, current_index);
+      return makeToken(T_OP, { t }, _start_index, current_index);
    }
 
    if (is_punctuator(first)) {
-      return Token(T_PUNCTUATOR, { first }, _start_index, current_index);
+      return makeToken(T_PUNCTUATOR, { first }, _start_index, current_index);
    }
 
    ParseError::raise(u8"Unexpected character " + std::string(1, first), this);
-   llvm_unreachable("see error above");
+   llvm_unreachable(0);
 }
 
 /**
@@ -591,11 +632,22 @@ void Lexer::advance(bool ignore_newline, bool significantWhiteSpace) {
    current_token = get_next_token(ignore_newline, significantWhiteSpace);
 }
 
+Token Lexer::makeToken(
+   TokenType ty,
+   Variant &&val,
+   size_t start,
+   size_t end,
+   bool isEscaped)
+{
+   return Token(ty, std::move(val), start, end, currentLine, indexOnLine, isEscaped);
+}
+
 /**
  * Returns the next token
  * @return
  */
-Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace) {
+Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace)
+{
    if (!tokens.empty() && tokens.back().get_type() == T_EOF) {
       return tokens.back();
    }
@@ -607,8 +659,10 @@ Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace) {
    Token t = tokens[current_token_index++];
    current_index = t.getEnd();
 
-   if (ignore_newline && t.is_punctuator('\n')) {
-      return get_next_token(true, significantWhiteSpace);
+   if (t.is_punctuator('\n')) {
+      if (ignore_newline) {
+         return get_next_token(true, significantWhiteSpace);
+      }
    }
 
    last_token_index = t.getStart();

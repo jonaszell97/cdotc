@@ -82,6 +82,20 @@ namespace cdot {
       }
    }
 
+   void FunctionType::visitContained(AbstractPass *v) {
+      if (returnType != nullptr) {
+         return;
+      }
+
+      rawReturnType->accept(v);
+      returnType = rawReturnType->getType()->deepCopy();
+
+      for (const auto& arg : rawArgTypes) {
+         arg.second->accept(v);
+         argTypes.push_back(arg.second->getType()->deepCopy());
+      }
+   }
+
    bool FunctionType::operator==(Type *&other) {
       switch (other->getTypeID()) {
          case TypeID::FunctionTypeID: {
@@ -118,7 +132,8 @@ namespace cdot {
       }
    }
 
-   std::vector<Type*> FunctionType::getContainedTypes(bool includeSelf) {
+   std::vector<Type*> FunctionType::getContainedTypes(bool includeSelf)
+   {
       std::vector<Type*> cont;
 
       if (includeSelf) {
@@ -200,15 +215,25 @@ namespace cdot {
    }
 
    llvm::Type* FunctionType::_getLlvmType() {
-      return ObjectType::getStructureType("__lambda");
+      return CodeGen::LambdaTy;
    }
 
-   llvm::Type* FunctionType::getLlvmFunctionType() {
-      llvm::Type* ret = returnType->getLlvmType();
+   llvm::Type* FunctionType::getLlvmFunctionType()
+   {
       std::vector<llvm::Type*> args{ Builder->getInt8PtrTy()->getPointerTo() };
-
       for (const auto& arg : argTypes) {
-         args.push_back(arg->getLlvmType());
+         auto llvmTy = arg->getLlvmType();
+         if (llvmTy->isStructTy()) {
+            llvmTy = llvmTy->getPointerTo();
+         }
+
+         args.push_back(llvmTy);
+      }
+
+      llvm::Type* ret = returnType->getLlvmType();
+      if (returnType->isValueType()) {
+         args.insert(++args.begin(), ret->getPointerTo());
+         ret = Builder->getVoidTy();
       }
 
       return llvm::FunctionType::get(ret, args, false);

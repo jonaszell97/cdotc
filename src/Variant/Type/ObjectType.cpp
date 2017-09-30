@@ -6,9 +6,9 @@
 #include "../../AST/SymbolTable.h"
 #include "IntegerType.h"
 #include "FPType.h"
-#include "../../AST/Visitor/CodeGen/CGMemory.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
-#include "../../AST/Visitor/StaticAnalysis/Enum.h"
+#include "../../AST/Passes/CodeGen/CGMemory.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Enum.h"
 #include "PointerType.h"
 
 namespace cdot {
@@ -64,9 +64,15 @@ namespace cdot {
    ObjectType* ObjectType::getAnyTy() {
       if (AnyTy == nullptr) {
          AnyTy = get("Any");
+         AnyTy->isProtocol(true);
       }
 
       return AnyTy;
+   }
+
+   cl::Class* ObjectType::getClass()
+   {
+      return SymbolTable::getClass(className);
    }
 
    bool ObjectType::operator==(Type *&other) {
@@ -133,16 +139,10 @@ namespace cdot {
 
    Type* ObjectType::unbox() {
       assert(util::matches(
-         "(Bool|Char|Float|Double|U?Int(1|8|16|32|64)?)",
+         "(Float|Double|U?Int(1|8|16|32|64)?)",
          className
       ) && "Not a primitive!");
 
-      if (className == "Bool") {
-         return IntegerType::get(1);
-      }
-      if (className == "Char") {
-         return IntegerType::get(8);
-      }
       if (className == "Float") {
          return FPType::getFloatTy();
       }
@@ -164,142 +164,6 @@ namespace cdot {
 
       auto bitwidth = std::stoi(className.substr(3));
       return IntegerType::get(bitwidth, isUnsigned);
-   }
-
-   namespace {
-
-      llvm::Value* CastToProtocol(
-         llvm::Value *&val,
-         cl::Class *&self,
-         cl::Class *&proto,
-         llvm::IRBuilder<> &Builder)
-      {
-         auto protoTy = ObjectType::getStructureType(proto->getName());
-         auto alloca = CGMemory::CreateAlloca(protoTy);
-         auto& vtbl = self->getProtocolVtable(proto->getName());
-
-         if (vtbl != nullptr) {
-            auto vtblPtr = Builder.CreateStructGEP(protoTy, alloca, 0);
-            Builder.CreateStore(vtbl, vtblPtr);
-         }
-
-         auto objPtr = Builder.CreateStructGEP(protoTy, alloca, 1);
-         Builder.CreateStore(
-            Builder.CreateBitCast(val, Builder.getInt8PtrTy()),
-            objPtr
-         );
-
-         return alloca;
-      }
-
-      llvm::Value* CastFromProtocol(
-         llvm::Value *&val,
-         cl::Class *&proto,
-         cl::Class *&destClass,
-         llvm::IRBuilder<> &Builder
-      ) {
-         auto protoTy = ObjectType::getStructureType(proto->getName());
-         auto selfGep = Builder.CreateStructGEP(protoTy, val, 1);
-
-         return Builder.CreateBitCast(
-            Builder.CreateLoad(selfGep),
-            ObjectType::getStructureType(destClass->getName())->getPointerTo()
-         );
-      }
-
-      llvm::Value* ApplyDynamicDownCast(
-         llvm::Value*& val,
-         Class *&other,
-         llvm::IRBuilder<> &Builder)
-      {
-         const auto Int8PtrTy = Builder.getInt8PtrTy();
-         const auto ZERO = Builder.getInt64(0);
-         const auto& TypeInfoTy = CodeGen::TypeInfoType;
-
-         // the ID we're looking for while going up the tree
-         auto baseID = Builder.getInt64(other->getTypeID());
-         auto classInfo = CodeGen::AccessField(0, val);
-         llvm::Value* currentTypeInfo = CGMemory::CreateAlloca(TypeInfoTy->getPointerTo());
-
-         auto firstTypeInfo = Builder.CreateStructGEP(
-            CodeGen::ClassInfoType, classInfo, 2
-         );
-
-         CodeGen::CreateStore(
-            firstTypeInfo,
-            currentTypeInfo
-         );
-
-         auto mergeBB = CodeGen::CreateBasicBlock("dyncast.merge");
-         auto successBB = CodeGen::CreateBasicBlock("dyncast.success");
-         auto failBB = CodeGen::CreateBasicBlock("dyncast.fail");
-         auto loadBB = CodeGen::CreateBasicBlock("dyncast.load");
-         auto compBB = CodeGen::CreateBasicBlock("dyncast.comp");
-
-         // inital comparison
-         auto parentTypeID = CodeGen::CreateLoad(
-            Builder.CreateStructGEP(
-               TypeInfoTy,
-               firstTypeInfo,
-               1
-            )
-         );
-
-         auto comp = Builder.CreateICmpEQ(parentTypeID, baseID);
-         Builder.CreateCondBr(comp, successBB, loadBB);
-
-         // check if the parent vtable is null
-         Builder.SetInsertPoint(loadBB);
-         auto parentTypeInfo = CodeGen::CreateLoad(Builder.CreateStructGEP(
-            TypeInfoTy,
-            CodeGen::CreateLoad(currentTypeInfo),
-            0
-         ));
-
-         parentTypeInfo = Builder.CreateBitCast(parentTypeInfo, TypeInfoTy->getPointerTo());
-
-         auto isNull = Builder.CreateIsNull(parentTypeInfo);
-         Builder.CreateCondBr(isNull, failBB, compBB);
-
-         // check if we have reached the ID we're looking for
-         Builder.SetInsertPoint(compBB);
-         parentTypeID = CodeGen::CreateLoad(
-            Builder.CreateStructGEP(
-               TypeInfoTy,
-               parentTypeInfo,
-               1
-            )
-         );
-
-         // store the new type info
-         CodeGen::CreateStore(
-            parentTypeInfo,
-            currentTypeInfo
-         );
-
-         comp = Builder.CreateICmpEQ(parentTypeID, baseID);
-         Builder.CreateCondBr(comp, successBB, loadBB);
-
-         Builder.SetInsertPoint(successBB);
-         Builder.CreateBr(mergeBB);
-
-         Builder.SetInsertPoint(failBB);
-         Builder.CreateBr(mergeBB);
-
-         Builder.SetInsertPoint(mergeBB);
-         auto phi = Builder.CreatePHI(Builder.getInt64Ty(), 2);
-         phi->addIncoming(Builder.getInt64(0), failBB);
-         phi->addIncoming(Builder.getInt64(1), successBB);
-
-         auto alloca = CGMemory::CreateAlloca(ObjectType::getStructureType("Option"));
-         CodeGen::SetField(0, alloca, phi);
-
-         auto anyProto = CGMemory::CreateAlloca(ObjectType::getStructureType("Any"));
-         CodeGen::SetField(1, anyProto, Builder.CreateBitCast(val, Int8PtrTy));
-         CodeGen::SetField(1, alloca, Builder.CreateBitCast(anyProto, Int8PtrTy));
-
-         return alloca;
-      }
    }
 
    bool ObjectType::implicitlyCastableTo(Type *other) {
@@ -365,6 +229,10 @@ namespace cdot {
                }
             }
 
+            if (concreteGenericTypes.size() != asObj->getConcreteGenericTypes().size()) {
+               return false;
+            }
+
             for (const auto& gen : concreteGenericTypes) {
                if (!asObj->concreteGenericTypes[gen.first] ||
                   !gen.second->implicitlyCastableTo(asObj->concreteGenericTypes[gen.first]))
@@ -379,6 +247,14 @@ namespace cdot {
             if (is_enum) {
                auto en = SymbolTable::getClass(className);
                return !static_cast<cdot::cl::Enum*>(en)->hasAssociatedValues();
+            }
+
+            if (other->isIntNTy(8) && className == "Char") {
+               return true;
+            }
+
+            if (other->isIntNTy(1) && className == "Bool") {
+               return true;
             }
 
             if (isBoxedEquivOf(other)) {
@@ -454,7 +330,11 @@ namespace cdot {
    }
 
    bool ObjectType::isRefcounted() {
-      return SymbolTable::hasClass(className) && SymbolTable::getClass(className)->isClass();
+      return !is_protocol && !is_struct && !is_enum;
+   }
+
+   bool ObjectType::isValueType() {
+      return is_protocol || is_struct || is_enum;
    }
 
    bool ObjectType::hasDefaultValue() {
@@ -492,10 +372,6 @@ namespace cdot {
       );
    }
 
-   bool ObjectType::isProtocol() {
-      return SymbolTable::getClass(className)->isProtocol();
-   }
-
    short ObjectType::getAlignment() {
       return SymbolTable::getClass(className)->getAlignment();
    }
@@ -509,7 +385,7 @@ namespace cdot {
    }
 
    llvm::Type* ObjectType::_getLlvmType() {
-      if (is_struct) {
+      if (is_struct || is_protocol) {
          return StructureTypes[className];
       }
       else {
@@ -518,7 +394,14 @@ namespace cdot {
    }
 
    string ObjectType::_toString() {
-      auto str = className;
+      string str;
+      if (isGeneric()) {
+         str = genericClassName;
+      }
+      else {
+         str = className;
+      }
+
       if (!concreteGenericTypes.empty()) {
          str += "<";
          size_t size = concreteGenericTypes.size();
@@ -528,6 +411,8 @@ namespace cdot {
             if (i < size - 1) {
                str += ", ";
             }
+
+            ++i;
          }
          str += ">";
       }

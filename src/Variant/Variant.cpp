@@ -3,7 +3,9 @@
 //
 
 #include "Variant.h"
-#include "../AST/Visitor/CodeGen/CodeGen.h"
+#include "../AST/Passes/CodeGen/CodeGen.h"
+#include "Type/IntegerType.h"
+#include "Type/FPType.h"
 
 namespace cdot {
 
@@ -224,5 +226,48 @@ namespace cdot {
       }
 
       return {};
+   }
+   
+   Variant Variant::castTo(Type *&to)
+   {
+      switch (type) {
+         case VariantType::INT:
+            switch (to->getTypeID()) {
+               case TypeID::IntegerTypeID: {
+                  auto asInt = cast<IntegerType>(to);
+                  bitwidth = asInt->getBitwidth();
+                  isUnsigned = asInt->isUnsigned();
+
+                  return *this;
+               }
+               case TypeID::FPTypeID: return Variant((double)intVal);
+               case TypeID::ObjectTypeID: return Variant(std::to_string(intVal));
+               default:
+                  llvm_unreachable("Should have returned before");
+            }
+         case VariantType::FLOAT:
+            switch (to->getTypeID()) {
+               case TypeID::IntegerTypeID: return Variant((long)floatVal);
+               case TypeID::FPTypeID: {
+                  auto asFloat = cast<FPType>(to);
+                  bitwidth = asFloat->getPrecision();
+
+                  return *this;
+               }
+               case TypeID::ObjectTypeID: return Variant(std::to_string(floatVal));
+               default:
+                  llvm_unreachable("Should have returned before");
+            }
+         case VariantType::STRING:
+            switch (to->getTypeID()) {
+               case TypeID::IntegerTypeID: return Variant(std::stol(strVal));
+               case TypeID::FPTypeID: return Variant(std::stod(strVal));
+               case TypeID::ObjectTypeID: return *this;
+               default:
+                  llvm_unreachable("Should have returned before");
+            }
+         default:
+            return {};
+      }
    }
 }

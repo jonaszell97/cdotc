@@ -3,12 +3,13 @@
 //
 
 #include "DeclPass.h"
-#include "../Visitor.cpp"
+#include "../ASTIncludes.txt"
 #include "../../SymbolTable.h"
 #include "../../../Message/Exceptions.h"
 #include "../../../Message/Warning.h"
 #include "../StaticAnalysis/Class.h"
 #include "../../../Variant/Type/IntegerType.h"
+#include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/VoidType.h"
 #include "../StaticAnalysis/Enum.h"
 
@@ -56,13 +57,14 @@ void DeclPass::doInitialPass(std::vector<std::shared_ptr<Statement>>& statements
                   cl->generics, cl.get(), cl->is_abstract);
             }
 
+            declaredClass->isDeclared(cl->is_declaration);
             if (cl->hasAttribute(Attr::NeverOmit)) {
                declaredClass->addUse();
             }
 
             pushNamespace(UserTypes.back());
             for (const auto& td : cl->typedefs) {
-               td->accept(*this);
+               td->accept(this);
             }
             popNamespace();
 
@@ -81,8 +83,14 @@ void DeclPass::doInitialPass(std::vector<std::shared_ptr<Statement>>& statements
 
             break;
          }
+         case NodeType::DECLARE_STMT: {
+            auto decl = std::static_pointer_cast<DeclareStmt>(stmt);
+            doInitialPass(decl->declarations);
+
+            break;
+         }
          case NodeType::TYPEDEF_DECL: {
-            stmt->accept(*this);
+            stmt->accept(this);
             break;
          }
          case NodeType::NAMESPACE_DECL: {
@@ -113,7 +121,7 @@ string DeclPass::declareVariable(
 {
    auto varName = ns_prefix() + name;
    if (SymbolTable::hasVariable(varName, importedNamespaces)) {
-      RuntimeError::raise("Redeclaration of variable " + name, cause);
+      RuntimeError::raise("Redeclaration of variable " + varName, cause);
    }
 
    if (access == AccessModifier::DEFAULT) {
@@ -173,14 +181,14 @@ void DeclPass::popNamespace()
 void DeclPass::visit(CompoundStmt *node)
 {
    for (const auto& stmt : node->statements) {
-      stmt->accept(*this);
+      stmt->accept(this);
    }
 }
 
 void DeclPass::visit(NamespaceDecl *node)
 {
    pushNamespace(node->nsName, !node->isAnonymousNamespace);
-   node->contents->accept(*this);
+   node->contents->accept(this);
    popNamespace();
 }
 
@@ -195,46 +203,27 @@ void DeclPass::visit(UsingStmt *node)
    }
 
    for (auto& item : node->importedItems) {
+      if (item == "*") {
+         if (node->importedItems.size() > 1) {
+            RuntimeError::raise("Cannot import multiple items when '*' is present", node);
+         }
+
+         node->kind = UsingKind::NAMESPACE;
+         node->importedItems.clear();
+         node->isWildcardImport = true;
+
+         importedNamespaces.push_back(node->importNamespace + ".");
+
+         break;
+      }
+
       node->fullNames.push_back(node->importNamespace + "." + item);
       auto &fullName = node->fullNames.back();
 
       if (SymbolTable::isNamespace(fullName) && !SymbolTable::hasClass(fullName)) {
-         node->importNamespace = fullName;
          node->importedItems.clear();
          node->kind = UsingKind::NAMESPACE;
-      }
 
-      bool declarationFound = node->kind == UsingKind::NAMESPACE;
-      if (SymbolTable::hasClass(fullName)) {
-         if (SymbolTable::getClass(fullName)->isPrivate()) {
-            RuntimeError::raise("Class " + fullName + " is not accessible", node);
-         }
-
-         declarationFound = true;
-         node->kind = UsingKind::CLASS;
-      }
-      else if (SymbolTable::hasVariable(fullName)) {
-         declarationFound = true;
-         node->kind = UsingKind::VARIABLE;
-      }
-      else if (SymbolTable::hasTypedef(fullName)) {
-         declarationFound = true;
-         node->kind = UsingKind::TYPEDEF;
-      }
-      else {
-         auto functions = SymbolTable::numFunctionsWithName(fullName);
-         if (functions == 1) {
-            declarationFound = true;
-            node->kind = UsingKind::FUNCTION;
-         }
-      }
-
-      if (!declarationFound) {
-         RuntimeError::raise("Namespace " + node->importNamespace +
-                     " does not have a member " + item, node);
-      }
-
-      if (node->kind == UsingKind::NAMESPACE) {
          importedNamespaces.push_back(node->importNamespace + ".");
       }
       else {
@@ -261,7 +250,7 @@ void DeclPass::visit(FunctionDecl *node)
 
    bool isMain = false;
 
-   node->returnType->accept(*this);
+   node->returnType->accept(this);
    auto& return_type = node->returnType->getType();
    auto qualified_name = ns_prefix() + node->funcName;
 
@@ -294,7 +283,7 @@ void DeclPass::visit(FunctionDecl *node)
          RuntimeError::raise(arg->argName + " is a reserved identifier", arg.get());
       }
 
-      arg->accept(*this);
+      arg->accept(this);
       auto& resolvedArg = arg->argType->getType();
       args.emplace_back(arg->argName, resolvedArg, arg->defaultVal);
 
@@ -313,12 +302,13 @@ void DeclPass::visit(FunctionDecl *node)
 }
 
 void DeclPass::visit(FuncArgDecl *node) {
-   node->argType->accept(*this);
-   node->isStruct = node->argType->getType()->isStruct();
+   node->argType->accept(this);
+   node->isStruct = node->argType->type->isStruct();
 }
 
 void DeclPass::visit(DeclStmt *node)
 {
+   node->type->accept(this);
    if (!node->is_global) {
       return;
    }
@@ -327,7 +317,7 @@ void DeclPass::visit(DeclStmt *node)
       node->access = AccessModifier::PUBLIC;
    }
 
-   node->binding = declareVariable(node->identifier, node->type->getType(true), node->access, node);
+   node->binding = declareVariable(node->identifier, node->type->getType(), node->access, node);
 }
 
 void DeclPass::visit(ClassDecl *node)
@@ -335,10 +325,14 @@ void DeclPass::visit(ClassDecl *node)
    Class* cl = SymbolTable::getClass(node->qualifiedName);
    if (node->isExtension()) {
       node->declaredClass = cl;
-      cl->extend(node);
+      ++cl->getOutstandingExtensions();
 
       for (const auto& proto : node->conformsTo) {
          cl->addConformance(proto);
+      }
+
+      if (node->is_declaration) {
+         cl->isDeclared(true);
       }
    }
    else {
@@ -418,7 +412,7 @@ void DeclPass::visit(ClassDecl *node)
    pushNamespace(node->className);
 
    for (const auto& decl : node->innerDeclarations) {
-      decl->accept(*this);
+      decl->accept(this);
       switch (decl->get_type()) {
          case NodeType::CLASS_DECL: {
             auto asCl = std::static_pointer_cast<ClassDecl>(decl);
@@ -436,25 +430,35 @@ void DeclPass::visit(ClassDecl *node)
    }
 
    for (const auto& td : node->typedefs) {
-      td->accept(*this);
+      td->accept(this);
    }
 
    for (const auto& field : node->fields) {
       field->className = node->qualifiedName;
-      field->accept(*this);
+      field->accept(this);
    }
 
+   bool isProtocolDefaultImpl = cl->isProtocol() && node->is_extension;
    for (const auto& method : node->methods) {
       method->class_name = node->qualifiedName;
-      method->accept(*this);
+      if (isProtocolDefaultImpl) {
+         method->hasDefinition_ = true;
+      }
+
+      method->accept(this);
    }
 
    for (const auto& constr:  node->constructors) {
       constr->className = node->qualifiedName;
-      constr->accept(*this);
+      constr->accept(this);
    }
 
-   if (!cl->isAbstract() && (node->isStruct() || (node->is_extension && cl->isStruct()))) {
+   if (node->destructor != nullptr) {
+      node->destructor->className = node->qualifiedName;
+      node->destructor->accept(this);
+   }
+
+   if (node->isStruct()) {
       node->explicitMemberwiseInitializer = !cl->declareMemberwiseInitializer();
    }
 
@@ -464,7 +468,7 @@ void DeclPass::visit(ClassDecl *node)
       );
    }
 
-   if (!node->is_extension && !ObjectType::hasStructureType(node->qualifiedName) && !cl->isAbstract()) {
+   if (!node->is_extension && !ObjectType::hasStructureType(node->qualifiedName)) {
       auto prefix = node->is_struct ? "struct." : (node->is_protocol ? "proto." : "class.");
       auto class_type = llvm::StructType::create(CodeGen::Context, prefix + node->qualifiedName);
       ObjectType::declareStructureType(node->qualifiedName, class_type);
@@ -480,7 +484,7 @@ void DeclPass::visit(MethodDecl *node)
    std::vector<Argument> args;
 
    for (const auto &arg : node->args) {
-      arg->accept(*this);
+      arg->accept(this);
       auto& resolvedArg = arg->argType->getType();
 
       args.emplace_back(arg->argName, arg->argType->getType(), arg->defaultVal);
@@ -489,15 +493,15 @@ void DeclPass::visit(MethodDecl *node)
    node->class_name = cl->getName();
    node->binding = SymbolTable::mangleMethod(node->class_name, node->methodName, args);
 
-   auto result = cl->hasMethod(node->methodName, args, {}, {}, false, false, true);
-   if (result.compatibility == CompatibilityType::COMPATIBLE) {
+   auto result = cl->getMethod(node->binding);
+   if (result != nullptr) {
       if (node->isAlias) {
-         cl->declareMethodAlias(node->alias, result.method->mangledName);
+         cl->declareMethodAlias(node->alias, node->binding);
          return;
       }
 
-      RuntimeError::raise("Method " + node->methodName + " cannot be redeclared with a "
-               "similar signature to a previous declaration", node);
+      RuntimeError::raise("Method " + node->methodName + " cannot be redeclared with the "
+         "same signature as a previous declaration", node);
    }
    else if (node->isAlias) {
       RuntimeError::raise("Aliased method " + node->methodName + " does not exist", node);
@@ -507,14 +511,14 @@ void DeclPass::visit(MethodDecl *node)
       node->am = AccessModifier::PUBLIC;
    }
 
-   node->returnType->accept(*this);
+   node->returnType->accept(this);
    auto returnType = node->returnType->getType()->deepCopy();
 
    node->method = cl->declareMethod(node->methodName, returnType, node->am, std::move(args),
       node->generics, node->isStatic, node);
 
    if (returnType->isStruct()) {
-      node->method->hasHiddenParam = true;
+      node->method->hasStructReturn = true;
    }
 }
 
@@ -522,7 +526,7 @@ void DeclPass::visit(FieldDecl *node)
 {
    auto cl = SymbolTable::getClass(node->className);
 
-   node->type->accept(*this);
+   node->type->accept(this);
    auto field_type = node->type->getType()->deepCopy();
 
    if (!node->isStatic && cl->isStruct() && isa<ObjectType>(field_type) &&
@@ -614,14 +618,14 @@ void DeclPass::visit(FieldDecl *node)
 void DeclPass::visit(ConstrDecl *node)
 {
    auto cl = SymbolTable::getClass(node->className);
-   if (node->memberwise && cl->isAbstract()) {
+   if (node->memberwise) {
       cl->declareMemberwiseInitializer();
       return;
    }
 
    std::vector<Argument> args;
    for (auto arg : node->args) {
-      arg->accept(*this);
+      arg->accept(this);
       auto& resolvedArg = arg->argType->getType();
 
       args.emplace_back(arg->argName, resolvedArg, arg->defaultVal);
@@ -629,19 +633,19 @@ void DeclPass::visit(ConstrDecl *node)
 
    string method_name = "init";
    node->className = cl->getName();
-   auto prevDecl = cl->hasMethod(method_name, args, {}, {},
-      /*Check parent*/ true, /*Check proto*/ false, /*strict*/ true);
+   node->binding = SymbolTable::mangleMethod(node->className, method_name, args);
 
-   if (prevDecl.compatibility == CompatibilityType::COMPATIBLE) {
-      if (prevDecl.method == cl->getMemberwiseInitializer()) {
-         RuntimeError::raise("Cannot declare method with the same signature as a previous declaration "
-                     "(Previous declaration is the implicit memberwise initializer)", node);
-      }
+   auto memberwiseInit = cl->getMemberwiseInitializer();
+   if (memberwiseInit != nullptr && node->binding == memberwiseInit->mangledName) {
+      RuntimeError::raise("Cannot declare method with the same signature as a previous declaration "
+         "(Previous declaration is the implicit memberwise initializer)", node);
+   }
 
+   auto prevDecl = cl->getMethod(node->binding);
+   if (prevDecl != nullptr) {
       RuntimeError::raise("Cannot declare method with the same signature as a previous declaration", node);
    }
 
-   node->binding = SymbolTable::mangleMethod(node->className, method_name, args);
    node->method = cl->declareMethod(
       method_name,
       cl->getType()->toRvalue(),
@@ -659,12 +663,25 @@ void DeclPass::visit(ConstrDecl *node)
 
 void DeclPass::visit(DestrDecl *node)
 {
+   auto cl = SymbolTable::getClass(node->className);
+   string methodName = "deinit";
+   std::vector<Argument> args;
 
+   node->binding = SymbolTable::mangleMethod(node->className, methodName, args);
+   node->declaredMethod = cl->declareMethod(
+      methodName,
+      new VoidType,
+      AccessModifier::PUBLIC,
+      {},
+      {},
+      false,
+      nullptr
+   );
 }
 
 void DeclPass::visit(TypedefDecl *node)
 {
-   node->origin->accept(*this);
+   node->origin->accept(this);
    SymbolTable::declareTypedef(node->alias, node->origin->getType());
 }
 
@@ -708,8 +725,9 @@ namespace {
 void DeclPass::visit(TypeRef *node)
 {
    auto generics = GenericsStack.empty() ? nullptr : GenericsStack.top();
-   auto isValid = Type::resolve(&node->type, currentNamespace.back(), generics, importedNamespaces);
+   node->type->visitContained(this);
 
+   auto isValid = Type::resolve(&node->type, currentNamespace.back(), generics, importedNamespaces);
    if (!isValid) {
       RuntimeError::raise("Type " + node->type->toString() + " does not exist", node);
    }
@@ -732,7 +750,7 @@ void DeclPass::visit(EnumDecl *node)
 
    for (const auto& method : node->methods) {
       method->class_name = node->qualifiedName;
-      method->accept(*this);
+      method->accept(this);
    }
 
    long last;
@@ -744,18 +762,22 @@ void DeclPass::visit(EnumDecl *node)
       EnumCase c;
       c.name = case_->caseName;
       for (const auto& assoc : case_->associatedTypes) {
-         assoc.second->accept(*this);
+         assoc.second->accept(this);
          c.associatedValues.emplace_back(assoc.first, assoc.second->getType());
       }
 
       if (case_->hasRawValue) {
          last = case_->rawValue;
       }
-      else if (first) {
-         last = 0;
-      }
       else {
-         ++last;
+         if (first) {
+            last = 0;
+         }
+         else {
+            ++last;
+         }
+
+         case_->rawValue = last;
       }
 
       if (std::find(caseVals.begin(), caseVals.end(), last) != caseVals.end()) {
@@ -770,7 +792,7 @@ void DeclPass::visit(EnumDecl *node)
    }
 
    if (node->rawType != nullptr) {
-      node->rawType->accept(*this);
+      node->rawType->accept(this);
       en->setRawType(node->rawType->type);
    }
 
@@ -780,49 +802,8 @@ void DeclPass::visit(EnumDecl *node)
 
 void DeclPass::visit(DeclareStmt *node)
 {
-   if (node->type != nullptr) {
-      node->type->accept(*this);
-   }
-
-   auto qualified_name = ns_prefix() + node->declaredName;
-
-   switch (node->declKind) {
-      case DeclarationType::VAR_DECL: {
-         auto type = node->type->getType();
-         declareVariable(node->declaredName, type, AccessModifier::PUBLIC, node);
-         break;
-      }
-      case DeclarationType::FUNC_DECL: {
-         auto type = node->type->getType();
-         Function::UniquePtr fun = std::make_unique<Function>(qualified_name, type, node->generics);
-
-         std::vector<Argument> args;
-         for (const auto &arg : node->args) {
-            arg->accept(*this);
-            auto ty = arg->argType->getType();
-
-            args.emplace_back(arg->argName, ty, arg->defaultVal);
-            fun->addArgument(ty, arg->defaultVal, arg->argName);
-         }
-
-         declareFunction(std::move(fun), node->generics, node);
-         node->bind(SymbolTable::mangleFunction(qualified_name, args));
-
-         break;
-      }
-      case DeclarationType::CLASS_DECL: {
-         if (node->extends == nullptr) {
-            node->extends = ObjectType::get("Any");
-         }
-
-         auto cl = SymbolTable::declareClass(AccessModifier::PUBLIC, qualified_name, node->extends, node->conformsTo,
-            node->generics, nullptr, node->is_abstract);
-
-         auto class_type = llvm::StructType::create(CodeGen::Context, "class." + qualified_name);
-         ObjectType::declareStructureType(qualified_name, class_type);
-
-         break;
-      }
+   for (const auto& decl : node->declarations) {
+      decl->accept(this);
    }
 }
 

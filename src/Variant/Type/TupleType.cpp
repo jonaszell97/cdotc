@@ -4,10 +4,10 @@
 
 #include "TupleType.h"
 #include "../../Util.h"
-#include "../../AST/Visitor/CodeGen/CodeGen.h"
+#include "../../AST/Passes/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
-#include "../../AST/Visitor/CodeGen/CGMemory.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
+#include "../../AST/Passes/CodeGen/CGMemory.h"
 #include "../../AST/Expression/TypeRef.h"
 
 namespace cdot {

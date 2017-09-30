@@ -7,6 +7,7 @@
 #include "../Statement/ControlFlow/ForInStmt.h"
 #include "../Statement/ControlFlow/WhileStmt.h"
 #include "../Statement/Declaration/FunctionDecl.h"
+#include "../Statement/Declaration/FuncArgDecl.h"
 #include "../Expression/Expression.h"
 #include "../Expression/Literal/NumericLiteral.h"
 #include "../Expression/Literal/StringLiteral.h"

@@ -24,10 +24,11 @@ public:
       return NodeType::ENUM_CASE_DECL;
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   void accept(AbstractPass* pass) override {
+      pass->visit(this);
+   }
+
+   ADD_FRIEND_PASSES
    friend class cdot::cl::Class;
 
 protected:

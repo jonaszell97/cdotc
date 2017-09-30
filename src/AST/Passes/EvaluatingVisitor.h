@@ -6,13 +6,13 @@
 //#define CDOT_LITERALEXPRVISITOR_H
 //
 //
-//#include "Visitor.h"
+//#include "Passes.h"
 //#include "../Statement/Declaration/FuncArgDecl.h"
 //#include "../Statement/ControlFlow/LabelStmt.h"
 //#include "../../StdLib/Module.h"
 //#include "../../StdLib/Class/Interface.h"
 //
-//class EvaluatingVisitor : public Visitor {
+//class EvaluatingVisitor : public Passes {
 //public:
 //    EvaluatingVisitor();
 //    EvaluatingVisitor(std::shared_ptr<Context> ctx);

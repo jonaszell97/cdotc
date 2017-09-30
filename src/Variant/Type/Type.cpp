@@ -5,7 +5,7 @@
 #include "Type.h"
 #include "ObjectType.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
 
 namespace cdot {
 
@@ -46,7 +46,7 @@ namespace cdot {
 
    bool Type::isBoxedPrimitive() {
       return isObject() && util::matches(
-         "(Bool|Char|Float|Double|U?Int(1|8|16|32|64)?)",
+         "(Float|Double|U?Int(1|8|16|32|64)?)",
          className
       );
    }
@@ -79,6 +79,10 @@ namespace cdot {
 
       if (needed->getClassName() == "Any") {
          return true;
+      }
+
+      if (!SymbolTable::hasClass(needed->getClassName())) {
+         return false;
       }
 
       auto coVar = SymbolTable::getClass(needed->getClassName());
@@ -232,6 +236,9 @@ namespace cdot {
             }
             else if (cl->isEnum()) {
                asObj->isEnum(true);
+            }
+            else if (cl->isProtocol()) {
+               asObj->isProtocol(true);
             }
          }
          else {

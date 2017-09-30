@@ -14,6 +14,16 @@ void CompoundStmt::addStatement(Statement::SharedPtr stmt) {
    statements.emplace_back(stmt);
 }
 
+void CompoundStmt::runPasses()
+{
+   for (auto& pass : passes) {
+      pass->visit(this);
+      pass->finalize();
+
+      delete pass;
+   }
+}
+
 std::vector<AstNode::SharedPtr> CompoundStmt::get_children() {
    std::vector<AstNode::SharedPtr> res;
    for (int i = 0; i < statements.size(); i++) {

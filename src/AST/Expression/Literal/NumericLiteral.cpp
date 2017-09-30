@@ -37,20 +37,14 @@ NumericLiteral::~NumericLiteral() {
    delete type;
 }
 
-bool NumericLiteral::canReturn(Type *ty)
+void NumericLiteral::saveOrResetState()
 {
-   if (ty->isBoxedPrimitive()) {
-      ty = ty->unbox();
+   if (prevState == nullptr) {
+      prevState = new NumericLiteral(*this);
    }
-
-   switch (value.type) {
-      case VariantType::INT:
-         return isa<PrimitiveType>(ty);
-      case VariantType::FLOAT: {
-         return ty->isFPType();
-      }
-      default:
-         return false;
+   else {
+      assert(prevState->get_type() == NodeType::LITERAL_EXPR && "Not a numeric literal");
+      *this = *static_cast<NumericLiteral *>(prevState);
    }
 }
 

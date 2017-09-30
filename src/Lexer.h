@@ -32,20 +32,28 @@ public:
 
    string s_val();
 
-   int current_index;
-   int index_on_line;
-   int last_token_index;
-   int current_token_index;
+   bool continueInterpolation = false;
+   size_t indexOnLine = 0;
+   size_t currentLine = 0;
+
+   size_t current_index = 0;
+   size_t last_token_index = 0;
+   size_t current_token_index = 0;
    Token current_token;
 
    friend class Parser;
    friend class ParseError;
+
    typedef std::unique_ptr<Lexer> UniquePtr;
 
 protected:
    std::vector<Token> tokens;
    string& src;
    string fileName;
+
+   size_t srcLength = 0;
+
+   Token makeToken(TokenType ty, Variant &&val, size_t start, size_t end, bool isEscaped = false);
 
    Token get_next_token(bool, bool);
    Token _get_next_token(bool, bool);

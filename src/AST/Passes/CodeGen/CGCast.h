@@ -9,8 +9,6 @@
 #include <llvm/IR/IRBuilder.h>
 #include "../StaticAnalysis/Class.h"
 
-using cdot::cl::MethodResult;
-
 namespace cdot {
    class Type;
 
@@ -26,8 +24,9 @@ namespace codegen {
       static llvm::Value *pointerCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
       static llvm::Value *tupleCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
 
-      static MethodResult hasCastOperator(Type* from, Type* to, llvm::IRBuilder<> &Builder);
-      static llvm::Value *castOperator(Type *from, Type *to, llvm::Value *val, MethodResult&, llvm::IRBuilder<> &Builder);
+      static CallCompatability hasCastOperator(Type* from, Type* to, llvm::IRBuilder<> &Builder);
+      static llvm::Value *castOperator(Type *from, Type *to, llvm::Value *val,
+         CallCompatability&, llvm::IRBuilder<> &Builder);
 
       static llvm::Value *protoToProtoCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
       static llvm::Value *castFromProtocol(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);

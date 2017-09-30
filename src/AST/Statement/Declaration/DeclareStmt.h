@@ -11,17 +11,14 @@
 class FuncArgDecl;
 class TypeRef;
 
-enum class DeclarationType {
-   CLASS_DECL,
-   FUNC_DECL,
-   VAR_DECL
-};
-
 class DeclareStmt : public Statement {
 public:
-   DeclareStmt(string, std::shared_ptr<TypeRef>, bool);
-   DeclareStmt(string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, std::vector<ObjectType*>);
-   DeclareStmt(AccessModifier, string, ObjectType*, std::vector<ObjectType*>, bool, std::vector<ObjectType*>);
+   DeclareStmt(ExternKind kind);
+
+   void addDeclaration(Statement::SharedPtr&& stmt) {
+      stmt->setExternKind(externKind);
+      declarations.push_back(stmt);
+   }
 
    std::vector<AstNode::SharedPtr> get_children() override;
 
@@ -40,36 +37,18 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
-   DeclarationType declKind;
-   string declaredName;
-
-   // class declaration
-   std::vector<ObjectType*> generics;
-   ObjectType* extends;
-   std::vector<ObjectType*> conformsTo;
-   AccessModifier am;
-   bool is_abstract;
-
-   // function declaration
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
-   std::shared_ptr<TypeRef> type = nullptr;
-
-   // variable
-   bool isConst;
+   std::vector<Statement::SharedPtr> declarations;
 };
 
 

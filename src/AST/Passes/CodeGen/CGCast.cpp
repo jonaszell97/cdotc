@@ -9,7 +9,7 @@
 #include "../../../Variant/Type/FPType.h"
 #include "../../../Variant/Type/TupleType.h"
 #include "CGMemory.h"
-#include "../../Visitor/StaticAnalysis/Enum.h"
+#include "../../Passes/StaticAnalysis/Enum.h"
 
 namespace cdot {
 namespace codegen {
@@ -25,7 +25,10 @@ namespace codegen {
          from->isLvalue(false);
       }
 
-      if (to->isBoxedEquivOf(from)) {
+      if (to->isBoxedEquivOf(from)
+         || (to->isObject() && to->getClassName() == "Char" && from->isIntegerTy())
+         || (to->isObject() && to->getClassName() == "Bool" && from->isIntegerTy()))
+      {
          auto structTy = ObjectType::getStructureType(to->getClassName());
          auto alloca = CGMemory::CreateAlloca(structTy);
          Builder.CreateCall(
@@ -36,7 +39,10 @@ namespace codegen {
          return alloca;
       }
 
-      if (from->isBoxedEquivOf(to)) {
+      if (from->isBoxedEquivOf(to)
+         || (from->isObject() && from->getClassName() == "Char" && to->isIntegerTy())
+         || (from->isObject() && from->getClassName() == "Bool" && to->isIntegerTy()))
+      {
          return CodeGen::CreateLoad(
             CodeGen::AccessField(0, val)
          );
@@ -136,6 +142,10 @@ namespace codegen {
          }
 
          return Builder.CreateBitCast(val, destTy);
+      }
+
+      if (from->isFunctionTy() && to->isFunctionTy()) {
+         return val;
       }
 
       llvm_unreachable("Unsupported cast!");
@@ -321,13 +331,13 @@ namespace codegen {
       return alloca;
    }
 
-   MethodResult CGCast::hasCastOperator(
+   CallCompatability CGCast::hasCastOperator(
       Type *from,
       Type *to,
       llvm::IRBuilder<> &Builder)
    {
       if (!from->isObject()) {
-         return MethodResult();
+         return CallCompatability();
       }
 
       auto cl = SymbolTable::getClass(from->getClassName());
@@ -341,7 +351,7 @@ namespace codegen {
       Type *from,
       Type *to,
       llvm::Value *val,
-      MethodResult &Result,
+      CallCompatability &Result,
       llvm::IRBuilder<> &Builder)
    {
       return Builder.CreateCall(Result.method->llvmFunc, { val });
@@ -384,7 +394,7 @@ namespace codegen {
       }
 
       auto protoTy = ObjectType::getStructureType(proto->getName());
-      auto alloca = CGMemory::CreateAlloca(protoTy, true);
+      auto alloca = CGMemory::CreateAlloca(protoTy);
       auto& vtbl = self->getProtocolVtable(proto->getName());
 
       if (vtbl != nullptr) {
@@ -396,7 +406,6 @@ namespace codegen {
       }
 
       auto objPtr = Builder.CreateStructGEP(protoTy, alloca, Class::ProtoObjPos);
-
       if (isa<PrimitiveType>(from)) {
          Builder.CreateStore(
             val,
@@ -470,19 +479,40 @@ namespace codegen {
    {
       auto fromProto = SymbolTable::getClass(from->getClassName());
       auto offset = fromProto->getVTableOffset(to->getClassName());
+      auto toProtoTy = ObjectType::getStructureType(to->getClassName());
+      auto alloca = CGMemory::CreateAlloca(toProtoTy);
 
       // shift the vtable pointer to the correct position
-      auto vtbl = CodeGen::AccessField(0, val);
-      vtbl = CodeGen::CreateLoad(vtbl);
-      auto offsetPtr = Builder.CreateInBoundsGEP(vtbl, { Builder.getInt64(0), Builder.getInt64(offset) });
+      llvm::Value* offsetPtr;
+      if (SymbolTable::getClass(to->getClassName())->isEmptyProtocol()) {
+         offsetPtr = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(toProtoTy->getContainedType(Class::ProtoVtblPos)));
+      }
+      else {
+         auto vtbl = CodeGen::AccessField(0, val);
+         vtbl = CodeGen::CreateLoad(vtbl);
+         offsetPtr = Builder.CreateInBoundsGEP(vtbl, { Builder.getInt64(0), Builder.getInt64(offset) });
+      }
 
-      auto toProto = ObjectType::getStructureType(to->getClassName());
-      auto alloca = CGMemory::CreateAlloca(toProto);
-
-      offsetPtr = Builder.CreateBitCast(offsetPtr, toProto->getContainedType(0));
-      CodeGen::SetField(0, alloca, offsetPtr);
-      CodeGen::SetField(1, alloca,
-         CodeGen::CreateLoad(CodeGen::AccessField(1, val)));
+      CodeGen::SetField(
+         Class::ProtoVtblPos,
+         alloca,
+         Builder.CreateBitCast(offsetPtr, toProtoTy->getContainedType(Class::ProtoVtblPos))
+      );
+      CodeGen::SetField(
+         Class::ProtoObjPos,
+         alloca,
+         CodeGen::CreateLoad(
+            CodeGen::AccessField(Class::ProtoObjPos, val)
+         )
+      );
+      CodeGen::SetField(
+         Class::ProtoSizePos,
+         alloca,
+         CodeGen::CreateLoad(
+            CodeGen::AccessField(Class::ProtoSizePos, val)
+         )
+      );
 
       return alloca;
    }

@@ -47,7 +47,13 @@ namespace cdot {
          return is_struct;
       }
 
-      bool isProtocol() override;
+      bool isProtocol() override {
+         return is_protocol;
+      }
+
+      void isProtocol(bool proto) {
+         is_protocol = proto;
+      }
 
       inline unordered_map<string, Type*>& getConcreteGenericTypes() override {
          return concreteGenericTypes;
@@ -79,7 +85,14 @@ namespace cdot {
          return this;
       }
 
+      cl::Class* getClass() override;
+
       bool isRefcounted() override;
+      bool isValueType() override;
+
+      bool needsMemCpy() override {
+         return is_struct || is_protocol || is_enum;
+      }
 
       bool hasDefaultValue() override;
 
@@ -221,6 +234,8 @@ namespace cdot {
    protected:
       bool is_struct = false;
       bool is_enum = false;
+      bool is_protocol = false;
+
       unordered_map<string, Type*> concreteGenericTypes;
       cl::Class* declaredClass = nullptr;
       

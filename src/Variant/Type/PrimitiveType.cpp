@@ -6,4 +6,6 @@
 
 namespace cdot {
 
+   bool PrimitiveType::PrintSpecificTypes = false;
+
 } // namespace cdot

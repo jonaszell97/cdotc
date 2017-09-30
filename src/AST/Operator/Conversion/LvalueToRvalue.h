@@ -25,8 +25,8 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
@@ -37,10 +37,7 @@ public:
       return NodeType::LVALUE_TO_RVALUE;
    }
 
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
-   friend class ConstExprPass;
+   ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr target;

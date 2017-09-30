@@ -1,36 +1,46 @@
 
-using Builtin.Primitive
-using Extern.C
+using Builtin.Primitive.{ int8, int32 }
+using Extern.C.{ malloc, free, exit, printf }
+using Char.ASCII
 
 class String {
     var length: Int { get }
     var charArray: int8* { get }
 
-    init() unsafe {
-        charArray = 0x0 as int8*
+    init {
+        charArray = __nullptr(int8)
         length = 0
     }
 
+    @_builtin(StringInit)
     init (str: int8*, len: Int) {
         charArray = str
         length = len
     }
 
-    init (len: Int) unsafe {
-        charArray = malloc(len + 1) as int8*
+    init (len: Int) {
+        charArray = malloc(len + 1)
         charArray[len] = '\0'
         length = len
     }
 
-    init (c: Char) unsafe {
-        charArray = malloc(2) as int8*
+    init (c: Char) {
+        charArray = malloc(2)
         charArray[0] = c.val
         charArray[1] = '\0'
         length = 1
     }
 
-    init (chr: Char, repeat: Int) unsafe {
-        charArray = Extern.C.malloc(repeat + 1) as int8*
+    init (s: String) {
+        length = s.length
+        charArray = malloc(s.length + 1)
+        for let i in 0..(length + 1) {
+            charArray[i] = s.charArray[i]
+        }
+    }
+
+    init (chr: Char, repeat: Int) {
+        charArray = malloc(repeat + 1)
         for var i = 0; i < repeat; ++i {
             charArray[i] = chr.val
         }
@@ -40,60 +50,50 @@ class String {
     }
 
     deinit {
-        Extern.C.printf("Deinitializing...\n")
+        printf("Deinitializing...\n")
         // Extern.C.free(charArray) FIXME
     }
 
-    def postfix [] (index: Int) -> ref int8 unsafe {
-        if (index > length) {
+    def postfix [] (index: Int) -> int8 {
+        if (index >= length) {
             print("no can do bby doll")
-            Extern.C.exit(11 as int32)
+            exit(11 as int32)
             __unreachable
         }
         
         return charArray[index]
     }
 
-    def infix + (p: StringRepresentable) -> String unsafe {
-        var copy = String(charArray, length)
+    @_builtin(StringConcat)
+    def infix + (p: StringRepresentable) -> String {
+        var copy = String(self)
         copy += p
 
         return copy
     }
 
-    def infix += (p: StringRepresentable) unsafe {
+    @_builtin(StringConcatEquals)
+    def infix += (p: StringRepresentable) {
         let s = p as String
-        let newStr = Extern.C.malloc(length + s.length + 1) as int8*
+        let newStr = malloc(length + s.length + 1)
 
-        for var i = 0; i < length; ++i {
-            newStr[i] = charArray[i]
-        }
-
-        for var i = 0; i < s.length; ++i {
-            newStr[i + length] = s.charArray[i]
-        }
+        __builtin_memcpy(newStr, charArray, length, alignof(int8))
+        __builtin_memcpy(&newStr[length], s.charArray, s.length, alignof(int8))
 
         charArray = newStr
         length = length + s.length
-        newStr[length] = '\0'
     }
 
-    def substr(begin: Int, len: Int = length) -> String unsafe {
+    def substr(begin: Int, len: Int = length) -> String {
+        var copyLen = len
         if (begin + len > length) {
-            print("Nice try, sucker")
-            Extern.C.exit(69.val as int32)
+            copyLen = length - begin
         }
 
-        let newStr = Extern.C.malloc(len) as int8*
-        for var i = 0; i < len; ++i {
-            newStr[i] = charArray[i + begin]
-        }
+        let newStr = malloc(len)
+        __builtin_memcpy(newStr, &charArray[begin], copyLen, alignof(int8))
 
         return String(newStr, len)
-    }
-
-    def _raw -> int8* {
-        return charArray
     }
 }
 
@@ -198,22 +198,20 @@ extend String with Randomizable {
     }
 
     static def random(length: Int, kind: RandomStringKind) -> String {
-        srand(time(__nullptr(int64)) as int32)
-
-        let charArray = malloc(length + 1) as int8*
+        let charArray = malloc(length + 1)
         match kind {
-        case .AlphaNumeric:
-            for let i in 0..length {
-                var c: int8 = '\0'
-                while c == '\0' {
-                    let next = 48 + (Int.random() % (122 - 48))
-                    if !(next > 57 && next < 65) && !(next > 90 && next < 97) {
-                        c = next.val as int8
+            case .AlphaNumeric:
+                for let i in 0..length {
+                    var c: int8 = ASCII.nul
+                    while c == ASCII.nul {
+                        let next = 48 + (Int.random() % (122 - 48))
+                        if !(next > 57 && next < 65) && !(next > 90 && next < 97) {
+                            c = next.val as int8
+                        }
                     }
-                }
 
-                charArray[i] = c
-            }
+                    charArray[i] = c
+                }
         }
 
         charArray[length] = '\0'
@@ -221,6 +219,45 @@ extend String with Randomizable {
     }
 
     static def random() -> String {
-        return String.random(10, RandomStringKind.AlphaNumeric)
+        return random(10, RandomStringKind.AlphaNumeric)
+    }
+}
+
+class StringBuilder {
+    var buffer: int8*
+    let bufferSize: Int
+    var current = 0
+
+    init (len: Int) {
+        buffer = malloc(len + 1) as int8*
+        bufferSize = len
+    }
+
+    def postfix [](index: Int) -> ref int8 {
+        if index >= bufferSize {
+            // throw
+        }
+
+        return buffer[index]
+    }
+
+    def append (c: Char) {
+        append(c.val)
+    }
+
+    def append (c: int8) {
+        if current >= bufferSize {
+            // throw
+        }
+
+        buffer[current] = c
+        ++current
+    }
+
+    def build () -> String {
+        let buffcpy = malloc(bufferSize + 1) as int8*
+        __builtin_memcpy(buffcpy, buffer, bufferSize, alignof(int8))
+        
+        return String(buffcpy, bufferSize)
     }
 }

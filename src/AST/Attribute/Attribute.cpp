@@ -11,13 +11,19 @@ namespace cdot {
       { "carray", Attr::CArray },
       { "cstring", Attr::CString },
       { "primitive", Attr::Primitive },
-      { "neverOmit", Attr::NeverOmit }
+      { "neverOmit", Attr::NeverOmit },
+      { "_builtin", Attr::_builtin }
    };
 
    string isValidAttribute(Attribute attr) {
       switch (attr.kind) {
          case Attr::None:
             return "Unknown attribute " + attr.name;
+         case Attr::_builtin:
+            if (attr.args.size() != 1) {
+               return "Attribute " + attr.name + " expects 1 argument";
+            }
+            break;
          case Attr::CArray:
          case Attr::CString:
          case Attr::NoCopy:

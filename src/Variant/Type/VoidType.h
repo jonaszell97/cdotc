@@ -27,6 +27,10 @@ namespace cdot {
       bool implicitlyCastableTo(Type*) override;
       bool operator==(Type*& other) override;
 
+      bool isValueType() override {
+         return false;
+      }
+
       llvm::Constant* getConstantVal(Variant&) override {
          llvm::PointerType* ptrTy;
          if (pointeeType != nullptr) {

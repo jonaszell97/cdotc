@@ -16,7 +16,7 @@ public:
       return true;
    }
 
-   bool canReturn(Type* ty) override;
+   void saveOrResetState() override;
 
    typedef std::shared_ptr<NoneLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -38,10 +38,7 @@ public:
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 };
 
 

@@ -8,13 +8,15 @@ StringLiteral::StringLiteral(std::string value, char modifier) : value(value), m
 
 }
 
-bool StringLiteral::canReturn(Type *ty)
+void StringLiteral::saveOrResetState()
 {
-   if (ty->isPointerTy() && ty->getPointeeType()->isInt8Ty()) {
-      return true;
+   if (prevState == nullptr) {
+      prevState = new StringLiteral(*this);
    }
-
-   return ty->isObject() && ty->getClassName() == "String";
+   else {
+      assert(prevState->get_type() == NodeType::STRING_LITERAL && "Not a string literal");
+      *this = *static_cast<StringLiteral *>(prevState);
+   }
 }
 
 std::vector<AstNode::SharedPtr> StringLiteral::get_children() {

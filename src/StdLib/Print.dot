@@ -1,6 +1,6 @@
 
-using Extern.C
-using Builtin.Primitive
+using Extern.C.printf
+using Builtin.Primitive.{ int8, int64, double }
 
 def print() {
     printf("\n")

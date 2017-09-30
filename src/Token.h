@@ -26,21 +26,30 @@ enum TokenType {
 
 using cdot::Variant;
 
-class Token {
-public:
+struct Token {
    Token();
-   Token(TokenType, Variant&&, int, int, bool = false);
+   Token(TokenType type, Variant &&val, size_t start, size_t end, size_t line,
+      size_t indexOnLine, bool isEscaped = false);
+
    TokenType get_type();
    Variant get_value();
 
    string toString();
 
-   int getStart() {
+   size_t getStart() {
       return start;
    }
 
-   int getEnd() {
+   size_t getEnd() {
       return end;
+   }
+
+   size_t getLine() {
+      return line;
+   }
+
+   size_t getIndexOnLine() {
+      return indexOnLine;
    }
 
    bool isEscaped() {
@@ -51,7 +60,7 @@ public:
       this->indent = indent;
    }
 
-   int getIndent() {
+   size_t getIndent() {
       return indent;
    }
 
@@ -60,14 +69,17 @@ public:
    bool is_operator(std::string);
    bool is_separator();
 
-protected:
+   bool isInterpolationStart = false;
+
    Variant _value;
    TokenType _type;
 
-   int start;
-   int end;
+   size_t start;
+   size_t end;
+   size_t line;
+   size_t indexOnLine;
 
-   int indent = 0;
+   size_t indent = 0;
 
    bool isEscaped_ = false;
 };

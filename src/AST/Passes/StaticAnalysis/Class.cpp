@@ -65,6 +65,11 @@ namespace cl {
    unsigned int Class::ProtoObjPos = 1;
    unsigned int Class::ProtoSizePos = 2;
 
+   unsigned int Class::VTableMethodPos = 0;
+   unsigned int Class::VTableIsProtoDefPos = 1;
+
+   size_t Class::ProtocolSize = 24;
+
    /**
     * Instantiates a class
     * @param class_name
@@ -87,6 +92,9 @@ namespace cl {
                                                                 : "")
    {
       type = ObjectType::get(class_name);
+      type->isProtocol(is_protocol);
+      type->isStruct(is_struct);
+
       for (const auto& gen : generics) {
          type->specifyGenericType(gen->getGenericClassName(), gen);
       }
@@ -108,6 +116,8 @@ namespace cl {
    {
       type = ObjectType::get(class_name);
       type->isStruct(is_struct);
+      type->isProtocol(is_protocol);
+
       for (const auto& gen : generics) {
          type->specifyGenericType(gen->getGenericClassName(), gen);
       }
@@ -134,6 +144,7 @@ namespace cl {
    ) {
       auto field = std::make_shared<Field>(name, type, access, def_val, isConst, decl);
       field->isStatic = isStatic;
+      field->owningClass = this;
 
       auto ptr = field.get();
 
@@ -162,12 +173,13 @@ namespace cl {
       bool isStatic,
       MethodDecl* decl)
    {
-      if (name == "init") {
+      if (name == "init" || isEnum()) {
          generics = this->generics;
       }
 
       auto symb = SymbolTable::mangleMethod(className, name, args);
       auto method = std::make_shared<Method>(name, ret_type, access, std::move(args), generics, isStatic, decl);
+      method->owningClass = this;
 
       method->mangledName = symb;
       method->isProtocolDefaultImpl = is_protocol && (decl == nullptr || decl->hasDefinition());
@@ -205,13 +217,12 @@ namespace cl {
       }
 
       // check if memberwise initializer already explicitly defined
-      auto res = hasMethod(constrName, args);
-      if (res.compatibility == CompatibilityType::COMPATIBLE) {
-         memberwiseInitializer = res.method;
+      auto mangled = SymbolTable::mangleMethod(className, constrName, args);
+      if (mangledMethods.find(mangled) != mangledMethods.end()) {
+         memberwiseInitializer = mangledMethods[mangled];
          return false;
       }
 
-      auto mangled = SymbolTable::mangleMethod(className, constrName, args);
       auto method = std::make_shared<Method>(constrName, type->toRvalue(), std::move(args), generics, nullptr);
 
       method->mangledName = mangled;
@@ -244,7 +255,7 @@ namespace cl {
       return false;
    }
 
-   MethodResult Class::hasMethod(
+   CallCompatability Class::hasMethod(
       string method_name,
       std::vector<Argument> args,
       std::vector<Type*> concreteGenerics,
@@ -254,64 +265,50 @@ namespace cl {
       bool strict,
       bool swap)
    {
-      MethodResult result;
+      CallCompatability result;
       auto overloads = methods.equal_range(method_name);
-      int bestMatch = 0;
-
-      if (overloads.first == overloads.second) {
-         goto check_parent;
+      if (overloads.first != overloads.second) {
+         result.compatibility = CompatibilityType::NO_MATCHING_CALL;
       }
-
-      result.compatibility = CompatibilityType::NO_MATCHING_CALL;
 
       for (auto it = overloads.first; it != overloads.second; ++it) {
          auto& overload = it->second;
-
 
          CallCompatability res = swap
             ? util::findMatchingCall(overload->arguments, args, concreteGenerics, overload->generics)
             : util::findMatchingCall(args, overload->arguments, concreteGenerics, overload->generics);
 
-         result.expectedType = res.expectedType;
-         result.foundType = res.foundType;
-         result.incompArg = res.incomp_arg;
-         result.argOrder = res.argOrder;
-         result.generics = res.generics;
-
-         if (res.perfect_match) {
-            result.compatibility = CompatibilityType::COMPATIBLE;
-            result.method = overload.get();
-            result.neededCasts = res.needed_casts;
-
-            return result;
+         if (!res.isCompatible() && !result.isCompatible()) {
+            result = res;
          }
-
-         if (res.is_compatible && res.compat_score >= bestMatch && !strict) {
-            result.compatibility = CompatibilityType::COMPATIBLE;
+         else if (res.perfectMatch
+            || (!strict && res.isCompatible() && (!result.isCompatible() || res.castPenalty <= res.castPenalty)))
+         {
+            result = res;
             result.method = overload.get();
-            result.neededCasts = res.needed_casts;
 
-            bestMatch = res.compat_score;
+            if (res.perfectMatch) {
+               return result;
+            }
          }
       }
 
-      check_parent:
-      if (result.compatibility != CompatibilityType::COMPATIBLE && parentClass != nullptr && check_parent
+      if (!result.isCompatible() && parentClass != nullptr && check_parent
          && method_name != "init")
       {
          auto parentRes = parentClass->hasMethod(method_name, args, concreteGenerics, classGenerics,
             check_parent, checkProtocols, strict);
-         if (parentRes.compatibility == CompatibilityType::COMPATIBLE) {
+         if (parentRes.isCompatible()) {
             return parentRes;
          }
       }
 
-      if (result.compatibility != CompatibilityType::COMPATIBLE && checkProtocols) {
+      if (!result.isCompatible() && checkProtocols) {
          for (const auto& prot : conformsTo_) {
-            auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args, concreteGenerics,
-               classGenerics, check_parent, checkProtocols, strict);
+            auto res = SymbolTable::getClass(prot->getClassName())->hasMethod(method_name, args,
+               concreteGenerics, classGenerics, check_parent, checkProtocols, strict);
 
-            if (res.compatibility == CompatibilityType::COMPATIBLE && (res.method->hasDefinition || is_protocol)) {
+            if (res.isCompatible() && (res.method->hasDefinition || is_protocol)) {
                return res;
             }
          }
@@ -345,6 +342,11 @@ namespace cl {
       }
 
       return nullptr;
+   }
+
+   pair<Class::MethodIterator, Class::MethodIterator> Class::getOverloads(string &methodName)
+   {
+      return methods.equal_range(methodName);
    }
 
    /**
@@ -505,8 +507,7 @@ namespace cl {
          delete needed;
 
          protoMethods.push_back(methodRes.method->mangledName);
-
-         for (const auto& m : mangledMethods) {
+         for (const auto &m : mangledMethods) {
             if (m.second->methodName == method.second->methodName) {
                methodRes.method->isProtocolMethod = true;
                methodRes.method->protocolName = protoName;
@@ -518,8 +519,13 @@ namespace cl {
 
       for (const auto& byProxy : proto->conformsTo_) {
          checkProtocolConformance(byProxy);
-         protocolMethods[protoName].insert(protocolMethods[protoName].end(),
-            protocolMethods[byProxy->getClassName()].begin(), protocolMethods[byProxy->getClassName()].end());
+         for (const auto& method : protocolMethods[byProxy->getClassName()]) {
+            auto& protoMethods = protocolMethods[protoName];
+            auto hasMethod = std::find(protoMethods.begin(), protoMethods.end(), method);
+            if (hasMethod == protoMethods.end()) {
+               protoMethods.push_back(method);
+            }
+         }
       }
    }
 
@@ -527,7 +533,8 @@ namespace cl {
     * Checks a class for correct implementation of all interfaces
     * @return An error, if it occurs
     */
-   void Class::finalize() {
+   void Class::finalize()
+   {
       if (finalized) {
          return;
       }
@@ -817,58 +824,68 @@ namespace cl {
       }
 
       // pad to a minimum and a multiple of ((word)) bits
-      int remaining = sizeof(int*) - size;
-      while (remaining > 0) {
-         if (remaining >= 4) {
-            memoryLayout.push_back(Builder.getInt32Ty());
-            size += 4;
-         }
-         else if (remaining >= 2) {
-            memoryLayout.push_back(Builder.getInt16Ty());
-            size += 2;
-         }
-         else if (remaining >= 1) {
-            memoryLayout.push_back(Builder.getInt8Ty());
-            size += 1;
-         }
-
-         remaining = sizeof(int*) - size;
-      }
-
-      // pad to a multiple of 1 byte
-      int remainder = (size - size % sizeof(int*) + sizeof(int*)) - size;
-      while (remainder % 8 != 0) {
-         if (remainder > 4) {
-            memoryLayout.push_back(Builder.getInt32Ty());
-            size += 4;
-         }
-         else if (remainder > 2) {
-            memoryLayout.push_back(Builder.getInt16Ty());
-            size += 2;
-         }
-         else {
-            memoryLayout.push_back(Builder.getInt8Ty());
-            size += 1;
-         }
-
-         remainder = (size - size % sizeof(int*) + sizeof(int*)) - size;
-      }
+//      int remaining = sizeof(int*) - size;
+//      while (remaining > 0) {
+//         if (remaining >= 4) {
+//            memoryLayout.push_back(Builder.getInt32Ty());
+//            size += 4;
+//         }
+//         else if (remaining >= 2) {
+//            memoryLayout.push_back(Builder.getInt16Ty());
+//            size += 2;
+//         }
+//         else if (remaining >= 1) {
+//            memoryLayout.push_back(Builder.getInt8Ty());
+//            size += 1;
+//         }
+//
+//         remaining = sizeof(int*) - size;
+//      }
+//
+//      // pad to a multiple of 1 byte
+//      int remainder = (size - size % sizeof(int*) + sizeof(int*)) - size;
+//      while (remainder % 8 != 0) {
+//         if (remainder > 4) {
+//            memoryLayout.push_back(Builder.getInt32Ty());
+//            size += 4;
+//         }
+//         else if (remainder > 2) {
+//            memoryLayout.push_back(Builder.getInt16Ty());
+//            size += 2;
+//         }
+//         else {
+//            memoryLayout.push_back(Builder.getInt8Ty());
+//            size += 1;
+//         }
+//
+//         remainder = (size - size % sizeof(int*) + sizeof(int*)) - size;
+//      }
 
       occupiedBytes = size;
       layoutGenerated = true;
    }
 
    namespace {
-      void getTotalMethods(ObjectType* current, unsigned* acc, Class* initial = nullptr) {
+      void getTotalMethods(
+         ObjectType* current,
+         unsigned& acc,
+         std::vector<string>& visitedProtocols,
+         Class* initial = nullptr)
+      {
          auto proto = initial;
          if (proto == nullptr) {
             proto = SymbolTable::getClass(current->getClassName());
          }
+         if (std::find(visitedProtocols.begin(), visitedProtocols.end(), proto->getName()) !=
+               visitedProtocols.end()) {
+            return;
+         }
 
-         *acc += proto->getMethods().size();
+         acc += proto->getMethods().size();
+         visitedProtocols.push_back(proto->getName());
 
          for (const auto& proxy : proto->getConformedToProtocols()) {
-            getTotalMethods(proxy, acc);
+            getTotalMethods(proxy, acc, visitedProtocols);
          }
       }
    }
@@ -876,20 +893,22 @@ namespace cl {
    void Class::generateProtocolMemoryLayout(llvm::IRBuilder<> &Builder)
    {
       unsigned methodCount = 0;
-      getTotalMethods(nullptr, &methodCount, this);
+      std::vector<string> visited;
+      getTotalMethods(nullptr, methodCount, visited, this);
 
       // vtable
       memoryLayout.push_back(
-         llvm::ArrayType::get(Builder.getInt8PtrTy(), methodCount)->getPointerTo()
+         llvm::ArrayType::get(CodeGen::VTablePairTy, methodCount)->getPointerTo()
       );
 
       // pointer to concrete type conforming to the protocol
       memoryLayout.push_back(Builder.getInt8PtrTy());
 
       // 0 if the conforming type is a class, or its size in bytes if its a struct
-      memoryLayout.push_back(std::move(CodeGen::WordTy));
+      memoryLayout.push_back(CodeGen::WordTy);
 
       occupiedBytes = 2 * sizeof(int*);
+      layoutGenerated = true;
    }
 
    void Class::generateTypeInfo(llvm::IRBuilder<> &Builder)
@@ -897,8 +916,13 @@ namespace cl {
       if (is_abstract) {
          return;
       }
+
       typeInfo = new llvm::GlobalVariable(*CodeGen::Module, CodeGen::TypeInfoType, true,
-         llvm::GlobalVariable::ExternalLinkage, nullptr);
+         llvm::GlobalVariable::ExternalLinkage, nullptr, "cdot.typeinfo." + className);
+
+      if (is_declared) {
+         return;
+      }
 
       llvm::Constant* parentTypeInfo;
       if (parentClass == nullptr) {
@@ -920,7 +944,6 @@ namespace cl {
       );
 
       _typeName = llvm::cast<llvm::Constant>(Builder.CreateBitCast(_typeName, Builder.getInt8PtrTy()));
-
 
       auto TypeInfoArr = llvm::ConstantStruct::get(CodeGen::TypeInfoType,
          { parentTypeInfo, _typeID, _typeName });
@@ -955,13 +978,27 @@ namespace cl {
       if (is_abstract) {
          return;
       }
+
       if (is_protocol) {
          size_t count = 0;
          collectProtocolVTableOffsets(nullptr, count);
+
          return;
       }
 
-      if (!virtualMethods.empty() || needsTypeInfo) {
+      if (vtable != nullptr) {
+         return;
+      }
+
+      auto vtableType = llvm::ArrayType::get(CodeGen::VTablePairTy,
+         virtualMethods.size() + (size_t)needsTypeInfo);
+
+      if (is_declared && (!virtualMethods.empty() || needsTypeInfo)) {
+         vtable = new llvm::GlobalVariable(Module, vtableType, true, llvm::GlobalValue::ExternalLinkage,
+            nullptr, "." + className + ".vtbl"
+         );
+      }
+      else if (!virtualMethods.empty() || needsTypeInfo) {
          std::vector<llvm::Constant*> vMethods;
          size_t i = 0;
 
@@ -970,23 +1007,40 @@ namespace cl {
          for (const auto& method : virtualMethods) {
             methodOffsets.emplace(method.second, i++);
             auto declaredMethod = getMethod(method.second);
-            vMethods.push_back(llvm::cast<llvm::Constant>(
-               Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
+            vMethods.push_back(llvm::ConstantStruct::get(
+               CodeGen::VTablePairTy,
+               llvm::ArrayRef<llvm::Constant *>{
+                  llvm::cast<llvm::Constant>(
+                     Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
+                  ),
+                  Builder.getInt1(declaredMethod->isProtocolDefaultImpl)
+               }
             ));
          }
 
-         auto pairTy = llvm::StructType::get(CodeGen::Context, { Builder.getInt8PtrTy(), Builder.getInt1Ty() });
-         auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), virtualMethods.size() + (size_t)needsTypeInfo);
          vtable = new llvm::GlobalVariable(Module, vtableType, true, llvm::GlobalValue::ExternalLinkage,
             llvm::ConstantArray::get(vtableType, vMethods), "." + className + ".vtbl"
          );
       }
       else {
-         vtable = llvm::ConstantPointerNull::get(Builder.getInt8PtrTy());
+         vtable = llvm::ConstantPointerNull::get(CodeGen::VTablePairTy->getPointerTo());
       }
 
       for (const auto& prot : protocolMethods) {
          auto& methods = prot.second;
+         if (methods.empty()) {
+            continue;
+         }
+
+         auto vtableType = llvm::ArrayType::get(CodeGen::VTablePairTy, methods.size());
+         if (is_declared) {
+            protocolVtables.emplace(prot.first, new llvm::GlobalVariable(Module, vtableType, true,
+               llvm::GlobalValue::ExternalLinkage, nullptr,
+               "." + className + "." + prot.first + ".vtbl"
+            ));
+
+            continue;
+         }
 
          if (methods.empty()) {
             continue;
@@ -997,18 +1051,22 @@ namespace cl {
 
          for (const auto& method : methods) {
             auto declaredMethod = getMethod(method);
-            vMethods.push_back(llvm::cast<llvm::Constant>(
-               Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
+            vMethods.push_back(llvm::ConstantStruct::get(
+               CodeGen::VTablePairTy,
+               llvm::ArrayRef<llvm::Constant *>{
+                  llvm::cast<llvm::Constant>(
+                     Builder.CreateBitCast(declaredMethod->llvmFunc, Builder.getInt8PtrTy())
+                  ),
+                  Builder.getInt1(declaredMethod->isProtocolDefaultImpl)
+               }
             ));
          }
 
-         auto vtableType = llvm::ArrayType::get(Builder.getInt8PtrTy(), methods.size());
          auto glob = new llvm::GlobalVariable(Module, vtableType, true,
             llvm::GlobalValue::ExternalLinkage, llvm::ConstantArray::get(vtableType, vMethods),
             "." + className + "." + prot.first + ".vtbl"
          );
 
-         auto protoName = prot.first;
          protocolVtables.emplace(prot.first, glob);
       }
    }

@@ -4,12 +4,16 @@
 
 #include "SymbolTable.h"
 #include "../Util.h"
-#include "Visitor/StaticAnalysis/Class.h"
-#include "Visitor/StaticAnalysis/Enum.h"
+#include "Passes/StaticAnalysis/Class.h"
+#include "Passes/StaticAnalysis/Enum.h"
 #include "Statement/Declaration/Class/ClassDecl.h"
-#include "Visitor/StaticAnalysis/Function.h"
+#include "Passes/StaticAnalysis/Function.h"
+#include "../Variant/Type/VoidType.h"
 
-std::unordered_map<string, Typedef> SymbolTable::typedefs = {};
+std::unordered_map<string, Typedef> SymbolTable::typedefs = {
+   { "Void", Typedef { AccessModifier::PUBLIC, new VoidType } }
+};
+
 std::unordered_map<string, Variable> SymbolTable::variables = {};
 std::unordered_multimap<string, Function::UniquePtr> SymbolTable::functions = {};
 std::unordered_map<string, std::unique_ptr<cdot::cl::Class>> SymbolTable::classes = {};
@@ -117,8 +121,7 @@ void SymbolTable::declareFunction(string &name, Function::UniquePtr &&fun) {
    functions.emplace(name, std::move(fun));
 }
 
-pair<unordered_multimap<string, Function::UniquePtr>::iterator,
-   unordered_multimap<string, Function::UniquePtr>::iterator> SymbolTable::getFunction(string &name)
+pair<SymbolTable::FunctionIterator, SymbolTable::FunctionIterator> SymbolTable::getFunction(string &name)
 {
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
       name = TemporaryAliases[name];
@@ -128,8 +131,8 @@ pair<unordered_multimap<string, Function::UniquePtr>::iterator,
    return functions.equal_range(name);
 }
 
-pair<unordered_multimap<string, Function::UniquePtr>::iterator,
-   unordered_multimap<string, Function::UniquePtr>::iterator> SymbolTable::getFunction(string &name,
+pair<SymbolTable::FunctionIterator, SymbolTable::FunctionIterator> SymbolTable::getFunction(
+   string &name,
    std::vector<string> &namespaces)
 {
    for (const auto& ns : namespaces) {

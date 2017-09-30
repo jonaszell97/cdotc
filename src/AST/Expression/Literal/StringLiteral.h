@@ -15,7 +15,7 @@ public:
       return true;
    }
 
-   bool canReturn(Type* ty) override;
+   void saveOrResetState() override;
 
    typedef std::shared_ptr<StringLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -29,8 +29,8 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
@@ -44,10 +44,7 @@ public:
       return modifier;
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
    char modifier;

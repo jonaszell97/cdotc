@@ -3,6 +3,9 @@
 //
 
 #include "MemberRefExpr.h"
+#include "../../SymbolTable.h"
+#include "../../Passes/StaticAnalysis/Class.h"
+#include "../../Passes/StaticAnalysis/Enum.h"
 
 MemberRefExpr::MemberRefExpr(string ident, bool pointerAccess) : isPointerAccess(pointerAccess) {
    this->ident = ident;

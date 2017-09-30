@@ -7,7 +7,7 @@
 #include "FPType.h"
 #include "VoidType.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
 #include "../../Token.h"
 
 namespace cdot {
@@ -40,12 +40,19 @@ namespace cdot {
          case TypeID::ObjectTypeID: {
             auto asObj = cast<ObjectType>(other);
 
-            if (asObj->getClassName() == "Any" || asObj->getClassName() == "AnyVal") {
+            if (asObj->getClassName() == "Any") {
+               return true;
+            }
+
+            if (bitWidth == 8 && asObj->getClassName() == "Char") {
+               return true;
+            }
+
+            if (bitWidth == 1 && asObj->getClassName() == "Bool") {
                return true;
             }
 
             string boxedCl = string(isUnsigned_ ? "U" : "") + "Int" + std::to_string(bitWidth);
-
             return asObj->getClassName() == boxedCl;
          }
          case TypeID::CollectionTypeID:
@@ -136,7 +143,16 @@ namespace cdot {
    }
 
    string IntegerType::_toString() {
-      return string(isUnsigned_ ? "u" : "") + "int" + std::to_string(bitWidth);
+      string str = "int" + std::to_string(bitWidth);
+      if (isUnsigned_) {
+         str = "u" + str;
+      }
+
+      if (PrimitiveType::PrintSpecificTypes) {
+         str = "Builtin.Primitive." + str;
+      }
+
+      return str;
    }
 
 } // namespace cdot

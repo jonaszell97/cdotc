@@ -6,7 +6,7 @@
 #define CDOT_CONTEXTVISITOR_H
 
 
-#include "Visitor.h"
+#include "AbstractPass.h"
 
 
 #endif //CDOT_CONTEXTVISITOR_H

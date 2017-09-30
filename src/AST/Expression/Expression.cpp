@@ -5,7 +5,13 @@
 #include "Expression.h"
 #include "../Statement/Declaration/DeclStmt.h"
 
-void Expression::isHiddenReturnValue() {
+Expression::~Expression()
+{
+   delete prevState;
+}
+
+void Expression::isHiddenReturnValue()
+{
    if (memberExpr) {
       memberExpr->isHiddenReturnValue();
    }
@@ -18,7 +24,8 @@ void Expression::isHiddenReturnValue() {
    }
 }
 
-void Expression::isReturnValue() {
+void Expression::isReturnValue()
+{
    isReturnValue_ = true;
    if (declaration != nullptr) {
       declaration->isReturnValue();

@@ -27,6 +27,8 @@ using std::vector;
 namespace cdot {
 namespace cl {
 
+   class Class;
+
    struct Field {
       Field(string name, Type* type, AccessModifier access_modifier, Expression::SharedPtr, bool isConst, FieldDecl*);
       typedef std::unique_ptr<Field> UniquePtr;
@@ -50,6 +52,8 @@ namespace cl {
 
       FieldDecl* declaration;
       llvm::Type* llvmType = nullptr;
+
+      Class* owningClass = nullptr;
    };
 
    struct Method {
@@ -83,24 +87,14 @@ namespace cl {
 
       MethodDecl* declaration;
       llvm::Function* llvmFunc;
-      bool hasHiddenParam = false;
-   };
+      bool hasStructReturn = false;
 
-   struct MethodResult {
-      CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
-      Method* method = nullptr;
-
-      std::vector<size_t> neededCasts;
-      std::vector<pair<size_t, bool>> argOrder;
-
-      std::vector<Type*> generics;
-
-      string expectedType;
-      string foundType;
-      size_t incompArg = 0;
+      Class* owningClass = nullptr;
    };
 
    class Class {
+      typedef unordered_multimap<string, Method::SharedPtr>::iterator MethodIterator;
+
    public:
       Class(AccessModifier am,
          string&,
@@ -143,7 +137,7 @@ namespace cl {
       void checkProtocolConformance(ObjectType *protoObj);
       void finalize();
 
-      MethodResult hasMethod(
+      CallCompatability hasMethod(
          string method_name,
          std::vector<Argument> args = {},
          std::vector<Type*> givenGenerics = {},
@@ -164,6 +158,8 @@ namespace cl {
 
       Method* getMethod(string method_name);
       Field* getField(string &field_name);
+
+      pair<MethodIterator, MethodIterator> getOverloads(string &methodName);
 
       const unordered_map<string, Method*>& getMethods() {
          return mangledMethods;
@@ -375,6 +371,14 @@ namespace cl {
          }
       }
 
+      void isDeclared(bool decl) {
+         is_declared = decl;
+      }
+
+      bool isDeclared() {
+         return is_declared;
+      }
+
       llvm::Function* getDestructor() {
          return destructor;
       }
@@ -405,11 +409,7 @@ namespace cl {
 
       ObjectType* getType();
 
-      void extend(ClassDecl* extension) {
-         outstandingExtensions.push_back(extension);
-      }
-
-      std::vector<ClassDecl*>& getOutstandingExtensions() {
+      size_t& getOutstandingExtensions() {
          return outstandingExtensions;
       }
 
@@ -438,6 +438,11 @@ namespace cl {
       static unsigned int ProtoObjPos;
       static unsigned int ProtoSizePos;
 
+      static unsigned int VTableMethodPos;
+      static unsigned int VTableIsProtoDefPos;
+
+      static size_t ProtocolSize;
+
    protected:
       static size_t lastTypeID;
       size_t uses = 0;
@@ -448,9 +453,11 @@ namespace cl {
       string className;
       string typeName;
 
+      bool is_declared = false;
+
       string declarationNamespace;
 
-      std::vector<ClassDecl*> outstandingExtensions;
+      size_t outstandingExtensions = 0;
 
       std::vector<Class*> innerDeclarations;
       Class* outerClass = nullptr;
@@ -460,7 +467,7 @@ namespace cl {
       std::vector<Class*> extendedBy;
       unordered_map<string, size_t> baseClassOffsets;
 
-      ClassDecl* declaration;
+      ClassDecl* declaration = nullptr;
 
       std::vector<ObjectType*> conformsTo_;
       map<string, std::vector<string>> protocolMethods;
@@ -486,7 +493,7 @@ namespace cl {
 
       std::vector<pair<string, string>> virtualMethods;
 
-      ObjectType* type;
+      ObjectType* type = nullptr;
 
       std::vector<ObjectType*> generics;
       bool is_abstract = false;

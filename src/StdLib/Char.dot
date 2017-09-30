@@ -1,5 +1,5 @@
 
-using Builtin.Primitive
+using Builtin.Primitive.*
 
 struct Char {
     let val: int8 { get }

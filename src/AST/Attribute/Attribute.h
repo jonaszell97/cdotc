@@ -22,7 +22,9 @@ namespace cdot {
       NoCopy,
       CString,
       Primitive,
-      NeverOmit
+      NeverOmit,
+
+      _builtin
    };
 
    extern unordered_map<string, Attr> AttributeMap;

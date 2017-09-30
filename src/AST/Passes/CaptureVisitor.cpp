@@ -2,8 +2,8 @@
 //// Created by Jonas Zell on 26.06.17.
 ////
 //
-//#include "CaptureVisitor.h"
-//#include "Visitor.cpp"
+//#include "CapturePasses.h"
+//#include "Passes.cpp"
 //
 //CaptureVisitor::CaptureVisitor(Context* ctx) :
 //    declared_identifiers(std::set<std::string>()),

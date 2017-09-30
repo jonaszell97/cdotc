@@ -1,6 +1,6 @@
 
 #include "ConstExprPass.h"
-#include "../Visitor.cpp"
+#include "../ASTIncludes.txt"
 #include "../../../Variant/Variant.h"
 #include "../../Statement/Declaration/FuncArgDecl.h"
 #include "../../../Variant/Type/PrimitiveType.h"
@@ -235,51 +235,6 @@ Variant ConstExprPass::visit(MemberRefExpr *node)
    return {};
 }
 
-
-namespace {
-   Variant handleCast(Variant& target, Type*& to) {
-      switch (target.type) {
-         case VariantType::INT:
-            switch (to->getTypeID()) {
-               case TypeID::IntegerTypeID: {
-                  auto asInt = cast<IntegerType>(to);
-                  target.bitwidth = asInt->getBitwidth();
-                  target.isUnsigned = asInt->isUnsigned();
-
-                  return target;
-               }
-               case TypeID::FPTypeID: return Variant((double)target.intVal);
-               case TypeID::ObjectTypeID: return Variant(std::to_string(target.intVal));
-               default:
-                  llvm_unreachable("Should have returned before");
-            }
-         case VariantType::FLOAT:
-            switch (to->getTypeID()) {
-               case TypeID::IntegerTypeID: return Variant((long)target.floatVal);
-               case TypeID::FPTypeID: {
-                  auto asFloat = cast<FPType>(to);
-                  target.bitwidth = asFloat->getPrecision();
-
-                  return target;
-               }
-               case TypeID::ObjectTypeID: return Variant(std::to_string(target.floatVal));
-               default:
-                  llvm_unreachable("Should have returned before");
-            }
-//         case VariantType::STRING:
-//            switch (to->getTypeID()) {
-//               case TypeID::IntegerTypeID: return Variant(std::stol(target.strVal));
-//               case TypeID::FPTypeID: return Variant(std::stod(target.strVal));
-//               case TypeID::ObjectTypeID: return target;
-//               default:
-//                  llvm_unreachable("Should have returned before");
-//            }
-         default:
-            return {};
-      }
-   }
-}
-
 Variant ConstExprPass::visit(BinaryOperator *node)
 {
    auto lhs = node->lhs->accept(*this);
@@ -293,12 +248,16 @@ Variant ConstExprPass::visit(BinaryOperator *node)
    else if (node->opType == BinaryOperatorType::CAST) {
       auto ty = std::static_pointer_cast<TypeRef>(node->rhs)->getType();
       if (isa<PrimitiveType>(ty) || (ty->isObject() && ty->getClassName() == "String")) {
-         node->staticVal = handleCast(lhs, ty);
+         node->staticVal = lhs.castTo(ty);
       }
    }
 
    node->staticVal = lhs.applyBinaryOp(rhs, node->op);
 
+   if (node->op == "**" && node->operandType->isIntegerTy()) {
+      node->staticVal = Variant((long)node->staticVal.floatVal);
+   }
+   
    if (node->opType == BinaryOperatorType::ASSIGNMENT) {
       node->op = assignOp;
 
@@ -507,7 +466,7 @@ Variant ConstExprPass::visit(ImplicitCastExpr *node)
       return {};
    }
 
-   node->staticVal = handleCast(target, node->to);
+   node->staticVal = target.castTo(node->to);
    node->staticVal.isBoxed = target.isBoxed;
 
    return node->staticVal;

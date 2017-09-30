@@ -7,6 +7,7 @@
 
 
 #include "Type.h"
+#include "../../AST/Passes/AbstractPass.h"
 
 class Function;
 class TypeRef;
@@ -75,6 +76,7 @@ namespace cdot {
       }
 
       void visitContained(TypeCheckPass& v) override;
+      void visitContained(AbstractPass* v) override;
 
       bool operator==(Type*& other) override;
       inline bool operator!=(Type*& other) override {

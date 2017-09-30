@@ -3,9 +3,9 @@
 //
 
 #include "CollectionType.h"
-#include "../../AST/Visitor/CodeGen/CGMemory.h"
+#include "../../AST/Passes/CodeGen/CGMemory.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Visitor/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Class.h"
 
 namespace cdot {
 

@@ -9,6 +9,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <string>
 #include <unordered_map>
+#include "../../AST/Passes/AbstractPass.h"
 
 using std::string;
 using std::unordered_map;
@@ -16,6 +17,7 @@ using std::pair;
 
 class Expression;
 class TypeCheckPass;
+class DeclPass;
 class CodeGen;
 
 namespace cdot {
@@ -25,6 +27,7 @@ namespace cdot {
    class ObjectType;
 
    namespace cl {
+      class Class;
       struct EnumCase;
    }
 
@@ -106,7 +109,7 @@ namespace cdot {
       }
 
       virtual bool needsLvalueToRvalueConv() {
-         return lvalue && !isStruct() && !cstyleArray && !carrayElement && !isSelf_;
+         return lvalue && !isStruct() && !isProtocol() && !cstyleArray && !carrayElement && !isSelf_;
       }
 
       bool isInferred() {
@@ -144,6 +147,10 @@ namespace cdot {
 
       virtual string& getClassName() {
          return className;
+      }
+
+      virtual cl::Class* getClass() {
+         llvm_unreachable("Call isObject first");
       }
 
       virtual bool isGeneric() {
@@ -379,6 +386,14 @@ namespace cdot {
          return false;
       }
 
+      virtual bool isValueType() {
+         return true;
+      }
+
+      virtual bool needsMemCpy() {
+         return false;
+      }
+
       virtual bool isSelf() {
          return isSelf_;
       }
@@ -388,6 +403,7 @@ namespace cdot {
       }
 
       virtual void visitContained(TypeCheckPass& t) {}
+      virtual void visitContained(AbstractPass* v) {}
 
    protected:
       TypeID id;

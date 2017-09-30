@@ -7,42 +7,42 @@
 
 #include <string>
 #include <stack>
-#include "../Visitor.h"
+#include "../AbstractPass.h"
 #include "../StaticAnalysis/Function.h"
 
 enum class AccessModifier : unsigned int;
 using std::string;
 
-class DeclPass {
+class DeclPass : AbstractPass {
 public:
    DeclPass();
 
    void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
 
-   virtual void visit(CompoundStmt *node);
+   void visit(CompoundStmt *node) override;
 
-   virtual void visit(NamespaceDecl *node);
-   virtual void visit(UsingStmt *node);
-   virtual void visit(EndOfFileStmt *node);
+   void visit(NamespaceDecl *node) override;
+   void visit(UsingStmt *node) override;
+   void visit(EndOfFileStmt *node) override;
 
-   virtual void visit(FunctionDecl *node);
-   virtual void visit(FuncArgDecl *node);
+   void visit(FunctionDecl *node) override;
+   void visit(FuncArgDecl *node) override;
 
-   virtual void visit(DeclStmt *node);
-   virtual void visit(ClassDecl *node);
-   virtual void visit(MethodDecl *node);
-   virtual void visit(FieldDecl *node);
-   virtual void visit(ConstrDecl *node);
-   virtual void visit(DestrDecl *node);
+   void visit(DeclStmt *node) override;
+   void visit(ClassDecl *node) override;
+   void visit(MethodDecl *node) override;
+   void visit(FieldDecl *node) override;
+   void visit(ConstrDecl *node) override;
+   void visit(DestrDecl *node) override;
 
-   virtual void visit(TypedefDecl *node);
-   virtual void visit(TypeRef *node);
-   virtual void visit(DeclareStmt *node);
-   virtual void visit(EnumDecl *node);
+   void visit(TypedefDecl *node) override;
+   void visit(TypeRef *node) override;
+   void visit(DeclareStmt *node) override;
+   void visit(EnumDecl *node) override;
 
-   virtual void visit(DebugStmt *node);
-   virtual void visit(Statement *node);
-   virtual void visit(Expression *node);
+   void visit(DebugStmt *node) override;
+   void visit(Statement *node) override;
+   void visit(Expression *node) override;
 
    string ns_prefix()
    {

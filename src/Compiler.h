@@ -7,22 +7,64 @@
 
 #include <string>
 #include <vector>
+#include <llvm/IR/Module.h>
 
 using std::string;
 
 namespace cdot {
 
+   enum class OutputKind {
+      EXEC,
+      OBJ,
+      IR,
+      ASM,
+      HEADERS,
+      LIB,
+      AST,
+      PRE_PROCESSED
+   };
+
+   struct CompilerOptions {
+      std::vector<string> sourceFiles;
+      std::vector<string> linkedFiles;
+      std::vector<string> headerFiles;
+
+      string executableOutFile;
+      string objectOutFile;
+      string asmOutFile;
+      string ppOutFile;
+      string irOutFile;
+
+      string basePath;
+
+      size_t optimizationLevel = 3;
+
+      std::vector<OutputKind> outputKinds;
+
+      bool hasOutputKind(OutputKind kind) {
+         return std::find(outputKinds.begin(), outputKinds.end(), kind) != outputKinds.end();
+      }
+
+      string headerOutPath;
+
+      bool isStdLib = false;
+      bool linkStdLib = true;
+   };
+
    class Compiler {
    public:
-      Compiler(int argc, char *argv[]);
-      void compile();
+      static void init(int argc, char *argv[]);
+      static void compile();
+
+      static void outputIR(llvm::Module* module);
+
+      static CompilerOptions& getOptions() {
+         return options;
+      }
 
    protected:
-      std::vector<string> sourceFiles;
-      string compilerLocation;
-
-      bool astDump = false;
-      bool linkStdLib = true;
+      static string compilerLocation;
+      static CompilerOptions options;
    };
 
 }

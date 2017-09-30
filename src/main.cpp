@@ -24,11 +24,11 @@ void  handler()
 
 int main(int argc, char* argv[])
 {
-   cdot::Compiler comp(argc, argv);
+   cdot::Compiler::init(argc, argv);
    std::set_terminate(handler);
 
    try {
-      comp.compile();
+      cdot::Compiler::compile();
    } catch(ParseError& p) {
       std::cout << p.what() << std::endl;
    } catch(RuntimeError& r) {

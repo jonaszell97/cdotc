@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+
 #include "Exceptions.h"
 #include "../Lexer.h"
 #include "../AST/AstNode.h"
@@ -37,10 +38,12 @@ namespace cdot {
             ++index;
          }
 
-         err += " (" + fileName + ":" + std::to_string(lines) + ":" + std::to_string(errIndex - last_newline) + ")\n";
-         err += std::to_string(lines) + " | " + errLine + "\n";
+         string linePref = std::to_string(lines) + " | ";
 
-         for (int i = 1; i < errIndex - startIndex; ++i) {
+         err += " (" + fileName + ":" + std::to_string(lines) + ":" + std::to_string(errIndex - last_newline) + ")\n";
+         err += linePref + errLine + "\n";
+
+         for (int i = 1; i < errIndex - startIndex + linePref.length(); ++i) {
             err += ' ';
          }
 

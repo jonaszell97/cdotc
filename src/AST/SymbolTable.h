@@ -54,6 +54,7 @@ using cdot::cl::EnumCase;
 using std::string;
 
 class SymbolTable {
+   typedef unordered_multimap<string, std::unique_ptr<Function>>::iterator FunctionIterator;
 public:
    static cdot::cl::Class* declareClass(
       AccessModifier am,
@@ -112,10 +113,8 @@ public:
 
    static void setVariable(string& name, Type* ty);
 
-   static pair<unordered_multimap<string, std::unique_ptr<Function>>::iterator,
-      unordered_multimap<string, std::unique_ptr<Function>>::iterator> getFunction(string &);
-   static pair<unordered_multimap<string, std::unique_ptr<Function>>::iterator,
-      unordered_multimap<string, std::unique_ptr<Function>>::iterator> getFunction(string &, std::vector<string> &);
+   static pair<FunctionIterator, FunctionIterator> getFunction(string &);
+   static pair<FunctionIterator, FunctionIterator> getFunction(string &, std::vector<string> &);
 
    static string mangleVariable(string &, Type *);
    static string mangleVariable(string &, size_t = 0);

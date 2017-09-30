@@ -13,6 +13,12 @@ public:
 
    void addStatement(Statement::SharedPtr stmt);
 
+   void addPass(AbstractPass* pass) {
+      passes.push_back(pass);
+   }
+
+   void runPasses();
+
    void returnable(bool terminable) {
       returnable_ = terminable;
    }
@@ -65,23 +71,22 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass& v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass& v) override {
       return v.visit(this);
    }
-   
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+
+   ADD_FRIEND_PASSES
 
 protected:
    bool returnable_ = true;
    std::vector<Statement::SharedPtr> statements;
    bool preserveScope = false;
+
+   std::vector<AbstractPass*> passes;
 
    bool isUnsafe_ = false;
    bool implicitZeroReturn = false;

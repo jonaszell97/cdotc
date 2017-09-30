@@ -7,10 +7,11 @@
 
 #include <iostream>
 #include "Attribute/Attribute.h"
-#include "Visitor/StaticAnalysis/TypeCheckPass.h"
-#include "Visitor/CodeGen/CodeGen.h"
-#include "Visitor/StaticAnalysis/ConstExprPass.h"
-#include "Visitor/Declaration/DeclPass.h"
+#include "Passes/StaticAnalysis/TypeCheckPass.h"
+#include "Passes/AbstractPass.h"
+#include "Passes/CodeGen/CodeGen.h"
+#include "Passes/StaticAnalysis/ConstExprPass.h"
+#include "Passes/Declaration/DeclPass.h"
 #include "../Variant/Type/Type.h"
 
 namespace cdot {
@@ -23,6 +24,7 @@ class Expression;
 using cdot::Attribute;
 
 class CompoundStmt;
+class HeaderGen;
 
 enum class NodeType {
    COLLECTION_LITERAL, LAMBDA_EXPR, LITERAL_EXPR, NONE_LITERAL, STRING_LITERAL, EXPRESSION,
@@ -56,18 +58,23 @@ public:
 
    virtual std::vector<AstNode::SharedPtr> get_children();
 
-   virtual void setIndex(int start, int end, size_t source) {
+   virtual void setIndex(size_t start, size_t end, size_t line, size_t source) {
       startIndex = start;
       endIndex = end;
+      this->line = line;
       sourceFileId = source;
    }
 
-   virtual int getStartIndex() const {
+   virtual size_t getStartIndex() const {
       return startIndex;
    }
 
-   virtual int getEndIndex() const {
+   virtual size_t getEndIndex() const {
       return endIndex;
+   }
+
+   virtual size_t getLine() const {
+      return line;
    }
 
    virtual void bind(std::string id) {
@@ -131,19 +138,19 @@ public:
    virtual llvm::Value* accept(CodeGen& v) = 0;
    virtual Type* accept(TypeCheckPass& v) = 0;
    virtual Variant accept(ConstExprPass& v) = 0;
-   virtual void accept(DeclPass& v) = 0;
+
+   virtual void accept(AbstractPass* v) = 0;
 
    virtual void __dump(int depth) = 0;
    virtual void __tab(int depth);
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
-   int startIndex;
-   int endIndex;
+   size_t startIndex;
+   size_t endIndex;
+   size_t line;
+
    size_t sourceFileId;
 
    AstNode* parent = nullptr;

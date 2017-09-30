@@ -7,7 +7,7 @@
 
 #include <unordered_map>
 #include <stack>
-#include "../Visitor.h"
+#include "../AbstractPass.h"
 #include "Function.h"
 #include "../../../Util.h"
 #include "../../Attribute/Attribute.h"
@@ -29,27 +29,13 @@ namespace cdot {
       class Class;
       class Method;
       class Enum;
-
-      struct MethodResult;
    }
-
-   struct FunctionResult {
-      CompatibilityType compatibility;
-      Function* func = nullptr;
-
-      std::vector<size_t> neededCasts;
-      std::vector<Type*> generics;
-      std::vector<pair<size_t, bool>> argOrder;
-      string expectedType;
-      string foundType;
-      size_t incompArg = 0;
-   };
 
    struct Scope {
       size_t id;
 
       string currentSelf;
-      string currentFunction;
+      pair<string, string> currentFunction;
 
       bool inProtocol = false;
       bool isFunctionRoot = false;
@@ -148,16 +134,26 @@ protected:
    std::stack<Scope> Scopes;
    std::stack<pair<string, string>> Cleanups;
 
+   std::stack<string> classScopeStack;
    string& currentClass() {
-      return currentNamespace.back();
+      return classScopeStack.top();
    }
 
    Scope* latestScope = nullptr;
 
    size_t lastScopeID = 0;
    void pushScope();
-   void pushFunctionScope(Type* returnType, bool isLambda = false);
-   void pushMethodScope(Type* returnType);
+   void pushFunctionScope(
+      Type* returnType,
+      string methodName,
+      string mangledName,
+      bool isLambda = false
+   );
+
+   void pushMethodScope(
+      cl::Method*
+   );
+
    void pushLoopScope(bool continuable = true, bool breakable = true);
    void popScope();
 
@@ -172,7 +168,8 @@ protected:
    inline void resolve(Type**, AstNode *node = nullptr);
 
    pair<pair<Type*, string>, bool> getVariable(string &name, AstNode *cause = nullptr);
-   FunctionResult getFunction(
+
+   CallCompatability getFunction(
       string& funcName,
       std::vector<Argument>& args,
       std::vector<Type*> generics = {}
@@ -245,6 +242,8 @@ protected:
    void DefineConstr(ConstrDecl*, cdot::cl::Class*);
    void DefineDestr(DestrDecl*, cdot::cl::Class*);
 
+   Type* HandleBuiltinIdentifier(IdentifierRefExpr *node);
+
    Type* HandleBinaryOperator(Type*, Type*, BinaryOperatorType, BinaryOperator *node);
    Type* HandleCastOp(Type *fst, Type *snd, BinaryOperator *node);
    Type* HandleAssignmentOp(Type *fst, Type *snd, BinaryOperator *node);
@@ -278,27 +277,52 @@ protected:
    void HandleEnumComp(Type *fst, Type *snd, BinaryOperator *node);
    void HandleTupleComp(Type *fst, Type *snd, BinaryOperator *node);
 
+   std::vector<std::vector<Argument>*> GetMethodOverloadArgs(
+      cl::Class* cl,
+      string& methodName
+   );
+
+   std::vector<std::vector<Argument>*> GetFunctionOverloadArgs(
+      string& functionName
+   );
+
+   void GetCallArguments(
+      std::vector<std::vector<Argument>*> overloads,
+      CallExpr *&node
+   );
+
    void HandleFunctionCall(CallExpr*);
    void HandleBuiltinCall(CallExpr*);
 
    void HandleMethodCall(CallExpr*);
    void HandleEnumCase(CallExpr *node);
 
-   void throwMethodNotFound(cdot::cl::MethodResult& res, CallExpr *node, cdot::cl::Class *cl);
+   void throwMethodNotFound(
+      CallCompatability& res,
+      CallExpr *node,
+      cdot::cl::Class *cl
+   );
 
    void HandleConstructorCall(CallExpr*);
    void HandleCallOperator(CallExpr*);
    void HandleAnonCall(CallExpr*);
 
-   void checkClassAccessibility(cdot::cl::Class*& cl, Expression* cause);
-   void checkMemberAccessibility(cdot::cl::Class*& cl, string& memberName, AccessModifier& access, Expression* cause);
+   void checkClassAccessibility(
+      cdot::cl::Class*& cl,
+      Expression* cause
+   );
+
+   void checkMemberAccessibility(
+      cdot::cl::Class*& cl,
+      string& memberName,
+      AccessModifier& access,
+      Expression* cause
+   );
 
    void PrepareCallArgs(
       std::vector<pair<string, std::shared_ptr<Expression>>>& args,
       std::vector<Argument>& givenArgs,
-      std::vector<Argument>& declaredArgs,
-      std::vector<pair<size_t, bool>> &argOrder,
-      bool isProtocolDefaultImpl = false
+      CallCompatability& comp
    );
 
    void ApplyCasts(
@@ -310,7 +334,10 @@ protected:
 
    void CopyNodeProperties(Expression *src, Expression *dst);
 
-   bool matchableAgainst(Type*& matchVal, std::shared_ptr<CaseStmt> const& caseVal);
+   bool matchableAgainst(
+      Type*& matchVal,
+      std::shared_ptr<CaseStmt> const& caseVal
+   );
 
    Type* HandleDictionaryLiteral(CollectionLiteral *node);
 };

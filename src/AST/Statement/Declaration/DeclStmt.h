@@ -36,8 +36,8 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
@@ -56,10 +56,7 @@ public:
       this->access = access;
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
    AccessModifier access;

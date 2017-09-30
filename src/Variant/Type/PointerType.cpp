@@ -3,7 +3,7 @@
 //
 
 #include "PointerType.h"
-#include "../../AST/Visitor/CodeGen/CGMemory.h"
+#include "../../AST/Passes/CodeGen/CGMemory.h"
 #include "../../AST/Expression/Expression.h"
 #include "IntegerType.h"
 #include "ObjectType.h"

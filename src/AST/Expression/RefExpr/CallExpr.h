@@ -14,7 +14,6 @@ namespace cl {
    class Class;
    class Method;
    struct EnumCase;
-   struct MethodResult;
 }
 }
 
@@ -33,6 +32,8 @@ public:
    CallExpr(CallType, std::vector<Expression::SharedPtr>, string = "");
 
    ~CallExpr() override;
+
+   void saveOrResetState() override;
 
    void set_generics(std::vector<Type*> generics) {
       this->generics = generics;
@@ -58,18 +59,15 @@ public:
       return v.visit(this);
    }
 
-   void accept(DeclPass &v) override {
-      v.visit(this);
+   void accept(AbstractPass* v) override {
+      v->visit(this);
    }
 
    Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
 
-   friend class ConstExprPass;
-   friend class CodeGen;
-   friend class TypeCheckPass;
-   friend class DeclPass;
+   ADD_FRIEND_PASSES
 
 protected:
    CallType type;
@@ -82,15 +80,11 @@ protected:
    bool isCapturedVar = false;
    Type* capturedType; // unowned
 
-   bool hasHiddenParamReturn = false;
-   Type* hiddenParamType = nullptr;
+   bool hasStructReturn = false;
+   Type* structReturnType = nullptr;
 
    bool isPointerAccess_ = false;
-
-   union {
-      cdot::cl::MethodResult *methodRes = nullptr;
-      FunctionResult *functionRes;
-   };
+   CallCompatability* compatibility = nullptr;
 
    // method call
    bool isNsMember = false;
@@ -118,7 +112,7 @@ protected:
    bool implicitSelfCall = false;
    string selfBinding;
 
-   bool reverseProtoShift = false;
+   bool isProtocolCall = false;
    bool castToBase = false;
 };
 

@@ -21,27 +21,15 @@ LambdaExpr::~LambdaExpr() {
    delete lambdaType;
 }
 
-bool LambdaExpr::canReturn(Type *ty)
+void LambdaExpr::saveOrResetState()
 {
-   if (!ty->isFunctionTy()) {
-      return false;
+   if (prevState == nullptr) {
+      prevState = new LambdaExpr(*this);
    }
-
-   auto fun = cast<FunctionType>(ty);
-   auto& otherArgs = fun->getArgTypes();
-
-   if (otherArgs.size() != otherArgs.size()) {
-      return false;
+   else {
+      assert(prevState->get_type() == NodeType::LAMBDA_EXPR && "Not a lambda expr");
+      *this = *static_cast<LambdaExpr *>(prevState);
    }
-
-   size_t i = 0;
-   for (const auto& arg : args) {
-      if (!arg->getArgType()->getType(true)->implicitlyCastableTo(otherArgs[i])) {
-         return false;
-      }
-   }
-
-   return returnType->getType(true)->implicitlyCastableTo(fun->getReturnType());
 }
 
 std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {

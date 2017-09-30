@@ -9,7 +9,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "../Visitor.h"
+#include "../AbstractPass.h"
 
 namespace cdot {
    struct Variant;

@@ -20,34 +20,14 @@ namespace cdot {
       return newTy;
    }
 
-   bool VoidType::operator==(Type *&other) {
-      if (!isa<VoidType>(other)) {
-         return false;
-      }
-
-      auto asVoid = cast<VoidType>(other);
-
-      if (pointeeType == nullptr && asVoid->pointeeType == nullptr) {
-         return true;
-      }
-
-      if (pointeeType != nullptr) {
-         return asVoid->pointeeType != nullptr && *pointeeType == asVoid->pointeeType;
-      }
-
-      return true;
+   bool VoidType::operator==(Type *&other)
+   {
+      return isa<VoidType>(other);
    }
 
-   bool VoidType::implicitlyCastableTo(Type *type) {
-      if (!type->isNullable() || type->isStruct()) {
-         return false;
-      }
-
-      if (pointeeType != nullptr) {
-         return pointeeType->implicitlyCastableTo(type);
-      }
-
-      return true;
+   bool VoidType::implicitlyCastableTo(Type *type)
+   {
+      return isa<VoidType>(type);
    }
 
    llvm::Type *VoidType::_getLlvmType() { return Builder->getVoidTy(); }

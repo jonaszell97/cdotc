@@ -4,9 +4,9 @@
 //
 //#include <regex>
 //#include <iostream>
-//#include "EvaluatingVisitor.h"
-//#include "Visitor.cpp"
-//#include "CaptureVisitor.h"
+//#include "EvaluatingPasses.h"
+//#include "Passes.cpp"
+//#include "CapturePasses.h"
 //#include "../../StdLib/Objects/Array.h"
 //#include "../../Parser.h"
 //

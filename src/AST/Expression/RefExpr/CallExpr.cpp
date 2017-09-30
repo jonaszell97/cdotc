@@ -3,6 +3,9 @@
 //
 
 #include "CallExpr.h"
+#include "../../SymbolTable.h"
+#include "../../Passes/StaticAnalysis/Class.h"
+#include "../../Passes/StaticAnalysis/Enum.h"
 
 CallExpr::CallExpr(CallType type, std::vector<pair<string, Expression::SharedPtr>> args, std::string _ident) :
    type(type),
@@ -31,6 +34,17 @@ CallExpr::~CallExpr() {
 
    for (const auto& gen : generics) {
       delete gen;
+   }
+}
+
+void CallExpr::saveOrResetState()
+{
+   if (prevState == nullptr) {
+      prevState = new CallExpr(*this);
+   }
+   else {
+      assert(prevState->get_type() == NodeType::CALL_EXPR && "Not a call expr");
+      *this = *static_cast<CallExpr *>(prevState);
    }
 }
 

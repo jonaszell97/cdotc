@@ -14,18 +14,88 @@ namespace cdot {
       enum class BuiltinMacro {
          TOLOWER,
          TOUPPER,
-         REPEAT
+         TOSTRING,
+         REPEAT,
+         LINE,
+         FILE
       };
 
       unordered_map<string, pair<BuiltinMacro, int>> BuiltinMacros = {
          { "_ToLower", {BuiltinMacro::TOLOWER, 1} },
          { "_ToUpper", {BuiltinMacro::TOUPPER, 1} },
-         { "_Repeat", {BuiltinMacro::REPEAT, 2} }
+         { "_ToString", {BuiltinMacro::TOSTRING, 1} },
+         { "_Repeat", {BuiltinMacro::REPEAT, 2} },
+         { "__LINE__", {BuiltinMacro::LINE, 0} },
+         { "__FILE__", {BuiltinMacro::FILE, 0} }
       };
 
+      //region Description
       unordered_map<string, Variant> BuiltinValues = {
          { "_WordSize", Variant((long)(sizeof(size_t) * 8)) },
+         { "__DEBUG__", Variant(true) },
+         { "_CLOCKS_PER_SEC", Variant((long)CLOCKS_PER_SEC) },
+#ifdef _WIN32
+         { "_WIN32", Variant(true) },
+#else
+         { "_WIN32", Variant(false) },
+#endif
+#ifdef _WIN64
+         { "_WIN64", Variant(true) },
+#else
+         { "_WIN64", Variant(false) },
+#endif
+#if defined(unix) || defined(__unix) || defined(__unix__)
+         { "unix", Variant(true) },
+         { "__unix", Variant(true) },
+         { "__unix__", Variant(true) },
+#else
+         { "unix", Variant(false) },
+         { "__unix", Variant(false) },
+         { "__unix__", Variant(false) },
+#endif
+#if defined(__APPLE__) || defined(__MACH__)
+         { "__APPLE__", Variant(true) },
+         { "__MACH__", Variant(true) },
+#else
+         { "__APPLE__", Variant(false) },
+         { "__MACH__", Variant(false) },
+#endif
+#if defined(linux) || defined(__linux) || defined(__linux__)
+         { "linux", Variant(true) },
+         { "__linux", Variant(true) },
+         { "__linux__", Variant(true) },
+#else
+         { "linux", Variant(false) },
+         { "__linux", Variant(false) },
+         { "__linux__", Variant(false) },
+#endif
+#ifdef __FreeBSD__
+         { "__FreeBSD__", Variant(true) },
+#else
+         { "__FreeBSD__", Variant(false) },
+#endif
       };
+      //endregion
+
+      void removeTrailingWhitespace(string& src) {
+         long i = src.length() - 1;
+         size_t count = 0;
+         while (src[i] == ' ' || src[i] == '\n' || src[i] == '\r') {
+            ++count;
+            --i;
+
+            if (i < 0) {
+               break;
+            }
+         }
+
+         // keep one trailing newline
+         if (src.length() > i + 1 && (src[i + 1] == '\n' || src[i + 1] == '\r')) {
+            --count;
+         }
+
+         src = src.substr(0, src.length() - count);
+      }
    }
 
    unordered_map<string, pair<string, std::vector<MacroArg>>> Preprocessor::Macros;
@@ -62,7 +132,10 @@ namespace cdot {
                std::cout << src << "\n\n----------\n\n";
                std::cout << out << std::endl;
             }
+
+            removeTrailingWhitespace(out);
             src = out;
+
             break;
          }
       }
@@ -165,16 +238,25 @@ namespace cdot {
                ++i;
             }
          }
-         else if (next.get_type() == T_PREPROC_VAR) {
-            substituteValue();
+         else if (next.get_type() == T_PREPROC_VAR || next.get_type() == T_IDENT) {
+            auto ident = lexer->s_val();
+            if (next.get_type() == T_IDENT && (Macros.find(ident) != Macros.end()
+                  || BuiltinMacros.find(ident) != BuiltinMacros.end())) {
+               substituteMacro();
+            }
+            else if (next.get_type() == T_PREPROC_VAR && (BuiltinValues.find(ident) != BuiltinValues.end()
+                  || Values.find(ident) != Values.end())) {
+               substituteValue();
+            }
+            else if (next.get_type() == T_PREPROC_VAR) {
+               out += ident;
+            }
+            else if (start != end) {
+               out += src.substr(start, end - start);
+            }
          }
          else if (next.get_type() == T_EOF) {
             return PD_NONE;
-         }
-         else if (next.get_type() == T_IDENT && (Macros.find(lexer->s_val()) != Macros.end() ||
-            BuiltinMacros.find(lexer->s_val()) != BuiltinMacros.end()))
-         {
-            substituteMacro();
          }
          else if (start != end) {
             out += src.substr(start, end - start);
@@ -203,18 +285,20 @@ namespace cdot {
          case T_IDENT:
          case T_PREPROC_VAR: {
             auto ident = lexer->s_val();
-            if (Macros.find(ident) != Macros.end()) {
+            if (lexer->current_token.get_type() == T_IDENT && Macros.find(ident) != Macros.end()) {
                substituteMacro();
                return currentTokenValue();
             }
-            if (BuiltinValues.find(ident) != BuiltinValues.end()) {
-               return BuiltinValues[ident];
-            }
-            if (Values.find(ident) == Values.end()) {
-               return Variant(ident);
+            if (lexer->current_token.get_type() == T_PREPROC_VAR) {
+               if (BuiltinValues.find(ident) != BuiltinValues.end()) {
+                  return BuiltinValues[ident];
+               }
+               if (Values.find(ident) != Values.end()) {
+                  return Values[ident];
+               }
             }
 
-            return Values[ident];
+            return Variant(ident);
          }
          case T_PUNCTUATOR: {
             if (lexer->current_token.is_punctuator('(')) {
@@ -265,10 +349,12 @@ namespace cdot {
    void Preprocessor::substituteValue()
    {
       auto valName = lexer->s_val();
-      if (Values.find(valName) == Values.end()) {
-         ParseError::raise("Reference to undeclared value " + valName, lexer);
+      if (BuiltinValues.find(valName) != BuiltinValues.end()) {
+         out += BuiltinValues[valName].toString();
+         return;
       }
 
+      assert(Values.find(valName) != Values.end() && "Value does not exist");
       out += Values[valName].toString();
    }
 
@@ -311,6 +397,10 @@ namespace cdot {
             res += target;
             break;
          }
+         case BuiltinMacro::TOSTRING: {
+            res += "\"" + args[0].toString() + "\"";
+            break;
+         }
          case BuiltinMacro::REPEAT: {
             if (args[0].type != VariantType::STRING || args[1].type != VariantType::INT) {
                ParseError::raise("Unexpected argument types for builtin macro _Repeat", lexer);
@@ -327,9 +417,20 @@ namespace cdot {
             res += rep;
             break;
          }
+         case BuiltinMacro::LINE: {
+            res += std::to_string(lexer->current_token.getLine());
+            break;
+         }
+         case BuiltinMacro::FILE: {
+            res += "\"" + fileName + "\"";
+            break;
+         }
       }
 
-      Preprocessor(res, fileName).run();
+      Preprocessor preproc(res, fileName);
+      preproc.lexer->currentLine = lexer->currentLine;
+      preproc.run();
+
       out += res;
    }
 
@@ -357,13 +458,22 @@ namespace cdot {
          lexer->advance();
          lexer->advance();
 
+         size_t start = lexer->last_token_index;
          while (!lexer->current_token.is_punctuator(')')) {
-            args.push_back(parseExpression().toString());
             lexer->advance();
 
             if (lexer->current_token.is_punctuator(',')) {
+               size_t end = lexer->last_token_index;
+               args.push_back(src.substr(start, end - start));
+
+               start = end;
                lexer->advance();
             }
+         }
+
+         size_t end = lexer->last_token_index;
+         if (start != end) {
+            args.push_back(src.substr(start, end - start));
          }
       }
 
@@ -406,7 +516,10 @@ namespace cdot {
          }
       }
 
-      Preprocessor(replacement, fileName).run();
+      Preprocessor preproc(replacement, fileName);
+      preproc.lexer->currentLine = lexer->currentLine;
+      preproc.run();
+
       out += replacement;
    }
 
@@ -437,7 +550,7 @@ namespace cdot {
          lexer->advance();
       }
 
-      int start = lexer->last_token_index;
+      size_t start = lexer->last_token_index;
       bool enddefFound = false;
 
       while (rawDef && lexer->current_token.is_punctuator('\n')) {
@@ -480,9 +593,7 @@ namespace cdot {
       }
 
       string macro = src.substr(start, lexer->last_token_index - start);
-      if (rawDef && macro.back() == '\n') {
-         macro.pop_back();
-      }
+      removeTrailingWhitespace(macro);
 
       Macros.emplace(name, pair<string, std::vector<MacroArg>>{ macro, args});
 
@@ -500,7 +611,7 @@ namespace cdot {
       advance();
 
       bool hasElse = false;
-      int ifStartIndex = lexer->current_index;
+      size_t ifStartIndex = lexer->current_index;
       int ifEndIndex = -1;
 
       int elseStartIndex;
@@ -542,12 +653,18 @@ namespace cdot {
 
       if (isDef) {
          auto sub = src.substr(ifStartIndex, ifEndIndex - ifStartIndex);
-         Preprocessor(sub, fileName).run();
+         Preprocessor preproc(sub, fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+         preproc.run();
+
          out += sub;
       }
       else if (hasElse) {
          auto sub = src.substr(elseStartIndex, elseEndIndex - elseStartIndex);
-         Preprocessor(sub, fileName).run();
+         Preprocessor preproc(sub, fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+         preproc.run();
+
          out += sub;
       }
    }
@@ -650,12 +767,18 @@ namespace cdot {
       }
       if (condIsTrue) {
          auto sub = src.substr(ifStartIndex, ifEndIndex - ifStartIndex);
-         Preprocessor(sub, fileName).run();
+         Preprocessor preproc(sub, fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+         preproc.run();
+
          out += sub;
       }
       else if (hasElse) {
          auto sub = src.substr(elseStartIndex, elseEndIndex - elseStartIndex);
-         Preprocessor(sub, fileName).run();
+         Preprocessor preproc(sub, fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+         preproc.run();
+
          out += sub;
       }
    }
@@ -822,7 +945,10 @@ namespace cdot {
             pos = iteration.find(search, startpos);
          }
 
-         Preprocessor(iteration, fileName).run();
+         Preprocessor preproc(iteration, fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+         preproc.run();
+
          out += iteration;
       }
    }

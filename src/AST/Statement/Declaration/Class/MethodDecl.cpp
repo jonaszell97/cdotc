@@ -15,7 +15,8 @@ MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, 
    body(body),
    am(am),
    isStatic(is_static),
-   isAbstract(false)
+   isAbstract(false),
+   hasDefinition_(body != nullptr)
 {
 
 }
@@ -27,7 +28,8 @@ MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, 
    args(args),
    am(am),
    isStatic(is_static),
-   isAbstract(true)
+   isAbstract(true),
+   hasDefinition_(body != nullptr)
 {
 
 }
@@ -36,7 +38,8 @@ MethodDecl::MethodDecl(string alias, string originMethod, std::vector<std::share
    methodName(originMethod),
    alias(alias),
    args(args),
-   isAlias(true)
+   isAlias(true),
+   hasDefinition_(body != nullptr)
 {
 
 }

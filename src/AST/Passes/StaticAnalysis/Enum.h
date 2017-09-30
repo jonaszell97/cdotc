@@ -63,10 +63,10 @@ namespace cl {
          return cases.find(caseName) != cases.end();
       }
 
-      MethodResult hasCase(string& caseName, std::vector<Argument>& assocTypes, std::vector<Type*>& generics) {
-         MethodResult res;
-         res.compatibility = CompatibilityType::FUNC_NOT_FOUND;
-
+      CallCompatability hasCase(string& caseName, std::vector<Argument>& assocTypes,
+         std::vector<Type*>& generics)
+      {
+         CallCompatability res;
          if (!hasCase(caseName)) {
             return res;
          }

@@ -1,5 +1,5 @@
 
-using Builtin.Primitive
+using Builtin.Primitive.*
 using Extern.C
 
 struct Float {
@@ -71,10 +71,10 @@ extend Double with StringRepresentable {
             strLen = strLen + 1
         }
         
-        let str = String(strLen)
+        let str = StringBuilder(strLen)
         var i = 0
         if (negative) {
-            str[0] = '-'
+            str.append('-')
             ++i
         }
         
@@ -93,7 +93,8 @@ extend Double with StringRepresentable {
 
         str[i] = (num + 48) as int8
         str[strLen - precision - 1] = '.'
-        return str
+        
+        return str.build()
     }
 
     def infix as String {
@@ -107,7 +108,7 @@ extend Double with Randomizable {
         let range = max - min
         let div = (2 ** 32) / range
 
-        return Double(min + rand() / div)
+        return Double(min + rand / div)
     }
 
     static def random() -> Double {

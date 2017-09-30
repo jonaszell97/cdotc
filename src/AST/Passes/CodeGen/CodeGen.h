@@ -9,7 +9,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <unordered_map>
 #include <stack>
-#include "../Visitor.h"
+#include "../AbstractPass.h"
 #include "../../../Variant/Variant.h"
 #include "../../../Variant/Type/PointerType.h"
 #include "../../Attribute/Attribute.h"
@@ -23,7 +23,6 @@ using std::string;
 using std::pair;
 using std::unordered_map;
 using std::unique_ptr;
-using namespace cdot;
 
 namespace cdot {
    class Type;
@@ -32,13 +31,16 @@ namespace cdot {
    class Builtin;
    class BinaryOperator;
    enum class BinaryOperatorType : unsigned int;
+   struct Argument;
 
    namespace cl {
       class Class;
+      struct Method;
    }
-
 }
 
+using namespace cdot;
+using cdot::cl::Method;
 using cdot::cl::Class;
 
 class CodeGen {
@@ -124,6 +126,8 @@ public:
    static llvm::Value* CreateLoad(llvm::Value* ptr);
    static llvm::BasicBlock* CreateBasicBlock(string name, llvm::Function* func = nullptr);
 
+   static void doProtocolCopy(llvm::Value *lhs, llvm::Value *rhs);
+
    static llvm::ConstantInt* wordSizedInt(int val);
 
    static llvm::Value* GetString(string&, bool = false);
@@ -159,7 +163,10 @@ public:
    static llvm::IRBuilder<> Builder;
    static llvm::StructType* ClassInfoType;
    static llvm::StructType* TypeInfoType;
+   static llvm::StructType* OpaqueTy;
    static llvm::IntegerType* WordTy;
+   static llvm::StructType* LambdaTy;
+   static llvm::StructType* VTablePairTy;
 
 protected:
    static unique_ptr<llvm::Module> Module;
@@ -221,7 +228,8 @@ protected:
       std::vector<Attribute> attrs = {},
       bool hiddenParam = false,
       bool envParam = false,
-      bool isVirtualOrProtocolMethod = false
+      bool isVirtualOrProtocolMethod = false,
+      bool hasDefinition = true
    );
 
    llvm::Function *DeclareFunction(
@@ -234,7 +242,8 @@ protected:
       std::vector<Attribute> attrs = {},
       bool hiddenParam = false,
       bool envParam = false,
-      bool isVirtualOrProtocolMethod = false
+      bool noByVal = false,
+      bool hasDefinition = true
    );
 
    llvm::Function* DeclareMethod(
@@ -245,13 +254,12 @@ protected:
       string &this_binding,
       std::vector<Attribute> attrs = {},
       bool hiddenParam = false,
-      bool isVirtualOrProtocolMethod = false
+      bool isVirtualOrProtocolMethod = false,
+      bool hasDefinition = true
    );
 
    void DefineFunction(llvm::Function*, std::shared_ptr<Statement> body, string name = "");
    void DefineFunction(string& bound_name, std::shared_ptr<Statement> body);
-
-   void InitializeFields(llvm::Function *func, cdot::cl::Class *cl);
 
    llvm::Function* DeclareDefaultConstructor(
       string &bound_name,
@@ -280,8 +288,15 @@ protected:
       std::shared_ptr<CompoundStmt> body = nullptr
    );
 
-   llvm::Value* DispatchProtocolCall(Type *, string&, llvm::Value *, std::vector<llvm::Value*>& args, Type*
-      returnType);
+   llvm::Value* DispatchProtocolCall(
+      Type *protoTy,
+      std::vector<llvm::Value*>& args,
+      Type* returnType,
+      cl::Method* method,
+      bool skipDefaultCheck = false,
+      llvm::Value* originalSelf = nullptr,
+      llvm::Value* vMethodPair = nullptr
+   );
 
    llvm::Value* ApplyStaticUpCast(Type *, string&, llvm::Value *);
 
@@ -312,10 +327,18 @@ protected:
    llvm::ConstantInt* ONE_64;
    llvm::ConstantInt* ZERO_64;
 
-   static llvm::Value* GetInteger(long val, unsigned short bits = 64, bool isUnsigned = false);
+   static llvm::Value* GetInteger(llvm::Value* val);
+   static llvm::Value* GetInteger(long val, unsigned short bits = 64);
+
    static llvm::Value* GetFloat(double val, unsigned short bits = 64);
 
    llvm::Value* CopyByVal(llvm::Value*);
+
+   static llvm::Function* DefineIncrementRefCount();
+   static llvm::Function* DefineDecrementRefCount();
+
+   static llvm::Function* DeclareIncrementRefCount();
+   static llvm::Function* DeclareDecrementRefCount();
 
    static void IncrementRefCount(llvm::Value*, const string& className);
    static void DecrementRefCount(llvm::Value*, string& className);
@@ -347,7 +370,8 @@ protected:
    llvm::Value* HandleTupleComp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node, bool neq = false);
 
    // pattern matching
-   llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy);
+   llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy,
+      llvm::Function* operatorEquals = nullptr);
 
    llvm::Value* HandleDictionaryLiteral(CollectionLiteral *node);
 };

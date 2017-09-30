@@ -4,10 +4,12 @@
 
 #include "Token.h"
 
-Token::Token() {}
+Token::Token() = default;
 
-Token::Token(TokenType type, Variant&& content, int start, int end, bool escaped) :
-   isEscaped_(escaped), _type(type), _value(content), start(start), end(end)
+Token::Token(TokenType type, Variant&& content, size_t start, size_t end, size_t line,
+   size_t indexOnLine, bool escaped) :
+   isEscaped_(escaped), _type(type), _value(content), start(start),
+   end(end), line(line), indexOnLine(indexOnLine)
 {
 
 }

@@ -23,19 +23,17 @@
 #include "AST/Expression/RefExpr/MemberRefExpr.h"
 #include "AST/Expression/RefExpr/SubscriptExpr.h"
 #include "AST/Statement/ControlFlow/ReturnStmt.h"
-#include "AST/Visitor/Visitor.h"
+#include "AST/Passes/AbstractPass.h"
 #include "AST/Statement/ControlFlow/ContinueStmt.h"
 #include "AST/Statement/ControlFlow/BreakStmt.h"
-#include "AST/Visitor/CaptureVisitor.h"
-#include "AST/Visitor/EvaluatingVisitor.h"
 #include "AST/Statement/ControlFlow/GotoStmt.h"
 #include "AST/Expression/Literal/LambdaExpr.h"
 #include "AST/Statement/Declaration/NamespaceDecl.h"
 #include "AST/Statement/UsingStmt.h"
 #include "AST/Statement/EndOfFileStmt.h"
-#include "AST/Visitor/StaticAnalysis/TypeCheckPass.h"
+#include "AST/Passes/StaticAnalysis/TypeCheckPass.h"
 #include "AST/SymbolTable.h"
-#include "AST/Visitor/CodeGen/CodeGen.h"
+#include "AST/Passes/CodeGen/CodeGen.h"
 #include "Message/Warning.h"
 #include "AST/Statement/Declaration/TypedefDecl.h"
 #include "Variant/Type/Type.h"
@@ -96,11 +94,11 @@ Parser::~Parser() {
 
 
 TypeRef::SharedPtr Parser::parse_type() {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    auto type = __parse_type();
    auto typeref = std::make_shared<TypeRef>(type);
-   typeref->setIndex(start, lexer->current_index, source_id);
+   typeref->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return typeref;
 
@@ -258,20 +256,20 @@ Type* Parser::__parse_type() {
  */
 Expression::SharedPtr Parser::parse_identifier()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    string ident = lexer->s_val();
 
    IdentifierRefExpr::SharedPtr ident_expr = std::make_shared<IdentifierRefExpr>(ident);
 
    ident_expr->setMemberExpr(try_parse_member_expr());
-   ident_expr->setIndex(start, lexer->current_index, source_id);
+   ident_expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return ident_expr;
 }
 
 std::shared_ptr<Expression> Parser::try_parse_member_expr()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance(false);
 
    // member access
@@ -285,7 +283,7 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
 
          MemberRefExpr::SharedPtr mem_ref = std::make_shared<MemberRefExpr>(index, pointerAccess);
          mem_ref->setMemberExpr(try_parse_member_expr());
-         mem_ref->setIndex(start, lexer->current_index, source_id);
+         mem_ref->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
          return mem_ref;
       }
@@ -306,7 +304,7 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
 
       MemberRefExpr::SharedPtr mem_ref = std::make_shared<MemberRefExpr>(ident, pointerAccess);
       mem_ref->setMemberExpr(try_parse_member_expr());
-      mem_ref->setIndex(start, lexer->current_index, source_id);
+      mem_ref->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return mem_ref;
    }
@@ -316,7 +314,7 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
       lexer->advance();
 
       Expression::SharedPtr expr = parse_expression();
-      expr->setIndex(start, lexer->current_index, source_id);
+      expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       SubscriptExpr::SharedPtr arr_acc = std::make_shared<SubscriptExpr>(expr);
 
@@ -326,7 +324,7 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
       }
 
       arr_acc->setMemberExpr(try_parse_member_expr());
-      arr_acc->setIndex(start, lexer->current_index, source_id);
+      arr_acc->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return arr_acc;
    }
@@ -342,7 +340,7 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
  */
 CollectionLiteral::SharedPtr Parser::parse_collection_literal()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    bool isDictionary = false;
    bool first = true;
@@ -395,13 +393,13 @@ CollectionLiteral::SharedPtr Parser::parse_collection_literal()
 
    if (isDictionary) {
       auto dict = std::make_shared<CollectionLiteral>(keys, values);
-      dict->setIndex(start, lexer->current_index, source_id);
+      dict->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return dict;
    }
 
    auto arr = std::make_shared<CollectionLiteral>(values);
-   arr->setIndex(start, lexer->current_index, source_id);
+   arr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return arr;
 }
@@ -433,7 +431,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
    }
    // enum case with inferred type
    if (lexer->current_token.is_punctuator('.')) {
-      int start = lexer->current_index;
+      size_t start = lexer->current_token.getStart();
       lexer->advance(T_IDENT);
 
       auto caseName = lexer->s_val();
@@ -441,7 +439,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
       if (!lexer->lookahead().is_punctuator('(')) {
          auto expr = std::make_shared<MemberRefExpr>(caseName);
          expr->setAttributes(attributes);
-         expr->setIndex(start, lexer->current_index, source_id);
+         expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
          expr->isEnumCase_(true);
 
          return expr;
@@ -454,7 +452,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
       }
    }
    if (lexer->current_token.get_type() == T_IDENT) {
-      int start = lexer->current_index;
+      size_t start = lexer->current_token.getStart();
       Token next = lexer->lookahead(false);
 
       // function call
@@ -466,7 +464,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
       if (next.is_operator("=>")) {
          auto argName = lexer->s_val();
          auto arg = std::make_shared<FuncArgDecl>(argName, std::make_shared<TypeRef>(new AutoType));
-         arg->setIndex(start, lexer->current_index, source_id);
+         arg->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
          start = lexer->current_index;
 
          lexer->advance();
@@ -475,7 +473,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
          auto body = parse_next_stmt();
          auto lambda = std::make_shared<LambdaExpr>(std::make_shared<TypeRef>(new AutoType),
             std::vector<FuncArgDecl::SharedPtr>{ arg }, body);
-         lambda->setIndex(start, lexer->current_index, source_id);
+         lambda->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
          lambda->setMemberExpr(try_parse_member_expr());
 
          return lambda;
@@ -487,63 +485,65 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
       return ident;
    }
    if (lexer->current_token.get_type() == T_LITERAL) {
-      int start = lexer->last_token_index;
+      size_t start = lexer->last_token_index;
       auto val = lexer->current_token.get_value();
 
       if (val.type == VariantType::STRING) {
          Token next = lexer->lookahead(false);
          auto str = lexer->s_val();
-         auto interpolations = util::findInterpolations(str);
 
-         // possible string modifier
-         if (!interpolations.empty()) {
-            Lexer *lex = new Lexer;
-            size_t i = 0;
-            auto originalLexer = lexer;
-            bool currentIsString = true;
-            std::vector<Expression::SharedPtr> strings;
+         auto strLiteral = std::make_shared<StringLiteral>(str);
+         strLiteral->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+         strLiteral->setMemberExpr(try_parse_member_expr());
+         strLiteral->setAttributes(attributes);
 
-            for (auto& curr : interpolations) {
-               if (currentIsString) {
-                  strings.push_back(std::make_shared<StringLiteral>(curr.second));
-                  currentIsString = false;
-                  continue;
+         if (!lexer->current_token.isInterpolationStart) {
+            return strLiteral;
+         }
+
+         std::vector<Expression::SharedPtr> strings{ strLiteral };
+         lexer->advance();
+
+         for (;;) {
+            Expression::SharedPtr expr;
+
+            if (lexer->current_token.is_punctuator('{')) {
+               lexer->advance();
+               expr = parse_expression();
+
+               lexer->advance();
+               if (!lexer->current_token.is_punctuator('}')) {
+                  ParseError::raise("Expected '}", lexer);
                }
-
-               lex->reset(curr.second, originalLexer->fileName);
-               lex->advance();
-
-               lexer = lex;
-               auto expr = parse_expression();
-               expr->setIndex(start + curr.first, start + curr.first + curr.second.length(), source_id);
-               strings.push_back(expr);
-
-               ++i;
-               currentIsString = true;
+            }
+            else {
+               expr = std::make_shared<IdentifierRefExpr>(lexer->s_val());
             }
 
-            delete lex;
-            lexer = originalLexer;
+            lexer->continueInterpolation = true;
 
-            auto interp = std::make_shared<StringInterpolation>(std::move(strings));
-            interp->setIndex(start, lexer->current_index, source_id);
-            interp->setMemberExpr(try_parse_member_expr());
-            interp->setAttributes(attributes);
+            strings.push_back(expr);
+            lexer->advance();
+            strings.push_back(std::make_shared<StringLiteral>(lexer->s_val()));
 
-            return interp;
+            lexer->continueInterpolation = false;
+            if (!lexer->current_token.isInterpolationStart) {
+               break;
+            }
+
+            lexer->advance();
          }
-         else {
-            auto string_literal = std::make_shared<StringLiteral>(str);
-            string_literal->setIndex(start, lexer->current_index, source_id);
-            string_literal->setMemberExpr(try_parse_member_expr());
-            string_literal->setAttributes(attributes);
 
-            return string_literal;
-         }
+         auto interp = std::make_shared<StringInterpolation>(std::move(strings));
+         interp->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+         interp->setMemberExpr(try_parse_member_expr());
+         interp->setAttributes(attributes);
+
+         return interp;
       }
       else if (val.type == VariantType::VOID) {
          auto noneLiteral = std::make_shared<NoneLiteral>();
-         noneLiteral->setIndex(start, lexer->current_index, source_id);
+         noneLiteral->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
          noneLiteral->setAttributes(attributes);
 
          return noneLiteral;
@@ -551,7 +551,7 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
 
       auto expr = std::make_shared<NumericLiteral>(val);
       expr->setMemberExpr(try_parse_member_expr());
-      expr->setIndex(start, lexer->current_index, source_id);
+      expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       expr->setAttributes(attributes);
 
       return expr;
@@ -587,7 +587,7 @@ namespace {
  */
 Expression::SharedPtr Parser::parse_unary_expr(UnaryOperator::SharedPtr literal, bool postfix)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    // prefix unary op
    if (isPrefixUnaryOp(lexer->current_token)) {
@@ -595,7 +595,7 @@ Expression::SharedPtr Parser::parse_unary_expr(UnaryOperator::SharedPtr literal,
       lexer->advance();
 
       unary_op->setTarget(parse_unary_expr());
-      unary_op->setIndex(start, lexer->current_index, source_id);
+      unary_op->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return unary_op;
    }
@@ -619,7 +619,7 @@ Expression::SharedPtr Parser::parse_unary_expr(UnaryOperator::SharedPtr literal,
       UnaryOperator::SharedPtr unary_op = std::make_shared<UnaryOperator>(lexer->s_val(), "postfix");
       unary_op->setMemberExpr(try_parse_member_expr());
       unary_op->setTarget(expr);
-      unary_op->setIndex(start, lexer->current_index, source_id);
+      unary_op->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return unary_op;
    }
@@ -635,13 +635,13 @@ Expression::SharedPtr Parser::parse_unary_expr(UnaryOperator::SharedPtr literal,
       expr->setMemberExpr(call);
    }
 
-   expr->setIndex(start, lexer->current_index, source_id);
+   expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return expr;
 }
 
 TertiaryOperator::SharedPtr Parser::parse_tertiary_operator(Expression::SharedPtr cond)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    lexer->advance();
    Expression::SharedPtr if_branch = parse_expression();
@@ -655,7 +655,7 @@ TertiaryOperator::SharedPtr Parser::parse_tertiary_operator(Expression::SharedPt
    Expression::SharedPtr else_branch = parse_expression();
 
    auto op = std::make_shared<TertiaryOperator>(cond, if_branch, else_branch);
-   op->setIndex(start, lexer->current_index, source_id);
+   op->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return op;
 }
@@ -763,7 +763,7 @@ Expression::SharedPtr Parser::parse_paren_expr() {
 
 std::shared_ptr<TupleLiteral> Parser::parse_tuple_literal() {
 
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    std::vector<pair<string, Expression::SharedPtr>> elements;
 
    lexer->advance();
@@ -798,7 +798,7 @@ std::shared_ptr<TupleLiteral> Parser::parse_tuple_literal() {
    }
 
    auto tuple = std::make_shared<TupleLiteral>(elements);
-   tuple->setIndex(start, lexer->current_index, source_id);
+   tuple->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return tuple;
 }
@@ -845,7 +845,7 @@ namespace {
  */
 Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs, int min_precedence)
 {
-   int start = lexer->last_token_index;
+   size_t start = lexer->last_token_index;
 
    if (lhs == nullptr) {
       lhs = parse_unary_expr();
@@ -881,7 +881,7 @@ Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs, int mi
 
       // return the expression so far
       BinaryOperator::SharedPtr binary_op = std::make_shared<BinaryOperator>(op);
-      binary_op->setIndex(start, lexer->current_index, source_id);
+      binary_op->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       binary_op->setLhs(lhs);
       binary_op->setRhs(rhs);
 
@@ -892,7 +892,7 @@ Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs, int mi
    if (next.is_operator("?")) {
       lexer->advance(false);
       auto op = parse_tertiary_operator(lhs);
-      op->setIndex(start, lexer->current_index, source_id);
+      op->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return op;
    }
@@ -931,7 +931,7 @@ Statement::SharedPtr Parser::parse_assignment(bool is_const, bool is_declaration
    }
 
    for (;;) {
-      int start = lexer->current_index;
+      size_t start = lexer->current_token.getStart();
       lexer->advance();
 
       bool inferred = true;
@@ -972,7 +972,8 @@ Statement::SharedPtr Parser::parse_assignment(bool is_const, bool is_declaration
       DeclStmt::SharedPtr decl_stmt = std::make_shared<DeclStmt>(identifier, typeref, is_const, top_level, value);
       decl_stmt->setAccess(access);
       decl_stmt->setAttributes(attributes);
-      decl_stmt->setIndex(start, lexer->current_index, source_id);
+      decl_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+      decl_stmt->isDeclaration(is_declaration);
 
       if (value != nullptr) {
          value->setDeclaration(decl_stmt.get());
@@ -1053,7 +1054,7 @@ std::vector<pair<string, std::shared_ptr<TypeRef>>> Parser::parse_tuple_type() {
  */
 std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(bool optionalNames, bool optionalTypes) {
 
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    std::vector<FuncArgDecl::SharedPtr> args;
    if (!lexer->current_token.is_punctuator('(')) {
@@ -1095,7 +1096,7 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(bool optionalNames, b
             argType->isCStyleVararg(true);
 
             arg_dec->setType(std::make_shared<TypeRef>(argType));
-            arg_dec->setIndex(start, lexer->current_index, source_id);
+            arg_dec->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
             args.push_back(arg_dec);
             break;
@@ -1139,7 +1140,7 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(bool optionalNames, b
          ParseError::raise("Default values are only allowed as last items of an argument list", lexer);
       }
 
-      arg_dec->setIndex(start, lexer->current_index, source_id);
+      arg_dec->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       args.push_back(arg_dec);
 
       // end of argument list or next argument
@@ -1177,7 +1178,7 @@ namespace {
  */
 FunctionDecl::SharedPtr Parser::parse_function_decl(bool is_declaration)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    bool isOperatorDecl = false;
    string opType;
    if (lexer->lookahead().get_type() == T_KEYWORD) {
@@ -1280,12 +1281,16 @@ FunctionDecl::SharedPtr Parser::parse_function_decl(bool is_declaration)
       CompoundStmt::SharedPtr func_body = parse_block();
       func_body->returnable(true);
       fun_dec->setBody(func_body);
-      fun_dec->setIndex(start, lexer->current_index, source_id);
+      fun_dec->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       fun_dec->setAttributes(attributes);
       attributes.clear();
    }
 
    CurrentClassGenerics.clear();
+
+   fun_dec->isDeclaration(is_declaration);
+   fun_dec->setAttributes(attributes);
+   attributes.clear();
 
    return fun_dec;
 }
@@ -1295,7 +1300,7 @@ FunctionDecl::SharedPtr Parser::parse_function_decl(bool is_declaration)
  * @return
  */
 LambdaExpr::SharedPtr Parser::parse_lambda_expr() {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list(false, true);
 
@@ -1323,7 +1328,7 @@ LambdaExpr::SharedPtr Parser::parse_lambda_expr() {
       cmpnd->returnable(true);
    }
 
-   lambda_expr->setIndex(start, lexer->current_index, source_id);
+   lambda_expr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    lambda_expr->setMemberExpr(try_parse_member_expr());
 
    return lambda_expr;
@@ -1336,7 +1341,7 @@ LambdaExpr::SharedPtr Parser::parse_lambda_expr() {
  */
 ConstrDecl::SharedPtr Parser::parse_constr_decl(AccessModifier am, bool optionalNames)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    lexer->advance();
    std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list(optionalNames);
@@ -1349,13 +1354,13 @@ ConstrDecl::SharedPtr Parser::parse_constr_decl(AccessModifier am, bool optional
 
 
    auto constr = std::make_shared<ConstrDecl>(args, constr_body, am);
-   constr->setIndex(start, lexer->current_index, source_id);
+   constr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return constr;
 }
 
 DestrDecl::SharedPtr Parser::parse_destr_decl()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    lexer->advance();
    std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
@@ -1366,7 +1371,7 @@ DestrDecl::SharedPtr Parser::parse_destr_decl()
    CompoundStmt::SharedPtr body = parse_block();
 
    auto destr = std::make_shared<DestrDecl>(std::move(body));
-   destr->setIndex(start, lexer->current_index, source_id);
+   destr->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return destr;
 }
@@ -1377,12 +1382,17 @@ DestrDecl::SharedPtr Parser::parse_destr_decl()
  * @param is_static
  * @return
  */
-FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static, bool isConst) {
+FieldDecl::SharedPtr Parser::parse_field_decl(
+   AccessModifier am,
+   bool is_static,
+   bool isConst,
+   bool isDeclaration)
+{
    if (lexer->current_token.get_type() != T_IDENT) {
       ParseError::raise("Field name must be a valid identifier", lexer);
    }
 
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    string field_name = lexer->s_val();
    TypeRef::SharedPtr typeref;
    bool typeDeclared = false;
@@ -1419,6 +1429,10 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
             getter = true;
 
             if (lexer->lookahead().is_punctuator('{')) {
+               if (isDeclaration) {
+                  ParseError::raise("Fields of declared classes cannot define a getter method", lexer);
+               }
+
                auto body = parse_block();
                field->addGetter(body);
 
@@ -1437,6 +1451,10 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
             setter = true;
 
             if (lexer->lookahead().is_punctuator('{')) {
+               if (isDeclaration) {
+                  ParseError::raise("Fields of declared classes cannot define a setter method", lexer);
+               }
+
                auto body = parse_block();
                field->addSetter(body);
 
@@ -1459,7 +1477,11 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
    }
 
    // optional default value
-   if (next.get_type() == T_OP && next.get_value().strVal == "=") {
+   if (next.is_operator("=")) {
+      if (isDeclaration) {
+         ParseError::raise("Fields of declared classes cannot define a default value", lexer);
+      }
+
       lexer->advance();
       lexer->advance();
       field->setDefault(parse_expression());
@@ -1468,29 +1490,27 @@ FieldDecl::SharedPtr Parser::parse_field_decl(AccessModifier am, bool is_static,
       ParseError::raise("Fields have to have an annotated type or a default value", lexer);
    }
 
-   lexer->advance(false);
-   if (!lexer->current_token.is_separator()) {
-      ParseError::raise("Field declarations must be on seperate lines", lexer);
-   }
-
-   field->setIndex(start, lexer->current_index, source_id);
+   field->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return field;
 }
 
 /**
  * Parses a method declaration
  * @param am
- * @param is_static
+ * @param isStatic
  * @param ts
  * @return
  */
-MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_static, bool is_interface)
+MethodDecl::SharedPtr Parser::parse_method_decl(
+   AccessModifier am,
+   bool isStatic,
+   bool allowOmittedBody)
 {
    if (lexer->current_token.get_type() != T_IDENT) {
       ParseError::raise("Method name must be a valid identifier", lexer);
    }
 
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    string method_name = lexer->s_val();
    lexer->advance();
@@ -1509,13 +1529,13 @@ MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_stati
       auto args = parse_arg_list(true);
 
       auto op_decl = std::make_shared<MethodDecl>(method_name, aliasee, args);
-      op_decl->setIndex(start, lexer->current_index, source_id);
+      op_decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return op_decl;
    }
 
    auto generics = parse_generics();
-   std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list(is_interface);
+   std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list(allowOmittedBody);
 
    // optional return type
    Token next = lexer->lookahead();
@@ -1537,19 +1557,19 @@ MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_stati
          ParseError::raise("Method declarations must be on seperate lines", lexer);
       }
 
-      auto method = std::make_shared<MethodDecl>(method_name, typeref, args, method_body, am, is_static);
-      method->setIndex(start, lexer->current_index, source_id);
+      auto method = std::make_shared<MethodDecl>(method_name, typeref, args, method_body, am, isStatic);
+      method->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       method->setGenerics(generics);
 
       return method;
    }
-   else if (!is_interface) {
+   else if (!allowOmittedBody) {
       ParseError::raise("Abstract methods can only be declared in a protocol or an abstract "
          "class", lexer);
    }
    else {
-      auto method = std::make_shared<MethodDecl>(method_name, typeref, args, am, is_static);
-      method->setIndex(start, lexer->current_index, source_id);
+      auto method = std::make_shared<MethodDecl>(method_name, typeref, args, am, isStatic);
+      method->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       method->setGenerics(generics);
 
       return method;
@@ -1565,7 +1585,7 @@ MethodDecl::SharedPtr Parser::parse_method_decl(AccessModifier am, bool is_stati
  */
 MethodDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, bool is_interface)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    auto opType = lexer->s_val();
    lexer->advance();
 
@@ -1638,7 +1658,7 @@ MethodDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, bool is_int
       auto args = parse_arg_list(true);
 
       auto op_decl = std::make_shared<MethodDecl>(opType + " " + op, aliasee, args);
-      op_decl->setIndex(start, lexer->current_index, source_id);
+      op_decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       op_decl->setGenerics(generics);
 
       return op_decl;
@@ -1686,7 +1706,7 @@ MethodDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, bool is_int
    }
    else {
       typeref = castTarget != nullptr ? castTarget : std::make_shared<TypeRef>(new VoidType);
-      typeref->setIndex(start, lexer->current_index, source_id);
+      typeref->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    }
 
    MethodDecl::SharedPtr op_decl;
@@ -1704,12 +1724,12 @@ MethodDecl::SharedPtr Parser::parse_operator_decl(AccessModifier am, bool is_int
       op_decl = std::make_shared<MethodDecl>(opType + " " + op, typeref, args, am, false);
    }
 
-   op_decl->setIndex(start, lexer->current_index, source_id);
+   op_decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return op_decl;
 }
 
 std::shared_ptr<EnumCaseDecl> Parser::parse_enum_case() {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    if (lexer->current_token.get_type() != T_IDENT) {
       ParseError::raise("Expected valid identifier as case name", lexer);
    }
@@ -1739,7 +1759,7 @@ std::shared_ptr<EnumCaseDecl> Parser::parse_enum_case() {
       caseDecl = std::make_shared<EnumCaseDecl>(std::move(caseName), std::move(associatedTypes));
    }
 
-   caseDecl->setIndex(start, lexer->current_index, source_id);
+   caseDecl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return caseDecl;
 }
 
@@ -1864,7 +1884,8 @@ std::vector<Type*> Parser::parse_concrete_generics() {
 std::vector<Statement::SharedPtr> Parser::parse_class_inner(
    bool isStruct,
    bool isProtocol,
-   bool isExtension)
+   bool isExtension,
+   bool isDeclaration)
 {
    std::vector<Statement::SharedPtr> declarations;
    std::vector<Attribute> attributes;
@@ -1887,7 +1908,7 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
    while (!declaration_finished) {
       lexer->advance();
 
-      int start = lexer->current_token.getStart();
+      size_t start = lexer->current_token.getStart();
       AccessModifier current_am = AccessModifier::DEFAULT;
       bool am_set = false;
       bool is_static = false;
@@ -1895,6 +1916,7 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
       bool memberwiseInit = false;
       bool isConstField = false;
       bool isMutating = false;
+      bool isInnerDeclaration = false;
 
       attributes = parse_attributes();
 
@@ -1957,6 +1979,13 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
             type = DeclType::CONSTR;
          }
          else if (keyword == "deinit") {
+            if (isProtocol) {
+               ParseError::raise("Protocols cannot contain deinitializers", lexer);
+            }
+            if (isDeclaration) {
+               ParseError::raise("Declarations cannot contain deinitializers", lexer);
+            }
+
             type = DeclType::DESTR;
          }
          else if (keyword == "infix" || keyword == "postfix" || keyword == "prefix") {
@@ -1973,6 +2002,9 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
          }
          else if (keyword == "struct") {
             type = DeclType::INNER_STRUCT;
+         }
+         else if (keyword == "declare") {
+            isInnerDeclaration = true;
          }
          else {
             ParseError::raise("Unexpected keyword '" + keyword + "' in class declaration", lexer);
@@ -1997,7 +2029,7 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
          auto origin = parse_type();
 
          lexer->advance(T_IDENT);
-         std::string alias = lexer->s_val();
+         string alias = lexer->s_val();
 
          declarations.push_back(std::make_shared<TypedefDecl>(alias, origin));
       }
@@ -2013,9 +2045,8 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
             lexer->advance();
          }
          else {
-            auto constr = parse_constr_decl(current_am, isProtocol);
-            constr->setAttributes(attributes);
-
+            auto constr = parse_constr_decl(current_am,
+               isProtocol || isDeclaration || isInnerDeclaration);
             declarations.push_back(constr);
          }
       }
@@ -2023,8 +2054,6 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
          lexer->backtrack();
 
          auto destr = parse_destr_decl();
-         destr->setAttributes(attributes);
-
          declarations.push_back(destr);
       }
       else if (type == DeclType::FIELD) {
@@ -2032,8 +2061,8 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
             ParseError::raise("Extensions can only contain static fields", lexer);
          }
 
-         auto field = parse_field_decl(current_am, is_static, isConstField);
-         field->setAttributes(attributes);
+         auto field = parse_field_decl(current_am, is_static, isConstField,
+            isDeclaration || isInnerDeclaration);
          declarations.push_back(field);
       }
       else if (type == DeclType::METHOD) {
@@ -2046,15 +2075,15 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
          }
 
          if (isOperator) {
-            auto op = parse_operator_decl(current_am, isProtocol);
-            op->setAttributes(attributes);
+            auto op = parse_operator_decl(current_am,
+               isProtocol || isDeclaration || isInnerDeclaration);
             op->isMutating(isMutating);
 
             declarations.push_back(op);
          }
          else {
-            auto method = parse_method_decl(current_am, is_static, isProtocol);
-            method->setAttributes(attributes);
+            auto method = parse_method_decl(current_am, is_static,
+               isProtocol || isDeclaration || isInnerDeclaration);
             method->isMutating(isMutating);
 
             declarations.push_back(method);
@@ -2063,8 +2092,6 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
       else if (type == DeclType::CASE) {
          case_start:
          auto case_ = parse_enum_case();
-         case_->setAttributes(attributes);
-
          declarations.push_back(case_);
 
          if (lexer->lookahead().is_punctuator(',')) {
@@ -2076,17 +2103,15 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
       else if (type == DeclType::INNER_CLASS || type == DeclType::INNER_STRUCT) {
          lexer->backtrack();
 
-         auto cl = parse_class_decl(type == DeclType::INNER_STRUCT, false);
-         cl->setAttributes(attributes);
+         auto cl = parse_class_decl(type == DeclType::INNER_STRUCT, false,
+            isDeclaration || isInnerDeclaration);
 
          declarations.push_back(cl);
       }
       else if (type == DeclType::INNER_ENUM) {
          lexer->backtrack();
 
-         auto en = parse_enum_decl();
-         en->setAttributes(attributes);
-
+         auto en = parse_enum_decl(isDeclaration || isInnerDeclaration);
          declarations.push_back(en);
       }
       else {
@@ -2094,7 +2119,10 @@ std::vector<Statement::SharedPtr> Parser::parse_class_inner(
       }
 
       if (!declarations.empty()) {
-         declarations.back()->setIndex(start, lexer->current_index, source_id);
+         declarations.back()->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+         declarations.back()->setAttributes(attributes);
+         declarations.back()->isDeclaration(declarations.back()->isDeclaration() || isDeclaration ||
+            isInnerDeclaration);
       }
 
       Token next = lexer->lookahead();
@@ -2236,9 +2264,10 @@ ClassHead Parser::parse_class_head(bool isEnum)
  */
 ClassDecl::SharedPtr Parser::parse_class_decl(
    bool isStruct,
-   bool isProtocol)
+   bool isProtocol,
+   bool isDeclaration)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    auto attrs = attributes;
    auto head = parse_class_head();
@@ -2260,7 +2289,7 @@ ClassDecl::SharedPtr Parser::parse_class_decl(
    std::vector<Statement::SharedPtr> innerDeclarations;
    DestrDecl::SharedPtr destructor = nullptr;
 
-   auto declarations = parse_class_inner(isStruct, isProtocol);
+   auto declarations = parse_class_inner(isStruct, isProtocol, false, isDeclaration);
    for (const auto& decl : declarations) {
       switch (decl->get_type()) {
          case NodeType::CONSTR_DECL:
@@ -2313,11 +2342,12 @@ ClassDecl::SharedPtr Parser::parse_class_decl(
       );
    }
 
+   class_decl->isDeclaration(isDeclaration);
    class_decl->isStruct(isStruct);
    class_decl->setAttributes(attrs);
    attributes.clear();
 
-   class_decl->setIndex(start, lexer->current_index, source_id);
+   class_decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    class_declarations.push_back(class_decl);
 
    return class_decl;
@@ -2339,20 +2369,20 @@ ClassDecl::SharedPtr Parser::parse_struct_decl() {
    return cl;
 }
 
-ClassDecl::SharedPtr Parser::parse_extend_stmt() {
-   auto cl = parse_class_decl();
+ClassDecl::SharedPtr Parser::parse_extend_stmt(bool isDeclaration)
+{
+   auto cl = parse_class_decl(false, false, isDeclaration);
    if (cl->getParentClass() != nullptr) {
       ParseError::raise("Extensions cannot add base classes", lexer);
    }
 
    cl->isExtension(true);
-
    return cl;
 }
 
-std::shared_ptr<EnumDecl> Parser::parse_enum_decl() {
-   int start = lexer->current_index;
-
+std::shared_ptr<EnumDecl> Parser::parse_enum_decl(bool isDeclaration)
+{
+   size_t start = lexer->current_token.getStart();
    auto attrs = attributes;
    auto head = parse_class_head(true);
 
@@ -2370,7 +2400,7 @@ std::shared_ptr<EnumDecl> Parser::parse_enum_decl() {
    std::vector<EnumCaseDecl::SharedPtr> cases;
    std::vector<Statement::SharedPtr> innerDeclarations;
 
-   auto declarations = parse_class_inner(false, false, false);
+   auto declarations = parse_class_inner(false, false, false, isDeclaration);
    for (const auto& decl : declarations) {
       switch (decl->get_type()) {
          case NodeType::METHOD_DECL:
@@ -2393,7 +2423,8 @@ std::shared_ptr<EnumDecl> Parser::parse_enum_decl() {
       std::move(innerDeclarations)
    );
 
-   enumDecl->setIndex(start, lexer->current_index, source_id);
+   enumDecl->isDeclaration(isDeclaration);
+   enumDecl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return enumDecl;
 }
 
@@ -2403,7 +2434,7 @@ std::shared_ptr<EnumDecl> Parser::parse_enum_decl() {
  */
 IfStmt::SharedPtr Parser::parse_if_stmt()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    Expression::SharedPtr if_cond = parse_expression();
@@ -2421,14 +2452,14 @@ IfStmt::SharedPtr Parser::parse_if_stmt()
       if_stmt->setElseBranch(else_branch);
    }
 
-   if_stmt->setIndex(start, lexer->current_index, source_id);
+   if_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return if_stmt;
 }
 
 CaseStmt::SharedPtr Parser::parse_case_stmt(bool default_)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    CaseStmt::SharedPtr case_stmt;
@@ -2467,13 +2498,13 @@ CaseStmt::SharedPtr Parser::parse_case_stmt(bool default_)
       case_stmt->setBody(stmt);
    }
 
-   case_stmt->setIndex(start, lexer->current_index, source_id);
+   case_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return case_stmt;
 }
 
 MatchStmt::SharedPtr Parser::parse_match_stmt()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    Expression::SharedPtr switch_val = parse_expression();
@@ -2500,13 +2531,13 @@ MatchStmt::SharedPtr Parser::parse_match_stmt()
       switch_stmt->addCase(caseStmt);
    }
 
-   switch_stmt->setIndex(start, lexer->current_index, source_id);
+   switch_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    return switch_stmt;
 }
 
 WhileStmt::SharedPtr Parser::parse_while_stmt(bool conditionBefore)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    Expression::SharedPtr cond = std::make_shared<NumericLiteral>(Variant(true));
@@ -2524,14 +2555,14 @@ WhileStmt::SharedPtr Parser::parse_while_stmt(bool conditionBefore)
    }
 
    WhileStmt::SharedPtr whileStmt = std::make_shared<WhileStmt>(cond, body, !conditionBefore);
-   whileStmt->setIndex(start, lexer->current_index, source_id);
+   whileStmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return whileStmt;
 }
 
 Statement::SharedPtr Parser::parse_for_stmt()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    Statement::SharedPtr init;
@@ -2562,7 +2593,7 @@ Statement::SharedPtr Parser::parse_for_stmt()
       CompoundStmt::SharedPtr body = std::static_pointer_cast<CompoundStmt>(parse_next_stmt());
 
       auto forInStmt = std::make_shared<ForInStmt>(std::move(decl), std::move(range), std::move(body));
-      forInStmt->setIndex(start, lexer->current_index, source_id);
+      forInStmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
       forInStmt->setAttributes(attributes);
 
       return forInStmt;
@@ -2600,69 +2631,125 @@ Statement::SharedPtr Parser::parse_for_stmt()
 
    ForStmt::SharedPtr for_stmt = std::make_shared<ForStmt>(init, term, inc);
    for_stmt->setBody(block);
-   for_stmt->setIndex(start, lexer->current_index, source_id);
+   for_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return for_stmt;
 }
 
-Statement::SharedPtr Parser::parse_declare_stmt() {
-   int start = lexer->current_index;
+DeclareStmt::SharedPtr Parser::parse_declare_stmt(ExternKind externKind, std::shared_ptr<DeclareStmt> decl)
+{
+   size_t start = lexer->current_token.getStart();
+   if (lexer->lookahead().get_type() == T_IDENT) {
+      lexer->advance();
+      auto str = lexer->s_val();
+
+      if (str == "C") {
+         externKind = ExternKind::C;
+      }
+      else if (str == "C++" || str == "CPP") {
+         externKind = ExternKind::CPP;
+      }
+      else {
+         ParseError::raise("Unknown extern kind " + str, lexer);
+      }
+   }
 
    if (lexer->lookahead().is_punctuator('{')) {
       lexer->advance();
-      return parse_multiple_declare_stmt();
+      return parse_multiple_declare_stmt(externKind);
    }
 
    lexer->advance();
+   auto attrs = parse_attributes();
+
    if (lexer->current_token.get_type() != T_KEYWORD) {
-      ParseError::raise("Expected 'def', 'let', 'const' or 'class'", lexer);
+      ParseError::raise("Unexpected token", lexer);
    }
 
+   AccessModifier access = AccessModifier::DEFAULT;
    string keyword = lexer->s_val();
 
-   DeclareStmt::SharedPtr decl = nullptr;
-
-   if (keyword == "def") {
-      auto func = parse_function_decl(true);
-      decl = std::make_shared<DeclareStmt>(func->getName(), func->getReturnType(), func->getArgs(),
-         func->getGenerics());
+   if (keyword == "public") {
+      access = AccessModifier::PUBLIC;
+      lexer->advance();
+      keyword = lexer->s_val();
    }
-   else if (keyword == "class") {
-      auto head = parse_class_head();
-      decl = std::make_shared<DeclareStmt>(head.am, head.class_name, head.extends, head.conformsTo, false, head.generics);
+   else if (keyword == "private") {
+      access = AccessModifier::PRIVATE;
+      lexer->advance();
+      keyword = lexer->s_val();
+   }
+   else if (keyword == "protected") {
+      access = AccessModifier::PROTECTED;
+      lexer->advance();
+      keyword = lexer->s_val();
+   }
+
+   bool wasNull = decl == nullptr;
+   if (wasNull) {
+      decl = std::make_shared<DeclareStmt>(externKind);
+   }
+
+   bool isAbstract = false;
+   bool isClass = keyword == "class";
+   bool isStruct = !isClass && keyword == "struct";
+
+   if (keyword == "extend") {
+      auto ext = parse_extend_stmt(true);
+      decl->addDeclaration(std::move(ext));
+   }
+   else if (keyword == "abstract") {
+      auto cl = parse_class_decl(false, false, true);
+      decl->addDeclaration(std::move(cl));
+   }
+   else if (keyword == "def") {
+      auto func = parse_function_decl(true);
+      decl->addDeclaration(std::move(func));
+   }
+   else if (isClass || isStruct) {
+      auto cl = parse_class_decl(isStruct, false, true);
+      decl->addDeclaration(std::move(cl));
+   }
+   else if (keyword == "enum") {
+      auto en = parse_enum_decl(true);
+      decl->addDeclaration(std::move(en));
    }
    else if (keyword == "var" || keyword == "let") {
       auto assign = std::static_pointer_cast<DeclStmt>(parse_assignment(keyword == "let", true));
-      decl = std::make_shared<DeclareStmt>(assign->getIdentifier(), assign->getType(), keyword == "let");
+      decl->addDeclaration(std::move(assign));
    }
    else {
-      assert(false && "Should not happen"); // TODO
+      ParseError::raise("Unexpected keyword '" + keyword + "' after declare", lexer);
    }
 
-   decl->setIndex(start, lexer->current_index, source_id);
+   if (wasNull) {
+      decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+   }
+
+   decl->setAttributes(attrs);
    return decl;
 }
 
-CompoundStmt::SharedPtr Parser::parse_multiple_declare_stmt() {
-   int start = lexer->current_index;
-   CompoundStmt::SharedPtr declarations = std::make_shared<CompoundStmt>(true);
+DeclareStmt::SharedPtr Parser::parse_multiple_declare_stmt(ExternKind externKind)
+{
+   size_t start = lexer->current_token.getStart();
+   auto decl = std::make_shared<DeclareStmt>(externKind);
 
    while (!lexer->lookahead().is_punctuator('}') && lexer->current_token.get_type() != T_EOF) {
-      auto declare = parse_declare_stmt();
-      declarations->addStatement(declare);
+      parse_declare_stmt(externKind, decl);
    }
 
    lexer->advance();
 
-   declarations->setIndex(start, lexer->current_index, source_id);
-   return declarations;
+   decl->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
+   return decl;
 }
 
 /**
  * Interprets a keyword statement
  */
 Statement::SharedPtr Parser::parse_keyword() {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    string keyword = lexer->current_token.get_value().strVal;
 
@@ -2673,13 +2760,13 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "def") {
       FunctionDecl::SharedPtr fun_dec = parse_function_decl();
-      fun_dec->setIndex(start, lexer->current_index, source_id);
+      fun_dec->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       return fun_dec;
    }
    else if (keyword == "if") {
       IfStmt::SharedPtr if_stmt = parse_if_stmt();
-      if_stmt->setIndex(start, lexer->current_index, source_id);
+      if_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(if_stmt);
@@ -2690,7 +2777,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "while" || keyword == "loop") {
       WhileStmt::SharedPtr while_stmt = parse_while_stmt(keyword == "while");
-      while_stmt->setIndex(start, lexer->current_index, source_id);
+      while_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(while_stmt);
@@ -2701,7 +2788,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "match") {
       auto switch_stmt = parse_match_stmt();
-      switch_stmt->setIndex(start, lexer->current_index, source_id);
+      switch_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(switch_stmt);
@@ -2712,7 +2799,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "default") {
       auto def_stmt = parse_case_stmt(true);
-      def_stmt->setIndex(start, lexer->current_index, source_id);
+      def_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(def_stmt);
@@ -2723,7 +2810,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "for") {
       Statement::SharedPtr for_stmt = parse_for_stmt();
-      for_stmt->setIndex(start, lexer->current_index, source_id);
+      for_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(for_stmt);
@@ -2734,7 +2821,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "continue") {
       ContinueStmt::SharedPtr cont_stmt = std::make_shared<ContinueStmt>();
-      cont_stmt->setIndex(start, lexer->current_index, source_id);
+      cont_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(cont_stmt);
@@ -2762,7 +2849,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    }
    else if (keyword == "break") {
       BreakStmt::SharedPtr break_stmt = std::make_shared<BreakStmt>();
-      break_stmt->setIndex(start, lexer->current_index, source_id);
+      break_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(break_stmt);
@@ -2772,7 +2859,7 @@ Statement::SharedPtr Parser::parse_keyword() {
       return break_stmt;
    }
    else if (keyword == "declare") {
-      return parse_declare_stmt();
+      return parse_declare_stmt(ExternKind::NONE);
    }
    else if (keyword == "class") {
       return parse_class_decl();
@@ -2817,7 +2904,7 @@ Statement::SharedPtr Parser::parse_keyword() {
 
          Expression::SharedPtr expr = parse_expression();
          ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>(expr);
-         return_stmt->setIndex(start, lexer->current_index, source_id);
+         return_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
          if (top_level) {
             implicit_main_stmts.push_back(return_stmt);
@@ -2828,7 +2915,7 @@ Statement::SharedPtr Parser::parse_keyword() {
       }
       else {
          ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>();
-         return_stmt->setIndex(start, lexer->current_index, source_id);
+         return_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
          lexer->advance(false);
 
          if (top_level) {
@@ -2842,7 +2929,7 @@ Statement::SharedPtr Parser::parse_keyword() {
    else if (keyword == "goto") {
       lexer->advance();
       auto goto_stmt = std::make_shared<GotoStmt>(lexer->s_val());
-      goto_stmt->setIndex(start, lexer->current_index, source_id);
+      goto_stmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
       if (top_level) {
          implicit_main_stmts.push_back(goto_stmt);
@@ -2877,7 +2964,7 @@ Statement::SharedPtr Parser::parse_keyword() {
  */
 CallExpr::SharedPtr Parser::parse_function_call(CallType callTy, bool allowLet)
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
 
    string funcName = lexer->s_val();
    lexer->advance();
@@ -2920,7 +3007,7 @@ CallExpr::SharedPtr Parser::parse_function_call(CallType callTy, bool allowLet)
    }
 
    call->setMemberExpr(try_parse_member_expr());
-   call->setIndex(start, lexer->current_index, source_id);
+   call->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    call->setAttributes(attributes);
    call->set_generics(generics);
 
@@ -3007,11 +3094,7 @@ std::vector<Attribute> Parser::parse_attributes() {
          lexer->advance();
 
          while (!lexer->current_token.is_punctuator(')') && lexer->current_token.get_type() != T_EOF) {
-            if (lexer->current_token.get_type() != T_IDENT) {
-               ParseError::raise("Expected attribute argument", lexer);
-            }
-
-            attr.args.push_back(lexer->s_val());
+            attr.args.push_back(lexer->current_token.get_value().toString());
             if (lexer->lookahead().is_punctuator(',')) {
                lexer->advance();
             }
@@ -3034,7 +3117,7 @@ std::vector<Attribute> Parser::parse_attributes() {
 }
 
 CompoundStmt::SharedPtr Parser::parse_block(bool preserveTopLevel) {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    bool last_top_level = top_level;
    bool unsafe = false;
 
@@ -3075,7 +3158,7 @@ CompoundStmt::SharedPtr Parser::parse_block(bool preserveTopLevel) {
       ParseError::raise("Expected '}' to end a block statement", lexer);
    }
 
-   block->setIndex(start, lexer->current_index, source_id);
+   block->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
    block->isUnsafe(unsafe);
 
    top_level = last_top_level;
@@ -3135,7 +3218,7 @@ Statement::SharedPtr Parser::parse_next_stmt() {
  */
 NamespaceDecl::SharedPtr Parser::parse_namespace_decl()
 {
-   int start = lexer->current_index;
+   size_t start = lexer->current_token.getStart();
    bool anonymous = false;
    string nsName;
 
@@ -3160,7 +3243,7 @@ NamespaceDecl::SharedPtr Parser::parse_namespace_decl()
    }
 
    auto mod = std::make_shared<NamespaceDecl>(nsName, parse_block(true), anonymous);
-   mod->setIndex(start, lexer->current_index, source_id);
+   mod->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    namespaces.push_back(nsName);
    return mod;
@@ -3170,14 +3253,15 @@ NamespaceDecl::SharedPtr Parser::parse_namespace_decl()
  * Parses a module import statement
  * @return
  */
-UsingStmt::SharedPtr Parser::parse_using_stmt() {
-   int start = lexer->current_index;
+UsingStmt::SharedPtr Parser::parse_using_stmt()
+{
+   size_t start = lexer->current_token.getStart();
    lexer->advance();
 
    string importNs;
    std::vector<string> items;
 
-   while (lexer->current_token.get_type() == T_IDENT) {
+   while (lexer->current_token.get_type() == T_IDENT || lexer->current_token.is_operator("*")) {
       if (lexer->lookahead().is_punctuator('.')) {
          if (!importNs.empty()) {
             importNs += ".";
@@ -3215,7 +3299,7 @@ UsingStmt::SharedPtr Parser::parse_using_stmt() {
    }
 
    UsingStmt::SharedPtr usingStmt = std::make_shared<UsingStmt>(std::move(importNs), std::move(items));
-   usingStmt->setIndex(start, lexer->current_index, source_id);
+   usingStmt->setIndex(start, lexer->current_index, lexer->currentLine, source_id);
 
    return usingStmt;
 }

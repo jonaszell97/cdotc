@@ -13,6 +13,8 @@ using std::pair;
 
 namespace cdot {
 
+   class Type;
+
    enum class VariantType {
       STRING,
       INT,
@@ -55,6 +57,8 @@ namespace cdot {
       static string typeToString(VariantType type);
       Variant applyBinaryOp(Variant& rhs, string& op);
       Variant applyUnaryOp(string& op);
+
+      Variant castTo(Type*& targetTy);
    };
 }
 
