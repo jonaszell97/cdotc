@@ -14,8 +14,6 @@ public:
    ReturnStmt();
    explicit ReturnStmt(std::shared_ptr<Expression>);
 
-   ~ReturnStmt() override;
-
    typedef std::shared_ptr<ReturnStmt> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int depth) override;
@@ -28,7 +26,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -51,7 +49,7 @@ protected:
    bool hiddenParamReturn = false;
 
    // codegen
-   Type* returnType = nullptr;
+   Type returnType;
 };
 
 

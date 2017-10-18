@@ -27,7 +27,7 @@ public:
         return v.visit(this);
     }
 
-    Type* accept(TypeCheckPass& v) override {
+    Type accept(TypeCheckPass& v) override {
         return v.visit(this);
     }
 

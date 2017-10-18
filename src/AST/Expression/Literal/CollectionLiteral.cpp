@@ -7,16 +7,37 @@
 
 CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> keys,
    std::vector<Expression::SharedPtr> values) :
-   keys(keys), values(values), isDictionary(true), type(std::make_shared<TypeRef>(ObjectType::get("Dictionary")))
+   keys(keys), values(values), isDictionary(true)
 {
-
+   string name = "Dictionary";
+   type = std::make_shared<TypeRef>(name, std::vector<pair<string, TypeRef::SharedPtr>>());
 }
 
 CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> values) :
-   values(values),
-   type(std::make_shared<TypeRef>(ObjectType::get("Array")))
+   values(values)
 {
+   string name = "Array";
+   type = std::make_shared<TypeRef>(name, std::vector<pair<string, TypeRef::SharedPtr>>());
+}
 
+void CollectionLiteral::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   for (auto &el : values) {
+      if (el.get() == child) {
+         el.reset(replacement);
+         return;
+      }
+   }
+   for (auto &el : keys) {
+      if (el.get() == child) {
+         el.reset(replacement);
+         return;
+      }
+   }
+
+   llvm_unreachable("child does not exist!");
 }
 
 void CollectionLiteral::addElement(Expression::SharedPtr value) {

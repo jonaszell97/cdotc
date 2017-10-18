@@ -13,6 +13,11 @@ UsingStmt::UsingStmt(
    
 }
 
+UsingStmt::UsingStmt(std::vector<string> &&fullNames) : fullNames(fullNames)
+{
+
+}
+
 std::vector<AstNode::SharedPtr> UsingStmt::get_children() {
    return { };
 }

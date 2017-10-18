@@ -15,7 +15,6 @@ namespace cdot {
 class TupleLiteral: public Expression {
 public:
    explicit TupleLiteral(std::vector<pair<string, Expression::SharedPtr>> elements);
-   ~TupleLiteral() override;
 
    typedef std::shared_ptr<TupleLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -29,17 +28,26 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
-   void accept(AbstractPass* v) override {
+   void accept(AbstractPass* v) override
+   {
       v->visit(this);
    }
 
-   Variant accept(ConstExprPass &v) override {
+   Variant accept(ConstExprPass &v) override
+   {
       return v.visit(this);
    }
+
+   bool createsTemporary() override
+   {
+      return true;
+   }
+
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
 
    ADD_FRIEND_PASSES
 

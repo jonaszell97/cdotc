@@ -17,7 +17,7 @@ using std::string;
 
 namespace cdot {
    namespace err {
-      string prepareLine(string& src, string& fileName, int errIndex);
+      string prepareLine(string& src, string& fileName, int errIndex, int length);
    }
 }
 
@@ -35,10 +35,10 @@ public:
 
 class RuntimeError : public std::exception {
 private:
-    explicit RuntimeError(const string& message);
     string message_;
 
 public:
+    explicit RuntimeError(const string& message);
     static void raise(string, AstNode *);
     virtual const char* what() const throw() {
         return message_.c_str();

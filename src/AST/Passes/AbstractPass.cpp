@@ -16,6 +16,7 @@ void AbstractPass::visit(ConstrDecl *node) {}
 void AbstractPass::visit(DestrDecl *node) {}
 void AbstractPass::visit(EnumDecl *node) {}
 void AbstractPass::visit(EnumCaseDecl *node) {}
+void AbstractPass::visit(UnionDecl *node) {}
 
 void AbstractPass::visit(IdentifierRefExpr *node) {}
 void AbstractPass::visit(SubscriptExpr *node) {}
@@ -57,4 +58,8 @@ void AbstractPass::visit(LvalueToRvalue *node) {}
 void AbstractPass::visit(EndOfFileStmt *node) {}
 void AbstractPass::visit(DebugStmt *node) {}
 
+void AbstractPass::visit(AstNode *node) {}
 void AbstractPass::visit(Statement *node) {}
+
+void AbstractPass::visit(TryStmt *node) {}
+void AbstractPass::visit(ThrowStmt *node) {}

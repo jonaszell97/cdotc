@@ -16,10 +16,14 @@ namespace cdot {
    enum class BuiltinFn : unsigned int {
       SIZEOF,
       ALIGNOF,
+      TYPEOF,
+      STACK_ALLOC,
       MEMCPY,
       MEMSET,
       BITCAST,
-      NULLPTR
+      NULLPTR,
+      ISNULL,
+      UNWRAP_PROTO
    };
 
    extern std::vector<string> BuiltinNamespaces;

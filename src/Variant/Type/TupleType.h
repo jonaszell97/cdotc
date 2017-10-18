@@ -5,7 +5,7 @@
 #ifndef CDOT_TUPLETYPE_H
 #define CDOT_TUPLETYPE_H
 
-#include "Type.h"
+#include "BuiltinType.h"
 
 class TypeRef;
 class TypeCheckPass;
@@ -13,28 +13,32 @@ using std::pair;
 
 namespace cdot {
 
-   class TupleType: public Type {
-   public:
-      TupleType(std::vector<pair<string, std::shared_ptr<TypeRef>>>& rawTypes);
-      TupleType(std::vector<Type*>& containedTypes);
-      TupleType(std::vector<pair<string, Type*>>& containedTypes);
-      ~TupleType() override;
+   class TupleType: public BuiltinType {
+   protected:
+      explicit TupleType(std::vector<pair<string, BuiltinType*>>& containedTypes, string& className);
 
-      Type*& getContainedType(size_t i) {
+      static string typesToString(const std::vector<pair<string, BuiltinType*>>& types);
+      static unordered_map<string, TupleType*> Instances;
+
+   public:
+      static TupleType *get(std::vector<pair<string, BuiltinType*>>& containedTypes);
+
+      BuiltinType*& getContainedType(size_t i) {
          return containedTypes[i].second;
       }
 
-      Type* getNamedType(string& name);
+      const std::vector<pair<string, BuiltinType*>>& getContainedTypes()
+      {
+         return containedTypes;
+      }
+
+      BuiltinType* getNamedType(string& name);
 
       size_t getArity() {
          return arity;
       }
 
       bool isTupleTy() override {
-         return true;
-      }
-
-      bool isStruct() override {
          return true;
       }
 
@@ -46,25 +50,13 @@ namespace cdot {
          return size;
       }
 
-      void visitContained(TypeCheckPass& t) override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
-      bool operator==(Type*& other) override;
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
-      }
-
-      std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
-      std::vector<Type**> getTypeReferences() override;
-
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
-
-      bool implicitlyCastableTo(Type*) override;
-
-      Type* deepCopy() override;
+      bool implicitlyCastableTo(BuiltinType*) override;
 
       static inline bool classof(TupleType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::TupleTypeID:
                return true;
@@ -80,8 +72,7 @@ namespace cdot {
    protected:
       static unordered_map<string, llvm::StructType*> TupleTypes;
 
-      std::vector<pair<string, std::shared_ptr<TypeRef>>> rawTypes;
-      std::vector<pair<string, Type*>> containedTypes;
+      std::vector<pair<string, BuiltinType*>> containedTypes;
       size_t arity;
       size_t size;
       unsigned short align;

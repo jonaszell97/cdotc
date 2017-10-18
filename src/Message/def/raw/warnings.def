@@ -1,0 +1,2 @@
+unused_result <warn> "unused expression result"
+implicit_conv <warn> "implicit conversion from $0 to $1"

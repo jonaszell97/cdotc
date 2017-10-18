@@ -5,19 +5,14 @@
 #include "Expression.h"
 #include "../Statement/Declaration/DeclStmt.h"
 
-Expression::~Expression()
-{
-   delete prevState;
-}
-
 void Expression::isHiddenReturnValue()
 {
    if (memberExpr) {
       memberExpr->isHiddenReturnValue();
    }
    else {
-      isHiddenReturnValue_ = true;
-      isReturnValue_ = true;
+      sret_value = true;
+      returned_value = true;
       if (declaration) {
          declaration->isHiddenReturnValue();
       }
@@ -26,7 +21,7 @@ void Expression::isHiddenReturnValue()
 
 void Expression::isReturnValue()
 {
-   isReturnValue_ = true;
+   returned_value = true;
    if (declaration != nullptr) {
       declaration->isReturnValue();
    }

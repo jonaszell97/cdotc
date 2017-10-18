@@ -3,13 +3,16 @@
 //
 
 #include "Util.h"
-#include "AST/Passes/StaticAnalysis/Class.h"
+#include "AST/Passes/StaticAnalysis/Record/Class.h"
 #include "Variant/Type/PointerType.h"
 #include "Variant/Type/ObjectType.h"
 #include "Variant/Type/IntegerType.h"
 #include "Variant/Type/FPType.h"
 #include "Variant/Type/AutoType.h"
 #include "Variant/Type/VoidType.h"
+#include "Variant/Type/Generic.h"
+#include "Variant/Type/GenericType.h"
+
 #include <string>
 #include <vector>
 #include <regex>
@@ -162,15 +165,21 @@ namespace util {
       "default",
       "struct",
       "throw",
+      "try",
+      "catch",
+      "finally",
       "class",
+      "union",
       "public",
       "private",
       "protected",
       "static",
       "abstract",
       "protocol",
+      "prop",
       "enum",
       "with",
+      "where",
       "namespace",
       "typeof",
       "continue",
@@ -277,27 +286,28 @@ namespace util {
    std::vector<string> builtinFunctions = {
       "sizeof",
       "alignof",
+      "typeof",
+      "stackalloc",
       "__builtin_memcpy",
       "__builtin_memset",
       "__builtin_bitcast",
-      "__nullptr"
+      "__nullptr",
+      "__builtin_isnull",
+      "__builtin_unwrap_protocol"
    };
 
-   unordered_map<string, pair<cdot::BuiltinFn, std::vector<Type *>>> builtinTypes = {
+   unordered_map<string, pair<cdot::BuiltinFn, std::vector<BuiltinType *>>> builtinTypes = {
       {"sizeof",            {BuiltinFn::SIZEOF,  {ObjectType::get("Int")}}},
       {"alignof",           {BuiltinFn::ALIGNOF, {ObjectType::get("Int")}}},
-      {
-       "__builtin_memcpy",  {
-                             BuiltinFn::MEMCPY,  {
-                                                  new VoidType, IntegerType::get(8)->getPointerTo(),
-                                                    IntegerType::get(8)->getPointerTo(), IntegerType::get()}}},
-      {
-       "__builtin_memset",  {
-                             BuiltinFn::MEMSET,  {
-                                                  new VoidType, IntegerType::get(8)->getPointerTo(),
-                                                    IntegerType::get(8),                 IntegerType::get()}}},
+      {"stackalloc",        {BuiltinFn::STACK_ALLOC, {IntegerType::get(8)->getPointerTo(), IntegerType::get()}}},
+      {"__builtin_memcpy",  {BuiltinFn::MEMCPY,  {VoidType::get(), IntegerType::get(8)->getPointerTo(),
+                                                    IntegerType::get(8)->getPointerTo(), IntegerType::get()}} },
+      {"__builtin_memset",  {BuiltinFn::MEMSET,  { VoidType::get(), IntegerType::get(8)->getPointerTo(),
+                                                    IntegerType::get(8), IntegerType::get()}} },
       {"__builtin_bitcast", {BuiltinFn::BITCAST, {}}},
-      {"__nullptr",         {BuiltinFn::NULLPTR, {}}}
+      {"__nullptr",         {BuiltinFn::NULLPTR, {}}},
+      {"__builtin_isnull",  {BuiltinFn::ISNULL, { ObjectType::get("Bool") }}},
+      {"__builtin_unwrap_protocol",  {BuiltinFn::UNWRAP_PROTO, { IntegerType::get(8, true)->getPointerTo() }}},
    };
 
    std::vector<string> str_split(string source, char delimiter) {
@@ -381,7 +391,7 @@ namespace util {
    string args_to_string(std::vector<Argument> &args) {
       string str = "(";
       for (int i = 0; i < args.size(); ++i) {
-         str += args.at(i).type->toString();
+         str += args.at(i).type.toString();
          if (i < args.size() - 1) {
             str += ", ";
          }
@@ -390,13 +400,132 @@ namespace util {
       return str + ")";
    }
 
+   size_t castPenalty(Type &from, Type &to)
+   {
+      size_t penalty = 0;
+      switch (from->getTypeID()) {
+         case TypeID::IntegerTypeID: {
+            if (to->isIntegerTy()) {
+               auto fromBW = from->getBitwidth();
+               auto toBW = to->getBitwidth();
+               auto fromUnsigned = from->isUnsigned();
+               auto toUnsigned = to->isUnsigned();
+
+               if (fromBW > toBW) {
+                  ++penalty;
+               }
+               else if (fromUnsigned != toUnsigned) {
+                  ++penalty;
+               }
+            }
+            else if (to->isFPType()) {
+               penalty += 2;
+            }
+            else if (to->isBoxedPrimitive() && to->unbox()->isIntegerTy()) {
+               if (to->unbox() != *from) {
+                  ++penalty;
+               }
+            }
+            else {
+               penalty += 3;
+            }
+            break;
+         }
+         case TypeID::FPTypeID: {
+            if (to->isFPType()) {
+               if (to->asFloatingTy()->getPrecision() < from->asFloatingTy()->getPrecision()) {
+                  ++penalty;
+               }
+            }
+            else if (to->isIntegerTy()) {
+               penalty += 2;
+            }
+            else if (to->isBoxedPrimitive() && to->unbox()->isFloatTy()) {
+               if (to->unbox() != *from) {
+                  ++penalty;
+               }
+            }
+            else {
+               penalty += 3;
+            }
+            break;
+         }
+         case TypeID::PointerTypeID: {
+            if (to->isPointerTy() || to->isRawFunctionTy()) {
+               ++penalty;
+            }
+            else if (to->isIntegerTy()) {
+               penalty += 2;
+            }
+            else {
+               penalty += 3;
+            }
+            break;
+         }
+         case TypeID::ObjectTypeID: {
+            auto fromObj = from->asObjTy();
+
+            if (to->isObject()) {
+               auto fromRec = from->getRecord()->getAs<Class>();
+               auto toRec = to->getRecord()->getAs<Class>();
+
+               if (fromRec->getName() == toRec->getName()) {
+                  ++penalty;
+               }
+               // upcast
+               else if (toRec->isBaseClassOf(fromRec->getName())) {
+                  ++penalty;
+               }
+               // downcast
+               else if (fromRec->isBaseClassOf(toRec->getName())) {
+                  penalty += 3;
+               }
+               else if (fromRec->isProtocol() == toRec->isProtocol()) {
+                  penalty += 2;
+               }
+               else {
+                  penalty += 3;
+               }
+            }
+            else if (from->isBoxedPrimitive() && to->isNumeric()) {
+               if (from->unbox() == *to) {
+                  ++penalty;
+               }
+               else {
+                  penalty += 2;
+               }
+            }
+            else {
+               penalty += 3;
+            }
+
+            break;
+         }
+         case TypeID::TupleTypeID: {
+            if (to->isTupleTy()) {
+               penalty += 2;
+            }
+            else {
+               penalty += 3;
+            }
+
+            break;
+         }
+         default:
+            penalty += 3;
+            break;
+      }
+
+      return penalty;
+   }
+
    TypeCheckPass* TCPass = nullptr;
 
    bool resolveGeneric(
-      Type* given,
-      Type* needed,
-      std::vector<Type*>& givenGenerics,
-      std::vector<ObjectType*>& neededGenerics)
+      BuiltinType* given,
+      BuiltinType* needed,
+      std::vector<GenericType*>& givenGenerics,
+      std::vector<GenericConstraint>& neededGenerics)
    {
       if (neededGenerics.empty()) {
          return givenGenerics.empty();
@@ -407,33 +536,64 @@ namespace util {
             return false;
          }
 
-         if (!resolveGeneric(given->getPointeeType(), needed->getPointeeType(), givenGenerics,
-            neededGenerics))
-         {
+         auto givenPointee = *given->asPointerTy()->getPointeeType();
+         auto neededPointee = *needed->asPointerTy()->getPointeeType();
+
+         if (!resolveGeneric(givenPointee, neededPointee, givenGenerics, neededGenerics)) {
             return false;
          }
       }
 
-      if (!needed->isObject() || !needed->isGeneric()) {
+      if (needed->isObject()) {
+         if (!given->isObject()) {
+            return false;
+         }
+
+         auto& givenConcrete = given->getConcreteGenericTypes();
+         auto& neededConcrete = needed->getConcreteGenericTypes();
+         if (givenConcrete.size() != neededConcrete.size()) {
+            return false;
+         }
+
+         size_t i = 0;
+         for (const auto& gen : givenConcrete) {
+            if (!resolveGeneric(gen, neededConcrete[i], givenGenerics, neededGenerics)) {
+               return false;
+            }
+
+            ++i;
+         }
+      }
+
+      if (!needed->isGeneric()) {
          return true;
       }
 
-      if (givenGenerics.size() < neededGenerics.size()) {
-         givenGenerics.push_back(given->deepCopy());
-      }
-      else {
-         if (!Type::GenericTypesCompatible(given, needed)) {
-            return false;
+      size_t i = 0;
+      for (const auto& gen : neededGenerics) {
+         if (gen.genericTypeName == needed->asGenericTy()->getGenericClassName()) {
+            break;
          }
 
-         needed = givenGenerics.back();
+         ++i;
       }
 
-      if (!Type::GenericTypesCompatible(given, needed)) {
+      assert(i < neededGenerics.size() && "Generic name mismatch");
+
+      auto& neededGen = neededGenerics[i];
+      if (givenGenerics.size() < neededGenerics.size()) {
+         givenGenerics.push_back(
+            GenericType::get(neededGen.genericTypeName, given)
+         );
+      }
+
+      if (i >= givenGenerics.size()) {
          return false;
       }
 
-      givenGenerics.back()->setGenericClassName(needed->getGenericClassName());
+      if (!cdot::GenericTypesCompatible(givenGenerics[i], neededGen)) {
+         return false;
+      }
 
       return true;
    }
@@ -441,8 +601,8 @@ namespace util {
    int resolveGenerics(
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
-      std::vector<Type*>& givenGenerics,
-      std::vector<ObjectType*>& neededGenerics)
+      std::vector<GenericType*>& givenGenerics,
+      std::vector<GenericConstraint>& neededGenerics)
    {
       int i = 0;
       for (auto &needed : neededArgs) {
@@ -450,7 +610,7 @@ namespace util {
             return -1;
          }
 
-         if (!resolveGeneric(givenArgs[i].type, needed.type, givenGenerics, neededGenerics)) {
+         if (!resolveGeneric(*givenArgs[i].type, *needed.type, givenGenerics, neededGenerics)) {
             return i;
          }
 
@@ -465,6 +625,8 @@ namespace util {
       std::vector<Argument> &needed_args)
    {
       CallCompatability comp;
+      comp.incompatibleArg = 0;
+
       size_t given_size = given_args.size();
       size_t needed_size = needed_args.size();
       size_t i = 0;
@@ -487,24 +649,23 @@ namespace util {
       }
 
       for (auto &neededArg : needed_args) {
-         auto& needed = neededArg.type;
-         if (i < given_size && given_args[i].type != nullptr) {
+         auto& needed = neededArg;
+         if (i < given_size && !given_args[i].type->isAutoTy()) {
             auto& givenArg = given_args.at(i);
             auto& given = givenArg.type;
 
-            if (!given->implicitlyCastableTo(needed)) {
+            if (!given.implicitlyCastableTo(needed.type)) {
                comp.incompatibleArg = i;
-               comp.foundType = given->toString();
-               comp.expectedType = needed->toString();
+
                return comp;
             }
-            else if (*given != needed) {
+            else if (given != needed.type) {
                perfect_match = false;
                comp.neededCasts.push_back(i);
-               ++comp.castPenalty;
+               comp.castPenalty += castPenalty(given, needed.type);
             }
          }
-         else if (!needed->hasDefaultArgVal()) {
+         else if (needed.defaultVal == nullptr) {
             comp.incompatibleArg = i;
             return comp;
          }
@@ -523,6 +684,8 @@ namespace util {
       std::vector<Argument> &neededArgs)
    {
       CallCompatability comp;
+      comp.incompatibleArg = 0;
+
       if (givenArgs.size() < neededArgs.size() - 1) {
          return comp;
       }
@@ -553,16 +716,14 @@ namespace util {
       for (size_t i = 0; i < givenArgs.size(); ++i) {
          auto& given = givenArgs[i];
 
-         if (!given.type->implicitlyCastableTo(vaTy)) {
+         if (!given.type.implicitlyCastableTo(vaTy)) {
             comp.incompatibleArg = i;
-            comp.foundType = given.type->toString();
-            comp.expectedType = vaTy->toString();
 
             return comp;
          }
-         else if (*given.type != vaTy) {
+         else if (!vaTy->isAutoTy() && given.type != vaTy) {
             comp.neededCasts.push_back(i);
-            ++comp.castPenalty;
+            comp.castPenalty += castPenalty(given.type, vaTy);
             perfectMatch = false;
          }
       }
@@ -637,28 +798,38 @@ namespace util {
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
 
-      std::vector<Type*> givenGenerics,
-      std::vector<ObjectType*> neededGenerics)
+      std::vector<GenericType*> givenGenerics,
+      std::vector<GenericConstraint> neededGenerics)
    {
       assert(TCPass != nullptr && "No TypeCheck Visitor!");
       CallCompatability comp;
+      comp.compatibility = CompatibilityType::NO_MATCHING_CALL;
+      comp.incompatibleArg = 0;
+
       std::vector<Argument> resolvedGivenArgs;
       std::vector<Argument> resolvedNeededArgs;
 
       size_t i = 0;
       bool vararg = !neededArgs.empty() && neededArgs.back().isVararg;
       bool cstyleVararg = vararg && neededArgs.back().cstyleVararg;
-      for (const auto& arg : givenArgs) {
+      for (auto& arg : givenArgs) {
          if (neededArgs.size() < i) {
-            resolvedGivenArgs.emplace_back(arg.label, arg.type->deepCopy(), arg.defaultVal);
+            resolvedGivenArgs.emplace_back(arg.label, arg.type, arg.defaultVal);
             continue;
          }
 
          auto& argVal = arg.defaultVal;
-         Type* needed = neededArgs.size() > i ? neededArgs[i].type : nullptr;
-         if (needed == nullptr) {
+         Type needed;
+         if (neededArgs.size() > i) {
+            needed = neededArgs[i].type;
+         }
+         else if (!neededArgs.empty()) {
+            needed = neededArgs.back().type;
+         }
+
+         if (needed->isAutoTy()) {
             if (cstyleVararg) {
-               resolvedGivenArgs.emplace_back(arg.label, new AutoType, argVal);
+               resolvedGivenArgs.emplace_back(arg.label, arg.type, argVal);
                ++i;
 
                continue;
@@ -668,12 +839,10 @@ namespace util {
                return comp;
             }
 
-            // vararg
-            needed = neededArgs.back().type;
+            llvm_unreachable("No needed type?");
          }
 
-         if (needed != nullptr && argVal != nullptr && argVal->needsContextualInformation()) {
-//            argVal->saveOrResetState();
+         if (!needed->isAutoTy() && argVal != nullptr && argVal->needsContextualInformation()) {
             argVal->setContextualType(needed);
             resolvedGivenArgs.emplace_back(arg.label, argVal->accept(*TCPass), argVal);
 
@@ -681,12 +850,15 @@ namespace util {
             continue;
          }
 
-         assert(arg.type != nullptr && "No argument type or value");
-         if (needed != nullptr && arg.type->isLvalue() && !needed->isLvalue()) {
-            resolvedGivenArgs.emplace_back(arg.label, arg.type->deepCopy()->toRvalue(), argVal);
+         assert(!arg.type->isAutoTy() && "No argument type or value");
+         if (needed->isAutoTy() && arg.type.isLvalue() && !needed.isLvalue()) {
+            auto ty = arg.type;
+            ty.isLvalue(false);
+
+            resolvedGivenArgs.emplace_back(arg.label, ty, argVal);
          }
          else {
-            resolvedGivenArgs.emplace_back(arg.label, arg.type->deepCopy(), argVal);
+            resolvedGivenArgs.emplace_back(arg.label, arg.type, argVal);
          }
 
          ++i;
@@ -700,25 +872,12 @@ namespace util {
       }
 
       for (const auto& arg : neededArgs) {
-         auto newTy = arg.type->deepCopy();
-         if (newTy->isObject()) {
-            auto asObj = cast<ObjectType>(newTy);
-            auto cl = SymbolTable::getClass(asObj->getClassName());
-
-            if (givenGenerics.size() == cl->getGenerics().size()) {
-               for (const auto &gen : cl->getGenerics()) {
-                  auto index = std::find_if(givenGenerics.begin(), givenGenerics.end(), [gen](Type*& ty) {
-                     return ty->getGenericClassName() == gen->getGenericClassName();
-                  });
-
-                  asObj->specifyGenericType(gen->getGenericClassName(), (*index)->deepCopy());
-               }
-
-               asObj->getUnqualifiedGenerics().clear();
-            }
+         auto newArg = arg;
+         if (newArg.type->isGeneric()) {
+            resolveGenerics(newArg.type, givenGenerics);
          }
 
-         resolvedNeededArgs.emplace_back(arg.label, newTy, arg.defaultVal);
+         resolvedNeededArgs.push_back(newArg);
       }
 
       auto res = funcCallCompatible(
@@ -733,10 +892,6 @@ namespace util {
          res.resolvedArgs = resolvedGivenArgs;
       }
 
-      for (const auto& arg : resolvedNeededArgs) {
-         delete arg.type;
-      }
-
       return res;
    }
 
@@ -744,26 +899,18 @@ namespace util {
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
 
-      std::vector<Type*> givenGenerics,
-      std::vector<ObjectType*> neededGenerics,
+      std::vector<GenericType*> givenGenerics,
+      std::vector<GenericConstraint> neededGenerics,
 
-      unordered_map<string, Type*> classGenerics)
+      unordered_map<string, BuiltinType*> classGenerics)
    {
       std::vector<Argument> classResolved;
       for (const auto& arg : neededArgs) {
-         auto ty = arg.type->deepCopy();
-
-         Type::resolveGeneric(&ty, classGenerics);
+         auto ty = arg.type;
          classResolved.emplace_back(arg.label, ty, arg.defaultVal);
       }
 
-      auto res = findMatchingCall(givenArgs, neededArgs, givenGenerics, neededGenerics);
-
-      for (const auto& arg : classResolved) {
-         delete arg.type;
-      }
-
-      return res;
+      return findMatchingCall(givenArgs, neededArgs, givenGenerics, neededGenerics);
    }
 
    bool matches(string pattern, string& subject) {
@@ -784,42 +931,6 @@ namespace util {
       { "unsafe-fp-math", "false" },
       { "use-soft-float", "false" }
    };
-
-   const std::regex interpolationRegex(
-      R"_((?:[^\\]|^)\$([^ \[\]\+\-\*/%&\|!=<>\.~\^,\(\)\{\}\$]+)|(?:[^\\]|^)\$\{([^\}]+)\})_"
-   );
-
-   std::vector<pair<size_t, string>> findInterpolations(string& str) {
-      std::smatch match;
-      std::vector<pair<size_t, string>> interpolations;
-
-      size_t beginPos = 0;
-      auto begin = str.cbegin();
-      while (std::regex_search(begin, str.cend(), match, interpolationRegex)) {
-         auto pos = beginPos + match.position();
-         if (match[0].str().front() != '$') {
-            ++pos;
-         }
-
-         interpolations.emplace_back(beginPos, str.substr(beginPos, pos - beginPos));
-
-         if (!match[1].str().empty()) {
-            interpolations.emplace_back(pos, match[1].str());
-         }
-         else {
-            interpolations.emplace_back(pos, match[2].str());
-         }
-
-         beginPos += match.position() + match.length();
-         begin += match.position() + match.length();
-      }
-
-      if (!interpolations.empty() && beginPos != str.length()) {
-         interpolations.emplace_back(beginPos, str.substr(beginPos));
-      }
-
-      return interpolations;
-   }
 
    size_t i = 0;
    string nextAnonymousNamespace() {

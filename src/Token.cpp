@@ -4,12 +4,95 @@
 
 #include "Token.h"
 
+#include <iostream>
+
+namespace cdot {
+   void printBits(unsigned long long l, bool space = false) {
+      string str;
+      unsigned long long curr = 63;
+      curr <<= 63;
+
+      for (int i = 0; i < 64; ++i) {
+         if (space && (i == 24 || i == 44 || i == 54)) {
+            str += ' ';
+         }
+
+         str += (l & curr) ? "1" : "0";
+         curr >>= 1;
+      }
+
+      std::cout << "0b" + str << std::endl;
+   }
+
+   SourceLocation::SourceLocation(
+      unsigned col,
+      const unsigned &line,
+      unsigned length,
+      const unsigned &sourceId) : col(col), line(line), length(length), sourceId(sourceId)
+   {
+//      assert(line < 1048576 && "line too high");
+//      assert(sourceId < 16384 && "sourceid too high");
+//
+//      if (col >= 32768) {
+//         col = 32767;
+//      }
+//
+//      if (length >= 32768) {
+//         length = 32768;
+//      }
+//
+//      loc = 0;
+//
+//      // first 15 bits - column
+//      loc |= col;
+//      loc <<= 49;
+//
+//      // next 20 bits - line
+//      loc |= (line << 29);
+//
+//      // next 15 bits - length
+//      loc |= (length << 14);
+//
+//      // last 14 bits - source id
+//      loc |= sourceId;
+//
+//      if (getLine() != line || getCol() != col || getLength() != length || getSourceId() != sourceId) {
+//         printBits(col);
+//         printBits(line);
+//         printBits(length);
+//         printBits(sourceId);
+//         printBits(loc, true);
+//         exit(0);
+//      }
+   }
+
+   unsigned SourceLocation::getCol() const
+   {
+      return col; //(unsigned)(loc >> 49);
+   }
+
+   unsigned SourceLocation::getLine() const
+   {
+      return line; // (unsigned)((loc >> 29) & 1048575);
+   }
+
+   unsigned SourceLocation::getLength() const
+   {
+      return length; // (unsigned)((loc >> 14) & 32767);
+   }
+
+   unsigned SourceLocation::getSourceId() const
+   {
+      return sourceId; // (unsigned)(loc & 16383);
+   }
+}
+
 Token::Token() = default;
 
-Token::Token(TokenType type, Variant&& content, size_t start, size_t end, size_t line,
-   size_t indexOnLine, bool escaped) :
+Token::Token(TokenType type, Variant&& content, SourceLocation loc,
+   unsigned start, bool escaped) :
    isEscaped_(escaped), _type(type), _value(content), start(start),
-   end(end), line(line), indexOnLine(indexOnLine)
+   loc(loc)
 {
 
 }

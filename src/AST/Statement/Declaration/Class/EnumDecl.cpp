@@ -7,7 +7,8 @@
 #include "EnumCaseDecl.h"
 
 EnumDecl::EnumDecl(AccessModifier am, string &&enumName, std::shared_ptr<TypeRef>& rawType,
-   std::vector<std::shared_ptr<MethodDecl>>&&methods, std::vector<ObjectType *> &&conformsTo, std::vector<ObjectType *> &&generics,
+   std::vector<std::shared_ptr<MethodDecl>>&&methods, std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
+   std::vector<GenericConstraint> &&generics,
    std::vector<std::shared_ptr<EnumCaseDecl>> &&cases, std::vector<Statement::SharedPtr>&& innerDeclarations) :
       className(enumName),
       am(am),

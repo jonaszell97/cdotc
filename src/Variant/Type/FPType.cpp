@@ -8,46 +8,59 @@
 #include "VoidType.h"
 #include "../../AST/Passes/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
 #include "../../Token.h"
 
 namespace cdot {
-   
-   FPType* FPType::ConstFloatTy = new FPType(32);
-   FPType* FPType::ConstDoubleTy = new FPType(64);
 
-   FPType* FPType::getFloatTy() {
-      return new FPType(32);
-   }
+   unordered_map<unsigned, FPType*> FPType::Instances;
 
-   FPType* FPType::getDoubleTy() {
-      return new FPType(64);
-   }
-
-   FPType::FPType(unsigned int precision) :
-      precision(precision),
-      className(precision == 32 ? "float" : "double")
+   FPType* FPType::get(unsigned precision)
    {
-      assert((precision == 32 || precision == 64) && "Invalid FP precision!");
+      if (Instances.find(precision) == Instances.end()) {
+         Instances.emplace(precision, new FPType(precision));
+      }
+
+      return Instances[precision];
+   }
+
+   FPType* FPType::getFloatTy()
+   {
+      return get(32);
+   }
+
+   FPType* FPType::getDoubleTy()
+   {
+      return get(64);
+   }
+
+   FPType::FPType(unsigned precision) :
+      precision(precision)
+   {
+      assert((precision == 32 || precision == 64 || precision == 16) && "Invalid FP precision!");
       id = TypeID::FPTypeID;
-   }
-
-   Type* FPType::box() {
-      return ObjectType::get(precision == 32 ? "Float" : "Double");
-   }
-
-   bool FPType::operator==(Type *&other) {
-      switch (other->getTypeID()) {
-         case TypeID::FPTypeID: {
-            auto asFloat = cast<FPType>(other);
-            return precision == asFloat->precision && Type::operator==(other);
-         }
+      switch (precision) {
+         case 16:
+            className = "half";
+            break;
+         case 32:
+            className = "float";
+            break;
+         case 64:
+            className = "double";
+            break;
          default:
-            return false;
+            llvm_unreachable("Invalid FP precision");
       }
    }
 
-   bool FPType::implicitlyCastableTo(Type *other) {
+   BuiltinType* FPType::box()
+   {
+      return ObjectType::get(string(1, ::toupper(className.front())) + className.substr(1));
+   }
+
+   bool FPType::implicitlyCastableTo(BuiltinType *other)
+   {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
             return true;
@@ -55,7 +68,8 @@ namespace cdot {
             return false;
          case TypeID::PointerTypeID:
             return false;
-         case TypeID::ObjectTypeID: {
+         case TypeID::ObjectTypeID:
+         case TypeID::GenericTypeID: {
             auto asObj = cast<ObjectType>(other);
 
             if (asObj->getClassName() == "Any" || asObj->getClassName() == "AnyVal") {
@@ -66,8 +80,6 @@ namespace cdot {
 
             return asObj->getClassName() == boxedCl;
          }
-         case TypeID::CollectionTypeID:
-            return false;
          case TypeID::IntegerTypeID:
             return false;
          case TypeID::FPTypeID: {
@@ -79,16 +91,12 @@ namespace cdot {
       }
    }
 
-   Type* FPType::deepCopy() {
-      return new FPType(*this);
-   }
-
-   Type* FPType::ArithmeticReturnType(string &op, Type *rhs) {
+   BuiltinType* FPType::ArithmeticReturnType(string &op, BuiltinType *rhs)
+   {
       if (op == "+" || op == "-" || op == "*" || "/") {
          if (isa<FPType>(rhs)) {
             auto rhsPrecision = cast<FPType>(rhs)->getPrecision();
-
-            return precision >= rhsPrecision ? this : rhs;
+            return get(precision >= rhsPrecision ? precision : rhsPrecision);
          }
 
          if (isa<IntegerType>(rhs)) {
@@ -96,46 +104,43 @@ namespace cdot {
          }
       }
 
-      return new VoidType();
+      return VoidType::get();
    }
 
-   bool FPType::explicitlyCastableTo(Type *other) {
-      return isa<IntegerType>(other) || isa<FPType>(other);
+   bool FPType::explicitlyCastableTo(BuiltinType *other)
+   {
+      return isa<PrimitiveType>(other);
    }
 
-   short FPType::getAlignment() {
+   short FPType::getAlignment()
+   {
       return (short)(precision / 8);
    }
 
-   llvm::Value* FPType::getDefaultVal() {
-      if (precision == 32) {
-         return llvm::ConstantFP::get(Builder->getFloatTy(), 0.0f);
-      }
-
-      return llvm::ConstantFP::get(Builder->getDoubleTy(), 0.0);
+   llvm::Value* FPType::getDefaultVal()
+   {
+      return llvm::ConstantFP::get(getLlvmType(), 0.0);
    }
 
-   llvm::Constant* FPType::getConstantVal(Variant &val) {
+   llvm::Constant* FPType::getConstantVal(Variant &val)
+   {
       return llvm::ConstantFP::get(getLlvmType(), val.floatVal);
    }
 
-   llvm::Type* FPType::_getLlvmType() {
+   llvm::Type* FPType::getLlvmType()
+   {
       switch (precision) {
          case 32:
-            return Builder->getFloatTy();
+            return llvm::Type::getFloatTy(CodeGen::Context);
          case 64:
          default:
-            return Builder->getDoubleTy();
+            return llvm::Type::getDoubleTy(CodeGen::Context);
       }
    }
 
-   string FPType::_toString() {
-      string str = precision == 64 ? "double" : "float";
-      if (PrimitiveType::PrintSpecificTypes) {
-         str = "Builtin.Primitive." + str;
-      }
-
-      return str;
+   string FPType::toString()
+   {
+      return className;
    }
 
 } // namespace cdot

@@ -1,0 +1,72 @@
+//
+// Created by Jonas Zell on 17.10.17.
+//
+
+#ifndef CDOT_MODULESERIAL_H
+#define CDOT_MODULESERIAL_H
+
+namespace cdot {
+namespace serial {
+
+enum NodeCodes : unsigned char {
+   NS_DECL = 0,
+   USING_STMT,
+   CMPND_STMT,
+
+   DECL_STMT,
+   FUNC_DECL,
+   DECLARE_STMT,
+   CLASS_DECL,
+   METHOD_DECL,
+   FIELD_DECL,
+   DESTR_DECL,
+   ENUM_DECL,
+   ENUM_CASE_DECL,
+
+   UNION_DECL,
+   IDENT_EXPR,
+   SUBSCRIPT_EXPR,
+   CALL_EXPR,
+   MEMBER_REF_EXPR,
+
+   FOR_STMT,
+   FOR_IN_STMT,
+   WHILE_STMT,
+   IF_STMT,
+   MATCH_STMT,
+   CASE_STMT,
+   LABEL_STMT,
+   GOTO_STMT,
+
+   RETURN_STMT,
+   BREAK_STMT,
+   CONTINUE_STMT,
+
+   COLLECTION_LIT,
+   NUMERIC_LIT,
+   NON_LIT,
+   STRING_LIT,
+   STRING_INTERPOLATION,
+   TUPLE_LIT,
+
+   UNARY_OP,
+   BINARY_OP,
+   TERTIARY_OP,
+
+   FUNC_ARG_DECL,
+   LAMDBA_EXPR,
+   IMPLICIT_CAST_EXPR,
+   TYPEDEF_DECL,
+   TYPEREF_EXPR,
+   LVAL_TO_RVAL,
+
+   EOF_STMT,
+   DEBUG_STMT,
+
+   TRY_STMT,
+   THROW_STMT
+};
+
+}
+}
+#endif //CDOT_MODULESERIAL_H

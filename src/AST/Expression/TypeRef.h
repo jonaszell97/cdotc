@@ -10,32 +10,82 @@
 
 class TypeRef : public Expression {
 public:
-   explicit TypeRef();
-   explicit TypeRef(Type*);
-   
-   ~TypeRef() override;
+   enum TypeKind {
+      Auto,
+      Primitive,
+      FunctionType,
+      TupleType,
+      ObjectType
+   };
+
+   typedef std::shared_ptr<TypeRef> SharedPtr;
+
+   TypeRef();
+   TypeRef(string& className, std::vector<pair<string, TypeRef::SharedPtr>> generics);
+   TypeRef(TypeRef::SharedPtr returnType, std::vector<pair<string, TypeRef::SharedPtr>> &argTypes);
+   explicit TypeRef(std::vector<pair<string, TypeRef::SharedPtr>> &tupleTypes);
+
+   TypeRef(const Type &ty) : type(ty), resolved(true) {}
 
    string toString();
 
-   void isGenericConstraint(bool constr) {
-      isGenericConstraint_ = constr;
-   }
-
-   inline Type*& getType(bool force = false) {
+   inline Type getType(bool force = false)
+   {
       assert((force || resolved) && "Resolve type before accessing!");
       return type;
    }
 
-   inline void setType(Type* t) {
-      if (type == t) {
-         return;
-      }
+   void isVararg(bool va)
+   {
+      vararg = va;
+   }
 
-      delete type;
+   bool isVararg()
+   {
+      return vararg;
+   }
+
+   void isCStyleVararg(bool va)
+   {
+      cstyleVararg = va;
+      vararg = va;
+   }
+
+   bool isCStyleVararg()
+   {
+      return cstyleVararg;
+   }
+
+   bool isReference()
+   {
+      return is_reference;
+   }
+
+   void isReference(bool ref)
+   {
+      is_reference = ref;
+   }
+
+   bool isOption()
+   {
+      return is_option;
+   }
+
+   void isOption(bool opt)
+   {
+      is_option = opt;
+   }
+
+   size_t& getPointerDepth()
+   {
+      return pointerDepth;
+   }
+
+   inline void setType(Type& t)
+   {
       type = t;
    }
 
-   typedef std::shared_ptr<TypeRef> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int) override;
 
@@ -47,7 +97,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -62,9 +112,21 @@ public:
    ADD_FRIEND_PASSES
 
 protected:
-   bool isGenericConstraint_ = false;
+   TypeKind kind;
    bool resolved = false;
-   Type* type = nullptr;
+
+   bool is_option = false;
+   bool is_reference = false;
+   size_t pointerDepth = 0;
+
+   Type type;
+
+   string className;
+   std::vector<pair<string, TypeRef::SharedPtr>> containedTypes;
+   TypeRef::SharedPtr returnType = nullptr;
+
+   bool vararg = false;
+   bool cstyleVararg = false;
 };
 
 

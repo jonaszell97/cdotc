@@ -9,7 +9,7 @@
 NamespaceDecl::NamespaceDecl(std::string ns_name, CompoundStmt::SharedPtr content, bool anonymous) :
    nsName(ns_name),
    contents(content),
-   isAnonymousNamespace(anonymous)
+   isAnonymousNamespace_(anonymous)
 {
 
 }

@@ -10,8 +10,8 @@ FieldDecl::FieldDecl(std::string field_name, std::shared_ptr<TypeRef> type, Acce
    fieldName(field_name),
    type(type),
    am(am),
-   isStatic(is_static),
-   isConst(isConst),
+   is_static(is_static),
+   is_const(isConst),
    defaultVal(def_val)
 {
 
@@ -25,19 +25,19 @@ void FieldDecl::__dump(int depth) {
    AstNode::__tab(depth);
 
    std::string get_set = "";
-   if (hasGetter || hasSetter) {
+   if (has_getter || has_setter) {
       get_set = " (";
-      if (hasGetter) {
+      if (has_getter) {
          get_set += "get,";
       }
-      if (hasSetter) {
+      if (has_setter) {
          get_set += "set,";
       }
       get_set.pop_back();
       get_set += ")";
    }
 
-   std::cout << (isStatic ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type->toString()
+   std::cout << (is_static ? "Static" : "") << "FieldDecl [" << util::am_map[am] << " " << type->toString()
            << " " << fieldName << get_set << "]" << std::endl;
 
    for (auto c : get_children()) {

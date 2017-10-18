@@ -5,7 +5,7 @@
 #include "Function.h"
 
 
-Function::Function(string& name, Type* ret_type, std::vector<ObjectType*>& generics) :
+Function::Function(string& name, Type& ret_type, std::vector<GenericConstraint>& generics) :
     returnType(ret_type),
     name(name),
     generics(generics),
@@ -14,7 +14,7 @@ Function::Function(string& name, Type* ret_type, std::vector<ObjectType*>& gener
 
 }
 
-Function::Function(string& name, Type* ret_type) :
+Function::Function(string& name, Type& ret_type) :
    returnType(ret_type),
    name(name),
    isLambda_(true)

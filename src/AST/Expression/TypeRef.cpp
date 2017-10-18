@@ -5,19 +5,32 @@
 #include "TypeRef.h"
 #include "../../Variant/Type/AutoType.h"
 
-TypeRef::TypeRef() : type(new AutoType) {
+TypeRef::TypeRef()
+   : kind(TypeKind::Auto)
+{
 
 }
 
-TypeRef::TypeRef(Type* t) : type(t) {
+TypeRef::TypeRef(string &className, std::vector<pair<string, TypeRef::SharedPtr>> generics)
+   : kind(TypeKind::ObjectType), className(className), containedTypes(generics)
+{
 
 }
 
-TypeRef::~TypeRef() {
-   delete type;
+TypeRef::TypeRef(TypeRef::SharedPtr returnType, std::vector<pair<string, TypeRef::SharedPtr>> &argTypes)
+   : kind(TypeKind::FunctionType), returnType(returnType), containedTypes(argTypes)
+{
+
 }
 
-string TypeRef::toString() {
+TypeRef::TypeRef(std::vector<pair<string, TypeRef::SharedPtr>> &tupleTypes)
+   : kind(TypeKind::TupleType), containedTypes(tupleTypes)
+{
+
+}
+
+string TypeRef::toString()
+{
    return type->toString();
 }
 

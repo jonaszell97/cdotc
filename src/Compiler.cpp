@@ -2,125 +2,28 @@
 // Created by Jonas Zell on 03.09.17.
 //
 
-#include <fstream>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/IR/AssemblyAnnotationWriter.h>
-#include <sys/stat.h>
 #include "Compiler.h"
 #include "Parser.h"
+#include "Preprocessor.h"
+
+#include "Files/FileUtils.h"
+#include "Files/FileManager.h"
+
+#include <fstream>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/Support/FileSystem.h>
+
 #include "AST/Statement/Block/CompoundStmt.h"
 #include "AST/Statement/EndOfFileStmt.h"
-#include "Preprocessor.h"
 #include "AST/Passes/Output/HeaderGen.h"
-#include "dirent.h"
+#include "Message/def/DiagnosticParser.h"
+#include "AST/Passes/Serialization/ModuleWriter.h"
+#include "AST/Passes/Serialization/ModuleReader.h"
 
-#if defined(_WIN32)
-#  define PATH_SEPARATOR '\\'
-#else
-#  define PATH_SEPARATOR '/'
-#endif
+using namespace cdot::fs;
 
 namespace cdot {
-
-   namespace {
-      string getPath(const string& fullPath)
-      {
-         return fullPath.substr(0, fullPath.rfind(PATH_SEPARATOR) + 1);
-      }
-
-      string getFileName(const string& fullPath)
-      {
-         auto withExtension = fullPath.substr(fullPath.rfind(PATH_SEPARATOR) + 1);
-         return withExtension.substr(0, withExtension.rfind('.'));
-      }
-
-      string getExtension(const string& fullPath)
-      {
-         auto withName = fullPath.substr(fullPath.rfind(PATH_SEPARATOR) + 1);
-         return withName.substr(withName.rfind('.') + 1);
-      }
-
-      string getFileNameAndExtension(const string& fullPath)
-      {
-         return fullPath.substr(fullPath.rfind(PATH_SEPARATOR) + 1);;
-      }
-
-      bool fileExists(const string& name)
-      {
-         if (FILE *file = fopen(name.c_str(), "r")) {
-            fclose(file);
-            return true;
-         } else {
-            return false;
-         }
-      }
-
-      void mkdirIfNotExists(const string& fullPath)
-      {
-         auto dir = getPath(fullPath);
-         mkdir(dir.c_str(), 0777);
-      }
-
-      std::vector<string> getAllFilesInDirectory(string& dirName, bool recurse, DIR* dir = nullptr)
-      {
-         std::vector<string> files;
-         struct dirent *ent;
-         if (dir == nullptr) {
-            dir = opendir(dirName.c_str());
-         }
-
-         if (dir != nullptr) {
-            while ((ent = readdir(dir)) != nullptr) {
-               string fileOrDir (ent->d_name);
-               if (fileOrDir.front() == '.') {
-                  continue;
-               }
-
-               string nestedDirName = dirName;
-               if (nestedDirName.back() != PATH_SEPARATOR) {
-                  nestedDirName += PATH_SEPARATOR;
-               }
-
-               nestedDirName += fileOrDir;
-               bool isNestedDir = false;
-               if (recurse) {
-                  DIR *nested;
-                  if ((nested = opendir(nestedDirName.c_str())) != nullptr) {
-                     auto nestedFiles = getAllFilesInDirectory(nestedDirName, true, nested);
-                     files.insert(files.begin(), nestedFiles.begin(), nestedFiles.end());
-                     isNestedDir = true;
-                  }
-               }
-               if (!isNestedDir) {
-                  auto ext = getExtension(fileOrDir);
-                  if (ext == "dot" || ext == "doth") {
-                     files.push_back(nestedDirName);
-                  }
-               }
-            }
-
-            closedir(dir);
-         }
-
-         return files;
-      }
-
-      llvm::raw_fd_ostream* createFile(const string& fileName, std::error_code ec, bool overwrite = false)
-      {
-         if (overwrite || !fileExists(fileName)) {
-            return new llvm::raw_fd_ostream(fileName, ec, llvm::sys::fs::OpenFlags::F_RW);
-         }
-
-         int i = 0;
-         while (fileExists(fileName + std::to_string(i))) {
-            ++i;
-         }
-
-         return new llvm::raw_fd_ostream(fileName + std::to_string(i), ec,
-            llvm::sys::fs::OpenFlags::F_RW);
-      }
-   }
 
    CompilerOptions Compiler::options;
    string Compiler::compilerLocation;
@@ -155,7 +58,7 @@ namespace cdot {
             if (argc > i + 1) {
                auto next = string(argv[i + 1]);
                if (next.front() != '-') {
-                  options.irOutFile = next;
+                  options.irOutPath = next;
                   ++i;
                }
             }
@@ -226,6 +129,16 @@ namespace cdot {
                }
             }
          }
+         else if (arg == "-emit-module") {
+            options.outputKinds.push_back(OutputKind::MODULE);
+            if (argc > i + 1) {
+               auto next = string(argv[i + 1]);
+               if (next.front() != '-') {
+                  ++i;
+                  options.moduleName = next;
+               }
+            }
+         }
          else if (arg == "-S") {
             textOutputOnly = true;
          }
@@ -265,6 +178,17 @@ namespace cdot {
                options.headerFiles.push_back(next);
             }
          }
+         else if (arg == "-m") {
+            while (argc > i + 1) {
+               string next(argv[i + 1]);
+               if (next.front() == '-') {
+                  break;
+               }
+
+               ++i;
+               options.importedModules.push_back(next);
+            }
+         }
          else if (arg == "-out") {
             ++i;
             if (argc <= i) {
@@ -273,6 +197,15 @@ namespace cdot {
 
             auto fileName = string(argv[i]);
             options.executableOutFile = fileName;
+         }
+         else if (arg == "-debug") {
+            options.emitDebugInfo = true;
+         }
+         else if (arg == "-parse-diagnostics") {
+            cdot::diag::DiagnosticParser parse;
+            parse.doParse();
+
+            exit(0);
          }
          else {
             throw std::runtime_error("Unknown argument " + arg);
@@ -294,6 +227,9 @@ namespace cdot {
       if (basePath.front() != PATH_SEPARATOR) {
          basePath = PATH_SEPARATOR + basePath;
       }
+      if (basePath == "/" || basePath.empty()) {
+         basePath = getPath(compilerLocation);
+      }
 
       if (!textOutputOnly) {
          options.outputKinds.push_back(OutputKind::EXEC);
@@ -309,7 +245,7 @@ namespace cdot {
             options.objectOutFile = basePath + options.objectOutFile;
          }
 
-         mkdirIfNotExists(options.objectOutFile);
+         mkdirIfNotExists(getPath(options.objectOutFile));
       }
 
       if (options.hasOutputKind(OutputKind::EXEC)) {
@@ -321,7 +257,7 @@ namespace cdot {
             options.executableOutFile = basePath + options.executableOutFile;
          }
 
-         mkdirIfNotExists(options.executableOutFile);
+         mkdirIfNotExists(getPath(options.executableOutFile));
       }
 
       if (options.hasOutputKind(OutputKind::HEADERS)) {
@@ -344,27 +280,27 @@ namespace cdot {
       }
 
       if (options.hasOutputKind(OutputKind::IR)) {
-         if (options.irOutFile.empty()) {
-            options.irOutFile = getPath(options.sourceFiles.front()) + "out/" +
+         if (options.irOutPath.empty()) {
+            options.irOutPath = getPath(options.sourceFiles.front()) + "out/" +
                getFileName(options.sourceFiles.front()) + ".ll";
          }
 
-         if (options.irOutFile.front() != PATH_SEPARATOR) {
-            options.irOutFile = basePath + options.irOutFile;
+         if (options.irOutPath.front() != PATH_SEPARATOR) {
+            options.irOutPath = basePath + options.irOutPath;
          }
 
-         mkdirIfNotExists(options.irOutFile);
+         mkdirIfNotExists(options.irOutPath);
       }
    }
 
    namespace {
-      string STD_LIB_HEADER_DIR = "/Users/Jonas/CDotProjects/headers";
-      string STD_LIB_OBJ_FILE = "/Users/Jonas/CDotProjects/libcdot.o";
+      string STD_LIB_HEADER_DIR = "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/headers";
+      string STD_LIB_OBJ_FILE = "/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/libcdot.o";
    }
 
    void Compiler::compile()
    {
-      if (options.linkStdLib) {
+      if (options.linkStdLib && !options.isStdLib) {
          auto files = getAllFilesInDirectory(STD_LIB_HEADER_DIR, true);
          options.headerFiles.insert(options.headerFiles.begin(), files.begin(), files.end());
          options.linkedFiles.push_back(STD_LIB_OBJ_FILE);
@@ -375,55 +311,60 @@ namespace cdot {
 
       DeclPass decl;
       TypeCheckPass tc;
-      CodeGen cg;
+
+      CodeGen::initGlobalTypes();
+
+      std::vector<CompilationUnit> CUs;
 
       /// HEADER FILES
       CompoundStmt::SharedPtr headerRoot = std::make_shared<CompoundStmt>();
       for (auto& fileName : options.headerFiles) {
-         std::ifstream t(fileName);
-         string src((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-         t.close();
+         auto buf = FileManager::openFile(fileName, true);
+         auto preprocessedBuf = Preprocessor(buf.second.get(), fileName).run();
 
-         Preprocessor(src, fileName).run();
-
-         Parser parser(fileName, src);
+         Parser parser(preprocessedBuf.get(), fileName, buf.first);
          auto compound = parser.parse();
+
+         CUs.emplace_back(getFileNameAndExtension(fileName), getPath(fileName),
+            parser.getSourceID(), compound, true);
 
          headerRoot->addStatements(compound->getStatements());
       }
 
       decl.doInitialPass(headerRoot->getStatements());
+      decl.declareGlobalTypedefs(headerRoot->getStatements());
       decl.visit(headerRoot.get());
 
       TypeCheckPass::connectTree(headerRoot.get());
       tc.doInitialPass(headerRoot->getStatements());
       tc.visit(headerRoot.get());
 
-      cg.DeclareClasses(headerRoot->getStatements());
-      cg.visit(headerRoot.get());
-
       /// SOURCE FILES
       CompoundStmt::SharedPtr root = std::make_shared<CompoundStmt>();
       for (auto& fileName : options.sourceFiles) {
-         std::ifstream t(fileName);
-         string src((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-         t.close();
+         auto buf = FileManager::openFile(fileName, true);
+         auto preprocessedBuf = Preprocessor(buf.second.get(), fileName).run();
 
-         Preprocessor(src, fileName).run();
          if (outputPreprocessed) {
             auto newFileName = getPath(fileName) + getFileName(fileName) + "_preprocessed.dot";
 
             std::error_code ec;
             llvm::raw_fd_ostream* outfile = createFile(newFileName, ec);
-            *outfile << src;
+            *outfile << llvm::StringRef(
+               preprocessedBuf->getBufferStart(), preprocessedBuf->getBufferSize()
+            );
+            
             outfile->flush();
             outfile->close();
 
             delete outfile;
          }
 
-         Parser parser(fileName, src);
+         Parser parser(preprocessedBuf.get(), fileName, buf.first);
          auto compound = parser.parse();
+
+         CUs.emplace_back(getFileNameAndExtension(fileName), getPath(fileName),
+            parser.getSourceID(), compound, false);
 
          root->addStatements(compound->getStatements());
 
@@ -438,6 +379,7 @@ namespace cdot {
 
       // DECLARATION
       decl.doInitialPass(root->getStatements());
+      decl.declareGlobalTypedefs(root->getStatements());
       decl.visit(root.get());
 
       // TYPE CHECKING
@@ -451,25 +393,13 @@ namespace cdot {
 
       // HEADER OUTPUT
       if (options.hasOutputKind(OutputKind::HEADERS)) {
-         string basePath;
+         mkdirIfNotExists(options.basePath + options.headerOutPath);
          for (const auto& stmt : headerGenRoots) {
-            auto path = getPath(stmt.first);
-            if (basePath.empty() || path.length() < basePath.length()) {
-               basePath = path;
-            }
-         }
-
-         for (const auto& stmt : headerGenRoots) {
-            auto path = getPath(stmt.first);
+            auto path = getPath(stmt.first).substr(options.basePath.length());
             auto fileName = getFileName(stmt.first);
 
-            string outPath = basePath + options.headerOutPath;
+            string outPath = options.basePath + options.headerOutPath + path;
             mkdirIfNotExists(outPath);
-
-            if (path.size() > basePath.size()) {
-               outPath += path.substr(basePath.size());
-               mkdirIfNotExists(outPath);
-            }
 
             string outFile = outPath + fileName + ".doth";
             stmt.second->addPass(new HeaderGen(outFile));
@@ -484,24 +414,57 @@ namespace cdot {
          std::cout << "\n\n";
       }
 
-      // CODEGEN
-      cg.DeclareClasses(root->getStatements());
-      cg.visit(root.get());
+      // MODULE OUTPUT
+      if (options.hasOutputKind(OutputKind::MODULE)) {
+         serial::ModuleWriter Writer(options.moduleName, root);
+         Writer.write(options.basePath);
+      }
 
-      cg.finalize();
+      // MODULES
+      for (const auto &fileName : options.importedModules) {
+         auto buf = FileManager::openFile(fileName);
+         serial::ModuleReader Reader(std::move(buf.second));
+
+         auto compound = Reader.Read();
+         CUs.emplace_back(getFileNameAndExtension(fileName),
+                          getPath(fileName), 0, compound, true);
+
+         headerRoot->addStatements(compound->getStatements());
+      }
+
+      for (auto& cu : CUs) {
+         cu.cg = new CodeGen(cu.fileName, cu.path, cu.ID, cu.isHeader);
+         cu.cg->DeclareClasses(cu.root->getStatements());
+      }
+
+      // CODEGEN
+      for (const auto& cu : CUs) {
+         cu.cg->visit(cu.root.get());
+         cu.cg->finalize();
+
+//         delete cu.cg;
+      }
+
+      CodeGen::linkAndEmit(CUs);
    }
 
-   void Compiler::outputIR(llvm::Module *module)
+   void Compiler::outputIR(CodeGen &CGM)
    {
-      if (options.irOutFile.empty()) {
-         module->dump();
+      if (options.irOutPath.empty()) {
+         CGM.Module->dump();
          return;
       }
 
-      std::error_code ec;
-      llvm::raw_fd_ostream outstream(options.irOutFile, ec, llvm::sys::fs::OpenFlags::F_RW);
+      string subPath = CGM.getPath().substr(options.basePath.length());
+      string outFileName = options.irOutPath + PATH_SEPARATOR + subPath +
+         swapExtension(getFileName(CGM.getFileName()), "ll");
 
-      module->print(outstream, new llvm::AssemblyAnnotationWriter);
+      mkdirIfNotExists(getPath(outFileName));
+
+      std::error_code ec;
+      llvm::raw_fd_ostream outstream(outFileName, ec, llvm::sys::fs::OpenFlags::F_RW);
+
+      CGM.Module->print(outstream, new llvm::AssemblyAnnotationWriter);
       outstream.flush();
       outstream.close();
    }

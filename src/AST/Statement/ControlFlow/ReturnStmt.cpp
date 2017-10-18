@@ -13,10 +13,6 @@ ReturnStmt::ReturnStmt() {
 
 }
 
-ReturnStmt::~ReturnStmt() {
-   delete returnType;
-}
-
 std::vector<AstNode::SharedPtr> ReturnStmt::get_children() {
    if (returnValue) {
       return { returnValue };

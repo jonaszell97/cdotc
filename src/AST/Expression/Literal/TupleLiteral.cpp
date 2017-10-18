@@ -11,8 +11,18 @@ TupleLiteral::TupleLiteral(std::vector<pair<string, Expression::SharedPtr>> elem
 
 }
 
-TupleLiteral::~TupleLiteral() {
-   delete tupleType;
+void TupleLiteral::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   for (auto &el : elements) {
+      if (el.second.get() == child) {
+         el.second.reset(replacement);
+         return;
+      }
+   }
+
+   llvm_unreachable("child does not exist");
 }
 
 std::vector<AstNode::SharedPtr> TupleLiteral::get_children() {

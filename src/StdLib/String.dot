@@ -1,6 +1,6 @@
 
-using Builtin.Primitive.{ int8, int32 }
-using Extern.C.{ malloc, free, exit, printf }
+using Builtin.Primitive.{ int8, int32, uword }
+using Extern.C.{ malloc, free }
 using Char.ASCII
 
 class String {
@@ -12,16 +12,33 @@ class String {
         length = 0
     }
 
-    @_builtin(StringInit)
     init (str: int8*, len: Int) {
         charArray = str
         length = len
+    }
+
+    @_builtin(StringInit)
+    init (str: int8*, len: uword) {
+        charArray = str
+        length = Int(len)
     }
 
     init (len: Int) {
         charArray = malloc(len + 1)
         charArray[len] = '\0'
         length = len
+    }
+
+    // must be null terminated
+    init (cstring: int8*) {
+        let i = 0
+        while cstring[i] != '\0' {
+            ++i
+        }
+
+        length = i
+        charArray = malloc(i)
+        __builtin_memcpy(charArray, cstring, i, alignof(int8))
     }
 
     init (c: Char) {
@@ -34,9 +51,7 @@ class String {
     init (s: String) {
         length = s.length
         charArray = malloc(s.length + 1)
-        for let i in 0..(length + 1) {
-            charArray[i] = s.charArray[i]
-        }
+        __builtin_memcpy(charArray, s.charArray, length, alignof(int8))
     }
 
     init (chr: Char, repeat: Int) {
@@ -50,31 +65,26 @@ class String {
     }
 
     deinit {
-        printf("Deinitializing...\n")
-        // Extern.C.free(charArray) FIXME
+        printf("Freeing %s\n", charArray)
+        free(charArray)
     }
 
-    def postfix [] (index: Int) -> int8 {
+    def postfix [] (index: Int) -> ref int8 {
         if (index >= length) {
-            print("no can do bby doll")
-            exit(11 as int32)
-            __unreachable
+            throw OutOfBoundsException()
         }
         
         return charArray[index]
     }
 
-    @_builtin(StringConcat)
-    def infix + (p: StringRepresentable) -> String {
+    def infix + (s: String) -> String {
         var copy = String(self)
-        copy += p
+        copy += s
 
         return copy
     }
 
-    @_builtin(StringConcatEquals)
-    def infix += (p: StringRepresentable) {
-        let s = p as String
+    def infix += (s: String) {
         let newStr = malloc(length + s.length + 1)
 
         __builtin_memcpy(newStr, charArray, length, alignof(int8))
@@ -82,6 +92,16 @@ class String {
 
         charArray = newStr
         length = length + s.length
+    }
+
+    @_builtin(StringConcat)
+    def infix + (p: StringRepresentable) -> String {
+        return self + (p as String)
+    }
+
+    @_builtin(StringConcatEquals)
+    def mutating infix += (p: StringRepresentable) {
+        self += (p as String)
     }
 
     def substr(begin: Int, len: Int = length) -> String {
@@ -197,7 +217,7 @@ extend String with Randomizable {
         case AlphaNumeric
     }
 
-    static def random(length: Int, kind: RandomStringKind) -> String {
+    static def random (length: Int, kind: RandomStringKind) -> String {
         let charArray = malloc(length + 1)
         match kind {
             case .AlphaNumeric:
@@ -218,46 +238,15 @@ extend String with Randomizable {
         return String(charArray, length)
     }
 
-    static def random() -> String {
+    static def random () -> String {
         return random(10, RandomStringKind.AlphaNumeric)
     }
 }
 
-class StringBuilder {
-    var buffer: int8*
-    let bufferSize: Int
-    var current = 0
-
-    init (len: Int) {
-        buffer = malloc(len + 1) as int8*
-        bufferSize = len
-    }
-
-    def postfix [](index: Int) -> ref int8 {
-        if index >= bufferSize {
-            // throw
+extend String with Throwable {
+    prop description: String { 
+        get {
+            return self
         }
-
-        return buffer[index]
-    }
-
-    def append (c: Char) {
-        append(c.val)
-    }
-
-    def append (c: int8) {
-        if current >= bufferSize {
-            // throw
-        }
-
-        buffer[current] = c
-        ++current
-    }
-
-    def build () -> String {
-        let buffcpy = malloc(bufferSize + 1) as int8*
-        __builtin_memcpy(buffcpy, buffer, bufferSize, alignof(int8))
-        
-        return String(buffcpy, bufferSize)
     }
 }

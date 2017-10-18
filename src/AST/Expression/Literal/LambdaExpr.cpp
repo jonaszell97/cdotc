@@ -17,21 +17,6 @@ LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::sh
 
 }
 
-LambdaExpr::~LambdaExpr() {
-   delete lambdaType;
-}
-
-void LambdaExpr::saveOrResetState()
-{
-   if (prevState == nullptr) {
-      prevState = new LambdaExpr(*this);
-   }
-   else {
-      assert(prevState->get_type() == NodeType::LAMBDA_EXPR && "Not a lambda expr");
-      *this = *static_cast<LambdaExpr *>(prevState);
-   }
-}
-
 std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {
    std::vector<AstNode::SharedPtr> children;
    for (const auto& arg : args) {

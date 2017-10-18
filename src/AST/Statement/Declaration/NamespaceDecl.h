@@ -25,7 +25,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -43,7 +43,38 @@ protected:
    string nsName;
    std::shared_ptr<CompoundStmt> contents;
 
-   bool isAnonymousNamespace = false;
+   bool isAnonymousNamespace_ = false;
+
+public:
+   const string &getNsName() const
+   {
+      return nsName;
+   }
+
+   void setNsName(const string &nsName)
+   {
+      NamespaceDecl::nsName = nsName;
+   }
+
+   const std::shared_ptr<CompoundStmt> &getContents() const
+   {
+      return contents;
+   }
+
+   void setContents(const std::shared_ptr<CompoundStmt> &contents)
+   {
+      NamespaceDecl::contents = contents;
+   }
+
+   bool isAnonymousNamespace() const
+   {
+      return isAnonymousNamespace_;
+   }
+
+   void isAnonymousNamespace(bool isAnonymousNamespace)
+   {
+      NamespaceDecl::isAnonymousNamespace_ = isAnonymousNamespace;
+   }
 };
 
 

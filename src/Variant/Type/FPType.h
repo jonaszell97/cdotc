@@ -10,8 +10,12 @@
 namespace cdot {
 
    class FPType : public PrimitiveType {
+   protected:
+      explicit FPType(unsigned = 64);
+      static unordered_map<unsigned, FPType*> Instances;
+
    public:
-      explicit FPType(unsigned int = 64);
+      static FPType* get(unsigned precision);
       static FPType* getFloatTy();
       static FPType* getDoubleTy();
 
@@ -31,34 +35,27 @@ namespace cdot {
          return true;
       }
 
-      Type* box() override;
+      BuiltinType* box() override;
 
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
-      Type* ArithmeticReturnType(string &op, Type *rhsTy) override;
+      BuiltinType* ArithmeticReturnType(string &op, BuiltinType *rhsTy) override;
 
-      bool implicitlyCastableTo(Type *destTy) override;
-      bool explicitlyCastableTo(Type *destTy) override;
+      bool implicitlyCastableTo(BuiltinType *destTy) override;
+      bool explicitlyCastableTo(BuiltinType *destTy) override;
 
       llvm::Value* getDefaultVal() override;
       llvm::Constant* getConstantVal(Variant &val) override;
 
       short getAlignment() override;
 
-      Type* deepCopy() override;
-
-      bool operator==(Type*& other) override;
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
-      }
-
       inline string& getClassName() override {
          return className;
       }
 
       static inline bool classof(FPType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::FPTypeID:
             case TypeID::PrimitiveTypeID:
@@ -67,12 +64,6 @@ namespace cdot {
                return false;
          }
       }
-
-      static FPType* ConstFloatTy;
-      static FPType* ConstDoubleTy;
-
-      typedef std::unique_ptr<FPType> UniquePtr;
-      typedef std::shared_ptr<FPType> SharedPtr;
 
    protected:
       int precision;

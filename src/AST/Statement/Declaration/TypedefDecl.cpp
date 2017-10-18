@@ -5,16 +5,22 @@
 #include "TypedefDecl.h"
 #include "../../Expression/TypeRef.h"
 
-TypedefDecl::TypedefDecl(string alias, TypeRef::SharedPtr origin) : alias(alias), origin(origin) {
-
+TypedefDecl::TypedefDecl(
+   AccessModifier access,
+   string &&alias,
+   std::shared_ptr<TypeRef> &&origin,
+   std::vector<GenericConstraint> &&generics)
+   : alias(alias), origin(origin), generics(generics), access(access)
+{
+   
 }
 
 std::vector<AstNode::SharedPtr> TypedefDecl::get_children() {
-    return {};
+   return {};
 }
 
 void TypedefDecl::__dump(int depth) {
-    AstNode::__tab(depth);
+   AstNode::__tab(depth);
 
-    std::cout << "TypedefDecl [" << origin->toString() << " -> " << alias << "]" << std::endl;
+   std::cout << "TypedefDecl [" << origin->toString() << " -> " << alias << "]" << std::endl;
 }

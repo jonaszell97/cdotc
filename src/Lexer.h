@@ -6,18 +6,24 @@
 #define TOKENIZER_H
 
 #include <string>
-#include "Token.h"
-#include "Parser.h"
 #include <vector>
+
+#include "Token.h"
+
+namespace llvm {
+   class MemoryBuffer;
+}
 
 class Parser;
 
 class Lexer {
 public:
    Lexer();
-   explicit Lexer(string &src, string &fileName);
-   
-   void reset(string &src, string &fileName);
+   Lexer(
+      llvm::MemoryBuffer *buf,
+      string const& fileName,
+      unsigned sourceId
+   );
 
    void advance(TokenType, bool = true, bool = false);
    void advance(bool = true, bool = false);
@@ -27,14 +33,29 @@ public:
    void backtrack_c(int);
    void backtrack();
 
+   void hardBacktrack();
+
+   void reset(const char *src, size_t len);
+   void ignoreInterpolation(bool ignore)
+   {
+      ignore_interpolation = ignore;
+   }
+
+   size_t lastTokenEnd();
+
    static char escape_char(char);
    static string unescape_char(char);
 
    string s_val();
 
+   const char* getSrc()
+   {
+      return src;
+   }
+
    bool continueInterpolation = false;
    size_t indexOnLine = 0;
-   size_t currentLine = 0;
+   size_t currentLine = 1;
 
    size_t current_index = 0;
    size_t last_token_index = 0;
@@ -48,10 +69,14 @@ public:
 
 protected:
    std::vector<Token> tokens;
-   string& src;
+   const char *src;
    string fileName;
 
-   size_t srcLength = 0;
+   unsigned sourceId = 0;
+
+   bool ignore_interpolation = false;
+
+   size_t srcLen = 0;
 
    Token makeToken(TokenType ty, Variant &&val, size_t start, size_t end, bool isEscaped = false);
 

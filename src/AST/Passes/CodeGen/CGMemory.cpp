@@ -8,45 +8,35 @@
 
 #define POINTER_SIZE sizeof(int*)
 
-std::stack<llvm::BasicBlock*> CGMemory::StackAllocBlock = {};
-std::stack<llvm::BasicBlock*> CGMemory::HeapAllocBlock = {};
-
 llvm::Value* CGMemory::CreateAlloca(
    llvm::Type *type,
    bool heapAlloc,
    string name,
    llvm::Value* arr_size
 ) {
-   assert(CodeGen::MALLOC != nullptr && "No malloc?");
+   assert(CGM.MALLOC != nullptr && "No malloc?");
+   assert(!StackAllocBlock.empty());
 
-   if (StackAllocBlock.empty() || HeapAllocBlock.empty()) {
-      auto glob = new llvm::GlobalVariable(*CodeGen::Module, type, false, llvm::GlobalVariable::ExternalLinkage,
-         llvm::ConstantAggregateZero::get(type), name);
-
-      return glob;
-   }
-
-   auto& Builder = CodeGen::Builder;
+   auto& Builder = CGM.Builder;
    bool isClass = false;
    llvm::Type* structTy = nullptr;
    auto ptrSize = Builder.getInt64(POINTER_SIZE);
 
+   llvm::IRBuilder<>::InsertPointGuard guard(Builder);
+
    auto allocBlock = Builder.GetInsertBlock();
-   if (arr_size == nullptr || llvm::isa<llvm::Constant>(arr_size)) {
-      if (heapAlloc) {
-         allocBlock = HeapAllocBlock.top();
-      }
-      else {
-         allocBlock = StackAllocBlock.top();
-      }
+   if (!heapAlloc && (arr_size == nullptr || llvm::isa<llvm::Constant>(arr_size))) {
+      allocBlock = StackAllocBlock.top();
    }
 
-   auto prevInsert = Builder.GetInsertBlock();
-   if (!allocBlock->getInstList().empty()) {
-      Builder.SetInsertPoint(&allocBlock->getInstList().front());
+   if (allocBlock->getInstList().empty()) {
+      Builder.SetInsertPoint(allocBlock);
+   }
+   else if (allocBlock->getInstList().size() > 1) {
+      Builder.SetInsertPoint(allocBlock->getInstList().back().getPrevNode());
    }
    else {
-      Builder.SetInsertPoint(allocBlock);
+      Builder.SetInsertPoint(&allocBlock->getInstList().back());
    }
 
    if (type->isStructTy()) {
@@ -56,20 +46,22 @@ llvm::Value* CGMemory::CreateAlloca(
 
    llvm::Value* val;
    if (heapAlloc && isClass) {
-      auto typeSize = CodeGen::GetStructSize(type);
-      auto allocSize = arr_size == nullptr ? typeSize : Builder.CreateMul(typeSize, arr_size);
+      auto typeSize = CGM.GetStructSize(type);
+      auto align = CGM.wordSizedInt(CGM.getAlignment(type));
+      auto allocSize = arr_size == nullptr ? typeSize : Builder.CreateMul(align, arr_size);
 
       val = Builder.CreateBitCast(
-         Builder.CreateCall(CodeGen::MALLOC, { allocSize }),
+         Builder.CreateCall(CGM.MALLOC, { allocSize }),
          structTy->getPointerTo(),
          name
       );
    }
    else if (heapAlloc) {
-      auto allocSize = arr_size == nullptr ? ptrSize : Builder.CreateMul(ptrSize, arr_size);
+      auto align = CGM.wordSizedInt(CGM.getAlignment(type));
+      auto allocSize = arr_size == nullptr ? ptrSize : Builder.CreateMul(align, arr_size);
 
       val = Builder.CreateBitCast(
-         Builder.CreateCall(CodeGen::MALLOC, { allocSize }),
+         Builder.CreateCall(CGM.MALLOC, { allocSize }),
          type->getPointerTo(),
          name
       );
@@ -90,7 +82,7 @@ llvm::Value* CGMemory::CreateAlloca(
       }
 
       alloc->setName(name);
-      alloc->setAlignment(CodeGen::getAlignment(type));
+      alloc->setAlignment(CGM.getAlignment(type));
 
       if (constSize) {
          // later code never expects an array type
@@ -101,6 +93,5 @@ llvm::Value* CGMemory::CreateAlloca(
       }
    }
 
-   Builder.SetInsertPoint(prevInsert);
    return val;
 }

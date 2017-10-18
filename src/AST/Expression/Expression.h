@@ -16,14 +16,9 @@ class Expression : public Statement {
 public:
    typedef std::shared_ptr<Expression> SharedPtr;
    typedef std::unique_ptr<Expression> UniquePtr;
-
-   ~Expression();
-
    inline void setParent(AstNode* p) {
       parent = p;
    }
-
-   virtual void saveOrResetState() {}
 
    Expression& operator=(const Expression &rhs) = default;
 
@@ -48,39 +43,40 @@ public:
       if (memberExpr != nullptr) {
          memberExpr->setGlobalVar(glob);
       }
-
-      isGlobal(true);
-      heapAllocate();
-   }
-
-   inline void isGlobal(bool gl) {
-      isGlobal_ = gl;
-      if (memberExpr != nullptr) {
-         memberExpr->isGlobal(gl);
-      }
    }
 
    virtual void isLhsOfAssigment() {
-      isLhsOfAssigment_ = true;
+      lhs_of_assignment = true;
       if (memberExpr != nullptr) {
          memberExpr->isLhsOfAssigment();
       }
    }
 
    virtual void isFunctionArgument() {
-      isFunctionArgument_ = true;
+      function_argument = true;
       if (memberExpr != nullptr) {
          memberExpr->isFunctionArgument();
       }
    }
 
-   virtual void needsProtocolExtraction(bool p) {
-      auto current = this;
-      while (current->memberExpr != nullptr) {
-         current = current->memberExpr.get();
-      }
+   virtual bool createsTemporary()
+   {
+      return false;
+   }
 
-      current->needsProtocolExtraction_ = p;
+   void addUse()
+   {
+      ++uses;
+   }
+
+   unsigned& getNumUses()
+   {
+      return uses;
+   }
+
+   bool isExpression() const override
+   {
+      return true;
    }
 
    void isReturnValue() override;
@@ -91,7 +87,7 @@ public:
          current = current->memberExpr.get();
       }
 
-      current->isPartOfReturnValue_ = ret;
+      current->part_of_return_value = ret;
 
       if (!initial) {
          return;
@@ -107,11 +103,11 @@ public:
    }
 
    void isEnumCase_(bool b) {
-      isEnumCase = b;
+      enum_case = b;
    }
 
    bool needsContextualInformation() override {
-      return isEnumCase;
+      return enum_case;
    }
 
    void isHiddenReturnValue() override;
@@ -124,7 +120,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -132,37 +128,261 @@ public:
       return v.visit(this);
    }
 
+   void accept(AbstractPass *v) override
+   {
+      v->visit(this);
+   }
+
    ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr memberExpr;
    Expression* parentExpr = nullptr;
-   bool lvalue = false;
    string ident;
 
-   bool needsCast = false;
-   Type* castFrom = nullptr;
-   Type* castTo = nullptr;
-   bool castHandled = false;
+   unsigned uses = 0;
+
+   bool needs_cast = false;
+   Type castFrom;
+   Type castTo;
+   bool cast_handled = false;
 
    bool lvalueCast = false;
-   bool needsProtocolExtraction_ = false;
-   bool loadBeforeExtract = false;
-   bool needsByValPass = false;
+   bool byval_pass = false;
 
-   bool isFunctionArgument_ = false;
-   bool isLhsOfAssigment_ = false;
-   bool isPartOfReturnValue_ = false;
-   bool isSetterCall = false;
+   bool function_argument = false;
+   bool lhs_of_assignment = false;
+   bool part_of_return_value = false;
+   bool setter_call = false;
    string setterName;
 
    Variant staticVal;
-   Expression *prevState = nullptr;
+
+   bool is_assigned = false;
 
    // codegen
    llvm::GlobalVariable* globalVar = nullptr;
-   bool isEnumCase = false;
+   bool enum_case = false;
    long caseVal;
+
+   bool temporary = false;
+   Record *tempType = nullptr;
+
+public:
+   void isAssigned(bool ass)
+   {
+      is_assigned = ass;
+   }
+
+   bool isAssigned() const
+   {
+      return is_assigned;
+   }
+
+   void isTemporary(bool tmp)
+   {
+      temporary = tmp;
+   }
+
+   bool isTemporary() const
+   {
+      return temporary;
+   }
+
+   void setTempType(Record *ty)
+   {
+      tempType = ty;
+   }
+
+   Record *getTempType() const
+   {
+      return tempType;
+   }
+
+   const Expression::SharedPtr &getMemberExpr() const
+   {
+      return memberExpr;
+   }
+
+   Expression *getParentExpr() const
+   {
+      return parentExpr;
+   }
+
+   void setParentExpr(Expression *parentExpr)
+   {
+      Expression::parentExpr = parentExpr;
+   }
+
+   const string &getIdent() const
+   {
+      return ident;
+   }
+
+   void setIdent(const string &ident)
+   {
+      Expression::ident = ident;
+   }
+
+   unsigned int getUses() const
+   {
+      return uses;
+   }
+
+   void setUses(unsigned int uses)
+   {
+      Expression::uses = uses;
+   }
+
+   bool needsCast() const
+   {
+      return needs_cast;
+   }
+
+   void needsCast(bool needsCast)
+   {
+      Expression::needs_cast = needsCast;
+   }
+
+   const Type &getCastFrom() const
+   {
+      return castFrom;
+   }
+
+   void setCastFrom(const Type &castFrom)
+   {
+      Expression::castFrom = castFrom;
+   }
+
+   const Type &getCastTo() const
+   {
+      return castTo;
+   }
+
+   void setCastTo(const Type &castTo)
+   {
+      Expression::castTo = castTo;
+   }
+
+   bool castHandled() const
+   {
+      return cast_handled;
+   }
+
+   void castHandled(bool castHandled)
+   {
+      Expression::cast_handled = castHandled;
+   }
+
+   bool isLvalueCast() const
+   {
+      return lvalueCast;
+   }
+
+   void isLvalueCast(bool lvalueCast)
+   {
+      Expression::lvalueCast = lvalueCast;
+   }
+
+   bool needsByValPass() const
+   {
+      return byval_pass;
+   }
+
+   void needsByValPass(bool needsByValPass)
+   {
+      Expression::byval_pass = needsByValPass;
+   }
+
+   bool getIsFunctionArgument() const
+   {
+      return function_argument;
+   }
+
+   void setIsFunctionArgument(bool farg)
+   {
+      function_argument = farg;
+   }
+
+   bool getIsLhsOfAssigment() const
+   {
+      return lhs_of_assignment;
+   }
+
+   void setIsLhsOfAssignment(bool lhsOfAssignment)
+   {
+      lhs_of_assignment = lhsOfAssignment;
+   }
+
+   bool getIsPartOfReturnValue() const
+   {
+      return part_of_return_value;
+   }
+
+   void setIsPartOfReturnValue(bool isPartOfReturnValue_)
+   {
+      Expression::part_of_return_value = isPartOfReturnValue_;
+   }
+
+   bool isSetterCall() const
+   {
+      return setter_call;
+   }
+
+   void isSetterCall(bool isSetterCall)
+   {
+      Expression::setter_call = isSetterCall;
+   }
+
+   const string &getSetterName() const
+   {
+      return setterName;
+   }
+
+   void setSetterName(const string &setterName)
+   {
+      Expression::setterName = setterName;
+   }
+
+   const Variant &getStaticVal() const
+   {
+      return staticVal;
+   }
+
+   void setStaticVal(const Variant &staticVal)
+   {
+      Expression::staticVal = staticVal;
+   }
+
+   llvm::GlobalVariable *getGlobalVar() const
+   {
+      return globalVar;
+   }
+
+   bool isEnumCase() const
+   {
+      return enum_case;
+   }
+
+   void isEnumCase(bool enum_case)
+   {
+      Expression::enum_case = enum_case;
+   }
+
+   long getCaseVal() const
+   {
+      return caseVal;
+   }
+
+   void setCaseVal(long caseVal)
+   {
+      Expression::caseVal = caseVal;
+   }
+
+   void setTemporary(bool temporary)
+   {
+      Expression::temporary = temporary;
+   }
 };
 
 

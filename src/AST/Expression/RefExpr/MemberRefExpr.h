@@ -14,8 +14,6 @@ public:
    explicit MemberRefExpr(string, bool pointerAccess = false);
    explicit MemberRefExpr(size_t, bool pointerAccess = false);
 
-   ~MemberRefExpr() override;
-
    typedef std::shared_ptr<MemberRefExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
 
@@ -28,7 +26,7 @@ public:
    llvm::Value* accept(CodeGen& v) override {
       return v.visit(this);
    }
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -40,12 +38,14 @@ public:
       return v.visit(this);
    }
 
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
+
    ADD_FRIEND_PASSES
 
 protected:
    // codegen
    string className;
-   Type* fieldType = nullptr;
+   Type fieldType;
    bool isStatic = false;
 
    bool isTupleAccess = false;
@@ -57,11 +57,16 @@ protected:
    bool isEnumRawValue = false;
 
    bool isPointerAccess = false;
+   bool unionAccess = false;
 
-   Type* genericOriginTy = nullptr;
-   Type* genericDestTy = nullptr;
+   BuiltinType* genericOriginTy = nullptr;
+   BuiltinType* genericDestTy = nullptr;
    bool needsGenericCast = false;
 
+public:
+   bool isUnionAccess() const;
+
+   void setUnionAccess(bool unionAccess);
 
 };
 

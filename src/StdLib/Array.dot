@@ -1,6 +1,6 @@
 
 using Builtin.Primitive.{ int8, word, int32 }
-using Extern.C.{ malloc, free, exit }
+using Extern.C.{ malloc, free }
 
 class Array<T> with Iterable<T> {
     static let INITIAL_CAPACITY = 8
@@ -44,7 +44,7 @@ class Array<T> with Iterable<T> {
         if (size + 1 > capacity) {
             resize(capacity << 1)
         }
-
+        
         raw[size] = t
         ++size
     }
@@ -79,20 +79,20 @@ class Array<T> with Iterable<T> {
     def postfix [] (index: Int) -> ref T {
         if (index >= size) {
             print("No can do baby doll")
-            exit(69 as int32)
+            System.exit(1)
         }
 
         return raw[index]
     }
 
-    def infix + (rhs: Array<T>) -> Array<T> unsafe {
+    def infix + (rhs: Array<T>) -> Array<T> {
         var newArr = Array(raw, size)
         newArr += rhs
         
         return newArr
     }
 
-    def infix += (rhs: Array<T>) unsafe {
+    def infix += (rhs: Array<T>) {
         var newArr = malloc(size + rhs.size) as T*
 
         copyTo(newArr)
@@ -108,16 +108,16 @@ class Array<T> with Iterable<T> {
 }
 
 extend Array with Iterable<T> {
-    class Iterator<T> with Iterator<T> {
+    class Iterator<T> with Global.Iterator<T> {
         let arr: [T]
         var index = 0
 
-        public init (_arr: [T]) {
+        init (_arr: [T]) {
             arr = _arr
         }
 
-        public def next -> T? {
-            if (index >= arr.size) {
+        def next -> T? {
+            if index >= arr.size {
                 return none
             }
             
@@ -130,8 +130,41 @@ extend Array with Iterable<T> {
     }
 }
 
-extend Array with StringRepresentable {
-    def infix as String {
-        return "[]"
+//FIXME
+// extend Array with StringRepresentable where T: StringRepresentable {
+//     def infix as String {
+//         var str = "["
+//         var i = 0
+//         for let el in self {
+//             print("hi")
+//             str += el as String
+//             print("bye")
+//             if i < size - 1 {
+//                 str += ", "
+//             }
+
+//             ++i
+//         }
+        
+//         return str + "]"
+//     }
+// }
+
+extend Array {
+    def forEach (func: (T) -> Void) {
+        for let el in self {
+            func(el)
+        }
+    }
+
+    def filter (pred: (T) -> Bool) -> Array<T> {
+        let arr = Array<T>()
+        for let el in self {
+            if !pred(el) {
+                arr.push(el)
+            }
+        }
+
+        return arr
     }
 }

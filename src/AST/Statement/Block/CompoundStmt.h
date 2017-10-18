@@ -9,19 +9,31 @@
 
 class CompoundStmt : public Statement {
 public:
-   explicit CompoundStmt(bool = false);
+   explicit CompoundStmt(bool preserveScope = false);
 
    void addStatement(Statement::SharedPtr stmt);
 
-   void addPass(AbstractPass* pass) {
+   void addPass(AbstractPass* pass)
+   {
       passes.push_back(pass);
    }
 
-   void runPasses();
-
-   void returnable(bool terminable) {
-      returnable_ = terminable;
+   void isUnsafe(bool unsafe)
+   {
+      isUnsafe_ = unsafe;
    }
+
+   bool isUnsafe() const
+   {
+      return isUnsafe_;
+   }
+
+   bool preservesScope() const
+   {
+      return preserveScope;
+   }
+
+   void runPasses();
    
    Statement::SharedPtr& at(size_t i) {
       return statements.at(i);
@@ -48,9 +60,7 @@ public:
       statements.clear();
    }
 
-   inline void isUnsafe(bool unsafe) {
-      isUnsafe_ = unsafe;
-   }
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
 
    typedef std::shared_ptr<CompoundStmt> SharedPtr;
    typedef std::unique_ptr<CompoundStmt> UniquePtr;
@@ -67,7 +77,7 @@ public:
       return v.visit(this);
    }
    
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -82,17 +92,12 @@ public:
    ADD_FRIEND_PASSES
 
 protected:
-   bool returnable_ = true;
    std::vector<Statement::SharedPtr> statements;
    bool preserveScope = false;
 
    std::vector<AbstractPass*> passes;
 
    bool isUnsafe_ = false;
-   bool implicitZeroReturn = false;
-
-   bool needsCleanup = false;
-   std::vector<pair<string, string>> valuesToClean;
 };
 
 

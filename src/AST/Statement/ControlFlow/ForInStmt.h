@@ -25,7 +25,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -48,11 +48,11 @@ protected:
    string iteratorGetter;
    string iteratorClass;
    string nextFunc;
-   Type* iteratedType = nullptr;
+   Type iteratedType;
    bool rangeIsRefcounted = false;
    string rangeClassName;
 
-   Type* protocolTy = nullptr;
+   BuiltinType* protocolTy = nullptr;
 };
 
 

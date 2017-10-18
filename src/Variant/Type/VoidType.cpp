@@ -4,39 +4,43 @@
 
 #include "VoidType.h"
 #include "ObjectType.h"
+#include "../../AST/Passes/CodeGen/CodeGen.h"
 
 namespace cdot {
 
-   VoidType::VoidType(Type *type) : pointeeType(type) {
-      id = TypeID::VoidTypeID;
-      isNullable_ = true;
-      isNull_ = true;
-   }
+   VoidType* VoidType::Instance = nullptr;
 
-   Type *VoidType::deepCopy() {
-      auto newTy = new VoidType(*this);
-      newTy->pointeeType = pointeeType == nullptr ? nullptr : pointeeType->deepCopy();
-
-      return newTy;
-   }
-
-   bool VoidType::operator==(Type *&other)
+   VoidType* VoidType::get()
    {
-      return isa<VoidType>(other);
-   }
-
-   bool VoidType::implicitlyCastableTo(Type *type)
-   {
-      return isa<VoidType>(type);
-   }
-
-   llvm::Type *VoidType::_getLlvmType() { return Builder->getVoidTy(); }
-
-   string VoidType::_toString() {
-      if (pointeeType) {
-         return pointeeType->toString() + "*";
+      if (Instance == nullptr) {
+         Instance = new VoidType;
       }
 
+      return Instance;
+   }
+
+   VoidType::VoidType()
+   {
+      id = TypeID::VoidTypeID;
+   }
+
+   bool VoidType::implicitlyCastableTo(BuiltinType *other)
+   {
+      return other == this;
+   }
+
+   llvm::Constant* VoidType::getConstantVal(Variant &)
+   {
+      return llvm::ConstantPointerNull::get(CodeGen::Int8PtrTy);
+   }
+
+   llvm::Type *VoidType::getLlvmType()
+   {
+      return llvm::Type::getVoidTy(CodeGen::Context);
+   }
+
+   string VoidType::toString()
+   {
       return "Void"; 
    }
 

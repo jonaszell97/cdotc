@@ -7,7 +7,7 @@
 
 #include "../AstNode.h"
 
-enum class ExternKind : unsigned int {
+enum class ExternKind : unsigned char {
    NONE,
    C,
    CPP
@@ -29,7 +29,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 

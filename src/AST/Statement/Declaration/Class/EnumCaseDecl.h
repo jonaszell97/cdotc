@@ -11,7 +11,8 @@
 
 class EnumCaseDecl: public Statement {
 public:
-   EnumCaseDecl(string&& name, long rawValue, std::vector<pair<string, std::shared_ptr<TypeRef>>>&& associatedTypes);
+   EnumCaseDecl(string&& name, std::shared_ptr<Expression>&& rawValue,
+      std::vector<pair<string, std::shared_ptr<TypeRef>>>&& associatedTypes);
    EnumCaseDecl(string&& name, std::vector<pair<string, std::shared_ptr<TypeRef>>>&& associatedTypes);
 
    typedef std::shared_ptr<EnumCaseDecl> SharedPtr;
@@ -33,11 +34,63 @@ public:
 
 protected:
    string caseName;
+   std::shared_ptr<Expression> rawVal = nullptr;
 
    long rawValue;
-   bool hasRawValue;
+   bool has_raw_value;
 
    std::vector<pair<string, std::shared_ptr<TypeRef>>> associatedTypes;
+
+public:
+   const string &getCaseName() const
+   {
+      return caseName;
+   }
+
+   void setCaseName(const string &caseName)
+   {
+      EnumCaseDecl::caseName = caseName;
+   }
+
+   const std::shared_ptr<Expression> &getRawVal() const
+   {
+      return rawVal;
+   }
+
+   void setRawVal(const std::shared_ptr<Expression> &rawVal)
+   {
+      EnumCaseDecl::rawVal = rawVal;
+   }
+
+   long getRawValue() const
+   {
+      return rawValue;
+   }
+
+   void setRawValue(long rawValue)
+   {
+      EnumCaseDecl::rawValue = rawValue;
+   }
+
+   bool hasRawValue() const
+   {
+      return has_raw_value;
+   }
+
+   void hasRawValue(bool has_raw_value)
+   {
+      EnumCaseDecl::has_raw_value = has_raw_value;
+   }
+
+   const std::vector<pair<string, std::shared_ptr<TypeRef>>> &getAssociatedTypes() const
+   {
+      return associatedTypes;
+   }
+
+   void setAssociatedTypes(const std::vector<pair<string, std::shared_ptr<TypeRef>>> &associatedTypes)
+   {
+      EnumCaseDecl::associatedTypes = associatedTypes;
+   }
 };
 
 

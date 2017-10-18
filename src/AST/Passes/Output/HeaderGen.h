@@ -13,10 +13,13 @@
 namespace cdot {
    struct Attribute;
    class ObjectType;
-   class Type;
+   class BuiltinType;
+   class GenericType;
+
+   struct GenericConstraint;
 }
 
-enum class ExternKind : unsigned int;
+enum class ExternKind : unsigned char;
 enum class AccessModifier : unsigned int;
 
 using std::string;
@@ -73,12 +76,15 @@ protected:
    void increaseIndent();
    void decreaseIndent();
 
-   void writeAttributes(std::vector<Attribute>& attrs);
+   void writeAttributes(std::vector<Attribute>& attrs, bool indent = true);
    void writeExternKind(ExternKind& kind);
-   void writeGenerics(std::vector<ObjectType*>& generics);
-   void writeGenerics(unordered_map<string, Type*>& generics);
+
+   void writeGenerics(std::vector<GenericConstraint>& generics);
+   void writeGenerics(std::vector<GenericType*>& generics);
 
    void writeProtocols(std::vector<ObjectType*>& conformsTo);
+   void writeProtocols(std::vector<std::shared_ptr<TypeRef>>& conformsTo);
+
    void writeArgs(std::vector<std::shared_ptr<FuncArgDecl>>& args);
    void writeAccess(AccessModifier& access);
 

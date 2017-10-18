@@ -10,6 +10,20 @@ CompoundStmt::CompoundStmt(bool keep_scope)
 
 }
 
+void CompoundStmt::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   for (auto &stmt : statements) {
+      if (stmt.get() == child) {
+         stmt.reset((Statement*)replacement);
+         return;
+      }
+   }
+
+   llvm_unreachable("child does not exist");
+}
+
 void CompoundStmt::addStatement(Statement::SharedPtr stmt) {
    statements.emplace_back(stmt);
 }

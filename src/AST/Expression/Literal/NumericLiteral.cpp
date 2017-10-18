@@ -12,9 +12,9 @@ NumericLiteral::NumericLiteral(cdot::Variant v) : value(v) {
       case VariantType::INT:
          switch (v.bitwidth) {
             case 1:
-               isBool = true; break;
+               is_bool = true; break;
             case 8:
-               isChar = true; break;
+               is_char = true; break;
             default:
                break;
          }
@@ -22,29 +22,11 @@ NumericLiteral::NumericLiteral(cdot::Variant v) : value(v) {
          type = IntegerType::get(v.bitwidth, v.isUnsigned);
          break;
       case VariantType::FLOAT:
-         type = new FPType(v.bitwidth);
-         break;
-      case VariantType::VOID:
-         type = new VoidType;
+         type = FPType::get(v.bitwidth);
          break;
       default:
          assert(false && "Unknown literal type!");
 
-   }
-}
-
-NumericLiteral::~NumericLiteral() {
-   delete type;
-}
-
-void NumericLiteral::saveOrResetState()
-{
-   if (prevState == nullptr) {
-      prevState = new NumericLiteral(*this);
-   }
-   else {
-      assert(prevState->get_type() == NodeType::LITERAL_EXPR && "Not a numeric literal");
-      *this = *static_cast<NumericLiteral *>(prevState);
    }
 }
 

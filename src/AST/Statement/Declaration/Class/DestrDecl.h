@@ -5,8 +5,7 @@
 #ifndef CDOT_DESTRDECL_H
 #define CDOT_DESTRDECL_H
 
-
-#include "../../Statement.h"
+#include "../CallableDecl.h"
 
 class CompoundStmt;
 
@@ -16,7 +15,7 @@ namespace cdot {
    }
 }
 
-class DestrDecl: public Statement {
+class DestrDecl: public CallableDecl {
 public:
    DestrDecl(std::shared_ptr<CompoundStmt> &&body);
 
@@ -34,7 +33,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -55,6 +54,47 @@ protected:
    cdot::cl::Method* declaredMethod;
    string selfBinding;
    string className;
+
+public:
+   const std::shared_ptr<CompoundStmt> &getBody() const
+   {
+      return body;
+   }
+
+   void setBody(const std::shared_ptr<CompoundStmt> &body)
+   {
+      DestrDecl::body = body;
+   }
+
+   Method *getDeclaredMethod() const
+   {
+      return declaredMethod;
+   }
+
+   void setDeclaredMethod(Method *declaredMethod)
+   {
+      DestrDecl::declaredMethod = declaredMethod;
+   }
+
+   const string &getSelfBinding() const
+   {
+      return selfBinding;
+   }
+
+   void setSelfBinding(const string &selfBinding)
+   {
+      DestrDecl::selfBinding = selfBinding;
+   }
+
+   const string &getClassName() const
+   {
+      return className;
+   }
+
+   void setClassName(const string &className)
+   {
+      DestrDecl::className = className;
+   }
 };
 
 

@@ -6,30 +6,32 @@
 #define CDOT_AUTOTYPE_H
 
 
-#include "Type.h"
+#include "BuiltinType.h"
 
 namespace cdot {
 
-   class AutoType : public Type {
+   class AutoType : public BuiltinType {
+   protected:
+      AutoType();
+      static AutoType *Instance;
+
    public:
-      explicit AutoType();
+      static AutoType *get();
 
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
-      Type* deepCopy() override;
+      bool isAutoTy() override
+      {
+         return true;
+      }
 
-      bool implicitlyCastableTo(Type*) override;
+      bool implicitlyCastableTo(BuiltinType*) override;
 
       llvm::Value* getDefaultVal() override;
 
-      bool operator==(Type*& other) override;
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
-      }
-
       static inline bool classof(AutoType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::AutoTypeID:
                return true;
@@ -37,9 +39,6 @@ namespace cdot {
                return false;
          }
       }
-
-      typedef std::unique_ptr<AutoType> UniquePtr;
-      typedef std::shared_ptr<AutoType> SharedPtr;
    };
 
 } // namespace cdot

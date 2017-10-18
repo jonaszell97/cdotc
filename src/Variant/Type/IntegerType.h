@@ -13,20 +13,25 @@ using std::unordered_map;
 namespace cdot {
 
    class IntegerType : public PrimitiveType {
-   public:
+   protected:
       explicit IntegerType(unsigned int = sizeof(int*) * 8, bool = false);
-      static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
+      static unordered_map<size_t, IntegerType*> Instances;
 
-      unsigned int getBitwidth() {
+   public:
+      static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
+      static IntegerType* getBoolTy();
+      static IntegerType* getCharTy();
+
+      unsigned int getBitwidth() override {
          return bitWidth;
       }
 
       bool isUnsigned() override {
-         return isUnsigned_;
+         return is_unsigned;
       }
 
       void isUnsigned(bool uns) {
-         isUnsigned_ = uns;
+         is_unsigned = uns;
       }
 
       bool isIntegerTy() override {
@@ -34,46 +39,43 @@ namespace cdot {
       }
 
       bool isInt64Ty(bool isUnsigned) override {
-         return bitWidth == 64 && isUnsigned_ == isUnsigned;
+         return bitWidth == 64 && is_unsigned == isUnsigned;
       }
 
       bool isInt8Ty(bool isUnsigned) override {
-         return bitWidth == 8 && isUnsigned_ == isUnsigned;
+         return bitWidth == 8 && is_unsigned == isUnsigned;
       }
 
       bool isInt1Ty(bool isUnsigned) override {
-         return bitWidth == 1 && isUnsigned_ == isUnsigned;
+         return bitWidth == 1 && is_unsigned == isUnsigned;
       }
 
       bool isIntNTy(unsigned n, bool isUnsigned) override {
-         return bitWidth == n && isUnsigned_ == isUnsigned;
+         return bitWidth == n && is_unsigned == isUnsigned;
       }
 
-      string _toString() override;
+      bool isPtrSizedInt() override
+      {
+         return bitWidth == sizeof(int*) * 8;
+      }
 
-      Type* ArithmeticReturnType(string&, Type*) override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
-      llvm::Type* _getLlvmType() override;
+      BuiltinType* ArithmeticReturnType(string&, BuiltinType*) override;
 
-      Type* deepCopy() override;
+      BuiltinType* box() override;
 
-      Type* box() override;
-
-      bool implicitlyCastableTo(Type*) override;
-      bool explicitlyCastableTo(Type*) override;
+      bool implicitlyCastableTo(BuiltinType*) override;
+      bool explicitlyCastableTo(BuiltinType*) override;
 
       llvm::Value* getDefaultVal() override;
       llvm::Constant* getConstantVal(Variant& val) override;
 
       short getAlignment() override;
 
-      bool operator==(Type*& other) override;
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
-      }
-
       static inline bool classof(IntegerType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::IntegerTypeID:
             case TypeID::PrimitiveTypeID:
@@ -86,14 +88,9 @@ namespace cdot {
       typedef std::unique_ptr<IntegerType> UniquePtr;
       typedef std::shared_ptr<IntegerType> SharedPtr;
 
-      static IntegerType* ConstInt64;
-      static IntegerType* ConstInt32;
-      static IntegerType* ConstInt8;
-      static IntegerType* ConstInt1;
-
    protected:
       int bitWidth;
-      bool isUnsigned_;
+      bool is_unsigned;
    };
 
 } // namespace cdot

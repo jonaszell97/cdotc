@@ -5,53 +5,35 @@
 #ifndef CDOT_VOIDTYPE_H
 #define CDOT_VOIDTYPE_H
 
-#include "Type.h"
+#include "BuiltinType.h"
 
 namespace cdot {
 
-   class VoidType : public Type {
+   class VoidType : public BuiltinType {
+   protected:
+      VoidType();
+      static VoidType* Instance;
+
    public:
-      explicit VoidType(Type* = nullptr);
+      static VoidType* get();
 
-      Type*& getPointeeType() override {
-         return pointeeType;
-      }
-      
-      inline void setPointeeType(Type* pointee) {
-        pointeeType = pointee;
-      }
-
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
-
-      bool implicitlyCastableTo(Type*) override;
-      bool operator==(Type*& other) override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
       bool isValueType() override {
          return false;
       }
 
-      llvm::Constant* getConstantVal(Variant&) override {
-         llvm::PointerType* ptrTy;
-         if (pointeeType != nullptr) {
-            auto pointee = pointeeType->getLlvmType();
-            if (!pointee->isPointerTy()) {
-               pointee = pointee->getPointerTo();
-            }
-
-            ptrTy = llvm::cast<llvm::PointerType>(pointee);
-         }
-         else {
-            ptrTy = Builder->getVoidTy()->getPointerTo();
-         }
-
-         return llvm::ConstantPointerNull::get(ptrTy);
+      bool isVoidTy() override
+      {
+         return true;
       }
 
-      Type* deepCopy() override;
+      llvm::Constant* getConstantVal(Variant&) override;
+      bool implicitlyCastableTo(BuiltinType* other) override;
 
       static inline bool classof(VoidType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::VoidTypeID:
                return true;
@@ -62,9 +44,6 @@ namespace cdot {
 
       typedef std::unique_ptr<VoidType> UniquePtr;
       typedef std::shared_ptr<VoidType> SharedPtr;
-
-   protected:
-      Type* pointeeType;
    };
 
 } // namespace cdot

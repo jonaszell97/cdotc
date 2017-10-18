@@ -12,14 +12,20 @@ namespace cdot {
       { "cstring", Attr::CString },
       { "primitive", Attr::Primitive },
       { "neverOmit", Attr::NeverOmit },
-      { "_builtin", Attr::_builtin }
+      { "extern", Attr::Extern },
+      { "rawPtr", Attr::RawFunctionPtr },
+
+      { "_builtin", Attr::_builtin },
+      { "_opaque", Attr::_opaque },
+      { "_align", Attr::_align }
    };
 
    string isValidAttribute(Attribute attr) {
       switch (attr.kind) {
          case Attr::None:
             return "Unknown attribute " + attr.name;
-         case Attr::_builtin:
+         case Attr::Extern:
+         case Attr::_align:
             if (attr.args.size() != 1) {
                return "Attribute " + attr.name + " expects 1 argument";
             }
@@ -29,6 +35,8 @@ namespace cdot {
          case Attr::NoCopy:
          case Attr::Primitive:
          case Attr::NeverOmit:
+         case Attr::_opaque:
+         case Attr::RawFunctionPtr:
             if (!attr.args.empty()) {
                return "Attribute " + attr.name + " expects no arguments";
             }
@@ -44,6 +52,8 @@ namespace cdot {
                   return "Invalid argument " + arg + " (Expected always, never or hint)";
                }
             }
+            break;
+         default:
             break;
       }
 

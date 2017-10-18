@@ -13,10 +13,6 @@ MatchStmt::MatchStmt(Expression::SharedPtr switch_val) :
    children.push_back(&this->switchValue);
 }
 
-MatchStmt::~MatchStmt() {
-   delete switchType;
-}
-
 std::vector<AstNode::SharedPtr> MatchStmt::get_children() {
    std::vector<AstNode::SharedPtr> children = { switchValue };
    for (auto case_ : cases) {

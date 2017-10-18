@@ -6,14 +6,16 @@
 #define VALUE_H
 
 #include <string>
-#include "llvm/IR/IRBuilder.h"
+#include <llvm/IR/IRBuilder.h>
 
 using std::string;
 using std::pair;
 
+class CodeGen;
+
 namespace cdot {
 
-   class Type;
+   class BuiltinType;
 
    enum class VariantType {
       STRING,
@@ -33,8 +35,8 @@ namespace cdot {
       Variant(double d);
       Variant(float f);
 
-      string toString();
-      llvm::Value* getLlvmValue(llvm::IRBuilder<>& Builder);
+      string toString() const;
+      llvm::Value* getLlvmValue(CodeGen &CGM);
 
       bool isVoid() {
          return type == VariantType::VOID;
@@ -58,7 +60,7 @@ namespace cdot {
       Variant applyBinaryOp(Variant& rhs, string& op);
       Variant applyUnaryOp(string& op);
 
-      Variant castTo(Type*& targetTy);
+      Variant castTo(BuiltinType*& targetTy);
    };
 }
 

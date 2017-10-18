@@ -7,17 +7,21 @@
 
 #include <string>
 #include <stack>
+
 #include "../AbstractPass.h"
 #include "../StaticAnalysis/Function.h"
 
 enum class AccessModifier : unsigned int;
+
 using std::string;
+using namespace cdot;
 
 class DeclPass : AbstractPass {
 public:
    DeclPass();
 
    void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
+   void declareGlobalTypedefs(std::vector<std::shared_ptr<Statement>>& statements);
 
    void visit(CompoundStmt *node) override;
 
@@ -34,6 +38,7 @@ public:
    void visit(FieldDecl *node) override;
    void visit(ConstrDecl *node) override;
    void visit(DestrDecl *node) override;
+   void visit(UnionDecl *node) override;
 
    void visit(TypedefDecl *node) override;
    void visit(TypeRef *node) override;
@@ -49,17 +54,33 @@ public:
       return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
    }
 
-   string declareVariable(string &name, Type *type, AccessModifier access, AstNode *cause);
-   Type*& declareFunction(Function::UniquePtr &&func, std::vector<ObjectType *> &generics, AstNode *cause);
+   string declareVariable(
+      string &name,
+      Type &type,
+      AccessModifier access,
+      AstNode *cause
+   );
+
+   Type declareFunction(
+      Function::UniquePtr &&func,
+      std::vector<GenericConstraint> &generics,
+      AstNode *cause
+   );
+
+   static void resolveType(
+      TypeRef *node,
+      std::vector<std::vector<GenericConstraint>*>& GenericsStack,
+      std::vector<string>& importedNamespaces,
+      std::vector<string>& currentNamespace
+   );
 
 protected:
+   static std::vector<string> UserTypes;
+
    std::vector<string> currentNamespace = {""};
    std::vector<string> importedNamespaces = {""};
 
-   std::vector<string> UserTypes;
-   std::vector<string> Typedefs;
-
-   std::stack<std::vector<ObjectType*>*> GenericsStack = {};
+   std::vector<std::vector<GenericConstraint>*> GenericsStack;
 
    void pushNamespace(string &ns, bool declare = true);
    void popNamespace();

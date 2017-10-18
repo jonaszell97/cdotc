@@ -15,8 +15,27 @@ TertiaryOperator::TertiaryOperator(Expression::SharedPtr cond, Expression::Share
    children.push_back(&rhs);
 }
 
-TertiaryOperator::~TertiaryOperator() {
+void TertiaryOperator::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   if (condition.get() == child) {
+      condition.reset(replacement);
+   }
 
+   if (lhs.get() == child) {
+      lhs.reset(replacement);
+   }
+
+   if (rhs.get() == child) {
+      rhs.reset(replacement);
+   }
+
+   if (memberExpr.get() == child) {
+      memberExpr.reset(replacement);
+   }
+
+   llvm_unreachable("child does not exist");
 }
 
 std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {

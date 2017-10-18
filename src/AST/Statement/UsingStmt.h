@@ -18,6 +18,7 @@ enum class UsingKind {
 class UsingStmt : public Statement {
 public:
    explicit UsingStmt(string&& importNamespace, std::vector<string>&& item);
+   explicit UsingStmt(std::vector<string> &&fullNames);
 
    typedef std::shared_ptr<UsingStmt> SharedPtr;
 
@@ -32,7 +33,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -50,6 +51,69 @@ protected:
 
    std::vector<string> fullNames;
    UsingKind kind;
+
+   bool resolved = false;
+
+public:
+   const string &getImportNamespace() const
+   {
+      return importNamespace;
+   }
+
+   void setImportNamespace(const string &importNamespace)
+   {
+      UsingStmt::importNamespace = importNamespace;
+   }
+
+   const std::vector<string> &getImportedItems() const
+   {
+      return importedItems;
+   }
+
+   void setImportedItems(const std::vector<string> &importedItems)
+   {
+      UsingStmt::importedItems = importedItems;
+   }
+
+   bool isIsWildcardImport() const
+   {
+      return isWildcardImport;
+   }
+
+   void setIsWildcardImport(bool isWildcardImport)
+   {
+      UsingStmt::isWildcardImport = isWildcardImport;
+   }
+
+   const std::vector<string> &getFullNames() const
+   {
+      return fullNames;
+   }
+
+   void setFullNames(const std::vector<string> &fullNames)
+   {
+      UsingStmt::fullNames = fullNames;
+   }
+
+   UsingKind getKind() const
+   {
+      return kind;
+   }
+
+   void setKind(UsingKind kind)
+   {
+      UsingStmt::kind = kind;
+   }
+
+   bool isResolved() const
+   {
+      return resolved;
+   }
+
+   void setResolved(bool resolved)
+   {
+      UsingStmt::resolved = resolved;
+   }
 };
 
 

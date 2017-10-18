@@ -8,174 +8,47 @@
 
 namespace cdot {
 
-   FunctionType::FunctionType(std::shared_ptr<TypeRef> returnType,
-      std::vector<pair<string, std::shared_ptr<TypeRef>>>&& argTypes,
-      std::vector<ObjectType*>&& genericTypes) :
-      rawReturnType(returnType),
-      rawArgTypes(argTypes),
-      genericTypes(genericTypes)
+   unordered_map<string, FunctionType*> FunctionType::Instances;
+
+   FunctionType* FunctionType::get(
+      Type &returnType,
+      std::vector<Argument> &argTypes,
+      bool isRawFunctionTy)
    {
-      id = TypeID::FunctionTypeID;
-      className = "__lambda";
+      auto key = typesToString(returnType, argTypes) + std::to_string((int)isRawFunctionTy);
+      if (Instances.find(key) == Instances.end()) {
+         Instances[key] = new FunctionType(returnType, argTypes, isRawFunctionTy);
+      }
+
+      return Instances[key];
    }
 
-   FunctionType::FunctionType(std::shared_ptr<TypeRef> returnType,
-      std::vector<pair<string, std::shared_ptr<TypeRef>>>& argTypes) :
-      rawReturnType(returnType),
-      rawArgTypes(argTypes),
-      isLambda_(true)
+   string FunctionType::typesToString(
+      Type &returnType,
+      std::vector<Argument> &argTypes)
    {
-      id = TypeID::FunctionTypeID;
-      className = "__lambda";
-   }
-
-   FunctionType::FunctionType(Type* returnType, std::vector<Type*>&& argTypes,
-      std::vector<ObjectType*>&& genericTypes) :
-      returnType(returnType),
-      argTypes(argTypes),
-      genericTypes(genericTypes)
-   {
-      id = TypeID::FunctionTypeID;
-      className = "__lambda";
-   }
-
-   FunctionType::FunctionType(Type* returnType, std::vector<Type*>& argTypes,
-      std::vector<ObjectType*> &genericTypes) :
-      returnType(returnType),
-      argTypes(argTypes),
-      genericTypes(genericTypes)
-   {
-      id = TypeID::FunctionTypeID;
-      className = "__lambda";
-   }
-
-   FunctionType::FunctionType(Type* returnType, std::vector<Type*>& argTypes) :
-      returnType(returnType),
-      argTypes(argTypes),
-      isLambda_(true)
-   {
-      id = TypeID::FunctionTypeID;
-      className = "__lambda";
-   }
-
-   FunctionType::~FunctionType() {
-      delete returnType;
-      for (const auto& gen : genericTypes) {
-         delete gen;
-      }
-      for (const auto& gen : argTypes) {
-         delete gen;
-      }
-   }
-
-   void FunctionType::visitContained(TypeCheckPass &v) {
-      if (returnType != nullptr) {
-         return;
-      }
-
-      rawReturnType->accept(v);
-      returnType = rawReturnType->getType()->deepCopy();
-
-      for (const auto& arg : rawArgTypes) {
-         arg.second->accept(v);
-         argTypes.push_back(arg.second->getType()->deepCopy());
-      }
-   }
-
-   void FunctionType::visitContained(AbstractPass *v) {
-      if (returnType != nullptr) {
-         return;
-      }
-
-      rawReturnType->accept(v);
-      returnType = rawReturnType->getType()->deepCopy();
-
-      for (const auto& arg : rawArgTypes) {
-         arg.second->accept(v);
-         argTypes.push_back(arg.second->getType()->deepCopy());
-      }
-   }
-
-   bool FunctionType::operator==(Type *&other) {
-      switch (other->getTypeID()) {
-         case TypeID::FunctionTypeID: {
-            auto asFun = cast<FunctionType>(other);
-            if (!Type::operator==(other)) {
-               return false;
-            }
-
-            if (*returnType != asFun->returnType) {
-               return false;
-            }
-
-            size_t i = 0;
-            for (const auto& arg : argTypes) {
-               if (*arg != asFun->argTypes.at(i)) {
-                  return false;
-               }
-               ++i;
-            }
-
-            i = 0;
-            for (auto gen : genericTypes) {
-               Type* otherGen = asFun->genericTypes.at(i);
-               if (*gen != otherGen) {
-                  return false;
-               }
-               ++i;
-            }
-
-            return true;
-         }
-         default:
-            return false;
-      }
-   }
-
-   std::vector<Type*> FunctionType::getContainedTypes(bool includeSelf)
-   {
-      std::vector<Type*> cont;
-
-      if (includeSelf) {
-         cont.push_back(this);
-      }
-
-      cont.push_back(returnType);
-      cont.insert(cont.end(), argTypes.begin(), argTypes.end());
-
-      return cont;
-   }
-
-   std::vector<Type**> FunctionType::getTypeReferences() {
-      std::vector<Type**> cont{&returnType};
-
-      for (auto& arg : argTypes) {
-         cont.push_back(&arg);
-      }
-
-      return cont;
-   }
-
-   Type* FunctionType::deepCopy() {
-      auto newTy = new FunctionType(*this);
-      newTy->returnType = returnType->deepCopy();
-
+      string res = "(";
       size_t i = 0;
       for (const auto& arg : argTypes) {
-         newTy->argTypes[i] = arg->deepCopy();
-         ++i;
+         res += arg.type.toString();
+         if (i < argTypes.size() - 1) {
+            res += ", ";
+         }
       }
 
-      i = 0;
-      for (const auto& gen : newTy->genericTypes) {
-         newTy->genericTypes[i] = cast<ObjectType>(gen->deepCopy());
-         ++i;
-      }
-
-      return newTy;
+      return res + ") -> " + returnType->toString();
    }
 
-   bool FunctionType::implicitlyCastableTo(Type *other) {
+   FunctionType::FunctionType(Type& returnType, std::vector<Argument>& argTypes, bool raw) :
+      returnType(returnType),
+      argTypes(argTypes),
+      isRawFunctionTy_(raw)
+   {
+      id = TypeID::FunctionTypeID;
+      className = "__lambda";
+   }
+
+   bool FunctionType::implicitlyCastableTo(BuiltinType *other) {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
             return true;
@@ -186,43 +59,60 @@ namespace cdot {
                return false;
             }
 
-            if (!returnType->implicitlyCastableTo(asFun->returnType)) {
+            if (!returnType.implicitlyCastableTo(asFun->returnType)) {
                return false;
             }
 
             size_t i = 0;
-            for (const auto& arg : argTypes) {
-               if (!arg->implicitlyCastableTo(asFun->argTypes.at(i))) {
+            for (auto& arg : argTypes) {
+               if (!arg.type.implicitlyCastableTo(asFun->argTypes.at(i).type)) {
                   return false;
                }
+
+               ++i;
             }
 
             return true;
          }
-         case TypeID::PointerTypeID:
-            return false;
-         case TypeID::ObjectTypeID:
-            return false;
-         case TypeID::CollectionTypeID:
-            return false;
-         case TypeID::IntegerTypeID:
-            return false;
-         case TypeID::FPTypeID:
-            return false;
+         case TypeID::PointerTypeID: {
+            return isRawFunctionTy_ &&
+               implicitlyCastableTo(*other->asPointerTy()->getPointeeType());
+         }
+         case TypeID::IntegerTypeID: {
+            return isRawFunctionTy_;
+         }
          default:
             return false;
       }
    }
 
-   llvm::Type* FunctionType::_getLlvmType() {
-      return CodeGen::LambdaTy;
+   size_t FunctionType::getSize()
+   {
+      if (!isRawFunctionTy_) {
+         return 2 * sizeof(int *);
+      }
+
+      return sizeof(void (*)(void));
+   }
+
+   llvm::Type* FunctionType::getLlvmType()
+   {
+      if (!isRawFunctionTy_) {
+         return CodeGen::LambdaTy;
+      }
+
+      return getLlvmFunctionType()->getPointerTo();
    }
 
    llvm::Type* FunctionType::getLlvmFunctionType()
    {
-      std::vector<llvm::Type*> args{ Builder->getInt8PtrTy()->getPointerTo() };
-      for (const auto& arg : argTypes) {
-         auto llvmTy = arg->getLlvmType();
+      std::vector<llvm::Type*> args;
+      if (!isRawFunctionTy_) {
+         args.push_back(CodeGen::Int8PtrTy->getPointerTo());
+      }
+
+      for (auto& arg : argTypes) {
+         auto llvmTy = arg.type->getLlvmType();
          if (llvmTy->isStructTy()) {
             llvmTy = llvmTy->getPointerTo();
          }
@@ -233,24 +123,15 @@ namespace cdot {
       llvm::Type* ret = returnType->getLlvmType();
       if (returnType->isValueType()) {
          args.insert(++args.begin(), ret->getPointerTo());
-         ret = Builder->getVoidTy();
+         ret = llvm::Type::getVoidTy(CodeGen::Context);
       }
 
       return llvm::FunctionType::get(ret, args, false);
    }
 
-   string FunctionType::_toString() {
-      string res = "(";
-
-      size_t i = 0;
-      for (const auto& arg : argTypes) {
-         res += arg->toString();
-         if (i < argTypes.size() - 1) {
-            res += ", ";
-         }
-      }
-
-      return res + ") -> " + returnType->toString();
+   string FunctionType::toString()
+   {
+      return typesToString(returnType, argTypes);
    }
 
 } // namespace cdot

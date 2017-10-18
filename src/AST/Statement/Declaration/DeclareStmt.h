@@ -33,7 +33,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -49,6 +49,17 @@ public:
 
 protected:
    std::vector<Statement::SharedPtr> declarations;
+
+public:
+   const std::vector<Statement::SharedPtr> &getDeclarations() const
+   {
+      return declarations;
+   }
+
+   void setDeclarations(const std::vector<Statement::SharedPtr> &declarations)
+   {
+      DeclareStmt::declarations = declarations;
+   }
 };
 
 

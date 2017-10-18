@@ -11,13 +11,10 @@
 class NumericLiteral : public Expression {
 public:
    NumericLiteral(cdot::Variant);
-   ~NumericLiteral();
 
    bool needsContextualInformation() override {
       return true;
    }
-
-   void saveOrResetState() override;
 
    typedef std::shared_ptr<NumericLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -31,7 +28,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -39,18 +36,89 @@ public:
       return v.visit(this);
    }
 
+   void accept(AbstractPass *v) override
+   {
+      v->visit(this);
+   }
+
+   bool createsTemporary() override
+   {
+      return true;
+   }
+
    ADD_FRIEND_PASSES
 
 protected:
    cdot::Variant value;
-   Type* type = nullptr;
+   BuiltinType* type = nullptr;
    string className;
 
-   bool isChar = false;
-   bool isBool = false;
+   bool is_char = false;
+   bool is_bool = false;
 
    // codegen
-   bool isPrimitive = false;
+   bool primitive = false;
+
+public:
+   const Variant &getValue() const
+   {
+      return value;
+   }
+
+   void setValue(const Variant &value)
+   {
+      NumericLiteral::value = value;
+   }
+
+   BuiltinType *getType() const
+   {
+      return type;
+   }
+
+   void setType(BuiltinType *type)
+   {
+      NumericLiteral::type = type;
+   }
+
+   const string &getClassName() const
+   {
+      return className;
+   }
+
+   void setClassName(const string &className)
+   {
+      NumericLiteral::className = className;
+   }
+
+   bool isChar() const
+   {
+      return is_char;
+   }
+
+   void isChar(bool is_char)
+   {
+      NumericLiteral::is_char = is_char;
+   }
+
+   bool isBool() const
+   {
+      return is_bool;
+   }
+
+   void isBool(bool is_bool)
+   {
+      NumericLiteral::is_bool = is_bool;
+   }
+
+   bool isPrimitive() const
+   {
+      return primitive;
+   }
+
+   void isPrimitive(bool primitive)
+   {
+      NumericLiteral::primitive = primitive;
+   }
 };
 
 

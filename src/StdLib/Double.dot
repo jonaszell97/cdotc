@@ -7,6 +7,9 @@ struct Float {
 }
 
 struct Double {
+    static let QNAN = __f64_q_nan
+    static let SNAN = __f64_sig_nan
+
     var val: double
 
     init (f: float) {
@@ -71,10 +74,10 @@ extend Double with StringRepresentable {
             strLen = strLen + 1
         }
         
-        let str = StringBuilder(strLen)
+        let str = String(strLen)
         var i = 0
         if (negative) {
-            str.append('-')
+            str[0] = '-'
             ++i
         }
         
@@ -94,7 +97,7 @@ extend Double with StringRepresentable {
         str[i] = (num + 48) as int8
         str[strLen - precision - 1] = '.'
         
-        return str.build()
+        return str
     }
 
     def infix as String {

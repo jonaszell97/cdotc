@@ -8,17 +8,6 @@ NoneLiteral::NoneLiteral() {
 
 }
 
-void NoneLiteral::saveOrResetState()
-{
-   if (prevState == nullptr) {
-      prevState = new NoneLiteral(*this);
-   }
-   else {
-      assert(prevState->get_type() == NodeType::NONE_LITERAL && "Not a none literal");
-      *this = *static_cast<NoneLiteral *>(prevState);
-   }
-}
-
 std::vector<AstNode::SharedPtr> NoneLiteral::get_children() {
    return {};
 }

@@ -11,11 +11,17 @@
 #include <stack>
 #include "../../../Variant/Variant.h"
 
+class CodeGen;
+
 class CGMemory {
 public:
-   static std::stack<llvm::BasicBlock*> StackAllocBlock;
-   static std::stack<llvm::BasicBlock*> HeapAllocBlock;
-   static llvm::Value* CreateAlloca(llvm::Type*, bool = false, string = "", llvm::Value* = nullptr);
+   explicit CGMemory(CodeGen& CGM) : CGM(CGM) {}
+
+   std::stack<llvm::BasicBlock*> StackAllocBlock;
+   llvm::Value* CreateAlloca(llvm::Type*, bool = false, string = "", llvm::Value* = nullptr);
+
+protected:
+   CodeGen &CGM;
 };
 
 

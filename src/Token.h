@@ -7,60 +7,90 @@
 
 #include <string>
 #include <map>
+
 #include "Variant/Variant.h"
 
+namespace cdot {
+   enum TokenType {
+      T_KEYWORD,
+      T_IDENT,
+      T_PUNCTUATOR,
+      T_OP,
+      T_LITERAL,
+      T_BOF,
+      T_EOF,
+
+      T_DIRECTIVE,
+      T_PREPROC_VAR,
+   };
+
+   struct SourceLocation {
+      SourceLocation() = default;
+      SourceLocation(
+         unsigned col,
+         const unsigned& line,
+         unsigned length,
+         const unsigned& sourceId
+      );
+
+      unsigned col : 16;
+      unsigned line : 16;
+      unsigned length : 16;
+      unsigned sourceId : 16;
+
+      unsigned getLine() const;
+      unsigned getCol() const;
+      unsigned getLength() const;
+      unsigned getSourceId() const;
+   };
+}
+
 using std::string;
-
-enum TokenType {
-   T_KEYWORD,
-   T_IDENT,
-   T_PUNCTUATOR,
-   T_OP,
-   T_LITERAL,
-   T_BOF,
-   T_EOF,
-
-   T_DIRECTIVE,
-   T_PREPROC_VAR,
-};
-
-using cdot::Variant;
+using namespace cdot;
 
 struct Token {
    Token();
-   Token(TokenType type, Variant &&val, size_t start, size_t end, size_t line,
-      size_t indexOnLine, bool isEscaped = false);
+   Token(TokenType type, Variant &&val, SourceLocation loc,
+      unsigned start, bool isEscaped = false);
 
    TokenType get_type();
    Variant get_value();
 
    string toString();
 
-   size_t getStart() {
+   unsigned getStart() const {
       return start;
    }
 
-   size_t getEnd() {
-      return end;
+   unsigned getEnd() const {
+      return start + loc.getLength();
    }
 
-   size_t getLine() {
-      return line;
+   unsigned getLine() const {
+      return loc.getLine();
    }
 
-   size_t getIndexOnLine() {
-      return indexOnLine;
+   unsigned getCol() const {
+      return loc.getCol();
    }
 
-   bool isEscaped() {
+   const SourceLocation& getSourceLoc() const
+   {
+      return loc;
+   }
+
+   bool isEscaped() const
+   {
       return isEscaped_;
    }
 
-   void setIndent(int indent) {
+   void setIndent(int indent)
+   {
       this->indent = indent;
    }
 
-   size_t getIndent() {
+   unsigned getIndent() const
+   {
       return indent;
    }
 
@@ -73,13 +103,10 @@ struct Token {
 
    Variant _value;
    TokenType _type;
+   SourceLocation loc;
 
-   size_t start;
-   size_t end;
-   size_t line;
-   size_t indexOnLine;
-
-   size_t indent = 0;
+   unsigned start;
+   unsigned indent = 0;
 
    bool isEscaped_ = false;
 };

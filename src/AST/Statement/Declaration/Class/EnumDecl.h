@@ -25,8 +25,8 @@ public:
       string&& enumName,
       std::shared_ptr<TypeRef>& rawType,
       std::vector<std::shared_ptr<MethodDecl>>&& methods,
-      std::vector<ObjectType*>&& conformsTo,
-      std::vector<ObjectType*>&& generics,
+      std::vector<std::shared_ptr<TypeRef>>&& conformsTo,
+      std::vector<GenericConstraint>&& generics,
       std::vector<std::shared_ptr<EnumCaseDecl>>&& cases,
       std::vector<Statement::SharedPtr>&& innerDeclarations
    );
@@ -53,7 +53,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -70,7 +70,7 @@ public:
 
 protected:
    std::vector<std::shared_ptr<EnumCaseDecl>> cases;
-   std::vector<ObjectType*> conformsTo;
+   std::vector<std::shared_ptr<TypeRef>> conformsTo;
 
    std::shared_ptr<TypeRef> rawType;
 
@@ -79,13 +79,114 @@ protected:
    string qualifiedName;
 
    std::vector<std::shared_ptr<MethodDecl>> methods;
-   std::vector<ObjectType*> generics;
+   std::vector<GenericConstraint> generics;
 
    std::vector<Statement::SharedPtr> innerDeclarations;
 
    // codegen
    string selfBinding;
    cdot::cl::Enum* declaredEnum;
+
+public:
+   const std::vector<std::shared_ptr<EnumCaseDecl>> &getCases() const
+   {
+      return cases;
+   }
+
+   void setCases(const std::vector<std::shared_ptr<EnumCaseDecl>> &cases)
+   {
+      EnumDecl::cases = cases;
+   }
+
+   const std::vector<std::shared_ptr<TypeRef>> &getConformsTo() const
+   {
+      return conformsTo;
+   }
+
+   void setConformsTo(const std::vector<std::shared_ptr<TypeRef>> &conformsTo)
+   {
+      EnumDecl::conformsTo = conformsTo;
+   }
+
+   const std::shared_ptr<TypeRef> &getRawType() const
+   {
+      return rawType;
+   }
+
+   void setRawType(const std::shared_ptr<TypeRef> &rawType)
+   {
+      EnumDecl::rawType = rawType;
+   }
+
+   AccessModifier getAm() const
+   {
+      return am;
+   }
+
+   void setAm(AccessModifier am)
+   {
+      EnumDecl::am = am;
+   }
+
+   const string &getQualifiedName() const
+   {
+      return qualifiedName;
+   }
+
+   void setQualifiedName(const string &qualifiedName)
+   {
+      EnumDecl::qualifiedName = qualifiedName;
+   }
+
+   const std::vector<std::shared_ptr<MethodDecl>> &getMethods() const
+   {
+      return methods;
+   }
+
+   void setMethods(const std::vector<std::shared_ptr<MethodDecl>> &methods)
+   {
+      EnumDecl::methods = methods;
+   }
+
+   const std::vector<GenericConstraint> &getGenerics() const
+   {
+      return generics;
+   }
+
+   void setGenerics(const std::vector<GenericConstraint> &generics)
+   {
+      EnumDecl::generics = generics;
+   }
+
+   const std::vector<Statement::SharedPtr> &getInnerDeclarations() const
+   {
+      return innerDeclarations;
+   }
+
+   void setInnerDeclarations(const std::vector<Statement::SharedPtr> &innerDeclarations)
+   {
+      EnumDecl::innerDeclarations = innerDeclarations;
+   }
+
+   const string &getSelfBinding() const
+   {
+      return selfBinding;
+   }
+
+   void setSelfBinding(const string &selfBinding)
+   {
+      EnumDecl::selfBinding = selfBinding;
+   }
+
+   Enum *getDeclaredEnum() const
+   {
+      return declaredEnum;
+   }
+
+   void setDeclaredEnum(Enum *declaredEnum)
+   {
+      EnumDecl::declaredEnum = declaredEnum;
+   }
 };
 
 

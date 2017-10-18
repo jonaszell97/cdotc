@@ -5,7 +5,7 @@
 #ifndef CDOT_CONSTRDECL_H
 #define CDOT_CONSTRDECL_H
 
-#include "../../Statement.h"
+#include "../CallableDecl.h"
 
 class FuncArgDecl;
 class CompoundStmt;
@@ -16,7 +16,7 @@ namespace cdot {
    }
 }
 
-class ConstrDecl : public Statement {
+class ConstrDecl : public CallableDecl {
 public:
    ConstrDecl();
    ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>>, std::shared_ptr<CompoundStmt>, AccessModifier);
@@ -35,7 +35,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -59,6 +59,77 @@ protected:
    std::string selfBinding;
    string className;
    cdot::cl::Method* method;
+
+public:
+   bool isMemberwise() const
+   {
+      return memberwise;
+   }
+
+   void setMemberwise(bool memberwise)
+   {
+      ConstrDecl::memberwise = memberwise;
+   }
+
+   AccessModifier getAm() const
+   {
+      return am;
+   }
+
+   void setAm(AccessModifier am)
+   {
+      ConstrDecl::am = am;
+   }
+
+   const std::vector<std::shared_ptr<FuncArgDecl>> &getArgs() const
+   {
+      return args;
+   }
+
+   void setArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args)
+   {
+      ConstrDecl::args = args;
+   }
+
+   const std::shared_ptr<CompoundStmt> &getBody() const
+   {
+      return body;
+   }
+
+   void setBody(const std::shared_ptr<CompoundStmt> &body)
+   {
+      ConstrDecl::body = body;
+   }
+
+   const string &getSelfBinding() const
+   {
+      return selfBinding;
+   }
+
+   void setSelfBinding(const string &selfBinding)
+   {
+      ConstrDecl::selfBinding = selfBinding;
+   }
+
+   const string &getClassName() const
+   {
+      return className;
+   }
+
+   void setClassName(const string &className)
+   {
+      ConstrDecl::className = className;
+   }
+
+   Method *getMethod() const
+   {
+      return method;
+   }
+
+   void setMethod(Method *method)
+   {
+      ConstrDecl::method = method;
+   }
 };
 
 

@@ -1,12 +1,10 @@
 
 #include <iostream>
-#include "Parser.h"
-#include "Message/Exceptions.h"
-#include "Compiler.h"
-#include <fstream>
-#include <codecvt>
 #include <execinfo.h>
-#include <random>
+
+#include "Compiler.h"
+#include "Message/Exceptions.h"
+#include "Token.h"
 
 void  handler()
 {

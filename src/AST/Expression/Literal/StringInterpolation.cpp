@@ -10,6 +10,20 @@ StringInterpolation::StringInterpolation(std::vector<Expression::SharedPtr>&& st
 
 }
 
+void StringInterpolation::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   for (auto &str : strings) {
+      if (str.get() == child) {
+         str.reset(replacement);
+         return;
+      }
+   }
+
+   llvm_unreachable("child does not exist");
+}
+
 std::vector<AstNode::SharedPtr> StringInterpolation::get_children() {
    std::vector<AstNode::SharedPtr> children;
    for (const auto& expr : strings) {

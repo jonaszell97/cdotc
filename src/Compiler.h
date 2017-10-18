@@ -9,6 +9,9 @@
 #include <vector>
 #include <llvm/IR/Module.h>
 
+class CodeGen;
+class CompoundStmt;
+
 using std::string;
 
 namespace cdot {
@@ -19,21 +22,44 @@ namespace cdot {
       IR,
       ASM,
       HEADERS,
-      LIB,
+      MODULE,
       AST,
       PRE_PROCESSED
+   };
+
+   struct CompilationUnit {
+      CompilationUnit(
+         const string &fileName,
+         const string &path,
+         size_t ID,
+         std::shared_ptr<CompoundStmt> root,
+         bool isHeader
+      ) : fileName(fileName), path(path), ID(ID), root(root), isHeader(isHeader)
+      {
+
+      }
+
+      string fileName;
+      string path;
+      size_t ID;
+      std::shared_ptr<CompoundStmt> root;
+      bool isHeader = false;
+
+      CodeGen *cg;
    };
 
    struct CompilerOptions {
       std::vector<string> sourceFiles;
       std::vector<string> linkedFiles;
+      std::vector<string> importedModules;
       std::vector<string> headerFiles;
 
       string executableOutFile;
       string objectOutFile;
       string asmOutFile;
       string ppOutFile;
-      string irOutFile;
+      string moduleName;
+      string irOutPath;
 
       string basePath;
 
@@ -49,6 +75,7 @@ namespace cdot {
 
       bool isStdLib = false;
       bool linkStdLib = true;
+      bool emitDebugInfo = false;
    };
 
    class Compiler {
@@ -56,7 +83,7 @@ namespace cdot {
       static void init(int argc, char *argv[]);
       static void compile();
 
-      static void outputIR(llvm::Module* module);
+      static void outputIR(CodeGen &CGM);
 
       static CompilerOptions& getOptions() {
          return options;

@@ -12,54 +12,7 @@
    friend class ::ConstExprPass; \
    friend class ::HeaderGen;
 
-class AstNode;
-class FunctionDecl;
-class CompoundStmt;
-class IdentifierRefExpr;
-class DeclStmt;
-class ForStmt;
-class ForInStmt;
-class WhileStmt;
-class CollectionLiteral;
-class NumericLiteral;
-class SubscriptExpr;
-class CallExpr;
-class MemberRefExpr;
-class TertiaryOperator;
-class UnaryOperator;
-class BreakStmt;
-class ContinueStmt;
-class IfStmt;
-class FuncArgDecl;
-class ReturnStmt;
-class Expression;
-class Statement;
-class ClassDecl;
-class FieldDecl;
-class MethodDecl;
-class ConstrDecl;
-class DestrDecl;
-class MatchStmt;
-class CaseStmt;
-class LabelStmt;
-class GotoStmt;
-class StringLiteral;
-class LambdaExpr;
-class NamespaceDecl;
-class UsingStmt;
-class EndOfFileStmt;
-class ImplicitCastExpr;
-class TypedefDecl;
-class TypeRef;
-class DeclareStmt;
-class LvalueToRvalue;
-class DebugStmt;
-class TupleLiteral;
-class EnumDecl;
-class EnumCaseDecl;
-class Statement;
-class NoneLiteral;
-class StringInterpolation;
+#include "../AstDeclarations.h"
 
 namespace cdot {
    class BinaryOperator;
@@ -72,6 +25,10 @@ public:
    virtual ~AbstractPass() = default;
    virtual void finalize() {}
 
+   virtual void visit(AstNode *node);
+   virtual void visit(Expression *node);
+   virtual void visit(Statement *node);
+
    virtual void visit(NamespaceDecl *node);
    virtual void visit(UsingStmt *node);
    virtual void visit(CompoundStmt *node);
@@ -80,6 +37,7 @@ public:
    virtual void visit(FunctionDecl *node);
    virtual void visit(DeclareStmt *node);
 
+   virtual void visit(UnionDecl *node);
    virtual void visit(ClassDecl *node);
    virtual void visit(MethodDecl *node);
    virtual void visit(FieldDecl *node);
@@ -119,7 +77,6 @@ public:
    virtual void visit(TertiaryOperator *node);
    
    virtual void visit(FuncArgDecl *node);
-   virtual void visit(Expression *node);
    virtual void visit(LambdaExpr *node);
    virtual void visit(ImplicitCastExpr *node);
    virtual void visit(TypedefDecl *node);
@@ -129,7 +86,8 @@ public:
    virtual void visit(EndOfFileStmt *node);
    virtual void visit(DebugStmt *node);
 
-   virtual void visit(Statement *node);
+   virtual void visit(TryStmt *node);
+   virtual void visit(ThrowStmt *node);
 
 protected:
    AbstractPass() = default;

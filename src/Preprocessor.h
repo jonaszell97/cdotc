@@ -7,7 +7,12 @@
 
 #include <string>
 #include <unordered_map>
+#include <llvm/Support/raw_ostream.h>
 #include "Lexer.h"
+
+namespace llvm {
+   class MemoryBuffer;
+}
 
 using std::string;
 using std::unordered_map;
@@ -43,13 +48,13 @@ namespace cdot {
 
    class Preprocessor {
    public:
-      explicit Preprocessor(string &src, string &fileName);
+      Preprocessor(llvm::MemoryBuffer *buf, string &fileName);
       ~Preprocessor();
 
-      void run(bool dump = false);
+      std::unique_ptr<llvm::MemoryBuffer> run(bool dump = false);
 
    protected:
-      string &src;
+      const char* src;
       string &fileName;
       string out;
 

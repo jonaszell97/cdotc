@@ -14,11 +14,6 @@ CaseStmt::CaseStmt() : LabelStmt("default") {
    isDefault = true;
 }
 
-CaseStmt::~CaseStmt() {
-   delete genericDestTy;
-   delete genericOriginTy;
-}
-
 std::vector<AstNode::SharedPtr> CaseStmt::get_children() {
    std::vector<AstNode::SharedPtr> children;
    if (caseVal != nullptr) {

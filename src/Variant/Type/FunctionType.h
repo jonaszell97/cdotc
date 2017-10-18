@@ -6,100 +6,69 @@
 #define CDOT_FUNCTIONTYPE_H
 
 
-#include "Type.h"
+#include "BuiltinType.h"
 #include "../../AST/Passes/AbstractPass.h"
+#include "Type.h"
 
-class Function;
-class TypeRef;
 using std::pair;
 
 namespace cdot {
 
+   struct Argument;
    class ObjectType;
 
-   class FunctionType : public Type {
+   class FunctionType : public BuiltinType {
+   protected:
+      FunctionType(Type& returnType, std::vector<Argument>& argTypes, bool raw);
+
+      static unordered_map<string, FunctionType*> Instances;
+      static string typesToString(
+         Type& returnType,
+         std::vector<Argument>& argTypes
+      );
+
    public:
-      FunctionType(std::shared_ptr<TypeRef>, std::vector<pair<string, std::shared_ptr<TypeRef>>>&&,
-         std::vector<ObjectType*>&&);
-      FunctionType(std::shared_ptr<TypeRef>, std::vector<pair<string, std::shared_ptr<TypeRef>>>&);
+      static FunctionType *get(
+         Type& returnType,
+         std::vector<Argument>& argTypes,
+         bool isRawFunctionTy
+      );
 
-      FunctionType(Type*, std::vector<Type*>&&, std::vector<ObjectType*>&&);
-      FunctionType(Type*, std::vector<Type*>&, std::vector<ObjectType*>&);
-      FunctionType(Type*, std::vector<Type*>&);
-
-      ~FunctionType() override;
-
-      inline bool isLambda() {
-         return isLambda_;
-      }
-
-      inline Type* getReturnType() {
+      inline Type getReturnType()
+      {
          return returnType;
       }
 
-      inline std::vector<Type*>& getArgTypes() {
+      inline std::vector<Argument>& getArgTypes()
+      {
          return argTypes;
       }
 
-      inline std::vector<ObjectType*> getGenericTypes() {
-         return genericTypes;
-      }
-
-      inline bool isGeneric() override {
-         if (returnType->isGeneric()) {
-            return true;
-         }
-
-         for (const auto& arg : argTypes) {
-            if (arg->isGeneric()) {
-               return true;
-            }
-         }
-
-         return false;
-      }
-
-      Function* getFunction() {
-         return declaredFunc;
-      }
-
-      void setFunction(Function* func) {
-         declaredFunc = func;
-      }
-
-      bool isFunctionTy() override {
+      bool isFunctionTy() override
+      {
          return true;
       }
 
-      bool isStruct() override {
-         return true;
+      bool isRawFunctionTy() override
+      {
+         return isRawFunctionTy_;
       }
 
-      void visitContained(TypeCheckPass& v) override;
-      void visitContained(AbstractPass* v) override;
-
-      bool operator==(Type*& other) override;
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
+      bool needsMemCpy() override
+      {
+         return !isRawFunctionTy_;
       }
 
-      std::vector<Type*> getContainedTypes(bool includeSelf = false) override;
-      std::vector<Type**> getTypeReferences() override;
+      size_t getSize() override;
 
-      string& getClassName() override {
-         return className;
-      }
-
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
       llvm::Type* getLlvmFunctionType() override;
 
-      bool implicitlyCastableTo(Type*) override;
-
-      Type* deepCopy() override;
+      bool implicitlyCastableTo(BuiltinType*) override;
 
       static inline bool classof(FunctionType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::FunctionTypeID:
                return true;
@@ -112,15 +81,10 @@ namespace cdot {
       typedef std::shared_ptr<FunctionType> SharedPtr;
 
    protected:
-      Type* returnType = nullptr;
-      std::vector<Type*> argTypes;
-      std::vector<ObjectType*> genericTypes;
-      Function* declaredFunc;
+      Type returnType;
+      std::vector<Argument> argTypes;
 
-      std::shared_ptr<TypeRef> rawReturnType;
-      std::vector<pair<string, std::shared_ptr<TypeRef>>> rawArgTypes;
-
-      bool isLambda_;
+      bool isRawFunctionTy_ = false;
    };
 
 } // namespace cdot

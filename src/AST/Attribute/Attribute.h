@@ -19,12 +19,16 @@ namespace cdot {
       None,
       Inline,
       CArray,
+      RawFunctionPtr,
       NoCopy,
       CString,
       Primitive,
       NeverOmit,
+      Extern,
 
-      _builtin
+      _builtin,
+      _opaque,
+      _align
    };
 
    extern unordered_map<string, Attr> AttributeMap;

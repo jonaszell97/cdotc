@@ -10,7 +10,6 @@
 class TertiaryOperator : public Expression {
 public:
    TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
-   ~TertiaryOperator() override;
 
    typedef std::shared_ptr<TertiaryOperator> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -24,7 +23,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -36,6 +35,8 @@ public:
       return v.visit(this);
    }
 
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
+
    ADD_FRIEND_PASSES
 
 protected:
@@ -44,7 +45,7 @@ protected:
    Expression::SharedPtr rhs;
 
    // codegen
-   Type* resultType;
+   BuiltinType* resultType;
 };
 
 

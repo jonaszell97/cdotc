@@ -18,7 +18,6 @@ class CaseStmt : public LabelStmt {
 public:
    explicit CaseStmt(std::shared_ptr<Expression>);
    CaseStmt();
-   ~CaseStmt() override;
 
    void setBody(Statement::SharedPtr stmt) {
       body = stmt;
@@ -36,7 +35,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -54,20 +53,16 @@ protected:
    bool isDefault = false;
    std::shared_ptr<Expression> caseVal;
    std::shared_ptr<Statement> body;
-   Type *caseType = nullptr;
+   Type caseType;
 
    // codegen
-   bool fallthrough = false;
    bool isEnumLetCase = false;
    bool isEnumVarCase = false;
-   bool needsGenericCast = false;
-   Type* genericOriginTy = nullptr;
-   Type* genericDestTy = nullptr;
 
    Method* operatorEquals = nullptr;
 
    cdot::cl::EnumCase* enumCaseVal;
-   std::vector<pair<string, Type*>> letIdentifiers;
+   std::vector<pair<string, Type>> letIdentifiers;
    std::vector<string> letBindings;
 };
 

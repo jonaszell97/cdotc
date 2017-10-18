@@ -4,10 +4,13 @@
 
 #include <fstream>
 #include "HeaderGen.h"
-#include "../ASTIncludes.txt"
+#include "../ASTIncludes.h"
 #include "../../Attribute/Attribute.h"
 #include "../../../Variant/Type/PrimitiveType.h"
-#include "../StaticAnalysis/Class.h"
+#include "../../../Variant/Type/GenericType.h"
+#include "../StaticAnalysis/Record/Class.h"
+#include "../StaticAnalysis/Record/Enum.h"
+#include "../../../Files/FileManager.h"
 
 namespace {
    void removeTrailingWhitespace(string& src) {
@@ -143,35 +146,40 @@ namespace {
    }
 }
 
-void HeaderGen::writeAttributes(std::vector<Attribute> &attrs)
+void HeaderGen::writeAttributes(std::vector<Attribute> &attrs, bool indent)
 {
    if (attrs.empty()) {
       return;
    }
 
-   applyIndent();
+   if(indent) {
+      applyIndent();
+   }
+
    for (const auto& attr : attrs) {
       writec('@');
       out << getAttrNameFromKind(attr.kind);
-      if (!attr.args.empty()) {
-         writec('(');
+      writec('(');
 
-         auto argc = attr.args.size();
-         for (size_t i = 0; i < argc; ++i) {
-            writeIdent(attr.args[i], false);
-            if (i < argc - 1) {
-               write(",");
-            }
+      auto argc = attr.args.size();
+      for (size_t i = 0; i < argc; ++i) {
+         writeIdent(attr.args[i], false);
+         if (i < argc - 1) {
+            write(",");
          }
-
-         writec(')');
       }
 
-      nextLine();
+      writec(')');
+      if (indent) {
+         nextLine();
+      }
+      else {
+         writec(' ');
+      }
    }
 }
 
-void HeaderGen::writeGenerics(std::vector<ObjectType *> &generics)
+void HeaderGen::writeGenerics(std::vector<GenericConstraint> &generics)
 {
    if (generics.empty()) {
       return;
@@ -181,10 +189,13 @@ void HeaderGen::writeGenerics(std::vector<ObjectType *> &generics)
    auto genc = generics.size();
    for (size_t i = 0; i < genc; ++i) {
       const auto& gen  = generics[i];
-      writeIdent(gen->getGenericClassName(), false);
-      write(":");
+      writeIdent(gen.genericTypeName, false);
 
-      write(gen->getClassName(), false);
+      if (!gen.covarName.empty()) {
+         write(":");
+         write(gen.covarName, false);
+      }
+
       if (i < genc - 1) {
          write(",");
       }
@@ -193,7 +204,7 @@ void HeaderGen::writeGenerics(std::vector<ObjectType *> &generics)
    write(">");
 }
 
-void HeaderGen::writeGenerics(unordered_map<string, Type *> &generics)
+void HeaderGen::writeGenerics(std::vector<GenericType*> &generics)
 {
    if (generics.empty()) {
       return;
@@ -203,13 +214,13 @@ void HeaderGen::writeGenerics(unordered_map<string, Type *> &generics)
    size_t i = 0;
    auto genc = generics.size();
    for (const auto& gen : generics) {
-      write(gen.second->toString(), false);
+      write(gen->getActualType()->toString(), false);
       if (i < genc - 1) {
          write(",");
       }
    }
 
-   write(">");
+   writec('>');
 }
 
 void HeaderGen::writeProtocols(std::vector<ObjectType *> &conformsTo)
@@ -224,6 +235,27 @@ void HeaderGen::writeProtocols(std::vector<ObjectType *> &conformsTo)
       const auto& gen = conformsTo[i];
       writeIdent(gen->getClassName(), false);
       writeGenerics(gen->getConcreteGenericTypes());
+
+      if (i < protc - 1) {
+         write(",");
+      }
+   }
+
+   addSpace();
+}
+
+void HeaderGen::writeProtocols(std::vector<std::shared_ptr<TypeRef>> &conformsTo)
+{
+   if (conformsTo.empty()) {
+      return;
+   }
+
+   write("with");
+   auto protc = conformsTo.size();
+   for (size_t i = 0; i < protc; ++i) {
+      const auto& gen = conformsTo[i];
+      writeIdent(gen->className, false);
+      writeGenerics(gen->type->getConcreteGenericTypes());
 
       if (i < protc - 1) {
          write(",");
@@ -290,7 +322,7 @@ void HeaderGen::writeExternKind(ExternKind &kind)
 
 void HeaderGen::visit(NamespaceDecl *node)
 {
-   if (node->isAnonymousNamespace) {
+   if (node->isAnonymousNamespace_) {
       return;
    }
 
@@ -364,9 +396,9 @@ void HeaderGen::visit(DeclStmt *node)
 
    write(":");
 
-   node->type->type->isLvalue(false);
+   node->type->type.isLvalue(false);
    node->type->accept(this);
-   node->type->type->isLvalue(true);
+   node->type->type.isLvalue(true);
 
    nextLine();
 }
@@ -416,7 +448,7 @@ void HeaderGen::visit(ClassDecl *node)
    applyIndent();
 
    if (!node->is_extension) {
-      if (!node->is_protocol && innerDecl == 0) {
+      if (innerDecl == 0) {
          write("declare");
          writeExternKind(node->externKind);
       }
@@ -437,7 +469,7 @@ void HeaderGen::visit(ClassDecl *node)
 
    if (node->parentClass != nullptr) {
       writec(':');
-      writeIdent(node->parentClass->getClassName());
+      writeIdent(node->parentClass->type->getClassName());
    }
 
    writeProtocols(node->conformsTo);
@@ -517,23 +549,29 @@ void HeaderGen::visit(FieldDecl *node)
 {
    applyIndent();
    writeAccess(node->am);
-   if (node->isStatic) {
+   if (node->is_static) {
       write("static");
    }
 
-   write(node->isConst ? "let" : "var");
+   if (node->is_property) {
+      write("prop");
+   }
+   else {
+      write(node->is_const ? "let" : "var");
+   }
+
    writeIdent(node->fieldName, false);
    write(":");
 
    node->type->accept(this);
 
-   if (node->hasGetter || node->hasSetter) {
+   if (node->has_getter || node->has_setter) {
       write(" {");
 
-      if (node->hasGetter) {
+      if (node->has_getter) {
          write("get");
       }
-      if (node->hasSetter) {
+      if (node->has_setter) {
          write("set");
       }
 
@@ -641,7 +679,7 @@ void HeaderGen::visit(EnumCaseDecl *node)
 
 void HeaderGen::visit(FuncArgDecl *node)
 {
-   if (node->argType->type->isCStyleVararg()) {
+   if (node->argType->isCStyleVararg()) {
       write("...", false);
       return;
    }
@@ -656,9 +694,24 @@ void HeaderGen::visit(FuncArgDecl *node)
    if (node->defaultVal != nullptr) {
       write(" =");
 
-      auto start = node->defaultVal->getStartIndex();
-      auto end = node->defaultVal->getEndIndex() - 1;
-      write(node->defaultVal->getSourceFile().second.substr(start, end - start), false);
+      auto loc = node->defaultVal->getSourceLoc();
+      auto srcFile = fs::FileManager::openFile(loc);
+
+      auto *buf = srcFile->getBufferStart();
+      auto size = srcFile->getBufferSize();
+      unsigned line = 1;
+      unsigned locLine = loc.getLine();
+
+      unsigned i;
+      for (i = 0; line < locLine; ++i) {
+         assert(i < size);
+         if (buf[i] == '\n') {
+            ++line;
+         }
+      }
+
+      i += loc.getCol() - 1;
+      write(string(&buf[i], loc.getLength()), false);
    }
 }
 
@@ -669,14 +722,17 @@ void HeaderGen::visit(TypedefDecl *node)
    write("typedef");
 
    node->origin->accept(this);
-   addSpace();
+   write(" =");
 
    writeIdent(node->alias, false);
+   writeGenerics(node->generics);
+
    nextLine();
 }
 
 void HeaderGen::visit(TypeRef *node)
 {
+   writeAttributes(node->attributes, false);
    write(node->type->toString(), false);
 }
 

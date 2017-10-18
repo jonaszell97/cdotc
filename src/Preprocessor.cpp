@@ -8,6 +8,9 @@
 #include "Lexer.h"
 #include "Util.h"
 
+#include "llvm/Support/MemoryBuffer.h"
+#include "Files/FileManager.h"
+
 namespace cdot {
 
    namespace {
@@ -74,6 +77,8 @@ namespace cdot {
 #else
          { "__FreeBSD__", Variant(false) },
 #endif
+         { "__builtin_eh_data_regno_0", Variant(__builtin_eh_return_data_regno(0)) },
+         { "__builtin_eh_data_regno_1", Variant(__builtin_eh_return_data_regno(1)) }
       };
       //endregion
 
@@ -102,10 +107,13 @@ namespace cdot {
    unordered_map<string, std::vector<string>> Preprocessor::Arrays;
    unordered_map<string, Variant> Preprocessor::Values;
 
-   Preprocessor::Preprocessor(string &src, string &fileName)
-      : src(src), srcLength(src.length()), lexer(new Lexer(src, fileName)), fileName(fileName)
+   Preprocessor::Preprocessor(llvm::MemoryBuffer *buf, string &fileName)
+      : src(buf->getBufferStart()),
+        srcLength(buf->getBufferSize()),
+        lexer(new Lexer(buf, fileName, 0)),
+        fileName(fileName)
    {
-      lexer->advance();
+
    }
 
    Preprocessor::~Preprocessor()
@@ -118,25 +126,22 @@ namespace cdot {
       }
    }
 
-   void Preprocessor::run(bool dump)
+   std::unique_ptr<llvm::MemoryBuffer> Preprocessor::run(bool dump)
    {
       for (;;) {
-         while (lexer->current_token.is_punctuator('\n')) {
-            advance();
-         }
-
          auto dir = getNextDirective();
          runDirective(dir);
          if (dir == PPDirective::PD_NONE) {
-            if (dump) {
-               std::cout << src << "\n\n----------\n\n";
-               std::cout << out << std::endl;
-            }
-
             removeTrailingWhitespace(out);
-            src = out;
 
-            break;
+            auto buf = llvm::MemoryBuffer::getNewMemBuffer(out.length());
+            memcpy(const_cast<char*>(buf->getBufferStart()), out.data(), out.length());
+
+//            if (util::matches(".*?Exception.*?", fileName)) {
+//               printf("%s\n", buf->getBufferStart());
+//            }
+
+            return std::move(buf);
          }
       }
    }
@@ -178,8 +183,8 @@ namespace cdot {
 
    PPDirective Preprocessor::getNextDirective()
    {
-      int start = lexer->last_token_index;
-      int end = lexer->current_index;
+      int start = (int)lexer->last_token_index;
+      int end = (int)lexer->current_index;
 
       for (;;) {
          Token next = lexer->current_token;
@@ -252,14 +257,14 @@ namespace cdot {
                out += ident;
             }
             else if (start != end) {
-               out += src.substr(start, end - start);
+               out += string(src + start, end - start);
             }
          }
          else if (next.get_type() == T_EOF) {
             return PD_NONE;
          }
          else if (start != end) {
-            out += src.substr(start, end - start);
+            out += string(src + start, end - start);
          }
 
          start = lexer->current_token.getEnd();
@@ -427,11 +432,14 @@ namespace cdot {
          }
       }
 
-      Preprocessor preproc(res, fileName);
-      preproc.lexer->currentLine = lexer->currentLine;
-      preproc.run();
+      auto buf = llvm::MemoryBuffer::getMemBuffer(res);
 
-      out += res;
+      Preprocessor preproc(buf.get(), fileName);
+      preproc.lexer->currentLine = lexer->currentLine;
+
+      auto newBuf = preproc.run();
+
+      out += string(newBuf->getBufferStart(), newBuf->getBufferSize());
    }
 
    void Preprocessor::substituteMacro()
@@ -464,7 +472,7 @@ namespace cdot {
 
             if (lexer->current_token.is_punctuator(',')) {
                size_t end = lexer->last_token_index;
-               args.push_back(src.substr(start, end - start));
+               args.push_back(string(src + start, end - start));
 
                start = end;
                lexer->advance();
@@ -473,7 +481,7 @@ namespace cdot {
 
          size_t end = lexer->last_token_index;
          if (start != end) {
-            args.push_back(src.substr(start, end - start));
+            args.push_back(string(src + start, end - start));
          }
       }
 
@@ -516,11 +524,13 @@ namespace cdot {
          }
       }
 
-      Preprocessor preproc(replacement, fileName);
-      preproc.lexer->currentLine = lexer->currentLine;
-      preproc.run();
+      auto buf = llvm::MemoryBuffer::getMemBuffer(replacement);
 
-      out += replacement;
+      Preprocessor preproc(buf.get(), fileName);
+      preproc.lexer->currentLine = lexer->currentLine;
+
+      auto newBuf = preproc.run();
+      out += string(newBuf->getBufferStart(), newBuf->getBufferSize());
    }
 
    void Preprocessor::parseDefine(bool rawDef)
@@ -592,7 +602,7 @@ namespace cdot {
          }
       }
 
-      string macro = src.substr(start, lexer->last_token_index - start);
+      string macro(src + start, lexer->last_token_index - start);
       removeTrailingWhitespace(macro);
 
       Macros.emplace(name, pair<string, std::vector<MacroArg>>{ macro, args});
@@ -651,21 +661,21 @@ namespace cdot {
       auto isDef = Macros.find(name) != Macros.end();
       isDef = reverseCondition ? !isDef : isDef;
 
+      string sub;
       if (isDef) {
-         auto sub = src.substr(ifStartIndex, ifEndIndex - ifStartIndex);
-         Preprocessor preproc(sub, fileName);
-         preproc.lexer->currentLine = lexer->currentLine;
-         preproc.run();
-
-         out += sub;
+         sub = string(src + ifStartIndex, ifEndIndex - ifStartIndex);
       }
       else if (hasElse) {
-         auto sub = src.substr(elseStartIndex, elseEndIndex - elseStartIndex);
-         Preprocessor preproc(sub, fileName);
-         preproc.lexer->currentLine = lexer->currentLine;
-         preproc.run();
+         sub = string(src + elseStartIndex, elseEndIndex - elseStartIndex);
+      }
 
-         out += sub;
+      if (isDef || hasElse) {
+         auto buf = llvm::MemoryBuffer::getMemBuffer(sub);
+         Preprocessor preproc(buf.get(), fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+
+         auto newBuf = preproc.run();
+         out += string(newBuf->getBufferStart(), newBuf->getBufferSize());
       }
    }
 
@@ -765,21 +775,22 @@ namespace cdot {
       if (hasElseIf && !condIsTrue) {
          return;
       }
-      if (condIsTrue) {
-         auto sub = src.substr(ifStartIndex, ifEndIndex - ifStartIndex);
-         Preprocessor preproc(sub, fileName);
-         preproc.lexer->currentLine = lexer->currentLine;
-         preproc.run();
 
-         out += sub;
+      string sub;
+      if (condIsTrue) {
+         sub = string(src + ifStartIndex, ifEndIndex - ifStartIndex);
       }
       else if (hasElse) {
-         auto sub = src.substr(elseStartIndex, elseEndIndex - elseStartIndex);
-         Preprocessor preproc(sub, fileName);
-         preproc.lexer->currentLine = lexer->currentLine;
-         preproc.run();
+         sub = string(src + elseStartIndex, elseEndIndex - elseStartIndex);
+      }
 
-         out += sub;
+      if (hasElse || condIsTrue) {
+         auto buf = llvm::MemoryBuffer::getMemBuffer(sub);
+         Preprocessor preproc(buf.get(), fileName);
+         preproc.lexer->currentLine = lexer->currentLine;
+
+         auto newBuf = preproc.run();
+         out += string(newBuf->getBufferStart(), newBuf->getBufferSize());
       }
    }
 
@@ -850,7 +861,7 @@ namespace cdot {
             }
 
             end = lexer->last_token_index;
-            elements.push_back(src.substr(start, end - start));
+            elements.push_back(string(src + start, end - start));
          }
 
          advance();
@@ -909,7 +920,7 @@ namespace cdot {
                   if (nestedFors-- == 0) {
                      done = true;
                      endForFound = true;
-                     block = src.substr(start, lexer->last_token_index - start);
+                     block = string(src + start, lexer->last_token_index - start);
                   }
                }
                if (lexer->s_val() == "for") {
@@ -945,11 +956,12 @@ namespace cdot {
             pos = iteration.find(search, startpos);
          }
 
-         Preprocessor preproc(iteration, fileName);
+         auto buf = llvm::MemoryBuffer::getMemBuffer(iteration);
+         Preprocessor preproc(buf.get(), fileName);
          preproc.lexer->currentLine = lexer->currentLine;
-         preproc.run();
 
-         out += iteration;
+         auto newBuf = preproc.run();
+         out += string(newBuf->getBufferStart(), newBuf->getBufferSize());
       }
    }
 }

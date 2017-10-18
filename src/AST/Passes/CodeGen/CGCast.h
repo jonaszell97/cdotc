@@ -6,38 +6,51 @@
 #define CDOT_CGCAST_H
 
 #include <llvm/IR/Value.h>
-#include <llvm/IR/IRBuilder.h>
-#include "../StaticAnalysis/Class.h"
+#include "../StaticAnalysis/Record/Class.h"
+
+class CodeGen;
 
 namespace cdot {
-   class Type;
+   class BuiltinType;
 
 namespace codegen {
 
    class CGCast {
    public:
-      static llvm::Value *applyCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      CGCast(CodeGen &CGM);
 
-      static llvm::Value *integralCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
-      static llvm::Value *floatingPointCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      llvm::Value *applyCast(Type& from, Type& to, llvm::Value *val);
 
-      static llvm::Value *pointerCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
-      static llvm::Value *tupleCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      llvm::Value *integralCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *floatingPointCast(Type& from, Type& to, llvm::Value *val);
 
-      static CallCompatability hasCastOperator(Type* from, Type* to, llvm::IRBuilder<> &Builder);
-      static llvm::Value *castOperator(Type *from, Type *to, llvm::Value *val,
-         CallCompatability&, llvm::IRBuilder<> &Builder);
+      llvm::Value *pointerCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *tupleCast(Type& from, Type& to, llvm::Value *val);
 
-      static llvm::Value *protoToProtoCast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
-      static llvm::Value *castFromProtocol(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
-      static llvm::Value *castToProtocol(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      CallCompatability hasCastOperator(Type& from, Type& to);
+      llvm::Value *castOperator(Type& from, Type& to, llvm::Value *val,
+         CallCompatability&);
 
-      static llvm::Value *staticUpcast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      llvm::Value *protoToProtoCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *castFromProtocol(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *castToProtocol(Type& from, Type& to, llvm::Value *val);
 
-      static llvm::Value *dynamicDowncast(Type *from, Type *to, llvm::Value *val, llvm::IRBuilder<> &Builder);
+      llvm::Value *staticUpcast(Type& from, Type& to, llvm::Value *val);
+
+      llvm::Value *dynamicDowncast(Type& from, Type& to, llvm::Value *val);
+
+      llvm::Value *functionCast(
+         Type& from,
+         Type& to,
+         llvm::Value *val,
+         llvm::Function* func,
+         bool isLambda,
+         bool hasSelfParam,
+         bool hasStructRet
+      );
 
    private:
-      CGCast() = default;
+      CodeGen &CGM;
    };
 
 }

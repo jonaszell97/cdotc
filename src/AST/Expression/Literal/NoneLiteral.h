@@ -16,8 +16,6 @@ public:
       return true;
    }
 
-   void saveOrResetState() override;
-
    typedef std::shared_ptr<NoneLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
    void __dump(int depth) override;
@@ -30,12 +28,22 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
    Variant accept(ConstExprPass& v) override {
       return v.visit(this);
+   }
+
+   void accept(AbstractPass *v) override
+   {
+      v->visit(this);
+   }
+
+   bool createsTemporary() override
+   {
+      return true;
    }
 
    ADD_FRIEND_PASSES

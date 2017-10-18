@@ -10,7 +10,7 @@
 
 class StringInterpolation: public Expression {
 public:
-   StringInterpolation(std::vector<Expression::SharedPtr>&& strings);
+   explicit StringInterpolation(std::vector<Expression::SharedPtr>&& strings);
 
    typedef std::shared_ptr<StringInterpolation> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -20,7 +20,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -36,10 +36,28 @@ public:
       return NodeType::STRING_INTERPOLATION;
    }
 
+   bool createsTemporary() override
+   {
+      return true;
+   }
+
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
+
    ADD_FRIEND_PASSES
 
 protected:
    std::vector<Expression::SharedPtr> strings;
+
+public:
+   const std::vector<Expression::SharedPtr> &getStrings() const
+   {
+      return strings;
+   }
+
+   void setStrings(const std::vector<Expression::SharedPtr> &strings)
+   {
+      StringInterpolation::strings = strings;
+   }
 };
 
 

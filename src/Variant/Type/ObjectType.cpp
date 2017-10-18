@@ -7,137 +7,117 @@
 #include "IntegerType.h"
 #include "FPType.h"
 #include "../../AST/Passes/CodeGen/CGMemory.h"
-#include "../../AST/Passes/StaticAnalysis/Class.h"
-#include "../../AST/Passes/StaticAnalysis/Enum.h"
+#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Record/Enum.h"
+#include "GenericType.h"
 #include "PointerType.h"
 
 namespace cdot {
 
    using cl::Class;
 
-   std::unordered_map<std::string, llvm::StructType*> ObjectType::StructureTypes = {};
+   unordered_map<string, ObjectType*> ObjectType::Instances;
 
-   ObjectType* AnyTy = nullptr;
-
-   ObjectType::ObjectType(string &&className, unordered_map<string, Type*>& concreteGenerics) :
-      concreteGenericTypes(concreteGenerics)
+   ObjectType* ObjectType::get(
+      string className,
+      std::vector<GenericType*> &generics)
    {
-      id = TypeID::ObjectTypeID;
-      this->className = className;
-      for (const auto& gen : concreteGenerics) {
-         gen.second->isGeneric(true);
-      }
-   }
-
-   ObjectType::ObjectType(string &&className) {
-      id = TypeID::ObjectTypeID;
-      this->className = className;
-   }
-
-   ObjectType::ObjectType(string &className) {
-      id = TypeID::ObjectTypeID;
-      this->className = className;
-   }
-
-   ObjectType::~ObjectType() {
-      for (const auto& gen : concreteGenericTypes) {
-         delete gen.second;
-      }
-
-      for (const auto& gen : unqualifiedGenerics) {
-         delete gen;
-      }
-   }
-
-   ObjectType* ObjectType::get(string className) {
-      return new ObjectType(className);
-   }
-
-   ObjectType* ObjectType::getOptionOf(Type *T) {
-      auto opt = new ObjectType("Option");
-      opt->isEnum(true);
-      opt->getConcreteGenericTypes().emplace("T", T);
-
-      return opt;
-   }
-
-   ObjectType* ObjectType::getAnyTy() {
-      if (AnyTy == nullptr) {
-         AnyTy = get("Any");
-         AnyTy->isProtocol(true);
-      }
-
-      return AnyTy;
-   }
-
-   cl::Class* ObjectType::getClass()
-   {
-      return SymbolTable::getClass(className);
-   }
-
-   bool ObjectType::operator==(Type *&other) {
-      switch (other->getTypeID()) {
-         case TypeID::ObjectTypeID:
-         case TypeID::CollectionTypeID: {
-            auto asObj = cast<ObjectType>(other);
-            if (className != asObj->className || !Type::operator==(other)) {
-               return false;
+      if (!generics.empty()) {
+         className += "<";
+         size_t size = generics.size();
+         size_t i = 0;
+         for (const auto& gen : generics) {
+            className += gen->toUniqueString();
+            if (i < size - 1) {
+               className += ", ";
             }
 
-            if (concreteGenericTypes.size() != asObj->concreteGenericTypes.size()) {
-               return false;
-            }
-
-//            for (const auto &gen : concreteGenericTypes) {
-//               if (*gen.second != asObj->concreteGenericTypes[gen.first]) {
-//                  return false;
-//               }
-//            }
-
-            return true;
+            ++i;
          }
-         default:
-            return false;
+         className += ">";
+      }
+
+      auto obj = get(className);
+      obj->concreteGenericTypes = generics;
+
+      return obj;
+   }
+
+   ObjectType* ObjectType::get(const string &className)
+   {
+      if (Instances.find(className) == Instances.end()) {
+         string name = className.substr(0, className.find('<'));
+         Instances.emplace(className, new ObjectType(name));
+      }
+
+      return Instances[className];
+   }
+
+   ObjectType::ObjectType(
+      const string &className,
+      std::vector<GenericType*>& concreteGenerics)
+      : concreteGenericTypes(concreteGenerics)
+   {
+      this->className = className;
+   }
+
+   ObjectType::ObjectType(const string &className)
+   {
+      this->className = className;
+      id = TypeID::ObjectTypeID;
+      if (SymbolTable::hasRecord(this->className)) {
+         auto cl = SymbolTable::getRecord(className);
+         is_struct = cl->isStruct();
+         is_protocol = cl->isProtocol();
+         is_enum = cl->isEnum();
+         is_union = cl->isUnion();
+
+         if (is_enum) {
+            auto en = cl->getAs<Enum>();
+            is_raw_enum = !en->hasAssociatedValues();
+         }
       }
    }
 
-   std::vector<Type*> ObjectType::getContainedTypes(bool includeSelf) {
-      std::vector<Type*> cont;
+   ObjectType* ObjectType::getOptionOf(BuiltinType *T)
+   {
+      std::vector<GenericType*> generics{ GenericType::get("T", T) };
+      return get("Option", generics);
+   }
 
-      if (includeSelf) {
-         cont.push_back(this);
-      }
+   ObjectType* ObjectType::getAnyTy()
+   {
+      return get("Any");
+   }
 
+   Record* ObjectType::getRecord()
+   {
+      return SymbolTable::getRecord(className);
+   }
+
+   GenericType* ObjectType::getConcreteGeneric(string genericName)
+   {
       for (const auto& gen : concreteGenericTypes) {
-         cont.push_back(gen.second);
+         if (gen->getGenericClassName() == genericName) {
+            return gen;
+         }
       }
 
-      return cont;
+      return nullptr;
    }
 
-   std::vector<Type**> ObjectType::getTypeReferences() {
-      std::vector<Type**> cont;
-
-      for (auto& gen : concreteGenericTypes) {
-         cont.push_back(&gen.second);
+   bool ObjectType::isOptionOf(string &className)
+   {
+      auto t = getConcreteGeneric("T");
+      if (t == nullptr) {
+         return false;
       }
 
-      return cont;
+      return t->getClassName() == className;
    }
 
-   Type* ObjectType::deepCopy() {
-      auto newTy = new ObjectType(*this);
-      for (const auto& cont : newTy->concreteGenericTypes) {
-         newTy->concreteGenericTypes[cont.first] = cont.second->deepCopy();
-      }
-      if (contravariance != nullptr) {
-         newTy->contravariance = contravariance->deepCopy();
-      }
-
-      return newTy;
-   }
-
-   Type* ObjectType::unbox() {
+   BuiltinType* ObjectType::unbox()
+   {
       assert(util::matches(
          "(Float|Double|U?Int(1|8|16|32|64)?)",
          className
@@ -166,31 +146,32 @@ namespace cdot {
       return IntegerType::get(bitwidth, isUnsigned);
    }
 
-   bool ObjectType::implicitlyCastableTo(Type *other) {
+   bool ObjectType::implicitlyCastableTo(BuiltinType *other)
+   {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
             return true;
          case TypeID::FunctionTypeID:
             return false;
          case TypeID::PointerTypeID: {
-            auto asPtr = cast<PointerType>(other);
+            auto asPtr = other->asPointerTy();
+            auto pointee = asPtr->getPointeeType();
 
             // string to char array
-            if (isa<IntegerType>(asPtr->getPointeeType())) {
-               auto asInt = cast<IntegerType>(asPtr->getPointeeType());
-               return asInt->getBitwidth() == 8 && !asInt->isUnsigned();
+            if (pointee->isIntegerTy()) {
+               return pointee->getBitwidth() == 8 && !pointee->isUnsigned();
             }
 
             // special handling for structs
-            if (is_struct && lvalue && implicitlyCastableTo(asPtr->getPointeeType())) {
+            if (is_struct && implicitlyCastableTo(*pointee)) {
                return true;
             }
 
             return false;
          }
          case TypeID::ObjectTypeID:
-         case TypeID::CollectionTypeID: {
-            auto asObj = cast<ObjectType>(other);
+         case TypeID::GenericTypeID: {
+            auto asObj = other->asObjTy();
             auto& otherClassName = asObj->getClassName();
 
             if (!SymbolTable::hasClass(otherClassName)) {
@@ -205,28 +186,15 @@ namespace cdot {
                return SymbolTable::getClass(className)->conformsTo(otherClassName);
             }
 
-            if (SymbolTable::getClass(className)->isProtocol()) {
-               if (className == otherClassName) {
-                  return true;
-               }
-
-               return SymbolTable::getClass(otherClassName)->conformsTo(className);
-            }
-
-            if (!Type::operator==(other)) {
-               return false;
+            if (otherClassName == "String") {
+               return SymbolTable::getClass(className)->conformsTo("StringRepresentable");
             }
 
             if (className != asObj->className) {
                cdot::cl::Class* cl = SymbolTable::getClass(asObj->className);
 
-               if (SymbolTable::getClass(className)->isProtocol()) {
-                  return cl->conformsTo(className);
-               }
-               else {
-                  return cl->isBaseClassOf(className) ||
-                     SymbolTable::getClass(className)->conformsTo(asObj->className);
-               }
+               return cl->isBaseClassOf(className) ||
+                  SymbolTable::getClass(className)->conformsTo(asObj->className);
             }
 
             if (concreteGenericTypes.size() != asObj->getConcreteGenericTypes().size()) {
@@ -234,8 +202,8 @@ namespace cdot {
             }
 
             for (const auto& gen : concreteGenericTypes) {
-               if (!asObj->concreteGenericTypes[gen.first] ||
-                  !gen.second->implicitlyCastableTo(asObj->concreteGenericTypes[gen.first]))
+               auto otherGen = asObj->getConcreteGeneric(gen->getGenericClassName());
+               if (!otherGen || !gen->implicitlyCastableTo(otherGen))
                {
                   return false;
                }
@@ -264,11 +232,8 @@ namespace cdot {
             if (isBoxedPrimitive()) {
                auto unboxed = unbox();
                if (unboxed->implicitlyCastableTo(other)) {
-                  delete unboxed;
                   return true;
                }
-
-               delete unboxed;
             }
 
             auto cl = SymbolTable::getClass(className);
@@ -292,7 +257,7 @@ namespace cdot {
       }
    }
 
-   bool ObjectType::explicitlyCastableTo(Type *other) {
+   bool ObjectType::explicitlyCastableTo(BuiltinType *other) {
       if (implicitlyCastableTo(other)) {
          return true;
       }
@@ -305,7 +270,7 @@ namespace cdot {
       }
    }
 
-   bool ObjectType::isBoxedEquivOf(Type *&other) {
+   bool ObjectType::isBoxedEquivOf(BuiltinType *other) {
       switch (other->getTypeID()) {
          case TypeID::IntegerTypeID: {
             auto asInt = cast<IntegerType>(other);
@@ -329,23 +294,23 @@ namespace cdot {
       }
    }
 
-   bool ObjectType::isRefcounted() {
+   bool ObjectType::isRefcounted()
+   {
       return !is_protocol && !is_struct && !is_enum;
    }
 
-   bool ObjectType::isValueType() {
+   bool ObjectType::isValueType()
+   {
       return is_protocol || is_struct || is_enum;
    }
 
-   bool ObjectType::hasDefaultValue() {
-      auto cl = SymbolTable::getClass(className);
-
-      auto constr = cl->hasMethod("init", {}, {}, concreteGenericTypes);
-
-      return constr.compatibility == CompatibilityType::COMPATIBLE;
+   bool ObjectType::hasDefaultValue()
+   {
+      return false;
    }
 
-   llvm::Value* ObjectType::getDefaultVal() {
+   llvm::Value* ObjectType::getDefaultVal()
+   {
       if (is_struct) {
          auto& fields = SymbolTable::getClass(className)->getFields();
          std::vector<llvm::Constant*> vals;
@@ -353,10 +318,10 @@ namespace cdot {
             vals.push_back(llvm::cast<llvm::Constant>(field.second->fieldType->getDefaultVal()));
          }
 
-         return llvm::ConstantStruct::get(ObjectType::getStructureType(className), vals);
+         return llvm::ConstantStruct::get(CodeGen::getStructTy(className), vals);
       }
 
-      return llvm::ConstantPointerNull::get(ObjectType::getStructureType(className)->getPointerTo());
+      return llvm::ConstantPointerNull::get(CodeGen::getStructTy(className)->getPointerTo());
    }
 
    llvm::Constant* ObjectType::getConstantVal(Variant &val)
@@ -367,47 +332,55 @@ namespace cdot {
       auto intVal = unboxed->getConstantVal(val);
 
       return llvm::ConstantStruct::get(
-         ObjectType::getStructureType(className),
+         CodeGen::getStructTy(className),
          { intVal }
       );
    }
 
-   short ObjectType::getAlignment() {
+   short ObjectType::getAlignment()
+   {
+      if (is_raw_enum) {
+         return static_cast<cl::Enum*>(getRecord())->getRawType()->getAlignment();
+      }
+
       return SymbolTable::getClass(className)->getAlignment();
    }
 
-   size_t ObjectType::getSize() {
-      if (is_struct) {
-         return SymbolTable::getClass(className)->getOccupiedBytes();
-      }
-
-      return sizeof(int*);
+   size_t ObjectType::getSize()
+   {
+      return SymbolTable::getRecord(className)->getSize();
    }
 
-   llvm::Type* ObjectType::_getLlvmType() {
-      if (is_struct || is_protocol) {
-         return StructureTypes[className];
+   llvm::Type* ObjectType::getLlvmType()
+   {
+      if (is_enum) {
+         auto en = static_cast<cl::Enum*>(getRecord());
+         if (!is_raw_enum) {
+            return CodeGen::getStructTy(className);
+         }
+
+         return en->getRawType()->getLlvmType();
+      }
+      else if (is_struct || is_protocol) {
+         return CodeGen::getStructTy(className);
+      }
+      else if (is_union) {
+         return llvm::IntegerType::get(CodeGen::Context, 8)->getPointerTo();
       }
       else {
-         return StructureTypes[className]->getPointerTo();
+         return CodeGen::getStructTy(className)->getPointerTo();
       }
    }
 
-   string ObjectType::_toString() {
-      string str;
-      if (isGeneric()) {
-         str = genericClassName;
-      }
-      else {
-         str = className;
-      }
-
+   string ObjectType::toString()
+   {
+      string str = className;
       if (!concreteGenericTypes.empty()) {
          str += "<";
          size_t size = concreteGenericTypes.size();
          size_t i = 0;
          for (const auto& gen : concreteGenericTypes) {
-            str += gen.second->toString();
+            str += gen->getActualType()->toString();
             if (i < size - 1) {
                str += ", ";
             }

@@ -34,7 +34,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -45,6 +45,13 @@ public:
    Variant accept(ConstExprPass &v) override {
       return v.visit(this);
    }
+
+   bool createsTemporary() override
+   {
+      return true;
+   }
+
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
 
    ADD_FRIEND_PASSES
 

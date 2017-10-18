@@ -10,7 +10,7 @@
 
 namespace cdot {
    namespace err {
-      string prepareLine(string& src, string& fileName, int errIndex)
+      string prepareLine(string& src, string& fileName, int errIndex, int length)
       {
          string err;
          int lines = 1;
@@ -40,14 +40,24 @@ namespace cdot {
 
          string linePref = std::to_string(lines) + " | ";
 
+         fileName = fileName.substr(fileName.rfind('/') + 1);
          err += " (" + fileName + ":" + std::to_string(lines) + ":" + std::to_string(errIndex - last_newline) + ")\n";
          err += linePref + errLine + "\n";
 
-         for (int i = 1; i < errIndex - startIndex + linePref.length(); ++i) {
+         int i = 1;
+         for (; i < errIndex - startIndex + linePref.length(); ++i) {
             err += ' ';
          }
 
          err += '^';
+
+         if ((length + i) > errLine.length()) {
+            length = errLine.length() - i + linePref.length();
+         }
+
+         for (int i = 1; i < length; ++i) {
+            err += '~';
+         }
 
          return err;
       }
@@ -62,7 +72,11 @@ ParseError::ParseError(const std::string& message) : message_(message) {
 void ParseError::raise(std::string msg, Lexer *lexer) {
    std::string err = "\033[21;31mError: " + msg;
    if (lexer != nullptr) {
-      err += cdot::err::prepareLine(lexer->src, lexer->fileName, lexer->current_token.getStart());
+      auto start = lexer->current_token.getStart();
+      auto end = lexer->current_token.getEnd();
+
+      auto str = string(lexer->src, lexer->srcLen);
+      err += cdot::err::prepareLine(str, lexer->fileName, start, end - start);
    }
 
    throw ParseError(err + "\033[0m");
@@ -75,8 +89,11 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 void RuntimeError::raise(std::string msg, AstNode *cause) {
    std::string err = "\033[21;31mError: " + msg;
    if (cause != nullptr) {
-      auto src = cause->getSourceFile();
-      err += cdot::err::prepareLine(src.second, src.first, cause->getStartIndex());
+//      auto src = cause->getSourceFile();
+//      auto start = cause->getStartIndex();
+//      auto end = cause->getEndIndex();
+//
+//      err += cdot::err::prepareLine(src.second, src.first, start, end - start);
    }
 
    throw RuntimeError(err + "\033[0m");

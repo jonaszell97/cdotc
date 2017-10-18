@@ -7,29 +7,43 @@
 #include "FPType.h"
 #include "VoidType.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/StaticAnalysis/Class.h"
+#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
 #include "../../Token.h"
 
 namespace cdot {
 
-   IntegerType* IntegerType::ConstInt64 = new IntegerType(64);
-   IntegerType* IntegerType::ConstInt32 = new IntegerType(32);
-   IntegerType* IntegerType::ConstInt8 = new IntegerType(8);
-   IntegerType* IntegerType::ConstInt1 = new IntegerType(1);
+   unordered_map<size_t, IntegerType*> IntegerType::Instances;
 
-   IntegerType* IntegerType::get(unsigned int bitWidth, bool isUnsigned) {
-      return new IntegerType(bitWidth, isUnsigned);
+   IntegerType* IntegerType::get(unsigned int bitWidth, bool is_unsigned)
+   {
+      auto hash = bitWidth + (unsigned)is_unsigned;
+      if (Instances.find(hash) == Instances.end()) {
+         Instances[hash] = new IntegerType(bitWidth, is_unsigned);
+      }
+
+      return Instances[hash];
+   }
+
+   IntegerType* IntegerType::getBoolTy()
+   {
+      return get(1);
+   }
+
+   IntegerType* IntegerType::getCharTy()
+   {
+      return get(8);
    }
 
    IntegerType::IntegerType(unsigned int bitWidth, bool isUnsigned) :
       bitWidth(bitWidth),
-      isUnsigned_(isUnsigned)
+      is_unsigned(isUnsigned)
    {
-      assert((bitWidth % 2 == 0 || bitWidth == 1) && "Invalid bitwidth!");
+      assert(((bitWidth > 2 && bitWidth % 2 == 0) || bitWidth == 1) && "Invalid bitwidth!");
       id = TypeID::IntegerTypeID;
    }
 
-   bool IntegerType::implicitlyCastableTo(Type *other) {
+   bool IntegerType::implicitlyCastableTo(BuiltinType *other)
+   {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
             return true;
@@ -37,7 +51,8 @@ namespace cdot {
             return false;
          case TypeID::PointerTypeID:
             return false;
-         case TypeID::ObjectTypeID: {
+         case TypeID::ObjectTypeID:
+         case TypeID::GenericTypeID: {
             auto asObj = cast<ObjectType>(other);
 
             if (asObj->getClassName() == "Any") {
@@ -52,43 +67,27 @@ namespace cdot {
                return true;
             }
 
-            string boxedCl = string(isUnsigned_ ? "U" : "") + "Int" + std::to_string(bitWidth);
+            string boxedCl = string(is_unsigned ? "U" : "") + "Int" + std::to_string(bitWidth);
             return asObj->getClassName() == boxedCl;
          }
-         case TypeID::CollectionTypeID:
-            return false;
          case TypeID::IntegerTypeID: {
-            auto asInt = cast<IntegerType>(other);
-            return asInt->bitWidth >= bitWidth && asInt->isUnsigned_ >= isUnsigned_;
+            return true;
          }
          case TypeID::FPTypeID:{
-            auto asFloat = cast<FPType>(other);
-            return asFloat->getPrecision() <= bitWidth;
+            return true;
          }
          default:
             return false;
       }
    }
 
-   Type* IntegerType::box() {
-      string boxedCl = string(isUnsigned_ ? "U" : "") + "Int";
-      if (bitWidth != sizeof(int*) * 8) {
-         boxedCl += std::to_string(bitWidth);;
-      }
-
-      // FIXME remove once all integer types implemented
-      if (!SymbolTable::hasClass(boxedCl)) {
-         return ObjectType::get("Int");
-      }
-
+   BuiltinType* IntegerType::box() {
+      string boxedCl = string(is_unsigned ? "U" : "") + "Int" + std::to_string(bitWidth);
       return ObjectType::get(boxedCl);
    }
 
-   Type* IntegerType::deepCopy() {
-      return new IntegerType(*this);
-   }
-
-   Type* IntegerType::ArithmeticReturnType(string &op, Type *rhs) {
+   BuiltinType* IntegerType::ArithmeticReturnType(string &op, BuiltinType *rhs)
+   {
       if (op == "+" || op == "-" || op == "*") {
          if (isa<FPType>(rhs)) {
             return rhs;
@@ -105,25 +104,16 @@ namespace cdot {
          return this;
       }
 
-      return new VoidType();
+      return VoidType::get();
    }
 
-   bool IntegerType::explicitlyCastableTo(Type *other) {
-      return isa<IntegerType>(other) || isa<FPType>(other) || isa<PointerType>(other);
+   bool IntegerType::explicitlyCastableTo(BuiltinType *other)
+   {
+      return other->isNumeric() || other->isPointerTy();
    }
 
-   bool IntegerType::operator==(Type *&other) {
-      switch (other->getTypeID()) {
-         case TypeID::IntegerTypeID: {
-            auto asInt = cast<IntegerType>(other);
-            return asInt->bitWidth == bitWidth && asInt->isUnsigned_ == isUnsigned_ && Type::operator==(other);
-         }
-         default:
-            return false;
-      }
-   }
-
-   llvm::Value* IntegerType::getDefaultVal() {
+   llvm::Value* IntegerType::getDefaultVal()
+   {
       auto intTy = llvm::IntegerType::get(CodeGen::Context, bitWidth);
 
       return llvm::ConstantInt::get(intTy, 0);
@@ -131,20 +121,23 @@ namespace cdot {
 
    llvm::Constant* IntegerType::getConstantVal(Variant& val) {
       return llvm::ConstantInt::get(CodeGen::Context, llvm::APInt(bitWidth, val.intVal,
-         !isUnsigned_));
+         !is_unsigned));
    }
 
-   short IntegerType::getAlignment() {
+   short IntegerType::getAlignment()
+   {
       return bitWidth == 1 ? (short)1 : (short)(bitWidth / 8);
    }
 
-   llvm::Type* IntegerType::_getLlvmType() {
-      return Builder->getIntNTy(bitWidth);
+   llvm::Type* IntegerType::getLlvmType()
+   {
+      return llvm::IntegerType::get(CodeGen::Context, bitWidth);
    }
 
-   string IntegerType::_toString() {
+   string IntegerType::toString()
+   {
       string str = "int" + std::to_string(bitWidth);
-      if (isUnsigned_) {
+      if (is_unsigned) {
          str = "u" + str;
       }
 

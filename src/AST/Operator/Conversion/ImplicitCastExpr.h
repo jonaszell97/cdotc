@@ -9,9 +9,7 @@
 
 class ImplicitCastExpr : public Expression {
 public:
-   ImplicitCastExpr(Type* from, Type* to, Expression::SharedPtr);
-
-   ~ImplicitCastExpr() override;
+   ImplicitCastExpr(Type& from, Type& to, Expression::SharedPtr);
 
    typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
@@ -21,7 +19,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -38,15 +36,15 @@ public:
    }
 
    void isHiddenReturnValue() override {
-      isHiddenReturnValue_ = true;
+      sret_value = true;
       target->isHiddenReturnValue();
    }
 
    ADD_FRIEND_PASSES
 
 protected:
-   Type* from = nullptr;
-   Type* to = nullptr;
+   Type from;
+   Type to;
    Expression::SharedPtr target;
 };
 

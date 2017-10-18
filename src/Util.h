@@ -9,11 +9,14 @@
 #include <set>
 #include <llvm/IR/Type.h>
 #include <regex>
+#include "Variant/Type/Generic.h"
 
 
 namespace cdot {
-   class Type;
+   class BuiltinType;
    class ObjectType;
+   class GenericType;
+
    enum class BuiltinFn : unsigned int;
 
    struct Argument;
@@ -21,7 +24,9 @@ namespace cdot {
    enum class CompatibilityType {
       COMPATIBLE,
       FUNC_NOT_FOUND,
-      NO_MATCHING_CALL
+      NO_MATCHING_CALL,
+
+      CONSTRAINT_FAILED
    };
 }
 
@@ -44,8 +49,19 @@ class Function;
 namespace cdot {
    namespace cl {
       struct Method;
+      struct ExtensionConstraint;
    }
 }
+
+struct CallCandidate {
+   union {
+      cl::Method* method;
+      Function* func;
+   };
+
+   size_t incompatibleArg;
+   const cl::ExtensionConstraint* failedConstraint = nullptr;
+};
 
 struct CallCompatability {
    CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
@@ -60,17 +76,15 @@ struct CallCompatability {
    std::vector<pair<size_t, bool>> argOrder;
 
    std::vector<Argument> resolvedArgs;
-   std::vector<Type*> generics;
+   std::vector<GenericType*> generics;
 
-   union {
-      Function* func;
-      cl::Method* method;
-   };
+   Function* func = nullptr;
+   cl::Method* method = nullptr;
 
-   size_t incompatibleArg = 0;
+   size_t incompatibleArg;
+   const cl::ExtensionConstraint* failedConstraint = nullptr;
 
-   string expectedType;
-   string foundType;
+   std::vector<CallCandidate> failedCandidates;
 };
 
 namespace util {
@@ -125,10 +139,8 @@ namespace util {
    string generate_getter_name(string);
    string generate_setter_name(string);
 
-   std::vector<pair<size_t, string>> findInterpolations(string& str);
-
    extern std::vector<string> builtinFunctions;
-   extern unordered_map<string, pair<cdot::BuiltinFn, std::vector<Type*>>> builtinTypes;
+   extern unordered_map<string, pair<cdot::BuiltinFn, std::vector<BuiltinType*>>> builtinTypes;
 
    extern string token_names[];
    extern std::vector<string> keywords;
@@ -150,17 +162,17 @@ namespace util {
    extern TypeCheckPass* TCPass;
 
    bool resolveGeneric(
-      Type* given,
-      Type* needed,
-      std::vector<Type*>& givenGenerics,
-      std::vector<ObjectType*>& neededGenerics
+      BuiltinType* given,
+      BuiltinType* needed,
+      std::vector<GenericType*>& givenGenerics,
+      std::vector<GenericConstraint>& neededGenerics
    );
 
    int resolveGenerics(
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
-      std::vector<Type*>& givenGenerics,
-      std::vector<ObjectType*>& neededGenerics
+      std::vector<GenericType*>& givenGenerics,
+      std::vector<GenericConstraint>& neededGenerics
    );
 
    CallCompatability funcCallCompatible(
@@ -177,18 +189,18 @@ namespace util {
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
 
-      std::vector<Type*> givenGenerics,
-      std::vector<ObjectType*> neededGenerics
+      std::vector<GenericType*> givenGenerics,
+      std::vector<GenericConstraint> neededGenerics
    );
 
    CallCompatability findMatchingCall(
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& neededArgs,
 
-      std::vector<Type*> givenGenerics,
-      std::vector<ObjectType*> neededGenerics,
+      std::vector<GenericType*> givenGenerics,
+      std::vector<GenericConstraint> neededGenerics,
 
-      unordered_map<string, Type*> classGenerics
+      unordered_map<string, BuiltinType*> classGenerics
    );
 
    std::vector<pair<size_t, bool>> orderArgs(

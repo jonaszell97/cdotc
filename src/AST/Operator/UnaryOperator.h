@@ -18,14 +18,13 @@ namespace cl {
 class UnaryOperator : public Expression {
 public:
    UnaryOperator(string, string);
-   ~UnaryOperator() override;
 
    void setTarget(Expression::SharedPtr t) {
       target = t;
    }
 
    void isLhsOfAssigment() override {
-      isLhsOfAssigment_ = true;
+      lhs_of_assignment = true;
       if (memberExpr != nullptr) {
          memberExpr->isLhsOfAssigment();
       }
@@ -47,7 +46,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -59,18 +58,23 @@ public:
       return v.visit(this);
    }
 
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
+
    ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr target;
    string op;
-   Type* operandType;
+   BuiltinType* operandType;
    bool prefix;
 
    // codegen
    std::shared_ptr<CallExpr> overridenCall;
    cdot::cl::Method* method;
    string className;
+
+   bool isPointerArithmetic = false;
+   bool needsDereferenceLoad = true;
 };
 
 

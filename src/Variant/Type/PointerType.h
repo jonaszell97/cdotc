@@ -5,20 +5,22 @@
 #ifndef CDOT_POINTERTYPE_H
 #define CDOT_POINTERTYPE_H
 
+#include "BuiltinType.h"
 #include "Type.h"
-#include "ObjectType.h"
 
 namespace cdot {
 
-   class PointerType : public Type {
+   class PointerType : public BuiltinType {
+   protected:
+      explicit PointerType(Type&);
+      static unordered_map<size_t, PointerType*> Instances;
+
    public:
-      PointerType(Type*);
+      static PointerType* get(Type& pointee);
+      static PointerType* get(BuiltinType* pointee);
 
-      ~PointerType() override {
-         delete pointeeType;
-      }
-
-      Type*& getPointeeType() override {
+      Type getPointeeType()
+      {
          return pointeeType;
       }
 
@@ -34,22 +36,6 @@ namespace cdot {
          return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()->getPointerTo());
       }
 
-      bool isLvalue() override;
-
-      inline void isLvalue(bool lval) override {
-         lvalue = lval;
-      }
-
-      inline bool isUnsafePointer() override {
-         return true;
-      }
-
-      bool operator==(Type*&other) override;
-      
-      inline bool operator!=(Type*& other) override {
-         return !operator==(other);
-      }
-
       bool isPointerToStruct() override {
          return pointeeType->isStruct();
       }
@@ -58,19 +44,14 @@ namespace cdot {
          return true;
       }
 
-      std::vector<Type*> getContainedTypes(bool includeSelf) override;
-      std::vector<Type**> getTypeReferences() override;
+      string toString() override;
+      llvm::Type* getLlvmType() override;
 
-      string _toString() override;
-      llvm::Type* _getLlvmType() override;
-
-      Type* deepCopy() override;
-
-      bool implicitlyCastableTo(Type*) override;
-      bool explicitlyCastableTo(Type*) override;
+      bool implicitlyCastableTo(BuiltinType*) override;
+      bool explicitlyCastableTo(BuiltinType*) override;
 
       static inline bool classof(PointerType const*) { return true; }
-      static inline bool classof(Type const* T) {
+      static inline bool classof(BuiltinType const* T) {
          switch(T->getTypeID()) {
             case TypeID::PointerTypeID:
                return true;
@@ -85,7 +66,7 @@ namespace cdot {
       friend class TypeRef;
 
    protected:
-      Type* pointeeType = nullptr;
+      Type pointeeType;
    };
 
 } // namespace cdot

@@ -4,8 +4,8 @@
 
 #include "MemberRefExpr.h"
 #include "../../SymbolTable.h"
-#include "../../Passes/StaticAnalysis/Class.h"
-#include "../../Passes/StaticAnalysis/Enum.h"
+#include "../../Passes/StaticAnalysis/Record/Class.h"
+#include "../../Passes/StaticAnalysis/Record/Enum.h"
 
 MemberRefExpr::MemberRefExpr(string ident, bool pointerAccess) : isPointerAccess(pointerAccess) {
    this->ident = ident;
@@ -19,10 +19,15 @@ MemberRefExpr::MemberRefExpr(size_t index, bool pointerAccess) :
 
 }
 
-MemberRefExpr::~MemberRefExpr() {
-   delete genericOriginTy;
-   delete genericDestTy;
-   delete fieldType;
+void MemberRefExpr::replaceChildWith(
+   AstNode *child,
+   Expression *replacement)
+{
+   if (memberExpr.get() == child) {
+      memberExpr.reset(replacement);
+   }
+
+   llvm_unreachable("child does not exist");
 }
 
 std::vector<AstNode::SharedPtr> MemberRefExpr::get_children() {
@@ -41,4 +46,12 @@ void MemberRefExpr::__dump(int depth) {
    if (memberExpr != nullptr) {
       memberExpr->__dump(depth + 1);
    }
+}
+
+bool MemberRefExpr::isUnionAccess() const {
+   return unionAccess;
+}
+
+void MemberRefExpr::setUnionAccess(bool unionAccess) {
+   MemberRefExpr::unionAccess = unionAccess;
 }

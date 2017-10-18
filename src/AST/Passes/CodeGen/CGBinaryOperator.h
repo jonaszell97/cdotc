@@ -9,7 +9,7 @@
 #include <llvm/IR/IRBuilder.h>
 
 namespace cdot {
-   class Type;
+   class BuiltinType;
 }
 
 using namespace cdot;
@@ -17,11 +17,11 @@ using namespace cdot;
 class CGBinaryOperator {
 public:
    // arithmetic
-   static llvm::Value* CreateAdd(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
-   static llvm::Value* CreateSub(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
-   static llvm::Value* CreateMul(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
-   static llvm::Value* CreateDiv(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
-   static llvm::Value* CreateRem(Type*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+   static llvm::Value* CreateAdd(BuiltinType*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+   static llvm::Value* CreateSub(BuiltinType*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+   static llvm::Value* CreateMul(BuiltinType*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+   static llvm::Value* CreateDiv(BuiltinType*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
+   static llvm::Value* CreateRem(BuiltinType*, llvm::Value*, llvm::Value*, llvm::IRBuilder<>&);
 };
 
 

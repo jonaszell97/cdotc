@@ -13,7 +13,6 @@ class CaseStmt;
 class MatchStmt : public Statement {
 public:
    MatchStmt(std::shared_ptr<Expression> switchVal);
-   ~MatchStmt() override;
 
    inline void addCase(std::shared_ptr<CaseStmt> case_) {
       cases.push_back(case_);
@@ -31,7 +30,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -47,14 +46,14 @@ public:
 
 protected:
    std::shared_ptr<Expression> switchValue;
-   Type *switchType = nullptr;
+   BuiltinType *switchType = nullptr;
    std::vector<std::shared_ptr<CaseStmt>> cases;
 
    Method* operatorEquals = nullptr;
 
    // codegen
    bool hasDefault = false;
-   int defaultIndex = -1;
+   unsigned defaultIndex = -1;
    
    bool isIntegralSwitch = false;
    bool allCasesReturn;

@@ -15,10 +15,20 @@ FunctionDecl::FunctionDecl(std::string func_name, TypeRef::SharedPtr type) :
 
 }
 
-FunctionDecl::~FunctionDecl() {
-   for (const auto& gen : generics) {
-      delete gen;
-   }
+FunctionDecl::FunctionDecl(
+   string &&funcName,
+   std::shared_ptr<TypeRef> &&returnType,
+   std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+   std::shared_ptr<CompoundStmt> &&body,
+   std::vector<GenericConstraint> &&generics,
+   bool has_sret) : funcName(funcName),
+                    returnType(returnType),
+                    args(args),
+                    body(body),
+                    generics(generics),
+                    has_sret(has_sret)
+{
+
 }
 
 std::vector<AstNode::SharedPtr> FunctionDecl::get_children() {

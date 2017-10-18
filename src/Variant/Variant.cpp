@@ -3,6 +3,9 @@
 //
 
 #include "Variant.h"
+
+#include <math.h>
+
 #include "../AST/Passes/CodeGen/CodeGen.h"
 #include "Type/IntegerType.h"
 #include "Type/FPType.h"
@@ -58,7 +61,8 @@ namespace cdot {
       type(VariantType::FLOAT) {
    }
 
-   llvm::Value* Variant::getLlvmValue(llvm::IRBuilder<>& Builder) {
+   llvm::Value* Variant::getLlvmValue(CodeGen &CGM) {
+      auto& Builder = CGM.Builder;
       switch (type) {
          case VariantType::INT: {
             return Builder.getIntN(bitwidth, intVal);
@@ -68,7 +72,7 @@ namespace cdot {
             return llvm::ConstantFP::get(ty, floatVal);
          }
          case VariantType::STRING: {
-            return CodeGen::GetString(strVal, rawStr);
+            return CGM.GetString(strVal, rawStr);
          }
          case VariantType::VOID: {
             return llvm::ConstantPointerNull::get(Builder.getInt8PtrTy());
@@ -85,7 +89,7 @@ namespace cdot {
       }
    }
 
-   string Variant::toString() {
+   string Variant::toString() const {
       switch (type) {
          case VariantType::INT: {
             if (bitwidth == 8) {
@@ -228,7 +232,7 @@ namespace cdot {
       return {};
    }
    
-   Variant Variant::castTo(Type *&to)
+   Variant Variant::castTo(BuiltinType *&to)
    {
       switch (type) {
          case VariantType::INT:

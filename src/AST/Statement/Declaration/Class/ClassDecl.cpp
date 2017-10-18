@@ -14,13 +14,14 @@ ClassDecl::ClassDecl(
       std::vector<std::shared_ptr<MethodDecl>> &&methods,
       std::vector<std::shared_ptr<ConstrDecl>> &&constr,
       std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<ObjectType*> &&generics,
+      std::vector<GenericConstraint> &&generics,
       AccessModifier am,
       bool is_abstract,
-      ObjectType* extends,
-      std::vector<ObjectType*> &&implements,
+      std::shared_ptr<TypeRef> extends,
+      std::vector<std::shared_ptr<TypeRef>> &&implements,
       std::shared_ptr<DestrDecl> &&destr,
-      std::vector<Statement::SharedPtr> &&innerDeclarations) :
+      std::vector<Statement::SharedPtr> &&innerDeclarations,
+      std::vector<ExtensionConstraint> &&constraints) :
    className(class_name),
    fields(fields),
    methods(methods),
@@ -32,7 +33,8 @@ ClassDecl::ClassDecl(
    is_abstract(is_abstract),
    parentClass(extends),
    conformsTo(implements),
-   innerDeclarations(innerDeclarations)
+   innerDeclarations(innerDeclarations),
+   constraints(constraints)
 {
 
 }
@@ -43,9 +45,9 @@ ClassDecl::ClassDecl(
       std::vector<std::shared_ptr<MethodDecl>> &&methods,
       std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
       std::vector<std::shared_ptr<TypedefDecl>>&&typedefs,
-      std::vector<ObjectType *> &&generics,
+      std::vector<GenericConstraint> &&generics,
       AccessModifier am,
-      std::vector<ObjectType*> &&conformsTo,
+      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
       std::shared_ptr<DestrDecl> &&destr,
       std::vector<Statement::SharedPtr> &&innerDeclarations) :
    className(className),
@@ -86,20 +88,5 @@ std::vector<std::shared_ptr<AstNode>> ClassDecl::get_children() {
 }
 
 void ClassDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   string extends_str = parentClass != nullptr ? ": " + parentClass->getClassName() : "";
-   string implements_str = conformsTo.size() > 0 ? " with " : "";
-   for (int i = 0; i < conformsTo.size(); ++i) {
-      implements_str += conformsTo[i]->getClassName();
-      if (i != conformsTo.size() - 1) {
-         implements_str += ", ";
-      }
-   }
 
-   std::cout << "ClassDecl" << " [" << (is_abstract ? "abstract " : "") <<
-           className << extends_str << implements_str << "]" << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
 }

@@ -1,6 +1,6 @@
 
 #include "ConstExprPass.h"
-#include "../ASTIncludes.txt"
+#include "../ASTIncludes.h"
 #include "../../../Variant/Variant.h"
 #include "../../Statement/Declaration/FuncArgDecl.h"
 #include "../../../Variant/Type/PrimitiveType.h"
@@ -130,7 +130,7 @@ Variant ConstExprPass::visit(CollectionLiteral *node)
 Variant ConstExprPass::visit(NumericLiteral *node)
 {
    node->staticVal = node->value;
-   if (!node->isPrimitive) {
+   if (!node->primitive) {
       node->staticVal.isBoxed = true;
    }
 
@@ -198,7 +198,7 @@ Variant ConstExprPass::visit(CallExpr *node)
    size_t i = 0;
    for (const auto& arg : node->args) {
       auto argDefined = node->declaredArgTypes != nullptr && node->declaredArgTypes->size() > i;
-      if (arg.second->needsByValPass || (argDefined && node->declaredArgTypes->at(i).type->isLvalue())) {
+      if (arg.second->byval_pass || (argDefined && node->declaredArgTypes->at(i).type.isLvalue())) {
          continue;
       }
 
@@ -215,7 +215,7 @@ Variant ConstExprPass::visit(CallExpr *node)
    i = 0;
    for (const auto& ty : node->resolvedArgs) {
       auto& arg = node->args[i].second;
-      if (ty.type->isLvalue() && arg->get_type() == NodeType::IDENTIFIER_EXPR) {
+      if (ty.type.isLvalue() && arg->get_type() == NodeType::IDENTIFIER_EXPR) {
          auto ident = std::static_pointer_cast<IdentifierRefExpr>(arg);
 
          Variant v;
@@ -247,8 +247,8 @@ Variant ConstExprPass::visit(BinaryOperator *node)
    }
    else if (node->opType == BinaryOperatorType::CAST) {
       auto ty = std::static_pointer_cast<TypeRef>(node->rhs)->getType();
-      if (isa<PrimitiveType>(ty) || (ty->isObject() && ty->getClassName() == "String")) {
-         node->staticVal = lhs.castTo(ty);
+      if (ty->isNumeric() || (ty->isObject() && ty->getClassName() == "String")) {
+         node->staticVal = lhs.castTo(*ty);
       }
    }
 
@@ -422,7 +422,7 @@ Variant ConstExprPass::visit(FieldDecl *node)
    if (node->defaultVal != nullptr) {
       node->defaultVal->staticVal = node->defaultVal->accept(*this);
 
-      if (node->isStatic) {
+      if (node->is_static) {
          setVariable(node->binding, node->defaultVal->staticVal);
       }
    }
@@ -462,11 +462,11 @@ Variant ConstExprPass::visit(ImplicitCastExpr *node)
    }
 
    auto& targetTy = node->to;
-   if (!isa<PrimitiveType>(targetTy) && !(targetTy->isObject() && targetTy->getClassName() == "String")) {
+   if (!targetTy->isNumeric() && !(targetTy->isObject() && targetTy->getClassName() == "String")) {
       return {};
    }
 
-   node->staticVal = target.castTo(node->to);
+   node->staticVal = target.castTo(*node->to);
    node->staticVal.isBoxed = target.isBoxed;
 
    return node->staticVal;

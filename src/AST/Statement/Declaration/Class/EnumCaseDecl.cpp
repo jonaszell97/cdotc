@@ -8,12 +8,12 @@
 using std::string;
 using std::pair;
 
-EnumCaseDecl::EnumCaseDecl(string &&name, long rawValue,
+EnumCaseDecl::EnumCaseDecl(string &&name, std::shared_ptr<Expression>&& rawValue,
       std::vector<pair<string, std::shared_ptr<TypeRef>>> &&associatedTypes) :
    caseName(name),
-   rawValue(rawValue),
+   rawVal(rawValue),
    associatedTypes(associatedTypes),
-   hasRawValue(true)
+   has_raw_value(true)
 {
 
 }
@@ -21,7 +21,7 @@ EnumCaseDecl::EnumCaseDecl(string &&name, long rawValue,
 EnumCaseDecl::EnumCaseDecl(string &&name, std::vector<pair<string, std::shared_ptr<TypeRef>>> &&associatedTypes) :
    caseName(name),
    associatedTypes(associatedTypes),
-   hasRawValue(false)
+   has_raw_value(false)
 {
 
 }

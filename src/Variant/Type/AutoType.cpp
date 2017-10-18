@@ -4,40 +4,41 @@
 
 #include "AutoType.h"
 
-
 namespace cdot {
 
-   AutoType::AutoType() {
-      id = TypeID::AutoTypeID;
-      isInferred_ = true;
-   }
+   AutoType *AutoType::Instance = nullptr;
 
-   bool AutoType::operator==(Type *&other) {
-      switch (other->getTypeID()) {
-         case TypeID::AutoTypeID:
-            return true;
-         default:
-            return false;
+   AutoType* AutoType::get()
+   {
+      if (Instance == nullptr) {
+         Instance = new AutoType;
       }
-   }
-   
-   Type* AutoType::deepCopy() {
-      return new AutoType(*this);
+
+      return Instance;
    }
 
-   llvm::Type* AutoType::_getLlvmType() {
+   AutoType::AutoType()
+   {
+      id = TypeID::AutoTypeID;
+   }
+
+   llvm::Type* AutoType::getLlvmType()
+   {
       llvm_unreachable("resolve first!");
    }
 
-   bool AutoType::implicitlyCastableTo(Type *) {
+   bool AutoType::implicitlyCastableTo(BuiltinType *)
+   {
       return true;
    }
 
-   llvm::Value* AutoType::getDefaultVal() {
+   llvm::Value* AutoType::getDefaultVal()
+   {
       llvm_unreachable("resolve first!");
    }
 
-   string AutoType::_toString() {
+   string AutoType::toString()
+   {
       return "auto";
    }
 }

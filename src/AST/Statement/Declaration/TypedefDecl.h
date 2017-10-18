@@ -11,7 +11,12 @@ class TypeRef;
 
 class TypedefDecl : public Statement {
 public:
-   TypedefDecl(string, std::shared_ptr<TypeRef>);
+   TypedefDecl(
+      AccessModifier access,
+      string&& alias,
+      std::shared_ptr<TypeRef>&& origin,
+      std::vector<GenericConstraint>&& generics
+   );
 
    typedef std::shared_ptr<TypedefDecl> SharedPtr;
    typedef std::unique_ptr<TypedefDecl> UniquePtr;
@@ -27,7 +32,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -42,8 +47,11 @@ public:
    ADD_FRIEND_PASSES
 
 protected:
+   AccessModifier access;
    string alias;
    std::shared_ptr<TypeRef> origin;
+
+   std::vector<GenericConstraint> generics;
 };
 
 

@@ -13,6 +13,8 @@
 #include "Passes/StaticAnalysis/ConstExprPass.h"
 #include "Passes/Declaration/DeclPass.h"
 #include "../Variant/Type/Type.h"
+#include "../Variant/Type/BuiltinType.h"
+#include "../Token.h"
 
 namespace cdot {
    class GenericType;
@@ -37,8 +39,10 @@ enum class NodeType {
    WHILE_STMT, FOR_IN_STMT,
 
    CLASS_DECL, ENUM_DECL, ENUM_CASE_DECL, CONSTR_DECL, FIELD_DECL, METHOD_DECL, OPERATOR_DECL, INTERFACE_DECL,
-   STRUCT_DECL, FUNC_ARG_DECL, DESTR_DECL,
+   STRUCT_DECL, FUNC_ARG_DECL, DESTR_DECL, UNION_DECL,
    FUNCTION_DECL, NAMESPACE_DECL, TYPEDEF_DECL, DECLARATION, DECLARE_STMT,
+
+   TRY_STMT, THROW_STMT,
 
    USING_STMT, EOF_STMT, DEBUG_STMT,
 
@@ -58,23 +62,41 @@ public:
 
    virtual std::vector<AstNode::SharedPtr> get_children();
 
-   virtual void setIndex(size_t start, size_t end, size_t line, size_t source) {
-      startIndex = start;
-      endIndex = end;
-      this->line = line;
-      sourceFileId = source;
+   virtual void setIndex(size_t start, size_t end, size_t line, size_t source)
+   {
+      loc = SourceLocation(start, line, end - start, source);
+   }
+
+   void setSourceLoc(const SourceLocation &loc)
+   {
+      this->loc = loc;
+   }
+
+   const SourceLocation& getSourceLoc() const
+   {
+      return loc;
    }
 
    virtual size_t getStartIndex() const {
-      return startIndex;
+      return loc.getCol();
    }
 
    virtual size_t getEndIndex() const {
-      return endIndex;
+      return loc.getCol() + loc.getLength();
    }
 
    virtual size_t getLine() const {
-      return line;
+      return loc.getLine();
+   }
+
+   virtual size_t getSourceId() const
+   {
+      return loc.getSourceId();
+   }
+
+   virtual bool isExpression() const
+   {
+      return false;
    }
 
    virtual void bind(std::string id) {
@@ -87,6 +109,12 @@ public:
 
    virtual void setAttributes(std::vector<Attribute> attr) {
       attributes = attr;
+   }
+
+   void replaceUsesWith(Expression *expr);
+   virtual void replaceChildWith(AstNode *child, Expression *replacement)
+   {
+      llvm_unreachable("not implemented for node");
    }
 
    std::vector<Attribute>& getAttributes() {
@@ -121,7 +149,8 @@ public:
       llvm_unreachable("see above");
    }
 
-   virtual void setContextualType(Type *t) {
+   virtual void setContextualType(const Type& t)
+   {
       contextualType = t;
    }
 
@@ -129,47 +158,112 @@ public:
       return false;
    }
 
-   virtual void heapAllocate();
-
-   virtual pair<string, string> getSourceFile();
-
    virtual NodeType get_type() = 0;
 
    virtual llvm::Value* accept(CodeGen& v) = 0;
-   virtual Type* accept(TypeCheckPass& v) = 0;
+   virtual Type accept(TypeCheckPass& v) = 0;
    virtual Variant accept(ConstExprPass& v) = 0;
 
    virtual void accept(AbstractPass* v) = 0;
 
-   virtual void __dump(int depth) = 0;
+   virtual void __dump(int depth) {}
    virtual void __tab(int depth);
+
+   template<typename T>
+   T *getAs()
+   {
+      return static_cast<T*>(this);
+   }
 
    ADD_FRIEND_PASSES
 
 protected:
-   size_t startIndex;
-   size_t endIndex;
-   size_t line;
-
-   size_t sourceFileId;
+   SourceLocation loc;
 
    AstNode* parent = nullptr;
    std::vector<std::shared_ptr<Expression>*> children;
-
    DeclStmt* declaration = nullptr;
-   bool isGlobal_ = false;
 
    std::vector<Attribute> attributes;
 
-   Type* contextualType = nullptr; // unowned
+   Type contextualType;
 
-   bool isReturnValue_ = false;
-   bool isHiddenReturnValue_ = false;
+   bool returned_value = false;
+   bool sret_value = false;
 
    // codegen
    string binding;
-   bool isHeapAllocated = false;
-   bool isGeneric = false;
+
+public:
+   const SourceLocation &getLoc() const
+   {
+      return loc;
+   }
+
+   void setLoc(const SourceLocation &loc)
+   {
+      AstNode::loc = loc;
+   }
+
+   AstNode *getParent() const
+   {
+      return parent;
+   }
+
+   void setParent(AstNode *parent)
+   {
+      AstNode::parent = parent;
+   }
+
+   const std::vector<std::shared_ptr<Expression> *> &getChildren() const
+   {
+      return children;
+   }
+
+   void setChildren(const std::vector<std::shared_ptr<Expression> *> &children)
+   {
+      AstNode::children = children;
+   }
+
+   DeclStmt *getDeclaration() const
+   {
+      return declaration;
+   }
+
+   const Type &getContextualType() const
+   {
+      return contextualType;
+   }
+
+   bool isReturnedValue() const
+   {
+      return returned_value;
+   }
+
+   void isReturnedValue(bool return_value)
+   {
+      AstNode::returned_value = return_value;
+   }
+
+   bool isStructRetVal() const
+   {
+      return sret_value;
+   }
+
+   void isStructRetVal(bool sret_value)
+   {
+      AstNode::sret_value = sret_value;
+   }
+
+   const string &getBinding() const
+   {
+      return binding;
+   }
+
+   void setBinding(const string &binding)
+   {
+      AstNode::binding = binding;
+   }
 };
 
 

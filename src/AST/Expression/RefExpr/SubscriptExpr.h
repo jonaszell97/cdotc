@@ -25,7 +25,7 @@ public:
       return v.visit(this);
    }
 
-   Type* accept(TypeCheckPass& v) override {
+   Type accept(TypeCheckPass& v) override {
       return v.visit(this);
    }
 
@@ -37,14 +37,15 @@ public:
       return v.visit(this);
    }
 
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
+
    ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr _index;
 
    // codegen
-   bool isSubscriptOp = false;
-   bool isPointerShift = false;
+   bool is_subscript_op = false;
    std::shared_ptr<CallExpr> overridenCall;
 };
 
