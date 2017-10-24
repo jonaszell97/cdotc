@@ -94,12 +94,24 @@ struct Token {
       return indent;
    }
 
+   bool isExpandedFromMacro() const
+   {
+      return expanded_from_macro;
+   }
+
+   void isExpandedFromMacro(bool exp)
+   {
+      expanded_from_macro = exp;
+   }
+
    bool is_punctuator(char);
-   bool is_keyword(std::string);
-   bool is_operator(std::string);
+   bool is_keyword(const string &);
+   bool is_operator(const string &);
+   bool is_identifier(const string &);
    bool is_separator();
 
    bool isInterpolationStart = false;
+   bool expanded_from_macro = false;
 
    Variant _value;
    TokenType _type;

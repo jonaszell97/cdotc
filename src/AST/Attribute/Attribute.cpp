@@ -14,6 +14,8 @@ namespace cdot {
       { "neverOmit", Attr::NeverOmit },
       { "extern", Attr::Extern },
       { "rawPtr", Attr::RawFunctionPtr },
+      { "throws", Attr::Throws },
+      { "nothrow", Attr::NoThrow },
 
       { "_builtin", Attr::_builtin },
       { "_opaque", Attr::_opaque },
@@ -30,6 +32,11 @@ namespace cdot {
                return "Attribute " + attr.name + " expects 1 argument";
             }
             break;
+         case Attr::Throws:
+            if (attr.args.empty()) {
+               return "attribute throws expects at least 1 argument";
+            }
+            break;
          case Attr::CArray:
          case Attr::CString:
          case Attr::NoCopy:
@@ -37,6 +44,7 @@ namespace cdot {
          case Attr::NeverOmit:
          case Attr::_opaque:
          case Attr::RawFunctionPtr:
+         case Attr::NoThrow:
             if (!attr.args.empty()) {
                return "Attribute " + attr.name + " expects no arguments";
             }
@@ -48,8 +56,12 @@ namespace cdot {
 
             if (!attr.args.empty()) {
                auto& arg = attr.args.front();
-               if (arg != "always" && arg != "hint" && arg != "never") {
-                  return "Invalid argument " + arg + " (Expected always, never or hint)";
+               if (arg.type != VariantType::STRING) {
+                  return "attribute inline expects string argument";
+               }
+               auto &str = arg.strVal;
+               if (str != "always" && str != "hint" && str != "never") {
+                  return "invalid argument " + str + " (expected always, never or hint)";
                }
             }
             break;

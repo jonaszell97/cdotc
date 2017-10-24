@@ -7,9 +7,9 @@
 #include "../../../Files/FileUtils.h"
 #include "../../../Parser.h"
 
-#include "../StaticAnalysis/Record/Class.h"
-#include "../StaticAnalysis/Record/Enum.h"
-#include "../StaticAnalysis/Record/Union.h"
+#include "../SemanticAnalysis/Record/Class.h"
+#include "../SemanticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Union.h"
 
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/TupleType.h"
@@ -535,7 +535,7 @@ namespace codegen {
       }
 
       std::vector<llvm::Metadata*> argTypes;
-      for (auto& arg : method->arguments) {
+      for (auto& arg : method->getArguments()) {
          if (arg.cstyleVararg) {
             break;
          }
@@ -549,8 +549,8 @@ namespace codegen {
 
       auto MD = DI.createMethod(
          ScopeStack.top(),
-         method->methodName,
-         method->mangledName,
+         method->getName(),
+         method->getMangledName(),
          getFileDI(method->loc),
          method->loc.getLine(),
          funcTy,
@@ -558,7 +558,7 @@ namespace codegen {
          method->hasDefinition,
          method->isVirtual,
          method->isStatic ? 0 // vtable offset
-                          : (unsigned)method->owningClass->getMethodOffset(method->mangledName),
+                          : (unsigned)method->owningClass->getMethodOffset(method->getMangledName()),
          method->isStatic ? 0 : 1 // 'this' offset
       );
 
@@ -570,7 +570,7 @@ namespace codegen {
 
       if (method->declaration) {
          auto argBegin = method->isStatic ? 0 : 1;
-         if (method->returnType->needsStructReturn()) {
+         if (method->getReturnType()->needsStructReturn()) {
             ++argBegin;
          }
 

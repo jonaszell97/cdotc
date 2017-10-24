@@ -15,7 +15,7 @@ using std::unordered_map;
 using std::pair;
 
 class Expression;
-class TypeCheckPass;
+class SemaPass;
 class DeclPass;
 class CodeGen;
 
@@ -88,7 +88,7 @@ namespace cdot {
          return className;
       }
 
-      virtual cl::Record * getRecord()
+      virtual cl::Record *getRecord() const
       {
          llvm_unreachable("Call isObject first");
       }
@@ -255,15 +255,23 @@ namespace cdot {
          return false;
       }
 
-      virtual bool isRefcounted() {
+      virtual bool isRefcounted() const
+      {
          return false;
       }
 
-      virtual bool isValueType() {
+      virtual bool needsCleanup() const
+      {
+         return false;
+      }
+
+      virtual bool isValueType() const
+      {
          return true;
       }
 
-      virtual bool needsMemCpy() {
+      virtual bool needsMemCpy() const
+      {
          return false;
       }
 

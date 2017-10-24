@@ -124,7 +124,7 @@ extend Array with Iterable<T> {
             return .Some(arr[index++])
         }
     }
-
+    
     def getIterator() -> Iterator<T> {
         return Iterator<T>(self)
     }

@@ -120,7 +120,7 @@ public:
       return v.visit(this);
    }
 
-   Type accept(TypeCheckPass& v) override {
+   Type accept(SemaPass& v) override {
       return v.visit(this);
    }
 
@@ -169,10 +169,7 @@ protected:
    Record *tempType = nullptr;
 
 public:
-   void isAssigned(bool ass)
-   {
-      is_assigned = ass;
-   }
+   void isAssigned(bool ass);
 
    bool isAssigned() const
    {

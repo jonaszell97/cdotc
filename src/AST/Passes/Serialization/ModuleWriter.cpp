@@ -202,7 +202,7 @@ void ModuleWriter::writeAttribute(const Attribute &attr)
 
    writeSize(attr.args.size());
    for (const auto &arg : attr.args) {
-      writeString(arg);
+      writeString(arg.toString());
    }
 }
 

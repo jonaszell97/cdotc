@@ -2,6 +2,7 @@
 // Created by Jonas Zell on 04.10.17.
 //
 
+#include <sstream>
 #include "DiagnosticParser.h"
 #include "../../Lexer.h"
 
@@ -24,14 +25,14 @@ namespace diag {
       Lexer lex;
       lex.ignoreInterpolation(true);
 
-      std::ofstream errorEnumOut(base + "/parsed/errors_enum.def");
-      std::ofstream errorMsgOut(base + "/parsed/errors_msg.def");
+      std::stringstream errorEnumOut;
+      std::stringstream errorMsgOut;
 
-      std::ofstream warnEnumOut(base + "/parsed/warn_enum.def");
-      std::ofstream warnMsgOut(base + "/parsed/warn_msg.def");
+      std::stringstream warnEnumOut;
+      std::stringstream warnMsgOut;
 
-      std::ofstream noteEnumOut(base + "/parsed/note_enum.def");
-      std::ofstream noteMsgOut(base + "/parsed/note_msg.def");
+      std::stringstream noteEnumOut;
+      std::stringstream noteMsgOut;
 
       string line;
       bool firstErr = true;
@@ -46,23 +47,23 @@ namespace diag {
          lex.reset(line.c_str(), line.length());
          lex.advance();
 
-         if (lex.current_token.get_type() == T_EOF) {
+         if (lex.currentToken.get_type() == T_EOF) {
             continue;
          }
 
          string name = lex.s_val();
          lex.advance();
 
-         assert(lex.current_token.is_operator("<") && "expected <");
+         assert(lex.currentToken.is_operator("<") && "expected <");
          lex.advance();
 
          string type = lex.s_val();
          lex.advance();
 
-         assert(lex.current_token.is_operator(">") && "expected >");
+         assert(lex.currentToken.is_operator(">") && "expected >");
          lex.advance();
 
-         assert(lex.current_token.get_type() == T_LITERAL && "expected string literal");
+         assert(lex.currentToken.get_type() == T_LITERAL && "expected string literal");
          string str = lex.s_val();
 
          auto enumVal = type + '_' + name;
@@ -108,19 +109,41 @@ namespace diag {
          }
       }
 
-      errorEnumOut.flush();
-      errorMsgOut.flush();
-      warnEnumOut.flush();
-      warnMsgOut.flush();
-      noteEnumOut.flush();
-      noteMsgOut.flush();
+      std::ofstream errorEnumOutS(base + "/parsed/errors_enum.def");
+      std::ofstream errorMsgOutS(base + "/parsed/errors_msg.def");
 
-      errorEnumOut.close();
-      errorMsgOut.close();
-      warnEnumOut.close();
-      warnMsgOut.close();
-      noteEnumOut.close();
-      noteMsgOut.close();
+      errorEnumOutS << errorEnumOut.str();
+      errorMsgOutS << errorMsgOut.str();
+
+      errorEnumOutS.flush();
+      errorMsgOutS.flush();
+
+      errorEnumOutS.close();
+      errorMsgOutS.close();
+
+      std::ofstream warnEnumOutS(base + "/parsed/warn_enum.def");
+      std::ofstream warnMsgOutS(base + "/parsed/warn_msg.def");
+
+      warnEnumOutS << warnEnumOut.str();
+      warnMsgOutS << warnMsgOut.str();
+
+      warnEnumOutS.flush();
+      warnMsgOutS.flush();
+
+      warnEnumOutS.close();
+      warnMsgOutS.close();
+
+      std::ofstream noteEnumOutS(base + "/parsed/note_enum.def");
+      std::ofstream noteMsgOutS(base + "/parsed/note_msg.def");
+
+      noteEnumOutS << noteEnumOut.str();
+      noteMsgOutS << noteMsgOut.str();
+
+      noteEnumOutS.flush();
+      noteMsgOutS.flush();
+
+      noteEnumOutS.close();
+      noteMsgOutS.close();
    }
 
 }

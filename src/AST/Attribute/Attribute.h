@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include "../../Variant/Variant.h"
 
 using std::unordered_map;
 using std::pair;
@@ -25,6 +26,8 @@ namespace cdot {
       Primitive,
       NeverOmit,
       Extern,
+      Throws,
+      NoThrow,
 
       _builtin,
       _opaque,
@@ -36,7 +39,7 @@ namespace cdot {
    struct Attribute {
       Attr kind;
       string name;
-      std::vector<string> args;
+      std::vector<Variant> args;
    };
 
    string isValidAttribute(Attribute attr);

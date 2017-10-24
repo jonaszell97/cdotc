@@ -8,8 +8,8 @@
 #include "../../Attribute/Attribute.h"
 #include "../../../Variant/Type/PrimitiveType.h"
 #include "../../../Variant/Type/GenericType.h"
-#include "../StaticAnalysis/Record/Class.h"
-#include "../StaticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Class.h"
+#include "../SemanticAnalysis/Record/Enum.h"
 #include "../../../Files/FileManager.h"
 
 namespace {
@@ -163,7 +163,7 @@ void HeaderGen::writeAttributes(std::vector<Attribute> &attrs, bool indent)
 
       auto argc = attr.args.size();
       for (size_t i = 0; i < argc; ++i) {
-         writeIdent(attr.args[i], false);
+         writeIdent(attr.args[i].toString(), false);
          if (i < argc - 1) {
             write(",");
          }
@@ -177,6 +177,31 @@ void HeaderGen::writeAttributes(std::vector<Attribute> &attrs, bool indent)
          writec(' ');
       }
    }
+}
+
+void HeaderGen::writeThrows(Callable *callable)
+{
+   const auto &thrown = callable->getThrownTypes();
+   if (thrown.empty()) {
+      return;
+   }
+
+   applyIndent();
+   write("@throws(", false);
+
+   auto numTys = thrown.size();
+   size_t i = 0;
+   for (const auto &ty : thrown) {
+      write(ty->toString(), false);
+      if (i < numTys - 1) {
+         write(",");
+      }
+
+      ++i;
+   }
+
+   writec(')');
+   nextLine();
 }
 
 void HeaderGen::writeGenerics(std::vector<GenericConstraint> &generics)
@@ -388,8 +413,9 @@ void HeaderGen::visit(DeclStmt *node)
 
    applyIndent();
    write("declare");
-   writeAccess(node->access);
    writeExternKind(node->externKind);
+
+   writeAccess(node->access);
 
    write(node->is_const ? "let" : "var");
    writeIdent(node->identifier, false);
@@ -406,6 +432,7 @@ void HeaderGen::visit(DeclStmt *node)
 void HeaderGen::visit(FunctionDecl *node)
 {
    writeAttributes(node->attributes);
+   writeThrows(node->getDeclaredFunction());
 
    applyIndent();
    write("declare");
@@ -527,6 +554,7 @@ void HeaderGen::visit(ClassDecl *node)
 void HeaderGen::visit(MethodDecl *node)
 {
    writeAttributes(node->attributes);
+   writeThrows(node->getMethod());
 
    applyIndent();
    writeAccess(node->am);
@@ -535,7 +563,27 @@ void HeaderGen::visit(MethodDecl *node)
    }
 
    write("def");
-   writeIdent(node->methodName, false);
+
+   string methodName = node->getMethodName();
+   if (node->getMethodName().substr(0, 6) == "infix ") {
+      write("infix");
+      methodName = methodName.substr(6);
+
+      if (methodName.substr(0, 3) == "as ") {
+         write("as");
+         methodName = methodName.substr(3);
+      }
+   }
+   else if (node->getMethodName().substr(0, 7) == "prefix ") {
+      write("prefix");
+      methodName = methodName.substr(7);
+   }
+   else if (node->getMethodName().substr(0, 8) == "postfix ") {
+      write("postfix");
+      methodName = methodName.substr(8);
+   }
+
+   writeIdent(methodName, false);
    writeGenerics(node->generics);
 
    writeArgs(node->args);
@@ -584,6 +632,7 @@ void HeaderGen::visit(FieldDecl *node)
 void HeaderGen::visit(ConstrDecl *node)
 {
    writeAttributes(node->attributes);
+   writeThrows(node->getMethod());
 
    applyIndent();
    writeAccess(node->am);
@@ -687,6 +736,10 @@ void HeaderGen::visit(FuncArgDecl *node)
    if (!node->argName.empty()) {
       writeIdent(node->argName, false);
       write(":");
+   }
+
+   if (node->isMut()) {
+      write("ref");
    }
 
    node->argType->accept(this);

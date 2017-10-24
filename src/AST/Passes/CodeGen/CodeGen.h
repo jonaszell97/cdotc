@@ -233,7 +233,7 @@ public:
    friend class CGMemory;
    friend class CGCast;
    friend class CGException;
-   friend class TypeCheckPass;
+   friend class SemaPass;
    friend class DeclPass;
 
    friend class cdot::cl::Class;
@@ -372,6 +372,7 @@ protected:
       string &bound_name,
       std::vector<std::shared_ptr<FuncArgDecl>> args,
       Type return_type,
+      bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
       string this_binding = "",
@@ -386,6 +387,7 @@ protected:
       string &bound_name,
       std::vector<std::shared_ptr<FuncArgDecl>> args,
       llvm::Type *return_type,
+      bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
       string this_binding = "",
@@ -400,6 +402,7 @@ protected:
       string &bound_name,
       std::vector<std::shared_ptr<FuncArgDecl>> args,
       Type return_type,
+      bool throws,
       llvm::Type *selfTy,
       string &this_binding,
       std::vector<Attribute> attrs = {},

@@ -5,7 +5,7 @@
 #include "BuiltinType.h"
 #include "ObjectType.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
+#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
 
 #include "IntegerType.h"
 #include "PointerType.h"

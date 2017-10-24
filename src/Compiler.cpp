@@ -4,7 +4,6 @@
 
 #include "Compiler.h"
 #include "Parser.h"
-#include "Preprocessor.h"
 
 #include "Files/FileUtils.h"
 #include "Files/FileManager.h"
@@ -310,7 +309,7 @@ namespace cdot {
       bool outputPreprocessed = options.hasOutputKind(OutputKind::PRE_PROCESSED);
 
       DeclPass decl;
-      TypeCheckPass tc;
+      SemaPass tc;
 
       CodeGen::initGlobalTypes();
 
@@ -320,9 +319,8 @@ namespace cdot {
       CompoundStmt::SharedPtr headerRoot = std::make_shared<CompoundStmt>();
       for (auto& fileName : options.headerFiles) {
          auto buf = FileManager::openFile(fileName, true);
-         auto preprocessedBuf = Preprocessor(buf.second.get(), fileName).run();
 
-         Parser parser(preprocessedBuf.get(), fileName, buf.first);
+         Parser parser(buf.second.get(), fileName, buf.first);
          auto compound = parser.parse();
 
          CUs.emplace_back(getFileNameAndExtension(fileName), getPath(fileName),
@@ -335,7 +333,7 @@ namespace cdot {
       decl.declareGlobalTypedefs(headerRoot->getStatements());
       decl.visit(headerRoot.get());
 
-      TypeCheckPass::connectTree(headerRoot.get());
+      SemaPass::connectTree(headerRoot.get());
       tc.doInitialPass(headerRoot->getStatements());
       tc.visit(headerRoot.get());
 
@@ -343,24 +341,8 @@ namespace cdot {
       CompoundStmt::SharedPtr root = std::make_shared<CompoundStmt>();
       for (auto& fileName : options.sourceFiles) {
          auto buf = FileManager::openFile(fileName, true);
-         auto preprocessedBuf = Preprocessor(buf.second.get(), fileName).run();
 
-         if (outputPreprocessed) {
-            auto newFileName = getPath(fileName) + getFileName(fileName) + "_preprocessed.dot";
-
-            std::error_code ec;
-            llvm::raw_fd_ostream* outfile = createFile(newFileName, ec);
-            *outfile << llvm::StringRef(
-               preprocessedBuf->getBufferStart(), preprocessedBuf->getBufferSize()
-            );
-            
-            outfile->flush();
-            outfile->close();
-
-            delete outfile;
-         }
-
-         Parser parser(preprocessedBuf.get(), fileName, buf.first);
+         Parser parser(buf.second.get(), fileName, buf.first);
          auto compound = parser.parse();
 
          CUs.emplace_back(getFileNameAndExtension(fileName), getPath(fileName),
@@ -383,7 +365,7 @@ namespace cdot {
       decl.visit(root.get());
 
       // TYPE CHECKING
-      TypeCheckPass::connectTree(root.get());
+      SemaPass::connectTree(root.get());
       tc.doInitialPass(root->getStatements());
       tc.visit(root.get());
 

@@ -303,8 +303,8 @@ void CodeGen::EmitCatchClauses(
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
       if (hasFinally) {
-         CreateStore(llvm::BlockAddress::get(Builder.GetInsertBlock()), eh.branchTarget);
-         eh.targets.push_back(Builder.GetInsertBlock());
+         CreateStore(llvm::BlockAddress::get(contBB), eh.branchTarget);
+         eh.targets.push_back(contBB);
 
          Builder.CreateBr(eh.finallyBB);
       }
@@ -420,6 +420,17 @@ llvm::Value* CodeGen::visit(ThrowStmt *node)
    auto thrownVal = node->getThrownVal()->accept(*this);
    llvm::Function *descFn = node->descFn ? getOwnDecl(node->descFn)
                                          : nullptr;
+
+   if (!node->thrownType->isRefcounted()) {
+      auto size = node->thrownType->getSize();
+      llvm::Value *errAlloc = Builder.CreateCall(MALLOC, { wordSizedInt(size) });
+
+      Builder.CreateMemCpy(errAlloc, thrownVal, size, 1);
+      thrownVal = errAlloc;
+   }
+   else {
+      IncrementRefCount(thrownVal);
+   }
 
    auto alloc = Builder.CreateCall(
       Exc->getAllocExcFn(),

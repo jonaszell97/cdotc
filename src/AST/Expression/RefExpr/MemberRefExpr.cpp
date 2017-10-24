@@ -4,8 +4,8 @@
 
 #include "MemberRefExpr.h"
 #include "../../SymbolTable.h"
-#include "../../Passes/StaticAnalysis/Record/Class.h"
-#include "../../Passes/StaticAnalysis/Record/Enum.h"
+#include "../../Passes/SemanticAnalysis/Record/Class.h"
+#include "../../Passes/SemanticAnalysis/Record/Enum.h"
 
 MemberRefExpr::MemberRefExpr(string ident, bool pointerAccess) : isPointerAccess(pointerAccess) {
    this->ident = ident;

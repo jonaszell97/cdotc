@@ -5,6 +5,14 @@
 #include "Expression.h"
 #include "../Statement/Declaration/DeclStmt.h"
 
+void Expression::isAssigned(bool ass)
+{
+   is_assigned = ass;
+   if (memberExpr) {
+      memberExpr->isAssigned(ass);
+   }
+}
+
 void Expression::isHiddenReturnValue()
 {
    if (memberExpr) {

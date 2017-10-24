@@ -6,7 +6,7 @@
 #include "../../Util.h"
 #include "../../AST/Passes/CodeGen/CodeGen.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
+#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
 #include "../../AST/Passes/CodeGen/CGMemory.h"
 #include "../../AST/Expression/TypeRef.h"
 

@@ -57,9 +57,12 @@ Variant ConstExprPass::visit(IdentifierRefExpr *node)
       return node->memberExpr->accept(*this);
    }
 
-   if (hasVariable(node->binding)) {
-      node->staticVal = getVariable(node->binding);
-   }
+//   if (hasVariable(node->binding)) {
+//      auto var = getVariable(node->binding);
+//      if (var.type != VariantType::STRING) {
+//         node->staticVal = var;
+//      }
+//   }
 
    return node->staticVal;
 }
@@ -227,7 +230,24 @@ Variant ConstExprPass::visit(CallExpr *node)
       return node->memberExpr->accept(*this);
    }
 
-   return {};
+   if (node->isIsBuiltin()) {
+      switch (node->builtinFnKind) {
+         case BuiltinFn::SIZEOF: {
+            auto ty = std::static_pointer_cast<TypeRef>(node->args.front().second)->getType();
+            node->staticVal = Variant((long) ty->getSize());
+            break;
+         }
+         case BuiltinFn::ALIGNOF: {
+            auto ty = std::static_pointer_cast<TypeRef>(node->args.front().second)->getType();
+            node->staticVal = Variant(ty->getAlignment());
+            break;
+         }
+         default:
+            break;
+      }
+   }
+
+   return node->staticVal;
 }
 
 Variant ConstExprPass::visit(MemberRefExpr *node)
@@ -265,7 +285,7 @@ Variant ConstExprPass::visit(BinaryOperator *node)
          auto ident = std::static_pointer_cast<IdentifierRefExpr>(node->lhs);
 
          Variant newVal = ConditionStack > 0 || ident->memberExpr != nullptr ? Variant()
-                                                                             : rhs;
+                                                                             : node->staticVal;
          setVariable(ident->binding, newVal);
       }
 
@@ -404,6 +424,15 @@ Variant ConstExprPass::visit(ClassDecl *node)
    }
    for (const auto& field : node->fields) {
       field->accept(*this);
+   }
+   for (const auto& method : node->methods) {
+      method->accept(*this);
+   }
+   for (const auto& constr : node->constructors) {
+      constr->accept(*this);
+   }
+   if (node->destructor) {
+      node->destructor->accept(*this);
    }
 
    return {};

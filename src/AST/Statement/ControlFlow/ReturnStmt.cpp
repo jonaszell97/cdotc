@@ -30,3 +30,33 @@ void ReturnStmt::__dump(int depth) {
       child->__dump(depth + 1);
    }
 }
+
+std::shared_ptr<Expression> &ReturnStmt::getReturnValue()
+{
+   return returnValue;
+}
+
+void ReturnStmt::setReturnValue(const std::shared_ptr<Expression> &returnValue)
+{
+   ReturnStmt::returnValue = returnValue;
+}
+
+bool ReturnStmt::isHiddenParamReturn() const
+{
+   return hiddenParamReturn;
+}
+
+void ReturnStmt::setHiddenParamReturn(bool hiddenParamReturn)
+{
+   ReturnStmt::hiddenParamReturn = hiddenParamReturn;
+}
+
+const Type &ReturnStmt::getReturnType() const
+{
+   return returnType;
+}
+
+void ReturnStmt::setReturnType(const Type &returnType)
+{
+   ReturnStmt::returnType = returnType;
+}

@@ -28,8 +28,9 @@ namespace cdot {
 
    extern std::vector<string> BuiltinNamespaces;
 
-   inline bool isBuilitinNamespace(string& name) {
-      return std::find(BuiltinNamespaces.begin(), BuiltinNamespaces.end(), name) != BuiltinNamespaces.end();
+   inline bool isBuilitinNamespace(const string& name) {
+      return std::find(BuiltinNamespaces.begin(),
+                       BuiltinNamespaces.end(), name) != BuiltinNamespaces.end();
    }
 
    class Builtin {

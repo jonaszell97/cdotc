@@ -67,9 +67,9 @@ namespace cdot {
 
 using namespace cdot;
 
-class TypeCheckPass {
+class SemaPass {
 public:
-   TypeCheckPass();
+   SemaPass();
 
    void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
 
@@ -137,7 +137,7 @@ public:
    virtual Type visit(Statement *node);
 
 protected:
-   std::unordered_map<string, DeclStmt*> declarations = {};
+   std::unordered_map<string, DeclStmt*> declarations;
    std::stack<Scope> Scopes;
    std::stack<pair<string, string>> Cleanups;
 
@@ -193,6 +193,14 @@ protected:
    void lvalueToRvalue(std::shared_ptr<Expression>& target);
    void toRvalueIfNecessary(Type &ty, std::shared_ptr<Expression> &target, bool preCond = true);
 
+   void CopyScopeProps(
+      Scope* src,
+      Scope* dst
+   );
+
+   bool warnCast(Type &lhs, Type &rhs);
+   void raiseTypeError(Type &lhs, Type &rhs, AstNode* cause);
+
    bool castGenericIfNecessary(
       Expression *node,
       std::vector<GenericType*> &concreteGenerics,
@@ -230,6 +238,8 @@ protected:
 
       return false;
    }
+
+   Callable *currentCallable = nullptr;
 
    static std::vector<string> currentNamespace;
    static std::vector<string> importedNamespaces;
@@ -310,8 +320,8 @@ protected:
 
    void checkMemberAccessibility(
       cdot::cl::Class*& cl,
-      string& memberName,
-      AccessModifier& access,
+      const string& memberName,
+      const AccessModifier& access,
       Expression* cause
    );
 

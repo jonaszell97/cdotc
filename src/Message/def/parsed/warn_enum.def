@@ -1,0 +1,2 @@
+warn_implicit_cast,
+warn_main_return_type

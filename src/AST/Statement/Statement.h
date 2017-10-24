@@ -7,6 +7,20 @@
 
 #include "../AstNode.h"
 
+namespace cdot {
+
+struct TemplateArgument {
+
+};
+
+struct Template {
+   unordered_map<string, TemplateArgument> args;
+   const char *begin;
+   size_t length;
+};
+
+}
+
 enum class ExternKind : unsigned char {
    NONE,
    C,
@@ -29,7 +43,7 @@ public:
       return v.visit(this);
    }
 
-   Type accept(TypeCheckPass& v) override {
+   Type accept(SemaPass& v) override {
       return v.visit(this);
    }
 
@@ -54,6 +68,30 @@ public:
 protected:
    ExternKind externKind = ExternKind::NONE;
    bool is_declaration = false;
+
+   bool is_templated = false;
+   Template template_;
+
+public:
+   bool isTemplated() const
+   {
+      return is_templated;
+   }
+
+   void isTemplated(bool templ)
+   {
+      is_templated = templ;
+   }
+
+   const Template &getTemplate() const
+   {
+      return template_;
+   }
+
+   void setTemplate(const Template &templ)
+   {
+      template_ = templ;
+   }
 };
 
 

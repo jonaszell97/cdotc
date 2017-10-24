@@ -75,12 +75,13 @@ namespace cdot {
       }
 
       GenericType* getConcreteGeneric(string genericName);
-      cl::Record* getRecord() override;
+      cl::Record* getRecord() const override;
 
-      bool isRefcounted() override;
-      bool isValueType() override;
+      bool isRefcounted() const override;
+      bool isValueType() const override;
 
-      bool needsMemCpy() override {
+      bool needsMemCpy() const override
+      {
          return is_struct || is_protocol || (is_enum && !is_raw_enum);
       }
 
@@ -90,6 +91,8 @@ namespace cdot {
       }
 
       bool hasDefaultValue() override;
+
+      bool needsCleanup() const override;
 
       bool isBoxedEquivOf(BuiltinType* other) override;
 

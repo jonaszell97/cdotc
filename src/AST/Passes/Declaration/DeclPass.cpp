@@ -7,12 +7,12 @@
 #include "../ASTIncludes.h"
 #include "../../SymbolTable.h"
 #include "../../../Message/Exceptions.h"
-#include "../StaticAnalysis/Record/Class.h"
-#include "../StaticAnalysis/Record/Union.h"
+#include "../SemanticAnalysis/Record/Class.h"
+#include "../SemanticAnalysis/Record/Union.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/VoidType.h"
-#include "../StaticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Enum.h"
 #include "../../../Variant/Type/TupleType.h"
 #include "../../../Variant/Type/AutoType.h"
 #include "../../../Variant/Type/Generic.h"
@@ -386,7 +386,7 @@ void DeclPass::visit(FunctionDecl *node)
 
    if (returnType->isStruct()) {
       node->has_sret = true;
-      fun->hasHiddenParam(true);
+      fun->hasStructReturn(true);
    }
 
    std::vector<Argument> args;
@@ -407,16 +407,29 @@ void DeclPass::visit(FunctionDecl *node)
       fun->addArgument(argument);
    }
 
-   declareFunction(std::move(fun), node->generics, node);
+   auto mangledName = SymbolTable::mangleFunction(qualified_name, args);
    if (qualified_name == "main") {
       node->binding = qualified_name;
    }
    else {
-      node->binding = SymbolTable::mangleFunction(qualified_name, args);
+      node->binding = mangledName;
    }
 
+   fun->setMangledName(node->binding);
+
+   auto it = SymbolTable::getFunction(qualified_name);
+   for (; it.first != it.second; ++it.first) {
+      if (it.first->second->getMangledName() == node->binding) {
+         diag::err(err_func_redeclaration) << 0 << qualified_name << node << diag::term;
+      }
+   }
+
+   if (node->hasAttribute(Attr::Throws)) {
+      CheckThrowsAttribute(fun.get(), node->getAttribute(Attr::Throws));
+   }
+
+   declareFunction(std::move(fun), node->generics, node);
    GenericsStack.pop_back();
-   node->declaredFunction->setMangledName(node->binding);
 }
 
 void DeclPass::visit(FuncArgDecl *node) {
@@ -451,7 +464,7 @@ void DeclPass::visit(ClassDecl *node)
       auto attr = node->getAttribute(Attr::_align);
       assert(!attr.args.empty() && "no argument for _align");
 
-      auto& specifiedAlignment = attr.args.front();
+      auto& specifiedAlignment = attr.args.front().strVal;
       short alignment;
       if (specifiedAlignment == "word") {
          alignment = sizeof(int*);
@@ -631,6 +644,8 @@ void DeclPass::visit(ClassDecl *node)
    if (node->destructor != nullptr) {
       node->destructor->className = node->qualifiedName;
       node->destructor->accept(this);
+      cl->hasNonEmptyDeinitializer(!node->getDestructor()->getBody()
+                                        ->getStatements().empty());
    }
 
    if (node->isStruct()) {
@@ -709,6 +724,10 @@ void DeclPass::visit(MethodDecl *node)
    node->method = cl->declareMethod(node->methodName, returnType, node->am, std::move(args),
       node->generics, node->isStatic, node, node->loc);
 
+   if (node->hasAttribute(Attr::Throws)) {
+      CheckThrowsAttribute(node->method, node->getAttribute(Attr::Throws));
+   }
+
    GenericsStack.pop_back();
 }
 
@@ -742,16 +761,19 @@ void DeclPass::visit(FieldDecl *node)
    auto& qualified_name = cl->getName();
    node->className = qualified_name;
 
+   Field *field = nullptr;
    if (node->is_static) {
-      if (cl->isProtocol()) {
-         cl->declareField(node->fieldName, *field_type, node->am, node->defaultVal, node->is_const,
+      if (cl->isProtocol() || node->is_property) {
+         field = cl->declareField(node->fieldName, *field_type, node->am, node->defaultVal, node->is_const,
             true, node->is_property, node);
       }
       else {
          node->binding = declareVariable(node->fieldName, field_type, node->am, node);
       }
 
-      return;
+      if (!node->isProperty()) {
+         return;
+      }
    }
 
    if (cl->isProtocol() && !node->has_setter && !node->has_getter) {
@@ -767,11 +789,13 @@ void DeclPass::visit(FieldDecl *node)
       }
    }
 
-   auto field = cl->declareField(node->fieldName, *field_type, node->am, node->defaultVal, node->is_const,
-      false, node->is_property, node);
+   if (!field) {
+      field = cl->declareField(node->fieldName, *field_type, node->am, node->defaultVal,
+                               node->is_const, false, node->is_property, node);
 
-   if (cl->isProtocol()) {
-      node->protocol_field = true;
+      if (cl->isProtocol()) {
+         node->protocol_field = true;
+      }
    }
 
    if (node->has_getter) {
@@ -780,7 +804,7 @@ void DeclPass::visit(FieldDecl *node)
       node->getterBinding = SymbolTable::mangleMethod(node->className, getterName, args);
 
       node->getterMethod = cl->declareMethod(getterName, field_type, AccessModifier::PUBLIC, {}, {},
-         false, nullptr, node->loc);
+         node->isStatic(), nullptr, node->loc);
 
       field->hasGetter = true;
       field->getterName = getterName;
@@ -793,7 +817,7 @@ void DeclPass::visit(FieldDecl *node)
       node->setterBinding = SymbolTable::mangleMethod(node->className, setterName, args);
 
       node->setterMethod = cl->declareMethod(setterName, setterRetType, AccessModifier::PUBLIC,
-         std::move(args), {}, false, nullptr, node->loc);
+         std::move(args), {}, node->isStatic(), nullptr, node->loc);
 
       field->hasSetter = true;
       field->setterName = setterName;
@@ -821,7 +845,7 @@ void DeclPass::visit(ConstrDecl *node)
    node->binding = SymbolTable::mangleMethod(node->className, method_name, args);
 
    auto memberwiseInit = cl->getMemberwiseInitializer();
-   if (memberwiseInit != nullptr && node->binding == memberwiseInit->mangledName) {
+   if (memberwiseInit != nullptr && node->binding == memberwiseInit->getMangledName()) {
       diag::err(err_func_redeclaration) << 1 << "init" << node << diag::cont;
       diag::note(note_func_redeclaration_memberwise_init) << diag::term;
    }
@@ -842,6 +866,10 @@ void DeclPass::visit(ConstrDecl *node)
       nullptr,
       node->loc
    );
+
+   if (node->hasAttribute(Attr::Throws)) {
+      CheckThrowsAttribute(node->method, node->getAttribute(Attr::Throws));
+   }
 
    node->method->loc = node->loc;
 
@@ -868,6 +896,10 @@ void DeclPass::visit(DestrDecl *node)
       nullptr,
       node->loc
    );
+
+   if (node->hasAttribute(Attr::Throws)) {
+      CheckThrowsAttribute(node->getDeclaredMethod(), node->getAttribute(Attr::Throws));
+   }
 }
 
 void DeclPass::visit(TypedefDecl *node)
@@ -1194,4 +1226,16 @@ void DeclPass::visit(Statement *node)
 void DeclPass::visit(Expression *node)
 {
 
+}
+
+void DeclPass::CheckThrowsAttribute(
+   Callable *callable, Attribute &attr)
+{
+   for (const auto &arg : attr.args) {
+      if (!SymbolTable::hasClass(arg.strVal, importedNamespaces)) {
+         diag::err(err_class_not_found) << arg << diag::term;
+      }
+
+      callable->addThrownType(ObjectType::get(arg.strVal));
+   }
 }

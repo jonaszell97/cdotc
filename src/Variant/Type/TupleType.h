@@ -8,7 +8,7 @@
 #include "BuiltinType.h"
 
 class TypeRef;
-class TypeCheckPass;
+class SemaPass;
 using std::pair;
 
 namespace cdot {

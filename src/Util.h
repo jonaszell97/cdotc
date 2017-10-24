@@ -30,7 +30,7 @@ namespace cdot {
    };
 }
 
-class TypeCheckPass;
+class SemaPass;
 class Expression;
 using std::pair;
 using std::string;
@@ -159,7 +159,7 @@ namespace util {
 
    extern std::vector<string> attributes;
 
-   extern TypeCheckPass* TCPass;
+   extern SemaPass* TCPass;
 
    bool resolveGeneric(
       BuiltinType* given,

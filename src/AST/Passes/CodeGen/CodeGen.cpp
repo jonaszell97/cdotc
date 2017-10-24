@@ -28,8 +28,8 @@
 #include "CGBinaryOperator.h"
 #include "../../Operator/Conversion/ImplicitCastExpr.h"
 #include "CGMemory.h"
-#include "../StaticAnalysis/Record/Class.h"
-#include "../StaticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Class.h"
+#include "../SemanticAnalysis/Record/Enum.h"
 #include "../../../Variant/Type/BuiltinType.h"
 #include "../../../Variant/Type/FPType.h"
 #include "../../../Variant/Type/IntegerType.h"
@@ -246,7 +246,7 @@ llvm::Constant* CodeGen::getFunction(const string &name)
 
 llvm::Function* CodeGen::getOwnDecl(const Method *method)
 {
-   const auto &func = method->llvmFunc;
+   const auto &func = method->getLlvmFunc();
    auto funcName = func->getName();
 
    auto index = OwnFunctions.find(funcName);
@@ -260,7 +260,7 @@ llvm::Function* CodeGen::getOwnDecl(const Method *method)
    ));
 
    ownFunc->setAttributes(func->getAttributes());
-   OwnFunctions[method->mangledName] = ownFunc;
+   OwnFunctions[method->getMangledName()] = ownFunc;
 
    return ownFunc;
 }
@@ -306,7 +306,15 @@ void CodeGen::finalize()
       for (const auto& val : global_initializers) {
          auto res = val.first->accept(*this);
          if (llvm::isa<llvm::Constant>(res)) {
-            val.first->globalVar->setInitializer(llvm::cast<llvm::Constant>(res));
+            if (llvm::isa<llvm::GlobalVariable>(res)) {
+               val.first->globalVar->setInitializer(
+                  llvm::cast<llvm::GlobalVariable>(res)->getInitializer()
+               );
+            }
+            else {
+               val.first->globalVar->setInitializer(llvm::cast<llvm::Constant>(res));
+            }
+
             continue;
          }
 
@@ -551,8 +559,11 @@ void CodeGen::DeclareClasses(std::vector<std::shared_ptr<Statement>>& statements
             }
 
             auto retTy = node->returnType->getType();
-            auto func = DeclareFunction(boundName, node->args, retTy, false, nullptr, "",
-               node->attributes, node->has_sret, false, false, !node->is_declaration);
+            auto func = DeclareFunction(
+               boundName, node->args, retTy, node->getDeclaredFunction()->throws(),
+               false, nullptr, "", node->attributes, node->has_sret, false, false,
+               !node->is_declaration
+            );
 
             node->declaredFunction->setLlvmFunc(func);
 
@@ -560,7 +571,7 @@ void CodeGen::DeclareClasses(std::vector<std::shared_ptr<Statement>>& statements
                auto builtin = node->getAttribute(Attr::_builtin);
                assert(!builtin.args.empty());
 
-               auto &name = builtin.args.front();
+               auto &name = builtin.args.front().strVal;
                if (name == "terminate") {
                   TERMINATE = func;
                }
@@ -772,7 +783,7 @@ llvm::Value* CodeGen::DispatchProtocolCall(
       originalSelf = args[0];
    }
 
-   auto& methodName = method->mangledName;
+   auto& methodName = method->getMangledName();
    if (vMethodPair == nullptr) {
       auto vtable = CreateLoad(AccessField(Class::ProtoVtblPos, originalSelf));
       vMethodPair = Builder.CreateGEP(
@@ -783,9 +794,9 @@ llvm::Value* CodeGen::DispatchProtocolCall(
       );
    }
 
-   auto& declaredArgs = method->arguments;
-   bool methodReturnsSelf = method->returnType->isGeneric() &&
-      method->returnType->asGenericTy()->getGenericClassName() == "Self";
+   auto& declaredArgs = method->getArguments();
+   bool methodReturnsSelf = method->getReturnType()->isGeneric() &&
+      method->getReturnType()->asGenericTy()->getGenericClassName() == "Self";
 
    // check whether this method is a protocol default implementation, indicated by
    // the second parameter in each vtable entry. If it is, the method will be expecting
@@ -1226,6 +1237,7 @@ llvm::Function * CodeGen::DeclareFunction(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    llvm::Type *return_type,
+   bool throws,
    bool set_this_arg,
    llvm::Type *selfTy,
    string this_binding,
@@ -1302,7 +1314,10 @@ llvm::Function * CodeGen::DeclareFunction(
       }
    }
 
-   func->addFnAttr(llvm::Attribute::NoUnwind);
+   if (!throws) {
+      func->addFnAttr(llvm::Attribute::NoUnwind);
+   }
+
    func->addFnAttr(llvm::Attribute::StackProtect);
    func->addFnAttr(llvm::Attribute::UWTable);
 
@@ -1317,16 +1332,18 @@ llvm::Function * CodeGen::DeclareFunction(
 
    for (const auto& attr : attrs) {
       switch (attr.kind) {
-         case Attr::Inline:
-            if (attr.args.empty() || attr.args.front() == "hint") {
+         case Attr::Inline: {
+            auto &arg = attr.args.front().strVal;
+            if (arg == "hint") {
                func->addFnAttr(llvm::Attribute::InlineHint);
             }
-            else if (attr.args.front() == "always") {
+            else if (arg == "always") {
                func->addFnAttr(llvm::Attribute::AlwaysInline);
             }
-            else if (attr.args.front() == "never") {
+            else if (arg == "never") {
                func->addFnAttr(llvm::Attribute::NoInline);
             }
+         }
          default:
             break;
       }
@@ -1374,6 +1391,7 @@ llvm::Function * CodeGen::DeclareFunction(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    Type return_type,
+   bool throws,
    bool set_this_arg,
    llvm::Type *selfTy,
    string this_binding,
@@ -1388,7 +1406,7 @@ llvm::Function * CodeGen::DeclareFunction(
       retType = retType->getPointerTo();
    }
 
-   return DeclareFunction(bound_name, args, retType, set_this_arg, selfTy,
+   return DeclareFunction(bound_name, args, retType, throws, set_this_arg, selfTy,
       this_binding, attrs, hiddenParam, envParam, isVirtualOrProtocolMethod, hasDefinition);
 }
 
@@ -1407,6 +1425,7 @@ llvm::Function* CodeGen::DeclareMethod(
    string &bound_name,
    std::vector<std::shared_ptr<FuncArgDecl>> args,
    Type return_type,
+   bool throws,
    llvm::Type *selfTy,
    string &this_binding,
    std::vector<Attribute> attrs,
@@ -1414,7 +1433,7 @@ llvm::Function* CodeGen::DeclareMethod(
    bool isVirtualOrProtocolMethod,
    bool hasDefinition)
 {
-   return DeclareFunction(bound_name, args, return_type, true, selfTy, this_binding,
+   return DeclareFunction(bound_name, args, return_type, throws, true, selfTy, this_binding,
       attrs, hiddenParam, false, isVirtualOrProtocolMethod, hasDefinition);
 }
 
@@ -1626,7 +1645,7 @@ void CodeGen::DecrementRefCount(
    llvm::Value *val)
 {
    assert(ARC_DEC != nullptr && "No ARC decrement intrinsic");
-   if (!llvm::isa<llvm::ConstantPointerNull>(val)) {
+   if (!llvm::isa<llvm::ConstantPointerNull>(val) && false) {
       Builder.CreateCall(ARC_DEC, {
          toInt8Ptr(val)
       });
@@ -1635,7 +1654,7 @@ void CodeGen::DecrementRefCount(
 
 void CodeGen::CleanupTemporaries()
 {
-   if (Temporaries.empty()) {
+   if (Temporaries.empty() || true) {
       return;
    }
 
@@ -1792,7 +1811,7 @@ llvm::ReturnInst *CodeGen::DoRet(
    if (retVal) {
       auto val = retVal->accept(*this);
       if (incRefCount) {
-         IncrementRefCount(val);
+//         IncrementRefCount(val);
       }
 
       retInst = Builder.CreateRet(val);
@@ -2137,7 +2156,7 @@ llvm::Value* CodeGen::visit(DeclStmt *node)
       }
       else if (!node->sret_value) {
          auto allocType = ret->getType();
-         if (node->inc_refcount) {
+         if (node->incRefCount() && !node->isReturnedValue()) {
             Cleanups.push(ret);
             IncrementRefCount(ret);
          }
@@ -2501,7 +2520,8 @@ llvm::Value* CodeGen::visit(NoneLiteral *node)
 
 llvm::Value* CodeGen::visit(StringLiteral *node)
 {
-   return ReturnMemberRef(node, GetString(node->value, node->raw));
+   auto isConst = node->contextualType.isConst() || node->isTemporary();
+   return ReturnMemberRef(node, GetString(node->value, node->raw, isConst));
 }
 
 llvm::Value* CodeGen::visit(StringInterpolation *node)
@@ -2587,8 +2607,9 @@ llvm::Value* CodeGen::HandleBuiltinCall(CallExpr *node)
          return Builder.CreateBitCast(val, node->returnType.getLlvmType());
       }
       case BuiltinFn::MEMCPY: {
+         assert(!node->args[3].second->staticVal.isVoid() && "memcpy needs static alignment");
          Builder.CreateMemCpy(node->args[0].second->accept(*this), node->args[1].second->accept(*this),
-            node->args[2].second->accept(*this), 8);
+            node->args[2].second->accept(*this), (unsigned)node->args[3].second->staticVal.intVal);
          return nullptr;
       }
       case BuiltinFn::MEMSET: {
@@ -2918,7 +2939,7 @@ llvm::Value* CodeGen::visit(MemberRefExpr *node)
    llvm::Value* value;
 
    if (node->enum_case) {
-      auto en = static_cast<cl::Enum*>(SymbolTable::getClass(node->className));
+      auto en = SymbolTable::getClass(node->className)->getAs<Enum>();
       auto rawTy = en->getRawType();
       auto var = Variant(node->caseVal);
       auto rawVal = rawTy->getConstantVal(var);
@@ -2943,15 +2964,15 @@ llvm::Value* CodeGen::visit(MemberRefExpr *node)
       auto val = pop();
       value = Builder.CreateBitCast(val, node->fieldType->getLlvmType()->getPointerTo());
    }
+   else if (node->getterOrSetterCall != nullptr) {
+      return node->getterOrSetterCall->accept(*this);
+   }
    else if (node->isStatic || node->isNsMember) {
       value = getVariable(node->binding);
    }
    else if (node->isTupleAccess) {
       auto val = pop();
       value = AccessField(node->tupleIndex, val);
-   }
-   else if (node->getterOrSetterCall != nullptr) {
-      return node->getterOrSetterCall->accept(*this);
    }
    else if (node->setter_call) {
       return pop();
@@ -3879,7 +3900,7 @@ llvm::Value* CodeGen::visit(MatchStmt *node)
             size_t j = 0;
             for (const auto& val : case_->letBindings) {
                auto gep = AccessField(j + 1, switchVal);
-               if (case_->letIdentifiers[i].second->needsMemCpy()) {
+               if (case_->letIdentifiers[j].second->needsMemCpy()) {
                   gep = CreateLoad(gep);
                }
 
@@ -4052,6 +4073,7 @@ llvm::Value* CodeGen::visit(LambdaExpr *node)
       lambdaName,
       node->args,
       node->lambdaType->getReturnType(),
+      false,
       false, // setSelfArg
       nullptr, // selfType
       "", // selfBinding

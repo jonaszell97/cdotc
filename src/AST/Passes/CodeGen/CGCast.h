@@ -6,7 +6,7 @@
 #define CDOT_CGCAST_H
 
 #include <llvm/IR/Value.h>
-#include "../StaticAnalysis/Record/Class.h"
+#include "../SemanticAnalysis/Record/Class.h"
 
 class CodeGen;
 

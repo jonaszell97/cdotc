@@ -7,7 +7,7 @@
 
 #define ADD_FRIEND_PASSES \
    friend class ::DeclPass; \
-   friend class ::TypeCheckPass; \
+   friend class ::SemaPass; \
    friend class ::CodeGen; \
    friend class ::ConstExprPass; \
    friend class ::HeaderGen;

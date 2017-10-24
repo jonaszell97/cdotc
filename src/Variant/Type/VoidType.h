@@ -20,7 +20,8 @@ namespace cdot {
       string toString() override;
       llvm::Type* getLlvmType() override;
 
-      bool isValueType() override {
+      bool isValueType() const override
+      {
          return false;
       }
 

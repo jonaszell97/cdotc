@@ -11,7 +11,7 @@
 #include "BitstreamReader.h"
 #include "../../AstDeclarations.h"
 #include "../../../Variant/Type/Type.h"
-#include "../StaticAnalysis/Function.h"
+#include "../SemanticAnalysis/Function.h"
 
 namespace llvm {
 class MemoryBuffer;

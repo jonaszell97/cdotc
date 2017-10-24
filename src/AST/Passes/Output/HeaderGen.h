@@ -11,12 +11,13 @@
 #include "../AbstractPass.h"
 
 namespace cdot {
-   struct Attribute;
-   class ObjectType;
-   class BuiltinType;
-   class GenericType;
+struct Attribute;
+class ObjectType;
+class BuiltinType;
+class GenericType;
+class Callable;
 
-   struct GenericConstraint;
+struct GenericConstraint;
 }
 
 enum class ExternKind : unsigned char;
@@ -31,7 +32,7 @@ using namespace cdot;
 class HeaderGen : public AbstractPass {
 public:
    explicit HeaderGen(string& fileName);
-   ~HeaderGen();
+   ~HeaderGen() override;
 
    void finalize() override;
 
@@ -77,6 +78,7 @@ protected:
    void decreaseIndent();
 
    void writeAttributes(std::vector<Attribute>& attrs, bool indent = true);
+   void writeThrows(Callable *callable);
    void writeExternKind(ExternKind& kind);
 
    void writeGenerics(std::vector<GenericConstraint>& generics);

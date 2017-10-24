@@ -7,7 +7,7 @@
 #include "FPType.h"
 #include "VoidType.h"
 #include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/StaticAnalysis/Record/Class.h"
+#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
 #include "../../Token.h"
 
 namespace cdot {

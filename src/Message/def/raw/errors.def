@@ -1,3 +1,9 @@
+
+/* PARSING */
+
+/* PREPROCESSING*/
+max_macro_recursion_depth <err> "maximum macro recursion depth reached ($0) in expansion of macro $1"
+
 /* TYPE ERRORS */
 implicit_cast <warn> "implicit cast from $0 to $1"
 type_mismatch <err> "incompatible types $0 and $1"
@@ -28,6 +34,8 @@ cand_generic_type_not_inferred <note> "could not infer generic type $0"
 cand_mismatched_arg_count <note> "candidate function not viable: requires $0 ${ 0 | plural_s(argument) }, $1 given"
 generic_type_not_inferred <err> "could not infer generic type $0 of ${ 1 | select(class,struct,enum,union,protocol) } $2"
 expected_type_as_arg <err> "expected ${ 0 | ordinal } argument of function $1 to be a type"
+method_must_be_static <err> "method $0 must be static"
+method_must_not_be_static <err> "method $0 must not be static"
 
 /* NAMESPACE ERRORS */
 namespace_not_found <err> "namespace $0 does not exist"

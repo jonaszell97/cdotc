@@ -26,7 +26,7 @@ public:
       return v.visit(this);
    }
 
-   Type accept(TypeCheckPass& v) override {
+   Type accept(SemaPass& v) override {
       return v.visit(this);
    }
 
@@ -50,6 +50,16 @@ protected:
 
    // codegen
    Type returnType;
+
+public:
+   std::shared_ptr<Expression> &getReturnValue();
+   void setReturnValue(const std::shared_ptr<Expression> &returnValue);
+
+   bool isHiddenParamReturn() const;
+   void setHiddenParamReturn(bool hiddenParamReturn);
+
+   const Type &getReturnType() const;
+   void setReturnType(const Type &returnType);
 };
 
 

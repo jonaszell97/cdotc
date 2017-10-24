@@ -7,10 +7,10 @@
 
 #include <iostream>
 #include "Attribute/Attribute.h"
-#include "Passes/StaticAnalysis/TypeCheckPass.h"
+#include "Passes/SemanticAnalysis/SemaPass.h"
 #include "Passes/AbstractPass.h"
 #include "Passes/CodeGen/CodeGen.h"
-#include "Passes/StaticAnalysis/ConstExprPass.h"
+#include "Passes/SemanticAnalysis/ConstExprPass.h"
 #include "Passes/Declaration/DeclPass.h"
 #include "../Variant/Type/Type.h"
 #include "../Variant/Type/BuiltinType.h"
@@ -161,7 +161,7 @@ public:
    virtual NodeType get_type() = 0;
 
    virtual llvm::Value* accept(CodeGen& v) = 0;
-   virtual Type accept(TypeCheckPass& v) = 0;
+   virtual Type accept(SemaPass& v) = 0;
    virtual Variant accept(ConstExprPass& v) = 0;
 
    virtual void accept(AbstractPass* v) = 0;

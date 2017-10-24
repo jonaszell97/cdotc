@@ -80,15 +80,15 @@ public:
 
    static void declareNamespace(const string &);
    static void declareVariable(
-      string &varName,
+      const string &varName,
       Type &varType,
       AccessModifier access,
-      string& declaredNamespace,
+      const string& declaredNamespace,
       AstNode *decl
    );
 
    static void declareFunction(
-      string &funcName,
+      const string &funcName,
       std::unique_ptr<Function> &&func
    );
 
@@ -96,54 +96,62 @@ public:
       Union *union_
    );
 
-   static void declareTemporaryAlias(string &, string &);
+   static void declareTemporaryAlias(const string &, const string &);
    static void clearTemporaryAliases();
 
-   static bool isNamespace(string &);
+   static bool isNamespace(const string &);
 
-   static bool hasClass(string&);
-   static bool hasClass(string&, std::vector<string> &);
+   static bool hasClass(const string&);
+   static bool hasClass(const string&, std::vector<string> &);
 
-   static bool hasUnion(string&);
-   static bool hasUnion(string&, std::vector<string> &);
+   static bool hasUnion(const string&);
+   static bool hasUnion(const string&, std::vector<string> &);
 
-   static bool hasRecord(string&);
-   static bool hasRecord(string&, std::vector<string> &);
+   static bool hasRecord(const string&);
+   static bool hasRecord(const string&, std::vector<string> &);
 
-   static bool hasTypedef(string&);
-   static bool hasTypedef(string&, std::vector<string> &);
+   static bool hasTypedef(const string&);
+   static bool hasTypedef(const string&, std::vector<string> &);
 
-   static bool hasVariable(string&);
-   static bool hasVariable(string&, std::vector<string> &);
+   static bool hasVariable(const string&);
+   static bool hasVariable(const string&, std::vector<string> &);
 
-   static size_t numFunctionsWithName(string &funcName);
+   static size_t numFunctionsWithName(const string &funcName);
 
-   static cdot::cl::Class* getClass(string);
-   static cdot::cl::Class* getClass(string, std::vector<string> &);
+   static cdot::cl::Class* getClass(const string&);
+   static cdot::cl::Class* getClass(const string&, std::vector<string> &);
 
    static cdot::cl::Union* getUnion(const string&);
-   static cdot::cl::Union* getUnion(string, std::vector<string> &);
+   static cdot::cl::Union* getUnion(const string&, std::vector<string> &);
 
    static Record *getRecord(const string &recordName);
    static Record *getRecord(const string &recordName, std::vector<string> &ns);
 
-   static Typedef getTypedef(string&);
-   static Typedef getTypedef(string&, std::vector<string> &);
+   static Typedef getTypedef(const string&);
+   static Typedef getTypedef(const string&, std::vector<string> &);
 
-   static Variable& getVariable(string &);
-   static pair<Variable&, string> getVariable(string &, std::vector<string> &);
+   static Variable& getVariable(const string &);
+   static pair<Variable&, string> getVariable(const string &, std::vector<string> &);
 
-   static void setVariable(string& name, BuiltinType* ty);
+   static void setVariable(const string& name, BuiltinType* ty);
 
-   static pair<FunctionIterator, FunctionIterator> getFunction(string &);
-   static pair<FunctionIterator, FunctionIterator> getFunction(string &, std::vector<string> &);
+   static pair<FunctionIterator, FunctionIterator> getFunction(const string &);
+   static pair<FunctionIterator, FunctionIterator> getFunction(const string &, std::vector<string> &);
 
    static string mangleVariable(const string &, size_t = 0);
    static string mangleFunction(const string &, std::vector<Argument> &args);
 
-   static string mangleMethod(string &, string &, std::vector<Argument> &args);
+   static string mangleMethod(
+      const string &className,
+      const string &methodName,
+      std::vector<Argument> &args
+   );
 
-   static Typedef* resolveTypedef(string typedefName, Type& target, std::vector<string> &importedNS);
+   static Typedef* resolveTypedef(
+      const string &typedefName,
+      Type& target,
+      std::vector<string> &importedNS
+   );
 
    static const unordered_map<string, Record*>& getRecords();
 

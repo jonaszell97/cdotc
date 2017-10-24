@@ -54,7 +54,7 @@ namespace cdot {
          return isRawFunctionTy_;
       }
 
-      bool needsMemCpy() override
+      bool needsMemCpy() const override
       {
          return !isRawFunctionTy_;
       }

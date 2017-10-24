@@ -14,7 +14,7 @@ std::shared_ptr<UnionDecl> Parser::parse_union_decl()
    auto attrs = std::move(attributes);
    attributes.clear();
 
-   Token start = lexer->current_token;
+   Token start = lexer->currentToken;
    lexer->advance();
 
    auto name = lexer->s_val();
@@ -25,7 +25,7 @@ std::shared_ptr<UnionDecl> Parser::parse_union_decl()
    bool first = true;
 
    UnionDecl::UnionTypes types;
-   while (!lexer->current_token.is_punctuator('}')) {
+   while (!lexer->currentToken.is_punctuator('}')) {
       auto keyword = lexer->s_val();
       if (keyword == "let") {
          if (!first && !isLet) {

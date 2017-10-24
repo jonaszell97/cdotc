@@ -60,11 +60,11 @@ namespace diag {
       lex.advance();
       while (lex.lookahead().get_type() != T_EOF) {
          single = false;
-         if (lex.current_token.isInterpolationStart) {
+         if (lex.currentToken.isInterpolationStart) {
             msg += lex.s_val();
 
             lex.advance();
-            if (lex.current_token.get_type() == T_IDENT && lex.s_val() == "$") {
+            if (lex.currentToken.get_type() == T_IDENT && lex.s_val() == "$") {
                msg += "$";
                lex.advance();
 
@@ -72,26 +72,26 @@ namespace diag {
             }
 
             ++substituted;
-            if (lex.current_token.is_punctuator('{')) {
+            if (lex.currentToken.is_punctuator('{')) {
                lex.advance();
 
-               assert(lex.current_token.get_type() == T_LITERAL && "expected arg index");
+               assert(lex.currentToken.get_type() == T_LITERAL && "expected arg index");
 
-               auto val = lex.current_token.get_value();
+               auto val = lex.currentToken.get_value();
                assert(val.type == VariantType::INT && "expected arg index");
                assert(providedArgs.size() > val.intVal && "no substitution provided");
 
                auto& arg = providedArgs[val.intVal];
                lex.advance();
-               assert(lex.current_token.is_operator("|") && "expected pipe");
+               assert(lex.currentToken.is_operator("|") && "expected pipe");
 
                lex.advance();
                msg += handleFunction(arg, lex);
             }
             else {
-               assert(lex.current_token.get_type() == T_LITERAL && "expected arg index");
+               assert(lex.currentToken.get_type() == T_LITERAL && "expected arg index");
 
-               auto val = lex.current_token.get_value();
+               auto val = lex.currentToken.get_value();
                assert(val.type == VariantType::INT && "expected arg index");
                assert(providedArgs.size() > val.intVal && "no substitution provided");
 
@@ -103,7 +103,7 @@ namespace diag {
             lex.advance();
             lex.continueInterpolation = false;
 
-            if (!lex.current_token.isInterpolationStart) {
+            if (!lex.currentToken.isInterpolationStart) {
                msg += lex.s_val();
                break;
             }
@@ -128,23 +128,23 @@ namespace diag {
       std::vector<string> args;
 
       lex.advance();
-      if (lex.current_token.is_punctuator('(')) {
+      if (lex.currentToken.is_punctuator('(')) {
          lex.advance();
 
-         while (!lex.current_token.is_punctuator(')')) {
-            size_t start = lex.current_token.getStart();
-            while (!lex.current_token.is_punctuator(',') && !lex.current_token.is_punctuator(')')) {
+         while (!lex.currentToken.is_punctuator(')')) {
+            size_t start = lex.currentToken.getStart();
+            while (!lex.currentToken.is_punctuator(',') && !lex.currentToken.is_punctuator(')')) {
                lex.advance();
             }
 
-            if (start != lex.current_index) {
-               args.push_back(string(lex.getSrc() + start, lex.current_index - start - 1));
+            if (start != lex.currentIndex) {
+               args.push_back(string(lex.getSrc() + start, lex.currentIndex - start - 1));
             }
             else {
                args.push_back(lex.s_val());
             }
 
-            if (lex.current_token.is_punctuator(',')) {
+            if (lex.currentToken.is_punctuator(',')) {
                lex.advance();
             }
          }
@@ -152,7 +152,7 @@ namespace diag {
          lex.advance();
       }
 
-      assert(lex.current_token.is_punctuator('}') && "expected }");
+      assert(lex.currentToken.is_punctuator('}') && "expected }");
 
       if (funcName == "select") {
          assert(args.size() > var.intVal && "too few options for index");
@@ -363,7 +363,7 @@ namespace diag {
 
    DiagnosticBuilder& DiagnosticBuilder::operator<<(Lexer* const& lex)
    {
-      loc = lex->current_token.getSourceLoc();
+      loc = lex->getSourceLoc();
       locGiven = true;
 
       return *this;

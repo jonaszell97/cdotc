@@ -76,6 +76,8 @@ namespace cdot {
       bool isStdLib = false;
       bool linkStdLib = true;
       bool emitDebugInfo = false;
+
+      unsigned maxMacroRecursionDepth = 256;
    };
 
    class Compiler {

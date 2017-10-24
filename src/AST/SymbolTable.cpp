@@ -4,11 +4,11 @@
 
 #include "SymbolTable.h"
 #include "../Util.h"
-#include "Passes/StaticAnalysis/Record/Class.h"
-#include "Passes/StaticAnalysis/Record/Union.h"
-#include "Passes/StaticAnalysis/Record/Enum.h"
+#include "Passes/SemanticAnalysis/Record/Class.h"
+#include "Passes/SemanticAnalysis/Record/Union.h"
+#include "Passes/SemanticAnalysis/Record/Enum.h"
 #include "Statement/Declaration/Class/ClassDecl.h"
-#include "Passes/StaticAnalysis/Function.h"
+#include "Passes/SemanticAnalysis/Function.h"
 #include "../Variant/Type/VoidType.h"
 
 std::unordered_map<string, Typedef> SymbolTable::typedefs = {
@@ -22,16 +22,17 @@ std::vector<string> SymbolTable::namespaces = {};
 unordered_map<string, string> SymbolTable::TemporaryAliases;
 
 Typedef* SymbolTable::resolveTypedef(
-   string typedefName,
+   const string &typedefName,
    Type& ts,
    std::vector<string> &namespaces)
 {
+   string name = typedefName;
    if (TemporaryAliases.find(typedefName) != TemporaryAliases.end()) {
-      typedefName = TemporaryAliases[typedefName];
+      name = TemporaryAliases[typedefName];
    }
 
    for (const auto& ns : namespaces) {
-      auto fullName = ns + typedefName;
+      auto fullName = ns + name;
       if (hasTypedef(fullName)) {
          return &typedefs[fullName];
       }
@@ -61,8 +62,8 @@ string SymbolTable::mangleFunction(
 }
 
 string SymbolTable::mangleMethod(
-   string &class_name,
-   string &name,
+   const string &class_name,
+   const string &name,
    std::vector<Argument> &args)
 {
    string symbol = class_name + "." + name;
@@ -74,7 +75,8 @@ string SymbolTable::mangleMethod(
    return symbol;
 }
 
-void SymbolTable::declareTemporaryAlias(string &alias, string &aliasee)
+void SymbolTable::declareTemporaryAlias(
+   const string &alias, const string &aliasee)
 {
    TemporaryAliases.emplace(alias, aliasee);
 }
@@ -91,7 +93,7 @@ void SymbolTable::declareNamespace(const string &name)
    }
 }
 
-bool SymbolTable::isNamespace(string &name)
+bool SymbolTable::isNamespace(const string &name)
 {
    if(std::find(namespaces.begin(), namespaces.end(), name) != namespaces.end() ||
       cdot::isBuilitinNamespace(name))
@@ -101,7 +103,6 @@ bool SymbolTable::isNamespace(string &name)
 
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
       if (isNamespace(TemporaryAliases[name])) {
-         name = TemporaryAliases[name];
          return true;
       }
    }
@@ -110,10 +111,10 @@ bool SymbolTable::isNamespace(string &name)
 }
 
 void SymbolTable::declareVariable(
-   string &name,
+   const string &name,
    Type& type,
    AccessModifier access,
-   string& declaredNamespace,
+   const string& declaredNamespace,
    AstNode *decl)
 {
    if (variables.find(name) != variables.end()) {
@@ -129,7 +130,7 @@ void SymbolTable::declareVariable(
 }
 
 void SymbolTable::declareFunction(
-   string &name,
+   const string &name,
    Function::UniquePtr &&fun)
 {
    functions.emplace(name, std::move(fun));
@@ -141,11 +142,10 @@ void SymbolTable::declareUnion(Union *union_)
 }
 
 pair<SymbolTable::FunctionIterator, SymbolTable::FunctionIterator>
-SymbolTable::getFunction(string &name)
+SymbolTable::getFunction(const string &name)
 {
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
-      name = TemporaryAliases[name];
-      return getFunction(name);
+      return getFunction(TemporaryAliases[name]);
    }
 
    return functions.equal_range(name);
@@ -153,7 +153,7 @@ SymbolTable::getFunction(string &name)
 
 pair<SymbolTable::FunctionIterator, SymbolTable::FunctionIterator>
 SymbolTable::getFunction(
-   string &name,
+   const string &name,
    std::vector<string> &namespaces)
 {
    for (const auto& ns : namespaces) {
@@ -170,14 +170,14 @@ SymbolTable::getFunction(
    return overloads;
 }
 
-bool SymbolTable::hasVariable(string& name) {
+bool SymbolTable::hasVariable(const string& name)
+{
    if (variables.find(name) != variables.end()) {
       return true;
    }
 
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
       if (hasVariable(TemporaryAliases[name])) {
-         name = TemporaryAliases[name];
          return true;
       }
    }
@@ -185,7 +185,8 @@ bool SymbolTable::hasVariable(string& name) {
    return false;
 }
 
-bool SymbolTable::hasVariable(string& name, std::vector<string> &namespaces) {
+bool SymbolTable::hasVariable(const string& name, std::vector<string> &namespaces)
+{
    for (const auto& ns : namespaces) {
       string fullName = ns + name;
       if (hasVariable(fullName)) {
@@ -196,28 +197,27 @@ bool SymbolTable::hasVariable(string& name, std::vector<string> &namespaces) {
    return hasVariable(name);
 }
 
-size_t SymbolTable::numFunctionsWithName(string &funcName)
+size_t SymbolTable::numFunctionsWithName(const string &funcName)
 {
    auto overloads = functions.equal_range(funcName);
    return std::distance(overloads.first, overloads.second);
 }
 
-Variable& SymbolTable::getVariable(string &name)
+Variable& SymbolTable::getVariable(const string &name)
 {
    if (variables.find(name) != variables.end()) {
       return variables[name];
    }
 
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
-      name = TemporaryAliases[name];
-      return getVariable(name);
+      return getVariable(TemporaryAliases[name]);
    }
 
    llvm_unreachable("Call hasVariable first!");
 }
 
 pair<Variable&, string> SymbolTable::getVariable(
-   string &name,
+   const string &name,
    std::vector<string> &namespaces)
 {
    for (const auto& ns : namespaces) {
@@ -231,7 +231,7 @@ pair<Variable&, string> SymbolTable::getVariable(
 }
 
 void SymbolTable::setVariable(
-   string &name,
+   const string &name,
    BuiltinType *ty)
 {
    *variables[name].type = ty;
@@ -270,7 +270,7 @@ void SymbolTable::declareTypedef(
    }
 }
 
-cdot::cl::Class* SymbolTable::getClass(string name)
+cdot::cl::Class* SymbolTable::getClass(const string &name)
 {
    auto rec = getRecord(name);
    assert(rec->isNonUnion());
@@ -284,7 +284,8 @@ namespace {
    }
 }
 
-cdot::cl::Class* SymbolTable::getClass(string name, std::vector<string> &namespaces)
+cdot::cl::Class* SymbolTable::getClass(
+   const string &name, std::vector<string> &namespaces)
 {
    auto rec = getRecord(name, namespaces);
    assert(rec->isNonUnion());
@@ -300,7 +301,8 @@ cdot::cl::Union* SymbolTable::getUnion(const string &name)
    return rec->getAs<Union>();
 }
 
-cdot::cl::Union* SymbolTable::getUnion(string name, std::vector<string> &namespaces)
+cdot::cl::Union* SymbolTable::getUnion(
+   const string &name, std::vector<string> &namespaces)
 {
    auto rec = getRecord(name, namespaces);
    assert(rec->isUnion());
@@ -308,12 +310,12 @@ cdot::cl::Union* SymbolTable::getUnion(string name, std::vector<string> &namespa
    return rec->getAs<Union>();
 }
 
-bool SymbolTable::hasRecord(string &name)
+bool SymbolTable::hasRecord(const string &name)
 {
    return getRecord(name) != nullptr;
 }
 
-bool SymbolTable::hasRecord(string &name, std::vector<string> &namespaces)
+bool SymbolTable::hasRecord(const string &name, std::vector<string> &namespaces)
 {
    return getRecord(name, namespaces) != nullptr;
 }
@@ -363,21 +365,21 @@ SymbolTable::getRecords()
    return Records;
 }
 
-Typedef SymbolTable::getTypedef(string& name) {
+Typedef SymbolTable::getTypedef(const string& name) {
    if (typedefs.find(name) != typedefs.end()) {
       auto td = typedefs[name];
       return Typedef{ td.access, td.aliasedType };
    }
 
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
-      name = TemporaryAliases[name];
-      return getTypedef(name);
+      return getTypedef(TemporaryAliases[name]);
    }
 
    llvm_unreachable("Call hasTypedef first!");
 }
 
-Typedef SymbolTable::getTypedef(string& name, std::vector<string> &namespaces) {
+Typedef SymbolTable::getTypedef(
+   const string& name, std::vector<string> &namespaces) {
    for (const auto& ns : namespaces) {
       auto fullName = ns + name;
       if (hasTypedef(fullName)) {
@@ -388,35 +390,38 @@ Typedef SymbolTable::getTypedef(string& name, std::vector<string> &namespaces) {
    llvm_unreachable("Call hasTypedef first!");
 }
 
-bool SymbolTable::hasClass(string& name) {
+bool SymbolTable::hasClass(const string& name) {
    auto cl = getRecord(name);
    return cl && cl->isNonUnion();
 }
 
-bool SymbolTable::hasUnion(string& name) {
+bool SymbolTable::hasUnion(const string& name) {
    auto cl = getRecord(name);
    return cl && cl->isUnion();
 }
 
-bool SymbolTable::hasUnion(string &name, std::vector<string> &namespaces)
+bool SymbolTable::hasUnion(
+   const string &name, std::vector<string> &namespaces)
 {
    auto rec = getRecord(name, namespaces);
    return rec != nullptr && rec->isUnion();
 }
 
-bool SymbolTable::hasClass(string& name, std::vector<string> &namespaces) {
+bool SymbolTable::hasClass(
+   const string& name, std::vector<string> &namespaces)
+{
    auto cl = getRecord(name, namespaces);
    return cl && cl->isNonUnion();
 }
 
-bool SymbolTable::hasTypedef(string& name) {
+bool SymbolTable::hasTypedef(const string& name)
+{
    if (typedefs.find(name) != typedefs.end()) {
       return true;
    }
 
    if (TemporaryAliases.find(name) != TemporaryAliases.end()) {
       if (hasTypedef(TemporaryAliases[name])) {
-         name = TemporaryAliases[name];
          return true;
       }
    }
@@ -424,7 +429,9 @@ bool SymbolTable::hasTypedef(string& name) {
    return false;
 }
 
-bool SymbolTable::hasTypedef(string& name, std::vector<string> &namespaces) {
+bool SymbolTable::hasTypedef(
+   const string& name, std::vector<string> &namespaces)
+{
    for (const auto& ns : namespaces) {
       auto fullName = ns + name;
       if (hasTypedef(fullName)) {

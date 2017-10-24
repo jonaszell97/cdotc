@@ -52,17 +52,17 @@ namespace cdot {
       return actualType->isEnum();
    }
 
-   bool GenericType::isRefcounted()
+   bool GenericType::isRefcounted() const
    {
       return actualType->isRefcounted();
    }
 
-   bool GenericType::isValueType()
+   bool GenericType::isValueType() const
    {
       return actualType->isValueType();
    }
 
-   bool GenericType::needsMemCpy()
+   bool GenericType::needsMemCpy() const
    {
       return actualType->needsMemCpy();
    }
@@ -92,7 +92,7 @@ namespace cdot {
       return actualType->getClassName();
    }
 
-   cl::Record * GenericType::getRecord()
+   cl::Record * GenericType::getRecord() const
    {
       return actualType->getRecord();
    }

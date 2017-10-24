@@ -72,10 +72,10 @@ ParseError::ParseError(const std::string& message) : message_(message) {
 void ParseError::raise(std::string msg, Lexer *lexer) {
    std::string err = "\033[21;31mError: " + msg;
    if (lexer != nullptr) {
-      auto start = lexer->current_token.getStart();
-      auto end = lexer->current_token.getEnd();
+      auto start = lexer->currentToken.getStart();
+      auto end = lexer->currentToken.getEnd();
 
-      auto str = string(lexer->src, lexer->srcLen);
+      auto str = string(lexer->curr, lexer->srcLen);
       err += cdot::err::prepareLine(str, lexer->fileName, start, end - start);
    }
 

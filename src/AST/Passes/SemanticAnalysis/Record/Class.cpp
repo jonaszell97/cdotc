@@ -11,6 +11,7 @@
 #include "../../../../Variant/Type/ObjectType.h"
 #include "../../../../Util.h"
 #include "../../../../Variant/Type/GenericType.h"
+#include "../Function.h"
 
 #include "../../../Statement/Declaration/Class/MethodDecl.h"
 #include "../../../Statement/Declaration/Class/ClassDecl.h"
@@ -54,39 +55,6 @@ namespace cl {
       bool isConst, FieldDecl* declaration) :
       fieldName(name), fieldType(type), accessModifier(access_modifier), defaultVal(def), isConst(isConst),
       declaration(declaration)
-   {
-
-   }
-
-   /**
-    * Instantiates a class method
-    * @param name
-    * @param ret_type
-    * @param access_modifier
-    * @param arg_names
-    * @param arg_types
-    * @param arg_defaults
-    */
-   Method::Method(string name, Type& ret_type, AccessModifier access_modifier, std::vector<Argument>&& args,
-         std::vector<GenericConstraint>& generics, bool isStatic, MethodDecl* declaration, SourceLocation loc) :
-      methodName(name), returnType(ret_type), accessModifier(access_modifier),
-      arguments(args), isStatic(isStatic), generics(generics), declaration(declaration),
-      hasDefinition(declaration == nullptr || declaration->hasDefinition()), loc(loc)
-   {
-
-   }
-
-   Method::Method(string name, Type& ret_type, std::vector<Argument>&& args,
-      std::vector<GenericConstraint>& generics,
-      MethodDecl*declaration, SourceLocation loc) :
-      methodName(name),
-      returnType(ret_type),
-      arguments(args),
-      isStatic(false),
-      generics(generics),
-      declaration(declaration),
-      hasDefinition(declaration == nullptr || declaration->hasDefinition()),
-      loc(loc)
    {
 
    }
@@ -139,7 +107,7 @@ namespace cl {
     * @param is_static
     */
    Field* Class::declareField(
-      string name,
+      const string &name,
       BuiltinType *type,
       AccessModifier access,
       Expression::SharedPtr def_val,
@@ -176,7 +144,7 @@ namespace cl {
     * @param arg_defaults
     */
    Method* Class::declareMethod(
-      string methodName,
+      const string &methodName,
       Type& ret_type,
       AccessModifier access,
       std::vector<Argument>&& args,
@@ -195,11 +163,11 @@ namespace cl {
 
       method->owningClass = this;
 
-      method->mangledName = symb;
+      method->setMangledName(symb);
       method->isProtocolDefaultImpl = is_protocol && (decl == nullptr || decl->hasDefinition());
       if (method->isProtocolDefaultImpl) {
          method->protocolName = methodName;
-         ++method->uses;
+         method->addUse();
       }
 
       if (activeConstraints && !ConstraintSets.back().empty()) {
@@ -207,7 +175,7 @@ namespace cl {
       }
 
       if (ret_type->needsStructReturn()) {
-         method->hasStructReturn = true;
+         method->hasStructReturn(true);
       }
 
       auto ptr = method.get();
@@ -269,7 +237,7 @@ namespace cl {
       auto method = std::make_shared<Method>(constrName, retType, std::move(args), generics,
          nullptr, SourceLocation());
 
-      method->mangledName = mangled;
+      method->setMangledName(mangled);
       method->loc = declaration->getSourceLoc();
       auto ptr = method.get();
 
@@ -286,7 +254,7 @@ namespace cl {
     * @param is_static
     * @return
     */
-   bool Class::hasField(string &field_name) {
+   bool Class::hasField(const string &field_name) {
       for (const auto& f : fields) {
          if (f.first == field_name) {
             return true;
@@ -309,7 +277,7 @@ namespace cl {
       return recordName.substr(declarationNamespace.length() + 1);
    }
 
-   size_t Class::getFieldOffset(string &fieldName)
+   size_t Class::getFieldOffset(const string &fieldName)
    {
       return getField(fieldName)->layoutOffset;
    }
@@ -395,7 +363,7 @@ namespace cl {
    }
 
    CallCompatability Class::hasMethod(
-      string method_name,
+      const string &method_name,
       std::vector<Argument> args,
       std::vector<GenericType*> concreteGenerics,
       BuiltinType* caller,
@@ -421,8 +389,9 @@ namespace cl {
             continue;
          }
 
-         CallCompatability res = util::findMatchingCall(args, overload->arguments, concreteGenerics,
-            overload->generics);
+         CallCompatability res =
+            util::findMatchingCall(args, overload->getArguments(),
+                                   concreteGenerics, overload->getGenerics());
 
          if (!res.isCompatible() && !result.isCompatible()) {
             CallCandidate cand;
@@ -473,10 +442,10 @@ namespace cl {
     * @param is_static
     * @return
     */
-   Method* Class::getMethod(string method_name)
+   Method* Class::getMethod(const string &method_name)
    {
       for (auto& method : methods) {
-         if (method.second->mangledName == method_name) {
+         if (method.second->getMangledName() == method_name) {
             return method.second.get();
          }
       }
@@ -494,7 +463,7 @@ namespace cl {
       return nullptr;
    }
 
-   pair<Class::MethodIterator, Class::MethodIterator> Class::getOverloads(string &methodName)
+   pair<Class::MethodIterator, Class::MethodIterator> Class::getOverloads(const string &methodName)
    {
       return methods.equal_range(methodName);
    }
@@ -505,7 +474,7 @@ namespace cl {
     * @param is_static
     * @return
     */
-   Field* Class::getField(string &field_name)
+   Field* Class::getField(const string &field_name)
    {
       for (const auto& f : fields) {
          if (f.first == field_name) {
@@ -597,7 +566,7 @@ namespace cl {
       }
 
       method->isProtocolMethod = true;
-      mangledMethods.emplace(method->mangledName, method);
+      mangledMethods.emplace(method->getMangledName(), method);
    }
 
    void Class::inheritProtocols(std::vector<ObjectType*>& protocols, ObjectType* current, bool initial) {
@@ -686,9 +655,9 @@ namespace cl {
       int i = 0;
       for (const auto& method : proto->methods) {
          std::vector<Argument> args;
-         args.reserve(method.second->arguments.size());
+         args.reserve(method.second->getArguments().size());
 
-         for (const auto& arg : method.second->arguments) {
+         for (const auto& arg : method.second->getArguments()) {
             auto needed = arg;
             if (needed.type->isObject() && needed.type->getClassName() == "Self") {
                *needed.type = ObjectType::get(recordName, concreteGenerics);
@@ -700,11 +669,11 @@ namespace cl {
             args.push_back(needed);
          }
 
-         auto methodName = SymbolTable::mangleFunction(method.second->methodName, args);
+         auto methodName = SymbolTable::mangleFunction(method.second->getName(), args);
          if (mangledMethods.find(methodName) == mangledMethods.end()) {
             if (method.second->hasDefinition) {
-               protoMethods.push_back(method.second->mangledName);
-               mangledMethods.emplace(method.second->mangledName, method.second.get());
+               protoMethods.push_back(method.second->getMangledName());
+               mangledMethods.emplace(method.second->getMangledName(), method.second.get());
 
                continue;
             }
@@ -722,29 +691,29 @@ namespace cl {
             }
 
             throw "Class " + recordName + " does not correctly implement interface " + protoName +
-               ": Required method " + method.second->methodName + " is missing or has incompatible signature";
+               ": Required method " + method.second->getName() + " is missing or has incompatible signature";
          }
 
          auto& implementedMethod = mangledMethods[methodName];
          if (implementedMethod->isStatic != method.second->isStatic) {
             string str = method.second->isStatic ? "" : " not";
             throw "Class " + recordName + " does not correctly implement interface " + protoName +
-               ": Method " + method.second->methodName + " must" + str + " be static";
+               ": Method " + method.second->getName() + " must" + str + " be static";
          }
 
-         auto& given = implementedMethod->returnType;
-         auto needed = method.second->returnType;
-         ++implementedMethod->uses;
+         auto& given = implementedMethod->getReturnType();
+         auto needed = method.second->getReturnType();
+         implementedMethod->addUse();
 
          if (!given.implicitlyCastableTo(needed)) {
             throw "Class " + recordName + " does not correctly implement interface " + protoName +
-               ": Required method " + method.second->methodName + " has incompatible return type (Expected " +
+               ": Required method " + method.second->getName() + " has incompatible return type (Expected " +
                needed->toString() + ", found " + given->toString() + ")";
          }
 
-         protoMethods.push_back(implementedMethod->mangledName);
+         protoMethods.push_back(implementedMethod->getMangledName());
          for (const auto &m : mangledMethods) {
-            if (m.second->methodName == method.second->methodName) {
+            if (m.second->getName() == method.second->getName()) {
                implementedMethod->isProtocolMethod = true;
                implementedMethod->protocolName = protoName;
             }
@@ -891,8 +860,8 @@ namespace cl {
    void Class::findVirtualMethods() {
       if (is_abstract) {
          for (const auto& method : mangledMethods) {
-            ++method.second->uses;
-            virtualMethods.emplace_back(method.first, method.second->mangledName);
+            method.second->addUse();
+            virtualMethods.emplace_back(method.first, method.second->getMangledName());
          }
          for (const auto& field : fields) {
             if (field.second->isProp && field.second->hasGetter) {
@@ -924,15 +893,15 @@ namespace cl {
                if (current->mangledMethods.find(method.first) != current->mangledMethods.end()) {
                   if (!util::in_pair_vector(virtualMethods, method.first)) {
                      auto& currentMethod = current->mangledMethods[method.first];
-                     ++currentMethod->uses;
+                     currentMethod->addUse();
 
-                     virtualMethods.emplace_back(method.first, currentMethod->mangledName);
+                     virtualMethods.emplace_back(method.first, currentMethod->getMangledName());
                   }
                   if (!util::in_pair_vector(base->virtualMethods, method.first)) {
                      auto& baseMethod = base->mangledMethods[method.first];
-                     ++baseMethod->uses;
+                     baseMethod->addUse();
 
-                     base->virtualMethods.emplace_back(method.first, baseMethod->mangledName);
+                     base->virtualMethods.emplace_back(method.first, baseMethod->getMangledName());
                   }
 
                   method.second->isVirtual = true;
@@ -941,9 +910,9 @@ namespace cl {
                   if (method.second->isProtocolMethod) {
                      auto& protoName = method.second->protocolName;
                      auto& currentMethod = current->mangledMethods[method.first];
-                     ++currentMethod->uses;
+                     currentMethod->addUse();
 
-                     protocolMethods[protoName].push_back(currentMethod->mangledName);
+                     protocolMethods[protoName].push_back(currentMethod->getMangledName());
                   }
 
                   break;
@@ -1219,7 +1188,7 @@ namespace cl {
 
       size_t methodPos = pos;
       for (const auto& method : current->methods) {
-         methodOffsets.emplace(method.second->mangledName, methodPos++);
+         methodOffsets.emplace(method.second->getMangledName(), methodPos++);
       }
 
       vtableOffsets.emplace(current->recordName, pos);
@@ -1382,7 +1351,7 @@ namespace cl {
 
    bool Class::isVirtual(Method *method) {
       if (util::in_pair_vector(virtualMethods,
-         SymbolTable::mangleFunction(method->methodName, method->arguments)))
+         SymbolTable::mangleFunction(method->getName(), method->getArguments())))
       {
          return true;
       }

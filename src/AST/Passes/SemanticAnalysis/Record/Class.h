@@ -64,48 +64,7 @@ namespace cl {
       Class* owningClass = nullptr;
    };
 
-   struct Method {
-      Method(string name, Type& ret_type, AccessModifier access_modifier, std::vector<Argument>&& args,
-         std::vector<GenericConstraint>& generics, bool, MethodDecl *decl, SourceLocation loc
-      );
-
-      Method(string name, Type& ret_type, std::vector<Argument>&& args,
-         std::vector<GenericConstraint>& generics, MethodDecl *decl, SourceLocation loc
-      );
-
-      typedef std::unique_ptr<Method> UniquePtr;
-      typedef std::shared_ptr<Method> SharedPtr;
-
-      string methodName;
-      string mangledName;
-
-      Type returnType;
-
-      std::vector<Argument> arguments;
-      AccessModifier  accessModifier;
-
-      std::vector<GenericConstraint> generics;
-      long constraintIndex = -1;
-
-      bool isStatic = false;
-      bool isProtocolMethod = false;
-      bool isVirtual = false;
-      bool mutableSelf = false;
-
-      size_t uses = 0;
-
-      bool isProtocolDefaultImpl = false;
-      bool hasDefinition = false;
-      string protocolName;
-
-      MethodDecl* declaration;
-      SourceLocation loc;
-
-      llvm::Function* llvmFunc;
-      bool hasStructReturn = false;
-
-      Class* owningClass = nullptr;
-   };
+   struct Method;
 
    enum class ImplicitConformance {
       StringRepresentable,
@@ -114,7 +73,7 @@ namespace cl {
    };
 
    class Class: public Record {
-      typedef unordered_multimap<string, Method::SharedPtr>::iterator MethodIterator;
+      typedef unordered_multimap<string, std::shared_ptr<Method>>::iterator MethodIterator;
 
    public:
       Class(
@@ -129,7 +88,7 @@ namespace cl {
       );
 
       Field* declareField(
-         string name,
+         const string &name,
          BuiltinType *type,
          AccessModifier access,
          Expression::SharedPtr def_val,
@@ -140,7 +99,7 @@ namespace cl {
       );
 
       Method* declareMethod(
-         string methodName,
+         const string &methodName,
          Type& ret_type,
          AccessModifier access,
          std::vector<Argument>&& args,
@@ -170,7 +129,7 @@ namespace cl {
       );
 
       CallCompatability hasMethod(
-         string method_name,
+         const string &method_name,
          std::vector<Argument> args = {},
          std::vector<GenericType*> givenGenerics = {},
          BuiltinType* caller = nullptr,
@@ -185,12 +144,12 @@ namespace cl {
          conformsTo_.push_back(proto);
       }
 
-      bool hasField(string &field_name);
+      bool hasField(const string &field_name);
 
-      Method* getMethod(string method_name);
-      Field* getField(string &field_name);
+      Method* getMethod(const string &method_name);
+      Field* getField(const string &field_name);
 
-      pair<MethodIterator, MethodIterator> getOverloads(string &methodName);
+      pair<MethodIterator, MethodIterator> getOverloads(const string &methodName);
 
       const unordered_map<string, Method*>& getMethods() {
          return mangledMethods;
@@ -230,6 +189,16 @@ namespace cl {
          return is_class;
       }
 
+      bool hasNonEmptyDeinitializer() const
+      {
+         return has_nonempty_deinit;
+      }
+
+      void hasNonEmptyDeinitializer(bool nonempty)
+      {
+         has_nonempty_deinit = nonempty;
+      }
+
       std::vector<GenericConstraint>& getGenerics()
       {
          return generics;
@@ -242,7 +211,7 @@ namespace cl {
 
       void declareMethodAlias(string& name, string& mangledOriginal) {
          for (const auto& method : methods) {
-            if (method.second->mangledName == mangledOriginal) {
+            if (method.second->getMangledName() == mangledOriginal) {
                methods.emplace(name, method.second);
                break;
             }
@@ -293,13 +262,13 @@ namespace cl {
          return protocolMethods;
       }
 
-      size_t getVTableOffset(string& interface_name) {
+      size_t getVTableOffset(const string& interface_name) {
          return vtableOffsets[interface_name];
       }
 
-      size_t getFieldOffset(string& fieldName);
+      size_t getFieldOffset(const string& fieldName);
 
-      size_t getMethodOffset(string& methodName) {
+      size_t getMethodOffset(const string& methodName) {
          return methodOffsets[methodName];
       }
 
@@ -433,7 +402,7 @@ namespace cl {
       map<string, std::vector<string>> protocolMethods;
 
       std::vector<pair<string, Field::SharedPtr>> fields;
-      unordered_multimap<string, Method::SharedPtr> methods;
+      unordered_multimap<string, std::shared_ptr<Method>> methods;
       std::vector<Method*> constructors;
 
       std::vector<std::vector<ExtensionConstraint>> ConstraintSets;
@@ -460,6 +429,8 @@ namespace cl {
       bool is_struct = false;
       bool is_class = false;
       bool hasAssociatedTypes_ = false;
+
+      bool has_nonempty_deinit = false;
 
       std::vector<ImplicitConformance> implicitConformances;
 

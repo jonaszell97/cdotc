@@ -4,8 +4,8 @@
 
 #include "CallExpr.h"
 #include "../../SymbolTable.h"
-#include "../../Passes/StaticAnalysis/Record/Class.h"
-#include "../../Passes/StaticAnalysis/Record/Enum.h"
+#include "../../Passes/SemanticAnalysis/Record/Class.h"
+#include "../../Passes/SemanticAnalysis/Record/Enum.h"
 
 CallExpr::CallExpr(CallType type, std::vector<pair<string, Expression::SharedPtr>> args, std::string _ident) :
    type(type),

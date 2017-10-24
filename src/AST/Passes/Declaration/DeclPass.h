@@ -9,7 +9,8 @@
 #include <stack>
 
 #include "../AbstractPass.h"
-#include "../StaticAnalysis/Function.h"
+#include "../SemanticAnalysis/Function.h"
+#include "../../Attribute/Attribute.h"
 
 enum class AccessModifier : unsigned int;
 
@@ -84,6 +85,8 @@ protected:
 
    void pushNamespace(string &ns, bool declare = true);
    void popNamespace();
+
+   void CheckThrowsAttribute(Callable *callable, Attribute &attr);
 };
 
 

@@ -40,14 +40,14 @@ namespace cdot {
       bool isStruct() override;
       bool isProtocol() override;
       bool isEnum() override;
-      bool isRefcounted() override;
+      bool isRefcounted() const override;
 
-      bool isValueType() override;
-      bool needsMemCpy() override;
+      bool isValueType() const override;
+      bool needsMemCpy() const override;
       bool needsStructReturn() override;
 
       string& getClassName() override;
-      cl::Record * getRecord() override;
+      cl::Record * getRecord() const override;
 
       string toString() override;
       string toUniqueString() override;

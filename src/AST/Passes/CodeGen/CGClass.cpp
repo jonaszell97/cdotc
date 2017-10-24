@@ -8,7 +8,7 @@
 
 #include "llvm/IR/Module.h"
 
-#include "../StaticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Enum.h"
 
 #include "../../Expression/TypeRef.h"
 #include "../../../Variant/Type/BuiltinType.h"
@@ -59,8 +59,9 @@ llvm::Function* CodeGen::DeclareDefaultConstructor(
    string &this_binding,
    cdot::cl::Class *cl)
 {
-   auto func = DeclareMethod(bound_name, args, return_type, this_val, this_binding, {}, false, false,
-      !cl->isDeclared());
+   auto func = DeclareMethod(bound_name, args, return_type, false,
+                             this_val, this_binding, {}, false, false,
+                             !cl->isDeclared());
 
    func->addFnAttr(llvm::Attribute::AlwaysInline);
    if (!cl->isDeclared()) {
@@ -79,7 +80,7 @@ llvm::Function* CodeGen::DeclareDefaultDestructor(
    string name = cl->getName() + ".deinit";
    Type voidTy(VoidType::get());
 
-   auto func = DeclareMethod(name, {}, voidTy, getStructTy(cl->getName()),
+   auto func = DeclareMethod(name, {}, voidTy, false, getStructTy(cl->getName()),
       selfBinding, {}, false, false, !cl->isDeclared());
 
    func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -89,7 +90,7 @@ llvm::Function* CodeGen::DeclareDefaultDestructor(
 
    auto destr = cl->hasMethod("deinit");
    if (destr.isCompatible()) {
-      destr.method->llvmFunc = func;
+      destr.method->setLlvmFunc(func);
    }
 
    cl->setDestructor(func);
@@ -294,7 +295,7 @@ void CodeGen::DeclareClass(ClassDecl *node)
       Type voidTy(VoidType::get());
 
       DeclareDefaultConstructor(name, {}, voidTy, classType, node->selfBinding, cl);
-      node->defaultConstr->llvmFunc = cl->getDefaultContructor();
+      node->defaultConstr->setLlvmFunc(cl->getDefaultContructor());
    }
 
    if (!node->constructors.empty()) {
@@ -341,7 +342,7 @@ void CodeGen::DeclareEnum(EnumDecl *node)
 void CodeGen::DefineField(FieldDecl *node)
 {
    auto field_type = node->type->getType();
-   if (node->is_static) {
+   if (node->isStatic() && !node->isProperty()) {
       auto global = llvm::cast<llvm::GlobalVariable>(getVariable(node->binding));
 
       if (node->defaultVal) {
@@ -358,8 +359,6 @@ void CodeGen::DefineField(FieldDecl *node)
             global_initializers.emplace_back(node->defaultVal.get(), *field_type);
          }
       }
-
-      return;
    }
 
    if (node->protocol_field || SymbolTable::getClass(node->className)->isDeclared()) {
@@ -407,7 +406,7 @@ void CodeGen::DefineField(FieldDecl *node)
 void CodeGen::DeclareField(FieldDecl *node)
 {
    auto field_type = node->type->getType();
-   if (node->is_static) {
+   if (node->isStatic() && !node->isProperty()) {
       auto llvmTy = field_type.getLlvmType();
       if (field_type->isStruct() && llvmTy->isPointerTy()) {
          llvmTy = llvmTy->getPointerElementType();
@@ -417,24 +416,26 @@ void CodeGen::DeclareField(FieldDecl *node)
          false, llvm::GlobalVariable::ExternalLinkage, nullptr, node->binding);
 
       declareVariable(node->binding, val);
-      return;
    }
 
    if (node->has_getter && node->getterBody != nullptr) {
       auto getterRetTy = field_type;
-      node->getterMethod->llvmFunc = DeclareMethod(
+      node->getterMethod->setLlvmFunc(DeclareFunction(
          node->getterBinding, {},
          getterRetTy,
+         node->getterMethod->throws(),
+         !node->isStatic(),
          getStructTy(node->className),
          node->getterSelfBinding,
          {},
          field_type->needsStructReturn(),
          false,
+         false,
          !node->is_declaration
-      );
+      ));
 
       if (emitDI) {
-         DI->emitMethodDI(node->getterMethod, node->getterMethod->llvmFunc);
+         DI->emitMethodDI(node->getterMethod, node->getterMethod->getLlvmFunc());
       }
    }
    else if (node->has_getter) {
@@ -446,7 +447,10 @@ void CodeGen::DeclareField(FieldDecl *node)
       }
 
       std::vector<llvm::Type*> argTypes;
-      argTypes.push_back(getStructTy(node->className)->getPointerTo());
+      if (!node->isStatic()) {
+         argTypes.push_back(getStructTy(node->className)->getPointerTo());
+      }
+
       if (hasSRet) {
          argTypes.push_back(field_type->getLlvmType()->getPointerTo());
       }
@@ -469,32 +473,42 @@ void CodeGen::DeclareField(FieldDecl *node)
          );
 
          declareFunction(node->getterBinding, func);
-         node->getterMethod->llvmFunc = func;
+         node->getterMethod->setLlvmFunc(func);
       }
    }
 
    if (node->has_setter && node->setterBody != nullptr) {
       Type voidTy(VoidType::get());
-      node->setterMethod->llvmFunc = DeclareMethod(
+      node->setterMethod->setLlvmFunc(DeclareFunction(
          node->setterBinding,
          { node->newVal },
          voidTy,
+         node->setterMethod->throws(),
+         !node->isStatic(),
          getStructTy(node->className),
          node->setterSelfBinding,
          {},
          false,
          false,
+         false,
          !node->is_declaration
-      );
+      ));
 
       if (emitDI) {
-         DI->emitMethodDI(node->setterMethod, node->setterMethod->llvmFunc);
+         DI->emitMethodDI(node->setterMethod, node->setterMethod->getLlvmFunc());
       }
    }
    else if (node->has_setter) {
+      std::vector<llvm::Type*> argTypes;
+      if (node->isStatic()) {
+         argTypes.push_back(getStructTy(node->className)->getPointerTo());
+      }
+
+      argTypes.push_back(field_type.getLlvmType());
+
       auto funcTy = llvm::FunctionType::get(
          Builder.getVoidTy(),
-         { getStructTy(node->className)->getPointerTo(), field_type.getLlvmType() },
+         argTypes,
          false
       );
 
@@ -510,7 +524,7 @@ void CodeGen::DeclareField(FieldDecl *node)
          );
 
          declareFunction(node->setterBinding, func);
-         node->setterMethod->llvmFunc = func;
+         node->setterMethod->setLlvmFunc(func);
       }
    }
 }
@@ -571,45 +585,47 @@ void CodeGen::DeclareMethod(MethodDecl *node)
          boundName,
          node->args,
          node->returnType->getType(),
+         node->method->throws(),
          selfType,
          node->selfBinding,
          node->attributes,
-         node->method->hasStructReturn,
+         node->method->hasStructReturn(),
          node->method->isProtocolMethod || node->method->isVirtual,
          !node->is_declaration
       );
 
       if (node->hasAttribute(Attr::_builtin)) {
-         auto& builtinKind = node->getAttribute(Attr::_builtin).args.front();
+         auto& builtinKind = node->getAttribute(Attr::_builtin).args.front().strVal;
          declareNative(builtinKind, func);
       }
 
-      node->method->llvmFunc = func;
+      node->method->setLlvmFunc(func);
    }
    else {
       auto func = DeclareFunction(
          boundName,
          node->args,
          node->returnType->getType(),
+         node->method->throws(),
          false,
          nullptr,
          "",
          node->attributes,
-         node->method->hasStructReturn,
+         node->method->hasStructReturn(),
          false,
          false,
          !node->is_declaration
       );
 
-      node->method->llvmFunc = func;
+      node->method->setLlvmFunc(func);
    }
 
    if (emitDI) {
-      DI->emitMethodDI(node->method, node->method->llvmFunc);
+      DI->emitMethodDI(node->method, node->method->getLlvmFunc());
    }
 
    if (node->getExternKind() == ExternKind::C) {
-      declareFunction(node->binding, node->method->llvmFunc);
+      declareFunction(node->binding, node->method->getLlvmFunc());
    }
 }
 
@@ -618,19 +634,21 @@ void CodeGen::DeclareConstr(ConstrDecl *node)
    auto &name = node->binding;
    Type voidTy(VoidType::get());
 
-   auto constr = DeclareMethod(name, node->args, voidTy, getStructTy(node->className),
-      node->selfBinding, node->attributes, false, false, node->body != nullptr);
+   auto constr = DeclareMethod(name, node->args, voidTy, node->getMethod()->throws(),
+                               getStructTy(node->className), node->selfBinding,
+                               node->attributes, false, false,
+                               node->body != nullptr);
 
    if (emitDI) {
       DI->emitMethodDI(node->method, constr);
    }
 
    if (node->hasAttribute(Attr::_builtin)) {
-      auto& builtinKind = node->getAttribute(Attr::_builtin).args.front();
+      auto& builtinKind = node->getAttribute(Attr::_builtin).args.front().strVal;
       declareNative(builtinKind, constr);
    }
 
-   node->method->llvmFunc = constr;
+   node->method->setLlvmFunc(constr);
 }
 
 void CodeGen::DefineClass(ClassDecl *node)
@@ -649,8 +667,8 @@ void CodeGen::DefineClass(ClassDecl *node)
 
       if (!method->isAlias && node->hasAttribute(Attr::Inline)) {
          auto& attr = node->getAttribute(Attr::Inline);
-         auto& kind = attr.args.front();
-         auto& func = method->method->llvmFunc;
+         auto& kind = attr.args.front().strVal;
+         const auto& func = method->method->getLlvmFunc();
 
          if (kind == "always") {
             func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -692,7 +710,7 @@ void CodeGen::DefineClass(ClassDecl *node)
          continue;
       }
 
-      auto& method = constr->method->llvmFunc;
+      const auto& method = constr->method->getLlvmFunc();
 
       if (emitDI) {
          Builder.SetCurrentDebugLocation(llvm::DebugLoc());
@@ -781,7 +799,7 @@ void CodeGen::DeclareMemberwiseInitializer(cdot::cl::Class* cl)
    auto &fields = cl->getFields();
 
    std::vector<llvm::Type *> argTypes;
-   argTypes.reserve(init->arguments.size() + 1);
+   argTypes.reserve(init->getArguments().size() + 1);
 
    llvm::Type* structTy = getStructTy(cl->getName());
    if (cl->isStruct()) {
@@ -790,7 +808,7 @@ void CodeGen::DeclareMemberwiseInitializer(cdot::cl::Class* cl)
 
    argTypes.push_back(structTy);
 
-   for (auto &arg : init->arguments) {
+   for (auto &arg : init->getArguments()) {
       auto ty = arg.type.getLlvmType();
       if (ty->isStructTy()) {
          argTypes.push_back(ty->getPointerTo());
@@ -827,8 +845,8 @@ void CodeGen::DeclareMemberwiseInitializer(cdot::cl::Class* cl)
    func->addFnAttr(llvm::Attribute::AlwaysInline);
    func->addFnAttr(llvm::Attribute::NoRecurse);
 
-   declareFunction(init->mangledName, func);
-   init->llvmFunc = func;
+   declareFunction(init->getMangledName(), func);
+   init->setLlvmFunc(func);
 }
 
 llvm::Value* CodeGen::visit(ClassDecl *node)
@@ -864,8 +882,8 @@ llvm::Value* CodeGen::visit(EnumDecl *node)
 
       if (!method->isAlias && node->hasAttribute(Attr::Inline)) {
          auto& attr = node->getAttribute(Attr::Inline);
-         auto& kind = attr.args.front();
-         auto& func = method->method->llvmFunc;
+         auto& kind = attr.args.front().strVal;
+         const auto& func = method->method->getLlvmFunc();
 
          if (kind == "always") {
             func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -952,17 +970,18 @@ void CodeGen::DeclareStringRepresentableConformance(cl::Class *cl)
       selfType = getStructTy(cl->getName());
    }
 
-   declaredMethod->llvmFunc = DeclareMethod(
+   declaredMethod->setLlvmFunc(DeclareMethod(
       mangledName,
       {},
-      declaredMethod->returnType,
+      declaredMethod->getReturnType(),
+      declaredMethod->throws(),
       selfType,
       selfBinding,
       {},
       false,
       true,
       !cl->isDeclared()
-   );
+   ));
 }
 
 void CodeGen::ImplementStringRepresentableConformance(cl::Class *cl)

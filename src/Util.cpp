@@ -3,7 +3,7 @@
 //
 
 #include "Util.h"
-#include "AST/Passes/StaticAnalysis/Record/Class.h"
+#include "AST/Passes/SemanticAnalysis/Record/Class.h"
 #include "Variant/Type/PointerType.h"
 #include "Variant/Type/ObjectType.h"
 #include "Variant/Type/IntegerType.h"
@@ -160,7 +160,6 @@ namespace util {
       "loop",
       "match",
       "for",
-      "in",
       "case",
       "default",
       "struct",
@@ -519,7 +518,7 @@ namespace util {
       return penalty;
    }
 
-   TypeCheckPass* TCPass = nullptr;
+   SemaPass* TCPass = nullptr;
 
    bool resolveGeneric(
       BuiltinType* given,

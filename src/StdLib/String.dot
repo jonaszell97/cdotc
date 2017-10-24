@@ -4,29 +4,36 @@ using Extern.C.{ malloc, free }
 using Char.ASCII
 
 class String {
+    static let DEFAULT_CAPACITY: UInt = 8
+
     var length: Int { get }
+    var capacity: UInt { get }
     var charArray: int8* { get }
 
     init {
-        charArray = __nullptr(int8)
         length = 0
+        capacity = 8
+        charArray = malloc(capacity)
     }
 
     init (str: int8*, len: Int) {
         charArray = str
         length = len
+        capacity = UInt(len as uword)
     }
 
     @_builtin(StringInit)
     init (str: int8*, len: uword) {
         charArray = str
         length = Int(len)
+        capacity = UInt(len)
     }
 
     init (len: Int) {
         charArray = malloc(len + 1)
         charArray[len] = '\0'
         length = len
+        capacity = UInt(len as uword)
     }
 
     // must be null terminated
@@ -37,21 +44,24 @@ class String {
         }
 
         length = i
+        capacity = UInt(i as uword)
         charArray = malloc(i)
         __builtin_memcpy(charArray, cstring, i, alignof(int8))
     }
 
     init (c: Char) {
-        charArray = malloc(2)
+        capacity = DEFAULT_CAPACITY
+        charArray = malloc(capacity)
         charArray[0] = c.val
-        charArray[1] = '\0'
+        charArray[capacity - 1] = '\0'
         length = 1
     }
 
     init (s: String) {
         length = s.length
-        charArray = malloc(s.length + 1)
-        __builtin_memcpy(charArray, s.charArray, length, alignof(int8))
+        capacity = s.capacity
+        charArray = malloc(s.capacity + 1)
+        __builtin_memcpy(charArray, s.charArray, capacity, alignof(int8))
     }
 
     init (chr: Char, repeat: Int) {
@@ -62,15 +72,23 @@ class String {
 
         charArray[repeat] = '\0'
         length = repeat
+        capacity = UInt(repeat as uword)
     }
 
     deinit {
-        printf("Freeing %s\n", charArray)
+        // free(charArray)
+    }
+
+    private def resize {
+        let newStr = malloc(capacity + 1)
+        __builtin_memcpy(newStr, charArray, length + 1, alignof(int8))
+
         free(charArray)
+        charArray = newStr
     }
 
     def postfix [] (index: Int) -> ref int8 {
-        if (index >= length) {
+        if index >= length {
             throw OutOfBoundsException()
         }
         
@@ -85,13 +103,17 @@ class String {
     }
 
     def infix += (s: String) {
-        let newStr = malloc(length + s.length + 1)
+        let newLen = length + s.length
+        if newLen > capacity {
+            while newLen > capacity {
+                capacity *= 2
+            }
 
-        __builtin_memcpy(newStr, charArray, length, alignof(int8))
-        __builtin_memcpy(&newStr[length], s.charArray, s.length, alignof(int8))
+            resize()
+        }
 
-        charArray = newStr
-        length = length + s.length
+        __builtin_memcpy(&charArray[length], s.charArray, s.length, alignof(int8))
+        length = newLen
     }
 
     @_builtin(StringConcat)
@@ -104,9 +126,20 @@ class String {
         self += (p as String)
     }
 
+    def append (c: int8) {
+        if length == capacity {
+            capacity *= 2
+            resize()
+        }
+
+        ++length
+        charArray[length - 1] = c
+        charArray[length] = '\0'
+    }
+
     def substr(begin: Int, len: Int = length) -> String {
         var copyLen = len
-        if (begin + len > length) {
+        if begin + len > length {
             copyLen = length - begin
         }
 
@@ -143,7 +176,7 @@ extend String with Iterable<Char> {
 
 extend String with StringRepresentable {
     def infix as String {
-        return self
+        return String(self)
     }
 }
 
@@ -172,10 +205,6 @@ extend String with Equatable {
         }
 
         return true
-    }
-
-    def infix != (s: String) -> Bool {
-        return !(self == s)
     }
 }
 
@@ -218,7 +247,7 @@ extend String with Randomizable {
     }
 
     static def random (length: Int, kind: RandomStringKind) -> String {
-        let charArray = malloc(length + 1)
+        let str = String(length)
         match kind {
             case .AlphaNumeric:
                 for let i in 0..length {
@@ -230,16 +259,15 @@ extend String with Randomizable {
                         }
                     }
 
-                    charArray[i] = c
+                    str[i] = c
                 }
         }
 
-        charArray[length] = '\0'
-        return String(charArray, length)
+        return str
     }
 
-    static def random () -> String {
-        return random(10, RandomStringKind.AlphaNumeric)
+    static def random -> String {
+        return random(10, .AlphaNumeric)
     }
 }
 

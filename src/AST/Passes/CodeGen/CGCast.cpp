@@ -7,7 +7,7 @@
 #include "CGMemory.h"
 
 #include "../../SymbolTable.h"
-#include "../StaticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Record/Enum.h"
 
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/FunctionType.h"

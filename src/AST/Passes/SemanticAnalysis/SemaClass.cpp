@@ -2,7 +2,7 @@
 // Created by Jonas Zell on 16.10.17.
 //
 
-#include "TypeCheckPass.h"
+#include "SemaPass.h"
 
 #include "../../Statement/Declaration/Class/ClassDecl.h"
 #include "../../Statement/Declaration/Class/FieldDecl.h"
@@ -23,7 +23,7 @@
 #include "../../SymbolTable.h"
 #include "../../../Variant/Type/VoidType.h"
 
-void TypeCheckPass::DefineField(
+void SemaPass::DefineField(
    FieldDecl *node,
    cdot::cl::Class *cl)
 {
@@ -58,10 +58,10 @@ void TypeCheckPass::DefineField(
             auto ty = field_type;
             cl->getField(node->fieldName)->fieldType = *ty;
             if (node->has_getter) {
-               node->getterMethod->returnType = ty;
+               node->getterMethod->getReturnType() = ty;
             }
             if (node->has_setter) {
-               node->setterMethod->arguments.front().type = ty;
+               node->setterMethod->getArguments().front().type = ty;
             }
          }
       }
@@ -79,12 +79,12 @@ void TypeCheckPass::DefineField(
 
    if (node->is_static) {
       node->binding = ns_prefix() + node->fieldName;
-      return;
    }
 
    if (node->has_getter && node->getterBody != nullptr) {
       pushMethodScope(node->getterMethod);
       latestScope->currentSelf = SymbolTable::mangleVariable("self", latestScope->id);
+      currentCallable = node->getterMethod;
 
       node->getterBody->accept(*this);
       node->getterSelfBinding = latestScope->currentSelf;
@@ -113,6 +113,7 @@ void TypeCheckPass::DefineField(
 
       latestScope->currentSelf = SymbolTable::mangleVariable("self", latestScope->id);
       node->newVal->binding = declareVariable(newValStr, field_type);
+      currentCallable = node->setterMethod;
 
       node->setterSelfBinding = latestScope->currentSelf;
       node->setterBody->accept(*this);
@@ -121,7 +122,7 @@ void TypeCheckPass::DefineField(
    }
 }
 
-void TypeCheckPass::DefineClass(
+void SemaPass::DefineClass(
    ClassDecl *node,
    cdot::cl::Class *cl)
 {
@@ -152,7 +153,7 @@ void TypeCheckPass::DefineClass(
    }
 }
 
-void TypeCheckPass::DefineMethod(
+void SemaPass::DefineMethod(
    MethodDecl *node,
    cdot::cl::Class *cl)
 {
@@ -208,7 +209,9 @@ void TypeCheckPass::DefineMethod(
          arg->binding = declareVariable(arg->argName, arg->argType->getType());
       }
 
+      currentCallable = node->getMethod();
       latestScope->mutableSelf = node->isMutating_;
+
       node->body->accept(*this);
 
       if (latestScope->returned == 0) {
@@ -221,7 +224,7 @@ void TypeCheckPass::DefineMethod(
          return_type = latestScope->declaredReturnType;
       }
 
-      node->method->returnType = return_type;
+      node->method->setReturnType(return_type);
 
       if (latestScope->branches - latestScope->returned > 0 && !return_type->isVoidTy())
       {
@@ -252,7 +255,7 @@ namespace {
    }
 }
 
-void TypeCheckPass::DefineConstr(
+void SemaPass::DefineConstr(
    ConstrDecl *node,
    cdot::cl::Class *cl)
 {
@@ -274,6 +277,7 @@ void TypeCheckPass::DefineConstr(
 
    latestScope->uninitializedFields = &uninitialized;
    latestScope->mutableSelf = true;
+   currentCallable = node->getMethod();
 
    for (auto& arg : node->args) {
       arg->binding = declareVariable(arg->argName, arg->argType->getType());
@@ -289,11 +293,12 @@ void TypeCheckPass::DefineConstr(
    popScope();
 }
 
-void TypeCheckPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
+void SemaPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
 {
    pushMethodScope(node->declaredMethod);
    latestScope->currentSelf = SymbolTable::mangleVariable("self", latestScope->id);
    node->selfBinding = latestScope->currentSelf;
+   currentCallable = node->getDeclaredMethod();
 
    node->body->accept(*this);
 
@@ -305,7 +310,7 @@ void TypeCheckPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
  * @param node
  * @return
  */
-Type TypeCheckPass::visit(ClassDecl *node)
+Type SemaPass::visit(ClassDecl *node)
 {
    DefineClass(node, node->declaredClass);
    return {};
@@ -316,12 +321,12 @@ Type TypeCheckPass::visit(ClassDecl *node)
  * @param node
  * @return
  */
-Type TypeCheckPass::visit(ConstrDecl *node)
+Type SemaPass::visit(ConstrDecl *node)
 {
    return {};
 }
 
-Type TypeCheckPass::visit(DestrDecl *node)
+Type SemaPass::visit(DestrDecl *node)
 {
    return {};
 }
@@ -331,7 +336,7 @@ Type TypeCheckPass::visit(DestrDecl *node)
  * @param node
  * @return
  */
-Type TypeCheckPass::visit(FieldDecl *node)
+Type SemaPass::visit(FieldDecl *node)
 {
    return {};
 }
@@ -341,12 +346,12 @@ Type TypeCheckPass::visit(FieldDecl *node)
  * @param node
  * @return
  */
-Type TypeCheckPass::visit(MethodDecl *node)
+Type SemaPass::visit(MethodDecl *node)
 {
    return {};
 }
 
-Type TypeCheckPass::visit(EnumDecl *node)
+Type SemaPass::visit(EnumDecl *node)
 {
    pushNamespace(node->className);
 
@@ -374,7 +379,7 @@ Type TypeCheckPass::visit(EnumDecl *node)
    return {};
 }
 
-Type TypeCheckPass::visit(UnionDecl *node)
+Type SemaPass::visit(UnionDecl *node)
 {
    auto un = node->getDeclaredUnion();
    for (const auto &ty : node->getContainedTypes()) {

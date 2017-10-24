@@ -35,6 +35,8 @@ namespace cdot {
       Variant(double d);
       Variant(float f);
 
+      Variant(const Variant &var);
+
       string toString() const;
       llvm::Value* getLlvmValue(CodeGen &CGM);
 
