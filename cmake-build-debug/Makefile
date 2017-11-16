@@ -111,30 +111,30 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named CDot
+# Target rules for targets named parse_diagnostics
 
 # Build rule for target.
-CDot: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 CDot
-.PHONY : CDot
+parse_diagnostics: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 parse_diagnostics
+.PHONY : parse_diagnostics
 
 # fast build rule for target.
-CDot/fast:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/build
-.PHONY : CDot/fast
+parse_diagnostics/fast:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/build
+.PHONY : parse_diagnostics/fast
 
 #=============================================================================
-# Target rules for targets named CDotTest
+# Target rules for targets named cdotc
 
 # Build rule for target.
-CDotTest: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 CDotTest
-.PHONY : CDotTest
+cdotc: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 cdotc
+.PHONY : cdotc
 
 # fast build rule for target.
-CDotTest/fast:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/build
-.PHONY : CDotTest/fast
+cdotc/fast:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/build
+.PHONY : cdotc/fast
 
 src/AST/AstNode.o: src/AST/AstNode.cpp.o
 
@@ -142,8 +142,7 @@ src/AST/AstNode.o: src/AST/AstNode.cpp.o
 
 # target to build an object file
 src/AST/AstNode.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/AstNode.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/AstNode.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/AstNode.cpp.o
 .PHONY : src/AST/AstNode.cpp.o
 
 src/AST/AstNode.i: src/AST/AstNode.cpp.i
@@ -152,8 +151,7 @@ src/AST/AstNode.i: src/AST/AstNode.cpp.i
 
 # target to preprocess a source file
 src/AST/AstNode.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/AstNode.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/AstNode.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/AstNode.cpp.i
 .PHONY : src/AST/AstNode.cpp.i
 
 src/AST/AstNode.s: src/AST/AstNode.cpp.s
@@ -162,8 +160,7 @@ src/AST/AstNode.s: src/AST/AstNode.cpp.s
 
 # target to generate assembly for a file
 src/AST/AstNode.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/AstNode.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/AstNode.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/AstNode.cpp.s
 .PHONY : src/AST/AstNode.cpp.s
 
 src/AST/Attribute/Attribute.o: src/AST/Attribute/Attribute.cpp.o
@@ -172,8 +169,7 @@ src/AST/Attribute/Attribute.o: src/AST/Attribute/Attribute.cpp.o
 
 # target to build an object file
 src/AST/Attribute/Attribute.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Attribute/Attribute.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Attribute/Attribute.cpp.o
 .PHONY : src/AST/Attribute/Attribute.cpp.o
 
 src/AST/Attribute/Attribute.i: src/AST/Attribute/Attribute.cpp.i
@@ -182,8 +178,7 @@ src/AST/Attribute/Attribute.i: src/AST/Attribute/Attribute.cpp.i
 
 # target to preprocess a source file
 src/AST/Attribute/Attribute.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Attribute/Attribute.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Attribute/Attribute.cpp.i
 .PHONY : src/AST/Attribute/Attribute.cpp.i
 
 src/AST/Attribute/Attribute.s: src/AST/Attribute/Attribute.cpp.s
@@ -192,8 +187,7 @@ src/AST/Attribute/Attribute.s: src/AST/Attribute/Attribute.cpp.s
 
 # target to generate assembly for a file
 src/AST/Attribute/Attribute.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Attribute/Attribute.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Attribute/Attribute.cpp.s
 .PHONY : src/AST/Attribute/Attribute.cpp.s
 
 src/AST/Context.o: src/AST/Context.cpp.o
@@ -202,8 +196,7 @@ src/AST/Context.o: src/AST/Context.cpp.o
 
 # target to build an object file
 src/AST/Context.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Context.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Context.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Context.cpp.o
 .PHONY : src/AST/Context.cpp.o
 
 src/AST/Context.i: src/AST/Context.cpp.i
@@ -212,8 +205,7 @@ src/AST/Context.i: src/AST/Context.cpp.i
 
 # target to preprocess a source file
 src/AST/Context.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Context.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Context.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Context.cpp.i
 .PHONY : src/AST/Context.cpp.i
 
 src/AST/Context.s: src/AST/Context.cpp.s
@@ -222,8 +214,7 @@ src/AST/Context.s: src/AST/Context.cpp.s
 
 # target to generate assembly for a file
 src/AST/Context.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Context.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Context.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Context.cpp.s
 .PHONY : src/AST/Context.cpp.s
 
 src/AST/Expression/Expression.o: src/AST/Expression/Expression.cpp.o
@@ -232,8 +223,7 @@ src/AST/Expression/Expression.o: src/AST/Expression/Expression.cpp.o
 
 # target to build an object file
 src/AST/Expression/Expression.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Expression.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Expression.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Expression.cpp.o
 .PHONY : src/AST/Expression/Expression.cpp.o
 
 src/AST/Expression/Expression.i: src/AST/Expression/Expression.cpp.i
@@ -242,8 +232,7 @@ src/AST/Expression/Expression.i: src/AST/Expression/Expression.cpp.i
 
 # target to preprocess a source file
 src/AST/Expression/Expression.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Expression.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Expression.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Expression.cpp.i
 .PHONY : src/AST/Expression/Expression.cpp.i
 
 src/AST/Expression/Expression.s: src/AST/Expression/Expression.cpp.s
@@ -252,8 +241,7 @@ src/AST/Expression/Expression.s: src/AST/Expression/Expression.cpp.s
 
 # target to generate assembly for a file
 src/AST/Expression/Expression.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Expression.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Expression.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Expression.cpp.s
 .PHONY : src/AST/Expression/Expression.cpp.s
 
 src/AST/Expression/Literal/CollectionLiteral.o: src/AST/Expression/Literal/CollectionLiteral.cpp.o
@@ -262,8 +250,7 @@ src/AST/Expression/Literal/CollectionLiteral.o: src/AST/Expression/Literal/Colle
 
 # target to build an object file
 src/AST/Expression/Literal/CollectionLiteral.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.o
 .PHONY : src/AST/Expression/Literal/CollectionLiteral.cpp.o
 
 src/AST/Expression/Literal/CollectionLiteral.i: src/AST/Expression/Literal/CollectionLiteral.cpp.i
@@ -272,8 +259,7 @@ src/AST/Expression/Literal/CollectionLiteral.i: src/AST/Expression/Literal/Colle
 
 # target to preprocess a source file
 src/AST/Expression/Literal/CollectionLiteral.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.i
 .PHONY : src/AST/Expression/Literal/CollectionLiteral.cpp.i
 
 src/AST/Expression/Literal/CollectionLiteral.s: src/AST/Expression/Literal/CollectionLiteral.cpp.s
@@ -282,9 +268,35 @@ src/AST/Expression/Literal/CollectionLiteral.s: src/AST/Expression/Literal/Colle
 
 # target to generate assembly for a file
 src/AST/Expression/Literal/CollectionLiteral.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/CollectionLiteral.cpp.s
 .PHONY : src/AST/Expression/Literal/CollectionLiteral.cpp.s
+
+src/AST/Expression/Literal/IntegerLiteral.o: src/AST/Expression/Literal/IntegerLiteral.cpp.o
+
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.o
+
+# target to build an object file
+src/AST/Expression/Literal/IntegerLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/IntegerLiteral.cpp.o
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.cpp.o
+
+src/AST/Expression/Literal/IntegerLiteral.i: src/AST/Expression/Literal/IntegerLiteral.cpp.i
+
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.i
+
+# target to preprocess a source file
+src/AST/Expression/Literal/IntegerLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/IntegerLiteral.cpp.i
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.cpp.i
+
+src/AST/Expression/Literal/IntegerLiteral.s: src/AST/Expression/Literal/IntegerLiteral.cpp.s
+
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.s
+
+# target to generate assembly for a file
+src/AST/Expression/Literal/IntegerLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/IntegerLiteral.cpp.s
+.PHONY : src/AST/Expression/Literal/IntegerLiteral.cpp.s
 
 src/AST/Expression/Literal/LambdaExpr.o: src/AST/Expression/Literal/LambdaExpr.cpp.o
 
@@ -292,8 +304,7 @@ src/AST/Expression/Literal/LambdaExpr.o: src/AST/Expression/Literal/LambdaExpr.c
 
 # target to build an object file
 src/AST/Expression/Literal/LambdaExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LambdaExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LambdaExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/LambdaExpr.cpp.o
 .PHONY : src/AST/Expression/Literal/LambdaExpr.cpp.o
 
 src/AST/Expression/Literal/LambdaExpr.i: src/AST/Expression/Literal/LambdaExpr.cpp.i
@@ -302,8 +313,7 @@ src/AST/Expression/Literal/LambdaExpr.i: src/AST/Expression/Literal/LambdaExpr.c
 
 # target to preprocess a source file
 src/AST/Expression/Literal/LambdaExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LambdaExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LambdaExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/LambdaExpr.cpp.i
 .PHONY : src/AST/Expression/Literal/LambdaExpr.cpp.i
 
 src/AST/Expression/Literal/LambdaExpr.s: src/AST/Expression/Literal/LambdaExpr.cpp.s
@@ -312,39 +322,62 @@ src/AST/Expression/Literal/LambdaExpr.s: src/AST/Expression/Literal/LambdaExpr.c
 
 # target to generate assembly for a file
 src/AST/Expression/Literal/LambdaExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LambdaExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LambdaExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/LambdaExpr.cpp.s
 .PHONY : src/AST/Expression/Literal/LambdaExpr.cpp.s
 
-src/AST/Expression/Literal/LiteralExpr.o: src/AST/Expression/Literal/LiteralExpr.cpp.o
+src/AST/Expression/Literal/NoneLiteral.o: src/AST/Expression/Literal/NoneLiteral.cpp.o
 
-.PHONY : src/AST/Expression/Literal/LiteralExpr.o
+.PHONY : src/AST/Expression/Literal/NoneLiteral.o
 
 # target to build an object file
-src/AST/Expression/Literal/LiteralExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o
-.PHONY : src/AST/Expression/Literal/LiteralExpr.cpp.o
+src/AST/Expression/Literal/NoneLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o
+.PHONY : src/AST/Expression/Literal/NoneLiteral.cpp.o
 
-src/AST/Expression/Literal/LiteralExpr.i: src/AST/Expression/Literal/LiteralExpr.cpp.i
+src/AST/Expression/Literal/NoneLiteral.i: src/AST/Expression/Literal/NoneLiteral.cpp.i
 
-.PHONY : src/AST/Expression/Literal/LiteralExpr.i
+.PHONY : src/AST/Expression/Literal/NoneLiteral.i
 
 # target to preprocess a source file
-src/AST/Expression/Literal/LiteralExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LiteralExpr.cpp.i
-.PHONY : src/AST/Expression/Literal/LiteralExpr.cpp.i
+src/AST/Expression/Literal/NoneLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/NoneLiteral.cpp.i
+.PHONY : src/AST/Expression/Literal/NoneLiteral.cpp.i
 
-src/AST/Expression/Literal/LiteralExpr.s: src/AST/Expression/Literal/LiteralExpr.cpp.s
+src/AST/Expression/Literal/NoneLiteral.s: src/AST/Expression/Literal/NoneLiteral.cpp.s
 
-.PHONY : src/AST/Expression/Literal/LiteralExpr.s
+.PHONY : src/AST/Expression/Literal/NoneLiteral.s
 
 # target to generate assembly for a file
-src/AST/Expression/Literal/LiteralExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/LiteralExpr.cpp.s
-.PHONY : src/AST/Expression/Literal/LiteralExpr.cpp.s
+src/AST/Expression/Literal/NoneLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/NoneLiteral.cpp.s
+.PHONY : src/AST/Expression/Literal/NoneLiteral.cpp.s
+
+src/AST/Expression/Literal/StringInterpolation.o: src/AST/Expression/Literal/StringInterpolation.cpp.o
+
+.PHONY : src/AST/Expression/Literal/StringInterpolation.o
+
+# target to build an object file
+src/AST/Expression/Literal/StringInterpolation.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o
+.PHONY : src/AST/Expression/Literal/StringInterpolation.cpp.o
+
+src/AST/Expression/Literal/StringInterpolation.i: src/AST/Expression/Literal/StringInterpolation.cpp.i
+
+.PHONY : src/AST/Expression/Literal/StringInterpolation.i
+
+# target to preprocess a source file
+src/AST/Expression/Literal/StringInterpolation.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringInterpolation.cpp.i
+.PHONY : src/AST/Expression/Literal/StringInterpolation.cpp.i
+
+src/AST/Expression/Literal/StringInterpolation.s: src/AST/Expression/Literal/StringInterpolation.cpp.s
+
+.PHONY : src/AST/Expression/Literal/StringInterpolation.s
+
+# target to generate assembly for a file
+src/AST/Expression/Literal/StringInterpolation.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringInterpolation.cpp.s
+.PHONY : src/AST/Expression/Literal/StringInterpolation.cpp.s
 
 src/AST/Expression/Literal/StringLiteral.o: src/AST/Expression/Literal/StringLiteral.cpp.o
 
@@ -352,8 +385,7 @@ src/AST/Expression/Literal/StringLiteral.o: src/AST/Expression/Literal/StringLit
 
 # target to build an object file
 src/AST/Expression/Literal/StringLiteral.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringLiteral.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/StringLiteral.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringLiteral.cpp.o
 .PHONY : src/AST/Expression/Literal/StringLiteral.cpp.o
 
 src/AST/Expression/Literal/StringLiteral.i: src/AST/Expression/Literal/StringLiteral.cpp.i
@@ -362,8 +394,7 @@ src/AST/Expression/Literal/StringLiteral.i: src/AST/Expression/Literal/StringLit
 
 # target to preprocess a source file
 src/AST/Expression/Literal/StringLiteral.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringLiteral.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/StringLiteral.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringLiteral.cpp.i
 .PHONY : src/AST/Expression/Literal/StringLiteral.cpp.i
 
 src/AST/Expression/Literal/StringLiteral.s: src/AST/Expression/Literal/StringLiteral.cpp.s
@@ -372,9 +403,35 @@ src/AST/Expression/Literal/StringLiteral.s: src/AST/Expression/Literal/StringLit
 
 # target to generate assembly for a file
 src/AST/Expression/Literal/StringLiteral.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringLiteral.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/Literal/StringLiteral.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/StringLiteral.cpp.s
 .PHONY : src/AST/Expression/Literal/StringLiteral.cpp.s
+
+src/AST/Expression/Literal/TupleLiteral.o: src/AST/Expression/Literal/TupleLiteral.cpp.o
+
+.PHONY : src/AST/Expression/Literal/TupleLiteral.o
+
+# target to build an object file
+src/AST/Expression/Literal/TupleLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o
+.PHONY : src/AST/Expression/Literal/TupleLiteral.cpp.o
+
+src/AST/Expression/Literal/TupleLiteral.i: src/AST/Expression/Literal/TupleLiteral.cpp.i
+
+.PHONY : src/AST/Expression/Literal/TupleLiteral.i
+
+# target to preprocess a source file
+src/AST/Expression/Literal/TupleLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/TupleLiteral.cpp.i
+.PHONY : src/AST/Expression/Literal/TupleLiteral.cpp.i
+
+src/AST/Expression/Literal/TupleLiteral.s: src/AST/Expression/Literal/TupleLiteral.cpp.s
+
+.PHONY : src/AST/Expression/Literal/TupleLiteral.s
+
+# target to generate assembly for a file
+src/AST/Expression/Literal/TupleLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/Literal/TupleLiteral.cpp.s
+.PHONY : src/AST/Expression/Literal/TupleLiteral.cpp.s
 
 src/AST/Expression/RefExpr/CallExpr.o: src/AST/Expression/RefExpr/CallExpr.cpp.o
 
@@ -382,8 +439,7 @@ src/AST/Expression/RefExpr/CallExpr.o: src/AST/Expression/RefExpr/CallExpr.cpp.o
 
 # target to build an object file
 src/AST/Expression/RefExpr/CallExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/CallExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/CallExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/CallExpr.cpp.o
 .PHONY : src/AST/Expression/RefExpr/CallExpr.cpp.o
 
 src/AST/Expression/RefExpr/CallExpr.i: src/AST/Expression/RefExpr/CallExpr.cpp.i
@@ -392,8 +448,7 @@ src/AST/Expression/RefExpr/CallExpr.i: src/AST/Expression/RefExpr/CallExpr.cpp.i
 
 # target to preprocess a source file
 src/AST/Expression/RefExpr/CallExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/CallExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/CallExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/CallExpr.cpp.i
 .PHONY : src/AST/Expression/RefExpr/CallExpr.cpp.i
 
 src/AST/Expression/RefExpr/CallExpr.s: src/AST/Expression/RefExpr/CallExpr.cpp.s
@@ -402,8 +457,7 @@ src/AST/Expression/RefExpr/CallExpr.s: src/AST/Expression/RefExpr/CallExpr.cpp.s
 
 # target to generate assembly for a file
 src/AST/Expression/RefExpr/CallExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/CallExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/CallExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/CallExpr.cpp.s
 .PHONY : src/AST/Expression/RefExpr/CallExpr.cpp.s
 
 src/AST/Expression/RefExpr/IdentifierRefExpr.o: src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
@@ -412,8 +466,7 @@ src/AST/Expression/RefExpr/IdentifierRefExpr.o: src/AST/Expression/RefExpr/Ident
 
 # target to build an object file
 src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
 .PHONY : src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
 
 src/AST/Expression/RefExpr/IdentifierRefExpr.i: src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
@@ -422,8 +475,7 @@ src/AST/Expression/RefExpr/IdentifierRefExpr.i: src/AST/Expression/RefExpr/Ident
 
 # target to preprocess a source file
 src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
 .PHONY : src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
 
 src/AST/Expression/RefExpr/IdentifierRefExpr.s: src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
@@ -432,8 +484,7 @@ src/AST/Expression/RefExpr/IdentifierRefExpr.s: src/AST/Expression/RefExpr/Ident
 
 # target to generate assembly for a file
 src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
 .PHONY : src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
 
 src/AST/Expression/RefExpr/MemberRefExpr.o: src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
@@ -442,8 +493,7 @@ src/AST/Expression/RefExpr/MemberRefExpr.o: src/AST/Expression/RefExpr/MemberRef
 
 # target to build an object file
 src/AST/Expression/RefExpr/MemberRefExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
 .PHONY : src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
 
 src/AST/Expression/RefExpr/MemberRefExpr.i: src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
@@ -452,8 +502,7 @@ src/AST/Expression/RefExpr/MemberRefExpr.i: src/AST/Expression/RefExpr/MemberRef
 
 # target to preprocess a source file
 src/AST/Expression/RefExpr/MemberRefExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
 .PHONY : src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
 
 src/AST/Expression/RefExpr/MemberRefExpr.s: src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
@@ -462,8 +511,7 @@ src/AST/Expression/RefExpr/MemberRefExpr.s: src/AST/Expression/RefExpr/MemberRef
 
 # target to generate assembly for a file
 src/AST/Expression/RefExpr/MemberRefExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
 .PHONY : src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
 
 src/AST/Expression/RefExpr/SubscriptExpr.o: src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
@@ -472,8 +520,7 @@ src/AST/Expression/RefExpr/SubscriptExpr.o: src/AST/Expression/RefExpr/Subscript
 
 # target to build an object file
 src/AST/Expression/RefExpr/SubscriptExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
 .PHONY : src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
 
 src/AST/Expression/RefExpr/SubscriptExpr.i: src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
@@ -482,8 +529,7 @@ src/AST/Expression/RefExpr/SubscriptExpr.i: src/AST/Expression/RefExpr/Subscript
 
 # target to preprocess a source file
 src/AST/Expression/RefExpr/SubscriptExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
 .PHONY : src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
 
 src/AST/Expression/RefExpr/SubscriptExpr.s: src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
@@ -492,8 +538,7 @@ src/AST/Expression/RefExpr/SubscriptExpr.s: src/AST/Expression/RefExpr/Subscript
 
 # target to generate assembly for a file
 src/AST/Expression/RefExpr/SubscriptExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
 .PHONY : src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
 
 src/AST/Expression/TypeRef.o: src/AST/Expression/TypeRef.cpp.o
@@ -502,8 +547,7 @@ src/AST/Expression/TypeRef.o: src/AST/Expression/TypeRef.cpp.o
 
 # target to build an object file
 src/AST/Expression/TypeRef.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/TypeRef.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/TypeRef.cpp.o
 .PHONY : src/AST/Expression/TypeRef.cpp.o
 
 src/AST/Expression/TypeRef.i: src/AST/Expression/TypeRef.cpp.i
@@ -512,8 +556,7 @@ src/AST/Expression/TypeRef.i: src/AST/Expression/TypeRef.cpp.i
 
 # target to preprocess a source file
 src/AST/Expression/TypeRef.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/TypeRef.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/TypeRef.cpp.i
 .PHONY : src/AST/Expression/TypeRef.cpp.i
 
 src/AST/Expression/TypeRef.s: src/AST/Expression/TypeRef.cpp.s
@@ -522,8 +565,7 @@ src/AST/Expression/TypeRef.s: src/AST/Expression/TypeRef.cpp.s
 
 # target to generate assembly for a file
 src/AST/Expression/TypeRef.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Expression/TypeRef.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Expression/TypeRef.cpp.s
 .PHONY : src/AST/Expression/TypeRef.cpp.s
 
 src/AST/Operator/BinaryOperator.o: src/AST/Operator/BinaryOperator.cpp.o
@@ -532,8 +574,7 @@ src/AST/Operator/BinaryOperator.o: src/AST/Operator/BinaryOperator.cpp.o
 
 # target to build an object file
 src/AST/Operator/BinaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/BinaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/BinaryOperator.cpp.o
 .PHONY : src/AST/Operator/BinaryOperator.cpp.o
 
 src/AST/Operator/BinaryOperator.i: src/AST/Operator/BinaryOperator.cpp.i
@@ -542,8 +583,7 @@ src/AST/Operator/BinaryOperator.i: src/AST/Operator/BinaryOperator.cpp.i
 
 # target to preprocess a source file
 src/AST/Operator/BinaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/BinaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/BinaryOperator.cpp.i
 .PHONY : src/AST/Operator/BinaryOperator.cpp.i
 
 src/AST/Operator/BinaryOperator.s: src/AST/Operator/BinaryOperator.cpp.s
@@ -552,8 +592,7 @@ src/AST/Operator/BinaryOperator.s: src/AST/Operator/BinaryOperator.cpp.s
 
 # target to generate assembly for a file
 src/AST/Operator/BinaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/BinaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/BinaryOperator.cpp.s
 .PHONY : src/AST/Operator/BinaryOperator.cpp.s
 
 src/AST/Operator/Conversion/ImplicitCastExpr.o: src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
@@ -562,8 +601,7 @@ src/AST/Operator/Conversion/ImplicitCastExpr.o: src/AST/Operator/Conversion/Impl
 
 # target to build an object file
 src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
 .PHONY : src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
 
 src/AST/Operator/Conversion/ImplicitCastExpr.i: src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
@@ -572,8 +610,7 @@ src/AST/Operator/Conversion/ImplicitCastExpr.i: src/AST/Operator/Conversion/Impl
 
 # target to preprocess a source file
 src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
 .PHONY : src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
 
 src/AST/Operator/Conversion/ImplicitCastExpr.s: src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
@@ -582,8 +619,7 @@ src/AST/Operator/Conversion/ImplicitCastExpr.s: src/AST/Operator/Conversion/Impl
 
 # target to generate assembly for a file
 src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
 .PHONY : src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
 
 src/AST/Operator/Conversion/LvalueToRvalue.o: src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
@@ -592,8 +628,7 @@ src/AST/Operator/Conversion/LvalueToRvalue.o: src/AST/Operator/Conversion/Lvalue
 
 # target to build an object file
 src/AST/Operator/Conversion/LvalueToRvalue.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
 .PHONY : src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
 
 src/AST/Operator/Conversion/LvalueToRvalue.i: src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
@@ -602,8 +637,7 @@ src/AST/Operator/Conversion/LvalueToRvalue.i: src/AST/Operator/Conversion/Lvalue
 
 # target to preprocess a source file
 src/AST/Operator/Conversion/LvalueToRvalue.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
 .PHONY : src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
 
 src/AST/Operator/Conversion/LvalueToRvalue.s: src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
@@ -612,8 +646,7 @@ src/AST/Operator/Conversion/LvalueToRvalue.s: src/AST/Operator/Conversion/Lvalue
 
 # target to generate assembly for a file
 src/AST/Operator/Conversion/LvalueToRvalue.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
 .PHONY : src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
 
 src/AST/Operator/TertiaryOperator.o: src/AST/Operator/TertiaryOperator.cpp.o
@@ -622,8 +655,7 @@ src/AST/Operator/TertiaryOperator.o: src/AST/Operator/TertiaryOperator.cpp.o
 
 # target to build an object file
 src/AST/Operator/TertiaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/TertiaryOperator.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/TertiaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/TertiaryOperator.cpp.o
 .PHONY : src/AST/Operator/TertiaryOperator.cpp.o
 
 src/AST/Operator/TertiaryOperator.i: src/AST/Operator/TertiaryOperator.cpp.i
@@ -632,8 +664,7 @@ src/AST/Operator/TertiaryOperator.i: src/AST/Operator/TertiaryOperator.cpp.i
 
 # target to preprocess a source file
 src/AST/Operator/TertiaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/TertiaryOperator.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/TertiaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/TertiaryOperator.cpp.i
 .PHONY : src/AST/Operator/TertiaryOperator.cpp.i
 
 src/AST/Operator/TertiaryOperator.s: src/AST/Operator/TertiaryOperator.cpp.s
@@ -642,8 +673,7 @@ src/AST/Operator/TertiaryOperator.s: src/AST/Operator/TertiaryOperator.cpp.s
 
 # target to generate assembly for a file
 src/AST/Operator/TertiaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/TertiaryOperator.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/TertiaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/TertiaryOperator.cpp.s
 .PHONY : src/AST/Operator/TertiaryOperator.cpp.s
 
 src/AST/Operator/UnaryOperator.o: src/AST/Operator/UnaryOperator.cpp.o
@@ -652,8 +682,7 @@ src/AST/Operator/UnaryOperator.o: src/AST/Operator/UnaryOperator.cpp.o
 
 # target to build an object file
 src/AST/Operator/UnaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/UnaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/UnaryOperator.cpp.o
 .PHONY : src/AST/Operator/UnaryOperator.cpp.o
 
 src/AST/Operator/UnaryOperator.i: src/AST/Operator/UnaryOperator.cpp.i
@@ -662,8 +691,7 @@ src/AST/Operator/UnaryOperator.i: src/AST/Operator/UnaryOperator.cpp.i
 
 # target to preprocess a source file
 src/AST/Operator/UnaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/UnaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/UnaryOperator.cpp.i
 .PHONY : src/AST/Operator/UnaryOperator.cpp.i
 
 src/AST/Operator/UnaryOperator.s: src/AST/Operator/UnaryOperator.cpp.s
@@ -672,9 +700,737 @@ src/AST/Operator/UnaryOperator.s: src/AST/Operator/UnaryOperator.cpp.s
 
 # target to generate assembly for a file
 src/AST/Operator/UnaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Operator/UnaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Operator/UnaryOperator.cpp.s
 .PHONY : src/AST/Operator/UnaryOperator.cpp.s
+
+src/AST/Passes/AbstractPass.o: src/AST/Passes/AbstractPass.cpp.o
+
+.PHONY : src/AST/Passes/AbstractPass.o
+
+# target to build an object file
+src/AST/Passes/AbstractPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/AbstractPass.cpp.o
+.PHONY : src/AST/Passes/AbstractPass.cpp.o
+
+src/AST/Passes/AbstractPass.i: src/AST/Passes/AbstractPass.cpp.i
+
+.PHONY : src/AST/Passes/AbstractPass.i
+
+# target to preprocess a source file
+src/AST/Passes/AbstractPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/AbstractPass.cpp.i
+.PHONY : src/AST/Passes/AbstractPass.cpp.i
+
+src/AST/Passes/AbstractPass.s: src/AST/Passes/AbstractPass.cpp.s
+
+.PHONY : src/AST/Passes/AbstractPass.s
+
+# target to generate assembly for a file
+src/AST/Passes/AbstractPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/AbstractPass.cpp.s
+.PHONY : src/AST/Passes/AbstractPass.cpp.s
+
+src/AST/Passes/CodeGen/CGBinaryOperator.o: src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+
+src/AST/Passes/CodeGen/CGBinaryOperator.i: src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+
+src/AST/Passes/CodeGen/CGBinaryOperator.s: src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+
+src/AST/Passes/CodeGen/CGCast.o: src/AST/Passes/CodeGen/CGCast.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGCast.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGCast.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGCast.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGCast.cpp.o
+
+src/AST/Passes/CodeGen/CGCast.i: src/AST/Passes/CodeGen/CGCast.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGCast.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGCast.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGCast.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGCast.cpp.i
+
+src/AST/Passes/CodeGen/CGCast.s: src/AST/Passes/CodeGen/CGCast.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGCast.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGCast.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGCast.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGCast.cpp.s
+
+src/AST/Passes/CodeGen/CGClass.o: src/AST/Passes/CodeGen/CGClass.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGClass.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGClass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGClass.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGClass.cpp.o
+
+src/AST/Passes/CodeGen/CGClass.i: src/AST/Passes/CodeGen/CGClass.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGClass.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGClass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGClass.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGClass.cpp.i
+
+src/AST/Passes/CodeGen/CGClass.s: src/AST/Passes/CodeGen/CGClass.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGClass.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGClass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGClass.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGClass.cpp.s
+
+src/AST/Passes/CodeGen/CGException.o: src/AST/Passes/CodeGen/CGException.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGException.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGException.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGException.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGException.cpp.o
+
+src/AST/Passes/CodeGen/CGException.i: src/AST/Passes/CodeGen/CGException.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGException.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGException.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGException.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGException.cpp.i
+
+src/AST/Passes/CodeGen/CGException.s: src/AST/Passes/CodeGen/CGException.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGException.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGException.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGException.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGException.cpp.s
+
+src/AST/Passes/CodeGen/CGMemory.o: src/AST/Passes/CodeGen/CGMemory.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGMemory.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGMemory.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGMemory.cpp.o
+
+src/AST/Passes/CodeGen/CGMemory.i: src/AST/Passes/CodeGen/CGMemory.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGMemory.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGMemory.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGMemory.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGMemory.cpp.i
+
+src/AST/Passes/CodeGen/CGMemory.s: src/AST/Passes/CodeGen/CGMemory.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGMemory.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGMemory.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGMemory.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGMemory.cpp.s
+
+src/AST/Passes/CodeGen/CGModule.o: src/AST/Passes/CodeGen/CGModule.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CGModule.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CGModule.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGModule.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CGModule.cpp.o
+
+src/AST/Passes/CodeGen/CGModule.i: src/AST/Passes/CodeGen/CGModule.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CGModule.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CGModule.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGModule.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CGModule.cpp.i
+
+src/AST/Passes/CodeGen/CGModule.s: src/AST/Passes/CodeGen/CGModule.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CGModule.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CGModule.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CGModule.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CGModule.cpp.s
+
+src/AST/Passes/CodeGen/CodeGen.o: src/AST/Passes/CodeGen/CodeGen.cpp.o
+
+.PHONY : src/AST/Passes/CodeGen/CodeGen.o
+
+# target to build an object file
+src/AST/Passes/CodeGen/CodeGen.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o
+.PHONY : src/AST/Passes/CodeGen/CodeGen.cpp.o
+
+src/AST/Passes/CodeGen/CodeGen.i: src/AST/Passes/CodeGen/CodeGen.cpp.i
+
+.PHONY : src/AST/Passes/CodeGen/CodeGen.i
+
+# target to preprocess a source file
+src/AST/Passes/CodeGen/CodeGen.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CodeGen.cpp.i
+.PHONY : src/AST/Passes/CodeGen/CodeGen.cpp.i
+
+src/AST/Passes/CodeGen/CodeGen.s: src/AST/Passes/CodeGen/CodeGen.cpp.s
+
+.PHONY : src/AST/Passes/CodeGen/CodeGen.s
+
+# target to generate assembly for a file
+src/AST/Passes/CodeGen/CodeGen.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/CodeGen/CodeGen.cpp.s
+.PHONY : src/AST/Passes/CodeGen/CodeGen.cpp.s
+
+src/AST/Passes/DebugInfo/DebugInfo.o: src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.o
+
+# target to build an object file
+src/AST/Passes/DebugInfo/DebugInfo.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+
+src/AST/Passes/DebugInfo/DebugInfo.i: src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.i
+
+# target to preprocess a source file
+src/AST/Passes/DebugInfo/DebugInfo.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+
+src/AST/Passes/DebugInfo/DebugInfo.s: src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.s
+
+# target to generate assembly for a file
+src/AST/Passes/DebugInfo/DebugInfo.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+.PHONY : src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+
+src/AST/Passes/Declaration/DeclPass.o: src/AST/Passes/Declaration/DeclPass.cpp.o
+
+.PHONY : src/AST/Passes/Declaration/DeclPass.o
+
+# target to build an object file
+src/AST/Passes/Declaration/DeclPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Declaration/DeclPass.cpp.o
+.PHONY : src/AST/Passes/Declaration/DeclPass.cpp.o
+
+src/AST/Passes/Declaration/DeclPass.i: src/AST/Passes/Declaration/DeclPass.cpp.i
+
+.PHONY : src/AST/Passes/Declaration/DeclPass.i
+
+# target to preprocess a source file
+src/AST/Passes/Declaration/DeclPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Declaration/DeclPass.cpp.i
+.PHONY : src/AST/Passes/Declaration/DeclPass.cpp.i
+
+src/AST/Passes/Declaration/DeclPass.s: src/AST/Passes/Declaration/DeclPass.cpp.s
+
+.PHONY : src/AST/Passes/Declaration/DeclPass.s
+
+# target to generate assembly for a file
+src/AST/Passes/Declaration/DeclPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Declaration/DeclPass.cpp.s
+.PHONY : src/AST/Passes/Declaration/DeclPass.cpp.s
+
+src/AST/Passes/Output/HeaderGen.o: src/AST/Passes/Output/HeaderGen.cpp.o
+
+.PHONY : src/AST/Passes/Output/HeaderGen.o
+
+# target to build an object file
+src/AST/Passes/Output/HeaderGen.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Output/HeaderGen.cpp.o
+.PHONY : src/AST/Passes/Output/HeaderGen.cpp.o
+
+src/AST/Passes/Output/HeaderGen.i: src/AST/Passes/Output/HeaderGen.cpp.i
+
+.PHONY : src/AST/Passes/Output/HeaderGen.i
+
+# target to preprocess a source file
+src/AST/Passes/Output/HeaderGen.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Output/HeaderGen.cpp.i
+.PHONY : src/AST/Passes/Output/HeaderGen.cpp.i
+
+src/AST/Passes/Output/HeaderGen.s: src/AST/Passes/Output/HeaderGen.cpp.s
+
+.PHONY : src/AST/Passes/Output/HeaderGen.s
+
+# target to generate assembly for a file
+src/AST/Passes/Output/HeaderGen.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Output/HeaderGen.cpp.s
+.PHONY : src/AST/Passes/Output/HeaderGen.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Builtin.o: src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Builtin.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Builtin.i: src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Builtin.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Builtin.s: src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Builtin.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+
+src/AST/Passes/SemanticAnalysis/ConstExprPass.o: src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+
+src/AST/Passes/SemanticAnalysis/ConstExprPass.i: src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+
+src/AST/Passes/SemanticAnalysis/ConstExprPass.s: src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Function.o: src/AST/Passes/SemanticAnalysis/Function.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Function.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Function.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Function.i: src/AST/Passes/SemanticAnalysis/Function.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Function.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Function.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Function.s: src/AST/Passes/SemanticAnalysis/Function.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Function.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Function.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Function.cpp.s
+
+src/AST/Passes/SemanticAnalysis/OverloadResolver.o: src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.o
+
+src/AST/Passes/SemanticAnalysis/OverloadResolver.i: src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.i
+
+src/AST/Passes/SemanticAnalysis/OverloadResolver.s: src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Record/Class.o: src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Record/Class.i: src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Record/Class.s: src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Record/Enum.o: src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Record/Enum.i: src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Record/Enum.s: src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Record/Record.o: src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Record/Record.i: src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Record/Record.s: src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+
+src/AST/Passes/SemanticAnalysis/Record/Union.o: src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+
+src/AST/Passes/SemanticAnalysis/Record/Union.i: src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+
+src/AST/Passes/SemanticAnalysis/Record/Union.s: src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaCall.o: src/AST/Passes/SemanticAnalysis/SemaCall.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaCall.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaCall.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaCall.i: src/AST/Passes/SemanticAnalysis/SemaCall.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaCall.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaCall.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaCall.s: src/AST/Passes/SemanticAnalysis/SemaCall.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaCall.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaCall.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaCall.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaClass.o: src/AST/Passes/SemanticAnalysis/SemaClass.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaClass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaClass.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaClass.i: src/AST/Passes/SemanticAnalysis/SemaClass.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaClass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaClass.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaClass.s: src/AST/Passes/SemanticAnalysis/SemaClass.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaClass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaClass.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaClass.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.o: src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.i: src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.s: src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaOperator.o: src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaOperator.i: src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaOperator.s: src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaOperator.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaPass.o: src/AST/Passes/SemanticAnalysis/SemaPass.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaPass.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaPass.i: src/AST/Passes/SemanticAnalysis/SemaPass.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaPass.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaPass.s: src/AST/Passes/SemanticAnalysis/SemaPass.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaPass.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaPass.cpp.s
+
+src/AST/Passes/SemanticAnalysis/SemaTemplate.o: src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.o
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.o
+
+# target to build an object file
+src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.o
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.o
+
+src/AST/Passes/SemanticAnalysis/SemaTemplate.i: src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.i
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.i
+
+# target to preprocess a source file
+src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.i
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.i
+
+src/AST/Passes/SemanticAnalysis/SemaTemplate.s: src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.s
+
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.s
+
+# target to generate assembly for a file
+src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.s
+.PHONY : src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp.s
+
+src/AST/Passes/Serialization/ModuleReader.o: src/AST/Passes/Serialization/ModuleReader.cpp.o
+
+.PHONY : src/AST/Passes/Serialization/ModuleReader.o
+
+# target to build an object file
+src/AST/Passes/Serialization/ModuleReader.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleReader.cpp.o
+.PHONY : src/AST/Passes/Serialization/ModuleReader.cpp.o
+
+src/AST/Passes/Serialization/ModuleReader.i: src/AST/Passes/Serialization/ModuleReader.cpp.i
+
+.PHONY : src/AST/Passes/Serialization/ModuleReader.i
+
+# target to preprocess a source file
+src/AST/Passes/Serialization/ModuleReader.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleReader.cpp.i
+.PHONY : src/AST/Passes/Serialization/ModuleReader.cpp.i
+
+src/AST/Passes/Serialization/ModuleReader.s: src/AST/Passes/Serialization/ModuleReader.cpp.s
+
+.PHONY : src/AST/Passes/Serialization/ModuleReader.s
+
+# target to generate assembly for a file
+src/AST/Passes/Serialization/ModuleReader.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleReader.cpp.s
+.PHONY : src/AST/Passes/Serialization/ModuleReader.cpp.s
+
+src/AST/Passes/Serialization/ModuleWriter.o: src/AST/Passes/Serialization/ModuleWriter.cpp.o
+
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.o
+
+# target to build an object file
+src/AST/Passes/Serialization/ModuleWriter.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleWriter.cpp.o
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.cpp.o
+
+src/AST/Passes/Serialization/ModuleWriter.i: src/AST/Passes/Serialization/ModuleWriter.cpp.i
+
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.i
+
+# target to preprocess a source file
+src/AST/Passes/Serialization/ModuleWriter.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleWriter.cpp.i
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.cpp.i
+
+src/AST/Passes/Serialization/ModuleWriter.s: src/AST/Passes/Serialization/ModuleWriter.cpp.s
+
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.s
+
+# target to generate assembly for a file
+src/AST/Passes/Serialization/ModuleWriter.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Passes/Serialization/ModuleWriter.cpp.s
+.PHONY : src/AST/Passes/Serialization/ModuleWriter.cpp.s
 
 src/AST/Statement/Block/CompoundStmt.o: src/AST/Statement/Block/CompoundStmt.cpp.o
 
@@ -682,8 +1438,7 @@ src/AST/Statement/Block/CompoundStmt.o: src/AST/Statement/Block/CompoundStmt.cpp
 
 # target to build an object file
 src/AST/Statement/Block/CompoundStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Block/CompoundStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Block/CompoundStmt.cpp.o
 .PHONY : src/AST/Statement/Block/CompoundStmt.cpp.o
 
 src/AST/Statement/Block/CompoundStmt.i: src/AST/Statement/Block/CompoundStmt.cpp.i
@@ -692,8 +1447,7 @@ src/AST/Statement/Block/CompoundStmt.i: src/AST/Statement/Block/CompoundStmt.cpp
 
 # target to preprocess a source file
 src/AST/Statement/Block/CompoundStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Block/CompoundStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Block/CompoundStmt.cpp.i
 .PHONY : src/AST/Statement/Block/CompoundStmt.cpp.i
 
 src/AST/Statement/Block/CompoundStmt.s: src/AST/Statement/Block/CompoundStmt.cpp.s
@@ -702,8 +1456,7 @@ src/AST/Statement/Block/CompoundStmt.s: src/AST/Statement/Block/CompoundStmt.cpp
 
 # target to generate assembly for a file
 src/AST/Statement/Block/CompoundStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Block/CompoundStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Block/CompoundStmt.cpp.s
 .PHONY : src/AST/Statement/Block/CompoundStmt.cpp.s
 
 src/AST/Statement/ControlFlow/BreakStmt.o: src/AST/Statement/ControlFlow/BreakStmt.cpp.o
@@ -712,8 +1465,7 @@ src/AST/Statement/ControlFlow/BreakStmt.o: src/AST/Statement/ControlFlow/BreakSt
 
 # target to build an object file
 src/AST/Statement/ControlFlow/BreakStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 
 src/AST/Statement/ControlFlow/BreakStmt.i: src/AST/Statement/ControlFlow/BreakStmt.cpp.i
@@ -722,8 +1474,7 @@ src/AST/Statement/ControlFlow/BreakStmt.i: src/AST/Statement/ControlFlow/BreakSt
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/BreakStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/BreakStmt.cpp.i
 
 src/AST/Statement/ControlFlow/BreakStmt.s: src/AST/Statement/ControlFlow/BreakStmt.cpp.s
@@ -732,8 +1483,7 @@ src/AST/Statement/ControlFlow/BreakStmt.s: src/AST/Statement/ControlFlow/BreakSt
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/BreakStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/BreakStmt.cpp.s
 
 src/AST/Statement/ControlFlow/CaseStmt.o: src/AST/Statement/ControlFlow/CaseStmt.cpp.o
@@ -742,8 +1492,7 @@ src/AST/Statement/ControlFlow/CaseStmt.o: src/AST/Statement/ControlFlow/CaseStmt
 
 # target to build an object file
 src/AST/Statement/ControlFlow/CaseStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/CaseStmt.cpp.o
 
 src/AST/Statement/ControlFlow/CaseStmt.i: src/AST/Statement/ControlFlow/CaseStmt.cpp.i
@@ -752,8 +1501,7 @@ src/AST/Statement/ControlFlow/CaseStmt.i: src/AST/Statement/ControlFlow/CaseStmt
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/CaseStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/CaseStmt.cpp.i
 
 src/AST/Statement/ControlFlow/CaseStmt.s: src/AST/Statement/ControlFlow/CaseStmt.cpp.s
@@ -762,8 +1510,7 @@ src/AST/Statement/ControlFlow/CaseStmt.s: src/AST/Statement/ControlFlow/CaseStmt
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/CaseStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/CaseStmt.cpp.s
 
 src/AST/Statement/ControlFlow/ContinueStmt.o: src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
@@ -772,8 +1519,7 @@ src/AST/Statement/ControlFlow/ContinueStmt.o: src/AST/Statement/ControlFlow/Cont
 
 # target to build an object file
 src/AST/Statement/ControlFlow/ContinueStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
 
 src/AST/Statement/ControlFlow/ContinueStmt.i: src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
@@ -782,8 +1528,7 @@ src/AST/Statement/ControlFlow/ContinueStmt.i: src/AST/Statement/ControlFlow/Cont
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/ContinueStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
 
 src/AST/Statement/ControlFlow/ContinueStmt.s: src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
@@ -792,9 +1537,35 @@ src/AST/Statement/ControlFlow/ContinueStmt.s: src/AST/Statement/ControlFlow/Cont
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/ContinueStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
+
+src/AST/Statement/ControlFlow/ForInStmt.o: src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.o
+
+# target to build an object file
+src/AST/Statement/ControlFlow/ForInStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+
+src/AST/Statement/ControlFlow/ForInStmt.i: src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.i
+
+# target to preprocess a source file
+src/AST/Statement/ControlFlow/ForInStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+
+src/AST/Statement/ControlFlow/ForInStmt.s: src/AST/Statement/ControlFlow/ForInStmt.cpp.s
+
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.s
+
+# target to generate assembly for a file
+src/AST/Statement/ControlFlow/ForInStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.s
+.PHONY : src/AST/Statement/ControlFlow/ForInStmt.cpp.s
 
 src/AST/Statement/ControlFlow/ForStmt.o: src/AST/Statement/ControlFlow/ForStmt.cpp.o
 
@@ -802,8 +1573,7 @@ src/AST/Statement/ControlFlow/ForStmt.o: src/AST/Statement/ControlFlow/ForStmt.c
 
 # target to build an object file
 src/AST/Statement/ControlFlow/ForStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/ForStmt.cpp.o
 
 src/AST/Statement/ControlFlow/ForStmt.i: src/AST/Statement/ControlFlow/ForStmt.cpp.i
@@ -812,8 +1582,7 @@ src/AST/Statement/ControlFlow/ForStmt.i: src/AST/Statement/ControlFlow/ForStmt.c
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/ForStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/ForStmt.cpp.i
 
 src/AST/Statement/ControlFlow/ForStmt.s: src/AST/Statement/ControlFlow/ForStmt.cpp.s
@@ -822,8 +1591,7 @@ src/AST/Statement/ControlFlow/ForStmt.s: src/AST/Statement/ControlFlow/ForStmt.c
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/ForStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/ForStmt.cpp.s
 
 src/AST/Statement/ControlFlow/GotoStmt.o: src/AST/Statement/ControlFlow/GotoStmt.cpp.o
@@ -832,8 +1600,7 @@ src/AST/Statement/ControlFlow/GotoStmt.o: src/AST/Statement/ControlFlow/GotoStmt
 
 # target to build an object file
 src/AST/Statement/ControlFlow/GotoStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/GotoStmt.cpp.o
 
 src/AST/Statement/ControlFlow/GotoStmt.i: src/AST/Statement/ControlFlow/GotoStmt.cpp.i
@@ -842,8 +1609,7 @@ src/AST/Statement/ControlFlow/GotoStmt.i: src/AST/Statement/ControlFlow/GotoStmt
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/GotoStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/GotoStmt.cpp.i
 
 src/AST/Statement/ControlFlow/GotoStmt.s: src/AST/Statement/ControlFlow/GotoStmt.cpp.s
@@ -852,8 +1618,7 @@ src/AST/Statement/ControlFlow/GotoStmt.s: src/AST/Statement/ControlFlow/GotoStmt
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/GotoStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/GotoStmt.cpp.s
 
 src/AST/Statement/ControlFlow/IfStmt.o: src/AST/Statement/ControlFlow/IfStmt.cpp.o
@@ -862,8 +1627,7 @@ src/AST/Statement/ControlFlow/IfStmt.o: src/AST/Statement/ControlFlow/IfStmt.cpp
 
 # target to build an object file
 src/AST/Statement/ControlFlow/IfStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/IfStmt.cpp.o
 
 src/AST/Statement/ControlFlow/IfStmt.i: src/AST/Statement/ControlFlow/IfStmt.cpp.i
@@ -872,8 +1636,7 @@ src/AST/Statement/ControlFlow/IfStmt.i: src/AST/Statement/ControlFlow/IfStmt.cpp
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/IfStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/IfStmt.cpp.i
 
 src/AST/Statement/ControlFlow/IfStmt.s: src/AST/Statement/ControlFlow/IfStmt.cpp.s
@@ -882,8 +1645,7 @@ src/AST/Statement/ControlFlow/IfStmt.s: src/AST/Statement/ControlFlow/IfStmt.cpp
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/IfStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/IfStmt.cpp.s
 
 src/AST/Statement/ControlFlow/LabelStmt.o: src/AST/Statement/ControlFlow/LabelStmt.cpp.o
@@ -892,8 +1654,7 @@ src/AST/Statement/ControlFlow/LabelStmt.o: src/AST/Statement/ControlFlow/LabelSt
 
 # target to build an object file
 src/AST/Statement/ControlFlow/LabelStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/LabelStmt.cpp.o
 
 src/AST/Statement/ControlFlow/LabelStmt.i: src/AST/Statement/ControlFlow/LabelStmt.cpp.i
@@ -902,8 +1663,7 @@ src/AST/Statement/ControlFlow/LabelStmt.i: src/AST/Statement/ControlFlow/LabelSt
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/LabelStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/LabelStmt.cpp.i
 
 src/AST/Statement/ControlFlow/LabelStmt.s: src/AST/Statement/ControlFlow/LabelStmt.cpp.s
@@ -912,9 +1672,35 @@ src/AST/Statement/ControlFlow/LabelStmt.s: src/AST/Statement/ControlFlow/LabelSt
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/LabelStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/LabelStmt.cpp.s
+
+src/AST/Statement/ControlFlow/MatchStmt.o: src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.o
+
+# target to build an object file
+src/AST/Statement/ControlFlow/MatchStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+
+src/AST/Statement/ControlFlow/MatchStmt.i: src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.i
+
+# target to preprocess a source file
+src/AST/Statement/ControlFlow/MatchStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+
+src/AST/Statement/ControlFlow/MatchStmt.s: src/AST/Statement/ControlFlow/MatchStmt.cpp.s
+
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.s
+
+# target to generate assembly for a file
+src/AST/Statement/ControlFlow/MatchStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.s
+.PHONY : src/AST/Statement/ControlFlow/MatchStmt.cpp.s
 
 src/AST/Statement/ControlFlow/ReturnStmt.o: src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 
@@ -922,8 +1708,7 @@ src/AST/Statement/ControlFlow/ReturnStmt.o: src/AST/Statement/ControlFlow/Return
 
 # target to build an object file
 src/AST/Statement/ControlFlow/ReturnStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 
 src/AST/Statement/ControlFlow/ReturnStmt.i: src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
@@ -932,8 +1717,7 @@ src/AST/Statement/ControlFlow/ReturnStmt.i: src/AST/Statement/ControlFlow/Return
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/ReturnStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
 
 src/AST/Statement/ControlFlow/ReturnStmt.s: src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
@@ -942,39 +1726,8 @@ src/AST/Statement/ControlFlow/ReturnStmt.s: src/AST/Statement/ControlFlow/Return
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/ReturnStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
-
-src/AST/Statement/ControlFlow/SwitchStmt.o: src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.o
-
-# target to build an object file
-src/AST/Statement/ControlFlow/SwitchStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-
-src/AST/Statement/ControlFlow/SwitchStmt.i: src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.i
-
-# target to preprocess a source file
-src/AST/Statement/ControlFlow/SwitchStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-
-src/AST/Statement/ControlFlow/SwitchStmt.s: src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
-
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.s
-
-# target to generate assembly for a file
-src/AST/Statement/ControlFlow/SwitchStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
-.PHONY : src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
 
 src/AST/Statement/ControlFlow/WhileStmt.o: src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 
@@ -982,8 +1735,7 @@ src/AST/Statement/ControlFlow/WhileStmt.o: src/AST/Statement/ControlFlow/WhileSt
 
 # target to build an object file
 src/AST/Statement/ControlFlow/WhileStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 .PHONY : src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 
 src/AST/Statement/ControlFlow/WhileStmt.i: src/AST/Statement/ControlFlow/WhileStmt.cpp.i
@@ -992,8 +1744,7 @@ src/AST/Statement/ControlFlow/WhileStmt.i: src/AST/Statement/ControlFlow/WhileSt
 
 # target to preprocess a source file
 src/AST/Statement/ControlFlow/WhileStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
 .PHONY : src/AST/Statement/ControlFlow/WhileStmt.cpp.i
 
 src/AST/Statement/ControlFlow/WhileStmt.s: src/AST/Statement/ControlFlow/WhileStmt.cpp.s
@@ -1002,9 +1753,35 @@ src/AST/Statement/ControlFlow/WhileStmt.s: src/AST/Statement/ControlFlow/WhileSt
 
 # target to generate assembly for a file
 src/AST/Statement/ControlFlow/WhileStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
 .PHONY : src/AST/Statement/ControlFlow/WhileStmt.cpp.s
+
+src/AST/Statement/Declaration/CallableDecl.o: src/AST/Statement/Declaration/CallableDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/CallableDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/CallableDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/CallableDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/CallableDecl.cpp.o
+
+src/AST/Statement/Declaration/CallableDecl.i: src/AST/Statement/Declaration/CallableDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/CallableDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/CallableDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/CallableDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/CallableDecl.cpp.i
+
+src/AST/Statement/Declaration/CallableDecl.s: src/AST/Statement/Declaration/CallableDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/CallableDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/CallableDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/CallableDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/CallableDecl.cpp.s
 
 src/AST/Statement/Declaration/Class/ClassDecl.o: src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 
@@ -1012,8 +1789,7 @@ src/AST/Statement/Declaration/Class/ClassDecl.o: src/AST/Statement/Declaration/C
 
 # target to build an object file
 src/AST/Statement/Declaration/Class/ClassDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 
 src/AST/Statement/Declaration/Class/ClassDecl.i: src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
@@ -1022,8 +1798,7 @@ src/AST/Statement/Declaration/Class/ClassDecl.i: src/AST/Statement/Declaration/C
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/Class/ClassDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
 
 src/AST/Statement/Declaration/Class/ClassDecl.s: src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
@@ -1032,8 +1807,7 @@ src/AST/Statement/Declaration/Class/ClassDecl.s: src/AST/Statement/Declaration/C
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/Class/ClassDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
 
 src/AST/Statement/Declaration/Class/ConstrDecl.o: src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
@@ -1042,8 +1816,7 @@ src/AST/Statement/Declaration/Class/ConstrDecl.o: src/AST/Statement/Declaration/
 
 # target to build an object file
 src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
 
 src/AST/Statement/Declaration/Class/ConstrDecl.i: src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
@@ -1052,8 +1825,7 @@ src/AST/Statement/Declaration/Class/ConstrDecl.i: src/AST/Statement/Declaration/
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
 
 src/AST/Statement/Declaration/Class/ConstrDecl.s: src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
@@ -1062,9 +1834,116 @@ src/AST/Statement/Declaration/Class/ConstrDecl.s: src/AST/Statement/Declaration/
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/DestrDecl.o: src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/DestrDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/DestrDecl.i: src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/DestrDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/DestrDecl.s: src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/DestrDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/EnumCaseDecl.o: src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/EnumCaseDecl.i: src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/EnumCaseDecl.s: src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/EnumDecl.o: src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/EnumDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/EnumDecl.i: src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/EnumDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/EnumDecl.s: src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/EnumDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/ExtensionDecl.o: src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/ExtensionDecl.i: src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/ExtensionDecl.s: src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/ExtensionDecl.cpp.s
 
 src/AST/Statement/Declaration/Class/FieldDecl.o: src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 
@@ -1072,8 +1951,7 @@ src/AST/Statement/Declaration/Class/FieldDecl.o: src/AST/Statement/Declaration/C
 
 # target to build an object file
 src/AST/Statement/Declaration/Class/FieldDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 
 src/AST/Statement/Declaration/Class/FieldDecl.i: src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
@@ -1082,8 +1960,7 @@ src/AST/Statement/Declaration/Class/FieldDecl.i: src/AST/Statement/Declaration/C
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/Class/FieldDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
 
 src/AST/Statement/Declaration/Class/FieldDecl.s: src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
@@ -1092,8 +1969,7 @@ src/AST/Statement/Declaration/Class/FieldDecl.s: src/AST/Statement/Declaration/C
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/Class/FieldDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
 
 src/AST/Statement/Declaration/Class/MethodDecl.o: src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
@@ -1102,8 +1978,7 @@ src/AST/Statement/Declaration/Class/MethodDecl.o: src/AST/Statement/Declaration/
 
 # target to build an object file
 src/AST/Statement/Declaration/Class/MethodDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 
 src/AST/Statement/Declaration/Class/MethodDecl.i: src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
@@ -1112,8 +1987,7 @@ src/AST/Statement/Declaration/Class/MethodDecl.i: src/AST/Statement/Declaration/
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/Class/MethodDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
 
 src/AST/Statement/Declaration/Class/MethodDecl.s: src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
@@ -1122,9 +1996,116 @@ src/AST/Statement/Declaration/Class/MethodDecl.s: src/AST/Statement/Declaration/
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/Class/MethodDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/PropDecl.o: src/AST/Statement/Declaration/Class/PropDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/PropDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/PropDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/PropDecl.i: src/AST/Statement/Declaration/Class/PropDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/PropDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/PropDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/PropDecl.s: src/AST/Statement/Declaration/Class/PropDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/PropDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/PropDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/PropDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/RecordDecl.o: src/AST/Statement/Declaration/Class/RecordDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/RecordDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/RecordDecl.i: src/AST/Statement/Declaration/Class/RecordDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/RecordDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/RecordDecl.s: src/AST/Statement/Declaration/Class/RecordDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/RecordDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/RecordDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/RecordSubDecl.o: src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/RecordSubDecl.i: src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/RecordSubDecl.s: src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/RecordSubDecl.cpp.s
+
+src/AST/Statement/Declaration/Class/UnionDecl.o: src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Class/UnionDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
+
+src/AST/Statement/Declaration/Class/UnionDecl.i: src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Class/UnionDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
+
+src/AST/Statement/Declaration/Class/UnionDecl.s: src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Class/UnionDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
 
 src/AST/Statement/Declaration/DeclStmt.o: src/AST/Statement/Declaration/DeclStmt.cpp.o
 
@@ -1132,8 +2113,7 @@ src/AST/Statement/Declaration/DeclStmt.o: src/AST/Statement/Declaration/DeclStmt
 
 # target to build an object file
 src/AST/Statement/Declaration/DeclStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o
 .PHONY : src/AST/Statement/Declaration/DeclStmt.cpp.o
 
 src/AST/Statement/Declaration/DeclStmt.i: src/AST/Statement/Declaration/DeclStmt.cpp.i
@@ -1142,8 +2122,7 @@ src/AST/Statement/Declaration/DeclStmt.i: src/AST/Statement/Declaration/DeclStmt
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/DeclStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclStmt.cpp.i
 .PHONY : src/AST/Statement/Declaration/DeclStmt.cpp.i
 
 src/AST/Statement/Declaration/DeclStmt.s: src/AST/Statement/Declaration/DeclStmt.cpp.s
@@ -1152,8 +2131,7 @@ src/AST/Statement/Declaration/DeclStmt.s: src/AST/Statement/Declaration/DeclStmt
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/DeclStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclStmt.cpp.s
 .PHONY : src/AST/Statement/Declaration/DeclStmt.cpp.s
 
 src/AST/Statement/Declaration/DeclareStmt.o: src/AST/Statement/Declaration/DeclareStmt.cpp.o
@@ -1162,8 +2140,7 @@ src/AST/Statement/Declaration/DeclareStmt.o: src/AST/Statement/Declaration/Decla
 
 # target to build an object file
 src/AST/Statement/Declaration/DeclareStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o
 .PHONY : src/AST/Statement/Declaration/DeclareStmt.cpp.o
 
 src/AST/Statement/Declaration/DeclareStmt.i: src/AST/Statement/Declaration/DeclareStmt.cpp.i
@@ -1172,8 +2149,7 @@ src/AST/Statement/Declaration/DeclareStmt.i: src/AST/Statement/Declaration/Decla
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/DeclareStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.i
 .PHONY : src/AST/Statement/Declaration/DeclareStmt.cpp.i
 
 src/AST/Statement/Declaration/DeclareStmt.s: src/AST/Statement/Declaration/DeclareStmt.cpp.s
@@ -1182,39 +2158,8 @@ src/AST/Statement/Declaration/DeclareStmt.s: src/AST/Statement/Declaration/Decla
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/DeclareStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.s
 .PHONY : src/AST/Statement/Declaration/DeclareStmt.cpp.s
-
-src/AST/Statement/Declaration/ExtendStmt.o: src/AST/Statement/Declaration/ExtendStmt.cpp.o
-
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.o
-
-# target to build an object file
-src/AST/Statement/Declaration/ExtendStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.cpp.o
-
-src/AST/Statement/Declaration/ExtendStmt.i: src/AST/Statement/Declaration/ExtendStmt.cpp.i
-
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.i
-
-# target to preprocess a source file
-src/AST/Statement/Declaration/ExtendStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.i
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.cpp.i
-
-src/AST/Statement/Declaration/ExtendStmt.s: src/AST/Statement/Declaration/ExtendStmt.cpp.s
-
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.s
-
-# target to generate assembly for a file
-src/AST/Statement/Declaration/ExtendStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.s
-.PHONY : src/AST/Statement/Declaration/ExtendStmt.cpp.s
 
 src/AST/Statement/Declaration/FuncArgDecl.o: src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 
@@ -1222,8 +2167,7 @@ src/AST/Statement/Declaration/FuncArgDecl.o: src/AST/Statement/Declaration/FuncA
 
 # target to build an object file
 src/AST/Statement/Declaration/FuncArgDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 
 src/AST/Statement/Declaration/FuncArgDecl.i: src/AST/Statement/Declaration/FuncArgDecl.cpp.i
@@ -1232,8 +2176,7 @@ src/AST/Statement/Declaration/FuncArgDecl.i: src/AST/Statement/Declaration/FuncA
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/FuncArgDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/FuncArgDecl.cpp.i
 
 src/AST/Statement/Declaration/FuncArgDecl.s: src/AST/Statement/Declaration/FuncArgDecl.cpp.s
@@ -1242,8 +2185,7 @@ src/AST/Statement/Declaration/FuncArgDecl.s: src/AST/Statement/Declaration/FuncA
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/FuncArgDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/FuncArgDecl.cpp.s
 
 src/AST/Statement/Declaration/FunctionDecl.o: src/AST/Statement/Declaration/FunctionDecl.cpp.o
@@ -1252,8 +2194,7 @@ src/AST/Statement/Declaration/FunctionDecl.o: src/AST/Statement/Declaration/Func
 
 # target to build an object file
 src/AST/Statement/Declaration/FunctionDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/FunctionDecl.cpp.o
 
 src/AST/Statement/Declaration/FunctionDecl.i: src/AST/Statement/Declaration/FunctionDecl.cpp.i
@@ -1262,8 +2203,7 @@ src/AST/Statement/Declaration/FunctionDecl.i: src/AST/Statement/Declaration/Func
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/FunctionDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/FunctionDecl.cpp.i
 
 src/AST/Statement/Declaration/FunctionDecl.s: src/AST/Statement/Declaration/FunctionDecl.cpp.s
@@ -1272,8 +2212,7 @@ src/AST/Statement/Declaration/FunctionDecl.s: src/AST/Statement/Declaration/Func
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/FunctionDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/FunctionDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/FunctionDecl.cpp.s
 
 src/AST/Statement/Declaration/NamespaceDecl.o: src/AST/Statement/Declaration/NamespaceDecl.cpp.o
@@ -1282,8 +2221,7 @@ src/AST/Statement/Declaration/NamespaceDecl.o: src/AST/Statement/Declaration/Nam
 
 # target to build an object file
 src/AST/Statement/Declaration/NamespaceDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/NamespaceDecl.cpp.o
 
 src/AST/Statement/Declaration/NamespaceDecl.i: src/AST/Statement/Declaration/NamespaceDecl.cpp.i
@@ -1292,8 +2230,7 @@ src/AST/Statement/Declaration/NamespaceDecl.i: src/AST/Statement/Declaration/Nam
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/NamespaceDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/NamespaceDecl.cpp.i
 
 src/AST/Statement/Declaration/NamespaceDecl.s: src/AST/Statement/Declaration/NamespaceDecl.cpp.s
@@ -1302,9 +2239,89 @@ src/AST/Statement/Declaration/NamespaceDecl.s: src/AST/Statement/Declaration/Nam
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/NamespaceDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/NamespaceDecl.cpp.s
+
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.o: src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.o
+
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.i: src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.i
+
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.s: src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp.s
+
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.o: src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.o
+
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.i: src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.i
+
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.s: src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp.s
+
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.o: src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.o
+
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.o
+
+# target to build an object file
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.o
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.o
+
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.i: src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.i
+
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.i
+
+# target to preprocess a source file
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.i
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.i
+
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.s: src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.s
+
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.s
+
+# target to generate assembly for a file
+src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.s
+.PHONY : src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp.s
 
 src/AST/Statement/Declaration/TypedefDecl.o: src/AST/Statement/Declaration/TypedefDecl.cpp.o
 
@@ -1312,8 +2329,7 @@ src/AST/Statement/Declaration/TypedefDecl.o: src/AST/Statement/Declaration/Typed
 
 # target to build an object file
 src/AST/Statement/Declaration/TypedefDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o
 .PHONY : src/AST/Statement/Declaration/TypedefDecl.cpp.o
 
 src/AST/Statement/Declaration/TypedefDecl.i: src/AST/Statement/Declaration/TypedefDecl.cpp.i
@@ -1322,8 +2338,7 @@ src/AST/Statement/Declaration/TypedefDecl.i: src/AST/Statement/Declaration/Typed
 
 # target to preprocess a source file
 src/AST/Statement/Declaration/TypedefDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.i
 .PHONY : src/AST/Statement/Declaration/TypedefDecl.cpp.i
 
 src/AST/Statement/Declaration/TypedefDecl.s: src/AST/Statement/Declaration/TypedefDecl.cpp.s
@@ -1332,9 +2347,62 @@ src/AST/Statement/Declaration/TypedefDecl.s: src/AST/Statement/Declaration/Typed
 
 # target to generate assembly for a file
 src/AST/Statement/Declaration/TypedefDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.s
 .PHONY : src/AST/Statement/Declaration/TypedefDecl.cpp.s
+
+src/AST/Statement/Exception/ThrowStmt.o: src/AST/Statement/Exception/ThrowStmt.cpp.o
+
+.PHONY : src/AST/Statement/Exception/ThrowStmt.o
+
+# target to build an object file
+src/AST/Statement/Exception/ThrowStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/ThrowStmt.cpp.o
+.PHONY : src/AST/Statement/Exception/ThrowStmt.cpp.o
+
+src/AST/Statement/Exception/ThrowStmt.i: src/AST/Statement/Exception/ThrowStmt.cpp.i
+
+.PHONY : src/AST/Statement/Exception/ThrowStmt.i
+
+# target to preprocess a source file
+src/AST/Statement/Exception/ThrowStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/ThrowStmt.cpp.i
+.PHONY : src/AST/Statement/Exception/ThrowStmt.cpp.i
+
+src/AST/Statement/Exception/ThrowStmt.s: src/AST/Statement/Exception/ThrowStmt.cpp.s
+
+.PHONY : src/AST/Statement/Exception/ThrowStmt.s
+
+# target to generate assembly for a file
+src/AST/Statement/Exception/ThrowStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/ThrowStmt.cpp.s
+.PHONY : src/AST/Statement/Exception/ThrowStmt.cpp.s
+
+src/AST/Statement/Exception/TryStmt.o: src/AST/Statement/Exception/TryStmt.cpp.o
+
+.PHONY : src/AST/Statement/Exception/TryStmt.o
+
+# target to build an object file
+src/AST/Statement/Exception/TryStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/TryStmt.cpp.o
+.PHONY : src/AST/Statement/Exception/TryStmt.cpp.o
+
+src/AST/Statement/Exception/TryStmt.i: src/AST/Statement/Exception/TryStmt.cpp.i
+
+.PHONY : src/AST/Statement/Exception/TryStmt.i
+
+# target to preprocess a source file
+src/AST/Statement/Exception/TryStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/TryStmt.cpp.i
+.PHONY : src/AST/Statement/Exception/TryStmt.cpp.i
+
+src/AST/Statement/Exception/TryStmt.s: src/AST/Statement/Exception/TryStmt.cpp.s
+
+.PHONY : src/AST/Statement/Exception/TryStmt.s
+
+# target to generate assembly for a file
+src/AST/Statement/Exception/TryStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Exception/TryStmt.cpp.s
+.PHONY : src/AST/Statement/Exception/TryStmt.cpp.s
 
 src/AST/Statement/Statement.o: src/AST/Statement/Statement.cpp.o
 
@@ -1342,8 +2410,7 @@ src/AST/Statement/Statement.o: src/AST/Statement/Statement.cpp.o
 
 # target to build an object file
 src/AST/Statement/Statement.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Statement.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Statement.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Statement.cpp.o
 .PHONY : src/AST/Statement/Statement.cpp.o
 
 src/AST/Statement/Statement.i: src/AST/Statement/Statement.cpp.i
@@ -1352,8 +2419,7 @@ src/AST/Statement/Statement.i: src/AST/Statement/Statement.cpp.i
 
 # target to preprocess a source file
 src/AST/Statement/Statement.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Statement.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Statement.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Statement.cpp.i
 .PHONY : src/AST/Statement/Statement.cpp.i
 
 src/AST/Statement/Statement.s: src/AST/Statement/Statement.cpp.s
@@ -1362,8 +2428,7 @@ src/AST/Statement/Statement.s: src/AST/Statement/Statement.cpp.s
 
 # target to generate assembly for a file
 src/AST/Statement/Statement.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Statement.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/Statement.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/Statement.cpp.s
 .PHONY : src/AST/Statement/Statement.cpp.s
 
 src/AST/Statement/UsingStmt.o: src/AST/Statement/UsingStmt.cpp.o
@@ -1372,8 +2437,7 @@ src/AST/Statement/UsingStmt.o: src/AST/Statement/UsingStmt.cpp.o
 
 # target to build an object file
 src/AST/Statement/UsingStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/UsingStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/UsingStmt.cpp.o
 .PHONY : src/AST/Statement/UsingStmt.cpp.o
 
 src/AST/Statement/UsingStmt.i: src/AST/Statement/UsingStmt.cpp.i
@@ -1382,8 +2446,7 @@ src/AST/Statement/UsingStmt.i: src/AST/Statement/UsingStmt.cpp.i
 
 # target to preprocess a source file
 src/AST/Statement/UsingStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/UsingStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/UsingStmt.cpp.i
 .PHONY : src/AST/Statement/UsingStmt.cpp.i
 
 src/AST/Statement/UsingStmt.s: src/AST/Statement/UsingStmt.cpp.s
@@ -1392,8 +2455,7 @@ src/AST/Statement/UsingStmt.s: src/AST/Statement/UsingStmt.cpp.s
 
 # target to generate assembly for a file
 src/AST/Statement/UsingStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Statement/UsingStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement/UsingStmt.cpp.s
 .PHONY : src/AST/Statement/UsingStmt.cpp.s
 
 src/AST/SymbolTable.o: src/AST/SymbolTable.cpp.o
@@ -1402,8 +2464,7 @@ src/AST/SymbolTable.o: src/AST/SymbolTable.cpp.o
 
 # target to build an object file
 src/AST/SymbolTable.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/SymbolTable.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/SymbolTable.cpp.o
 .PHONY : src/AST/SymbolTable.cpp.o
 
 src/AST/SymbolTable.i: src/AST/SymbolTable.cpp.i
@@ -1412,8 +2473,7 @@ src/AST/SymbolTable.i: src/AST/SymbolTable.cpp.i
 
 # target to preprocess a source file
 src/AST/SymbolTable.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/SymbolTable.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/SymbolTable.cpp.i
 .PHONY : src/AST/SymbolTable.cpp.i
 
 src/AST/SymbolTable.s: src/AST/SymbolTable.cpp.s
@@ -1422,339 +2482,119 @@ src/AST/SymbolTable.s: src/AST/SymbolTable.cpp.s
 
 # target to generate assembly for a file
 src/AST/SymbolTable.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/SymbolTable.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/SymbolTable.cpp.s
 .PHONY : src/AST/SymbolTable.cpp.s
 
-src/AST/Visitor/CaptureVisitor.o: src/AST/Visitor/CaptureVisitor.cpp.o
+src/Compiler.o: src/Compiler.cpp.o
 
-.PHONY : src/AST/Visitor/CaptureVisitor.o
-
-# target to build an object file
-src/AST/Visitor/CaptureVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CaptureVisitor.cpp.o
-.PHONY : src/AST/Visitor/CaptureVisitor.cpp.o
-
-src/AST/Visitor/CaptureVisitor.i: src/AST/Visitor/CaptureVisitor.cpp.i
-
-.PHONY : src/AST/Visitor/CaptureVisitor.i
-
-# target to preprocess a source file
-src/AST/Visitor/CaptureVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CaptureVisitor.cpp.i
-.PHONY : src/AST/Visitor/CaptureVisitor.cpp.i
-
-src/AST/Visitor/CaptureVisitor.s: src/AST/Visitor/CaptureVisitor.cpp.s
-
-.PHONY : src/AST/Visitor/CaptureVisitor.s
-
-# target to generate assembly for a file
-src/AST/Visitor/CaptureVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CaptureVisitor.cpp.s
-.PHONY : src/AST/Visitor/CaptureVisitor.cpp.s
-
-src/AST/Visitor/CodeGen/CGBinaryOperator.o: src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
-
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.o
+.PHONY : src/Compiler.o
 
 # target to build an object file
-src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
+src/Compiler.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler.cpp.o
+.PHONY : src/Compiler.cpp.o
 
-src/AST/Visitor/CodeGen/CGBinaryOperator.i: src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
+src/Compiler.i: src/Compiler.cpp.i
 
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.i
+.PHONY : src/Compiler.i
 
 # target to preprocess a source file
-src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
+src/Compiler.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler.cpp.i
+.PHONY : src/Compiler.cpp.i
 
-src/AST/Visitor/CodeGen/CGBinaryOperator.s: src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
+src/Compiler.s: src/Compiler.cpp.s
 
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.s
+.PHONY : src/Compiler.s
 
 # target to generate assembly for a file
-src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
-.PHONY : src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
+src/Compiler.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler.cpp.s
+.PHONY : src/Compiler.cpp.s
 
-src/AST/Visitor/CodeGen/CGMemory.o: src/AST/Visitor/CodeGen/CGMemory.cpp.o
+src/Compiler/PassManager.o: src/Compiler/PassManager.cpp.o
 
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.o
+.PHONY : src/Compiler/PassManager.o
 
 # target to build an object file
-src/AST/Visitor/CodeGen/CGMemory.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.cpp.o
+src/Compiler/PassManager.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler/PassManager.cpp.o
+.PHONY : src/Compiler/PassManager.cpp.o
 
-src/AST/Visitor/CodeGen/CGMemory.i: src/AST/Visitor/CodeGen/CGMemory.cpp.i
+src/Compiler/PassManager.i: src/Compiler/PassManager.cpp.i
 
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.i
+.PHONY : src/Compiler/PassManager.i
 
 # target to preprocess a source file
-src/AST/Visitor/CodeGen/CGMemory.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.i
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.cpp.i
+src/Compiler/PassManager.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler/PassManager.cpp.i
+.PHONY : src/Compiler/PassManager.cpp.i
 
-src/AST/Visitor/CodeGen/CGMemory.s: src/AST/Visitor/CodeGen/CGMemory.cpp.s
+src/Compiler/PassManager.s: src/Compiler/PassManager.cpp.s
 
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.s
+.PHONY : src/Compiler/PassManager.s
 
 # target to generate assembly for a file
-src/AST/Visitor/CodeGen/CGMemory.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.s
-.PHONY : src/AST/Visitor/CodeGen/CGMemory.cpp.s
+src/Compiler/PassManager.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler/PassManager.cpp.s
+.PHONY : src/Compiler/PassManager.cpp.s
 
-src/AST/Visitor/CodeGen/CodeGenVisitor.o: src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
+src/Files/FileManager.o: src/Files/FileManager.cpp.o
 
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.o
+.PHONY : src/Files/FileManager.o
 
 # target to build an object file
-src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
+src/Files/FileManager.cpp.o:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Files/FileManager.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileManager.cpp.o
+.PHONY : src/Files/FileManager.cpp.o
 
-src/AST/Visitor/CodeGen/CodeGenVisitor.i: src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
+src/Files/FileManager.i: src/Files/FileManager.cpp.i
 
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.i
+.PHONY : src/Files/FileManager.i
 
 # target to preprocess a source file
-src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
+src/Files/FileManager.cpp.i:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Files/FileManager.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileManager.cpp.i
+.PHONY : src/Files/FileManager.cpp.i
 
-src/AST/Visitor/CodeGen/CodeGenVisitor.s: src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
+src/Files/FileManager.s: src/Files/FileManager.cpp.s
 
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.s
+.PHONY : src/Files/FileManager.s
 
 # target to generate assembly for a file
-src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
-.PHONY : src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
+src/Files/FileManager.cpp.s:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Files/FileManager.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileManager.cpp.s
+.PHONY : src/Files/FileManager.cpp.s
 
-src/AST/Visitor/EvaluatingVisitor.o: src/AST/Visitor/EvaluatingVisitor.cpp.o
+src/Files/FileUtils.o: src/Files/FileUtils.cpp.o
 
-.PHONY : src/AST/Visitor/EvaluatingVisitor.o
+.PHONY : src/Files/FileUtils.o
 
 # target to build an object file
-src/AST/Visitor/EvaluatingVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o
-.PHONY : src/AST/Visitor/EvaluatingVisitor.cpp.o
+src/Files/FileUtils.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileUtils.cpp.o
+.PHONY : src/Files/FileUtils.cpp.o
 
-src/AST/Visitor/EvaluatingVisitor.i: src/AST/Visitor/EvaluatingVisitor.cpp.i
+src/Files/FileUtils.i: src/Files/FileUtils.cpp.i
 
-.PHONY : src/AST/Visitor/EvaluatingVisitor.i
-
-# target to preprocess a source file
-src/AST/Visitor/EvaluatingVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/EvaluatingVisitor.cpp.i
-.PHONY : src/AST/Visitor/EvaluatingVisitor.cpp.i
-
-src/AST/Visitor/EvaluatingVisitor.s: src/AST/Visitor/EvaluatingVisitor.cpp.s
-
-.PHONY : src/AST/Visitor/EvaluatingVisitor.s
-
-# target to generate assembly for a file
-src/AST/Visitor/EvaluatingVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/EvaluatingVisitor.cpp.s
-.PHONY : src/AST/Visitor/EvaluatingVisitor.cpp.s
-
-src/AST/Visitor/StaticAnalysis/Builtin.o: src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.o
-
-# target to build an object file
-src/AST/Visitor/StaticAnalysis/Builtin.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
-
-src/AST/Visitor/StaticAnalysis/Builtin.i: src/AST/Visitor/StaticAnalysis/Builtin.cpp.i
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.i
+.PHONY : src/Files/FileUtils.i
 
 # target to preprocess a source file
-src/AST/Visitor/StaticAnalysis/Builtin.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.i
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.cpp.i
+src/Files/FileUtils.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileUtils.cpp.i
+.PHONY : src/Files/FileUtils.cpp.i
 
-src/AST/Visitor/StaticAnalysis/Builtin.s: src/AST/Visitor/StaticAnalysis/Builtin.cpp.s
+src/Files/FileUtils.s: src/Files/FileUtils.cpp.s
 
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.s
-
-# target to generate assembly for a file
-src/AST/Visitor/StaticAnalysis/Builtin.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.s
-.PHONY : src/AST/Visitor/StaticAnalysis/Builtin.cpp.s
-
-src/AST/Visitor/StaticAnalysis/Class.o: src/AST/Visitor/StaticAnalysis/Class.cpp.o
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.o
-
-# target to build an object file
-src/AST/Visitor/StaticAnalysis/Class.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.cpp.o
-
-src/AST/Visitor/StaticAnalysis/Class.i: src/AST/Visitor/StaticAnalysis/Class.cpp.i
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.i
-
-# target to preprocess a source file
-src/AST/Visitor/StaticAnalysis/Class.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.i
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.cpp.i
-
-src/AST/Visitor/StaticAnalysis/Class.s: src/AST/Visitor/StaticAnalysis/Class.cpp.s
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.s
+.PHONY : src/Files/FileUtils.s
 
 # target to generate assembly for a file
-src/AST/Visitor/StaticAnalysis/Class.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.s
-.PHONY : src/AST/Visitor/StaticAnalysis/Class.cpp.s
-
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o: src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o
-
-# target to build an object file
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i: src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i
-
-# target to preprocess a source file
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s: src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s
-
-# target to generate assembly for a file
-src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-.PHONY : src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-
-src/AST/Visitor/StaticAnalysis/Function.o: src/AST/Visitor/StaticAnalysis/Function.cpp.o
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.o
-
-# target to build an object file
-src/AST/Visitor/StaticAnalysis/Function.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.cpp.o
-
-src/AST/Visitor/StaticAnalysis/Function.i: src/AST/Visitor/StaticAnalysis/Function.cpp.i
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.i
-
-# target to preprocess a source file
-src/AST/Visitor/StaticAnalysis/Function.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.i
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.cpp.i
-
-src/AST/Visitor/StaticAnalysis/Function.s: src/AST/Visitor/StaticAnalysis/Function.cpp.s
-
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.s
-
-# target to generate assembly for a file
-src/AST/Visitor/StaticAnalysis/Function.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.s
-.PHONY : src/AST/Visitor/StaticAnalysis/Function.cpp.s
-
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o: src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o
-
-# target to build an object file
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i: src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i
-
-# target to preprocess a source file
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s: src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s
-
-# target to generate assembly for a file
-src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-.PHONY : src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-
-src/AST/Visitor/Visitor.o: src/AST/Visitor/Visitor.cpp.o
-
-.PHONY : src/AST/Visitor/Visitor.o
-
-# target to build an object file
-src/AST/Visitor/Visitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/Visitor.cpp.o
-.PHONY : src/AST/Visitor/Visitor.cpp.o
-
-src/AST/Visitor/Visitor.i: src/AST/Visitor/Visitor.cpp.i
-
-.PHONY : src/AST/Visitor/Visitor.i
-
-# target to preprocess a source file
-src/AST/Visitor/Visitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/Visitor.cpp.i
-.PHONY : src/AST/Visitor/Visitor.cpp.i
-
-src/AST/Visitor/Visitor.s: src/AST/Visitor/Visitor.cpp.s
-
-.PHONY : src/AST/Visitor/Visitor.s
-
-# target to generate assembly for a file
-src/AST/Visitor/Visitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/AST/Visitor/Visitor.cpp.s
-.PHONY : src/AST/Visitor/Visitor.cpp.s
+src/Files/FileUtils.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Files/FileUtils.cpp.s
+.PHONY : src/Files/FileUtils.cpp.s
 
 src/Lexer.o: src/Lexer.cpp.o
 
@@ -1762,8 +2602,8 @@ src/Lexer.o: src/Lexer.cpp.o
 
 # target to build an object file
 src/Lexer.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Lexer.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Lexer.cpp.o
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Lexer.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Lexer.cpp.o
 .PHONY : src/Lexer.cpp.o
 
 src/Lexer.i: src/Lexer.cpp.i
@@ -1772,8 +2612,8 @@ src/Lexer.i: src/Lexer.cpp.i
 
 # target to preprocess a source file
 src/Lexer.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Lexer.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Lexer.cpp.i
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Lexer.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Lexer.cpp.i
 .PHONY : src/Lexer.cpp.i
 
 src/Lexer.s: src/Lexer.cpp.s
@@ -1782,9 +2622,36 @@ src/Lexer.s: src/Lexer.cpp.s
 
 # target to generate assembly for a file
 src/Lexer.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Lexer.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Lexer.cpp.s
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Lexer.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Lexer.cpp.s
 .PHONY : src/Lexer.cpp.s
+
+src/Message/Diagnostics.o: src/Message/Diagnostics.cpp.o
+
+.PHONY : src/Message/Diagnostics.o
+
+# target to build an object file
+src/Message/Diagnostics.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Diagnostics.cpp.o
+.PHONY : src/Message/Diagnostics.cpp.o
+
+src/Message/Diagnostics.i: src/Message/Diagnostics.cpp.i
+
+.PHONY : src/Message/Diagnostics.i
+
+# target to preprocess a source file
+src/Message/Diagnostics.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Diagnostics.cpp.i
+.PHONY : src/Message/Diagnostics.cpp.i
+
+src/Message/Diagnostics.s: src/Message/Diagnostics.cpp.s
+
+.PHONY : src/Message/Diagnostics.s
+
+# target to generate assembly for a file
+src/Message/Diagnostics.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Diagnostics.cpp.s
+.PHONY : src/Message/Diagnostics.cpp.s
 
 src/Message/Exceptions.o: src/Message/Exceptions.cpp.o
 
@@ -1792,8 +2659,7 @@ src/Message/Exceptions.o: src/Message/Exceptions.cpp.o
 
 # target to build an object file
 src/Message/Exceptions.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Exceptions.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Exceptions.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Exceptions.cpp.o
 .PHONY : src/Message/Exceptions.cpp.o
 
 src/Message/Exceptions.i: src/Message/Exceptions.cpp.i
@@ -1802,8 +2668,7 @@ src/Message/Exceptions.i: src/Message/Exceptions.cpp.i
 
 # target to preprocess a source file
 src/Message/Exceptions.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Exceptions.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Exceptions.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Exceptions.cpp.i
 .PHONY : src/Message/Exceptions.cpp.i
 
 src/Message/Exceptions.s: src/Message/Exceptions.cpp.s
@@ -1812,39 +2677,92 @@ src/Message/Exceptions.s: src/Message/Exceptions.cpp.s
 
 # target to generate assembly for a file
 src/Message/Exceptions.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Exceptions.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Exceptions.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/Exceptions.cpp.s
 .PHONY : src/Message/Exceptions.cpp.s
 
-src/Message/Warning.o: src/Message/Warning.cpp.o
+src/Message/def/DiagnosticParser.o: src/Message/def/DiagnosticParser.cpp.o
 
-.PHONY : src/Message/Warning.o
+.PHONY : src/Message/def/DiagnosticParser.o
 
 # target to build an object file
-src/Message/Warning.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Warning.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Warning.cpp.o
-.PHONY : src/Message/Warning.cpp.o
+src/Message/def/DiagnosticParser.cpp.o:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/def/DiagnosticParser.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/def/DiagnosticParser.cpp.o
+.PHONY : src/Message/def/DiagnosticParser.cpp.o
 
-src/Message/Warning.i: src/Message/Warning.cpp.i
+src/Message/def/DiagnosticParser.i: src/Message/def/DiagnosticParser.cpp.i
 
-.PHONY : src/Message/Warning.i
+.PHONY : src/Message/def/DiagnosticParser.i
 
 # target to preprocess a source file
-src/Message/Warning.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Warning.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Warning.cpp.i
-.PHONY : src/Message/Warning.cpp.i
+src/Message/def/DiagnosticParser.cpp.i:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/def/DiagnosticParser.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/def/DiagnosticParser.cpp.i
+.PHONY : src/Message/def/DiagnosticParser.cpp.i
 
-src/Message/Warning.s: src/Message/Warning.cpp.s
+src/Message/def/DiagnosticParser.s: src/Message/def/DiagnosticParser.cpp.s
 
-.PHONY : src/Message/Warning.s
+.PHONY : src/Message/def/DiagnosticParser.s
 
 # target to generate assembly for a file
-src/Message/Warning.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Message/Warning.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Message/Warning.cpp.s
-.PHONY : src/Message/Warning.cpp.s
+src/Message/def/DiagnosticParser.cpp.s:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/def/DiagnosticParser.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Message/def/DiagnosticParser.cpp.s
+.PHONY : src/Message/def/DiagnosticParser.cpp.s
+
+src/Message/main.o: src/Message/main.cpp.o
+
+.PHONY : src/Message/main.o
+
+# target to build an object file
+src/Message/main.cpp.o:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/main.cpp.o
+.PHONY : src/Message/main.cpp.o
+
+src/Message/main.i: src/Message/main.cpp.i
+
+.PHONY : src/Message/main.i
+
+# target to preprocess a source file
+src/Message/main.cpp.i:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/main.cpp.i
+.PHONY : src/Message/main.cpp.i
+
+src/Message/main.s: src/Message/main.cpp.s
+
+.PHONY : src/Message/main.s
+
+# target to generate assembly for a file
+src/Message/main.cpp.s:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Message/main.cpp.s
+.PHONY : src/Message/main.cpp.s
+
+src/ParseRecord.o: src/ParseRecord.cpp.o
+
+.PHONY : src/ParseRecord.o
+
+# target to build an object file
+src/ParseRecord.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ParseRecord.cpp.o
+.PHONY : src/ParseRecord.cpp.o
+
+src/ParseRecord.i: src/ParseRecord.cpp.i
+
+.PHONY : src/ParseRecord.i
+
+# target to preprocess a source file
+src/ParseRecord.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ParseRecord.cpp.i
+.PHONY : src/ParseRecord.cpp.i
+
+src/ParseRecord.s: src/ParseRecord.cpp.s
+
+.PHONY : src/ParseRecord.s
+
+# target to generate assembly for a file
+src/ParseRecord.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ParseRecord.cpp.s
+.PHONY : src/ParseRecord.cpp.s
 
 src/Parser.o: src/Parser.cpp.o
 
@@ -1852,8 +2770,7 @@ src/Parser.o: src/Parser.cpp.o
 
 # target to build an object file
 src/Parser.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Parser.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Parser.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parser.cpp.o
 .PHONY : src/Parser.cpp.o
 
 src/Parser.i: src/Parser.cpp.i
@@ -1862,8 +2779,7 @@ src/Parser.i: src/Parser.cpp.i
 
 # target to preprocess a source file
 src/Parser.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Parser.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Parser.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parser.cpp.i
 .PHONY : src/Parser.cpp.i
 
 src/Parser.s: src/Parser.cpp.s
@@ -1872,9 +2788,92 @@ src/Parser.s: src/Parser.cpp.s
 
 # target to generate assembly for a file
 src/Parser.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Parser.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Parser.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parser.cpp.s
 .PHONY : src/Parser.cpp.s
+
+src/Preprocessor.o: src/Preprocessor.cpp.o
+
+.PHONY : src/Preprocessor.o
+
+# target to build an object file
+src/Preprocessor.cpp.o:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Preprocessor.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Preprocessor.cpp.o
+.PHONY : src/Preprocessor.cpp.o
+
+src/Preprocessor.i: src/Preprocessor.cpp.i
+
+.PHONY : src/Preprocessor.i
+
+# target to preprocess a source file
+src/Preprocessor.cpp.i:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Preprocessor.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Preprocessor.cpp.i
+.PHONY : src/Preprocessor.cpp.i
+
+src/Preprocessor.s: src/Preprocessor.cpp.s
+
+.PHONY : src/Preprocessor.s
+
+# target to generate assembly for a file
+src/Preprocessor.cpp.s:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Preprocessor.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Preprocessor.cpp.s
+.PHONY : src/Preprocessor.cpp.s
+
+src/Template/Specilization.o: src/Template/Specilization.cpp.o
+
+.PHONY : src/Template/Specilization.o
+
+# target to build an object file
+src/Template/Specilization.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/Specilization.cpp.o
+.PHONY : src/Template/Specilization.cpp.o
+
+src/Template/Specilization.i: src/Template/Specilization.cpp.i
+
+.PHONY : src/Template/Specilization.i
+
+# target to preprocess a source file
+src/Template/Specilization.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/Specilization.cpp.i
+.PHONY : src/Template/Specilization.cpp.i
+
+src/Template/Specilization.s: src/Template/Specilization.cpp.s
+
+.PHONY : src/Template/Specilization.s
+
+# target to generate assembly for a file
+src/Template/Specilization.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/Specilization.cpp.s
+.PHONY : src/Template/Specilization.cpp.s
+
+src/Template/TokenStore.o: src/Template/TokenStore.cpp.o
+
+.PHONY : src/Template/TokenStore.o
+
+# target to build an object file
+src/Template/TokenStore.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/TokenStore.cpp.o
+.PHONY : src/Template/TokenStore.cpp.o
+
+src/Template/TokenStore.i: src/Template/TokenStore.cpp.i
+
+.PHONY : src/Template/TokenStore.i
+
+# target to preprocess a source file
+src/Template/TokenStore.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/TokenStore.cpp.i
+.PHONY : src/Template/TokenStore.cpp.i
+
+src/Template/TokenStore.s: src/Template/TokenStore.cpp.s
+
+.PHONY : src/Template/TokenStore.s
+
+# target to generate assembly for a file
+src/Template/TokenStore.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Template/TokenStore.cpp.s
+.PHONY : src/Template/TokenStore.cpp.s
 
 src/Token.o: src/Token.cpp.o
 
@@ -1882,8 +2881,8 @@ src/Token.o: src/Token.cpp.o
 
 # target to build an object file
 src/Token.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Token.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Token.cpp.o
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Token.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Token.cpp.o
 .PHONY : src/Token.cpp.o
 
 src/Token.i: src/Token.cpp.i
@@ -1892,8 +2891,8 @@ src/Token.i: src/Token.cpp.i
 
 # target to preprocess a source file
 src/Token.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Token.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Token.cpp.i
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Token.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Token.cpp.i
 .PHONY : src/Token.cpp.i
 
 src/Token.s: src/Token.cpp.s
@@ -1902,8 +2901,8 @@ src/Token.s: src/Token.cpp.s
 
 # target to generate assembly for a file
 src/Token.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Token.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Token.cpp.s
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Token.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Token.cpp.s
 .PHONY : src/Token.cpp.s
 
 src/Util.o: src/Util.cpp.o
@@ -1912,8 +2911,7 @@ src/Util.o: src/Util.cpp.o
 
 # target to build an object file
 src/Util.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Util.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Util.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Util.cpp.o
 .PHONY : src/Util.cpp.o
 
 src/Util.i: src/Util.cpp.i
@@ -1922,8 +2920,7 @@ src/Util.i: src/Util.cpp.i
 
 # target to preprocess a source file
 src/Util.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Util.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Util.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Util.cpp.i
 .PHONY : src/Util.cpp.i
 
 src/Util.s: src/Util.cpp.s
@@ -1932,69 +2929,8 @@ src/Util.s: src/Util.cpp.s
 
 # target to generate assembly for a file
 src/Util.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Util.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Util.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Util.cpp.s
 .PHONY : src/Util.cpp.s
-
-src/Variant/Arithmetic.o: src/Variant/Arithmetic.cpp.o
-
-.PHONY : src/Variant/Arithmetic.o
-
-# target to build an object file
-src/Variant/Arithmetic.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Arithmetic.cpp.o
-.PHONY : src/Variant/Arithmetic.cpp.o
-
-src/Variant/Arithmetic.i: src/Variant/Arithmetic.cpp.i
-
-.PHONY : src/Variant/Arithmetic.i
-
-# target to preprocess a source file
-src/Variant/Arithmetic.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Arithmetic.cpp.i
-.PHONY : src/Variant/Arithmetic.cpp.i
-
-src/Variant/Arithmetic.s: src/Variant/Arithmetic.cpp.s
-
-.PHONY : src/Variant/Arithmetic.s
-
-# target to generate assembly for a file
-src/Variant/Arithmetic.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Arithmetic.cpp.s
-.PHONY : src/Variant/Arithmetic.cpp.s
-
-src/Variant/Conversion.o: src/Variant/Conversion.cpp.o
-
-.PHONY : src/Variant/Conversion.o
-
-# target to build an object file
-src/Variant/Conversion.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Conversion.cpp.o
-.PHONY : src/Variant/Conversion.cpp.o
-
-src/Variant/Conversion.i: src/Variant/Conversion.cpp.i
-
-.PHONY : src/Variant/Conversion.i
-
-# target to preprocess a source file
-src/Variant/Conversion.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Conversion.cpp.i
-.PHONY : src/Variant/Conversion.cpp.i
-
-src/Variant/Conversion.s: src/Variant/Conversion.cpp.s
-
-.PHONY : src/Variant/Conversion.s
-
-# target to generate assembly for a file
-src/Variant/Conversion.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Conversion.cpp.s
-.PHONY : src/Variant/Conversion.cpp.s
 
 src/Variant/Type/AutoType.o: src/Variant/Type/AutoType.cpp.o
 
@@ -2002,8 +2938,7 @@ src/Variant/Type/AutoType.o: src/Variant/Type/AutoType.cpp.o
 
 # target to build an object file
 src/Variant/Type/AutoType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/AutoType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/AutoType.cpp.o
 .PHONY : src/Variant/Type/AutoType.cpp.o
 
 src/Variant/Type/AutoType.i: src/Variant/Type/AutoType.cpp.i
@@ -2012,8 +2947,7 @@ src/Variant/Type/AutoType.i: src/Variant/Type/AutoType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/AutoType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/AutoType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/AutoType.cpp.i
 .PHONY : src/Variant/Type/AutoType.cpp.i
 
 src/Variant/Type/AutoType.s: src/Variant/Type/AutoType.cpp.s
@@ -2022,39 +2956,35 @@ src/Variant/Type/AutoType.s: src/Variant/Type/AutoType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/AutoType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/AutoType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/AutoType.cpp.s
 .PHONY : src/Variant/Type/AutoType.cpp.s
 
-src/Variant/Type/CollectionType.o: src/Variant/Type/CollectionType.cpp.o
+src/Variant/Type/BuiltinType.o: src/Variant/Type/BuiltinType.cpp.o
 
-.PHONY : src/Variant/Type/CollectionType.o
+.PHONY : src/Variant/Type/BuiltinType.o
 
 # target to build an object file
-src/Variant/Type/CollectionType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/CollectionType.cpp.o
-.PHONY : src/Variant/Type/CollectionType.cpp.o
+src/Variant/Type/BuiltinType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/BuiltinType.cpp.o
+.PHONY : src/Variant/Type/BuiltinType.cpp.o
 
-src/Variant/Type/CollectionType.i: src/Variant/Type/CollectionType.cpp.i
+src/Variant/Type/BuiltinType.i: src/Variant/Type/BuiltinType.cpp.i
 
-.PHONY : src/Variant/Type/CollectionType.i
+.PHONY : src/Variant/Type/BuiltinType.i
 
 # target to preprocess a source file
-src/Variant/Type/CollectionType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/CollectionType.cpp.i
-.PHONY : src/Variant/Type/CollectionType.cpp.i
+src/Variant/Type/BuiltinType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/BuiltinType.cpp.i
+.PHONY : src/Variant/Type/BuiltinType.cpp.i
 
-src/Variant/Type/CollectionType.s: src/Variant/Type/CollectionType.cpp.s
+src/Variant/Type/BuiltinType.s: src/Variant/Type/BuiltinType.cpp.s
 
-.PHONY : src/Variant/Type/CollectionType.s
+.PHONY : src/Variant/Type/BuiltinType.s
 
 # target to generate assembly for a file
-src/Variant/Type/CollectionType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/CollectionType.cpp.s
-.PHONY : src/Variant/Type/CollectionType.cpp.s
+src/Variant/Type/BuiltinType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/BuiltinType.cpp.s
+.PHONY : src/Variant/Type/BuiltinType.cpp.s
 
 src/Variant/Type/FPType.o: src/Variant/Type/FPType.cpp.o
 
@@ -2062,8 +2992,7 @@ src/Variant/Type/FPType.o: src/Variant/Type/FPType.cpp.o
 
 # target to build an object file
 src/Variant/Type/FPType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FPType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FPType.cpp.o
 .PHONY : src/Variant/Type/FPType.cpp.o
 
 src/Variant/Type/FPType.i: src/Variant/Type/FPType.cpp.i
@@ -2072,8 +3001,7 @@ src/Variant/Type/FPType.i: src/Variant/Type/FPType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/FPType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FPType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FPType.cpp.i
 .PHONY : src/Variant/Type/FPType.cpp.i
 
 src/Variant/Type/FPType.s: src/Variant/Type/FPType.cpp.s
@@ -2082,8 +3010,7 @@ src/Variant/Type/FPType.s: src/Variant/Type/FPType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/FPType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FPType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FPType.cpp.s
 .PHONY : src/Variant/Type/FPType.cpp.s
 
 src/Variant/Type/FunctionType.o: src/Variant/Type/FunctionType.cpp.o
@@ -2092,8 +3019,7 @@ src/Variant/Type/FunctionType.o: src/Variant/Type/FunctionType.cpp.o
 
 # target to build an object file
 src/Variant/Type/FunctionType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FunctionType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FunctionType.cpp.o
 .PHONY : src/Variant/Type/FunctionType.cpp.o
 
 src/Variant/Type/FunctionType.i: src/Variant/Type/FunctionType.cpp.i
@@ -2102,8 +3028,7 @@ src/Variant/Type/FunctionType.i: src/Variant/Type/FunctionType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/FunctionType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FunctionType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FunctionType.cpp.i
 .PHONY : src/Variant/Type/FunctionType.cpp.i
 
 src/Variant/Type/FunctionType.s: src/Variant/Type/FunctionType.cpp.s
@@ -2112,9 +3037,35 @@ src/Variant/Type/FunctionType.s: src/Variant/Type/FunctionType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/FunctionType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/FunctionType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/FunctionType.cpp.s
 .PHONY : src/Variant/Type/FunctionType.cpp.s
+
+src/Variant/Type/Generic.o: src/Variant/Type/Generic.cpp.o
+
+.PHONY : src/Variant/Type/Generic.o
+
+# target to build an object file
+src/Variant/Type/Generic.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Generic.cpp.o
+.PHONY : src/Variant/Type/Generic.cpp.o
+
+src/Variant/Type/Generic.i: src/Variant/Type/Generic.cpp.i
+
+.PHONY : src/Variant/Type/Generic.i
+
+# target to preprocess a source file
+src/Variant/Type/Generic.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Generic.cpp.i
+.PHONY : src/Variant/Type/Generic.cpp.i
+
+src/Variant/Type/Generic.s: src/Variant/Type/Generic.cpp.s
+
+.PHONY : src/Variant/Type/Generic.s
+
+# target to generate assembly for a file
+src/Variant/Type/Generic.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Generic.cpp.s
+.PHONY : src/Variant/Type/Generic.cpp.s
 
 src/Variant/Type/GenericType.o: src/Variant/Type/GenericType.cpp.o
 
@@ -2122,8 +3073,7 @@ src/Variant/Type/GenericType.o: src/Variant/Type/GenericType.cpp.o
 
 # target to build an object file
 src/Variant/Type/GenericType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/GenericType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/GenericType.cpp.o
 .PHONY : src/Variant/Type/GenericType.cpp.o
 
 src/Variant/Type/GenericType.i: src/Variant/Type/GenericType.cpp.i
@@ -2132,8 +3082,7 @@ src/Variant/Type/GenericType.i: src/Variant/Type/GenericType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/GenericType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/GenericType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/GenericType.cpp.i
 .PHONY : src/Variant/Type/GenericType.cpp.i
 
 src/Variant/Type/GenericType.s: src/Variant/Type/GenericType.cpp.s
@@ -2142,8 +3091,7 @@ src/Variant/Type/GenericType.s: src/Variant/Type/GenericType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/GenericType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/GenericType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/GenericType.cpp.s
 .PHONY : src/Variant/Type/GenericType.cpp.s
 
 src/Variant/Type/IntegerType.o: src/Variant/Type/IntegerType.cpp.o
@@ -2152,8 +3100,7 @@ src/Variant/Type/IntegerType.o: src/Variant/Type/IntegerType.cpp.o
 
 # target to build an object file
 src/Variant/Type/IntegerType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/IntegerType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/IntegerType.cpp.o
 .PHONY : src/Variant/Type/IntegerType.cpp.o
 
 src/Variant/Type/IntegerType.i: src/Variant/Type/IntegerType.cpp.i
@@ -2162,8 +3109,7 @@ src/Variant/Type/IntegerType.i: src/Variant/Type/IntegerType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/IntegerType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/IntegerType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/IntegerType.cpp.i
 .PHONY : src/Variant/Type/IntegerType.cpp.i
 
 src/Variant/Type/IntegerType.s: src/Variant/Type/IntegerType.cpp.s
@@ -2172,9 +3118,35 @@ src/Variant/Type/IntegerType.s: src/Variant/Type/IntegerType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/IntegerType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/IntegerType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/IntegerType.cpp.s
 .PHONY : src/Variant/Type/IntegerType.cpp.s
+
+src/Variant/Type/MetaType.o: src/Variant/Type/MetaType.cpp.o
+
+.PHONY : src/Variant/Type/MetaType.o
+
+# target to build an object file
+src/Variant/Type/MetaType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/MetaType.cpp.o
+.PHONY : src/Variant/Type/MetaType.cpp.o
+
+src/Variant/Type/MetaType.i: src/Variant/Type/MetaType.cpp.i
+
+.PHONY : src/Variant/Type/MetaType.i
+
+# target to preprocess a source file
+src/Variant/Type/MetaType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/MetaType.cpp.i
+.PHONY : src/Variant/Type/MetaType.cpp.i
+
+src/Variant/Type/MetaType.s: src/Variant/Type/MetaType.cpp.s
+
+.PHONY : src/Variant/Type/MetaType.s
+
+# target to generate assembly for a file
+src/Variant/Type/MetaType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/MetaType.cpp.s
+.PHONY : src/Variant/Type/MetaType.cpp.s
 
 src/Variant/Type/ObjectType.o: src/Variant/Type/ObjectType.cpp.o
 
@@ -2182,8 +3154,7 @@ src/Variant/Type/ObjectType.o: src/Variant/Type/ObjectType.cpp.o
 
 # target to build an object file
 src/Variant/Type/ObjectType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/ObjectType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/ObjectType.cpp.o
 .PHONY : src/Variant/Type/ObjectType.cpp.o
 
 src/Variant/Type/ObjectType.i: src/Variant/Type/ObjectType.cpp.i
@@ -2192,8 +3163,7 @@ src/Variant/Type/ObjectType.i: src/Variant/Type/ObjectType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/ObjectType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/ObjectType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/ObjectType.cpp.i
 .PHONY : src/Variant/Type/ObjectType.cpp.i
 
 src/Variant/Type/ObjectType.s: src/Variant/Type/ObjectType.cpp.s
@@ -2202,8 +3172,7 @@ src/Variant/Type/ObjectType.s: src/Variant/Type/ObjectType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/ObjectType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/ObjectType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/ObjectType.cpp.s
 .PHONY : src/Variant/Type/ObjectType.cpp.s
 
 src/Variant/Type/PointerType.o: src/Variant/Type/PointerType.cpp.o
@@ -2212,8 +3181,7 @@ src/Variant/Type/PointerType.o: src/Variant/Type/PointerType.cpp.o
 
 # target to build an object file
 src/Variant/Type/PointerType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PointerType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PointerType.cpp.o
 .PHONY : src/Variant/Type/PointerType.cpp.o
 
 src/Variant/Type/PointerType.i: src/Variant/Type/PointerType.cpp.i
@@ -2222,8 +3190,7 @@ src/Variant/Type/PointerType.i: src/Variant/Type/PointerType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/PointerType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PointerType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PointerType.cpp.i
 .PHONY : src/Variant/Type/PointerType.cpp.i
 
 src/Variant/Type/PointerType.s: src/Variant/Type/PointerType.cpp.s
@@ -2232,8 +3199,7 @@ src/Variant/Type/PointerType.s: src/Variant/Type/PointerType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/PointerType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PointerType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PointerType.cpp.s
 .PHONY : src/Variant/Type/PointerType.cpp.s
 
 src/Variant/Type/PrimitiveType.o: src/Variant/Type/PrimitiveType.cpp.o
@@ -2242,8 +3208,7 @@ src/Variant/Type/PrimitiveType.o: src/Variant/Type/PrimitiveType.cpp.o
 
 # target to build an object file
 src/Variant/Type/PrimitiveType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PrimitiveType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PrimitiveType.cpp.o
 .PHONY : src/Variant/Type/PrimitiveType.cpp.o
 
 src/Variant/Type/PrimitiveType.i: src/Variant/Type/PrimitiveType.cpp.i
@@ -2252,8 +3217,7 @@ src/Variant/Type/PrimitiveType.i: src/Variant/Type/PrimitiveType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/PrimitiveType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PrimitiveType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PrimitiveType.cpp.i
 .PHONY : src/Variant/Type/PrimitiveType.cpp.i
 
 src/Variant/Type/PrimitiveType.s: src/Variant/Type/PrimitiveType.cpp.s
@@ -2262,9 +3226,35 @@ src/Variant/Type/PrimitiveType.s: src/Variant/Type/PrimitiveType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/PrimitiveType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/PrimitiveType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/PrimitiveType.cpp.s
 .PHONY : src/Variant/Type/PrimitiveType.cpp.s
+
+src/Variant/Type/TupleType.o: src/Variant/Type/TupleType.cpp.o
+
+.PHONY : src/Variant/Type/TupleType.o
+
+# target to build an object file
+src/Variant/Type/TupleType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TupleType.cpp.o
+.PHONY : src/Variant/Type/TupleType.cpp.o
+
+src/Variant/Type/TupleType.i: src/Variant/Type/TupleType.cpp.i
+
+.PHONY : src/Variant/Type/TupleType.i
+
+# target to preprocess a source file
+src/Variant/Type/TupleType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TupleType.cpp.i
+.PHONY : src/Variant/Type/TupleType.cpp.i
+
+src/Variant/Type/TupleType.s: src/Variant/Type/TupleType.cpp.s
+
+.PHONY : src/Variant/Type/TupleType.s
+
+# target to generate assembly for a file
+src/Variant/Type/TupleType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TupleType.cpp.s
+.PHONY : src/Variant/Type/TupleType.cpp.s
 
 src/Variant/Type/Type.o: src/Variant/Type/Type.cpp.o
 
@@ -2272,8 +3262,7 @@ src/Variant/Type/Type.o: src/Variant/Type/Type.cpp.o
 
 # target to build an object file
 src/Variant/Type/Type.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/Type.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Type.cpp.o
 .PHONY : src/Variant/Type/Type.cpp.o
 
 src/Variant/Type/Type.i: src/Variant/Type/Type.cpp.i
@@ -2282,8 +3271,7 @@ src/Variant/Type/Type.i: src/Variant/Type/Type.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/Type.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/Type.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Type.cpp.i
 .PHONY : src/Variant/Type/Type.cpp.i
 
 src/Variant/Type/Type.s: src/Variant/Type/Type.cpp.s
@@ -2292,9 +3280,62 @@ src/Variant/Type/Type.s: src/Variant/Type/Type.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/Type.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/Type.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/Type.cpp.s
 .PHONY : src/Variant/Type/Type.cpp.s
+
+src/Variant/Type/TypeGroup.o: src/Variant/Type/TypeGroup.cpp.o
+
+.PHONY : src/Variant/Type/TypeGroup.o
+
+# target to build an object file
+src/Variant/Type/TypeGroup.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeGroup.cpp.o
+.PHONY : src/Variant/Type/TypeGroup.cpp.o
+
+src/Variant/Type/TypeGroup.i: src/Variant/Type/TypeGroup.cpp.i
+
+.PHONY : src/Variant/Type/TypeGroup.i
+
+# target to preprocess a source file
+src/Variant/Type/TypeGroup.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeGroup.cpp.i
+.PHONY : src/Variant/Type/TypeGroup.cpp.i
+
+src/Variant/Type/TypeGroup.s: src/Variant/Type/TypeGroup.cpp.s
+
+.PHONY : src/Variant/Type/TypeGroup.s
+
+# target to generate assembly for a file
+src/Variant/Type/TypeGroup.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeGroup.cpp.s
+.PHONY : src/Variant/Type/TypeGroup.cpp.s
+
+src/Variant/Type/TypeUtils.o: src/Variant/Type/TypeUtils.cpp.o
+
+.PHONY : src/Variant/Type/TypeUtils.o
+
+# target to build an object file
+src/Variant/Type/TypeUtils.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeUtils.cpp.o
+.PHONY : src/Variant/Type/TypeUtils.cpp.o
+
+src/Variant/Type/TypeUtils.i: src/Variant/Type/TypeUtils.cpp.i
+
+.PHONY : src/Variant/Type/TypeUtils.i
+
+# target to preprocess a source file
+src/Variant/Type/TypeUtils.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeUtils.cpp.i
+.PHONY : src/Variant/Type/TypeUtils.cpp.i
+
+src/Variant/Type/TypeUtils.s: src/Variant/Type/TypeUtils.cpp.s
+
+.PHONY : src/Variant/Type/TypeUtils.s
+
+# target to generate assembly for a file
+src/Variant/Type/TypeUtils.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/TypeUtils.cpp.s
+.PHONY : src/Variant/Type/TypeUtils.cpp.s
 
 src/Variant/Type/VoidType.o: src/Variant/Type/VoidType.cpp.o
 
@@ -2302,8 +3343,7 @@ src/Variant/Type/VoidType.o: src/Variant/Type/VoidType.cpp.o
 
 # target to build an object file
 src/Variant/Type/VoidType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/VoidType.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/VoidType.cpp.o
 .PHONY : src/Variant/Type/VoidType.cpp.o
 
 src/Variant/Type/VoidType.i: src/Variant/Type/VoidType.cpp.i
@@ -2312,8 +3352,7 @@ src/Variant/Type/VoidType.i: src/Variant/Type/VoidType.cpp.i
 
 # target to preprocess a source file
 src/Variant/Type/VoidType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/VoidType.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/VoidType.cpp.i
 .PHONY : src/Variant/Type/VoidType.cpp.i
 
 src/Variant/Type/VoidType.s: src/Variant/Type/VoidType.cpp.s
@@ -2322,8 +3361,7 @@ src/Variant/Type/VoidType.s: src/Variant/Type/VoidType.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Type/VoidType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Type/VoidType.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Type/VoidType.cpp.s
 .PHONY : src/Variant/Type/VoidType.cpp.s
 
 src/Variant/Variant.o: src/Variant/Variant.cpp.o
@@ -2332,8 +3370,8 @@ src/Variant/Variant.o: src/Variant/Variant.cpp.o
 
 # target to build an object file
 src/Variant/Variant.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Variant.cpp.o
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Variant.cpp.o
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Variant/Variant.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Variant.cpp.o
 .PHONY : src/Variant/Variant.cpp.o
 
 src/Variant/Variant.i: src/Variant/Variant.cpp.i
@@ -2342,8 +3380,8 @@ src/Variant/Variant.i: src/Variant/Variant.cpp.i
 
 # target to preprocess a source file
 src/Variant/Variant.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Variant.cpp.i
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Variant.cpp.i
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Variant/Variant.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Variant.cpp.i
 .PHONY : src/Variant/Variant.cpp.i
 
 src/Variant/Variant.s: src/Variant/Variant.cpp.s
@@ -2352,8 +3390,8 @@ src/Variant/Variant.s: src/Variant/Variant.cpp.s
 
 # target to generate assembly for a file
 src/Variant/Variant.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Variant.cpp.s
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/src/Variant/Variant.cpp.s
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/src/Variant/Variant.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Variant/Variant.cpp.s
 .PHONY : src/Variant/Variant.cpp.s
 
 src/main.o: src/main.cpp.o
@@ -2362,7 +3400,7 @@ src/main.o: src/main.cpp.o
 
 # target to build an object file
 src/main.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/main.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/main.cpp.o
 .PHONY : src/main.cpp.o
 
 src/main.i: src/main.cpp.i
@@ -2371,7 +3409,7 @@ src/main.i: src/main.cpp.i
 
 # target to preprocess a source file
 src/main.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/main.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/main.cpp.i
 .PHONY : src/main.cpp.i
 
 src/main.s: src/main.cpp.s
@@ -2380,116 +3418,8 @@ src/main.s: src/main.cpp.s
 
 # target to generate assembly for a file
 src/main.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/main.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/main.cpp.s
 .PHONY : src/main.cpp.s
-
-test/ControlFlow/IfTest.o: test/ControlFlow/IfTest.cpp.o
-
-.PHONY : test/ControlFlow/IfTest.o
-
-# target to build an object file
-test/ControlFlow/IfTest.cpp.o:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/ControlFlow/IfTest.cpp.o
-.PHONY : test/ControlFlow/IfTest.cpp.o
-
-test/ControlFlow/IfTest.i: test/ControlFlow/IfTest.cpp.i
-
-.PHONY : test/ControlFlow/IfTest.i
-
-# target to preprocess a source file
-test/ControlFlow/IfTest.cpp.i:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/ControlFlow/IfTest.cpp.i
-.PHONY : test/ControlFlow/IfTest.cpp.i
-
-test/ControlFlow/IfTest.s: test/ControlFlow/IfTest.cpp.s
-
-.PHONY : test/ControlFlow/IfTest.s
-
-# target to generate assembly for a file
-test/ControlFlow/IfTest.cpp.s:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/ControlFlow/IfTest.cpp.s
-.PHONY : test/ControlFlow/IfTest.cpp.s
-
-test/Functions.o: test/Functions.cpp.o
-
-.PHONY : test/Functions.o
-
-# target to build an object file
-test/Functions.cpp.o:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/Functions.cpp.o
-.PHONY : test/Functions.cpp.o
-
-test/Functions.i: test/Functions.cpp.i
-
-.PHONY : test/Functions.i
-
-# target to preprocess a source file
-test/Functions.cpp.i:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/Functions.cpp.i
-.PHONY : test/Functions.cpp.i
-
-test/Functions.s: test/Functions.cpp.s
-
-.PHONY : test/Functions.s
-
-# target to generate assembly for a file
-test/Functions.cpp.s:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/Functions.cpp.s
-.PHONY : test/Functions.cpp.s
-
-test/TokenizerTest.o: test/TokenizerTest.cpp.o
-
-.PHONY : test/TokenizerTest.o
-
-# target to build an object file
-test/TokenizerTest.cpp.o:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/TokenizerTest.cpp.o
-.PHONY : test/TokenizerTest.cpp.o
-
-test/TokenizerTest.i: test/TokenizerTest.cpp.i
-
-.PHONY : test/TokenizerTest.i
-
-# target to preprocess a source file
-test/TokenizerTest.cpp.i:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/TokenizerTest.cpp.i
-.PHONY : test/TokenizerTest.cpp.i
-
-test/TokenizerTest.s: test/TokenizerTest.cpp.s
-
-.PHONY : test/TokenizerTest.s
-
-# target to generate assembly for a file
-test/TokenizerTest.cpp.s:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/TokenizerTest.cpp.s
-.PHONY : test/TokenizerTest.cpp.s
-
-test/main.o: test/main.cpp.o
-
-.PHONY : test/main.o
-
-# target to build an object file
-test/main.cpp.o:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/main.cpp.o
-.PHONY : test/main.cpp.o
-
-test/main.i: test/main.cpp.i
-
-.PHONY : test/main.i
-
-# target to preprocess a source file
-test/main.cpp.i:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/main.cpp.i
-.PHONY : test/main.cpp.i
-
-test/main.s: test/main.cpp.s
-
-.PHONY : test/main.s
-
-# target to generate assembly for a file
-test/main.cpp.s:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/test/main.cpp.s
-.PHONY : test/main.cpp.s
 
 # Help Target
 help:
@@ -2499,8 +3429,8 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... CDot"
-	@echo "... CDotTest"
+	@echo "... parse_diagnostics"
+	@echo "... cdotc"
 	@echo "... src/AST/AstNode.o"
 	@echo "... src/AST/AstNode.i"
 	@echo "... src/AST/AstNode.s"
@@ -2516,15 +3446,24 @@ help:
 	@echo "... src/AST/Expression/Literal/CollectionLiteral.o"
 	@echo "... src/AST/Expression/Literal/CollectionLiteral.i"
 	@echo "... src/AST/Expression/Literal/CollectionLiteral.s"
+	@echo "... src/AST/Expression/Literal/IntegerLiteral.o"
+	@echo "... src/AST/Expression/Literal/IntegerLiteral.i"
+	@echo "... src/AST/Expression/Literal/IntegerLiteral.s"
 	@echo "... src/AST/Expression/Literal/LambdaExpr.o"
 	@echo "... src/AST/Expression/Literal/LambdaExpr.i"
 	@echo "... src/AST/Expression/Literal/LambdaExpr.s"
-	@echo "... src/AST/Expression/Literal/LiteralExpr.o"
-	@echo "... src/AST/Expression/Literal/LiteralExpr.i"
-	@echo "... src/AST/Expression/Literal/LiteralExpr.s"
+	@echo "... src/AST/Expression/Literal/NoneLiteral.o"
+	@echo "... src/AST/Expression/Literal/NoneLiteral.i"
+	@echo "... src/AST/Expression/Literal/NoneLiteral.s"
+	@echo "... src/AST/Expression/Literal/StringInterpolation.o"
+	@echo "... src/AST/Expression/Literal/StringInterpolation.i"
+	@echo "... src/AST/Expression/Literal/StringInterpolation.s"
 	@echo "... src/AST/Expression/Literal/StringLiteral.o"
 	@echo "... src/AST/Expression/Literal/StringLiteral.i"
 	@echo "... src/AST/Expression/Literal/StringLiteral.s"
+	@echo "... src/AST/Expression/Literal/TupleLiteral.o"
+	@echo "... src/AST/Expression/Literal/TupleLiteral.i"
+	@echo "... src/AST/Expression/Literal/TupleLiteral.s"
 	@echo "... src/AST/Expression/RefExpr/CallExpr.o"
 	@echo "... src/AST/Expression/RefExpr/CallExpr.i"
 	@echo "... src/AST/Expression/RefExpr/CallExpr.s"
@@ -2555,6 +3494,87 @@ help:
 	@echo "... src/AST/Operator/UnaryOperator.o"
 	@echo "... src/AST/Operator/UnaryOperator.i"
 	@echo "... src/AST/Operator/UnaryOperator.s"
+	@echo "... src/AST/Passes/AbstractPass.o"
+	@echo "... src/AST/Passes/AbstractPass.i"
+	@echo "... src/AST/Passes/AbstractPass.s"
+	@echo "... src/AST/Passes/CodeGen/CGBinaryOperator.o"
+	@echo "... src/AST/Passes/CodeGen/CGBinaryOperator.i"
+	@echo "... src/AST/Passes/CodeGen/CGBinaryOperator.s"
+	@echo "... src/AST/Passes/CodeGen/CGCast.o"
+	@echo "... src/AST/Passes/CodeGen/CGCast.i"
+	@echo "... src/AST/Passes/CodeGen/CGCast.s"
+	@echo "... src/AST/Passes/CodeGen/CGClass.o"
+	@echo "... src/AST/Passes/CodeGen/CGClass.i"
+	@echo "... src/AST/Passes/CodeGen/CGClass.s"
+	@echo "... src/AST/Passes/CodeGen/CGException.o"
+	@echo "... src/AST/Passes/CodeGen/CGException.i"
+	@echo "... src/AST/Passes/CodeGen/CGException.s"
+	@echo "... src/AST/Passes/CodeGen/CGMemory.o"
+	@echo "... src/AST/Passes/CodeGen/CGMemory.i"
+	@echo "... src/AST/Passes/CodeGen/CGMemory.s"
+	@echo "... src/AST/Passes/CodeGen/CGModule.o"
+	@echo "... src/AST/Passes/CodeGen/CGModule.i"
+	@echo "... src/AST/Passes/CodeGen/CGModule.s"
+	@echo "... src/AST/Passes/CodeGen/CodeGen.o"
+	@echo "... src/AST/Passes/CodeGen/CodeGen.i"
+	@echo "... src/AST/Passes/CodeGen/CodeGen.s"
+	@echo "... src/AST/Passes/DebugInfo/DebugInfo.o"
+	@echo "... src/AST/Passes/DebugInfo/DebugInfo.i"
+	@echo "... src/AST/Passes/DebugInfo/DebugInfo.s"
+	@echo "... src/AST/Passes/Declaration/DeclPass.o"
+	@echo "... src/AST/Passes/Declaration/DeclPass.i"
+	@echo "... src/AST/Passes/Declaration/DeclPass.s"
+	@echo "... src/AST/Passes/Output/HeaderGen.o"
+	@echo "... src/AST/Passes/Output/HeaderGen.i"
+	@echo "... src/AST/Passes/Output/HeaderGen.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Builtin.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Builtin.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Builtin.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/ConstExprPass.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/ConstExprPass.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/ConstExprPass.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Function.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Function.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Function.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/OverloadResolver.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/OverloadResolver.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/OverloadResolver.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Class.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Class.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Class.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Enum.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Enum.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Enum.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Record.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Record.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Record.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Union.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Union.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/Record/Union.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaCall.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaCall.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaCall.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaClass.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaClass.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaClass.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaMemberExpr.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaMemberExpr.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaMemberExpr.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaOperator.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaOperator.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaOperator.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaPass.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaPass.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaPass.s"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaTemplate.o"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaTemplate.i"
+	@echo "... src/AST/Passes/SemanticAnalysis/SemaTemplate.s"
+	@echo "... src/AST/Passes/Serialization/ModuleReader.o"
+	@echo "... src/AST/Passes/Serialization/ModuleReader.i"
+	@echo "... src/AST/Passes/Serialization/ModuleReader.s"
+	@echo "... src/AST/Passes/Serialization/ModuleWriter.o"
+	@echo "... src/AST/Passes/Serialization/ModuleWriter.i"
+	@echo "... src/AST/Passes/Serialization/ModuleWriter.s"
 	@echo "... src/AST/Statement/Block/CompoundStmt.o"
 	@echo "... src/AST/Statement/Block/CompoundStmt.i"
 	@echo "... src/AST/Statement/Block/CompoundStmt.s"
@@ -2567,6 +3587,9 @@ help:
 	@echo "... src/AST/Statement/ControlFlow/ContinueStmt.o"
 	@echo "... src/AST/Statement/ControlFlow/ContinueStmt.i"
 	@echo "... src/AST/Statement/ControlFlow/ContinueStmt.s"
+	@echo "... src/AST/Statement/ControlFlow/ForInStmt.o"
+	@echo "... src/AST/Statement/ControlFlow/ForInStmt.i"
+	@echo "... src/AST/Statement/ControlFlow/ForInStmt.s"
 	@echo "... src/AST/Statement/ControlFlow/ForStmt.o"
 	@echo "... src/AST/Statement/ControlFlow/ForStmt.i"
 	@echo "... src/AST/Statement/ControlFlow/ForStmt.s"
@@ -2579,36 +3602,60 @@ help:
 	@echo "... src/AST/Statement/ControlFlow/LabelStmt.o"
 	@echo "... src/AST/Statement/ControlFlow/LabelStmt.i"
 	@echo "... src/AST/Statement/ControlFlow/LabelStmt.s"
+	@echo "... src/AST/Statement/ControlFlow/MatchStmt.o"
+	@echo "... src/AST/Statement/ControlFlow/MatchStmt.i"
+	@echo "... src/AST/Statement/ControlFlow/MatchStmt.s"
 	@echo "... src/AST/Statement/ControlFlow/ReturnStmt.o"
 	@echo "... src/AST/Statement/ControlFlow/ReturnStmt.i"
 	@echo "... src/AST/Statement/ControlFlow/ReturnStmt.s"
-	@echo "... src/AST/Statement/ControlFlow/SwitchStmt.o"
-	@echo "... src/AST/Statement/ControlFlow/SwitchStmt.i"
-	@echo "... src/AST/Statement/ControlFlow/SwitchStmt.s"
 	@echo "... src/AST/Statement/ControlFlow/WhileStmt.o"
 	@echo "... src/AST/Statement/ControlFlow/WhileStmt.i"
 	@echo "... src/AST/Statement/ControlFlow/WhileStmt.s"
+	@echo "... src/AST/Statement/Declaration/CallableDecl.o"
+	@echo "... src/AST/Statement/Declaration/CallableDecl.i"
+	@echo "... src/AST/Statement/Declaration/CallableDecl.s"
 	@echo "... src/AST/Statement/Declaration/Class/ClassDecl.o"
 	@echo "... src/AST/Statement/Declaration/Class/ClassDecl.i"
 	@echo "... src/AST/Statement/Declaration/Class/ClassDecl.s"
 	@echo "... src/AST/Statement/Declaration/Class/ConstrDecl.o"
 	@echo "... src/AST/Statement/Declaration/Class/ConstrDecl.i"
 	@echo "... src/AST/Statement/Declaration/Class/ConstrDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/DestrDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/DestrDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/DestrDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/EnumCaseDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/EnumCaseDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/EnumCaseDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/EnumDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/EnumDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/EnumDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/ExtensionDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/ExtensionDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/ExtensionDecl.s"
 	@echo "... src/AST/Statement/Declaration/Class/FieldDecl.o"
 	@echo "... src/AST/Statement/Declaration/Class/FieldDecl.i"
 	@echo "... src/AST/Statement/Declaration/Class/FieldDecl.s"
 	@echo "... src/AST/Statement/Declaration/Class/MethodDecl.o"
 	@echo "... src/AST/Statement/Declaration/Class/MethodDecl.i"
 	@echo "... src/AST/Statement/Declaration/Class/MethodDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/PropDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/PropDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/PropDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/RecordDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/RecordDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/RecordDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/RecordSubDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/RecordSubDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/RecordSubDecl.s"
+	@echo "... src/AST/Statement/Declaration/Class/UnionDecl.o"
+	@echo "... src/AST/Statement/Declaration/Class/UnionDecl.i"
+	@echo "... src/AST/Statement/Declaration/Class/UnionDecl.s"
 	@echo "... src/AST/Statement/Declaration/DeclStmt.o"
 	@echo "... src/AST/Statement/Declaration/DeclStmt.i"
 	@echo "... src/AST/Statement/Declaration/DeclStmt.s"
 	@echo "... src/AST/Statement/Declaration/DeclareStmt.o"
 	@echo "... src/AST/Statement/Declaration/DeclareStmt.i"
 	@echo "... src/AST/Statement/Declaration/DeclareStmt.s"
-	@echo "... src/AST/Statement/Declaration/ExtendStmt.o"
-	@echo "... src/AST/Statement/Declaration/ExtendStmt.i"
-	@echo "... src/AST/Statement/Declaration/ExtendStmt.s"
 	@echo "... src/AST/Statement/Declaration/FuncArgDecl.o"
 	@echo "... src/AST/Statement/Declaration/FuncArgDecl.i"
 	@echo "... src/AST/Statement/Declaration/FuncArgDecl.s"
@@ -2618,9 +3665,24 @@ help:
 	@echo "... src/AST/Statement/Declaration/NamespaceDecl.o"
 	@echo "... src/AST/Statement/Declaration/NamespaceDecl.i"
 	@echo "... src/AST/Statement/Declaration/NamespaceDecl.s"
+	@echo "... src/AST/Statement/Declaration/Template/CallableTemplateDecl.o"
+	@echo "... src/AST/Statement/Declaration/Template/CallableTemplateDecl.i"
+	@echo "... src/AST/Statement/Declaration/Template/CallableTemplateDecl.s"
+	@echo "... src/AST/Statement/Declaration/Template/MethodTemplateDecl.o"
+	@echo "... src/AST/Statement/Declaration/Template/MethodTemplateDecl.i"
+	@echo "... src/AST/Statement/Declaration/Template/MethodTemplateDecl.s"
+	@echo "... src/AST/Statement/Declaration/Template/RecordTemplateDecl.o"
+	@echo "... src/AST/Statement/Declaration/Template/RecordTemplateDecl.i"
+	@echo "... src/AST/Statement/Declaration/Template/RecordTemplateDecl.s"
 	@echo "... src/AST/Statement/Declaration/TypedefDecl.o"
 	@echo "... src/AST/Statement/Declaration/TypedefDecl.i"
 	@echo "... src/AST/Statement/Declaration/TypedefDecl.s"
+	@echo "... src/AST/Statement/Exception/ThrowStmt.o"
+	@echo "... src/AST/Statement/Exception/ThrowStmt.i"
+	@echo "... src/AST/Statement/Exception/ThrowStmt.s"
+	@echo "... src/AST/Statement/Exception/TryStmt.o"
+	@echo "... src/AST/Statement/Exception/TryStmt.i"
+	@echo "... src/AST/Statement/Exception/TryStmt.s"
 	@echo "... src/AST/Statement/Statement.o"
 	@echo "... src/AST/Statement/Statement.i"
 	@echo "... src/AST/Statement/Statement.s"
@@ -2630,81 +3692,78 @@ help:
 	@echo "... src/AST/SymbolTable.o"
 	@echo "... src/AST/SymbolTable.i"
 	@echo "... src/AST/SymbolTable.s"
-	@echo "... src/AST/Visitor/CaptureVisitor.o"
-	@echo "... src/AST/Visitor/CaptureVisitor.i"
-	@echo "... src/AST/Visitor/CaptureVisitor.s"
-	@echo "... src/AST/Visitor/CodeGen/CGBinaryOperator.o"
-	@echo "... src/AST/Visitor/CodeGen/CGBinaryOperator.i"
-	@echo "... src/AST/Visitor/CodeGen/CGBinaryOperator.s"
-	@echo "... src/AST/Visitor/CodeGen/CGMemory.o"
-	@echo "... src/AST/Visitor/CodeGen/CGMemory.i"
-	@echo "... src/AST/Visitor/CodeGen/CGMemory.s"
-	@echo "... src/AST/Visitor/CodeGen/CodeGenVisitor.o"
-	@echo "... src/AST/Visitor/CodeGen/CodeGenVisitor.i"
-	@echo "... src/AST/Visitor/CodeGen/CodeGenVisitor.s"
-	@echo "... src/AST/Visitor/EvaluatingVisitor.o"
-	@echo "... src/AST/Visitor/EvaluatingVisitor.i"
-	@echo "... src/AST/Visitor/EvaluatingVisitor.s"
-	@echo "... src/AST/Visitor/StaticAnalysis/Builtin.o"
-	@echo "... src/AST/Visitor/StaticAnalysis/Builtin.i"
-	@echo "... src/AST/Visitor/StaticAnalysis/Builtin.s"
-	@echo "... src/AST/Visitor/StaticAnalysis/Class.o"
-	@echo "... src/AST/Visitor/StaticAnalysis/Class.i"
-	@echo "... src/AST/Visitor/StaticAnalysis/Class.s"
-	@echo "... src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o"
-	@echo "... src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i"
-	@echo "... src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s"
-	@echo "... src/AST/Visitor/StaticAnalysis/Function.o"
-	@echo "... src/AST/Visitor/StaticAnalysis/Function.i"
-	@echo "... src/AST/Visitor/StaticAnalysis/Function.s"
-	@echo "... src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o"
-	@echo "... src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i"
-	@echo "... src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s"
-	@echo "... src/AST/Visitor/Visitor.o"
-	@echo "... src/AST/Visitor/Visitor.i"
-	@echo "... src/AST/Visitor/Visitor.s"
+	@echo "... src/Compiler.o"
+	@echo "... src/Compiler.i"
+	@echo "... src/Compiler.s"
+	@echo "... src/Compiler/PassManager.o"
+	@echo "... src/Compiler/PassManager.i"
+	@echo "... src/Compiler/PassManager.s"
+	@echo "... src/Files/FileManager.o"
+	@echo "... src/Files/FileManager.i"
+	@echo "... src/Files/FileManager.s"
+	@echo "... src/Files/FileUtils.o"
+	@echo "... src/Files/FileUtils.i"
+	@echo "... src/Files/FileUtils.s"
 	@echo "... src/Lexer.o"
 	@echo "... src/Lexer.i"
 	@echo "... src/Lexer.s"
+	@echo "... src/Message/Diagnostics.o"
+	@echo "... src/Message/Diagnostics.i"
+	@echo "... src/Message/Diagnostics.s"
 	@echo "... src/Message/Exceptions.o"
 	@echo "... src/Message/Exceptions.i"
 	@echo "... src/Message/Exceptions.s"
-	@echo "... src/Message/Warning.o"
-	@echo "... src/Message/Warning.i"
-	@echo "... src/Message/Warning.s"
+	@echo "... src/Message/def/DiagnosticParser.o"
+	@echo "... src/Message/def/DiagnosticParser.i"
+	@echo "... src/Message/def/DiagnosticParser.s"
+	@echo "... src/Message/main.o"
+	@echo "... src/Message/main.i"
+	@echo "... src/Message/main.s"
+	@echo "... src/ParseRecord.o"
+	@echo "... src/ParseRecord.i"
+	@echo "... src/ParseRecord.s"
 	@echo "... src/Parser.o"
 	@echo "... src/Parser.i"
 	@echo "... src/Parser.s"
+	@echo "... src/Preprocessor.o"
+	@echo "... src/Preprocessor.i"
+	@echo "... src/Preprocessor.s"
+	@echo "... src/Template/Specilization.o"
+	@echo "... src/Template/Specilization.i"
+	@echo "... src/Template/Specilization.s"
+	@echo "... src/Template/TokenStore.o"
+	@echo "... src/Template/TokenStore.i"
+	@echo "... src/Template/TokenStore.s"
 	@echo "... src/Token.o"
 	@echo "... src/Token.i"
 	@echo "... src/Token.s"
 	@echo "... src/Util.o"
 	@echo "... src/Util.i"
 	@echo "... src/Util.s"
-	@echo "... src/Variant/Arithmetic.o"
-	@echo "... src/Variant/Arithmetic.i"
-	@echo "... src/Variant/Arithmetic.s"
-	@echo "... src/Variant/Conversion.o"
-	@echo "... src/Variant/Conversion.i"
-	@echo "... src/Variant/Conversion.s"
 	@echo "... src/Variant/Type/AutoType.o"
 	@echo "... src/Variant/Type/AutoType.i"
 	@echo "... src/Variant/Type/AutoType.s"
-	@echo "... src/Variant/Type/CollectionType.o"
-	@echo "... src/Variant/Type/CollectionType.i"
-	@echo "... src/Variant/Type/CollectionType.s"
+	@echo "... src/Variant/Type/BuiltinType.o"
+	@echo "... src/Variant/Type/BuiltinType.i"
+	@echo "... src/Variant/Type/BuiltinType.s"
 	@echo "... src/Variant/Type/FPType.o"
 	@echo "... src/Variant/Type/FPType.i"
 	@echo "... src/Variant/Type/FPType.s"
 	@echo "... src/Variant/Type/FunctionType.o"
 	@echo "... src/Variant/Type/FunctionType.i"
 	@echo "... src/Variant/Type/FunctionType.s"
+	@echo "... src/Variant/Type/Generic.o"
+	@echo "... src/Variant/Type/Generic.i"
+	@echo "... src/Variant/Type/Generic.s"
 	@echo "... src/Variant/Type/GenericType.o"
 	@echo "... src/Variant/Type/GenericType.i"
 	@echo "... src/Variant/Type/GenericType.s"
 	@echo "... src/Variant/Type/IntegerType.o"
 	@echo "... src/Variant/Type/IntegerType.i"
 	@echo "... src/Variant/Type/IntegerType.s"
+	@echo "... src/Variant/Type/MetaType.o"
+	@echo "... src/Variant/Type/MetaType.i"
+	@echo "... src/Variant/Type/MetaType.s"
 	@echo "... src/Variant/Type/ObjectType.o"
 	@echo "... src/Variant/Type/ObjectType.i"
 	@echo "... src/Variant/Type/ObjectType.s"
@@ -2714,9 +3773,18 @@ help:
 	@echo "... src/Variant/Type/PrimitiveType.o"
 	@echo "... src/Variant/Type/PrimitiveType.i"
 	@echo "... src/Variant/Type/PrimitiveType.s"
+	@echo "... src/Variant/Type/TupleType.o"
+	@echo "... src/Variant/Type/TupleType.i"
+	@echo "... src/Variant/Type/TupleType.s"
 	@echo "... src/Variant/Type/Type.o"
 	@echo "... src/Variant/Type/Type.i"
 	@echo "... src/Variant/Type/Type.s"
+	@echo "... src/Variant/Type/TypeGroup.o"
+	@echo "... src/Variant/Type/TypeGroup.i"
+	@echo "... src/Variant/Type/TypeGroup.s"
+	@echo "... src/Variant/Type/TypeUtils.o"
+	@echo "... src/Variant/Type/TypeUtils.i"
+	@echo "... src/Variant/Type/TypeUtils.s"
 	@echo "... src/Variant/Type/VoidType.o"
 	@echo "... src/Variant/Type/VoidType.i"
 	@echo "... src/Variant/Type/VoidType.s"
@@ -2726,18 +3794,6 @@ help:
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"
-	@echo "... test/ControlFlow/IfTest.o"
-	@echo "... test/ControlFlow/IfTest.i"
-	@echo "... test/ControlFlow/IfTest.s"
-	@echo "... test/Functions.o"
-	@echo "... test/Functions.i"
-	@echo "... test/Functions.s"
-	@echo "... test/TokenizerTest.o"
-	@echo "... test/TokenizerTest.i"
-	@echo "... test/TokenizerTest.s"
-	@echo "... test/main.o"
-	@echo "... test/main.i"
-	@echo "... test/main.s"
 .PHONY : help
 
 

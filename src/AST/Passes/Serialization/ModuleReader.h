@@ -83,7 +83,7 @@ protected:
    Type readQualType();
    Argument readArg();
    Attribute readAttr();
-   GenericConstraint readGeneric();
+   TemplateConstraint readGeneric();
 
    Variant readVariant();
 
@@ -140,7 +140,7 @@ protected:
    std::shared_ptr<ContinueStmt> ReadContinueStmt();
 
    std::shared_ptr<CollectionLiteral> ReadCollectionLiteral();
-   std::shared_ptr<NumericLiteral> ReadNumericLiteral();
+   std::shared_ptr<IntegerLiteral> ReadNumericLiteral();
    std::shared_ptr<NoneLiteral> ReadNoneLiteral();
    std::shared_ptr<StringLiteral> ReadStringLiteral();
    std::shared_ptr<StringInterpolation> ReadStringInterpolation();

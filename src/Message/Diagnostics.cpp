@@ -61,10 +61,10 @@ namespace diag {
       while (lex.lookahead().get_type() != T_EOF) {
          single = false;
          if (lex.currentToken.isInterpolationStart) {
-            msg += lex.s_val();
+            msg += lex.strVal();
 
             lex.advance();
-            if (lex.currentToken.get_type() == T_IDENT && lex.s_val() == "$") {
+            if (lex.currentToken.get_type() == T_IDENT && lex.strVal() == "$") {
                msg += "$";
                lex.advance();
 
@@ -104,17 +104,17 @@ namespace diag {
             lex.continueInterpolation = false;
 
             if (!lex.currentToken.isInterpolationStart) {
-               msg += lex.s_val();
+               msg += lex.strVal();
                break;
             }
          }
          else {
-            msg += lex.s_val();
+            msg += lex.strVal();
          }
       }
 
       if (single) {
-         msg += lex.s_val();
+         msg += lex.strVal();
       }
 
       return msg;
@@ -124,7 +124,7 @@ namespace diag {
       Variant &var,
       Lexer &lex)
    {
-      auto funcName = lex.s_val();
+      auto funcName = lex.strVal();
       std::vector<string> args;
 
       lex.advance();
@@ -141,7 +141,7 @@ namespace diag {
                args.push_back(string(lex.getSrc() + start, lex.currentIndex - start - 1));
             }
             else {
-               args.push_back(lex.s_val());
+               args.push_back(lex.strVal());
             }
 
             if (lex.currentToken.is_punctuator(',')) {
@@ -319,7 +319,7 @@ namespace diag {
 
    DiagnosticBuilder& DiagnosticBuilder::operator<<(string const& str)
    {
-      providedArgs.emplace_back(str);
+      providedArgs.emplace_back(string(str));
       return *this;
    }
 
@@ -363,7 +363,7 @@ namespace diag {
 
    DiagnosticBuilder& DiagnosticBuilder::operator<<(Lexer* const& lex)
    {
-      loc = lex->getSourceLoc();
+      loc = lex->currentToken.getSourceLoc();
       locGiven = true;
 
       return *this;

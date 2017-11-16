@@ -22,68 +22,39 @@ namespace cl {
    public:
       Enum(
          AccessModifier am,
-         string& name,
-         std::vector<GenericConstraint>& generics,
-         const SourceLocation &loc
+         const string& name,
+         const SourceLocation &loc,
+         EnumDecl *decl
       );
 
-      void addCase(string& name, EnumCase&& case_, SourceLocation loc) {
-         cases.emplace(name, case_);
-         if (case_.associatedValues.size() > maxAssociatedValues) {
-            maxAssociatedValues = case_.associatedValues.size();
-         }
+      void addCase(string& name, EnumCase&& case_, SourceLocation loc);
 
-         if (!case_.associatedValues.empty()) {
-            hasAssociatedValues_ = true;
+      llvm::Type *getSelfType() const override;
 
-            std::vector<Argument> args;
-            for (const auto& assoc : case_.associatedValues) {
-               args.emplace_back(assoc.first, assoc.second);
-            }
-
-            Type retTy;
-            declareMethod(name, retTy, AccessModifier::PUBLIC, std::move(args), generics, false,
-               nullptr, loc);
-         }
-      }
-
-      size_t getNumCases() {
+      size_t getNumCases() const
+      {
          return cases.size();
       }
 
       void generateMemoryLayout(CodeGen &CGM) override;
 
-      size_t getMaxAssociatedValues() {
+      size_t getMaxAssociatedValues() const
+      {
          return maxAssociatedValues;
       }
 
-      bool isEnum() override
+      bool isEnum() const override
       {
          return true;
       }
 
-      bool hasCase(string& caseName) {
+      bool hasCase(const string& caseName) const
+      {
          return cases.find(caseName) != cases.end();
       }
 
-      CallCompatability hasCase(string& caseName, std::vector<Argument>& assocTypes,
-         std::vector<GenericType*>& generics)
+      bool hasAssociatedValues() const
       {
-         CallCompatability res;
-         if (!hasCase(caseName)) {
-            return res;
-         }
-
-         res.compatibility = CompatibilityType::NO_MATCHING_CALL;
-         auto types = cases[caseName].associatedValues;
-         if (types.size() != assocTypes.size()) {
-            return res;
-         }
-
-         return hasMethod(caseName, assocTypes, generics);
-      }
-
-      bool hasAssociatedValues() {
          return hasAssociatedValues_;
       }
 
@@ -92,15 +63,17 @@ namespace cl {
          hasAssociatedValues_ = assoc;
       }
 
-      BuiltinType* getRawType() {
+      BuiltinType* getRawType()
+      {
          return rawType;
       }
 
-      void setRawType(BuiltinType* raw) {
+      void setRawType(BuiltinType* raw)
+      {
          rawType = raw;
       }
 
-      bool isRawEnum() override
+      bool isRawEnum() const override
       {
          return !hasAssociatedValues_;
       }
@@ -110,7 +83,8 @@ namespace cl {
          return cases;
       }
 
-      EnumCase& getCase(string& caseName) {
+      EnumCase& getCase(string& caseName)
+      {
          assert(hasCase(caseName) && "Call hasCase first!");
          return cases[caseName];
       }

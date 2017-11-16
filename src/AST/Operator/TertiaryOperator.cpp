@@ -46,12 +46,3 @@ std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {
 
    return children;
 }
-
-void TertiaryOperator::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "TertiaryOperator ['?:']" << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
-}

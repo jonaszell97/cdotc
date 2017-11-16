@@ -3,62 +3,35 @@
 //
 
 #include "ObjectType.h"
+
 #include "../../AST/SymbolTable.h"
-#include "IntegerType.h"
-#include "FPType.h"
+
 #include "../../AST/Passes/CodeGen/CGMemory.h"
 #include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
 #include "../../AST/Passes/SemanticAnalysis/Record/Enum.h"
+
+#include "Generic.h"
+#include "IntegerType.h"
+#include "FPType.h"
 #include "GenericType.h"
 #include "PointerType.h"
+#include "../../AST/Passes/CodeGen/CodeGen.h"
+#include "../../AST/Passes/Declaration/DeclPass.h"
 
 namespace cdot {
 
 using cl::Class;
 
 unordered_map<string, ObjectType*> ObjectType::Instances;
-
-ObjectType* ObjectType::get(
-   string className,
-   std::vector<GenericType*> &generics)
-{
-   if (!generics.empty()) {
-      className += "<";
-      size_t size = generics.size();
-      size_t i = 0;
-      for (const auto& gen : generics) {
-         className += gen->toUniqueString();
-         if (i < size - 1) {
-            className += ", ";
-         }
-
-         ++i;
-      }
-      className += ">";
-   }
-
-   auto obj = get(className);
-   obj->concreteGenericTypes = generics;
-
-   return obj;
-}
+unordered_map<string, DummyObjectType*> DummyObjectType::Instances;
 
 ObjectType* ObjectType::get(const string &className)
 {
    if (Instances.find(className) == Instances.end()) {
-      string name = className.substr(0, className.find('<'));
-      Instances.emplace(className, new ObjectType(name));
+      Instances.emplace(className, new ObjectType(className));
    }
 
    return Instances[className];
-}
-
-ObjectType::ObjectType(
-   const string &className,
-   std::vector<GenericType*>& concreteGenerics)
-   : concreteGenericTypes(concreteGenerics)
-{
-   this->className = className;
 }
 
 ObjectType::ObjectType(const string &className)
@@ -81,8 +54,13 @@ ObjectType::ObjectType(const string &className)
 
 ObjectType* ObjectType::getOptionOf(BuiltinType *T)
 {
-   std::vector<GenericType*> generics{ GenericType::get("T", T) };
-   return get("Option", generics);
+   std::vector<TemplateArg> templateArgs{TemplateArg(GenericType::get("T", T))};
+
+   // instantiate option type
+   auto rec = SymbolTable::getRecord("Option",
+      new ResolvedTemplateArgList(move(templateArgs)));
+
+   return get(rec->getName());
 }
 
 ObjectType* ObjectType::getAnyTy()
@@ -95,33 +73,64 @@ Record* ObjectType::getRecord() const
    return SymbolTable::getRecord(className);
 }
 
-GenericType* ObjectType::getConcreteGeneric(string genericName)
+const std::vector<TemplateArg>& ObjectType::getTemplateArgs() const
 {
-   for (const auto& gen : concreteGenericTypes) {
-      if (gen->getGenericClassName() == genericName) {
-         return gen;
+   auto rec = getRecord();
+   assert(rec->isTemplated());
+
+   return rec->getTemplateArgs();
+}
+
+bool ObjectType::hasTemplateArgs() const
+{
+   return getRecord()->isTemplated();
+}
+
+GenericType *const
+ObjectType::getNamedTemplateArg(const string &genericName) const
+{
+   auto &templateArgs = getTemplateArgs();
+   for (const auto& gen : templateArgs) {
+      if (!gen.isTypeName()) {
+         continue;
+      }
+      if (gen.getGenericTy()->getClassName() == genericName) {
+         return gen.getGenericTy();
       }
    }
 
    return nullptr;
 }
 
-bool ObjectType::isOptionOf(string &className)
+bool ObjectType::isOptionTy() const
 {
-   auto t = getConcreteGeneric("T");
-   if (t == nullptr) {
+   auto rec = getRecord();
+   if (!rec->isTemplated()) {
       return false;
    }
 
-   return t->getClassName() == className;
+   return rec->getTemplate()->recordName == "Option";
+}
+
+bool ObjectType::isOptionOf(const string &className) const
+{
+   if (!isOptionTy()) {
+      return false;
+   }
+
+   auto TemplateArg = getRecord()->getTemplateArg("T");
+   return TemplateArg.isTypeName() && TemplateArg.getGenericTy()
+                                                 ->getActualType()
+                                                 ->getClassName() == className;
 }
 
 bool ObjectType::needsCleanup() const
 {
-   return isRefcounted() || (is_struct && getRecord()->getAs<Class>()->hasNonEmptyDeinitializer());
+   return isRefcounted() || (is_struct && getRecord()
+      ->getAs<Class>()->hasNonEmptyDeinitializer());
 }
 
-BuiltinType* ObjectType::unbox()
+BuiltinType* ObjectType::unbox() const
 {
    assert(util::matches(
       "(Float|Double|U?Int(1|8|16|32|64)?)",
@@ -147,13 +156,14 @@ BuiltinType* ObjectType::unbox()
       return IntegerType::get();
    }
 
-   auto bitwidth = std::stoi(className.substr(3));
-   return IntegerType::get(bitwidth, isUnsigned);
+   return IntegerType::get(std::stoi(className.substr(3)), isUnsigned);
 }
 
-bool ObjectType::implicitlyCastableTo(BuiltinType *other)
+bool ObjectType::implicitlyCastableTo(BuiltinType *other) const
 {
    switch (other->getTypeID()) {
+      case TypeID::GenericTypeID:
+         return implicitlyCastableTo(other->asGenericTy()->getActualType());
       case TypeID::AutoTypeID:
          return true;
       case TypeID::FunctionTypeID:
@@ -174,10 +184,9 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other)
 
          return false;
       }
-      case TypeID::ObjectTypeID:
-      case TypeID::GenericTypeID: {
+      case TypeID::ObjectTypeID: {
          auto asObj = other->asObjTy();
-         auto& otherClassName = asObj->getClassName();
+         auto& otherClassName = other->getClassName();
 
          if (!SymbolTable::hasClass(otherClassName)) {
             return false;
@@ -188,11 +197,13 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other)
                return true;
             }
 
-            return SymbolTable::getClass(className)->conformsTo(otherClassName);
+            return SymbolTable::getClass(className)
+               ->conformsTo(otherClassName);
          }
 
          if (otherClassName == "String") {
-            return SymbolTable::getClass(className)->conformsTo("StringRepresentable");
+            return SymbolTable::getClass(className)
+               ->conformsTo("StringRepresentable");
          }
 
          if (className != asObj->className) {
@@ -202,24 +213,12 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other)
                SymbolTable::getClass(className)->conformsTo(asObj->className);
          }
 
-         if (concreteGenericTypes.size() != asObj->getConcreteGenericTypes().size()) {
-            return false;
-         }
-
-         for (const auto& gen : concreteGenericTypes) {
-            auto otherGen = asObj->getConcreteGeneric(gen->getGenericClassName());
-            if (!otherGen || !gen->implicitlyCastableTo(otherGen))
-            {
-               return false;
-            }
-         }
-
          return true;
       }
       case TypeID::IntegerTypeID: {
          if (is_enum) {
             auto en = SymbolTable::getClass(className);
-            return !static_cast<cdot::cl::Enum*>(en)->hasAssociatedValues();
+            return !en->getAs<Enum>()->hasAssociatedValues();
          }
 
          if (other->isIntNTy(8) && className == "Char") {
@@ -244,8 +243,7 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other)
          auto cl = SymbolTable::getClass(className);
          auto op = "infix as " + other->toString();
 
-         auto castOp = cl->hasMethod(op);
-         return castOp.compatibility == CompatibilityType::COMPATIBLE;
+         return cl->hasMethodWithName(op);
       }
       case TypeID::FPTypeID: {
          if (isBoxedEquivOf(other)) {
@@ -262,7 +260,8 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other)
    }
 }
 
-bool ObjectType::explicitlyCastableTo(BuiltinType *other) {
+bool ObjectType::explicitlyCastableTo(BuiltinType *other) const
+{
    if (implicitlyCastableTo(other)) {
       return true;
    }
@@ -275,7 +274,8 @@ bool ObjectType::explicitlyCastableTo(BuiltinType *other) {
    }
 }
 
-bool ObjectType::isBoxedEquivOf(BuiltinType *other) {
+bool ObjectType::isBoxedEquivOf(BuiltinType *other) const
+{
    switch (other->getTypeID()) {
       case TypeID::IntegerTypeID: {
          auto asInt = cast<IntegerType>(other);
@@ -286,8 +286,11 @@ bool ObjectType::isBoxedEquivOf(BuiltinType *other) {
             return asInt->getBitwidth() == 8;
          }
 
-         string boxedCl = string(asInt->isUnsigned() ? "U" : "") + "Int" + std::to_string(asInt->getBitwidth());
-         return className == boxedCl || (asInt->getBitwidth() == sizeof(int*) * 8 && className == "Int");
+         string boxedCl = string(asInt->isUnsigned() ? "U" : "")
+                          + "Int" + std::to_string(asInt->getBitwidth());
+         return className == boxedCl
+                || (asInt->getBitwidth() == sizeof(int*) * 8
+                    && className == "Int");
       }
       case TypeID::FPTypeID: {
          auto asFloat = cast<FPType>(other);
@@ -309,27 +312,34 @@ bool ObjectType::isValueType() const
    return is_protocol || is_struct || is_enum;
 }
 
-bool ObjectType::hasDefaultValue()
+bool ObjectType::hasDefaultValue() const
 {
    return false;
 }
 
-llvm::Value* ObjectType::getDefaultVal()
+llvm::Value* ObjectType::getDefaultVal(CodeGen &CGM) const
 {
    if (is_struct) {
       auto& fields = SymbolTable::getClass(className)->getFields();
       std::vector<llvm::Constant*> vals;
       for (const auto& field : fields) {
-         vals.push_back(llvm::cast<llvm::Constant>(field.second->fieldType->getDefaultVal()));
+         if (field.second->isStatic) {
+            continue;
+         }
+
+         vals.push_back(llvm::cast<llvm::Constant>(
+            field.second->fieldType->getDefaultVal(CGM)));
       }
 
-      return llvm::ConstantStruct::get(CodeGen::getStructTy(className), vals);
+      return llvm::ConstantStruct::get(CodeGen::getStructTy(className),
+                                       vals);
    }
 
-   return llvm::ConstantPointerNull::get(CodeGen::getStructTy(className)->getPointerTo());
+   return llvm::ConstantPointerNull::get(CodeGen::getStructTy(className)
+                                            ->getPointerTo());
 }
 
-llvm::Constant* ObjectType::getConstantVal(Variant &val)
+llvm::Constant* ObjectType::getConstantVal(Variant &val) const
 {
    assert(isBoxedPrimitive() && "Can't emit constant val otherwise");
 
@@ -342,7 +352,7 @@ llvm::Constant* ObjectType::getConstantVal(Variant &val)
    );
 }
 
-short ObjectType::getAlignment()
+short ObjectType::getAlignment() const
 {
    if (is_raw_enum) {
       return static_cast<cl::Enum*>(getRecord())->getRawType()->getAlignment();
@@ -351,12 +361,12 @@ short ObjectType::getAlignment()
    return SymbolTable::getClass(className)->getAlignment();
 }
 
-size_t ObjectType::getSize()
+size_t ObjectType::getSize() const
 {
    return SymbolTable::getRecord(className)->getSize();
 }
 
-llvm::Type* ObjectType::getLlvmType()
+llvm::Type* ObjectType::getLlvmType() const
 {
    if (is_enum) {
       auto en = static_cast<cl::Enum*>(getRecord());
@@ -377,25 +387,28 @@ llvm::Type* ObjectType::getLlvmType()
    }
 }
 
-string ObjectType::toString()
+string ObjectType::toString() const
 {
-   string str = className;
-   if (!concreteGenericTypes.empty()) {
-      str += "<";
-      size_t size = concreteGenericTypes.size();
-      size_t i = 0;
-      for (const auto& gen : concreteGenericTypes) {
-         str += gen->getActualType()->toString();
-         if (i < size - 1) {
-            str += ", ";
-         }
+   return className;
+}
 
-         ++i;
-      }
-      str += ">";
+DummyObjectType::DummyObjectType(
+   const string &className,
+   std::vector<TemplateArg> &templateArgs)
+   : ObjectType(className), templateArgs(templateArgs)
+{
+
+}
+
+DummyObjectType* DummyObjectType::get(const string &className,
+                                      std::vector<TemplateArg> &templateArgs) {
+   auto name = className + util::TemplateArgsToString(templateArgs);
+   if (Instances.find(name) == Instances.end()) {
+      Instances.emplace(name, new DummyObjectType(className,
+                                                  templateArgs));
    }
 
-   return str;
+   return Instances[name];
 }
 
 } // namespace cdot

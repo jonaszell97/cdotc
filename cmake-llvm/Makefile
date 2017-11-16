@@ -111,17 +111,17 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named CDot
+# Target rules for targets named cdotc-llvm
 
 # Build rule for target.
-CDot: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 CDot
-.PHONY : CDot
+cdotc-llvm: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 cdotc-llvm
+.PHONY : cdotc-llvm
 
 # fast build rule for target.
-CDot/fast:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/build
-.PHONY : CDot/fast
+cdotc-llvm/fast:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/build
+.PHONY : cdotc-llvm/fast
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.o
 
@@ -129,7 +129,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.o: Users/
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.i
@@ -138,7 +138,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.i: Users/
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.s
@@ -147,8 +147,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.s: Users/
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.o
 
@@ -156,7 +183,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.o: Users/
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.i
@@ -165,7 +192,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.i: Users/
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.s
@@ -174,7 +201,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.s: Users/
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.o
@@ -183,7 +210,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expres
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.i
@@ -192,7 +219,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expres
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.s
@@ -201,35 +228,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expres
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.o
 
@@ -237,7 +264,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.i
@@ -246,7 +273,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.s
@@ -255,35 +282,89 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.o
 
@@ -291,7 +372,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.i
@@ -300,7 +381,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.s
@@ -309,35 +390,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Litera
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.o
 
@@ -345,7 +426,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.i
@@ -354,7 +435,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.s
@@ -363,7 +444,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
@@ -372,7 +453,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
@@ -381,7 +462,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
@@ -390,7 +471,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
@@ -399,7 +480,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
@@ -408,7 +489,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
@@ -417,35 +498,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExp
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.o
 
@@ -453,7 +534,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRe
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.i
@@ -462,7 +543,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRe
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.s
@@ -471,35 +552,8 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRe
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.o
 
@@ -507,7 +561,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOp
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.i
@@ -516,7 +570,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOp
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.s
@@ -525,89 +579,62 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOp
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.o
 
@@ -615,7 +642,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Tertiary
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.i
@@ -624,7 +651,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Tertiary
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.s
@@ -633,7 +660,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Tertiary
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.o
@@ -642,7 +669,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOpe
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.i
@@ -651,7 +678,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOpe
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.s
@@ -660,35 +687,602 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOpe
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 
@@ -696,7 +1290,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
@@ -705,7 +1299,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
@@ -714,7 +1308,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
@@ -723,7 +1317,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
@@ -732,7 +1326,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
@@ -741,7 +1335,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/CaseStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
@@ -750,7 +1344,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
@@ -759,7 +1353,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
@@ -768,8 +1362,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.o
 
@@ -777,7 +1398,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.i
@@ -786,7 +1407,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.s
@@ -795,7 +1416,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
@@ -804,7 +1425,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
@@ -813,7 +1434,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
@@ -822,7 +1443,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/GotoStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.o
@@ -831,7 +1452,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.i
@@ -840,7 +1461,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.s
@@ -849,7 +1470,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/IfStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
@@ -858,7 +1479,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
@@ -867,7 +1488,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
@@ -876,8 +1497,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 
@@ -885,7 +1533,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
@@ -894,7 +1542,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
@@ -903,35 +1551,8 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 
@@ -939,7 +1560,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
@@ -948,7 +1569,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
@@ -957,8 +1578,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Control
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 
@@ -966,7 +1614,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
@@ -975,7 +1623,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
@@ -984,7 +1632,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
@@ -993,7 +1641,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
@@ -1002,7 +1650,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
@@ -1011,8 +1659,89 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 
@@ -1020,7 +1749,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
@@ -1029,7 +1758,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
@@ -1038,35 +1767,8 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 
@@ -1074,7 +1776,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
@@ -1083,7 +1785,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
@@ -1092,35 +1794,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.o
 
@@ -1128,7 +1830,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.i
@@ -1137,7 +1839,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.s
@@ -1146,35 +1848,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 
@@ -1182,7 +1884,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
@@ -1191,7 +1893,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
@@ -1200,7 +1902,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.o
@@ -1209,7 +1911,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.i
@@ -1218,7 +1920,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.s
@@ -1227,7 +1929,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FunctionDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
@@ -1236,7 +1938,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
@@ -1245,7 +1947,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
@@ -1254,7 +1956,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/NamespaceDecl.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.o
@@ -1263,7 +1965,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.i
@@ -1272,7 +1974,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.s
@@ -1281,116 +1983,62 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declara
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.o
 
@@ -1398,7 +2046,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Stateme
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.i
@@ -1407,7 +2055,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Stateme
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.s
@@ -1416,359 +2064,143 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Stateme
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.o
 
@@ -1776,7 +2208,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.o: Users/Jonas/
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.i
@@ -1785,7 +2217,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.i: Users/Jonas/
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.s
@@ -1794,8 +2226,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.s: Users/Jonas/
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.o
 
@@ -1803,7 +2262,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.o:
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.i
@@ -1812,7 +2271,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.i:
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.s
@@ -1821,7 +2280,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.s:
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.o
@@ -1830,7 +2289,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.o: Us
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.i
@@ -1839,7 +2298,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.i: Us
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.s
@@ -1848,8 +2307,62 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.s: Us
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.o
 
@@ -1857,7 +2370,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.o: Users/Jonas
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.i
@@ -1866,7 +2379,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.i: Users/Jonas
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.s
@@ -1875,8 +2388,35 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.s: Users/Jonas
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.o
 
@@ -1884,7 +2424,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.o: Users/Jonas/
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.i
@@ -1893,7 +2433,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.i: Users/Jonas/
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.s
@@ -1902,7 +2442,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.s: Users/Jonas/
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.o
@@ -1911,7 +2451,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.o: Users/Jonas/C
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.i
@@ -1920,7 +2460,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.i: Users/Jonas/C
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.s
@@ -1929,62 +2469,359 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.s: Users/Jonas/C
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.cpp.s
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.o
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.o
-
-# target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.o
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.i
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.i
-
-# target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.i
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.s
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.s
-
-# target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.cpp.s
-
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.o
-
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.o
 
 # target to build an object file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.o
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.o
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.o
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.i
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.i
 
 # target to preprocess a source file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.i
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.i
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.i
 
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.s
 
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.s
 
 # target to generate assembly for a file
-Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.s
-.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.cpp.s
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp.s
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.o
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.o
+
+# target to build an object file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.o
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.o
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.i
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.i
+
+# target to preprocess a source file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.i
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.i
+
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.s
+
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.s
+
+# target to generate assembly for a file
+Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.s
+.PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.o
 
@@ -1992,7 +2829,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.o: Us
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.i
@@ -2001,7 +2838,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.i: Us
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.s
@@ -2010,7 +2847,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.s: Us
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.cpp.s
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.o: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.o
@@ -2019,7 +2856,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.o: Users/Jonas/C
 
 # target to build an object file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.o:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.o
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.o
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.i: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.i
@@ -2028,7 +2865,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.i: Users/Jonas/C
 
 # target to preprocess a source file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.i:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.i
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.i
 
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.s: Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.s
@@ -2037,7 +2874,7 @@ Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.s: Users/Jonas/C
 
 # target to generate assembly for a file
 Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.s:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.s
 .PHONY : Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/main.cpp.s
 
 # Help Target
@@ -2048,31 +2885,40 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... CDot"
+	@echo "... cdotc-llvm"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/AstNode.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Context.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Expression.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/ArrayLiteral.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/CollectionLiteral.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LambdaExpr.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringLiteral.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/ArrayAccessExpr.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/CallExpr.s"
@@ -2082,36 +2928,93 @@ help:
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/MemberRefExpr.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/RefExpr.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/RefExpr/SubscriptExpr.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Namespace.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/BinaryOperator.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ExplicitCastExpr.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/ImplicitCastExpr.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Operator.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/ImplicitCastExpr.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/TertiaryOperator.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/UnaryOperator.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/CompoundStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGClass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGException.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/DebugInfo/DebugInfo.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleReader.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Serialization/ModuleWriter.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Builtin.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/ConstExprPass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Function.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Class.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Enum.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Record.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/Record/Union.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TCClass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/SemanticAnalysis/TypeCheckPass.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Block/CompoundStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/BreakStmt.s"
@@ -2121,6 +3024,9 @@ help:
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ContinueStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForStmt.s"
@@ -2133,39 +3039,48 @@ help:
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/LabelStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ReturnStmt.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/WhileStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/CallableDecl.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ClassDecl.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/ConstrDecl.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/FieldDecl.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/InterfaceDecl.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/MethodDecl.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/OperatorDecl.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/UnionDecl.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclStmt.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/FuncArgDecl.s"
@@ -2178,84 +3093,99 @@ help:
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/TypedefDecl.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ExportStmt.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/InputStmt.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/IO/OutputStmt.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ImportStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/ThrowStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Exception/TryStmt.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Statement.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGCast.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGClass.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGType.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/Internal/CGInternal.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/UsingStmt.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/SymbolTable.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileManager.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Files/FileUtils.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Lexer.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Diagnostics.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Exceptions.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/Warning.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Message/def/DiagnosticParser.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/ParseRecord.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Parser.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Token.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Util.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Arithmetic.s"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.o"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.i"
-	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Conversion.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/BuiltinType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Generic.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.s"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.o"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.i"
+	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.s"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.o"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.i"
 	@echo "... Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Variant.s"

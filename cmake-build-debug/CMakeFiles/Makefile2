@@ -60,76 +60,76 @@ CMAKE_SOURCE_DIR = /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript
 CMAKE_BINARY_DIR = /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug
 
 #=============================================================================
-# Target rules for target CMakeFiles/CDot.dir
+# Target rules for target CMakeFiles/parse_diagnostics.dir
 
 # All Build rule for target.
-CMakeFiles/CDot.dir/all:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/depend
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49 "Built target CDot"
-.PHONY : CMakeFiles/CDot.dir/all
+CMakeFiles/parse_diagnostics.dir/all:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/depend
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=94,95,96,97,98,99,100 "Built target parse_diagnostics"
+.PHONY : CMakeFiles/parse_diagnostics.dir/all
 
 # Include target in all.
-all: CMakeFiles/CDot.dir/all
+all: CMakeFiles/parse_diagnostics.dir/all
 
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/CDot.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 49
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/CDot.dir/all
+CMakeFiles/parse_diagnostics.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 7
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/parse_diagnostics.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 0
-.PHONY : CMakeFiles/CDot.dir/rule
+.PHONY : CMakeFiles/parse_diagnostics.dir/rule
 
 # Convenience name for target.
-CDot: CMakeFiles/CDot.dir/rule
+parse_diagnostics: CMakeFiles/parse_diagnostics.dir/rule
 
-.PHONY : CDot
-
-# clean rule for target.
-CMakeFiles/CDot.dir/clean:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/clean
-.PHONY : CMakeFiles/CDot.dir/clean
+.PHONY : parse_diagnostics
 
 # clean rule for target.
-clean: CMakeFiles/CDot.dir/clean
+CMakeFiles/parse_diagnostics.dir/clean:
+	$(MAKE) -f CMakeFiles/parse_diagnostics.dir/build.make CMakeFiles/parse_diagnostics.dir/clean
+.PHONY : CMakeFiles/parse_diagnostics.dir/clean
+
+# clean rule for target.
+clean: CMakeFiles/parse_diagnostics.dir/clean
 
 .PHONY : clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/CDotTest.dir
+# Target rules for target CMakeFiles/cdotc.dir
 
 # All Build rule for target.
-CMakeFiles/CDotTest.dir/all:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/depend
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Built target CDotTest"
-.PHONY : CMakeFiles/CDotTest.dir/all
+CMakeFiles/cdotc.dir/all:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/depend
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93 "Built target cdotc"
+.PHONY : CMakeFiles/cdotc.dir/all
 
 # Include target in all.
-all: CMakeFiles/CDotTest.dir/all
+all: CMakeFiles/cdotc.dir/all
 
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/CDotTest.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 51
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/CDotTest.dir/all
+CMakeFiles/cdotc.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 93
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/cdotc.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles 0
-.PHONY : CMakeFiles/CDotTest.dir/rule
+.PHONY : CMakeFiles/cdotc.dir/rule
 
 # Convenience name for target.
-CDotTest: CMakeFiles/CDotTest.dir/rule
+cdotc: CMakeFiles/cdotc.dir/rule
 
-.PHONY : CDotTest
-
-# clean rule for target.
-CMakeFiles/CDotTest.dir/clean:
-	$(MAKE) -f CMakeFiles/CDotTest.dir/build.make CMakeFiles/CDotTest.dir/clean
-.PHONY : CMakeFiles/CDotTest.dir/clean
+.PHONY : cdotc
 
 # clean rule for target.
-clean: CMakeFiles/CDotTest.dir/clean
+CMakeFiles/cdotc.dir/clean:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/clean
+.PHONY : CMakeFiles/cdotc.dir/clean
+
+# clean rule for target.
+clean: CMakeFiles/cdotc.dir/clean
 
 .PHONY : clean
 

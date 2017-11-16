@@ -16,33 +16,45 @@ using std::string;
 
 namespace cdot {
 
-   enum class Attr : unsigned int {
-      None,
-      Inline,
-      CArray,
-      RawFunctionPtr,
-      NoCopy,
-      CString,
-      Primitive,
-      NeverOmit,
-      Extern,
-      Throws,
-      NoThrow,
+enum class Attr : unsigned int {
+   None,
+   Inline,
+   CArray,
+   RawFunctionPtr,
+   NoCopy,
+   CString,
+   Primitive,
+   NeverOmit,
+   Extern,
+   Throws,
+   NoThrow,
 
-      _builtin,
-      _opaque,
-      _align
-   };
+   _builtin,
+   _opaque,
+   _align
+};
 
-   extern unordered_map<string, Attr> AttributeMap;
+extern unordered_map<string, Attr> AttributeMap;
 
-   struct Attribute {
-      Attr kind;
-      string name;
-      std::vector<Variant> args;
-   };
+struct Attribute {
+   Attr kind;
+   string name;
+   std::vector<Variant> args;
+};
 
-   string isValidAttribute(Attribute attr);
+class AttributeOwner {
+protected:
+   std::vector<Attribute> attributes;
+
+public:
+   void setAttributes(std::vector<Attribute> &&attrs);
+   const std::vector<Attribute> &getAttributes() const;
+
+   bool hasAttribute(Attr kind);
+   Attribute &getAttribute(Attr kind);
+};
+
+string isValidAttribute(Attribute attr);
 
 }
 

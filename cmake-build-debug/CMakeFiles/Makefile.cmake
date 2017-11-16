@@ -53,6 +53,6 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
-  "CMakeFiles/CDot.dir/DependInfo.cmake"
-  "CMakeFiles/CDotTest.dir/DependInfo.cmake"
+  "CMakeFiles/parse_diagnostics.dir/DependInfo.cmake"
+  "CMakeFiles/cdotc.dir/DependInfo.cmake"
   )

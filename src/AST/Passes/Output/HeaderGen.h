@@ -11,13 +11,15 @@
 #include "../AbstractPass.h"
 
 namespace cdot {
+
 struct Attribute;
 class ObjectType;
 class BuiltinType;
 class GenericType;
 class Callable;
+struct TemplateArg;
+struct TemplateConstraint;
 
-struct GenericConstraint;
 }
 
 enum class ExternKind : unsigned char;
@@ -31,10 +33,14 @@ using namespace cdot;
 
 class HeaderGen : public AbstractPass {
 public:
-   explicit HeaderGen(string& fileName);
+   explicit HeaderGen(
+      std::vector<string>& fileNames
+   );
+
    ~HeaderGen() override;
 
-   void finalize() override;
+   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
+   void finalize(const string &fileName);
 
    void visit(NamespaceDecl *node) override;
    void visit(UsingStmt *node) override;
@@ -59,7 +65,7 @@ public:
    void visit(DebugStmt *node) override;
 
 protected:
-   string& fileName;
+   std::vector<string>& fileNames;
    stringstream out;
 
    size_t currentIndent = 0;
@@ -77,18 +83,19 @@ protected:
    void increaseIndent();
    void decreaseIndent();
 
-   void writeAttributes(std::vector<Attribute>& attrs, bool indent = true);
+   void writeAttributes(const std::vector<Attribute>& attrs,
+                        bool indent = true);
    void writeThrows(Callable *callable);
    void writeExternKind(ExternKind& kind);
 
-   void writeGenerics(std::vector<GenericConstraint>& generics);
-   void writeGenerics(std::vector<GenericType*>& generics);
+   void writeGenerics(const std::vector<TemplateConstraint>& generics);
+   void writeGenerics(const std::vector<TemplateArg>& generics);
 
-   void writeProtocols(std::vector<ObjectType*>& conformsTo);
-   void writeProtocols(std::vector<std::shared_ptr<TypeRef>>& conformsTo);
+   void writeProtocols(const std::vector<ObjectType*>& conformsTo);
+   void writeProtocols(const std::vector<std::shared_ptr<TypeRef>>& conformsTo);
 
-   void writeArgs(std::vector<std::shared_ptr<FuncArgDecl>>& args);
-   void writeAccess(AccessModifier& access);
+   void writeArgs(const std::vector<std::shared_ptr<FuncArgDecl>>& args);
+   void writeAccess(const AccessModifier& access);
 
    void writeIdent(const string& ident, bool newLine = true);
 };

@@ -4,100 +4,55 @@
 
 #include "Token.h"
 
+#include "Variant/Type/IntegerType.h"
+#include "Variant/Type/FPType.h"
+
 #include <iostream>
 
 namespace cdot {
-   void printBits(unsigned long long l, bool space = false) {
-      string str;
-      unsigned long long curr = 63;
-      curr <<= 63;
 
-      for (int i = 0; i < 64; ++i) {
-         if (space && (i == 24 || i == 44 || i == 54)) {
-            str += ' ';
-         }
-
-         str += (l & curr) ? "1" : "0";
-         curr >>= 1;
-      }
-
-      std::cout << "0b" + str << std::endl;
-   }
-
-   SourceLocation::SourceLocation(
-      unsigned col,
-      const unsigned &line,
-      unsigned length,
-      const unsigned &sourceId) : col(col), line(line), length(length), sourceId(sourceId)
-   {
-//      assert(line < 1048576 && "line too high");
-//      assert(sourceId < 16384 && "sourceid too high");
-//
-//      if (col >= 32768) {
-//         col = 32767;
-//      }
-//
-//      if (length >= 32768) {
-//         length = 32768;
-//      }
-//
-//      loc = 0;
-//
-//      // first 15 bits - column
-//      loc |= col;
-//      loc <<= 49;
-//
-//      // next 20 bits - line
-//      loc |= (line << 29);
-//
-//      // next 15 bits - length
-//      loc |= (length << 14);
-//
-//      // last 14 bits - source id
-//      loc |= sourceId;
-//
-//      if (getLine() != line || getCol() != col || getLength() != length || getSourceId() != sourceId) {
-//         printBits(col);
-//         printBits(line);
-//         printBits(length);
-//         printBits(sourceId);
-//         printBits(loc, true);
-//         exit(0);
-//      }
-   }
-
-   unsigned SourceLocation::getCol() const
-   {
-      return col; //(unsigned)(loc >> 49);
-   }
-
-   unsigned SourceLocation::getLine() const
-   {
-      return line; // (unsigned)((loc >> 29) & 1048575);
-   }
-
-   unsigned SourceLocation::getLength() const
-   {
-      return length; // (unsigned)((loc >> 14) & 32767);
-   }
-
-   unsigned SourceLocation::getSourceId() const
-   {
-      return sourceId; // (unsigned)(loc & 16383);
-   }
+SourceLocation::SourceLocation(unsigned col,
+                               const unsigned &line,
+                               unsigned length,
+                               const unsigned &sourceId) : col(col), line(line),
+                                                           length(length),
+                                                           sourceId(sourceId)
+{
 }
 
-Token::Token() = default;
+unsigned SourceLocation::getCol() const
+{
+   return col;
+}
+
+unsigned SourceLocation::getLine() const
+{
+   return line;
+}
+
+unsigned SourceLocation::getLength() const
+{
+   return length;
+}
+
+unsigned SourceLocation::getSourceId() const
+{
+   return sourceId;
+}
+
+} // namespace cdot
+
+Token::Token() : isInterpolationStart(false) {}
+Token::~Token() = default;
 
 Token::Token(TokenType type, Variant&& content, SourceLocation loc,
-   unsigned start, bool escaped) :
-   isEscaped_(escaped), _type(type), _value(content), start(start),
-   loc(loc)
+   unsigned start) : _type(type), _value(content), start(start), loc(loc),
+                     isInterpolationStart(false)
 {
 
 }
 
-string Token::toString()
+string Token::toString() const
 {
    switch (_type) {
       case T_BOF: return "T_BOF";
@@ -124,27 +79,69 @@ TokenType Token::get_type()
    return _type;
 }
 
-bool Token::is_punctuator(char c)
+bool Token::is_punctuator(char c) const
 {
-   return _type == T_PUNCTUATOR && _value.charVal == c;
+   if (c == '<') {
+      return _type == T_OP && _value.strVal == "<";
+   }
+   if (c == '>') {
+      return _type == T_OP && _value.strVal == ">";
+   }
+
+   return _type == T_PUNCTUATOR && _value.intVal == c;
 }
 
-bool Token::is_keyword(const string &keyword)
+bool Token::is_punctuator() const
+{
+   return _type == T_PUNCTUATOR;
+}
+
+bool Token::is_keyword(const string &keyword) const
 {
    return _type == T_KEYWORD && _value.strVal == keyword;
 }
 
-bool Token::is_operator(const string &op)
+bool Token::is_keyword() const
+{
+   return _type == T_KEYWORD;
+}
+
+bool Token::is_operator(const string &op) const
 {
    return _type == T_OP && _value.strVal == op;
 }
 
-bool Token::is_identifier(const string &ident)
+bool Token::is_operator() const
+{
+   return _type == T_OP;
+}
+
+bool Token::is_identifier(const string &ident) const
 {
    return _type == T_IDENT && _value.strVal == ident;
 }
 
-bool Token::is_separator()
+bool Token::is_identifier() const
 {
-   return _type == T_PUNCTUATOR && (_value.intVal == '\n' || _value.intVal == ';');
+   return _type == T_IDENT;
+}
+
+bool Token::is_separator() const
+{
+   return (_type == T_PUNCTUATOR
+            && (_value.intVal == '\n' || _value.intVal == ';'))
+          || _type == T_EOF;
+}
+
+string Token::TokensToString(const std::vector<Token> &tokens)
+{
+   string str;
+   unsigned i = 0;
+   auto numTokens = tokens.size();
+
+   for (const auto &tok : tokens) {
+      str += tok._value.toString();
+   }
+
+   return str;
 }

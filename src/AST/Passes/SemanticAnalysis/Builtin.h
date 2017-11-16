@@ -9,7 +9,6 @@
 #include <vector>
 
 using std::string;
-using std::vector;
 
 namespace cdot {
 
@@ -23,7 +22,9 @@ namespace cdot {
       BITCAST,
       NULLPTR,
       ISNULL,
-      UNWRAP_PROTO
+      UNWRAP_PROTO,
+
+      BuiltinSizeof
    };
 
    extern std::vector<string> BuiltinNamespaces;

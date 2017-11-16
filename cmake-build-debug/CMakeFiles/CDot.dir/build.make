@@ -393,28 +393,28 @@ CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o.provides: CMake
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o: ../src/AST/Expression/Literal/LiteralExpr.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o: ../src/AST/Expression/Literal/NumericLiteral.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp > CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.i
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp > CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/LiteralExpr.cpp -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.s
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NumericLiteral.cpp -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -753,28 +753,28 @@ CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o.provides: CMakeF
 CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o: ../src/AST/Visitor/Visitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o: ../src/AST/Passes/AbstractPass.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp > CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/Visitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/AbstractPass.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -849,52 +849,52 @@ CMakeFiles/CDot.dir/src/AST/Context.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/
 CMakeFiles/CDot.dir/src/AST/Context.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Context.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o: ../src/AST/Visitor/CaptureVisitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o: ../src/AST/Passes/CaptureVisitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CaptureVisitor.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CaptureVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CaptureVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CaptureVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o: ../src/AST/Visitor/EvaluatingVisitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o: ../src/AST/Passes/EvaluatingVisitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/EvaluatingVisitor.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/EvaluatingVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/EvaluatingVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/EvaluatingVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -993,28 +993,28 @@ CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o.provide
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o: ../src/AST/Statement/ControlFlow/SwitchStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o: ../src/AST/Statement/ControlFlow/MatchStmt.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp > CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.i
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp > CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/SwitchStmt.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.s
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/MatchStmt.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -1209,28 +1209,28 @@ CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o.provides: CM
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o: ../src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o: ../src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o
 
 
 CMakeFiles/CDot.dir/src/Message/Warning.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -1257,28 +1257,28 @@ CMakeFiles/CDot.dir/src/Message/Warning.cpp.o.provides: CMakeFiles/CDot.dir/src/
 CMakeFiles/CDot.dir/src/Message/Warning.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Message/Warning.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o: ../src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o: ../src/AST/Passes/StaticAnalysis/ConstExprPass.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -1305,76 +1305,76 @@ CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o.provides: CMakeFiles/CDot.dir/src/
 CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o: ../src/AST/Visitor/StaticAnalysis/Class.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o: ../src/AST/Passes/StaticAnalysis/Class.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Class.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Class.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Class.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Class.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o: ../src/AST/Visitor/CodeGen/CodeGenVisitor.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.i
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.s
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.requires:
-
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.requires
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.provides
-
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o: ../src/AST/Visitor/CodeGen/CGBinaryOperator.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o: ../src/AST/Passes/CodeGen/CodeGen.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp > CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CodeGen.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o: ../src/AST/Passes/CodeGen/CGBinaryOperator.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp > CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGBinaryOperator.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o: CMakeFiles/CDot.dir/flags.make
@@ -1401,57 +1401,33 @@ CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o.provides:
 CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o: ../src/AST/Visitor/CodeGen/CGMemory.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o: ../src/AST/Passes/CodeGen/CGMemory.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp > CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/CodeGen/CGMemory.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGMemory.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o
-
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o: ../src/AST/Statement/Declaration/ExtendStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp > CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.i
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/ExtendStmt.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.s
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.requires:
-
-.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.requires
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.provides
-
-CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o: ../src/AST/Expression/TypeRef.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/TypeRef.cpp
 
 CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.i: cmake_force
@@ -1473,33 +1449,33 @@ CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o.provides: CMakeFiles/CDot.d
 CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o: ../src/AST/Visitor/StaticAnalysis/Function.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Function.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o: ../src/AST/Passes/StaticAnalysis/Function.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Function.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Function.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Function.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Function.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Function.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o
 
 
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o: ../src/AST/Statement/Declaration/DeclareStmt.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/DeclareStmt.cpp
 
 CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.i: cmake_force
@@ -1523,7 +1499,7 @@ CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o.provides.bui
 
 CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o: ../src/Variant/Type/Type.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/Type.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.i: cmake_force
@@ -1547,7 +1523,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o.provides.build: CMakeFiles/CDot.
 
 CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o: ../src/Variant/Type/PrimitiveType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PrimitiveType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.i: cmake_force
@@ -1571,7 +1547,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o.provides.build: CMakeFi
 
 CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o: ../src/Variant/Type/PointerType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/PointerType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.i: cmake_force
@@ -1595,7 +1571,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o.provides.build: CMakeFile
 
 CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o: ../src/Variant/Type/FunctionType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FunctionType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.i: cmake_force
@@ -1617,33 +1593,9 @@ CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o.provides: CMakeFiles/CDo
 CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o
 
 
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o: ../src/Variant/Type/GenericType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp
-
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp > CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.i
-
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/GenericType.cpp -o CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.s
-
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.requires:
-
-.PHONY : CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.requires
-
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.provides: CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.provides
-
-CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o
-
-
 CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o: ../src/Variant/Type/ObjectType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/ObjectType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.i: cmake_force
@@ -1667,7 +1619,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o.provides.build: CMakeFiles
 
 CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o: ../src/Variant/Type/IntegerType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/IntegerType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.i: cmake_force
@@ -1691,7 +1643,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o.provides.build: CMakeFile
 
 CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o: ../src/Variant/Type/FPType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/FPType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.i: cmake_force
@@ -1715,7 +1667,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o.provides.build: CMakeFiles/CDo
 
 CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o: ../src/Variant/Type/CollectionType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_70) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/CollectionType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.i: cmake_force
@@ -1739,7 +1691,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/CollectionType.cpp.o.provides.build: CMakeF
 
 CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o: ../src/Variant/Type/VoidType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_71) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/VoidType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.i: cmake_force
@@ -1763,7 +1715,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o.provides.build: CMakeFiles/C
 
 CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o: ../src/Variant/Type/AutoType.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_72) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_70) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/AutoType.cpp
 
 CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.i: cmake_force
@@ -1787,7 +1739,7 @@ CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o.provides.build: CMakeFiles/C
 
 CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o: ../src/AST/Operator/Conversion/LvalueToRvalue.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_73) "Building CXX object CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_71) "Building CXX object CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Operator/Conversion/LvalueToRvalue.cpp
 
 CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.i: cmake_force
@@ -1811,7 +1763,7 @@ CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o.provides.bu
 
 CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o: CMakeFiles/CDot.dir/flags.make
 CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o: ../src/AST/Attribute/Attribute.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_74) "Building CXX object CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_72) "Building CXX object CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o"
 	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Attribute/Attribute.cpp
 
 CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.i: cmake_force
@@ -1833,28 +1785,364 @@ CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o.provides: CMakeFiles/CDot.
 CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o
 
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o: CMakeFiles/CDot.dir/flags.make
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o: ../src/AST/Visitor/StaticAnalysis/Builtin.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_75) "Building CXX object CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Builtin.cpp
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o: ../src/AST/Passes/StaticAnalysis/Builtin.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_73) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Builtin.cpp
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.i"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Builtin.cpp > CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.i
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Builtin.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.i
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.s"
-	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Visitor/StaticAnalysis/Builtin.cpp -o CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.s
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Builtin.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.s
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.requires:
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.requires:
 
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.requires
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.requires
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.requires
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.provides.build
-.PHONY : CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.provides
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.provides
 
-CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o
+
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o: ../src/Variant/Type/TupleType.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_74) "Building CXX object CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp > CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.i
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Variant/Type/TupleType.cpp -o CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.s
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.provides: CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o: ../src/AST/Expression/Literal/TupleLiteral.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_75) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp > CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/TupleLiteral.cpp -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o: ../src/AST/Passes/StaticAnalysis/Enum.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_76) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Enum.cpp
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Enum.cpp > CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/StaticAnalysis/Enum.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o: ../src/AST/Statement/Declaration/Class/EnumDecl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_77) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp > CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumDecl.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o: ../src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_78) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp > CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o: ../src/AST/Expression/Literal/NoneLiteral.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_79) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp > CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/NoneLiteral.cpp -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o: ../src/AST/Passes/CodeGen/CGCast.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_80) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp > CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/CodeGen/CGCast.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o: ../src/AST/Statement/ControlFlow/ForInStmt.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_81) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp > CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/ControlFlow/ForInStmt.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o: ../src/AST/Statement/Declaration/Class/DestrDecl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_82) "Building CXX object CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp > CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Statement/Declaration/Class/DestrDecl.cpp -o CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/Compiler.cpp.o: ../src/Compiler.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_83) "Building CXX object CMakeFiles/CDot.dir/src/Compiler.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Compiler.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/Compiler.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp > CMakeFiles/CDot.dir/src/Compiler.cpp.i
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/Compiler.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Compiler.cpp -o CMakeFiles/CDot.dir/src/Compiler.cpp.s
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/Compiler.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.o.provides: CMakeFiles/CDot.dir/src/Compiler.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Compiler.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/Compiler.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/Compiler.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Compiler.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o: ../src/AST/Passes/Declaration/DeclPass.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_84) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp > CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Declaration/DeclPass.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o: ../src/AST/Expression/Literal/StringInterpolation.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_85) "Building CXX object CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp > CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Expression/Literal/StringInterpolation.cpp -o CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o
+
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.o: ../src/Preprocessor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_86) "Building CXX object CMakeFiles/CDot.dir/src/Preprocessor.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/Preprocessor.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/Preprocessor.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp > CMakeFiles/CDot.dir/src/Preprocessor.cpp.i
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/Preprocessor.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/Preprocessor.cpp -o CMakeFiles/CDot.dir/src/Preprocessor.cpp.s
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.provides: CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.provides.build: CMakeFiles/CDot.dir/src/Preprocessor.cpp.o
+
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o: CMakeFiles/CDot.dir/flags.make
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o: ../src/AST/Passes/Output/HeaderGen.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_87) "Building CXX object CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o -c /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.i"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp > CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.i
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.s"
+	/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/src/AST/Passes/Output/HeaderGen.cpp -o CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.s
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.requires:
+
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.requires
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.provides: CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.requires
+	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.provides.build
+.PHONY : CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.provides
+
+CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.provides.build: CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o
 
 
 # Object files for target CDot
@@ -1873,7 +2161,7 @@ CDot_OBJECTS = \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.o" \
@@ -1888,17 +2176,17 @@ CDot_OBJECTS = \
 "CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Context.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o" \
@@ -1907,24 +2195,22 @@ CDot_OBJECTS = \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o" \
 "CMakeFiles/CDot.dir/src/Message/Warning.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o" \
-"CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o" \
 "CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o" \
@@ -1933,7 +2219,21 @@ CDot_OBJECTS = \
 "CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o" \
 "CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o" \
-"CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o"
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o" \
+"CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o" \
+"CMakeFiles/CDot.dir/src/Compiler.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o" \
+"CMakeFiles/CDot.dir/src/Preprocessor.cpp.o" \
+"CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o"
 
 # External object files for target CDot
 CDot_EXTERNAL_OBJECTS =
@@ -1952,7 +2252,7 @@ CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/IfStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.o
@@ -1967,17 +2267,17 @@ CDot: CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/SubscriptExpr.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Context.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o
@@ -1986,24 +2286,22 @@ CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/LambdaExpr.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Message/Warning.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o
-CDot: CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o
@@ -2012,7 +2310,21 @@ CDot: CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o
 CDot: CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o
-CDot: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o
+CDot: CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o
+CDot: CMakeFiles/CDot.dir/src/Compiler.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o
+CDot: CMakeFiles/CDot.dir/src/Preprocessor.cpp.o
+CDot: CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o
 CDot: CMakeFiles/CDot.dir/build.make
 CDot: /usr/local/Cellar/llvm/4.0.0_1/lib/libLLVMDemangle.a
 CDot: /usr/local/Cellar/llvm/4.0.0_1/lib/libLLVMSupport.a
@@ -2215,7 +2527,7 @@ CDot: /usr/local/Cellar/llvm/4.0.0_1/lib/libLLVMOption.a
 CDot: /usr/local/Cellar/llvm/4.0.0_1/lib/libLLVMSupport.a
 CDot: /usr/local/Cellar/llvm/4.0.0_1/lib/libLLVMDemangle.a
 CDot: CMakeFiles/CDot.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_76) "Linking CXX executable CDot"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_88) "Linking CXX executable CDot"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/CDot.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -2237,7 +2549,7 @@ CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/WhileStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Block/CompoundStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclStmt.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/LiteralExpr.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NumericLiteral.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ReturnStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Operator/BinaryOperator.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Operator/UnaryOperator.cpp.o.requires
@@ -2252,17 +2564,17 @@ CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/RefExpr/Sub
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Arithmetic.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Conversion.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForStmt.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/Visitor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/AbstractPass.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ContinueStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/BreakStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Context.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/CaptureVisitor.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/EvaluatingVisitor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/CaptureVisitor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/EvaluatingVisitor.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ClassDecl.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/ConstrDecl.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/FieldDecl.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/MethodDecl.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/SwitchStmt.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/MatchStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/CaseStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/LabelStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/GotoStmt.cpp.o.requires
@@ -2271,24 +2583,22 @@ CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/Lam
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/NamespaceDecl.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/UsingStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/TypedefDecl.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/TypeCheckVisitor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/TypeCheckPass.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Message/Warning.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/ConstExprVisitor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/ConstExprPass.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/SymbolTable.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Class.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CodeGenVisitor.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGBinaryOperator.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Class.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CodeGen.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGBinaryOperator.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Operator/Conversion/ImplicitCastExpr.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/CodeGen/CGMemory.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/ExtendStmt.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGMemory.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/TypeRef.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Function.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Function.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/DeclareStmt.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/Type.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/PrimitiveType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/PointerType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/FunctionType.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/GenericType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/ObjectType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/IntegerType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/FPType.cpp.o.requires
@@ -2297,7 +2607,21 @@ CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/VoidType.cpp.
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/AutoType.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Operator/Conversion/LvalueToRvalue.cpp.o.requires
 CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Attribute/Attribute.cpp.o.requires
-CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Visitor/StaticAnalysis/Builtin.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Builtin.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Variant/Type/TupleType.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/TupleLiteral.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/StaticAnalysis/Enum.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumDecl.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/NoneLiteral.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/CodeGen/CGCast.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/ControlFlow/ForInStmt.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Statement/Declaration/Class/DestrDecl.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Compiler.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/Declaration/DeclPass.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Expression/Literal/StringInterpolation.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/Preprocessor.cpp.o.requires
+CMakeFiles/CDot.dir/requires: CMakeFiles/CDot.dir/src/AST/Passes/Output/HeaderGen.cpp.o.requires
 
 .PHONY : CMakeFiles/CDot.dir/requires
 

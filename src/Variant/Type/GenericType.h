@@ -8,58 +8,52 @@
 
 #include "ObjectType.h"
 
+#include "../../Token.h"
+#include "Generic.h"
+
 namespace cdot {
 
    class GenericType : public ObjectType {
    protected:
       GenericType(const string& genericClassName, BuiltinType* actualType);
       static unordered_map<string, GenericType*> Instances;
-      static string keyFrom(const string& genericClassName, BuiltinType* actualType);
+      static string keyFrom(const string& genericClassName,
+                            BuiltinType* actualType);
 
-      string genericClassName;
       BuiltinType* actualType;
 
    public:
-      static GenericType* get(const string& genericClassName, BuiltinType* actualType);
+      static GenericType* get(const string& genericClassName,
+                              BuiltinType* actualType);
 
-      string& getGenericClassName()
-      {
-         return genericClassName;
-      }
-
-      bool isGeneric() override
+      bool isGenericTy() const override
       {
          return true;
       }
 
-      BuiltinType* getActualType()
-      {
-         return actualType;
-      }
+      BuiltinType* getActualType() const;
+      BuiltinType* getActualType();
 
-      bool isStruct() override;
-      bool isProtocol() override;
-      bool isEnum() override;
+      bool isStruct() const override;
+      bool isProtocol() const override;
+      bool isEnum() const override;
       bool isRefcounted() const override;
 
       bool isValueType() const override;
       bool needsMemCpy() const override;
-      bool needsStructReturn() override;
+      bool needsStructReturn() const override;
 
-      string& getClassName() override;
       cl::Record * getRecord() const override;
 
-      string toString() override;
-      string toUniqueString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      string toUniqueString() const override;
+      llvm::Type* getLlvmType() const override;
 
-      short getAlignment() override;
-      size_t getSize() override;
+      short getAlignment() const override;
+      size_t getSize() const override;
 
-      bool implicitlyCastableTo(BuiltinType* rhs) override;
-      bool explicitlyCastableTo(BuiltinType* rhs) override;
-
-      ObjectType* asObjTy() override;
+      bool implicitlyCastableTo(BuiltinType* rhs) const override;
+      bool explicitlyCastableTo(BuiltinType* rhs) const override;
 
       static inline bool classof(ObjectType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

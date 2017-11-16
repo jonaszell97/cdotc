@@ -27,33 +27,40 @@ namespace cdot {
          return containedTypes[i].second;
       }
 
-      const std::vector<pair<string, BuiltinType*>>& getContainedTypes()
+      const std::vector<pair<string, BuiltinType*>>& getContainedTypes() const
       {
          return containedTypes;
       }
 
-      BuiltinType* getNamedType(string& name);
+      BuiltinType* getNamedType(string& name) const;
 
-      size_t getArity() {
+      size_t getArity() const
+      {
          return arity;
       }
 
-      bool isTupleTy() override {
+      bool isTupleTy() const override
+      {
          return true;
       }
 
-      short getAlignment() override {
+      short getAlignment() const override
+      {
          return align;
       }
 
-      size_t getSize() override {
+      size_t getSize() const override
+      {
          return size;
       }
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      bool needsMemCpy() const override;
+      bool needsLvalueToRvalueConv() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
+
+      bool implicitlyCastableTo(BuiltinType*) const override;
 
       static inline bool classof(TupleType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

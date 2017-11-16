@@ -17,12 +17,3 @@ std::vector<AstNode::SharedPtr> WhileStmt::get_children() {
    std::vector<AstNode::SharedPtr> children{ body };
    return { condition, body };
 }
-
-void WhileStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "WhileStmt" << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
-}

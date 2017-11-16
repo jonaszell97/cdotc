@@ -9,20 +9,33 @@ AstNode::AstNode() {
 
 }
 
+bool AstNode::hasAttribute(Attr kind) const
+{
+   for (const auto& attr : attributes) {
+      if (attr.kind == kind) {
+         return true;
+      }
+   }
+
+   return false;
+}
+
 void AstNode::replaceUsesWith(Expression *expr)
 {
    assert(parent && "no parent to replace from");
    parent->replaceChildWith(this, expr);
 }
 
-void AstNode::isReturnValue() {
+void AstNode::isReturnValue()
+{
    returned_value = true;
    if (declaration != nullptr) {
       declaration->isReturnValue();
    }
 }
 
-void AstNode::isHiddenReturnValue() {
+void AstNode::isHiddenReturnValue()
+{
    returned_value = true;
    sret_value = true;
    if (declaration != nullptr) {
@@ -32,12 +45,4 @@ void AstNode::isHiddenReturnValue() {
 
 std::vector<AstNode::SharedPtr> AstNode::get_children() {
    return std::vector<AstNode::SharedPtr>();
-}
-
-void AstNode::__tab(int depth) {
-   for (int i = 0; i < depth; i++) {
-      std::cout << "\t";
-   }
-
-   printf("<%p> ", this);
 }

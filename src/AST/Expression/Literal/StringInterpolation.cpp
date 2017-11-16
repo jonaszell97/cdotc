@@ -32,7 +32,3 @@ std::vector<AstNode::SharedPtr> StringInterpolation::get_children() {
 
    return children;
 }
-
-void StringInterpolation::__dump(int depth) {
-
-}

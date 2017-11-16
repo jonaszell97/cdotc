@@ -26,6 +26,7 @@
 
 #include "../../../Message/Exceptions.h"
 #include "../../../Message/Diagnostics.h"
+#include "../../../Lexer.h"
 
 using namespace cdot::diag;
 
@@ -50,8 +51,6 @@ Type SemaPass::HandleCastOp(
    if (lhs->isObject()) {
       auto fromClass = SymbolTable::getClass(lhs->getClassName());
       if (fromClass->isBaseClassOf(rhs->getClassName())) {
-         SymbolTable::getClass(rhs->getClassName())->needsTypeInfoGen(true);
-
          return Type(ObjectType::getOptionOf(*rhs));
       }
    }
@@ -67,11 +66,13 @@ Type SemaPass::HandleAssignmentOp(
 {
    if (!fst->isPointerTy()) {
       if (!snd.implicitlyCastableTo(fst)) {
-         diag::err(err_type_mismatch) << fst << snd << node->lhs.get() << diag::term;
+         diag::err(err_type_mismatch) << fst << snd << node->lhs.get()
+                                      << diag::term;
       }
       else if (fst != snd) {
          if (warnCast(fst, snd)) {
-//         Warning::issue("Implicit cast from " + snd.toString() + " to " + fst.toString(), node);
+//         Warning::issue("Implicit cast from " + snd.toString() + " to "
+// + fst.toString(), node);
          }
 
          wrapImplicitCast(node->rhs, snd, fst);
@@ -91,26 +92,26 @@ Type SemaPass::HandleAssignmentOp(
 
       binOp->lhsType = fst;
       binOp->rhsType = snd;
-      binOp->lhsIsBoxed = node->lhsIsBoxed;
-      binOp->rhsIsBoxed = node->rhsIsBoxed;
+      binOp->lhs_is_boxed = node->lhs_is_boxed;
+      binOp->rhs_is_boxed = node->rhs_is_boxed;
 
       node->preAssignmentOp = binOp;
-      binOp->accept(*this);
+      binOp->accept(this);
    }
    else {
       node->rhs->isAssigned(true);
    }
 
    if (snd->isVoidTy()) {
-      node->isNullAssignment = true;
+      node->is_null_assignment = true;
    }
 
    if (fst->isProtocol()) {
-      node->isProtocolAssignment = true;
+      node->is_protocol_assignment = true;
    }
 
-   node->updateRefCount = fst->isObject() &&
-                          SymbolTable::getClass(fst->getClassName())->isRefcounted();
+   node->update_refcount = fst->isObject() && SymbolTable::getClass(
+      fst->getClassName())->isRefcounted();
 
    node->operandType = *fst;
    return Type(VoidType::get());
@@ -172,8 +173,9 @@ Type SemaPass::HandleArithmeticOp(
    if (op == "**") {
       auto int64Ty = Type(IntegerType::get());
       if (!snd->isIntegerTy()) {
-         diag::err(err_incompatible_binop_types) << 1 /*right*/ << "**" << 0 /*integral*/
-                                                 << node->rhs << diag::term;
+         diag::err(err_incompatible_binop_types)
+            << 1 /*right*/ << "**" << 0 /*integral*/
+            << node->rhs << diag::term;
       }
 
       Type retType = fst->isIntegerTy() ? fst : Type(FPType::getDoubleTy());
@@ -193,7 +195,8 @@ Type SemaPass::HandleArithmeticOp(
    }
 
    err:
-   RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " + fst.toString()
+   RuntimeError::raise("Cannot apply binary operator '" + op
+                       + "' values of type " + fst.toString()
                        + " and " + snd.toString(), node);
    llvm_unreachable("");
 }
@@ -205,7 +208,8 @@ Type SemaPass::HandleBitwiseOp(
 {
    auto& op = node->op;
    if (!fst->isIntegerTy() || !snd->isIntegerTy()) {
-      RuntimeError::raise("Cannot apply binary operator '" + op + "' values of type " +
+      RuntimeError::raise("Cannot apply binary operator '" + op
+                          + "' values of type " +
                           fst.toString() + " and " + snd.toString(), node);
    }
 
@@ -224,7 +228,8 @@ Type SemaPass::HandleLogicalOp(
 {
    auto boolTy = Type(IntegerType::get(1));
    if (!fst.implicitlyCastableTo(boolTy) && !snd.implicitlyCastableTo(boolTy)) {
-      RuntimeError::raise("Cannot apply binary operator '" + node->op + "' to values of type " + fst
+      RuntimeError::raise("Cannot apply binary operator '"
+                          + node->op + "' to values of type " + fst
          .toString() + " and " + snd.toString(), node);
    }
 
@@ -244,28 +249,7 @@ void SemaPass::HandleEnumComp(
    Type& snd,
    BinaryOperator *node)
 {
-//   node->isEnumComp = true;
-//
-//   auto fstHasKnownCase = fst->hasKnownEnumCase();
-//   auto sndHasKnownCase = snd->hasKnownEnumCase();
-//   if (!fstHasKnownCase && !sndHasKnownCase) {
-//      return;
-//   }
-//
-//   auto& associatedValues = fstHasKnownCase ? fst->getAssociatedTypes() : snd->getAssociatedTypes();
-//   node->knownCase = fstHasKnownCase ? fst->getKnownEnumCase() : snd->getKnownEnumCase();
-//   node->caseTypes = fstHasKnownCase ? fst->getKnownEnumCaseTypes() : snd->getKnownEnumCaseTypes();
-//
-//   size_t i = 0;
-//   for (const auto& val : associatedValues) {
-//      if (val.second->isUnderscore()) {
-//         node->caseValues.push_back(nullptr);
-//      }
-//      else {
-//         node->caseValues.push_back(val.second);
-//      }
-//      ++i;
-//   }
+   llvm_unreachable("all enums implicitly conform to Equatable!");
 }
 
 void SemaPass::HandleTupleComp(
@@ -273,13 +257,10 @@ void SemaPass::HandleTupleComp(
    Type& snd,
    BinaryOperator *node)
 {
-   assert(fst->isTupleTy() && snd->isTupleTy() && "Can't compare tuple with non-tuple!");
+   assert(fst->isTupleTy() && snd->isTupleTy()
+          && "Can't compare tuple with non-tuple!");
 
-   auto fstAsTuple = cast<TupleType>(*fst);
-
-   node->isTupleComp = true;
-   node->arity = fstAsTuple->getArity();
-   node->llvmTupleType = fstAsTuple->getLlvmType();
+   node->setOperandType(fst->asTupleTy());
 }
 
 Type SemaPass::HandleEqualityOp(
@@ -289,13 +270,17 @@ Type SemaPass::HandleEqualityOp(
 {
    // pointer comparison operators
    if (node->op.length() == 3) {
-      if ((fst->isPointerTy() + snd->isPointerTy() + fst->isRefcounted() + snd->isRefcounted()) == 0) {
-         RuntimeError::raise("Expected at least one operand of " + node->op + " to be a pointer", node);
+      if ((fst->isPointerTy() + snd->isPointerTy()
+           + fst->isRefcounted() + snd->isRefcounted()) == 0) {
+         RuntimeError::raise("Expected at least one operand of " + node->op
+                             + " to be a pointer", node);
       }
 
       auto wordTy = Type(IntegerType::get());
-      if (!fst.implicitlyCastableTo(wordTy) || !fst.implicitlyCastableTo(wordTy)) {
-         RuntimeError::raise("Binary operator " + node->op + " is not applicable to types " +
+      if (!fst.implicitlyCastableTo(wordTy)
+          || !fst.implicitlyCastableTo(wordTy)) {
+         RuntimeError::raise("Binary operator " + node->op
+                             + " is not applicable to types " +
                              fst.toString() + " and " + snd.toString(), node);
       }
 
@@ -311,7 +296,8 @@ Type SemaPass::HandleEqualityOp(
       return Type(IntegerType::getBoolTy());
    }
 
-   if ((!fst->isNumeric() && !fst->isEnum()) && !fst->isTupleTy() && !fst->isPointerTy()) {
+   if ((!fst->isNumeric() && !fst->isEnum()) && !fst->isTupleTy()
+       && !fst->isPointerTy()) {
       RuntimeError::raise("Cannot compare values of type " + fst
          .toString() + " and " + snd.toString() + " for equality", node);
    }
@@ -352,8 +338,9 @@ Type SemaPass::HandleComparisonOp(
    }
 
    if (!fst->isNumeric() || !snd->isNumeric()) {
-      RuntimeError::raise("Cannot apply binary operator '" + node->op + "' to values of type " + fst
-         .toString() + " and " + snd.toString(), node);
+      RuntimeError::raise("Cannot apply binary operator '"
+                          + node->op + "' to values of type " + fst.toString()
+                          + " and " + snd.toString(), node);
    }
 
    if (snd != fst) {
@@ -362,7 +349,7 @@ Type SemaPass::HandleComparisonOp(
 
    node->operandType = *fst;
 
-   if (node->boxedPrimitiveOp) {
+   if (node->boxed_primitive_op) {
       return Type(ObjectType::get("Bool"));
    }
 
@@ -374,7 +361,8 @@ Type SemaPass::HandleOtherOp(
    Type& snd,
    BinaryOperator *node)
 {
-   RuntimeError::raise("Binary operator " + node->op + " is not defined for arguments of type " +
+   RuntimeError::raise("Binary operator " + node->op
+                       + " is not defined for arguments of type " +
                        fst.toString() + " and " + snd.toString(), node);
    llvm_unreachable(0);
 }
@@ -385,9 +373,10 @@ Type SemaPass::HandleBinaryOperator(
    BinaryOperatorType opTy,
    BinaryOperator *node)
 {
-   if (opTy != BinaryOperatorType::CAST && opTy != BinaryOperatorType::ASSIGNMENT) {
+   if (opTy != BinaryOperatorType::CAST
+       && opTy != BinaryOperatorType::ASSIGNMENT) {
       if (lhs->isEnum()) {
-         auto en = static_cast<cl::Enum *>(SymbolTable::getClass(lhs->getClassName()));
+         auto en = SymbolTable::getClass(lhs->getClassName())->getAs<Enum>();
          if (en->isRawEnum()) {
             auto rawTy = Type(en->getRawType());
             wrapImplicitCast(node->lhs, lhs, rawTy);
@@ -395,7 +384,7 @@ Type SemaPass::HandleBinaryOperator(
          }
       }
       if (rhs->isEnum()) {
-         auto en = static_cast<cl::Enum *>(SymbolTable::getClass(rhs->getClassName()));
+         auto en = SymbolTable::getClass(rhs->getClassName())->getAs<Enum>();
          if (en->isRawEnum()) {
             auto rawTy = Type(en->getRawType());
             wrapImplicitCast(node->rhs, rhs, rawTy);
@@ -436,16 +425,20 @@ Type SemaPass::tryBinaryOperatorMethod(
       args.pop_back();
    }
 
-   cdot::cl::Class* cl = SymbolTable::getClass(fst->getClassName(), importedNamespaces);
-   auto binOpResult = cl->hasMethod(opName, args, {}, *fst);
+   cl::Class* cl = SymbolTable::getClass(fst->getClassName(),
+                                         importedNamespaces);
+   auto binOpResult = getMethod(cl, opName, args);
    if (binOpResult.compatibility == CompatibilityType::COMPATIBLE) {
       if (wasLvalue) {
          lvalueToRvalue(node->lhs);
       }
 
       pushTy(fst);
-      auto call = std::make_shared<CallExpr>(CallType::METHOD_CALL,
-                                             std::vector<Expression::SharedPtr>{ node->rhs }, opName);
+      auto call = std::make_shared<CallExpr>(
+         CallType::METHOD_CALL,
+         std::vector<Expression::SharedPtr>{ node->rhs },
+         std::move(opName)
+      );
 
       if (node->opType == BinaryOperatorType::CAST) {
          call->args.pop_back();
@@ -462,7 +455,7 @@ Type SemaPass::tryBinaryOperatorMethod(
       node->overridenCall = call;
       node->operandType = *fst;
 
-      auto res = call->accept(*this);
+      auto res = getResult(call);
       node->isTemporary(call->isTemporary());
       node->setTempType(call->getTempType());
 
@@ -488,9 +481,11 @@ Type SemaPass::tryFreeStandingBinaryOp(
       }
 
       pushTy(fst);
-      auto call = std::make_shared<CallExpr>(CallType::FUNC_CALL,
-                                             std::vector<Expression::SharedPtr>{ node->lhs, node->rhs },
-                                             freeOp.func->getName());
+      auto call = std::make_shared<CallExpr>(
+         CallType::FUNC_CALL,
+         std::vector<Expression::SharedPtr>{ node->lhs, node->rhs },
+         string(freeOp.func->getName())
+      );
 
       // we already resolved the argument, don't want to visit it again
       call->resolvedArgs = args;
@@ -501,7 +496,7 @@ Type SemaPass::tryFreeStandingBinaryOp(
       node->overridenCall = call;
       node->operandType = *fst;
 
-      return call->accept(*this);;
+      return getResult(call);
    }
 
    return {};
@@ -512,9 +507,11 @@ Type SemaPass::tryFreeStandingBinaryOp(
  * @param node
  * @return
  */
-Type SemaPass::visit(BinaryOperator *node)
+void SemaPass::visit(BinaryOperator *node)
 {
-   node->lhs->addUse();
+   auto &lhsNode = node->getLhs();
+
+   lhsNode->addUse();
    node->rhs->addUse();
 
    //NONBINARY
@@ -523,112 +520,119 @@ Type SemaPass::visit(BinaryOperator *node)
 
    auto isAssignment = opType == BinaryOperatorType::ASSIGNMENT;
    if (isAssignment) {
-      node->lhs->isLhsOfAssigment();
+      lhsNode->isLhsOfAssigment();
    }
 
-   node->lhs->setContextualType(node->contextualType);
+   lhsNode->setContextualType(node->contextualType);
 
    bool isPreAssignmentOp = !node->lhsType->isAutoTy();
-   Type fst = isPreAssignmentOp ? node->lhsType
-                                : node->lhs->accept(*this);
+   Type lhs = isPreAssignmentOp ? node->lhsType
+                                : getResult(lhsNode);
 
-   if (node->lhs->setter_call) {
-      auto call = std::make_shared<CallExpr>(
-         CallType::METHOD_CALL,
-         std::vector<Expression::SharedPtr>{ node->rhs },
-         node->lhs->setterName
-      );
+   if (setterMethod) {
+      node->isSetterCall(true);
+      node->setMethod(setterMethod);
+      setterMethod = nullptr;
 
-      node->overridenCall = call;
-      node->operandType = *fst;
+      node->getRhs()->setContextualType(lhs);
+      Type rhs = getResult(node->getRhs());
 
-      CopyNodeProperties(node, call.get());
-      call->setMemberExpr(node->memberExpr);
-      call->setParent(node->parent);
+      if (!rhs.implicitlyCastableTo(lhs)) {
+         diag::err(err_type_mismatch) << lhs << rhs << node << diag::term;
+      }
 
-      pushTy(fst);
-      return call->accept(*this);
+      wrapImplicitCast(node->getRhs(), rhs, lhs);
+
+      return;
    }
 
-   // checked if this is an assignment operator method, so the lhs will be lvalue to rvalue converted
-   bool wasLvalue = fst.needsLvalueToRvalueConv() && isAssignment;
+   // checked if this is an assignment operator method, so the lhs will
+   // be lvalue to rvalue converted
+   bool wasLvalue = lhs.needsLvalueToRvalueConv() && isAssignment;
 
    if (isAssignment) {
-      if (fst.isConst()) {
+      if (lhs.isConst()) {
          RuntimeError::raise("Trying to reassign constant", node->lhs.get());
       }
-      else if (!fst.isLvalue()) {
-         if (fst.isSelf()) {
-            RuntimeError::raise("Cannot assign to 'self' in non-mutating function", node->lhs.get());
+      else if (!lhs.isLvalue()) {
+         if (lhs.isSelf()) {
+            RuntimeError::raise("Cannot assign to 'self' in non-mutating "
+                                   "function", node->lhs.get());
          }
 
-         RuntimeError::raise("Cannot assign to rvalue of type " + fst.toString(), node->lhs.get());
+         RuntimeError::raise("Cannot assign to rvalue of type "
+                             + lhs.toString(), node->lhs.get());
       }
 
       // now that we know it's an lvalue, use the pointee type for compatibilty checks
-      fst.isLvalue(false);
-      node->isStructAssignment = fst->isStruct();
-      node->isSelfAssignment = fst.isSelf();
+      lhs.isLvalue(false);
+      node->needsMemCpy(lhs->needsMemCpy());
+      node->isSelfAssignment(lhs.isSelf());
    }
    else {
-      toRvalueIfNecessary(fst, node->lhs, node->op != "===");
+      toRvalueIfNecessary(lhs, node->lhs, node->op != "===");
    }
 
-   if (fst->isBoxedPrimitive()) {
-      node->rhs->setContextualType(Type(fst->unbox()));
+   if (lhs->isBoxedPrimitive()) {
+      node->rhs->setContextualType(Type(lhs->unbox()));
    }
    else {
-      node->rhs->setContextualType(fst);
+      node->rhs->setContextualType(lhs);
    }
 
-   Type snd = isPreAssignmentOp ? node->rhsType
-                                : node->rhs->accept(*this);
+   Type rhs = isPreAssignmentOp ? node->rhsType
+                                : getResult(node->rhs);
 
-   if (opType == BinaryOperatorType::CAST && node->rhs->get_type() == NodeType::TYPE_REF) {
+   if (opType == BinaryOperatorType::CAST
+       && node->rhs->get_type() == NodeType::TYPE_REF) {
       auto typeref = std::static_pointer_cast<TypeRef>(node->rhs);
       if (typeref->getType()->isBoxedPrimitive()) {
          node->boxedResultType = typeref->getType()->getClassName();
       }
    }
 
-   if (!isPreAssignmentOp && (opType == BinaryOperatorType::ARITHMETIC || opType == BinaryOperatorType::EQUALITY ||
-                              opType == BinaryOperatorType::COMPARISON || opType == BinaryOperatorType::CAST ||
-                              opType == BinaryOperatorType::BITWISE || opType == BinaryOperatorType::LOGICAL))
+   if (!isPreAssignmentOp && (opType == BinaryOperatorType::ARITHMETIC
+                              || opType == BinaryOperatorType::EQUALITY
+                              || opType == BinaryOperatorType::COMPARISON
+                              || opType == BinaryOperatorType::CAST
+                              || opType == BinaryOperatorType::BITWISE
+                              || opType == BinaryOperatorType::LOGICAL))
    {
-      node->lhsIsBoxed = fst->isBoxedPrimitive();
-      node->rhsIsBoxed = snd->isBoxedPrimitive();
+      node->lhs_is_boxed = lhs->isBoxedPrimitive();
+      node->rhs_is_boxed = rhs->isBoxedPrimitive();
 
-      if (node->lhsIsBoxed && (node->rhsIsBoxed || snd->isNumeric())) {
-         auto unboxed = Type(fst->unbox());
-         node->boxedPrimitiveOp = true;
-         wrapImplicitCast(node->lhs, fst, unboxed);
-         fst = unboxed;
+      if (node->lhs_is_boxed && (node->rhs_is_boxed || rhs->isNumeric())) {
+         auto unboxed = Type(lhs->unbox());
+         node->boxed_primitive_op = true;
+         wrapImplicitCast(node->lhs, lhs, unboxed);
+         lhs = unboxed;
       }
-      if (node->rhsIsBoxed && (node->lhsIsBoxed || fst->isNumeric())) {
-         auto unboxed = Type(snd->unbox());
-         node->boxedPrimitiveOp = true;
+      if (node->rhs_is_boxed && (node->lhs_is_boxed || lhs->isNumeric())) {
+         auto unboxed = Type(rhs->unbox());
+         node->boxed_primitive_op = true;
 
          if (opType != BinaryOperatorType::CAST) {
-            wrapImplicitCast(node->rhs, snd, unboxed);
+            wrapImplicitCast(node->rhs, rhs, unboxed);
          }
 
-         snd = unboxed;
+         rhs = unboxed;
       }
    }
 
-   string opName = opType == BinaryOperatorType::CAST ? "infix as " + snd.toString()
-                                                      : "infix " + node->op;
+   string opName = opType == BinaryOperatorType::CAST
+                   ? "infix as " + rhs.toString()
+                   : "infix " + node->op;
 
-   if (fst->isObject() && SymbolTable::hasClass(fst->getClassName())) {
-      auto methodRes = tryBinaryOperatorMethod(fst, snd, node, opName, wasLvalue);
+   if (lhs->isObject() && SymbolTable::hasClass(lhs->getClassName())) {
+      auto methodRes = tryBinaryOperatorMethod(lhs, rhs, node, opName, wasLvalue);
       if (!methodRes->isAutoTy()) {
-         return methodRes;
+         return returnResult(methodRes);
       }
    }
 
-   auto freeOpRes = tryFreeStandingBinaryOp(fst, snd, node, opName, wasLvalue);
+   auto freeOpRes = tryFreeStandingBinaryOp(lhs, rhs, node, opName, wasLvalue);
    if (!freeOpRes->isAutoTy()) {
-      return freeOpRes;
+      return returnResult(freeOpRes);
    }
 
    if (util::is_reversible(node->op) && node->lhs->needsContextualInformation()
@@ -638,17 +642,18 @@ Type SemaPass::visit(BinaryOperator *node)
       node->lhs = node->rhs;
       node->rhs = _lhsNode;
 
-      auto _lhsType = fst;
-      fst = snd;
-      snd = _lhsType;
+      auto _lhsType = lhs;
+      lhs = rhs;
+      rhs = _lhsType;
    }
 
-   toRvalueIfNecessary(snd, node->rhs, node->op != "===");
+   toRvalueIfNecessary(rhs, node->rhs, node->op != "===");
 
-   auto res = HandleBinaryOperator(fst, snd, opType, node);
-   if (!isPreAssignmentOp && node->boxedPrimitiveOp) {
+   auto res = HandleBinaryOperator(lhs, rhs, opType, node);
+   if (!isPreAssignmentOp && node->boxed_primitive_op) {
       string className;
-      if (opType == BinaryOperatorType::ARITHMETIC || opType == BinaryOperatorType::BITWISE) {
+      if (opType == BinaryOperatorType::ARITHMETIC
+          || opType == BinaryOperatorType::BITWISE) {
          if (res->isFloatTy()) {
             className = "Float";
          }
@@ -667,8 +672,9 @@ Type SemaPass::visit(BinaryOperator *node)
             className += std::to_string(bitwidth);
          }
       }
-      else if (opType == BinaryOperatorType::COMPARISON || opType == BinaryOperatorType::EQUALITY ||
-               opType == BinaryOperatorType::LOGICAL)
+      else if (opType == BinaryOperatorType::COMPARISON
+               || opType == BinaryOperatorType::EQUALITY
+               || opType == BinaryOperatorType::LOGICAL)
       {
          className = "Bool";
       }
@@ -690,9 +696,9 @@ Type SemaPass::visit(BinaryOperator *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(TertiaryOperator *node)
+void SemaPass::visit(TertiaryOperator *node)
 {
-   Type cond = node->condition->accept(*this);
+   Type cond = getResult(node->condition);
    node->condition->addUse();
 
    Type boolTy = Type(IntegerType::getBoolTy());
@@ -700,7 +706,8 @@ Type SemaPass::visit(TertiaryOperator *node)
       wrapImplicitCast(node->condition, cond, boolTy);
    }
    else if (!cond.implicitlyCastableTo(boolTy)) {
-      RuntimeError::raise("Condition of tertiary operator '?:' must be boolean or implicitly castable"
+      RuntimeError::raise("Condition of tertiary operator "
+                             "'?:' must be boolean or implicitly castable"
                              " to bool", node);
    }
 
@@ -711,26 +718,27 @@ Type SemaPass::visit(TertiaryOperator *node)
       node->rhs->setContextualType(node->contextualType);
    }
 
-   Type fst = node->lhs->accept(*this);
-   Type snd = node->rhs->accept(*this);
+   Type fst = getResult(node->lhs);
+   Type snd = getResult(node->rhs);
 
    node->lhs->addUse();
    node->rhs->addUse();
 
    if (!fst.implicitlyCastableTo(snd)) {
-      RuntimeError::raise("Cannot apply tertiary operator '?:' to values of type " + fst.toString() +
+      RuntimeError::raise("Cannot apply tertiary operator '?:' to "
+                             "values of type " + fst.toString() +
                           " and " + snd.toString(), node);
    }
    else if (fst != snd) {
       if (warnCast(fst, snd)) {
-//         Warning::issue("Implicit cast from " + snd.toString() + " to " + fst.toString(), node->rhs.get());
+
       }
 
       wrapImplicitCast(node->rhs, snd, fst);
    }
 
    node->resultType = *fst;
-   return fst;
+   return returnResult(fst);
 }
 
 Type SemaPass::tryFreeStandingUnaryOp(
@@ -744,8 +752,10 @@ Type SemaPass::tryFreeStandingUnaryOp(
    auto freeOp = getFunction(methodName, args);
    if (freeOp.compatibility == CompatibilityType::COMPATIBLE) {
       pushTy(lhs);
-      auto call = std::make_shared<CallExpr>(CallType::FUNC_CALL,
-                                             std::vector<Expression::SharedPtr>{ node->target }, freeOp.func->getName()
+      auto call = std::make_shared<CallExpr>(
+         CallType::FUNC_CALL,
+         std::vector<Expression::SharedPtr>{ node->target },
+         string(freeOp.func->getName())
       );
 
       // we already resolved the argument, don't want to visit it again
@@ -757,7 +767,7 @@ Type SemaPass::tryFreeStandingUnaryOp(
       node->overridenCall = call;
       node->operandType = *lhs;
 
-      return call->accept(*this);;
+      return getResult(call);
    }
 
    return {};
@@ -768,26 +778,30 @@ Type SemaPass::tryFreeStandingUnaryOp(
  * @param node
  * @return
  */
-Type SemaPass::visit(UnaryOperator *node)
+void SemaPass::visit(UnaryOperator *node)
 {
    string& op = node->op;
-   Type target = node->target->accept(*this);
+   Type target = getResult(node->target);
    node->target->addUse();
 
    auto freeStanding = tryFreeStandingUnaryOp(target, node, op);
    if (!freeStanding->isAutoTy()) {
-      return freeStanding;
+      return returnResult(freeStanding);
    }
 
    if (target->isObject()) {
       auto& className = target->getClassName();
 
-      auto class_decl = SymbolTable::getClass(className, importedNamespaces);
-      auto unOpResult = class_decl->hasMethod((node->prefix ? "prefix " : "postfix ") + op, {}, {}, *target);
+      auto cl = SymbolTable::getClass(className, importedNamespaces);
+      auto unOpResult = getMethod(cl,
+                                  (node->prefix ? "prefix " : "postfix ") + op);
 
       if (unOpResult.compatibility == CompatibilityType::COMPATIBLE) {
-         auto call = std::make_shared<CallExpr>(CallType::METHOD_CALL, std::vector<Expression::SharedPtr>{},
-                                                (node->prefix ? "prefix " : "postfix ") + op);
+         auto call = std::make_shared<CallExpr>(
+            CallType::METHOD_CALL,
+            std::vector<Expression::SharedPtr>{},
+            (node->prefix ? "prefix " : "postfix ") + op
+         );
 
          node->overridenCall = call;
          node->operandType = *target;
@@ -796,23 +810,26 @@ Type SemaPass::visit(UnaryOperator *node)
          toRvalueIfNecessary(target, node->target);
          pushTy(target);
 
-         return call->accept(*this);
+         return call->accept(this);
       }
    }
 
    if (op == "++" || op == "--") {
       if (!target.isLvalue()) {
-         RuntimeError::raise("Unary operator " + op + " cannot be applied to rvalue of "
+         RuntimeError::raise("Unary operator " + op
+                             + " cannot be applied to rvalue of "
             "type " + target.toString(), node->target.get());
       }
       if (target.isConst()) {
-         RuntimeError::raise("Unary operator " + op + " cannot be applied to 'let' constant", node->target.get());
+         RuntimeError::raise("Unary operator " + op + " cannot be applied to "
+            "'let' constant", node->target.get());
       }
       if (target->isPointerTy()) {
          node->isPointerArithmetic = true;
       }
       else if (!target->isNumeric()) {
-         RuntimeError::raise("Unary operator " + op + " is not applicable to type " + target.toString(),
+         RuntimeError::raise("Unary operator " + op + " is not applicable to "
+                                "type " + target.toString(),
                              node->target.get());
       }
 
@@ -827,7 +844,8 @@ Type SemaPass::visit(UnaryOperator *node)
 
       toRvalueIfNecessary(target, node->target, !node->lhs_of_assignment);
       if (!target->isPointerTy()) {
-         RuntimeError::raise("Cannot dereference non-pointer type", node->target.get());
+         RuntimeError::raise("Cannot dereference non-pointer type",
+                             node->target.get());
       }
 
       node->needsDereferenceLoad = (wasLvalue || !node->lhs_of_assignment)
@@ -845,7 +863,8 @@ Type SemaPass::visit(UnaryOperator *node)
 
    if (op == "&") {
       if (!target.isLvalue()) {
-         RuntimeError::raise("Cannot apply unary operator '&' to non-reference value", node->target.get());
+         RuntimeError::raise("Cannot apply unary operator '&' to non-reference "
+                                "value", node->target.get());
       }
 
       target.isLvalue(false);
@@ -861,18 +880,22 @@ Type SemaPass::visit(UnaryOperator *node)
 
    if (op == "+" || op == "-") {
       if (!target->isNumeric()) {
-         RuntimeError::raise("Unary operator " + op + " is not applicable to type " + target.toString(),
-                             node->target.get());
+         RuntimeError::raise("Unary operator " + op
+                             + " is not applicable to type "
+                             + target.toString(), node->target.get());
       }
       if (op == "-" && target->isUnsigned()) {
-         RuntimeError::raise("Unary operator '-' cannot be applied to unsigned integer", node->target.get());
+         RuntimeError::raise("Unary operator '-' "
+                                "cannot be applied to unsigned integer",
+                             node->target.get());
       }
 
       result = target;
    }
    else if (op == "~") {
       if (!target->isIntegerTy()) {
-         RuntimeError::raise("Unary operator '~' is only applicable to type Int", node->target.get());
+         RuntimeError::raise("Unary operator '~' is only applicable to "
+                                "type Int", node->target.get());
       }
 
       result = target;
@@ -880,8 +903,8 @@ Type SemaPass::visit(UnaryOperator *node)
    else if (op == "!") {
       auto boolTy = Type(IntegerType::get(1));
       if (!target.implicitlyCastableTo(boolTy)) {
-         RuntimeError::raise("Unary operator '!' is not applicable to type " + target
-            .toString(), node->target.get());
+         RuntimeError::raise("Unary operator '!' is not applicable to type "
+                             + target.toString(), node->target.get());
       }
 
       if (target != boolTy) {
@@ -893,8 +916,9 @@ Type SemaPass::visit(UnaryOperator *node)
       result = boolTy;
    }
    else {
-      RuntimeError::raise("Unary operator " + node->op + " is not defined on class " +
-                          target.toString(), node);
+      RuntimeError::raise("Unary operator " + node->op
+                          + " is not defined on class " + target.toString(),
+                          node);
    }
 
    return ReturnMemberExpr(node, result);

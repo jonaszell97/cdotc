@@ -19,67 +19,55 @@ namespace cdot {
 
 class MethodDecl : public CallableDecl {
 public:
-   MethodDecl(std::string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, std::shared_ptr<CompoundStmt>,
-         AccessModifier = AccessModifier::PUBLIC, bool = false);
-   MethodDecl(std::string, std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, AccessModifier =
-      AccessModifier::PUBLIC, bool = false);
-   MethodDecl(string, string, std::vector<std::shared_ptr<FuncArgDecl>>);
+   MethodDecl(
+      string &&methodName,
+      std::shared_ptr<TypeRef> &&returnType,
+      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+      std::shared_ptr<CompoundStmt> &&body,
+      AccessModifier,
+      bool = false
+   );
 
-   void isMutating(bool mut) {
+   MethodDecl(
+      string &&methodName,
+      std::shared_ptr<TypeRef> &&returnType,
+      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+      AccessModifier,
+      bool = false
+   );
+
+   MethodDecl(
+      string &&methodName,
+      string &&aliasedMethod,
+      std::vector<std::shared_ptr<FuncArgDecl>> &&args
+   );
+
+   void isMutating(bool mut)
+   {
       isMutating_ = mut;
    }
 
-   void isCastOp(bool castop) {
+   void isCastOp(bool castop)
+   {
       isCastOp_ = castop;
-   }
-
-   bool hasDefinition() {
-      return hasDefinition_;
-   }
-
-   void setGenerics(std::vector<GenericConstraint> gen) {
-      generics = gen;
    }
 
    typedef std::shared_ptr<MethodDecl> SharedPtr;
    typedef std::unique_ptr<MethodDecl> UniquePtr;
 
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int depth) override;
 
    NodeType get_type() override {
       return NodeType::METHOD_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
    bool isStatic;
    bool isAbstract;
    bool isAlias = false;
-   AccessModifier am;
-   string methodName;
-   std::shared_ptr<TypeRef> returnType;
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
-   std::shared_ptr<CompoundStmt> body;
-
-   std::vector<GenericConstraint> generics;
 
    string alias;
    bool isMutating_ = false;
@@ -87,14 +75,25 @@ protected:
 
    bool hasDefinition_ = false;
 
+   bool is_protocol_method = false;
+
    // codegen
-   std::string class_name;
-   std::string selfBinding;
+   cl::Record *record;
    cdot::cl::Method* method;
 
    bool isUsed = false;
 
 public:
+   bool isProtocolMethod() const
+   {
+      return is_protocol_method;
+   }
+
+   void isProtocolMethod(bool proto)
+   {
+      is_protocol_method = proto;
+   }
+
    bool isIsStatic() const {
       return isStatic;
    }
@@ -117,50 +116,6 @@ public:
 
    void setIsAlias(bool isAlias) {
       MethodDecl::isAlias = isAlias;
-   }
-
-   AccessModifier getAm() const {
-      return am;
-   }
-
-   void setAm(AccessModifier am) {
-      MethodDecl::am = am;
-   }
-
-   const string &getMethodName() const {
-      return methodName;
-   }
-
-   void setMethodName(const string &methodName) {
-      MethodDecl::methodName = methodName;
-   }
-
-   const std::shared_ptr<TypeRef> &getReturnType() const {
-      return returnType;
-   }
-
-   void setReturnType(const std::shared_ptr<TypeRef> &returnType) {
-      MethodDecl::returnType = returnType;
-   }
-
-   const std::vector<std::shared_ptr<FuncArgDecl>> &getArgs() const {
-      return args;
-   }
-
-   void setArgs(const vector<std::shared_ptr<FuncArgDecl>> &args) {
-      MethodDecl::args = args;
-   }
-
-   const std::shared_ptr<CompoundStmt> &getBody() const {
-      return body;
-   }
-
-   void setBody(const std::shared_ptr<CompoundStmt> &body) {
-      MethodDecl::body = body;
-   }
-
-   const std::vector<GenericConstraint> &getGenerics() const {
-      return generics;
    }
 
    const string &getAlias() const {
@@ -195,27 +150,14 @@ public:
       MethodDecl::hasDefinition_ = hasDefinition_;
    }
 
-   const string &getClass_name() const {
-      return class_name;
-   }
+   cl::Record *getRecord() const;
+   void setRecord(cl::Record *record);
 
-   void setClass_name(const string &class_name) {
-      MethodDecl::class_name = class_name;
-   }
-
-   const string &getSelfBinding() const {
-      return selfBinding;
-   }
-
-   void setSelfBinding(const string &selfBinding) {
-      MethodDecl::selfBinding = selfBinding;
-   }
-
-   Method *getMethod() const {
+   cl::Method *getMethod() const {
       return method;
    }
 
-   void setMethod(Method *method) {
+   void setMethod(cl::Method *method) {
       MethodDecl::method = method;
    }
 

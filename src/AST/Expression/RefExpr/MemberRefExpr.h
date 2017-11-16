@@ -11,63 +11,79 @@ class CallExpr;
 
 class MemberRefExpr : public Expression {
 public:
-   explicit MemberRefExpr(string, bool pointerAccess = false);
+   explicit MemberRefExpr(string &&, bool pointerAccess = false);
    explicit MemberRefExpr(size_t, bool pointerAccess = false);
 
    typedef std::shared_ptr<MemberRefExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
 
-   void __dump(int) override;
-
    NodeType get_type() override {
       return NodeType::MEMBER_EXPR;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
    void replaceChildWith(AstNode *child, Expression *replacement) override;
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
+   TemplateArgList *templateArgs;
+
    // codegen
    string className;
    Type fieldType;
-   bool isStatic = false;
+   bool is_static = false;
 
-   bool isTupleAccess = false;
+   BuiltinType *metaType = nullptr;
+
+   bool is_tuple_access = false;
    size_t tupleIndex;
 
    std::shared_ptr<CallExpr> getterOrSetterCall = nullptr;
 
-   bool isNsMember = false;
-   bool isEnumRawValue = false;
+   bool is_ns_member = false;
+   bool is_enum_raw_value = false;
 
-   bool isPointerAccess = false;
-   bool unionAccess = false;
-
-   BuiltinType* genericOriginTy = nullptr;
-   BuiltinType* genericDestTy = nullptr;
-   bool needsGenericCast = false;
+   bool is_pointer_access = false;
+   bool is_union_access = false;
 
 public:
+   bool isStatic() const;
+   void setIsStatic(bool is_static);
+
+   bool isTupleAccess() const;
+   void setIsTupleAccess(bool is_tuple_access);
+
+   const std::shared_ptr<CallExpr> &getGetterOrSetterCall() const;
+   void setGetterOrSetterCall(
+      const std::shared_ptr<CallExpr> &getterOrSetterCall);
+
+   bool isNsMember() const;
+   void setIsNsMember(bool is_ns_member);
+
+   BuiltinType *getMetaType() const;
+   void setMetaType(BuiltinType *metaType);
+
+   bool isEnumRawValue() const;
+   void setIsEnumRawValue(bool is_enum_raw_value);
+
+   bool isPointerAccess() const;
+   void setIsPointerAccess(bool is_pointer_access);
+
    bool isUnionAccess() const;
+   void setIsUnionAccess(bool is_union_access);
 
-   void setUnionAccess(bool unionAccess);
+   const string &getClassName() const;
+   void setClassName(const string &className);
 
+   const Type &getFieldType() const;
+   void setFieldType(const Type &fieldType);
+
+   size_t getTupleIndex() const;
+   void setTupleIndex(size_t tupleIndex);
+
+   TemplateArgList *&getTemplateArgs();
+   void setTemplateArgs(TemplateArgList *templateArgs);
 };
 
 

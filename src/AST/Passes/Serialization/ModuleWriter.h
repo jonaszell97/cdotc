@@ -22,7 +22,7 @@ class BuiltinType;
 struct Type;
 struct Argument;
 struct Attribute;
-struct GenericConstraint;
+struct TemplateConstraint;
 struct Variant;
 
 namespace serial {
@@ -53,7 +53,7 @@ protected:
    void writeArg(const Argument &arg);
    void writeVariant(const Variant &var);
    void writeAttribute(const Attribute &attr);
-   void writeGeneric(const GenericConstraint &gen);
+   void writeGeneric(const TemplateConstraint &gen);
 
    std::stack<unsigned char> Packs;
    std::stack<unsigned short> WrittenBitStack;
@@ -106,7 +106,7 @@ protected:
    void visit(ContinueStmt *node) override;
 
    void visit(CollectionLiteral *node) override;
-   void visit(NumericLiteral *node) override;
+   void visit(IntegerLiteral *node) override;
    void visit(NoneLiteral *node) override;
    void visit(StringLiteral *node) override;
    void visit(StringInterpolation *node) override;

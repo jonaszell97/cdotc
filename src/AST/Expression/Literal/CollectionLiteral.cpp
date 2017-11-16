@@ -5,19 +5,21 @@
 #include "CollectionLiteral.h"
 #include "../TypeRef.h"
 
-CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> keys,
-   std::vector<Expression::SharedPtr> values) :
-   keys(keys), values(values), isDictionary(true)
+CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> &&keys,
+   std::vector<Expression::SharedPtr> &&values) :
+   keys(keys), values(values), is_dictionary(true)
 {
-   string name = "Dictionary";
-   type = std::make_shared<TypeRef>(name, std::vector<pair<string, TypeRef::SharedPtr>>());
+   type = std::make_shared<TypeRef>(
+      TypeRef::NamespaceVec{ { "Dictionary", {} } }
+   );
 }
 
-CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> values) :
+CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> &&values) :
    values(values)
 {
-   string name = "Array";
-   type = std::make_shared<TypeRef>(name, std::vector<pair<string, TypeRef::SharedPtr>>());
+   type = std::make_shared<TypeRef>(
+      TypeRef::NamespaceVec{ { "Array", {} } }
+   );
 }
 
 void CollectionLiteral::replaceChildWith(
@@ -40,20 +42,6 @@ void CollectionLiteral::replaceChildWith(
    llvm_unreachable("child does not exist!");
 }
 
-void CollectionLiteral::addElement(Expression::SharedPtr value) {
-   values.push_back(value);
-   children.push_back(&values.back());
-}
-
-void CollectionLiteral::addElement(Expression::SharedPtr key, Expression::SharedPtr value) {
-   values.push_back(value);
-   keys.push_back(key);
-   children.push_back(&values.back());
-   children.push_back(&keys.back());
-
-   isDictionary = true;
-}
-
 std::vector<AstNode::SharedPtr> CollectionLiteral::get_children() {
    std::vector<AstNode::SharedPtr> res;
 
@@ -68,11 +56,53 @@ std::vector<AstNode::SharedPtr> CollectionLiteral::get_children() {
    return res;
 }
 
-void CollectionLiteral::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "CollectionLiteral [" << type->toString() << "]" << std::endl;
+const std::vector<Expression::SharedPtr> &CollectionLiteral::getKeys() const
+{
+   return keys;
+}
 
-   for (auto c : values) {
-      c->__dump(depth + 1);
-   }
+void CollectionLiteral::setKeys(const std::vector<Expression::SharedPtr> &keys)
+{
+   CollectionLiteral::keys = keys;
+}
+
+const std::vector<Expression::SharedPtr> &CollectionLiteral::getValues() const
+{
+   return values;
+}
+
+void
+CollectionLiteral::setValues(const std::vector<Expression::SharedPtr> &values)
+{
+   CollectionLiteral::values = values;
+}
+
+const std::shared_ptr<TypeRef> &CollectionLiteral::getType() const
+{
+   return type;
+}
+
+void CollectionLiteral::setType(const std::shared_ptr<TypeRef> &type)
+{
+   CollectionLiteral::type = type;
+}
+
+bool CollectionLiteral::isDictionary() const
+{
+   return is_dictionary;
+}
+
+void CollectionLiteral::isDictionary(bool is_dictionary)
+{
+   CollectionLiteral::is_dictionary = is_dictionary;
+}
+
+bool CollectionLiteral::isMetaTy() const
+{
+   return is_meta_ty;
+}
+
+void CollectionLiteral::isMetaTy(bool is_meta_ty)
+{
+   CollectionLiteral::is_meta_ty = is_meta_ty;
 }

@@ -3,28 +3,20 @@
 //
 
 #include "Lexer.h"
-#include "Message/Exceptions.h"
-#include "Util.h"
-#include "Compiler.h"
-#include "Message/Diagnostics.h"
 
 #include <unordered_map>
 #include <llvm/Support/raw_ostream.h>
 #include <sstream>
 #include <iomanip>
 
+#ifndef CDOT_LEXER_STANDALONE
+#include "Message/Diagnostics.h"
+#endif
+
 unordered_map<string, Lexer::Macro> Lexer::GlobalMacros;
-unordered_map<string, Lexer::Macro> Lexer::Macros;
-
 unordered_map<string, Variant> Lexer::GlobalValues;
-unordered_map<string, Variant> Lexer::Values;
-
-unordered_map<string, std::vector<Variant>> Lexer::GlobalArrays;
-unordered_map<string, std::vector<Variant>> Lexer::Arrays;
 
 std::stack<Lexer::MacroExpansion> Lexer::ExpansionStack;
-
-using namespace cdot::diag;
 
 namespace cdot {
 
@@ -55,13 +47,13 @@ namespace {
 
 //region Description
 unordered_map<string, Variant> BuiltinValues = {
-   { "_WordSize", Variant((long)(sizeof(size_t) * 8)) },
+   { "_WordSize", Variant((unsigned long long)(sizeof(size_t) * 8)) },
    { "__DEBUG__", Variant(true) },
-   { "_CLOCKS_PER_SEC", Variant((long)CLOCKS_PER_SEC) },
-   { "EOF", Variant((long)EOF) },
-   { "SEEK_SET", Variant((long)SEEK_SET) },
-   { "SEEK_END", Variant((long)SEEK_END) },
-   { "SEEK_CUR", Variant((long)SEEK_CUR) },
+   { "_CLOCKS_PER_SEC", Variant((unsigned long long)CLOCKS_PER_SEC) },
+   { "EOF", Variant((unsigned long long)EOF) },
+   { "SEEK_SET", Variant((unsigned long long)SEEK_SET) },
+   { "SEEK_END", Variant((unsigned long long)SEEK_END) },
+   { "SEEK_CUR", Variant((unsigned long long)SEEK_CUR) },
 #ifdef _WIN32
    { "_WIN32", Variant(true) },
 #else
@@ -106,72 +98,128 @@ unordered_map<string, Variant> BuiltinValues = {
    { "__builtin_eh_data_regno_1", Variant(__builtin_eh_return_data_regno(1)) }
 };
 
-}
+} // anonymous namespace
 
-Variant Lexer::currentTokenValue()
+Variant Lexer::currentTokenValue(bool allowUndeclaredIdentifiers)
 {
    switch (currentToken.get_type()) {
       case T_LITERAL:
-      case T_IDENT:
-         return currentToken.get_value();
+         return currentToken._value;
       case T_OP: {
-         auto op = s_val();
+         auto &op = strRef();
          advance();
-         auto target = currentTokenValue();
+         auto target = currentTokenValue(allowUndeclaredIdentifiers);
 
          return target.applyUnaryOp(op);
       }
-      case T_PREPROC_VAR: {
-         auto ident = s_val();
+      case T_IDENT: {
+         auto &ident = strRef();
          if (BuiltinValues.find(ident) != BuiltinValues.end()) {
             return BuiltinValues[ident];
          }
          if (Values.find(ident) != Values.end()) {
             return Values[ident];
          }
+         if (allowUndeclaredIdentifiers) {
+            return currentToken._value;
+         }
 
-         return Variant(ident);
+         CDOT_DIAGNOSE("undeclared identifier" + ident);
       }
       case T_PUNCTUATOR: {
          if (currentToken.is_punctuator('(')) {
             advance();
-            auto expr = parseExpression();
+            auto expr = parseExpression({}, 0, false,
+                                        allowUndeclaredIdentifiers);
 
             advance();
             if (!currentToken.is_punctuator(')')) {
-               ParseError::raise("Expected ')'", this);
+               CDOT_DIAGNOSE("Expected ')'");
             }
 
             return expr;
          }
+         if (currentToken.is_punctuator('[')) {
+            return parseArray();
+         }
       }
       default:
-         ParseError::raise("Unexpected token in preprocessor expression", this);
+         CDOT_DIAGNOSE("Unexpected token in preprocessor expression");
          llvm_unreachable(0);
    }
 }
 
-Variant Lexer::parseExpression(Variant lhs, int minPrecedence)
+Variant Lexer::parseArray()
 {
+   std::vector<Variant> vec;
+   while (!currentToken.is_punctuator(']')) {
+      advance();
+      if (currentToken.is_punctuator(',')) {
+         continue;
+      }
+      if (currentToken.is_punctuator(']')) {
+         break;
+      }
+
+      vec.push_back(currentTokenValue(true));
+   }
+
+   return { std::move(vec) };
+}
+
+bool Lexer::maybeClosingTemplateBracket(Token &next)
+{
+   if (next.is_operator(">")) {
+      auto buf = curr;
+      auto idx = currentIndex;
+
+      while (idx < srcLen) {
+         if (*buf == '>') {
+            return true;
+         }
+         if (*buf == '\n') {
+            return true;
+         }
+
+         ++idx;
+         ++buf;
+      }
+   }
+
+   return false;
+}
+
+Variant Lexer::parseExpression(Variant lhs,
+                               int minPrecedence,
+                               bool isTemplateArg,
+                               bool allowUndeclaredIdentifiers) {
    bool prev = ignoreDirective;
    ignoreDirective = true;
 
    if (lhs.isVoid()) {
-      lhs = currentTokenValue();
+      lhs = currentTokenValue(allowUndeclaredIdentifiers);
    }
 
    auto next = lookahead(false);
-   while (next.get_type() == T_OP && util::op_precedence[next.get_value().strVal] >= minPrecedence) {
+
+   // if no '>' follows on the same line, parse as closing angled brace
+   while (next.get_type() == T_OP
+          && util::op_precedence[next.get_value().strVal] >= minPrecedence
+          && (!isTemplateArg || !maybeClosingTemplateBracket(next))) {
       advance();
 
-      string op = s_val();
+      string op = strVal();
       advance();
 
-      auto rhs = currentTokenValue();
+      auto rhs = currentTokenValue(allowUndeclaredIdentifiers);
 
       next = lookahead();
-      while (next.get_type() == T_OP && util::op_precedence[next.get_value().strVal] > util::op_precedence[op]) {
-         rhs = parseExpression(rhs, util::op_precedence[next.get_value().strVal]);
+      while (next.get_type() == T_OP
+             && util::op_precedence[next.get_value().strVal]
+                > util::op_precedence[op]
+             && (!isTemplateArg || !maybeClosingTemplateBracket(next))) {
+         rhs = parseExpression(rhs,
+                               util::op_precedence[next.get_value().strVal]);
          next = lookahead();
       }
 
@@ -182,12 +230,30 @@ Variant Lexer::parseExpression(Variant lhs, int minPrecedence)
       advance();
       advance();
 
-      lhs = Variant(lhs.strVal + '.' + parseExpression().toString());
+      lhs = Variant(lhs.strVal + '.'
+                    + parseExpression({}, 0, isTemplateArg,
+                                      allowUndeclaredIdentifiers).toString());
    }
 
    ignoreDirective = prev;
 
    return lhs;
+}
+
+Token Lexer::valueToToken(SourceLocation loc, Variant &&val)
+{
+   Token tok;
+   if (val.isStr()) {
+      tok._type = T_IDENT;
+   }
+   else {
+      tok._type = T_LITERAL;
+   }
+
+   tok._value = Variant(std::move(val));
+   tok.loc = loc;
+
+   return std::move(tok);
 }
 
 void Lexer::handle_directive(string &&dir)
@@ -235,7 +301,7 @@ void Lexer::handle_define()
 {
    advance();
 
-   string name = s_val();
+   string name = strVal();
    std::vector<string> args;
 
    if (char_lookahead() == '\n') {
@@ -250,7 +316,7 @@ void Lexer::handle_define()
    if (currentToken.is_punctuator('(')) {
       advance();
       while (!currentToken.is_punctuator(')')) {
-         args.push_back(s_val());
+         args.push_back(strVal());
          advance();
          if (currentToken.is_punctuator(',')) {
             advance();
@@ -296,18 +362,17 @@ void Lexer::handle_undef()
 {
    advance();
 
-   auto name = s_val();
+   auto name = strVal();
    auto index = Macros.find(name);
    if (index != Macros.end()) {
       Macros.erase(index);
    }
 }
 
-namespace {
-void tokenError(Lexer* lexer) {
-   ParseError::raise("Unexpected token " +
-                     util::token_names[lexer->currentToken.get_type()], lexer);
-}
+void Lexer::tokenError()
+{
+   CDOT_DIAGNOSE("Unexpected token " +
+                 util::token_names[currentToken.get_type()])
 }
 
 void Lexer::handle_let()
@@ -315,37 +380,19 @@ void Lexer::handle_let()
    advance();
 
    if (currentToken.get_type() != T_IDENT) {
-      tokenError(this);
+      tokenError();
    }
 
-   auto name = s_val();
+   auto name = strVal();
    advance();
 
    if (!currentToken.is_operator("=")) {
-      tokenError(this);
+      tokenError();
    }
 
    advance();
 
-   if (currentToken.is_punctuator('[')) {
-      std::vector<Variant> elements;
-      while (!currentToken.is_punctuator(']')) {
-         advance();
-         if (currentToken.is_punctuator(',')) {
-            continue;
-         }
-         if (currentToken.is_punctuator(']')) {
-            break;
-         }
-
-         elements.emplace_back(currentTokenValue());
-      }
-
-      Arrays[name] = elements;
-   }
-   else {
-      Values[name] = parseExpression();
-   }
+   Values[name] = parseExpression();
 }
 
 void Lexer::handle_print()
@@ -379,14 +426,14 @@ void Lexer::handle_ifdef()
    advance();
    ignoreMacro = false;
 
-   auto name = s_val();
+   auto name = strVal();
    handle_if(Macros.find(name) != Macros.end());
 }
 
 void Lexer::handle_ifndef()
 {
    advance();
-   auto name = s_val();
+   auto name = strVal();
 
    handle_if(Macros.find(name) == Macros.end());
 }
@@ -451,7 +498,7 @@ void Lexer::skip_until_directive(const string &dir)
       }
 
       if (currentIndex >= srcLen) {
-         ParseError::raise("expected #" + dir, this);
+         CDOT_DIAGNOSE("expected #" + dir);
       }
 
       next = get_next_char();
@@ -462,7 +509,7 @@ void Lexer::skip_until_directive(const string &dir)
 void Lexer::skip_until_endif()
 {
    if (!openIfs) {
-      tokenError(this);
+      tokenError();
    }
 
    skip_until_directive("endif");
@@ -472,48 +519,72 @@ void Lexer::handle_for()
 {
    advance();
 
-   auto elName = s_val();
+   auto elName = strVal();
    advance();
 
    if (Values.find(elName) != Values.end()) {
-      ParseError::raise("variable " + elName + " already defined", this);
+      CDOT_DIAGNOSE("variable " + elName + " already defined");
    }
 
-   assert(s_val() == "in");
+   assert(currentToken._value.strVal == "in");
+
+   size_t line = currentLine;
+   size_t col = indexOnLine;
+   size_t begin = currentIndex;
+   auto buff = curr;
+
+   while (*buff != '\n' && begin < srcLen) {
+      ++begin;
+      ++col;
+      ++buff;
+   }
+
    advance();
-
-   auto arrName = s_val();
-   auto it = Arrays.find(arrName);
-
-   if (it == Arrays.end()) {
-      ParseError::raise("array " + arrName + " not declared", this);
+   auto arr = parseExpression();
+   if (!arr.isArray()) {
+      CDOT_DIAGNOSE("#for-in requires array type");
    }
 
-   ForStack.push(ForScope {
-      getLexerLoc(), elName,
-      it->second.begin(), it->second.end()
-   });
-
-   if (it->second.empty()) {
+   if (arr.vec->empty()) {
       skip_until_directive("endfor");
       return;
    }
 
-   Values.emplace(elName, *it->second.begin());
+   std::vector<Variant> reversedVec;
+   for (auto i = arr.vec->size() - 1;; --i) {
+      reversedVec.push_back(arr[i]);
+      if (i == 0) {
+         break;
+      }
+   }
+
+   Values[elName] = std::move(reversedVec.back());
+   reversedVec.pop_back();
+
+   ForStack.push(ForScope {
+      { line, col, begin }, elName,
+      std::move(reversedVec)
+   });
 }
 
 void Lexer::handle_endfor()
 {
    if (ForStack.empty()) {
-      tokenError(this);
+      tokenError();
    }
 
    auto &latest = ForStack.top();
-   ++latest.it;
 
-   if (latest.it != latest.end) {
-      setLoc(latest.loc);
-      Values[latest.varName] = *latest.it;
+   if (!latest.vec.empty()) {
+      currentLine = latest.loc.line;
+      indexOnLine = latest.loc.col;
+      curr = begin + latest.loc.begin;
+      currentIndex = latest.loc.begin;
+      lookaheadList.clear();
+
+      Values[latest.varName] = std::move(latest.vec.back());
+      latest.vec.pop_back();
+
       return;
    }
 
@@ -584,7 +655,8 @@ void Lexer::expand_macro(string &&macroName)
    assert(it != Macros.end());
 
    if (args.size() != it->second.args.size()) {
-      ParseError::raise("wrong number of arguments passed to macro " + macroName, this);
+      CDOT_DIAGNOSE("wrong number of arguments passed to macro "
+                        + macroName);
    }
 
    auto numArgs = args.size();
@@ -593,7 +665,8 @@ void Lexer::expand_macro(string &&macroName)
       Macros.emplace(it->second.args[i], args[i]);
    }
 
-   auto _buff = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(it->second.begin, it->second.length));
+   auto _buff = llvm::MemoryBuffer::getMemBufferCopy(
+      llvm::StringRef(it->second.begin, it->second.length));
    auto buff = _buff.release();
 
    auto lex = std::make_unique<Lexer>(buff, fileName, sourceId);
@@ -601,13 +674,17 @@ void Lexer::expand_macro(string &&macroName)
    lex->indexOnLine = it->second.loc.indexOnLine;
    lex->macroExpansionDepth = macroExpansionDepth + 1;
 
-   if (macroExpansionDepth > Compiler::getOptions().maxMacroRecursionDepth) {
-      diag::err(err_max_macro_recursion_depth)
-         << (size_t)Compiler::getOptions().maxMacroRecursionDepth
-         << macroName << this << diag::term;
+   if (macroExpansionDepth > 256) {
+      CDOT_DIAGNOSE("max recursion depth reached");
    }
 
    ExpansionStack.emplace(std::move(lex), buff);
+}
+
+void Lexer::expand_template_arg(string &&argName)
+{
+   auto &arg = TemplateArgs[argName];
+   lookaheadList.insert(lookaheadList.end(), arg.rbegin(), arg.rend());
 }
 
 Token Lexer::handlePreprocFunc(
@@ -624,7 +701,7 @@ Token Lexer::handlePreprocFunc(
    bool isToString = macroName == "_ToString";
    if (macroName == "_ToString") {
       if (*buf != '(') {
-         ParseError::raise("expected '('", this);
+         CDOT_DIAGNOSE("expected '('");
       }
 
       currentIndex += curr - buf + 1;
@@ -635,7 +712,7 @@ Token Lexer::handlePreprocFunc(
       advance();
 
       if (currentToken.get_type() != T_PREPROC_VAR) {
-         ParseError::raise("_ToString expects a preprocessor variable", this);
+         CDOT_DIAGNOSE("_ToString expects a preprocessor variable");
       }
 
       string str;
@@ -647,11 +724,11 @@ Token Lexer::handlePreprocFunc(
          str = ident;
       }
 
-      args.emplace_back(str);
+      args.emplace_back(std::move(str));
       advance();
 
       if (!currentToken.is_punctuator(')')) {
-         ParseError::raise("expected ')'", this);
+         CDOT_DIAGNOSE("expected ')'");
       }
    }
    else if (*buf == '(') {
@@ -671,7 +748,7 @@ Token Lexer::handlePreprocFunc(
    }
 
    if (args.size() != macro.second) {
-      ParseError::raise("wrong number of arguments passed to macro " + macroName, this);
+      CDOT_DIAGNOSE("wrong number of arguments passed to macro " + macroName);
    }
 
    switch (macro.first) {
@@ -681,7 +758,7 @@ Token Lexer::handlePreprocFunc(
 
          auto tok = currentToken;
          tok._type = T_IDENT;
-         tok._value = Variant(str);
+         tok._value = Variant(std::move(str));
 
          return tok;
       }
@@ -691,7 +768,7 @@ Token Lexer::handlePreprocFunc(
 
          auto tok = currentToken;
          tok._type = T_IDENT;
-         tok._value = Variant(str);
+         tok._value = Variant(std::move(str));
 
          return tok;
       }
@@ -703,8 +780,10 @@ Token Lexer::handlePreprocFunc(
          return tok;
       }
       case BuiltinMacro::NUMFORMAT: {
-         if (args.front().type != VariantType::INT || args[1].type != VariantType::INT) {
-            ParseError::raise("_NumFormat expects integers as 1st and 2nd arguments", this);
+         if (args.front().type != VariantType::INT
+             || args[1].type != VariantType::INT) {
+            CDOT_DIAGNOSE("_NumFormat expects integers as 1st and "
+                                 "2nd arguments");
          }
 
          auto &val = args.front().intVal;
@@ -732,21 +811,21 @@ Token Lexer::handlePreprocFunc(
 
          auto tok = currentToken;
          tok._type = T_IDENT;
-         tok._value = Variant(res);
+         tok._value = Variant(std::move(res));
 
          return tok;
       }
       case BuiltinMacro::FILE: {
          auto tok = currentToken;
          tok._type = T_LITERAL;
-         tok._value = Variant(fileName);
+         tok._value = Variant(string(fileName));
 
          return tok;
       }
       case BuiltinMacro::LINE: {
          auto tok = currentToken;
          tok._type = T_LITERAL;
-         tok._value = Variant((long)currentLine);
+         tok._value = Variant(currentLine);
 
          return tok;
       }
@@ -769,7 +848,7 @@ void Lexer::substitute_value()
    else {
       auto it = BuiltinValues.find(name);
       if (it == BuiltinValues.end()) {
-         ParseError::raise("unknown value " + name, this);
+         CDOT_DIAGNOSE("unknown value " + name);
       }
 
       val = &it->second;

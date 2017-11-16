@@ -2,15 +2,24 @@
 // Created by Jonas Zell on 26.09.17.
 //
 
-#include <fstream>
 #include "HeaderGen.h"
+
+#include <fstream>
+
+#include "../../../Compiler.h"
 #include "../ASTIncludes.h"
 #include "../../Attribute/Attribute.h"
+
 #include "../../../Variant/Type/PrimitiveType.h"
 #include "../../../Variant/Type/GenericType.h"
+
 #include "../SemanticAnalysis/Record/Class.h"
 #include "../SemanticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Function.h"
+
+#include "../../../Files/FileUtils.h"
 #include "../../../Files/FileManager.h"
+
 
 namespace {
    void removeTrailingWhitespace(string& src) {
@@ -56,26 +65,46 @@ namespace {
    }
 }
 
-HeaderGen::HeaderGen(string& fileName) :
-   fileName(fileName)
+HeaderGen::HeaderGen(
+   std::vector<string> &fileNames) : fileNames(fileNames)
 {
-   nextLine();
-   PrimitiveType::PrintSpecificTypes = true;
+
 }
 
 HeaderGen::~HeaderGen()
 {
-   PrimitiveType::PrintSpecificTypes = false;
+
 }
 
-void HeaderGen::finalize()
+void HeaderGen::run(std::vector<std::shared_ptr<CompoundStmt>> &roots)
 {
+   auto &options = Compiler::getOptions();
+   for (size_t i = options.headerFiles.size(); i < roots.size(); ++i) {
+      auto &root = roots[i];
+      visit(root.get());
+      finalize(fileNames[i]);
+   }
+}
+
+void HeaderGen::finalize(const string &fileName)
+{
+   auto &options = Compiler::getOptions();
+   fs::mkdirIfNotExists(options.headerOutPath);
+
+   auto path = fs::getPath(fileName).substr(options.basePath.length());
+   auto outFileName = fs::getFileName(fileName);
+
+   string outPath = options.basePath + options.headerOutPath + path;
+   fs::mkdirIfNotExists(outPath);
+
+   string outFile = outPath + outFileName + ".doth";
+
    auto str = out.str();
    out.flush();
 
    removeTrailingWhitespace(str);
 
-   std::ofstream outfile(fileName);
+   std::ofstream outfile(outFile);
    outfile << str;
 
    outfile.close();
@@ -146,7 +175,8 @@ namespace {
    }
 }
 
-void HeaderGen::writeAttributes(std::vector<Attribute> &attrs, bool indent)
+void HeaderGen::writeAttributes(const std::vector<Attribute> &attrs,
+                                bool indent)
 {
    if (attrs.empty()) {
       return;
@@ -204,7 +234,7 @@ void HeaderGen::writeThrows(Callable *callable)
    nextLine();
 }
 
-void HeaderGen::writeGenerics(std::vector<GenericConstraint> &generics)
+void HeaderGen::writeGenerics(const std::vector<TemplateConstraint> &generics)
 {
    if (generics.empty()) {
       return;
@@ -216,9 +246,9 @@ void HeaderGen::writeGenerics(std::vector<GenericConstraint> &generics)
       const auto& gen  = generics[i];
       writeIdent(gen.genericTypeName, false);
 
-      if (!gen.covarName.empty()) {
+      if (gen.covariance) {
          write(":");
-         write(gen.covarName, false);
+         write(gen.covariance->toString(), false);
       }
 
       if (i < genc - 1) {
@@ -229,7 +259,7 @@ void HeaderGen::writeGenerics(std::vector<GenericConstraint> &generics)
    write(">");
 }
 
-void HeaderGen::writeGenerics(std::vector<GenericType*> &generics)
+void HeaderGen::writeGenerics(const std::vector<TemplateArg> &generics)
 {
    if (generics.empty()) {
       return;
@@ -239,7 +269,7 @@ void HeaderGen::writeGenerics(std::vector<GenericType*> &generics)
    size_t i = 0;
    auto genc = generics.size();
    for (const auto& gen : generics) {
-      write(gen->getActualType()->toString(), false);
+      write(gen.toString(), false);
       if (i < genc - 1) {
          write(",");
       }
@@ -248,7 +278,7 @@ void HeaderGen::writeGenerics(std::vector<GenericType*> &generics)
    writec('>');
 }
 
-void HeaderGen::writeProtocols(std::vector<ObjectType *> &conformsTo)
+void HeaderGen::writeProtocols(const std::vector<ObjectType *> &conformsTo)
 {
    if (conformsTo.empty()) {
       return;
@@ -259,7 +289,7 @@ void HeaderGen::writeProtocols(std::vector<ObjectType *> &conformsTo)
    for (size_t i = 0; i < protc; ++i) {
       const auto& gen = conformsTo[i];
       writeIdent(gen->getClassName(), false);
-      writeGenerics(gen->getConcreteGenericTypes());
+      writeGenerics(gen->getTemplateArgs());
 
       if (i < protc - 1) {
          write(",");
@@ -269,7 +299,8 @@ void HeaderGen::writeProtocols(std::vector<ObjectType *> &conformsTo)
    addSpace();
 }
 
-void HeaderGen::writeProtocols(std::vector<std::shared_ptr<TypeRef>> &conformsTo)
+void HeaderGen::writeProtocols(
+   const std::vector<std::shared_ptr<TypeRef>> &conformsTo)
 {
    if (conformsTo.empty()) {
       return;
@@ -279,8 +310,8 @@ void HeaderGen::writeProtocols(std::vector<std::shared_ptr<TypeRef>> &conformsTo
    auto protc = conformsTo.size();
    for (size_t i = 0; i < protc; ++i) {
       const auto& gen = conformsTo[i];
-      writeIdent(gen->className, false);
-      writeGenerics(gen->type->getConcreteGenericTypes());
+      writeIdent(gen->getTypeRef()->toString(), false);
+      writeGenerics(gen->type->getTemplateArgs());
 
       if (i < protc - 1) {
          write(",");
@@ -290,7 +321,7 @@ void HeaderGen::writeProtocols(std::vector<std::shared_ptr<TypeRef>> &conformsTo
    addSpace();
 }
 
-void HeaderGen::writeArgs(std::vector<std::shared_ptr<FuncArgDecl>> &args)
+void HeaderGen::writeArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args)
 {
    writec('(');
 
@@ -306,7 +337,7 @@ void HeaderGen::writeArgs(std::vector<std::shared_ptr<FuncArgDecl>> &args)
    writec(')');
 }
 
-void HeaderGen::writeAccess(AccessModifier &access)
+void HeaderGen::writeAccess(const AccessModifier &access)
 {
    auto str = accessModifierToString(access);
    write(str, !str.empty());
@@ -432,20 +463,19 @@ void HeaderGen::visit(DeclStmt *node)
 void HeaderGen::visit(FunctionDecl *node)
 {
    writeAttributes(node->attributes);
-   writeThrows(node->getDeclaredFunction());
+   writeThrows(node->getCallable());
 
    applyIndent();
    write("declare");
    writeExternKind(node->externKind);
 
    write("def");
-   writeIdent(node->funcName, false);
-   writeGenerics(node->generics);
+   writeIdent(node->getName(), false);
 
-   writeArgs(node->args);
+   writeArgs(node->getArgs());
 
    write(" ->");
-   node->returnType->accept(this);
+   node->getReturnType()->accept(this);
    nextLine();
 }
 
@@ -474,25 +504,19 @@ void HeaderGen::visit(ClassDecl *node)
 
    applyIndent();
 
-   if (!node->is_extension) {
-      if (innerDecl == 0) {
-         write("declare");
-         writeExternKind(node->externKind);
-      }
-
-      writeAccess(node->am);
-      if (node->is_abstract && !node->is_protocol) {
-         write("abstract");
-      }
-
-      write(node->is_struct ? "struct" : node->is_protocol ? "protocol" : "class");
-   }
-   else {
-      write("declare extend");
+   if (innerDecl == 0) {
+      write("declare");
+      writeExternKind(node->externKind);
    }
 
-   writeIdent(node->className);
-   writeGenerics(node->generics);
+   writeAccess(node->am);
+   if (node->is_abstract && !node->is_protocol) {
+      write("abstract");
+   }
+
+   write(node->is_struct ? "struct" : node->is_protocol ? "protocol" : "class");
+
+   writeIdent(node->recordName);
 
    if (node->parentClass != nullptr) {
       writec(':');
@@ -557,15 +581,15 @@ void HeaderGen::visit(MethodDecl *node)
    writeThrows(node->getMethod());
 
    applyIndent();
-   writeAccess(node->am);
+   writeAccess(node->getAm());
    if (node->isStatic) {
       write("static");
    }
 
    write("def");
 
-   string methodName = node->getMethodName();
-   if (node->getMethodName().substr(0, 6) == "infix ") {
+   string methodName = node->getName();
+   if (node->getName().substr(0, 6) == "infix ") {
       write("infix");
       methodName = methodName.substr(6);
 
@@ -574,41 +598,35 @@ void HeaderGen::visit(MethodDecl *node)
          methodName = methodName.substr(3);
       }
    }
-   else if (node->getMethodName().substr(0, 7) == "prefix ") {
+   else if (node->getName().substr(0, 7) == "prefix ") {
       write("prefix");
       methodName = methodName.substr(7);
    }
-   else if (node->getMethodName().substr(0, 8) == "postfix ") {
+   else if (node->getName().substr(0, 8) == "postfix ") {
       write("postfix");
       methodName = methodName.substr(8);
    }
 
    writeIdent(methodName, false);
-   writeGenerics(node->generics);
 
-   writeArgs(node->args);
+   writeArgs(node->getArgs());
 
    write(" ->");
-   node->returnType->accept(this);
+   node->getReturnType()->accept(this);
    nextLine();
 }
 
 void HeaderGen::visit(FieldDecl *node)
 {
    applyIndent();
-   writeAccess(node->am);
+   writeAccess(node->access);
    if (node->is_static) {
       write("static");
    }
 
-   if (node->is_property) {
-      write("prop");
-   }
-   else {
-      write(node->is_const ? "let" : "var");
-   }
+   write(node->is_const ? "let" : "var");
 
-   writeIdent(node->fieldName, false);
+   writeIdent(node->name, false);
    write(":");
 
    node->type->accept(this);
@@ -653,7 +671,7 @@ void HeaderGen::visit(EnumDecl *node)
    writeAccess(node->am);
 
    write("enum");
-   writeIdent(node->className, false);
+   writeIdent(node->recordName, false);
 
    if (node->rawType != nullptr) {
       writec('(');
@@ -663,8 +681,6 @@ void HeaderGen::visit(EnumDecl *node)
    else {
       addSpace();
    }
-
-   writeGenerics(node->generics);
 
    writeProtocols(node->conformsTo);
    openBrace();
@@ -778,7 +794,7 @@ void HeaderGen::visit(TypedefDecl *node)
    write(" =");
 
    writeIdent(node->alias, false);
-   writeGenerics(node->generics);
+   writeGenerics(node->templateArgs);
 
    nextLine();
 }

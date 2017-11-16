@@ -22,11 +22,13 @@ namespace cdot {
       static IntegerType* getBoolTy();
       static IntegerType* getCharTy();
 
-      unsigned int getBitwidth() override {
+      unsigned int getBitwidth() const override
+      {
          return bitWidth;
       }
 
-      bool isUnsigned() override {
+      bool isUnsigned() const override
+      {
          return is_unsigned;
       }
 
@@ -34,45 +36,50 @@ namespace cdot {
          is_unsigned = uns;
       }
 
-      bool isIntegerTy() override {
+      bool isIntegerTy() const override
+      {
          return true;
       }
 
-      bool isInt64Ty(bool isUnsigned) override {
+      bool isInt64Ty(bool isUnsigned) const override
+      {
          return bitWidth == 64 && is_unsigned == isUnsigned;
       }
 
-      bool isInt8Ty(bool isUnsigned) override {
+      bool isInt8Ty(bool isUnsigned) const override
+      {
          return bitWidth == 8 && is_unsigned == isUnsigned;
       }
 
-      bool isInt1Ty(bool isUnsigned) override {
+      bool isInt1Ty(bool isUnsigned) const override
+      {
          return bitWidth == 1 && is_unsigned == isUnsigned;
       }
 
-      bool isIntNTy(unsigned n, bool isUnsigned) override {
+      bool isIntNTy(unsigned n, bool isUnsigned) const override
+      {
          return bitWidth == n && is_unsigned == isUnsigned;
       }
 
-      bool isPtrSizedInt() override
+      bool isPtrSizedInt() const override
       {
          return bitWidth == sizeof(int*) * 8;
       }
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
 
-      BuiltinType* ArithmeticReturnType(string&, BuiltinType*) override;
+      BuiltinType* ArithmeticReturnType(string&, BuiltinType*) const override;
 
-      BuiltinType* box() override;
+      BuiltinType* box() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) override;
-      bool explicitlyCastableTo(BuiltinType*) override;
+      bool implicitlyCastableTo(BuiltinType*) const override;
+      bool explicitlyCastableTo(BuiltinType*) const override;
 
-      llvm::Value* getDefaultVal() override;
-      llvm::Constant* getConstantVal(Variant& val) override;
+      llvm::Value* getDefaultVal(CodeGen &CGM) const override;
+      llvm::Constant* getConstantVal(Variant& val) const override;
 
-      short getAlignment() override;
+      short getAlignment() const override;
 
       static inline bool classof(IntegerType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

@@ -7,9 +7,11 @@
 #include "../../Passes/SemanticAnalysis/Record/Class.h"
 #include "../../Passes/SemanticAnalysis/Record/Enum.h"
 
-CallExpr::CallExpr(CallType type, std::vector<pair<string, Expression::SharedPtr>> args, std::string _ident) :
-   type(type),
-   args(args)
+CallExpr::CallExpr(CallType type,
+                   std::vector<pair<string, Expression::SharedPtr>> &&args,
+                   string &&_ident)
+   : type(type), args(args),
+     templateArgs(new ResolvedTemplateArgList({}))
 {
    ident = _ident;
    for (auto& arg : this->args) {
@@ -17,8 +19,10 @@ CallExpr::CallExpr(CallType type, std::vector<pair<string, Expression::SharedPtr
    }
 }
 
-CallExpr::CallExpr(CallType type, std::vector<Expression::SharedPtr> args, string _ident) :
-   type(type)
+CallExpr::CallExpr(CallType type,
+                   std::vector<Expression::SharedPtr> &&args,
+                   string &&_ident)
+   : type(type), templateArgs(new ResolvedTemplateArgList({}))
 {
    ident = _ident;
    for (auto& arg : args) {
@@ -58,15 +62,6 @@ std::vector<AstNode::SharedPtr> CallExpr::get_children() {
    return res;
 }
 
-void CallExpr::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "CallExpr" << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
-}
-
 CallType CallExpr::getType() const {
    return type;
 }
@@ -75,20 +70,23 @@ void CallExpr::setType(CallType type) {
    CallExpr::type = type;
 }
 
-const std::vector<pair<string, Expression::SharedPtr>> &CallExpr::getArgs() const {
+std::vector<pair<string, Expression::SharedPtr>> &
+CallExpr::getArgs()
+{
    return args;
 }
 
-void CallExpr::setArgs(const std::vector<pair<string, Expression::SharedPtr>> &args) {
+void CallExpr::setArgs(
+   const std::vector<pair<string, Expression::SharedPtr>> &args) {
    CallExpr::args = args;
 }
 
-bool CallExpr::isIsCallOp() const {
-   return isCallOp;
+bool CallExpr::isCallOp() const {
+   return is_call_op;
 }
 
-void CallExpr::setIsCallOp(bool isCallOp) {
-   CallExpr::isCallOp = isCallOp;
+void CallExpr::isCallOp(bool isCallOp) {
+   CallExpr::is_call_op = isCallOp;
 }
 
 const string &CallExpr::getCallOpBinding() const {
@@ -99,36 +97,28 @@ void CallExpr::setCallOpBinding(const string &callOpBinding) {
    CallExpr::callOpBinding = callOpBinding;
 }
 
-bool CallExpr::isIsCapturedVar() const {
-   return isCapturedVar;
+bool CallExpr::isCapturedVar() const {
+   return is_captured_var;
 }
 
 void CallExpr::setIsCapturedVar(bool isCapturedVar) {
-   CallExpr::isCapturedVar = isCapturedVar;
+   CallExpr::is_captured_var = isCapturedVar;
 }
 
-bool CallExpr::isHasStructReturn() const {
-   return hasStructReturn;
+bool CallExpr::hasStructReturn() const {
+   return has_struct_return;
 }
 
 void CallExpr::setHasStructReturn(bool hasStructReturn) {
-   CallExpr::hasStructReturn = hasStructReturn;
+   CallExpr::has_struct_return = hasStructReturn;
 }
 
-BuiltinType *CallExpr::getStructReturnType() const {
-   return structReturnType;
-}
-
-void CallExpr::setStructReturnType(BuiltinType *structReturnType) {
-   CallExpr::structReturnType = structReturnType;
-}
-
-bool CallExpr::isIsPointerAccess_() const {
-   return isPointerAccess_;
+bool CallExpr::isPointerAccess_() const {
+   return is_pointer_access;
 }
 
 void CallExpr::setIsPointerAccess_(bool isPointerAccess_) {
-   CallExpr::isPointerAccess_ = isPointerAccess_;
+   CallExpr::is_pointer_access = isPointerAccess_;
 }
 
 CallCompatability *CallExpr::getCompatibility() const {
@@ -139,20 +129,20 @@ void CallExpr::setCompatibility(CallCompatability *compatibility) {
    CallExpr::compatibility = compatibility;
 }
 
-bool CallExpr::isIsNsMember() const {
-   return isNsMember;
+bool CallExpr::isNsMember() const {
+   return is_ns_member;
 }
 
 void CallExpr::setIsNsMember(bool isNsMember) {
-   CallExpr::isNsMember = isNsMember;
+   CallExpr::is_ns_member = isNsMember;
 }
 
-bool CallExpr::isIsStatic() const {
-   return isStatic;
+bool CallExpr::isStatic() const {
+   return is_static;
 }
 
 void CallExpr::setIsStatic(bool isStatic) {
-   CallExpr::isStatic = isStatic;
+   CallExpr::is_static = isStatic;
 }
 
 const Type &CallExpr::getReturnType() const {
@@ -163,20 +153,20 @@ void CallExpr::setReturnType(const Type &returnType) {
    CallExpr::returnType = returnType;
 }
 
-bool CallExpr::isIs_virtual() const {
+bool CallExpr::isVirtual() const {
    return is_virtual;
 }
 
-void CallExpr::setIs_virtual(bool is_virtual) {
+void CallExpr::setIsVirtual(bool is_virtual) {
    CallExpr::is_virtual = is_virtual;
 }
 
-bool CallExpr::isIsBuiltin() const {
-   return isBuiltin;
+bool CallExpr::isBuiltin() const {
+   return is_builtin;
 }
 
 void CallExpr::setIsBuiltin(bool isBuiltin) {
-   CallExpr::isBuiltin = isBuiltin;
+   CallExpr::is_builtin = isBuiltin;
 }
 
 BuiltinFn CallExpr::getBuiltinFnKind() const {
@@ -211,30 +201,6 @@ void CallExpr::setMethod(Method *method) {
    CallExpr::method = method;
 }
 
-const Type &CallExpr::getGenericOriginTy() const {
-   return genericOriginTy;
-}
-
-void CallExpr::setGenericOriginTy(const Type &genericOriginTy) {
-   CallExpr::genericOriginTy = genericOriginTy;
-}
-
-const Type &CallExpr::getGenericDestTy() const {
-   return genericDestTy;
-}
-
-void CallExpr::setGenericDestTy(const Type &genericDestTy) {
-   CallExpr::genericDestTy = genericDestTy;
-}
-
-bool CallExpr::isNeedsGenericCast() const {
-   return needsGenericCast;
-}
-
-void CallExpr::setNeedsGenericCast(bool needsGenericCast) {
-   CallExpr::needsGenericCast = needsGenericCast;
-}
-
 bool CallExpr::isAnonymousCall() const {
    return anonymous_call;
 }
@@ -243,23 +209,8 @@ void CallExpr::setIsAnonymousCall(bool isAnonymousCall_) {
    CallExpr::anonymous_call = isAnonymousCall_;
 }
 
-const std::vector<std::shared_ptr<TypeRef>> &CallExpr::getGenerics() const {
-   return generics;
-}
-
-void CallExpr::setGenerics(const std::vector<std::shared_ptr<TypeRef>> &generics) {
-   CallExpr::generics = generics;
-}
-
-const std::vector<GenericType *> &CallExpr::getResolvedGenerics() const {
-   return resolvedGenerics;
-}
-
-void CallExpr::setResolvedGenerics(const std::vector<GenericType *> &resolvedGenerics) {
-   CallExpr::resolvedGenerics = resolvedGenerics;
-}
-
-const std::vector<Argument> &CallExpr::getResolvedArgs() const {
+std::vector<Argument> &CallExpr::getResolvedArgs()
+{
    return resolvedArgs;
 }
 
@@ -267,12 +218,12 @@ void CallExpr::setResolvedArgs(const std::vector<Argument> &resolvedArgs) {
    CallExpr::resolvedArgs = resolvedArgs;
 }
 
-std::vector<Argument> *CallExpr::getDeclaredArgTypes() const {
+std::vector<Argument> &CallExpr::getDeclaredArgTypes() {
    return declaredArgTypes;
 }
 
-void CallExpr::setDeclaredArgTypes(std::vector<Argument> *declaredArgTypes) {
-   CallExpr::declaredArgTypes = declaredArgTypes;
+void CallExpr::setDeclaredArgTypes(std::vector<Argument> &&declaredArgTypes) {
+   CallExpr::declaredArgTypes = std::move(declaredArgTypes);
 }
 
 FunctionType *CallExpr::getFunctionType() const {
@@ -299,12 +250,12 @@ void CallExpr::setSelfBinding(const string &selfBinding) {
    CallExpr::selfBinding = selfBinding;
 }
 
-bool CallExpr::isIsProtocolCall() const {
-   return isProtocolCall;
+bool CallExpr::isProtocolCall() const {
+   return is_protocol_call;
 }
 
 void CallExpr::setIsProtocolCall(bool isProtocolCall) {
-   CallExpr::isProtocolCall = isProtocolCall;
+   CallExpr::is_protocol_call = isProtocolCall;
 }
 
 bool CallExpr::isCastToBase() const {
@@ -329,4 +280,25 @@ bool CallExpr::isUnionConstr() const {
 
 void CallExpr::setUnionConstr(bool unionConstr) {
    CallExpr::unionConstr = unionConstr;
+}
+
+TemplateArgList *&CallExpr::getTemplateArgs()
+{
+   return templateArgs;
+}
+
+void CallExpr::setTemplateArgs(TemplateArgList *templateArgs)
+{
+   delete CallExpr::templateArgs;
+   CallExpr::templateArgs = templateArgs;
+}
+
+bool CallExpr::loadBeforeCall() const
+{
+   return load_before_call;
+}
+
+void CallExpr::loadBeforeCall(bool load_before_call)
+{
+   CallExpr::load_before_call = load_before_call;
 }

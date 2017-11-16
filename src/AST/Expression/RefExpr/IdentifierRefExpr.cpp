@@ -3,6 +3,7 @@
 //
 
 #include "IdentifierRefExpr.h"
+#include "../../../Variant/Type/Generic.h"
 
 namespace cdot {
    unordered_map<string, BuiltinIdentifier> builtinIdentifiers = {
@@ -15,8 +16,21 @@ namespace cdot {
    };
 }
 
-IdentifierRefExpr::IdentifierRefExpr(string ident) {
-   this->ident = ident;
+IdentifierRefExpr::IdentifierRefExpr(string &&ident)
+   : templateArgs(new ResolvedTemplateArgList({}))
+{
+   this->ident = std::move(ident);
+}
+
+IdentifierRefExpr::~IdentifierRefExpr()
+{
+   delete templateArgs;
+}
+
+void IdentifierRefExpr::setTemplateArgs(TemplateArgList *templateArgs)
+{
+   delete IdentifierRefExpr::templateArgs;
+   IdentifierRefExpr::templateArgs = templateArgs;
 }
 
 std::vector<AstNode::SharedPtr> IdentifierRefExpr::get_children() {
@@ -25,15 +39,5 @@ std::vector<AstNode::SharedPtr> IdentifierRefExpr::get_children() {
    }
    else {
       return { };
-   }
-}
-
-void IdentifierRefExpr::__dump(int depth) {
-   AstNode::__tab(depth);
-
-   std::cout << "Identifier" << "Expr" << " [" << ident << "]" << std::endl;
-
-   if (memberExpr != nullptr) {
-      memberExpr->__dump(depth + 1);
    }
 }

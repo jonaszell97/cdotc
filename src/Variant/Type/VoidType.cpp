@@ -8,40 +8,40 @@
 
 namespace cdot {
 
-   VoidType* VoidType::Instance = nullptr;
+VoidType* VoidType::Instance = nullptr;
 
-   VoidType* VoidType::get()
-   {
-      if (Instance == nullptr) {
-         Instance = new VoidType;
-      }
-
-      return Instance;
+VoidType* VoidType::get()
+{
+   if (Instance == nullptr) {
+      Instance = new VoidType;
    }
 
-   VoidType::VoidType()
-   {
-      id = TypeID::VoidTypeID;
-   }
+   return Instance;
+}
 
-   bool VoidType::implicitlyCastableTo(BuiltinType *other)
-   {
-      return other == this;
-   }
+VoidType::VoidType()
+{
+   id = TypeID::VoidTypeID;
+}
 
-   llvm::Constant* VoidType::getConstantVal(Variant &)
-   {
-      return llvm::ConstantPointerNull::get(CodeGen::Int8PtrTy);
-   }
+bool VoidType::implicitlyCastableTo(BuiltinType *other) const
+{
+   return other == this;
+}
 
-   llvm::Type *VoidType::getLlvmType()
-   {
-      return llvm::Type::getVoidTy(CodeGen::Context);
-   }
+llvm::Constant* VoidType::getConstantVal(Variant &) const
+{
+   return llvm::ConstantPointerNull::get(CodeGen::Int8PtrTy);
+}
 
-   string VoidType::toString()
-   {
-      return "Void"; 
-   }
+llvm::Type *VoidType::getLlvmType() const
+{
+   return llvm::Type::getVoidTy(CodeGen::Context);
+}
+
+string VoidType::toString() const
+{
+   return "Void";
+}
 
 } // namespace cdot

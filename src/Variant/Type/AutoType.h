@@ -18,17 +18,17 @@ namespace cdot {
    public:
       static AutoType *get();
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
 
-      bool isAutoTy() override
+      bool isAutoTy() const override
       {
          return true;
       }
 
-      bool implicitlyCastableTo(BuiltinType*) override;
+      bool implicitlyCastableTo(BuiltinType*) const override;
 
-      llvm::Value* getDefaultVal() override;
+      llvm::Value* getDefaultVal(CodeGen &CGM) const override;
 
       static inline bool classof(AutoType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

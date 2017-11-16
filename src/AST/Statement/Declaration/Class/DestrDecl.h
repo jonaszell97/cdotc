@@ -17,84 +17,38 @@ namespace cdot {
 
 class DestrDecl: public CallableDecl {
 public:
-   DestrDecl(std::shared_ptr<CompoundStmt> &&body);
+   DestrDecl();
 
    typedef std::shared_ptr<DestrDecl> SharedPtr;
    typedef std::unique_ptr<DestrDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-   void __dump(int depth) override;
-
-   NodeType get_type() override {
+   NodeType get_type() override
+   {
       return NodeType::DESTR_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
-   std::shared_ptr<CompoundStmt> body;
-
    // codegen
    cdot::cl::Method* declaredMethod;
-   string selfBinding;
-   string className;
+   cl::Record* record;
 
 public:
-   const std::shared_ptr<CompoundStmt> &getBody() const
-   {
-      return body;
-   }
 
-   void setBody(const std::shared_ptr<CompoundStmt> &body)
-   {
-      DestrDecl::body = body;
-   }
-
-   Method *getDeclaredMethod() const
+   cl::Method *getDeclaredMethod() const
    {
       return declaredMethod;
    }
 
-   void setDeclaredMethod(Method *declaredMethod)
+   void setDeclaredMethod(cl::Method *declaredMethod)
    {
       DestrDecl::declaredMethod = declaredMethod;
    }
 
-   const string &getSelfBinding() const
-   {
-      return selfBinding;
-   }
-
-   void setSelfBinding(const string &selfBinding)
-   {
-      DestrDecl::selfBinding = selfBinding;
-   }
-
-   const string &getClassName() const
-   {
-      return className;
-   }
-
-   void setClassName(const string &className)
-   {
-      DestrDecl::className = className;
-   }
+   cl::Record *getRecord() const;
+   void setRecord(cl::Record *record);
 };
 
 

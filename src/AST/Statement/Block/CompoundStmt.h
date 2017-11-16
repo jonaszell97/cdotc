@@ -13,11 +13,6 @@ public:
 
    void addStatement(Statement::SharedPtr stmt);
 
-   void addPass(AbstractPass* pass)
-   {
-      passes.push_back(pass);
-   }
-
    void isUnsafe(bool unsafe)
    {
       isUnsafe_ = unsafe;
@@ -32,8 +27,6 @@ public:
    {
       return preserveScope;
    }
-
-   void runPasses();
    
    Statement::SharedPtr& at(size_t i) {
       return statements.at(i);
@@ -67,28 +60,11 @@ public:
    
    std::vector<AstNode::SharedPtr> get_children() override;
 
-   void __dump(int depth) override;
-
    NodeType get_type() override {
       return NodeType::COMPOUND_STMT;
    }
-   
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-   
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
 
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

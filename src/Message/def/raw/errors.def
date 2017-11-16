@@ -1,4 +1,9 @@
 
+/* ANY */
+generic_error <err> "$0"
+generic_warn <warn> "$0"
+generic_note <note> "$0"
+
 /* PARSING */
 
 /* PREPROCESSING*/
@@ -32,10 +37,14 @@ cand_no_implicit_conv <note> "candidate function not viable: no implicit convers
 cand_failed_constraint <note> "candidate function not viable because of failed constraint: $0"
 cand_generic_type_not_inferred <note> "could not infer generic type $0"
 cand_mismatched_arg_count <note> "candidate function not viable: requires $0 ${ 0 | plural_s(argument) }, $1 given"
+not_enough_generic_parameters <note> "expected $0 generic type parameters, got $1"
 generic_type_not_inferred <err> "could not infer generic type $0 of ${ 1 | select(class,struct,enum,union,protocol) } $2"
 expected_type_as_arg <err> "expected ${ 0 | ordinal } argument of function $1 to be a type"
 method_must_be_static <err> "method $0 must be static"
 method_must_not_be_static <err> "method $0 must not be static"
+
+ambiguous_call <err> "call to ${ 0 | select(function, method) } $1 is ambiguous"
+ambiguous_call <note> "candidate declared here"
 
 /* NAMESPACE ERRORS */
 namespace_not_found <err> "namespace $0 does not exist"
@@ -56,6 +65,14 @@ constant_field_setter <err> "constant fields cannot have a setter"
 self_outside_method <err> "${ 0 | select(self, super) } can only be used in instance methods"
 super_without_base <err> "cannot reference 'super' because class $0 does not have a base class"
 
+no_template_method <err> "${ 0 | select(class,struct,enum,union,protocol) } $1 does not have a templated method '$2'"
+
+overload_generic_params <err> "${ 0 | select(function, method) } overloads must have the same template arguments"
+overload_generic_params <note> "previous template argument list declared here"
+
+duplicate_method <err> "duplicate declaration of ${ 0 | select(function, method) } $1"
+duplicate_method <note> "previous declaration here"
+
 union_initializer_arg_count <err> "union initializer takes one argument"
 union_initializer_type <err> "union initializer argument must be convertible to one of the unions types"
 
@@ -71,6 +88,7 @@ circular_conformance <err> "circular protocol conformance between $0 and $1"
 
 /* ENUM ERRORS */
 enum_case_not_found <err> "enum $0 does not define case $1${ 2 | if( with the given arguments) }"
+enum_case_wrong_no_args <err> "case $0 requires $1 arguments, $2 given"
 
 /* TUPLE ERRORS */
 indexed_prop_on_nun_tuple <err> "cannot access indexed property on non-tuple type $0"

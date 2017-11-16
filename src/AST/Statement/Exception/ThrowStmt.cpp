@@ -16,11 +16,6 @@ std::vector<AstNode::SharedPtr> ThrowStmt::get_children()
    return { thrownVal };
 }
 
-void ThrowStmt::__dump(int depth)
-{
-
-}
-
 const std::shared_ptr<Expression> &ThrowStmt::getThrownVal() const {
    return thrownVal;
 }

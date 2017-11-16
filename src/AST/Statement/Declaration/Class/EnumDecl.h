@@ -5,87 +5,51 @@
 #ifndef CDOT_ENUMDECL_H
 #define CDOT_ENUMDECL_H
 
-
-#include "../../Statement.h"
+#include "RecordDecl.h"
 
 class MethodDecl;
 class EnumCaseDecl;
+enum class AccessModifier : unsigned int;
 
 namespace cdot {
-   namespace cl {
-      struct Method;
-      class Enum;
-   }
+struct TemplateConstraint;
+namespace cl {
+   struct Method;
+   class Enum;
+}
 }
 
-class EnumDecl: public Statement {
+class EnumDecl: public RecordDecl {
 public:
    EnumDecl(
       AccessModifier am,
       string&& enumName,
       std::shared_ptr<TypeRef>& rawType,
-      std::vector<std::shared_ptr<MethodDecl>>&& methods,
+      std::vector<std::shared_ptr<Statement>>&& methods,
+      std::vector<std::shared_ptr<PropDecl>> &&properties,
       std::vector<std::shared_ptr<TypeRef>>&& conformsTo,
-      std::vector<GenericConstraint>&& generics,
       std::vector<std::shared_ptr<EnumCaseDecl>>&& cases,
       std::vector<Statement::SharedPtr>&& innerDeclarations
    );
-
-   string& getClassName() {
-      return className;
-   }
-
-   void setClassName(string&& name) {
-      className = name;
-   }
 
    typedef std::shared_ptr<EnumDecl> SharedPtr;
    typedef std::unique_ptr<EnumDecl> UniquePtr;
 
    std::vector<std::shared_ptr<AstNode>> get_children() override;
-   void __dump(int depth) override;
 
    NodeType get_type() override {
       return NodeType::ENUM_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
-   friend class cdot::cl::Class;
 
 protected:
    std::vector<std::shared_ptr<EnumCaseDecl>> cases;
-   std::vector<std::shared_ptr<TypeRef>> conformsTo;
-
    std::shared_ptr<TypeRef> rawType;
-
-   AccessModifier am;
-   string className;
-   string qualifiedName;
-
-   std::vector<std::shared_ptr<MethodDecl>> methods;
-   std::vector<GenericConstraint> generics;
-
-   std::vector<Statement::SharedPtr> innerDeclarations;
 
    // codegen
    string selfBinding;
-   cdot::cl::Enum* declaredEnum;
 
 public:
    const std::vector<std::shared_ptr<EnumCaseDecl>> &getCases() const
@@ -98,16 +62,6 @@ public:
       EnumDecl::cases = cases;
    }
 
-   const std::vector<std::shared_ptr<TypeRef>> &getConformsTo() const
-   {
-      return conformsTo;
-   }
-
-   void setConformsTo(const std::vector<std::shared_ptr<TypeRef>> &conformsTo)
-   {
-      EnumDecl::conformsTo = conformsTo;
-   }
-
    const std::shared_ptr<TypeRef> &getRawType() const
    {
       return rawType;
@@ -116,56 +70,6 @@ public:
    void setRawType(const std::shared_ptr<TypeRef> &rawType)
    {
       EnumDecl::rawType = rawType;
-   }
-
-   AccessModifier getAm() const
-   {
-      return am;
-   }
-
-   void setAm(AccessModifier am)
-   {
-      EnumDecl::am = am;
-   }
-
-   const string &getQualifiedName() const
-   {
-      return qualifiedName;
-   }
-
-   void setQualifiedName(const string &qualifiedName)
-   {
-      EnumDecl::qualifiedName = qualifiedName;
-   }
-
-   const std::vector<std::shared_ptr<MethodDecl>> &getMethods() const
-   {
-      return methods;
-   }
-
-   void setMethods(const std::vector<std::shared_ptr<MethodDecl>> &methods)
-   {
-      EnumDecl::methods = methods;
-   }
-
-   const std::vector<GenericConstraint> &getGenerics() const
-   {
-      return generics;
-   }
-
-   void setGenerics(const std::vector<GenericConstraint> &generics)
-   {
-      EnumDecl::generics = generics;
-   }
-
-   const std::vector<Statement::SharedPtr> &getInnerDeclarations() const
-   {
-      return innerDeclarations;
-   }
-
-   void setInnerDeclarations(const std::vector<Statement::SharedPtr> &innerDeclarations)
-   {
-      EnumDecl::innerDeclarations = innerDeclarations;
    }
 
    const string &getSelfBinding() const
@@ -178,15 +82,7 @@ public:
       EnumDecl::selfBinding = selfBinding;
    }
 
-   Enum *getDeclaredEnum() const
-   {
-      return declaredEnum;
-   }
-
-   void setDeclaredEnum(Enum *declaredEnum)
-   {
-      EnumDecl::declaredEnum = declaredEnum;
-   }
+   cl::Enum *getDeclaredEnum() const;
 };
 
 

@@ -5,17 +5,26 @@
 #include "Function.h"
 
 #include "../../Statement/Declaration/Class/MethodDecl.h"
+#include "../../SymbolTable.h"
+#include "Record/Record.h"
 
 namespace cdot {
 
 Callable::Callable(
    string &&name,
    AccessModifier am,
-   Type &&returnType,
-   std::vector<Argument> &&arguments,
-   std::vector<GenericConstraint> &&generics) : name(name), accessModifier(am),
-                                                returnType(returnType), arguments(arguments),
-                                                generics(generics)
+   const Type &returnType,
+   std::vector<Argument> &&arguments) : name(name), accessModifier(am),
+                                        returnType(returnType),
+                                        arguments(arguments)
+{
+
+}
+
+Callable::Callable(cl::CallableTemplate *Template)
+   : name(string(Template->funcName)),
+     Template(Template),
+     is_template(true)
 {
 
 }
@@ -24,35 +33,52 @@ namespace cl {
 
 Method::Method(
    string name,
-   Type& ret_type,
+   const Type& ret_type,
    AccessModifier access_modifier,
    std::vector<Argument>&& args,
-   std::vector<GenericConstraint>& generics,
    bool isStatic,
    MethodDecl* declaration,
-   SourceLocation loc
-) : Callable(std::move(name), access_modifier, std::move(ret_type),
-             std::move(args), std::move(generics)),
-   isStatic(isStatic), declaration(declaration),
-   hasDefinition(declaration == nullptr || declaration->hasDefinition()), loc(loc)
+   SourceLocation loc,
+   unsigned id
+) : Callable(std::move(name), access_modifier, ret_type,
+             std::move(args)),
+   is_static(isStatic), methodID(id), loc(loc),
+   hasDefinition(declaration == nullptr || declaration->hasDefinition())
+{
+   this->declaration = declaration;
+}
+
+Method::Method(MethodTemplate *Template) : Callable(Template)
 {
 
 }
 
 Method::Method(
    string name,
-   Type& ret_type,
+   const Type& ret_type,
    std::vector<Argument>&& args,
-   std::vector<GenericConstraint>& generics,
    MethodDecl*declaration,
-   SourceLocation loc
-) : Callable(std::move(name), AccessModifier::PUBLIC, std::move(ret_type),
-             std::move(args), std::move(generics)),
-   isStatic(false), declaration(declaration),
+   SourceLocation loc,
+   unsigned id
+) : Callable(std::move(name), AccessModifier::PUBLIC, ret_type,
+             std::move(args)),
+   is_static(false),
    hasDefinition(declaration == nullptr || declaration->hasDefinition()),
-   loc(loc)
+   loc(loc), methodID(id)
 {
+   this->declaration = declaration;
+}
 
+Method::~Method()
+{
+   delete Template;
+}
+
+AstNode* Method::getTemplateOrMethodDecl()
+{
+   return is_template
+          ? (AstNode*)static_cast<MethodTemplate*>(Template)->methodDecl
+          : (AstNode*)declaration;
 }
 
 }
@@ -152,16 +178,6 @@ void Callable::setArguments(const std::vector<Argument> &arguments)
    Callable::arguments = arguments;
 }
 
-std::vector<GenericConstraint> &Callable::getGenerics()
-{
-   return generics;
-}
-
-void Callable::setGenerics(const std::vector<GenericConstraint> &generics)
-{
-   Callable::generics = generics;
-}
-
 bool Callable::hasStructReturn() const
 {
    return has_struct_return;
@@ -191,22 +207,27 @@ void Callable::setLlvmFunc(llvm::Function *llvmFunc)
 {
    Callable::llvmFunc = llvmFunc;
 }
-}
 
-Function::Function(
-   string& name,
-   Type& ret_type,
-   std::vector<GenericConstraint>& generics
-) : Callable(std::move(name), AccessModifier::PUBLIC,
-             std::move(ret_type), {}, std::move(generics))
+} // namespace cdot
+
+Function::Function(string& name, const Type& ret_type)
+   : Callable(std::move(name), AccessModifier::PUBLIC, ret_type, {})
 {
 
 }
 
-Function::Function(
-   string& name,
-   Type& ret_type
-) : Callable(std::move(name), AccessModifier::PUBLIC, std::move(ret_type), {}, {})
+Function::Function(cl::CallableTemplate *Template) : Callable(Template)
 {
 
+}
+
+Function::~Function()
+{
+   delete Template;
+}
+
+AstNode* Function::getTemplateOrFunctionDecl() const
+{
+   return is_template ? (AstNode*)Template->decl
+                      : (AstNode*)declaration;
 }

@@ -121,7 +121,7 @@ using namespace ::cdot::codegen;
 
 using namespace cdot::eh;
 
-llvm::Value* CodeGen::visit(TryStmt *node)
+void CodeGen::visit(TryStmt *node)
 {
    bool hasFinally = node->finallyBlock != nullptr;
    bool hasCatches = !node->catchBlocks.empty();
@@ -159,7 +159,7 @@ llvm::Value* CodeGen::visit(TryStmt *node)
    Builder.SetInsertPoint(ip);
    EHStack.emplace_back(landBB, finallyBB, contBB, brAlloca, std::vector<llvm::BasicBlock*>());
 
-   node->body->accept(*this);
+   node->body->accept(this);
 
    if (hasCatches) {
       EmitCatchClauses(node);
@@ -172,8 +172,6 @@ llvm::Value* CodeGen::visit(TryStmt *node)
    if (!hasCatches && !hasFinally) {
       EmitTryNoClauses(node);
    }
-
-   return nullptr;
 }
 
 void CodeGen::EmitTryNoClauses(
@@ -192,7 +190,8 @@ void CodeGen::EmitTryNoClauses(
    Builder.SetInsertPoint(landBB);
 
    // catch-none
-   auto landingPad = llvm::cast<llvm::LandingPadInst>(&landBB->getInstList().front());
+   auto landingPad = llvm::cast<llvm::LandingPadInst>(
+      &landBB->getInstList().front());
    landingPad->addClause(
       llvm::ConstantArray::get(
          llvm::ArrayType::get(Builder.getInt8PtrTy(), 1),
@@ -238,7 +237,7 @@ void CodeGen::EmitFinally(
    }
 
    Builder.SetInsertPoint(eh.finallyBB);
-   node->finallyBlock->accept(*this);
+   node->finallyBlock->accept(this);
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
       if (eh.targets.empty()) {
@@ -369,7 +368,7 @@ void CodeGen::EmitCatchClauses(
       }
 
       declareVariable(catchBlock.identifier, exc);
-      catchBlock.body->accept(*this);
+      catchBlock.body->accept(this);
 
       if (!Builder.GetInsertBlock()->getTerminator()) {
          if (hasFinally) {
@@ -388,7 +387,7 @@ void CodeGen::EmitCatchClauses(
    Builder.CreateBr(compBBs.front());
 
    auto typeIdFor = llvm::Intrinsic::getDeclaration(
-      Module.get(),
+      Module,
       llvm::Intrinsic::ID::eh_typeid_for
    );
 
@@ -415,15 +414,16 @@ void CodeGen::EmitCatchClauses(
    }
 }
 
-llvm::Value* CodeGen::visit(ThrowStmt *node)
+void CodeGen::visit(ThrowStmt *node)
 {
-   auto thrownVal = node->getThrownVal()->accept(*this);
+   auto thrownVal = getResult(node->getThrownVal());
    llvm::Function *descFn = node->descFn ? getOwnDecl(node->descFn)
                                          : nullptr;
 
    if (!node->thrownType->isRefcounted()) {
       auto size = node->thrownType->getSize();
-      llvm::Value *errAlloc = Builder.CreateCall(MALLOC, { wordSizedInt(size) });
+      llvm::Value *errAlloc = Builder.CreateCall(MALLOC,
+                                                 { wordSizedInt(size) });
 
       Builder.CreateMemCpy(errAlloc, thrownVal, size, 1);
       thrownVal = errAlloc;
@@ -444,6 +444,4 @@ llvm::Value* CodeGen::visit(ThrowStmt *node)
 
    CreateCall(Exc->getThrowFn(), {alloc});
    Builder.CreateUnreachable();
-
-   return nullptr;
 }

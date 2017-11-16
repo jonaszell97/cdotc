@@ -5,13 +5,18 @@
 #include "ConstrDecl.h"
 #include "../../Block/CompoundStmt.h"
 #include "../FuncArgDecl.h"
+#include "../../../../Util.h"
 
-ConstrDecl::ConstrDecl() : args{}, body{}, memberwise(true), am(AccessModifier::PUBLIC) {
+ConstrDecl::ConstrDecl()
+   : CallableDecl(AccessModifier::PUBLIC, {}, {}, {}), memberwise(true)
+{
 
 }
 
-ConstrDecl::ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>> args, CompoundStmt::SharedPtr body, AccessModifier am) :
-      args(args), body(body), am(am) {
+ConstrDecl::ConstrDecl(
+   std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+   AccessModifier am) : CallableDecl(am, {}, {}, std::move(args))
+{
 
 }
 
@@ -32,11 +37,12 @@ std::vector<std::shared_ptr<AstNode>> ConstrDecl::get_children() {
    return children;
 }
 
-void ConstrDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << (memberwise ? "Implicit" : "") << "ConstrDecl" << std::endl;
+cl::Record *ConstrDecl::getRecord() const
+{
+   return record;
+}
 
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
+void ConstrDecl::setRecord(cl::Record *record)
+{
+   ConstrDecl::record = record;
 }

@@ -6,119 +6,123 @@
 
 namespace cdot {
 
-   unordered_map<string, GenericType*> GenericType::Instances;
+unordered_map<string, GenericType*> GenericType::Instances;
 
-   string GenericType::keyFrom(
-      const string &genericClassName,
-      BuiltinType* actualType)
-   {
-      auto actualClassName = actualType->toUniqueString();
-      return std::to_string(genericClassName.length()) + genericClassName
-         + std::to_string(actualClassName.length()) + actualClassName;
+string GenericType::keyFrom(
+   const string &genericClassName,
+   BuiltinType* actualType)
+{
+   auto actualClassName = actualType->toUniqueString();
+   return std::to_string(genericClassName.length()) + genericClassName
+      + std::to_string(actualClassName.length()) + actualClassName;
+}
+
+GenericType* GenericType::get(
+   const string &genericClassName,
+   BuiltinType* actualType)
+{
+   while (actualType->isGenericTy()) {
+      actualType = actualType->asGenericTy()->getActualType();
    }
 
-   GenericType* GenericType::get(
-      const string &genericClassName,
-      BuiltinType* actualType)
-   {
-      auto key = keyFrom(genericClassName, actualType);
-      if (Instances.find(key) == Instances.end()) {
-         Instances[key] = new GenericType(genericClassName, actualType);
-      }
-
-      return Instances[key];
+   auto key = keyFrom(genericClassName, actualType);
+   if (Instances.find(key) == Instances.end()) {
+      Instances[key] = new GenericType(genericClassName, actualType);
    }
 
-   GenericType::GenericType(
-      const string &genericClassName,
-      BuiltinType* actualType)
-      : genericClassName(genericClassName), actualType(actualType)
-   {
-      id = TypeID::GenericTypeID;
-   }
+   return Instances[key];
+}
 
-   bool GenericType::isStruct()
-   {
-      return actualType->isStruct();
-   }
+GenericType::GenericType(
+   const string &genericClassName,
+   BuiltinType* actualType)
+   : ObjectType(genericClassName), actualType(actualType)
+{
+   id = TypeID::GenericTypeID;
+}
 
-   bool GenericType::isProtocol()
-   {
-      return actualType->isProtocol();
-   }
+BuiltinType* GenericType::getActualType() const
+{
+   return actualType;
+}
 
-   bool GenericType::isEnum()
-   {
-      return actualType->isEnum();
-   }
+BuiltinType* GenericType::getActualType()
+{
+   return actualType;
+}
 
-   bool GenericType::isRefcounted() const
-   {
-      return actualType->isRefcounted();
-   }
+bool GenericType::isStruct() const
+{
+   return actualType->isStruct();
+}
 
-   bool GenericType::isValueType() const
-   {
-      return actualType->isValueType();
-   }
+bool GenericType::isProtocol() const
+{
+   return actualType->isProtocol();
+}
 
-   bool GenericType::needsMemCpy() const
-   {
-      return actualType->needsMemCpy();
-   }
+bool GenericType::isEnum() const
+{
+   return actualType->isEnum();
+}
 
-   bool GenericType::needsStructReturn()
-   {
-      return actualType->needsStructReturn();
-   }
+bool GenericType::isRefcounted() const
+{
+   return actualType->isRefcounted();
+}
 
-   ObjectType* GenericType::asObjTy()
-   {
-      return actualType->asObjTy();
-   }
+bool GenericType::isValueType() const
+{
+   return actualType->isValueType();
+}
 
-   bool GenericType::implicitlyCastableTo(BuiltinType *rhs)
-   {
-      return actualType->implicitlyCastableTo(rhs);
-   }
+bool GenericType::needsMemCpy() const
+{
+   return actualType->needsMemCpy();
+}
 
-   bool GenericType::explicitlyCastableTo(BuiltinType *rhs)
-   {
-      return actualType->explicitlyCastableTo(rhs);
-   }
+bool GenericType::needsStructReturn() const
+{
+   return actualType->needsStructReturn();
+}
 
-   string& GenericType::getClassName()
-   {
-      return actualType->getClassName();
-   }
+bool GenericType::implicitlyCastableTo(BuiltinType *rhs) const
+{
+   return actualType->implicitlyCastableTo(rhs);
+}
 
-   cl::Record * GenericType::getRecord() const
-   {
-      return actualType->getRecord();
-   }
+bool GenericType::explicitlyCastableTo(BuiltinType *rhs) const
+{
+   return actualType->explicitlyCastableTo(rhs);
+}
 
-   short GenericType::getAlignment()
-   {
-      return actualType->getAlignment();
-   }
+cl::Record * GenericType::getRecord() const
+{
+   return actualType->getRecord();
+}
 
-   size_t GenericType::getSize()
-   {
-      return actualType->getSize();
-   }
+short GenericType::getAlignment() const
+{
+   return actualType->getAlignment();
+}
 
-   llvm::Type* GenericType::getLlvmType()
-   {
-      return actualType->getLlvmType();
-   }
+size_t GenericType::getSize() const
+{
+   return actualType->getSize();
+}
 
-   string GenericType::toString()
-   {
-      return genericClassName;
-   }
+llvm::Type* GenericType::getLlvmType() const
+{
+   return actualType->getLlvmType();
+}
 
-   string GenericType::toUniqueString()
-   {
-      return genericClassName + ": " + actualType->toUniqueString();
-   }
+string GenericType::toString() const
+{
+   return className;
+}
+
+string GenericType::toUniqueString() const
+{
+   return className + ": " + actualType->toUniqueString();
+}
 }

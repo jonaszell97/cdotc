@@ -35,15 +35,3 @@ std::vector<AstNode::SharedPtr> UnaryOperator::get_children() {
 
    return res;
 }
-
-void UnaryOperator::__dump(int depth) {
-   for (int i = 0; i < depth; i++) {
-      std::cout << "\t";
-   }
-
-   std::cout << "UnaryOperator ['" << op << "']" << std::endl;
-
-   for (auto child : get_children()) {
-      child->__dump(depth + 1);
-   }
-}

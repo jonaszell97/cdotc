@@ -7,28 +7,24 @@
 #include "../../Expression/TypeRef.h"
 #include "../Block/CompoundStmt.h"
 
-FunctionDecl::FunctionDecl(std::string func_name, TypeRef::SharedPtr type) :
-   funcName(func_name),
-   returnType(type),
-   args(std::vector<FuncArgDecl::SharedPtr>())
+FunctionDecl::FunctionDecl(
+   AccessModifier am, string &&func_name, TypeRef::SharedPtr type)
+   : CallableDecl(am, std::move(func_name), std::move(type), {})
 {
 
 }
 
 FunctionDecl::FunctionDecl(
+   AccessModifier am,
    string &&funcName,
    std::shared_ptr<TypeRef> &&returnType,
    std::vector<std::shared_ptr<FuncArgDecl>> &&args,
    std::shared_ptr<CompoundStmt> &&body,
-   std::vector<GenericConstraint> &&generics,
-   bool has_sret) : funcName(funcName),
-                    returnType(returnType),
-                    args(args),
-                    body(body),
-                    generics(generics),
-                    has_sret(has_sret)
+   bool has_sret) : CallableDecl(am, std::move(funcName), std::move(returnType),
+                                 std::move(args))
 {
-
+   this->body = body;
+   this->has_sret = has_sret;
 }
 
 std::vector<AstNode::SharedPtr> FunctionDecl::get_children() {
@@ -42,15 +38,3 @@ std::vector<AstNode::SharedPtr> FunctionDecl::get_children() {
 
    return res;
 }
-
-void FunctionDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "FunctionDecl ["<< funcName << " => " << returnType->toString()  << "]" << std::endl;
-
-   for (auto arg : args) {
-      arg->__dump(depth + 1);
-   }
-
-   body->__dump(depth + 1);
-}
-

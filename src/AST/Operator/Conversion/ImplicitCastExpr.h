@@ -9,27 +9,10 @@
 
 class ImplicitCastExpr : public Expression {
 public:
-   ImplicitCastExpr(Type& from, Type& to, Expression::SharedPtr);
+   ImplicitCastExpr(const Type& from, const Type& to, Expression::SharedPtr);
 
    typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
-
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-     v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-     return v.visit(this);
-   }
 
    NodeType get_type() override {
       return target->get_type();
@@ -40,6 +23,7 @@ public:
       target->isHiddenReturnValue();
    }
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

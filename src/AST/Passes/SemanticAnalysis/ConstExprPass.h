@@ -8,86 +8,105 @@
 #include <stack>
 #include <vector>
 #include <string>
+#include <set>
 #include <unordered_map>
+
 #include "../AbstractPass.h"
+#include "../../../Variant/Variant.h"
 
 namespace cdot {
    struct Variant;
 }
 
-using namespace cdot;
-using std::stack;
-using std::unordered_map;
-using std::string;
-
-class ConstExprPass {
+class ConstExprPass: public AbstractPass {
 public:
-   ConstExprPass();
+   explicit ConstExprPass();
+   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
 
-   virtual Variant visit(NamespaceDecl *node);
-   virtual Variant visit(CompoundStmt *node);
+   void visit(NamespaceDecl *node) override;
+   void visit(CompoundStmt *node) override;
 
-   virtual Variant visit(DeclStmt *node);
-   virtual Variant visit(FunctionDecl *node);
-   virtual Variant visit(DeclareStmt *node);
+   void visit(DeclStmt *node) override;
+   void DeclareGlobalVar(DeclStmt *node);
 
-   virtual Variant visit(ClassDecl *node);
-   virtual Variant visit(MethodDecl *node);
-   virtual Variant visit(FieldDecl *node);
-   virtual Variant visit(ConstrDecl *node);
-   virtual Variant visit(DestrDecl *node);
-   virtual Variant visit(EnumDecl *node);
+   void visit(FunctionDecl *node) override;
+   void visit(DeclareStmt *node) override;
 
-   virtual Variant visit(IdentifierRefExpr *node);
-   virtual Variant visit(SubscriptExpr *node);
-   virtual Variant visit(CallExpr *node);
-   virtual Variant visit(MemberRefExpr *node);
+   void visit(ClassDecl *node) override;
+   void visit(MethodDecl *node) override;
+   void visit(FieldDecl *node) override;
+   void DeclareField(FieldDecl *node);
 
-   virtual Variant visit(ForStmt *node);
-   virtual Variant visit(ForInStmt *node);
-   virtual Variant visit(WhileStmt *node);
-   virtual Variant visit(IfStmt *node);
-   virtual Variant visit(MatchStmt *node);
-   virtual Variant visit(CaseStmt *node);
-   virtual Variant visit(LabelStmt *node);
-   virtual Variant visit(GotoStmt *node);
+   void visit(ConstrDecl *node) override;
+   void visit(DestrDecl *node) override;
+   void visit(EnumDecl *node) override;
+   void visit(RecordTemplateDecl *node) override;
 
-   virtual Variant visit(ReturnStmt *node);
-   virtual Variant visit(BreakStmt *node);
-   virtual Variant visit(ContinueStmt *node);
+   void visit(IdentifierRefExpr *node) override;
+   void visit(SubscriptExpr *node) override;
+   void visit(CallExpr *node) override;
+   void visit(MemberRefExpr *node) override;
 
-   virtual Variant visit(CollectionLiteral *node);
-   virtual Variant visit(NumericLiteral *node);
-   virtual Variant visit(NoneLiteral *node);
-   virtual Variant visit(StringLiteral *node);
-   virtual Variant visit(StringInterpolation *node);
-   virtual Variant visit(TupleLiteral *node);
+   void visit(ForStmt *node) override;
+   void visit(ForInStmt *node) override;
+   void visit(WhileStmt *node) override;
+   void visit(IfStmt *node) override;
+   void visit(MatchStmt *node) override;
+   void visit(CaseStmt *node) override;
+   void visit(LabelStmt *node) override;
+   void visit(GotoStmt *node) override;
 
-   virtual Variant visit(BinaryOperator *node);
-   virtual Variant visit(TertiaryOperator *node);
-   virtual Variant visit(UnaryOperator *node);
+   void visit(ReturnStmt *node) override;
+   void visit(BreakStmt *node) override;
+   void visit(ContinueStmt *node) override;
+
+   void visit(CollectionLiteral *node) override;
+   void visit(IntegerLiteral *node) override;
+   void visit(FPLiteral *node) override;
+   void visit(BoolLiteral *node) override;
+   void visit(CharLiteral *node) override;
+
+   void visit(NoneLiteral *node) override;
+   void visit(StringLiteral *node) override;
+   void visit(StringInterpolation *node) override;
+   void visit(TupleLiteral *node) override;
+
+   void visit(BinaryOperator *node) override;
+   void visit(TertiaryOperator *node) override;
+   void visit(UnaryOperator *node) override;
 
 
-   virtual Variant visit(FuncArgDecl *node);
-   virtual Variant visit(Expression *node);
-   virtual Variant visit(LambdaExpr *node);
-   virtual Variant visit(ImplicitCastExpr *node);
-   virtual Variant visit(TypedefDecl *node);
-   virtual Variant visit(TypeRef *node);
-   virtual Variant visit(LvalueToRvalue *node);
+   void visit(FuncArgDecl *node) override;
+   void visit(Expression *node) override;
+   void visit(LambdaExpr *node) override;
+   void visit(ImplicitCastExpr *node) override;
+   void visit(TypedefDecl *node) override;
+   void visit(TypeRef *node) override;
+   void visit(LvalueToRvalue *node) override;
 
-   virtual Variant visit(DebugStmt *node);
+   void visit(DebugStmt *node) override;
 
-   virtual Variant visit(Statement *node);
+   void visit(Statement *node) override;
+
+   cdot::Variant getResult(AstNode *node);
+   cdot::Variant getResult(std::shared_ptr<AstNode> node);
 
 protected:
    static size_t ConditionStack;
 
-   long hasVariable(string& varName);
-   Variant& getVariable(string& varName);
-   void setVariable(string& varName, Variant& val);
+   std::unordered_map<std::string, cdot::Variant> Variables;
+   std::set<std::string> VisitedClasses;
+   std::stack<cdot::Variant> Results;
 
-   unordered_map<string, Variant> Variables;
+   void returnResult(cdot::Variant v);
+
+   void doInitialPass(
+      const std::vector<std::shared_ptr<Statement>> &root);
+
+   bool hasVariable(const std::string& varName);
+   cdot::Variant& getVariable(const std::string& varName);
+   void setVariable(
+      const std::string& varName, const cdot::Variant& val);
 };
 
 

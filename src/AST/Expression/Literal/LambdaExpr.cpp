@@ -8,8 +8,9 @@
 #include "../../../Variant/Type/FunctionType.h"
 #include "../TypeRef.h"
 
-LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::shared_ptr<FuncArgDecl>> args,
-       Statement::SharedPtr body) :
+LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type,
+                       std::vector<std::shared_ptr<FuncArgDecl>> args,
+                       Statement::SharedPtr body) :
    returnType(return_type),
    args(args),
    body(body)
@@ -17,7 +18,8 @@ LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type, std::vector<std::sh
 
 }
 
-std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {
+std::vector<AstNode::SharedPtr> LambdaExpr::get_children()
+{
    std::vector<AstNode::SharedPtr> children;
    for (const auto& arg : args) {
       children.push_back(arg);
@@ -28,13 +30,4 @@ std::vector<AstNode::SharedPtr> LambdaExpr::get_children() {
 
    children.push_back(body);
    return children;
-}
-
-void LambdaExpr::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "LambdaExpr\n";
-
-   for (const auto& child : get_children()) {
-      child->__dump(depth + 1);
-   }
 }

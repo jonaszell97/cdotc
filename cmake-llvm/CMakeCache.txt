@@ -14,12 +14,6 @@
 # EXTERNAL cache entries
 ########################
 
-//Value Computed by CMake
-CDot_BINARY_DIR:STATIC=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm
-
-//Value Computed by CMake
-CDot_SOURCE_DIR:STATIC=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm
-
 //Path to a program.
 CMAKE_AR:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar
 
@@ -50,7 +44,7 @@ CMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DNDEBUG
 CMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING=-O2 -g -DNDEBUG
 
 //C compiler
-CMAKE_C_COMPILER:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
+CMAKE_C_COMPILER:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang
 
 //Flags used by the compiler during all build types.
 CMAKE_C_FLAGS:STRING=
@@ -134,7 +128,7 @@ CMAKE_OSX_DEPLOYMENT_TARGET:STRING=
 CMAKE_OSX_SYSROOT:STRING=
 
 //Value Computed by CMake
-CMAKE_PROJECT_NAME:STATIC=CDot
+CMAKE_PROJECT_NAME:STATIC=cdot-llvm
 
 //Path to a program.
 CMAKE_RANLIB:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib
@@ -184,6 +178,12 @@ CMAKE_STRIP:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/Xcode
 // during the make.  This is useful for debugging only. With Visual
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
+
+//Value Computed by CMake
+cdot-llvm_BINARY_DIR:STATIC=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm
+
+//Value Computed by CMake
+cdot-llvm_SOURCE_DIR:STATIC=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm
 
 
 ########################

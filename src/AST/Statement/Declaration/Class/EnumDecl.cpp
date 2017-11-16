@@ -6,18 +6,27 @@
 #include "MethodDecl.h"
 #include "EnumCaseDecl.h"
 
-EnumDecl::EnumDecl(AccessModifier am, string &&enumName, std::shared_ptr<TypeRef>& rawType,
-   std::vector<std::shared_ptr<MethodDecl>>&&methods, std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-   std::vector<GenericConstraint> &&generics,
-   std::vector<std::shared_ptr<EnumCaseDecl>> &&cases, std::vector<Statement::SharedPtr>&& innerDeclarations) :
-      className(enumName),
-      am(am),
-      rawType(rawType),
-      methods(methods),
-      conformsTo(conformsTo),
-      generics(generics),
-      cases(cases),
-      innerDeclarations(innerDeclarations)
+#include "../../../Passes/SemanticAnalysis/Record/Enum.h"
+
+EnumDecl::EnumDecl(AccessModifier am,
+                   string &&enumName,
+                   std::shared_ptr<TypeRef>& rawType,
+                   std::vector<std::shared_ptr<Statement>> &&methods,
+                   std::vector<std::shared_ptr<PropDecl>> &&properties,
+                   std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
+                   std::vector<std::shared_ptr<EnumCaseDecl>> &&cases,
+                   std::vector<Statement::SharedPtr> &&innerDeclarations) :
+   RecordDecl(
+      am,
+      std::move(enumName),
+      std::move(conformsTo),
+      std::move(methods),
+      {},
+      move(properties),
+      std::move(innerDeclarations)
+   ),
+   rawType(move(rawType)),
+   cases(move(cases))
 {
 
 }
@@ -37,11 +46,7 @@ std::vector<std::shared_ptr<AstNode>> EnumDecl::get_children() {
    return children;
 }
 
-void EnumDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "EnumDecl [" << className << "]\n";
-
-   for (const auto& child : get_children()) {
-      child->__dump(depth + 1);
-   }
+cl::Enum* EnumDecl::getDeclaredEnum() const
+{
+   return record->getAs<Enum>();
 }

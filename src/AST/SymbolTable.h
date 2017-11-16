@@ -18,40 +18,60 @@ class CompoundStmt;
 class ClassDecl;
 class Function;
 class AstNode;
+class TypeRef;
 
 using std::pair;
 using std::unordered_map;
 using std::unordered_multimap;
 
 namespace cdot {
-   class PointerType;
-   class BuiltinType;
-   class ObjectType;
-   class ObjectType;
+class PointerType;
+class BuiltinType;
+class ObjectType;
+class ObjectType;
+class TemplateArgList;
 
-   struct Argument;
-   
-   namespace cl {
-      class Class;
-      class Enum;
-      class Union;
-      class Record;
-      struct EnumCase;
+struct Argument;
+
+namespace cl {
+
+class Class;
+class Enum;
+class Union;
+class Record;
+struct EnumCase;
+struct RecordTemplate;
+struct CallableTemplate;
+
+}
+
+struct Variable {
+   AccessModifier access;
+   Type type;
+   string declaredNamespace;
+   AstNode *decl;
+};
+
+struct Typedef {
+   Typedef(
+      BuiltinType *ty, const string &alias,
+      const std::vector<TemplateConstraint> &templateArgs = {},
+      AccessModifier access = AccessModifier::PUBLIC,
+      AstNode *decl = nullptr) : aliasedType(ty), alias(alias),
+                                 generics(templateArgs),
+                                 access(access), decl(decl)
+   {
+
    }
 
-   struct Variable {
-      AccessModifier access;
-      Type type;
-      string declaredNamespace;
-      AstNode *decl;
-   };
+   Typedef() = default;
 
-   struct Typedef {
-      AccessModifier access;
-      BuiltinType *aliasedType;
-      std::vector<GenericConstraint> generics;
-      AstNode *decl;
-   };
+   AccessModifier access;
+   string alias;
+   BuiltinType *aliasedType;
+   std::vector<TemplateConstraint> generics;
+   AstNode *decl;
+};
 }
 
 using namespace cdot;
@@ -60,9 +80,32 @@ using namespace cdot::cl;
 using std::string;
 
 class SymbolTable {
-   typedef unordered_multimap<string, std::unique_ptr<Function>>::iterator FunctionIterator;
+   typedef unordered_multimap<string, std::unique_ptr<Function>>::iterator
+      FunctionIterator;
 public:
+   static void declareRecord(
+      Record *cl
+   );
+
+   static void declareRecord(
+      const string &name,
+      Record *cl
+   );
+
+   static RecordTemplate *declareRecordTemplate(
+      RecordTemplate &&templ
+   );
+
+   static void declareFunctionTemplate(
+      CallableTemplate *templ
+   );
+
    static void declareClass(
+      Class *cl
+   );
+
+   static void declareClass(
+      const string &name,
       Class *cl
    );
 
@@ -70,10 +113,15 @@ public:
       Enum *en
    );
 
+   static void declareEnum(
+      const string &name,
+      Enum *en
+   );
+
    static void declareTypedef(
       const string& alias,
       BuiltinType* originTy,
-      const std::vector<GenericConstraint>& generics = {},
+      const std::vector<TemplateConstraint>& generics = {},
       AccessModifier access = AccessModifier::PUBLIC,
       AstNode *decl = nullptr
    );
@@ -81,7 +129,7 @@ public:
    static void declareNamespace(const string &);
    static void declareVariable(
       const string &varName,
-      Type &varType,
+      const Type &varType,
       AccessModifier access,
       const string& declaredNamespace,
       AstNode *decl
@@ -90,6 +138,16 @@ public:
    static void declareFunction(
       const string &funcName,
       std::unique_ptr<Function> &&func
+   );
+
+   static void checkTemplateArgCompatability(
+      Function &newFunc
+   );
+
+   static void checkDuplicateFunctionDeclaration(
+      AstNode *decl,
+      const string &name,
+      const string &mangledName
    );
 
    static void declareUnion(
@@ -102,63 +160,144 @@ public:
    static bool isNamespace(const string &);
 
    static bool hasClass(const string&);
-   static bool hasClass(const string&, std::vector<string> &);
+   static bool hasClass(const string&, const std::vector<string> &);
 
    static bool hasUnion(const string&);
-   static bool hasUnion(const string&, std::vector<string> &);
+   static bool hasUnion(const string&, const std::vector<string> &);
 
    static bool hasRecord(const string&);
-   static bool hasRecord(const string&, std::vector<string> &);
+   static bool hasRecord(const string&, const std::vector<string> &);
+   static bool hasRecord(const string& name,
+                         std::vector<TemplateArg> &args,
+                         const std::vector<string> &importedNamespaces);
+
+   static bool hasRecordTemplate(const string &name);
+   static bool hasRecordTemplate(const string&, const std::vector<string> &);
+
+   static bool hasFunctionTemplate(const string &name);
+   static bool hasFunctionTemplate(const string&, const std::vector<string> &);
 
    static bool hasTypedef(const string&);
-   static bool hasTypedef(const string&, std::vector<string> &);
+   static bool hasTypedef(const string&, const std::vector<string> &);
 
    static bool hasVariable(const string&);
-   static bool hasVariable(const string&, std::vector<string> &);
+   static bool hasVariable(const string&, const std::vector<string> &);
 
    static size_t numFunctionsWithName(const string &funcName);
 
    static cdot::cl::Class* getClass(const string&);
-   static cdot::cl::Class* getClass(const string&, std::vector<string> &);
+   static cdot::cl::Class* getClass(const string&, const std::vector<string> &);
 
    static cdot::cl::Union* getUnion(const string&);
-   static cdot::cl::Union* getUnion(const string&, std::vector<string> &);
+   static cdot::cl::Union* getUnion(const string&, const std::vector<string> &);
 
    static Record *getRecord(const string &recordName);
-   static Record *getRecord(const string &recordName, std::vector<string> &ns);
+   static Record *getRecord(const string &recordName,
+                            const std::vector<string> &ns);
+   static Record *getRecord(const string &recordName,
+                            TemplateArgList *argList,
+                            const std::vector<string> &ns = {},
+                            bool *isNew = nullptr);
+
+   static Function *getAnyFn(const string &withName,
+                             const std::vector<string> &ns);
+
+   static RecordTemplate *getRecordTemplate(const string &name);
+   static RecordTemplate *getRecordTemplate(const string &name,
+                                            const std::vector<string> &ns);
+
+   static CallableTemplate &getFunctionTemplate(const string &name);
+   static CallableTemplate &getFunctionTemplate(const string &name,
+                                                const std::vector<string> &ns);
+
+   static bool isTemplatedFunction(const string &funcName);
+   static std::vector<TemplateConstraint> &getConstraints(
+      const string &forFunction);
 
    static Typedef getTypedef(const string&);
-   static Typedef getTypedef(const string&, std::vector<string> &);
+   static Typedef getTypedef(const string&, const std::vector<string> &);
 
    static Variable& getVariable(const string &);
-   static pair<Variable&, string> getVariable(const string &, std::vector<string> &);
+   static pair<Variable&, string> getVariable(const string &,
+                                              const std::vector<string> &);
 
    static void setVariable(const string& name, BuiltinType* ty);
 
    static pair<FunctionIterator, FunctionIterator> getFunction(const string &);
-   static pair<FunctionIterator, FunctionIterator> getFunction(const string &, std::vector<string> &);
+   static pair<FunctionIterator, FunctionIterator> getFunction(
+      const string &, const std::vector<string> &);
 
    static string mangleVariable(const string &, size_t = 0);
    static string mangleFunction(const string &, std::vector<Argument> &args);
+   static string mangleFunction(const string &,
+                                std::vector<std::shared_ptr<TypeRef>> &args);
 
    static string mangleMethod(
       const string &className,
       const string &methodName,
-      std::vector<Argument> &args
+      std::vector<Argument> &args,
+      bool resolveSelf = false
    );
 
-   static Typedef* resolveTypedef(
+   static Typedef& resolveTypedef(
       const string &typedefName,
-      Type& target,
       std::vector<string> &importedNS
    );
 
    static const unordered_map<string, Record*>& getRecords();
 
+   enum LookupKind {
+      LK_Full,
+      LK_Records,
+      LK_Functions,
+      LK_Variables
+   };
+
+   struct LookupResult {
+      enum LookupResultKind {
+         LRK_Nothing,
+
+         LRK_Record,
+         LRK_Class,
+         LRK_Enum,
+         LRK_Struct,
+         LRK_Protocol,
+         LRK_Union,
+
+         LRK_Function,
+         LRK_GlobalVariable,
+
+         LRK_RecordTemplate,
+         LRK_FunctionTemplate
+      };
+
+      bool isRecord() const;
+      bool isFunction() const;
+      bool isGlobalVariable() const;
+      bool isRecordTemplate() const;
+      bool isFunctionTemplate() const;
+
+      LookupResultKind kind;
+      union {
+         Record *record = nullptr;
+         Class *cl;
+         Enum *en;
+         Union *un;
+         Function *fun;
+         RecordTemplate *recordTemplate;
+         CallableTemplate *callableTemplate;
+      };
+   };
+
+   static LookupResult lookup(const string &symbolName,
+                              const std::vector<string> &inNamespaces,
+                              LookupKind kind = LK_Full);
+
 private:
    SymbolTable() = default;
 
    static unordered_map<string, Record*> Records;
+   static unordered_map<string, RecordTemplate> RecordTemplates;
 
    static unordered_map<string, Typedef> typedefs;
    static unordered_map<string, Variable> variables;

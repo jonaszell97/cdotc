@@ -19,29 +19,30 @@ namespace codegen {
    public:
       CGCast(CodeGen &CGM);
 
-      llvm::Value *applyCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *applyCast(const Type& from, const Type& to,
+                             llvm::Value *val);
 
-      llvm::Value *integralCast(Type& from, Type& to, llvm::Value *val);
-      llvm::Value *floatingPointCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *integralCast(const Type& from, const Type& to, llvm::Value *val);
+      llvm::Value *floatingPointCast(const Type& from, const Type& to, llvm::Value *val);
 
-      llvm::Value *pointerCast(Type& from, Type& to, llvm::Value *val);
-      llvm::Value *tupleCast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *pointerCast(const Type& from, const Type& to, llvm::Value *val);
+      llvm::Value *tupleCast(const Type& from, const Type& to, llvm::Value *val);
 
-      CallCompatability hasCastOperator(Type& from, Type& to);
-      llvm::Value *castOperator(Type& from, Type& to, llvm::Value *val,
-         CallCompatability&);
+      cl::Method *hasCastOperator(const Type& from, const Type& to);
+      llvm::Value *castOperator(const Type& from, const Type& to, llvm::Value *val,
+         cl::Method*);
 
-      llvm::Value *protoToProtoCast(Type& from, Type& to, llvm::Value *val);
-      llvm::Value *castFromProtocol(Type& from, Type& to, llvm::Value *val);
-      llvm::Value *castToProtocol(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *protoToProtoCast(const Type& from, const Type& to, llvm::Value *val);
+      llvm::Value *castFromProtocol(const Type& from, const Type& to, llvm::Value *val);
+      llvm::Value *castToProtocol(const Type& from, const Type& to, llvm::Value *val);
 
-      llvm::Value *staticUpcast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *staticUpcast(const Type& from, const Type& to, llvm::Value *val);
 
-      llvm::Value *dynamicDowncast(Type& from, Type& to, llvm::Value *val);
+      llvm::Value *dynamicDowncast(const Type& from, const Type& to, llvm::Value *val);
 
       llvm::Value *functionCast(
-         Type& from,
-         Type& to,
+         const Type& from,
+         const Type& to,
          llvm::Value *val,
          llvm::Function* func,
          bool isLambda,

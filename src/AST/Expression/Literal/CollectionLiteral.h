@@ -12,38 +12,18 @@ class TypeRef;
 class CollectionLiteral : public Expression {
 public:
    explicit CollectionLiteral(
-      std::vector<Expression::SharedPtr> keys,
-      std::vector<Expression::SharedPtr> values
+      std::vector<Expression::SharedPtr> &&keys,
+      std::vector<Expression::SharedPtr> &&values
    );
    explicit CollectionLiteral(
-      std::vector<Expression::SharedPtr> values
+      std::vector<Expression::SharedPtr> &&values
    );
-
-   void addElement(Expression::SharedPtr value);
-   void addElement(Expression::SharedPtr key, Expression::SharedPtr value);
 
    typedef std::shared_ptr<CollectionLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::COLLECTION_LITERAL;
-   }
-
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
    }
 
    bool createsTemporary() override
@@ -53,6 +33,7 @@ public:
 
    void replaceChildWith(AstNode *child, Expression *replacement) override;
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
@@ -60,7 +41,24 @@ protected:
    std::vector<Expression::SharedPtr> values;
    std::shared_ptr<TypeRef> type;
 
-   bool isDictionary = false;
+   bool is_dictionary = false;
+   bool is_meta_ty = false;
+
+public:
+   const std::vector<std::shared_ptr<Expression>> &getKeys() const;
+   void setKeys(const std::vector<std::shared_ptr<Expression>> &keys);
+
+   const std::vector<std::shared_ptr<Expression>> &getValues() const;
+   void setValues(const std::vector<std::shared_ptr<Expression>> &values);
+
+   const std::shared_ptr<TypeRef> &getType() const;
+   void setType(const std::shared_ptr<TypeRef> &type);
+
+   bool isDictionary() const;
+   void isDictionary(bool is_dictionary);
+
+   bool isMetaTy() const;
+   void isMetaTy(bool is_meta_ty);
 };
 
 

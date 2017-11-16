@@ -54,12 +54,12 @@ namespace cdot {
       }
    }
 
-   BuiltinType* FPType::box()
+   BuiltinType* FPType::box() const
    {
       return ObjectType::get(string(1, ::toupper(className.front())) + className.substr(1));
    }
 
-   bool FPType::implicitlyCastableTo(BuiltinType *other)
+   bool FPType::implicitlyCastableTo(BuiltinType *other) const
    {
       switch (other->getTypeID()) {
          case TypeID::AutoTypeID:
@@ -91,7 +91,7 @@ namespace cdot {
       }
    }
 
-   BuiltinType* FPType::ArithmeticReturnType(string &op, BuiltinType *rhs)
+   BuiltinType* FPType::ArithmeticReturnType(string &op, BuiltinType *rhs) const
    {
       if (op == "+" || op == "-" || op == "*" || "/") {
          if (isa<FPType>(rhs)) {
@@ -100,34 +100,34 @@ namespace cdot {
          }
 
          if (isa<IntegerType>(rhs)) {
-            return this;
+            return get(precision);
          }
       }
 
       return VoidType::get();
    }
 
-   bool FPType::explicitlyCastableTo(BuiltinType *other)
+   bool FPType::explicitlyCastableTo(BuiltinType *other) const
    {
       return isa<PrimitiveType>(other);
    }
 
-   short FPType::getAlignment()
+   short FPType::getAlignment() const
    {
       return (short)(precision / 8);
    }
 
-   llvm::Value* FPType::getDefaultVal()
+   llvm::Value* FPType::getDefaultVal(CodeGen &CGM) const
    {
       return llvm::ConstantFP::get(getLlvmType(), 0.0);
    }
 
-   llvm::Constant* FPType::getConstantVal(Variant &val)
+   llvm::Constant* FPType::getConstantVal(Variant &val) const
    {
       return llvm::ConstantFP::get(getLlvmType(), val.floatVal);
    }
 
-   llvm::Type* FPType::getLlvmType()
+   llvm::Type* FPType::getLlvmType() const
    {
       switch (precision) {
          case 32:
@@ -138,7 +138,7 @@ namespace cdot {
       }
    }
 
-   string FPType::toString()
+   string FPType::toString() const
    {
       return className;
    }

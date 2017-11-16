@@ -26,8 +26,3 @@ std::vector<AstNode::SharedPtr> TryStmt::get_children()
 
    return children;
 }
-
-void TryStmt::__dump(int depth)
-{
-
-}

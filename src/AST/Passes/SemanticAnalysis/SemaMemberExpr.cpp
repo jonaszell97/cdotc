@@ -2,6 +2,7 @@
 // Created by Jonas Zell on 24.10.17.
 //
 
+#include <llvm/Support/raw_ostream.h>
 #include "SemaPass.h"
 
 #include "../ASTIncludes.h"
@@ -26,10 +27,11 @@
 
 #include "../../../Message/Exceptions.h"
 #include "../../../Message/Diagnostics.h"
+#include "../Declaration/DeclPass.h"
 
 using namespace cdot::diag;
 
-Type SemaPass::ReturnMemberExpr(
+void SemaPass::ReturnMemberExpr(
    Expression *node,
    Type ty)
 {
@@ -40,7 +42,7 @@ Type SemaPass::ReturnMemberExpr(
       }
 
       pushTy(ty);
-      ty = node->memberExpr->accept(*this);
+      ty = getResult(node->memberExpr);
    }
    else if (node->createsTemporary() && ty->needsCleanup()
             && !node->isAssigned() && !node->isReturnedValue())
@@ -50,34 +52,7 @@ Type SemaPass::ReturnMemberExpr(
       node->setTempType(ty->getRecord());
    }
 
-   return ty;
-}
-
-bool SemaPass::castGenericIfNecessary(
-   Expression *node,
-   std::vector<GenericType*> &concreteGenerics,
-   Type &ty,
-   bool preCond)
-{
-   if (!preCond || !ty->isGeneric()) {
-      return false;
-   }
-
-   Type fromTy(ty);
-   Type toTy(ty);
-
-   resolveGenerics(toTy, concreteGenerics);
-   toTy.isLvalue(fromTy.isLvalue());
-
-   if (fromTy == toTy) {
-      return false;
-   }
-
-   node->needs_cast = true;
-   node->castFrom = fromTy;
-   node->castTo = toTy;
-
-   return true;
+   returnResult(ty);
 }
 
 void SemaPass::checkClassAccessibility(
@@ -85,9 +60,8 @@ void SemaPass::checkClassAccessibility(
    Expression *cause)
 {
    if (cl->isPrivate() &&
-       std::find(currentNamespace.begin(), currentNamespace.end(), cl->getDeclarationNamespace())
-       == currentNamespace.end())
-   {
+       std::find(currentNamespace.begin(), currentNamespace.end(),
+                 cl->getDeclarationNamespace()) == currentNamespace.end()) {
       diag::err(err_class_not_accessible) << cl->getNameSelector()
                                           << cl->getName() << cause << diag::term;
    }
@@ -99,75 +73,18 @@ void SemaPass::checkMemberAccessibility(
    const AccessModifier &access,
    Expression *cause)
 {
-   if (access == AccessModifier::PROTECTED && !cl->protectedPropAccessibleFrom(currentClass())) {
-      diag::err(err_protected_member_access) << memberName << cl->getNameSelector()
-                                             << cl->getName() << cause << diag::term;
+   if (access == AccessModifier::PROTECTED
+       && !cl->protectedPropAccessibleFrom(currentClass())) {
+      diag::err(err_protected_member_access)
+         << memberName << cl->getNameSelector()
+         << cl->getName() << cause << diag::term;
    }
-   else if (access == AccessModifier::PRIVATE && !cl->privatePropAccessibleFrom(currentClass())) {
-      diag::err(err_private_member_access) << memberName << cl->getNameSelector()
-                                           << cl->getName() << cause << diag::term;
+   else if (access == AccessModifier::PRIVATE
+            && !cl->privatePropAccessibleFrom(currentClass())) {
+      diag::err(err_private_member_access)
+         << memberName << cl->getNameSelector()
+         << cl->getName() << cause << diag::term;
    }
-}
-
-/**
- * Checks a function call for the validity of the arguments
- * @param node
- * @return
- */
-Type SemaPass::visit(
-   CallExpr *node)
-{
-   //MAINCALL
-   for (size_t i = node->resolvedArgs.size(); i < node->args.size(); ++i) {
-      auto& arg = node->args.at(i);
-      Type ty;
-      if (!arg.second->needsContextualInformation()) {
-         ty = arg.second->accept(*this);
-      }
-
-      node->resolvedArgs.emplace_back(arg.first, ty, arg.second);
-   }
-
-   if (node->type == CallType::FUNC_CALL) {
-      if (util::in_vector(util::builtinFunctions, node->ident)) {
-         HandleBuiltinCall(node);
-      }
-      else if (node->ident.empty()) {
-         HandleCallOperator(node);
-      }
-      else if (SymbolTable::hasRecord(node->ident, importedNamespaces)) {
-         HandleConstructorCall(node);
-      }
-      else {
-         HandleFunctionCall(node);
-      }
-   }
-   else if (node->type == CallType::METHOD_CALL) {
-      HandleMethodCall(node);
-   }
-   else if (node->type == CallType::ANON_CALL) {
-      HandleAnonCall(node);
-   }
-
-   switch (node->getType()) {
-      case CallType::METHOD_CALL:
-      case CallType::CONSTR_CALL:
-         if (node->getMethod()) {
-            currentCallable->copyThrows(node->getMethod());
-         }
-
-         break;
-      case CallType::FUNC_CALL:
-         if (!node->isIsBuiltin()) {
-            currentCallable->copyThrows(node->func);
-         }
-
-         break;
-      default:
-         break;
-   }
-
-   return ReturnMemberExpr(node, node->returnType);
 }
 
 /**
@@ -175,28 +92,30 @@ Type SemaPass::visit(
  * @param node
  * @return
  */
-Type SemaPass::visit(MemberRefExpr *node)
+void SemaPass::visit(MemberRefExpr *node)
 {
    Type latest;
    string className;
    Class* cl;
 
-   if (node->parentExpr == nullptr && node->enum_case) {
+   if (node->getParentExpr() == nullptr && node->isEnumCase()) {
       auto& inf = node->contextualType;
-      if (inf->isAutoTy() || !SymbolTable::hasClass(inf->getClassName(), importedNamespaces)) {
-         RuntimeError::raise("Could not infer type of enum case " + node->ident, node);
+      if (inf->isAutoTy() || !SymbolTable::hasClass(inf->getClassName(),
+                                                    importedNamespaces)) {
+         RuntimeError::raise("Could not infer type of enum case "
+                             + node->getIdent(), node);
       }
 
       auto cl = SymbolTable::getClass(inf->getClassName(), importedNamespaces);
 
-      node->className = cl->getName();
-      node->isNsMember = true;
+      node->setClassName(cl->getName());
+      node->setIsNsMember(true);
    }
 
-   if (node->isNsMember) {
-      if (hasVariable(node->ident)) {
-         auto var = getVariable(node->ident, node);
-         node->binding = var.first.second;
+   if (node->isNsMember()) {
+      if (hasVariable(node->getIdent())) {
+         auto var = getVariable(node->getIdent(), node);
+         node->setBinding(var.first.second);
 
          auto res = var.first.first.type;
          res.isLvalue(true);
@@ -204,45 +123,79 @@ Type SemaPass::visit(MemberRefExpr *node)
          return ReturnMemberExpr(node, res);
       }
 
-      cl = SymbolTable::getClass(node->className, importedNamespaces);
+      cl = SymbolTable::getClass(node->getClassName(), importedNamespaces);
       checkClassAccessibility(cl, node);
 
-      node->className = cl->getName();
+      node->setClassName(cl->getName());
 
-      if (!hasVariable(node->ident)) {
-         node->ident = node->ident.substr(node->ident.find_last_of('.') + 1);
+      if (!hasVariable(node->getIdent())) {
+         node->setIdent(
+            node->getIdent().substr(node->getIdent().find_last_of('.') + 1));
 
          if (cl->isEnum()) {
             auto en = cl->getAs<Enum>();
 
-            size_t genericParamsGiven = 0;
-            if (!node->contextualType->isAutoTy() && node->contextualType->isObject()) {
-               genericParamsGiven = node->contextualType->getConcreteGenericTypes().size();
-            }
-
-            if (en->isGeneric() && genericParamsGiven < en->getGenerics().size()) {
-               RuntimeError::raise("Could not infer generic type " +
-                                   en->getGenerics()[genericParamsGiven].genericTypeName, node);
-            }
-            if (!en->hasCase(node->ident)) {
-               diag::err(err_enum_case_not_found) << node->className << node->ident << false
+            if (!en->hasCase(node->getIdent())) {
+               diag::err(err_enum_case_not_found) << node->getClassName()
+                                                  << node->getIdent() << false
                                                   << node << diag::term;
             }
 
-            auto obj = ObjectType::get(node->className);
-            if (en->isGeneric()) {
-               for (const auto &gen : node->contextualType->getConcreteGenericTypes()) {
-                  obj->getConcreteGenericTypes().push_back(gen);
-               }
+            auto obj = ObjectType::get(node->getClassName());
+            auto Case = en->getCase(node->getIdent());
+
+            if (!Case.associatedValues.empty()) {
+               diag::err(err_enum_case_wrong_no_args)
+                  << node->getIdent()
+                  << Case.associatedValues.size() << 0
+                  << node << diag::term;
             }
 
-            node->enum_case = true;
-            node->caseVal = en->getCase(node->ident).rawValue;
+            node->isEnumCase(true);
+            node->setCaseVal(Case.rawValue);
 
             return ReturnMemberExpr(node, Type(obj));
          }
-         else if (cl->hasField(node->ident)) {
-            goto has_field;
+         else if (cl->hasProperty(node->getIdent())) {
+            return HandlePropAccess(node, cl);
+         }
+         else if (cl->hasField(node->getIdent())) {
+            return HandleFieldAccess(node, cl);
+         }
+      }
+
+      if (!node->getMemberExpr()) {
+         auto potentialTypeName = cl->getName() + '.' + node->getIdent();
+         if (Record *rec = SymbolTable::getRecord(potentialTypeName)) {
+            node->setMetaType(ObjectType::get(rec->getName()));
+            node->setFieldType(Type{ ObjectType::get("cdot.TypeInfo") });
+
+            return ReturnMemberExpr(node, node->getFieldType());
+         }
+         if (SymbolTable::hasRecordTemplate(potentialTypeName,
+                                            importedNamespaces)) {
+            auto &Template = *SymbolTable::getRecordTemplate(potentialTypeName,
+                                                            importedNamespaces);
+
+            if (!node->getTemplateArgs()->isResolved()) {
+               DeclPass::resolveTemplateArgs(
+                  node->getTemplateArgs(),
+                  Template.constraints,
+                  [this](TypeRef *node) {
+                     node->accept(this);
+                  },
+                  node
+               );
+            }
+
+            auto rec = SymbolTable::getRecord(potentialTypeName,
+                                              node->getTemplateArgs(),
+                                              importedNamespaces);
+
+            node->setMetaType(ObjectType::get(rec->getName()));
+            node->setFieldType(Type{ ObjectType::get("cdot.TypeInfo") });
+
+            return ReturnMemberExpr(node, node->getFieldType());
          }
       }
 
@@ -250,7 +203,7 @@ Type SemaPass::visit(MemberRefExpr *node)
    }
 
    latest = popTy();
-   if (node->isPointerAccess) {
+   if (node->isPointerAccess()) {
       if (!latest->isPointerTy()) {
          RuntimeError::raise("Value is not a pointer", node);
       }
@@ -259,135 +212,140 @@ Type SemaPass::visit(MemberRefExpr *node)
    }
 
    className = latest->getClassName();
-   node->className = className;
+   node->setClassName(className);
 
-   if (node->isTupleAccess) {
+   if (node->isTupleAccess()) {
       if (!latest->isTupleTy()) {
-         RuntimeError::raise("Cannot access indexed property on non-tuple value of type "
-                             + latest.toString(), node);
+         RuntimeError::raise("Cannot access indexed property on non-tuple "
+                                "value of type " + latest.toString(), node);
       }
 
       auto asTuple = cast<TupleType>(*latest);
-      if (asTuple->getArity() <= node->tupleIndex) {
-         RuntimeError::raise("Cannot access index " + std::to_string(node->tupleIndex) + " on tuple "
-            "with arity " + std::to_string(asTuple->getArity()), node);
+      if (asTuple->getArity() <= node->getTupleIndex()) {
+         RuntimeError::raise("Cannot access index "
+                             + std::to_string(node->getTupleIndex())
+                             + " on tuple with arity "
+                             + std::to_string(asTuple->getArity()), node);
       }
 
-      *node->fieldType = asTuple->getContainedType(node->tupleIndex);
-      node->fieldType.isLvalue(true);
-      node->fieldType.isConst(latest.isConst());
+      Type ty(asTuple->getContainedType(node->getTupleIndex()));
+      ty.isLvalue(true);
+      ty.isConst(latest.isConst());
 
-      return ReturnMemberExpr(node, node->fieldType);
+      node->setFieldType(ty);
+      return ReturnMemberExpr(node, node->getFieldType());
    }
 
-   if (className.empty()) {
-      RuntimeError::raise("Cannot access property " + node->ident + " on value of type "
-                          + latest.toString(), node);
+   if (className.empty() || !latest->isObject()) {
+      RuntimeError::raise("Cannot access property " + node->getIdent()
+                          + " on value of type " + latest.toString(), node);
    }
 
    if (SymbolTable::hasUnion(className, importedNamespaces)) {
       CheckUnionAccess(node);
-      return ReturnMemberExpr(node, node->fieldType);
+      return ReturnMemberExpr(node, node->getFieldType());
    }
 
    cl = SymbolTable::getClass(className, importedNamespaces);
    checkClassAccessibility(cl, node);
 
-   if (cl->isEnum() && node->ident == "rawValue") {
-      *node->fieldType = IntegerType::get(64);
-      node->isEnumRawValue = true;
+   if (cl->isEnum() && node->getIdent() == "rawValue") {
+      Type ty(IntegerType::get());
+      node->setFieldType(ty);
+      node->setIsEnumRawValue(true);
 
-      return ReturnMemberExpr(node, node->fieldType);
+      return ReturnMemberExpr(node, node->getFieldType());
    }
-   else if (cl->hasField(node->ident)) {
-      has_field:
-      Field *field = cl->getField(node->ident);
-
-      // if this field needed initializing and we're in a constructor, erase it from the needed fields
-      bool isUninitializedField = false;
-      auto& uninitializedFields = latestScope->uninitializedFields;
-      if (currentClass() == className && node->lhs_of_assignment && uninitializedFields != nullptr) {
-         auto index = std::find(uninitializedFields->begin(), uninitializedFields->end(), node->ident);
-         if (index != uninitializedFields->end()) {
-            uninitializedFields->erase(index);
-            isUninitializedField = true;
-         }
-      }
-
-      // Check if we're trying to assign a const field
-      if (field->isConst && node->lhs_of_assignment && !isUninitializedField) {
-         RuntimeError::raise("Field " + field->fieldName + " of " + cl->getTypeName() + " is constant", node);
-      }
-
-      // Use a getter if available
-      if (field->hasGetter && !node->lhs_of_assignment
-          && (currentClass() != className || className.empty()))
-      {
-         auto call = std::make_shared<CallExpr>(
-            CallType::METHOD_CALL,
-            std::vector<Expression::SharedPtr>{},
-            field->getterName
-
-         );
-
-         CopyNodeProperties(node, call.get());
-         call->parentExpr = node->parentExpr;
-         node->getterOrSetterCall = call;
-
-         // static property
-         if (latest->isAutoTy()) {
-            call->className = node->className;
-            call->setIsNsMember(true);
-         }
-         else {
-            pushTy(latest);
-         }
-
-         return call->accept(*this);
-      }
-
-      // Use a setter if available (and we're on the left side of an assignment)
-      if (field->hasSetter && node->lhs_of_assignment && currentClass() != className) {
-         Expression* current = node;
-         node->setter_call = true;
-
-         while (current->parentExpr != nullptr) {
-            current = current->parentExpr;
-         }
-
-         current->setter_call = true;
-         current->setterName = field->setterName;
-
-         return latest;
-      }
-
-      auto& field_type = field->fieldType;
-      auto& concreteGenerics = latest->getConcreteGenericTypes();
-
-      Type ty(field->fieldType);
-      auto isGeneric = castGenericIfNecessary(node, concreteGenerics, ty, currentClass() != cl->getName());
-      if (currentClass() == cl->getName()) {
-         resolveGenerics(ty, *GenericsStack.back());
-      }
-      else if (isGeneric) {
-         resolveGenerics(ty, concreteGenerics);
-      }
-
-      node->fieldType = ty;
-      node->binding = field->mangledName;
-
-      checkMemberAccessibility(cl, field->fieldName, field->accessModifier, node);
-
-      node->fieldType.isLvalue(true);
-      node->fieldType.isConst(field->isConst && !isUninitializedField);
-
-      return ReturnMemberExpr(node, node->fieldType);
+   else if (cl->hasField(node->getIdent())) {
+      return HandleFieldAccess(node, cl);
+   }
+   else if (cl->hasProperty(node->getIdent())) {
+      return HandlePropAccess(node, cl);
    }
 
    err:
    diag::err(err_member_not_found) << cl->getNameSelector() << cl->getName()
-                                   << node->ident << node << diag::term;
+                                   << node->getIdent() << node << diag::term;
    llvm_unreachable(0);
+}
+
+void SemaPass::HandleFieldAccess(MemberRefExpr *node, Class* cl)
+{
+   Field *field = cl->getField(node->getIdent());
+
+   // Check if we're trying to assign a const field
+   if (field->isConst && node->getIsLhsOfAssigment()
+       && cl->getName() != currentClass()) {
+      diag::err(err_reassign_constant) << field->fieldName << node
+                                       << diag::term;
+   }
+
+   // Use a getter if available
+   if (field->hasGetter() && !node->getIsLhsOfAssigment()
+       && (currentClass() != cl->getName())) {
+      node->isGetterCall(true);
+      node->setAccessorMethod(field->getter);
+
+      node->setFieldType(Type(field->fieldType));
+
+      return ReturnMemberExpr(node, node->getFieldType());
+   }
+
+   // Use a setter if available (and we're on the left side of an assignment)
+   if (field->hasSetter() && node->getIsLhsOfAssigment()
+       && currentClass() != cl->getName()) {
+      node->isSetterCall(true);
+      node->setAccessorMethod(field->setter);
+      node->setFieldType(Type(field->fieldType));
+      setterMethod = node->getAccessorMethod();
+
+      return returnResult(node->getFieldType());
+   }
+
+   auto& field_type = field->fieldType;
+
+   Type ty(field->fieldType);
+   ty.isLvalue(true);
+   ty.isConst(field->isConst);
+
+   node->setFieldType(ty);
+   node->setBinding(field->mangledName);
+
+   checkMemberAccessibility(cl, field->fieldName,
+                            field->accessModifier, node);
+
+   return ReturnMemberExpr(node, node->getFieldType());
+}
+
+void SemaPass::HandlePropAccess(MemberRefExpr *node, cl::Record *rec)
+{
+   auto prop = rec->getProperty(node->getIdent());
+   assert(prop && "shouldn't be called otherwise");
+
+   if (node->getIsLhsOfAssigment()) {
+      if (!prop->hasSetter()) {
+         diag::err(err_generic_error) << "property " + node->getIdent()
+                                         + "does not have a setter"
+                                      << node << diag::term;
+      }
+
+      setterMethod = prop->getSetter();
+      node->isSetterCall(true);
+      node->setAccessorMethod(prop->getSetter());
+   }
+   else {
+      if (!prop->hasGetter()) {
+         diag::err(err_generic_error) << "property " + node->getIdent()
+                                         + "does not have a getter"
+                                      << node << diag::term;
+      }
+
+      node->isGetterCall(true);
+      node->setAccessorMethod(prop->getGetter());
+   }
+
+   node->setFieldType(prop->getType());
+   return ReturnMemberExpr(node, node->getFieldType());
 }
 
 void SemaPass::CheckUnionAccess(MemberRefExpr *node)
@@ -403,7 +361,7 @@ void SemaPass::CheckUnionAccess(MemberRefExpr *node)
    ty.isConst(un->isConst());
 
    node->fieldType = ty;
-   node->setUnionAccess(true);
+   node->setIsUnionAccess(true);
 }
 
 
@@ -412,7 +370,7 @@ void SemaPass::CheckUnionAccess(MemberRefExpr *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(SubscriptExpr *node)
+void SemaPass::visit(SubscriptExpr *node)
 {
    auto ts = popTy();
    if (!ts->isObject()) {
@@ -420,7 +378,7 @@ Type SemaPass::visit(SubscriptExpr *node)
       node->_index->setContextualType(int64Ty);
    }
 
-   Type index = node->_index->accept(*this);
+   Type index = getResult(node->_index);
    node->_index->addUse();
 
    if (ts->isObject())
@@ -430,12 +388,12 @@ Type SemaPass::visit(SubscriptExpr *node)
       std::vector<Argument> args{ Argument("", index) };
       string op = "postfix []";
 
-      auto methodResult = cl->hasMethod(op, args, {}, *ts);
+      auto methodResult = getMethod(cl, op, args);
       if (methodResult.isCompatible()) {
          auto call = std::make_shared<CallExpr>(
             CallType::METHOD_CALL,
             std::vector<Expression::SharedPtr>{ node->_index },
-            op
+            std::move(op)
          );
 
          call->loc = node->loc;
@@ -450,7 +408,7 @@ Type SemaPass::visit(SubscriptExpr *node)
          node->is_subscript_op = true;
 
          pushTy(ts);
-         auto type = call->accept(*this);
+         auto type = getResult(call);
 
          return ReturnMemberExpr(node, type);
       }

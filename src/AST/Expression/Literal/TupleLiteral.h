@@ -18,28 +18,9 @@ public:
 
    typedef std::shared_ptr<TupleLiteral> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::TUPLE_LITERAL;
-   }
-
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override
-   {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override
-   {
-      return v.visit(this);
    }
 
    bool createsTemporary() override
@@ -49,6 +30,7 @@ public:
 
    void replaceChildWith(AstNode *child, Expression *replacement) override;
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
@@ -56,6 +38,19 @@ protected:
 
    // codegen
    TupleType* tupleType;
+   bool is_meta_ty = false;
+
+public:
+   bool isMetaTy() const;
+   void isMetaTy(bool is_meta_ty);
+
+   const std::vector<pair<string, std::shared_ptr<Expression>>>
+   &getElements() const;
+   void setElements(
+      const std::vector<pair<string, std::shared_ptr<Expression>>> &elements);
+
+   TupleType *getTupleType() const;
+   void setTupleType(TupleType *tupleType);
 };
 
 

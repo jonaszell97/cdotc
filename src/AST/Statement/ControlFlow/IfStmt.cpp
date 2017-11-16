@@ -30,12 +30,3 @@ std::vector<AstNode::SharedPtr> IfStmt::get_children() {
 
     return children;
 }
-
-void IfStmt::__dump(int depth) {
-    AstNode::__tab(depth);
-    std::cout << "IfStmt" << std::endl;
-
-    for (auto c : get_children()) {
-        c->__dump(depth + 1);
-    }
-}

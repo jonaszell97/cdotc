@@ -28,16 +28,6 @@ void CompoundStmt::addStatement(Statement::SharedPtr stmt) {
    statements.emplace_back(stmt);
 }
 
-void CompoundStmt::runPasses()
-{
-   for (auto& pass : passes) {
-      pass->visit(this);
-      pass->finalize();
-
-      delete pass;
-   }
-}
-
 std::vector<AstNode::SharedPtr> CompoundStmt::get_children() {
    std::vector<AstNode::SharedPtr> res;
    for (int i = 0; i < statements.size(); i++) {
@@ -45,16 +35,4 @@ std::vector<AstNode::SharedPtr> CompoundStmt::get_children() {
    }
 
    return res;
-}
-
-void CompoundStmt::__dump(int depth) {
-   for (int i = 0; i < depth; i++) {
-      std::cout << "\t";
-   }
-
-   std::cout << "CompoundStmt" << std::endl;
-
-   for (int i = 0; i < statements.size(); i++) {
-      statements[i]->__dump(depth + 1);
-   }
 }

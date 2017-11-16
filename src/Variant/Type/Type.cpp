@@ -49,7 +49,7 @@ namespace cdot {
       is_self = self;
    }
 
-   bool Type::implicitlyCastableTo(Type &dest)
+   bool Type::implicitlyCastableTo(const Type &dest) const
    {
       if (!is_lvalue && dest.is_lvalue) {
          return false;
@@ -58,7 +58,7 @@ namespace cdot {
       return builtinTy->implicitlyCastableTo(*dest);
    }
 
-   llvm::Type* Type::getLlvmType()
+   llvm::Type* Type::getLlvmType() const
    {
       auto ty = builtinTy->getLlvmType();
       if (is_lvalue) {
@@ -68,7 +68,7 @@ namespace cdot {
       return ty;
    }
 
-   bool Type::needsLvalueToRvalueConv()
+   bool Type::needsLvalueToRvalueConv() const
    {
       return is_lvalue && !is_self && builtinTy->needsLvalueToRvalueConv();
    }

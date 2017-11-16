@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <string>
 
+class UnionDecl;
+
 using std::string;
 using std::unordered_map;
 
@@ -23,10 +25,11 @@ public:
    Union(
       const string& name,
       bool isConst,
-      const SourceLocation &loc
+      const SourceLocation &loc,
+      UnionDecl *decl
    );
 
-   bool isUnion() override
+   bool isUnion() const override
    {
       return true;
    }

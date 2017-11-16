@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <execinfo.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include "Compiler.h"
 #include "Message/Exceptions.h"

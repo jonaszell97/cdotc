@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <llvm/IR/Module.h>
+#include <unordered_map>
 
 class CodeGen;
 class CompoundStmt;
@@ -16,86 +17,99 @@ using std::string;
 
 namespace cdot {
 
-   enum class OutputKind {
-      EXEC,
-      OBJ,
-      IR,
-      ASM,
-      HEADERS,
-      MODULE,
-      AST,
-      PRE_PROCESSED
-   };
+namespace cl {
 
-   struct CompilationUnit {
-      CompilationUnit(
-         const string &fileName,
-         const string &path,
-         size_t ID,
-         std::shared_ptr<CompoundStmt> root,
-         bool isHeader
-      ) : fileName(fileName), path(path), ID(ID), root(root), isHeader(isHeader)
-      {
+class Class;
 
-      }
+} // namespace cl
 
-      string fileName;
-      string path;
-      size_t ID;
-      std::shared_ptr<CompoundStmt> root;
-      bool isHeader = false;
+namespace codegen {
 
-      CodeGen *cg;
-   };
+class DebugInfo;
 
-   struct CompilerOptions {
-      std::vector<string> sourceFiles;
-      std::vector<string> linkedFiles;
-      std::vector<string> importedModules;
-      std::vector<string> headerFiles;
+} // namespace codegen
 
-      string executableOutFile;
-      string objectOutFile;
-      string asmOutFile;
-      string ppOutFile;
-      string moduleName;
-      string irOutPath;
+enum class OutputKind {
+   EXEC,
+   OBJ,
+   IR,
+   ASM,
+   HEADERS,
+   MODULE,
+   AST,
+   PRE_PROCESSED
+};
 
-      string basePath;
+struct CompilationUnit {
+   CompilationUnit(
+      const string &fileName,
+      const string &path,
+      size_t ID,
+      std::shared_ptr<CompoundStmt> root,
+      bool isHeader
+   ) : fileName(fileName), path(path), ID(ID), root(root), isHeader(isHeader)
+   {
 
-      size_t optimizationLevel = 3;
+   }
 
-      std::vector<OutputKind> outputKinds;
+   string fileName;
+   string path;
+   size_t ID;
+   std::shared_ptr<CompoundStmt> root;
+   bool isHeader = false;
 
-      bool hasOutputKind(OutputKind kind) {
-         return std::find(outputKinds.begin(), outputKinds.end(), kind) != outputKinds.end();
-      }
+   llvm::Module *Module;
+   codegen::DebugInfo *DI;
+   std::unordered_map<string, llvm::Constant*> ModuleFunctions;
+   std::vector<cl::Class*> ModuleRecords;
+};
 
-      string headerOutPath;
+struct CompilerOptions {
+   std::vector<string> sourceFiles;
+   std::vector<string> linkedFiles;
+   std::vector<string> importedModules;
+   std::vector<string> headerFiles;
 
-      bool isStdLib = false;
-      bool linkStdLib = true;
-      bool emitDebugInfo = false;
+   string executableOutFile;
+   string objectOutFile;
+   string asmOutFile;
+   string ppOutFile;
+   string moduleName;
+   string irOutPath;
 
-      unsigned maxMacroRecursionDepth = 256;
-   };
+   string basePath;
 
-   class Compiler {
-   public:
-      static void init(int argc, char *argv[]);
-      static void compile();
+   size_t optimizationLevel = 3;
 
-      static void outputIR(CodeGen &CGM);
+   std::vector<OutputKind> outputKinds;
 
-      static CompilerOptions& getOptions() {
-         return options;
-      }
+   bool hasOutputKind(OutputKind kind) {
+      return std::find(outputKinds.begin(), outputKinds.end(), kind) != outputKinds.end();
+   }
 
-   protected:
-      static string compilerLocation;
-      static CompilerOptions options;
-   };
+   string headerOutPath;
 
-}
+   bool isStdLib = false;
+   bool linkStdLib = true;
+   bool emitDebugInfo = false;
+
+   unsigned maxMacroRecursionDepth = 256;
+};
+
+class Compiler {
+public:
+   static void init(int argc, char *argv[]);
+   static void compile();
+
+   static CompilerOptions& getOptions() {
+      return options;
+   }
+
+protected:
+   static string compilerLocation;
+   static CompilerOptions options;
+};
+
+} // namespace cdot
 
 #endif //CDOT_CDOT_H

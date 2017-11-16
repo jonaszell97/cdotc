@@ -13,7 +13,6 @@
 #include "../../../Expression/Expression.h"
 #include "../../../Statement/Declaration/FuncArgDecl.h"
 #include "../../../../Variant/Type/ObjectType.h"
-#include "../../../Statement/Declaration/Class/ClassDecl.h"
 
 #include "Record.h"
 
@@ -25,18 +24,18 @@ using std::string;
 using std::map;
 using std::unordered_map;
 using std::unordered_multimap;
-using std::vector;
 
 namespace cdot {
-   struct GenericConstraint;
+   struct TemplateConstraint;
 
 namespace cl {
 
    class Class;
 
    struct Field {
-      Field(string name, BuiltinType* type, AccessModifier access_modifier, Expression::SharedPtr,
-         bool isConst, FieldDecl*);
+      Field(string name, BuiltinType* type, AccessModifier access_modifier,
+            Expression::SharedPtr defaultVal, bool isConst, FieldDecl*);
+
       typedef std::unique_ptr<Field> UniquePtr;
       typedef std::shared_ptr<Field> SharedPtr;
 
@@ -48,12 +47,12 @@ namespace cl {
 
       bool isConst = false;
       bool isStatic = false;
-      bool isProp = false;
 
-      bool hasGetter = false;
-      bool hasSetter = false;
-      string getterName;
-      string setterName;
+      bool hasGetter() const;
+      bool hasSetter() const;
+
+      Method *getter = nullptr;
+      Method *setter = nullptr;
 
       bool isInheritedField = false;
 
@@ -66,11 +65,6 @@ namespace cl {
 
    struct Method;
 
-   enum class ImplicitConformance {
-      StringRepresentable,
-      Hashable,
-      Equatable
-   };
 
    class Class: public Record {
       typedef unordered_multimap<string, std::shared_ptr<Method>>::iterator MethodIterator;
@@ -79,8 +73,7 @@ namespace cl {
       Class(
          AccessModifier am,
          const string& className,
-         std::vector<GenericConstraint> &generics,
-         ClassDecl *decl,
+         RecordDecl *decl,
          const SourceLocation &loc,
          bool isAbstract,
          bool isProto,
@@ -94,59 +87,44 @@ namespace cl {
          Expression::SharedPtr def_val,
          bool isConst,
          bool isStatic,
-         bool isProp,
          FieldDecl* declaration
       );
 
       Method* declareMethod(
          const string &methodName,
-         Type& ret_type,
+         const Type& ret_type,
          AccessModifier access,
          std::vector<Argument>&& args,
-         std::vector<GenericConstraint> generics,
          bool isStatic,
          MethodDecl* declaration,
          SourceLocation loc
-      );
+      ) override;
 
       void pushConstraintSet(std::vector<ExtensionConstraint> &&constraints);
       void popConstraintSet();
 
-      const std::vector<ExtensionConstraint>& getConstraintSet(unsigned i);
-
-      void inheritProtocols(std::vector<ObjectType*>& protocols, ObjectType* current, bool initial = true);
-      void checkProtocolConformance(ObjectType *protoObj);
-      void finalize();
-
       bool checkConstraint(
          const ExtensionConstraint& constraint,
          BuiltinType*& caller
-      );
+      ) const override;
 
       const ExtensionConstraint* checkConstraints(
          Method* method,
          BuiltinType* caller
-      );
+      ) const override;
 
-      CallCompatability hasMethod(
-         const string &method_name,
-         std::vector<Argument> args = {},
-         std::vector<GenericType*> givenGenerics = {},
-         BuiltinType* caller = nullptr,
-         bool check_parent = true,
-         bool checkProtocols = true,
-         bool strict = false
-      );
+      const std::vector<ExtensionConstraint>& getConstraintSet(unsigned i);
+
+      void inheritProtocols(Class* current);
+      void checkProtocolConformance(Class *protoObj);
+      void finalize() override;
 
       bool declareMemberwiseInitializer();
 
-      void addConformance(ObjectType *proto) {
-         conformsTo_.push_back(proto);
-      }
-
       bool hasField(const string &field_name);
 
-      Method* getMethod(const string &method_name);
+      Method* getMethod(const string &method_name) override;
+      Method* getMethod(unsigned id) override;
       Field* getField(const string &field_name);
 
       pair<MethodIterator, MethodIterator> getOverloads(const string &methodName);
@@ -159,32 +137,27 @@ namespace cl {
          return is_abstract;
       }
 
-      bool isNonUnion() override
+      bool isNonUnion() const override
       {
          return true;
       }
 
-      bool isClass() override
+      bool isClass() const override
       {
          return is_class;
       }
 
-      bool isStruct() override
+      bool isStruct() const override
       {
          return is_struct;
       }
 
-      bool isProtocol() override
+      bool isProtocol() const override
       {
          return is_protocol;
       }
 
-      bool isGeneric() override
-      {
-         return !generics.empty();
-      }
-
-      bool isRefcounted() override
+      bool isRefcounted() const override
       {
          return is_class;
       }
@@ -199,45 +172,14 @@ namespace cl {
          has_nonempty_deinit = nonempty;
       }
 
-      std::vector<GenericConstraint>& getGenerics()
-      {
-         return generics;
-      }
-
-      ClassDecl* getDeclaration()
-      {
-         return declaration;
-      }
-
-      void declareMethodAlias(string& name, string& mangledOriginal) {
-         for (const auto& method : methods) {
-            if (method.second->getMangledName() == mangledOriginal) {
-               methods.emplace(name, method.second);
-               break;
-            }
-         }
-      }
-
-      bool isEmptyProtocol() {
-         if (!is_protocol || !methods.empty()) {
-            return false;
-         }
-         for (const auto& prot : conformsTo_) {
-            if (!SymbolTable::getClass(prot->getClassName())->isEmptyProtocol()) {
-               return false;
-            }
-         }
-
-         return true;
-      }
-
+      bool isEmptyProtocol();
       string getUnqualifiedName();
-
-      bool conformsTo(const string &name) override;
 
       bool protectedPropAccessibleFrom(const string &class_context);
       bool privatePropAccessibleFrom(const string &class_context);
+
       bool isBaseClassOf(const string &child);
+      bool isBaseClassOf(Record *child);
 
       Class* getParent() {
          return parentClass;
@@ -246,80 +188,63 @@ namespace cl {
       void findVirtualMethods();
       bool isVirtual(Method *);
 
-      void setDefaultConstructor(llvm::Function* constr) {
+      void setDefaultConstructor(llvm::Function* constr)
+      {
          defaultConstructor = constr;
       }
 
-      llvm::Function* getDefaultContructor() {
+      llvm::Function* getDefaultContructor() const
+      {
          return defaultConstructor;
       }
 
-      const std::vector<pair<string, Field::SharedPtr>>& getFields() {
+      const std::vector<pair<string, Field::SharedPtr>>& getFields() const
+      {
          return fields;
       }
 
-      const std::map<string, std::vector<string>>& getInterfMethods() {
+      const std::map<string, std::vector<string>>& getInterfMethods() const
+      {
          return protocolMethods;
       }
 
-      size_t getVTableOffset(const string& interface_name) {
-         return vtableOffsets[interface_name];
+      size_t getVTableOffset(const string& interface_name) const
+      {
+         return vtableOffsets.at(interface_name);
       }
 
       size_t getFieldOffset(const string& fieldName);
+      size_t getMethodOffset(const string& methodName) const;
 
-      size_t getMethodOffset(const string& methodName) {
-         return methodOffsets[methodName];
-      }
-
-      const std::vector<Method*>& getConstructors() {
+      const std::vector<Method*>& getConstructors() const
+      {
          return constructors;
       }
 
-      const std::vector<llvm::Type*>& getMemoryLayout() {
+      const std::vector<llvm::Type*>& getMemoryLayout() const
+      {
          return memoryLayout;
       }
 
       llvm::Constant* getVtable(CodeGen &CGM);
       llvm::GlobalVariable* getProtocolVtable(const string& protoName, CodeGen &CGM);
 
-      bool isEmpty() {
+      bool isEmpty() const
+      {
          return emptyLayout;
       }
 
-      size_t getBaseClassOffset(string& className) {
-         return baseClassOffsets[className];
+      const size_t getBaseClassOffset(const string& className) const
+      {
+         return baseClassOffsets.at(className);
       }
 
-      void defineConcreteGeneric(string genericClassName, BuiltinType* type) {
-         concreteGenerics.emplace(genericClassName, type);
-      }
-
-      unordered_map<string, BuiltinType*> getConcreteGenerics() {
-         return concreteGenerics;
-      }
-
-      Method*& getMemberwiseInitializer() {
+      Method* getMemberwiseInitializer() const
+      {
          return memberwiseInitializer;
       }
 
-      string& getOriginalProtocol(string& methodName) {
-         if (inheritedProtocolMethods.find(methodName) != inheritedProtocolMethods.end()) {
-            return SymbolTable::getClass(inheritedProtocolMethods[methodName])
-               ->getOriginalProtocol(methodName);
-         }
-
-         return recordName;
-      }
-
-      std::vector<ObjectType*>& getConformedToProtocols() {
-         return conformsTo_;
-      }
-
-      void setConformedToProtocols(std::vector<ObjectType*>& conf)
-      {
-         conformsTo_ = conf;
-      }
+      string& getOriginalProtocol(string& methodName);
 
       void setParentClass(Class* parent);
 
@@ -328,48 +253,30 @@ namespace cl {
       void generateProtocolMemoryLayout(CodeGen &CGM) override;
       void generateVTables(CodeGen &CGM) override;
 
-      virtual void collectProtocolVTableOffsets(ObjectType *proto, size_t &pos);
-
-      void needsTypeInfoGen(bool gen) {
-         needsTypeInfo = gen;
-         if (parentClass != nullptr) {
-            parentClass->needsTypeInfoGen(gen);
-         }
-      }
+      virtual void collectProtocolVTableOffsets(Class *proto, size_t &pos);
 
       llvm::Function* getDestructor(CodeGen &CGM);
 
-      std::vector<pair<size_t, string>>& getRefCountedFields() {
+      const std::vector<pair<size_t, string>>& getRefCountedFields() const
+      {
          return refCountedFields;
       }
 
-      void setDestructor(llvm::Function* destr) {
+      void setDestructor(llvm::Function* destr)
+      {
          destructor = destr;
       }
 
       llvm::Constant* getTypeInfo(CodeGen &CGM);
 
-      size_t& getOutstandingExtensions() {
+      size_t& getOutstandingExtensions()
+      {
          return outstandingExtensions;
       }
 
-      bool hasInnerClass(const string &inner);
-
-      void addInnerClass(Class* inner) {
-         innerDeclarations.push_back(inner);
-         inner->outerClass = this;
-      }
-
-      Method*& getParameterlessConstructor()
+      Method* getParameterlessConstructor() const
       {
          return parameterlessConstructor;
-      }
-
-      void addImplicitConformance(ImplicitConformance kind);
-
-      std::vector<ImplicitConformance>& getImplicitConformances()
-      {
-         return implicitConformances;
       }
 
       typedef std::unique_ptr<Class> UniquePtr;
@@ -389,26 +296,17 @@ namespace cl {
 
       size_t outstandingExtensions = 0;
 
-      std::vector<Class*> innerDeclarations;
-      Class* outerClass = nullptr;
-
       Class* parentClass = nullptr;
       std::vector<Class*> extendedBy;
       unordered_map<string, size_t> baseClassOffsets;
 
-      ClassDecl* declaration = nullptr;
-
-      std::vector<ObjectType*> conformsTo_;
       map<string, std::vector<string>> protocolMethods;
 
       std::vector<pair<string, Field::SharedPtr>> fields;
-      unordered_multimap<string, std::shared_ptr<Method>> methods;
       std::vector<Method*> constructors;
 
       std::vector<std::vector<ExtensionConstraint>> ConstraintSets;
       unordered_map<string, string> inheritedProtocolMethods;
-
-      unordered_map<string, BuiltinType*> concreteGenerics;
 
       Method* parameterlessConstructor = nullptr;
       Method* memberwiseInitializer = nullptr;
@@ -423,7 +321,6 @@ namespace cl {
 
       std::vector<pair<string, string>> virtualMethods;
 
-      std::vector<GenericConstraint> generics;
       bool is_abstract = false;
       bool is_protocol = false;
       bool is_struct = false;
@@ -431,8 +328,6 @@ namespace cl {
       bool hasAssociatedTypes_ = false;
 
       bool has_nonempty_deinit = false;
-
-      std::vector<ImplicitConformance> implicitConformances;
 
       bool finalized = false;
 

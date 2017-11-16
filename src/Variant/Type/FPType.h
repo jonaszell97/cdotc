@@ -19,40 +19,40 @@ namespace cdot {
       static FPType* getFloatTy();
       static FPType* getDoubleTy();
 
-      inline unsigned int getPrecision() {
+      unsigned int getPrecision() const
+      {
          return precision;
       }
       
-      bool isFloatTy() override {
+      bool isFloatTy() const override
+      {
          return precision == 32;
       }
 
-      bool isDoubleTy() override {
+      bool isDoubleTy() const override
+      {
          return precision == 64;
       }
 
-      bool isFPType() override {
+      bool isFPType() const override
+      {
          return true;
       }
 
-      BuiltinType* box() override;
+      BuiltinType* box() const override;
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
 
-      BuiltinType* ArithmeticReturnType(string &op, BuiltinType *rhsTy) override;
+      BuiltinType* ArithmeticReturnType(string &op, BuiltinType *rhsTy) const override;
 
-      bool implicitlyCastableTo(BuiltinType *destTy) override;
-      bool explicitlyCastableTo(BuiltinType *destTy) override;
+      bool implicitlyCastableTo(BuiltinType *destTy) const override;
+      bool explicitlyCastableTo(BuiltinType *destTy) const override;
 
-      llvm::Value* getDefaultVal() override;
-      llvm::Constant* getConstantVal(Variant &val) override;
+      llvm::Value* getDefaultVal(CodeGen &CGM) const override;
+      llvm::Constant* getConstantVal(Variant &val) const override;
 
-      short getAlignment() override;
-
-      inline string& getClassName() override {
-         return className;
-      }
+      short getAlignment() const override;
 
       static inline bool classof(FPType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

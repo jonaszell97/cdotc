@@ -18,28 +18,11 @@ public:
       return {};
    }
 
-   void __dump(int) override {}
-
    NodeType get_type() override {
       return NodeType::DEBUG_STMT;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
    typedef std::shared_ptr<DebugStmt> SharedPtr;

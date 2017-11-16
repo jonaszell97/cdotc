@@ -1,27 +1,125 @@
 
 #include "ConstExprPass.h"
+
 #include "../ASTIncludes.h"
+#include "Builtin.h"
+
 #include "../../../Variant/Variant.h"
-#include "../../Statement/Declaration/FuncArgDecl.h"
 #include "../../../Variant/Type/PrimitiveType.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/FPType.h"
 
+#include "../SemanticAnalysis/Record/Class.h"
+#include "../../../Message/Diagnostics.h"
+
+
+using namespace cdot;
+using namespace cdot::diag;
+
+using std::stack;
+using std::unordered_map;
+using std::string;
+using std::set;
+
 size_t ConstExprPass::ConditionStack = 0;
 
-ConstExprPass::ConstExprPass() {
+ConstExprPass::ConstExprPass()
+{
 
 }
 
-long ConstExprPass::hasVariable(string &varName) {
+void ConstExprPass::run(std::vector<std::shared_ptr<CompoundStmt>> &roots)
+{
+   for (const auto &root : roots) {
+      doInitialPass(root->getStatements());
+   }
+
+   for (const auto &root : roots) {
+      visit(root.get());
+   }
+}
+
+cdot::Variant ConstExprPass::getResult(std::shared_ptr<AstNode> node)
+{
+   node->accept(this);
+   if (Results.empty()) {
+      return {};
+   }
+
+   auto res = std::move(Results.top());
+   Results.pop();
+
+   return res;
+}
+
+cdot::Variant ConstExprPass::getResult(AstNode *node)
+{
+   node->accept(this);
+   if (Results.empty()) {
+      return {};
+   }
+
+   auto res = std::move(Results.top());
+   Results.pop();
+
+   return res;
+}
+
+void ConstExprPass::returnResult(cdot::Variant v)
+{
+   Results.push(std::move(v));
+}
+
+void ConstExprPass::doInitialPass(
+   const std::vector<std::shared_ptr<Statement>> &statements)
+{
+   for (const auto &stmt : statements) {
+      switch (stmt->get_type()) {
+//         case NodeType::CLASS_DECL: {
+//            auto clDec = std::static_pointer_cast<ClassDecl>(stmt);
+//            for (const auto & field : clDec->getFields()) {
+//               DeclareField(field.get());
+//            }
+//
+//            doInitialPass(clDec->getInnerDeclarations());
+//            break;
+//         }
+//         case NodeType::RECORD_TEMPLATE_DECL: {
+//            auto recTempl = std::static_pointer_cast<RecordTemplateDecl>(stmt);
+//            doInitialPass(recTempl->getInstantiations());
+//
+//            break;
+//         }
+//         case NodeType::NAMESPACE_DECL: {
+//            auto nsDecl = std::static_pointer_cast<NamespaceDecl>(stmt);
+//            doInitialPass(nsDecl->getContents()->getStatements());
+//
+//            break;
+//         }
+         case NodeType::DECLARATION: {
+            auto decl = std::static_pointer_cast<DeclStmt>(stmt);
+            DeclareGlobalVar(decl.get());
+
+            break;
+         }
+         default:
+            break;
+      }
+   }
+}
+
+bool ConstExprPass::hasVariable(const string &varName)
+{
    return Variables.find(varName) != Variables.end();
 }
 
-Variant& ConstExprPass::getVariable(string &varName) {
+Variant& ConstExprPass::getVariable(const string &varName)
+{
    return Variables[varName];
 }
 
-void ConstExprPass::setVariable(string &varName, Variant &val) {
+void ConstExprPass::setVariable(const string &varName, const Variant &val)
+{
    if (Variables.find(varName) != Variables.end()) {
       Variables[varName] = val;
    }
@@ -30,132 +128,147 @@ void ConstExprPass::setVariable(string &varName, Variant &val) {
    }
 }
 
-Variant ConstExprPass::visit(NamespaceDecl *node)
+void ConstExprPass::visit(NamespaceDecl *node)
 {
-   node->contents->accept(*this);
-   return {};
+   node->getContents()->accept(this);
 }
 
-Variant ConstExprPass::visit(FunctionDecl *node)
+void ConstExprPass::visit(FunctionDecl *node)
 {
-   node->body->accept(*this);
-   return {};
+   node->getBody()->accept(this);
 }
 
-Variant ConstExprPass::visit(CompoundStmt *node)
+void ConstExprPass::visit(CompoundStmt *node)
 {
    for (const auto& stmt : node->get_children()) {
-      stmt->accept(*this);
+      stmt->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(IdentifierRefExpr *node)
+void ConstExprPass::visit(IdentifierRefExpr *node)
 {
-   if (node->memberExpr != nullptr) {
-      return node->memberExpr->accept(*this);
+   if (node->getMemberExpr() != nullptr) {
+      return node->getMemberExpr()->accept(this);
    }
 
-//   if (hasVariable(node->binding)) {
-//      auto var = getVariable(node->binding);
-//      if (var.type != VariantType::STRING) {
-//         node->staticVal = var;
-//      }
-//   }
+   if (hasVariable(node->getBinding())) {
+      auto var = getVariable(node->getBinding());
+      if (var.type != VariantType::STRING) {
+         node->setStaticVal(var);
+      }
+   }
 
-   return node->staticVal;
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(DeclStmt *node)
+void ConstExprPass::DeclareGlobalVar(DeclStmt *node)
 {
-   if (node->value != nullptr) {
-      node->value->staticVal = node->value->accept(*this);
+   if (node->value != nullptr && node->isConst() && node->isGlobal()) {
+      node->value->staticVal = getResult(node->value);
       setVariable(node->binding, node->value->staticVal);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(ForStmt *node)
+void ConstExprPass::visit(DeclStmt *node)
+{
+   if (!node->isGlobal() && node->getValue()) {
+      node->value->staticVal = getResult(node->value);
+      setVariable(node->binding, node->value->staticVal);
+   }
+}
+
+void ConstExprPass::visit(ForStmt *node)
 {
    if (node->termination == nullptr) {
-      return {};
+      return;
    }
 
-   auto cond = node->termination->accept(*this);
+   auto cond = getResult(node->termination);
    if (cond.isVoid()) {
       ++ConditionStack;
-      node->body->accept(*this);
+      node->body->accept(this);
       --ConditionStack;
    }
    else if (cond.intVal != 0) {
-      node->body->accept(*this);
+      node->body->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(ForInStmt *node)
+void ConstExprPass::visit(ForInStmt *node)
 {
    ++ConditionStack;
-   node->body->accept(*this);
+   node->body->accept(this);
    --ConditionStack;
-
-   return {};
 }
 
-Variant ConstExprPass::visit(WhileStmt *node)
+void ConstExprPass::visit(WhileStmt *node)
 {
-   auto cond = node->condition->accept(*this);
+   auto cond = getResult(node->condition);
 
    if (cond.isVoid()) {
       ++ConditionStack;
-      node->body->accept(*this);
+      node->body->accept(this);
       --ConditionStack;
    }
    else if (cond.intVal != 0) {
-      node->body->accept(*this);
+      node->body->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(CollectionLiteral *node)
+void ConstExprPass::visit(CollectionLiteral *node)
 {
    for (const auto& stmt : node->get_children()) {
-      stmt->accept(*this);
+      stmt->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(NumericLiteral *node)
+void ConstExprPass::visit(IntegerLiteral *node)
 {
-   node->staticVal = node->value;
-   if (!node->primitive) {
-      node->staticVal.isBoxed = true;
-   }
+   node->setStaticVal(node->getValue());
+   node->getStaticVal().boxed = node->getType()->isObject();
 
-   return node->staticVal;
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(NoneLiteral *node)
+void ConstExprPass::visit(FPLiteral *node)
 {
-   return {};
+   node->setStaticVal(node->getValue());
+   node->getStaticVal().boxed = node->getType()->isObject();
+
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(StringLiteral *node)
+void ConstExprPass::visit(BoolLiteral *node)
 {
-   node->staticVal = Variant(node->value);
-   node->staticVal.rawStr = node->raw;
+   node->setStaticVal({node->getValue()});
+   node->getStaticVal().boxed = node->getType()->isObject();
 
-   return node->staticVal;
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(StringInterpolation *node)
+void ConstExprPass::visit(CharLiteral *node)
 {
-   return {};
+   node->setStaticVal({node->getNarrow()});
+   node->getStaticVal().boxed = node->getType()->isObject();
+
+   returnResult(node->getStaticVal());
+}
+
+void ConstExprPass::visit(NoneLiteral *node)
+{
+
+}
+
+void ConstExprPass::visit(StringLiteral *node)
+{
+   node->staticVal = Variant(string(node->value));
+   node->staticVal.boxed = node->isRaw();
+
+   returnResult(node->staticVal);
+}
+
+void ConstExprPass::visit(StringInterpolation *node)
+{
    string str;
    for (const auto& s : node->strings) {
       Expression::SharedPtr next = s;
@@ -180,34 +293,35 @@ Variant ConstExprPass::visit(StringInterpolation *node)
       }
 
       end:
-      auto nextStr = next->accept(*this);
+      auto nextStr = getResult(next);
       if (nextStr.isVoid()) {
-         return {};
+         return;
       }
 
-      return nextStr.strVal;
+      return returnResult({std::move(nextStr.strVal)});
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(SubscriptExpr *node)
+void ConstExprPass::visit(SubscriptExpr *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(CallExpr *node)
+void ConstExprPass::visit(CallExpr *node)
 {
    size_t i = 0;
    for (const auto& arg : node->args) {
-      auto argDefined = node->declaredArgTypes != nullptr && node->declaredArgTypes->size() > i;
-      if (arg.second->byval_pass || (argDefined && node->declaredArgTypes->at(i).type.isLvalue())) {
+      auto argDefined = node->declaredArgTypes.size() > i;
+      if (arg.second->byval_pass
+          || (argDefined && node->declaredArgTypes.at(i).type.isLvalue())) {
          continue;
       }
 
-      arg.second->staticVal = arg.second->accept(*this);
-      if (argDefined && !node->declaredArgTypes->at(i).type->isStruct()) {
-         arg.second->staticVal.isBoxed = false;
+      arg.second->staticVal = getResult(arg.second);
+
+
+      if (argDefined && !node->declaredArgTypes.at(i).type->isStruct()) {
+         arg.second->staticVal.boxed = false;
       }
 
       ++i;
@@ -227,18 +341,20 @@ Variant ConstExprPass::visit(CallExpr *node)
    }
 
    if (node->memberExpr != nullptr) {
-      return node->memberExpr->accept(*this);
+      return node->memberExpr->accept(this);
    }
 
-   if (node->isIsBuiltin()) {
+   if (node->isBuiltin()) {
       switch (node->builtinFnKind) {
          case BuiltinFn::SIZEOF: {
-            auto ty = std::static_pointer_cast<TypeRef>(node->args.front().second)->getType();
-            node->staticVal = Variant((long) ty->getSize());
+            auto ty = std::static_pointer_cast<TypeRef>(
+               node->args.front().second)->getType();
+            node->staticVal = Variant((unsigned long long) ty->getSize());
             break;
          }
          case BuiltinFn::ALIGNOF: {
-            auto ty = std::static_pointer_cast<TypeRef>(node->args.front().second)->getType();
+            auto ty = std::static_pointer_cast<TypeRef>(
+               node->args.front().second)->getType();
             node->staticVal = Variant(ty->getAlignment());
             break;
          }
@@ -247,18 +363,35 @@ Variant ConstExprPass::visit(CallExpr *node)
       }
    }
 
-   return node->staticVal;
+   returnResult(node->staticVal);
 }
 
-Variant ConstExprPass::visit(MemberRefExpr *node)
+void ConstExprPass::visit(MemberRefExpr *node)
 {
-   return {};
+   if (VisitedClasses.find(node->getClassName()) == VisitedClasses.end()) {
+      if (SymbolTable::hasRecord(node->getClassName())) {
+         SymbolTable::getRecord(node->getClassName())->getDecl()
+                                                     ->accept(this);
+      }
+   }
+
+   if (node->isNsMember()) {
+      if (hasVariable(node->getBinding())) {
+         node->setStaticVal(getVariable(node->getBinding()));
+      }
+   }
+
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(BinaryOperator *node)
+void ConstExprPass::visit(BinaryOperator *node)
 {
-   auto lhs = node->lhs->accept(*this);
-   auto rhs = node->rhs->accept(*this);
+   if (node->op == "..") {
+      return;
+   }
+
+   auto lhs = getResult(node->lhs);
+   auto rhs = getResult(node->rhs);
 
    string assignOp;
    if (node->opType == BinaryOperatorType::ASSIGNMENT) {
@@ -267,7 +400,8 @@ Variant ConstExprPass::visit(BinaryOperator *node)
    }
    else if (node->opType == BinaryOperatorType::CAST) {
       auto ty = std::static_pointer_cast<TypeRef>(node->rhs)->getType();
-      if (ty->isNumeric() || (ty->isObject() && ty->getClassName() == "String")) {
+      if (ty->isNumeric()
+          || (ty->isObject() && ty->getClassName() == "String")) {
          node->staticVal = lhs.castTo(*ty);
       }
    }
@@ -275,7 +409,7 @@ Variant ConstExprPass::visit(BinaryOperator *node)
    node->staticVal = lhs.applyBinaryOp(rhs, node->op);
 
    if (node->op == "**" && node->operandType->isIntegerTy()) {
-      node->staticVal = Variant((long)node->staticVal.floatVal);
+      node->staticVal = Variant((unsigned long long)node->staticVal.floatVal);
    }
    
    if (node->opType == BinaryOperatorType::ASSIGNMENT) {
@@ -284,35 +418,34 @@ Variant ConstExprPass::visit(BinaryOperator *node)
       if (node->lhs->get_type() == NodeType::IDENTIFIER_EXPR) {
          auto ident = std::static_pointer_cast<IdentifierRefExpr>(node->lhs);
 
-         Variant newVal = ConditionStack > 0 || ident->memberExpr != nullptr ? Variant()
-                                                                             : node->staticVal;
+         Variant newVal = ConditionStack > 0 || ident->memberExpr != nullptr
+                          ? Variant()
+                          : node->staticVal;
          setVariable(ident->binding, newVal);
       }
 
-      return {};
+      return;
    }
 
-   node->staticVal.isBoxed = lhs.isBoxed || rhs.isBoxed;
-   return node->staticVal;
+   node->staticVal.boxed = lhs.boxed || rhs.boxed;
+   returnResult(node->staticVal);
 }
 
-Variant ConstExprPass::visit(TertiaryOperator *node)
+void ConstExprPass::visit(TertiaryOperator *node)
 {
-   auto cond = node->condition->accept(*this);
+   auto cond = getResult(node->condition);
    if (cond.isVoid()) {
       ++ConditionStack;
-      node->lhs->accept(*this);
-      node->rhs->accept(*this);
+      node->lhs->accept(this);
+      node->rhs->accept(this);
       --ConditionStack;
    }
    else if (cond.intVal == 0) {
-      node->rhs->accept(*this);
+      node->rhs->accept(this);
    }
    else {
-      node->lhs->accept(*this);
+      node->lhs->accept(this);
    }
-
-   return {};
 }
 
 #define UNARY_OPERATOR_INT(OP) \
@@ -325,222 +458,225 @@ Variant ConstExprPass::visit(TertiaryOperator *node)
       node->staticVal = Variant(OP target.floatVal);\
    }
 
-Variant ConstExprPass::visit(UnaryOperator *node)
+void ConstExprPass::visit(UnaryOperator *node)
 {
-   auto target = node->target->accept(*this);
+   auto target = getResult(node->target);
    if (target.isVoid()) {
-      return {};
+      return;
    }
 
    node->staticVal = target.applyUnaryOp(node->op);
-   node->staticVal.isBoxed = target.isBoxed;
+   node->staticVal.boxed = target.boxed;
 
-   return {};
+   returnResult(node->getStaticVal());
 }
 
-Variant ConstExprPass::visit(BreakStmt *node)
+void ConstExprPass::visit(BreakStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(ContinueStmt *node)
+void ConstExprPass::visit(ContinueStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(IfStmt *node)
+void ConstExprPass::visit(IfStmt *node)
 {
-   auto cond = node->condition->accept(*this);
-
+   auto cond = getResult(node->condition);
    if (cond.isVoid()) {
       ++ConditionStack;
 
-      node->ifBranch->accept(*this);
+      node->ifBranch->accept(this);
       if (node->elseBranch) {
-         node->elseBranch->accept(*this);
+         node->elseBranch->accept(this);
       }
 
       --ConditionStack;
    }
    else if (cond.intVal == 1) {
-      node->ifBranch->accept(*this);
+      node->ifBranch->accept(this);
    }
    else if (cond.intVal == 0 && node->elseBranch != nullptr) {
-      node->elseBranch->accept(*this);
+      node->elseBranch->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(MatchStmt *node)
+void ConstExprPass::visit(MatchStmt *node)
 {
    for (const auto& stmt : node->get_children()) {
-      stmt->accept(*this);
+      stmt->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(CaseStmt *node)
+void ConstExprPass::visit(CaseStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(LabelStmt *node)
+void ConstExprPass::visit(LabelStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(GotoStmt *node)
+void ConstExprPass::visit(GotoStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(FuncArgDecl *node)
+void ConstExprPass::visit(FuncArgDecl *node)
 {
    if (node->defaultVal) {
-      node->defaultVal->accept(*this);
+      node->defaultVal->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(ReturnStmt *node)
+void ConstExprPass::visit(ReturnStmt *node)
 {
    if (node->returnValue != nullptr) {
-      node->returnValue->accept(*this);
+      node->returnValue->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(Expression *node)
+void ConstExprPass::visit(Expression *node)
 {
-   return {};
+   returnResult({});
 }
 
-Variant ConstExprPass::visit(ClassDecl *node)
+void ConstExprPass::visit(ClassDecl *node)
 {
-   for (const auto& inner : node->innerDeclarations) {
-      inner->accept(*this);
+   auto &name = node->getDeclaredClass()->getName();
+   if (VisitedClasses.find(name) != VisitedClasses.end()) {
+      return;
    }
-   for (const auto& field : node->fields) {
-      field->accept(*this);
+
+   VisitedClasses.insert(name);
+   for (const auto& inner : node->getInnerDeclarations()) {
+      inner->accept(this);
    }
-   for (const auto& method : node->methods) {
-      method->accept(*this);
+   for (const auto& field : node->getFields()) {
+      field->accept(this);
+   }
+   for (const auto& method : node->getMethods()) {
+      method->accept(this);
    }
    for (const auto& constr : node->constructors) {
-      constr->accept(*this);
+      constr->accept(this);
    }
    if (node->destructor) {
-      node->destructor->accept(*this);
+      node->destructor->accept(this);
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(MethodDecl *node)
+void ConstExprPass::visit(MethodDecl *node)
 {
-   if (node->body != nullptr) {
-      node->body->accept(*this);
+   if (node->getBody() != nullptr) {
+      node->getBody()->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(FieldDecl *node)
+void ConstExprPass::DeclareField(FieldDecl *node)
 {
-   if (node->defaultVal != nullptr) {
-      node->defaultVal->staticVal = node->defaultVal->accept(*this);
 
-      if (node->is_static) {
-         setVariable(node->binding, node->defaultVal->staticVal);
+}
+
+void ConstExprPass::visit(FieldDecl *node)
+{
+   auto &defaultVal = node->getDefaultVal();
+   if (defaultVal != nullptr && node->isStatic() && node->isConst()) {
+      defaultVal->setStaticVal(getResult(defaultVal));
+
+      if (node->isStatic()) {
+         setVariable(node->getBinding(), defaultVal->getStaticVal());
       }
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(ConstrDecl *node)
+void ConstExprPass::visit(ConstrDecl *node)
 {
-   if (node->body != nullptr) {
-      node->body->accept(*this);
+   if (node->getBody() != nullptr) {
+      node->getBody()->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(DestrDecl *node)
+void ConstExprPass::visit(DestrDecl *node)
 {
-   if (node->body != nullptr) {
-      node->body->accept(*this);
+   if (node->getBody() != nullptr) {
+      node->getBody()->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(LambdaExpr *node)
+void ConstExprPass::visit(LambdaExpr *node)
 {
-   if (node->body != nullptr) {
-      node->body->accept(*this);
+   if (node->getBody() != nullptr) {
+      node->getBody()->accept(this);
    }
-   return {};
 }
 
-Variant ConstExprPass::visit(ImplicitCastExpr *node)
+void ConstExprPass::visit(ImplicitCastExpr *node)
 {
-   auto target = node->target->accept(*this);
+   auto target = getResult(node->target);
    if (target.isVoid()) {
-      return {};
+      returnResult({});
    }
 
    auto& targetTy = node->to;
-   if (!targetTy->isNumeric() && !(targetTy->isObject() && targetTy->getClassName() == "String")) {
-      return {};
+   if (!targetTy->isNumeric()
+       && !(targetTy->isObject() && targetTy->getClassName() == "String")) {
+      return returnResult({});
    }
 
    node->staticVal = target.castTo(*node->to);
-   node->staticVal.isBoxed = target.isBoxed;
+   node->staticVal.boxed = target.boxed;
 
-   return node->staticVal;
+   returnResult(node->staticVal);
 }
 
-Variant ConstExprPass::visit(TypedefDecl *node)
+void ConstExprPass::visit(TypedefDecl *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(TypeRef *node)
+void ConstExprPass::visit(TypeRef *node)
 {
-   return {};
+   returnResult({});
 }
 
-Variant ConstExprPass::visit(DeclareStmt *node)
+void ConstExprPass::visit(DeclareStmt *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(LvalueToRvalue *node)
+void ConstExprPass::visit(LvalueToRvalue *node)
 {
-   return node->target->accept(*this);
+   returnResult(getResult(node->target));
 }
 
-Variant ConstExprPass::visit(DebugStmt *node)
+void ConstExprPass::visit(DebugStmt *node)
 {
    if (!node->isUnreachable) {
       int i = 3;
    }
-
-   return {};
 }
 
-Variant ConstExprPass::visit(TupleLiteral *node)
+void ConstExprPass::visit(TupleLiteral *node)
 {
-   return {};
+   returnResult({});
 }
 
-Variant ConstExprPass::visit(EnumDecl *node)
+void ConstExprPass::visit(EnumDecl *node)
 {
-   return {};
+
 }
 
-Variant ConstExprPass::visit(Statement *node)
+void ConstExprPass::visit(RecordTemplateDecl *node)
 {
-   return {};
+   for (const auto &inst : node->getInstantiations()) {
+      inst->accept(this);
+   }
+}
+
+void ConstExprPass::visit(Statement *node)
+{
+
 }

@@ -22,22 +22,6 @@ public:
 
    Expression& operator=(const Expression &rhs) = default;
 
-   virtual inline void setMemberExpr(std::shared_ptr<Expression> ref_expr) {
-      if (ref_expr == nullptr) {
-        return;
-      }
-      
-      if (memberExpr == nullptr) {
-         memberExpr = ref_expr;
-         children.push_back(&memberExpr);
-         memberExpr->parent = this;
-         memberExpr->parentExpr = this;
-      }
-      else {
-         memberExpr->setMemberExpr(ref_expr);
-      }
-   }
-
    virtual inline void setGlobalVar(llvm::GlobalVariable* glob) {
       globalVar = glob;
       if (memberExpr != nullptr) {
@@ -106,7 +90,8 @@ public:
       enum_case = b;
    }
 
-   bool needsContextualInformation() override {
+   bool needsContextualInformation() const override
+   {
       return enum_case;
    }
 
@@ -116,23 +101,7 @@ public:
       return NodeType::EXPRESSION;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass *v) override
-   {
-      v->visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
@@ -153,8 +122,10 @@ protected:
    bool function_argument = false;
    bool lhs_of_assignment = false;
    bool part_of_return_value = false;
+
    bool setter_call = false;
-   string setterName;
+   bool getter_call = false;
+   cl::Method *accessorMethod;
 
    Variant staticVal;
 
@@ -166,7 +137,7 @@ protected:
    long caseVal;
 
    bool temporary = false;
-   Record *tempType = nullptr;
+   cl::Record *tempType = nullptr;
 
 public:
    void isAssigned(bool ass);
@@ -186,12 +157,12 @@ public:
       return temporary;
    }
 
-   void setTempType(Record *ty)
+   void setTempType(cl::Record *ty)
    {
       tempType = ty;
    }
 
-   Record *getTempType() const
+   cl::Record *getTempType() const
    {
       return tempType;
    }
@@ -211,7 +182,7 @@ public:
       Expression::parentExpr = parentExpr;
    }
 
-   const string &getIdent() const
+   string &getIdent()
    {
       return ident;
    }
@@ -331,17 +302,7 @@ public:
       Expression::setter_call = isSetterCall;
    }
 
-   const string &getSetterName() const
-   {
-      return setterName;
-   }
-
-   void setSetterName(const string &setterName)
-   {
-      Expression::setterName = setterName;
-   }
-
-   const Variant &getStaticVal() const
+   Variant &getStaticVal()
    {
       return staticVal;
    }
@@ -380,6 +341,14 @@ public:
    {
       Expression::temporary = temporary;
    }
+
+   void setMemberExpr(const SharedPtr &memberExpr);
+
+   cl::Method *getAccessorMethod() const;
+   void setAccessorMethod(cl::Method *accessorMethod);
+
+   bool isGetterCall() const;
+   void isGetterCall(bool getter_call);
 };
 
 

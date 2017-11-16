@@ -12,10 +12,15 @@
    friend class ::ConstExprPass; \
    friend class ::HeaderGen;
 
+#include <vector>
 #include "../AstDeclarations.h"
 
 namespace cdot {
    class BinaryOperator;
+}
+
+namespace std {
+   class shared_ptr;
 }
 
 using cdot::BinaryOperator;
@@ -23,7 +28,7 @@ using cdot::BinaryOperator;
 class AbstractPass {
 public:
    virtual ~AbstractPass() = default;
-   virtual void finalize() {}
+   virtual void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) = 0;
 
    virtual void visit(AstNode *node);
    virtual void visit(Expression *node);
@@ -35,6 +40,7 @@ public:
 
    virtual void visit(DeclStmt *node);
    virtual void visit(FunctionDecl *node);
+   virtual void visit(CallableDecl *node);
    virtual void visit(DeclareStmt *node);
 
    virtual void visit(UnionDecl *node);
@@ -43,6 +49,12 @@ public:
    virtual void visit(FieldDecl *node);
    virtual void visit(ConstrDecl *node);
    virtual void visit(DestrDecl *node);
+   virtual void visit(ExtensionDecl *node);
+   virtual void visit(PropDecl *node);
+
+   virtual void visit(RecordTemplateDecl *node);
+   virtual void visit(CallableTemplateDecl *node);
+   virtual void visit(MethodTemplateDecl *node);
 
    virtual void visit(EnumDecl *node);
    virtual void visit(EnumCaseDecl *node);
@@ -66,7 +78,11 @@ public:
    virtual void visit(ContinueStmt *node);
 
    virtual void visit(CollectionLiteral *node);
-   virtual void visit(NumericLiteral *node);
+   virtual void visit(IntegerLiteral *node);
+   virtual void visit(FPLiteral *node);
+   virtual void visit(BoolLiteral *node);
+   virtual void visit(CharLiteral *node);
+
    virtual void visit(NoneLiteral *node);
    virtual void visit(StringLiteral *node);
    virtual void visit(StringInterpolation *node);
@@ -89,8 +105,18 @@ public:
    virtual void visit(TryStmt *node);
    virtual void visit(ThrowStmt *node);
 
+   virtual void visit(cdot::InheritanceConstraint *constraint);
+   virtual void visit(cdot::ConformanceConstraint *constraint);
+   virtual void visit(cdot::ValueExprConstraint *constraint);
+   virtual void visit(cdot::TokenEqualityConstraint *constraint);
+
 protected:
-   AbstractPass() = default;
+   AbstractPass();
+
+   void deferVisit(const std::shared_ptr<AstNode> &node);
+   void visitDeferred();
+
+   std::vector<std::shared_ptr<AstNode>> DeferredNodes;
 };
 
 #endif //CDOT_VISITOR_H

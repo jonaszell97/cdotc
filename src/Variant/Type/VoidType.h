@@ -17,21 +17,21 @@ namespace cdot {
    public:
       static VoidType* get();
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
 
       bool isValueType() const override
       {
          return false;
       }
 
-      bool isVoidTy() override
+      bool isVoidTy() const override
       {
          return true;
       }
 
-      llvm::Constant* getConstantVal(Variant&) override;
-      bool implicitlyCastableTo(BuiltinType* other) override;
+      llvm::Constant* getConstantVal(Variant&) const override;
+      bool implicitlyCastableTo(BuiltinType* other) const override;
 
       static inline bool classof(VoidType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

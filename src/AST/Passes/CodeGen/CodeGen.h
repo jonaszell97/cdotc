@@ -16,6 +16,7 @@
 #include "../../../Variant/Type/PointerType.h"
 #include "../../Attribute/Attribute.h"
 
+
 class FuncArgDecl;
 class CompoundStmt;
 class FieldDecl;
@@ -28,54 +29,66 @@ using std::unordered_map;
 using std::unique_ptr;
 
 namespace cdot {
-   class BuiltinType;
-   class GenericType;
-   class Builtin;
-   class BinaryOperator;
-   struct CompilationUnit;
+class BuiltinType;
+class GenericType;
+class PrimitiveType;
+class Builtin;
+class BinaryOperator;
+class Callable;
 
-   namespace eh {
-      class CGException;
+struct CompilationUnit;
+struct FunctionTemplateInstantiation;
+
+namespace eh {
+   class CGException;
+}
+
+namespace codegen {
+   class CGCast;
+}
+
+enum class BinaryOperatorType : unsigned int;
+
+struct Argument;
+
+struct EHFrame {
+   EHFrame(
+      llvm::BasicBlock *lpad,
+      llvm::BasicBlock *finally,
+      llvm::BasicBlock *cont,
+      llvm::AllocaInst *branchTarget,
+      std::vector<llvm::BasicBlock*> targets)
+      : landingPad(lpad), finallyBB(finally), contBB(cont),
+        branchTarget(branchTarget), targets(targets)
+   {
+
    }
 
-   namespace codegen {
-      class CGCast;
-   }
+   llvm::BasicBlock *landingPad;
+   llvm::BasicBlock *finallyBB;
+   llvm::BasicBlock *contBB;
 
-   enum class BinaryOperatorType : unsigned int;
+   llvm::AllocaInst *branchTarget;
+   std::vector<llvm::BasicBlock*> targets;
+};
 
-   struct Argument;
+namespace cl {
 
-   struct EHFrame {
-      EHFrame(
-         llvm::BasicBlock *lpad,
-         llvm::BasicBlock *finally,
-         llvm::BasicBlock *cont,
-         llvm::AllocaInst *branchTarget,
-         std::vector<llvm::BasicBlock*> targets)
-         : landingPad(lpad), finallyBB(finally), contBB(cont),
-           branchTarget(branchTarget), targets(targets)
-      {
+class Class;
+class Record;
+struct Method;
+struct Field;
+struct RecordTemplateInstantiation;
+class Property;
 
-      }
+}
 
-      llvm::BasicBlock *landingPad;
-      llvm::BasicBlock *finallyBB;
-      llvm::BasicBlock *contBB;
+namespace codegen {
+   class DebugInfo;
+}
 
-      llvm::AllocaInst *branchTarget;
-      std::vector<llvm::BasicBlock*> targets;
-   };
+struct CompilationUnit;
 
-   namespace cl {
-      class Class;
-      class Record;
-      struct Method;
-   }
-
-   namespace codegen {
-      class DebugInfo;
-   }
 }
 
 using namespace cdot;
@@ -83,90 +96,114 @@ using namespace cdot::codegen;
 using namespace cdot::eh;
 using namespace cdot::cl;
 
-class CodeGen {
+class CodeGen: public AbstractPass {
 public:
    CodeGen(
-      const string &fileName,
-      const string &path,
-      size_t compUnitID,
-      bool isHeader
+      std::vector<CompilationUnit> &CUs
    );
 
    ~CodeGen();
 
-   virtual llvm::Value* visit(NamespaceDecl *node);
-   virtual llvm::Value* visit(UsingStmt *node);
-   virtual llvm::Value* visit(CompoundStmt *node);
+   void setup(CompilationUnit &CU);
+   void save(CompilationUnit &CU);
+   void restore(CompilationUnit &CU);
 
-   virtual llvm::Value* visit(DeclStmt *node);
-   virtual llvm::Value* visit(FunctionDecl *node);
-   virtual llvm::Value* visit(DeclareStmt *node);
+   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
 
-   virtual llvm::Value* visit(ClassDecl *node);
-   virtual llvm::Value* visit(MethodDecl *node);
-   virtual llvm::Value* visit(FieldDecl *node);
-   virtual llvm::Value* visit(ConstrDecl *node);
-   virtual llvm::Value* visit(DestrDecl *node);
-   virtual llvm::Value* visit(EnumDecl *node);
-   virtual llvm::Value* visit(UnionDecl *node);
+   void visit(NamespaceDecl *node) override;
+   void visit(UsingStmt *node) override;
+   void visit(CompoundStmt *node) override;
 
-   virtual llvm::Value* visit(IdentifierRefExpr *node);
-   virtual llvm::Value* visit(SubscriptExpr *node);
-   virtual llvm::Value* visit(CallExpr *node);
-   virtual llvm::Value* visit(MemberRefExpr *node);
+   void visit(DeclStmt *node) override;
+   void visit(FunctionDecl *node) override;
+   void visit(DeclareStmt *node) override;
 
-   virtual llvm::Value* visit(ForStmt *node);
-   virtual llvm::Value* visit(ForInStmt *node);
-   virtual llvm::Value* visit(WhileStmt *node);
-   virtual llvm::Value* visit(IfStmt *node);
-   virtual llvm::Value* visit(MatchStmt *node);
-   virtual llvm::Value* visit(CaseStmt *node);
-   virtual llvm::Value* visit(LabelStmt *node);
-   virtual llvm::Value* visit(GotoStmt *node);
+   void visit(ClassDecl *node) override;
+   void visit(EnumDecl *node) override;
+   void visit(UnionDecl *node) override;
 
-   virtual llvm::Value* visit(ReturnStmt *node);
-   virtual llvm::Value* visit(BreakStmt *node);
-   virtual llvm::Value* visit(ContinueStmt *node);
+   void visit(FieldDecl *node) override;
 
-   virtual llvm::Value* visit(CollectionLiteral *node);
-   virtual llvm::Value* visit(NumericLiteral *node);
-   virtual llvm::Value* visit(NoneLiteral *node);
-   virtual llvm::Value* visit(StringLiteral *node);
-   virtual llvm::Value* visit(StringInterpolation *node);
-   virtual llvm::Value* visit(TupleLiteral *node);
+   void visit(MethodDecl *node) override;
+   void visit(ConstrDecl *node) override;
+   void visit(DestrDecl *node) override;
 
-   virtual llvm::Value* visit(BinaryOperator *node);
-   virtual llvm::Value* visit(TertiaryOperator *node);
-   virtual llvm::Value* visit(UnaryOperator *node);
+   void visit(RecordTemplateDecl *node) override;
+   void visit(CallableTemplateDecl *node) override;
+   void visit(MethodTemplateDecl *node) override;
 
-   virtual llvm::Value* visit(FuncArgDecl *node);
-   virtual llvm::Value* visit(Expression *node);
-   virtual llvm::Value* visit(LambdaExpr *node);
-   virtual llvm::Value* visit(ImplicitCastExpr *node);
-   virtual llvm::Value* visit(TypedefDecl *node);
-   virtual llvm::Value* visit(TypeRef *node);
-   virtual llvm::Value* visit(LvalueToRvalue *node);
+   void visit(IdentifierRefExpr *node) override;
+   void visit(SubscriptExpr *node) override;
+   void visit(CallExpr *node) override;
+   void visit(MemberRefExpr *node) override;
 
-   virtual llvm::Value* visit(TryStmt *node);
-   virtual llvm::Value* visit(ThrowStmt *node);
+   void visit(ForStmt *node) override;
+   void visit(ForInStmt *node) override;
+   void visit(WhileStmt *node) override;
+   void visit(IfStmt *node) override;
+   void visit(MatchStmt *node) override;
+   void visit(CaseStmt *node) override;
+   void visit(LabelStmt *node) override;
+   void visit(GotoStmt *node) override;
 
-   virtual llvm::Value* visit(EndOfFileStmt *node);
-   virtual llvm::Value* visit(DebugStmt *node);
+   void visit(ReturnStmt *node) override;
+   void visit(BreakStmt *node) override;
+   void visit(ContinueStmt *node) override;
 
-   virtual llvm::Value* visit(Statement *node);
+   void visit(CollectionLiteral *node) override;
 
-   void finalize();
+   void visit(IntegerLiteral *node) override;
+   void visit(FPLiteral *node) override;
+   void visit(BoolLiteral *node) override;
+   void visit(CharLiteral *node) override;
+
+   void visit(NoneLiteral *node) override;
+   void visit(StringLiteral *node) override;
+   void visit(StringInterpolation *node) override;
+   void visit(TupleLiteral *node) override;
+
+   void visit(BinaryOperator *node) override;
+   void visit(TertiaryOperator *node) override;
+   void visit(UnaryOperator *node) override;
+
+   void visit(FuncArgDecl *node) override;
+   void visit(Expression *node) override;
+   void visit(LambdaExpr *node) override;
+   void visit(ImplicitCastExpr *node) override;
+   void visit(TypedefDecl *node) override;
+   void visit(TypeRef *node) override;
+   void visit(LvalueToRvalue *node) override;
+
+   void visit(TryStmt *node) override;
+   void visit(ThrowStmt *node) override;
+
+   void visit(EndOfFileStmt *node) override;
+   void visit(DebugStmt *node) override;
+
+   void visit(Statement *node) override;
+
+   void finalize(const CompilationUnit &CU);
    static void linkAndEmit(std::vector<CompilationUnit>& CUs);
 
-   void DeclareClass(ClassDecl*);
+   void outputIR(const CompilationUnit &CU);
+
+   void ForwardDeclareRecord(Record *cl);
+
+   void DeclareClass(Class *cl);
    void DeclareEnum(EnumDecl*);
-   void DeclareClasses(std::vector<std::shared_ptr<Statement>>& statements);
+   void DeclareClasses(
+      const std::vector<std::shared_ptr<Statement>>&statements);
+
+   void VisitFunctionDecl(FunctionDecl *node);
 
    unsigned short getAlignment(llvm::Value*);
    unsigned short getAlignment(llvm::Type*);
 
    llvm::Value* GetFieldOffset(string&, unsigned);
    llvm::Value* GetStructSize(llvm::Type*);
+
+   llvm::Instruction *CreateCopy(llvm::Value *dst, llvm::Value *src,
+                                 BuiltinType *ty);
 
    llvm::Value* CreateStore(llvm::Value* val, llvm::Value* ptr);
    llvm::Value* CreateLoad(llvm::Value* ptr);
@@ -177,6 +214,8 @@ public:
    llvm::ConstantInt* wordSizedInt(int val);
 
    llvm::Value* GetString(const string &str, bool cstr = false, bool isConst = false);
+
+   llvm::Value *getVariantValue(const Variant &v);
    llvm::Value* getStaticVal(
       Variant& v,
       BuiltinType*& ty,
@@ -203,24 +242,18 @@ public:
    void DebugPrint(llvm::Value* val, string msg = "");
 
    llvm::Value *toInt8Ptr(llvm::Value *val);
+
    llvm::Constant* getTypeInfo(BuiltinType *ty);
 
+   llvm::Constant *createBuiltinTypeInfo(const string &name,
+                                         llvm::Constant *deinitializer,
+                                         size_t typeID);
+
+   llvm::Constant* createTupleTypeInfo(TupleType *ty);
+   llvm::Constant* createFunctionTypeInfo(FunctionType *ty);
+   llvm::Constant* createPrimitiveTypeInfo(PrimitiveType *ty);
+
    bool addStrMetadata(llvm::Value* inst, string str);
-
-   const string &getFileName()
-   {
-      return fileName;
-   }
-
-   const string &getPath()
-   {
-      return path;
-   }
-
-   size_t getCUID()
-   {
-      return CUID;
-   }
 
    static void declareStructTy(
       const string &name,
@@ -242,7 +275,7 @@ public:
    static llvm::LLVMContext Context;
 
    llvm::IRBuilder<> Builder;
-   std::unique_ptr<llvm::Module> Module;
+   llvm::Module *Module;
 
    static llvm::StructType* ClassInfoType;
    static llvm::StructType* TypeInfoType;
@@ -270,6 +303,14 @@ protected:
    unordered_map<string, llvm::Constant*> OwnFunctions;
    unordered_map<string, llvm::Value*> OwnValues;
    std::vector<pair<Expression*, BuiltinType*>> global_initializers;
+   std::stack<llvm::Value*> Results;
+
+   std::vector<CompilationUnit> &CUs;
+
+   llvm::Value *getResult();
+   llvm::Value *getResult(AstNode *node);
+   llvm::Value *getResult(std::shared_ptr<AstNode> node);
+   void returnResult(llvm::Value *v);
 
    void declareFunction(
       const string &name,
@@ -305,14 +346,6 @@ protected:
       llvm::Function *funcTy
    );
 
-   size_t CUID;
-
-
-   // compile unit
-   const string &fileName;
-   const string &path;
-   bool isHeader;
-
    // function stack
    std::vector<llvm::Function*> functions;
 
@@ -333,7 +366,7 @@ protected:
 
    // debug info
    bool emitDI;
-   DebugInfo *DI;
+   DebugInfo *DI = nullptr;
 
    // value stack
    std::stack<llvm::Value*> valueStack;
@@ -362,21 +395,22 @@ protected:
    bool broken = false;
 
    // identifier expressions
-   llvm::Value* ReturnMemberRef(Expression*, llvm::Value*);
+   void ReturnMemberRef(Expression*, llvm::Value*);
 
    // functions
    unordered_map<unsigned int, llvm::Type*> LambdaTypes = {};
    unordered_map<string, int> LambdaEnvOrder = {};
 
    llvm::Function *DeclareFunction(
-      string &bound_name,
-      std::vector<std::shared_ptr<FuncArgDecl>> args,
+      const string &bound_name,
+      const std::vector<Argument> &args,
+      const std::vector<pair<string, string>> &argBindings,
       Type return_type,
       bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
-      string this_binding = "",
-      std::vector<Attribute> attrs = {},
+      const string &this_binding = "",
+      const std::vector<Attribute> &attrs = {},
       bool hiddenParam = false,
       bool envParam = false,
       bool isVirtualOrProtocolMethod = false,
@@ -384,14 +418,30 @@ protected:
    );
 
    llvm::Function *DeclareFunction(
-      string &bound_name,
-      std::vector<std::shared_ptr<FuncArgDecl>> args,
+      const string &bound_name,
+      const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+      Type return_type,
+      bool throws,
+      bool set_this_arg = false,
+      llvm::Type *selfTy = nullptr,
+      const string &this_binding = "",
+      const std::vector<Attribute> &attrs = {},
+      bool hiddenParam = false,
+      bool envParam = false,
+      bool isVirtualOrProtocolMethod = false,
+      bool hasDefinition = true
+   );
+
+   llvm::Function *DeclareFunction(
+      const string &bound_name,
+      const std::vector<Argument> &args,
+      const std::vector<pair<string, string>> &argBindings,
       llvm::Type *return_type,
       bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
-      string this_binding = "",
-      std::vector<Attribute> attrs = {},
+      const string &this_binding = "",
+      const std::vector<Attribute> &attrs = {},
       bool hiddenParam = false,
       bool envParam = false,
       bool noByVal = false,
@@ -399,44 +449,64 @@ protected:
    );
 
    llvm::Function* DeclareMethod(
-      string &bound_name,
-      std::vector<std::shared_ptr<FuncArgDecl>> args,
+      const string &bound_name,
+      const std::vector<Argument> &args,
+      const std::vector<pair<string, string>> &argBindings,
       Type return_type,
       bool throws,
       llvm::Type *selfTy,
-      string &this_binding,
-      std::vector<Attribute> attrs = {},
+      const string &this_binding,
+      const std::vector<Attribute> &attrs = {},
       bool hiddenParam = false,
       bool isVirtualOrProtocolMethod = false,
       bool hasDefinition = true
    );
 
-   void DefineFunction(llvm::Function*, std::shared_ptr<Statement> body, string name = "");
-   void DefineFunction(string& bound_name, std::shared_ptr<Statement> body);
+   llvm::Function* DeclareMethod(
+      const string &bound_name,
+      const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+      Type return_type,
+      bool throws,
+      llvm::Type *selfTy,
+      const string &this_binding,
+      const std::vector<Attribute> &attrs = {},
+      bool hiddenParam = false,
+      bool isVirtualOrProtocolMethod = false,
+      bool hasDefinition = true
+   );
+
+   void DefineFunction(
+      llvm::Function *func,
+      std::shared_ptr<Statement> body,
+      const string &name = ""
+   );
+
+   void DefineFunction(
+      const string& bound_name,
+      std::shared_ptr<Statement> body
+   );
+
+   pair<std::vector<Argument>, std::vector<pair<string, string>>>
+   getArgBindings(const std::vector<std::shared_ptr<FuncArgDecl>> &args);
 
    llvm::Function* DeclareDefaultConstructor(
-      string &bound_name,
-      std::vector<std::shared_ptr<FuncArgDecl>> args,
-      Type& return_type,
+      const string &bound_name,
       llvm::StructType *this_arg,
-      string &this_binding,
       cdot::cl::Class *cl
    );
 
    void DefineDefaultConstructor(
-      string &bound_name,
-      string &this_binding,
+      const string &bound_name,
       cdot::cl::Class *cl
    );
 
    llvm::Function* DeclareDefaultDestructor(
       llvm::StructType* selfArg,
-      string& selfBinding,
       cdot::cl::Class* cl
    );
 
    void DefineDefaultDestructor(
-      string& selfBinding,
+      const string &selfBinding,
       cdot::cl::Class* cl,
       std::shared_ptr<CompoundStmt> body = nullptr
    );
@@ -460,16 +530,19 @@ protected:
 
    // declarations
 
-   void DefineClass(ClassDecl*);
+   void DefineClass(Class *cl);
 
-   void DeclareField(FieldDecl*);
-   void DefineField(FieldDecl*);
+   void DeclareField(Field *field);
+   void DefineField(Field *field);
 
-   void DeclareMethod(MethodDecl*);
-   void DefineMethod(MethodDecl*);
+   void DeclareProp(cl::Property *prop);
+   void DefineProp(cl::Property *prop);
 
-   void DeclareConstr(ConstrDecl*);
-   void DefineConstr(ConstrDecl*);
+   void DeclareMethod(Method *method);
+   void DefineMethod(Method *method, std::shared_ptr<CompoundStmt> body);
+
+//   void DeclareConstr(Method *method);
+//   void DefineConstr(Method *method, std::shared_ptr<CompoundStmt> body);
 
    void DeclareMemberwiseInitializer(cdot::cl::Class *cl);
    void DefineMemberwiseInitializer(cdot::cl::Class *cl);
@@ -538,9 +611,7 @@ protected:
    llvm::Value* HandleComparisonOp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node);
    llvm::Value* HandleOtherOp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node);
 
-   // enum & tuple comparison
-   llvm::Value* HandleEnumComp(llvm::Value*lhs, llvm::Value*rhs, std::vector<llvm::Value*>& assocValues,
-      std::vector<BuiltinType*>& assocTypes, bool neq = false);
+   // tuple comparison
    llvm::Value* HandleTupleComp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node, bool neq = false);
 
    // pattern matching

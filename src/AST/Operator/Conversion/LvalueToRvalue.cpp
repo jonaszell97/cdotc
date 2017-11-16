@@ -15,11 +15,3 @@ LvalueToRvalue::LvalueToRvalue(Expression::SharedPtr expr) :
 std::vector<AstNode::SharedPtr> LvalueToRvalue::get_children() {
     return { target };
 }
-
-void LvalueToRvalue::__dump(int depth) {
-    AstNode::__tab(depth);
-
-    std::cout << "ImplicitLvalueToRvalue" << std::endl;
-
-    target->__dump(depth + 1);
-}

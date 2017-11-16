@@ -17,10 +17,3 @@ NamespaceDecl::NamespaceDecl(std::string ns_name, CompoundStmt::SharedPtr conten
 std::vector<AstNode::SharedPtr> NamespaceDecl::get_children() {
    return { contents };
 }
-
-void NamespaceDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout <<  "NameSpaceDecl [" << nsName << "]" << std::endl;
-
-   contents->__dump(depth + 1);
-}

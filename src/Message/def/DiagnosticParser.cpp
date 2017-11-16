@@ -51,20 +51,20 @@ namespace diag {
             continue;
          }
 
-         string name = lex.s_val();
+         string name = lex.strVal();
          lex.advance();
 
          assert(lex.currentToken.is_operator("<") && "expected <");
          lex.advance();
 
-         string type = lex.s_val();
+         string type = lex.strVal();
          lex.advance();
 
          assert(lex.currentToken.is_operator(">") && "expected >");
          lex.advance();
 
          assert(lex.currentToken.get_type() == T_LITERAL && "expected string literal");
-         string str = lex.s_val();
+         string str = lex.strVal();
 
          auto enumVal = type + '_' + name;
 

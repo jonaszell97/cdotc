@@ -1,16 +1,18 @@
 //
 // Created by Jonas Zell on 04.07.17.
 //
+#include "SemaPass.h"
 
 #include <iostream>
 #include <fstream>
-#include "SemaPass.h"
+
 #include "../ASTIncludes.h"
 #include "../../SymbolTable.h"
+
 #include "Record/Class.h"
 #include "Record/Union.h"
 #include "Record/Enum.h"
-#include "../../../Message/Warning.h"
+
 #include "../../../Variant/Type/BuiltinType.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/ObjectType.h"
@@ -19,37 +21,116 @@
 #include "../../../Variant/Type/VoidType.h"
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/FPType.h"
-#include "../../Operator/Conversion/LvalueToRvalue.h"
-#include "../../../Util.h"
 #include "../../../Variant/Type/TupleType.h"
-#include "../../../Message/Exceptions.h"
 #include "../../../Variant/Type/AutoType.h"
+#include "../../../Variant/Type/TypeGroup.h"
+#include "../../../Variant/Type/MetaType.h"
 
+#include "../../../Message/Exceptions.h"
 #include "../../../Message/Diagnostics.h"
+#include "../../../Parser.h"
+#include "../../../Util.h"
+
+#include "../Declaration/DeclPass.h"
+#include "OverloadResolver.h"
+
+#include "../../Statement/Declaration/Class/ExtensionDecl.h"
 
 using namespace cdot::cl;
 using namespace cdot::diag;
 
-string self_str = "self";
 std::vector<string> SemaPass::currentNamespace = { "" };
 std::vector<string> SemaPass::importedNamespaces = { "" };
-std::vector<std::vector<GenericConstraint>*> SemaPass::GenericsStack = {};
+std::vector<std::vector<TemplateConstraint>*> SemaPass::GenericsStack;
 
 SemaPass::SemaPass()
 {
    pushScope();
    classScopeStack.push("");
 
-   util::TCPass = this;
+   resolverFn = [this](Expression *node) {
+      return getResult(node);
+   };
+
+   TypeResolverFn = [this](TypeRef *node, const
+   std::vector<TemplateArg>&args,const std::vector<TemplateConstraint>&constr) {
+      DeclPass::ResolveStatus status;
+      return DeclPass::getResolvedType(
+         node,
+         importedNamespaces,
+         currentNamespace,
+         &status,
+         &args,
+         &constr
+      );
+   };
 }
 
-void SemaPass::pushClassScope(cl::Class *cl, string& className)
+void SemaPass::run(std::vector<std::shared_ptr<CompoundStmt>> &roots)
 {
-   pushNamespace(className);
+   for (const auto &root : roots) {
+      doInitialPass(root->getStatements());
+   }
+   for (const auto &root : roots) {
+      visit(root.get());
+   }
+
+   visitDeferred();
+}
+
+Type SemaPass::getResult()
+{
+   auto res = std::move(Results.top());
+   Results.pop();
+
+   return std::move(res);
+}
+
+Type SemaPass::getResult(AstNode *node)
+{
+   auto res = getAmbiguousResult(node);
+   if (res->isTypeGroup()) {
+      *res = res->getGroupDefault();
+   }
+
+   return res;
+}
+
+Type SemaPass::getResult(std::shared_ptr<AstNode> node)
+{
+   return getResult(node.get());
+}
+
+Type SemaPass::getAmbiguousResult(AstNode *node)
+{
+   node->accept(this);
+   auto res = std::move(Results.top());
+   Results.pop();
+
+   return std::move(res);
+}
+
+Type SemaPass::getAmbiguousResult(std::shared_ptr<AstNode> node)
+{
+   return getAmbiguousResult(node.get());
+}
+
+void SemaPass::returnResult(Type t)
+{
+   Results.push(t);
+}
+
+void SemaPass::returnResult(BuiltinType *t)
+{
+   Results.emplace(t);
+}
+
+void SemaPass::pushClassScope(cl::Record *cl)
+{
+   pushNamespace(cl->getName());
    latestScope->inProtocol = cl->isProtocol();
 
-   classScopeStack.push(currentNamespace.back());
-   GenericsStack.push_back(&cl->getGenerics());
+   classScopeStack.push(cl->getName());
 }
 
 void SemaPass::popClassScope()
@@ -61,46 +142,56 @@ void SemaPass::popClassScope()
    GenericsStack.pop_back();
 }
 
-void SemaPass::doInitialPass(std::vector<std::shared_ptr<Statement>>& statements)
+void SemaPass::doInitialPass(const std::shared_ptr<Statement> &stmt)
+{
+   switch (stmt->get_type()) {
+      case NodeType::CLASS_DECL: {
+         auto node = std::static_pointer_cast<ClassDecl>(stmt);
+         auto cl = node->getRecord()->getAs<Class>();
+
+         pushClassScope(cl);
+
+         doInitialPass(node->getInnerDeclarations());
+         for (const auto &field : node->getFields()) {
+            DefineField(field.get(), cl);
+         }
+
+         popClassScope();
+
+         break;
+      }
+      case NodeType::EXTENSION_DECL: {
+         auto ext = std::static_pointer_cast<ExtensionDecl>(stmt);
+         doInitialPass(ext->getInnerDeclarations());
+
+         break;
+      }
+      case NodeType::RECORD_TEMPLATE_DECL: {
+         auto Templ = std::static_pointer_cast<RecordTemplateDecl>(stmt);
+         doInitialPass(Templ->getInstantiations());
+
+         break;
+      }
+      case NodeType::NAMESPACE_DECL: {
+         auto ns = std::static_pointer_cast<NamespaceDecl>(stmt);
+         pushNamespace(ns->nsName);
+         doInitialPass(ns->contents->getStatements());
+         popNamespace();
+         break;
+      }
+      case NodeType::USING_STMT:
+      case NodeType::EOF_STMT:
+         stmt->accept(this);
+      default:
+         break;
+   }
+}
+
+void SemaPass::doInitialPass(
+   const std::vector<std::shared_ptr<Statement>>& statements)
 {
    for (const auto& stmt : statements) {
-      switch (stmt->get_type()) {
-         case NodeType::CLASS_DECL: {
-            auto node = std::static_pointer_cast<ClassDecl>(stmt);
-            auto cl = node->declaredClass;
-
-            pushClassScope(cl, node->className);
-
-            doInitialPass(node->innerDeclarations);
-            for (const auto &field : node->fields) {
-               DefineField(field.get(), cl);
-            }
-
-            popClassScope();
-
-            break;
-         }
-//         case NodeType::DECLARATION: {
-//            auto node = std::static_pointer_cast<DeclStmt>(stmt);
-//            if (node->isGlobal()) {
-//               globalVars.push_back(node);
-//            }
-//
-//            break;
-//         }
-         case NodeType::NAMESPACE_DECL: {
-            auto ns = std::static_pointer_cast<NamespaceDecl>(stmt);
-            pushNamespace(ns->nsName);
-            doInitialPass(ns->contents->getStatements());
-            popNamespace();
-            break;
-         }
-         case NodeType::USING_STMT:
-         case NodeType::EOF_STMT:
-            stmt->accept(*this);
-         default:
-            break;
-      }
+      doInitialPass(stmt);
    }
 
    importedNamespaces.empty();
@@ -228,8 +319,8 @@ void SemaPass::connectTree(
  * @param cause
  */
 string SemaPass::declareVariable(
-   string &name,
-   Type type,
+   const string &name,
+   const Type &type,
    bool global,
    AstNode *cause)
 {
@@ -242,10 +333,13 @@ string SemaPass::declareVariable(
    }
 
    if (SymbolTable::hasVariable(var_name, importedNamespaces)) {
-      diag::err(err_var_redeclaration) << var_name << cause << diag::term;
+      diag::err(err_var_redeclaration) << name << cause
+                                       << diag::term;
    }
 
-   SymbolTable::declareVariable(var_name, type, AccessModifier::PUBLIC, currentNamespace.back(), cause);
+   SymbolTable::declareVariable(
+      var_name, type, AccessModifier::PUBLIC,
+      currentNamespace.back(), cause);
 
    return var_name;
 }
@@ -254,7 +348,7 @@ string SemaPass::declareVariable(
  * Pushes a type on the type stack
  * @param type
  */
-void SemaPass::pushTy(Type& type)
+void SemaPass::pushTy(const Type& type)
 {
    typeStack.push(type);
 }
@@ -301,9 +395,10 @@ pair<pair<Variable, string>, bool> SemaPass::getVariable(
    if (current == nullptr) {
       if (SymbolTable::hasVariable(ident, importedNamespaces)) {
          auto var = SymbolTable::getVariable(ident, importedNamespaces);
-         if (var.first.access == AccessModifier::PRIVATE && std::find(currentNamespace.begin(),
-            currentNamespace.end(), var.first.declaredNamespace) == currentNamespace.end())
-         {
+         if (var.first.access == AccessModifier::PRIVATE
+             && std::find(currentNamespace.begin(),
+            currentNamespace.end(), var.first.declaredNamespace)
+                == currentNamespace.end()) {
             diag::err(err_private_access) << 0 /*variable*/ << ident << cause
                                           << diag::term;
          }
@@ -339,17 +434,93 @@ bool SemaPass::hasVariable(string ident)
    return true;
 }
 
-/**
- * Checks for a matching function overload, throws if none or more than one is found
- * @param fun
- * @param args
- * @param cause
- * @return
- */
+MetaType* SemaPass::getMetaType(BuiltinType *forType)
+{
+//   auto argList = new ResolvedTemplateArgList(
+//      {TemplateArg(GenericType::get("T", forType))});
+//
+//   bool newlyCreated;
+//   SymbolTable::getRecord("cdot.TypeInfo",
+//                          argList,
+//                          {},
+//                          &newlyCreated);
+//
+//   if (!newlyCreated) {
+//      delete argList;
+//   }
+
+   return MetaType::get(forType);
+}
+
+namespace {
+
+bool isBetterMatchThan(CallCompatability &result,
+                       CallCompatability &next) {
+   return (next.isCompatible()
+           && (!result.isCompatible()
+               || next.castPenalty <= result.castPenalty));
+}
+
+void compareMatches(bool &firstIncompatible,
+                    CallCompatability &result,
+                    CallCompatability &next,
+                    Function *func = nullptr, Method *method = nullptr) {
+   if (!next.isCompatible()) {
+      if (firstIncompatible) {
+         firstIncompatible = false;
+         result = next;
+         result.compatibility = CompatibilityType::NO_MATCHING_CALL;
+      }
+
+      CallCandidate cand;
+      if (func) {
+         cand.func = func;
+      }
+      else {
+         cand.method = method;
+      }
+
+      cand.incompatibleArg = result.incompatibleArg;
+      cand.failedConstraint = result.failedConstraint;
+
+      result.failedCandidates.push_back(cand);
+      return;
+   }
+
+   if (next.perfectMatch || isBetterMatchThan(result, next)) {
+      firstIncompatible = false;
+      result = std::move(next);
+      if (func) {
+         result.func = func;
+      }
+      else {
+         result.method = method;
+      }
+   }
+}
+
+void checkIfAmbigous(const string &name,
+                     bool isFunction,
+                     AstNode *caller,
+                     llvm::SmallVector<AstNode*, 4> &perfectCalls) {
+   if (perfectCalls.size() <= 1) {
+      return;
+   }
+
+   diag::err(err_ambiguous_call) << !isFunction << name << diag::cont;
+   for (const auto &call : perfectCalls) {
+      diag::note(note_ambiguous_call) << call << diag::cont;
+   }
+
+   std::exit(1);
+}
+
+} // anonymous namespace
+
 CallCompatability SemaPass::getFunction(
-   string& funcName,
+   const string& funcName,
    std::vector<Argument>& args,
-   std::vector<GenericType*> generics)
+   std::vector<TemplateArg> const& templateArgs)
 {
    string context;
    auto overloads = SymbolTable::getFunction(funcName, importedNamespaces);
@@ -359,45 +530,138 @@ CallCompatability SemaPass::getFunction(
       return result;
    }
 
+   bool isTemplated = SymbolTable::isTemplatedFunction(funcName);
+   const std::vector<TemplateConstraint> &Constraints = isTemplated
+                                      ? SymbolTable::getConstraints(funcName)
+                                      : std::vector<TemplateConstraint>{};
+
+   OverloadResolver Resolver(args, templateArgs, resolverFn, TypeResolverFn,
+                             Constraints);
+
+   llvm::SmallVector<AstNode*, 4> perfectCalls;
    bool firstIncompatible = true;
+
    for (auto it = overloads.first; it != overloads.second; ++it) {
+      auto isComp = result.isCompatible();
       auto& overload = it->second;
 
-      auto res = util::findMatchingCall(args, overload->getArguments(), generics, overload->getGenerics());
-      if (!res.isCompatible()) {
-         if (firstIncompatible) {
-            firstIncompatible = false;
-            result = res;
-            result.compatibility = CompatibilityType::NO_MATCHING_CALL;
-         }
-
-         CallCandidate cand;
-         cand.func = overload.get();
-         cand.incompatibleArg = result.incompatibleArg;
-         cand.failedConstraint = result.failedConstraint;
-
-         result.failedCandidates.push_back(cand);
+      auto res = Resolver.checkIfViable(overload.get());
+      if (res.perfectMatch) {
+         perfectCalls.push_back(overload->getDeclaration());
       }
-      else if (res.perfectMatch || (res.isCompatible()
-         && (!result.isCompatible() || res.castPenalty <= result.castPenalty)))
-      {
-         result = res;
-         result.func = overload.get();
 
-         if (res.perfectMatch) {
-            break;
-         }
-      }
+      compareMatches(firstIncompatible, result, res, overload.get());
+   }
+
+   checkIfAmbigous(funcName, true, nullptr, perfectCalls);
+
+   if (result.isCompatible() && isTemplated) {
+      result.func = DeclPass::declareFunctionInstantiation(
+         *result.func->getTemplate(),
+         result.generics
+      );
    }
 
    return result;
 }
 
+CallCompatability SemaPass::getMethod(Record *rec,
+                                      const string &methodName,
+                                      const std::vector<Argument> &args,
+                                 std::vector<TemplateArg> const& templateArgs) {
+   CallCompatability result;
+   auto overloads = rec->getMethods().equal_range(methodName);
+   if (overloads.first != overloads.second) {
+      result.compatibility = CompatibilityType::NO_MATCHING_CALL;
+   }
+   else {
+      return result;
+   }
+
+   const std::vector<TemplateConstraint> &Constraints =
+      overloads.first->second->isTemplate()
+         ? overloads.first->second->getTemplate()->constraints
+         : std::vector<TemplateConstraint>{};
+
+   OverloadResolver Resolver(args, templateArgs, resolverFn, TypeResolverFn,
+                             Constraints);
+
+   llvm::SmallVector<AstNode*, 4> perfectCalls;
+   bool firstIncompatible = true;
+
+   for (auto it = overloads.first; it != overloads.second; ++it) {
+      auto& overload = it->second;
+
+//      auto failedConstr = checkConstraints(overload.get(), caller);
+//      if (failedConstr != nullptr) {
+//         result.compatibility = CompatibilityType::CONSTRAINT_FAILED;
+//         result.failedConstraint = failedConstr;
+//
+//         continue;
+//      }
+
+      const auto& Constraints = overload->isTemplate()
+                                ? overload->getTemplate()->constraints
+                                : std::vector<TemplateConstraint>();
+      
+      auto res = Resolver.checkIfViable(overload.get());
+      if (res.perfectMatch) {
+         perfectCalls.push_back(overload->getDeclaration());
+      }
+
+      compareMatches(firstIncompatible, result, res, nullptr, overload.get());
+   }
+
+   if (!result.isCompatible() && rec->isNonUnion()) {
+      auto cl = rec->getAs<Class>();
+      if (cl->getParent()) {
+         result = getMethod(cl->getParent(), methodName, args, templateArgs);
+      }
+   }
+
+   if (!result.isCompatible()) {
+      for (const auto &proto : rec->getConformances()) {
+         result = getMethod(proto, methodName, args, templateArgs);
+         if (result.isCompatible()) {
+            break;
+         }
+      }
+   }
+
+   checkIfAmbigous(methodName, false, nullptr, perfectCalls);
+   return result;
+}
+
+CallCompatability SemaPass::getCase(cl::Enum *en,
+                                    const string &caseName,
+                                    std::vector<Argument> const& args) {
+   CallCompatability res;
+   if (!en->hasCase(caseName)) {
+      return res;
+   }
+
+   res.compatibility = CompatibilityType::NO_MATCHING_CALL;
+   auto types = en->getCases()[caseName].associatedValues;
+   if (types.size() != args.size()) {
+      return res;
+   }
+
+   std::vector<Argument> neededArgs;
+   for (const auto &ty : types) {
+      neededArgs.emplace_back(ty.first, ty.second);
+   }
+
+   OverloadResolver Resolver(args, {}, resolverFn, TypeResolverFn, {});
+   Resolver.isCallCompatible(res, args, neededArgs, resolverFn);
+   res.resolvedNeededArgs = std::move(neededArgs);
+
+   return res;
+}
+
 void SemaPass::ApplyCasts(
-   std::vector<pair<string, std::shared_ptr<Expression>>> &args,
-   std::vector<Argument> &givenArgs,
-   std::vector<Argument> &declaredArgs,
-   std::vector<size_t> &casts)
+   CallExpr *node,
+   std::vector<Type> &givenArgs,
+   std::vector<Argument> &declaredArgs)
 {
    size_t i = 0;
    for (auto& arg : givenArgs) {
@@ -405,9 +669,10 @@ void SemaPass::ApplyCasts(
          break;
       }
 
-      assert(args.size() > i && "No arg to cast");
-      if (arg.type != declaredArgs[i].type && !declaredArgs[i].type->isAutoTy()) {
-         wrapImplicitCast(args[i].second, arg.type, declaredArgs[i].type);
+      assert(node->args.size() > i && "No arg to cast");
+      if (arg != declaredArgs[i].type && !arg->isTypeGroup()
+          && !declaredArgs[i].type->isAutoTy()) {
+         wrapImplicitCast(node->args[i].second, arg, declaredArgs[i].type);
       }
 
       ++i;
@@ -440,7 +705,8 @@ void SemaPass::return_(
    if (!ret_type.implicitlyCastableTo(current->declaredReturnType) ||
       (current->declaredReturnType.isLvalue() && !ret_type.isLvalue()))
    {
-      diag::err(err_return_type_mismatch) << ret_type << current->declaredReturnType
+      diag::err(err_return_type_mismatch) << ret_type
+                                          << current->declaredReturnType
                                           << cause << diag::term;
    }
 
@@ -459,8 +725,8 @@ void SemaPass::continue_(ContinueStmt* continueStmt)
    }
 
    if (current == nullptr) {
-      diag::err(err_loop_keyword_outside_loop) << 0 /*continue*/ << continueStmt
-                                               << diag::term;
+      diag::err(err_loop_keyword_outside_loop) << 0 /*continue*/
+                                               << continueStmt << diag::term;
    }
 
    current->continued = true;
@@ -486,9 +752,10 @@ void SemaPass::resolve(Type* ty, AstNode* node)
 
 }
 
-void SemaPass::pushNamespace(string &ns)
+void SemaPass::pushNamespace(const string &ns)
 {
-   auto newNs = currentNamespace.size() == 1 ? ns : currentNamespace.back() + "." + ns;
+   auto newNs = currentNamespace.size() == 1 ? ns : currentNamespace.back()
+                                                    + "." + ns;
    currentNamespace.push_back(newNs);
    importedNamespaces.push_back(newNs + ".");
 }
@@ -501,9 +768,13 @@ void SemaPass::popNamespace()
 
 void SemaPass::wrapImplicitCast(
    Expression::SharedPtr& target,
-   Type& originTy,
-   Type destTy)
+   const Type &originTy,
+   const Type &destTy)
 {
+   if (!originTy->needsCastTo(*destTy)) {
+      return;
+   }
+
    auto cast = new ImplicitCastExpr(originTy, destTy, target);
 
    cast->loc = target->loc;
@@ -544,22 +815,20 @@ void SemaPass::toRvalueIfNecessary(
  * @param node
  * @return
  */
-Type SemaPass::visit(NamespaceDecl *node)
+void SemaPass::visit(NamespaceDecl *node)
 {
    pushNamespace(node->nsName);
    if (node->isAnonymousNamespace_) {
       importedNamespaces.push_back(currentNamespace.back());
    }
 
-   node->contents->accept(*this);
+   node->contents->accept(this);
    if (!node->isAnonymousNamespace_) {
       popNamespace();
    }
    else {
       currentNamespace.pop_back();
    }
-
-   return {};
 }
 
 /**
@@ -567,7 +836,7 @@ Type SemaPass::visit(NamespaceDecl *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(CompoundStmt *node)
+void SemaPass::visit(CompoundStmt *node)
 {
    if (!node->preserveScope) {
       pushScope();
@@ -575,46 +844,56 @@ Type SemaPass::visit(CompoundStmt *node)
 
    latestScope->unsafe = node->isUnsafe_ || latestScope->unsafe;
 
-   for (const auto& child : node->get_children()) {
-      Type ty = child->accept(*this);
+   for (const auto &stmt : node->getStatements()) {
+      switch (stmt->get_type()) {
+         case NodeType::CALLABLE_TEMPLATE_DECL:
+         case NodeType::RECORD_TEMPLATE_DECL:
+            deferVisit(stmt);
+            break;
+         default:
+            stmt->accept(this);
+            break;
+      }
    }
 
    if (!node->preserveScope) {
       popScope();
    }
-
-   return {};
 }
 
 namespace {
 
-bool isReservedIdentifier(string& ident)
+bool isReservedIdentifier(const string& ident)
 {
-   return (
-      ident == "_"   ||
-      ident == "Self"
-   );
+   return (ident == "_"   || ident == "Self");
 }
 
+}
+
+void SemaPass::visit(FunctionDecl *node)
+{
+   visit((CallableDecl*)node);
 }
 
 /**
- * Checks if all code paths in the function return a value of the correct type and places the function in the symbol
+ * Checks if all code paths in the function return a value of the correct type 
+ * and places the function in the symbol
  * table
  * @param node
  * @return
  */
-Type SemaPass::visit(FunctionDecl *node)
+void SemaPass::visit(CallableDecl *node)
 {
-   if (node->is_declaration) {
-      for (const auto& arg : node->args) {
-         if (arg->defaultVal != nullptr) {
-            arg->defaultVal->setContextualType(arg->argType->type);
-            arg->defaultVal->accept(*this);
+   if (node->isDeclaration()) {
+      for (const auto& arg : node->getArgs()) {
+         auto &defaultVal = arg->getDefaultVal();
+         if (defaultVal) {
+            defaultVal->setContextualType(arg->argType->type);
+            defaultVal->accept(this);
          }
       }
 
-      return {};
+      return;
    }
 
    if (node->hasAttribute(Attr::Extern)) {
@@ -631,43 +910,44 @@ Type SemaPass::visit(FunctionDecl *node)
    }
 
    for (const auto& inner : node->getInnerDecls()) {
-      inner->accept(*this);
+      inner->accept(this);
    }
 
-   pushNamespace(node->funcName);
-   GenericsStack.push_back(&node->generics);
+   pushNamespace(node->getName());
 
-   auto return_type = node->returnType->getType();
-   pushFunctionScope(return_type, node->declaredFunction->getName(),
-      node->declaredFunction->getMangledName());
+   auto return_type = node->getReturnType()->getType();
+   pushFunctionScope(return_type, node->getName(), node->getBinding());
 
-   for (const auto& arg : node->args) {
-      arg->accept(*this);
+   for (const auto& arg : node->getArgs()) {
+      arg->accept(this);
       arg->binding = declareVariable(arg->argName, arg->argType->getType());
    }
 
-   currentCallable = node->declaredFunction;
-
+   currentCallable = node->getCallable();
    attributes = node->attributes;
-   node->body->accept(*this);
+
+   node->getBody()->accept(this);
 
    attributes.clear();
 
    if (latestScope->branches - latestScope->returned > 0 &&
-      !return_type->isVoidTy() && node->funcName != "main")
+      !return_type->isVoidTy() && node->getName() != "main")
    {
       diag::err(err_not_all_code_paths_return) << node << diag::term;
    }
    // implicit 0 return for main function
-   else if (latestScope->branches - latestScope->returned > 0 && node->funcName == "main") {
+   else if (latestScope->branches - latestScope->returned > 0
+            && node->getName() == "main") {
       *return_type = IntegerType::get();
    }
 
-   popScope();
-   GenericsStack.pop_back();
-   popNamespace();
+   node->hasStructRet(node->getReturnType()
+                          ->getTypeRef()
+                          ->needsStructReturn());
 
-   return {};
+   popScope();
+   popNamespace();
+   currentCallable = nullptr;
 }
 
 void SemaPass::CopyNodeProperties(
@@ -699,11 +979,13 @@ BuiltinType* SemaPass::HandleBuiltinIdentifier(IdentifierRefExpr *node)
    auto kind = builtinIdentifiers[node->ident];
    switch (kind) {
       case BuiltinIdentifier::FUNC:
-         node->builtinValue = Variant(latestScope->currentFunction.first);
+         node->builtinValue = Variant(string(latestScope->currentFunction
+                                                        .first));
          node->builtinType = ObjectType::get("String");
          break;
       case BuiltinIdentifier::MANGLED_FUNC:
-         node->builtinValue = Variant(latestScope->currentFunction.second);
+         node->builtinValue = Variant(string(latestScope->currentFunction
+                                                       .second));
          node->builtinType = ObjectType::get("String");
          break;
       case BuiltinIdentifier::FLOAT_QNAN:
@@ -725,7 +1007,7 @@ BuiltinType* SemaPass::HandleBuiltinIdentifier(IdentifierRefExpr *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(IdentifierRefExpr *node)
+void SemaPass::visit(IdentifierRefExpr *node)
 {
    if (node->is_let_expr || node->is_var_expr) {
       diag::err(err_unexpected_let_expr) << node << diag::term;
@@ -733,7 +1015,8 @@ Type SemaPass::visit(IdentifierRefExpr *node)
 
    auto builtin = HandleBuiltinIdentifier(node);
    if (builtin != nullptr) {
-      return Type(builtin);
+      returnResult(Type(builtin));
+      return;
    }
 
    string ns_name = node->ident;
@@ -745,11 +1028,11 @@ Type SemaPass::visit(IdentifierRefExpr *node)
       }
    }
 
-   if (SymbolTable::isNamespace(ns_name) && node->memberExpr != nullptr)
+   if (SymbolTable::isNamespace(ns_name))
    {
-      auto current = node->memberExpr;
-
-      while (current != nullptr && current->get_type() == NodeType::MEMBER_EXPR) {
+      auto current = node->getMemberExpr();
+      while (current != nullptr
+             && current->get_type() == NodeType::MEMBER_EXPR) {
          auto new_ns = ns_name + "." + current->ident;
 
          if (!SymbolTable::isNamespace(new_ns)) {
@@ -760,8 +1043,8 @@ Type SemaPass::visit(IdentifierRefExpr *node)
          current = current->memberExpr;
       }
 
-      node->is_namespace = true;
-      node->memberExpr = current;
+      node->isNamespace(true);
+      node->setMemberExpr(current);
 
       if (SymbolTable::hasTypedef(ns_name, importedNamespaces)) {
          auto td = SymbolTable::getTypedef(ns_name, importedNamespaces);
@@ -770,15 +1053,42 @@ Type SemaPass::visit(IdentifierRefExpr *node)
          }
       }
 
-      if (node->memberExpr->get_type() == NodeType::MEMBER_EXPR) {
+      if (SymbolTable::hasRecordTemplate(ns_name, importedNamespaces)) {
+         auto &Template = *SymbolTable::getRecordTemplate(ns_name);
+         DeclPass::resolveTemplateArgs(
+            node->getTemplateArgs(),
+            Template.constraints,
+            [this](TypeRef *node) {
+               node->accept(this);
+            },
+            node
+         );
+
+         auto rec = getRecord(ns_name, node->getTemplateArgs());
+         ns_name = rec->getName();
+      }
+
+      if (!node->getMemberExpr()) {
+         if (Record *rec = SymbolTable::getRecord(ns_name)) {
+            auto meta = getMetaType(ObjectType::get(rec->getName()));
+            node->setMetaType(ObjectType::get(rec->getName()));
+
+            return returnResult(meta);
+         }
+         else {
+            diag::err(err_undeclared_identifer) << ns_name << node
+                                                << diag::term;
+         }
+      }
+      else if (node->memberExpr->get_type() == NodeType::MEMBER_EXPR) {
          auto member_expr = std::static_pointer_cast<MemberRefExpr>(node->memberExpr);
-         member_expr->isNsMember = true;
+         member_expr->is_ns_member = true;
          member_expr->className = ns_name;
          member_expr->ident = ns_name + "." + member_expr->ident;
       }
       else if (node->memberExpr->get_type() == NodeType::CALL_EXPR) {
          auto member_expr = std::static_pointer_cast<CallExpr>(node->memberExpr);
-         member_expr->isNsMember = true;
+         member_expr->is_ns_member = true;
          member_expr->className = ns_name;
          member_expr->ident = member_expr->ident;
          member_expr->type = CallType::METHOD_CALL;
@@ -788,22 +1098,23 @@ Type SemaPass::visit(IdentifierRefExpr *node)
                                           << diag::term;
       }
       else {
-         assert(false && "Unknown operation");
+         llvm_unreachable("Unknown operation");
       }
 
       node->memberExpr->contextualType = node->contextualType;
-
-      return node->memberExpr->accept(*this);
+      return node->memberExpr->accept(this);
    }
 
    if (node->ident == "super") {
       if (currentClass().empty()) {
-         diag::err(err_self_outside_method) << 1 /*super*/ << node << diag::term;
+         diag::err(err_self_outside_method) << 1 /*super*/
+                                            << node << diag::term;
       }
 
       auto currentCl = SymbolTable::getClass(currentClass());
       if (currentCl->getParent() == nullptr) {
-         diag::err(err_super_without_base) << currentClass() << node << diag::term;
+         diag::err(err_super_without_base) << currentClass()
+                                           << node << diag::term;
       }
 
       node->binding = latestScope->currentSelf;
@@ -817,92 +1128,23 @@ Type SemaPass::visit(IdentifierRefExpr *node)
 
    // try a function instead
    if (!hasVariable(node->ident)) {
-      std::vector<Argument> args;
-      Type returnType;
-      bool typeInferred = false;
-
-      if (node->contextualType->isFunctionTy()) {
-         auto asFunc = cast<FunctionType>(*node->contextualType);
-         args = asFunc->getArgTypes();
-         returnType = asFunc->getReturnType();
-         typeInferred = true;
-      }
-      else {
-         *returnType = VoidType::get();
-      }
-
-      auto overloads = SymbolTable::getFunction(node->ident, importedNamespaces);
-      bool foundMatch = false;
-      Function* result;
-
-      // only one result
-      if (!typeInferred && std::distance(overloads.first, overloads.second) == 1) {
-         result = overloads.first->second.get();
-
-         node->binding = result->getMangledName();
-         node->is_function = true;
-
-         std::vector<Argument> argTypes;
-         for (const auto& arg : result->getArguments()) {
-            argTypes.emplace_back("", arg.type);
-         }
-
-         auto funcTy = FunctionType::get(result->getReturnType(),
-            argTypes, node->contextualType->isRawFunctionTy());
-         return ReturnMemberExpr(node, Type(funcTy));
-      }
-
-      for (auto it = overloads.first; it != overloads.second; ++it) {
-         auto& argTypes = it->second->getArguments();
-         if (argTypes.size() != args.size()) {
-            continue;
-         }
-
-         size_t i = 0;
-         bool matches = true;
-         for (auto& arg : argTypes) {
-            if (!args.at(i).type.implicitlyCastableTo(arg.type)) {
-               matches = false;
-               break;
-            }
-         }
-
-         if (!matches) {
-            continue;
-         }
-
-         if (!returnType.implicitlyCastableTo(it->second->getReturnType())) {
-            continue;
-         }
-
-         foundMatch = true;
-         result = it->second.get();
-         break;
-      }
-
-      if (foundMatch) {
-         node->binding = result->getMangledName();
-         node->is_function = true;
-
-         std::vector<Argument> argTypes;
-         for (const auto& arg : result->getArguments()) {
-            argTypes.emplace_back("", arg.type);
-         }
-
-         auto funcTy = FunctionType::get(result->getReturnType(), argTypes,
-            node->contextualType->isRawFunctionTy());
-         return ReturnMemberExpr(node, Type(funcTy));
+      auto ty = tryFunctionReference(node);
+      if (!ty->isAutoTy()) {
+         return returnResult(ty);
       }
    }
 
-   bool implicit_this = node->ident != "self" && !hasVariable(node->ident) && !currentClass().empty();
+   bool implicit_this = node->ident != "self" && !hasVariable(node->ident)
+                        && !currentClass().empty();
+
    if (node->ident == "self" || implicit_this) {
       if (currentClass().empty()) {
-         diag::err(err_self_outside_method) << 0 /*self*/ << node << diag::term;
+         diag::err(err_self_outside_method) << 0 /*self*/
+                                            << node << diag::term;
       }
 
       if (implicit_this) {
-         auto mem_ref = std::make_shared<MemberRefExpr>(node->ident);
+         auto mem_ref = std::make_shared<MemberRefExpr>(std::move(node->ident));
          CopyNodeProperties(node, mem_ref.get());
          mem_ref->parent = node;
 
@@ -914,21 +1156,7 @@ Type SemaPass::visit(IdentifierRefExpr *node)
       node->ident = "self";
 
       auto cl = SymbolTable::getClass(currentClass());
-
-      // add generics
-      std::vector<GenericType*> generics;
-      for (const auto& gen : cl->getGenerics()) {
-         auto covar = gen.covarName;
-         if (covar.empty()) {
-            covar = "Any";
-         }
-
-         generics.push_back(
-            GenericType::get(gen.genericTypeName, ObjectType::get(covar))
-         );
-      }
-
-      Type type(ObjectType::get(cl->getName(), generics));
+      Type type(ObjectType::get(cl->getName()));
 
       bool rawEnum = cl->isRawEnum();
       type.isLvalue(latestScope->mutableSelf || rawEnum);
@@ -941,7 +1169,8 @@ Type SemaPass::visit(IdentifierRefExpr *node)
 
    // add capture for this variable
    if (latestScope->inLambda && res.second) {
-      latestScope->captures->emplace_back(res.first.second, res.first.first.type);
+      latestScope->captures->emplace_back(res.first.second,
+                                          res.first.first.type);
       node->captured_var = true;
       node->capturedType = *res.first.first.type;
    }
@@ -951,24 +1180,114 @@ Type SemaPass::visit(IdentifierRefExpr *node)
    return ReturnMemberExpr(node, res.first.first.type);
 }
 
+Type SemaPass::tryFunctionReference(IdentifierRefExpr *node)
+{
+   std::vector<Argument> args;
+   Type returnType;
+   bool typeInferred = false;
+
+   if (node->contextualType->isFunctionTy()) {
+      auto asFunc = cast<FunctionType>(*node->contextualType);
+      args = asFunc->getArgTypes();
+      returnType = asFunc->getReturnType();
+      typeInferred = true;
+   }
+   else {
+      *returnType = VoidType::get();
+   }
+
+   auto overloads = SymbolTable::getFunction(node->ident, importedNamespaces);
+   bool foundMatch = false;
+   Function* result;
+
+   if (!node->getContextualType()->isAutoTy()
+       && node->contextualType->isRawFunctionTy()) {
+      node->wrapLambda(false);
+   }
+
+   // only one result
+   if (!typeInferred && std::distance(overloads.first, overloads.second) == 1) {
+      result = overloads.first->second.get();
+
+      node->binding = result->getMangledName();
+      node->is_function = true;
+
+      std::vector<Argument> argTypes;
+      for (const auto& arg : result->getArguments()) {
+         argTypes.emplace_back("", arg.type);
+      }
+
+      auto funcTy = FunctionType::get(result->getReturnType(), argTypes,
+                                      node->contextualType->isRawFunctionTy());
+      ReturnMemberExpr(node, Type(funcTy));
+      return getResult();
+   }
+
+   for (auto it = overloads.first; it != overloads.second; ++it) {
+      auto& argTypes = it->second->getArguments();
+      if (argTypes.size() != args.size()) {
+         continue;
+      }
+
+      size_t i = 0;
+      bool matches = true;
+      for (auto& arg : argTypes) {
+         if (!arg.type.implicitlyCastableTo(args.at(i).type)) {
+            matches = false;
+            break;
+         }
+      }
+
+      if (!matches) {
+         continue;
+      }
+
+      if (!it->second->getReturnType().implicitlyCastableTo(returnType)) {
+         continue;
+      }
+
+      foundMatch = true;
+      result = it->second.get();
+      break;
+   }
+
+   if (foundMatch) {
+      node->binding = result->getMangledName();
+      node->is_function = true;
+
+      std::vector<Argument> argTypes;
+      for (const auto& arg : result->getArguments()) {
+         argTypes.emplace_back("", arg.type);
+      }
+
+      auto funcTy = FunctionType::get(result->getReturnType(), argTypes,
+                                      node->contextualType->isRawFunctionTy());
+
+      ReturnMemberExpr(node, Type(funcTy));
+      return getResult();
+   }
+
+   return {};
+}
+
 /**
  * Declares one or more variables
  * @param node
  * @return
  */
-Type SemaPass::visit(DeclStmt *node)
+void SemaPass::visit(DeclStmt *node)
 {
    if (node->declared || node->is_declaration) {
-      return {};
+      return;
    }
 
-   auto& ident = node->identifier;
+   auto& ident = node->getIdentifier();
    if (isReservedIdentifier(ident)) {
       diag::err(err_reserved_identifier) << ident << node << diag::term;
    }
 
    if (!node->type->resolved) {
-      node->type->accept(*this);
+      node->type->accept(this);
    }
 
    auto declType = node->type->getType();
@@ -982,7 +1301,7 @@ Type SemaPass::visit(DeclStmt *node)
          val->setContextualType(declType);
       }
 
-      Type givenType = val->accept(*this);
+      Type givenType = getResult(val);
       if (givenType->isVoidTy()) {
          diag::err(err_cannot_assign_void) << node << diag::term;
       }
@@ -998,12 +1317,11 @@ Type SemaPass::visit(DeclStmt *node)
          node->type->setType(declType);
       }
       else if (!givenType.implicitlyCastableTo(declType)) {
-         diag::err(err_type_mismatch) << givenType << declType << val << diag::term;
+         diag::err(err_type_mismatch) << givenType << declType
+                                      << val << diag::term;
       }
 
-      if (declType != givenType) {
-         wrapImplicitCast(node->value, givenType, declType);
-      }
+      wrapImplicitCast(node->value, givenType, declType);
    }
    else if (!declType->hasDefaultValue()) {
       diag::err(err_not_initialized) << node << diag::term;
@@ -1012,7 +1330,7 @@ Type SemaPass::visit(DeclStmt *node)
    resolve(&declType);
 
    auto allocType = declType;
-   node->struct_alloca = declType->isStruct();
+   node->struct_alloca = declType->needsMemCpy();
    node->inc_refcount = declType->isObject() &&
       SymbolTable::getRecord(declType->getClassName())->isRefcounted();
 
@@ -1028,8 +1346,6 @@ Type SemaPass::visit(DeclStmt *node)
 
    declarations.emplace(node->binding, node);
    node->declared = true;
-
-   return {};
 }
 
 /**
@@ -1037,22 +1353,22 @@ Type SemaPass::visit(DeclStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(ForStmt *node)
+void SemaPass::visit(ForStmt *node)
 {
    pushScope();
 
    if (node->initialization) {
-      node->initialization->accept(*this);
+      node->initialization->accept(this);
    }
 
    if (node->increment) {
-      node->increment->accept(*this);
+      node->increment->accept(this);
    }
 
    if (node->termination) {
       node->termination->addUse();
 
-      auto cond = node->termination->accept(*this);
+      auto cond = getResult(node->termination);
       auto boolTy = Type(IntegerType::get(1));
 
       if (cond->isObject() && cond->getClassName() == "Bool") {
@@ -1066,24 +1382,20 @@ Type SemaPass::visit(ForStmt *node)
 
    if (node->body) {
       pushLoopScope();
-      node->body->accept(*this);
+      node->body->accept(this);
       popScope();
    }
 
    popScope();
-   return {};
 }
 
-Type SemaPass::visit(ForInStmt *node)
+void SemaPass::visit(ForInStmt *node)
 {
-   auto range = node->rangeExpr->accept(*this);
+   auto range = getResult(node->rangeExpr);
    node->rangeExpr->addUse();
 
-   if (range.isSelf() && !GenericsStack.empty()) {
-      resolveGenerics(range, *GenericsStack.back());
-   }
-
-   if (!range->isObject() || !SymbolTable::getClass(range->getClassName())->conformsTo("Iterable")) {
+   if (!range->isObject() || !SymbolTable::getClass(range->getClassName())
+      ->conformsTo("Iterable")) {
       diag::err(err_range_not_iterable) << node->rangeExpr << diag::term;
    }
 
@@ -1092,23 +1404,23 @@ Type SemaPass::visit(ForInStmt *node)
    auto cl = SymbolTable::getClass(range->getClassName());
    cl->addUse();
 
-   auto& prot = cl->getConformedToProtocols();
+   auto& prot = cl->getConformances();
    Type itType;
    for (const auto& p : prot) {
-      if (p->getClassName() == "Iterable") {
-         *itType = p->getConcreteGeneric("T")->getActualType();
+      if (p->getName() == "Iterable") {
+         *itType = p->getTemplateArg("T").getGenericTy()->getActualType();
          break;
       }
    }
 
-   assert(!itType->isAutoTy() && "Iterable conformance shouldn't be possible otherwise!");
-   resolveGenerics(itType, range);
+   assert(!itType->isAutoTy()
+          && "Iterable conformance shouldn't be possible otherwise!");
 
    if (itType->isProtocol()) {
       node->protocolTy = *itType;
    }
 
-   node->decl->type->accept(*this);
+   node->decl->type->accept(this);
    if (!node->decl->type->getType().implicitlyCastableTo(itType)) {
       diag::err(err_type_mismatch) << node->decl->type->getType() << itType
                                    << node->decl << diag::term;
@@ -1120,10 +1432,10 @@ Type SemaPass::visit(ForInStmt *node)
 
    node->binding = declareVariable(node->decl->identifier, itType, false, node);
 
-   node->body->accept(*this);
+   node->body->accept(this);
    popScope();
 
-   auto getIterator = cl->hasMethod("getIterator", {}, {}, *range);
+   auto getIterator = getMethod(cl, "getIterator");
    assert(getIterator.compatibility == CompatibilityType::COMPATIBLE
       && "Iterable not implemented correctly?");
    
@@ -1132,7 +1444,7 @@ Type SemaPass::visit(ForInStmt *node)
    auto iteratorCl = SymbolTable::getClass(getIterator.method->getReturnType()->getClassName());
    iteratorCl->addUse();
 
-   auto nextFunc = iteratorCl->hasMethod("next", {}, {}, ObjectType::get(iteratorCl->getName()));
+   auto nextFunc = getMethod(cl, "next");
    assert(nextFunc.compatibility == CompatibilityType::COMPATIBLE
       && "Iterator<> not implemented correctly?");
 
@@ -1147,8 +1459,6 @@ Type SemaPass::visit(ForInStmt *node)
    if (node->rangeIsRefcounted) {
       node->rangeClassName = range->getClassName();
    }
-
-   return {};
 }
 
 /**
@@ -1156,10 +1466,9 @@ Type SemaPass::visit(ForInStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(
-   WhileStmt *node)
+void SemaPass::visit(WhileStmt *node)
 {
-   auto cond = node->condition->accept(*this);
+   auto cond = getResult(node->condition);
    node->condition->addUse();
 
    auto boolTy = Type(IntegerType::get(1));
@@ -1172,10 +1481,8 @@ Type SemaPass::visit(
    }
 
    pushLoopScope();
-   node->body->accept(*this);
+   node->body->accept(this);
    popScope();
-
-   return {};
 }
 
 pair<Type, std::vector<Type>> SemaPass::unify(
@@ -1188,7 +1495,7 @@ pair<Type, std::vector<Type>> SemaPass::unify(
    bool anyCompatible = false;
 
    for (auto& expr : types) {
-      auto type = expr->accept(*this);
+      auto type = getResult(expr);
       evaledTypes.push_back(type);
 
       if (unified->isAutoTy()) {
@@ -1218,7 +1525,7 @@ pair<Type, std::vector<Type>> SemaPass::unify(
 
 Type SemaPass::HandleDictionaryLiteral(CollectionLiteral *node)
 {
-   node->type->accept(*this);
+   node->type->accept(this);
 
    auto dictTy = node->type->getType();
    auto HashableTy = ObjectType::get("Hashable");
@@ -1235,11 +1542,11 @@ Type SemaPass::HandleDictionaryLiteral(CollectionLiteral *node)
          raiseTypeError(node->contextualType, dictTy, node);
       }
 
-      auto keyTy = Type(dict->getConcreteGeneric("K"));
-      auto valTy = Type(dict->getConcreteGeneric("V"));
+      auto keyTy = Type(dict->getNamedTemplateArg("K"));
+      auto valTy = Type(dict->getNamedTemplateArg("V"));
 
       for (auto& key : keys) {
-         auto ty = key->accept(*this);
+         auto ty = getResult(key);
          key->addUse();
          toRvalueIfNecessary(ty, key);
 
@@ -1254,7 +1561,7 @@ Type SemaPass::HandleDictionaryLiteral(CollectionLiteral *node)
       }
 
       for (auto& val : values) {
-         auto ty = val->accept(*this);
+         auto ty = getResult(val);
          val->addUse();
          toRvalueIfNecessary(ty, val);
 
@@ -1292,21 +1599,38 @@ Type SemaPass::HandleDictionaryLiteral(CollectionLiteral *node)
       wrapImplicitCast(val, valTy.first, Type(AnyTy));
    }
 
-   std::vector<GenericType*> generics{ GenericType::get("K", *keyTy.first),
-      GenericType::get("V", *valTy.first), };
+   std::vector<TemplateArg> generics{ TemplateArg(GenericType::get("K", *keyTy.first)),
+      TemplateArg(GenericType::get("V", *valTy.first)) };
 
-   return Type(ObjectType::get("Dictionary", generics));
+   return Type(ObjectType::get("Dictionary"));
 }
+
+namespace {
+
+void createArrayInstantiation(BuiltinType *elementType)
+{
+   auto argList = new ResolvedTemplateArgList(
+      {TemplateArg(GenericType::get("T", elementType))});
+
+   bool isNew;
+   SymbolTable::getRecord("Array", argList, {}, &isNew);
+
+   if (!isNew) {
+      delete argList;
+   }
+}
+
+} // anonymous namespace
 
 /**
  * Checks an array literal
  * @param node
  * @return
  */
-Type SemaPass::visit(CollectionLiteral *node)
+void SemaPass::visit(CollectionLiteral *node)
 {
-   if (node->isDictionary) {
-      return HandleDictionaryLiteral(node);
+   if (node->is_dictionary) {
+      return returnResult(HandleDictionaryLiteral(node));
    }
 
    auto isInferred = node->contextualType->isAutoTy();
@@ -1317,9 +1641,18 @@ Type SemaPass::visit(CollectionLiteral *node)
       }
       else {
          elTy = unify(node->values).first;
+         if (elTy->isMetaType()) {
+            node->isMetaTy(true);
+            node->getType()->setType(elTy);
+            createArrayInstantiation(
+               cast<MetaType>(*elTy)->getUnderlyingType());
+
+            return returnResult(node->getType()->getTypeRef());
+         }
+
          for (auto& el : node->values) {
             toRvalueIfNecessary(elTy, el);
-            wrapImplicitCast(el, elTy, Type(ObjectType::getAnyTy()));
+            wrapImplicitCast(el, Type(ObjectType::getAnyTy()), elTy);
          }
       }
 
@@ -1327,8 +1660,8 @@ Type SemaPass::visit(CollectionLiteral *node)
          node->type->setType(elTy);
       }
       else {
-         std::vector<GenericType*> generics{ GenericType::get("T", *elTy )};
-         Type ArrayTy(ObjectType::get("Array", generics));
+         std::vector<TemplateArg> generics{ TemplateArg(GenericType::get("T", *elTy )) };
+         Type ArrayTy(ObjectType::get("Array"));
          node->type->setType(ArrayTy);
       }
 
@@ -1348,7 +1681,7 @@ Type SemaPass::visit(CollectionLiteral *node)
       isCarray = true;
    }
    else {
-      *elType = node->contextualType->asObjTy()->getConcreteGeneric("T");
+      *elType = node->contextualType->asObjTy()->getNamedTemplateArg("T");
    }
 
    if (!node->values.empty()) {
@@ -1386,90 +1719,83 @@ Type SemaPass::visit(CollectionLiteral *node)
    return ReturnMemberExpr(node, node->type->getType());
 }
 
-/**
- * Returns the type of the literal
- * @param node
- * @return
- */
-Type SemaPass::visit(NumericLiteral *node)
+void SemaPass::visit(IntegerLiteral *node)
 {
-   if ((node->memberExpr == nullptr && isa<PrimitiveType>(*node->contextualType)) ||
-      node->hasAttribute(Attr::Primitive))
-   {
-      node->primitive = true;
-
-      if (!node->type->implicitlyCastableTo(*node->contextualType)) {
-         return Type(node->type);
+   if (node->getContextualType()->isIntegerTy()) {
+      if (!node->getType()->implicitlyCastableTo(*node->getContextualType())) {
+         return returnResult(node->getType());
       }
 
-      if (isa<PrimitiveType>(*node->contextualType)) {
-         node->type = *node->contextualType;
-         node->value = node->value.castTo(node->type);
-      }
+      node->setType(*node->getContextualType());
+      node->setValue(node->getValue().castTo(node->getType()));
 
-      return Type(node->type);
+      return returnResult(node->getType());
    }
 
-   if (node->contextualType->isBoxedPrimitive()) {
-      node->type = node->contextualType->unbox();
+   if (node->getContextualType()->isAutoTy()) {
+      Type ty (IntegerTypeGroup::getAll());
+      return ReturnMemberExpr(node, ty);
    }
 
-   switch (node->type->getTypeID()) {
-      case TypeID::IntegerTypeID: {
-         auto asInt = cast<IntegerType>(node->type);
-         string className = "Int";
-         if (asInt->isUnsigned()) {
-            className = "U" + className;
-         }
+   node->setValue(node->getValue().castTo(*node->getContextualType()));
+   node->setType(node->getType()->box());
 
-         auto bitWidth = asInt->getBitwidth();
-         className += std::to_string(bitWidth);
-
-         if (node->is_char) {
-            className = "Char";
-         }
-
-         if (node->is_bool) {
-            className = "Bool";
-         }
-
-         node->className = className;
-         break;
-      }
-      case TypeID::FPTypeID: {
-         auto asFloat = cast<FPType>(node->type);
-         node->className = asFloat->getPrecision() == 64 ? "Double" : "Float";
-         break;
-      }
-      case TypeID::ObjectTypeID:
-         node->className = node->type->getClassName();
-         break;
-      default:
-         llvm_unreachable("Unknown literal type");
-   }
-
-   assert(node->primitive || !node->className.empty() && "Unknown primitive type");
-
-   auto ty = ObjectType::get(node->className);
-   if (node->is_char) {
-      BuiltinType* ty = IntegerType::get(8);
-      node->value = node->value.castTo(ty);
-   }
-   else if (node->is_bool) {
-      BuiltinType* ty = IntegerType::get(1);
-      node->value = node->value.castTo(ty);
-   }
-   else {
-      node->value = node->value.castTo(node->type);
-   }
-
-   return ReturnMemberExpr(node, Type(ty));
+   return ReturnMemberExpr(node, Type(node->getType()));
 }
 
-Type SemaPass::visit(NoneLiteral *node)
+void SemaPass::visit(FPLiteral *node)
+{
+   if (node->getContextualType()->isFPType()) {
+      if (!node->getType()->implicitlyCastableTo(*node->getContextualType())) {
+         return returnResult(node->getType());
+      }
+
+      node->setType(*node->getContextualType());
+      node->setValue(node->getValue().castTo(node->getType()));
+
+      return returnResult(node->getType());
+   }
+
+   if (node->getContextualType()->isAutoTy()) {
+      Type ty (FPTypeGroup::get());
+      return ReturnMemberExpr(node, ty);
+   }
+
+   node->setValue(node->getValue().castTo(*node->getContextualType()));
+   node->setType(node->getType()->box());
+
+   return ReturnMemberExpr(node, Type(node->getType()));
+}
+
+void SemaPass::visit(BoolLiteral *node)
+{
+   if (node->getContextualType()->isInt1Ty()) {
+      // default
+   }
+   else {
+      node->setType(ObjectType::get("Bool"));
+   }
+
+   return ReturnMemberExpr(node, Type(node->getType()));
+}
+
+void SemaPass::visit(CharLiteral *node)
+{
+   if (node->getContextualType()->isInt8Ty()) {
+      // default
+   }
+   else {
+      node->setType(ObjectType::get("Char"));
+   }
+
+   return ReturnMemberExpr(node, Type(node->getType()));
+}
+
+void SemaPass::visit(NoneLiteral *node)
 {
    if (node->contextualType->isAutoTy()) {
-      diag::err(err_requires_contextual_type) << "'none'" << node << diag::term;
+      diag::err(err_requires_contextual_type) << "'none'"
+                                              << node << diag::term;
    }
    if (!node->contextualType->isOptionTy()) {
       diag::err(err_type_mismatch) << node->contextualType << "Option"
@@ -1479,7 +1805,7 @@ Type SemaPass::visit(NoneLiteral *node)
    return ReturnMemberExpr(node, node->contextualType);
 }
 
-Type SemaPass::visit(StringLiteral *node)
+void SemaPass::visit(StringLiteral *node)
 {
    for (const auto& attr : node->attributes) {
       switch (attr.kind) {
@@ -1487,7 +1813,8 @@ Type SemaPass::visit(StringLiteral *node)
             node->raw = true;
             break;
          default:
-            diag::err(err_attr_not_applicable) << attr.name << node << diag::term;
+            diag::err(err_attr_not_applicable) << attr.name
+                                               << node << diag::term;
       }
    }
 
@@ -1505,12 +1832,12 @@ Type SemaPass::visit(StringLiteral *node)
    return ReturnMemberExpr(node, Type(ObjectType::get("String")));
 }
 
-Type SemaPass::visit(StringInterpolation *node)
+void SemaPass::visit(StringInterpolation *node)
 {
    bool first = true;
    size_t i = 0;
    for (auto& expr : node->strings) {
-      auto val = expr->accept(*this);
+      auto val = getResult(expr);
       expr->addUse();
       toRvalueIfNecessary(val, expr);
 
@@ -1556,10 +1883,9 @@ Type SemaPass::visit(StringInterpolation *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(BreakStmt *node)
+void SemaPass::visit(BreakStmt *node)
 {
    break_(node);
-   return {};
 }
 
 /**
@@ -1567,10 +1893,9 @@ Type SemaPass::visit(BreakStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(ContinueStmt *node)
+void SemaPass::visit(ContinueStmt *node)
 {
    continue_(node);
-   return {};
 }
 
 /**
@@ -1578,9 +1903,9 @@ Type SemaPass::visit(ContinueStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(IfStmt *node)
+void SemaPass::visit(IfStmt *node)
 {
-   Type cond = node->condition->accept(*this);
+   Type cond = getResult(node->condition);
    node->condition->addUse();
    toRvalueIfNecessary(cond, node->condition);
 
@@ -1598,12 +1923,12 @@ Type SemaPass::visit(IfStmt *node)
       bool elseReturns = false;
 
       pushScope();
-      node->ifBranch->accept(*this);
+      node->ifBranch->accept(this);
       ifReturns = latestScope->branches - latestScope->returned <= 0;
       popScope();
 
       pushScope();
-      node->elseBranch->accept(*this);
+      node->elseBranch->accept(this);
       elseReturns = latestScope->branches - latestScope->returned <= 0;;
       popScope();
 
@@ -1614,11 +1939,9 @@ Type SemaPass::visit(IfStmt *node)
    }
    else {
       pushScope();
-      node->ifBranch->accept(*this);
+      node->ifBranch->accept(this);
       popScope();
    }
-
-   return {};
 }
 
 bool SemaPass::matchableAgainst(
@@ -1632,7 +1955,7 @@ bool SemaPass::matchableAgainst(
    auto& caseVal = case_->caseVal;
    if ((matchTy->isNumeric() || matchTy->isTupleTy()) && !matchTy->isEnum()) {
       caseVal->setContextualType(matchTy);
-      auto givenTy = caseVal->accept(*this);
+      auto givenTy = getResult(caseVal);
       case_->caseType = givenTy;
 
       return givenTy.implicitlyCastableTo(matchTy);
@@ -1668,7 +1991,8 @@ bool SemaPass::matchableAgainst(
       bool isLetExpr = false;
       for (const auto& arg : callExpr->args) {
          if (arg.second->get_type() == NodeType::IDENTIFIER_EXPR) {
-            auto ident = std::static_pointer_cast<IdentifierRefExpr>(arg.second);
+            auto ident = std::static_pointer_cast<IdentifierRefExpr>(
+               arg.second);
             if (ident->is_let_expr || ident->is_var_expr) {
                isLetExpr = true;
                var = ident->is_var_expr;
@@ -1678,7 +2002,8 @@ bool SemaPass::matchableAgainst(
          }
 
          if (isLetExpr) {
-            RuntimeError::raise("Expected all arguments to be 'let' expressions", arg.second.get());
+            RuntimeError::raise("Expected all arguments to be 'let' "
+                                   "expressions", arg.second.get());
          }
       }
 
@@ -1695,7 +2020,8 @@ bool SemaPass::matchableAgainst(
 
                case_->enumCaseVal = &val;
                for (size_t i = 0; i < val.associatedValues.size(); ++i) {
-                  case_->letIdentifiers.emplace_back(letIdents[i], Type(val.associatedValues[i].second));
+                  case_->letIdentifiers.emplace_back(
+                     letIdents[i], Type(val.associatedValues[i].second));
                }
 
                return true;
@@ -1707,10 +2033,10 @@ bool SemaPass::matchableAgainst(
 
       for (size_t i = givenArgs.size(); i < callExpr->args.size(); ++i) {
          const auto& arg = callExpr->args.at(i);
-         givenArgs.emplace_back(arg.first, arg.second->accept(*this));
+         givenArgs.emplace_back(arg.first, getResult(arg.second));
       }
 
-      auto compat = en->hasCase(callExpr->ident, givenArgs, callExpr->resolvedGenerics);
+      auto compat = getCase(en, callExpr->getIdent(), givenArgs);
       if (compat.compatibility != CompatibilityType::COMPATIBLE) {
          return false;
       }
@@ -1722,7 +2048,7 @@ bool SemaPass::matchableAgainst(
    if (matchTy->isObject()) {
       caseVal->setContextualType(matchTy);
 
-      auto givenTy = caseVal->accept(*this);
+      auto givenTy = getResult(caseVal);
       case_->caseType = givenTy;
 
       auto rec = matchTy->getRecord();
@@ -1731,7 +2057,10 @@ bool SemaPass::matchableAgainst(
       }
 
       auto cl = rec->getAs<Class>();
-      auto operatorEquals = cl->hasMethod("infix ==", { Argument{ "", givenTy } });
+      auto operatorEquals = getMethod(cl,
+                                      "infix ==",
+                                      { Argument{ "", givenTy } });
+
       if (operatorEquals.compatibility == CompatibilityType::COMPATIBLE) {
          case_->operatorEquals = operatorEquals.method;
          return true;
@@ -1748,9 +2077,9 @@ bool SemaPass::matchableAgainst(
    return false;
 }
 
-Type SemaPass::visit(MatchStmt *node)
+void SemaPass::visit(MatchStmt *node)
 {
-   Type switchType = node->switchValue->accept(*this);
+   Type switchType = getResult(node->switchValue);
    toRvalueIfNecessary(switchType, node->switchValue);
 
    node->switchValue->addUse();
@@ -1760,12 +2089,15 @@ Type SemaPass::visit(MatchStmt *node)
       string protName = "Equatable";
 
       if (!cl->conformsTo(protName)) {
-         RuntimeError::raise("Types used as a match value must conform to 'Equatable'", node);
+         RuntimeError::raise("Types used as a match value must conform to"
+                                " 'Equatable'", node);
       }
    }
-   else if (!switchType->isNumeric() && !switchType->isTupleTy() && !switchType->isEnum())
+   else if (!switchType->isNumeric() && !switchType->isTupleTy()
+            && !switchType->isEnum())
    {
-      RuntimeError::raise("Types used as a match value must conform to 'Equatable'", node);
+      RuntimeError::raise("Types used as a match value must conform to "
+                             "'Equatable'", node);
    }
 
    std::vector<long> rawCaseValues;
@@ -1796,16 +2128,19 @@ Type SemaPass::visit(MatchStmt *node)
       pushLoopScope(true, true);
 
       if (switchType->isEnum() && !case_->isDefault) {
-         if (std::find(rawCaseValues.begin(), rawCaseValues.end(), case_->enumCaseVal->rawValue)
+         if (std::find(rawCaseValues.begin(), rawCaseValues.end(),
+                       case_->enumCaseVal->rawValue)
             != rawCaseValues.end())
          {
-            RuntimeError::raise("Duplicate case " + case_->enumCaseVal->name, case_.get());
+            RuntimeError::raise("Duplicate case " + case_->enumCaseVal->name,
+                                case_.get());
          }
 
          rawCaseValues.push_back(case_->enumCaseVal->rawValue);
 
          if (case_->isEnumLetCase || case_->isEnumVarCase) {
-            auto en = SymbolTable::getClass(switchType->getClassName())->getAs<Enum>();
+            auto en = SymbolTable::getClass(switchType->getClassName())
+               ->getAs<Enum>();
 
             for (auto& val : case_->letIdentifiers) {
                auto ty = val.second;
@@ -1813,16 +2148,18 @@ Type SemaPass::visit(MatchStmt *node)
                ty.isLvalue(true);
                ty.isConst(case_->isEnumLetCase);
 
-               case_->letBindings.push_back(declareVariable(val.first, ty, false, case_.get()));
+               case_->letBindings.push_back(
+                  declareVariable(val.first, ty, false, case_.get()));
             }
          }
       }
 
       if (case_->body) {
-         case_->body->accept(*this);
+         case_->body->accept(this);
 
          if (i == numCases - 1 && latestScope->continued) {
-            RuntimeError::raise("Cannot continue from last case statement", case_.get());
+            RuntimeError::raise("Cannot continue from last case statement",
+                                case_.get());
          }
          if (latestScope->continued && i < numCases - 1) {
             checkIfContinuable.push_back(i);
@@ -1842,7 +2179,8 @@ Type SemaPass::visit(MatchStmt *node)
    for (const auto& ind : checkIfContinuable) {
       auto nextCase = node->cases[ind + 1];
       if (nextCase->isEnumLetCase) {
-         RuntimeError::raise("Cannot continue to case with 'let' expression", nextCase.get());
+         RuntimeError::raise("Cannot continue to case with 'let' expression",
+                             nextCase.get());
       }
    }
 
@@ -1851,7 +2189,8 @@ Type SemaPass::visit(MatchStmt *node)
       isExhaustive = true;
    }
    else if (switchType->isEnum()) {
-      auto numCases = static_cast<Enum*>(SymbolTable::getClass(switchType->getClassName()))->getNumCases();
+      auto numCases = static_cast<Enum*>(
+         SymbolTable::getClass(switchType->getClassName()))->getNumCases();
       isExhaustive = numCases == node->cases.size();
    }
 
@@ -1864,8 +2203,6 @@ Type SemaPass::visit(MatchStmt *node)
 
    node->switchType = *switchType;
    node->allCasesReturn = allCasesReturn;
-
-   return {};
 }
 
 /**
@@ -1873,9 +2210,9 @@ Type SemaPass::visit(MatchStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(CaseStmt *node)
+void SemaPass::visit(CaseStmt *node)
 {
-   return {};
+
 }
 
 /**
@@ -1883,14 +2220,15 @@ Type SemaPass::visit(CaseStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(LabelStmt *node)
+void SemaPass::visit(LabelStmt *node)
 {
-   if (std::find(labels.begin(), labels.end(), node->labelName) != labels.end()) {
-      RuntimeError::raise("Label '" + node->labelName + "' already exists in the same scope", node);
+   if (std::find(labels.begin(), labels.end(), node->labelName)
+       != labels.end()) {
+      RuntimeError::raise("Label '" + node->labelName
+                          + "' already exists in the same scope", node);
    }
 
    labels.push_back(node->labelName);
-   return {};
 }
 
 /**
@@ -1898,24 +2236,23 @@ Type SemaPass::visit(LabelStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(GotoStmt *node)
+void SemaPass::visit(GotoStmt *node)
 {
    if (!has_label(node->labelName)) {
       RuntimeError::raise("No label '" + node->labelName + "' to go to", node);
    }
-
-   return {};
 }
 
 /**
- * Checks a function argument declaration for type consistency of default value and existence of declared type
+ * Checks a function argument declaration for type consistency of default
+ * value and existence of declared type
  * @param node
  * @return
  */
-Type SemaPass::visit(FuncArgDecl *node)
+void SemaPass::visit(FuncArgDecl *node)
 {
    if (!node->argType->resolved) {
-      node->argType->accept(*this);
+      node->argType->accept(this);
    }
 
    auto ts = node->argType->getType();
@@ -1931,14 +2268,15 @@ Type SemaPass::visit(FuncArgDecl *node)
       node->defaultVal->setContextualType(ts);
       node->defaultVal->addUse();
 
-      Type defaultType = node->defaultVal->accept(*this);
+      Type defaultType = getResult(node->defaultVal);
       if (!defaultType.implicitlyCastableTo(ts)) {
-         RuntimeError::raise("Default value for parameter " + node->argName + " must be of type "
-            + node->argType->getType().toString(), node->defaultVal.get());
+//         RuntimeError::raise("Default value for parameter " + node->argName
+//                             + " must be of type "
+//            + node->argType->getType().toString(), node->defaultVal.get());
       }
    }
 
-   return ts;
+   returnResult(ts);
 }
 
 /**
@@ -1946,7 +2284,7 @@ Type SemaPass::visit(FuncArgDecl *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(ReturnStmt *node)
+void SemaPass::visit(ReturnStmt *node)
 {
    auto &retVal = node->getReturnValue();
    if (retVal) {
@@ -1968,8 +2306,9 @@ Type SemaPass::visit(ReturnStmt *node)
          ident = std::static_pointer_cast<IdentifierRefExpr>(retVal);
       }
 
-      Type retType = retVal->accept(*this);
-      toRvalueIfNecessary(retType, retVal, !latestScope->declaredReturnType.isLvalue());
+      Type retType = getResult(retVal);
+      toRvalueIfNecessary(retType, retVal,
+                          !latestScope->declaredReturnType.isLvalue());
 
       node->returnType = latestScope->declaredReturnType;
       return_(retType, retVal.get());
@@ -1989,8 +2328,6 @@ Type SemaPass::visit(ReturnStmt *node)
       *node->returnType = VoidType::get();
       return_(node->returnType, node);
    }
-
-   return {};
 }
 
 /**
@@ -1998,9 +2335,9 @@ Type SemaPass::visit(ReturnStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(Expression *node)
+void SemaPass::visit(Expression *node)
 {
-   return {};
+
 }
 
 
@@ -2009,25 +2346,27 @@ Type SemaPass::visit(Expression *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(LambdaExpr *node)
+void SemaPass::visit(LambdaExpr *node)
 {
-   Type returnType = node->returnType->accept(*this);
+   Type returnType = getResult(node->returnType);
    if (node->contextualType->isFunctionTy()) {
       auto asFunc = cast<FunctionType>(*node->contextualType);
       auto& neededArgs = asFunc->getArgTypes();
 
       if (neededArgs.size() != node->args.size()) {
          RuntimeError::raise("Incompatible argument counts: Expected " +
-            std::to_string(neededArgs.size()) + ", but found " + std::to_string(node->args.size()), node);
+            std::to_string(neededArgs.size()) + ", but found "
+                             + std::to_string(node->args.size()), node);
       }
 
       size_t i = 0;
       for (const auto& arg : node->args) {
          if (arg->defaultVal != nullptr) {
-            RuntimeError::raise("Lambda expression arguments cannot have default values", arg->defaultVal.get());
+            RuntimeError::raise("Lambda expression arguments cannot have "
+                                   "default values", arg->defaultVal.get());
          }
 
-         arg->accept(*this);
+         arg->accept(this);
          auto given = arg->argType->getType();
          auto& needed = neededArgs[i].type;
 
@@ -2035,7 +2374,8 @@ Type SemaPass::visit(LambdaExpr *node)
             arg->argType->setType(needed);
          }
          else if (!given.implicitlyCastableTo(needed)) {
-            RuntimeError::raise("Incompatible argument types: No implicit conversion from " +
+            RuntimeError::raise("Incompatible argument types: No implicit "
+                                   "conversion from " +
                given.toString() + " to " + needed.toString(), arg.get());
          }
 
@@ -2048,8 +2388,10 @@ Type SemaPass::visit(LambdaExpr *node)
          node->returnType->setType(returnType);
       }
       else if (!returnType.implicitlyCastableTo(declaredRetTy)) {
-         RuntimeError::raise("Incompatible return types: No implicit conversion from " +
-            returnType.toString() + " to " + asFunc->getReturnType().toString(), node->returnType.get());
+         RuntimeError::raise("Incompatible return types: No implicit "
+                                "conversion from " +
+            returnType.toString() + " to " + asFunc->getReturnType().toString(),
+                             node->returnType.get());
       }
    }
 
@@ -2057,7 +2399,8 @@ Type SemaPass::visit(LambdaExpr *node)
    if (isSingleStmt && returnType->isAutoTy()) {
       auto asExpr = std::dynamic_pointer_cast<Expression>(node->body);
       if (!asExpr) {
-         RuntimeError::raise("Expected single-statement lambda to contain a valid expression", node->body.get());
+         RuntimeError::raise("Expected single-statement lambda to "
+                                "contain a valid expression", node->body.get());
       }
 
       node->body = std::make_shared<ReturnStmt>(asExpr);
@@ -2072,10 +2415,11 @@ Type SemaPass::visit(LambdaExpr *node)
 
    for (const auto& arg : node->args) {
       if (!arg->argType->resolved) {
-         arg->accept(*this);
+         arg->accept(this);
       }
       if (arg->argType->getType()->isAutoTy()) {
-         RuntimeError::raise("Could not infer type of argument " + arg->argName, arg.get());
+         RuntimeError::raise("Could not infer type of argument "
+                             + arg->argName, arg.get());
       }
 
       argTypes.emplace_back("", arg->argType->getType());
@@ -2084,7 +2428,7 @@ Type SemaPass::visit(LambdaExpr *node)
       }
    }
 
-   auto ret = node->body->accept(*this);
+   auto ret = getResult(node->body);
    if (latestScope->returned > 0 && returnType->isAutoTy()) {
       if (isSingleStmt) {
          returnType = ret;
@@ -2096,8 +2440,9 @@ Type SemaPass::visit(LambdaExpr *node)
       }
    }
    else if (!ret.implicitlyCastableTo(returnType)) {
-      RuntimeError::raise("Returning value of type " + ret.toString() + " from function with "
-         "declared return type " + returnType.toString(), node);
+//      RuntimeError::raise("Returning value of type " + ret.toString()
+//                          + " from function with declared return type "
+//                          + returnType.toString(), node);
    }
 
    if (returnType->isAutoTy()) {
@@ -2119,7 +2464,7 @@ Type SemaPass::visit(LambdaExpr *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(UsingStmt *node)
+void SemaPass::visit(UsingStmt *node)
 {
    if (node->kind == UsingKind::NAMESPACE) {
       importedNamespaces.push_back(node->importNamespace + ".");
@@ -2131,7 +2476,8 @@ Type SemaPass::visit(UsingStmt *node)
          bool declarationFound = node->kind == UsingKind::NAMESPACE;
          if (SymbolTable::hasClass(fullName)) {
             if (SymbolTable::getClass(fullName)->isPrivate()) {
-               RuntimeError::raise("Class " + fullName + " is not accessible", node);
+               RuntimeError::raise("Class " + fullName + " is not accessible",
+                                   node);
             }
 
             declarationFound = true;
@@ -2162,8 +2508,6 @@ Type SemaPass::visit(UsingStmt *node)
          ++i;
       }
    }
-
-   return {};
 }
 
 /**
@@ -2171,50 +2515,47 @@ Type SemaPass::visit(UsingStmt *node)
  * @param node
  * @return
  */
-Type SemaPass::visit(EndOfFileStmt *node)
+void SemaPass::visit(EndOfFileStmt *node)
 {
    importedNamespaces.clear();
    importedNamespaces.push_back("");
    SymbolTable::clearTemporaryAliases();
-
-   return {};
 }
 
-Type SemaPass::visit(ImplicitCastExpr *node)
+void SemaPass::visit(ImplicitCastExpr *node)
 {
    resolve(&node->to);
-   node->target->accept(*this);
+   node->target->accept(this);
 
-   return node->to;
+   returnResult(node->to);
 }
 
-Type SemaPass::visit(TypedefDecl *node)
+void SemaPass::visit(TypedefDecl *node)
 {
-   return {};
+
 }
 
-Type SemaPass::visit(TypeRef *node)
+void SemaPass::visit(TypeRef *node)
 {
    assert(!node->resolved && "Duplicate resolving");
-   DeclPass::resolveType(node, GenericsStack, importedNamespaces, currentNamespace);
-   return node->type;
+   DeclPass::resolveType(node, importedNamespaces, currentNamespace);
+
+   returnResult(node->type);
 }
 
-Type SemaPass::visit(DeclareStmt *node)
+void SemaPass::visit(DeclareStmt *node)
 {
    for (const auto& decl : node->declarations) {
-      decl->accept(*this);
+      decl->accept(this);
    }
-
-   return {};
 }
 
-Type SemaPass::visit(LvalueToRvalue* node)
+void SemaPass::visit(LvalueToRvalue* node)
 {
    llvm_unreachable("Should only be applied after evaluating the node");
 }
 
-Type SemaPass::visit(DebugStmt* node)
+void SemaPass::visit(DebugStmt* node)
 {
    if (node->isUnreachable) {
       auto current = latestScope;
@@ -2230,33 +2571,52 @@ Type SemaPass::visit(DebugStmt* node)
    else {
       int i = 3;
    }
-
-   return {};
 }
 
-Type SemaPass::visit(Statement* node)
+void SemaPass::visit(Statement* node)
 {
-   return {};
+
 }
 
-Type SemaPass::visit(TupleLiteral* node)
+void SemaPass::visit(TupleLiteral* node)
 {
    std::vector<pair<string, BuiltinType*>> containedTypes;
 
+   bool isMetaType = true;
    for (auto& el : node->elements) {
       el.second->addUse();
 
-      auto ty = el.second->accept(*this);
+      auto ty = getResult(el.second);
       toRvalueIfNecessary(ty, el.second);
+
+      if (!ty->isMetaType()) {
+         isMetaType = false;
+      }
 
       containedTypes.emplace_back(el.first, *ty);
    }
 
+   if (isMetaType) {
+      for (auto &pair : containedTypes) {
+         if (pair.second->isMetaType()) {
+            pair.second = cast<MetaType>(pair.second)->getUnderlyingType();
+         }
+      }
+
+      auto tupleTy = TupleType::get(containedTypes);
+      node->setTupleType(tupleTy);
+      node->isMetaTy(true);
+
+      return returnResult(getMetaType(tupleTy));
+   }
+
    auto tupleTy = TupleType::get(containedTypes);
+
    if (!node->contextualType->isAutoTy()) {
       if (!tupleTy->implicitlyCastableTo(*node->contextualType)) {
-         RuntimeError::raise("Incompatible types " + tupleTy->toString() + " and " +
-               node->contextualType.toString(), node);
+         RuntimeError::raise("Incompatible types " + tupleTy->toString()
+                             + " and " + node->contextualType.toString(),
+                             node);
       }
 
       auto asTuple = cast<TupleType>(*node->contextualType);
@@ -2273,15 +2633,15 @@ Type SemaPass::visit(TupleLiteral* node)
    }
 
    node->tupleType = tupleTy;
-   return Type(tupleTy);
+   returnResult(tupleTy);
 }
 
-Type SemaPass::visit(TryStmt *node)
+void SemaPass::visit(TryStmt *node)
 {
-   node->body->accept(*this);
+   node->body->accept(this);
 
    for (auto& catchBlock : node->catchBlocks) {
-      auto caughtType = catchBlock.caughtType->accept(*this);
+      auto caughtType = getResult(catchBlock.caughtType);
 
       pushScope();
 
@@ -2290,45 +2650,31 @@ Type SemaPass::visit(TryStmt *node)
       ty.isLvalue(true);
 
       catchBlock.identifier = declareVariable(catchBlock.identifier, ty);
-      catchBlock.body->accept(*this);
+      catchBlock.body->accept(this);
 
       popScope();
    }
 
    if (node->finallyBlock != nullptr) {
-      node->finallyBlock->accept(*this);
+      node->finallyBlock->accept(this);
    }
-
-   return {};
 }
 
-namespace {
-   string desc = "description";
-}
-
-Type SemaPass::visit(ThrowStmt *node)
+void SemaPass::visit(ThrowStmt *node)
 {
-   auto thrown = node->thrownVal->accept(*this);
+   auto thrown = getResult(node->thrownVal);
    node->thrownVal->isAssigned(true);
    node->thrownVal->addUse();
    node->setThrownType(*thrown);
 
    if (thrown->isObject()) {
       auto rec = thrown->getRecord();
-      if (rec->isNonUnion()) {
-         auto cl = rec->getAs<Class>();
-         if (cl->hasField(desc)) {
-            auto field = cl->getField(desc);
-            if (field->isProp && field->hasGetter) {
-               node->descFn = cl->getMethod(cl->getName() + "." + field->getterName);
-            }
-         }
+      if (rec->hasProperty("description")) {
+         node->descFn = rec->getProperty("description")->getGetter();
       }
    }
 
    assert(currentCallable && "no function?");
    currentCallable->addThrownType(*thrown);
-
-   return {};
 }
 

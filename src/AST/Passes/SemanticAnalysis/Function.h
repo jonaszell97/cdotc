@@ -5,14 +5,19 @@
 #ifndef CDOT_FUNCTION_H
 #define CDOT_FUNCTION_H
 
+#include <pngconf.h>
 #include "../../../Variant/Variant.h"
 #include "../../../Variant/Type/BuiltinType.h"
 #include "../../../Variant/Type/Generic.h"
 #include "../../../Variant/Type/Type.h"
 #include "../../../Token.h"
+#include "../../Attribute/Attribute.h"
+
+#include "SemaPass.h"
 
 class FunctionDecl;
 class MethodDecl;
+class CompoundStmt;
 
 enum class AccessModifier : unsigned int;
 
@@ -20,24 +25,8 @@ using std::string;
 using namespace cdot;
 
 namespace cdot {
-struct Argument {
-   Argument(string label, Type ty, std::shared_ptr<Expression> defVal = nullptr, bool vararg = false, bool
-      cstyleVararg = false)
-      : label(label), type(ty), defaultVal(defVal), isVararg(vararg), cstyleVararg(cstyleVararg)
-   {
 
-   }
-
-   string label;
-   Type type;
-   std::shared_ptr<Expression> defaultVal;
-
-   bool isVararg = false;
-   bool cstyleVararg = false;
-   bool ref = false;
-};
-
-class Callable {
+class Callable: public AttributeOwner {
 public:
    const string &getName() const;
    void setName(const string &name);
@@ -51,11 +40,8 @@ public:
    Type &getReturnType();
    void setReturnType(const Type &returnType);
 
-   std::vector<Argument> &getArguments();
+   virtual std::vector<Argument> &getArguments();
    void setArguments(const std::vector<Argument> &arguments);
-
-   std::vector<GenericConstraint> &getGenerics();
-   void setGenerics(const std::vector<GenericConstraint> &generics);
 
    bool hasStructReturn() const;
    void hasStructReturn(bool has_struct_return);
@@ -75,6 +61,16 @@ public:
    bool isNoThrow();
    void isNoThrow(bool nothrow);
 
+   cl::CallableTemplate *getTemplate()
+   {
+      return Template;
+   }
+
+   void setTemplate(cl::CallableTemplate *Template)
+   {
+      Callable::Template = Template;
+   }
+
    llvm::Function *getLlvmFunc() const;
 
    void setLlvmFunc(llvm::Function *llvmFunc);
@@ -84,14 +80,35 @@ public:
       ++uses;
    }
 
+   void setDecl(CallableDecl *decl)
+   {
+      declaration = decl;
+   }
+
+   CallableDecl *getDeclaration()
+   {
+      return declaration;
+   }
+
+   bool isTemplate() const
+   {
+      return is_template;
+   }
+
+   void isTemplate(bool is_template)
+   {
+      Callable::is_template = is_template;
+   }
+
 protected:
    Callable(
       string &&name,
       AccessModifier am,
-      Type &&returnType,
-      std::vector<Argument> &&arguments,
-      std::vector<GenericConstraint> &&generics
+      const Type &returnType,
+      std::vector<Argument> &&arguments
    );
+
+   explicit Callable(cl::CallableTemplate *Template);
 
    string name;
    string mangledName;
@@ -100,7 +117,6 @@ protected:
 
    Type returnType;
    std::vector<Argument> arguments;
-   std::vector<GenericConstraint> generics;
 
    bool is_nothrow = false;
    std::vector<BuiltinType*> thrownTypes;
@@ -108,7 +124,11 @@ protected:
    bool has_struct_return = false;
    unsigned uses = 0;
 
+   bool is_template = false;
+
    llvm::Function *llvmFunc;
+   CallableDecl* declaration;
+   cl::CallableTemplate *Template = nullptr;
 };
 
 namespace cl {
@@ -118,82 +138,132 @@ class Class;
 struct Method: public Callable {
    Method(
       string name,
-      Type& ret_type,
+      const Type& ret_type,
       AccessModifier access_modifier,
       std::vector<Argument>&& args,
-       std::vector<GenericConstraint>& generics,
       bool isStatic,
       MethodDecl *decl,
-      SourceLocation loc
+      SourceLocation loc,
+      unsigned id
+   );
+
+   explicit Method(
+      MethodTemplate *Template
    );
 
    Method(
       string name,
-      Type& ret_type,
+      const Type& ret_type,
       std::vector<Argument>&& args,
-      std::vector<GenericConstraint>& generics,
       MethodDecl *decl,
-      SourceLocation loc
+      SourceLocation loc,
+      unsigned id
    );
+
+   ~Method();
+
+   const string &getSelfBinding() const
+   {
+      return selfBinding;
+   }
+
+   void setSelfBinding(const string &selfBinding)
+   {
+      Method::selfBinding = selfBinding;
+   }
+
+   void isStatic(bool stat)
+   {
+      is_static = stat;
+   }
+
+   bool isStatic() const
+   {
+      return is_static;
+   }
+
+   bool isProtocolMethod() const
+   {
+      return is_protocol_method;
+   }
+
+   void isProtocolMethod(bool proto)
+   {
+      is_protocol_method = proto;
+   }
+
+   bool isVirtual() const
+   {
+      return is_virtual;
+   }
+
+   void isVirtual(bool virt)
+   {
+      is_virtual = virt;
+   }
+
+   bool isInitializer() const
+   {
+      return is_initializer;
+   }
+
+   void isInitializer(bool init)
+   {
+      is_initializer = init;
+   }
+
+   unsigned getMethodID() const
+   {
+      return methodID;
+   }
+
+   cl::MethodTemplate *getMethodTemplate()
+   {
+      return static_cast<MethodTemplate*>(Template);
+   }
+
+   AstNode *getTemplateOrMethodDecl();
 
    typedef std::unique_ptr<Method> UniquePtr;
    typedef std::shared_ptr<Method> SharedPtr;
 
    long constraintIndex = -1;
+   unsigned methodID;
 
-   bool isStatic = false;
-   bool isProtocolMethod = false;
-   bool isVirtual = false;
+   bool is_static = false;
+   bool is_protocol_method = false;
+   bool is_virtual = false;
    bool mutableSelf = false;
 
+   bool is_initializer = false;
    bool isProtocolDefaultImpl = false;
    bool hasDefinition = false;
-   string protocolName;
 
-   MethodDecl* declaration;
+   string protocolName;
+   string selfBinding;
+
    SourceLocation loc;
 
-   Class* owningClass = nullptr;
+   Record* owningClass = nullptr;
 };
 }
 }
 
 class Function: public Callable {
 public:
-   Function(string&, Type&, std::vector<GenericConstraint>&);
-   Function(string&, Type&);
+   Function(string&, const Type&);
+   explicit Function(cl::CallableTemplate *Template);
 
-   void addArgument(Type type, string& name) {
-      arguments.emplace_back(name, type);
-   }
-   
-   void addArgument(
-      Type type,
-      std::shared_ptr<Expression> def_val,
-      string& name)
+   ~Function();
+
+   void addArgument(Argument &&arg)
    {
-      arguments.emplace_back(name, type, def_val);
+      arguments.push_back(std::move(arg));
    }
 
-   void addArgument(Argument& arg)
-   {
-      arguments.push_back(arg);
-   }
-
-   void setDecl(FunctionDecl *decl)
-   {
-      this->decl = decl;
-   }
-
-   FunctionDecl *getDecl()
-   {
-      return decl;
-   }
+   AstNode *getTemplateOrFunctionDecl() const;
 
    typedef std::unique_ptr<Function> UniquePtr;
-
-protected:
-   FunctionDecl *decl;
 };
 
 

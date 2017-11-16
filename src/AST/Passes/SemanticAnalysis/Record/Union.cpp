@@ -6,6 +6,7 @@
 
 #include "../../../../Variant/Type/BuiltinType.h"
 #include "../../../../Util.h"
+#include "../../../Statement/Declaration/Class/UnionDecl.h"
 
 namespace cdot {
 namespace cl {
@@ -13,8 +14,10 @@ namespace cl {
    Union::Union(
       const string& name,
       bool isConst,
-      const SourceLocation &loc)
-      : Record(name, AccessModifier::PUBLIC, loc), is_const(isConst)
+      const SourceLocation &loc,
+      UnionDecl *decl)
+      : Record(name, AccessModifier::PUBLIC, loc, decl),
+        is_const(isConst)
    {
 
    }

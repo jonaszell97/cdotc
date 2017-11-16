@@ -12,7 +12,8 @@ class TypeRef;
 class FuncArgDecl : public Expression {
 public:
    explicit FuncArgDecl(bool = false);
-   FuncArgDecl(std::string, std::shared_ptr<TypeRef>, Expression::SharedPtr = {});
+   FuncArgDecl(std::string, std::shared_ptr<TypeRef>,
+               Expression::SharedPtr = {});
    
    void setName(string name_) {
       argName = name_;
@@ -30,30 +31,16 @@ public:
       defaultVal = def;
    }
 
+   std::shared_ptr<FuncArgDecl> clone() const;
+
    typedef std::shared_ptr<FuncArgDecl> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int depth) override;
 
    NodeType get_type() override {
       return NodeType::FUNC_ARG_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

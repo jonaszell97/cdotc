@@ -10,6 +10,7 @@
 #include "ModuleSerial.h"
 #include "../ASTIncludes.h"
 #include "../../../Variant/Type/FPType.h"
+#include "../../../Variant/Type/PointerType.h"
 #include "../../../Variant/Type/GenericType.h"
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/TupleType.h"
@@ -129,11 +130,11 @@ void ModuleWriter::writeType(BuiltinType *ty)
       case TypeID::ObjectTypeID: {
          writeString(ty->getClassName());
 
-         auto &generics = ty->getConcreteGenericTypes();
+         auto &generics = ty->getTemplateArgs();
          writeSize(generics.size());
 
          for (auto &gen : generics) {
-            writeType(gen);
+            write(gen.toString());
          }
 
          break;
@@ -141,7 +142,7 @@ void ModuleWriter::writeType(BuiltinType *ty)
       case TypeID::GenericTypeID: {
          auto gen = ty->asGenericTy();
 
-         writeString(gen->getGenericClassName());
+         writeString(gen->getClassName());
          writeType(gen->getActualType());
 
          break;
@@ -212,7 +213,7 @@ void ModuleWriter::writeVariant(const Variant &var)
    writeSize(var.bitwidth);
 
    writeBoolPack((bool[]) {
-      var.isUnsigned, var.isBoxed, var.rawStr
+      var.is_unsigned, var.boxed
    }, 3);
 
    if (var.type != VariantType::STRING) {
@@ -223,11 +224,18 @@ void ModuleWriter::writeVariant(const Variant &var)
    }
 }
 
-void ModuleWriter::writeGeneric(const GenericConstraint &gen)
+void ModuleWriter::writeGeneric(const TemplateConstraint &gen)
 {
    writeString(gen.genericTypeName);
-   writeString(gen.covarName);
-   writeString(gen.contravarName);
+   if (gen.kind == TemplateConstraint::TypeName && gen.covariance) {
+      writeString("-" + gen.covariance->toString());
+   }
+   if (gen.kind == TemplateConstraint::Value && gen.valueType) {
+      writeString(gen.valueType->toString());
+   }
+   if (gen.contravariance) {
+      writeString("+" + gen.contravariance->toString());
+   }
 }
 
 void ModuleWriter::visit(AstNode *node)
@@ -270,9 +278,9 @@ void ModuleWriter::visit(Expression *node)
       node->isAssigned(), node->isEnumCase(), node->isTemporary()
    }, 9);
 
-   if (node->isSetterCall()) {
-      writeString(node->getSetterName());
-   }
+//   if (node->isSetterCall()) {
+//      writeString(node->getAccessorName());
+//   }
 
    if (node->isEnumCase()) {
       writeSize(node->getCaseVal());
@@ -358,7 +366,7 @@ void ModuleWriter::visit(FunctionDecl *node)
    Writer.WriteByte(FUNC_DECL);
    visit((Statement*)node);
 
-   writeString(node->getFuncName());
+   writeString(node->getName());
    node->getReturnType()->accept(this);
 
    auto &args = node->getArgs();
@@ -366,13 +374,6 @@ void ModuleWriter::visit(FunctionDecl *node)
 
    for (const auto &arg : args) {
       arg->accept(this);
-   }
-
-   auto &generics = node->getGenerics();
-   writeSize(generics.size());
-
-   for (const auto &gen : generics) {
-      writeGeneric(gen);
    }
 
    auto hasBody = node->getBody() != nullptr;
@@ -427,18 +428,13 @@ void ModuleWriter::visit(ContinueStmt *node) {}
 
 void ModuleWriter::visit(CollectionLiteral *node) {}
 
-void ModuleWriter::visit(NumericLiteral *node)
+void ModuleWriter::visit(IntegerLiteral *node)
 {
    Writer.WriteByte(NUMERIC_LIT);
    visit((Expression*)node);
 
    writeVariant(node->getValue());
    writeType(node->getType());
-   writeString(node->getClassName());
-
-   writeBoolPack((bool[]) {
-      node->isChar(), node->isBool(), node->isPrimitive()
-   }, 3);
 }
 
 void ModuleWriter::visit(NoneLiteral *node)

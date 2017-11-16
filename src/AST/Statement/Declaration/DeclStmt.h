@@ -10,37 +10,24 @@
 
 class TypeRef;
 class Expression;
+enum class AccessModifier : unsigned int;
 
 class DeclStmt : public Statement {
 public:
-   DeclStmt(string, std::shared_ptr<TypeRef>, bool, bool, std::shared_ptr<Expression> = nullptr);
+   DeclStmt(
+      string, std::shared_ptr<TypeRef>, bool, std::shared_ptr<Expression> = nullptr
+   );
 
    std::vector<AstNode::SharedPtr> get_children() override;
 
    typedef std::shared_ptr<DeclStmt> SharedPtr;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::DECLARATION;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
-   string getIdentifier() {
+   const string &getIdentifier()
+   {
       return identifier;
    }
 
@@ -57,6 +44,7 @@ public:
       return access;
    }
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

@@ -13,16 +13,41 @@
 #include "../../Attribute/Attribute.h"
 
 enum class AccessModifier : unsigned int;
+class Parser;
+
+namespace llvm {
+
+class MemoryBuffer;
+
+} // namespace llvm
+
+namespace cdot {
+namespace cl {
+
+class Record;
+struct RecordTemplate;
+
+} // namespace cl
+} // namespace cdot
 
 using std::string;
 using namespace cdot;
 
-class DeclPass : AbstractPass {
+class DeclPass: public AbstractPass {
 public:
-   DeclPass();
+   explicit DeclPass();
+   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
 
-   void doInitialPass(std::vector<std::shared_ptr<Statement>>& statements);
    void declareGlobalTypedefs(std::vector<std::shared_ptr<Statement>>& statements);
+
+   static void DeclareClass(ClassDecl *node);
+   static void DeclareEnum(EnumDecl *node);
+   static void DeclareUnion(UnionDecl *node);
+
+   void DeclareRecordTemplate(RecordTemplateDecl *node);
+   void DeclareFunctionTemplate(CallableTemplateDecl *node);
+   void DeclareMethodTemplate(const string &recordName,
+                              MethodTemplateDecl *node);
 
    void visit(CompoundStmt *node) override;
 
@@ -34,17 +59,25 @@ public:
    void visit(FuncArgDecl *node) override;
 
    void visit(DeclStmt *node) override;
+
    void visit(ClassDecl *node) override;
-   void visit(MethodDecl *node) override;
+   void visit(ExtensionDecl *node) override;
+   void visit(UnionDecl *node) override;
+   void visit(EnumDecl *node) override;
+
    void visit(FieldDecl *node) override;
+   void visit(PropDecl *node) override;
+
+   void visit(MethodDecl *node) override;
    void visit(ConstrDecl *node) override;
    void visit(DestrDecl *node) override;
-   void visit(UnionDecl *node) override;
+
+   void visit(RecordTemplateDecl *node) override;
+   void visit(CallableTemplateDecl *node) override;
 
    void visit(TypedefDecl *node) override;
    void visit(TypeRef *node) override;
    void visit(DeclareStmt *node) override;
-   void visit(EnumDecl *node) override;
 
    void visit(DebugStmt *node) override;
    void visit(Statement *node) override;
@@ -56,7 +89,7 @@ public:
    }
 
    string declareVariable(
-      string &name,
+      const string &name,
       Type &type,
       AccessModifier access,
       AstNode *cause
@@ -64,27 +97,132 @@ public:
 
    Type declareFunction(
       Function::UniquePtr &&func,
-      std::vector<GenericConstraint> &generics,
       AstNode *cause
+   );
+
+   enum ResolveStatus {
+      Res_Success,
+      Res_SubstituationFailure
+   };
+
+   static BuiltinType *resolveObjectTy(
+      TypeRef *node,
+      std::vector<string>& importedNamespaces,
+      std::vector<string>& currentNamespace,
+
+      const string &name,
+      TemplateArgList *argList,
+      ResolveStatus *status = nullptr,
+      const std::vector<TemplateArg> *templateArgs = nullptr,
+      const std::vector<TemplateConstraint> *constraints = nullptr
+   );
+
+   static BuiltinType *resolveTemplateTy(
+      const TypeRef *node,
+      std::vector<string>& importedNamespaces,
+      std::vector<string>& currentNamespace,
+
+      const string &name,
+      const std::vector<TemplateArg> *templateArgs = nullptr,
+      const std::vector<TemplateConstraint> *constraints = nullptr
+   );
+
+   static BuiltinType *resolveTypedef(
+      const TypeRef *node,
+      std::vector<string>& importedNamespaces,
+      std::vector<string>& currentNamespace,
+
+      const string &name,
+      ResolveStatus *status = nullptr,
+      const std::vector<TemplateArg> *templateArgs = nullptr,
+      const std::vector<TemplateConstraint> *constraints = nullptr
+   );
+
+   static BuiltinType* getResolvedType(
+      TypeRef *node,
+      std::vector<string>& importedNamespaces,
+      std::vector<string>& currentNamespace,
+      ResolveStatus *status = nullptr,
+      const std::vector<TemplateArg> *templateArgs = nullptr,
+      const std::vector<TemplateConstraint> *constraints = nullptr
    );
 
    static void resolveType(
       TypeRef *node,
-      std::vector<std::vector<GenericConstraint>*>& GenericsStack,
       std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace
+      std::vector<string>& currentNamespace,
+      ResolveStatus *status = nullptr,
+      const std::vector<TemplateArg> *templateArgs = nullptr,
+      const std::vector<TemplateConstraint> *constraints = nullptr
    );
 
-protected:
-   static std::vector<string> UserTypes;
+   static std::unique_ptr<Parser> prepareParser(
+       cl::Template *Templ,
+       std::vector<TemplateArg> const& templateArgs,
+       bool isRecord = false
+   );
 
+   static cl::Record *declareRecordInstantiation(
+      cl::RecordTemplate &Template,
+      TemplateArgList *argList,
+      bool *isNew = nullptr
+   );
+
+   static Function *declareFunctionInstantiation(
+      cl::CallableTemplate &Template,
+      std::vector<TemplateArg> const& templateArgs,
+      bool *isNew = nullptr
+   );
+
+   static cl::Method *declareMethodInstantiation(
+      cl::MethodTemplate &Template,
+      std::vector<TemplateArg> const& templateArgs,
+      cl::Record *rec = nullptr,
+      bool *isNew = nullptr
+   );
+
+   static void resolveTemplateArgs(
+      TemplateArgList *&args,
+      std::vector<TemplateConstraint> &constraints,
+      const std::function<void (TypeRef*)> &resolver,
+      AstNode *cause
+   );
+
+   static void resolveTemplateConstraints(
+      std::vector<TemplateConstraint> &constraints,
+      const std::function<void (TypeRef*)> &resolver
+   );
+
+   static void checkTemplateConstraintCompatability(
+      TemplateArgList *argList,
+      const std::vector<TemplateConstraint> &constraints,
+      AstNode *cause,
+      AstNode *decl
+   );
+
+   void pushNamespace(const string &ns, bool declare = true);
+   void popNamespace();
+
+   std::vector<string> &getCurrentNamespace()
+   {
+      return currentNamespace;
+   }
+
+   std::vector<string> &getImportedNamespaces()
+   {
+      return importedNamespaces;
+   }
+
+   void importNamespace(const string &ns)
+   {
+      importedNamespaces.push_back(ns);
+   }
+
+protected:
    std::vector<string> currentNamespace = {""};
    std::vector<string> importedNamespaces = {""};
 
-   std::vector<std::vector<GenericConstraint>*> GenericsStack;
-
-   void pushNamespace(string &ns, bool declare = true);
-   void popNamespace();
+   std::vector<std::vector<TemplateConstraint>*> GenericsStack;
 
    void CheckThrowsAttribute(Callable *callable, Attribute &attr);
 };

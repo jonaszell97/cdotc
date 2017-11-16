@@ -9,32 +9,19 @@
 
 class EndOfFileStmt : public Statement {
 public:
-    EndOfFileStmt() = default;
+   EndOfFileStmt() = default;
 
-    typedef std::shared_ptr<EndOfFileStmt> SharedPtr;
+   typedef std::shared_ptr<EndOfFileStmt> SharedPtr;
 
-    std::vector<AstNode::SharedPtr> get_children() override {
-        return {};
-    }
-
-    void __dump(int depth) override {}
-
-    NodeType get_type() override {
-        return NodeType::EOF_STMT;
-    }
-
-    llvm::Value* accept(CodeGen& v) override {
-        return v.visit(this);
-    }
-
-    Type accept(SemaPass& v) override {
-        return v.visit(this);
-    }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
+   std::vector<AstNode::SharedPtr> get_children() override {
+      return {};
    }
 
+   NodeType get_type() override {
+      return NodeType::EOF_STMT;
+   }
+
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 };
 

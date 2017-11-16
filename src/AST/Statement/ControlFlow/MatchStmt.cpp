@@ -21,12 +21,3 @@ std::vector<AstNode::SharedPtr> MatchStmt::get_children() {
 
    return children;
 }
-
-void MatchStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "MatchStmt" << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
-}

@@ -23,11 +23,3 @@ std::vector<AstNode::SharedPtr> ForInStmt::get_children() {
 
    return children;
 }
-
-void ForInStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "ForInStmt [" + decl->getIdentifier() + "]\n";
-   for (const auto& child : get_children()) {
-      child->__dump(depth + 1);
-   }
-}

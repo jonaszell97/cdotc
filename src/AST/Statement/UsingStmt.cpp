@@ -21,8 +21,3 @@ UsingStmt::UsingStmt(std::vector<string> &&fullNames) : fullNames(fullNames)
 std::vector<AstNode::SharedPtr> UsingStmt::get_children() {
    return { };
 }
-
-void UsingStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "UsingStmt [" << "]" << std::endl;
-}

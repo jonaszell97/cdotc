@@ -41,7 +41,10 @@ class GotoStmt;
 class NoneLiteral;
 class StringInterpolation;
 class CollectionLiteral;
-class NumericLiteral;
+class IntegerLiteral;
+class FPLiteral;
+class BoolLiteral;
+class CharLiteral;
 class StringLiteral;
 class LambdaExpr;
 class TupleLiteral;
@@ -52,10 +55,12 @@ class TypeRef;
 class DeclareStmt;
 class ExtendStmt;
 class ClassDecl;
+class ExtensionDecl;
 class FieldDecl;
 class MethodDecl;
 class ConstrDecl;
 class DestrDecl;
+class PropDecl;
 
 class EnumDecl;
 class EnumCaseDecl;
@@ -69,6 +74,16 @@ class FuncArgDecl;
 class TryStmt;
 class ThrowStmt;
 
+class RecordTemplateDecl;
+class CallableTemplateDecl;
+class MethodTemplateDecl;
+
 namespace cdot {
+
 class BinaryOperator;
-}
+class InheritanceConstraint;
+class ConformanceConstraint;
+class ValueExprConstraint;
+class TokenEqualityConstraint;
+
+} // namespace cdot

@@ -22,15 +22,6 @@ std::vector<AstNode::SharedPtr> ReturnStmt::get_children() {
    }
 }
 
-void ReturnStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "ReturnStmt" << std::endl;
-
-   for (auto child : get_children()) {
-      child->__dump(depth + 1);
-   }
-}
-
 std::shared_ptr<Expression> &ReturnStmt::getReturnValue()
 {
    return returnValue;

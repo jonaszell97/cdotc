@@ -11,66 +11,71 @@
 #include "Variant/Variant.h"
 
 namespace cdot {
-   enum TokenType {
-      T_KEYWORD,
-      T_IDENT,
-      T_PUNCTUATOR,
-      T_OP,
-      T_LITERAL,
-      T_BOF,
-      T_EOF,
 
-      T_DIRECTIVE,
-      T_PREPROC_VAR,
-   };
+enum TokenType : unsigned char {
+   T_KEYWORD = 0,
+   T_IDENT,
+   T_PUNCTUATOR,
+   T_OP,
+   T_LITERAL,
+   T_BOF,
+   T_EOF,
 
-   struct SourceLocation {
-      SourceLocation() = default;
-      SourceLocation(
-         unsigned col,
-         const unsigned& line,
-         unsigned length,
-         const unsigned& sourceId
-      );
+   T_DIRECTIVE,
+   T_PREPROC_VAR,
+};
 
-      unsigned col : 16;
-      unsigned line : 16;
-      unsigned length : 16;
-      unsigned sourceId : 16;
+struct SourceLocation {
+   SourceLocation() = default;
+   SourceLocation(
+      unsigned col,
+      const unsigned& line,
+      unsigned length,
+      const unsigned& sourceId
+   );
 
-      unsigned getLine() const;
-      unsigned getCol() const;
-      unsigned getLength() const;
-      unsigned getSourceId() const;
-   };
+   unsigned col : 16;
+   unsigned line : 16;
+   unsigned length : 16;
+   unsigned sourceId : 16;
+
+   unsigned getLine() const;
+   unsigned getCol() const;
+   unsigned getLength() const;
+   unsigned getSourceId() const;
+};
 }
 
-using std::string;
 using namespace cdot;
 
 struct Token {
    Token();
-   Token(TokenType type, Variant &&val, SourceLocation loc,
-      unsigned start, bool isEscaped = false);
+   ~Token();
+   Token(TokenType type, Variant &&val, SourceLocation loc = {},
+      unsigned start = 0);
 
    TokenType get_type();
    Variant get_value();
 
-   string toString();
+   std::string toString() const;
 
-   unsigned getStart() const {
+   unsigned getStart() const
+   {
       return start;
    }
 
-   unsigned getEnd() const {
+   unsigned getEnd() const
+   {
       return start + loc.getLength();
    }
 
-   unsigned getLine() const {
+   unsigned getLine() const
+   {
       return loc.getLine();
    }
 
-   unsigned getCol() const {
+   unsigned getCol() const
+   {
       return loc.getCol();
    }
 
@@ -79,48 +84,28 @@ struct Token {
       return loc;
    }
 
-   bool isEscaped() const
-   {
-      return isEscaped_;
-   }
+   bool is_punctuator(char) const;
+   bool is_punctuator() const;
 
-   void setIndent(int indent)
-   {
-      this->indent = indent;
-   }
+   bool is_keyword(const std::string &) const;
+   bool is_keyword() const;
 
-   unsigned getIndent() const
-   {
-      return indent;
-   }
+   bool is_operator(const std::string &) const;
+   bool is_operator() const;
 
-   bool isExpandedFromMacro() const
-   {
-      return expanded_from_macro;
-   }
+   bool is_identifier(const std::string &) const;
+   bool is_identifier() const;
 
-   void isExpandedFromMacro(bool exp)
-   {
-      expanded_from_macro = exp;
-   }
-
-   bool is_punctuator(char);
-   bool is_keyword(const string &);
-   bool is_operator(const string &);
-   bool is_identifier(const string &);
-   bool is_separator();
-
-   bool isInterpolationStart = false;
-   bool expanded_from_macro = false;
+   bool is_separator() const;
 
    Variant _value;
-   TokenType _type;
    SourceLocation loc;
 
-   unsigned start;
-   unsigned indent = 0;
+   TokenType _type : 8;
+   bool isInterpolationStart : 8;
+   unsigned start : 32;
 
-   bool isEscaped_ = false;
+   static std::string TokensToString(const std::vector<Token> &tokens);
 };
 
 

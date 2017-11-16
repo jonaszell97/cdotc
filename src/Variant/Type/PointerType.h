@@ -12,43 +12,51 @@ namespace cdot {
 
    class PointerType : public BuiltinType {
    protected:
-      explicit PointerType(Type&);
+      explicit PointerType(const Type&);
       static unordered_map<size_t, PointerType*> Instances;
 
    public:
-      static PointerType* get(Type& pointee);
+      static PointerType* get(Type const& pointee);
       static PointerType* get(BuiltinType* pointee);
+      static PointerType* get(const BuiltinType* pointee);
 
-      Type getPointeeType()
+      Type getPointeeType() const
       {
          return pointeeType;
       }
 
-      inline bool hasDefaultValue() override {
+      inline bool hasDefaultValue() const override
+      {
          return true;
       }
 
-      llvm::Value* getDefaultVal() override {
-         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()->getPointerTo());
+      llvm::Value* getDefaultVal(CodeGen &CGM) const override
+      {
+         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()
+                                                          ->getPointerTo());
       }
 
-      llvm::Constant* getConstantVal(Variant& val) override {
-         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()->getPointerTo());
+      llvm::Constant* getConstantVal(Variant& val) const override
+      {
+         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()
+                                                          ->getPointerTo());
       }
 
-      bool isPointerToStruct() override {
+      bool isPointerToStruct() const override
+      {
          return pointeeType->isStruct();
       }
 
-      bool isPointerTy() override {
+      bool isPointerTy() const override
+      {
          return true;
       }
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) override;
-      bool explicitlyCastableTo(BuiltinType*) override;
+      bool implicitlyCastableTo(BuiltinType*) const override;
+      bool explicitlyCastableTo(BuiltinType*) const override;
 
       static inline bool classof(PointerType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {
@@ -66,7 +74,7 @@ namespace cdot {
       friend class TypeRef;
 
    protected:
-      Type pointeeType;
+      const Type pointeeType;
    };
 
 } // namespace cdot

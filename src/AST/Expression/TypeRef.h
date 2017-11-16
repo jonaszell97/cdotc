@@ -8,6 +8,10 @@
 
 #include "../Expression/Expression.h"
 
+namespace cdot {
+class TemplateArgList;
+}
+
 class TypeRef : public Expression {
 public:
    enum TypeKind {
@@ -18,12 +22,26 @@ public:
       ObjectType
    };
 
+   typedef std::vector<pair<string, TemplateArgList*>> NamespaceVec;
    typedef std::shared_ptr<TypeRef> SharedPtr;
 
    TypeRef();
-   TypeRef(string& className, std::vector<pair<string, TypeRef::SharedPtr>> generics);
-   TypeRef(TypeRef::SharedPtr returnType, std::vector<pair<string, TypeRef::SharedPtr>> &argTypes);
-   explicit TypeRef(std::vector<pair<string, TypeRef::SharedPtr>> &tupleTypes);
+
+   // Object type
+   TypeRef(
+      NamespaceVec &&ns
+   );
+
+   // function type
+   TypeRef(
+      TypeRef::SharedPtr &&returnType,
+      std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes
+   );
+
+   // tuple type
+   explicit TypeRef(
+      std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes
+   );
 
    TypeRef(const Type &ty) : type(ty), resolved(true) {}
 
@@ -32,6 +50,11 @@ public:
    inline Type getType(bool force = false)
    {
       assert((force || resolved) && "Resolve type before accessing!");
+      return type;
+   }
+
+   Type &getTypeRef()
+   {
       return type;
    }
 
@@ -76,39 +99,34 @@ public:
       is_option = opt;
    }
 
-   size_t& getPointerDepth()
+   size_t getPointerDepth() const
    {
       return pointerDepth;
    }
 
-   inline void setType(Type& t)
+   void incrementPointerDepth()
+   {
+      ++pointerDepth;
+   }
+
+   void setType(const Type& t)
    {
       type = t;
    }
 
+   Type &operator*()
+   {
+      assert(resolved && "resolve first");
+      return type;
+   }
+
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::TYPE_REF;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
@@ -117,17 +135,51 @@ protected:
 
    bool is_option = false;
    bool is_reference = false;
+   bool return_dummy_obj_ty = false;
+   bool is_meta_ty = false;
    size_t pointerDepth = 0;
 
    Type type;
 
-   string className;
+   NamespaceVec namespaceQual;
    std::vector<pair<string, TypeRef::SharedPtr>> containedTypes;
+
    TypeRef::SharedPtr returnType = nullptr;
 
    bool vararg = false;
    bool cstyleVararg = false;
-};
 
+public:
+   TypeKind getKind() const;
+   void setKind(TypeKind kind);
+
+   bool isResolved() const;
+   void setResolved(bool resolved);
+
+   void setPointerDepth(size_t pointerDepth);
+
+   const Type &getType() const;
+
+   const NamespaceVec &getNamespaceQual() const;
+   void setNamespaceQual(const NamespaceVec &namespaceQual);
+
+   const std::vector<pair<string, SharedPtr>> &getContainedTypes() const;
+   void setContainedTypes(
+      const std::vector<pair<string, SharedPtr>> &containedTypes);
+
+   const SharedPtr &getReturnType() const;
+   void setReturnType(const SharedPtr &returnType);
+
+   void setVararg(bool vararg);
+
+   bool isCstyleVararg() const;
+   void setCstyleVararg(bool cstyleVararg);
+
+   bool returnDummyObjTy() const;
+   void setReturnDummyObjTy(bool b);
+
+   bool isMetaTy() const;
+   void isMetaTy(bool is_meta_ty);
+};
 
 #endif //CDOT_TYPEREF_H

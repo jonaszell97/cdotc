@@ -12,61 +12,60 @@
 
 namespace cdot {
 
-   unordered_map<size_t, PointerType*> PointerType::Instances;
+unordered_map<size_t, PointerType*> PointerType::Instances;
 
-   PointerType* PointerType::get(Type& pointee)
-   {
-      auto hash = (size_t)*pointee;
-      if (Instances.find(hash) == Instances.end()) {
-         Instances.emplace(hash, new PointerType(pointee));
-      }
-
-      return Instances[hash];
+PointerType* PointerType::get(Type const& pointee)
+{
+   auto hash = (size_t)*pointee;
+   if (Instances.find(hash) == Instances.end()) {
+      Instances.emplace(hash, new PointerType(pointee));
    }
 
-   PointerType* PointerType::get(BuiltinType *pointee)
-   {
-      Type ty(pointee);
-      return get(ty);
+   return Instances[hash];
+}
+
+PointerType* PointerType::get(BuiltinType *pointee)
+{
+   return get(Type(pointee));
+}
+
+PointerType::PointerType(const Type& pointeeType) :
+   pointeeType(pointeeType)
+{
+   id = TypeID::PointerTypeID;
+}
+
+bool PointerType::implicitlyCastableTo(BuiltinType *other) const
+{
+   if (other->isPointerTy()) {
+      auto pointee = other->asPointerTy()->getPointeeType();
+      return pointeeType.implicitlyCastableTo(pointee);
    }
 
-   PointerType::PointerType(Type& pointeeType) :
-      pointeeType(pointeeType)
-   {
-      id = TypeID::PointerTypeID;
+   if (other->isRawFunctionTy()) {
+      return pointeeType->implicitlyCastableTo(other);
    }
 
-   bool PointerType::implicitlyCastableTo(BuiltinType *other)
-   {
-      if (other->isPointerTy()) {
-         auto pointee = other->asPointerTy()->getPointeeType();
-         return pointeeType.implicitlyCastableTo(pointee);
-      }
+   return false;
+}
 
-      if (other->isRawFunctionTy()) {
-         return pointeeType->implicitlyCastableTo(other);
-      }
+bool PointerType::explicitlyCastableTo(BuiltinType *other) const
+{
+   return isa<PointerType>(other) || isa<IntegerType>(other);
+}
 
-      return false;
+llvm::Type* PointerType::getLlvmType() const
+{
+   if (pointeeType->isFunctionTy()) {
+      return pointeeType->getLlvmFunctionType()->getPointerTo();
    }
 
-   bool PointerType::explicitlyCastableTo(BuiltinType *other)
-   {
-      return isa<PointerType>(other) || isa<IntegerType>(other);
-   }
+   return pointeeType->getLlvmType()->getPointerTo();
+}
 
-   llvm::Type* PointerType::getLlvmType()
-   {
-      if (pointeeType->isFunctionTy()) {
-         return pointeeType->getLlvmFunctionType()->getPointerTo();
-      }
-
-      return pointeeType->getLlvmType()->getPointerTo();
-   }
-
-   string PointerType::toString()
-   {
-      return pointeeType->toString() + "*";
-   }
+string PointerType::toString() const
+{
+   return pointeeType->toString() + "*";
+}
 
 } // namespace cdot

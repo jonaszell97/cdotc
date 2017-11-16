@@ -8,7 +8,8 @@
 using std::string;
 using std::pair;
 
-EnumCaseDecl::EnumCaseDecl(string &&name, std::shared_ptr<Expression>&& rawValue,
+EnumCaseDecl::EnumCaseDecl(string &&name,
+                           std::shared_ptr<Expression>&& rawValue,
       std::vector<pair<string, std::shared_ptr<TypeRef>>> &&associatedTypes) :
    caseName(name),
    rawVal(rawValue),
@@ -18,8 +19,10 @@ EnumCaseDecl::EnumCaseDecl(string &&name, std::shared_ptr<Expression>&& rawValue
 
 }
 
-EnumCaseDecl::EnumCaseDecl(string &&name, std::vector<pair<string, std::shared_ptr<TypeRef>>> &&associatedTypes) :
-   caseName(name),
+EnumCaseDecl::EnumCaseDecl(string &&name,
+                           std::vector<pair<string, std::shared_ptr<TypeRef>>>
+                           &&associatedTypes)
+   : caseName(name),
    associatedTypes(associatedTypes),
    has_raw_value(false)
 {
@@ -33,9 +36,4 @@ std::vector<std::shared_ptr<AstNode>> EnumCaseDecl::get_children() {
    }
 
    return children;
-}
-
-void EnumCaseDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "EnumCaseDecl [" << caseName << "]\n";
 }

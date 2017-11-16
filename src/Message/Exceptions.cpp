@@ -7,6 +7,7 @@
 #include "Exceptions.h"
 #include "../Lexer.h"
 #include "../AST/AstNode.h"
+#include "Diagnostics.h"
 
 namespace cdot {
    namespace err {
@@ -70,16 +71,7 @@ ParseError::ParseError(const std::string& message) : message_(message) {
 }
 
 void ParseError::raise(std::string msg, Lexer *lexer) {
-   std::string err = "\033[21;31mError: " + msg;
-   if (lexer != nullptr) {
-      auto start = lexer->currentToken.getStart();
-      auto end = lexer->currentToken.getEnd();
-
-      auto str = string(lexer->curr, lexer->srcLen);
-      err += cdot::err::prepareLine(str, lexer->fileName, start, end - start);
-   }
-
-   throw ParseError(err + "\033[0m");
+   diag::err(diag::err_generic_error) << msg << lexer << diag::term;
 }
 
 RuntimeError::RuntimeError(const std::string& message) : message_(message) {
@@ -87,14 +79,5 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 }
 
 void RuntimeError::raise(std::string msg, AstNode *cause) {
-   std::string err = "\033[21;31mError: " + msg;
-   if (cause != nullptr) {
-//      auto src = cause->getSourceFile();
-//      auto start = cause->getStartIndex();
-//      auto end = cause->getEndIndex();
-//
-//      err += cdot::err::prepareLine(src.second, src.first, start, end - start);
-   }
-
-   throw RuntimeError(err + "\033[0m");
+   diag::err(diag::err_generic_error) << msg << cause << diag::term;
 }

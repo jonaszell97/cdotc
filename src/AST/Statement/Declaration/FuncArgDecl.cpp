@@ -7,33 +7,31 @@
 #include "../../Expression/TypeRef.h"
 
 FuncArgDecl::FuncArgDecl(std::string name, TypeRef::SharedPtr type, Expression::SharedPtr def) :
-    argName(name),
-    argType(type),
-    defaultVal(def)
+   argName(name),
+   argType(type),
+   defaultVal(def)
 {
-    if (defaultVal != nullptr) {
-        children.push_back(&defaultVal);
-    }
+   if (defaultVal != nullptr) {
+      children.push_back(&defaultVal);
+   }
 }
 
 FuncArgDecl::FuncArgDecl(bool mut) : mut(mut) {
 
 }
 
-std::vector<AstNode::SharedPtr> FuncArgDecl::get_children() {
-    if (defaultVal != nullptr) {
-        return { defaultVal };
-    }
+std::shared_ptr<FuncArgDecl> FuncArgDecl::clone() const
+{
+   auto decl = std::make_shared<FuncArgDecl>(*this);
+   decl->argType = std::make_shared<TypeRef>(argType->getType());
 
-    return {};
+   return decl;
 }
 
-void FuncArgDecl::__dump(int depth) {
-    AstNode::__tab(depth);
+std::vector<AstNode::SharedPtr> FuncArgDecl::get_children() {
+   if (defaultVal != nullptr) {
+      return { defaultVal };
+   }
 
-    std::cout << "FuncArgDecl [" << argType->toString() << " " << argName << "]" << std::endl;
-
-    if (defaultVal != nullptr) {
-        defaultVal->__dump(depth + 1);
-    }
+   return {};
 }

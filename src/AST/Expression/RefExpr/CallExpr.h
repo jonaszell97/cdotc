@@ -10,12 +10,19 @@
 
 namespace cdot {
    class FunctionType;
-namespace cl {
-   class Class;
-   class Method;
-   struct EnumCase;
+   enum class BuiltinFn : unsigned int;
+   struct Argument;
+   class TemplateArgList;
+
+   namespace cl {
+      class Class;
+      class Method;
+      struct EnumCase;
+   }
+
 }
-}
+
+struct CallCompatability;
 
 using cdot::cl::EnumCase;
 
@@ -28,45 +35,30 @@ enum class CallType : unsigned int {
 
 class CallExpr : public Expression {
 public:
-   CallExpr(CallType, std::vector<pair<string, Expression::SharedPtr>>, string = "");
-   CallExpr(CallType, std::vector<Expression::SharedPtr>, string = "");
+   CallExpr(CallType kind,
+            std::vector<pair<string, Expression::SharedPtr>> &&args,
+            string &&name = "");
+   CallExpr(CallType kind,
+            std::vector<Expression::SharedPtr> &&args,
+            string &&name = "");
 
-   void set_generics(std::vector<std::shared_ptr<TypeRef>> generics) {
-      this->generics = generics;
-   }
-
-   void isPointerAccess(bool ptr) {
-      isPointerAccess_ = ptr;
+   void isPointerAccess(bool ptr)
+   {
+      is_pointer_access = ptr;
    }
 
    bool createsTemporary() override;
 
    typedef std::shared_ptr<CallExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::CALL_EXPR;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
    void replaceChildWith(AstNode *child, Expression *replacement) override;
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
@@ -74,24 +66,23 @@ protected:
    std::vector<pair<string, Expression::SharedPtr>> args;
 
    // codegen
-   bool isCallOp = false;
+   bool is_call_op = false;
+   bool load_before_call = false;
    string callOpBinding;
 
-   bool isCapturedVar = false;
+   bool is_captured_var = false;
+   bool has_struct_return = false;
 
-   bool hasStructReturn = false;
-   BuiltinType* structReturnType = nullptr;
-
-   bool isPointerAccess_ = false;
+   bool is_pointer_access = false;
    CallCompatability* compatibility = nullptr;
 
    // method call
-   bool isNsMember = false;
-   bool isStatic = false;
+   bool is_ns_member = false;
+   bool is_static = false;
    Type returnType;
    bool is_virtual = false;
 
-   bool isBuiltin = false;
+   bool is_builtin = false;
    BuiltinFn builtinFnKind;
    size_t alignment;
 
@@ -101,159 +92,110 @@ protected:
       Function *func;
    };
 
-   Type genericOriginTy;
-   Type genericDestTy;
-   bool needsGenericCast = false;
    bool anonymous_call = false;
    size_t anonymousFieldIndex;
 
-   std::vector<std::shared_ptr<TypeRef>> generics;
-   std::vector<GenericType*> resolvedGenerics;
+   TemplateArgList *templateArgs;
 
    std::vector<Argument> resolvedArgs;
-
-   std::vector<Argument>* declaredArgTypes = nullptr;
+   std::vector<Argument> declaredArgTypes;
 
    FunctionType* functionType;
    bool implicitSelfCall = false;
    string selfBinding;
 
-   bool isProtocolCall = false;
+   bool is_protocol_call = false;
    bool castToBase = false;
 
    bool unionConstr = false;
 
 public:
    CallType getType() const;
-
    void setType(CallType type);
 
-   const std::vector<pair<string, std::shared_ptr<Expression>>> &getArgs() const;
+   std::vector<pair<string, std::shared_ptr<Expression>>> &getArgs();
+   void setArgs(
+      const std::vector<pair<string, std::shared_ptr<Expression>>> &args);
 
-   void setArgs(const std::vector<pair<string, std::shared_ptr<Expression>>> &args);
+   bool isCallOp() const;
+   void isCallOp(bool isCallOp);
 
-   bool isIsCallOp() const;
-
-   void setIsCallOp(bool isCallOp);
+   bool loadBeforeCall() const;
+   void loadBeforeCall(bool load_before_call);
 
    const string &getCallOpBinding() const;
-
    void setCallOpBinding(const string &callOpBinding);
 
-   bool isIsCapturedVar() const;
-
+   bool isCapturedVar() const;
    void setIsCapturedVar(bool isCapturedVar);
 
-   bool isHasStructReturn() const;
-
+   bool hasStructReturn() const;
    void setHasStructReturn(bool hasStructReturn);
 
-   BuiltinType *getStructReturnType() const;
-
-   void setStructReturnType(BuiltinType *structReturnType);
-
-   bool isIsPointerAccess_() const;
-
+   bool isPointerAccess_() const;
    void setIsPointerAccess_(bool isPointerAccess_);
 
    CallCompatability *getCompatibility() const;
-
    void setCompatibility(CallCompatability *compatibility);
 
-   bool isIsNsMember() const;
-
+   bool isNsMember() const;
    void setIsNsMember(bool isNsMember);
 
-   bool isIsStatic() const;
-
+   bool isStatic() const;
    void setIsStatic(bool isStatic);
 
    const Type &getReturnType() const;
-
    void setReturnType(const Type &returnType);
 
-   bool isIs_virtual() const;
+   bool isVirtual() const;
+   void setIsVirtual(bool is_virtual);
 
-   void setIs_virtual(bool is_virtual);
-
-   bool isIsBuiltin() const;
-
+   bool isBuiltin() const;
    void setIsBuiltin(bool isBuiltin);
 
    BuiltinFn getBuiltinFnKind() const;
-
    void setBuiltinFnKind(BuiltinFn builtinFnKind);
 
    size_t getAlignment() const;
-
    void setAlignment(size_t alignment);
 
    const string &getClassName() const;
-
    void setClassName(const string &className);
 
-   Method *getMethod() const;
-
-   void setMethod(Method *method);
-
-   const Type &getGenericOriginTy() const;
-
-   void setGenericOriginTy(const Type &genericOriginTy);
-
-   const Type &getGenericDestTy() const;
-
-   void setGenericDestTy(const Type &genericDestTy);
-
-   bool isNeedsGenericCast() const;
-
-   void setNeedsGenericCast(bool needsGenericCast);
+   cl::Method *getMethod() const;
+   void setMethod(cl::Method *method);
 
    bool isAnonymousCall() const;
-
    void setIsAnonymousCall(bool isAnonymousCall_);
 
-   const std::vector<std::shared_ptr<TypeRef>> &getGenerics() const;
+   TemplateArgList *&getTemplateArgs();
+   void setTemplateArgs(TemplateArgList *templateArgs);
 
-   void setGenerics(const std::vector<std::shared_ptr<TypeRef>> &generics);
-
-   const std::vector<GenericType *> &getResolvedGenerics() const;
-
-   void setResolvedGenerics(const std::vector<GenericType *> &resolvedGenerics);
-
-   const std::vector<Argument> &getResolvedArgs() const;
-
+   std::vector<Argument> &getResolvedArgs();
    void setResolvedArgs(const std::vector<Argument> &resolvedArgs);
 
-   std::vector<Argument> *getDeclaredArgTypes() const;
-
-   void setDeclaredArgTypes(std::vector<Argument> *declaredArgTypes);
+   std::vector<Argument> &getDeclaredArgTypes();
+   void setDeclaredArgTypes(std::vector<Argument> &&declaredArgTypes);
 
    FunctionType *getFunctionType() const;
-
    void setFunctionType(FunctionType *functionType);
 
    bool isImplicitSelfCall() const;
-
    void setImplicitSelfCall(bool implicitSelfCall);
 
    const string &getSelfBinding() const;
-
    void setSelfBinding(const string &selfBinding);
 
-   bool isIsProtocolCall() const;
-
+   bool isProtocolCall() const;
    void setIsProtocolCall(bool isProtocolCall);
 
    bool isCastToBase() const;
-
    void setCastToBase(bool castToBase);
 
    size_t getAnonymousFieldIndex() const;
-
    void setAnonymousFieldIndex(size_t anonymousFieldIndex);
 
    bool isUnionConstr() const;
-
    void setUnionConstr(bool unionConstr);
 };
 

@@ -29,13 +29,3 @@ std::vector<AstNode::SharedPtr> SubscriptExpr::get_children() {
 
    return res;
 }
-
-void SubscriptExpr::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "SubscriptExpr" << std::endl;
-
-   _index->__dump(depth + 1);
-   if (memberExpr != nullptr) {
-      memberExpr->__dump(depth + 1);
-   }
-}

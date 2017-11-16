@@ -5,9 +5,22 @@
 #include "UnionDecl.h"
 
 #include "../../../Expression/TypeRef.h"
+#include "../../../../Util.h"
 
-UnionDecl::UnionDecl(string &&name, UnionTypes &&types, bool isConst)
-   : name(name), containedTypes(types), is_const(isConst)
+using std::move;
+
+UnionDecl::UnionDecl(string &&name,
+                     UnionTypes &&types,
+                     bool isConst,
+                     std::vector<std::shared_ptr<Statement>> &&methods,
+                     std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
+                     std::vector<std::shared_ptr<PropDecl>> &&properties,
+
+                     std::vector<std::shared_ptr<Statement>> &&innerDecls)
+   : RecordDecl(AccessModifier::PUBLIC, move(name), {}, move(methods),
+                move(typedefs), move(properties), move(innerDecls)),
+     containedTypes(move(types)),
+     is_const(isConst)
 {
 
 }

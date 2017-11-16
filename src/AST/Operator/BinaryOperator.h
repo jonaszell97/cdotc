@@ -12,230 +12,154 @@ class ConstExprPass;
 
 namespace cdot {
 
-   enum class BinaryOperatorType : unsigned int {
-      ARITHMETIC,
-      ASSIGNMENT,
-      EQUALITY,
-      COMPARISON,
-      BITWISE,
-      LOGICAL,
-      CAST,
-      OTHER
-   };
+enum class BinaryOperatorType : unsigned int {
+   ARITHMETIC,
+   ASSIGNMENT,
+   EQUALITY,
+   COMPARISON,
+   BITWISE,
+   LOGICAL,
+   CAST,
+   OTHER
+};
 
-   BinaryOperatorType getBinaryOpType(string op);
+BinaryOperatorType getBinaryOpType(const string &op);
 
-   namespace cl {
-      class Method;
+namespace cl {
+   class Method;
+} // namespace cl
+
+
+class BinaryOperator : public Expression {
+public:
+   explicit BinaryOperator(string);
+   BinaryOperator(string, Expression::SharedPtr, Expression::SharedPtr);
+
+   void setLhs(Expression::SharedPtr lhs);
+   void setRhs(Expression::SharedPtr rhs);
+
+   typedef std::shared_ptr<BinaryOperator> SharedPtr;
+
+   std::vector<AstNode::SharedPtr> get_children() override;
+
+   NodeType get_type() override {
+     return NodeType::BINARY_OPERATOR;
    }
-}
 
-namespace cdot {
+   void replaceChildWith(AstNode *child, Expression *replacement) override;
 
-   class BinaryOperator : public Expression {
-   public:
-      explicit BinaryOperator(string);
-      BinaryOperator(string, Expression::SharedPtr, Expression::SharedPtr);
+   ASTNODE_ACCEPT_PASSES
+   ADD_FRIEND_PASSES
 
-      void setLhs(Expression::SharedPtr lhs);
-      void setRhs(Expression::SharedPtr rhs);
+protected:
+   Expression::SharedPtr lhs;
+   Expression::SharedPtr rhs;
+   BuiltinType *operandType = nullptr;
+   string op;
+   cdot::BinaryOperatorType opType;
 
-      typedef std::shared_ptr<BinaryOperator> SharedPtr;
+   BuiltinType *pointerArithmeticType = nullptr;
 
-      std::vector<AstNode::SharedPtr> get_children() override;
+   BinaryOperator* preAssignmentOp = nullptr;
+   Type lhsType;
+   Type rhsType;
 
-      void __dump(int depth) override;
+   llvm::Value* lhsVal = nullptr;
+   llvm::Value* rhsVal = nullptr;
 
-      NodeType get_type() override {
-        return NodeType::BINARY_OPERATOR;
-      }
+   // codegen
+   std::shared_ptr<CallExpr> overridenCall = nullptr;
+   string className;
+   cdot::cl::Method *method;
+   bool needs_memcpy = false;
+   bool is_self_assignment = false;
+   bool is_null_assignment = false;
+   bool is_protocol_assignment = false;
 
-      llvm::Value *accept(CodeGen &v) override {
-        return v.visit(this);
-      }
+   bool boxed_primitive_op = false;
+   bool lhs_is_boxed = false;
+   bool rhs_is_boxed = false;
+   string boxedResultType;
 
-      Type accept(SemaPass &v) override {
-        return v.visit(this);
-      }
+   bool is_enum_comp = false;
+   bool is_tuple_comp = false;
+   bool update_refcount = false;
 
-      void accept(AbstractPass* v) override {
-        v->visit(this);
-      }
+public:
+   Expression::SharedPtr &getLhs();
+   Expression::SharedPtr &getRhs();
 
-      Variant accept(ConstExprPass &v) override {
-        return v.visit(this);
-      }
+   BuiltinType *getOperandType() const;
+   void setOperandType(BuiltinType *operandType);
 
-      void replaceChildWith(AstNode *child, Expression *replacement) override;
+   const string &getOp() const;
+   void setOp(const string &op);
 
-      ADD_FRIEND_PASSES
+   BinaryOperatorType getOpType() const;
+   void setOpType(BinaryOperatorType opType);
 
-   protected:
-      Expression::SharedPtr lhs;
-      Expression::SharedPtr rhs;
-      BuiltinType *operandType = nullptr;
-      string op;
-      cdot::BinaryOperatorType opType;
+   BuiltinType *getPointerArithmeticType() const;
+   void setPointerArithmeticType(BuiltinType *pointerArithmeticType);
 
-      BuiltinType *pointerArithmeticType = nullptr;
+   BinaryOperator *getPreAssignmentOp() const;
+   void setPreAssignmentOp(BinaryOperator *preAssignmentOp);
 
-      BinaryOperator* preAssignmentOp = nullptr;
-      Type lhsType;
-      Type rhsType;
+   Type &getLhsType();
+   void setLhsType(const Type &lhsType);
 
-      llvm::Value* lhsVal = nullptr;
-      llvm::Value* rhsVal = nullptr;
+   const Type &getRhsType() const;
+   void setRhsType(const Type &rhsType);
 
-      // codegen
-      std::shared_ptr<CallExpr> overridenCall = nullptr;
-      string className;
-      cdot::cl::Method *method;
-      bool isStructAssignment = false;
-      bool isSelfAssignment = false;
-      bool isNullAssignment = false;
-      bool isProtocolAssignment = false;
+   llvm::Value *getLhsVal() const;
+   void setLhsVal(llvm::Value *lhsVal);
 
-      bool boxedPrimitiveOp = false;
-      bool lhsIsBoxed = false;
-      bool rhsIsBoxed = false;
-      string boxedResultType;
+   llvm::Value *getRhsVal() const;
+   void setRhsVal(llvm::Value *rhsVal);
 
-      // special comparison operators
-      bool isEnumComp = false;
-      EnumCase* knownCase = nullptr;
-      std::vector<Expression::SharedPtr> caseValues;
-      std::vector<BuiltinType*> caseTypes;
+   const std::shared_ptr<CallExpr> &getOverridenCall() const;
+   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);
 
-      bool isTupleComp = false;
-      size_t arity;
-      std::vector<BuiltinType*> tupleTypes;
-      llvm::Type* llvmTupleType;
+   const string &getClassName() const;
+   void setClassName(const string &className);
 
-      bool updateRefCount = false;
-      
-   public:
-      const Expression::SharedPtr &getLhs() const;
+   cl::Method *getMethod() const;
+   void setMethod(cl::Method *method);
 
-      const Expression::SharedPtr &getRhs() const;
+   bool needsMemCpy() const;
+   void needsMemCpy(bool isStructAssignment);
 
-      BuiltinType *getOperandType() const;
+   bool isSelfAssignment() const;
+   void isSelfAssignment(bool isSelfAssignment);
 
-      void setOperandType(BuiltinType *operandType);
+   bool isNullAssignment() const;
+   void isNullAssignment(bool isNullAssignment);
 
-      const string &getOp() const;
+   bool isProtocolAssignment() const;
+   void isProtocolAssignment(bool isProtocolAssignment);
 
-      void setOp(const string &op);
+   bool isBoxedPrimitiveOp() const;
+   void isBoxedPrimitiveOp(bool boxedPrimitiveOp);
 
-      BinaryOperatorType getOpType() const;
+   bool lhsIsBoxed() const;
+   void lhsIsBoxed(bool lhsIsBoxed);
 
-      void setOpType(BinaryOperatorType opType);
+   bool rhsIsBoxed() const;
+   void rhsIsBoxed(bool rhsIsBoxed);
 
-      BuiltinType *getPointerArithmeticType() const;
+   const string &getBoxedResultType() const;
+   void setBoxedResultType(const string &boxedResultType);
 
-      void setPointerArithmeticType(BuiltinType *pointerArithmeticType);
+   bool isEnumComp() const;
+   void isEnumComp(bool isEnumComp);
 
-      BinaryOperator *getPreAssignmentOp() const;
+   bool isTupleComp() const;
+   void isTupleComp(bool isTupleComp);
 
-      void setPreAssignmentOp(BinaryOperator *preAssignmentOp);
+   bool updateRefCount() const;
+   void updateRefCount(bool updateRefCount);
+};
 
-      Type &getLhsType();
-
-      void setLhsType(const Type &lhsType);
-
-      const Type &getRhsType() const;
-
-      void setRhsType(const Type &rhsType);
-
-      llvm::Value *getLhsVal() const;
-
-      void setLhsVal(llvm::Value *lhsVal);
-
-      llvm::Value *getRhsVal() const;
-
-      void setRhsVal(llvm::Value *rhsVal);
-
-      const std::shared_ptr<CallExpr> &getOverridenCall() const;
-
-      void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);
-
-      const string &getClassName() const;
-
-      void setClassName(const string &className);
-
-      Method *getMethod() const;
-
-      void setMethod(Method *method);
-
-      bool isIsStructAssignment() const;
-
-      void setIsStructAssignment(bool isStructAssignment);
-
-      bool isIsSelfAssignment() const;
-
-      void setIsSelfAssignment(bool isSelfAssignment);
-
-      bool isIsNullAssignment() const;
-
-      void setIsNullAssignment(bool isNullAssignment);
-
-      bool isIsProtocolAssignment() const;
-
-      void setIsProtocolAssignment(bool isProtocolAssignment);
-
-      bool isBoxedPrimitiveOp() const;
-
-      void setBoxedPrimitiveOp(bool boxedPrimitiveOp);
-
-      bool isLhsIsBoxed() const;
-
-      void setLhsIsBoxed(bool lhsIsBoxed);
-
-      bool isRhsIsBoxed() const;
-
-      void setRhsIsBoxed(bool rhsIsBoxed);
-
-      const string &getBoxedResultType() const;
-
-      void setBoxedResultType(const string &boxedResultType);
-
-      bool isIsEnumComp() const;
-
-      void setIsEnumComp(bool isEnumComp);
-
-      EnumCase *getKnownCase() const;
-
-      void setKnownCase(EnumCase *knownCase);
-
-      const std::vector<Expression::SharedPtr> &getCaseValues() const;
-
-      void setCaseValues(const std::vector<Expression::SharedPtr> &caseValues);
-
-      const std::vector<BuiltinType *> &getCaseTypes() const;
-
-      void setCaseTypes(const std::vector<BuiltinType *> &caseTypes);
-
-      bool isIsTupleComp() const;
-
-      void setIsTupleComp(bool isTupleComp);
-
-      size_t getArity() const;
-
-      void setArity(size_t arity);
-
-      const std::vector<BuiltinType *> &getTupleTypes() const;
-
-      void setTupleTypes(const std::vector<BuiltinType *> &tupleTypes);
-
-      llvm::Type *getLlvmTupleType() const;
-
-      void setLlvmTupleType(llvm::Type *llvmTupleType);
-
-      bool isUpdateRefCount() const;
-
-      void setUpdateRefCount(bool updateRefCount);
-   };
-
-}
+} // namespace cdot
 
 
 #endif //CDOT_BINARYOPERATOR_H

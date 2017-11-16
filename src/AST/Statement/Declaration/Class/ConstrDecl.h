@@ -19,46 +19,29 @@ namespace cdot {
 class ConstrDecl : public CallableDecl {
 public:
    ConstrDecl();
-   ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>>, std::shared_ptr<CompoundStmt>, AccessModifier);
+   ConstrDecl(
+      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+      AccessModifier am
+   );
 
    typedef std::shared_ptr<ConstrDecl> SharedPtr;
    typedef std::unique_ptr<ConstrDecl> UniquePtr;
 
    std::vector<std::shared_ptr<AstNode>> get_children() override;
-   void __dump(int depth) override;
 
    NodeType get_type() override {
       return NodeType::CONSTR_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
    bool memberwise = false;
-   AccessModifier am;
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
-   std::shared_ptr<CompoundStmt> body;
 
    // codegen
-   std::string selfBinding;
-   string className;
    cdot::cl::Method* method;
+   cl::Record *record;
 
 public:
    bool isMemberwise() const
@@ -71,65 +54,18 @@ public:
       ConstrDecl::memberwise = memberwise;
    }
 
-   AccessModifier getAm() const
-   {
-      return am;
-   }
-
-   void setAm(AccessModifier am)
-   {
-      ConstrDecl::am = am;
-   }
-
-   const std::vector<std::shared_ptr<FuncArgDecl>> &getArgs() const
-   {
-      return args;
-   }
-
-   void setArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args)
-   {
-      ConstrDecl::args = args;
-   }
-
-   const std::shared_ptr<CompoundStmt> &getBody() const
-   {
-      return body;
-   }
-
-   void setBody(const std::shared_ptr<CompoundStmt> &body)
-   {
-      ConstrDecl::body = body;
-   }
-
-   const string &getSelfBinding() const
-   {
-      return selfBinding;
-   }
-
-   void setSelfBinding(const string &selfBinding)
-   {
-      ConstrDecl::selfBinding = selfBinding;
-   }
-
-   const string &getClassName() const
-   {
-      return className;
-   }
-
-   void setClassName(const string &className)
-   {
-      ConstrDecl::className = className;
-   }
-
-   Method *getMethod() const
+   cl::Method *getMethod() const
    {
       return method;
    }
 
-   void setMethod(Method *method)
+   void setMethod(cl::Method *method)
    {
       ConstrDecl::method = method;
    }
+
+   cl::Record *getRecord() const;
+   void setRecord(cl::Record *record);
 };
 
 

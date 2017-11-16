@@ -60,39 +60,39 @@ CMAKE_SOURCE_DIR = /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake
 CMAKE_BINARY_DIR = /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm
 
 #=============================================================================
-# Target rules for target CMakeFiles/CDot.dir
+# Target rules for target CMakeFiles/cdotc-llvm.dir
 
 # All Build rule for target.
-CMakeFiles/CDot.dir/all:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/depend
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72 "Built target CDot"
-.PHONY : CMakeFiles/CDot.dir/all
+CMakeFiles/cdotc-llvm.dir/all:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/depend
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Built target cdotc-llvm"
+.PHONY : CMakeFiles/cdotc-llvm.dir/all
 
 # Include target in all.
-all: CMakeFiles/CDot.dir/all
+all: CMakeFiles/cdotc-llvm.dir/all
 
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/CDot.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm/CMakeFiles 72
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/CDot.dir/all
+CMakeFiles/cdotc-llvm.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm/CMakeFiles 100
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/cdotc-llvm.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-llvm/CMakeFiles 0
-.PHONY : CMakeFiles/CDot.dir/rule
+.PHONY : CMakeFiles/cdotc-llvm.dir/rule
 
 # Convenience name for target.
-CDot: CMakeFiles/CDot.dir/rule
+cdotc-llvm: CMakeFiles/cdotc-llvm.dir/rule
 
-.PHONY : CDot
-
-# clean rule for target.
-CMakeFiles/CDot.dir/clean:
-	$(MAKE) -f CMakeFiles/CDot.dir/build.make CMakeFiles/CDot.dir/clean
-.PHONY : CMakeFiles/CDot.dir/clean
+.PHONY : cdotc-llvm
 
 # clean rule for target.
-clean: CMakeFiles/CDot.dir/clean
+CMakeFiles/cdotc-llvm.dir/clean:
+	$(MAKE) -f CMakeFiles/cdotc-llvm.dir/build.make CMakeFiles/cdotc-llvm.dir/clean
+.PHONY : CMakeFiles/cdotc-llvm.dir/clean
+
+# clean rule for target.
+clean: CMakeFiles/cdotc-llvm.dir/clean
 
 .PHONY : clean
 

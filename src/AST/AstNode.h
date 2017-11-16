@@ -7,18 +7,39 @@
 
 #include <iostream>
 #include "Attribute/Attribute.h"
-#include "Passes/SemanticAnalysis/SemaPass.h"
 #include "Passes/AbstractPass.h"
-#include "Passes/CodeGen/CodeGen.h"
-#include "Passes/SemanticAnalysis/ConstExprPass.h"
-#include "Passes/Declaration/DeclPass.h"
+
 #include "../Variant/Type/Type.h"
-#include "../Variant/Type/BuiltinType.h"
 #include "../Token.h"
 
+#define ASTNODE_ACCEPT_PASSES \
+   void accept(AbstractPass *pass) override {\
+      pass->visit(this); \
+   }
+
 namespace cdot {
-   class GenericType;
-}
+
+class BuiltinType;
+class GenericType;
+
+class Callable;
+
+class TemplateArgList;
+struct TemplateConstraint;
+
+namespace cl {
+
+struct Method;
+class Class;
+class Record;
+class Enum;
+class Union;
+
+} // namespace cl
+} // namespace cdot
+
+
+class Function;
 
 class DeclStmt;
 class Expression;
@@ -28,19 +49,35 @@ using cdot::Attribute;
 class CompoundStmt;
 class HeaderGen;
 
+class ConstExprPass;
+class CodeGen;
+class SemaPass;
+class DeclPass;
+
+enum class AccessModifier : unsigned int;
+
 enum class NodeType {
-   COLLECTION_LITERAL, LAMBDA_EXPR, LITERAL_EXPR, NONE_LITERAL, STRING_LITERAL, EXPRESSION,
-   ARRAY_ACCESS_EXPR, CALL_EXPR, IDENTIFIER_EXPR, MEMBER_EXPR, METHOD_CALL_EXPR, REF_EXPR,
-   BINARY_OPERATOR, UNARY_OPERATOR, TERTIARY_OPERATOR, TUPLE_LITERAL, STRING_INTERPOLATION,
+   COLLECTION_LITERAL, LAMBDA_EXPR, INTEGER_LITERAL,
+   FLOATING_LITERAL, NONE_LITERAL,
+   STRING_LITERAL, EXPRESSION, BOOL_LITERAL, CHAR_LITERAL,
+   ARRAY_ACCESS_EXPR, CALL_EXPR, IDENTIFIER_EXPR, MEMBER_EXPR,
+   METHOD_CALL_EXPR, REF_EXPR,
+   BINARY_OPERATOR, UNARY_OPERATOR, TERTIARY_OPERATOR, TUPLE_LITERAL,
+   STRING_INTERPOLATION,
 
    EXPLICIT_CAST_EXPR, IMPLICIT_CAST_EXPR, LVALUE_TO_RVALUE,
 
-   BREAK_STMT, CASE_STMT, CONTINUE_STMT, FOR_STMT, GOTO_STMT, IF_STMT, LABEL_STMT, RETURN_STMT, SWITCH_STMT,
+   BREAK_STMT, CASE_STMT, CONTINUE_STMT, FOR_STMT, GOTO_STMT, IF_STMT,
+   LABEL_STMT, RETURN_STMT, SWITCH_STMT,
    WHILE_STMT, FOR_IN_STMT,
 
-   CLASS_DECL, ENUM_DECL, ENUM_CASE_DECL, CONSTR_DECL, FIELD_DECL, METHOD_DECL, OPERATOR_DECL, INTERFACE_DECL,
-   STRUCT_DECL, FUNC_ARG_DECL, DESTR_DECL, UNION_DECL,
+   CLASS_DECL, ENUM_DECL, ENUM_CASE_DECL, CONSTR_DECL, FIELD_DECL, METHOD_DECL,
+   OPERATOR_DECL, INTERFACE_DECL,
+   STRUCT_DECL, FUNC_ARG_DECL, DESTR_DECL, UNION_DECL, PROP_DECL,
+   EXTENSION_DECL,
    FUNCTION_DECL, NAMESPACE_DECL, TYPEDEF_DECL, DECLARATION, DECLARE_STMT,
+
+   RECORD_TEMPLATE_DECL, CALLABLE_TEMPLATE_DECL, METHOD_TEMPLATE_DECL,
 
    TRY_STMT, THROW_STMT,
 
@@ -121,22 +158,15 @@ public:
       return attributes;
    }
 
-   virtual bool isUnderscore() {
+   virtual bool isUnderscore() const
+   {
       return false;
    }
 
    virtual void isReturnValue();
    virtual void isHiddenReturnValue();
 
-   bool hasAttribute(Attr kind) {
-      for (const auto& attr : attributes) {
-         if (attr.kind == kind) {
-            return true;
-         }
-      }
-
-      return false;
-   }
+   bool hasAttribute(Attr kind) const;
 
    Attribute& getAttribute(Attr kind) {
       for (auto& attr : attributes) {
@@ -154,20 +184,14 @@ public:
       contextualType = t;
    }
 
-   virtual bool needsContextualInformation() {
+   virtual bool needsContextualInformation() const
+   {
       return false;
    }
 
    virtual NodeType get_type() = 0;
 
-   virtual llvm::Value* accept(CodeGen& v) = 0;
-   virtual Type accept(SemaPass& v) = 0;
-   virtual Variant accept(ConstExprPass& v) = 0;
-
    virtual void accept(AbstractPass* v) = 0;
-
-   virtual void __dump(int depth) {}
-   virtual void __tab(int depth);
 
    template<typename T>
    T *getAs()

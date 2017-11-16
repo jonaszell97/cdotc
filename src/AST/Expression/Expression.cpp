@@ -36,3 +36,28 @@ void Expression::isReturnValue()
 
    isPartOfReturnValue(true);
 }
+
+void Expression::setMemberExpr(const Expression::SharedPtr &memberExpr)
+{
+   Expression::memberExpr = memberExpr;
+}
+
+cl::Method *Expression::getAccessorMethod() const
+{
+   return accessorMethod;
+}
+
+void Expression::setAccessorMethod(cl::Method *accessorMethod)
+{
+   Expression::accessorMethod = accessorMethod;
+}
+
+bool Expression::isGetterCall() const
+{
+   return getter_call;
+}
+
+void Expression::isGetterCall(bool getter_call)
+{
+   Expression::getter_call = getter_call;
+}

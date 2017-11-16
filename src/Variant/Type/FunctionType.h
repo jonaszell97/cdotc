@@ -23,8 +23,8 @@ namespace cdot {
 
       static unordered_map<string, FunctionType*> Instances;
       static string typesToString(
-         Type& returnType,
-         std::vector<Argument>& argTypes
+         const Type& returnType,
+         const std::vector<Argument>& argTypes
       );
 
    public:
@@ -34,22 +34,22 @@ namespace cdot {
          bool isRawFunctionTy
       );
 
-      inline Type getReturnType()
+      Type getReturnType() const
       {
          return returnType;
       }
 
-      inline std::vector<Argument>& getArgTypes()
+      const std::vector<Argument>& getArgTypes() const
       {
          return argTypes;
       }
 
-      bool isFunctionTy() override
+      bool isFunctionTy() const override
       {
          return true;
       }
 
-      bool isRawFunctionTy() override
+      bool isRawFunctionTy() const override
       {
          return isRawFunctionTy_;
       }
@@ -59,13 +59,18 @@ namespace cdot {
          return !isRawFunctionTy_;
       }
 
-      size_t getSize() override;
+      bool needsLvalueToRvalueConv() const override
+      {
+         return isRawFunctionTy_;
+      }
 
-      string toString() override;
-      llvm::Type* getLlvmType() override;
-      llvm::Type* getLlvmFunctionType() override;
+      size_t getSize() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) override;
+      string toString() const override;
+      llvm::Type* getLlvmType() const override;
+      llvm::Type* getLlvmFunctionType() const override;
+
+      bool implicitlyCastableTo(BuiltinType*) const override;
 
       static inline bool classof(FunctionType const*) { return true; }
       static inline bool classof(BuiltinType const* T) {

@@ -22,22 +22,22 @@ namespace cdot {
       id = TypeID::AutoTypeID;
    }
 
-   llvm::Type* AutoType::getLlvmType()
+   llvm::Type* AutoType::getLlvmType() const
    {
       llvm_unreachable("resolve first!");
    }
 
-   bool AutoType::implicitlyCastableTo(BuiltinType *)
+   bool AutoType::implicitlyCastableTo(BuiltinType *) const
    {
       return true;
    }
 
-   llvm::Value* AutoType::getDefaultVal()
+   llvm::Value* AutoType::getDefaultVal(CodeGen &CGM) const
    {
       llvm_unreachable("resolve first!");
    }
 
-   string AutoType::toString()
+   string AutoType::toString() const
    {
       return "auto";
    }

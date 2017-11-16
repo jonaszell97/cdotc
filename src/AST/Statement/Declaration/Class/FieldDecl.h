@@ -7,6 +7,7 @@
 
 
 #include "../../Statement.h"
+#include "RecordSubDecl.h"
 
 class TypeRef;
 class Expression;
@@ -18,21 +19,16 @@ namespace cl {
 }
 }
 
-class FieldDecl : public Statement {
+class FieldDecl : public RecordSubDecl {
 public:
    FieldDecl(
-      std::string,
-      std::shared_ptr<TypeRef>,
-      AccessModifier = AccessModifier::PUBLIC,
-      bool = false,
-      bool = false,
-      std::shared_ptr<Expression> = {}
+      std::string &&name,
+      std::shared_ptr<TypeRef> &&type,
+      AccessModifier am,
+      bool isStatic = false,
+      bool isConst = false,
+      std::shared_ptr<Expression> &&defaultVal = {}
    );
-
-   void isProperty(bool prop)
-   {
-      is_property = prop;
-   }
 
    inline void setDefault(std::shared_ptr<Expression> expr) {
       defaultVal = expr;
@@ -42,64 +38,49 @@ public:
    typedef std::unique_ptr<FieldDecl> UniquePtr;
 
    std::vector<std::shared_ptr<AstNode>> get_children() override;
-   void __dump(int depth) override;
 
-   NodeType get_type() override {
+   NodeType get_type() override
+   {
       return NodeType::FIELD_DECL;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass& v) override {
-      return v.visit(this);
-   }
-
-   virtual inline void addGetter(std::shared_ptr<CompoundStmt> body = nullptr) {
+   virtual inline void addGetter(std::shared_ptr<CompoundStmt> body = nullptr)
+   {
       has_getter = true;
       getterBody = body;
    }
 
-   virtual inline void addSetter(std::shared_ptr<CompoundStmt> body = nullptr) {
+   virtual inline void addSetter(std::shared_ptr<CompoundStmt> body = nullptr)
+   {
       has_setter = true;
       setterBody = body;
    }
 
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
    bool has_getter = false;
    bool has_setter = false;
+
    std::shared_ptr<CompoundStmt> getterBody = nullptr;
    std::shared_ptr<CompoundStmt> setterBody = nullptr;
+
    string getterSelfBinding;
    string setterSelfBinding;
+
    cdot::cl::Method *getterMethod;
    cdot::cl::Method *setterMethod;
+
    std::shared_ptr<FuncArgDecl> newVal = nullptr;
 
-   bool is_static;
    bool is_const;
-   AccessModifier am;
    std::shared_ptr<TypeRef> type;
-   string fieldName;
    std::shared_ptr<Expression> defaultVal;
 
    bool protocol_field = false;
 
-   bool is_property = false;
-
    // codegen
-   string className;
    string getterBinding;
    string setterBinding;
 
@@ -164,22 +145,22 @@ public:
       FieldDecl::setterSelfBinding = setterSelfBinding;
    }
 
-   Method *getGetterMethod() const
+   cl::Method *getGetterMethod() const
    {
       return getterMethod;
    }
 
-   void setGetterMethod(Method *getterMethod)
+   void setGetterMethod(cl::Method *getterMethod)
    {
       FieldDecl::getterMethod = getterMethod;
    }
 
-   Method *getSetterMethod() const
+   cl::Method *getSetterMethod() const
    {
       return setterMethod;
    }
 
-   void setSetterMethod(Method *setterMethod)
+   void setSetterMethod(cl::Method *setterMethod)
    {
       FieldDecl::setterMethod = setterMethod;
    }
@@ -194,16 +175,6 @@ public:
       FieldDecl::newVal = newVal;
    }
 
-   bool isStatic() const
-   {
-      return is_static;
-   }
-
-   void isStatic(bool is_static)
-   {
-      FieldDecl::is_static = is_static;
-   }
-
    bool isConst() const
    {
       return is_const;
@@ -214,16 +185,6 @@ public:
       FieldDecl::is_const = is_const;
    }
 
-   AccessModifier getAccess() const
-   {
-      return am;
-   }
-
-   void setAccess(AccessModifier am)
-   {
-      FieldDecl::am = am;
-   }
-
    const std::shared_ptr<TypeRef> &getType() const
    {
       return type;
@@ -232,16 +193,6 @@ public:
    void setType(const std::shared_ptr<TypeRef> &type)
    {
       FieldDecl::type = type;
-   }
-
-   const string &getFieldName() const
-   {
-      return fieldName;
-   }
-
-   void setFieldName(const string &fieldName)
-   {
-      FieldDecl::fieldName = fieldName;
    }
 
    const std::shared_ptr<Expression> &getDefaultVal() const
@@ -262,21 +213,6 @@ public:
    void isProtocolField(bool protocol_field)
    {
       FieldDecl::protocol_field = protocol_field;
-   }
-
-   bool isProperty() const
-   {
-      return is_property;
-   }
-
-   const string &getClassName() const
-   {
-      return className;
-   }
-
-   void setClassName(const string &className)
-   {
-      FieldDecl::className = className;
    }
 
    const string &getGetterBinding() const

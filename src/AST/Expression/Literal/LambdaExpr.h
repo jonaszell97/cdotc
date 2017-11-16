@@ -18,34 +18,19 @@ class LambdaExpr : public Expression {
 public:
    LambdaExpr(std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, Statement::SharedPtr);
 
-   bool needsContextualInformation() override {
+   bool needsContextualInformation() const override
+   {
       return true;
    }
 
    typedef std::shared_ptr<LambdaExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int) override;
 
    NodeType get_type() override {
       return NodeType::LAMBDA_EXPR;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

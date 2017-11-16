@@ -6,27 +6,30 @@
 #include "../../../Expression/TypeRef.h"
 #include "../../Block/CompoundStmt.h"
 #include "../../Declaration/FuncArgDecl.h"
+#include "../../../../Util.h"
 
-MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
-      CompoundStmt::SharedPtr body, AccessModifier am, bool is_static) :
-   methodName(method_name),
-   returnType(return_type),
-   args(args),
-   body(body),
-   am(am),
-   isStatic(is_static),
-   isAbstract(false),
-   hasDefinition_(body != nullptr)
+MethodDecl::MethodDecl(
+   string &&name,
+   TypeRef::SharedPtr &&returnType,
+   std::vector<FuncArgDecl::SharedPtr> &&args,
+   CompoundStmt::SharedPtr &&body,
+   AccessModifier am,
+   bool is_static
+) : CallableDecl(am, std::move(name), std::move(returnType), std::move(args)),
+    isStatic(is_static),
+    isAbstract(false),
+    hasDefinition_(body != nullptr)
 {
-
+   this->body = body;
 }
 
-MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, std::vector<FuncArgDecl::SharedPtr> args,
-      AccessModifier am, bool is_static) :
-   methodName(method_name),
-   returnType(return_type),
-   args(args),
-   am(am),
+MethodDecl::MethodDecl(
+   string &&name,
+   TypeRef::SharedPtr &&returnType,
+   std::vector<FuncArgDecl::SharedPtr> &&args,
+   AccessModifier am,
+   bool is_static
+) : CallableDecl(am, std::move(name), std::move(returnType), std::move(args)),
    isStatic(is_static),
    isAbstract(true),
    hasDefinition_(body != nullptr)
@@ -34,10 +37,13 @@ MethodDecl::MethodDecl(std::string method_name, TypeRef::SharedPtr return_type, 
 
 }
 
-MethodDecl::MethodDecl(string alias, string originMethod, std::vector<std::shared_ptr<FuncArgDecl>> args) :
-   methodName(originMethod),
+MethodDecl::MethodDecl(
+   string &&alias,
+   string &&originMethod,
+   std::vector<std::shared_ptr<FuncArgDecl>> &&args
+) : CallableDecl(AccessModifier::PUBLIC, std::move(originMethod), {},
+                 std::move(args)),
    alias(alias),
-   args(args),
    isAlias(true),
    hasDefinition_(body != nullptr)
 {
@@ -57,17 +63,12 @@ std::vector<AstNode::SharedPtr> MethodDecl::get_children() {
    return children;
 }
 
-void MethodDecl::__dump(int depth) {
-   AstNode::__tab(depth);
-   if (!isAlias) {
-      std::cout << (isStatic ? "Static" : "") << "MethodDecl [" << (isAbstract ? "abstract " : "") << util::am_map[am]
-              << " " << methodName << " => " << returnType->toString() << "]" << std::endl;
-   }
-   else {
-      std::cout << "MethodAlias [" + methodName + " = " + alias + "]\n";
-   }
+cl::Record *MethodDecl::getRecord() const
+{
+   return record;
+}
 
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
+void MethodDecl::setRecord(cl::Record *record)
+{
+   MethodDecl::record = record;
 }

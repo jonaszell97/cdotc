@@ -14,6 +14,7 @@
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/AutoType.h"
 #include "../../../Variant/Type/VoidType.h"
+#include "../../../Variant/Type/PointerType.h"
 
 namespace cdot {
 namespace serial {
@@ -115,14 +116,14 @@ BuiltinType *ModuleReader::readType()
          auto className = readString();
          auto numGenerics = readSize();
 
-         std::vector<GenericType *> genericTypes;
+         std::vector<TemplateArg> genericTypes;
          for (size_t i = 0; i < numGenerics; ++i) {
             auto gen = readType();
-            assert(gen->isGeneric());
-            genericTypes.push_back(gen->asGenericTy());
+            assert(gen->isGenericTy());
+            genericTypes.emplace_back(gen->asGenericTy());
          }
 
-         return ObjectType::get(className, genericTypes);
+         return ObjectType::get(className);
       }
       case TypeID::GenericTypeID: {
          auto genTypeName = readString();
@@ -206,10 +207,6 @@ Variant ModuleReader::readVariant()
    v.type = (VariantType)readSize();
    v.bitwidth = (int)readSize();
 
-   readBoolPack((bool*[]) {
-      &v.isUnsigned, &v.isBoxed, &v.rawStr
-   }, 3);
-
    if (v.type != VariantType::STRING) {
       v.intVal = readSize();
    }
@@ -220,14 +217,15 @@ Variant ModuleReader::readVariant()
    return v;
 }
 
-GenericConstraint ModuleReader::readGeneric()
+TemplateConstraint ModuleReader::readGeneric()
 {
-   GenericConstraint gen;
-   gen.genericTypeName = readString();
-   gen.covarName = readString();
-   gen.contravarName = readString();
+//   TemplateConstraint gen;
+//   gen.genericTypeName = readString();
+//   gen.covarName = readString();
+//   gen.contravarName = readString();
 
-   return gen;
+//   return gen;
+   llvm_unreachable("henlo");
 }
 
 AstNodeHeader ModuleReader::readAstNodeHeader()
@@ -322,7 +320,6 @@ void ModuleReader::copyExprProps(
    expr->isAssigned(header.isAssigned);
    expr->isEnumCase(header.isEnumCase);
    expr->isTemporary(header.isTemporary);
-   expr->setSetterName(header.setterName);
    expr->setCaseVal(header.caseVal);
 }
 
@@ -431,10 +428,10 @@ std::shared_ptr<DeclStmt> ModuleReader::ReadDeclStmt()
       ident,
       ty,
       isConst,
-      isGlobal,
       val
    );
 
+   decl->isGlobal(isGlobal);
    decl->setAccess(access);
    decl->isStructAlloca(structAlloca);
    decl->isProtocolDecl(protocolDecl);
@@ -462,12 +459,6 @@ std::shared_ptr<FunctionDecl> ModuleReader::ReadFunctionDecl()
       args.push_back(ReadFuncArgDecl());
    }
 
-   std::vector<GenericConstraint> generics;
-   auto numGenerics = readSize();
-   for (size_t i = 0; i < numGenerics; ++i) {
-      generics.push_back(readGeneric());
-   }
-
    bool hasStructRet, hasBody;
    readBoolPack((bool*[]) {
       &hasStructRet, &hasBody
@@ -482,11 +473,11 @@ std::shared_ptr<FunctionDecl> ModuleReader::ReadFunctionDecl()
 
 
    auto decl = std::make_shared<FunctionDecl>(
+      AccessModifier::PUBLIC,
       std::move(funcName),
       std::move(retType),
       std::move(args),
       std::move(body),
-      std::move(generics),
       hasStructRet
    );
 
@@ -632,24 +623,19 @@ std::shared_ptr<CollectionLiteral> ModuleReader::ReadCollectionLiteral()
    return nullptr;
 }
 
-std::shared_ptr<NumericLiteral> ModuleReader::ReadNumericLiteral()
+std::shared_ptr<IntegerLiteral> ModuleReader::ReadNumericLiteral()
 {
    auto header = readExprHeader();
    auto val = readVariant();
    auto ty = readType();
-   auto className = readString();
 
-   bool isChar, isBool, isPrimitive;
+   bool isChar, isBool;
    readBoolPack((bool*[]) {
-      &isChar, &isBool, &isPrimitive
+      &isChar, &isBool
    }, 3);
 
-   auto lit = std::make_shared<NumericLiteral>(val);
-   lit->setClassName(className);
+   auto lit = std::make_shared<IntegerLiteral>(Variant());
    lit->setType(ty);
-   lit->isChar(isChar);
-   lit->isBool(isBool);
-   lit->isPrimitive(isPrimitive);
 
    copyExprProps(header, lit.get());
    return lit;

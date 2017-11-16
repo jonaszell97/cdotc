@@ -20,6 +20,7 @@ namespace cdot {
    struct SourceLocation;
    class BuiltinType;
    struct Argument;
+   struct CompilationUnit;
    class BinaryOperator;
 
 namespace cl {
@@ -34,7 +35,7 @@ namespace codegen {
 
    class DebugInfo {
    public:
-      explicit DebugInfo(CodeGen &CGM);
+      explicit DebugInfo(const CompilationUnit &CU, llvm::IRBuilder<> &Builder);
 
       llvm::DIScope *getCurrentScope()
       {
@@ -86,7 +87,8 @@ namespace codegen {
       unordered_map<string, llvm::DISubprogram*> Subprograms;
 
       llvm::DIBuilder DI;
-      CodeGen &CGM;
+      llvm::IRBuilder<> &Builder;
+      llvm::Module *Module;
 
       std::stack<llvm::DIScope*> ScopeStack;
       llvm::DIFile *File;

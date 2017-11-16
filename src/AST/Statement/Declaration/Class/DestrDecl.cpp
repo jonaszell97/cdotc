@@ -4,19 +4,20 @@
 
 #include "DestrDecl.h"
 #include "../../Block/CompoundStmt.h"
+#include "../../../../Util.h"
 
-DestrDecl::DestrDecl(std::shared_ptr<CompoundStmt> &&body) :
-   body(body)
+DestrDecl::DestrDecl()
+   : CallableDecl(AccessModifier::PUBLIC, {}, {}, {})
 {
 
 }
 
-std::vector<std::shared_ptr<AstNode>> DestrDecl::get_children() {
-   return { body };
+cl::Record *DestrDecl::getRecord() const
+{
+   return record;
 }
 
-void DestrDecl::__dump(int depth) {
-   __tab(depth);
-   std::cout << "DestrDecl\n";
-   body->__dump(depth + 1);
+void DestrDecl::setRecord(cl::Record *record)
+{
+   DestrDecl::record = record;
 }

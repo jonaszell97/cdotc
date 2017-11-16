@@ -47,10 +47,10 @@ namespace cdot {
       void isSelf(bool self);
 
 
-      bool implicitlyCastableTo(Type &dest);
-      bool needsLvalueToRvalueConv();
+      bool implicitlyCastableTo(const Type &dest) const;
+      bool needsLvalueToRvalueConv() const;
 
-      llvm::Type* getLlvmType();
+      llvm::Type* getLlvmType() const;
 
       string toString() const;
 
@@ -60,6 +60,11 @@ namespace cdot {
       }
 
       BuiltinType*& operator*()
+      {
+         return builtinTy;
+      }
+
+      BuiltinType* operator*() const
       {
          return builtinTy;
       }

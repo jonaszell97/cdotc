@@ -25,12 +25,3 @@ std::vector<AstNode::SharedPtr> CaseStmt::get_children() {
 
    return children;
 }
-
-void CaseStmt::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << (isDefault ? "DefaultStmt" : "CaseStmt") << std::endl;
-
-   for (auto c : get_children()) {
-      c->__dump(depth + 1);
-   }
-}

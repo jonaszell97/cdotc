@@ -5,8 +5,9 @@
 #include "TupleLiteral.h"
 #include "../../../Variant/Type/TupleType.h"
 
-TupleLiteral::TupleLiteral(std::vector<pair<string, Expression::SharedPtr>> elements) :
-   elements(elements)
+TupleLiteral::TupleLiteral(
+   std::vector<pair<string, Expression::SharedPtr>> elements)
+   : elements(elements)
 {
 
 }
@@ -37,10 +38,34 @@ std::vector<AstNode::SharedPtr> TupleLiteral::get_children() {
    return children;
 }
 
-void TupleLiteral::__dump(int depth) {
-   AstNode::__tab(depth);
-   std::cout << "TupleLiteral\n";
-   for (const auto& child : get_children()) {
-      child->__dump(depth + 1);
-   }
+bool TupleLiteral::isMetaTy() const
+{
+   return is_meta_ty;
+}
+
+void TupleLiteral::isMetaTy(bool is_meta_ty)
+{
+   TupleLiteral::is_meta_ty = is_meta_ty;
+}
+
+const std::vector<pair<string, Expression::SharedPtr>> &
+TupleLiteral::getElements() const
+{
+   return elements;
+}
+
+void TupleLiteral::setElements(
+   const std::vector<pair<string, Expression::SharedPtr>> &elements)
+{
+   TupleLiteral::elements = elements;
+}
+
+TupleType *TupleLiteral::getTupleType() const
+{
+   return tupleType;
+}
+
+void TupleLiteral::setTupleType(TupleType *tupleType)
+{
+   TupleLiteral::tupleType = tupleType;
 }

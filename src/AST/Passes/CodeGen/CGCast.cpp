@@ -8,7 +8,9 @@
 
 #include "../../SymbolTable.h"
 #include "../SemanticAnalysis/Record/Enum.h"
+#include "../SemanticAnalysis/Function.h"
 
+#include "../../../Variant/Type/GenericType.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/FunctionType.h"
 #include "../../../Variant/Type/FPType.h"
@@ -23,16 +25,11 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::applyCast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
-      
-      if (from.needsLvalueToRvalueConv() && !to.isLvalue()) {
-         val = CGM.CreateLoad(val);
-         from.isLvalue(false);
-      }
 
       if (to->isBoxedEquivOf(*from)
          || (to->isObject() && to->getClassName() == "Char" && from->isIntegerTy())
@@ -98,7 +95,7 @@ namespace codegen {
       }
 
       auto res = hasCastOperator(from, to);
-      if (res.compatibility == CompatibilityType::COMPATIBLE) {
+      if (res) {
          return castOperator(from, to, val, res);
       }
 
@@ -159,7 +156,7 @@ namespace codegen {
       }
 
       if (from->isFunctionTy() && to->isFunctionTy()) {
-         llvm_unreachable("Should be treated specially");
+         return val;
       }
 
       if (from->isRawFunctionTy()) {
@@ -184,22 +181,22 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::integralCast(
-      Type& from,
-      Type& to,
+      const Type& _from,
+      const Type& _to,
       llvm::Value *val)
    {
+      BuiltinType *from = *_from;
+      BuiltinType *to = *_to;
+
       auto &Builder = CGM.Builder;
       auto toType = to->getLlvmType();
-      if (to.isLvalue()) {
-         toType = toType->getPointerTo();
-      }
 
       if (to->isEnum() && to->getRecord()->isRawEnum()) {
-         *to = static_cast<cl::Enum*>(to->getRecord())->getRawType();
+         to = static_cast<cl::Enum*>(to->getRecord())->getRawType();
       }
 
       if (from->isEnum() && from->getRecord()->isRawEnum()) {
-         *from = static_cast<cl::Enum*>(from->getRecord())->getRawType();
+         from = static_cast<cl::Enum*>(from->getRecord())->getRawType();
       }
 
       switch (to->getTypeID()) {
@@ -246,8 +243,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::floatingPointCast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -300,8 +297,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::pointerCast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -335,8 +332,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::tupleCast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       assert(to->isTupleTy() && "cast shouldn't be allowed otherwise");
@@ -373,34 +370,37 @@ namespace codegen {
       return alloca;
    }
 
-   CallCompatability CGCast::hasCastOperator(
-      Type& from,
-      Type& to)
+   cl::Method* CGCast::hasCastOperator(
+      const Type& from,
+      const Type& to)
    {
       auto &Builder = CGM.Builder;
       if (!from->isObject()) {
-         return CallCompatability();
+         return nullptr;
       }
 
       auto cl = SymbolTable::getClass(from->getClassName());
       auto op = "infix as " + to->toString();
 
-      auto castOp = cl->hasMethod(op);
-      return castOp;
+      if (cl->hasMethodWithName(op)) {
+         return cl->getMethod(op);
+      }
+
+      return nullptr;
    }
 
    llvm::Value* CGCast::castOperator(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val,
-      CallCompatability &Result)
+      cl::Method *res)
    {
-      return CGM.Builder.CreateCall(CGM.getOwnDecl(Result.method), { val });
+      return CGM.Builder.CreateCall(CGM.getOwnDecl(res), { val });
    }
 
    llvm::Value* CGCast::staticUpcast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -414,8 +414,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::castToProtocol(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -473,8 +473,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::castFromProtocol(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -518,8 +518,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::protoToProtoCast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -564,8 +564,8 @@ namespace codegen {
    }
 
    llvm::Value* CGCast::dynamicDowncast(
-      Type& from,
-      Type& to,
+      const Type& from,
+      const Type& to,
       llvm::Value *val)
    {
       auto &Builder = CGM.Builder;
@@ -662,8 +662,8 @@ namespace codegen {
    // wrap a function that takes the needed parameters and casts them to the needed types,
    // then calls the original function
    llvm::Value* CGCast::functionCast(
-      Type &from,
-      Type &to,
+      const Type &from,
+      const Type &to,
       llvm::Value *val,
       llvm::Function* func,
       bool isLambda,
@@ -678,7 +678,7 @@ namespace codegen {
       auto wrapperFunc = llvm::Function::Create(
          llvm::cast<llvm::FunctionType>(funcTy),
          llvm::Function::PrivateLinkage, func->getName() + "__wrapped",
-         CGM.Module.get()
+         CGM.Module
       );
 
       auto entryBB = llvm::BasicBlock::Create(CGM.Context, "entry", wrapperFunc);

@@ -10,64 +10,66 @@
 class MemberRefExpr;
 
 namespace cdot {
-   enum class BuiltinIdentifier {
-      FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN, FLOAT_SNAN, DOUBLE_SNAN
-   };
+enum class BuiltinIdentifier {
+   FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN, FLOAT_SNAN, DOUBLE_SNAN
+};
 
-   extern unordered_map<string, BuiltinIdentifier> builtinIdentifiers;
+extern unordered_map<string, BuiltinIdentifier> builtinIdentifiers;
+
+class TemplateArgList;
 }
 
 class IdentifierRefExpr : public Expression {
 public:
-   explicit IdentifierRefExpr(string);
+   explicit IdentifierRefExpr(string &&ident);
+   ~IdentifierRefExpr() override;
 
-   bool isUnderscore() override {
+   bool isUnderscore() const override
+   {
       return ident == "_";
+   }
+
+   bool needsContextualInformation() const override
+   {
+      return memberExpr == nullptr;
    }
 
    typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
    std::vector<AstNode::SharedPtr> get_children() override;
 
-   void __dump(int) override ;
-
    NodeType get_type() override {
       return NodeType::IDENTIFIER_EXPR;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:
    // codegen
    bool captured_var = false;
-   BuiltinType* capturedType;
+
+   union {
+      BuiltinType *builtinType = nullptr;
+      BuiltinType *capturedType;
+   };
+
+   BuiltinType *metaType = nullptr;
 
    bool is_let_expr = false;
    bool is_var_expr = false;
 
    Variant builtinValue;
-   BuiltinType* builtinType = nullptr;
    BuiltinIdentifier builtinKind;
 
    bool is_namespace = false;
    bool is_super = false;
    bool is_function = false;
+   bool is_metatype = false;
+
+   bool wrap_lambda = true;
    string superClassName;
+
+   TemplateArgList *templateArgs;
 
 public:
    bool isLetExpr()
@@ -130,6 +132,16 @@ public:
       IdentifierRefExpr::builtinType = builtinType;
    }
 
+   BuiltinType *getMetaType() const
+   {
+      return metaType;
+   }
+
+   void setMetaType(BuiltinType *metaType)
+   {
+      IdentifierRefExpr::metaType = metaType;
+   }
+
    BuiltinIdentifier getBuiltinKind() const
    {
       return builtinKind;
@@ -179,6 +191,23 @@ public:
    {
       IdentifierRefExpr::superClassName = superClassName;
    }
+
+   bool wrapLambda() const
+   {
+      return wrap_lambda;
+   }
+
+   void wrapLambda(bool b)
+   {
+      wrap_lambda = b;
+   }
+
+   TemplateArgList *&getTemplateArgs()
+   {
+      return templateArgs;
+   }
+
+   void setTemplateArgs(TemplateArgList *templateArgs);
 };
 
 

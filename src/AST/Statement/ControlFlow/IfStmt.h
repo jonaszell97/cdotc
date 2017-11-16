@@ -22,28 +22,12 @@ public:
    typedef std::shared_ptr<IfStmt> SharedPtr;
 
    std::vector<AstNode::SharedPtr> get_children() override;
-   void __dump(int depth) override;
 
    NodeType get_type() override {
       return NodeType::IF_STMT;
    }
 
-   llvm::Value* accept(CodeGen& v) override {
-      return v.visit(this);
-   }
-
-   Type accept(SemaPass& v) override {
-      return v.visit(this);
-   }
-
-   void accept(AbstractPass* v) override {
-      v->visit(this);
-   }
-
-   Variant accept(ConstExprPass &v) override {
-      return v.visit(this);
-   }
-
+   ASTNODE_ACCEPT_PASSES
    ADD_FRIEND_PASSES
 
 protected:

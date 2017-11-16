@@ -12,14 +12,14 @@ namespace cdot {
 
    class PrimitiveType : public BuiltinType {
    public:
-      virtual BuiltinType* ArithmeticReturnType(string&, BuiltinType*) = 0;
+      virtual BuiltinType* ArithmeticReturnType(string&, BuiltinType*) const = 0;
 
-      inline bool hasDefaultValue() override
+      inline bool hasDefaultValue() const override
       {
          return true;
       }
 
-      bool isNumeric() override
+      bool isNumeric() const override
       {
          return true;
       }
