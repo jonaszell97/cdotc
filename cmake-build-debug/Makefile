@@ -3298,6 +3298,33 @@ src/IL/Value/Record/AggregateType.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Record/AggregateType.cpp.s
 .PHONY : src/IL/Value/Record/AggregateType.cpp.s
 
+src/IL/Value/Use.o: src/IL/Value/Use.cpp.o
+
+.PHONY : src/IL/Value/Use.o
+
+# target to build an object file
+src/IL/Value/Use.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.o
+.PHONY : src/IL/Value/Use.cpp.o
+
+src/IL/Value/Use.i: src/IL/Value/Use.cpp.i
+
+.PHONY : src/IL/Value/Use.i
+
+# target to preprocess a source file
+src/IL/Value/Use.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.i
+.PHONY : src/IL/Value/Use.cpp.i
+
+src/IL/Value/Use.s: src/IL/Value/Use.cpp.s
+
+.PHONY : src/IL/Value/Use.s
+
+# target to generate assembly for a file
+src/IL/Value/Use.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.s
+.PHONY : src/IL/Value/Use.cpp.s
+
 src/IL/Value/Value.o: src/IL/Value/Value.cpp.o
 
 .PHONY : src/IL/Value/Value.o
@@ -4619,6 +4646,9 @@ help:
 	@echo "... src/IL/Value/Record/AggregateType.o"
 	@echo "... src/IL/Value/Record/AggregateType.i"
 	@echo "... src/IL/Value/Record/AggregateType.s"
+	@echo "... src/IL/Value/Use.o"
+	@echo "... src/IL/Value/Use.i"
+	@echo "... src/IL/Value/Use.s"
 	@echo "... src/IL/Value/Value.o"
 	@echo "... src/IL/Value/Value.i"
 	@echo "... src/IL/Value/Value.s"

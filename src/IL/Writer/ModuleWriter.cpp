@@ -609,18 +609,6 @@ void ModuleWriterImpl::WriteInstruction(Instruction *I)
       out << " = ";
    }
 
-   if (auto Op = dyn_cast<OperatorInst>(I)) {
-      out << OpNames[(unsigned short)Op->getOpCode() - FirstOp] << ' ';
-      WriteValue(Op->getOperand(0));
-
-      if (Op->getNumOperands() == 2) {
-         out << ',' << ' ';
-         WriteValue(Op->getOperand(1));
-      }
-
-      return;
-   }
-
    if (auto Cast = dyn_cast<CastInst>(I)) {
       if (auto IntCast = dyn_cast<IntegerCastInst>(Cast)) {
          out << IntCastNames[(unsigned char)IntCast->getKind()];
@@ -636,9 +624,22 @@ void ModuleWriterImpl::WriteInstruction(Instruction *I)
       }
 
       out << ' ';
-      WriteValue(Cast->getTarget());
+      WriteValue(Cast->getOperand(0));
+
       out << " to ";
       WriteILType(Cast->getType());
+
+      return;
+   }
+
+   if (auto Op = dyn_cast<OperatorInst>(I)) {
+      out << OpNames[(unsigned short)Op->getOpCode() - FirstOp] << ' ';
+      WriteValue(Op->getOperand(0));
+
+      if (Op->getNumOperands() == 2) {
+         out << ',' << ' ';
+         WriteValue(Op->getOperand(1));
+      }
 
       return;
    }
@@ -656,14 +657,14 @@ void ModuleWriterImpl::WriteInstruction(Instruction *I)
       WriteName(Call->getCalledFunction()->getLinkageName(),
                 ValPrefix::Constant);
 
-      auto &Args = Call->getArgs();
+      auto Args = Call->getArgs();
       auto NumArgs = Args.size();
       size_t i = 0;
 
       out << '(';
 
-      for (const auto &arg : Args) {
-         WriteValue(arg);
+      for (auto it = Call->op_begin(); it != Call->op_end(); ++it) {
+         WriteValue(*it);
          if (i < NumArgs - 1) {
             out << ", ";
          }
@@ -926,6 +927,7 @@ void ModuleWriterImpl::WriteBasicBlock(BasicBlock *BB, bool first)
    for (const auto &I : BB->getInstructions()) {
       ApplyTab();
       WriteInstruction(I);
+
       out << '\n';
    }
 }

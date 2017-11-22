@@ -14,30 +14,32 @@ namespace il {
 CallInst::CallInst(Function *func, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent, const std::string &name,
                    const SourceLocation &loc)
-   : Instruction(CallInstID, *func->getReturnType(), parent,  name, loc),
-     args(args.begin(), args.end()), calledFunction(func), Self(nullptr)
+   : MultiOperandInst(CallInstID, args, *func->getReturnType(), parent,  name,
+                      loc), calledFunction(func), Self(nullptr)
 {
-   func->addUse();
+   func->addUse(this);
 }
 
 CallInst::CallInst(Method *method, Value *Self, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent, const std::string &name,
                    const SourceLocation &loc)
-   : Instruction(CallInstID, *method->getReturnType(), parent,  name, loc),
-     args(args.begin(), args.end()), calledMethod(method), Self(Self)
+   : MultiOperandInst(CallInstID, args, *method->getReturnType(), parent,
+                      name, loc), calledMethod(method), Self(Self)
 {
-   method->addUse();
+   method->addUse(this);
 }
 
 CallInst::CallInst(llvm::StringRef funcName, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent, const std::string &name,
                    const SourceLocation &loc)
-   : Instruction(CallInstID, nullptr, parent,  name, loc),
-     args(args.begin(), args.end()), Self(nullptr)
+   : MultiOperandInst(CallInstID, args, nullptr, parent,  name, loc),
+     Self(nullptr)
 {
    auto Module = parent->getParent()->getParent();
    calledFunction = Module->getFunction(funcName);
    *type = *calledFunction->getReturnType();
+
+   calledFunction->addUse(this);
 }
 
 bool CallInst::isMethodCall() const
@@ -50,9 +52,9 @@ Function *CallInst::getCalledFunction() const
    return calledFunction;
 }
 
-const CallInst::ArgList &CallInst::getArgs() const
+llvm::ArrayRef<Value*> CallInst::getArgs()
 {
-   return args;
+   return llvm::ArrayRef<Value*>(Operands, numOperands);
 }
 
 Method *CallInst::getCalledMethod() const
@@ -75,6 +77,11 @@ InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
    NormalContinuation->addPredecessor(parent);
    LandingPad->addPredecessor(parent);
    id = InvokeInstID;
+
+   func->addUse(this);
+   for (const auto &arg : args) {
+      arg->addUse(this);
+   }
 }
 
 InvokeInst::InvokeInst(Method *method, Value *Self,
@@ -88,6 +95,11 @@ InvokeInst::InvokeInst(Method *method, Value *Self,
    NormalContinuation->addPredecessor(parent);
    LandingPad->addPredecessor(parent);
    id = InvokeInstID;
+
+   method->addUse(this);
+   for (const auto &arg : args) {
+      arg->addUse(this);
+   }
 }
 
 } // namespace il

@@ -6,6 +6,7 @@
 #define CDOT_CASTINST_H
 
 #include "../../Constant/ConstantExpr.h"
+#include "../Operator/OperatorInst.h"
 
 namespace cdot {
 namespace il {
@@ -16,7 +17,7 @@ class LandingPadInst;
 static const unsigned short FirstCast = Value::BitCastInstID;
 extern const char* CastNames[];
 
-class CastInst: public Instruction {
+class CastInst: public UnaryInstruction {
 public:
    CastInst(TypeID id,
             Value *target,
@@ -24,26 +25,17 @@ public:
             BasicBlock *parent,
             const std::string &name = "",
             const SourceLocation &loc = {})
-      : Instruction(id, toType, parent, name, loc), target(target)
+      : UnaryInstruction(id, target, toType, parent, name, loc)
    {
 
    }
-
-   Value *getTarget() const
-   {
-      return target;
-   }
-
-protected:
-   Value *target;
 
 public:
    static bool classof(CastInst const* T) { return true; }
    static bool classof(Value const* T) {
       switch(T->getTypeID()) {
-#     define CDOT_INSTRUCTION(Name) \
+#     define CDOT_CAST_INST(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_CAST_INSTS
 #     include "../../Instructions.def"
             return true;
          default:
@@ -52,41 +44,15 @@ public:
    }
 };
 
-template<Value::TypeID typeID, bool isConst = false>
-class CastBase: public CastInst {
-public:
-   CastBase(Value *target,
-            Type *toType,
-            BasicBlock *parent,
-            const std::string &name = "",
-            const SourceLocation &loc = {})
-      : CastInst(typeID, target, toType, parent, name, loc)
-   {
-
-   }
-};
-
-/// Synopsis
-//class BitCastInst: public CastBase<ConstantExpr, Value::BitCastInstID, true> {
-//public:
-//   BitCastInst(Value *target,
-//               Type *toType,
-//               BasicBlock *parent,
-//               const SourceLocation &loc = {},
-//               const std::string &name = "")
-//      : CastInst(target, toType, parent, loc, name) {}
-//};
-
-#define CDOT_CAST_INST(name, IsConst)                                         \
-   class name##Inst: public CastBase<Value::name##InstID, IsConst> {          \
+#define CDOT_CAST_INST(name)                                                  \
+   class name##Inst: public CastInst {                                        \
       public:                                                                 \
          name##Inst(Value *target,                                            \
                     Type *toType,                                             \
                     BasicBlock *parent,                                       \
                     const std::string &name_ = "",                            \
                     const SourceLocation &loc = {})                           \
-         : CastBase(target, toType, parent, name_, loc) {                     \
-            target->addUse();                                                 \
+         : CastInst(name##InstID, target, toType, parent, name_, loc) {       \
          }                                                                    \
                                                                               \
          static bool classof(Value const* T)                                  \
@@ -95,10 +61,12 @@ public:
          }                                                                    \
    };
 
-CDOT_CAST_INST(BitCast, true)
-CDOT_CAST_INST(DynamicCast, false)
+CDOT_CAST_INST(BitCast)
+CDOT_CAST_INST(DynamicCast)
 
-class IntegerCastInst: public CastBase<Value::IntegerCastInstID, false> {
+#undef CDOT_CAST_INST
+
+class IntegerCastInst: public CastInst {
 public:
    IntegerCastInst(Value *target,
                    Type *toType,
@@ -125,7 +93,7 @@ public:
 
 extern const char* IntCastNames[];
 
-class FPCastInst: public CastBase<Value::FPCastInstID, false> {
+class FPCastInst: public CastInst {
 public:
    FPCastInst(Value *target,
               Type *toType,
@@ -151,7 +119,7 @@ public:
 
 extern const char* FPCastNames[];
 
-class UnionCastInst: public CastBase<Value::UnionCastInstID, false> {
+class UnionCastInst: public CastInst {
 public:
    UnionCastInst(Value *target,
                  UnionType *UnionTy,
@@ -181,7 +149,7 @@ public:
    }
 };
 
-class ProtoCastInst: public CastBase<Value::ProtoCastInstID, false> {
+class ProtoCastInst: public CastInst {
 public:
    ProtoCastInst(Value *target,
                  Type *toType,
@@ -204,7 +172,7 @@ public:
    }
 };
 
-class ExceptionCastInst: public CastBase<Value::ExceptionCastInstID, false> {
+class ExceptionCastInst: public CastInst {
 public:
    ExceptionCastInst(Value *target,
                      Type *toType,
@@ -218,8 +186,6 @@ public:
       return T->getTypeID() == ExceptionCastInstID;
    }
 };
-
-#undef CDOT_CAST_INST
 
 } // namespace il
 } // namespace cdot

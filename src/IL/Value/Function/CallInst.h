@@ -5,10 +5,9 @@
 #ifndef CDOT_CALLINST_H
 #define CDOT_CALLINST_H
 
-
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/ArrayRef.h>
-#include "../Instruction/Instruction.h"
+
+#include "../Instruction/MultiOperandInst.h"
 
 namespace cdot {
 namespace il {
@@ -16,9 +15,8 @@ namespace il {
 class Function;
 class Method;
 
-class CallInst: public Instruction {
+class CallInst: public MultiOperandInst {
 public:
-   typedef llvm::SmallVector<Value*, 4> ArgList;
    CallInst(Function *func,
             llvm::ArrayRef<Value*> args,
             BasicBlock *parent,
@@ -43,8 +41,7 @@ public:
    Value *getSelf() const;
 
    bool isMethodCall() const;
-
-   const ArgList &getArgs() const;
+   llvm::ArrayRef<Value*> getArgs();
 
 protected:
    union {
@@ -53,7 +50,6 @@ protected:
    };
 
    Value *Self;
-   ArgList args;
 
 public:
    static bool classof(Value const* T) {

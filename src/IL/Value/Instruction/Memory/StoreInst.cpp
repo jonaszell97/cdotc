@@ -15,7 +15,8 @@ StoreInst::StoreInst(Value *dst, Value *src, BasicBlock *parent,
    : Instruction(StoreInstID, VoidType::get(), parent,  name, loc),
      dst(dst), src(src)
 {
-
+   dst->addUse(this);
+   src->addUse(this);
 }
 
 bool StoreInst::useMemCpy() const
@@ -40,6 +41,7 @@ LoadInst::LoadInst(Value *target,
    : Instruction(LoadInstID, nullptr, parent, name, loc),
      target(target)
 {
+   target->addUse(this);
    if (target->isLvalue()) {
       *type = *target->getType();
    }

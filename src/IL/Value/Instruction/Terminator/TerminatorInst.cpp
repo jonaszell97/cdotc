@@ -21,7 +21,7 @@ RetInst::RetInst(Value *returnedValue, BasicBlock *parent,
    : TerminatorInst(RetInstID, parent, name, loc),
      returnedValue(returnedValue)
 {
-
+   returnedValue->addUse(this);
 }
 
 RetInst::RetInst(BasicBlock *parent, const std::string &name,
@@ -46,7 +46,7 @@ ThrowInst::ThrowInst(Value *thrownValue, BasicBlock *parent,
                      const string &name, const SourceLocation &loc)
    : TerminatorInst(ThrowInstID, parent, name, loc), thrownValue(thrownValue)
 {
-
+   thrownValue->addUse(this);
 }
 
 UnreachableInst::UnreachableInst(BasicBlock *parent,

@@ -22,13 +22,13 @@ namespace il {
 
 class MDSet;
 class MetaData;
+class Use;
 enum MDKind : unsigned;
 
 class Value {
 public:
    enum TypeID : unsigned short {
-#     define CDOT_INCLUDE_ALL
-#     define CDOT_INSTRUCTION(name) name##ID,
+#     define CDOT_ALL(name) name##ID,
 #     include "Instructions.def"
    };
 
@@ -42,14 +42,13 @@ protected:
          const SourceLocation &loc = {});
 
    TypeID id : 16;
-   unsigned uses : 16;
-
    unsigned Flags : 16;
-   unsigned SubclassData : 16;
+   unsigned SubclassData : 32;
 
    ILType type;
    std::string name;
 
+   Use *uses;
    MDSet *metaData;
 
    enum Flag {
@@ -74,8 +73,19 @@ public:
    bool isLvalue() const;
    void setIsLvalue(bool lvalue);
 
-   void addUse();
-   unsigned getNumUses() const;
+   Use const* getUses() const
+   {
+      return uses;
+   }
+
+   Use * getUses()
+   {
+      return uses;
+   }
+
+   void addUse(Value *User);
+   size_t getNumUses() const;
+   bool isUnused() const;
 
    llvm::StringRef getName() const;
    void setName(const std::string &name);

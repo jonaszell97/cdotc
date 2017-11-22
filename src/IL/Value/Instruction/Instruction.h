@@ -25,12 +25,6 @@ public:
       switch (T->getTypeID()) {
 #     define CDOT_INSTRUCTION(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_MEM_INSTS
-#     define CDOT_INCLUDE_TERM_INSTS
-#     define CDOT_INCLUDE_FLOW_INSTS
-#     define CDOT_INCLUDE_OP_INSTS
-#     define CDOT_INCLUDE_CAST_INSTS
-#     define CDOT_INCLUDE_CALL_INSTS
 #     include "../Instructions.def"
             return true;
          default:

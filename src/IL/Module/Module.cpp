@@ -190,7 +190,7 @@ void Module::AssignNames()
          }
 
          for (auto &I : BB->getInstructions()) {
-            if (!I->hasName() && !I->getType()->isVoidTy()) {
+            if (!I->hasName()) {
                I->setName(std::to_string(count++));
             }
             else {

@@ -99,10 +99,8 @@ public:
    static bool classof(Value const* T)
    {
       switch (T->getTypeID()) {
-#        define CDOT_INCLUDE_TYPES
-#        define CDOT_INSTRUCTION(Name) \
+#        define CDOT_AGGR_TYPE(Name) \
             case Name##ID:
-
 #        include "../Instructions.def"
             return true;
          default:

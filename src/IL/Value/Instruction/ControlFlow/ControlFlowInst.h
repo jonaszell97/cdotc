@@ -21,9 +21,8 @@ public:
 
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
-#     define CDOT_INSTRUCTION(Name) \
+#     define CDOT_TERM_INST(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_FLOW_INSTS
 #     include "../../Instructions.def"
             return true;
          default:

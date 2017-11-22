@@ -806,6 +806,9 @@
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/Memory/StoreInst.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/MultiOperandInst.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/Operator/OperatorInst.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -828,6 +831,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Record/AggregateType.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Use.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Use.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Value.cpp">

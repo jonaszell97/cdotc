@@ -183,19 +183,19 @@ Function::iterator Function::removeBasicBlock(const BasicBlock *bb)
 
 Function::iterator Function::insertBasicBlockAfter(BasicBlock *bb,
                                                    iterator it) {
-   bb->addUse();
+   bb->addUse(this);
    return BasicBlocks.insert(++it, bb);
 }
 
 Function::iterator Function::insertBasicBlockBefore(BasicBlock *bb,
                                                     iterator it) {
-   bb->addUse();
+   bb->addUse(this);
    return BasicBlocks.insert(it, bb);
 }
 
 Function::iterator Function::insertBasicBlockAtEnd(BasicBlock *bb)
 {
-   bb->addUse();
+   bb->addUse(this);
    BasicBlocks.push_back(bb);
 
    return BasicBlocks.end();
@@ -203,7 +203,7 @@ Function::iterator Function::insertBasicBlockAtEnd(BasicBlock *bb)
 
 Function::iterator Function::insertBasicBlockAtBegin(BasicBlock *bb)
 {
-   bb->addUse();
+   bb->addUse(this);
    return BasicBlocks.insert(BasicBlocks.begin(), bb);
 }
 

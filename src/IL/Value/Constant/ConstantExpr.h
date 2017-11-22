@@ -23,9 +23,8 @@ protected:
 
    static inline bool classof(Value const* T) {
       switch (T->getTypeID()) {
-#     define CDOT_INSTRUCTION(Name) \
+#     define CDOT_CONSTEXPR(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_CONSTEXPRS
 #     include "../Instructions.def"
             return true;
          default:

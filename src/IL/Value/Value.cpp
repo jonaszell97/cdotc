@@ -3,6 +3,7 @@
 //
 
 #include "Value.h"
+#include "Use.h"
 #include "MetaData/MetaData.h"
 
 #define CDOT_VALUE_INCLUDE
@@ -100,14 +101,24 @@ void Value::setIsLvalue(bool lvalue)
    type.setIsLvalue(lvalue);
 }
 
-void Value::addUse()
+void Value::addUse(Value *User)
 {
-   ++uses;
+   if (!uses) {
+      uses = new Use(User); return;
+   }
+
+   uses->addUseAtEnd(new Use(User));
 }
 
-unsigned Value::getNumUses() const
+size_t Value::getNumUses() const
 {
-   return uses;
+   if (!uses) return 0;
+   return uses->count();
+}
+
+bool Value::isUnused() const
+{
+   return !getNumUses();
 }
 
 llvm::StringRef Value::getName() const

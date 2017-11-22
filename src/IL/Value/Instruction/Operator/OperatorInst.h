@@ -25,16 +25,71 @@ extern const char* OpNames[];
 
 Type *getResultTypeFor(Value *lhs, Value *rhs, OpCode op);
 
+//template<class ValueT>
+//class op_iterator_impl :
+//      public std::iterator<std::forward_iterator_tag, ValueT*> {
+//public:
+//   op_iterator_impl(ValueT *V) : Curr(V) {}
+//
+//   bool operator==(const op_iterator_impl &x) const { return Curr == x.Curr; }
+//   bool operator!=(const op_iterator_impl &x) const { return Curr != x.Curr; }
+//
+//   ValueT *operator*()
+//   {
+//      return Curr;
+//   }
+//
+//   op_iterator_impl &operator++() // pre-increment
+//   {
+//      ++Curr;
+//      return *this;
+//   }
+//
+//   op_iterator_impl operator++(int) // post-increment
+//   {
+//      auto tmp = *this;
+//      ++Curr;
+//
+//      return tmp;
+//   }
+//
+//   op_iterator_impl &operator--() // pre-decrement
+//   {
+//      ++Curr;
+//      return *this;
+//   }
+//
+//   op_iterator_impl operator--(int) // post-decrement
+//   {
+//      auto tmp = *this;
+//      ++Curr;
+//
+//      return tmp;
+//   }
+//
+//protected:
+//   ValueT *Curr;
+//};
+
 class OperatorInst: public Instruction {
 public:
-   virtual Value *getOperand(unsigned idx) = 0;
-   virtual unsigned getNumOperands() const = 0;
-   virtual void setOperand(unsigned idx, Value *val) = 0;
+   Value *getOperand(unsigned idx);
+   unsigned getNumOperands() const;
+   void setOperand(unsigned idx, Value *val);
 
    OpCode getOpCode() const
    {
       return (OpCode)id;
    }
+
+   using op_iterator =       Value**;
+   using op_const_iterator = Value* const*;
+
+   op_iterator op_begin();
+   op_iterator op_end();
+
+   op_const_iterator op_begin() const;
+   op_const_iterator op_end() const;
 
 protected:
    OperatorInst(TypeID id, Type *resultType, BasicBlock *parent,
@@ -49,9 +104,12 @@ public:
    static bool classof(OperatorInst const* T) { return true; }
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
-#     define CDOT_INSTRUCTION(Name) \
+#     define CDOT_UNARY_INST(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_OP_INSTS
+#     define CDOT_BINARY_INST(Name) \
+         case Name##ID:
+#     define CDOT_CAST_INST(Name) \
+         case Name##ID:
 #     include "../../Instructions.def"
             return true;
          default:
@@ -60,51 +118,49 @@ public:
    }
 };
 
-template<unsigned NumOperands, OpCode opCode>
-class OperatorBase: public OperatorInst {
+class BinaryInstruction: public OperatorInst {
 public:
-   Value *getOperand(unsigned idx) override
+   BinaryInstruction(TypeID id,
+                     Value *lhs,
+                     Value *rhs,
+                     Type *resultType,
+                     BasicBlock *parent,
+                     const std::string &name = "",
+                     const SourceLocation &loc = {});
+
+   friend class OperatorInst;
+
+private:
+   unsigned getNumOperandsImpl() const { return 2; }
+
+   Value *getOperandImpl(unsigned idx)
    {
-      assert(idx < NumOperands);
-      return operands[idx];
+      assert(idx < 2);
+      return Operands[idx];
    }
 
-   unsigned getNumOperands() const override
+   void setOperandImpl(unsigned idx, Value *V)
    {
-      return NumOperands;
+      assert(idx < 2);
+      Operands[idx] = V;
    }
 
-   void setOperand(unsigned idx, Value *val) override
-   {
-      assert(idx < NumOperands);
-      operands[idx] = val;
-   }
+   op_iterator op_begin_impl();
+   op_iterator op_end_impl();
+
+   op_const_iterator op_begin_impl() const;
+   op_const_iterator op_end_impl() const;
 
 protected:
-   OperatorBase(Type *resultType, BasicBlock *parent,
-                const std::string &name = "",
-                const SourceLocation &loc = {})
-      : OperatorInst((TypeID)opCode, resultType, parent,  name, loc),
-        operands{}
-   {
-
-   }
-
-   ~OperatorBase()
-   {
-      for (unsigned i = 0; i < NumOperands; ++i) {
-         delete operands[i];
-      }
-   }
-
-   Value *operands[NumOperands];
+   Value *Operands[2];
 
 public:
-   static bool classof(OperatorBase const* T) { return true; }
-   static inline bool classof(Value const* T) {
-      auto typeID = T->getTypeID();
-      switch(typeID) {
-         case (TypeID)opCode:
+   static bool classof(Value const *T)
+   {
+      switch(T->getTypeID()) {
+#     define CDOT_BINARY_INST(Name) \
+         case Name##ID:
+#     include "../../Instructions.def"
             return true;
          default:
             return false;
@@ -112,37 +168,73 @@ public:
    }
 };
 
-/// Synopsis
-// class BinaryOpInst: public OperatorInst<2, OpCode::BinaryOpCode> {
-// public:
-//     BinaryOpInst(Value *lhs, Value *rhs, BasicBlock *parent,
-//                  const string &name = "", const SourceLocation &loc = {})
-//         : OperatorInst(getResultTypeFor(lhs, rhs, OpCode::name), parent,
-//                        name, loc)
-//     {
-//        setOperand(0, lhs);
-//        lhs->addUse();
-//        setOperand(1, rhs);
-//        rhs->addUse();
-//     }
-//  };
+class UnaryInstruction: public OperatorInst {
+public:
+   UnaryInstruction(TypeID id,
+                    Value *operand,
+                    Type *resultType,
+                    BasicBlock *parent,
+                    const std::string &name = "",
+                    const SourceLocation &loc = { });
+
+   friend class OperatorInst;
+
+private:
+   unsigned getNumOperandsImpl() const { return 1; }
+
+   Value *getOperandImpl(unsigned idx)
+   {
+      assert(idx == 0);
+      return Operand;
+   }
+
+   void setOperandImpl(unsigned idx, Value *V)
+   {
+      assert(idx == 0);
+      Operand = V;
+   }
+
+   op_iterator op_begin_impl();
+   op_iterator op_end_impl();
+
+   op_const_iterator op_begin_impl() const;
+   op_const_iterator op_end_impl() const;
+
+protected:
+   Value *Operand;
+
+public:
+   static bool classof(Value const *T)
+   {
+      switch (T->getTypeID()) {
+#     define CDOT_UNARY_INST(Name) \
+         case Name##ID:
+#     define CDOT_CAST_INST(Name) \
+         case Name##ID:
+
+#     include "../../Instructions.def"
+
+            return true;
+         default:return false;
+      }
+   }
+};
 
 #define CDOT_BIN_OP(Name) \
-   class Name##Inst: public OperatorBase<2, OpCode::Name> {                   \
+   class Name##Inst: public BinaryInstruction {                               \
    public:                                                                    \
       Name##Inst(Value *lhs, Value *rhs, BasicBlock *parent,                  \
                  const std::string &name = "", const SourceLocation &loc = {})\
-         : OperatorBase(getResultTypeFor(lhs, rhs, OpCode::Name), parent,     \
-                        name, loc)                                            \
+         : BinaryInstruction(Name##InstID, lhs, rhs,                          \
+                             getResultTypeFor(lhs, rhs, OpCode::Name),        \
+                             parent, name, loc)                               \
       {                                                                       \
-         setOperand(0, lhs); lhs->addUse();                                   \
-         setOperand(1, rhs); rhs->addUse();                                   \
       }                                                                       \
                                                                               \
-         static bool classof(Value const* T)                                  \
-         {                                                                    \
-            return T->getTypeID() == Name##InstID;                            \
-         }                                                                    \
+      static bool classof(Value const* T)                                     \
+      {                                                                       \
+         return T->getTypeID() == Name##InstID;                               \
+      }                                                                       \
    };
 
 /// Synopsis
@@ -158,13 +250,13 @@ public:
 //  };
 
 #define CDOT_UN_OP(Name) \
-   class Name##Inst: public OperatorBase<1, OpCode::Name> {                   \
+   class Name##Inst: public UnaryInstruction {                                \
    public:                                                                    \
       Name##Inst(Value *target, BasicBlock *parent,                           \
                  const std::string &name = "", const SourceLocation &loc = {})\
-         : OperatorBase(*target->getType(), parent, name, loc)                \
+         : UnaryInstruction(Name##InstID, target, *target->getType(), parent, \
+                            name,loc)                                         \
       {                                                                       \
-         setOperand(0, target); target->addUse();                             \
       }                                                                       \
                                                                               \
          static bool classof(Value const* T)                                  \

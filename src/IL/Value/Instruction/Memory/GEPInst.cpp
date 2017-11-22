@@ -18,6 +18,7 @@ GEPInst::GEPInst(Value *val, size_t idx, BasicBlock *parent,
    : Instruction(GEPInstID, nullptr, parent,  name, loc),
      index(idx), val(val), AggrTy(nullptr)
 {
+   val->addUse(this);
    auto valTy = val->getType();
 
    if (valTy->isPointerTy()) {
@@ -48,6 +49,7 @@ GEPInst::GEPInst(AggregateType *AggrTy, Value *val, size_t idx,
    : Instruction(GEPInstID, nullptr, parent,  name, loc),
      index(idx), val(val), AggrTy(AggrTy)
 {
+   val->addUse(this);
    if (isa<StructType>(AggrTy)) {
       *type = cast<StructType>(AggrTy)->getFields()[idx].type;
    }

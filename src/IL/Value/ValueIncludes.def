@@ -3,6 +3,8 @@
 
 #ifdef CDOT_VALUE_INCLUDE
 
+#include "Use.h"
+
 #include "Constant/Constant.h"
 #include "Constant/ConstantVal.h"
 #include "Constant/ConstantExpr.h"
@@ -33,9 +35,15 @@
 
 #ifdef CDOT_VALUE_DECLARE
 
-#define CDOT_INSTRUCTION(Name) class Name;
-#define CDOT_INCLUDE_ALL
+#define CDOT_ALL(Name) class Name;
 #include "Instructions.def"
+
+class AggregateType;
+class Instruction;
+class ConstantExpr;
+
+class CastInst;
+class OperatorInst;
 
 #endif
 

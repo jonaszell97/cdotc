@@ -31,10 +31,8 @@ IntegerCastInst::IntegerCastInst(Value *target,
                                  BasicBlock *parent,
                                  const std::string &name,
                                  const SourceLocation &loc)
-   : CastBase(target, toType, parent, name, loc)
+   : CastInst(IntegerCastInstID, target, toType, parent, name, loc)
 {
-   target->addUse();
-
    auto from = target->getType();
    if (from->isIntegerTy()) {
       if (type->isPointerTy()) {
@@ -98,7 +96,7 @@ const char* FPCastNames[] = {
 
 FPCastInst::FPCastInst(Value *target, Type *toType, BasicBlock *parent,
                        const std::string &name, const SourceLocation &loc)
-   : CastBase(target, toType, parent, name, loc)
+   : CastInst(FPCastInstID, target, toType, parent, name, loc)
 {
    auto from = target->getType();
 
@@ -135,7 +133,7 @@ UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
                              BasicBlock *parent,
                              const std::string &name,
                              const SourceLocation &loc)
-   : CastBase(target, UnionTy->getFieldType(fieldName),
+   : CastInst(UnionCastInstID, target, UnionTy->getFieldType(fieldName),
               parent, name, loc),
      UnionTy(UnionTy), fieldName(fieldName)
 {
@@ -144,7 +142,7 @@ UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
 
 ProtoCastInst::ProtoCastInst(Value *target, Type *toType, BasicBlock *parent,
                              const string &name, const SourceLocation &loc)
-   : CastBase(target, toType, parent, name, loc)
+   : CastInst(ProtoCastInstID, target, toType, parent, name, loc)
 {
    if (toType->isObjectTy() && toType->getRecord()->isProtocol()) {
       SubclassData |= Flag::Wrap;
@@ -164,7 +162,7 @@ bool ProtoCastInst::isUnwrap() const
 ExceptionCastInst::ExceptionCastInst(Value *target, Type *toType,
                              BasicBlock *parent, const string &name,
                              const SourceLocation &loc)
-   : CastBase(target, toType, parent, name, loc)
+   : CastInst(ExceptionCastInstID, target, toType, parent, name, loc)
 {
    *type = type->getPointerTo();
 }

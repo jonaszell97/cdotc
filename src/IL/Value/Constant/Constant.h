@@ -16,10 +16,10 @@ public:
    static bool classof(Constant const* T) { return true; }
    static bool classof(Value const* T) {
       switch (T->getTypeID()) {
-#     define CDOT_INSTRUCTION(Name) \
+#     define CDOT_CONSTANT(Name) \
          case Name##ID:
-#     define CDOT_INCLUDE_CONSTANTS
-#     define CDOT_INCLUDE_CONSTEXPRS
+#     define CDOT_AGGR_TYPE(Name) \
+         case Name##ID:
 #     include "../Instructions.def"
             return true;
          default:

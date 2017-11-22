@@ -31,8 +31,16 @@ BrInst::BrInst(Value *Condition,
      TargetBranch(IfBranch), ElseBranch(ElseBranch),
      TargetArgs(std::move(TargetArgs)), ElseArgs(std::move(ElseArgs))
 {
+   Condition->addUse(this);
    IfBranch->addPredecessor(parent);
    ElseBranch->addPredecessor(parent);
+
+   for (const auto &arg : TargetArgs) {
+      arg->addUse(this);
+   }
+   for (const auto &arg : ElseArgs) {
+      arg->addUse(this);
+   }
 }
 
 BrInst::BrInst(BasicBlock *TargetBranch,
@@ -44,6 +52,9 @@ BrInst::BrInst(BasicBlock *TargetBranch,
      TargetArgs(std::move(BlockArgs))
 {
    TargetBranch->addPredecessor(parent);
+   for (const auto &arg : TargetArgs) {
+      arg->addUse(this);
+   }
 }
 
 BrInst::BrInst(BasicBlock *parent, const string &name,
@@ -95,6 +106,10 @@ SwitchInst::SwitchInst(Value *SwitchVal, BasicBlock *parent,
 
 void SwitchInst::addCase(Value *val, BasicBlock *Dst)
 {
+   if (val) {
+      val->addUse(this);
+   }
+
    Dst->addPredecessor(parent);
    Cases.emplace_back(val, Dst);
 }
