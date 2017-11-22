@@ -22,16 +22,14 @@ namespace cdot {
 
 using cl::Class;
 
-unordered_map<string, ObjectType*> ObjectType::Instances;
-unordered_map<string, DummyObjectType*> DummyObjectType::Instances;
-
 ObjectType* ObjectType::get(const string &className)
 {
-   if (Instances.find(className) == Instances.end()) {
-      Instances.emplace(className, new ObjectType(className));
+   auto key = "__obj." + className;
+   if (Instances.find(key) == Instances.end()) {
+      Instances.try_emplace(key, new ObjectType(className));
    }
 
-   return Instances[className];
+   return cast<ObjectType>(Instances[key]);
 }
 
 ObjectType::ObjectType(const string &className)
@@ -52,7 +50,7 @@ ObjectType::ObjectType(const string &className)
    }
 }
 
-ObjectType* ObjectType::getOptionOf(BuiltinType *T)
+ObjectType* ObjectType::getOptionOf(Type *T)
 {
    std::vector<TemplateArg> templateArgs{TemplateArg(GenericType::get("T", T))};
 
@@ -130,7 +128,7 @@ bool ObjectType::needsCleanup() const
       ->getAs<Class>()->hasNonEmptyDeinitializer());
 }
 
-BuiltinType* ObjectType::unbox() const
+Type* ObjectType::unbox() const
 {
    assert(util::matches(
       "(Float|Double|U?Int(1|8|16|32|64)?)",
@@ -159,7 +157,7 @@ BuiltinType* ObjectType::unbox() const
    return IntegerType::get(std::stoi(className.substr(3)), isUnsigned);
 }
 
-bool ObjectType::implicitlyCastableTo(BuiltinType *other) const
+bool ObjectType::implicitlyCastableTo(Type *other) const
 {
    switch (other->getTypeID()) {
       case TypeID::GenericTypeID:
@@ -260,7 +258,7 @@ bool ObjectType::implicitlyCastableTo(BuiltinType *other) const
    }
 }
 
-bool ObjectType::explicitlyCastableTo(BuiltinType *other) const
+bool ObjectType::explicitlyCastableTo(Type *other) const
 {
    if (implicitlyCastableTo(other)) {
       return true;
@@ -274,7 +272,7 @@ bool ObjectType::explicitlyCastableTo(BuiltinType *other) const
    }
 }
 
-bool ObjectType::isBoxedEquivOf(BuiltinType *other) const
+bool ObjectType::isBoxedEquivOf(Type *other) const
 {
    switch (other->getTypeID()) {
       case TypeID::IntegerTypeID: {
@@ -317,7 +315,19 @@ bool ObjectType::hasDefaultValue() const
    return false;
 }
 
-llvm::Value* ObjectType::getDefaultVal(CodeGen &CGM) const
+unsigned ObjectType::getBitwidth() const
+{
+   assert(is_raw_enum);
+   return getRecord()->getAs<Enum>()->getRawType()->getBitwidth();
+}
+
+bool ObjectType::isUnsigned() const
+{
+   assert(is_raw_enum);
+   return getRecord()->getAs<Enum>()->getRawType()->isUnsigned();
+}
+
+llvm::Value* ObjectType::getDefaultVal(ast::CodeGen &CGM) const
 {
    if (is_struct) {
       auto& fields = SymbolTable::getClass(className)->getFields();
@@ -331,11 +341,11 @@ llvm::Value* ObjectType::getDefaultVal(CodeGen &CGM) const
             field.second->fieldType->getDefaultVal(CGM)));
       }
 
-      return llvm::ConstantStruct::get(CodeGen::getStructTy(className),
+      return llvm::ConstantStruct::get(ast::CodeGen::getStructTy(className),
                                        vals);
    }
 
-   return llvm::ConstantPointerNull::get(CodeGen::getStructTy(className)
+   return llvm::ConstantPointerNull::get(ast::CodeGen::getStructTy(className)
                                             ->getPointerTo());
 }
 
@@ -347,7 +357,7 @@ llvm::Constant* ObjectType::getConstantVal(Variant &val) const
    auto intVal = unboxed->getConstantVal(val);
 
    return llvm::ConstantStruct::get(
-      CodeGen::getStructTy(className),
+      ast::CodeGen::getStructTy(className),
       { intVal }
    );
 }
@@ -404,11 +414,11 @@ DummyObjectType* DummyObjectType::get(const string &className,
                                       std::vector<TemplateArg> &templateArgs) {
    auto name = className + util::TemplateArgsToString(templateArgs);
    if (Instances.find(name) == Instances.end()) {
-      Instances.emplace(name, new DummyObjectType(className,
+      Instances.try_emplace(name, new DummyObjectType(className,
                                                   templateArgs));
    }
 
-   return Instances[name];
+   return cast<DummyObjectType>(Instances[name]);
 }
 
 } // namespace cdot

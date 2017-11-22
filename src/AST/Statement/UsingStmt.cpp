@@ -4,20 +4,23 @@
 
 #include "UsingStmt.h"
 
+namespace cdot {
+namespace ast {
+
 UsingStmt::UsingStmt(
    string&& importNamespace,
-   std::vector<string>&& item) :
-   importNamespace(importNamespace),
-   importedItems(item)
+   std::vector<string>&& items)
+   : Statement(UsingStmtID), importNamespace(move(importNamespace)),
+     importedItems(move(items))
 {
    
 }
 
-UsingStmt::UsingStmt(std::vector<string> &&fullNames) : fullNames(fullNames)
+UsingStmt::UsingStmt(std::vector<string> &&fullNames)
+   : Statement(UsingStmtID), fullNames(fullNames)
 {
 
 }
 
-std::vector<AstNode::SharedPtr> UsingStmt::get_children() {
-   return { };
-}
+} // namespace ast
+} // namespace cdot

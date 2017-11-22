@@ -6,13 +6,16 @@
 
 using namespace cdot::cl;
 
+namespace cdot {
+namespace ast {
+
 CallableTemplateDecl::CallableTemplateDecl(
    string &&name, std::unique_ptr<TokenStore> &&Store,
    std::vector<TemplateConstraint> &&constraints,
    std::vector<std::shared_ptr<FuncArgDecl>> &&args,
    std::shared_ptr<TypeRef> &&returnType)
-   : name(name), Store(move(Store)), args(args),
-     constraints(constraints), returnType(returnType)
+   : Statement(CallableTemplateDeclID),  name(name), Store(move(Store)),
+     args(args), constraints(constraints), returnType(returnType)
 {
 
 }
@@ -94,3 +97,6 @@ std::unique_ptr<TokenStore> &CallableTemplateDecl::getStore()
 {
    return Store;
 }
+
+} // namespace ast
+} // namespace cdot

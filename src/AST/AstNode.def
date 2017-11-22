@@ -1,0 +1,95 @@
+
+#ifndef CDOT_ASTNODE
+#  error "define CDOT_ASTNODE before including"
+#endif
+
+#if defined(CDOT_INCLUDE_ALL)
+
+CDOT_ASTNODE(AstNode)
+
+#endif
+
+#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_EXPR)
+
+CDOT_ASTNODE(Expression)
+CDOT_ASTNODE(TypeRef)
+CDOT_ASTNODE(IntegerLiteral)
+CDOT_ASTNODE(FPLiteral)
+CDOT_ASTNODE(BoolLiteral)
+CDOT_ASTNODE(CharLiteral)
+CDOT_ASTNODE(NoneLiteral)
+CDOT_ASTNODE(StringLiteral)
+CDOT_ASTNODE(StringInterpolation)
+CDOT_ASTNODE(LambdaExpr)
+CDOT_ASTNODE(CollectionLiteral)
+CDOT_ASTNODE(TupleLiteral)
+
+CDOT_ASTNODE(IdentifierRefExpr)
+CDOT_ASTNODE(MemberRefExpr)
+CDOT_ASTNODE(CallExpr)
+CDOT_ASTNODE(SubscriptExpr)
+
+CDOT_ASTNODE(UnaryOperator)
+CDOT_ASTNODE(BinaryOperator)
+CDOT_ASTNODE(TertiaryOperator)
+
+CDOT_ASTNODE(ImplicitCastExpr)
+CDOT_ASTNODE(LvalueToRvalue)
+
+#endif
+
+#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_STMT)
+
+CDOT_ASTNODE(Statement)
+
+CDOT_ASTNODE(CompoundStmt)
+CDOT_ASTNODE(BreakStmt)
+CDOT_ASTNODE(ContinueStmt)
+CDOT_ASTNODE(ReturnStmt)
+CDOT_ASTNODE(CaseStmt)
+CDOT_ASTNODE(LabelStmt)
+CDOT_ASTNODE(GotoStmt)
+CDOT_ASTNODE(ForStmt)
+CDOT_ASTNODE(IfStmt)
+CDOT_ASTNODE(WhileStmt)
+CDOT_ASTNODE(ForInStmt)
+CDOT_ASTNODE(MatchStmt)
+
+CDOT_ASTNODE(EnumCaseDecl)
+CDOT_ASTNODE(ConstrDecl)
+CDOT_ASTNODE(FieldDecl)
+CDOT_ASTNODE(MethodDecl)
+CDOT_ASTNODE(FuncArgDecl)
+CDOT_ASTNODE(DestrDecl)
+CDOT_ASTNODE(PropDecl)
+CDOT_ASTNODE(ExtensionDecl)
+CDOT_ASTNODE(FunctionDecl)
+CDOT_ASTNODE(NamespaceDecl)
+CDOT_ASTNODE(TypedefDecl)
+CDOT_ASTNODE(DeclStmt)
+CDOT_ASTNODE(DeclareStmt)
+CDOT_ASTNODE(RecordTemplateDecl)
+CDOT_ASTNODE(MethodTemplateDecl)
+CDOT_ASTNODE(CallableTemplateDecl)
+CDOT_ASTNODE(TryStmt)
+CDOT_ASTNODE(ThrowStmt)
+CDOT_ASTNODE(UsingStmt)
+CDOT_ASTNODE(DebugStmt)
+CDOT_ASTNODE(NullStmt)
+
+#endif
+
+#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_RECORD_DECL)
+
+CDOT_ASTNODE(RecordDecl)
+CDOT_ASTNODE(ClassDecl)
+CDOT_ASTNODE(EnumDecl)
+CDOT_ASTNODE(UnionDecl)
+
+#endif
+
+#undef CDOT_ASTNODE
+#undef CDOT_INCLUDE_ALL
+#undef CDOT_INCLUDE_RECORD_DECL
+#undef CDOT_INCLUDE_STMT
+#undef CDOT_INCLUDE_EXPR

@@ -8,6 +8,9 @@
 
 #include "../../../Passes/SemanticAnalysis/Record/Enum.h"
 
+namespace cdot {
+namespace ast {
+
 EnumDecl::EnumDecl(AccessModifier am,
                    string &&enumName,
                    std::shared_ptr<TypeRef>& rawType,
@@ -17,6 +20,7 @@ EnumDecl::EnumDecl(AccessModifier am,
                    std::vector<std::shared_ptr<EnumCaseDecl>> &&cases,
                    std::vector<Statement::SharedPtr> &&innerDeclarations) :
    RecordDecl(
+      EnumDeclID,
       am,
       std::move(enumName),
       std::move(conformsTo),
@@ -31,22 +35,10 @@ EnumDecl::EnumDecl(AccessModifier am,
 
 }
 
-std::vector<std::shared_ptr<AstNode>> EnumDecl::get_children() {
-   std::vector<std::shared_ptr<AstNode>> children;
-   for (const auto& method : methods) {
-      children.push_back(method);
-   }
-   for (const auto& case_ : cases) {
-      children.push_back(case_);
-   }
-   for (const auto& inner : innerDeclarations) {
-      children.push_back(inner);
-   }
-
-   return children;
-}
-
 cl::Enum* EnumDecl::getDeclaredEnum() const
 {
    return record->getAs<Enum>();
 }
+
+} // namespace ast
+} // namespace cdot

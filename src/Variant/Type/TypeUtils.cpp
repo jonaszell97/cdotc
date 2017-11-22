@@ -15,12 +15,12 @@
 namespace cdot {
 namespace util {
 
-bool isSubTypeOf(BuiltinType *ty, BuiltinType *of)
+bool isSubTypeOf(Type *ty, Type *of)
 {
    return *ty < *of;
 }
 
-bool operator<=(const BuiltinType &ty, const BuiltinType &of)
+bool operator<=(const Type &ty, const Type &of)
 {
    if (ty.getTypeID() != of.getTypeID()) {
       return false;
@@ -102,7 +102,7 @@ bool operator<=(const BuiltinType &ty, const BuiltinType &of)
       return true;
    }
 
-   assert(ty.isObject());
+   assert(ty.isObjectTy());
 
    auto rec1 = ty.getRecord();
    auto rec2 = of.getRecord();
@@ -150,52 +150,52 @@ bool operator<=(const BuiltinType &ty, const BuiltinType &of)
    return true;
 }
 
-bool isSubTypeOrEqual(BuiltinType *ty, BuiltinType *of)
+bool isSubTypeOrEqual(Type *ty, Type *of)
 {
    return *ty <= *of;
 }
 
-bool operator<(const BuiltinType &ty, const BuiltinType &of)
+bool operator<(const Type &ty, const Type &of)
 {
    return ty <= of && ty != of;
 }
 
-bool isSuperTypeOf(BuiltinType *ty, BuiltinType *of)
+bool isSuperTypeOf(Type *ty, Type *of)
 {
    return *ty > *of;
 }
 
-bool operator>(const BuiltinType &ty, const BuiltinType &of)
+bool operator>(const Type &ty, const Type &of)
 {
    return !(ty <= of);
 }
 
-bool isSuperTypeOrEqual(BuiltinType *ty, BuiltinType *of)
+bool isSuperTypeOrEqual(Type *ty, Type *of)
 {
    return *ty >= *of;
 }
 
-bool operator>=(const BuiltinType &ty, const BuiltinType &of)
+bool operator>=(const Type &ty, const Type &of)
 {
    return ty > of || ty == of;
 }
 
-bool isSameAs(BuiltinType *ty, BuiltinType *as)
+bool isSameAs(Type *ty, Type *as)
 {
    return *ty == *as;
 }
 
-bool operator==(const BuiltinType &ty, const BuiltinType &as)
+bool operator==(const Type &ty, const Type &as)
 {
    return &ty == &as;
 }
 
-bool isDifferentThan(BuiltinType *ty, BuiltinType *than)
+bool isDifferentThan(Type *ty, Type *than)
 {
    return *ty != *than;
 }
 
-bool operator!=(const BuiltinType &ty, const BuiltinType &than)
+bool operator!=(const Type &ty, const Type &than)
 {
    return &ty != &than;
 }

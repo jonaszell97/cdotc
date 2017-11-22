@@ -3,10 +3,24 @@
 //
 
 #include "AstNode.h"
-#include "Statement/Declaration/DeclStmt.h"
+#include "Attribute/Attribute.h"
 
-AstNode::AstNode() {
+namespace cdot {
+namespace ast {
 
+void AstNode::setAttributes(std::vector<Attribute> &&attr)
+{
+   attributes = move(attr);
+}
+
+std::vector<Attribute>& AstNode::getAttributes()
+{
+   return attributes;
+}
+
+void AstNode::setSourceLoc(size_t start, size_t end,
+                           size_t line, size_t source) {
+   loc = SourceLocation(start, line, end - start, source);
 }
 
 bool AstNode::hasAttribute(Attr kind) const
@@ -20,29 +34,51 @@ bool AstNode::hasAttribute(Attr kind) const
    return false;
 }
 
-void AstNode::replaceUsesWith(Expression *expr)
+Attribute& AstNode::getAttribute(Attr kind)
 {
-   assert(parent && "no parent to replace from");
-   parent->replaceChildWith(this, expr);
-}
-
-void AstNode::isReturnValue()
-{
-   returned_value = true;
-   if (declaration != nullptr) {
-      declaration->isReturnValue();
+   for (auto& attr : attributes) {
+      if (attr.kind == kind) {
+         return attr;
+      }
    }
+
+   assert(false && "Call hasAttribute first");
+   llvm_unreachable("see above");
 }
 
-void AstNode::isHiddenReturnValue()
+const SourceLocation &AstNode::getSourceLoc() const
 {
-   returned_value = true;
-   sret_value = true;
-   if (declaration != nullptr) {
-      declaration->isHiddenReturnValue();
-   }
+   return loc;
 }
 
-std::vector<AstNode::SharedPtr> AstNode::get_children() {
-   return std::vector<AstNode::SharedPtr>();
+void AstNode::setSourceLoc(const SourceLocation &loc)
+{
+   AstNode::loc = loc;
 }
+
+AstNode *AstNode::getParent() const
+{
+   return parent;
+}
+
+void AstNode::setParent(AstNode *parent)
+{
+   AstNode::parent = parent;
+}
+
+const QualType &AstNode::getContextualType() const
+{
+   return contextualType;
+}
+const string &AstNode::getBinding() const
+{
+   return binding;
+}
+
+void AstNode::setBinding(const string &binding)
+{
+   AstNode::binding = binding;
+}
+
+} // namespace ast
+} // namespace cdot

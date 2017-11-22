@@ -5,28 +5,41 @@
 #include "IfStmt.h"
 #include "../../Expression/Expression.h"
 
-IfStmt::IfStmt(Expression::SharedPtr cond, Statement::SharedPtr if_branch) :
-    condition(cond),
-    ifBranch(if_branch),
-    elseBranch{}
+namespace cdot {
+namespace ast {
+
+IfStmt::IfStmt(Expression::SharedPtr &&cond,
+               Statement::SharedPtr &&body)
+   : Statement(IfStmtID), condition(move(cond)), ifBranch(move(body)),
+     elseBranch{}
 {
-    children.push_back(&cond);
+
 }
 
-IfStmt::IfStmt(Expression::SharedPtr cond) : condition(cond), ifBranch{}, elseBranch{} {
-    children.push_back(&cond);
+std::shared_ptr<Expression> &IfStmt::getCondition()
+{
+   return condition;
 }
 
-std::vector<AstNode::SharedPtr> IfStmt::get_children() {
-    std::vector<AstNode::SharedPtr> children;
-    children.push_back(condition);
-
-    if (ifBranch != nullptr) {
-        children.push_back(ifBranch);
-    }
-    if (elseBranch != nullptr) {
-        children.push_back(elseBranch);
-    }
-
-    return children;
+void IfStmt::setCondition(const std::shared_ptr<Expression> &condition)
+{
+   IfStmt::condition = condition;
 }
+
+const Statement::SharedPtr &IfStmt::getIfBranch() const
+{
+   return ifBranch;
+}
+
+void IfStmt::setIfBranch(const Statement::SharedPtr &ifBranch)
+{
+   IfStmt::ifBranch = ifBranch;
+}
+
+const Statement::SharedPtr &IfStmt::getElseBranch() const
+{
+   return elseBranch;
+}
+
+} // namespace ast
+} // namespace cdot

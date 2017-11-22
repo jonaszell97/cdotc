@@ -10,7 +10,7 @@
 
 #include "BitstreamReader.h"
 #include "../../AstDeclarations.h"
-#include "../../../Variant/Type/Type.h"
+#include "../../../Variant/Type/QualType.h"
 #include "../SemanticAnalysis/Function.h"
 
 namespace llvm {
@@ -24,7 +24,7 @@ using cdot::BinaryOperator;
 
 namespace cdot {
 
-class BuiltinType;
+class Type;
 struct Attribute;
 
 namespace serial {
@@ -47,8 +47,8 @@ struct ExpressionHeader {
    unsigned uses;
 
    bool needsCast;
-   Type castFrom;
-   Type castTo;
+   QualType castFrom;
+   QualType castTo;
 
    bool lvalueCast;
    bool byvalPass;
@@ -79,8 +79,8 @@ protected:
    string readString();
    size_t readSize();
 
-   BuiltinType *readType();
-   Type readQualType();
+   Type *readType();
+   QualType readQualType();
    Argument readArg();
    Attribute readAttr();
    TemplateConstraint readGeneric();

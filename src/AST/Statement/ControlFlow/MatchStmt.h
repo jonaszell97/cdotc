@@ -7,30 +7,31 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class Expression;
 class CaseStmt;
 
 class MatchStmt : public Statement {
 public:
-   MatchStmt(std::shared_ptr<Expression> switchVal);
+   MatchStmt(std::shared_ptr<Expression> &&switchVal);
 
-   inline void addCase(std::shared_ptr<CaseStmt> case_) {
-      cases.push_back(case_);
+   void addCase(std::shared_ptr<CaseStmt> &&case_)
+   {
+      cases.push_back(move(case_));
    }
 
    typedef std::shared_ptr<MatchStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::SWITCH_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == MatchStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<Expression> switchValue;
-   BuiltinType *switchType = nullptr;
+   Type *switchType = nullptr;
    std::vector<std::shared_ptr<CaseStmt>> cases;
 
    cl::Method* operatorEquals = nullptr;
@@ -41,7 +42,42 @@ protected:
    
    bool isIntegralSwitch = false;
    bool allCasesReturn;
+
+public:
+   std::shared_ptr<Expression> &getSwitchValue();
+
+   Type *getSwitchType() const;
+
+   const std::vector<std::shared_ptr<CaseStmt>> &getCases() const;
+
+   cl::Method *getOperatorEquals() const;
+
+   void setSwitchValue(const std::shared_ptr<Expression> &switchValue);
+
+   void setSwitchType(Type *switchType);
+
+   void setCases(const std::vector<std::shared_ptr<CaseStmt>> &cases);
+
+   void setOperatorEquals(cl::Method *operatorEquals);
+
+   bool isHasDefault() const;
+
+   void setHasDefault(bool hasDefault);
+
+   unsigned int getDefaultIndex() const;
+
+   void setDefaultIndex(unsigned int defaultIndex);
+
+   bool isIsIntegralSwitch() const;
+
+   void setIsIntegralSwitch(bool isIntegralSwitch);
+
+   bool isAllCasesReturn() const;
+
+   void setAllCasesReturn(bool allCasesReturn);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_SWITCHSTMT_H

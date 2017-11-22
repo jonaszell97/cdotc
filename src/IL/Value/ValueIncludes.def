@@ -1,0 +1,43 @@
+
+// include all IL classes
+
+#ifdef CDOT_VALUE_INCLUDE
+
+#include "Constant/Constant.h"
+#include "Constant/ConstantVal.h"
+#include "Constant/ConstantExpr.h"
+#include "GlobalVariable.h"
+
+#include "Function/Method.h"
+#include "Function/CallInst.h"
+#include "Function/Argument.h"
+#include "Function/BasicBlock.h"
+
+#include "Instruction/Cast/CastInst.h"
+
+#include "Instruction/Memory/AllocaInst.h"
+#include "Instruction/Memory/InitInst.h"
+#include "Instruction/Memory/GEPInst.h"
+#include "Instruction/Memory/StoreInst.h"
+
+#include "Instruction/Terminator/TerminatorInst.h"
+#include "Instruction/ControlFlow/ControlFlowInst.h"
+
+#include "Instruction/Operator/OperatorInst.h"
+
+#include "Record/AggregateType.h"
+
+#endif
+
+// Forward declare all IL classes
+
+#ifdef CDOT_VALUE_DECLARE
+
+#define CDOT_INSTRUCTION(Name) class Name;
+#define CDOT_INCLUDE_ALL
+#include "Instructions.def"
+
+#endif
+
+#undef CDOT_VALUE_INCLUDE
+#undef CDOT_VALUE_DECLARE

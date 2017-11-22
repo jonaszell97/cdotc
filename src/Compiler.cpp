@@ -3,7 +3,7 @@
 //
 
 #include "Compiler.h"
-#include "Parser.h"
+#include "parse/Parser.h"
 
 #include "Compiler/PassManager.h"
 #include "Files/FileUtils.h"
@@ -15,7 +15,6 @@
 #include <llvm/Support/FileSystem.h>
 
 #include "AST/Statement/Block/CompoundStmt.h"
-#include "AST/Statement/EndOfFileStmt.h"
 #include "AST/Passes/Output/HeaderGen.h"
 #include "Message/def/DiagnosticParser.h"
 #include "AST/Passes/Serialization/ModuleWriter.h"
@@ -346,10 +345,11 @@ void Compiler::compile()
       fileNames.push_back(fileName);
    }
 
-   PassManager manager(roots);
+   PassManager manager(CUs);
    manager.addPass(PassManager::Declaration)
           .addPass(PassManager::SemanticAnalysis)
-          .addPass(PassManager::ConstantFold);
+          .addPass(PassManager::ConstantFold)
+          .addPass(PassManager::ILGen);
 
 
    if (outputPreprocessed) {
@@ -366,10 +366,10 @@ void Compiler::compile()
          headerRoot.push_back(roots[i]);
       }
 
-      manager.addPass(new HeaderGen(headerFiles));
+//      manager.addPass(new HeaderGen(headerFiles));
    }
 
-   manager.addPass(new CodeGen(CUs));
+//   manager.addPass(new CodeGen);
    manager.runPasses();
 
    // MODULE OUTPUT

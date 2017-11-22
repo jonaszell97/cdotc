@@ -9,28 +9,29 @@
 #include "../../Util.h"
 
 TypeRef::TypeRef()
-   : kind(TypeKind::Auto)
+   : Expression(TypeRefID), kind(TypeKind::Auto)
 {
 
 }
 
 TypeRef::TypeRef(NamespaceVec &&ns)
-   : kind(TypeKind::ObjectType), namespaceQual(ns)
+   : Expression(TypeRefID), kind(TypeKind::ObjectType), namespaceQual(ns)
 {
 
 }
 
 TypeRef::TypeRef(TypeRef::SharedPtr &&returnType,
                  std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes)
-   : kind(TypeKind::FunctionType), returnType(returnType),
-     containedTypes(argTypes)
+   : Expression(TypeRefID), kind(TypeKind::FunctionType),
+     returnType(returnType), containedTypes(argTypes)
 {
 
 }
 
 TypeRef::TypeRef(
    std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes)
-   : kind(TypeKind::TupleType), containedTypes(tupleTypes)
+   : Expression(TypeRefID), kind(TypeKind::TupleType),
+     containedTypes(tupleTypes)
 {
 
 }
@@ -89,12 +90,6 @@ string TypeRef::toString()
    return res;
 }
 
-std::vector<AstNode::SharedPtr> TypeRef::get_children() {
-   std::vector<AstNode::SharedPtr> children;
-
-   return children;
-}
-
 TypeRef::TypeKind TypeRef::getKind() const
 {
    return kind;
@@ -120,7 +115,7 @@ void TypeRef::setPointerDepth(size_t pointerDepth)
    TypeRef::pointerDepth = pointerDepth;
 }
 
-const Type &TypeRef::getType() const
+const QualType &TypeRef::getType() const
 {
    return type;
 }

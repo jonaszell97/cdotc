@@ -10,18 +10,15 @@
 
 #include <unordered_map>
 #include <stack>
+#include <set>
 
 #include "../AbstractPass.h"
 #include "../../../Variant/Variant.h"
 #include "../../../Variant/Type/PointerType.h"
 #include "../../Attribute/Attribute.h"
-
-
-class FuncArgDecl;
-class CompoundStmt;
-class FieldDecl;
-class Statement;
-class CGMemory;
+#include "../../Operator/UnaryOperator.h"
+#include "../../Statement/ControlFlow/IfStmt.h"
+#include "../../Expression/Literal/LambdaExpr.h"
 
 using std::string;
 using std::pair;
@@ -29,11 +26,11 @@ using std::unordered_map;
 using std::unique_ptr;
 
 namespace cdot {
-class BuiltinType;
+
+class Type;
 class GenericType;
 class PrimitiveType;
 class Builtin;
-class BinaryOperator;
 class Callable;
 
 struct CompilationUnit;
@@ -43,11 +40,14 @@ namespace eh {
    class CGException;
 }
 
+namespace ast {
+class CGMemory;
+enum class BinaryOperatorType : unsigned int;
+}
+
 namespace codegen {
    class CGCast;
 }
-
-enum class BinaryOperatorType : unsigned int;
 
 struct Argument;
 
@@ -81,106 +81,108 @@ struct Field;
 struct RecordTemplateInstantiation;
 class Property;
 
-}
+} // namespace cl
 
 namespace codegen {
-   class DebugInfo;
-}
+
+class DebugInfo;
+
+} // namespace codegen
 
 struct CompilationUnit;
 
-}
+} // namespace cdot
 
 using namespace cdot;
 using namespace cdot::codegen;
 using namespace cdot::eh;
 using namespace cdot::cl;
 
+namespace cdot {
+namespace ast {
+
 class CodeGen: public AbstractPass {
 public:
-   CodeGen(
-      std::vector<CompilationUnit> &CUs
-   );
-
+   CodeGen();
    ~CodeGen();
 
    void setup(CompilationUnit &CU);
    void save(CompilationUnit &CU);
    void restore(CompilationUnit &CU);
 
-   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
+   void run(std::vector<CompilationUnit> &CUs);
 
-   void visit(NamespaceDecl *node) override;
-   void visit(UsingStmt *node) override;
-   void visit(CompoundStmt *node) override;
+   void visit(NamespaceDecl *node);
+   void visit(UsingStmt *node);
+   void visit(CompoundStmt *node);
 
-   void visit(DeclStmt *node) override;
-   void visit(FunctionDecl *node) override;
-   void visit(DeclareStmt *node) override;
+   void visit(DeclStmt *node);
+   void visit(FunctionDecl *node);
+   void visit(DeclareStmt *node);
 
-   void visit(ClassDecl *node) override;
-   void visit(EnumDecl *node) override;
-   void visit(UnionDecl *node) override;
+   void visit(ClassDecl *node);
+   void visit(EnumDecl *node);
+   void visit(UnionDecl *node);
 
-   void visit(FieldDecl *node) override;
+   void visit(FieldDecl *node);
 
-   void visit(MethodDecl *node) override;
-   void visit(ConstrDecl *node) override;
-   void visit(DestrDecl *node) override;
+   void visit(MethodDecl *node);
+   void visit(ConstrDecl *node);
+   void visit(DestrDecl *node);
 
-   void visit(RecordTemplateDecl *node) override;
-   void visit(CallableTemplateDecl *node) override;
-   void visit(MethodTemplateDecl *node) override;
+   void visit(RecordTemplateDecl *node);
+   void visit(CallableTemplateDecl *node);
+   void visit(MethodTemplateDecl *node);
 
-   void visit(IdentifierRefExpr *node) override;
-   void visit(SubscriptExpr *node) override;
-   void visit(CallExpr *node) override;
-   void visit(MemberRefExpr *node) override;
+   void visit(IdentifierRefExpr *node);
+   void visit(SubscriptExpr *node);
+   void visit(CallExpr *node);
+   void visit(MemberRefExpr *node);
 
-   void visit(ForStmt *node) override;
-   void visit(ForInStmt *node) override;
-   void visit(WhileStmt *node) override;
-   void visit(IfStmt *node) override;
-   void visit(MatchStmt *node) override;
-   void visit(CaseStmt *node) override;
-   void visit(LabelStmt *node) override;
-   void visit(GotoStmt *node) override;
+   void visit(ForStmt *node);
+   void visit(ForInStmt *node);
+   void visit(WhileStmt *node);
+   void visit(IfStmt *node);
+   void visit(MatchStmt *node);
+   void visit(CaseStmt *node);
+   void visit(LabelStmt *node);
+   void visit(GotoStmt *node);
 
-   void visit(ReturnStmt *node) override;
-   void visit(BreakStmt *node) override;
-   void visit(ContinueStmt *node) override;
+   void visit(ReturnStmt *node);
+   void visit(BreakStmt *node);
+   void visit(ContinueStmt *node);
 
-   void visit(CollectionLiteral *node) override;
+   void visit(CollectionLiteral *node);
 
-   void visit(IntegerLiteral *node) override;
-   void visit(FPLiteral *node) override;
-   void visit(BoolLiteral *node) override;
-   void visit(CharLiteral *node) override;
+   void visit(IntegerLiteral *node);
+   void visit(FPLiteral *node);
+   void visit(BoolLiteral *node);
+   void visit(CharLiteral *node);
 
-   void visit(NoneLiteral *node) override;
-   void visit(StringLiteral *node) override;
-   void visit(StringInterpolation *node) override;
-   void visit(TupleLiteral *node) override;
+   void visit(NoneLiteral *node);
+   void visit(StringLiteral *node);
+   void visit(StringInterpolation *node);
+   void visit(TupleLiteral *node);
 
-   void visit(BinaryOperator *node) override;
-   void visit(TertiaryOperator *node) override;
-   void visit(UnaryOperator *node) override;
+   void visit(BinaryOperator *node);
+   void visit(TertiaryOperator *node);
+   void visit(UnaryOperator *node);
 
-   void visit(FuncArgDecl *node) override;
-   void visit(Expression *node) override;
-   void visit(LambdaExpr *node) override;
-   void visit(ImplicitCastExpr *node) override;
-   void visit(TypedefDecl *node) override;
-   void visit(TypeRef *node) override;
-   void visit(LvalueToRvalue *node) override;
+   void visit(FuncArgDecl *node);
+   void visit(Expression *node);
+   void visit(LambdaExpr *node);
+   void visit(ImplicitCastExpr *node);
+   void visit(TypedefDecl *node);
+   void visit(TypeRef *node);
+   void visit(LvalueToRvalue *node);
 
-   void visit(TryStmt *node) override;
-   void visit(ThrowStmt *node) override;
+   void visit(TryStmt *node);
+   void visit(ThrowStmt *node);
 
-   void visit(EndOfFileStmt *node) override;
-   void visit(DebugStmt *node) override;
+   void visit(EndOfFileStmt *node);
+   void visit(DebugStmt *node);
 
-   void visit(Statement *node) override;
+   void visit(Statement *node);
 
    void finalize(const CompilationUnit &CU);
    static void linkAndEmit(std::vector<CompilationUnit>& CUs);
@@ -203,7 +205,7 @@ public:
    llvm::Value* GetStructSize(llvm::Type*);
 
    llvm::Instruction *CreateCopy(llvm::Value *dst, llvm::Value *src,
-                                 BuiltinType *ty);
+                                 Type *ty);
 
    llvm::Value* CreateStore(llvm::Value* val, llvm::Value* ptr);
    llvm::Value* CreateLoad(llvm::Value* ptr);
@@ -218,17 +220,17 @@ public:
    llvm::Value *getVariantValue(const Variant &v);
    llvm::Value* getStaticVal(
       Variant& v,
-      BuiltinType*& ty,
+      Type*& ty,
       bool global = false
    );
 
    llvm::Value* getStaticVal(
       std::shared_ptr<Expression> &expr,
-      BuiltinType*& ty,
+      Type*& ty,
       bool global = false
    );
 
-   llvm::Value *valueToString(BuiltinType *ty, llvm::Value *val);
+   llvm::Value *valueToString(Type *ty, llvm::Value *val);
 
    // classes
    llvm::Value* AccessField(string ,string, llvm::Value*);
@@ -237,13 +239,13 @@ public:
    void SetField(size_t, llvm::Value*, llvm::Value*, bool = false);
    void SetField(string, string, llvm::Value*, llvm::Value*, bool = false);
 
-   llvm::Value* ExtractFromOption(llvm::Value* opt, Type& destTy);
+   llvm::Value* ExtractFromOption(llvm::Value* opt, QualType& destTy);
 
    void DebugPrint(llvm::Value* val, string msg = "");
 
    llvm::Value *toInt8Ptr(llvm::Value *val);
 
-   llvm::Constant* getTypeInfo(BuiltinType *ty);
+   llvm::Constant* getTypeInfo(Type *ty);
 
    llvm::Constant *createBuiltinTypeInfo(const string &name,
                                          llvm::Constant *deinitializer,
@@ -264,7 +266,7 @@ public:
    static llvm::StructType *getStructTy(const string &name);
 
    friend class CGMemory;
-   friend class CGCast;
+   friend class codegen::CGCast;
    friend class CGException;
    friend class SemaPass;
    friend class DeclPass;
@@ -302,10 +304,8 @@ protected:
 
    unordered_map<string, llvm::Constant*> OwnFunctions;
    unordered_map<string, llvm::Value*> OwnValues;
-   std::vector<pair<Expression*, BuiltinType*>> global_initializers;
+   std::vector<pair<Expression*, Type*>> global_initializers;
    std::stack<llvm::Value*> Results;
-
-   std::vector<CompilationUnit> &CUs;
 
    llvm::Value *getResult();
    llvm::Value *getResult(AstNode *node);
@@ -356,7 +356,7 @@ protected:
    void CleanupTemporaries();
 
    // memory
-   CGMemory *Mem;
+   ast::CGMemory *Mem;
 
    // excn
    CGException *Exc;
@@ -405,7 +405,7 @@ protected:
       const string &bound_name,
       const std::vector<Argument> &args,
       const std::vector<pair<string, string>> &argBindings,
-      Type return_type,
+      QualType return_type,
       bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
@@ -420,7 +420,7 @@ protected:
    llvm::Function *DeclareFunction(
       const string &bound_name,
       const std::vector<std::shared_ptr<FuncArgDecl>> &args,
-      Type return_type,
+      QualType return_type,
       bool throws,
       bool set_this_arg = false,
       llvm::Type *selfTy = nullptr,
@@ -452,7 +452,7 @@ protected:
       const string &bound_name,
       const std::vector<Argument> &args,
       const std::vector<pair<string, string>> &argBindings,
-      Type return_type,
+      QualType return_type,
       bool throws,
       llvm::Type *selfTy,
       const string &this_binding,
@@ -465,7 +465,7 @@ protected:
    llvm::Function* DeclareMethod(
       const string &bound_name,
       const std::vector<std::shared_ptr<FuncArgDecl>> &args,
-      Type return_type,
+      QualType return_type,
       bool throws,
       llvm::Type *selfTy,
       const string &this_binding,
@@ -512,16 +512,16 @@ protected:
    );
 
    llvm::Value* DispatchProtocolCall(
-      Type &protoTy,
+      QualType &protoTy,
       std::vector<llvm::Value*>& args,
-      BuiltinType* returnType,
+      Type* returnType,
       cl::Method* method,
       bool skipDefaultCheck = false,
       llvm::Value* originalSelf = nullptr,
       llvm::Value* vMethodPair = nullptr
    );
 
-   llvm::Value* ApplyStaticUpCast(BuiltinType *, string&, llvm::Value *);
+   llvm::Value* ApplyStaticUpCast(Type *, string&, llvm::Value *);
 
    llvm::CallInst* DispatchVirtualCall(string &className, string &methodName,
       std::vector<llvm::Value*>& args);
@@ -598,7 +598,7 @@ protected:
    unordered_map<string, llvm::Value*> Strings;
 
    // collections
-   llvm::Value* CreateCStyleArray(BuiltinType* type, std::vector<std::shared_ptr<Expression>>& elements);
+   llvm::Value* CreateCStyleArray(Type* type, std::vector<std::shared_ptr<Expression>>& elements);
    llvm::Value* CreateArray(ObjectType* type, std::vector<std::shared_ptr<Expression>>& elements);
    
    // binary operators
@@ -615,7 +615,7 @@ protected:
    llvm::Value* HandleTupleComp(llvm::Value*lhs, llvm::Value*rhs, BinaryOperator* node, bool neq = false);
 
    // pattern matching
-   llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, BuiltinType *&compTy,
+   llvm::Value* CreateCompEQ(llvm::Value *&lhs, llvm::Value *&rhs, Type *&compTy,
       llvm::Function* operatorEquals = nullptr);
 
    llvm::Value* HandleDictionaryLiteral(CollectionLiteral *node);
@@ -626,5 +626,7 @@ protected:
    void EmitCatchClauses(TryStmt *node);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CODEGENVISITOR_H

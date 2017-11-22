@@ -15,20 +15,18 @@
 #include "Builtin.h"
 
 #include "../../../Variant/Type/Generic.h"
+#include "../../Statement/Declaration/DeclStmt.h"
 
 class SymbolTable;
-class Expression;
 
 using std::string;
 using std::pair;
 
 namespace cdot {
 
-class BuiltinType;
-class BinaryOperator;
+class Type;
 class MetaType;
 struct Typedef;
-enum class BinaryOperatorType : unsigned int;
 
 struct Variable;
 
@@ -47,143 +45,133 @@ class Enum;
 struct Scope {
    size_t id;
 
-   string currentSelf;
-   pair<string, string> currentFunction;
+   union {
+      Callable *function;
+      cl::Method *method;
+   };
 
-   bool inProtocol = false;
-   bool isFunctionRoot = false;
    bool isLambdaRoot = false;
-
-   bool continuable = false;
-   bool breakable = false;
-   bool continued = false;
-   bool broken = false;
-
-   bool unsafe = false;
-   bool mutableSelf = false;
-
-   Type declaredReturnType;
    bool returnable = false;
-   bool inLambda = false;
-   int branches = 1;
-   int returned = 0;
 
    Scope* enclosingScope = nullptr;
-   std::vector<string>* uninitializedFields = nullptr;
-   std::vector<pair<string, Type>>* captures = nullptr;
+   std::set<std::string>* captures = nullptr;
 };
 
 } // namespace cdot
 
-using namespace cdot;
+
+namespace cdot {
+namespace ast {
+
+enum class BinaryOperatorType : unsigned int;
 
 class SemaPass: public AbstractPass {
 public:
    explicit SemaPass();
-   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
+   void run(std::vector<CompilationUnit> &CUs);
 
    void doInitialPass(const std::shared_ptr<Statement>& statement);
    void doInitialPass(
       const std::vector<std::shared_ptr<Statement>>& statements);
 
-   static void connectTree(AstNode*);
+   void visit(AstNode *node) {}
+   void visit(NamespaceDecl *node);
+   void visit(UsingStmt *node);
+   void visit(CompoundStmt *node);
 
-   void visit(NamespaceDecl *node) override;
-   void visit(UsingStmt *node) override;
-   void visit(CompoundStmt *node) override;
+   void visit(DeclStmt *node);
+   void visit(FunctionDecl *node);
+   void visit(CallableDecl *node);
+   void visit(DeclareStmt *node);
 
-   void visit(DeclStmt *node) override;
-   void visit(FunctionDecl *node) override;
-   void visit(CallableDecl *node) override;
-   void visit(DeclareStmt *node) override;
+   void visit(ClassDecl *node);
+   void visit(ExtensionDecl *node);
+   void visit(EnumDecl *node);
+   void visit(UnionDecl *node);
 
-   void visit(ClassDecl *node) override;
-   void visit(ExtensionDecl *node) override;
-   void visit(EnumDecl *node) override;
-   void visit(UnionDecl *node) override;
+   void visit(FieldDecl *node);
+   void visit(PropDecl *node);
 
-   void visit(FieldDecl *node) override;
-   void visit(PropDecl *node) override;
+   void visit(MethodDecl *node);
+   void visit(ConstrDecl *node);
+   void visit(DestrDecl *node);
 
-   void visit(MethodDecl *node) override;
-   void visit(ConstrDecl *node) override;
-   void visit(DestrDecl *node) override;
+   void visit(RecordTemplateDecl *node);
+   void visit(CallableTemplateDecl *node);
+   void visit(MethodTemplateDecl *node);
 
-   void visit(RecordTemplateDecl *node) override;
-   void visit(CallableTemplateDecl *node) override;
-   void visit(MethodTemplateDecl *node) override;
+   void visit(IdentifierRefExpr *node);
+   void visit(SubscriptExpr *node);
+   void visit(CallExpr *node);
+   void visit(MemberRefExpr *node);
 
-   void visit(IdentifierRefExpr *node) override;
-   void visit(SubscriptExpr *node) override;
-   void visit(CallExpr *node) override;
-   void visit(MemberRefExpr *node) override;
+   void visit(ForStmt *node);
+   void visit(ForInStmt *node);
+   void visit(WhileStmt *node);
+   void visit(IfStmt *node);
+   void visit(MatchStmt *node);
+   void visit(CaseStmt *node);
+   void visit(LabelStmt *node);
+   void visit(GotoStmt *node);
 
-   void visit(ForStmt *node) override;
-   void visit(ForInStmt *node) override;
-   void visit(WhileStmt *node) override;
-   void visit(IfStmt *node) override;
-   void visit(MatchStmt *node) override;
-   void visit(CaseStmt *node) override;
-   void visit(LabelStmt *node) override;
-   void visit(GotoStmt *node) override;
+   void visit(ReturnStmt *node);
+   void visit(BreakStmt *node);
+   void visit(ContinueStmt *node);
 
-   void visit(ReturnStmt *node) override;
-   void visit(BreakStmt *node) override;
-   void visit(ContinueStmt *node) override;
+   void visit(IntegerLiteral *node);
+   void visit(FPLiteral *node);
+   void visit(BoolLiteral *node);
+   void visit(CharLiteral *node);
 
-   void visit(IntegerLiteral *node) override;
-   void visit(FPLiteral *node) override;
-   void visit(BoolLiteral *node) override;
-   void visit(CharLiteral *node) override;
+   void visit(CollectionLiteral *node);
 
-   void visit(CollectionLiteral *node) override;
+   void visit(NoneLiteral *node);
+   void visit(StringLiteral *node);
+   void visit(StringInterpolation *node);
+   void visit(TupleLiteral *node);
 
-   void visit(NoneLiteral *node) override;
-   void visit(StringLiteral *node) override;
-   void visit(StringInterpolation *node) override;
-   void visit(TupleLiteral *node) override;
+   void visit(BinaryOperator *node);
+   void visit(TertiaryOperator *node);
+   void visit(UnaryOperator *node);
 
-   void visit(BinaryOperator *node) override;
-   void visit(TertiaryOperator *node) override;
-   void visit(UnaryOperator *node) override;
+   void visit(TryStmt *node);
+   void visit(ThrowStmt *node);
 
-   void visit(TryStmt *node) override;
-   void visit(ThrowStmt *node) override;
+   void visit(FuncArgDecl *node);
+   void visit(Expression *node);
+   void visit(LambdaExpr *node);
+   void visit(ImplicitCastExpr *node);
+   void visit(TypedefDecl *node);
+   void visit(TypeRef *node);
+   void visit(LvalueToRvalue *node);
 
-   void visit(FuncArgDecl *node) override;
-   void visit(Expression *node) override;
-   void visit(LambdaExpr *node) override;
-   void visit(ImplicitCastExpr *node) override;
-   void visit(TypedefDecl *node) override;
-   void visit(TypeRef *node) override;
-   void visit(LvalueToRvalue *node) override;
+   void visit(EndOfFileStmt *node);
+   void visit(DebugStmt *node);
 
-   void visit(EndOfFileStmt *node) override;
-   void visit(DebugStmt *node) override;
-
-   void visit(Statement *node) override;
+   void visit(Statement *node);
 
 protected:
    std::unordered_map<string, DeclStmt*> declarations;
    std::stack<Scope> Scopes;
    std::stack<pair<string, string>> Cleanups;
 
-   std::stack<Type> Results;
+   llvm::StringMap<GotoStmt*> UnresolvedGotos;
+   std::stack<QualType> Results;
 
-   std::function<Type(Expression*)> resolverFn;
-   std::function<BuiltinType*
+   std::function<QualType(Expression*)> resolverFn;
+   std::function<Type*
       (TypeRef*, const std::vector<TemplateArg>&,
        const std::vector<TemplateConstraint>&)> TypeResolverFn;
 
-   Type getResult();
-   Type getResult(AstNode *node);
-   Type getResult(std::shared_ptr<AstNode> node);
+   QualType pop();
+   QualType VisitNode(AstNode *node);
+   QualType VisitNode(std::shared_ptr<AstNode> node);
 
-   Type getAmbiguousResult(AstNode *node);
-   Type getAmbiguousResult(std::shared_ptr<AstNode> node);
+   QualType getAmbiguousResult(AstNode *node);
+   QualType getAmbiguousResult(std::shared_ptr<AstNode> node);
 
-   void returnResult(Type t);
-   void returnResult(BuiltinType *t);
+   void returnResult(QualType t);
+   void returnResult(Type *t);
 
    std::stack<string> classScopeStack;
    string& currentClass() {
@@ -193,27 +181,26 @@ protected:
    Scope* latestScope = nullptr;
 
    size_t lastScopeID = 0;
-   void pushScope();
-   void pushFunctionScope(
-      Type returnType,
-      string methodName,
-      string mangledName,
-      bool isLambda = false
-   );
 
-   void pushMethodScope(
-      cl::Method*
-   );
+   void pushScope();
+   void popScope();
+
+   void pushFunctionScope(QualType returnType,
+                          Callable *func);
+
+   void pushMethodScope(cl::Method*);
+
+   void popFunctionScope();
 
    void pushLoopScope(bool continuable = true, bool breakable = true);
-   void popScope();
+   void popLoopScope(bool continuable = true, bool breakable = true);
 
    void pushClassScope(cl::Record* cl);
    void popClassScope();
 
    string declareVariable(
       const string &name,
-      const Type &type,
+      const QualType &type,
       bool isGlobal = false,
       AstNode *cause = nullptr
    );
@@ -223,13 +210,17 @@ protected:
       TemplateArgList *argList
    );
 
-   void pushTy(const Type&);
-   Type popTy();
+   void pushTy(const QualType&);
+   QualType popTy();
 
-   inline void resolve(Type*, AstNode *node = nullptr);
+   struct VarResult {
+      Variable *V;
+      std::string scope;
+      bool escapesLambdaScope;
+   };
 
-   pair<pair<Variable, string>, bool> getVariable(string &name,
-                                                  AstNode *cause = nullptr);
+   VarResult getVariable(string &name,
+                         AstNode *cause = nullptr);
 
    CallCompatability getFunction(
       const string& funcName,
@@ -238,30 +229,30 @@ protected:
    );
 
    CallCompatability getMethod(
-      cl::Record *rec,
+      cdot::cl::Record *rec,
       const string& methodName,
       const std::vector<Argument>& args = {},
       std::vector<TemplateArg> const& templateArgs = {}
    );
 
    CallCompatability getCase(
-      cl::Enum *en,
+      cdot::cl::Enum *en,
       const string &caseName,
       std::vector<Argument> const& args = {}
    );
 
    bool hasVariable(string name);
 
-   MetaType *getMetaType(BuiltinType *forType);
+   MetaType *getMetaType(Type *forType);
 
    void wrapImplicitCast(
       std::shared_ptr<Expression>& target,
-      const Type &originTy,
-      const Type &destTy
+      const QualType &originTy,
+      const QualType &destTy
    );
 
    void lvalueToRvalue(std::shared_ptr<Expression>& target);
-   void toRvalueIfNecessary(Type &ty, std::shared_ptr<Expression> &target,
+   void toRvalueIfNecessary(QualType &ty, std::shared_ptr<Expression> &target,
                             bool preCond = true);
 
    void CopyScopeProps(
@@ -269,27 +260,14 @@ protected:
       Scope* dst
    );
 
-   bool warnCast(Type &lhs, Type &rhs);
-   void raiseTypeError(Type &lhs, Type &rhs, AstNode* cause);
+   bool warnCast(QualType &lhs, QualType &rhs);
+   void raiseTypeError(QualType &lhs, QualType &rhs, AstNode* cause);
 
-   std::stack<Type> typeStack;
+   std::stack<QualType> typeStack;
 
-   std::vector<string> labels = {};
+   std::set<string> labels = {};
 
-   inline bool has_label(string label) {
-      if (std::find(labels.begin(), labels.end(), label) != labels.end()) {
-         return true;
-      }
-
-      return false;
-   }
-
-   void ReturnMemberExpr(Expression*, Type);
-
-   void return_(Type& ret_type, AstNode *cause = nullptr);
-
-   void continue_(ContinueStmt* continueStmt);
-   void break_(BreakStmt* breakStmt);
+   void ReturnMemberExpr(Expression*, QualType);
 
    std::vector<Attribute> attributes = {};
 
@@ -303,7 +281,9 @@ protected:
       return false;
    }
 
-   Callable *currentCallable = nullptr;
+   size_t BreakStack = 0;
+   size_t ContinueStack = 0;
+   std::stack<QualType> ReturnTypeStack;
 
    static std::vector<string> currentNamespace;
    static std::vector<string> importedNamespaces;
@@ -318,9 +298,9 @@ protected:
                                              : currentNamespace.back() + ".";
    }
 
-   Type tryFunctionReference(IdentifierRefExpr *node);
+   QualType tryFunctionReference(IdentifierRefExpr *node);
 
-   pair<Type, std::vector<Type>> unify(
+   pair<QualType, std::vector<QualType>> unify(
       std::vector<std::shared_ptr<Expression>>&);
 
 
@@ -330,41 +310,41 @@ protected:
    void DefineConstr(ConstrDecl*, cdot::cl::Class*);
    void DefineDestr(DestrDecl*, cdot::cl::Class*);
 
-   BuiltinType* HandleBuiltinIdentifier(IdentifierRefExpr *node);
+   Type* HandleBuiltinIdentifier(IdentifierRefExpr *node);
 
-   Type HandleBinaryOperator(Type &lhs, Type &rhs, BinaryOperatorType,
+   QualType HandleBinaryOperator(QualType &lhs, QualType &rhs, BinaryOperatorType,
                              BinaryOperator *node);
-   Type HandleCastOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleAssignmentOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleArithmeticOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleBitwiseOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleLogicalOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleEqualityOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleComparisonOp(Type &lhs, Type &rhs, BinaryOperator *node);
-   Type HandleOtherOp(Type &lhs, Type &rhs, BinaryOperator *node);
+   QualType HandleCastOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleAssignmentOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleArithmeticOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleBitwiseOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleLogicalOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleEqualityOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleComparisonOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
+   QualType HandleOtherOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
 
-   Type tryBinaryOperatorMethod(
-      Type& fst,
-      Type& snd,
+   QualType tryBinaryOperatorMethod(
+      QualType& fst,
+      QualType& snd,
       BinaryOperator *node,
-      string &opName,
+      const string &opName,
       bool isAssignment
    );
-   Type tryFreeStandingBinaryOp(
-      Type& fst,
-      Type& snd,
+   QualType tryFreeStandingBinaryOp(
+      QualType& fst,
+      QualType& snd,
       BinaryOperator *node,
-      string &opName,
+      const string &opName,
       bool isAssignment
    );
-   Type tryFreeStandingUnaryOp(
-      Type& lhs,
+   QualType tryFreeStandingUnaryOp(
+      QualType& lhs,
       UnaryOperator *node,
-      string &opName
+      const string &opName
    );
 
-   void HandleEnumComp(Type& fst, Type& snd, BinaryOperator *node);
-   void HandleTupleComp(Type& fst, Type& snd, BinaryOperator *node);
+   void HandleEnumComp(QualType& fst, QualType& snd, BinaryOperator *node);
+   void HandleTupleComp(QualType& fst, QualType& snd, BinaryOperator *node);
 
    void HandleFunctionCall(CallExpr*);
    void HandleBuiltinCall(CallExpr*);
@@ -404,12 +384,12 @@ protected:
       std::vector<pair<string, std::shared_ptr<Expression>>>& args,
       std::vector<Argument>& givenArgs,
       std::vector<Argument>& declaredArgs,
-      std::vector<Type>& resolvedArgs
+      std::vector<QualType>& resolvedArgs
    );
 
    void ApplyCasts(
       CallExpr *node,
-      std::vector<Type> &givenArgs,
+      std::vector<QualType> &givenArgs,
       std::vector<Argument> &declaredArgs
    );
 
@@ -417,16 +397,19 @@ protected:
    void CheckUnionAccess(MemberRefExpr *node);
 
    bool matchableAgainst(
-      Type& matchVal,
+      QualType& matchVal,
       std::shared_ptr<CaseStmt> const& caseVal
    );
 
-   Type HandleDictionaryLiteral(CollectionLiteral *node);
+   QualType HandleDictionaryLiteral(CollectionLiteral *node);
 
    cl::Method *setterMethod = nullptr;
    void HandleFieldAccess(MemberRefExpr *node, cl::Class *cl);
    void HandlePropAccess(MemberRefExpr *node, cl::Record *rec);
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_TYPECHECKVISITOR_H

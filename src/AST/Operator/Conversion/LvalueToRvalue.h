@@ -5,27 +5,31 @@
 #ifndef CDOT_LVALUETORVALUECONV_H
 #define CDOT_LVALUETORVALUECONV_H
 
-
 #include "../../Expression/Expression.h"
-using namespace cdot;
+
+namespace cdot {
+namespace ast {
 
 class LvalueToRvalue : public Expression {
 public:
    explicit LvalueToRvalue(Expression::SharedPtr expr);
 
    typedef std::shared_ptr<LvalueToRvalue> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::LVALUE_TO_RVALUE;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == LvalueToRvalueID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr target;
+
+public:
+   const Expression::SharedPtr &getTarget() const;
+   void setTarget(const Expression::SharedPtr &target);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_LVALUETORVALUECONV_H

@@ -12,7 +12,6 @@
 #include "../SemanticAnalysis/Function.h"
 #include "../../Attribute/Attribute.h"
 
-enum class AccessModifier : unsigned int;
 class Parser;
 
 namespace llvm {
@@ -22,6 +21,9 @@ class MemoryBuffer;
 } // namespace llvm
 
 namespace cdot {
+
+enum class AccessModifier : unsigned int;
+
 namespace cl {
 
 class Record;
@@ -30,13 +32,16 @@ struct RecordTemplate;
 } // namespace cl
 } // namespace cdot
 
+namespace cdot {
+namespace ast {
+
 using std::string;
 using namespace cdot;
 
 class DeclPass: public AbstractPass {
 public:
    explicit DeclPass();
-   void run(std::vector<std::shared_ptr<CompoundStmt>> &roots) override;
+   void run(std::vector<CompilationUnit> &CUs);
 
    void declareGlobalTypedefs(std::vector<std::shared_ptr<Statement>>& statements);
 
@@ -49,39 +54,50 @@ public:
    void DeclareMethodTemplate(const string &recordName,
                               MethodTemplateDecl *node);
 
-   void visit(CompoundStmt *node) override;
+   void VisitNode(AstNode *node);
+   void VisitNode(const std::shared_ptr<AstNode> &node)
+   {
+      VisitNode(node.get());
+   }
 
-   void visit(NamespaceDecl *node) override;
-   void visit(UsingStmt *node) override;
-   void visit(EndOfFileStmt *node) override;
+   void visit(AstNode *node)
+   {
 
-   void visit(FunctionDecl *node) override;
-   void visit(FuncArgDecl *node) override;
+   }
 
-   void visit(DeclStmt *node) override;
+   void visit(CompoundStmt *node);
 
-   void visit(ClassDecl *node) override;
-   void visit(ExtensionDecl *node) override;
-   void visit(UnionDecl *node) override;
-   void visit(EnumDecl *node) override;
+   void visit(NamespaceDecl *node);
+   void visit(UsingStmt *node);
+   void visit(EndOfFileStmt *node);
 
-   void visit(FieldDecl *node) override;
-   void visit(PropDecl *node) override;
+   void visit(FunctionDecl *node);
+   void visit(FuncArgDecl *node);
 
-   void visit(MethodDecl *node) override;
-   void visit(ConstrDecl *node) override;
-   void visit(DestrDecl *node) override;
+   void visit(DeclStmt *node);
 
-   void visit(RecordTemplateDecl *node) override;
-   void visit(CallableTemplateDecl *node) override;
+   void visit(ClassDecl *node);
+   void visit(ExtensionDecl *node);
+   void visit(UnionDecl *node);
+   void visit(EnumDecl *node);
 
-   void visit(TypedefDecl *node) override;
-   void visit(TypeRef *node) override;
-   void visit(DeclareStmt *node) override;
+   void visit(FieldDecl *node);
+   void visit(PropDecl *node);
 
-   void visit(DebugStmt *node) override;
-   void visit(Statement *node) override;
-   void visit(Expression *node) override;
+   void visit(MethodDecl *node);
+   void visit(ConstrDecl *node);
+   void visit(DestrDecl *node);
+
+   void visit(RecordTemplateDecl *node);
+   void visit(CallableTemplateDecl *node);
+
+   void visit(TypedefDecl *node);
+   void visit(TypeRef *node);
+   void visit(DeclareStmt *node);
+
+   void visit(DebugStmt *node);
+   void visit(Statement *node);
+   void visit(Expression *node);
 
    string ns_prefix()
    {
@@ -90,14 +106,14 @@ public:
 
    string declareVariable(
       const string &name,
-      Type &type,
+      QualType &type,
       AccessModifier access,
       AstNode *cause
    );
 
-   Type declareFunction(
-      Function::UniquePtr &&func,
-      AstNode *cause
+   QualType declareFunction(
+      ast::Function::UniquePtr &&func,
+      bool isExternC = false
    );
 
    enum ResolveStatus {
@@ -105,7 +121,7 @@ public:
       Res_SubstituationFailure
    };
 
-   static BuiltinType *resolveObjectTy(
+   static Type *resolveObjectTy(
       TypeRef *node,
       std::vector<string>& importedNamespaces,
       std::vector<string>& currentNamespace,
@@ -117,7 +133,7 @@ public:
       const std::vector<TemplateConstraint> *constraints = nullptr
    );
 
-   static BuiltinType *resolveTemplateTy(
+   static Type *resolveTemplateTy(
       const TypeRef *node,
       std::vector<string>& importedNamespaces,
       std::vector<string>& currentNamespace,
@@ -127,7 +143,7 @@ public:
       const std::vector<TemplateConstraint> *constraints = nullptr
    );
 
-   static BuiltinType *resolveTypedef(
+   static Type *resolveTypedef(
       const TypeRef *node,
       std::vector<string>& importedNamespaces,
       std::vector<string>& currentNamespace,
@@ -138,7 +154,7 @@ public:
       const std::vector<TemplateConstraint> *constraints = nullptr
    );
 
-   static BuiltinType* getResolvedType(
+   static Type* getResolvedType(
       TypeRef *node,
       std::vector<string>& importedNamespaces,
       std::vector<string>& currentNamespace,
@@ -168,7 +184,7 @@ public:
       bool *isNew = nullptr
    );
 
-   static Function *declareFunctionInstantiation(
+   static ast::Function *declareFunctionInstantiation(
       cl::CallableTemplate &Template,
       std::vector<TemplateArg> const& templateArgs,
       bool *isNew = nullptr
@@ -227,5 +243,7 @@ protected:
    void CheckThrowsAttribute(Callable *callable, Attribute &attr);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_DECLPASS_H

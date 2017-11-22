@@ -6,11 +6,9 @@
 
 namespace cdot {
 
-unordered_map<string, GenericType*> GenericType::Instances;
-
 string GenericType::keyFrom(
    const string &genericClassName,
-   BuiltinType* actualType)
+   Type* actualType)
 {
    auto actualClassName = actualType->toUniqueString();
    return std::to_string(genericClassName.length()) + genericClassName
@@ -19,7 +17,7 @@ string GenericType::keyFrom(
 
 GenericType* GenericType::get(
    const string &genericClassName,
-   BuiltinType* actualType)
+   Type* actualType)
 {
    while (actualType->isGenericTy()) {
       actualType = actualType->asGenericTy()->getActualType();
@@ -30,23 +28,23 @@ GenericType* GenericType::get(
       Instances[key] = new GenericType(genericClassName, actualType);
    }
 
-   return Instances[key];
+   return cast<GenericType>(Instances[key]);
 }
 
 GenericType::GenericType(
    const string &genericClassName,
-   BuiltinType* actualType)
+   Type* actualType)
    : ObjectType(genericClassName), actualType(actualType)
 {
    id = TypeID::GenericTypeID;
 }
 
-BuiltinType* GenericType::getActualType() const
+Type* GenericType::getActualType() const
 {
    return actualType;
 }
 
-BuiltinType* GenericType::getActualType()
+Type* GenericType::getActualType()
 {
    return actualType;
 }
@@ -86,12 +84,12 @@ bool GenericType::needsStructReturn() const
    return actualType->needsStructReturn();
 }
 
-bool GenericType::implicitlyCastableTo(BuiltinType *rhs) const
+bool GenericType::implicitlyCastableTo(Type *rhs) const
 {
    return actualType->implicitlyCastableTo(rhs);
 }
 
-bool GenericType::explicitlyCastableTo(BuiltinType *rhs) const
+bool GenericType::explicitlyCastableTo(Type *rhs) const
 {
    return actualType->explicitlyCastableTo(rhs);
 }

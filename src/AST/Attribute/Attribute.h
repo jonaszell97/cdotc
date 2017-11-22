@@ -56,6 +56,6 @@ public:
 
 string isValidAttribute(Attribute attr);
 
-}
+} // namespace cdot
 
 #endif //CDOT_ATTRIBUTE_H

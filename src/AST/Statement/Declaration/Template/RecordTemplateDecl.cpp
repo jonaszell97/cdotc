@@ -8,14 +8,17 @@
 
 using std::move;
 
+namespace cdot {
+namespace ast {
+
 RecordTemplateDecl::RecordTemplateDecl(
    RecordTemplateKind kind, string &&name,
    std::unique_ptr<TokenStore> &&Store,
    std::vector<TemplateConstraint> &&constraints,
-   std::vector<Initializer> &&initializers) : kind(kind), Store(move(Store)),
-                                              name(name),
-                                              constraints(move(constraints)),
-                                              initializers(move(initializers))
+   std::vector<Initializer> &&initializers)
+   : Statement(RecordTemplateDeclID), kind(kind), Store(move(Store)),
+     name(name), constraints(move(constraints)),
+     initializers(move(initializers))
 {
 
 }
@@ -105,3 +108,6 @@ std::unique_ptr<TokenStore> &RecordTemplateDecl::getStore()
 {
    return Store;
 }
+
+} // namespace ast
+} // namespace cdot

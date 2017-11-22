@@ -6,17 +6,12 @@
 #include "../../Expression/TypeRef.h"
 #include "FuncArgDecl.h"
 
-DeclareStmt::DeclareStmt(ExternKind kind)
+namespace cdot {
+namespace ast {
+
+DeclareStmt::DeclareStmt(ExternKind kind) : Statement(DeclareStmtID)
 {
    externKind = kind;
-}
-
-std::vector<AstNode::SharedPtr> DeclareStmt::get_children()
-{
-   std::vector<AstNode::SharedPtr> children;
-   children.insert(children.begin(), declarations.begin(), declarations.end());
-
-   return children;
 }
 
 void DeclareStmt::addDeclaration(Statement::SharedPtr &&stmt)
@@ -26,3 +21,6 @@ void DeclareStmt::addDeclaration(Statement::SharedPtr &&stmt)
 
    declarations.push_back(move(stmt));
 }
+
+} // namespace ast
+} // namespace cdot

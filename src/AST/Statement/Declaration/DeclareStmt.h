@@ -8,25 +8,23 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class FuncArgDecl;
 class TypeRef;
 
 class DeclareStmt : public Statement {
 public:
    explicit DeclareStmt(ExternKind kind);
-
    void addDeclaration(Statement::SharedPtr&& stmt);
-
-   std::vector<AstNode::SharedPtr> get_children() override;
 
    typedef std::shared_ptr<DeclareStmt> SharedPtr;
 
-   NodeType get_type() override {
-      return NodeType::DECLARE_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == DeclareStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::vector<Statement::SharedPtr> declarations;
@@ -43,5 +41,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_DECLARESTMT_H

@@ -5,28 +5,17 @@
 #include "ForStmt.h"
 #include "../../Expression/Expression.h"
 
-ForStmt::ForStmt(Statement::SharedPtr init, std::shared_ptr<Expression> term, Statement::SharedPtr inc) :
-   initialization(init),
-   termination(term),
-   increment(inc)
+namespace cdot {
+namespace ast {
+
+ForStmt::ForStmt(Statement::SharedPtr &&init,
+                 std::shared_ptr<Expression> &&term,
+                 Statement::SharedPtr &&inc)
+   : Statement(ForStmtID), initialization(move(init)), termination(move(term)),
+     increment(move(inc))
 {
 
 }
 
-std::vector<AstNode::SharedPtr> ForStmt::get_children() {
-   std::vector<AstNode::SharedPtr> children;
-   if (initialization) {
-      children.push_back(initialization);
-   }
-   if (increment) {
-      children.push_back(increment);
-   }
-   if (termination) {
-      children.push_back(termination);
-   }
-   if (body != nullptr) {
-      children.push_back(body);
-   }
-
-   return children;
-}
+} // namespace ast
+} // namespace cdot

@@ -8,16 +8,10 @@
 #include "../../Statement.h"
 #include "../../../Passes/SemanticAnalysis/Record/Record.h"
 
-class FieldDecl;
-class PropDecl;
-class MethodDecl;
-class ConstrDecl;
-class TypedefDecl;
-class DestrDecl;
-class TypeRef;
-
 namespace cdot {
+
 namespace cl {
+
 struct ExtensionConstraint {
    enum ConstraintKind {
       CONFORMANCE,
@@ -36,15 +30,39 @@ struct ExtensionConstraint {
 
    string reportFailure() const;
 };
-}
-}
+
+} // namespace cl
+
+namespace ast {
+
+class FieldDecl;
+class PropDecl;
+class MethodDecl;
+class ConstrDecl;
+class TypedefDecl;
+class DestrDecl;
+class TypeRef;
 
 class RecordDecl: public Statement {
 public:
    typedef std::shared_ptr<RecordDecl> SharedPtr;
 
+   static bool classof(AstNode const* T)
+   {
+      switch (T->getTypeID()) {
+#      define CDOT_ASTNODE(Name) \
+          case Name##ID:
+#      define CDOT_INCLUDE_RECORD_DECL
+#      include "../../../AstNode.def"
+         return true;
+         default:
+            return false;
+      }
+   }
+
 protected:
    RecordDecl(
+      NodeType typeID,
       AccessModifier am,
       string &&recordName,
 
@@ -103,5 +121,7 @@ public:
    void setRecord(Record *record);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_RECORDDECL_H

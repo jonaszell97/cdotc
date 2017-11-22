@@ -5,29 +5,43 @@
 #include "ThrowStmt.h"
 #include "../../Expression/Expression.h"
 
+namespace cdot {
+namespace ast {
+
 ThrowStmt::ThrowStmt(std::shared_ptr<Expression> &&thrownVal)
-   : thrownVal(thrownVal)
+   : Statement(ThrowStmtID), thrownVal(thrownVal)
 {
 
 }
 
-std::vector<AstNode::SharedPtr> ThrowStmt::get_children()
+const std::shared_ptr<Expression> &ThrowStmt::getThrownVal() const
 {
-   return { thrownVal };
-}
-
-const std::shared_ptr<Expression> &ThrowStmt::getThrownVal() const {
    return thrownVal;
 }
 
-void ThrowStmt::setThrownVal(const std::shared_ptr<Expression> &thrownVal) {
+void ThrowStmt::setThrownVal(const std::shared_ptr<Expression> &thrownVal)
+{
    ThrowStmt::thrownVal = thrownVal;
 }
 
-BuiltinType *ThrowStmt::getThrownType() const {
+Type *ThrowStmt::getThrownType() const
+{
    return thrownType;
 }
 
-void ThrowStmt::setThrownType(BuiltinType *thrownType) {
+void ThrowStmt::setThrownType(Type *thrownType)
+{
    ThrowStmt::thrownType = thrownType;
 }
+cl::Method *ThrowStmt::getDescFn() const
+{
+   return descFn;
+}
+
+void ThrowStmt::setDescFn(cl::Method *descFn)
+{
+   ThrowStmt::descFn = descFn;
+}
+
+} // namespace ast
+} // namespace cdot

@@ -5,23 +5,20 @@
 #include "DeclStmt.h"
 #include "../../Expression/TypeRef.h"
 
+namespace cdot {
+namespace ast {
 
-DeclStmt::DeclStmt(
-   string identifier, TypeRef::SharedPtr type, bool is_const,
-   Expression::SharedPtr val)
-   : identifier(identifier),
-     type(type),
+DeclStmt::DeclStmt(string &&identifier,
+                   TypeRef::SharedPtr &&type,
+                   bool is_const,
+                   Expression::SharedPtr &&val)
+   : Statement(DeclStmtID), identifier(move(identifier)),
+     type(move(type)),
      is_const(is_const),
-     value(val)
+     value(move(val))
 {
 
 }
 
-std::vector<AstNode::SharedPtr> DeclStmt::get_children() {
-   std::vector<AstNode::SharedPtr> children{ type };
-   if (value) {
-      children.push_back(value);
-   }
-
-   return children;
-}
+} // namespace ast
+} // namespace cdot

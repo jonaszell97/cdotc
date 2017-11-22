@@ -7,49 +7,37 @@
 
 #include "../Expression/Expression.h"
 
-class CallExpr;
-
 namespace cdot {
 namespace cl {
    struct Method;
 }
 }
 
+namespace cdot {
+namespace ast {
+
+class CallExpr;
+
 class UnaryOperator : public Expression {
 public:
-   UnaryOperator(string, string);
+   UnaryOperator(string &&op, string &&fix);
 
-   void setTarget(Expression::SharedPtr t) {
+   void setTarget(Expression::SharedPtr t)
+   {
       target = t;
    }
 
-   void isLhsOfAssigment() override {
-      lhs_of_assignment = true;
-      if (memberExpr != nullptr) {
-         memberExpr->isLhsOfAssigment();
-      }
-      if (target != nullptr) {
-         target->isLhsOfAssigment();
-      }
-   }
-
-   std::vector<AstNode::SharedPtr> get_children() override;
-
    typedef std::shared_ptr<UnaryOperator> SharedPtr;
 
-   NodeType get_type() override {
-      return NodeType::UNARY_OPERATOR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == UnaryOperatorID;
    }
-
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr target;
    string op;
-   BuiltinType* operandType;
+   Type* operandType;
    bool prefix;
 
    // codegen
@@ -59,7 +47,44 @@ protected:
 
    bool isPointerArithmetic = false;
    bool needsDereferenceLoad = true;
+
+public:
+   Expression::SharedPtr &getTarget();
+
+   const string &getOp() const;
+
+   void setOp(const string &op);
+
+   Type *getOperandType() const;
+
+   void setOperandType(Type *operandType);
+
+   bool isPrefix() const;
+
+   void setPrefix(bool prefix);
+
+   const std::shared_ptr<CallExpr> &getOverridenCall() const;
+
+   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);
+
+   cl::Method *getMethod() const;
+
+   void setMethod(cl::Method *method);
+
+   const string &getClassName() const;
+
+   void setClassName(const string &className);
+
+   bool isIsPointerArithmetic() const;
+
+   void setIsPointerArithmetic(bool isPointerArithmetic);
+
+   bool isNeedsDereferenceLoad() const;
+
+   void setNeedsDereferenceLoad(bool needsDereferenceLoad);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_UNARYOPERATOR_H

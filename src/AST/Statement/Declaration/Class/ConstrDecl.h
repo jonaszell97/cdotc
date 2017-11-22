@@ -7,14 +7,18 @@
 
 #include "../CallableDecl.h"
 
+namespace cdot {
+
+namespace cl {
+
+struct Method;
+
+} // namespace cl
+
+namespace ast {
+
 class FuncArgDecl;
 class CompoundStmt;
-
-namespace cdot {
-   namespace cl {
-      struct Method;
-   }
-}
 
 class ConstrDecl : public CallableDecl {
 public:
@@ -25,23 +29,18 @@ public:
    );
 
    typedef std::shared_ptr<ConstrDecl> SharedPtr;
-   typedef std::unique_ptr<ConstrDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::CONSTR_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ConstrDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    bool memberwise = false;
 
    // codegen
    cdot::cl::Method* method;
-   cl::Record *record;
+   cdot::cl::Record *record;
 
 public:
    bool isMemberwise() const
@@ -54,19 +53,21 @@ public:
       ConstrDecl::memberwise = memberwise;
    }
 
-   cl::Method *getMethod() const
+   cdot::cl::Method *getMethod() const
    {
       return method;
    }
 
-   void setMethod(cl::Method *method)
+   void setMethod(cdot::cl::Method *method)
    {
       ConstrDecl::method = method;
    }
 
-   cl::Record *getRecord() const;
-   void setRecord(cl::Record *record);
+   cdot::cl::Record *getRecord() const;
+   void setRecord(cdot::cl::Record *record);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CONSTRDECL_H

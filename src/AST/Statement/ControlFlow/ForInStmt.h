@@ -8,20 +8,23 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
+class DeclStmt;
+
 class ForInStmt: public Statement {
 public:
-   ForInStmt(std::shared_ptr<DeclStmt>&& decl, std::shared_ptr<Expression>&& range,
-      std::shared_ptr<Statement>&& body);
+   ForInStmt(std::shared_ptr<DeclStmt>&& decl,
+             std::shared_ptr<Expression>&& range,
+             std::shared_ptr<Statement>&& body);
 
    typedef std::shared_ptr<ForInStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::FOR_IN_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ForInStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<DeclStmt> decl;
@@ -32,12 +35,56 @@ protected:
    string iteratorGetter;
    string iteratorClass;
    string nextFunc;
-   Type iteratedType;
+   QualType iteratedType;
    bool rangeIsRefcounted = false;
    string rangeClassName;
 
-   BuiltinType* protocolTy = nullptr;
+   Type* protocolTy = nullptr;
+
+public:
+   const std::shared_ptr<DeclStmt> &getDecl() const;
+
+   void setDecl(const std::shared_ptr<DeclStmt> &decl);
+
+   const std::shared_ptr<Expression> &getRangeExpr() const;
+
+   void setRangeExpr(const std::shared_ptr<Expression> &rangeExpr);
+
+   const std::shared_ptr<Statement> &getBody() const;
+
+   void setBody(const std::shared_ptr<Statement> &body);
+
+   const string &getIteratorGetter() const;
+
+   void setIteratorGetter(const string &iteratorGetter);
+
+   const string &getIteratorClass() const;
+
+   void setIteratorClass(const string &iteratorClass);
+
+   const string &getNextFunc() const;
+
+   void setNextFunc(const string &nextFunc);
+
+   const QualType &getIteratedType() const;
+
+   void setIteratedType(const QualType &iteratedType);
+
+   bool isRangeIsRefcounted() const;
+
+   void setRangeIsRefcounted(bool rangeIsRefcounted);
+
+   const string &getRangeClassName() const;
+
+   void setRangeClassName(const string &rangeClassName);
+
+   Type *getProtocolTy() const;
+
+   void setProtocolTy(Type *protocolTy);
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_FORINSTMT_H

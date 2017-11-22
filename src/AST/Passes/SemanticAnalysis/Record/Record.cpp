@@ -17,6 +17,7 @@
 #include "../../CodeGen/CodeGen.h"
 
 using namespace cdot::diag;
+using namespace cdot::ast;
 
 namespace cdot {
 namespace cl {
@@ -121,7 +122,7 @@ void Record::setTypedefs(const std::vector<Typedef> &typedefs)
 }
 
 void Record::declareTypedef(
-   BuiltinType *ty, const string &alias,
+   Type *ty, const string &alias,
    const std::vector<TemplateConstraint> &templateArgs,
    AccessModifier access, AstNode *decl)
 {
@@ -227,11 +228,10 @@ void Record::setMethods(
 }
 
 
-Method* Record::getMethod(const string &method_name)
+Method* Record::getMethod(llvm::StringRef name)
 {
    for (auto& method : methods) {
-      if (method.second->getName() == method_name
-          || method.second->getMangledName() == method_name) {
+      if (name.equals(method.second->getMangledName())) {
          return method.second.get();
       }
    }
@@ -281,10 +281,10 @@ namespace {
 
 string getOperatorEqualsName(Record *rec)
 {
-   string res(rec->getName());
+   string res;
    auto len = res.length();
 
-   res += ".infix ==";
+   res += "infix ==";
    res += std::to_string(len);
    res += rec->getName();
 
@@ -294,7 +294,7 @@ string getOperatorEqualsName(Record *rec)
 } // anonymous namespace
 
 Method* Record::declareMethod(const string &methodName,
-                              const Type& ret_type,
+                              const QualType& ret_type,
                               AccessModifier access,
                               std::vector<Argument>&& args,
                               bool isStatic,
@@ -323,10 +323,6 @@ Method* Record::declareMethod(const string &methodName,
    auto ptr = method.get();
    methods.emplace(methodName, std::move(method));
 
-   for (const auto &m : methods) {
-      int i = 3;
-   }
-
    if (mangledName == getOperatorEqualsName(this)) {
       operatorEquals = ptr;
    }
@@ -335,7 +331,7 @@ Method* Record::declareMethod(const string &methodName,
 }
 
 Property* Record::declareProperty(const string &propName,
-                                  const Type &ty,
+                                  const QualType &ty,
                                   bool isStatic,
                                   Method *getter,
                                   Method *setter,
@@ -491,14 +487,14 @@ std::vector<TemplateConstraint>& Record::getMethodConstraints(
 
 const ExtensionConstraint* Record::checkConstraints(
    Method *method,
-   BuiltinType *caller) const
+   Type *caller) const
 {
    llvm_unreachable("should only be called on classes");
 }
 
 bool Record::checkConstraint(
    const ExtensionConstraint &constr,
-   BuiltinType *&caller) const
+   Type *&caller) const
 {
    llvm_unreachable("should only be called on classes");
 }
@@ -525,7 +521,7 @@ bool isBetterMatchThan(
 
 void Record::addImplicitConformance(ImplicitConformanceKind kind,
                                     std::vector<string> &protocolMethods) {
-   Type returnType;
+   QualType returnType;
    Method* method;
 
    switch (kind) {
@@ -549,7 +545,7 @@ void Record::addImplicitConformance(ImplicitConformanceKind kind,
             "infix ==",
             returnType,
             AccessModifier::PUBLIC,
-            { Argument("", Type(ObjectType::get(recordName))) },
+            { Argument("", QualType(ObjectType::get(recordName))) },
             false,
             nullptr,
             SourceLocation()
@@ -600,7 +596,7 @@ void Record::setOperatorEquals(Method *operatorEquals)
 }
 
 Property::Property(const string &name,
-                   const Type &ty,
+                   const QualType &ty,
                    bool isStatic,
                    Method *getter,
                    Method *setter,
@@ -633,12 +629,12 @@ void Property::setName(const string &name)
    Property::name = name;
 }
 
-const Type &Property::getType() const
+const QualType &Property::getType() const
 {
    return type;
 }
 
-void Property::setType(const Type &ty)
+void Property::setType(const QualType &ty)
 {
    Property::type = ty;
 }

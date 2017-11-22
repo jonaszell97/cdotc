@@ -26,6 +26,11 @@ struct CallCompatability;
 
 using cdot::cl::EnumCase;
 
+namespace cdot {
+namespace ast {
+
+class Function;
+
 enum class CallType : unsigned int {
    METHOD_CALL,
    FUNC_CALL,
@@ -38,6 +43,7 @@ public:
    CallExpr(CallType kind,
             std::vector<pair<string, Expression::SharedPtr>> &&args,
             string &&name = "");
+
    CallExpr(CallType kind,
             std::vector<Expression::SharedPtr> &&args,
             string &&name = "");
@@ -50,16 +56,11 @@ public:
    bool createsTemporary() override;
 
    typedef std::shared_ptr<CallExpr> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::CALL_EXPR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == CallExprID;
    }
-
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    CallType type;
@@ -79,7 +80,7 @@ protected:
    // method call
    bool is_ns_member = false;
    bool is_static = false;
-   Type returnType;
+   QualType returnType;
    bool is_virtual = false;
 
    bool is_builtin = false;
@@ -89,7 +90,7 @@ protected:
    string className;
    union {
       cdot::cl::Method *method;
-      Function *func;
+      ast::Function *func;
    };
 
    bool anonymous_call = false;
@@ -144,8 +145,8 @@ public:
    bool isStatic() const;
    void setIsStatic(bool isStatic);
 
-   const Type &getReturnType() const;
-   void setReturnType(const Type &returnType);
+   QualType &getReturnType();
+   void setReturnType(const QualType &returnType);
 
    bool isVirtual() const;
    void setIsVirtual(bool is_virtual);
@@ -164,6 +165,12 @@ public:
 
    cl::Method *getMethod() const;
    void setMethod(cl::Method *method);
+
+   Function *getFunc() const;
+   void setFunc(Function *func)
+   {
+      CallExpr::func = func;
+   }
 
    bool isAnonymousCall() const;
    void setIsAnonymousCall(bool isAnonymousCall_);
@@ -199,5 +206,7 @@ public:
    void setUnionConstr(bool unionConstr);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CALLEXPR_H

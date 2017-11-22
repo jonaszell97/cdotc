@@ -8,12 +8,12 @@
 #include "RecordDecl.h"
 
 namespace cdot {
-   namespace cl {
-      class Union;
-   }
+
+namespace cl {
+class Union;
 }
 
-using cdot::cl::Union;
+namespace ast {
 
 class UnionDecl: public RecordDecl {
 public:
@@ -32,12 +32,6 @@ public:
 
       std::vector<std::shared_ptr<Statement>> &&innerdecls
    );
-
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::UNION_DECL;
-   }
 
    const UnionTypes &getContainedTypes() const {
       return containedTypes;
@@ -58,8 +52,6 @@ public:
       UnionDecl::declaredUnion = declaredUnion;
    }
 
-   ASTNODE_ACCEPT_PASSES
-
 protected:
    UnionTypes containedTypes;
    bool is_const = false;
@@ -67,5 +59,7 @@ protected:
    Union *declaredUnion;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_UNIONDECL_H

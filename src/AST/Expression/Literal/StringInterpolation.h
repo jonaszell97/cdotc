@@ -5,35 +5,32 @@
 #ifndef CDOT_STRINGINTERPOLATION_H
 #define CDOT_STRINGINTERPOLATION_H
 
-
 #include "../Expression.h"
+
+namespace cdot {
+namespace ast {
 
 class StringInterpolation: public Expression {
 public:
    explicit StringInterpolation(std::vector<Expression::SharedPtr>&& strings);
 
    typedef std::shared_ptr<StringInterpolation> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   inline virtual NodeType get_type() override {
-      return NodeType::STRING_INTERPOLATION;
-   }
 
    bool createsTemporary() override
    {
       return true;
    }
 
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == StringInterpolationID;
+   }
 
 protected:
    std::vector<Expression::SharedPtr> strings;
 
 public:
-   const std::vector<Expression::SharedPtr> &getStrings() const
+   std::vector<Expression::SharedPtr> &getStrings()
    {
       return strings;
    }
@@ -44,5 +41,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_STRINGINTERPOLATION_H

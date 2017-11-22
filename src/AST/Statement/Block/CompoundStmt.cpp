@@ -4,35 +4,19 @@
 
 #include "CompoundStmt.h"
 
+namespace cdot {
+namespace ast {
+
 CompoundStmt::CompoundStmt(bool keep_scope)
-   : preserveScope(keep_scope)
+   : Statement(CompoundStmtID), preserveScope(keep_scope)
 {
 
 }
 
-void CompoundStmt::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
+void CompoundStmt::addStatement(Statement::SharedPtr &&stmt)
 {
-   for (auto &stmt : statements) {
-      if (stmt.get() == child) {
-         stmt.reset((Statement*)replacement);
-         return;
-      }
-   }
-
-   llvm_unreachable("child does not exist");
+   statements.push_back(std::move(stmt));
 }
 
-void CompoundStmt::addStatement(Statement::SharedPtr stmt) {
-   statements.emplace_back(stmt);
-}
-
-std::vector<AstNode::SharedPtr> CompoundStmt::get_children() {
-   std::vector<AstNode::SharedPtr> res;
-   for (int i = 0; i < statements.size(); i++) {
-      res.push_back(statements[i]);
-   }
-
-   return res;
-}
+} // namespace ast
+} // namespace cdot

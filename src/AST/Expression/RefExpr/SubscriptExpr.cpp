@@ -4,28 +4,45 @@
 
 #include "SubscriptExpr.h"
 
-SubscriptExpr::SubscriptExpr(Expression::SharedPtr expr) {
-   _index = expr;
-   children.push_back(&_index);
-}
+namespace cdot {
+namespace ast {
 
-void SubscriptExpr::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
+SubscriptExpr::SubscriptExpr(Expression::SharedPtr expr)
+   : Expression(SubscriptExprID)
 {
-   if (memberExpr.get() == child) {
-      memberExpr.reset(replacement);
-   }
-
-   llvm_unreachable("child does not exist");
+   index = expr;
 }
 
-std::vector<AstNode::SharedPtr> SubscriptExpr::get_children() {
-   std::vector<AstNode::SharedPtr> res;
-   res.push_back(_index);
-   if ( memberExpr != nullptr) {
-      res.push_back(memberExpr);
-   }
-
-   return res;
+Expression::SharedPtr &SubscriptExpr::getIndex()
+{
+   return index;
 }
+
+void SubscriptExpr::setIndex(const Expression::SharedPtr &index)
+{
+   SubscriptExpr::index = index;
+}
+
+bool SubscriptExpr::isSubscriptOperator() const
+{
+   return is_subscript_op;
+}
+
+void SubscriptExpr::setIsSubscriptOperator(bool is_subscript_op)
+{
+   SubscriptExpr::is_subscript_op = is_subscript_op;
+}
+
+const std::shared_ptr<CallExpr> &SubscriptExpr::getOverridenCall() const
+{
+   return overridenCall;
+}
+
+void
+SubscriptExpr::setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall)
+{
+   SubscriptExpr::overridenCall = overridenCall;
+}
+
+} // namespace ast
+} // namespace cdot

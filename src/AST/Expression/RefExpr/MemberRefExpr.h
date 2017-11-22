@@ -7,6 +7,9 @@
 
 #include "../Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class CallExpr;
 
 class MemberRefExpr : public Expression {
@@ -15,26 +18,21 @@ public:
    explicit MemberRefExpr(size_t, bool pointerAccess = false);
 
    typedef std::shared_ptr<MemberRefExpr> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::MEMBER_EXPR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == MemberRefExprID;
    }
-
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    TemplateArgList *templateArgs;
 
    // codegen
    string className;
-   Type fieldType;
+   QualType fieldType;
    bool is_static = false;
 
-   BuiltinType *metaType = nullptr;
+   Type *metaType = nullptr;
 
    bool is_tuple_access = false;
    size_t tupleIndex;
@@ -61,8 +59,8 @@ public:
    bool isNsMember() const;
    void setIsNsMember(bool is_ns_member);
 
-   BuiltinType *getMetaType() const;
-   void setMetaType(BuiltinType *metaType);
+   Type *getMetaType() const;
+   void setMetaType(Type *metaType);
 
    bool isEnumRawValue() const;
    void setIsEnumRawValue(bool is_enum_raw_value);
@@ -76,8 +74,8 @@ public:
    const string &getClassName() const;
    void setClassName(const string &className);
 
-   const Type &getFieldType() const;
-   void setFieldType(const Type &fieldType);
+   const QualType &getFieldType() const;
+   void setFieldType(const QualType &fieldType);
 
    size_t getTupleIndex() const;
    void setTupleIndex(size_t tupleIndex);
@@ -86,5 +84,7 @@ public:
    void setTemplateArgs(TemplateArgList *templateArgs);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_MEMBERREFEXPR_H

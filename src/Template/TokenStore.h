@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "../Token.h"
+#include "../lex/Token.h"
 
 namespace cdot {
 

@@ -7,59 +7,33 @@
 #include "../../Passes/SemanticAnalysis/Record/Class.h"
 #include "../../Passes/SemanticAnalysis/Record/Enum.h"
 
+namespace cdot {
+namespace ast {
+
 CallExpr::CallExpr(CallType type,
                    std::vector<pair<string, Expression::SharedPtr>> &&args,
                    string &&_ident)
-   : type(type), args(args),
+   : Expression(CallExprID), type(type), args(args),
      templateArgs(new ResolvedTemplateArgList({}))
 {
-   ident = _ident;
-   for (auto& arg : this->args) {
-      children.push_back(&arg.second);
-   }
+   ident = std::move(_ident);
 }
 
 CallExpr::CallExpr(CallType type,
                    std::vector<Expression::SharedPtr> &&args,
                    string &&_ident)
-   : type(type), templateArgs(new ResolvedTemplateArgList({}))
+   : Expression(CallExprID), type(type),
+     templateArgs(new ResolvedTemplateArgList({}))
 {
-   ident = _ident;
-   for (auto& arg : args) {
-      this->args.emplace_back("", arg);
-      children.push_back(&this->args.back().second);
+   ident = std::move(_ident);
+   for (const auto &arg : args) {
+      this->args.emplace_back("", move(arg));
    }
 }
 
 bool CallExpr::createsTemporary()
 {
-   return returnType->isObject();
-}
-
-void CallExpr::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   for (auto &arg : args) {
-      if (arg.second.get() == child) {
-         arg.second.reset(replacement);
-         return;
-      }
-   }
-
-   llvm_unreachable("child does not exist");
-}
-
-std::vector<AstNode::SharedPtr> CallExpr::get_children() {
-   std::vector<AstNode::SharedPtr> res;
-   for (auto arg : args) {
-      res.push_back(arg.second);
-   }
-   if (memberExpr != nullptr) {
-      res.push_back(memberExpr);
-   }
-
-   return res;
+   return returnType->isObjectTy();
 }
 
 CallType CallExpr::getType() const {
@@ -145,11 +119,12 @@ void CallExpr::setIsStatic(bool isStatic) {
    CallExpr::is_static = isStatic;
 }
 
-const Type &CallExpr::getReturnType() const {
+QualType &CallExpr::getReturnType()
+{
    return returnType;
 }
 
-void CallExpr::setReturnType(const Type &returnType) {
+void CallExpr::setReturnType(const QualType &returnType) {
    CallExpr::returnType = returnType;
 }
 
@@ -302,3 +277,11 @@ void CallExpr::loadBeforeCall(bool load_before_call)
 {
    CallExpr::load_before_call = load_before_call;
 }
+
+Function *CallExpr::getFunc() const
+{
+   return func;
+}
+
+} // namespace ast
+} // namespace cdot

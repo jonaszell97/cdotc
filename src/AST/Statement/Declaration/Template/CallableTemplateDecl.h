@@ -21,6 +21,11 @@ class CallableTemplate;
 
 } // namespace cdot
 
+namespace cdot {
+namespace ast {
+
+class FuncArgDecl;
+
 class CallableTemplateDecl: public Statement {
 public:
    CallableTemplateDecl(
@@ -33,17 +38,11 @@ public:
 
    typedef std::shared_ptr<CallableTemplateDecl> SharedPtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override
+   static bool classof(AstNode const* T)
    {
-      return {};
+       return T->getTypeID() == CallableTemplateDeclID
+              || T->getTypeID() == MethodTemplateDeclID;
    }
-
-   NodeType get_type() override
-   {
-      return NodeType::CALLABLE_TEMPLATE_DECL;
-   }
-
-   ASTNODE_ACCEPT_PASSES
 
 protected:
    string name;
@@ -53,7 +52,7 @@ protected:
    std::vector<std::shared_ptr<FuncArgDecl>> args;
    std::shared_ptr<TypeRef> returnType;
 
-   cl::CallableTemplate *templ;
+   cdot::cl::CallableTemplate *templ;
    std::vector<std::shared_ptr<Statement>> Instantiations;
 
 public:
@@ -69,8 +68,8 @@ public:
    std::shared_ptr<TypeRef> &getReturnType();
    void setReturnType(const std::shared_ptr<TypeRef> &returnType);
 
-   cl::CallableTemplate *getTempl() const;
-   void setTempl(cl::CallableTemplate *templ);
+   cdot::cl::CallableTemplate *getTempl() const;
+   void setTempl(cdot::cl::CallableTemplate *templ);
 
    const std::vector<std::shared_ptr<Statement>> &getInstantiations() const;
    void setInstantiations(
@@ -78,9 +77,10 @@ public:
    void addInstantiation(std::shared_ptr<Statement> &&inst);
 
    std::unique_ptr<TokenStore> &getStore();
-
-
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_CALLABLETEMPLATEDECL_H

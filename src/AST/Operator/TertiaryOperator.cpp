@@ -4,45 +4,32 @@
 
 #include "TertiaryOperator.h"
 
-TertiaryOperator::TertiaryOperator(Expression::SharedPtr cond, Expression::SharedPtr if_br,
-      Expression::SharedPtr else_br) :
-   condition(cond),
-   lhs(if_br),
-   rhs(else_br)
+namespace cdot {
+namespace ast {
+
+TertiaryOperator::TertiaryOperator(Expression::SharedPtr &&cond,
+                                   Expression::SharedPtr &&lhs,
+                                   Expression::SharedPtr &&rhs)
+   : Expression(TertiaryOperatorID), condition(move(cond)), lhs(move(lhs)),
+     rhs(move(rhs))
 {
-   children.push_back(&condition);
-   children.push_back(&lhs);
-   children.push_back(&rhs);
+
 }
 
-void TertiaryOperator::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
+Expression::SharedPtr &TertiaryOperator::getCondition()
 {
-   if (condition.get() == child) {
-      condition.reset(replacement);
-   }
-
-   if (lhs.get() == child) {
-      lhs.reset(replacement);
-   }
-
-   if (rhs.get() == child) {
-      rhs.reset(replacement);
-   }
-
-   if (memberExpr.get() == child) {
-      memberExpr.reset(replacement);
-   }
-
-   llvm_unreachable("child does not exist");
+   return condition;
 }
 
-std::vector<AstNode::SharedPtr> TertiaryOperator::get_children() {
-   std::vector<AstNode::SharedPtr> children { condition, lhs, rhs };
-   if (memberExpr != nullptr) {
-      children.push_back(memberExpr);
-   }
-
-   return children;
+Expression::SharedPtr &TertiaryOperator::getLhs()
+{
+   return lhs;
 }
+
+Expression::SharedPtr &TertiaryOperator::getRhs()
+{
+   return rhs;
+}
+
+} // namespace ast
+} // namespace cdot

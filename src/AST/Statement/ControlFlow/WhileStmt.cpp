@@ -5,15 +5,32 @@
 #include "WhileStmt.h"
 #include "../../Expression/Expression.h"
 
-WhileStmt::WhileStmt(Expression::SharedPtr cond, Statement::SharedPtr while_block, bool atLeastOnce) :
-   condition(cond),
-   body(while_block),
-   atLeastOnce(atLeastOnce)
+namespace cdot {
+namespace ast {
+
+WhileStmt::WhileStmt(Expression::SharedPtr &&cond,
+                     Statement::SharedPtr &&body,
+                     bool atLeastOnce)
+   : Statement(WhileStmtID), condition(move(cond)), body(move(body)),
+     atLeastOnce(atLeastOnce)
 {
-   children.push_back(&condition);
+
 }
 
-std::vector<AstNode::SharedPtr> WhileStmt::get_children() {
-   std::vector<AstNode::SharedPtr> children{ body };
-   return { condition, body };
+std::shared_ptr<Expression> &WhileStmt::getCondition()
+{
+   return condition;
 }
+
+const Statement::SharedPtr &WhileStmt::getBody() const
+{
+   return body;
+}
+
+bool WhileStmt::isAtLeastOnce() const
+{
+   return atLeastOnce;
+}
+
+} // namespace ast
+} // namespace cdot

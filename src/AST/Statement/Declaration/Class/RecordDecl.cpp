@@ -9,17 +9,23 @@
 
 using std::move;
 
+namespace cdot {
+namespace ast {
+
 RecordDecl::RecordDecl(
-   AccessModifier am, string &&recordName,
+   NodeType typeID,
+   AccessModifier am,
+   string &&recordName,
    std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
    std::vector<std::shared_ptr<Statement>> &&methods,
    std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
    std::vector<std::shared_ptr<PropDecl>> &&properties,
    std::vector<Statement::SharedPtr> &&innerDeclarations)
-       : am(am), recordName(move(recordName)), conformsTo(move(conformsTo)),
-         methods(move(methods)), typedefs(move(typedefs)),
-         innerDeclarations(move(innerDeclarations)),
-         properties(move(properties))
+   : Statement(typeID), am(am), recordName(move(recordName)),
+     conformsTo(move(conformsTo)),
+     methods(move(methods)), typedefs(move(typedefs)),
+     innerDeclarations(move(innerDeclarations)),
+     properties(move(properties))
 {
 
 }
@@ -125,3 +131,6 @@ void RecordDecl::setRecord(Record *record)
 {
    RecordDecl::record = record;
 }
+
+} // namespace ast
+} // namespace cdot

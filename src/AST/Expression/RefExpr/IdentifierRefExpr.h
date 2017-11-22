@@ -7,7 +7,6 @@
 
 #include "../Expression.h"
 
-class MemberRefExpr;
 
 namespace cdot {
 enum class BuiltinIdentifier {
@@ -19,52 +18,46 @@ extern unordered_map<string, BuiltinIdentifier> builtinIdentifiers;
 class TemplateArgList;
 }
 
+namespace cdot {
+namespace ast {
+
+class MemberRefExpr;
+
 class IdentifierRefExpr : public Expression {
 public:
    explicit IdentifierRefExpr(string &&ident);
-   ~IdentifierRefExpr() override;
-
-   bool isUnderscore() const override
-   {
-      return ident == "_";
-   }
-
-   bool needsContextualInformation() const override
-   {
-      return memberExpr == nullptr;
-   }
 
    typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::IDENTIFIER_EXPR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == IdentifierRefExprID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    // codegen
    bool captured_var = false;
 
    union {
-      BuiltinType *builtinType = nullptr;
-      BuiltinType *capturedType;
+      Type *builtinType = nullptr;
+      Type *capturedType;
    };
 
-   BuiltinType *metaType = nullptr;
-
-   bool is_let_expr = false;
-   bool is_var_expr = false;
+   Type *metaType = nullptr;
 
    Variant builtinValue;
    BuiltinIdentifier builtinKind;
 
-   bool is_namespace = false;
-   bool is_super = false;
-   bool is_function = false;
-   bool is_metatype = false;
+   bool is_let_expr : 1;
+   bool is_var_expr : 1;
+   bool is_namespace : 1;
+   bool is_super : 1;
+   bool is_self : 1;
+   bool is_function : 1;
+   bool is_metatype : 1;
+   bool functionArg : 1;
+   
+   size_t argNo = 0;
 
    bool wrap_lambda = true;
    string superClassName;
@@ -102,12 +95,12 @@ public:
       IdentifierRefExpr::captured_var = captured_var;
    }
 
-   BuiltinType *getCapturedType() const
+   Type *getCapturedType() const
    {
       return capturedType;
    }
 
-   void setCapturedType(BuiltinType *capturedType)
+   void setCapturedType(Type *capturedType)
    {
       IdentifierRefExpr::capturedType = capturedType;
    }
@@ -122,22 +115,22 @@ public:
       IdentifierRefExpr::builtinValue = builtinValue;
    }
 
-   BuiltinType *getBuiltinType() const
+   Type *getBuiltinType() const
    {
       return builtinType;
    }
 
-   void setBuiltinType(BuiltinType *builtinType)
+   void setBuiltinType(Type *builtinType)
    {
       IdentifierRefExpr::builtinType = builtinType;
    }
 
-   BuiltinType *getMetaType() const
+   Type *getMetaType() const
    {
       return metaType;
    }
 
-   void setMetaType(BuiltinType *metaType)
+   void setMetaType(Type *metaType)
    {
       IdentifierRefExpr::metaType = metaType;
    }
@@ -207,8 +200,40 @@ public:
       return templateArgs;
    }
 
+   bool isSelf() const
+   {
+      return is_self;
+   }
+
+   void setIsSelf(bool is_self)
+   {
+      IdentifierRefExpr::is_self = is_self;
+   }
+
+   bool isFunctionArg() const
+   {
+      return functionArg;
+   }
+
+   void setFunctionArg(bool functionArg)
+   {
+      IdentifierRefExpr::functionArg = functionArg;
+   }
+
+   size_t getArgNo() const
+   {
+      return argNo;
+   }
+
+   void setArgNo(size_t argNo)
+   {
+      IdentifierRefExpr::argNo = argNo;
+   }
+
    void setTemplateArgs(TemplateArgList *templateArgs);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_IDENTIFIEREXPRESSION_H

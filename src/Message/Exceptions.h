@@ -10,15 +10,19 @@
 #include <map>
 
 class Token;
-class AstNode;
-
 class Lexer;
+
 using std::string;
 
 namespace cdot {
-   namespace err {
-      string prepareLine(string& src, string& fileName, int errIndex, int length);
-   }
+namespace err {
+string prepareLine(string& src, string& fileName, int errIndex, int length);
+}
+
+namespace ast {
+class AstNode;
+}
+
 }
 
 class ParseError : public std::exception {
@@ -39,7 +43,7 @@ private:
 
 public:
     explicit RuntimeError(const string& message);
-    static void raise(string, AstNode *);
+    static void raise(string, cdot::ast::AstNode *);
     virtual const char* what() const throw() {
         return message_.c_str();
     }

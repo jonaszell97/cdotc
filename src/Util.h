@@ -10,17 +10,16 @@
 #include <llvm/IR/Type.h>
 #include <regex>
 
-class AstNode;
-
 namespace cdot {
-class BuiltinType;
+
+class Type;
 class ObjectType;
 class GenericType;
 
 enum class BuiltinFn : unsigned int;
 
 struct Argument;
-struct Type;
+struct QualType;
 
 struct TemplateArg;
 struct TemplateConstraint;
@@ -32,14 +31,6 @@ enum class CompatibilityType {
 
    CONSTRAINT_FAILED
 };
-}
-
-class SemaPass;
-class Expression;
-using std::pair;
-using std::string;
-using std::unordered_map;
-using namespace cdot;
 
 enum class AccessModifier : unsigned int {
    DEFAULT,
@@ -48,19 +39,35 @@ enum class AccessModifier : unsigned int {
    PROTECTED
 };
 
-class Function;
+}
+using std::pair;
+using std::string;
+using std::unordered_map;
+using namespace cdot;
 
 namespace cdot {
 namespace cl {
+
 struct Method;
 struct ExtensionConstraint;
-}
-}
+
+} // namespace cl
+
+namespace ast {
+
+class AstNode;
+class SemaPass;
+class Expression;
+class Function;
+
+} // namespace ast
+
+} // namespace cdot
 
 struct CallCandidate {
    union {
       cl::Method* method;
-      Function* func;
+      ast::Function* func;
    };
 
    size_t incompatibleArg;
@@ -78,11 +85,11 @@ struct CallCompatability {
 
    std::vector<pair<size_t, bool>> argOrder;
 
-   std::vector<Type> resolvedArgs;
+   std::vector<QualType> resolvedArgs;
    std::vector<Argument> resolvedNeededArgs;
    std::vector<TemplateArg> generics;
 
-   Function* func = nullptr;
+   ast::Function* func = nullptr;
    cl::Method* method = nullptr;
 
    size_t incompatibleArg;
@@ -209,12 +216,12 @@ bool is_reversible(const string &);
 
 extern std::vector<string> attributes;
 
-typedef std::function<Type(Expression *)> ResolverFn;
+typedef std::function<QualType(ast::Expression *)> ResolverFn;
 
-Type dummyResolver(Expression *node);
+QualType dummyResolver(ast::Expression *node);
 
 
-size_t castPenalty(const Type &from, const Type &to);
+size_t castPenalty(const QualType &from, const QualType &to);
 
 string nextAnonymousNamespace();
 
@@ -222,7 +229,7 @@ string TemplateArgsToString(
    const std::vector<TemplateArg> &templateArgs, bool skipEmpty = true);
 
 void checkTemplateArgs(
-   AstNode *cause,
+   ast::AstNode *cause,
    std::vector<TemplateConstraint> &neededArgs,
    std::vector<TemplateArg> &givenArgs
 );

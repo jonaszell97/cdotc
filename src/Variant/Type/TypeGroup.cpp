@@ -12,9 +12,6 @@ TypeGroup::TypeGroup()
    id = TypeID::TypeGroupID;
 }
 
-llvm::SmallDenseMap<int, IntegerTypeGroup*>
-   IntegerTypeGroup::Instances;
-
 IntegerTypeGroup::IntegerTypeGroup(Kind kind) : kind(kind)
 {
 
@@ -22,38 +19,41 @@ IntegerTypeGroup::IntegerTypeGroup(Kind kind) : kind(kind)
 
 IntegerTypeGroup* IntegerTypeGroup::getAll()
 {
-   auto it = Instances.find(All);
+   auto key = "IntegerTypeGroup::All";
+   auto it = Instances.find(key);
    if (it != Instances.end()) {
-      return it->second;
+      return cast<IntegerTypeGroup>(it->second);
    }
 
-   Instances[All] = new IntegerTypeGroup(All);
-   return Instances[All];
+   Instances[key] = new IntegerTypeGroup(All);
+   return cast<IntegerTypeGroup>(Instances[key]);
 }
 
 IntegerTypeGroup* IntegerTypeGroup::getSigned()
 {
-   auto it = Instances.find(Signed);
+   auto key = "IntegerTypeGroup::Signed";
+   auto it = Instances.find(key);
    if (it != Instances.end()) {
-      return it->second;
+      return cast<IntegerTypeGroup>(it->second);
    }
 
-   Instances[Signed] = new IntegerTypeGroup(Signed);
-   return Instances[Signed];
+   Instances[key] = new IntegerTypeGroup(Signed);
+   return cast<IntegerTypeGroup>(Instances[key]);
 }
 
 IntegerTypeGroup* IntegerTypeGroup::getUnsigned()
 {
-   auto it = Instances.find(Unsigned);
+   auto key = "IntegerTypeGroup::Unsigned";
+   auto it = Instances.find(key);
    if (it != Instances.end()) {
-      return it->second;
+      return cast<IntegerTypeGroup>(it->second);
    }
 
-   Instances[Unsigned] = new IntegerTypeGroup(Unsigned);
-   return Instances[Unsigned];
+   Instances[key] = new IntegerTypeGroup(Unsigned);
+   return cast<IntegerTypeGroup>(Instances[key]);
 }
 
-bool IntegerTypeGroup::implicitlyCastableTo(BuiltinType *ty) const
+bool IntegerTypeGroup::implicitlyCastableTo(Type *ty) const
 {
    if (ty->isIntegerTy()) {
       switch (kind) {
@@ -75,7 +75,7 @@ string IntegerTypeGroup::toString() const
    }
 }
 
-BuiltinType* IntegerTypeGroup::getGroupDefault() const
+Type* IntegerTypeGroup::getGroupDefault() const
 {
    return ObjectType::get("Int" + std::to_string((size_t)sizeof(int*)*8));
 }
@@ -96,7 +96,7 @@ FPTypeGroup* FPTypeGroup::get()
    return Instance;
 }
 
-bool FPTypeGroup::implicitlyCastableTo(BuiltinType *ty) const
+bool FPTypeGroup::implicitlyCastableTo(Type *ty) const
 {
    if (ty->isFPType()) {
       return true;
@@ -110,7 +110,7 @@ string FPTypeGroup::toString() const
    return "FPTypeGroup";
 }
 
-BuiltinType* FPTypeGroup::getGroupDefault() const
+Type* FPTypeGroup::getGroupDefault() const
 {
    return ObjectType::get("Double");
 }

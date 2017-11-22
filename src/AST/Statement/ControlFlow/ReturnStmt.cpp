@@ -5,21 +5,18 @@
 #include "ReturnStmt.h"
 #include "../../Expression/Expression.h"
 
-ReturnStmt::ReturnStmt(Expression::SharedPtr return_val) : returnValue(return_val) {
-   children.push_back(&returnValue);
+namespace cdot {
+namespace ast {
+
+ReturnStmt::ReturnStmt(Expression::SharedPtr &&retVal)
+   : Statement(ReturnStmtID), returnValue(move(retVal))
+{
+
 }
 
-ReturnStmt::ReturnStmt() {
+ReturnStmt::ReturnStmt() : Statement(ReturnStmtID)
+{
 
-}
-
-std::vector<AstNode::SharedPtr> ReturnStmt::get_children() {
-   if (returnValue) {
-      return { returnValue };
-   }
-   else {
-      return {};
-   }
 }
 
 std::shared_ptr<Expression> &ReturnStmt::getReturnValue()
@@ -42,12 +39,15 @@ void ReturnStmt::setHiddenParamReturn(bool hiddenParamReturn)
    ReturnStmt::hiddenParamReturn = hiddenParamReturn;
 }
 
-const Type &ReturnStmt::getReturnType() const
+const QualType &ReturnStmt::getReturnType() const
 {
    return returnType;
 }
 
-void ReturnStmt::setReturnType(const Type &returnType)
+void ReturnStmt::setReturnType(const QualType &returnType)
 {
    ReturnStmt::returnType = returnType;
 }
+
+} // namespace ast
+} // namespace cdot

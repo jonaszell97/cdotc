@@ -7,32 +7,25 @@
 #include "../../Block/CompoundStmt.h"
 #include "../../../Passes/SemanticAnalysis/Record/Record.h"
 
+namespace cdot {
+namespace ast {
+
 PropDecl::PropDecl(string &&propName,
                    std::shared_ptr<TypeRef> &&type,
                    AccessModifier access,
                    bool isStatic,
                    bool hasDefinition,
+                   bool hasGetter,
+                   bool hasSetter,
                    std::shared_ptr<CompoundStmt> &&getter,
                    std::shared_ptr<CompoundStmt> &&setter,
                    string &&newValName)
-   : RecordSubDecl(std::move(propName), access, isStatic),
+   : RecordSubDecl(PropDeclID, std::move(propName), access, isStatic),
      type(std::move(type)), has_definition(hasDefinition),
-     getterBody(getter), setterBody(setter), newValName(move(newValName))
+     getterBody(getter), setterBody(setter), newValName(move(newValName)),
+     getter(hasGetter), setter(hasSetter)
 {
 
-}
-
-std::vector<std::shared_ptr<AstNode>> PropDecl::get_children()
-{
-   std::vector<std::shared_ptr<AstNode>> children;
-   if (hasGetter()) {
-      children.push_back(getterBody);
-   }
-   if (hasSetter()) {
-      children.push_back(setterBody);
-   }
-
-   return children;
 }
 
 const std::shared_ptr<TypeRef> &PropDecl::getType() const
@@ -47,12 +40,12 @@ void PropDecl::setType(const std::shared_ptr<TypeRef> &type)
 
 bool PropDecl::hasGetter() const
 {
-   return getterBody != nullptr;
+   return getter;
 }
 
 bool PropDecl::hasSetter() const
 {
-   return setterBody != nullptr;
+   return setter;
 }
 
 const std::shared_ptr<CompoundStmt> &PropDecl::getGetterBody() const
@@ -104,3 +97,7 @@ void PropDecl::setNewValName(const string &newValName)
 {
    PropDecl::newValName = newValName;
 }
+
+
+} // namespace ast
+} // namespace cdot

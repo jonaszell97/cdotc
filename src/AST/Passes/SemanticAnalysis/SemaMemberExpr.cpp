@@ -14,7 +14,7 @@
 #include "Record/Union.h"
 #include "Record/Enum.h"
 
-#include "../../../Variant/Type/BuiltinType.h"
+#include "../../../Variant/Type/Type.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Variant/Type/PointerType.h"
@@ -31,25 +31,23 @@
 
 using namespace cdot::diag;
 
+namespace cdot {
+namespace ast {
+
+using namespace cdot::cl;
+
 void SemaPass::ReturnMemberExpr(
    Expression *node,
-   Type ty)
+   QualType ty)
 {
-   if (node->memberExpr != nullptr) {
+   if (auto MemExpr = node->getMemberExpr()) {
       if (ty.needsLvalueToRvalueConv()) {
          ty.isLvalue(false);
-         node->lvalueCast = true;
+         node->isLvalueCast(true);
       }
 
       pushTy(ty);
-      ty = getResult(node->memberExpr);
-   }
-   else if (node->createsTemporary() && ty->needsCleanup()
-            && !node->isAssigned() && !node->isReturnedValue())
-   {
-      node->lvalueCast = ty.needsLvalueToRvalueConv();
-      node->isTemporary(true);
-      node->setTempType(ty->getRecord());
+      ty = VisitNode(MemExpr);
    }
 
    returnResult(ty);
@@ -63,7 +61,8 @@ void SemaPass::checkClassAccessibility(
        std::find(currentNamespace.begin(), currentNamespace.end(),
                  cl->getDeclarationNamespace()) == currentNamespace.end()) {
       diag::err(err_class_not_accessible) << cl->getNameSelector()
-                                          << cl->getName() << cause << diag::term;
+                                          << cl->getName() << cause
+                                          << diag::term;
    }
 }
 
@@ -94,12 +93,12 @@ void SemaPass::checkMemberAccessibility(
  */
 void SemaPass::visit(MemberRefExpr *node)
 {
-   Type latest;
+   QualType latest;
    string className;
    Class* cl;
 
    if (node->getParentExpr() == nullptr && node->isEnumCase()) {
-      auto& inf = node->contextualType;
+      auto& inf = node->getContextualType();
       if (inf->isAutoTy() || !SymbolTable::hasClass(inf->getClassName(),
                                                     importedNamespaces)) {
          RuntimeError::raise("Could not infer type of enum case "
@@ -115,9 +114,9 @@ void SemaPass::visit(MemberRefExpr *node)
    if (node->isNsMember()) {
       if (hasVariable(node->getIdent())) {
          auto var = getVariable(node->getIdent(), node);
-         node->setBinding(var.first.second);
+         node->setBinding(var.scope);
 
-         auto res = var.first.first.type;
+         auto res = var.V->type;
          res.isLvalue(true);
 
          return ReturnMemberExpr(node, res);
@@ -154,7 +153,7 @@ void SemaPass::visit(MemberRefExpr *node)
             node->isEnumCase(true);
             node->setCaseVal(Case.rawValue);
 
-            return ReturnMemberExpr(node, Type(obj));
+            return ReturnMemberExpr(node, QualType(obj));
          }
          else if (cl->hasProperty(node->getIdent())) {
             return HandlePropAccess(node, cl);
@@ -168,7 +167,7 @@ void SemaPass::visit(MemberRefExpr *node)
          auto potentialTypeName = cl->getName() + '.' + node->getIdent();
          if (Record *rec = SymbolTable::getRecord(potentialTypeName)) {
             node->setMetaType(ObjectType::get(rec->getName()));
-            node->setFieldType(Type{ ObjectType::get("cdot.TypeInfo") });
+            node->setFieldType(QualType{ ObjectType::get("cdot.TypeInfo") });
 
             return ReturnMemberExpr(node, node->getFieldType());
          }
@@ -182,7 +181,7 @@ void SemaPass::visit(MemberRefExpr *node)
                   node->getTemplateArgs(),
                   Template.constraints,
                   [this](TypeRef *node) {
-                     node->accept(this);
+                     VisitNode(node);
                   },
                   node
                );
@@ -193,7 +192,7 @@ void SemaPass::visit(MemberRefExpr *node)
                                               importedNamespaces);
 
             node->setMetaType(ObjectType::get(rec->getName()));
-            node->setFieldType(Type{ ObjectType::get("cdot.TypeInfo") });
+            node->setFieldType(QualType{ ObjectType::get("cdot.TypeInfo") });
 
             return ReturnMemberExpr(node, node->getFieldType());
          }
@@ -228,7 +227,7 @@ void SemaPass::visit(MemberRefExpr *node)
                              + std::to_string(asTuple->getArity()), node);
       }
 
-      Type ty(asTuple->getContainedType(node->getTupleIndex()));
+      QualType ty(asTuple->getContainedType(node->getTupleIndex()));
       ty.isLvalue(true);
       ty.isConst(latest.isConst());
 
@@ -236,7 +235,7 @@ void SemaPass::visit(MemberRefExpr *node)
       return ReturnMemberExpr(node, node->getFieldType());
    }
 
-   if (className.empty() || !latest->isObject()) {
+   if (className.empty() || !latest->isObjectTy()) {
       RuntimeError::raise("Cannot access property " + node->getIdent()
                           + " on value of type " + latest.toString(), node);
    }
@@ -250,7 +249,7 @@ void SemaPass::visit(MemberRefExpr *node)
    checkClassAccessibility(cl, node);
 
    if (cl->isEnum() && node->getIdent() == "rawValue") {
-      Type ty(IntegerType::get());
+      QualType ty(IntegerType::get());
       node->setFieldType(ty);
       node->setIsEnumRawValue(true);
 
@@ -286,7 +285,7 @@ void SemaPass::HandleFieldAccess(MemberRefExpr *node, Class* cl)
       node->isGetterCall(true);
       node->setAccessorMethod(field->getter);
 
-      node->setFieldType(Type(field->fieldType));
+      node->setFieldType(QualType(field->fieldType));
 
       return ReturnMemberExpr(node, node->getFieldType());
    }
@@ -296,7 +295,7 @@ void SemaPass::HandleFieldAccess(MemberRefExpr *node, Class* cl)
        && currentClass() != cl->getName()) {
       node->isSetterCall(true);
       node->setAccessorMethod(field->setter);
-      node->setFieldType(Type(field->fieldType));
+      node->setFieldType(QualType(field->fieldType));
       setterMethod = node->getAccessorMethod();
 
       return returnResult(node->getFieldType());
@@ -304,7 +303,7 @@ void SemaPass::HandleFieldAccess(MemberRefExpr *node, Class* cl)
 
    auto& field_type = field->fieldType;
 
-   Type ty(field->fieldType);
+   QualType ty(field->fieldType);
    ty.isLvalue(true);
    ty.isConst(field->isConst);
 
@@ -317,7 +316,7 @@ void SemaPass::HandleFieldAccess(MemberRefExpr *node, Class* cl)
    return ReturnMemberExpr(node, node->getFieldType());
 }
 
-void SemaPass::HandlePropAccess(MemberRefExpr *node, cl::Record *rec)
+void SemaPass::HandlePropAccess(MemberRefExpr *node, Record *rec)
 {
    auto prop = rec->getProperty(node->getIdent());
    assert(prop && "shouldn't be called otherwise");
@@ -350,17 +349,17 @@ void SemaPass::HandlePropAccess(MemberRefExpr *node, cl::Record *rec)
 
 void SemaPass::CheckUnionAccess(MemberRefExpr *node)
 {
-   auto un = SymbolTable::getUnion(node->className, importedNamespaces);
-   if (!un->hasField(node->ident)) {
-      diag::err(err_member_not_found) << 3 /*union*/ << node->ident
+   auto un = SymbolTable::getUnion(node->getClassName(), importedNamespaces);
+   if (!un->hasField(node->getIdent())) {
+      diag::err(err_member_not_found) << 3 /*union*/ << node->getIdent()
                                       << node << diag::term;
    }
 
-   Type ty(un->getFieldTy(node->ident));
+   QualType ty(un->getFieldTy(node->getIdent()));
    ty.isLvalue(true);
    ty.isConst(un->isConst());
 
-   node->fieldType = ty;
+   node->setFieldType(ty);
    node->setIsUnionAccess(true);
 }
 
@@ -373,15 +372,14 @@ void SemaPass::CheckUnionAccess(MemberRefExpr *node)
 void SemaPass::visit(SubscriptExpr *node)
 {
    auto ts = popTy();
-   if (!ts->isObject()) {
-      Type int64Ty(IntegerType::get());
-      node->_index->setContextualType(int64Ty);
+   if (!ts->isObjectTy()) {
+      QualType int64Ty(IntegerType::get());
+      node->getIndex()->setContextualType(int64Ty);
    }
 
-   Type index = getResult(node->_index);
-   node->_index->addUse();
+   QualType index = VisitNode(node->getIndex());
 
-   if (ts->isObject())
+   if (ts->isObjectTy())
    {
       auto& className = ts->getClassName();
       auto cl = SymbolTable::getClass(className, importedNamespaces);
@@ -392,23 +390,22 @@ void SemaPass::visit(SubscriptExpr *node)
       if (methodResult.isCompatible()) {
          auto call = std::make_shared<CallExpr>(
             CallType::METHOD_CALL,
-            std::vector<Expression::SharedPtr>{ node->_index },
+            std::vector<Expression::SharedPtr>{ node->getIndex() },
             std::move(op)
          );
 
-         call->loc = node->loc;
-         call->parentExpr = node;
-         call->parent = node;
-         call->resolvedArgs.push_back(std::move(args.front()));
+         call->setSourceLoc(node->getSourceLoc());
+         call->setParentExpr(node);
+         call->setParent(node);
+         call->getResolvedArgs().push_back(std::move(args.front()));
 
          auto expr = std::static_pointer_cast<Expression>(call);
-         node->children.push_back(&expr);
 
-         node->overridenCall = call;
-         node->is_subscript_op = true;
+         node->setOverridenCall(call);
+         node->setIsSubscriptOperator(true);
 
          pushTy(ts);
-         auto type = getResult(call);
+         auto type = VisitNode(call);
 
          return ReturnMemberExpr(node, type);
       }
@@ -421,14 +418,14 @@ void SemaPass::visit(SubscriptExpr *node)
       diag::err(err_illegal_subscript) << ts << node << diag::term;
    }
 
-   toRvalueIfNecessary(index, node->_index);
+   toRvalueIfNecessary(index, node->getIndex());
 
-   Type int64Ty(IntegerType::get(64));
+   QualType int64Ty(IntegerType::get(64));
    if (!index->isNumeric() && !index->isBoxedPrimitive()) {
       diag::err(err_subscript_index_not_integral) << node << diag::term;
    }
    else if (index != int64Ty) {
-      wrapImplicitCast(node->_index, index, int64Ty);
+      wrapImplicitCast(node->getIndex(), index, int64Ty);
    }
 
    ts = ts->asPointerTy()->getPointeeType();
@@ -436,3 +433,6 @@ void SemaPass::visit(SubscriptExpr *node)
 
    return ReturnMemberExpr(node, ts);
 }
+
+} // namespace ast
+} // namespace cdot

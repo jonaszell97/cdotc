@@ -15,7 +15,6 @@ namespace cdot {
    class IntegerType : public PrimitiveType {
    protected:
       explicit IntegerType(unsigned int = sizeof(int*) * 8, bool = false);
-      static unordered_map<size_t, IntegerType*> Instances;
 
    public:
       static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
@@ -34,11 +33,6 @@ namespace cdot {
 
       void isUnsigned(bool uns) {
          is_unsigned = uns;
-      }
-
-      bool isIntegerTy() const override
-      {
-         return true;
       }
 
       bool isInt64Ty(bool isUnsigned) const override
@@ -69,27 +63,21 @@ namespace cdot {
       string toString() const override;
       llvm::Type* getLlvmType() const override;
 
-      BuiltinType* ArithmeticReturnType(string&, BuiltinType*) const override;
+      Type* ArithmeticReturnType(const string&, Type *) const override;
 
-      BuiltinType* box() const override;
+      Type* box() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) const override;
-      bool explicitlyCastableTo(BuiltinType*) const override;
+      bool implicitlyCastableTo(Type*) const override;
+      bool explicitlyCastableTo(Type*) const override;
 
-      llvm::Value* getDefaultVal(CodeGen &CGM) const override;
+      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
       llvm::Constant* getConstantVal(Variant& val) const override;
 
       short getAlignment() const override;
 
-      static inline bool classof(IntegerType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
-         switch(T->getTypeID()) {
-            case TypeID::IntegerTypeID:
-            case TypeID::PrimitiveTypeID:
-               return true;
-            default:
-               return false;
-         }
+      static bool classof(Type const* T)
+      {
+         return T->getTypeID() == TypeID::IntegerTypeID;
       }
 
       typedef std::unique_ptr<IntegerType> UniquePtr;

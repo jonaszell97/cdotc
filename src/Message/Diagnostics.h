@@ -8,99 +8,102 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
-#include "../Token.h"
+#include "../lex/Token.h"
 
 using std::string;
 using std::unordered_map;
 
 class Lexer;
-class AstNode;
 
 namespace cdot {
-   class BuiltinType;
+class Type;
 
-   struct Variant;
-   struct Type;
-   struct SourceLocation;
+struct Variant;
+struct QualType;
+struct SourceLocation;
+
+namespace ast {
+class AstNode;
+}
 
 namespace diag {
 
-   enum class DiagnosticKind {
-      WARNING,
-      ERROR,
-      NOTE
-   };
+enum class DiagnosticKind {
+   WARNING,
+   ERROR,
+   NOTE
+};
 
-   enum Terminator {
-      term,
-      cont
-   };
+enum Terminator {
+   term,
+   cont
+};
 
-   enum Option {
-      whole_line,
-      show_wiggle
-   };
+enum Option {
+   whole_line,
+   show_wiggle
+};
 
-   enum Warning {
+enum Warning {
 #     include "def/parsed/warn_enum.def"
-   };
+};
 
-   enum Error {
+enum Error {
 #     include "def/parsed/errors_enum.def"
-   };
+};
 
-   enum Note {
+enum Note {
 #     include "def/parsed/note_enum.def"
-   };
+};
 
-   class DiagnosticBuilder {
-   public:
-      explicit DiagnosticBuilder(Warning warn);
-      explicit DiagnosticBuilder(Error err);
-      explicit DiagnosticBuilder(Note note);
+class DiagnosticBuilder {
+public:
+   explicit DiagnosticBuilder(Warning warn);
+   explicit DiagnosticBuilder(Error err);
+   explicit DiagnosticBuilder(Note note);
 
-      // non-terminating
-      DiagnosticBuilder& operator<<(string const& str);
-      DiagnosticBuilder& operator<<(const char* const& str);
-      DiagnosticBuilder& operator<<(int const& i);
-      DiagnosticBuilder& operator<<(size_t const& i);
-      DiagnosticBuilder& operator<<(bool const& b);
+   // non-terminating
+   DiagnosticBuilder& operator<<(string const& str);
+   DiagnosticBuilder& operator<<(const char* const& str);
+   DiagnosticBuilder& operator<<(int const& i);
+   DiagnosticBuilder& operator<<(size_t const& i);
+   DiagnosticBuilder& operator<<(bool const& b);
 
-      DiagnosticBuilder& operator<<(Variant const& str);
-      DiagnosticBuilder& operator<<(BuiltinType* const& ty);
-      DiagnosticBuilder& operator<<(Type const& ty);
+   DiagnosticBuilder& operator<<(Variant const& str);
+   DiagnosticBuilder& operator<<(Type* const& ty);
+   DiagnosticBuilder& operator<<(QualType const& ty);
 
-      DiagnosticBuilder& operator<<(SourceLocation const& loc);
-      DiagnosticBuilder& operator<<(AstNode* const& node);
-      DiagnosticBuilder& operator<<(std::shared_ptr<AstNode> const& node);
-      DiagnosticBuilder& operator<<(Lexer* const& lex);
+   DiagnosticBuilder& operator<<(SourceLocation const& loc);
+   DiagnosticBuilder& operator<<(ast::AstNode* const& node);
+   DiagnosticBuilder& operator<<(std::shared_ptr<ast::AstNode> const& node);
+   DiagnosticBuilder& operator<<(Lexer* const& lex);
 
-      DiagnosticBuilder& operator<<(Option const& opt);
+   DiagnosticBuilder& operator<<(Option const& opt);
 
-      // terminating
-      void operator<<(Terminator const& terminator);
+   // terminating
+   void operator<<(Terminator const& terminator);
 
-   protected:
-      DiagnosticKind kind;
+protected:
+   DiagnosticKind kind;
 
-      string prepareMessage();
-      void writeDiagnostic();
+   string prepareMessage();
+   void writeDiagnostic();
 
-      string handleFunction(Variant& var, Lexer& lex);
+   string handleFunction(Variant& var, Lexer& lex);
 
-      bool locGiven = false;
-      SourceLocation loc;
+   bool locGiven = false;
+   SourceLocation loc;
 
-      const char*& diag;
-      std::vector<Variant> providedArgs;
+   const char*& diag;
+   std::vector<Variant> providedArgs;
 
-      bool showWholeLine = false;
-      bool showWiggle = false;
-   };
+   bool showWholeLine = false;
+   bool showWiggle = false;
+};
 
-   DiagnosticBuilder warn(Warning warn);
-   DiagnosticBuilder err(Error err);
-   DiagnosticBuilder note(Note note);
+DiagnosticBuilder warn(Warning warn);
+DiagnosticBuilder err(Error err);
+DiagnosticBuilder note(Note note);
 }
 }
 

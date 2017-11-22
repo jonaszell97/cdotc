@@ -27,12 +27,12 @@ namespace cdot {
       llvm_unreachable("resolve first!");
    }
 
-   bool AutoType::implicitlyCastableTo(BuiltinType *) const
+   bool AutoType::implicitlyCastableTo(Type *) const
    {
       return true;
    }
 
-   llvm::Value* AutoType::getDefaultVal(CodeGen &CGM) const
+   llvm::Value* AutoType::getDefaultVal(ast::CodeGen &CGM) const
    {
       llvm_unreachable("resolve first!");
    }

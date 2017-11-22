@@ -13,7 +13,7 @@
 #include "Record/Union.h"
 #include "Record/Enum.h"
 
-#include "../../../Variant/Type/BuiltinType.h"
+#include "../../../Variant/Type/Type.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Variant/Type/PointerType.h"
@@ -26,11 +26,12 @@
 
 #include "../../../Message/Exceptions.h"
 #include "../../../Message/Diagnostics.h"
-#include "../../../Parser.h"
+#include "../../../parse/Parser.h"
 #include "../Declaration/DeclPass.h"
 #include "OverloadResolver.h"
 
 using namespace cdot::diag;
+using ast::Function;
 
 namespace {
 
@@ -49,6 +50,9 @@ llvm::StringMap<BuiltinFn> builtinFunctions = {
 };
 
 } // anonymous namespace
+
+namespace cdot {
+namespace ast {
 
 void SemaPass::PrepareCallArgs(
    std::vector<pair<string, std::shared_ptr<Expression>>>& args,
@@ -81,13 +85,11 @@ void SemaPass::PrepareCallArgs(
    std::vector<pair<string, std::shared_ptr<Expression>>> &args,
    std::vector<Argument> &givenArgs,
    std::vector<Argument> &declaredArgs,
-   std::vector<Type> &resolvedArgs)
+   std::vector<QualType> &resolvedArgs)
 {
    size_t i = 0;
    bool vararg = !declaredArgs.empty() && declaredArgs.back().cstyleVararg;
    for (auto& arg : args) {
-      arg.second->addUse();
-
       if (i >= givenArgs.size()) {
          break;
       }
@@ -99,12 +101,12 @@ void SemaPass::PrepareCallArgs(
 
       if (i >= declaredArgs.size() || (vararg && i >= declaredArgs.size() - 1)){
          if (given->isAutoTy()) {
-            given = getResult(arg.second);
+            given = VisitNode(arg.second);
          }
 
          // assume that c style varargs need a primitive...
          if (given->isBoxedPrimitive()) {
-            wrapImplicitCast(arg.second, given, Type(given->unbox()));
+            wrapImplicitCast(arg.second, given, QualType(given->unbox()));
          }
 
          // and an rvalue
@@ -119,7 +121,7 @@ void SemaPass::PrepareCallArgs(
 
       if (given->isTypeGroup()) {
          arg.second->setContextualType(declared);
-         given = getResult(arg.second);
+         given = VisitNode(arg.second);
       }
 
       if (declared->isStruct() && given->isStruct()
@@ -135,32 +137,33 @@ void SemaPass::PrepareCallArgs(
 void SemaPass::visit(CallExpr *node)
 {
    //MAINCALL
-   for (size_t i = node->resolvedArgs.size(); i < node->args.size(); ++i) {
-      auto& arg = node->args.at(i);
-      Type ty = getAmbiguousResult(arg.second);
+   auto &args = node->getArgs();
+   for (size_t i = node->getResolvedArgs().size(); i < args.size(); ++i) {
+      auto& arg = args.at(i);
+      QualType ty = getAmbiguousResult(arg.second);
 
-      node->resolvedArgs.emplace_back(arg.first, ty, arg.second);
+      node->getResolvedArgs().emplace_back(arg.first, ty, arg.second);
    }
 
-   if (node->type == CallType::FUNC_CALL) {
+   if (node->getType() == CallType::FUNC_CALL) {
       if (builtinFunctions.find(node->getIdent()) != builtinFunctions.end()) {
          HandleBuiltinCall(node);
       }
-      else if (node->ident.empty()) {
+      else if (node->getIdent().empty()) {
          HandleCallOperator(node);
       }
-      else if (SymbolTable::hasRecord(node->ident, importedNamespaces)
-               || SymbolTable::hasRecordTemplate(node->ident)) {
+      else if (SymbolTable::hasRecord(node->getIdent(), importedNamespaces)
+               || SymbolTable::hasRecordTemplate(node->getIdent())) {
          HandleConstructorCall(node);
       }
       else {
          HandleFunctionCall(node);
       }
    }
-   else if (node->type == CallType::METHOD_CALL) {
+   else if (node->getType() == CallType::METHOD_CALL) {
       HandleMethodCall(node);
    }
-   else if (node->type == CallType::ANON_CALL) {
+   else if (node->getType() == CallType::ANON_CALL) {
       HandleAnonCall(node);
    }
 
@@ -168,13 +171,13 @@ void SemaPass::visit(CallExpr *node)
       case CallType::METHOD_CALL:
       case CallType::CONSTR_CALL:
          if (node->getMethod()) {
-            currentCallable->copyThrows(node->getMethod());
+            latestScope->function->copyThrows(node->getMethod());
          }
 
          break;
       case CallType::FUNC_CALL:
          if (!node->isBuiltin()) {
-            currentCallable->copyThrows(node->func);
+            latestScope->function->copyThrows(node->getFunc());
          }
 
          break;
@@ -182,7 +185,7 @@ void SemaPass::visit(CallExpr *node)
          break;
    }
 
-   return ReturnMemberExpr(node, node->returnType);
+   return ReturnMemberExpr(node, node->getReturnType());
 }
 
 void SemaPass::HandleFunctionCall(CallExpr *node)
@@ -196,39 +199,38 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
          node->getTemplateArgs(),
          Constraints,
          [this](TypeRef *node) {
-            node->accept(this);
+            VisitNode(node);
          },
          node
       );
    }
 
-   auto& resolvedArgs = node->resolvedArgs;
-   auto result = getFunction(node->ident, resolvedArgs,
+   auto& resolvedArgs = node->getResolvedArgs();
+   auto result = getFunction(node->getIdent(), resolvedArgs,
                              node->getTemplateArgs()->get());
 
    if (!result.isCompatible()) {
       // lambda or saved function call
-      if (hasVariable(node->ident)) {
-         auto var = getVariable(node->ident, node);
-         auto fun = var.first.first.type;
+      if (hasVariable(node->getIdent())) {
+         auto var = getVariable(node->getIdent(), node);
+         auto &fun = var.V->type;
 
          if (fun->isFunctionTy()) {
             pushTy(fun);
-            node->type = CallType::ANON_CALL;
-            node->binding = var.first.second;
+            node->setType(CallType::ANON_CALL);
+            node->setBinding(var.scope);
 
-            if (latestScope->inLambda && var.second) {
-               latestScope->captures->emplace_back(var.first.second,
-                                                   var.first.first.type);
-               node->is_captured_var = true;
+            if (var.escapesLambdaScope) {
+               latestScope->captures->insert(var.scope);
+               node->setIsCapturedVar(true);
             }
 
             return HandleAnonCall(node);
          }
 
-         if (fun->isObject()) {
+         if (fun->isObjectTy()) {
             pushTy(fun);
-            node->setCallOpBinding(var.first.second);
+            node->setCallOpBinding(var.scope);
 
             return HandleCallOperator(node);
          }
@@ -239,23 +241,23 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
       if (!currentCl.empty() && SymbolTable::hasClass(currentCl)) {
          auto cl = SymbolTable::getClass(currentCl);
 
-         auto compat = getMethod(cl, node->ident, resolvedArgs);
-
+         auto compat = getMethod(cl, node->getIdent(), resolvedArgs);
          if (compat.compatibility == CompatibilityType::COMPATIBLE) {
-            auto selfTy = Type(ObjectType::get(currentCl));
+            auto selfTy = QualType(ObjectType::get(currentCl));
             pushTy(selfTy);
 
-            node->type = CallType::METHOD_CALL;
-            node->implicitSelfCall = true;
-            node->selfBinding = latestScope->currentSelf;
+            node->setType(CallType::METHOD_CALL);
+            node->setImplicitSelfCall(true);
 
             return HandleMethodCall(node);
          }
       }
 
       if (result.compatibility == CompatibilityType::NO_MATCHING_CALL) {
-         diag::err(err_no_matching_call) << 0 << node->ident << node
+         diag::err(err_no_matching_call) << 0 << node->getIdent() << node
                                          << diag::cont;
+         
+         auto &resolvedArgs = node->getResolvedArgs();
          for (const auto& cand : result.failedCandidates) {
             auto& func = cand.func;
             auto &templateArgs = node->getTemplateArgs()->get();
@@ -265,10 +267,10 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
                   << func->getDeclaration()
                   << diag::cont;
             }
-            else if (node->resolvedArgs.size() != func->getArguments().size()) {
+            else if (resolvedArgs.size() != func->getArguments().size()) {
                diag::note(note_cand_mismatched_arg_count)
                   << func->getArguments().size()
-                  << node->resolvedArgs.size()
+                  << resolvedArgs.size()
                   << func->getDeclaration()
                   << diag::whole_line << diag::cont;
             }
@@ -286,14 +288,14 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
          exit(1);
       }
       if (result.compatibility == CompatibilityType::FUNC_NOT_FOUND) {
-         diag::err(err_func_not_found) << 0 << node->ident << node
+         diag::err(err_func_not_found) << 0 << node->getIdent() << node
                                        << diag::term;
       }
 
       llvm_unreachable("No other options possible");
    }
 
-   node->declaredArgTypes = result.resolvedNeededArgs;
+   node->setDeclaredArgTypes(std::move(result.resolvedNeededArgs));
 
    auto& func = result.func;
    if (func->isTemplate()) {
@@ -303,14 +305,11 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
       );
    }
 
-   func->addUse();
+   PrepareCallArgs(node->getArgs(), resolvedArgs, result);
+   ApplyCasts(node, result.resolvedArgs, node->getDeclaredArgTypes());
 
-   PrepareCallArgs(node->args, resolvedArgs, result);
-   ApplyCasts(node, result.resolvedArgs, node->declaredArgTypes);
-
-   node->func = func;
-   node->setBinding(SymbolTable::mangleFunction(func->getName(),
-                                                func->getArguments()));
+   node->setFunc(func);
+   node->setBinding(func->getMangledName());
    node->setReturnType(func->getReturnType());
 
    if (node->getReturnType()->needsStructReturn()) {
@@ -320,106 +319,106 @@ void SemaPass::HandleFunctionCall(CallExpr *node)
 
 void SemaPass::HandleBuiltinCall(CallExpr *node)
 {
-   node->is_builtin = true;
-   node->builtinFnKind = builtinFunctions[node->getIdent()];
+   node->setIsBuiltin(true);
+   node->setBuiltinFnKind(builtinFunctions[node->getIdent()]);
 
-   switch (node->builtinFnKind) {
+   auto &args = node->getArgs();
+   auto FnKind = node->getBuiltinFnKind();
+
+   switch (node->getBuiltinFnKind()) {
       case BuiltinFn::ALIGNOF:
       case BuiltinFn::SIZEOF:
       case BuiltinFn::TYPEOF:
       case BuiltinFn::NULLPTR: {
-         if (node->args.size() != 1
-             || node->args.front().second->get_type() != NodeType::TYPE_REF) {
-            RuntimeError::raise("Expected type as argument to " + node->ident,
-                                node);
+         if (args.size() != 1 || !isa<TypeRef>(args[0].second)) {
+            RuntimeError::raise("Expected type as argument to "
+                                + node->getIdent(), node);
          }
 
          auto typeref = std::static_pointer_cast<TypeRef>(
-            node->args.at(0).second);
-         if (!typeref->resolved) {
-            typeref->accept(this);
+            args.at(0).second);
+         if (!typeref->isResolved()) {
+            VisitNode(typeref);
          }
 
-         if (node->builtinFnKind == BuiltinFn::SIZEOF
-             || node->builtinFnKind == BuiltinFn::ALIGNOF) {
-            *node->returnType = ObjectType::get("Int");
+         if (FnKind == BuiltinFn::SIZEOF || FnKind == BuiltinFn::ALIGNOF) {
+            *node->getReturnType() = ObjectType::get("Int");
 
             bool needsCast = false;
-            if (node->contextualType->isIntegerTy()) {
-               node->returnType = node->contextualType;
+            if (node->getContextualType()->isIntegerTy()) {
+               node->setReturnType(node->getContextualType());
                needsCast = true;
             }
-            else if (node->contextualType->isBoxedPrimitive()) {
-               auto unboxed = node->contextualType->unbox();
+            else if (node->getContextualType()->isBoxedPrimitive()) {
+               auto unboxed = node->getContextualType()->unbox();
                if (unboxed->isIntegerTy()) {
-                  node->returnType = node->contextualType;
+                  node->setReturnType(node->getContextualType());
                   needsCast = true;
                }
             }
-            else if (!node->contextualType->isAutoTy()) {
-               diag::err(err_type_mismatch) << node->returnType
-                                            << node->contextualType
+            else if (!node->getContextualType()->isAutoTy()) {
+               diag::err(err_type_mismatch) << node->getReturnType()
+                                            << node->getContextualType()
                                             << node << diag::term;
             }
 
             if (needsCast) {
-               node->needs_cast = true;
-               *node->castFrom = IntegerType::get()->box();
-               node->castTo = node->returnType;
+               node->needsCast(true);
+               node->setCastFrom(QualType(IntegerType::get()->box()));
+               node->setCastTo(node->getReturnType());
             }
          }
 
-         if (node->builtinFnKind == BuiltinFn::NULLPTR) {
+         if (FnKind == BuiltinFn::NULLPTR) {
             auto ty = typeref->getType();
             bool refcounted = false;
-            if (ty->isObject()) {
+            if (ty->isObjectTy()) {
                refcounted = ty->getRecord()->isRefcounted();
             }
 
             if (!refcounted) {
-               *node->returnType = ty->getPointerTo();
+               *node->getReturnType() = ty->getPointerTo();
             }
             else {
-               node->returnType = ty;
+               node->setReturnType(ty);
             }
          }
 
          break;
       }
       case BuiltinFn::BITCAST: {
-         if (node->args.size() != 2
-             || node->args.at(1).second->get_type() != NodeType::TYPE_REF) {
+         if (args.size() != 2 || !isa<TypeRef>(args[1].second)) {
             RuntimeError::raise("Expected type as second argument to "
-                                + node->ident, node);
+                                + node->getIdent(), node);
          }
 
-         auto& arg = node->args.front();
-         node->resolvedArgs.emplace_back(arg.first, getResult(arg.second),
-                                         arg.second);
+         auto& arg = args.front();
+         node->getResolvedArgs().emplace_back(arg.first, VisitNode(arg.second),
+                                              arg.second);
 
          auto typeref = std::static_pointer_cast<TypeRef>(
-            node->args.at(1).second);
-         if (!typeref->resolved) {
-            typeref->accept(this);
+            args.at(1).second);
+         if (!typeref->isResolved()) {
+            VisitNode(typeref);
          }
 
-         toRvalueIfNecessary(node->resolvedArgs.front().type,
-                             node->args.front().second);
-         node->returnType = typeref->getType();
+         toRvalueIfNecessary(node->getResolvedArgs().front().type,
+                             args.front().second);
+         node->setReturnType(typeref->getType());
 
          break;
       }
       case BuiltinFn::ISNULL: {
-         if (node->args.size() != 1) {
-            diag::err(err_incomp_arg_counts) << 1 << node->args.size()
+         if (args.size() != 1) {
+            diag::err(err_incomp_arg_counts) << 1 << args.size()
                                              << node << diag::term;
          }
 
-         *node->returnType = ObjectType::get("Bool");
+         *node->getReturnType() = ObjectType::get("Bool");
 
-         auto& arg = node->args.front();
-         auto ty = getResult(arg.second);
-         node->resolvedArgs.emplace_back(arg.first, ty, arg.second);
+         auto& arg = args.front();
+         auto ty = VisitNode(arg.second);
+         node->getResolvedArgs().emplace_back(arg.first, ty, arg.second);
 
          if (!ty->isPointerTy() && !ty->isRawFunctionTy()
              && !ty->isRefcounted()) {
@@ -431,14 +430,14 @@ void SemaPass::HandleBuiltinCall(CallExpr *node)
          break;
       }
       case BuiltinFn::UNWRAP_PROTO: {
-         if (node->args.size() != 1) {
-            diag::err(err_incomp_arg_counts) << 1 << node->args.size()
+         if (args.size() != 1) {
+            diag::err(err_incomp_arg_counts) << 1 << args.size()
                                              << node << diag::term;
          }
 
-         auto& arg = node->args.front();
-         auto ty = getResult(arg.second);
-         node->resolvedArgs.emplace_back(arg.first, ty, arg.second);
+         auto& arg = args.front();
+         auto ty = VisitNode(arg.second);
+         node->getResolvedArgs().emplace_back(arg.first, ty, arg.second);
 
          if (!ty->isProtocol()) {
             diag::err(err_unexpected_value) << "protocol"
@@ -449,45 +448,45 @@ void SemaPass::HandleBuiltinCall(CallExpr *node)
          break;
       }
       case BuiltinFn::STACK_ALLOC: {
-         if (node->args.size() != 2) {
-            diag::err(err_incomp_arg_counts) << 2 << node->args.size()
+         if (args.size() != 2) {
+            diag::err(err_incomp_arg_counts) << 2 << args.size()
                                              << node << diag::term;
          }
 
          auto typeref = std::static_pointer_cast<TypeRef>(
-            node->args.at(0).second);
-         if (!typeref->resolved) {
-            typeref->accept(this);
+            args.at(0).second);
+         if (!typeref->isResolved()) {
+            VisitNode(typeref);
          }
 
-         auto& arg = node->args[1].second;
+         auto& arg = args[1].second;
          auto ty = typeref->getType();
          toRvalueIfNecessary(ty, arg);
 
-         auto sizeTy = getResult(arg);
+         auto sizeTy = VisitNode(arg);
          if (!sizeTy->isIntegerTy()) {
-            wrapImplicitCast(arg, sizeTy, Type(IntegerType::get()));
+            wrapImplicitCast(arg, sizeTy, QualType(IntegerType::get()));
          }
 
-         *node->returnType = ty->getPointerTo();
+         *node->getReturnType() = ty->getPointerTo();
 
          break;
       }
       case BuiltinFn::BuiltinSizeof: {
-         if (node->args.size() != 1) {
-            diag::err(err_incomp_arg_counts) << 1 << node->args.size()
+         if (args.size() != 1) {
+            diag::err(err_incomp_arg_counts) << 1 << args.size()
                                              << node << diag::term;
          }
 
-         *node->returnType = IntegerType::get();
+         *node->getReturnType() = IntegerType::get();
 
-         auto ty = getResult(node->args.front().second);
+         auto ty = VisitNode(args.front().second);
          if (ty->isVoidTy()) {
             diag::err(err_generic_error) << "void type has no size" << node
                                          << diag::term;
          }
 
-         toRvalueIfNecessary(ty, node->args.front().second);
+         toRvalueIfNecessary(ty, args.front().second);
 
          break;
       }
@@ -523,13 +522,13 @@ void SemaPass::HandleEnumCase(CallExpr *node)
    node->isEnumCase(true);
    node->setCaseVal(case_.rawValue);
 
-   std::vector<Type > enumCaseTypes;
+   std::vector<QualType > enumCaseTypes;
    for (const auto &arg : node->getDeclaredArgTypes()) {
       enumCaseTypes.push_back(arg.type);
    }
 
    auto obj = ObjectType::get(node->getClassName());
-   node->setReturnType(Type(obj));
+   node->setReturnType(QualType(obj));
 }
 
 void SemaPass::HandleMethodCall(
@@ -538,51 +537,51 @@ void SemaPass::HandleMethodCall(
    Class* cl;
    string className;
    string fullName;
-   Type latest;
+   QualType latest;
 
-   if (node->parentExpr == nullptr && node->enum_case) {
-      auto& inf = node->contextualType;
+   if (node->getParentExpr() == nullptr && node->isEnumCase()) {
+      auto& inf = node->getContextualType();
       if (inf->isAutoTy() || !SymbolTable::hasClass(inf->getClassName())) {
          RuntimeError::raise("Could not infer type of enum case "
-                             + node->ident, node);
+                             + node->getIdent(), node);
       }
 
-      node->className = inf->getClassName();
-      node->is_ns_member = true;
+      node->setClassName(inf->getClassName());
+      node->setIsNsMember(true);
 
       return HandleEnumCase(node);
    }
 
-   if (node->is_ns_member) {
-      fullName = node->className + "." + node->ident;
+   if (node->isNsMember()) {
+      fullName = node->getClassName() + "." + node->getIdent();
 
       if (SymbolTable::hasRecord(fullName, importedNamespaces)
           || SymbolTable::hasRecordTemplate(fullName)) {
-         node->type = CallType::CONSTR_CALL;
-         node->ident = fullName;
+         node->setType(CallType::CONSTR_CALL);
+         node->setIdent(fullName);
 
          return HandleConstructorCall(node);
       }
 
       if (SymbolTable::numFunctionsWithName(fullName) > 0) {
-         node->type = CallType::FUNC_CALL;
-         node->ident = fullName;
+         node->setType(CallType::FUNC_CALL);
+         node->setIdent(fullName);
 
          return HandleFunctionCall(node);
       }
 
-      if (!SymbolTable::hasClass(node->className)) {
+      if (!SymbolTable::hasClass(node->getClassName())) {
          RuntimeError::raise("Function " + fullName + " does not exist",
                              node);
       }
 
       HandleEnumCase(node);
-      if (!node->returnType->isAutoTy()) {
+      if (!node->getReturnType()->isAutoTy()) {
          return;
       }
 
-      cl = SymbolTable::getClass(node->className);
-      className = node->className;
+      cl = SymbolTable::getClass(node->getClassName());
+      className = node->getClassName();
    }
    else {
       assert(!typeStack.empty() && "Nothing to call method on!");
@@ -596,7 +595,7 @@ void SemaPass::HandleMethodCall(
          latest = latest->asPointerTy()->getPointeeType();
       }
 
-      if (!latest->isObject()) {
+      if (!latest->isObjectTy()) {
          RuntimeError::raise("Cannot call method on value of type "
                              + latest.toString(), node);
       }
@@ -611,8 +610,8 @@ void SemaPass::HandleMethodCall(
       node->setClassName(className);
 
       if (cl->isProtocol()) {
-         node->castFrom = latest;
-         node->is_protocol_call = true;
+         node->setCastFrom(latest);
+         node->setIsProtocolCall(true);
       }
    }
 
@@ -629,7 +628,7 @@ void SemaPass::HandleMethodCall(
          node->getTemplateArgs(),
          Constraints,
          [this](TypeRef *node) {
-            node->accept(this);
+            VisitNode(node);
          },
          node
       );
@@ -637,7 +636,7 @@ void SemaPass::HandleMethodCall(
 
    checkClassAccessibility(cl, node);
 
-   BuiltinType* caller = node->isNsMember() ? nullptr : *latest;
+   Type* caller = node->isNsMember() ? nullptr : *latest;
    auto &givenArgs = node->getResolvedArgs();
    auto methodResult = getMethod(cl, node->getIdent(), givenArgs,
                                  node->getTemplateArgs()->get());
@@ -645,7 +644,7 @@ void SemaPass::HandleMethodCall(
    if (methodResult.compatibility != CompatibilityType::COMPATIBLE) {
       if (cl->hasField(node->getIdent())) {
          auto field = cl->getField(node->getIdent());
-         Type fieldTy(field->fieldType);
+         QualType fieldTy(field->fieldType);
          if (fieldTy->isFunctionTy()) {
             node->setType(CallType::ANON_CALL);
 
@@ -675,8 +674,6 @@ void SemaPass::HandleMethodCall(
    }
 
    auto& method = methodResult.method;
-   method->addUse();
-
    if (method->isTemplate()) {
       method = DeclPass::declareMethodInstantiation(
          *method->getMethodTemplate(), methodResult.generics
@@ -688,48 +685,35 @@ void SemaPass::HandleMethodCall(
                             method->getAccessModifier(), node);
 
    auto ty = method->getReturnType();
-   node->returnType = ty;
+   node->setReturnType(ty);
 
    // methods with 'ref' return type
-   node->returnType.isLvalue(method->getReturnType().isLvalue());
-   node->binding = method->getMangledName();
-   node->method = method;
-   node->is_virtual = cl->isAbstract() || cl->isVirtual(method);
-   node->is_static = method->is_static;
-   node->declaredArgTypes = method->getArguments();
+   node->getReturnType().isLvalue(method->getReturnType().isLvalue());
+   node->setBinding(method->getMangledName());
+   node->setMethod(method);
+   node->setIsVirtual(cl->isAbstract() || cl->isVirtual(method));
+   node->setIsStatic(method->isStatic());
 
-   PrepareCallArgs(node->args, givenArgs, methodResult);
-   ApplyCasts(node, methodResult.resolvedArgs, node->declaredArgTypes);
+   PrepareCallArgs(node->getArgs(), givenArgs, methodResult);
+   ApplyCasts(node, methodResult.resolvedArgs, method->getArguments());
 
    // check if this method has a hidden byval struct parameter
    if (method->hasStructReturn()) {
-      node->has_struct_return = true;
-   }
-
-   // if we call another constructor, we can assume that all fields
-   // will be initialized there, otherwise that constructor will fail.
-   // this will accept circular calls as valid, but those will cause
-   // other problems anyway
-   // FIXME calls in conditions
-   auto& uninitializedFields = latestScope->uninitializedFields;
-   if (method->getName() == "init" && currentClass() == cl->getName() &&
-       uninitializedFields != nullptr)
-   {
-      uninitializedFields->clear();
+      node->setHasStructReturn(true);
    }
 }
 
 void SemaPass::HandleConstructorCall(CallExpr *node)
 {
    bool clearTemplateArgs = false;
-   if (SymbolTable::hasRecordTemplate(node->ident)) {
-      auto &Template = *SymbolTable::getRecordTemplate(node->ident);
+   if (SymbolTable::hasRecordTemplate(node->getIdent())) {
+      auto &Template = *SymbolTable::getRecordTemplate(node->getIdent());
       if (!node->getTemplateArgs()->isResolved()) {
          DeclPass::resolveTemplateArgs(
             node->getTemplateArgs(),
             Template.constraints,
             [this](TypeRef *node) {
-               node->accept(this);
+               VisitNode(node);
             },
             node
          );
@@ -756,7 +740,7 @@ void SemaPass::HandleConstructorCall(CallExpr *node)
             node->getTemplateArgs(),
             Template.constraints,
             [this](TypeRef *node) {
-               node->accept(this);
+               VisitNode(node);
             },
             node
          );
@@ -766,29 +750,38 @@ void SemaPass::HandleConstructorCall(CallExpr *node)
    }
 
    auto record = getRecord(
-      node->ident,
+      node->getIdent(),
       node->getTemplateArgs()
    );
 
    if (record->isUnion()) {
-      if (node->resolvedArgs.size() != 1) {
+      if (node->getResolvedArgs().size() != 1) {
          diag::err(err_union_initializer_arg_count) << node
                                                     << diag::term;
       }
 
-      auto& ty = node->resolvedArgs.front().type;
+      auto& ty = node->getResolvedArgs().front().type;
       auto un = record->getAs<Union>();
 
-      if (!un->initializableWith(*ty)) {
+
+      auto neededTy = un->initializableWith(*ty);
+      if (!neededTy) {
          diag::err(err_union_initializer_type) << node
                                                << diag::term;
       }
 
-      toRvalueIfNecessary(ty, node->args.front().second);
+      if (ty->isTypeGroup()) {
+         node->getArgs().front().second->setContextualType(QualType(neededTy));
+         ty = VisitNode(node->getArgs().front().second);
+      }
 
-      *node->returnType = ObjectType::get(un->getName());
+      toRvalueIfNecessary(ty, node->getArgs().front().second);
+      wrapImplicitCast(node->getArgs().front().second, ty,
+                       QualType(neededTy));
+
+      *node->getReturnType() = ObjectType::get(un->getName());
       node->setUnionConstr(true);
-      node->type = CallType::CONSTR_CALL;
+      node->setType(CallType::CONSTR_CALL);
 
       return;
    }
@@ -796,7 +789,7 @@ void SemaPass::HandleConstructorCall(CallExpr *node)
    Class* cl = record->getAs<Class>();
    checkClassAccessibility(cl, node);
 
-   auto& givenArgs = node->resolvedArgs;
+   auto& givenArgs = node->getResolvedArgs();
    auto constrResult = getMethod(cl, "init", givenArgs);
 
    if (constrResult.compatibility != CompatibilityType::COMPATIBLE) {
@@ -805,28 +798,22 @@ void SemaPass::HandleConstructorCall(CallExpr *node)
 
    auto& method = constrResult.method;
 
-   method->addUse();
-   cl->addUse();
-
    // check accessibility
    checkMemberAccessibility(cl, method->getName(), method->getAccessModifier(),
                             node);
    if (cl->isAbstract()) {
-      RuntimeError::raise("Cannot instantiate abstract class " + node->ident,
-                          node);
+      RuntimeError::raise("Cannot instantiate abstract class "
+                          + node->getIdent(), node);
    }
 
-   node->type = CallType::CONSTR_CALL;
+   node->setType(CallType::CONSTR_CALL);
 
-   *node->returnType = ObjectType::get(cl->getName());
-   node->binding = method->getMangledName();
-   node->method = method;
-   node->ident = cl->getName();
+   *node->getReturnType() = ObjectType::get(cl->getName());
+   node->setMethod(method);
+   node->setIdent(cl->getName());
 
-   node->declaredArgTypes = std::move(constrResult.resolvedNeededArgs);
-
-   PrepareCallArgs(node->args, givenArgs, constrResult);
-   ApplyCasts(node, constrResult.resolvedArgs, node->declaredArgTypes);
+   PrepareCallArgs(node->getArgs(), givenArgs, constrResult);
+   ApplyCasts(node, constrResult.resolvedArgs, method->getArguments());
 }
 
 void SemaPass::throwMethodNotFound(
@@ -834,7 +821,7 @@ void SemaPass::throwMethodNotFound(
    CallExpr *node,
    Class *cl)
 {
-   diag::err(err_no_matching_call) << 1 << node->ident
+   diag::err(err_no_matching_call) << 1 << node->getIdent()
                                    << node << diag::cont;
 
    size_t i = result.failedCandidates.size();
@@ -846,14 +833,14 @@ void SemaPass::throwMethodNotFound(
             << cand.failedConstraint->reportFailure()
             << method->loc << diag::cont;
       }
-      else if (node->args.size() != method->getArguments().size()) {
+      else if (node->getArgs().size() != method->getArguments().size()) {
          diag::note(note_cand_mismatched_arg_count)
             << method->getArguments().size()
-            << node->args.size()
+            << node->getArgs().size()
             << method->loc << diag::cont;
       }
       else {
-         auto &givenArg = node->resolvedArgs[cand.incompatibleArg];
+         auto &givenArg = node->getResolvedArgs()[cand.incompatibleArg];
          auto &neededArg = method->getArguments()[cand.incompatibleArg];
          diag::note(note_cand_no_implicit_conv)
             << givenArg.type << neededArg.type
@@ -868,7 +855,7 @@ void SemaPass::throwMethodNotFound(
 void SemaPass::HandleCallOperator(CallExpr *node)
 {
    auto latest = popTy();
-   if (!latest->isObject() || !SymbolTable::hasClass(latest->getClassName())) {
+   if (!latest->isObjectTy() || !SymbolTable::hasClass(latest->getClassName())) {
       pushTy(latest);
       return HandleAnonCall(node);
    }
@@ -877,7 +864,7 @@ void SemaPass::HandleCallOperator(CallExpr *node)
    string methodName = "postfix ()";
    auto cl = SymbolTable::getClass(className, importedNamespaces);
 
-   auto& givenArgs = node->resolvedArgs;
+   auto& givenArgs = node->getResolvedArgs();
    auto callOpResult = getMethod(cl, methodName, givenArgs);
 
    if (callOpResult.compatibility != CompatibilityType::COMPATIBLE) {
@@ -889,21 +876,21 @@ void SemaPass::HandleCallOperator(CallExpr *node)
    auto& method = callOpResult.method;
    node->setType(CallType::METHOD_CALL);
    node->setBinding(method->getMangledName());
-   node->setDeclaredArgTypes(std::move(callOpResult.resolvedNeededArgs));
    node->isCallOp(true);
    node->setMethod(method);
    node->loadBeforeCall(latest.needsLvalueToRvalueConv());
 
-   PrepareCallArgs(node->args, givenArgs, callOpResult);
-   ApplyCasts(node, callOpResult.resolvedArgs, node->declaredArgTypes);
+   PrepareCallArgs(node->getArgs(), givenArgs, callOpResult);
+   ApplyCasts(node, callOpResult.resolvedArgs,
+              callOpResult.resolvedNeededArgs);
 
-   node->returnType = method->getReturnType();
+   node->setReturnType(method->getReturnType());
 }
 
 void SemaPass::HandleAnonCall(CallExpr *node)
 {
    auto latest = popTy();
-   auto& givenArgs = node->resolvedArgs;
+   auto& givenArgs = node->getResolvedArgs();
 
    if (latest->isPointerTy()) {
       latest = latest->asPointerTy()->getPointeeType();
@@ -931,7 +918,7 @@ void SemaPass::HandleAnonCall(CallExpr *node)
    node->setType(CallType::ANON_CALL);
    node->setDeclaredArgTypes(std::vector<Argument>(func->getArgTypes()));
 
-   PrepareCallArgs(node->args, givenArgs, result);
+   PrepareCallArgs(node->getArgs(), givenArgs, result);
    ApplyCasts(node, result.resolvedArgs, node->getDeclaredArgTypes());
 
    node->setReturnType(func->getReturnType());
@@ -941,3 +928,6 @@ void SemaPass::HandleAnonCall(CallExpr *node)
       node->setHasStructReturn(true);
    }
 }
+
+} // namespace ast
+} // namespace cdot

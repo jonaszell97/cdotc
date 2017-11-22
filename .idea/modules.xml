@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/XtremeJonasScript.iml" filepath="$PROJECT_DIR$/.idea/XtremeJonasScript.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/CDot.iml" filepath="$PROJECT_DIR$/.idea/CDot.iml" />
     </modules>
   </component>
 </project>

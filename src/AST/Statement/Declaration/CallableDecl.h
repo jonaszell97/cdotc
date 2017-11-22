@@ -8,9 +8,13 @@
 #include "../Statement.h"
 #include "../../../Variant/Type/Generic.h"
 
+namespace cdot {
+namespace ast {
+
+class FuncArgDecl;
+
 class CallableDecl: public Statement {
 public:
-
    void setInnerDecls(std::vector<std::shared_ptr<Statement>>&& decls)
    {
       innerDeclarations = decls;
@@ -27,12 +31,16 @@ public:
    }
 
 protected:
-   CallableDecl(
-      AccessModifier am,
-      string &&name,
-      std::shared_ptr<TypeRef> &&returnType,
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args
-   );
+   CallableDecl(NodeType typeID,
+                AccessModifier am,
+                string &&name,
+                std::shared_ptr<TypeRef> &&returnType,
+                std::vector<std::shared_ptr<FuncArgDecl>> &&args)
+      : Statement(typeID), am(am), name(move(name)),
+        returnType(move(returnType)), args(move(args))
+   {
+
+   }
 
    AccessModifier am;
 
@@ -140,5 +148,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CALLABLEDECL_H

@@ -4,12 +4,14 @@
 
 #include "StringLiteral.h"
 
-StringLiteral::StringLiteral(std::string value)
-   : value(value) {
+namespace cdot {
+namespace ast {
+
+StringLiteral::StringLiteral(std::string &&value)
+   : Expression(StringLiteralID), value(std::move(value))
+{
 
 }
 
-std::vector<AstNode::SharedPtr> StringLiteral::get_children() {
-   return memberExpr == nullptr ? std::vector<AstNode::SharedPtr>()
-                                : std::vector<AstNode::SharedPtr>{memberExpr };
-}
+} // namespace ast
+} // namespace cdot

@@ -7,49 +7,60 @@
 
 #include "../CallableDecl.h"
 
-class CompoundStmt;
-
 namespace cdot {
-   namespace cl {
-      struct Method;
-   }
+namespace cl {
+
+struct Method;
+
 }
+
+namespace ast {
+
+class CompoundStmt;
 
 class DestrDecl: public CallableDecl {
 public:
-   DestrDecl();
-
-   typedef std::shared_ptr<DestrDecl> SharedPtr;
-   typedef std::unique_ptr<DestrDecl> UniquePtr;
-
-   NodeType get_type() override
+   DestrDecl() : CallableDecl(DestrDeclID, AccessModifier::PUBLIC, {}, {}, {})
    {
-      return NodeType::DESTR_DECL;
+
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   typedef std::shared_ptr<DestrDecl> SharedPtr;
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == DestrDeclID;
+   }
 
 protected:
    // codegen
-   cdot::cl::Method* declaredMethod;
-   cl::Record* record;
+   cdot::cl::Method* declaredMethod = nullptr;
+   cdot::cl::Record* record = nullptr;
 
 public:
 
-   cl::Method *getDeclaredMethod() const
+   cdot::cl::Method *getDeclaredMethod() const
    {
       return declaredMethod;
    }
 
-   void setDeclaredMethod(cl::Method *declaredMethod)
+   void setDeclaredMethod(cdot::cl::Method *declaredMethod)
    {
       DestrDecl::declaredMethod = declaredMethod;
    }
 
-   cl::Record *getRecord() const;
-   void setRecord(cl::Record *record);
+   cdot::cl::Record* getRecord() const
+   {
+      return record;
+   }
+
+   void setRecord(cdot::cl::Record* record)
+   {
+      this->record = record;
+   }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_DESTRDECL_H

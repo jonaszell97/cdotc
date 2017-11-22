@@ -3,7 +3,7 @@
 //
 
 #include "Builtin.h"
-#include "../../../Variant/Type/BuiltinType.h"
+#include "../../../Variant/Type/Type.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../SymbolTable.h"
 #include "Record/Class.h"
@@ -61,7 +61,7 @@ namespace cdot {
       primitiveDeclared = true;
    }
 
-   void Builtin::ImportBuiltin(string &name) {
+   void Builtin::ImportBuiltin(const string &name) {
       bool fullImport = name == "Builtin";
 
       if (fullImport || name == "Builtin.Primitive") {

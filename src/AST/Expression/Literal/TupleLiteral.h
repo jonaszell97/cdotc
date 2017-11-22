@@ -12,26 +12,25 @@ namespace cdot {
    class TupleType;
 }
 
+namespace cdot {
+namespace ast {
+
 class TupleLiteral: public Expression {
 public:
-   explicit TupleLiteral(std::vector<pair<string, Expression::SharedPtr>> elements);
+   explicit TupleLiteral(
+      std::vector<pair<string, Expression::SharedPtr>> &&elements);
 
    typedef std::shared_ptr<TupleLiteral> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::TUPLE_LITERAL;
-   }
 
    bool createsTemporary() override
    {
       return true;
    }
 
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == TupleLiteralID;
+   }
 
 protected:
    std::vector<pair<string, Expression::SharedPtr>> elements;
@@ -44,8 +43,7 @@ public:
    bool isMetaTy() const;
    void isMetaTy(bool is_meta_ty);
 
-   const std::vector<pair<string, std::shared_ptr<Expression>>>
-   &getElements() const;
+   std::vector<pair<string, std::shared_ptr<Expression>>> &getElements();
    void setElements(
       const std::vector<pair<string, std::shared_ptr<Expression>>> &elements);
 
@@ -53,5 +51,7 @@ public:
    void setTupleType(TupleType *tupleType);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_TUPLELITERAL_H

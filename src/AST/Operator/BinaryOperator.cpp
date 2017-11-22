@@ -3,11 +3,13 @@
 //
 
 #include "BinaryOperator.h"
-#include "../../Lexer.h"
+#include "../../lex/Lexer.h"
 
 using namespace cdot::cl;
 
 namespace cdot {
+namespace ast {
+
 BinaryOperatorType getBinaryOpType(const string &op) {
    if (!util::isAssignmentOperator(op).empty()) {
       return BinaryOperatorType::ASSIGNMENT;
@@ -36,55 +38,25 @@ BinaryOperatorType getBinaryOpType(const string &op) {
    return BinaryOperatorType::OTHER;
 }
 
-BinaryOperator::BinaryOperator(string op) : op(op) {
+BinaryOperator::BinaryOperator(string &&op)
+   : Expression(BinaryOperatorID), op(op)
+{
 
 }
 
-BinaryOperator::BinaryOperator(string op, Expression::SharedPtr lhs, Expression::SharedPtr rhs) :
-   op(op),
-   lhs(lhs),
-   rhs(rhs) {
+BinaryOperator::BinaryOperator(string &&op,
+                               Expression::SharedPtr &&lhs,
+                               Expression::SharedPtr &&rhs)
+   : Expression(BinaryOperatorID), op(move(op)), lhs(move(lhs)), rhs(move(rhs)) {
 
 }
 
 void BinaryOperator::setLhs(Expression::SharedPtr exp) {
    lhs = exp;
-   children.push_back(&lhs);
 }
 
 void BinaryOperator::setRhs(Expression::SharedPtr exp) {
    rhs = exp;
-   children.push_back(&rhs);
-}
-
-void BinaryOperator::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   if (lhs.get() == child) {
-      lhs.reset(replacement);
-   }
-
-   if (rhs.get() == child) {
-      rhs.reset(replacement);
-   }
-
-   if (memberExpr.get() == child) {
-      memberExpr.reset(replacement);
-   }
-
-   llvm_unreachable("child does not exist");
-}
-
-std::vector<AstNode::SharedPtr> BinaryOperator::get_children() {
-   std::vector<AstNode::SharedPtr> res;
-   res.push_back(lhs);
-   res.push_back(rhs);
-   if (memberExpr != nullptr) {
-      res.push_back(memberExpr);
-   }
-
-   return res;
 }
 
 Expression::SharedPtr &BinaryOperator::getLhs()
@@ -97,11 +69,11 @@ Expression::SharedPtr &BinaryOperator::getRhs()
    return rhs;
 }
 
-BuiltinType *BinaryOperator::getOperandType() const {
+Type *BinaryOperator::getOperandType() const {
    return operandType;
 }
 
-void BinaryOperator::setOperandType(BuiltinType *operandType) {
+void BinaryOperator::setOperandType(Type *operandType) {
    BinaryOperator::operandType = operandType;
 }
 
@@ -121,11 +93,11 @@ void BinaryOperator::setOpType(BinaryOperatorType opType) {
    BinaryOperator::opType = opType;
 }
 
-BuiltinType *BinaryOperator::getPointerArithmeticType() const {
+Type *BinaryOperator::getPointerArithmeticType() const {
    return pointerArithmeticType;
 }
 
-void BinaryOperator::setPointerArithmeticType(BuiltinType *pointerArithmeticType) {
+void BinaryOperator::setPointerArithmeticType(Type *pointerArithmeticType) {
    BinaryOperator::pointerArithmeticType = pointerArithmeticType;
 }
 
@@ -137,19 +109,19 @@ void BinaryOperator::setPreAssignmentOp(BinaryOperator *preAssignmentOp) {
    BinaryOperator::preAssignmentOp = preAssignmentOp;
 }
 
-Type &BinaryOperator::getLhsType() {
+QualType &BinaryOperator::getLhsType() {
    return lhsType;
 }
 
-void BinaryOperator::setLhsType(const Type &lhsType) {
+void BinaryOperator::setLhsType(const QualType &lhsType) {
    BinaryOperator::lhsType = lhsType;
 }
 
-const Type &BinaryOperator::getRhsType() const {
+const QualType &BinaryOperator::getRhsType() const {
    return rhsType;
 }
 
-void BinaryOperator::setRhsType(const Type &rhsType) {
+void BinaryOperator::setRhsType(const QualType &rhsType) {
    BinaryOperator::rhsType = rhsType;
 }
 
@@ -282,5 +254,5 @@ void BinaryOperator::updateRefCount(bool updateRefCount) {
    BinaryOperator::update_refcount = updateRefCount;
 }
 
-
-}
+} // namespace ast
+} // namespace cdot

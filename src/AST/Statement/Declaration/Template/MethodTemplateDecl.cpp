@@ -7,6 +7,9 @@
 using std::move;
 using namespace cdot::cl;
 
+namespace cdot {
+namespace ast {
+
 MethodTemplateDecl::MethodTemplateDecl(
    string &&name, std::unique_ptr<TokenStore> &&Store,
    std::vector<TemplateConstraint> &&constraints,
@@ -17,7 +20,7 @@ MethodTemplateDecl::MethodTemplateDecl(
                           move(constraints), move(args), move(returnType)),
      is_static(is_static)
 {
-
+   typeID = MethodTemplateDeclID;
 }
 
 bool MethodTemplateDecl::isStatic() const
@@ -70,3 +73,6 @@ void MethodTemplateDecl::isMutating(bool is_mutating)
 {
    MethodTemplateDecl::is_mutating = is_mutating;
 }
+
+} // namespace ast
+} // namespace cdot

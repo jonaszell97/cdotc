@@ -4,31 +4,15 @@
 
 #include "StringInterpolation.h"
 
-StringInterpolation::StringInterpolation(std::vector<Expression::SharedPtr>&& strings) :
-   strings(strings)
+namespace cdot {
+namespace ast {
+
+StringInterpolation::StringInterpolation(
+   std::vector<Expression::SharedPtr>&& strings)
+   : Expression(StringInterpolationID), strings(move(strings))
 {
 
 }
 
-void StringInterpolation::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   for (auto &str : strings) {
-      if (str.get() == child) {
-         str.reset(replacement);
-         return;
-      }
-   }
-
-   llvm_unreachable("child does not exist");
-}
-
-std::vector<AstNode::SharedPtr> StringInterpolation::get_children() {
-   std::vector<AstNode::SharedPtr> children;
-   for (const auto& expr : strings) {
-      children.push_back(expr);
-   }
-
-   return children;
-}
+} // namespace ast
+} // namespace cdot

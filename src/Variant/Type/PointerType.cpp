@@ -12,30 +12,28 @@
 
 namespace cdot {
 
-unordered_map<size_t, PointerType*> PointerType::Instances;
-
-PointerType* PointerType::get(Type const& pointee)
+PointerType* PointerType::get(QualType const& pointee)
 {
-   auto hash = (size_t)*pointee;
+   auto hash = std::to_string((uintptr_t)*pointee);
    if (Instances.find(hash) == Instances.end()) {
-      Instances.emplace(hash, new PointerType(pointee));
+      Instances.try_emplace(hash, new PointerType(pointee));
    }
 
-   return Instances[hash];
+   return cast<PointerType>(Instances[hash]);
 }
 
-PointerType* PointerType::get(BuiltinType *pointee)
+PointerType* PointerType::get(Type *pointee)
 {
-   return get(Type(pointee));
+   return get(QualType(pointee));
 }
 
-PointerType::PointerType(const Type& pointeeType) :
+PointerType::PointerType(const QualType& pointeeType) :
    pointeeType(pointeeType)
 {
    id = TypeID::PointerTypeID;
 }
 
-bool PointerType::implicitlyCastableTo(BuiltinType *other) const
+bool PointerType::implicitlyCastableTo(Type *other) const
 {
    if (other->isPointerTy()) {
       auto pointee = other->asPointerTy()->getPointeeType();
@@ -49,7 +47,7 @@ bool PointerType::implicitlyCastableTo(BuiltinType *other) const
    return false;
 }
 
-bool PointerType::explicitlyCastableTo(BuiltinType *other) const
+bool PointerType::explicitlyCastableTo(Type *other) const
 {
    return isa<PointerType>(other) || isa<IntegerType>(other);
 }

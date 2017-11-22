@@ -4,7 +4,7 @@
 
 #include <sstream>
 #include "DiagnosticParser.h"
-#include "../../Lexer.h"
+#include "../../lex/Lexer.h"
 
 namespace cdot {
 namespace diag {

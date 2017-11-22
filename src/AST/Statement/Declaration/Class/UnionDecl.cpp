@@ -9,6 +9,9 @@
 
 using std::move;
 
+namespace cdot {
+namespace ast {
+
 UnionDecl::UnionDecl(string &&name,
                      UnionTypes &&types,
                      bool isConst,
@@ -17,23 +20,13 @@ UnionDecl::UnionDecl(string &&name,
                      std::vector<std::shared_ptr<PropDecl>> &&properties,
 
                      std::vector<std::shared_ptr<Statement>> &&innerDecls)
-   : RecordDecl(AccessModifier::PUBLIC, move(name), {}, move(methods),
-                move(typedefs), move(properties), move(innerDecls)),
+   : RecordDecl(UnionDeclID, AccessModifier::PUBLIC, move(name), {},
+                move(methods), move(typedefs), move(properties),
+                move(innerDecls)),
      containedTypes(move(types)),
      is_const(isConst)
 {
 
-}
-
-std::vector<std::shared_ptr<AstNode>>
-UnionDecl::get_children()
-{
-   std::vector<std::shared_ptr<AstNode>> children;
-   for (const auto & ty : containedTypes) {
-      children.push_back(ty.second);
-   }
-
-   return children;
 }
 
 bool UnionDecl::isConst() const {
@@ -43,3 +36,6 @@ bool UnionDecl::isConst() const {
 void UnionDecl::isConst(bool is_const) {
    UnionDecl::is_const = is_const;
 }
+
+} // namespace ast
+} // namespace cdot

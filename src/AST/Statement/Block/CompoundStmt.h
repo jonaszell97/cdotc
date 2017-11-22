@@ -7,11 +7,13 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class CompoundStmt : public Statement {
 public:
    explicit CompoundStmt(bool preserveScope = false);
-
-   void addStatement(Statement::SharedPtr stmt);
+   void addStatement(Statement::SharedPtr &&stmt);
 
    void isUnsafe(bool unsafe)
    {
@@ -53,28 +55,22 @@ public:
       statements.clear();
    }
 
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
    typedef std::shared_ptr<CompoundStmt> SharedPtr;
    typedef std::unique_ptr<CompoundStmt> UniquePtr;
-   
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::COMPOUND_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == CompoundStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::vector<Statement::SharedPtr> statements;
    bool preserveScope = false;
 
-   std::vector<AbstractPass*> passes;
-
    bool isUnsafe_ = false;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_COMPOUNDSTATEMENT_H

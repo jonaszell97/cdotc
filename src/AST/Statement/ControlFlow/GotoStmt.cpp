@@ -4,10 +4,19 @@
 
 #include "GotoStmt.h"
 
-GotoStmt::GotoStmt(std::string label_name) : labelName(label_name) {
+namespace cdot {
+namespace ast {
+
+GotoStmt::GotoStmt(std::string &&name)
+   : Statement(GotoStmtID), labelName(move(name))
+{
 
 }
 
-std::vector<AstNode::SharedPtr> GotoStmt::get_children() {
-    return { };
+const string &GotoStmt::getLabelName() const
+{
+   return labelName;
 }
+
+} // namespace ast
+} // namespace cdot

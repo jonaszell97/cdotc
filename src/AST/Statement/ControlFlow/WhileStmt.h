@@ -6,29 +6,38 @@
 #define CDOT_WHILESTATEMENT_H
 
 #include "../Statement.h"
+
+namespace cdot {
+namespace ast {
+
 class Expression;
 
 class WhileStmt : public Statement {
 public:
-   WhileStmt(std::shared_ptr<Expression> cond, Statement::SharedPtr body, bool atLeastOnce);
-
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::WHILE_STMT;
-   }
+   WhileStmt(std::shared_ptr<Expression> &&cond,
+             Statement::SharedPtr &&body,
+             bool atLeastOnce);
 
    typedef std::shared_ptr<WhileStmt> SharedPtr;
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == WhileStmtID;
+   }
 
 protected:
    std::shared_ptr<Expression> condition;
    Statement::SharedPtr body;
 
    bool atLeastOnce = false;
+
+public:
+   std::shared_ptr<Expression> &getCondition();
+   const Statement::SharedPtr &getBody() const;
+   bool isAtLeastOnce() const;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_WHILESTATEMENT_H

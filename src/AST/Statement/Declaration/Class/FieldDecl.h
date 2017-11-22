@@ -9,15 +9,19 @@
 #include "../../Statement.h"
 #include "RecordSubDecl.h"
 
-class TypeRef;
-class Expression;
-
 namespace cdot {
+
 namespace cl {
-   struct Method;
-   struct Field;
+struct Method;
+struct Field;
 }
-}
+
+namespace ast {
+
+class TypeRef;
+class FuncArgDecl;
+class Expression;
+class CompoundStmt;
 
 class FieldDecl : public RecordSubDecl {
 public:
@@ -30,34 +34,29 @@ public:
       std::shared_ptr<Expression> &&defaultVal = {}
    );
 
-   inline void setDefault(std::shared_ptr<Expression> expr) {
-      defaultVal = expr;
+   inline void setDefault(std::shared_ptr<Expression> &&expr)
+   {
+      defaultVal = move(expr);
    }
 
    typedef std::shared_ptr<FieldDecl> SharedPtr;
-   typedef std::unique_ptr<FieldDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override
-   {
-      return NodeType::FIELD_DECL;
-   }
-
-   virtual inline void addGetter(std::shared_ptr<CompoundStmt> body = nullptr)
+   void addGetter(std::shared_ptr<CompoundStmt> &&body = nullptr)
    {
       has_getter = true;
-      getterBody = body;
+      getterBody = move(body);
    }
 
-   virtual inline void addSetter(std::shared_ptr<CompoundStmt> body = nullptr)
+   void addSetter(std::shared_ptr<CompoundStmt> &&body = nullptr)
    {
       has_setter = true;
-      setterBody = body;
+      setterBody = move(body);
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == FieldDeclID;
+   }
 
 protected:
    bool has_getter = false;
@@ -145,22 +144,22 @@ public:
       FieldDecl::setterSelfBinding = setterSelfBinding;
    }
 
-   cl::Method *getGetterMethod() const
+   cdot::cl::Method *getGetterMethod() const
    {
       return getterMethod;
    }
 
-   void setGetterMethod(cl::Method *getterMethod)
+   void setGetterMethod(cdot::cl::Method *getterMethod)
    {
       FieldDecl::getterMethod = getterMethod;
    }
 
-   cl::Method *getSetterMethod() const
+   cdot::cl::Method *getSetterMethod() const
    {
       return setterMethod;
    }
 
-   void setSetterMethod(cl::Method *setterMethod)
+   void setSetterMethod(cdot::cl::Method *setterMethod)
    {
       FieldDecl::setterMethod = setterMethod;
    }
@@ -236,5 +235,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CLASSMEMBERDECL_H

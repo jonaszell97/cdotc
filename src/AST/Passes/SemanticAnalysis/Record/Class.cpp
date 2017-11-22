@@ -56,7 +56,7 @@ string ExtensionConstraint::reportFailure() const
  * @param type
  * @param access_modifier
  */
-Field::Field(string name, BuiltinType* type, AccessModifier access_modifier,
+Field::Field(string name, Type* type, AccessModifier access_modifier,
              Expression::SharedPtr def,
    bool isConst, FieldDecl* declaration) :
    fieldName(name), fieldType(type), accessModifier(access_modifier),
@@ -118,7 +118,7 @@ Class::Class(
  */
 Field* Class::declareField(
    const string &name,
-   BuiltinType *type,
+   Type *type,
    AccessModifier access,
    Expression::SharedPtr def_val,
    bool isConst,
@@ -130,7 +130,10 @@ Field* Class::declareField(
 
    field->isStatic = isStatic;
    field->owningClass = this;
-   field->layoutOffset = fieldCount++;
+
+   if (!isStatic) {
+      field->layoutOffset = fieldCount++;
+   }
 
    auto ptr = field.get();
 
@@ -152,7 +155,7 @@ Field* Class::declareField(
  */
 Method* Class::declareMethod(
    const string &methodName,
-   const Type& ret_type,
+   const QualType& ret_type,
    AccessModifier access,
    std::vector<Argument>&& args,
    bool isStatic,
@@ -207,7 +210,7 @@ const std::vector<ExtensionConstraint>& Class::getConstraintSet(unsigned i)
 
 const ExtensionConstraint* Class::checkConstraints(
    Method *method,
-   BuiltinType *caller) const
+   Type *caller) const
 {
    if (caller == nullptr || method->constraintIndex == -1) {
       return nullptr;
@@ -225,7 +228,7 @@ const ExtensionConstraint* Class::checkConstraints(
 
 bool Class::checkConstraint(
    const ExtensionConstraint &constr,
-   BuiltinType *&caller) const
+   Type *&caller) const
 {
    auto asObj = caller->asObjTy();
    auto targetTy = asObj->getNamedTemplateArg(
@@ -274,7 +277,7 @@ bool Class::declareMemberwiseInitializer()
          continue;
       }
 
-      args.emplace_back(field.second->fieldName, Type(field.second->fieldType));
+      args.emplace_back(field.second->fieldName, QualType(field.second->fieldType));
    }
 
    // check if memberwise initializer already explicitly defined
@@ -284,12 +287,13 @@ bool Class::declareMemberwiseInitializer()
       return false;
    }
 
-   Type retType(ObjectType::get(recordName));
+   QualType retType(ObjectType::get(recordName));
    auto method = std::make_shared<Method>(constrName, retType,
                                           std::move(args),
                                           nullptr, SourceLocation(),
                                           methods.size());
 
+   method->owningClass = this;
    method->setMangledName(mangled);
    method->loc = decl->getSourceLoc();
    auto ptr = method.get();
@@ -371,18 +375,23 @@ void Class::setParentClass(Class *parent)
    }
 }
 
-Method* Class::getMethod(const string &method_name)
+Method* Class::getMethod(llvm::StringRef name)
 {
-   auto m = Record::getMethod(method_name);
+   auto m = Record::getMethod(name);
    if (m) {
       return m;
    }
 
    if (parentClass != nullptr) {
-      return parentClass->getMethod(method_name);
+      return parentClass->getMethod(name);
    }
 
    return nullptr;
+}
+
+Method* Class::getOwnMethod(llvm::StringRef name)
+{
+   return Record::getMethod(name);
 }
 
 Method* Class::getMethod(unsigned id)
@@ -536,10 +545,7 @@ void Class::checkProtocolConformance(Class *proto)
             auto inst = instantiateProtocolDefaultImpl(this,
                                                        method.second.get());
 
-            methods.emplace(inst->getName(), inst);
             protoMethods.push_back(inst->getMangledName());
-            mangledMethods.emplace(inst->getMangledName(), inst);
-
             continue;
          }
          if (protoName == "StringRepresentable") {
@@ -898,7 +904,7 @@ void Class::generateMemoryLayout(CodeGen &CGM)
          field->llvmType = field->fieldType->getLlvmType();
       }
 
-      if (field->fieldType->isObject() &&
+      if (field->fieldType->isObjectTy() &&
          SymbolTable::getClass(field->fieldType->getClassName())->isRefcounted())
       {
          refCountedFields.emplace_back(i, field->fieldType->getClassName());

@@ -7,32 +7,27 @@
 
 #include "../Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class StringLiteral : public Expression {
 public:
-   explicit StringLiteral(string);
-
-   bool needsContextualInformation() const override {
-      return true;
-   }
+   explicit StringLiteral(string &&str);
 
    typedef std::shared_ptr<StringLiteral> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::STRING_LITERAL;
-   }
 
    bool createsTemporary() override
    {
       return true;
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == StringLiteralID;
+   }
 
 protected:
    string value;
-
    bool raw = false;
 
 public:
@@ -57,5 +52,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_STRINGLITERAL_H

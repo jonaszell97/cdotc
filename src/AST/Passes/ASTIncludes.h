@@ -32,14 +32,15 @@
 #include "../Statement/Declaration/Class/ConstrDecl.h"
 #include "../Statement/Declaration/Class/DestrDecl.h"
 #include "../Statement/Declaration/Class/FieldDecl.h"
+#include "../Statement/Declaration/Class/PropDecl.h"
 #include "../Statement/Declaration/Class/MethodDecl.h"
+#include "../Statement/Declaration/Class/ExtensionDecl.h"
 #include "../Statement/Declaration/Template/RecordTemplateDecl.h"
 #include "../Statement/Declaration/Template/CallableTemplateDecl.h"
 #include "../Statement/Declaration/Template/MethodTemplateDecl.h"
 #include "../Expression/Literal/CollectionLiteral.h"
 #include "../Statement/Declaration/NamespaceDecl.h"
 #include "../Statement/UsingStmt.h"
-#include "../Statement/EndOfFileStmt.h"
 #include "../../Util.h"
 #include "../Statement/Declaration/DeclareStmt.h"
 #include "../Statement/DebugStmt.h"
@@ -54,3 +55,5 @@
 #include "../Statement/Exception/ThrowStmt.h"
 
 #include "../Statement/Declaration/Class/UnionDecl.h"
+
+#include "../Statement/NullStmt.h"

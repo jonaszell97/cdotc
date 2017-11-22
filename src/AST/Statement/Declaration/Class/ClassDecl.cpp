@@ -13,6 +13,9 @@
 using namespace cdot::cl;
 using std::move;
 
+namespace cdot {
+namespace ast {
+
 ClassDecl::ClassDecl(
    string &&class_name,
    std::vector<std::shared_ptr<FieldDecl>> &&fields,
@@ -28,6 +31,7 @@ ClassDecl::ClassDecl(
    std::vector<Statement::SharedPtr> &&innerDeclarations,
    bool isStruct)
    : RecordDecl(
+         ClassDeclID,
          am,
          move(class_name),
          move(implements),
@@ -58,6 +62,7 @@ ClassDecl::ClassDecl(
       std::shared_ptr<DestrDecl> &&destr,
       std::vector<Statement::SharedPtr> &&innerDeclarations)
    : RecordDecl(
+      ClassDeclID,
       am,
       move(className),
       move(conformsTo),
@@ -73,27 +78,6 @@ ClassDecl::ClassDecl(
    is_protocol(true)
 {
 
-}
-
-std::vector<std::shared_ptr<AstNode>> ClassDecl::get_children() {
-   std::vector<std::shared_ptr<AstNode>> children;
-   for (const auto& td : typedefs) {
-      children.push_back(td);
-   }
-   for (const auto& constr : constructors) {
-      children.push_back(constr);
-   }
-   for (const auto& field : fields) {
-      children.push_back(field);
-   }
-   for (const auto& method : methods) {
-      children.push_back(method);
-   }
-   for (const auto& inner : innerDeclarations) {
-      children.push_back(inner);
-   }
-
-   return children;
 }
 
 void ClassDecl::setParentClass(const std::shared_ptr<TypeRef> &parentClass)
@@ -193,3 +177,6 @@ void ClassDecl::setDefaultConstr(Method *defaultConstr)
 {
    ClassDecl::defaultConstr = defaultConstr;
 }
+
+} // namespace ast
+} // namespace cdot

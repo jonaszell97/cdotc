@@ -7,6 +7,9 @@
 
 #include "RecordDecl.h"
 
+namespace cdot {
+namespace ast {
+
 class ExtensionDecl: public RecordDecl {
 public:
    ExtensionDecl(
@@ -23,14 +26,12 @@ public:
       std::vector<Statement::SharedPtr> &&innerDeclarations
    );
 
-   NodeType get_type() override
-   {
-      return NodeType::EXTENSION_DECL;
-   }
-
-   ASTNODE_ACCEPT_PASSES
-
    typedef std::shared_ptr<ExtensionDecl> SharedPtr;
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ExtensionDeclID;
+   }
 
 protected:
    std::vector<std::shared_ptr<ConstrDecl>> initializers;
@@ -41,5 +42,7 @@ public:
       const std::vector<std::shared_ptr<ConstrDecl>> &initializers);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_EXTENSIONDECL_H

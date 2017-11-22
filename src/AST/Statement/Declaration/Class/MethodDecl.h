@@ -7,15 +7,12 @@
 
 #include "../CallableDecl.h"
 
+namespace cdot {
+namespace ast {
+
 class TypeRef;
 class CompoundStmt;
 class FuncArgDecl;
-
-namespace cdot {
-   namespace cl {
-      struct Method;
-   }
-}
 
 class MethodDecl : public CallableDecl {
 public:
@@ -55,14 +52,10 @@ public:
    typedef std::shared_ptr<MethodDecl> SharedPtr;
    typedef std::unique_ptr<MethodDecl> UniquePtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::METHOD_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == MethodDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    bool isStatic;
@@ -78,7 +71,7 @@ protected:
    bool is_protocol_method = false;
 
    // codegen
-   cl::Record *record;
+   cdot::cl::Record *record;
    cdot::cl::Method* method;
 
    bool isUsed = false;
@@ -150,14 +143,14 @@ public:
       MethodDecl::hasDefinition_ = hasDefinition_;
    }
 
-   cl::Record *getRecord() const;
-   void setRecord(cl::Record *record);
+   cdot::cl::Record *getRecord() const;
+   void setRecord(cdot::cl::Record *record);
 
-   cl::Method *getMethod() const {
+   cdot::cl::Method *getMethod() const {
       return method;
    }
 
-   void setMethod(cl::Method *method) {
+   void setMethod(cdot::cl::Method *method) {
       MethodDecl::method = method;
    }
 
@@ -170,5 +163,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_MEMBERDECL_H

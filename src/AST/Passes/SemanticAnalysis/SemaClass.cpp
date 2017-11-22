@@ -26,6 +26,9 @@
 #include "../../SymbolTable.h"
 #include "../../../Variant/Type/VoidType.h"
 
+namespace cdot {
+namespace ast {
+
 void SemaPass::DefineField(
    FieldDecl *node,
    cdot::cl::Class *cl)
@@ -39,9 +42,8 @@ void SemaPass::DefineField(
 
    if (defaultVal != nullptr) {
       defaultVal->setContextualType(field_type);
-      defaultVal->addUse();
 
-      Type def_type = getResult(defaultVal);
+      QualType def_type = VisitNode(defaultVal);
       toRvalueIfNecessary(def_type, defaultVal);
 
       auto declaredField = cl->getField(node->getName());
@@ -88,38 +90,24 @@ void SemaPass::DefineField(
    if (node->hasGetter() && node->getGetterBody() != nullptr) {
       pushMethodScope(node->getGetterMethod());
 
-      latestScope->declaredReturnType = field_type;
-      latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                             latestScope->id);
-      currentCallable = node->getGetterMethod();
+      VisitNode(node->getGetterBody());
 
-      node->getGetterBody()->accept(this);
-      node->setGetterSelfBinding(latestScope->currentSelf);
-
-      popScope();
+      popFunctionScope();
    }
 
    if (node->hasSetter() && node->getSetterBody() != nullptr) {
       pushMethodScope(node->getSetterMethod());
-      string newValStr = "newVal";
 
       auto typeref = std::make_shared<TypeRef>();
       typeref->setResolved(true);
       typeref->setType(field_type);
 
-      node->setNewVal(std::make_shared<FuncArgDecl>(newValStr, typeref));
+      node->setNewVal(std::make_shared<FuncArgDecl>("newVal", move(typeref)));
 
-      latestScope->declaredReturnType = Type(VoidType::get());
-      latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                             latestScope->id);
+      node->getNewVal()->setBinding(declareVariable("newVal", field_type));
+      VisitNode(node->getSetterBody());
 
-      node->getNewVal()->setBinding(declareVariable(newValStr, field_type));
-      currentCallable = node->getSetterMethod();
-
-      node->setSetterSelfBinding(latestScope->currentSelf);
-      node->getSetterBody()->accept(this);
-
-      popScope();
+      popFunctionScope();
    }
 }
 
@@ -131,14 +119,7 @@ void SemaPass::visit(PropDecl *node)
    if (node->hasGetter() && node->getGetterBody() != nullptr) {
       pushMethodScope(prop->getGetter());
 
-      latestScope->declaredReturnType = propTy;
-      latestScope->currentSelf =
-         SymbolTable::mangleVariable("self", latestScope->id);
-      currentCallable = prop->getGetter();
-
-      node->getGetterBody()->accept(this);
-      prop->getGetter()->setSelfBinding(latestScope->currentSelf);
-
+      VisitNode(node->getGetterBody());
       popScope();
    }
 
@@ -149,15 +130,10 @@ void SemaPass::visit(PropDecl *node)
       typeref->setResolved(true);
       typeref->setType(propTy);
 
-      latestScope->declaredReturnType = Type(VoidType::get());
-      latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                             latestScope->id);
-
-      prop->getSetter()->setSelfBinding(latestScope->currentSelf);
       prop->setNewValBinding(declareVariable(prop->getNewValName(),
                                              prop->getType()));
 
-      node->getSetterBody()->accept(this);
+      VisitNode(node->getSetterBody());
       popScope();
    }
 }
@@ -167,11 +143,11 @@ void SemaPass::DefineClass(ClassDecl *node,
    pushClassScope(cl);
 
    for (const auto& decl : node->getInnerDeclarations()) {
-      decl->accept(this);
+      VisitNode(decl);
    }
 
    for (const auto &prop : node->getProperties()) {
-      prop->accept(this);
+      VisitNode(prop);
    }
 
    for (const auto &method : cl->getMethods()) {
@@ -182,15 +158,15 @@ void SemaPass::DefineClass(ClassDecl *node,
          continue;
       }
 
-      method.second->getDeclaration()->accept(this);
+      VisitNode(method.second->getDeclaration());
    }
 
    for (const auto &constr : node->getConstructors()) {
       DefineConstr(constr.get(), cl);
    }
 
-   if (node->getDestructor() != nullptr) {
-      DefineDestr(node->destructor.get(), cl);
+   if (auto Deinit = node->getDestructor()) {
+      DefineDestr(Deinit.get(), cl);
    }
 
    popClassScope();
@@ -202,15 +178,15 @@ void SemaPass::visit(ExtensionDecl *node)
    pushClassScope(rec);
 
    for (const auto& decl : node->getInnerDeclarations()) {
-      decl->accept(this);
+      VisitNode(decl);
    }
 
    for (const auto &prop : node->getProperties()) {
-      prop->accept(this);
+      VisitNode(prop);
    }
 
    for (const auto &stmt : node->getMethods()) {
-      stmt->accept(this);
+      VisitNode(stmt);
    }
 
    for (const auto &constr : node->getInitializers()) {
@@ -224,14 +200,14 @@ void SemaPass::DefineMethod(
    MethodDecl *node,
    cdot::cl::Class *cl)
 {
-   if (node->isAlias || node->is_declaration) {
+   if (node->isIsAlias() || node->isDeclaration()) {
       return;
    }
 
-   bool hasConstraints = node->method->constraintIndex != -1;
+   bool hasConstraints = node->getMethod()->constraintIndex != -1;
    if (hasConstraints) {
       auto& constraints = cl->getConstraintSet(
-         (unsigned)node->method->constraintIndex);
+         (unsigned)node->getMethod()->constraintIndex);
       auto& classGenerics = GenericsStack.back();
       auto* newConstraints = new std::vector<TemplateConstraint>();
 
@@ -265,44 +241,18 @@ void SemaPass::DefineMethod(
    }
 
    auto return_type = node->getReturnType()->getType();
-   pushMethodScope(node->method);
+   pushMethodScope(node->getMethod());
 
-   if (!node->isStatic) {
-      latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                             latestScope->id);
-      node->getMethod()->setSelfBinding(latestScope->currentSelf);
-   }
+   attributes = node->getAttributes();
 
-   attributes = node->attributes;
-
-   if (node->getBody()) {
+   if (auto Body = node->getBody()) {
       for (const auto &arg : node->getArgs()) {
-         arg->visitDefault = true;
-         arg->accept(this);
-         arg->binding = declareVariable(arg->argName, arg->argType->getType());
+         VisitNode(arg);
+         arg->setBinding(declareVariable(arg->getArgName(),
+                                         arg->getArgType()->getType()));
       }
 
-      currentCallable = node->getMethod();
-      latestScope->mutableSelf = node->isMutating_;
-
-      node->getBody()->accept(this);
-
-      if (latestScope->returned == 0) {
-         if (!return_type->isVoidTy()) {
-//            RuntimeError::raise("Returning Void from a method with declared return type " +
-//               node->returnType->getType().toString(), node->returnType.get());
-         }
-      }
-      else {
-         return_type = latestScope->declaredReturnType;
-      }
-
-      node->getMethod()->setReturnType(return_type);
-
-      if (latestScope->branches - latestScope->returned > 0
-          && !return_type->isVoidTy()) {
-//         RuntimeError::raise("Not all code paths return a value", node->body.get());
-      }
+      VisitNode(Body);
    }
    else if (return_type->isAutoTy()) {
       *return_type = VoidType::get();
@@ -315,7 +265,7 @@ void SemaPass::DefineMethod(
       delete back;
    }
 
-   popScope();
+   popFunctionScope();
    attributes.clear();
 }
 
@@ -332,15 +282,11 @@ void SemaPass::DefineConstr(
    ConstrDecl *node,
    cdot::cl::Class *cl)
 {
-   if (node->memberwise || node->getBody() == nullptr) {
+   if (node->isMemberwise() || node->getBody() == nullptr) {
       return;
    }
 
-   pushMethodScope(node->method);
-
-   latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                          latestScope->id);
-   node->method->setSelfBinding(latestScope->currentSelf);
+   pushMethodScope(node->getMethod());
 
    std::vector<string> uninitialized;
    for (const auto& field : cl->getFields()) {
@@ -349,35 +295,20 @@ void SemaPass::DefineConstr(
       }
    }
 
-   latestScope->uninitializedFields = &uninitialized;
-   latestScope->mutableSelf = true;
-   currentCallable = node->getMethod();
-
    for (auto& arg : node->getArgs()) {
-      arg->binding = declareVariable(arg->argName, arg->argType->getType());
+      arg->setBinding(declareVariable(arg->getArgName(),
+                                      arg->getArgType()->getType()));
    }
 
-   node->getBody()->accept(this);
-
-   if (!uninitialized.empty()) {
-//      RuntimeError::raise("Member " + uninitialized.front() + " of "
-//         "class " + cl->getName() + " needs to be initialized", node->body.get());
-   }
-
-   popScope();
+   VisitNode(node->getBody());
+   popFunctionScope();
 }
 
 void SemaPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
 {
-   pushMethodScope(node->declaredMethod);
-   latestScope->currentSelf = SymbolTable::mangleVariable("self",
-                                                          latestScope->id);
-   node->getDeclaredMethod()->setSelfBinding(latestScope->currentSelf);
-   currentCallable = node->getDeclaredMethod();
-
-   node->getBody()->accept(this);
-
-   popScope();
+   pushMethodScope(node->getDeclaredMethod());
+   VisitNode(node->getBody());
+   popFunctionScope();
 }
 
 void SemaPass::visit(ClassDecl *node)
@@ -411,7 +342,7 @@ void SemaPass::visit(EnumDecl *node)
    pushNamespace(node->getRecordName());
 
    for (const auto& inner : node->getInnerDeclarations()) {
-      inner->accept(this);
+      VisitNode(inner);
    }
 
    popNamespace();
@@ -420,10 +351,9 @@ void SemaPass::visit(EnumDecl *node)
    pushClassScope(en);
 
    for (const auto &method : en->getMethods()) {
-      if (!method.second->getDeclaration()) {
-         continue;
+      if (auto decl = method.second->getDeclaration()) {
+         VisitNode(decl);
       }
-      method.second->getDeclaration()->accept(this);
    }
 
    popClassScope();
@@ -433,10 +363,13 @@ void SemaPass::visit(UnionDecl *node)
 {
    auto un = node->getDeclaredUnion();
    for (const auto &ty : node->getContainedTypes()) {
-      if (!ty.second->resolved) {
-         ty.second->accept(this);
+      if (!ty.second->isResolved()) {
+         VisitNode(ty.second);
       }
 
       un->declareField(ty.first, *ty.second->getType());
    }
 }
+
+} // namespace ast
+} // namespace cdot

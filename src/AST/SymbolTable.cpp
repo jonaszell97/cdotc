@@ -23,6 +23,7 @@
 using namespace cdot::diag;
 
 using std::ostringstream;
+using ast::Function;
 
 unordered_map<string, Typedef> SymbolTable::typedefs = {
    { "Void", Typedef(VoidType::get(), "void") }
@@ -88,7 +89,8 @@ string SymbolTable::mangleMethod(
    bool resolveSelf)
 {
    ostringstream out;
-   out << recordName << '.' << name;
+
+   out << name;
    for (const auto &arg : args) {
       if (resolveSelf && arg.type->isGenericTy()
           && arg.type->asGenericTy()->getClassName() == "Self") {
@@ -141,7 +143,7 @@ bool SymbolTable::isNamespace(const string &name)
 
 void SymbolTable::declareVariable(
    const string &name,
-   const Type &type,
+   const QualType &type,
    AccessModifier access,
    const string &declaredNamespace,
    AstNode *decl)
@@ -335,7 +337,7 @@ SymbolTable::getVariable(const string &name,
    llvm_unreachable("Call hasVariable first!");
 }
 
-void SymbolTable::setVariable(const string &name, BuiltinType *ty)
+void SymbolTable::setVariable(const string &name, Type *ty)
 {
    *variables[name].type = ty;
 }
@@ -402,13 +404,13 @@ void SymbolTable::declareEnum(const string &name, Enum *en)
 
 void SymbolTable::declareTypedef(
    const string &alias,
-   BuiltinType *originTy,
+   Type *originTy,
    const std::vector<TemplateConstraint> &constr,
    AccessModifier access,
    AstNode *decl)
 {
    typedefs.emplace(alias, Typedef(originTy, alias, constr, access, decl));
-   if (originTy->isObject()) {
+   if (originTy->isObjectTy()) {
       namespaces.push_back(alias);
    }
 

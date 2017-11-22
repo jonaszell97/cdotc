@@ -5,7 +5,7 @@
 #include "DebugInfo.h"
 #include "../CodeGen/CodeGen.h"
 #include "../../../Files/FileUtils.h"
-#include "../../../Parser.h"
+#include "../../../parse/Parser.h"
 #include "../../../Compiler.h"
 
 #include "../SemanticAnalysis/Record/Class.h"
@@ -17,7 +17,7 @@
 #include "../../../Variant/Type/TupleType.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/Type.h"
+#include "../../../Variant/Type/QualType.h"
 
 #include "../../Statement/Declaration/DeclStmt.h"
 #include "../../Statement/Declaration/FunctionDecl.h"
@@ -34,6 +34,7 @@
 #include "../../../Files/FileManager.h"
 
 using namespace cdot::fs;
+using namespace cdot::ast;
 
 namespace cdot {
 namespace codegen {
@@ -103,7 +104,7 @@ llvm::DIFile* DebugInfo::getFileDI(const SourceLocation &loc)
    );
 }
 
-llvm::DIType* DebugInfo::getTypeDI(BuiltinType *ty)
+llvm::DIType* DebugInfo::getTypeDI(Type *ty)
 {
    auto index = TypeNodes.find((uintptr_t)ty);
    if (index != TypeNodes.end()) {
@@ -250,9 +251,9 @@ llvm::dwarf::Tag DebugInfo::getTagForRecord(Record *rec)
    return Tag;
 }
 
-llvm::DIType* DebugInfo::getRecordDI(BuiltinType *ty)
+llvm::DIType* DebugInfo::getRecordDI(Type *ty)
 {
-   assert(ty->isObject());
+   assert(ty->isObjectTy());
 
    auto index = StructTypes.find(ty->getClassName());
    if (index != StructTypes.end()) {
@@ -667,7 +668,7 @@ void DebugInfo::beginLexicalScope(const SourceLocation &loc)
 
 void DebugInfo::beginGeneratedFunctionScope(
    llvm::StringRef funcName,
-   const std::vector<BuiltinType*> &args)
+   const std::vector<Type*> &args)
 {
    std::vector<llvm::Metadata*> argTypes;
    for (auto& arg : args) {

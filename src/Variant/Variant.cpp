@@ -447,7 +447,7 @@ Variant Variant::applyUnaryOp(const string &op) const
    return {};
 }
 
-Variant Variant::castTo(BuiltinType *to) const
+Variant Variant::castTo(Type *to) const
 {
    switch (type) {
       case VariantType::INT:
@@ -462,7 +462,12 @@ Variant Variant::castTo(BuiltinType *to) const
                return res;
             }
             case TypeID::FPTypeID: return Variant((double)intVal);
-            case TypeID::ObjectTypeID: return Variant(std::to_string(intVal));
+            case TypeID::ObjectTypeID:
+               if (to->getClassName()=="String") {
+                  return Variant(std::to_string(intVal));
+               }
+
+               return *this;
             default:
                llvm_unreachable("Should have returned before");
          }

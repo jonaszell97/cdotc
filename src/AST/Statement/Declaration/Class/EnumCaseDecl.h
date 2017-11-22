@@ -5,28 +5,30 @@
 #ifndef CDOT_ENUMCASEDECL_H
 #define CDOT_ENUMCASEDECL_H
 
-
 #include "../../Statement.h"
 #include "../../../../Variant/Variant.h"
 
+namespace cdot {
+namespace ast {
+
+class TypeRef;
+
 class EnumCaseDecl: public Statement {
 public:
+   typedef std::vector<pair<string, std::shared_ptr<TypeRef>>>
+      AssociatedTypeVec;
+
    EnumCaseDecl(string&& name, std::shared_ptr<Expression>&& rawValue,
-      std::vector<pair<string, std::shared_ptr<TypeRef>>>&& associatedTypes);
-   EnumCaseDecl(string&& name, std::vector<pair<string,
-      std::shared_ptr<TypeRef>>>&& associatedTypes);
+                AssociatedTypeVec&& associatedTypes);
+   EnumCaseDecl(string&& name, AssociatedTypeVec&& associatedTypes);
 
    typedef std::shared_ptr<EnumCaseDecl> SharedPtr;
    typedef std::unique_ptr<EnumCaseDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::ENUM_CASE_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == EnumCaseDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    string caseName;
@@ -78,16 +80,19 @@ public:
       EnumCaseDecl::has_raw_value = has_raw_value;
    }
 
-   const std::vector<pair<string, std::shared_ptr<TypeRef>>> &getAssociatedTypes() const
+   const AssociatedTypeVec& getAssociatedTypes() const
    {
       return associatedTypes;
    }
 
-   void setAssociatedTypes(const std::vector<pair<string, std::shared_ptr<TypeRef>>> &associatedTypes)
+   void setAssociatedTypes(AssociatedTypeVec &associatedTypes)
    {
       EnumCaseDecl::associatedTypes = associatedTypes;
    }
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_ENUMCASEDECL_H

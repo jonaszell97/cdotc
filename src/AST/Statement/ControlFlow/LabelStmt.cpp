@@ -4,10 +4,19 @@
 
 #include "LabelStmt.h"
 
-LabelStmt::LabelStmt(std::string label_name) : labelName(label_name) {
+namespace cdot {
+namespace ast {
+
+LabelStmt::LabelStmt(std::string &&name)
+   : Statement(LabelStmtID), labelName(move(name))
+{
 
 }
 
-std::vector<AstNode::SharedPtr> LabelStmt::get_children() {
-    return {};
+const string &LabelStmt::getLabelName() const
+{
+   return labelName;
 }
+
+} // namespace ast
+} // namespace cdot

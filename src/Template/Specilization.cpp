@@ -74,11 +74,6 @@ InheritanceConstraint::InheritanceConstraint(
 
 }
 
-void InheritanceConstraint::accept(AbstractPass *pass)
-{
-   pass->visit(this);
-}
-
 bool InheritanceConstraint::appliesTo(const TemplateArg &arg)
 {
    assert(arg.isTypeName() && "expected type");
@@ -105,11 +100,6 @@ ConformanceConstraint::ConformanceConstraint(
                     std::move(type))
 {
 
-}
-
-void ConformanceConstraint::accept(AbstractPass *pass)
-{
-   pass->visit(this);
 }
 
 bool ConformanceConstraint::appliesTo(const TemplateArg &arg)
@@ -140,11 +130,6 @@ ValueExprConstraint::ValueExprConstraint(
 
 }
 
-void ValueExprConstraint::accept(AbstractPass *pass)
-{
-   pass->visit(this);
-}
-
 bool ValueExprConstraint::appliesTo(const TemplateArg &arg)
 {
    return false;
@@ -171,11 +156,6 @@ TokenEqualityConstraint::TokenEqualityConstraint(
    : TokenConstraint(TSC_TokenEquality, std::move(argName), std::move(tokens))
 {
 
-}
-
-void TokenEqualityConstraint::accept(AbstractPass *pass)
-{
-   pass->visit(this);
 }
 
 bool TokenEqualityConstraint::appliesTo(const TemplateArg &arg)

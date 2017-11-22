@@ -11,11 +11,9 @@
 using std::string;
 using std::pair;
 
-class CodeGen;
-
 namespace cdot {
 
-class BuiltinType;
+class Type;
 
 enum class VariantType : unsigned char {
    STRING = 0,
@@ -77,7 +75,7 @@ struct Variant {
    Variant applyBinaryOp(const Variant& rhs, const string& op) const;
    Variant applyUnaryOp(const string& op) const;
 
-   Variant castTo(BuiltinType* targetTy) const;
+   Variant castTo(Type* targetTy) const;
 };
 
 //class Variant_ {

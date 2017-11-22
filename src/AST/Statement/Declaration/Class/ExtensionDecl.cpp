@@ -4,6 +4,9 @@
 
 #include "ExtensionDecl.h"
 
+namespace cdot {
+namespace ast {
+
 ExtensionDecl::ExtensionDecl(
    AccessModifier am, string &&recordName,
    std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
@@ -12,9 +15,9 @@ ExtensionDecl::ExtensionDecl(
    std::vector<std::shared_ptr<PropDecl>> &&properties,
    std::vector<std::shared_ptr<ConstrDecl>> &&initializers,
    std::vector<Statement::SharedPtr> &&innerDeclarations)
-   : RecordDecl(am, move(recordName), move(conformsTo), move(methods),
-                move(typedefs), move(properties), move(innerDeclarations)),
-     initializers(move(initializers))
+   : RecordDecl(ExtensionDeclID, am, move(recordName), move(conformsTo),
+                move(methods), move(typedefs), move(properties),
+                move(innerDeclarations)), initializers(move(initializers))
 {
 
 }
@@ -30,3 +33,6 @@ void ExtensionDecl::setInitializers(
 {
    ExtensionDecl::initializers = initializers;
 }
+
+} // namespace ast
+} // namespace cdot

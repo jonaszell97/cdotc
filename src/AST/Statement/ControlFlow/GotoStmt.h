@@ -7,23 +7,28 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class GotoStmt : public Statement {
 public:
-   explicit GotoStmt(string);
+   explicit GotoStmt(string &&label);
 
    typedef std::shared_ptr<GotoStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::GOTO_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == GotoStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    string labelName;
+
+public:
+   const string &getLabelName() const;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_GOTOSTMT_H

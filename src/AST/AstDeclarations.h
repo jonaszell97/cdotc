@@ -2,8 +2,13 @@
 // Created by Jonas Zell on 10.10.17.
 //
 
+namespace cdot {
+namespace ast {
+
 class AstNode;
 class CompoundStmt;
+
+class NullStmt;
 
 class IdentifierRefExpr;
 class DeclStmt;
@@ -78,12 +83,11 @@ class RecordTemplateDecl;
 class CallableTemplateDecl;
 class MethodTemplateDecl;
 
-namespace cdot {
-
 class BinaryOperator;
 class InheritanceConstraint;
 class ConformanceConstraint;
 class ValueExprConstraint;
 class TokenEqualityConstraint;
 
+} // namespace ast
 } // namespace cdot

@@ -12,23 +12,21 @@
 
 namespace cdot {
 
-unordered_map<string, TupleType*> TupleType::Instances;
 unordered_map<string, llvm::StructType*> TupleType::TupleTypes;
 
-TupleType* TupleType::get(std::vector<pair<string, BuiltinType*>>& containedTypes)
+TupleType* TupleType::get(std::vector<pair<string, Type*>>& containedTypes)
 {
    auto key = typesToString(containedTypes);
    if (Instances.find(key) == Instances.end()) {
       Instances[key] = new TupleType(containedTypes, key);
    }
 
-   return Instances[key];
+   return cast<TupleType>(Instances[key]);
 }
 
-TupleType::TupleType(std::vector<pair<string, BuiltinType*>> &containedTypes, string& className) :
-   arity(containedTypes.size()),
-   align(1),
-   size(0)
+TupleType::TupleType(std::vector<pair<string, Type*>> &containedTypes,
+                     string& className)
+   : arity(containedTypes.size()), align(1), size(0)
 {
    id = TypeID::TupleTypeID;
    this->className = className;
@@ -48,7 +46,7 @@ TupleType::TupleType(std::vector<pair<string, BuiltinType*>> &containedTypes, st
 }
 
 string TupleType::typesToString(
-   const std::vector<pair<string, BuiltinType *>> &containedTypes)
+   const std::vector<pair<string, Type *>> &containedTypes)
 {
    string str = "(";
    size_t i = 0;
@@ -65,7 +63,7 @@ string TupleType::typesToString(
    return str + ")";
 }
 
-bool TupleType::implicitlyCastableTo(BuiltinType *other) const
+bool TupleType::implicitlyCastableTo(Type *other) const
 {
    if (other->isTupleTy()) {
       auto asTuple = cast<TupleType>(other);

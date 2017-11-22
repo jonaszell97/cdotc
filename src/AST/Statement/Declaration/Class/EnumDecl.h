@@ -7,17 +7,22 @@
 
 #include "RecordDecl.h"
 
-class MethodDecl;
-class EnumCaseDecl;
+namespace cdot {
+
+struct TemplateConstraint;
 enum class AccessModifier : unsigned int;
 
-namespace cdot {
-struct TemplateConstraint;
 namespace cl {
-   struct Method;
-   class Enum;
+
+struct Method;
+class Enum;
+
 }
-}
+
+namespace ast {
+
+class MethodDecl;
+class EnumCaseDecl;
 
 class EnumDecl: public RecordDecl {
 public:
@@ -33,16 +38,11 @@ public:
    );
 
    typedef std::shared_ptr<EnumDecl> SharedPtr;
-   typedef std::unique_ptr<EnumDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::ENUM_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == EnumDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::vector<std::shared_ptr<EnumCaseDecl>> cases;
@@ -82,8 +82,10 @@ public:
       EnumDecl::selfBinding = selfBinding;
    }
 
-   cl::Enum *getDeclaredEnum() const;
+   cdot::cl::Enum *getDeclaredEnum() const;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_ENUMDECL_H

@@ -7,18 +7,18 @@
 
 using namespace cdot::cl;
 
+namespace cdot {
+namespace ast {
+
 TypedefDecl::TypedefDecl(
    AccessModifier access,
    string &&alias,
    std::shared_ptr<TypeRef> &&origin,
    std::vector<TemplateConstraint> &&generics)
-   : alias(alias), origin(origin), templateArgs(generics), access(access)
+   : Statement(TypedefDeclID), alias(alias), origin(origin),
+     templateArgs(generics), access(access)
 {
-   
-}
 
-std::vector<AstNode::SharedPtr> TypedefDecl::get_children() {
-   return {};
 }
 
 AccessModifier TypedefDecl::getAccess() const
@@ -70,3 +70,6 @@ void TypedefDecl::setRecord(Record *record)
 {
    TypedefDecl::record = record;
 }
+
+} // namespace ast
+} // namespace cdot

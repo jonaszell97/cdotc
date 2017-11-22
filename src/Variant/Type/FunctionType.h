@@ -6,9 +6,9 @@
 #define CDOT_FUNCTIONTYPE_H
 
 
-#include "BuiltinType.h"
-#include "../../AST/Passes/AbstractPass.h"
 #include "Type.h"
+#include "../../AST/Passes/AbstractPass.h"
+#include "QualType.h"
 
 using std::pair;
 
@@ -17,24 +17,25 @@ namespace cdot {
    struct Argument;
    class ObjectType;
 
-   class FunctionType : public BuiltinType {
+   class FunctionType : public Type {
    protected:
-      FunctionType(Type& returnType, std::vector<Argument>& argTypes, bool raw);
+      FunctionType(const QualType& returnType,
+                   const std::vector<Argument>& argTypes,
+                   bool raw);
 
-      static unordered_map<string, FunctionType*> Instances;
       static string typesToString(
-         const Type& returnType,
+         const QualType& returnType,
          const std::vector<Argument>& argTypes
       );
 
    public:
       static FunctionType *get(
-         Type& returnType,
-         std::vector<Argument>& argTypes,
+         const QualType& returnType,
+         const std::vector<Argument>& argTypes,
          bool isRawFunctionTy
       );
 
-      Type getReturnType() const
+      QualType getReturnType() const
       {
          return returnType;
       }
@@ -44,12 +45,7 @@ namespace cdot {
          return argTypes;
       }
 
-      bool isFunctionTy() const override
-      {
-         return true;
-      }
-
-      bool isRawFunctionTy() const override
+      bool isRawFunctionTy() const
       {
          return isRawFunctionTy_;
       }
@@ -70,23 +66,18 @@ namespace cdot {
       llvm::Type* getLlvmType() const override;
       llvm::Type* getLlvmFunctionType() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) const override;
+      bool implicitlyCastableTo(Type*) const override;
 
-      static inline bool classof(FunctionType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
-         switch(T->getTypeID()) {
-            case TypeID::FunctionTypeID:
-               return true;
-            default:
-               return false;
-         }
+      static bool classof(Type const* T)
+      {
+         return T->getTypeID() == TypeID::FunctionTypeID;
       }
 
       typedef std::unique_ptr<FunctionType> UniquePtr;
       typedef std::shared_ptr<FunctionType> SharedPtr;
 
    protected:
-      Type returnType;
+      QualType returnType;
       std::vector<Argument> argTypes;
 
       bool isRawFunctionTy_ = false;

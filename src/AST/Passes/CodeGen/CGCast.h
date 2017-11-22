@@ -8,51 +8,55 @@
 #include <llvm/IR/Value.h>
 #include "../SemanticAnalysis/Record/Class.h"
 
-class CodeGen;
+
 
 namespace cdot {
-   class BuiltinType;
+class Type;
+
+namespace ast {
+class CodeGen;
+}
 
 namespace codegen {
 
-   class CGCast {
-   public:
-      CGCast(CodeGen &CGM);
+class CGCast {
+public:
+   CGCast(ast::CodeGen &CGM);
 
-      llvm::Value *applyCast(const Type& from, const Type& to,
-                             llvm::Value *val);
+   llvm::Value *applyCast(const QualType& from, const QualType& to,
+                          llvm::Value *val);
 
-      llvm::Value *integralCast(const Type& from, const Type& to, llvm::Value *val);
-      llvm::Value *floatingPointCast(const Type& from, const Type& to, llvm::Value *val);
+   llvm::Value *integralCast(const QualType& from, const QualType& to, llvm::Value *val);
+   llvm::Value *floatingPointCast(const QualType& from, const QualType& to, llvm::Value *val);
 
-      llvm::Value *pointerCast(const Type& from, const Type& to, llvm::Value *val);
-      llvm::Value *tupleCast(const Type& from, const Type& to, llvm::Value *val);
+   llvm::Value *pointerCast(const QualType& from, const QualType& to, llvm::Value *val);
+   llvm::Value *tupleCast(const QualType& from, const QualType& to, llvm::Value *val);
 
-      cl::Method *hasCastOperator(const Type& from, const Type& to);
-      llvm::Value *castOperator(const Type& from, const Type& to, llvm::Value *val,
-         cl::Method*);
+   cl::Method *hasCastOperator(const QualType& from, const QualType& to);
+   llvm::Value *castOperator(const QualType& from, const QualType& to, llvm::Value *val,
+      cl::Method*);
 
-      llvm::Value *protoToProtoCast(const Type& from, const Type& to, llvm::Value *val);
-      llvm::Value *castFromProtocol(const Type& from, const Type& to, llvm::Value *val);
-      llvm::Value *castToProtocol(const Type& from, const Type& to, llvm::Value *val);
+   llvm::Value *protoToProtoCast(const QualType& from, const QualType& to, llvm::Value *val);
+   llvm::Value *castFromProtocol(const QualType& from, const QualType& to, llvm::Value *val);
+   llvm::Value *castToProtocol(const QualType& from, const QualType& to, llvm::Value *val);
 
-      llvm::Value *staticUpcast(const Type& from, const Type& to, llvm::Value *val);
+   llvm::Value *staticUpcast(const QualType& from, const QualType& to, llvm::Value *val);
 
-      llvm::Value *dynamicDowncast(const Type& from, const Type& to, llvm::Value *val);
+   llvm::Value *dynamicDowncast(const QualType& from, const QualType& to, llvm::Value *val);
 
-      llvm::Value *functionCast(
-         const Type& from,
-         const Type& to,
-         llvm::Value *val,
-         llvm::Function* func,
-         bool isLambda,
-         bool hasSelfParam,
-         bool hasStructRet
-      );
+   llvm::Value *functionCast(
+      const QualType& from,
+      const QualType& to,
+      llvm::Value *val,
+      llvm::Function* func,
+      bool isLambda,
+      bool hasSelfParam,
+      bool hasStructRet
+   );
 
-   private:
-      CodeGen &CGM;
-   };
+private:
+   ast::CodeGen &CGM;
+};
 
 }
 }

@@ -7,6 +7,9 @@
 
 #include "../Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class TypeRef;
 
 class CollectionLiteral : public Expression {
@@ -20,21 +23,16 @@ public:
    );
 
    typedef std::shared_ptr<CollectionLiteral> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::COLLECTION_LITERAL;
-   }
 
    bool createsTemporary() override
    {
       return true;
    }
 
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == CollectionLiteralID;
+   }
 
 protected:
    std::vector<Expression::SharedPtr> keys;
@@ -61,5 +59,7 @@ public:
    void isMetaTy(bool is_meta_ty);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_ARRAYLITERAL_H

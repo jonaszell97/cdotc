@@ -12,6 +12,9 @@ namespace cdot {
 class TemplateArgList;
 }
 
+namespace cdot {
+namespace ast {
+
 class TypeRef : public Expression {
 public:
    enum TypeKind {
@@ -43,17 +46,20 @@ public:
       std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes
    );
 
-   TypeRef(const Type &ty) : type(ty), resolved(true) {}
+   TypeRef(const QualType &ty) : Expression(TypeRefID), type(ty), resolved(true)
+   {
+
+   }
 
    string toString();
 
-   inline Type getType(bool force = false)
+   inline QualType getType(bool force = false)
    {
       assert((force || resolved) && "Resolve type before accessing!");
       return type;
    }
 
-   Type &getTypeRef()
+   QualType &getTypeRef()
    {
       return type;
    }
@@ -109,25 +115,21 @@ public:
       ++pointerDepth;
    }
 
-   void setType(const Type& t)
+   void setType(const QualType& t)
    {
       type = t;
    }
 
-   Type &operator*()
+   QualType &operator*()
    {
       assert(resolved && "resolve first");
       return type;
    }
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::TYPE_REF;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == TypeRefID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    TypeKind kind;
@@ -139,7 +141,7 @@ protected:
    bool is_meta_ty = false;
    size_t pointerDepth = 0;
 
-   Type type;
+   QualType type;
 
    NamespaceVec namespaceQual;
    std::vector<pair<string, TypeRef::SharedPtr>> containedTypes;
@@ -158,7 +160,7 @@ public:
 
    void setPointerDepth(size_t pointerDepth);
 
-   const Type &getType() const;
+   const QualType &getType() const;
 
    const NamespaceVec &getNamespaceQual() const;
    void setNamespaceQual(const NamespaceVec &namespaceQual);
@@ -181,5 +183,8 @@ public:
    bool isMetaTy() const;
    void isMetaTy(bool is_meta_ty);
 };
+
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_TYPEREF_H

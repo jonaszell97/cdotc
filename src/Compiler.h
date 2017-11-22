@@ -10,9 +10,6 @@
 #include <llvm/IR/Module.h>
 #include <unordered_map>
 
-class CodeGen;
-class CompoundStmt;
-
 using std::string;
 
 namespace cdot {
@@ -22,6 +19,13 @@ namespace cl {
 class Class;
 
 } // namespace cl
+
+namespace ast {
+
+class CodeGen;
+class CompoundStmt;
+
+} // namespace ast
 
 namespace codegen {
 
@@ -45,7 +49,7 @@ struct CompilationUnit {
       const string &fileName,
       const string &path,
       size_t ID,
-      std::shared_ptr<CompoundStmt> root,
+      std::shared_ptr<ast::CompoundStmt> root,
       bool isHeader
    ) : fileName(fileName), path(path), ID(ID), root(root), isHeader(isHeader)
    {
@@ -55,7 +59,7 @@ struct CompilationUnit {
    string fileName;
    string path;
    size_t ID;
-   std::shared_ptr<CompoundStmt> root;
+   std::shared_ptr<ast::CompoundStmt> root;
    bool isHeader = false;
 
    llvm::Module *Module;

@@ -10,14 +10,6 @@
 #include "../../../../Template/TokenStore.h"
 #include "../../../../Variant/Type/Generic.h"
 
-enum class RecordTemplateKind : unsigned char {
-   STRUCT,
-   CLASS,
-   ENUM,
-   UNION,
-   PROTOCOL
-};
-
 namespace cdot {
 
 struct TemplateConstraint;
@@ -31,6 +23,19 @@ struct RecordTemplate;
 } // namespace cl
 
 } // namespace cdot
+
+namespace cdot {
+namespace ast {
+
+class FuncArgDecl;
+
+enum class RecordTemplateKind : unsigned char {
+   STRUCT,
+   CLASS,
+   ENUM,
+   UNION,
+   PROTOCOL
+};
 
 class RecordTemplateDecl: public Statement {
 public:
@@ -50,17 +55,10 @@ public:
 
    typedef std::shared_ptr<RecordTemplateDecl> SharedPtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override
+   static bool classof(AstNode const* T)
    {
-      return {};
+       return T->getTypeID() == RecordTemplateDeclID;
    }
-
-   NodeType get_type() override
-   {
-      return NodeType::RECORD_TEMPLATE_DECL;
-   }
-
-   ASTNODE_ACCEPT_PASSES
 
 protected:
    RecordTemplateKind kind;
@@ -71,9 +69,9 @@ protected:
    std::vector<TemplateConstraint> constraints;
    std::vector<Initializer> initializers;
 
-   cl::RecordTemplateInstantiation *outerTemplate = nullptr;
+   cdot::cl::RecordTemplateInstantiation *outerTemplate = nullptr;
 
-   cl::RecordTemplate *templ;
+   cdot::cl::RecordTemplate *templ;
    std::vector<std::shared_ptr<Statement>> Instantiations;
 
 public:
@@ -88,20 +86,23 @@ public:
    std::vector<TemplateConstraint> &getConstraints();
    void setConstraints(const std::vector<TemplateConstraint> &constraints);
 
-   cl::RecordTemplateInstantiation *getOuterTemplate() const;
-   void setOuterTemplate(cl::RecordTemplateInstantiation *outerTemplate);
+   cdot::cl::RecordTemplateInstantiation *getOuterTemplate() const;
+   void setOuterTemplate(cdot::cl::RecordTemplateInstantiation *outerTemplate);
 
    std::vector<Initializer> &getInitializers();
    void setInitializers(const std::vector<Initializer> &initializers);
 
-   cl::RecordTemplate *getTempl() const;
-   void setTempl(cl::RecordTemplate *Template);
+   cdot::cl::RecordTemplate *getTempl() const;
+   void setTempl(cdot::cl::RecordTemplate *Template);
 
    const std::vector<std::shared_ptr<Statement>> &getInstantiations() const;
    void setInstantiations(
       const std::vector<std::shared_ptr<Statement>> &Instantiations);
    void addInstantiation(std::shared_ptr<Statement> &&inst);
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_RECORDTEMPLATEDECL_H

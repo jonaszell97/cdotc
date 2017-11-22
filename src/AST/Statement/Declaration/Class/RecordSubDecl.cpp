@@ -4,10 +4,15 @@
 
 #include "RecordSubDecl.h"
 
-RecordSubDecl::RecordSubDecl(std::string &&name,
+namespace cdot {
+namespace ast {
+
+RecordSubDecl::RecordSubDecl(NodeType typeID,
+                             std::string &&name,
                              AccessModifier access,
                              bool isStatic)
-   : name(std::move(name)), access(access), is_static(isStatic)
+   : Statement(typeID), name(std::move(name)), access(access),
+     is_static(isStatic)
 {
 
 }
@@ -51,3 +56,6 @@ void RecordSubDecl::setRecord(cl::Record *record)
 {
    RecordSubDecl::record = record;
 }
+
+} // namespace ast
+} // namespace cdot

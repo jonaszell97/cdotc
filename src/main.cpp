@@ -5,7 +5,7 @@
 
 #include "Compiler.h"
 #include "Message/Exceptions.h"
-#include "Token.h"
+#include "lex/Token.h"
 
 void  handler()
 {
@@ -26,12 +26,16 @@ int main(int argc, char* argv[])
    cdot::Compiler::init(argc, argv);
    std::set_terminate(handler);
 
+   int i;
+
    try {
       cdot::Compiler::compile();
    } catch(ParseError& p) {
       std::cout << p.what() << std::endl;
    } catch(RuntimeError& r) {
       std::cout << r.what() << std::endl;
+   } catch (std::bad_alloc &alloc) {
+      i = 3;
    }
 
    return 0;

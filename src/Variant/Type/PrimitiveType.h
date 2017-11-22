@@ -6,13 +6,13 @@
 #define CDOT_PRIMITIVETYPE_H
 
 
-#include "BuiltinType.h"
+#include "Type.h"
 
 namespace cdot {
 
-   class PrimitiveType : public BuiltinType {
+   class PrimitiveType : public Type {
    public:
-      virtual BuiltinType* ArithmeticReturnType(string&, BuiltinType*) const = 0;
+      virtual Type* ArithmeticReturnType(const string&, Type*) const = 0;
 
       inline bool hasDefaultValue() const override
       {
@@ -27,7 +27,7 @@ namespace cdot {
       static bool PrintSpecificTypes;
 
       static inline bool classof(PrimitiveType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
+      static inline bool classof(Type const* T) {
          switch(T->getTypeID()) {
             case TypeID::PrimitiveTypeID:
             case TypeID::IntegerTypeID:

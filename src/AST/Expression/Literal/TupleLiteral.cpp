@@ -5,37 +5,14 @@
 #include "TupleLiteral.h"
 #include "../../../Variant/Type/TupleType.h"
 
+namespace cdot {
+namespace ast {
+
 TupleLiteral::TupleLiteral(
-   std::vector<pair<string, Expression::SharedPtr>> elements)
-   : elements(elements)
+   std::vector<pair<string, Expression::SharedPtr>> &&elements)
+   : Expression(TupleLiteralID), elements(std::move(elements))
 {
 
-}
-
-void TupleLiteral::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   for (auto &el : elements) {
-      if (el.second.get() == child) {
-         el.second.reset(replacement);
-         return;
-      }
-   }
-
-   llvm_unreachable("child does not exist");
-}
-
-std::vector<AstNode::SharedPtr> TupleLiteral::get_children() {
-   std::vector<AstNode::SharedPtr> children;
-   for (auto& cont : elements) {
-      children.push_back(cont.second);
-   }
-   if (memberExpr != nullptr) {
-      children.push_back(memberExpr);
-   }
-
-   return children;
 }
 
 bool TupleLiteral::isMetaTy() const
@@ -48,8 +25,8 @@ void TupleLiteral::isMetaTy(bool is_meta_ty)
    TupleLiteral::is_meta_ty = is_meta_ty;
 }
 
-const std::vector<pair<string, Expression::SharedPtr>> &
-TupleLiteral::getElements() const
+std::vector<pair<string, Expression::SharedPtr>> &
+TupleLiteral::getElements()
 {
    return elements;
 }
@@ -69,3 +46,6 @@ void TupleLiteral::setTupleType(TupleType *tupleType)
 {
    TupleLiteral::tupleType = tupleType;
 }
+
+} // namespace ast
+} // namespace cdot

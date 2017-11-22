@@ -7,7 +7,11 @@
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/FPType.h"
 
-IntegerLiteral::IntegerLiteral(cdot::Variant &&v) : value(v)
+namespace cdot {
+namespace ast {
+
+IntegerLiteral::IntegerLiteral(cdot::Variant &&v)
+   : Expression(IntegerLiteralID), value(v)
 {
    assert(v.type == VariantType::INT);
    type = IntegerType::get(value.bitwidth, value.is_unsigned);
@@ -23,17 +27,18 @@ void IntegerLiteral::setValue(const Variant &value)
    IntegerLiteral::value = value;
 }
 
-BuiltinType *IntegerLiteral::getType() const
+Type *IntegerLiteral::getType() const
 {
    return type;
 }
 
-void IntegerLiteral::setType(BuiltinType *type)
+void IntegerLiteral::setType(Type *type)
 {
    IntegerLiteral::type = type;
 }
 
 FPLiteral::FPLiteral(cdot::Variant &&val)
+   : Expression(FPLiteralID), value(std::move(val))
 {
    assert(val.type == VariantType::FLOAT);
    type = FPType::get(val.bitwidth);
@@ -49,17 +54,18 @@ void FPLiteral::setValue(const Variant &val)
    FPLiteral::value = val;
 }
 
-BuiltinType *FPLiteral::getType() const
+Type *FPLiteral::getType() const
 {
    return type;
 }
 
-void FPLiteral::setType(BuiltinType *type)
+void FPLiteral::setType(Type *type)
 {
    FPLiteral::type = type;
 }
 
-BoolLiteral::BoolLiteral(bool value) : value(value)
+BoolLiteral::BoolLiteral(bool value)
+   : Expression(BoolLiteralID), value(value)
 {
    type = IntegerType::getBoolTy();
 }
@@ -74,22 +80,24 @@ void BoolLiteral::setValue(bool value)
    BoolLiteral::value = value;
 }
 
-BuiltinType *BoolLiteral::getType() const
+Type *BoolLiteral::getType() const
 {
    return type;
 }
 
-void BoolLiteral::setType(BuiltinType *type)
+void BoolLiteral::setType(Type *type)
 {
    BoolLiteral::type = type;
 }
 
-CharLiteral::CharLiteral(char value) : is_wide(false), narrow(value)
+CharLiteral::CharLiteral(char value)
+   : Expression(CharLiteralID), is_wide(false), narrow(value)
 {
    type = IntegerType::getCharTy();
 }
 
-CharLiteral::CharLiteral(wchar_t value) : is_wide(true), wide(value)
+CharLiteral::CharLiteral(wchar_t value)
+   : Expression(CharLiteralID), is_wide(true), wide(value)
 {
    type = IntegerType::getCharTy();
 }
@@ -124,12 +132,15 @@ void CharLiteral::isWide(bool is_wide)
    CharLiteral::is_wide = is_wide;
 }
 
-BuiltinType *CharLiteral::getType() const
+Type *CharLiteral::getType() const
 {
    return type;
 }
 
-void CharLiteral::setType(BuiltinType *type)
+void CharLiteral::setType(Type *type)
 {
    CharLiteral::type = type;
 }
+
+} // namespace ast
+} // namespace cdot

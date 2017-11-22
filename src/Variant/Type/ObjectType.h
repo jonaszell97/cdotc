@@ -7,7 +7,7 @@
 
 
 #include <unordered_map>
-#include "BuiltinType.h"
+#include "Type.h"
 
 using std::unordered_map;
 
@@ -20,22 +20,15 @@ namespace cl {
 class Record;
 }
 
-class ObjectType : public BuiltinType {
+class ObjectType : public Type {
 protected:
    ObjectType() = default;
    explicit ObjectType(const string &className);
 
-   static unordered_map<string, ObjectType*> Instances;
-
 public:
    static ObjectType *get(const string& className);
-   static ObjectType* getOptionOf(BuiltinType *T);
+   static ObjectType* getOptionOf(Type *T);
    static ObjectType* getAnyTy();
-
-   bool isObject() const override
-   {
-      return true;
-   }
 
    void isStruct(bool str)
    {
@@ -59,13 +52,16 @@ public:
 
    bool isNumeric() const override
    {
-      return is_raw_enum;
+      return isRawEnum();
    }
 
-   bool isIntegerTy() const override
+   bool isRawEnum() const
    {
       return is_raw_enum;
    }
+
+   unsigned getBitwidth() const override;
+   bool isUnsigned() const override;
 
    const std::vector<TemplateArg>& getTemplateArgs() const override;
    bool hasTemplateArgs() const override;
@@ -82,20 +78,20 @@ public:
 
    bool needsStructReturn() const override
    {
-      return BuiltinType::needsStructReturn() && !is_raw_enum;
+      return Type::needsStructReturn() && !is_raw_enum;
    }
 
    bool hasDefaultValue() const override;
 
    bool needsCleanup() const override;
 
-   bool isBoxedEquivOf(BuiltinType* other) const override;
+   bool isBoxedEquivOf(Type* other) const override;
 
    string toString() const override;
    llvm::Type* getLlvmType() const override;
 
-   bool implicitlyCastableTo(BuiltinType*) const override;
-   bool explicitlyCastableTo(BuiltinType*) const override;
+   bool implicitlyCastableTo(Type*) const override;
+   bool explicitlyCastableTo(Type*) const override;
 
    short getAlignment() const override;
    size_t getSize() const override;
@@ -114,16 +110,17 @@ public:
    bool isOptionTy() const override;
    bool isOptionOf(const string& className) const override;
 
-   BuiltinType* unbox() const override;
+   Type* unbox() const override;
 
-   llvm::Value* getDefaultVal(CodeGen &CGM) const override;
+   llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
    llvm::Constant* getConstantVal(Variant&) const override;
 
    static bool classof(ObjectType const*) { return true; }
-   static bool classof(BuiltinType const* T) {
+   static bool classof(Type const* T) {
       switch(T->getTypeID()) {
          case TypeID::ObjectTypeID:
          case TypeID::GenericTypeID:
+         case TypeID::MetaTypeID:
             return true;
          default:
             return false;
@@ -145,7 +142,6 @@ protected:
    DummyObjectType(
       const string &className, std::vector<TemplateArg> &templateArgs);
 
-   static unordered_map<string, DummyObjectType*> Instances;
    std::vector<TemplateArg> &templateArgs;
 
 public:

@@ -8,12 +8,15 @@
 #include "RecordSubDecl.h"
 
 namespace cdot {
+
 namespace cl {
-
 class Property;
+}
 
-}
-}
+namespace ast {
+
+class TypeRef;
+class CompoundStmt;
 
 class PropDecl: public RecordSubDecl {
 public:
@@ -23,21 +26,19 @@ public:
       AccessModifier access,
       bool isStatic,
       bool hasDefinition,
+      bool hasGetter,
+      bool hasSetter,
       std::shared_ptr<CompoundStmt> &&getter,
       std::shared_ptr<CompoundStmt> &&setter,
       string &&newValName
    );
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override
-   {
-      return NodeType::PROP_DECL;
-   }
-
-   ASTNODE_ACCEPT_PASSES
-
    typedef std::shared_ptr<PropDecl> SharedPtr;
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == PropDeclID;
+   }
 
 protected:
    std::shared_ptr<TypeRef> type;
@@ -45,6 +46,9 @@ protected:
 
    std::shared_ptr<CompoundStmt> getterBody = nullptr;
    std::shared_ptr<CompoundStmt> setterBody = nullptr;
+
+   bool getter = false;
+   bool setter = false;
 
    string newValName;
 
@@ -73,5 +77,7 @@ public:
    void setProp(cl::Property *prop);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_PROPDECL_H

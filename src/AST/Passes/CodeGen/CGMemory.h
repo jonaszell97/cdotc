@@ -11,6 +11,9 @@
 #include <stack>
 #include "../../../Variant/Variant.h"
 
+namespace cdot {
+namespace ast {
+
 class CodeGen;
 
 class CGMemory {
@@ -24,5 +27,8 @@ protected:
    CodeGen &CGM;
 };
 
+
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CGMEMORY_H

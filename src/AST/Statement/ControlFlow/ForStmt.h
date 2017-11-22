@@ -7,32 +7,73 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class IdentifierRefExpr;
 
 class ForStmt : public Statement {
 public:
-   ForStmt(Statement::SharedPtr, std::shared_ptr<Expression>, Statement::SharedPtr);
+   ForStmt(Statement::SharedPtr &&init,
+           std::shared_ptr<Expression> &&term,
+           Statement::SharedPtr &&inc);
 
-   void setBody(Statement::SharedPtr _body) {
-      body = _body;
+   void setBody(Statement::SharedPtr &&_body)
+   {
+      body = std::move(_body);
    }
 
    typedef std::shared_ptr<ForStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::FOR_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ForStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<Statement> initialization;
    std::shared_ptr<Expression> termination;
    Statement::SharedPtr increment;
    Statement::SharedPtr body;
+
+public:
+   const std::shared_ptr<Statement> &getInitialization() const
+   {
+      return initialization;
+   }
+
+   void setInitialization(const std::shared_ptr<Statement> &initialization)
+   {
+      ForStmt::initialization = initialization;
+   }
+
+   const std::shared_ptr<Expression> &getTermination() const
+   {
+      return termination;
+   }
+
+   void setTermination(const std::shared_ptr<Expression> &termination)
+   {
+      ForStmt::termination = termination;
+   }
+
+   const Statement::SharedPtr &getIncrement() const
+   {
+      return increment;
+   }
+
+   void setIncrement(const Statement::SharedPtr &increment)
+   {
+      ForStmt::increment = increment;
+   }
+
+   const Statement::SharedPtr &getBody() const
+   {
+      return body;
+   }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_FORSTMT_H

@@ -7,13 +7,16 @@
 
 #include "../../Expression/Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class TypeRef;
 
-class FuncArgDecl : public Expression {
+class FuncArgDecl : public Statement {
 public:
-   explicit FuncArgDecl(bool = false);
-   FuncArgDecl(std::string, std::shared_ptr<TypeRef>,
-               Expression::SharedPtr = {});
+   FuncArgDecl(std::string &&argName,
+               std::shared_ptr<TypeRef> &&argType,
+               Expression::SharedPtr &&defaultValue = {});
    
    void setName(string name_) {
       argName = name_;
@@ -31,25 +34,17 @@ public:
       defaultVal = def;
    }
 
-   std::shared_ptr<FuncArgDecl> clone() const;
-
    typedef std::shared_ptr<FuncArgDecl> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::FUNC_ARG_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == FuncArgDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::string argName;
    std::shared_ptr<TypeRef> argType = nullptr;
    std::shared_ptr<Expression> defaultVal;
-   bool mut = false;
-   bool isStruct = false;
-   bool visitDefault = false;
 
 public:
    const string &getArgName() const {
@@ -71,31 +66,9 @@ public:
    void setDefaultVal(const std::shared_ptr<Expression> &defaultVal) {
       FuncArgDecl::defaultVal = defaultVal;
    }
-
-   bool isMut() const {
-      return mut;
-   }
-
-   void setMut(bool mut) {
-      FuncArgDecl::mut = mut;
-   }
-
-   bool isIsStruct() const {
-      return isStruct;
-   }
-
-   void setIsStruct(bool isStruct) {
-      FuncArgDecl::isStruct = isStruct;
-   }
-
-   bool isVisitDefault() const {
-      return visitDefault;
-   }
-
-   void setVisitDefault(bool visitDefault) {
-      FuncArgDecl::visitDefault = visitDefault;
-   }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_FUNCARGDECL_H

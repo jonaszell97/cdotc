@@ -8,21 +8,21 @@
 #include "VoidType.h"
 #include "../../AST/SymbolTable.h"
 #include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../../Token.h"
+#include "../../lex/Token.h"
 #include "../../AST/Passes/CodeGen/CodeGen.h"
 
 namespace cdot {
 
-unordered_map<size_t, IntegerType*> IntegerType::Instances;
-
 IntegerType* IntegerType::get(unsigned int bitWidth, bool is_unsigned)
 {
-   auto hash = bitWidth + (unsigned)is_unsigned;
+   auto hash = std::to_string(bitWidth)
+               + std::to_string((unsigned) is_unsigned) + ".__int";
+
    if (Instances.find(hash) == Instances.end()) {
       Instances[hash] = new IntegerType(bitWidth, is_unsigned);
    }
 
-   return Instances[hash];
+   return cast<IntegerType>(Instances[hash]);
 }
 
 IntegerType* IntegerType::getBoolTy()
@@ -43,7 +43,7 @@ IntegerType::IntegerType(unsigned int bitWidth, bool isUnsigned) :
    id = TypeID::IntegerTypeID;
 }
 
-bool IntegerType::implicitlyCastableTo(BuiltinType *other) const
+bool IntegerType::implicitlyCastableTo(Type *other) const
 {
    switch (other->getTypeID()) {
       case TypeID::AutoTypeID:
@@ -82,13 +82,13 @@ bool IntegerType::implicitlyCastableTo(BuiltinType *other) const
    }
 }
 
-BuiltinType* IntegerType::box() const
+Type* IntegerType::box() const
 {
    return ObjectType::get(string(is_unsigned ? "U" : "") + "Int"
                           + std::to_string(bitWidth));
 }
 
-BuiltinType* IntegerType::ArithmeticReturnType(string &op, BuiltinType *rhs) const
+Type* IntegerType::ArithmeticReturnType(const string &op, Type *rhs) const
 {
    if (op == "+" || op == "-" || op == "*") {
       if (isa<FPType>(rhs)) {
@@ -109,21 +109,21 @@ BuiltinType* IntegerType::ArithmeticReturnType(string &op, BuiltinType *rhs) con
    return VoidType::get();
 }
 
-bool IntegerType::explicitlyCastableTo(BuiltinType *other) const
+bool IntegerType::explicitlyCastableTo(Type *other) const
 {
    return other->isNumeric() || other->isPointerTy();
 }
 
-llvm::Value* IntegerType::getDefaultVal(CodeGen &CGM) const
+llvm::Value* IntegerType::getDefaultVal(ast::CodeGen &CGM) const
 {
-   auto intTy = llvm::IntegerType::get(CodeGen::Context, bitWidth);
+   auto intTy = llvm::IntegerType::get(ast::CodeGen::Context, bitWidth);
 
    return llvm::ConstantInt::get(intTy, 0);
 }
 
 llvm::Constant* IntegerType::getConstantVal(Variant& val) const
 {
-   return llvm::ConstantInt::get(CodeGen::Context,
+   return llvm::ConstantInt::get(ast::CodeGen::Context,
                                  llvm::APInt(bitWidth, val.intVal,
                                              !is_unsigned));
 }
@@ -135,7 +135,7 @@ short IntegerType::getAlignment() const
 
 llvm::Type* IntegerType::getLlvmType() const
 {
-   return llvm::IntegerType::get(CodeGen::Context, bitWidth);
+   return llvm::IntegerType::get(ast::CodeGen::Context, bitWidth);
 }
 
 string IntegerType::toString() const

@@ -36,7 +36,7 @@ namespace cdot {
 
    class Builtin {
    public:
-      static void ImportBuiltin(string &name);
+      static void ImportBuiltin(const string &name);
    };
 
 }

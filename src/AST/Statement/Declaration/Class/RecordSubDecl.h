@@ -7,9 +7,13 @@
 
 #include "../../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class RecordSubDecl: public Statement {
 protected:
    RecordSubDecl(
+      NodeType typeID,
       std::string &&name,
       AccessModifier access,
       bool isStatic
@@ -19,7 +23,12 @@ protected:
    AccessModifier access;
    bool is_static;
 
-   cl::Record *record = nullptr;
+   cdot::cl::Record *record = nullptr;
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == FieldDeclID || T->getTypeID() == PropDeclID;
+   }
 
 public:
    const string &getName() const;
@@ -31,9 +40,11 @@ public:
    bool isStatic() const;
    void isStatic(bool is_static);
 
-   cl::Record *getRecord() const;
-   void setRecord(cl::Record *record);
+   cdot::cl::Record *getRecord() const;
+   void setRecord(cdot::cl::Record *record);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_RECORDSUBDECL_H

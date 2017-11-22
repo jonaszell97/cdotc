@@ -8,26 +8,17 @@
 #include "../../../Variant/Type/FunctionType.h"
 #include "../TypeRef.h"
 
-LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> return_type,
-                       std::vector<std::shared_ptr<FuncArgDecl>> args,
-                       Statement::SharedPtr body) :
-   returnType(return_type),
-   args(args),
-   body(body)
+namespace cdot {
+namespace ast {
+
+LambdaExpr::LambdaExpr(std::shared_ptr<TypeRef> &&return_type,
+                       std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+                       Statement::SharedPtr &&body)
+   : Expression(LambdaExprID), returnType(move(return_type)), args(move(args)),
+     body(move(body))
 {
 
 }
 
-std::vector<AstNode::SharedPtr> LambdaExpr::get_children()
-{
-   std::vector<AstNode::SharedPtr> children;
-   for (const auto& arg : args) {
-      children.push_back(arg);
-   }
-   if (memberExpr != nullptr) {
-      children.push_back(memberExpr);
-   }
-
-   children.push_back(body);
-   return children;
-}
+} // namespace ast
+} // namespace cdot

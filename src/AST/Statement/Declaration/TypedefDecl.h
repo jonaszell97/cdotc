@@ -8,8 +8,10 @@
 #include "../Statement.h"
 #include "../../../Variant/Type/Generic.h"
 
+namespace cdot {
+namespace ast {
+
 class TypeRef;
-enum class AccessModifier : unsigned int;
 
 class TypedefDecl : public Statement {
 public:
@@ -21,16 +23,11 @@ public:
    );
 
    typedef std::shared_ptr<TypedefDecl> SharedPtr;
-   typedef std::unique_ptr<TypedefDecl> UniquePtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::TYPEDEF_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == TypedefDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    AccessModifier access;
@@ -39,7 +36,7 @@ protected:
 
    std::vector<TemplateConstraint> templateArgs;
 
-   cl::Record *record = nullptr;
+   cdot::cl::Record *record = nullptr;
 
 public:
    AccessModifier getAccess() const;
@@ -54,9 +51,11 @@ public:
    std::vector<TemplateConstraint> &getTemplateArgs();
    void setTemplateArgs(const std::vector<TemplateConstraint> &templateArgs);
 
-   cl::Record *getRecord() const;
-   void setRecord(cl::Record *record);
+   cdot::cl::Record *getRecord() const;
+   void setRecord(cdot::cl::Record *record);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_TYPEDEFDECL_H

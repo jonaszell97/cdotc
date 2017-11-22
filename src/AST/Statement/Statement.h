@@ -7,6 +7,9 @@
 
 #include "../AstNode.h"
 
+namespace cdot {
+namespace ast {
+
 enum class ExternKind : unsigned char {
    NONE,
    C,
@@ -15,31 +18,49 @@ enum class ExternKind : unsigned char {
 
 class Statement : public AstNode {
 public:
-   void isDeclaration(bool decl) {
+   void isDeclaration(bool decl)
+   {
       is_declaration = decl;
    }
 
-   bool isDeclaration() {
+   bool isDeclaration()
+   {
       return is_declaration;
    }
 
    typedef std::shared_ptr<Statement> SharedPtr;
 
-   void setExternKind(ExternKind kind) {
+   void setExternKind(ExternKind kind)
+   {
       externKind = kind;
    }
 
-   ExternKind getExternKind() const {
+   ExternKind getExternKind() const
+   {
       return externKind;
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       switch (T->getTypeID()) {
+#      define CDOT_ASTNODE(Name) \
+          case Name##ID:
+#      define CDOT_INCLUDE_STMT
+#      include "../AstNode.def"
+             return true;
+          default:
+             return false;
+       }
+   }
 
 protected:
+   explicit Statement(NodeType typeID) : AstNode(typeID) {}
    ExternKind externKind = ExternKind::NONE;
    bool is_declaration = false;
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //STATEMENT_H

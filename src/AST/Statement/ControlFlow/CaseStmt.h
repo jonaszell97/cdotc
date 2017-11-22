@@ -6,38 +6,41 @@
 #define CDOT_CASESTMT_H
 
 #include "LabelStmt.h"
-class Expression;
 
 namespace cdot {
-   namespace cl {
-      struct EnumCase;
-   }
-}
+
+namespace cl {
+
+struct EnumCase;
+
+} // namespace cdot
+
+namespace ast {
+
+class Expression;
 
 class CaseStmt : public LabelStmt {
 public:
-   explicit CaseStmt(std::shared_ptr<Expression>);
+   explicit CaseStmt(std::shared_ptr<Expression> &&caseVal);
    CaseStmt();
 
-   void setBody(Statement::SharedPtr stmt) {
-      body = stmt;
+   void setBody(Statement::SharedPtr &&stmt)
+   {
+      body = std::move(stmt);
    }
 
    typedef std::shared_ptr<CaseStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::CASE_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == CaseStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    bool isDefault = false;
    std::shared_ptr<Expression> caseVal;
    std::shared_ptr<Statement> body;
-   Type caseType;
+   QualType caseType;
 
    // codegen
    bool isEnumLetCase = false;
@@ -46,9 +49,50 @@ protected:
    cl::Method* operatorEquals = nullptr;
 
    cdot::cl::EnumCase* enumCaseVal;
-   std::vector<pair<string, Type>> letIdentifiers;
+   std::vector<pair<string, QualType>> letIdentifiers;
    std::vector<string> letBindings;
+
+public:
+   bool isIsDefault() const;
+
+   std::shared_ptr<Expression> &getCaseVal();
+
+   const std::shared_ptr<Statement> &getBody() const;
+
+   const QualType &getCaseType() const;
+
+   bool isIsEnumLetCase() const;
+
+   bool isIsEnumVarCase() const;
+
+   cl::Method *getOperatorEquals() const;
+
+   cdot::cl::EnumCase *getEnumCaseVal() const;
+
+   std::vector<pair<string, QualType>> &getLetIdentifiers();
+   std::vector<string> &getLetBindings();
+
+   void setIsDefault(bool isDefault);
+
+   void setCaseVal(const std::shared_ptr<Expression> &caseVal);
+
+   void setCaseType(const QualType &caseType);
+
+   void setIsEnumLetCase(bool isEnumLetCase);
+
+   void setIsEnumVarCase(bool isEnumVarCase);
+
+   void setOperatorEquals(cdot::cl::Method *operatorEquals);
+
+   void setEnumCaseVal(cdot::cl::EnumCase *enumCaseVal);
+
+   void
+   setLetIdentifiers(const std::vector<pair<string, QualType>> &letIdentifiers);
+
+   void setLetBindings(const std::vector<string> &letBindings);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CASESTMT_H

@@ -14,6 +14,9 @@ struct RecordTemplateInstantiation;
 }
 }
 
+namespace cdot {
+namespace ast {
+
 class MethodTemplateDecl: public CallableTemplateDecl {
 public:
    MethodTemplateDecl(
@@ -27,26 +30,19 @@ public:
 
    typedef std::shared_ptr<CallableTemplateDecl> SharedPtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override
+   static bool classof(AstNode const* T)
    {
-      return {};
+       return T->getTypeID() == MethodTemplateDeclID;
    }
-
-   NodeType get_type() override
-   {
-      return NodeType::METHOD_TEMPLATE_DECL;
-   }
-
-   ASTNODE_ACCEPT_PASSES
 
 protected:
    bool is_static;
    bool is_operator;
    bool is_mutating;
 
-   cl::RecordTemplateInstantiation *outerRecord = nullptr;
+   cdot::cl::RecordTemplateInstantiation *outerRecord = nullptr;
 
-   cl::Method *method;
+   cdot::cl::Method *method;
 
 public:
    bool isStatic() const;
@@ -58,12 +54,14 @@ public:
    bool isMutating() const;
    void isMutating(bool is_mutating);
 
-   cl::RecordTemplateInstantiation *getOuterRecord() const;
-   void setOuterRecord(cl::RecordTemplateInstantiation *outerRecord);
+   cdot::cl::RecordTemplateInstantiation *getOuterRecord() const;
+   void setOuterRecord(cdot::cl::RecordTemplateInstantiation *outerRecord);
 
-   cl::Method *getMethod() const;
-   void setMethod(cl::Method *method);
+   cdot::cl::Method *getMethod() const;
+   void setMethod(cdot::cl::Method *method);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_METHODTEMPLATEDECL_H

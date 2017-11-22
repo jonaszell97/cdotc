@@ -1,6 +1,6 @@
-/Applications/CLion.app/Contents/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript
+"/Applications/CLion 2017.3 EAP.app/Contents/bin/cmake/bin/cmake" -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /Users/Jonas/CDot
 -- Found LLVM 4.0.0
 -- Using LLVMConfig.cmake in: /usr/local/Cellar/llvm/4.0.0_1/lib/cmake/llvm
 -- Configuring done
 -- Generating done
--- Build files have been written to: /Users/Jonas/CLionProjects/HackerRank/XtremeJonasScript/cmake-build-debug
+-- Build files have been written to: /Users/Jonas/CDot/cmake-build-debug

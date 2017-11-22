@@ -8,28 +8,33 @@
 
 #include "Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class DebugStmt : public Statement {
 public:
-   DebugStmt(bool unreachable = false) : isUnreachable(unreachable) {
+   explicit DebugStmt(bool unreachable = false)
+      : Statement(DebugStmtID), unreachable(unreachable) {
 
    }
 
-   std::vector<AstNode::SharedPtr> get_children() override {
-      return {};
+   bool isUnreachable() const
+   {
+      return unreachable;
    }
 
-   NodeType get_type() override {
-      return NodeType::DEBUG_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == DebugStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
    typedef std::shared_ptr<DebugStmt> SharedPtr;
 
 protected:
-   bool isUnreachable;
+   bool unreachable;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_DEBUGSTMT_H

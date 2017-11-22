@@ -24,19 +24,19 @@ VoidType::VoidType()
    id = TypeID::VoidTypeID;
 }
 
-bool VoidType::implicitlyCastableTo(BuiltinType *other) const
+bool VoidType::implicitlyCastableTo(Type *other) const
 {
    return other == this;
 }
 
 llvm::Constant* VoidType::getConstantVal(Variant &) const
 {
-   return llvm::ConstantPointerNull::get(CodeGen::Int8PtrTy);
+   return llvm::ConstantPointerNull::get(ast::CodeGen::Int8PtrTy);
 }
 
 llvm::Type *VoidType::getLlvmType() const
 {
-   return llvm::Type::getVoidTy(CodeGen::Context);
+   return llvm::Type::getVoidTy(ast::CodeGen::Context);
 }
 
 string VoidType::toString() const

@@ -8,23 +8,20 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class TypeRef;
 class Expression;
-enum class AccessModifier : unsigned int;
 
 class DeclStmt : public Statement {
 public:
-   DeclStmt(
-      string, std::shared_ptr<TypeRef>, bool, std::shared_ptr<Expression> = nullptr
-   );
-
-   std::vector<AstNode::SharedPtr> get_children() override;
+   DeclStmt(string &&ident,
+            std::shared_ptr<TypeRef> &&type,
+            bool isConst,
+            std::shared_ptr<Expression> &&val = nullptr);
 
    typedef std::shared_ptr<DeclStmt> SharedPtr;
-
-   NodeType get_type() override {
-      return NodeType::DECLARATION;
-   }
 
    const string &getIdentifier()
    {
@@ -44,8 +41,10 @@ public:
       return access;
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == DeclStmtID;
+   }
 
 protected:
    AccessModifier access;
@@ -58,7 +57,7 @@ protected:
    bool struct_alloca = false;
    bool protocol_decl = false;
    bool declared = false;
-
+   bool captured = false;
    bool inc_refcount = false;
 
 public:
@@ -72,7 +71,7 @@ public:
       DeclStmt::type = type;
    }
 
-   const std::shared_ptr<Expression> &getValue() const
+   std::shared_ptr<Expression> &getValue()
    {
       return value;
    }
@@ -141,7 +140,19 @@ public:
    {
       DeclStmt::inc_refcount = incRefCount;
    }
+
+   bool isCaptured() const
+   {
+      return captured;
+   }
+
+   void setCaptured(bool captured)
+   {
+      DeclStmt::captured = captured;
+   }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_DECLSTATEMENT_H

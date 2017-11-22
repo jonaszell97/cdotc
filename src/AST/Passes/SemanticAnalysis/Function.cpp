@@ -8,12 +8,14 @@
 #include "../../SymbolTable.h"
 #include "Record/Record.h"
 
+using namespace cdot::ast;
+
 namespace cdot {
 
 Callable::Callable(
    string &&name,
    AccessModifier am,
-   const Type &returnType,
+   const QualType &returnType,
    std::vector<Argument> &&arguments) : name(name), accessModifier(am),
                                         returnType(returnType),
                                         arguments(arguments)
@@ -33,7 +35,7 @@ namespace cl {
 
 Method::Method(
    string name,
-   const Type& ret_type,
+   const QualType& ret_type,
    AccessModifier access_modifier,
    std::vector<Argument>&& args,
    bool isStatic,
@@ -55,7 +57,7 @@ Method::Method(MethodTemplate *Template) : Callable(Template)
 
 Method::Method(
    string name,
-   const Type& ret_type,
+   const QualType& ret_type,
    std::vector<Argument>&& args,
    MethodDecl*declaration,
    SourceLocation loc,
@@ -67,6 +69,11 @@ Method::Method(
    loc(loc), methodID(id)
 {
    this->declaration = declaration;
+}
+
+string Method::getLinkageName() const
+{
+   return owningClass->getName() + '.' + getMangledName();
 }
 
 Method::~Method()
@@ -88,12 +95,12 @@ void Callable::copyThrows(Callable *callable)
    addThrownTypes(callable->thrownTypes);
 }
 
-void Callable::addThrownTypes(const std::vector<BuiltinType*> &tys)
+void Callable::addThrownTypes(const std::vector<Type*> &tys)
 {
    thrownTypes.insert(thrownTypes.begin(), tys.begin(), tys.end());
 }
 
-void Callable::addThrownType(BuiltinType *ty)
+void Callable::addThrownType(Type *ty)
 {
    if (throws(ty)) {
       return;
@@ -102,7 +109,7 @@ void Callable::addThrownType(BuiltinType *ty)
    thrownTypes.push_back(ty);
 }
 
-bool Callable::throws(BuiltinType *ty)
+bool Callable::throws(Type *ty)
 {
    return std::find(thrownTypes.begin(), thrownTypes.end(), ty)
           != thrownTypes.end();
@@ -123,7 +130,7 @@ void Callable::isNoThrow(bool nothrow)
    is_nothrow = nothrow;
 }
 
-const std::vector<BuiltinType*>& Callable::getThrownTypes() const
+const std::vector<Type*>& Callable::getThrownTypes() const
 {
    return thrownTypes;
 }
@@ -143,6 +150,11 @@ const string &Callable::getMangledName() const
    return mangledName;
 }
 
+string Callable::getLinkageName() const
+{
+   return mangledName;
+}
+
 void Callable::setMangledName(const string &mandledName)
 {
    Callable::mangledName = mandledName;
@@ -158,12 +170,12 @@ void Callable::setAccessModifier(AccessModifier accessModifier)
    Callable::accessModifier = accessModifier;
 }
 
-Type &Callable::getReturnType()
+QualType &Callable::getReturnType()
 {
    return returnType;
 }
 
-void Callable::setReturnType(const Type &returnType)
+void Callable::setReturnType(const QualType &returnType)
 {
    Callable::returnType = returnType;
 }
@@ -208,9 +220,9 @@ void Callable::setLlvmFunc(llvm::Function *llvmFunc)
    Callable::llvmFunc = llvmFunc;
 }
 
-} // namespace cdot
+namespace ast {
 
-Function::Function(string& name, const Type& ret_type)
+Function::Function(string& name, const QualType& ret_type)
    : Callable(std::move(name), AccessModifier::PUBLIC, ret_type, {})
 {
 
@@ -231,3 +243,7 @@ AstNode* Function::getTemplateOrFunctionDecl() const
    return is_template ? (AstNode*)Template->decl
                       : (AstNode*)declaration;
 }
+
+} // namespace ast
+
+} // namespace cdot

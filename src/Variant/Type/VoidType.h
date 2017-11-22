@@ -5,11 +5,11 @@
 #ifndef CDOT_VOIDTYPE_H
 #define CDOT_VOIDTYPE_H
 
-#include "BuiltinType.h"
+#include "Type.h"
 
 namespace cdot {
 
-   class VoidType : public BuiltinType {
+   class VoidType : public Type {
    protected:
       VoidType();
       static VoidType* Instance;
@@ -25,22 +25,12 @@ namespace cdot {
          return false;
       }
 
-      bool isVoidTy() const override
-      {
-         return true;
-      }
-
       llvm::Constant* getConstantVal(Variant&) const override;
-      bool implicitlyCastableTo(BuiltinType* other) const override;
+      bool implicitlyCastableTo(Type* other) const override;
 
-      static inline bool classof(VoidType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
-         switch(T->getTypeID()) {
-            case TypeID::VoidTypeID:
-               return true;
-            default:
-               return false;
-         }
+      static bool classof(Type const* T)
+      {
+         return T->getTypeID() == TypeID::VoidTypeID;
       }
 
       typedef std::unique_ptr<VoidType> UniquePtr;

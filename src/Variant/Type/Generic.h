@@ -10,28 +10,36 @@
 #include <vector>
 
 #include "../Variant.h"
-#include "../Type/Type.h"
-#include "../../Token.h"
+#include "QualType.h"
+#include "../../lex/Token.h"
 #include "../../Template/TokenStore.h"
 
 using std::string;
 using std::unordered_map;
 
-class TypeRef;
 class Token;
+
+namespace cdot {
+
+namespace ast {
+
 class CompoundStmt;
+class TypeRef;
 class RecordTemplateDecl;
 class CallableTemplateDecl;
 class MethodTemplateDecl;
 class Statement;
 enum class RecordTemplateKind : unsigned char;
 
-namespace cdot {
+} // namespace ast
+
+using namespace cdot::ast;
 
 struct Argument {
    Argument() = default;
-   Argument(const string &label, Type ty,
-            std::shared_ptr<Expression> defVal = nullptr, bool vararg = false,
+   Argument(const string &label, QualType ty,
+            std::shared_ptr<ast::Expression> defVal = nullptr,
+            bool vararg = false,
             bool cstyleVararg = false)
       : label(label), type(ty), defaultVal(defVal), isVararg(vararg),
         cstyleVararg(cstyleVararg)
@@ -45,7 +53,7 @@ struct Argument {
    }
 
    string label;
-   Type type;
+   QualType type;
    std::shared_ptr<Expression> defaultVal;
 
    bool isVararg = false;
@@ -134,11 +142,11 @@ struct MethodTemplate: public CallableTemplate {
 
 } // namespace cl
 
-class BuiltinType;
+class Type;
 class ObjectType;
 class GenericType;
 
-struct Type;
+struct QualType;
 
 struct TemplateConstraint {
    enum Kind : unsigned char {
@@ -167,13 +175,13 @@ struct TemplateConstraint {
 
    union {
       std::shared_ptr<TypeRef> unresolvedCovariance;
-      BuiltinType *covariance;
-      BuiltinType *valueType;
+      Type *covariance;
+      Type *valueType;
    };
 
    union {
       std::shared_ptr<TypeRef> unresolvedContravariance;
-      BuiltinType* contravariance;
+      Type* contravariance;
    };
 
    std::shared_ptr<TemplateArg> defaultValue;
@@ -292,9 +300,9 @@ public:
 bool GenericTypesCompatible(GenericType* given,
                             const TemplateConstraint& needed);
 
-void resolveGenerics(Type& ty, Type& obj);
-void resolveGenerics(Type& ty, ObjectType*& obj);
-void resolveGenerics(Type& ty, const std::vector<TemplateArg>& generics);
+void resolveGenerics(QualType& ty, QualType& obj);
+void resolveGenerics(QualType& ty, ObjectType*& obj);
+void resolveGenerics(QualType& ty, const std::vector<TemplateArg>& generics);
 
 } // namespace cdot
 

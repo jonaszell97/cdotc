@@ -7,30 +7,34 @@
 
 #include "../Expression/Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class TertiaryOperator : public Expression {
 public:
-   TertiaryOperator(Expression::SharedPtr, Expression::SharedPtr, Expression::SharedPtr);
+   TertiaryOperator(Expression::SharedPtr &&cond,
+                    Expression::SharedPtr &&lhs,
+                    Expression::SharedPtr &&rhs);
 
    typedef std::shared_ptr<TertiaryOperator> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::TERTIARY_OPERATOR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == TertiaryOperatorID;
    }
-
-   void replaceChildWith(AstNode *child, Expression *replacement) override;
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    Expression::SharedPtr condition;
    Expression::SharedPtr lhs;
    Expression::SharedPtr rhs;
 
-   // codegen
-   BuiltinType* resultType;
+public:
+   Expression::SharedPtr &getCondition();
+   Expression::SharedPtr &getLhs();
+   Expression::SharedPtr &getRhs();
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_TERTIARYOPERATOR_H

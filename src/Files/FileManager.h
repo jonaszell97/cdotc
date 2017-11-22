@@ -11,7 +11,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/MemoryBuffer.h>
 
-#include "../Token.h"
+#include "../lex/Token.h"
 
 using llvm::MemoryBuffer;
 using llvm::Twine;

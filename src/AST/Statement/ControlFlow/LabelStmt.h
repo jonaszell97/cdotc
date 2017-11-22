@@ -7,23 +7,28 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class LabelStmt : public Statement {
 public:
-   explicit LabelStmt(string);
+   explicit LabelStmt(string &&name);
 
    typedef std::shared_ptr<LabelStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::LABEL_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == LabelStmtID || T->getTypeID() == CaseStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    string labelName;
+
+public:
+   const string &getLabelName() const;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_LABELSTMT_H

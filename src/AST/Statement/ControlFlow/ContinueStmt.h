@@ -7,20 +7,22 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class ContinueStmt : public Statement {
 public:
-   ContinueStmt();
+   ContinueStmt() : Statement(ContinueStmtID) {}
 
    typedef std::shared_ptr<ContinueStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::CONTINUE_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ContinueStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CONTINUESTMT_H

@@ -10,9 +10,7 @@
 
 namespace cdot {
 
-llvm::SmallDenseMap<BuiltinType*, MetaType*> MetaType::Instances;
-
-MetaType::MetaType(BuiltinType *forType) : forType(forType)
+MetaType::MetaType(Type *forType) : forType(forType)
 {
    assert(forType);
    id = TypeID::MetaTypeID;
@@ -20,22 +18,18 @@ MetaType::MetaType(BuiltinType *forType) : forType(forType)
    is_struct = true;
 }
 
-MetaType* MetaType::get(BuiltinType *forType)
+MetaType* MetaType::get(Type *forType)
 {
-   auto it = Instances.find(forType);
+   auto key = string("cdot.TypeInfo.") + std::to_string((uintptr_t)forType);
+   auto it = Instances.find(key);
    if (it == Instances.end()) {
       it->second = new MetaType(forType);
    }
 
-   return it->second;
+   return cast<MetaType>(it->second);
 }
 
-bool MetaType::isMetaType() const
-{
-   return true;
-}
-
-BuiltinType* MetaType::getUnderlyingType() const
+Type* MetaType::getUnderlyingType() const
 {
    return forType;
 }
@@ -57,10 +51,10 @@ short MetaType::getAlignment() const
 
 llvm::Type* MetaType::getLlvmType() const
 {
-   return CodeGen::getStructTy(className);
+   return ast::CodeGen::getStructTy(className);
 }
 
-llvm::Value* MetaType::getDefaultVal(CodeGen &CGM) const
+llvm::Value* MetaType::getDefaultVal(ast::CodeGen &CGM) const
 {
    return CGM.getTypeInfo(forType);
 }

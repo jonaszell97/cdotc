@@ -7,21 +7,28 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class CompoundStmt;
 
 class NamespaceDecl : public Statement {
 public:
-   NamespaceDecl(string, std::shared_ptr<CompoundStmt>, bool);
+   NamespaceDecl(string &&nsName,
+                 std::shared_ptr<CompoundStmt> &&body,
+                 bool isAnonymous)
+      : Statement(NamespaceDeclID), nsName(move(nsName)), contents(move(body)),
+        isAnonymousNamespace_(isAnonymous)
+   {
 
-   typedef std::shared_ptr<NamespaceDecl> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::NAMESPACE_DECL;
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   typedef std::shared_ptr<NamespaceDecl> SharedPtr;
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == NamespaceDeclID;
+   }
 
 protected:
    string nsName;
@@ -61,5 +68,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_MODULEDECL_H

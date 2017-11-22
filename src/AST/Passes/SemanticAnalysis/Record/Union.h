@@ -10,13 +10,15 @@
 #include <unordered_map>
 #include <string>
 
-class UnionDecl;
-
 using std::string;
 using std::unordered_map;
 
 namespace cdot {
-   class BuiltinType;
+class Type;
+
+namespace ast {
+class UnionDecl;
+}
 
 namespace cl {
 
@@ -34,24 +36,24 @@ public:
       return true;
    }
 
-   const unordered_map<string, BuiltinType *> &getFields() const;
-   void setFields(const unordered_map<string, BuiltinType *> &types);
+   const unordered_map<string, Type *> &getFields() const;
+   void setFields(const unordered_map<string, Type *> &types);
 
    bool isConst() const;
    void isConst(bool is_const);
 
    bool hasField(string &name);
-   BuiltinType *getFieldTy(string &name);
+   Type *getFieldTy(string &name);
 
    void declareField(
       const string &fieldName,
-      BuiltinType *fieldTy
+      Type *fieldTy
    );
 
-   bool initializableWith(BuiltinType *ty);
+   Type* initializableWith(Type *ty);
 
 protected:
-   unordered_map<string, BuiltinType*> fields;
+   unordered_map<string, Type*> fields;
    bool is_const;
 };
 

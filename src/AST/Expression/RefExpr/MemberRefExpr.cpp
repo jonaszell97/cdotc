@@ -7,41 +7,24 @@
 #include "../../Passes/SemanticAnalysis/Record/Class.h"
 #include "../../Passes/SemanticAnalysis/Record/Enum.h"
 
+namespace cdot {
+namespace ast {
+
 MemberRefExpr::MemberRefExpr(string &&ident,
                              bool pointerAccess)
-   : is_pointer_access(pointerAccess),
+   : Expression(MemberRefExprID), is_pointer_access(pointerAccess),
      templateArgs(new ResolvedTemplateArgList({}))
 {
    this->ident = ident;
 }
 
-MemberRefExpr::MemberRefExpr(size_t index, bool pointerAccess) :
-   tupleIndex(index),
+MemberRefExpr::MemberRefExpr(size_t index, bool pointerAccess)
+   : Expression(MemberRefExprID), tupleIndex(index),
    is_tuple_access(true),
    is_pointer_access(pointerAccess),
    templateArgs(new ResolvedTemplateArgList({}))
 {
 
-}
-
-void MemberRefExpr::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   if (memberExpr.get() == child) {
-      memberExpr.reset(replacement);
-   }
-
-   llvm_unreachable("child does not exist");
-}
-
-std::vector<AstNode::SharedPtr> MemberRefExpr::get_children() {
-   if (memberExpr != nullptr) {
-      return { memberExpr };
-   }
-   else {
-      return { };
-   }
 }
 
 const string &MemberRefExpr::getClassName() const
@@ -54,12 +37,12 @@ void MemberRefExpr::setClassName(const string &className)
    MemberRefExpr::className = className;
 }
 
-const Type &MemberRefExpr::getFieldType() const
+const QualType &MemberRefExpr::getFieldType() const
 {
    return fieldType;
 }
 
-void MemberRefExpr::setFieldType(const Type &fieldType)
+void MemberRefExpr::setFieldType(const QualType &fieldType)
 {
    MemberRefExpr::fieldType = fieldType;
 }
@@ -145,12 +128,12 @@ void MemberRefExpr::setIsUnionAccess(bool is_union_access)
    MemberRefExpr::is_union_access = is_union_access;
 }
 
-BuiltinType *MemberRefExpr::getMetaType() const
+Type *MemberRefExpr::getMetaType() const
 {
    return metaType;
 }
 
-void MemberRefExpr::setMetaType(BuiltinType *metaType)
+void MemberRefExpr::setMetaType(Type *metaType)
 {
    MemberRefExpr::metaType = metaType;
 }
@@ -165,3 +148,6 @@ void MemberRefExpr::setTemplateArgs(TemplateArgList *templateArgs)
    delete MemberRefExpr::templateArgs;
    MemberRefExpr::templateArgs = templateArgs;
 }
+
+} // namespace ast
+} // namespace cdot

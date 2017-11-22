@@ -2,9 +2,13 @@
 // Created by Jonas Zell on 13.08.17.
 //
 
+#include <llvm/Support/raw_ostream.h>
+#include <sstream>
+
 #include "FunctionType.h"
 #include "ObjectType.h"
 #include "PointerType.h"
+#include "GenericType.h"
 
 #include "../../AST/Passes/SemanticAnalysis/Function.h"
 #include "../../AST/Expression/TypeRef.h"
@@ -12,40 +16,55 @@
 
 namespace cdot {
 
-unordered_map<string, FunctionType*> FunctionType::Instances;
-
 FunctionType* FunctionType::get(
-   Type &returnType,
-   std::vector<Argument> &argTypes,
+   const QualType &returnType,
+   const std::vector<Argument> &argTypes,
    bool isRawFunctionTy)
 {
-   auto key = typesToString(returnType, argTypes) + std::to_string((int)isRawFunctionTy);
+   auto key = typesToString(returnType, argTypes)
+              + std::to_string((int)isRawFunctionTy) + ".__fun";
+
    if (Instances.find(key) == Instances.end()) {
-      Instances[key] = new FunctionType(returnType, argTypes, isRawFunctionTy);
+      Instances.try_emplace(key, new FunctionType(returnType, argTypes,
+                                                  isRawFunctionTy));
    }
 
-   return Instances[key];
+   assert(Instances.find(key) != Instances.end());
+
+   return cast<FunctionType>(Instances[key]);
 }
 
 string FunctionType::typesToString(
-   const Type &returnType,
+   const QualType &returnType,
    const std::vector<Argument> &argTypes)
 {
-   string res = "(";
+   std::ostringstream res;
+   res << "(";
+
    size_t i = 0;
    for (const auto& arg : argTypes) {
-      res += arg.type.toString();
+      if (auto gen = dyn_cast<GenericType>(*arg.type)) {
+         res << gen->getClassName() << ": "
+             << gen->getActualType()->toString();
+      }
+      else {
+         res << arg.type.toString();
+      }
+
       if (i < argTypes.size() - 1) {
-         res += ", ";
+         res << ", ";
       }
 
       ++i;
    }
 
-   return res + ") -> " + returnType->toString();
+   res << ") -> " << returnType->toString();
+   return res.str();
 }
 
-FunctionType::FunctionType(Type& returnType, std::vector<Argument>& argTypes, bool raw) :
+FunctionType::FunctionType(const QualType& returnType,
+                           const std::vector<Argument>&argTypes,
+                           bool raw) :
    returnType(returnType),
    argTypes(argTypes),
    isRawFunctionTy_(raw)
@@ -54,7 +73,7 @@ FunctionType::FunctionType(Type& returnType, std::vector<Argument>& argTypes, bo
    className = "__lambda";
 }
 
-bool FunctionType::implicitlyCastableTo(BuiltinType *other) const
+bool FunctionType::implicitlyCastableTo(Type *other) const
 {
    switch (other->getTypeID()) {
       case TypeID::AutoTypeID:

@@ -11,22 +11,16 @@
 #include <map>
 #include <vector>
 #include "../Util.h"
-#include "../Variant/Type/Type.h"
-
-
-class CompoundStmt;
-class ClassDecl;
-class Function;
-class AstNode;
-class TypeRef;
+#include "../Variant/Type/QualType.h"
 
 using std::pair;
 using std::unordered_map;
 using std::unordered_multimap;
 
 namespace cdot {
+
 class PointerType;
-class BuiltinType;
+class Type;
 class ObjectType;
 class ObjectType;
 class TemplateArgList;
@@ -43,18 +37,30 @@ struct EnumCase;
 struct RecordTemplate;
 struct CallableTemplate;
 
-}
+} // namespace cl
+
+namespace ast {
+
+class CompoundStmt;
+class ClassDecl;
+class AstNode;
+class TypeRef;
+class Function;
+
+} // namespace ast
+
+using namespace cdot::ast;
 
 struct Variable {
    AccessModifier access;
-   Type type;
+   QualType type;
    string declaredNamespace;
    AstNode *decl;
 };
 
 struct Typedef {
    Typedef(
-      BuiltinType *ty, const string &alias,
+      Type *ty, const string &alias,
       const std::vector<TemplateConstraint> &templateArgs = {},
       AccessModifier access = AccessModifier::PUBLIC,
       AstNode *decl = nullptr) : aliasedType(ty), alias(alias),
@@ -68,7 +74,7 @@ struct Typedef {
 
    AccessModifier access;
    string alias;
-   BuiltinType *aliasedType;
+   Type *aliasedType;
    std::vector<TemplateConstraint> generics;
    AstNode *decl;
 };
@@ -80,7 +86,7 @@ using namespace cdot::cl;
 using std::string;
 
 class SymbolTable {
-   typedef unordered_multimap<string, std::unique_ptr<Function>>::iterator
+   typedef unordered_multimap<string, std::unique_ptr<ast::Function>>::iterator
       FunctionIterator;
 public:
    static void declareRecord(
@@ -120,7 +126,7 @@ public:
 
    static void declareTypedef(
       const string& alias,
-      BuiltinType* originTy,
+      Type* originTy,
       const std::vector<TemplateConstraint>& generics = {},
       AccessModifier access = AccessModifier::PUBLIC,
       AstNode *decl = nullptr
@@ -129,7 +135,7 @@ public:
    static void declareNamespace(const string &);
    static void declareVariable(
       const string &varName,
-      const Type &varType,
+      const QualType &varType,
       AccessModifier access,
       const string& declaredNamespace,
       AstNode *decl
@@ -137,11 +143,11 @@ public:
 
    static void declareFunction(
       const string &funcName,
-      std::unique_ptr<Function> &&func
+      std::unique_ptr<ast::Function> &&func
    );
 
    static void checkTemplateArgCompatability(
-      Function &newFunc
+      ast::Function &newFunc
    );
 
    static void checkDuplicateFunctionDeclaration(
@@ -199,8 +205,8 @@ public:
                             const std::vector<string> &ns = {},
                             bool *isNew = nullptr);
 
-   static Function *getAnyFn(const string &withName,
-                             const std::vector<string> &ns);
+   static ast::Function *getAnyFn(const string &withName,
+                                  const std::vector<string> &ns);
 
    static RecordTemplate *getRecordTemplate(const string &name);
    static RecordTemplate *getRecordTemplate(const string &name,
@@ -221,7 +227,7 @@ public:
    static pair<Variable&, string> getVariable(const string &,
                                               const std::vector<string> &);
 
-   static void setVariable(const string& name, BuiltinType* ty);
+   static void setVariable(const string& name, Type* ty);
 
    static pair<FunctionIterator, FunctionIterator> getFunction(const string &);
    static pair<FunctionIterator, FunctionIterator> getFunction(
@@ -283,7 +289,7 @@ public:
          Class *cl;
          Enum *en;
          Union *un;
-         Function *fun;
+         ast::Function *fun;
          RecordTemplate *recordTemplate;
          CallableTemplate *callableTemplate;
       };
@@ -301,7 +307,8 @@ private:
 
    static unordered_map<string, Typedef> typedefs;
    static unordered_map<string, Variable> variables;
-   static std::unordered_multimap<string, std::unique_ptr<Function>> functions;
+   static std::unordered_multimap<string, std::unique_ptr<ast::Function>>
+      functions;
    static std::vector<string> namespaces;
    static unordered_map<string, string> TemporaryAliases;
 };

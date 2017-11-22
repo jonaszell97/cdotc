@@ -7,88 +7,76 @@
 
 #include "../Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class IntegerLiteral : public Expression {
 public:
    explicit IntegerLiteral(cdot::Variant &&lexeme);
 
-   bool needsContextualInformation() const override
-   {
-      return true;
-   }
-
    typedef std::shared_ptr<IntegerLiteral> SharedPtr;
 
-   NodeType get_type() override
+   static bool classof(AstNode const* T)
    {
-      return NodeType::INTEGER_LITERAL;
+       return T->getTypeID() == IntegerLiteralID;
    }
-
-   bool createsTemporary() override
-   {
-      return true;
-   }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    cdot::Variant value;
-   BuiltinType* type = nullptr;
+   Type* type = nullptr;
 
 public:
    const Variant &getValue() const;
    void setValue(const Variant &value);
 
-   BuiltinType *getType() const;
-   void setType(BuiltinType *type);
+   Type *getType() const;
+   void setType(Type *type);
 };
 
 class FPLiteral: public Expression {
 public:
    explicit FPLiteral(cdot::Variant &&val);
 
-   NodeType get_type() override
-   {
-      return NodeType::FLOATING_LITERAL;
-   }
-
    typedef std::shared_ptr<FPLiteral> SharedPtr;
-   ASTNODE_ACCEPT_PASSES
+
+   static bool classof(AstNode const* T)
+   {
+      return T->getTypeID() == FPLiteralID;
+   }
 
 protected:
    cdot::Variant value;
-   cdot::BuiltinType *type;
+   cdot::Type *type;
 
 public:
    const Variant &getValue() const;
    void setValue(const Variant &val);
 
-   BuiltinType *getType() const;
-   void setType(BuiltinType *type);
+   Type *getType() const;
+   void setType(Type *type);
 };
 
 class BoolLiteral: public Expression {
 public:
    explicit BoolLiteral(bool value);
 
-   NodeType get_type() override
-   {
-      return NodeType::BOOL_LITERAL;
-   }
-
    typedef std::shared_ptr<BoolLiteral> SharedPtr;
-   ASTNODE_ACCEPT_PASSES
+
+   static bool classof(AstNode const* T)
+   {
+      return T->getTypeID() == BoolLiteralID;
+   }
 
 protected:
    bool value;
-   cdot::BuiltinType *type;
+   cdot::Type *type;
 
 public:
    bool getValue() const;
    void setValue(bool value);
 
-   BuiltinType *getType() const;
-   void setType(BuiltinType *type);
+   Type *getType() const;
+   void setType(Type *type);
 };
 
 class CharLiteral: public Expression {
@@ -96,13 +84,12 @@ public:
    explicit CharLiteral(char value);
    explicit CharLiteral(wchar_t value);
 
-   NodeType get_type() override
-   {
-      return NodeType::CHAR_LITERAL;
-   }
-
    typedef std::shared_ptr<CharLiteral> SharedPtr;
-   ASTNODE_ACCEPT_PASSES
+
+   static bool classof(AstNode const* T)
+   {
+      return T->getTypeID() == CharLiteralID;
+   }
 
 protected:
    union {
@@ -111,7 +98,7 @@ protected:
    };
 
    bool is_wide;
-   cdot::BuiltinType *type;
+   cdot::Type *type;
 
 public:
    char getNarrow() const;
@@ -123,9 +110,11 @@ public:
    bool isWide() const;
    void isWide(bool is_wide);
 
-   BuiltinType *getType() const;
-   void setType(BuiltinType *type);
+   Type *getType() const;
+   void setType(Type *type);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_LITERALEXPRESSION_H

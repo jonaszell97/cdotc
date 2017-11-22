@@ -14,7 +14,7 @@ Enum::Enum(
    AccessModifier am,
    const string &name,
    const SourceLocation &loc,
-   EnumDecl *decl)
+   ast::EnumDecl *decl)
    : Class(am, name, decl, loc, false, false, false)
 {
    needsTypeInfo = false;
@@ -23,7 +23,7 @@ Enum::Enum(
    this->rawType = IntegerType::get(sizeof(int*) * 8);
 }
 
-void Enum::addCase(string &name, EnumCase &&case_, SourceLocation loc)
+void Enum::addCase(const string &name, EnumCase &&case_, SourceLocation loc)
 {
    cases.emplace(name, case_);
    if (case_.associatedValues.size() > maxAssociatedValues) {
@@ -38,7 +38,7 @@ void Enum::addCase(string &name, EnumCase &&case_, SourceLocation loc)
          args.emplace_back(assoc.first, assoc.second);
       }
 
-      Type retTy;
+      QualType retTy;
       declareMethod(name, retTy, AccessModifier::PUBLIC,
                     std::move(args), false, nullptr, loc);
    }

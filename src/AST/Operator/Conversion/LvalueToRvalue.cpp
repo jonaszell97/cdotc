@@ -4,14 +4,24 @@
 
 #include "LvalueToRvalue.h"
 
+namespace cdot {
+namespace ast {
 
-LvalueToRvalue::LvalueToRvalue(Expression::SharedPtr expr) :
-    target(expr)
+LvalueToRvalue::LvalueToRvalue(Expression::SharedPtr expr)
+   : Expression(LvalueToRvalueID), target(expr)
 {
-    children.push_back(&target);
     target->setParent(this);
 }
 
-std::vector<AstNode::SharedPtr> LvalueToRvalue::get_children() {
-    return { target };
+const Expression::SharedPtr &LvalueToRvalue::getTarget() const
+{
+   return target;
 }
+
+void LvalueToRvalue::setTarget(const Expression::SharedPtr &target)
+{
+   LvalueToRvalue::target = target;
+}
+
+} // namespace ast
+} // namespace cdot

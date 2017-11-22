@@ -16,9 +16,6 @@
 
 #include "Record.h"
 
-class ClassDecl;
-class Expression;
-
 using namespace cdot;
 using std::string;
 using std::map;
@@ -26,327 +23,339 @@ using std::unordered_map;
 using std::unordered_multimap;
 
 namespace cdot {
-   struct TemplateConstraint;
+
+struct TemplateConstraint;
+
+namespace ast {
+
+class ClassDecl;
+class Expression;
+class FieldDecl;
+
+}
 
 namespace cl {
 
-   class Class;
+using namespace cdot::ast;
 
-   struct Field {
-      Field(string name, BuiltinType* type, AccessModifier access_modifier,
-            Expression::SharedPtr defaultVal, bool isConst, FieldDecl*);
+class Class;
 
-      typedef std::unique_ptr<Field> UniquePtr;
-      typedef std::shared_ptr<Field> SharedPtr;
+struct Field {
+   Field(string name, Type* type, AccessModifier access_modifier,
+         Expression::SharedPtr defaultVal, bool isConst, FieldDecl*);
 
-      string fieldName;
-      string mangledName;
-      BuiltinType* fieldType;
-      AccessModifier accessModifier;
-      Expression::SharedPtr defaultVal;
+   typedef std::unique_ptr<Field> UniquePtr;
+   typedef std::shared_ptr<Field> SharedPtr;
 
-      bool isConst = false;
-      bool isStatic = false;
+   string fieldName;
+   string mangledName;
+   Type* fieldType;
+   AccessModifier accessModifier;
+   Expression::SharedPtr defaultVal;
 
-      bool hasGetter() const;
-      bool hasSetter() const;
+   bool isConst = false;
+   bool isStatic = false;
 
-      Method *getter = nullptr;
-      Method *setter = nullptr;
+   bool hasGetter() const;
+   bool hasSetter() const;
 
-      bool isInheritedField = false;
+   Method *getter = nullptr;
+   Method *setter = nullptr;
 
-      FieldDecl* declaration;
-      llvm::Type* llvmType = nullptr;
-      size_t layoutOffset;
+   bool isInheritedField = false;
 
-      Class* owningClass = nullptr;
+   FieldDecl* declaration;
+   llvm::Type* llvmType = nullptr;
+   size_t layoutOffset;
+
+   Class* owningClass = nullptr;
+};
+
+struct Method;
+
+
+class Class: public Record {
+   typedef unordered_multimap<string, std::shared_ptr<Method>>::iterator MethodIterator;
+
+public:
+   Class(
+      AccessModifier am,
+      const string& className,
+      RecordDecl *decl,
+      const SourceLocation &loc,
+      bool isAbstract,
+      bool isProto,
+      bool isStruct
+   );
+
+   Field* declareField(
+      const string &name,
+      Type *type,
+      AccessModifier access,
+      Expression::SharedPtr def_val,
+      bool isConst,
+      bool isStatic,
+      FieldDecl* declaration
+   );
+
+   Method* declareMethod(
+      const string &methodName,
+      const QualType& ret_type,
+      AccessModifier access,
+      std::vector<Argument>&& args,
+      bool isStatic,
+      MethodDecl* declaration,
+      SourceLocation loc
+   ) override;
+
+   void pushConstraintSet(std::vector<ExtensionConstraint> &&constraints);
+   void popConstraintSet();
+
+   bool checkConstraint(
+      const ExtensionConstraint& constraint,
+      Type*& caller
+   ) const override;
+
+   const ExtensionConstraint* checkConstraints(
+      Method* method,
+      Type* caller
+   ) const override;
+
+   const std::vector<ExtensionConstraint>& getConstraintSet(unsigned i);
+
+   void inheritProtocols(Class* current);
+   void checkProtocolConformance(Class *protoObj);
+   void finalize() override;
+
+   bool declareMemberwiseInitializer();
+
+   bool hasField(const string &field_name);
+
+   Method* getMethod(llvm::StringRef name) override;
+   Method* getOwnMethod(llvm::StringRef name) override;
+   Method* getMethod(unsigned id) override;
+   Field* getField(const string &field_name);
+
+   pair<MethodIterator, MethodIterator> getOverloads(const string &methodName);
+
+   const unordered_map<string, Method*>& getMethods() {
+      return mangledMethods;
    };
 
-   struct Method;
-
-
-   class Class: public Record {
-      typedef unordered_multimap<string, std::shared_ptr<Method>>::iterator MethodIterator;
-
-   public:
-      Class(
-         AccessModifier am,
-         const string& className,
-         RecordDecl *decl,
-         const SourceLocation &loc,
-         bool isAbstract,
-         bool isProto,
-         bool isStruct
-      );
-
-      Field* declareField(
-         const string &name,
-         BuiltinType *type,
-         AccessModifier access,
-         Expression::SharedPtr def_val,
-         bool isConst,
-         bool isStatic,
-         FieldDecl* declaration
-      );
-
-      Method* declareMethod(
-         const string &methodName,
-         const Type& ret_type,
-         AccessModifier access,
-         std::vector<Argument>&& args,
-         bool isStatic,
-         MethodDecl* declaration,
-         SourceLocation loc
-      ) override;
-
-      void pushConstraintSet(std::vector<ExtensionConstraint> &&constraints);
-      void popConstraintSet();
-
-      bool checkConstraint(
-         const ExtensionConstraint& constraint,
-         BuiltinType*& caller
-      ) const override;
-
-      const ExtensionConstraint* checkConstraints(
-         Method* method,
-         BuiltinType* caller
-      ) const override;
-
-      const std::vector<ExtensionConstraint>& getConstraintSet(unsigned i);
-
-      void inheritProtocols(Class* current);
-      void checkProtocolConformance(Class *protoObj);
-      void finalize() override;
-
-      bool declareMemberwiseInitializer();
-
-      bool hasField(const string &field_name);
-
-      Method* getMethod(const string &method_name) override;
-      Method* getMethod(unsigned id) override;
-      Field* getField(const string &field_name);
-
-      pair<MethodIterator, MethodIterator> getOverloads(const string &methodName);
-
-      const unordered_map<string, Method*>& getMethods() {
-         return mangledMethods;
-      };
-
-      bool isAbstract() {
-         return is_abstract;
-      }
-
-      bool isNonUnion() const override
-      {
-         return true;
-      }
-
-      bool isClass() const override
-      {
-         return is_class;
-      }
-
-      bool isStruct() const override
-      {
-         return is_struct;
-      }
-
-      bool isProtocol() const override
-      {
-         return is_protocol;
-      }
-
-      bool isRefcounted() const override
-      {
-         return is_class;
-      }
-
-      bool hasNonEmptyDeinitializer() const
-      {
-         return has_nonempty_deinit;
-      }
-
-      void hasNonEmptyDeinitializer(bool nonempty)
-      {
-         has_nonempty_deinit = nonempty;
-      }
+   bool isAbstract() {
+      return is_abstract;
+   }
+
+   bool isNonUnion() const override
+   {
+      return true;
+   }
+
+   bool isClass() const override
+   {
+      return is_class;
+   }
+
+   bool isStruct() const override
+   {
+      return is_struct;
+   }
+
+   bool isProtocol() const override
+   {
+      return is_protocol;
+   }
+
+   bool isRefcounted() const override
+   {
+      return is_class;
+   }
+
+   bool hasNonEmptyDeinitializer() const
+   {
+      return has_nonempty_deinit;
+   }
+
+   void hasNonEmptyDeinitializer(bool nonempty)
+   {
+      has_nonempty_deinit = nonempty;
+   }
+
+   bool isEmptyProtocol();
+   string getUnqualifiedName();
+
+   bool protectedPropAccessibleFrom(const string &class_context);
+   bool privatePropAccessibleFrom(const string &class_context);
+
+   bool isBaseClassOf(const string &child);
+   bool isBaseClassOf(Record *child);
+
+   Class* getParent() {
+      return parentClass;
+   }
+
+   void findVirtualMethods();
+   bool isVirtual(Method *);
+
+   void setDefaultConstructor(llvm::Function* constr)
+   {
+      defaultConstructor = constr;
+   }
+
+   llvm::Function* getDefaultContructor() const
+   {
+      return defaultConstructor;
+   }
 
-      bool isEmptyProtocol();
-      string getUnqualifiedName();
+   const std::vector<pair<string, Field::SharedPtr>>& getFields() const
+   {
+      return fields;
+   }
 
-      bool protectedPropAccessibleFrom(const string &class_context);
-      bool privatePropAccessibleFrom(const string &class_context);
-
-      bool isBaseClassOf(const string &child);
-      bool isBaseClassOf(Record *child);
-
-      Class* getParent() {
-         return parentClass;
-      }
-
-      void findVirtualMethods();
-      bool isVirtual(Method *);
+   const std::map<string, std::vector<string>>& getInterfMethods() const
+   {
+      return protocolMethods;
+   }
 
-      void setDefaultConstructor(llvm::Function* constr)
-      {
-         defaultConstructor = constr;
-      }
+   size_t getVTableOffset(const string& interface_name) const
+   {
+      return vtableOffsets.at(interface_name);
+   }
 
-      llvm::Function* getDefaultContructor() const
-      {
-         return defaultConstructor;
-      }
+   size_t getFieldOffset(const string& fieldName);
+   size_t getMethodOffset(const string& methodName) const;
 
-      const std::vector<pair<string, Field::SharedPtr>>& getFields() const
-      {
-         return fields;
-      }
+   const std::vector<Method*>& getConstructors() const
+   {
+      return constructors;
+   }
 
-      const std::map<string, std::vector<string>>& getInterfMethods() const
-      {
-         return protocolMethods;
-      }
+   const std::vector<llvm::Type*>& getMemoryLayout() const
+   {
+      return memoryLayout;
+   }
 
-      size_t getVTableOffset(const string& interface_name) const
-      {
-         return vtableOffsets.at(interface_name);
-      }
+   llvm::Constant* getVtable(CodeGen &CGM);
+   llvm::GlobalVariable* getProtocolVtable(const string& protoName, CodeGen &CGM);
 
-      size_t getFieldOffset(const string& fieldName);
-      size_t getMethodOffset(const string& methodName) const;
+   bool isEmpty() const
+   {
+      return emptyLayout;
+   }
 
-      const std::vector<Method*>& getConstructors() const
-      {
-         return constructors;
-      }
+   const size_t getBaseClassOffset(const string& className) const
+   {
+      return baseClassOffsets.at(className);
+   }
 
-      const std::vector<llvm::Type*>& getMemoryLayout() const
-      {
-         return memoryLayout;
-      }
+   Method* getMemberwiseInitializer() const
+   {
+      return memberwiseInitializer;
+   }
 
-      llvm::Constant* getVtable(CodeGen &CGM);
-      llvm::GlobalVariable* getProtocolVtable(const string& protoName, CodeGen &CGM);
+   string& getOriginalProtocol(string& methodName);
 
-      bool isEmpty() const
-      {
-         return emptyLayout;
-      }
+   void setParentClass(Class* parent);
 
-      const size_t getBaseClassOffset(const string& className) const
-      {
-         return baseClassOffsets.at(className);
-      }
+   void generateTypeInfo(CodeGen &CGM) override;
+   void generateMemoryLayout(CodeGen &CGM) override;
+   void generateProtocolMemoryLayout(CodeGen &CGM) override;
+   void generateVTables(CodeGen &CGM) override;
 
-      Method* getMemberwiseInitializer() const
-      {
-         return memberwiseInitializer;
-      }
+   virtual void collectProtocolVTableOffsets(Class *proto, size_t &pos);
 
-      string& getOriginalProtocol(string& methodName);
+   llvm::Function* getDestructor(CodeGen &CGM);
 
-      void setParentClass(Class* parent);
+   const std::vector<pair<size_t, string>>& getRefCountedFields() const
+   {
+      return refCountedFields;
+   }
 
-      void generateTypeInfo(CodeGen &CGM) override;
-      void generateMemoryLayout(CodeGen &CGM) override;
-      void generateProtocolMemoryLayout(CodeGen &CGM) override;
-      void generateVTables(CodeGen &CGM) override;
+   void setDestructor(llvm::Function* destr)
+   {
+      destructor = destr;
+   }
 
-      virtual void collectProtocolVTableOffsets(Class *proto, size_t &pos);
+   llvm::Constant* getTypeInfo(CodeGen &CGM);
 
-      llvm::Function* getDestructor(CodeGen &CGM);
+   size_t& getOutstandingExtensions()
+   {
+      return outstandingExtensions;
+   }
 
-      const std::vector<pair<size_t, string>>& getRefCountedFields() const
-      {
-         return refCountedFields;
-      }
+   Method* getParameterlessConstructor() const
+   {
+      return parameterlessConstructor;
+   }
 
-      void setDestructor(llvm::Function* destr)
-      {
-         destructor = destr;
-      }
+   typedef std::unique_ptr<Class> UniquePtr;
 
-      llvm::Constant* getTypeInfo(CodeGen &CGM);
+   static unsigned int ProtoVtblPos;
+   static unsigned int ProtoObjPos;
+   static unsigned int ProtoSizePos;
 
-      size_t& getOutstandingExtensions()
-      {
-         return outstandingExtensions;
-      }
+   static unsigned int VTableMethodPos;
+   static unsigned int VTableIsProtoDefPos;
 
-      Method* getParameterlessConstructor() const
-      {
-         return parameterlessConstructor;
-      }
+   static size_t ProtocolSize;
 
-      typedef std::unique_ptr<Class> UniquePtr;
+protected:
+   bool activeConstraints = false;
+   size_t fieldCount = 0;
 
-      static unsigned int ProtoVtblPos;
-      static unsigned int ProtoObjPos;
-      static unsigned int ProtoSizePos;
+   size_t outstandingExtensions = 0;
 
-      static unsigned int VTableMethodPos;
-      static unsigned int VTableIsProtoDefPos;
+   Class* parentClass = nullptr;
+   std::vector<Class*> extendedBy;
+   unordered_map<string, size_t> baseClassOffsets;
 
-      static size_t ProtocolSize;
+   map<string, std::vector<string>> protocolMethods;
 
-   protected:
-      bool activeConstraints = false;
-      size_t fieldCount = 0;
+   std::vector<pair<string, Field::SharedPtr>> fields;
+   std::vector<Method*> constructors;
 
-      size_t outstandingExtensions = 0;
+   std::vector<std::vector<ExtensionConstraint>> ConstraintSets;
+   unordered_map<string, string> inheritedProtocolMethods;
 
-      Class* parentClass = nullptr;
-      std::vector<Class*> extendedBy;
-      unordered_map<string, size_t> baseClassOffsets;
+   Method* parameterlessConstructor = nullptr;
+   Method* memberwiseInitializer = nullptr;
+   llvm::Function* defaultConstructor;
 
-      map<string, std::vector<string>> protocolMethods;
+   unordered_map<string, Method*> mangledMethods;
 
-      std::vector<pair<string, Field::SharedPtr>> fields;
-      std::vector<Method*> constructors;
+   unordered_map<string, size_t> methodOffsets;
+   unordered_map<string, size_t> vtableOffsets;
+   size_t refCountOffset;
+   std::vector<pair<size_t, string>> refCountedFields;
 
-      std::vector<std::vector<ExtensionConstraint>> ConstraintSets;
-      unordered_map<string, string> inheritedProtocolMethods;
+   std::vector<pair<string, string>> virtualMethods;
 
-      Method* parameterlessConstructor = nullptr;
-      Method* memberwiseInitializer = nullptr;
-      llvm::Function* defaultConstructor;
+   bool is_abstract = false;
+   bool is_protocol = false;
+   bool is_struct = false;
+   bool is_class = false;
+   bool hasAssociatedTypes_ = false;
 
-      unordered_map<string, Method*> mangledMethods;
+   bool has_nonempty_deinit = false;
 
-      unordered_map<string, size_t> methodOffsets;
-      unordered_map<string, size_t> vtableOffsets;
-      size_t refCountOffset;
-      std::vector<pair<size_t, string>> refCountedFields;
+   bool finalized = false;
 
-      std::vector<pair<string, string>> virtualMethods;
+   std::vector<llvm::Type*> memoryLayout;
+   bool layoutGenerated = false;
+   bool emptyLayout = false;
 
-      bool is_abstract = false;
-      bool is_protocol = false;
-      bool is_struct = false;
-      bool is_class = false;
-      bool hasAssociatedTypes_ = false;
+   llvm::StructType* classLlvmType = nullptr;
+   llvm::PointerType* opaquePtr = nullptr;
 
-      bool has_nonempty_deinit = false;
+   llvm::Function* destructor = nullptr;
 
-      bool finalized = false;
+   bool needsTypeInfo;
 
-      std::vector<llvm::Type*> memoryLayout;
-      bool layoutGenerated = false;
-      bool emptyLayout = false;
+   llvm::Constant* vtable = nullptr;
+   llvm::GlobalVariable* typeInfo = nullptr;
+   unordered_map<string, llvm::GlobalVariable*> protocolVtables;
 
-      llvm::StructType* classLlvmType = nullptr;
-      llvm::PointerType* opaquePtr = nullptr;
-
-      llvm::Function* destructor = nullptr;
-
-      bool needsTypeInfo;
-
-      llvm::Constant* vtable = nullptr;
-      llvm::GlobalVariable* typeInfo = nullptr;
-      unordered_map<string, llvm::GlobalVariable*> protocolVtables;
-
-   };
+};
 
 } // namespace cl
 } // namespace cdot

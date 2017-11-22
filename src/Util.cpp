@@ -234,7 +234,7 @@ void checkTemplateArgs(
    }
 }
 
-Type dummyResolver(Expression *node)
+QualType dummyResolver(ast::Expression *node)
 {
    llvm_unreachable("dummy resolver called");
 }

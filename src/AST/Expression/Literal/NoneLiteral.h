@@ -8,30 +8,27 @@
 
 #include "../Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class NoneLiteral: public Expression {
 public:
-   NoneLiteral();
-
-   bool needsContextualInformation() const override
-   {
-      return true;
-   }
+   NoneLiteral() : Expression(NoneLiteralID) {}
 
    typedef std::shared_ptr<NoneLiteral> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::NONE_LITERAL;
-   }
 
    bool createsTemporary() override
    {
       return true;
    }
 
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == NoneLiteralID;
+   }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_NONELITERAL_H

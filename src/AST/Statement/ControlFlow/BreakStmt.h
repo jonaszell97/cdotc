@@ -7,20 +7,22 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class BreakStmt : public Statement {
 public:
-   explicit BreakStmt();
+   BreakStmt() : Statement(BreakStmtID) {}
 
    typedef std::shared_ptr<BreakStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::BREAK_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == BreakStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_BREAKSTMT_H

@@ -10,8 +10,17 @@
 #include <unordered_map>
 
 #include "../../../SymbolTable.h"
-#include "../../../../Token.h"
+#include "../../../../lex/Token.h"
 #include "../../../../Variant/Type/Generic.h"
+
+using std::string;
+using std::unordered_map;
+
+namespace cdot {
+
+enum class AccessModifier : unsigned int;
+
+namespace ast {
 
 class CodeGen;
 class AstNode;
@@ -21,12 +30,7 @@ class Statement;
 class MethodDecl;
 class PropDecl;
 
-enum class AccessModifier : unsigned int;
-
-using std::string;
-using std::unordered_map;
-
-namespace cdot {
+} // namespace ast
 
 namespace cl {
 
@@ -49,13 +53,13 @@ struct ImplicitConformance {
 class Property {
 public:
    Property(const string &name,
-            const Type &ty,
+            const QualType &ty,
             bool isStatic,
             Method *getter,
             Method *setter,
             Record *rec,
             string &&newValName,
-            PropDecl *decl);
+            ast::PropDecl *decl);
 
    bool hasGetter() const;
    bool hasSetter() const;
@@ -63,8 +67,8 @@ public:
    const string &getName() const;
    void setName(const string &name);
 
-   const Type &getType() const;
-   void setType(const Type &ty);
+   const QualType &getType() const;
+   void setType(const QualType &ty);
 
    Method *getGetter() const;
    void setGetter(Method *getter);
@@ -78,8 +82,8 @@ public:
    bool isStatic() const;
    void isStatic(bool is_static);
 
-   PropDecl *getDecl() const;
-   void setDecl(PropDecl *decl);
+   ast::PropDecl *getDecl() const;
+   void setDecl(ast::PropDecl *decl);
 
    const string &getNewValName() const;
    void setNewValName(const string &newValName);
@@ -89,7 +93,7 @@ public:
 
 protected:
    string name;
-   Type type;
+   QualType type;
    bool is_static;
 
    Method *getter;
@@ -99,7 +103,7 @@ protected:
    string newValBinding;
 
    Record *record;
-   PropDecl *decl;
+   ast::PropDecl *decl;
 };
 
 class Record {
@@ -203,7 +207,7 @@ public:
    void setTypedefs(const std::vector<Typedef> &typedefs);
 
    void declareTypedef(
-      BuiltinType *ty, const string &alias,
+      Type *ty, const string &alias,
       const std::vector<TemplateConstraint> &templateArgs,
       AccessModifier access, AstNode *decl
    );
@@ -285,37 +289,42 @@ public:
    Method *getOperatorEquals() const;
    void setOperatorEquals(Method *operatorEquals);
 
-   RecordDecl *getDecl() const;
-   void setDecl(RecordDecl *decl);
+   ast::RecordDecl *getDecl() const;
+   void setDecl(ast::RecordDecl *decl);
 
    const unordered_multimap<string, std::shared_ptr<Method>> &
    getMethods() const;
    void setMethods(
       const unordered_multimap<string, std::shared_ptr<Method>> &methods);
 
-   virtual Method* getMethod(const string &method_name);
+   virtual Method* getMethod(llvm::StringRef name);
+   virtual Method* getOwnMethod(llvm::StringRef name)
+   {
+      return getMethod(name);
+   }
+
    virtual Method* getMethod(unsigned id);
 
    void declareMethodAlias(const string& name, const string& mangledOriginal);
 
    virtual Method* declareMethod(
       const string &methodName,
-      const Type& ret_type,
+      const QualType& ret_type,
       AccessModifier access,
       std::vector<Argument>&& args,
       bool isStatic,
-      MethodDecl* declaration,
+      ast::MethodDecl* declaration,
       SourceLocation loc
    );
 
    Property* declareProperty(
       const string &propName,
-      const Type &ty,
+      const QualType &ty,
       bool isStatic,
       Method *getter,
       Method *setter,
       string &&newValName,
-      PropDecl *decl
+      ast::PropDecl *decl
    );
 
    Method *declareMethodTemplate(
@@ -345,12 +354,12 @@ public:
 
    virtual bool checkConstraint(
       const ExtensionConstraint& constraint,
-      BuiltinType*& caller
+      Type*& caller
    ) const;
 
    virtual const ExtensionConstraint* checkConstraints(
       Method* method,
-      BuiltinType* caller
+      Type* caller
    ) const;
 
 protected:
@@ -365,7 +374,7 @@ protected:
       const string &name,
       AccessModifier access,
       const SourceLocation &loc,
-      RecordDecl *decl
+      ast::RecordDecl *decl
    );
 
    string recordName;
@@ -398,7 +407,7 @@ protected:
    bool is_opaque = false;
 
    SourceLocation loc;
-   RecordDecl *decl;
+   ast::RecordDecl *decl;
 
    Method *operatorEquals = nullptr;
 };

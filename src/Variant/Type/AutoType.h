@@ -6,11 +6,11 @@
 #define CDOT_AUTOTYPE_H
 
 
-#include "BuiltinType.h"
+#include "Type.h"
 
 namespace cdot {
 
-   class AutoType : public BuiltinType {
+   class AutoType : public Type {
    protected:
       AutoType();
       static AutoType *Instance;
@@ -21,23 +21,13 @@ namespace cdot {
       string toString() const override;
       llvm::Type* getLlvmType() const override;
 
-      bool isAutoTy() const override
+      bool implicitlyCastableTo(Type*) const override;
+
+      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
+
+      static bool classof(Type const* T)
       {
-         return true;
-      }
-
-      bool implicitlyCastableTo(BuiltinType*) const override;
-
-      llvm::Value* getDefaultVal(CodeGen &CGM) const override;
-
-      static inline bool classof(AutoType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
-         switch(T->getTypeID()) {
-            case TypeID::AutoTypeID:
-               return true;
-            default:
-               return false;
-         }
+         return T->getTypeID() == TypeID::AutoTypeID;
       }
    };
 

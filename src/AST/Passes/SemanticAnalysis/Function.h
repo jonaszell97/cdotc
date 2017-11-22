@@ -7,24 +7,28 @@
 
 #include <pngconf.h>
 #include "../../../Variant/Variant.h"
-#include "../../../Variant/Type/BuiltinType.h"
-#include "../../../Variant/Type/Generic.h"
 #include "../../../Variant/Type/Type.h"
-#include "../../../Token.h"
+#include "../../../Variant/Type/Generic.h"
+#include "../../../Variant/Type/QualType.h"
+#include "../../../lex/Token.h"
 #include "../../Attribute/Attribute.h"
 
 #include "SemaPass.h"
-
-class FunctionDecl;
-class MethodDecl;
-class CompoundStmt;
-
-enum class AccessModifier : unsigned int;
 
 using std::string;
 using namespace cdot;
 
 namespace cdot {
+
+enum class AccessModifier : unsigned int;
+
+namespace ast {
+
+class FunctionDecl;
+class MethodDecl;
+class CompoundStmt;
+
+} // namespace ast
 
 class Callable: public AttributeOwner {
 public:
@@ -32,13 +36,14 @@ public:
    void setName(const string &name);
 
    const string &getMangledName() const;
+   virtual string getLinkageName() const;
    void setMangledName(const string &mandledName);
 
    AccessModifier getAccessModifier() const;
    void setAccessModifier(AccessModifier accessModifier);
 
-   Type &getReturnType();
-   void setReturnType(const Type &returnType);
+   QualType &getReturnType();
+   void setReturnType(const QualType &returnType);
 
    virtual std::vector<Argument> &getArguments();
    void setArguments(const std::vector<Argument> &arguments);
@@ -49,13 +54,13 @@ public:
    unsigned int getUses() const;
    void setUses(unsigned int uses);
 
-   const std::vector<BuiltinType*> &getThrownTypes() const;
+   const std::vector<Type*> &getThrownTypes() const;
 
    void copyThrows(Callable *callable);
-   void addThrownTypes(const std::vector<BuiltinType*> &tys);
-   void addThrownType(BuiltinType *ty);
+   void addThrownTypes(const std::vector<Type*> &tys);
+   void addThrownType(Type *ty);
 
-   bool throws(BuiltinType *ty);
+   bool throws(Type *ty);
    bool throws();
 
    bool isNoThrow();
@@ -80,12 +85,12 @@ public:
       ++uses;
    }
 
-   void setDecl(CallableDecl *decl)
+   void setDecl(ast::CallableDecl *decl)
    {
       declaration = decl;
    }
 
-   CallableDecl *getDeclaration()
+   ast::CallableDecl *getDeclaration()
    {
       return declaration;
    }
@@ -104,7 +109,7 @@ protected:
    Callable(
       string &&name,
       AccessModifier am,
-      const Type &returnType,
+      const QualType &returnType,
       std::vector<Argument> &&arguments
    );
 
@@ -115,11 +120,11 @@ protected:
 
    AccessModifier  accessModifier;
 
-   Type returnType;
+   QualType returnType;
    std::vector<Argument> arguments;
 
    bool is_nothrow = false;
-   std::vector<BuiltinType*> thrownTypes;
+   std::vector<Type*> thrownTypes;
 
    bool has_struct_return = false;
    unsigned uses = 0;
@@ -127,7 +132,7 @@ protected:
    bool is_template = false;
 
    llvm::Function *llvmFunc;
-   CallableDecl* declaration;
+   ast::CallableDecl* declaration = nullptr;
    cl::CallableTemplate *Template = nullptr;
 };
 
@@ -138,11 +143,11 @@ class Class;
 struct Method: public Callable {
    Method(
       string name,
-      const Type& ret_type,
+      const QualType& ret_type,
       AccessModifier access_modifier,
       std::vector<Argument>&& args,
       bool isStatic,
-      MethodDecl *decl,
+      ast::MethodDecl *decl,
       SourceLocation loc,
       unsigned id
    );
@@ -153,9 +158,9 @@ struct Method: public Callable {
 
    Method(
       string name,
-      const Type& ret_type,
+      const QualType& ret_type,
       std::vector<Argument>&& args,
-      MethodDecl *decl,
+      ast::MethodDecl *decl,
       SourceLocation loc,
       unsigned id
    );
@@ -222,7 +227,19 @@ struct Method: public Callable {
       return static_cast<MethodTemplate*>(Template);
    }
 
-   AstNode *getTemplateOrMethodDecl();
+   bool isProperty() const
+   {
+      return property;
+   }
+
+   void setIsProperty(bool prop)
+   {
+      property = prop;
+   }
+
+   string getLinkageName() const override;
+
+   ast::AstNode *getTemplateOrMethodDecl();
 
    typedef std::unique_ptr<Method> UniquePtr;
    typedef std::shared_ptr<Method> SharedPtr;
@@ -234,6 +251,7 @@ struct Method: public Callable {
    bool is_protocol_method = false;
    bool is_virtual = false;
    bool mutableSelf = false;
+   bool property = false;
 
    bool is_initializer = false;
    bool isProtocolDefaultImpl = false;
@@ -246,12 +264,14 @@ struct Method: public Callable {
 
    Record* owningClass = nullptr;
 };
-}
-}
+
+} // namespace cl
+
+namespace ast {
 
 class Function: public Callable {
 public:
-   Function(string&, const Type&);
+   Function(string&, const QualType&);
    explicit Function(cl::CallableTemplate *Template);
 
    ~Function();
@@ -261,10 +281,14 @@ public:
       arguments.push_back(std::move(arg));
    }
 
-   AstNode *getTemplateOrFunctionDecl() const;
+   ast::AstNode *getTemplateOrFunctionDecl() const;
 
    typedef std::unique_ptr<Function> UniquePtr;
 };
+
+} // namespace ast
+
+} // namespace cdot
 
 
 #endif //CDOT_FUNCTION_H

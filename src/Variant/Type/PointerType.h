@@ -5,22 +5,20 @@
 #ifndef CDOT_POINTERTYPE_H
 #define CDOT_POINTERTYPE_H
 
-#include "BuiltinType.h"
 #include "Type.h"
+#include "QualType.h"
 
 namespace cdot {
 
-   class PointerType : public BuiltinType {
+   class PointerType : public Type {
    protected:
-      explicit PointerType(const Type&);
-      static unordered_map<size_t, PointerType*> Instances;
+      explicit PointerType(const QualType&);
 
    public:
-      static PointerType* get(Type const& pointee);
-      static PointerType* get(BuiltinType* pointee);
-      static PointerType* get(const BuiltinType* pointee);
+      static PointerType* get(QualType const& pointee);
+      static PointerType* get(Type* pointee);
 
-      Type getPointeeType() const
+      QualType getPointeeType() const
       {
          return pointeeType;
       }
@@ -30,7 +28,7 @@ namespace cdot {
          return true;
       }
 
-      llvm::Value* getDefaultVal(CodeGen &CGM) const override
+      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override
       {
          return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()
                                                           ->getPointerTo());
@@ -47,25 +45,15 @@ namespace cdot {
          return pointeeType->isStruct();
       }
 
-      bool isPointerTy() const override
-      {
-         return true;
-      }
-
       string toString() const override;
       llvm::Type* getLlvmType() const override;
 
-      bool implicitlyCastableTo(BuiltinType*) const override;
-      bool explicitlyCastableTo(BuiltinType*) const override;
+      bool implicitlyCastableTo(Type*) const override;
+      bool explicitlyCastableTo(Type*) const override;
 
-      static inline bool classof(PointerType const*) { return true; }
-      static inline bool classof(BuiltinType const* T) {
-         switch(T->getTypeID()) {
-            case TypeID::PointerTypeID:
-               return true;
-            default:
-               return false;
-         }
+      static bool classof(Type const* T)
+      {
+         return T->getTypeID() == TypeID::PointerTypeID;
       }
 
       typedef std::unique_ptr<PointerType> UniquePtr;
@@ -74,7 +62,7 @@ namespace cdot {
       friend class TypeRef;
 
    protected:
-      const Type pointeeType;
+      const QualType pointeeType;
    };
 
 } // namespace cdot

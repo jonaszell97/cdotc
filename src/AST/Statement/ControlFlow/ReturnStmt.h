@@ -7,22 +7,22 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class Expression;
 
 class ReturnStmt : public Statement {
 public:
    ReturnStmt();
-   explicit ReturnStmt(std::shared_ptr<Expression>);
+   explicit ReturnStmt(std::shared_ptr<Expression> &&val);
 
    typedef std::shared_ptr<ReturnStmt> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::RETURN_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ReturnStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<Expression> returnValue;
@@ -33,7 +33,7 @@ protected:
    bool hiddenParamReturn = false;
 
    // codegen
-   Type returnType;
+   QualType returnType;
 
 public:
    std::shared_ptr<Expression> &getReturnValue();
@@ -42,9 +42,12 @@ public:
    bool isHiddenParamReturn() const;
    void setHiddenParamReturn(bool hiddenParamReturn);
 
-   const Type &getReturnType() const;
-   void setReturnType(const Type &returnType);
+   const QualType &getReturnType() const;
+   void setReturnType(const QualType &returnType);
 };
+
+} // namespace ast
+} // namespace cdot
 
 
 #endif //CDOT_RETURNSTATEMENT_H

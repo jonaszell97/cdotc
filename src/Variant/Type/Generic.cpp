@@ -407,10 +407,10 @@ bool GenericTypesCompatible(
 
    assert(needed.resolved && "unresolved template constraint");
    if (needed.covariance) {
-      if (!needed.covariance->isObject()) {
+      if (!needed.covariance->isObjectTy()) {
          return needed.covariance == actual;
       }
-      if (!actual->isObject()) {
+      if (!actual->isObjectTy()) {
          return false;
       }
 
@@ -436,12 +436,12 @@ bool GenericTypesCompatible(
    }
 
    if (needed.contravariance) {
-      assert(needed.covariance->isObject());
+      assert(needed.covariance->isObjectTy());
 
       auto Covar = needed.covariance->asObjTy()->getRecord();
       assert(Covar->isClass());
 
-      if (!actual->isObject() && actual->getRecord()->isClass()) {
+      if (!actual->isObjectTy() && actual->getRecord()->isClass()) {
          return false;
       }
 
@@ -456,30 +456,30 @@ bool GenericTypesCompatible(
 
 // --- forward declarations ---
 
-BuiltinType *resolveGenericTy(
+Type *resolveGenericTy(
    GenericType *ty,
    const std::vector<TemplateArg>& generics
 );
 
-BuiltinType *resolveFunctionTy(
+Type *resolveFunctionTy(
    FunctionType *ty,
    const std::vector<TemplateArg>& generics
 );
 
-BuiltinType *resolveTupleTy(
+Type *resolveTupleTy(
    TupleType *ty,
    const std::vector<TemplateArg>& generics
 );
 
-BuiltinType *resolveObjectTy(
+Type *resolveObjectTy(
    ObjectType *ty,
    const std::vector<TemplateArg>& generics
 );
 
 // -----------------------------
 
-BuiltinType *resolveGenerics(
-   BuiltinType *ty,
+Type *resolveGenerics(
+   Type *ty,
    const std::vector<TemplateArg>& generics)
 {
    switch (ty->getTypeID()) {
@@ -497,13 +497,13 @@ BuiltinType *resolveGenerics(
 }
 
 void resolveGenerics(
-   Type& ty,
+   QualType& ty,
    const std::vector<TemplateArg>& generics)
 {
    *ty = resolveGenerics(*ty, generics);
 }
 
-BuiltinType *resolveGenericTy(
+Type *resolveGenericTy(
    GenericType *ty,
    const std::vector<TemplateArg>& generics)
 {
@@ -521,7 +521,7 @@ BuiltinType *resolveGenericTy(
    return ty;
 }
 
-BuiltinType *resolveObjectTy(
+Type *resolveObjectTy(
    ObjectType *ty,
    const std::vector<TemplateArg>& generics)
 {
@@ -550,11 +550,11 @@ BuiltinType *resolveObjectTy(
    return ObjectType::get(className);
 }
 
-BuiltinType *resolveFunctionTy(
+Type *resolveFunctionTy(
    FunctionType *ty,
    const std::vector<TemplateArg>& generics)
 {
-   Type retType(ty->getReturnType());
+   QualType retType(ty->getReturnType());
    std::vector<Argument> argTypes;
 
    *retType = resolveGenerics(*ty->getReturnType(), generics);
@@ -566,11 +566,11 @@ BuiltinType *resolveFunctionTy(
    return FunctionType::get(retType, argTypes, ty->isRawFunctionTy());
 }
 
-BuiltinType *resolveTupleTy(
+Type *resolveTupleTy(
    TupleType *ty,
    const std::vector<TemplateArg>& generics)
 {
-   std::vector<pair<string, BuiltinType*>> containedTypes;
+   std::vector<pair<string, Type*>> containedTypes;
    for (auto &cont : ty->getContainedTypes()) {
       containedTypes.emplace_back(
          cont.first,

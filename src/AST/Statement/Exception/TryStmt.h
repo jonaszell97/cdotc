@@ -8,18 +8,19 @@
 #include "../Statement.h"
 
 namespace cdot {
-   struct CatchBlock {
-      std::shared_ptr<TypeRef> caughtType;
-      string identifier;
+namespace ast {
 
-      Statement::SharedPtr body;
+class TypeRef;
 
-      bool needsCast = false;
-      Type castTo;
-   };
-}
+struct CatchBlock {
+   std::shared_ptr<TypeRef> caughtType;
+   string identifier;
 
-using cdot::CatchBlock;
+   ast::Statement::SharedPtr body;
+
+   bool needsCast = false;
+   QualType castTo;
+};
 
 class TryStmt: public Statement {
 public:
@@ -35,23 +36,26 @@ public:
       this->finallyBlock = finallyBlock;
    }
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
    typedef std::shared_ptr<TryStmt> SharedPtr;
 
-   NodeType get_type() override {
-      return NodeType::TRY_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == TryStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    Statement::SharedPtr body;
 
    std::vector<CatchBlock> catchBlocks;
    Statement::SharedPtr finallyBlock = nullptr;
+
+public:
+   const Statement::SharedPtr &getBody() const;
+   std::vector<CatchBlock> &getCatchBlocks();
+   const Statement::SharedPtr &getFinallyBlock() const;
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_TRYSTMT_H

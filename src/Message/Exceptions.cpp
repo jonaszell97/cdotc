@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include "Exceptions.h"
-#include "../Lexer.h"
+#include "../lex/Lexer.h"
 #include "../AST/AstNode.h"
 #include "Diagnostics.h"
 
@@ -78,6 +78,6 @@ RuntimeError::RuntimeError(const std::string& message) : message_(message) {
 
 }
 
-void RuntimeError::raise(std::string msg, AstNode *cause) {
+void RuntimeError::raise(std::string msg, cdot::ast::AstNode *cause) {
    diag::err(diag::err_generic_error) << msg << cause << diag::term;
 }

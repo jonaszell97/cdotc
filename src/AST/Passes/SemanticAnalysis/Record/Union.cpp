@@ -4,7 +4,7 @@
 
 #include "Union.h"
 
-#include "../../../../Variant/Type/BuiltinType.h"
+#include "../../../../Variant/Type/Type.h"
 #include "../../../../Util.h"
 #include "../../../Statement/Declaration/Class/UnionDecl.h"
 
@@ -24,7 +24,7 @@ namespace cl {
 
    void Union::declareField(
       const string &fieldName,
-      BuiltinType *fieldTy)
+      Type *fieldTy)
    {
       fields.emplace(fieldName, fieldTy);
       if (fieldTy->getSize() > occupiedBytes) {
@@ -35,22 +35,22 @@ namespace cl {
       }
    }
 
-   bool Union::initializableWith(BuiltinType *ty)
+   Type* Union::initializableWith(Type *ty)
    {
       for (const auto& field : fields) {
          if (ty->implicitlyCastableTo(field.second)) {
-            return true;
+            return field.second;
          }
       }
 
-      return false;
+      return nullptr;
    }
 
-   const unordered_map<string, cdot::BuiltinType *> &Union::getFields() const {
+   const unordered_map<string, cdot::Type *> &Union::getFields() const {
       return fields;
    }
 
-   void Union::setFields(const unordered_map<string, cdot::BuiltinType *> &types) {
+   void Union::setFields(const unordered_map<string, cdot::Type *> &types) {
       Union::fields = types;
    }
 
@@ -67,7 +67,7 @@ namespace cl {
       return fields.find(name) != fields.end();
    }
 
-   BuiltinType* Union::getFieldTy(string &name)
+   Type* Union::getFieldTy(string &name)
    {
       return fields[name];
    }

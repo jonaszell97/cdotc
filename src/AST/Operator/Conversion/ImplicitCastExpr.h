@@ -7,30 +7,38 @@
 
 #include "../../Expression/Expression.h"
 
+namespace cdot {
+namespace ast {
+
 class ImplicitCastExpr : public Expression {
 public:
-   ImplicitCastExpr(const Type& from, const Type& to, Expression::SharedPtr);
+   ImplicitCastExpr(const QualType& from, const QualType& to,
+                    Expression::SharedPtr &&target);
 
    typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return target->get_type();
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ImplicitCastExprID;
    }
-
-   void isHiddenReturnValue() override {
-      sret_value = true;
-      target->isHiddenReturnValue();
-   }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
-   Type from;
-   Type to;
+   QualType from;
+   QualType to;
    Expression::SharedPtr target;
+
+public:
+   const QualType &getFrom() const;
+   void setFrom(const QualType &from);
+
+   const QualType &getTo() const;
+   void setTo(const QualType &to);
+
+   const Expression::SharedPtr &getTarget() const;
+   void setTarget(const Expression::SharedPtr &target);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_IMPLICITCASTEXPR_H

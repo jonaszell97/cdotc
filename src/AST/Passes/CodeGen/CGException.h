@@ -8,14 +8,17 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
 
-class CodeGen;
-
 namespace cdot {
+
+namespace ast {
+class CodeGen;
+}
+
 namespace eh {
 
    class CGException {
    public:
-      CGException(CodeGen &CGM);
+      CGException(ast::CodeGen &CGM);
 
       llvm::Constant *getBeginCatchFn();
       llvm::Constant *getEndCatchFn();
@@ -26,7 +29,7 @@ namespace eh {
       llvm::Constant *getPersonalityFn();
 
    protected:
-      CodeGen &CGM;
+      ast::CodeGen &CGM;
 
       llvm::Constant *BeginCatchFn = nullptr;
       llvm::Constant *EndCatchFn = nullptr;

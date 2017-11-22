@@ -6,23 +6,29 @@
 
 #include "../../Expression/TypeRef.h"
 
+namespace cdot {
+namespace ast {
+
 TryStmt::TryStmt(Statement::SharedPtr&& body)
-   : body(body)
+   : Statement(TryStmtID), body(body)
 {
 
 }
 
-std::vector<AstNode::SharedPtr> TryStmt::get_children()
+const Statement::SharedPtr &TryStmt::getBody() const
 {
-   std::vector<AstNode::SharedPtr> children;
-   for (const auto& catch_ : catchBlocks) {
-      children.push_back(catch_.caughtType);
-      children.push_back(catch_.body);
-   }
-
-   if (finallyBlock != nullptr) {
-      children.push_back(finallyBlock);
-   }
-
-   return children;
+   return body;
 }
+
+std::vector<CatchBlock> &TryStmt::getCatchBlocks()
+{
+   return catchBlocks;
+}
+
+const Statement::SharedPtr &TryStmt::getFinallyBlock() const
+{
+   return finallyBlock;
+}
+
+} // namespace ast
+} // namespace cdot

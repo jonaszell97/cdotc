@@ -7,6 +7,9 @@
 
 #include "Statement.h"
 
+namespace cdot {
+namespace ast {
+
 enum class UsingKind {
    FUNCTION,
    CLASS,
@@ -22,14 +25,10 @@ public:
 
    typedef std::shared_ptr<UsingStmt> SharedPtr;
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::USING_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == UsingStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    string importNamespace;
@@ -73,7 +72,7 @@ public:
       UsingStmt::isWildcardImport = isWildcardImport;
    }
 
-   const std::vector<string> &getFullNames() const
+   std::vector<string> &getFullNames()
    {
       return fullNames;
    }
@@ -104,5 +103,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_IMPORTSTMT_H

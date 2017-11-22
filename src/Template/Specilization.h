@@ -9,15 +9,18 @@
 #include <vector>
 #include <memory>
 
-class TypeRef;
 class BuiltinType;
-class Expression;
 class Token;
-class AbstractPass;
 
 namespace cdot {
 
 struct TemplateArg;
+
+namespace ast {
+
+class Expression;
+class TypeRef;
+class AbstractPass;
 
 class TemplateSpecilizationConstraint {
 public:
@@ -37,7 +40,6 @@ public:
    };
 
    virtual bool appliesTo(const TemplateArg &arg) = 0;
-   virtual void accept(AbstractPass *pass) = 0;
 
    Kind getKind() const;
    void setKind(Kind kind);
@@ -75,7 +77,6 @@ public:
                          std::string &&argName, InheritanceKind kind);
 
    bool appliesTo(const TemplateArg &arg) override;
-   void accept(AbstractPass *pass) override;
 
 protected:
    InheritanceKind inheritance_kind;
@@ -87,7 +88,6 @@ public:
                          std::string &&argName);
 
    bool appliesTo(const TemplateArg &arg) override;
-   void accept(AbstractPass *pass) override;
 };
 
 class ValueConstraint: public TemplateSpecilizationConstraint {
@@ -107,7 +107,6 @@ public:
                        std::shared_ptr<Expression> &&expr);
 
    bool appliesTo(const TemplateArg &arg) override;
-   void accept(AbstractPass *pass) override;
 };
 
 class TokenConstraint: public TemplateSpecilizationConstraint {
@@ -127,10 +126,9 @@ public:
                            std::vector<Token> &&tokens);
 
    bool appliesTo(const TemplateArg &arg) override;
-   void accept(AbstractPass *pass) override;
 };
 
-
+} // namespace ast
 } // namespace cdot
 
 #endif //CDOT_SPECILIZATION_H

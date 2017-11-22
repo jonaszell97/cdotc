@@ -7,24 +7,23 @@
 
 #include "../Statement.h"
 
+namespace cdot {
+namespace ast {
+
 class ThrowStmt: public Statement {
 public:
    ThrowStmt(std::shared_ptr<Expression>&& thrownVal);
 
-   std::vector<AstNode::SharedPtr> get_children() override;
-
    typedef std::shared_ptr<ThrowStmt> SharedPtr;
 
-   NodeType get_type() override {
-      return NodeType::THROW_STMT;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ThrowStmtID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<Expression> thrownVal;
-   BuiltinType *thrownType;
+   Type *thrownType;
 
    cl::Method *descFn = nullptr;
 
@@ -33,10 +32,16 @@ public:
 
    void setThrownVal(const std::shared_ptr<Expression> &thrownVal);
 
-   BuiltinType *getThrownType() const;
+   Type *getThrownType() const;
 
-   void setThrownType(BuiltinType *thrownType);
+   void setThrownType(Type *thrownType);
+
+   cdot::cl::Method *getDescFn() const;
+
+   void setDescFn(cdot::cl::Method *descFn);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_THROWSTMT_H

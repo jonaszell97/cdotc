@@ -8,11 +8,17 @@
 #include <memory>
 #include <vector>
 
+namespace cdot {
+
+namespace ast {
+
 class CompoundStmt;
 class ConstExprPass;
 class AbstractPass;
 
-namespace cdot {
+}
+
+struct CompilationUnit;
 
 class PassManager {
 public:
@@ -20,20 +26,21 @@ public:
       Other,
       ConstantFold,
       Declaration,
-      SemanticAnalysis
+      SemanticAnalysis,
+      ILGen
    };
 
-   explicit PassManager(std::vector<std::shared_ptr<CompoundStmt>> &roots);
+   explicit PassManager(std::vector<cdot::CompilationUnit> &CUs);
    ~PassManager();
 
    PassManager &addPass(PassKind kind);
-   PassManager &addPass(AbstractPass *pass);
+   PassManager &addPass(ast::AbstractPass *pass);
 
    void runPasses();
 
 protected:
-   std::vector<AbstractPass*> passes;
-   std::vector<std::shared_ptr<CompoundStmt>> &roots;
+   std::vector<ast::AbstractPass*> passes;
+   std::vector<CompilationUnit> &CUs;
 };
 
 } // namespace cdot

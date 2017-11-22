@@ -5,39 +5,37 @@
 #ifndef CDOT_LAMBDAEXPR_H
 #define CDOT_LAMBDAEXPR_H
 
+#include <set>
 #include "../Expression.h"
+
+namespace cdot {
+
+class FunctionType;
+
+namespace ast {
 
 class FuncArgDecl;
 class TypeRef;
 
-namespace cdot {
-   class FunctionType;
-}
-
 class LambdaExpr : public Expression {
 public:
-   LambdaExpr(std::shared_ptr<TypeRef>, std::vector<std::shared_ptr<FuncArgDecl>>, Statement::SharedPtr);
-
-   bool needsContextualInformation() const override
-   {
-      return true;
-   }
+   LambdaExpr(std::shared_ptr<TypeRef> &&returnType,
+              std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+              Statement::SharedPtr &&body);
 
    typedef std::shared_ptr<LambdaExpr> SharedPtr;
-   std::vector<AstNode::SharedPtr> get_children() override;
 
-   NodeType get_type() override {
-      return NodeType::LAMBDA_EXPR;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == LambdaExprID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<TypeRef> returnType;
    std::vector<std::shared_ptr<FuncArgDecl>> args;
    Statement::SharedPtr body;
-   std::vector<pair<string, Type>> captures;
+
+   std::set<std::string> captures;
 
    // codegen
    FunctionType* lambdaType = nullptr;
@@ -68,11 +66,13 @@ public:
       LambdaExpr::body = body;
    }
 
-   const std::vector<pair<string, Type>> &getCaptures() const {
+   std::set<string> &getCaptures()
+   {
       return captures;
    }
 
-   void setCaptures(const std::vector<pair<string, Type>> &captures) {
+   void setCaptures(const std::set<string> &captures)
+   {
       LambdaExpr::captures = captures;
    }
 
@@ -93,5 +93,7 @@ public:
    }
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_LAMBDAEXPR_H

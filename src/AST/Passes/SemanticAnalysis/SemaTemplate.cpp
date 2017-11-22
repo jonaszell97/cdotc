@@ -16,6 +16,9 @@
 
 using namespace cdot::diag;
 
+namespace cdot {
+namespace ast {
+
 cl::Record* SemaPass::getRecord(
    string &name, TemplateArgList *argList)
 {
@@ -33,7 +36,7 @@ cl::Record* SemaPass::getRecord(
          pushClassScope(cl);
 
          doInitialPass(node->getInnerDeclarations());
-         for (const auto &field : node->fields) {
+         for (const auto &field : node->getFields()) {
             DefineField(field.get(), cl);
          }
 
@@ -82,7 +85,7 @@ void SemaPass::visit(RecordTemplateDecl *node)
       for (; i < prevSize; ++i) {
          const auto &inst = Instantiations[i];
          doInitialPass(inst);
-         inst->accept(this);
+         VisitNode(inst);
       }
    }
 
@@ -92,7 +95,7 @@ void SemaPass::visit(RecordTemplateDecl *node)
 void SemaPass::visit(CallableTemplateDecl *node)
 {
    for (const auto &inst : node->getInstantiations()) {
-      inst->accept(this);
+      VisitNode(inst);
    }
 }
 
@@ -101,7 +104,10 @@ void SemaPass::visit(MethodTemplateDecl *node)
    for (const auto &inst : node->getInstantiations()) {
       auto method = std::static_pointer_cast<MethodDecl>(inst);
       pushClassScope(method->getRecord());
-      inst->accept(this);
+      VisitNode(inst);
       popClassScope();
    }
 }
+
+} // namespace ast
+} // namespace cdot

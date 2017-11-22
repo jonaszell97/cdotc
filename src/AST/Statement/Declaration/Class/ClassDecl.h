@@ -7,23 +7,25 @@
 
 #include "RecordDecl.h"
 
+namespace cdot {
+
+struct FunctionTemplateInstantiation;
+
+namespace cl {
+
+struct Method;
+class Class;
+
+} // namespace cl
+
+namespace ast {
+
 class FieldDecl;
 class MethodDecl;
 class ConstrDecl;
 class TypedefDecl;
 class DestrDecl;
 class TypeRef;
-
-namespace cdot {
-
-struct FunctionTemplateInstantiation;
-
-namespace cl {
-struct Method;
-class Class;
-
-}
-}
 
 using cdot::cl::ExtensionConstraint;
 
@@ -71,14 +73,10 @@ public:
    typedef std::shared_ptr<ClassDecl> SharedPtr;
    typedef std::unique_ptr<ClassDecl> UniquePtr;
 
-   std::vector<std::shared_ptr<AstNode>> get_children() override;
-
-   NodeType get_type() override {
-      return NodeType::CLASS_DECL;
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == ClassDeclID;
    }
-
-   ASTNODE_ACCEPT_PASSES
-   ADD_FRIEND_PASSES
 
 protected:
    std::shared_ptr<TypeRef> parentClass = nullptr;
@@ -123,11 +121,13 @@ public:
    const string &getSelfBinding() const;
    void setSelfBinding(const string &selfBinding);
 
-   cl::Class *getDeclaredClass() const;
+   Class *getDeclaredClass() const;
 
-   cl::Method *getDefaultConstr() const;
-   void setDefaultConstr(cl::Method *defaultConstr);
+   Method *getDefaultConstr() const;
+   void setDefaultConstr(Method *defaultConstr);
 };
 
+} // namespace ast
+} // namespace cdot
 
 #endif //CDOT_CLASSDECLEXPR_H

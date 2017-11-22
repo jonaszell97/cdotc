@@ -11,22 +11,29 @@
 #include "llvm/IR/DIBuilder.h"
 #include "../../AstDeclarations.h"
 
-class CodeGen;
-
 using std::unordered_map;
 using std::string;
 
 namespace cdot {
-   struct SourceLocation;
-   class BuiltinType;
-   struct Argument;
-   struct CompilationUnit;
-   class BinaryOperator;
+
+struct SourceLocation;
+class Type;
+struct Argument;
+struct CompilationUnit;
 
 namespace cl {
-   class Record;
-   struct Method;
-}
+
+class Record;
+struct Method;
+
+} // namespace cl
+
+namespace ast {
+
+class CodeGen;
+class BinaryOperator;
+
+} // namespace ast
 
 using cl::Record;
 using cl::Method;
@@ -48,21 +55,25 @@ namespace codegen {
 
       llvm::DIFile *getFileDI(const SourceLocation &loc);
 
-      llvm::DIType *getTypeDI(BuiltinType *ty);
-      llvm::DIType *getRecordDI(BuiltinType *ty);
+      llvm::DIType *getTypeDI(Type *ty);
+      llvm::DIType *getRecordDI(Type *ty);
 
       llvm::dwarf::Tag getTagForRecord(Record *rec);
 
-      llvm::Instruction *emitLocalVarDI(DeclStmt *node, llvm::Value *alloca, llvm::Instruction *inst);
-      void emitAssignmentDI(BinaryOperator *node, llvm::Value *addr);
-      llvm::MDNode *emitGlobalVarDI(DeclStmt *node, llvm::GlobalVariable *var);
+      llvm::Instruction *emitLocalVarDI(ast::DeclStmt *node,
+                                        llvm::Value *alloca,
+                                        llvm::Instruction *inst);
+      void emitAssignmentDI(ast::BinaryOperator *node, llvm::Value *addr);
+      llvm::MDNode *emitGlobalVarDI(ast::DeclStmt *node,
+                                    llvm::GlobalVariable *var);
 
       llvm::MDNode *emitMethodDI(Method *method, llvm::Function *func);
-      llvm::MDNode *emitFunctionDI(FunctionDecl *node, llvm::Function *func);
-      llvm::MDNode *emitLambdaDI(LambdaExpr *node, llvm::Function *func);
+      llvm::MDNode *emitFunctionDI(ast::FunctionDecl *node,
+                                   llvm::Function *func);
+      llvm::MDNode *emitLambdaDI(ast::LambdaExpr *node, llvm::Function *func);
 
       void emitParameterDI(
-         const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+         const std::vector<std::shared_ptr<ast::FuncArgDecl>> &args,
          llvm::Function *func,
          unsigned int argBegin = 0,
          bool emitSelf = false
@@ -72,7 +83,7 @@ namespace codegen {
 
       void beginGeneratedFunctionScope(
          llvm::StringRef funcName,
-         const std::vector<BuiltinType*> &args
+         const std::vector<Type*> &args
       );
 
       void beginLexicalScope(const SourceLocation &loc);

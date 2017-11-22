@@ -6,28 +6,28 @@
 #define CDOT_TYPEUTILS_H
 
 
-#include "BuiltinType.h"
+#include "Type.h"
 
 namespace cdot {
 namespace util {
 
-bool isSubTypeOf(BuiltinType *ty, BuiltinType *of);
-bool operator<(const BuiltinType &ty, const BuiltinType &of);
+bool isSubTypeOf(Type *ty, Type *of);
+bool operator<(const Type &ty, const Type &of);
 
-bool isSubTypeOrEqual(BuiltinType *ty, BuiltinType *of);
-bool operator<=(const BuiltinType &ty, const BuiltinType &of);
+bool isSubTypeOrEqual(Type *ty, Type *of);
+bool operator<=(const Type &ty, const Type &of);
 
-bool isSuperTypeOf(BuiltinType *ty, BuiltinType *of);
-bool operator>(const BuiltinType &ty, const BuiltinType &of);
+bool isSuperTypeOf(Type *ty, Type *of);
+bool operator>(const Type &ty, const Type &of);
 
-bool isSuperTypeOrEqual(BuiltinType *ty, BuiltinType *of);
-bool operator>=(const BuiltinType &ty, const BuiltinType &of);
+bool isSuperTypeOrEqual(Type *ty, Type *of);
+bool operator>=(const Type &ty, const Type &of);
 
-bool isSameAs(BuiltinType *ty, BuiltinType *as);
-bool operator==(const BuiltinType &ty, const BuiltinType &as);
+bool isSameAs(Type *ty, Type *as);
+bool operator==(const Type &ty, const Type &as);
 
-bool isDifferentThan(BuiltinType *ty, BuiltinType *than);
-bool operator!=(const BuiltinType &ty, const BuiltinType &than);
+bool isDifferentThan(Type *ty, Type *than);
+bool operator!=(const Type &ty, const Type &than);
 
 } // namespace util
 } // namespace cdot

@@ -5,55 +5,27 @@
 #include "CollectionLiteral.h"
 #include "../TypeRef.h"
 
-CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> &&keys,
-   std::vector<Expression::SharedPtr> &&values) :
-   keys(keys), values(values), is_dictionary(true)
+namespace cdot {
+namespace ast {
+
+CollectionLiteral::CollectionLiteral(
+   std::vector<Expression::SharedPtr> &&keys,
+   std::vector<Expression::SharedPtr> &&values)
+   : Expression(NodeType::CollectionLiteralID), keys(keys), values(values),
+     is_dictionary(true)
 {
    type = std::make_shared<TypeRef>(
       TypeRef::NamespaceVec{ { "Dictionary", {} } }
    );
 }
 
-CollectionLiteral::CollectionLiteral(std::vector<Expression::SharedPtr> &&values) :
-   values(values)
+CollectionLiteral::CollectionLiteral(
+   std::vector<Expression::SharedPtr> &&values)
+   : Expression(NodeType::CollectionLiteralID), values(values)
 {
    type = std::make_shared<TypeRef>(
       TypeRef::NamespaceVec{ { "Array", {} } }
    );
-}
-
-void CollectionLiteral::replaceChildWith(
-   AstNode *child,
-   Expression *replacement)
-{
-   for (auto &el : values) {
-      if (el.get() == child) {
-         el.reset(replacement);
-         return;
-      }
-   }
-   for (auto &el : keys) {
-      if (el.get() == child) {
-         el.reset(replacement);
-         return;
-      }
-   }
-
-   llvm_unreachable("child does not exist!");
-}
-
-std::vector<AstNode::SharedPtr> CollectionLiteral::get_children() {
-   std::vector<AstNode::SharedPtr> res;
-
-   for (auto el : values) {
-      res.push_back(el);
-   }
-
-   if (memberExpr != nullptr) {
-      res.push_back(memberExpr);
-   }
-
-   return res;
 }
 
 const std::vector<Expression::SharedPtr> &CollectionLiteral::getKeys() const
@@ -106,3 +78,6 @@ void CollectionLiteral::isMetaTy(bool is_meta_ty)
 {
    CollectionLiteral::is_meta_ty = is_meta_ty;
 }
+
+} // namespace ast
+} // namespace cdot

@@ -106,12 +106,12 @@ CallCompatability OverloadResolver::checkIfViable(Callable *callable)
    return comp;
 }
 
-std::vector<Type> OverloadResolver::resolveContextual(
+std::vector<QualType> OverloadResolver::resolveContextual(
    const std::vector<Argument> &givenArgs,
    const std::vector<Argument> &neededArgs,
    const ArgResolverFn &argResolver)
 {
-   std::vector<Type> resolvedGivenArgs;
+   std::vector<QualType> resolvedGivenArgs;
    size_t i = 0;
 
    // Resolve passed arguments that depend on contextual information
@@ -161,7 +161,7 @@ OverloadResolver::isCallCompatible(CallCompatability &comp,
 
 namespace {
 
-size_t castPenalty(const Type &from, const Type &to)
+size_t castPenalty(const QualType &from, const QualType &to)
 {
    size_t penalty = 0;
    switch (from->getTypeID()) {
@@ -227,7 +227,7 @@ size_t castPenalty(const Type &from, const Type &to)
       case TypeID::ObjectTypeID: {
          auto fromObj = from->asObjTy();
 
-         if (to->isObject()) {
+         if (to->isObjectTy()) {
             auto fromRec = from->getRecord()->getAs<Class>();
             auto toRec = to->getRecord()->getAs<Class>();
 
@@ -284,7 +284,7 @@ size_t castPenalty(const Type &from, const Type &to)
 
 void
 OverloadResolver::isCallCompatible(CallCompatability &comp,
-                                   const std::vector<Type> &givenArgs,
+                                   const std::vector<QualType> &givenArgs,
                                    const std::vector<Argument> &neededArgs,
                                    size_t checkUntil) {
    comp.incompatibleArg = 0;
@@ -344,7 +344,7 @@ OverloadResolver::isCallCompatible(CallCompatability &comp,
 
 void
 OverloadResolver::isVarargCallCompatible(CallCompatability &comp,
-                                         const std::vector<Type> &givenArgs,
+                                         const std::vector<QualType> &givenArgs,
                                       const std::vector<Argument> &neededArgs) {
    comp.incompatibleArg = 0;
 
@@ -388,8 +388,8 @@ OverloadResolver::isVarargCallCompatible(CallCompatability &comp,
 }
 
 OverloadResolver::InferenceStatus
-OverloadResolver::inferTemplateArg(BuiltinType *given,
-                                   BuiltinType *needed,
+OverloadResolver::inferTemplateArg(Type *given,
+                                   Type *needed,
                                    std::vector<TemplateArg> &templateArgs) {
    if (needed->isPointerTy()) {
       if (!given->isPointerTy()) {
@@ -464,8 +464,8 @@ OverloadResolver::inferTemplateArg(BuiltinType *given,
       return Status;
    }
 
-   if (needed->isObject() && !needed->isGenericTy()) {
-      if (!given->isObject()) {
+   if (needed->isObjectTy() && !needed->isGenericTy()) {
+      if (!given->isObjectTy()) {
          return Inf_SubstituationFailure;
       }
 
@@ -534,7 +534,7 @@ OverloadResolver::inferTemplateArg(BuiltinType *given,
 }
 
 OverloadResolver::InferenceStatus
-OverloadResolver::inferTemplateArgs(const std::vector<Type> &givenArgs,
+OverloadResolver::inferTemplateArgs(const std::vector<QualType> &givenArgs,
                                     std::vector<TemplateParameter>& neededArgs,
                                     std::vector<TemplateArg>& templateArgs) {
    if (neededArgs.empty() || !templateArgs.empty()) {
@@ -608,7 +608,7 @@ OverloadResolver::InferenceStatus
 OverloadResolver::inferTemplateArgs(const std::vector<Argument> &givenArgs,
                                     std::vector<TemplateParameter>& neededArgs,
                                     std::vector<TemplateArg>& templateArgs) {
-   std::vector<Type> tys;
+   std::vector<QualType> tys;
    for (const auto &arg : givenArgs) {
       if (arg.type->isAutoTy() && arg.defaultVal) {
          tys.push_back(argResolver(arg.defaultVal.get()));

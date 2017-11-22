@@ -3,10 +3,10 @@
 //
 
 #include "CGBinaryOperator.h"
-#include "../../../Variant/Type/BuiltinType.h"
+#include "../../../Variant/Type/Type.h"
 #include "../../../Variant/Type/IntegerType.h"
 
-llvm::Value* CGBinaryOperator::CreateAdd(BuiltinType* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
+llvm::Value* CGBinaryOperator::CreateAdd(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
    Builder)
 {
    switch (operand_type->getTypeID()) {
@@ -24,7 +24,7 @@ llvm::Value* CGBinaryOperator::CreateAdd(BuiltinType* operand_type, llvm::Value*
    }
 }
 
-llvm::Value* CGBinaryOperator::CreateSub(BuiltinType* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
+llvm::Value* CGBinaryOperator::CreateSub(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
    Builder)
 {
    switch (operand_type->getTypeID()) {
@@ -41,7 +41,7 @@ llvm::Value* CGBinaryOperator::CreateSub(BuiltinType* operand_type, llvm::Value*
    }
 }
 
-llvm::Value* CGBinaryOperator::CreateMul(BuiltinType* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
+llvm::Value* CGBinaryOperator::CreateMul(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
    Builder)
 {
    switch (operand_type->getTypeID()) {
@@ -58,7 +58,7 @@ llvm::Value* CGBinaryOperator::CreateMul(BuiltinType* operand_type, llvm::Value*
    }
 }
 
-llvm::Value* CGBinaryOperator::CreateDiv(BuiltinType* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
+llvm::Value* CGBinaryOperator::CreateDiv(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
    Builder)
 {
    switch (operand_type->getTypeID()) {
@@ -76,7 +76,7 @@ llvm::Value* CGBinaryOperator::CreateDiv(BuiltinType* operand_type, llvm::Value*
    }
 }
 
-llvm::Value* CGBinaryOperator::CreateRem(BuiltinType* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
+llvm::Value* CGBinaryOperator::CreateRem(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
 Builder)
 {
    switch (operand_type->getTypeID()) {
