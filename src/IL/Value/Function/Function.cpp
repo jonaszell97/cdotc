@@ -20,201 +20,124 @@
 
 #include "Method.h"
 
+using namespace cdot::support;
+
 namespace cdot {
 namespace il {
 
-Function::Function(Callable *c, Module *parent)
-   : Constant(FunctionID,
-              FunctionType::get(c->getReturnType(), c->getArguments(), true),
-              c->getName(),
-              c->getDeclaration() ? c->getDeclaration()->getSourceLoc()
-                                  : SourceLocation()),
-     parent(parent), returnType(c->getReturnType())
-{
-   metaData->addNode(new MDFunction(c));
-   for (const auto &arg : c->getArguments()) {
-      this->args.push_back(new Argument(*arg.type, arg.isVararg, this,
-                                        arg.label));
+namespace {
+
+FunctionType *makeFuncTy(QualType &returnType,
+                         llvm::ArrayRef<Argument*> args) {
+   std::vector<cdot::Argument> realArgs;
+   for (const auto &arg : args) {
+      realArgs.emplace_back(arg->getName(), arg->getType(),
+                            nullptr, false, arg->isVararg());
    }
 
-   if (c->getDeclaration()) {
-      setIsExternC(c->getDeclaration()->getExternKind() == ExternKind::C);
-   }
-
-   if (parent) {
-      parent->insertFunction(this);
-   }
-
-   SubclassData |= Flag::Declared;
-   if (c->throws()) {
-      SubclassData |= Flag::Throws;
-   }
+   return FunctionType::get(returnType, realArgs, true);
 }
+
+} // anonymous namespace
 
 Function::Function(const std::string &name,
                    QualType returnType,
-                   llvm::ArrayRef<cdot::Argument> args,
+                   llvm::ArrayRef<Argument *> args,
                    Module *parent,
-                   SourceLocation loc,
-                   bool mightThrow)
-   : Constant(FunctionID, FunctionType::get(returnType, args, true),
-              name, loc),
-     parent(parent), returnType(returnType)
+                   bool mightThrow,
+                   bool isExternC)
+   : GlobalObject(FunctionID, makeFuncTy(returnType, args),
+                  parent, name),
+     returnType(returnType), BasicBlocks(this)
 {
+   auto EntryBlock = new BasicBlock(this);
+   EntryBlock->setName("entry");
+
    for (const auto &arg : args) {
-      this->args.push_back(new Argument(*arg.type, arg.isVararg, this,
-                                        arg.label));
+      EntryBlock->getArgs().push_back(arg);
    }
 
+   setIsExternC(isExternC);
    SubclassData |= Flag::Declared;
-   SubclassData |= Flag::Lambda;
 
    if (mightThrow) {
       SubclassData |= Flag::Throws;
    }
 
+   if (returnType->needsStructReturn())
+      SubclassData |= Flag::SRet;
+
    if (parent) {
       parent->insertFunction(this);
    }
 }
 
-Function::Function(const std::string &name,
-                   FunctionType *ty,
-                   QualType returnType,
-                   llvm::ArrayRef<Argument *> args, Module *parent,
-                   SourceLocation loc,
-                   unsigned SubClassData)
-   : Constant(FunctionID, ty, name, loc),
-     parent(parent), returnType(returnType),
-     args(args.begin(), args.end())
+Function::Function(TypeID id, FunctionType *Ty, const std::string &name,
+                   QualType returnType, llvm::ArrayRef<Argument *> args,
+                   Module *parent, bool mightThrow, bool isExternC)
+   : GlobalObject(id, Ty, parent, name),
+     returnType(returnType), BasicBlocks(this)
 {
-   this->SubclassData = SubClassData | Flag::Declared;
+   auto EntryBlock = new BasicBlock(this);
+   EntryBlock->setName("entry");
+
+   for (const auto &arg : args) {
+      EntryBlock->getArgs().push_back(arg);
+   }
+
+   setIsExternC(isExternC);
+   SubclassData |= Flag::Declared;
+
+   if (mightThrow) {
+      SubclassData |= Flag::Throws;
+   }
+
+   if (returnType->needsStructReturn())
+      SubclassData |= Flag::SRet;
+
    if (parent) {
       parent->insertFunction(this);
    }
 }
 
-bool Function::hasCallable() const
+Function::Function(const Function &other)
+   : GlobalObject(FunctionID, *other.getType(), nullptr, other.name),
+     returnType(other.returnType), BasicBlocks(this)
 {
-   return metaData->hasNode(MDFunctionID);
-}
+   auto EntryBlock = new BasicBlock(this);
+   EntryBlock->setName("entry");
 
-Callable* Function::getCallable() const
-{
-   return cast<MDFunction>(metaData->getNode(MDFunctionID))
-      ->getCallable();
+   for (const auto &arg : other.getEntryBlock()->getArgs()) {
+      EntryBlock->getArgs().push_back(new Argument(arg.getType(),
+                                                   arg.isVararg(),
+                                                   EntryBlock));
+   }
+
+   metaData = other.metaData;
+   SubclassData = other.SubclassData | Flag::Declared;
+
+   if (auto Loc = other.getLocation())
+      addMetaData(Loc);
 }
 
 bool Function::isLambda() const
 {
-   return (SubclassData & Flag::Lambda) != 0;
+   return isa<Lambda>(this);
 }
 
-const string &Function::getMangledName() const
+bool Function::hasStructReturn() const
 {
-   if (isLambda()) {
-      return name;
-   }
-
-   return getCallable()->getMangledName();
+   return (SubclassData & Flag::SRet) != 0;
 }
 
-string Function::getLinkageName() const
+BasicBlock const* Function::getEntryBlock() const
 {
-   if (isLambda()) {
-      return name;
-   }
-
-   return getCallable()->getLinkageName();
+   return &BasicBlocks.front();
 }
 
-QualType Function::getReturnType() const
+BasicBlock* Function::getEntryBlock()
 {
-   return returnType;
-}
-
-const Function::ArgList &Function::getArgs() const
-{
-   return args;
-}
-
-Function::BBList::reference Function::getEntryBlock()
-{
-   if (BasicBlocks.empty()) {
-      addDefinition();
-   }
-
-   return BasicBlocks.front();
-}
-
-Function::iterator Function::getIteratorForBB(BasicBlock *bb)
-{
-   auto it = BasicBlocks.begin();
-   while (it != BasicBlocks.end()) {
-      if (*it == bb) {
-         return it;
-      }
-
-      ++it;
-   }
-
-   llvm_unreachable("Basic Block does not belong to function!");
-}
-
-Function::const_iterator Function::getIteratorForBB(const BasicBlock *bb) const
-{
-   auto it = BasicBlocks.begin();
-   while (it != BasicBlocks.end()) {
-      if (*it == bb) {
-         return it;
-      }
-
-      ++it;
-   }
-
-   llvm_unreachable("Basic Block does not belong to function!");
-}
-
-Function::iterator Function::removeBasicBlock(const BasicBlock *bb)
-{
-   auto it = getIteratorForBB(bb);
-   return BasicBlocks.erase(it);
-}
-
-Function::iterator Function::insertBasicBlockAfter(BasicBlock *bb,
-                                                   iterator it) {
-   bb->addUse(this);
-   return BasicBlocks.insert(++it, bb);
-}
-
-Function::iterator Function::insertBasicBlockBefore(BasicBlock *bb,
-                                                    iterator it) {
-   bb->addUse(this);
-   return BasicBlocks.insert(it, bb);
-}
-
-Function::iterator Function::insertBasicBlockAtEnd(BasicBlock *bb)
-{
-   bb->addUse(this);
-   BasicBlocks.push_back(bb);
-
-   return BasicBlocks.end();
-}
-
-Function::iterator Function::insertBasicBlockAtBegin(BasicBlock *bb)
-{
-   bb->addUse(this);
-   return BasicBlocks.insert(BasicBlocks.begin(), bb);
-}
-
-Module *Function::getParent() const
-{
-   return parent;
-}
-
-const Function::BBList &Function::getBasicBlocks() const
-{
-   return BasicBlocks;
+   return &BasicBlocks.front();
 }
 
 bool Function::isDeclared() const
@@ -229,7 +152,7 @@ bool Function::mightThrow() const
 
 bool Function::isExternC() const
 {
-   return (SubclassData & Flag::ExternC) != 0;
+   return isLambda() || (SubclassData & Flag::ExternC) != 0;
 }
 
 void Function::setIsExternC(bool ext)
@@ -242,6 +165,11 @@ void Function::setIsExternC(bool ext)
    }
 }
 
+bool Function::isGlobalInitFn() const
+{
+   return this == parent->getGlobalInitFn();
+}
+
 void Function::addDefinition()
 {
    if (!isDeclared()) {
@@ -249,99 +177,39 @@ void Function::addDefinition()
    }
 
    SubclassData &= ~Flag::Declared;
+}
 
-   auto EntryBlock = new BasicBlock(this, "entry", getLocation());
-   if (auto M = dyn_cast<Method>(this)) {
-      if (!M->isStatic()) {
-         EntryBlock->addBlockArg(
-            new Argument(ObjectType::get(M->getRecordType()->getName()),
-                         false, this, "self"));
-      }
+Function* Function::getDeclarationIn(Module *M)
+{
+   if (parent == M)
+      return this;
+
+   Function *f;
+   if (auto Init = dyn_cast<Initializer>(this)) {
+      f = new Initializer(*Init);
    }
-   for (const auto &arg : args) {
-      EntryBlock->addBlockArg(arg);
+   else if (auto M = dyn_cast<Method>(this)) {
+      f = new Method(*M);
    }
-}
-
-void Function::addArgument(const std::string &name, ILType ty)
-{
-   addArgument(new Argument(ty, false, this, name));
-}
-
-void Function::addArgument(Argument *arg)
-{
-   getEntryBlock()->addBlockArg(arg);
-   args.push_back(arg);
-}
-
-void Function::addArgumentAtBegin(Argument *arg)
-{
-   auto &BBArgs = getEntryBlock()->getArgs();
-   BBArgs.insert(BBArgs.begin(), arg);
-
-   args.insert(args.begin(), arg);
-}
-
-void Function::addArgumentAtBegin(const std::string &name, ILType ty)
-{
-   addArgumentAtBegin(new Argument(ty, false, this, name));
-}
-
-Argument* Function::getArgument(unsigned idx) const
-{
-   assert(args.size() > idx);
-   return args[idx];
-}
-
-Function* Function::getDeclarationIn(Module *M) const
-{
-   if (isa<Initializer>(this)) {
-      if (hasCallable()) {
-         return new Initializer(static_cast<cl::Method*>(getCallable()), M);
-      }
-
-      return new Initializer(name, type->asFunctionTy(), returnType, args,
-                             cast<Method>(this)->getRecordType(), M,
-                             getLocation(), mightThrow());
-   }
-   if (isa<Method>(this)) {
-      if (hasCallable()) {
-         return new Method(static_cast<cl::Method*>(getCallable()), M);
-      }
-
-      auto method = cast<Method>(this);
-      return new Method(name, type->asFunctionTy(), returnType, args,
-                        method->getRecordType(), method->isStatic(), M,
-                        getLocation(), mightThrow());
+   else {
+      f = new Function(*this);
    }
 
-   if (hasCallable()) {
-      return new Function(getCallable(), M);
-   }
+   f->parent = M;
+   M->insertFunction(f);
 
-   return new Function(name, type->asFunctionTy(), returnType, args, M,
-                       getLocation(), SubclassData);
+   return f;
 }
 
-MDFunction::MDFunction(Callable *c)
-   : MetaData(MDFunctionID), callable(c)
+Lambda::Lambda(QualType returnType,
+               llvm::ArrayRef<Argument *> args,
+               Module *parent,
+               bool mightThrow)
+   : Function(LambdaID, makeFuncTy(returnType, args),
+              "__anonymous_lambda", returnType, args, parent,
+              mightThrow, false)
 {
 
-}
-
-Callable *MDFunction::getCallable() const
-{
-   return callable;
-}
-
-cl::Method *MDFunction::getMethod() const
-{
-   return method;
-}
-
-ast::Function *MDFunction::getFunction() const
-{
-   return function;
 }
 
 } // namespace il

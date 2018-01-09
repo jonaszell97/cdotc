@@ -27,23 +27,16 @@ public:
 protected:
    std::shared_ptr<Expression> returnValue;
 
-   bool interfaceShift = false;
-   string originTy;
-
-   bool hiddenParamReturn = false;
-
-   // codegen
-   QualType returnType;
-
 public:
-   std::shared_ptr<Expression> &getReturnValue();
-   void setReturnValue(const std::shared_ptr<Expression> &returnValue);
+   const std::shared_ptr<Expression> &getReturnValue() const
+   {
+      return returnValue;
+   }
 
-   bool isHiddenParamReturn() const;
-   void setHiddenParamReturn(bool hiddenParamReturn);
-
-   const QualType &getReturnType() const;
-   void setReturnType(const QualType &returnType);
+   std::shared_ptr<Expression> &getReturnValue()
+   {
+      return returnValue;
+   }
 };
 
 } // namespace ast

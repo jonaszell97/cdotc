@@ -6,6 +6,8 @@
 
 #include <llvm/Support/ErrorHandling.h>
 
+using cdot::lex::Token;
+
 namespace cdot {
 
 SimpleTokenStore::SimpleTokenStore(std::vector<Token> &&tokens)

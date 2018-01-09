@@ -16,20 +16,5 @@ TertiaryOperator::TertiaryOperator(Expression::SharedPtr &&cond,
 
 }
 
-Expression::SharedPtr &TertiaryOperator::getCondition()
-{
-   return condition;
-}
-
-Expression::SharedPtr &TertiaryOperator::getLhs()
-{
-   return lhs;
-}
-
-Expression::SharedPtr &TertiaryOperator::getRhs()
-{
-   return rhs;
-}
-
 } // namespace ast
 } // namespace cdot

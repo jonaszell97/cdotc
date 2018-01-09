@@ -8,33 +8,29 @@
 #include "../Statement/Statement.h"
 #include "../../Variant/Variant.h"
 
-namespace llvm {
-
-class GlobalVariable;
-
-} // namespace llvm
-
 namespace cdot {
 namespace ast {
 
 class Expression : public Statement {
 public:
    typedef std::shared_ptr<Expression> SharedPtr;
-   typedef std::unique_ptr<Expression> UniquePtr;
 
    Expression& operator=(const Expression &rhs) = default;
 
-   virtual void setGlobalVar(llvm::GlobalVariable* glob);
-   virtual void isLhsOfAssigment();
+   void setIsLhsOfAssignment();
 
-   virtual bool createsTemporary();
+   const QualType &getExprType() const
+   {
+      return exprType;
+   }
+
+   void setExprType(const QualType &exprType);
 
    static bool classof(AstNode const* T)
    {
       switch (T->getTypeID()) {
-#      define CDOT_ASTNODE(Name) \
+#      define CDOT_EXPR(Name) \
           case Name##ID:
-#      define CDOT_INCLUDE_EXPR
 #      include "../AstNode.def"
             return true;
          default:
@@ -42,88 +38,40 @@ public:
       }
    }
 
+   Type *getPlaceholderType() const;
+   bool isTripleColon() const;
+
 protected:
-   explicit Expression(NodeType typeID) : Statement(typeID) {}
+   explicit Expression(NodeType typeID)
+      : Statement(typeID), lhs_of_assignment(false), setter_call(false),
+        getter_call(false), variadicArgPackExpansion(false)
+   {}
+
+   ~Expression();
+
+   QualType exprType;
 
    Expression::SharedPtr memberExpr;
    Expression* parentExpr = nullptr;
-   string ident;
 
-   bool needs_cast = false;
-   QualType castFrom;
-   QualType castTo;
-   bool cast_handled = false;
+   bool lhs_of_assignment : 1;
+   bool setter_call : 1;
+   bool getter_call : 1;
+   bool variadicArgPackExpansion : 1;
 
-   bool lvalueCast = false;
-   bool byval_pass = false;
-
-   bool lhs_of_assignment = false;
-
-   bool setter_call = false;
-   bool getter_call = false;
-   cl::Method *accessorMethod;
-
-   Variant staticVal;
-
-   // codegen
-   llvm::GlobalVariable* globalVar = nullptr;
-   bool enum_case = false;
-   long caseVal;
-
-   bool temporary = false;
-   cl::Record *tempType = nullptr;
+   cl::Method *accessorMethod = nullptr;
 
 public:
-   void isTemporary(bool tmp);
-   bool isTemporary() const;
-
-   void setTempType(cl::Record *ty);
-   cl::Record *getTempType() const;
-
    const Expression::SharedPtr &getMemberExpr() const;
 
    Expression *getParentExpr() const;
    void setParentExpr(Expression *parentExpr);
-
-   string &getIdent();
-   void setIdent(const string &ident);
-
-   bool needsCast() const;
-   void needsCast(bool needsCast);
-
-   const QualType &getCastFrom() const;
-   void setCastFrom(const QualType &castFrom);
-
-   const QualType &getCastTo() const;
-   void setCastTo(const QualType &castTo);
-
-   bool castHandled() const;
-   void castHandled(bool castHandled);
-
-   bool isLvalueCast() const;
-   void isLvalueCast(bool lvalueCast);
-
-   bool needsByValPass() const;
-   void needsByValPass(bool needsByValPass);
 
    bool getIsLhsOfAssigment() const;
    void setIsLhsOfAssignment(bool lhsOfAssignment);
 
    bool isSetterCall() const;
    void isSetterCall(bool isSetterCall);
-
-   Variant &getStaticVal();
-   void setStaticVal(const Variant &staticVal);
-
-   llvm::GlobalVariable *getGlobalVar() const;
-
-   bool isEnumCase() const;
-   void isEnumCase(bool enum_case);
-
-   long getCaseVal() const;
-   void setCaseVal(long caseVal);
-
-   void setTemporary(bool temporary);
 
    void setMemberExpr(const SharedPtr &memberExpr);
 
@@ -132,6 +80,45 @@ public:
 
    bool isGetterCall() const;
    void isGetterCall(bool getter_call);
+
+   bool isVariadicArgPackExpansion() const
+   {
+      return variadicArgPackExpansion;
+   }
+
+   void setIsVariadicArgPackExpansion(bool variadicArgPackExpansion);
+};
+
+class IdentifiedExpr: public Expression {
+public:
+   IdentifiedExpr(NodeType typeID, string &&ident)
+      : Expression(typeID), ident(move(ident))
+   {}
+
+   const string &getIdent() const
+   {
+      return ident;
+   }
+
+   void setIdent(string &&ident)
+   {
+      IdentifiedExpr::ident = move(ident);
+   }
+
+   static bool classof(AstNode const* T)
+   {
+      switch (T->getTypeID()) {
+         case IdentifierRefExprID:
+         case CallExprID:
+         case MemberRefExprID:
+            return true;
+         default:
+            return false;
+      }
+   }
+
+protected:
+   string ident;
 };
 
 } // namespace ast

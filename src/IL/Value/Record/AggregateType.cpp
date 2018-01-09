@@ -9,24 +9,22 @@
 #include "../Function/Method.h"
 
 #include "../../../AST/Passes/SemanticAnalysis/Record/Enum.h"
+#include "../../../Variant/Type/ObjectType.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-AggregateType::AggregateType(TypeID id, const std::string &name,
-                             SourceLocation loc, Module *m)
-   : Constant(id, nullptr, name, loc),
-     parent(m)
+AggregateType::AggregateType(llvm::StringRef name,
+                             TypeID id,
+                             Module *m)
+   : GlobalObject(id, nullptr, m, name)
 {
    SubclassData |= Flag::ForwardDeclared;
    if (m) {
-      m->getContext().registerType(this);
+      m->insertType(this);
    }
-}
-
-void AggregateType::setIsForwardDeclared(bool b)
-{
-   SubclassData |= Flag::ForwardDeclared;
 }
 
 void AggregateType::addMethod(Method *M)
@@ -37,14 +35,12 @@ void AggregateType::addMethod(Method *M)
 Method* AggregateType::getMethod(llvm::StringRef name)
 {
    for (const auto &M : Methods) {
-      if (M->getName() == name
-          || (M->hasCallable() && name.equals(M->getMangledName()))) {
+      if (M->getName() == name) {
          return M;
       }
    }
    for (const auto &M : Initializers) {
-      if (M->getName() == name
-          || (M->hasCallable() && name.equals(M->getMangledName()))) {
+      if (M->getName() == name) {
          return M;
       }
    }
@@ -59,37 +55,9 @@ Method* AggregateType::getMethod(llvm::StringRef name)
    return nullptr;
 }
 
-bool AggregateType::isForwardDeclared() const
-{
-   return (SubclassData & Flag::ForwardDeclared) != 0;
-}
-
-Module* AggregateType::getParent() const
-{
-   return parent;
-}
-
 const AggregateType::MethodList &AggregateType::getMethods() const
 {
    return Methods;
-}
-
-AggregateType::MethodList AggregateType::getMethodsInModule(
-   Module *Mod) const
-{
-   MethodList list;
-   bool isProtocol = isa<ProtocolType>(this);
-   for (const auto &M : Methods) {
-      if (M->isProperty()) {
-         continue;
-      }
-
-      if (isProtocol || Mod->getOwnFunction(M->getMangledName())) {
-         list.push_back(M);
-      }
-   }
-
-   return list;
 }
 
 void AggregateType::addProperty(AggregateType::Property &&P)
@@ -163,54 +131,38 @@ const AggregateType::InitializerList &AggregateType::getInitializers() const
    return Initializers;
 }
 
-AggregateType::InitializerList
-AggregateType::getInitializersInModule(Module *M) const
+size_t AggregateType::getSize() const
 {
-   InitializerList list;
-   for (const auto &I : Initializers) {
-      if (M->getOwnFunction(I->getMangledName())) {
-         list.push_back(I);
-      }
+   if (!size) {
+      auto R = SymbolTable::getRecord(name);
+      size = R->getSize();
+      alignment = R->getAlignment();
    }
 
-   return list;
+   return size;
 }
 
-ClassType::ClassType(const std::string &name, llvm::StringRef parentClass,
-                     Module *m, SourceLocation loc)
-   : StructType(name, m, loc), ParentClass(parentClass)
+unsigned short AggregateType::getAlignment() const
+{
+   if (!alignment) {
+      auto R = SymbolTable::getRecord(name);
+      size = R->getSize();
+      alignment = R->getAlignment();
+   }
+
+   return alignment;
+}
+
+ClassType::ClassType(llvm::StringRef name,
+                     llvm::StringRef parentClass,
+                     Module *m)
+   : StructType(name, m), ParentClass(parentClass)
 {
    id = ClassTypeID;
 }
 
-const llvm::StringRef &ClassType::getParentClass() const
-{
-   return ParentClass;
-}
-
-ConstantArray *ClassType::getVTable() const
-{
-   return VTable;
-}
-
-void ClassType::setVTable(ConstantArray *VTable)
-{
-   ClassType::VTable = VTable;
-}
-
-const llvm::SmallDenseSet<llvm::StringRef, 4> &ClassType::getVirtualMethods()
-const
-{
-   return VirtualMethods;
-}
-
-void ClassType::addVirtualMethod(llvm::StringRef M)
-{
-   VirtualMethods.insert(M);
-}
-
-StructType::StructType(const std::string &name, Module *m, SourceLocation loc)
-   : AggregateType(StructTypeID, name, loc, m)
+StructType::StructType(llvm::StringRef name, Module *m)
+   : AggregateType(name, StructTypeID, m)
 {
 
 }
@@ -236,9 +188,22 @@ const StructType::FieldList &StructType::getFields() const
    return Fields;
 }
 
-EnumType::EnumType(const std::string &name, Type *rawType, Module *m,
-                   SourceLocation loc)
-   : AggregateType(EnumTypeID, name, loc, m), rawType(rawType)
+unsigned StructType::getFieldOffset(llvm::StringRef fieldName) const
+{
+   unsigned i = 0;
+   for (const auto &F: Fields) {
+      if (fieldName.equals(F.name))
+         return i;
+      else
+         ++i;
+   }
+
+   llvm_unreachable("field does not exist");
+}
+
+EnumType::EnumType(llvm::StringRef name,
+                   Type *rawType, Module *m)
+   : AggregateType(name, EnumTypeID, m), rawType(rawType)
 {
 
 }
@@ -262,18 +227,27 @@ const EnumType::CaseList &EnumType::getCases() const
    return cases;
 }
 
+const EnumType::Case & EnumType::getCase(llvm::StringRef name) const
+{
+   for (const auto &C : cases)
+      if (name.equals(C.name))
+         return C;
+
+   llvm_unreachable("case not found");
+}
+
 size_t EnumType::getMaxAssociatedValues() const
 {
    return maxAssociatedValues;
 }
 
-UnionType::UnionType(const std::string &name, Module *m, SourceLocation loc)
-   : StructType(name, m, loc)
+UnionType::UnionType(llvm::StringRef name, Module *m)
+   : StructType(name, m)
 {
    id = UnionTypeID;
 }
 
-Type * UnionType::getFieldType(llvm::StringRef fieldName) const
+QualType UnionType::getFieldType(llvm::StringRef fieldName) const
 {
    for (const auto &F: Fields) {
       if (fieldName.equals(F.name)) {
@@ -284,9 +258,9 @@ Type * UnionType::getFieldType(llvm::StringRef fieldName) const
    return nullptr;
 }
 
-ProtocolType::ProtocolType(const std::string &name, Module *m,
-                           SourceLocation loc)
-   : AggregateType(ProtocolTypeID, name, loc, m)
+ProtocolType::ProtocolType(llvm::StringRef name,
+                           Module *m)
+   : AggregateType(name, ProtocolTypeID, m)
 {
 
 }

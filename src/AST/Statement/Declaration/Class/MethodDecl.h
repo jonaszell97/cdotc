@@ -6,8 +6,13 @@
 #define CDOT_MEMBERDECL_H
 
 #include "../CallableDecl.h"
+#include "../../../../Basic/Precedence.h"
 
 namespace cdot {
+
+enum class FixKind : unsigned char;
+enum class Associativity : unsigned char;
+
 namespace ast {
 
 class TypeRef;
@@ -20,17 +25,34 @@ public:
       string &&methodName,
       std::shared_ptr<TypeRef> &&returnType,
       std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+      std::vector<TemplateParameter> &&templateParams,
+      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
       std::shared_ptr<CompoundStmt> &&body,
-      AccessModifier,
-      bool = false
+      AccessModifier access,
+      bool isStatic = false
    );
 
    MethodDecl(
       string &&methodName,
       std::shared_ptr<TypeRef> &&returnType,
       std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-      AccessModifier,
-      bool = false
+      std::vector<TemplateParameter> &&templateParams,
+      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
+      std::shared_ptr<CompoundStmt> &&body,
+      OperatorInfo op,
+      bool isCastOp,
+      AccessModifier access,
+      bool isStatic
+   );
+
+   MethodDecl(
+      string &&methodName,
+      std::shared_ptr<TypeRef> &&returnType,
+      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+      std::vector<TemplateParameter> &&templateParams,
+      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
+      AccessModifier access,
+      bool isStatic = false
    );
 
    MethodDecl(
@@ -67,13 +89,13 @@ protected:
    bool isCastOp_ = false;
 
    bool hasDefinition_ = false;
-
    bool is_protocol_method = false;
+
+   FixKind fix;
+   Associativity associativity;
 
    // codegen
    cdot::cl::Record *record;
-   cdot::cl::Method* method;
-
    bool isUsed = false;
 
 public:
@@ -146,13 +168,7 @@ public:
    cdot::cl::Record *getRecord() const;
    void setRecord(cdot::cl::Record *record);
 
-   cdot::cl::Method *getMethod() const {
-      return method;
-   }
-
-   void setMethod(cdot::cl::Method *method) {
-      MethodDecl::method = method;
-   }
+   cdot::cl::Method *getMethod() const;
 
    bool isIsUsed() const {
       return isUsed;
@@ -160,6 +176,26 @@ public:
 
    void setIsUsed(bool isUsed) {
       MethodDecl::isUsed = isUsed;
+   }
+
+   FixKind getFix() const
+   {
+      return fix;
+   }
+
+   void setFix(FixKind fix)
+   {
+      MethodDecl::fix = fix;
+   }
+
+   Associativity getAssociativity() const
+   {
+      return associativity;
+   }
+
+   void setAssociativity(Associativity associativity)
+   {
+      MethodDecl::associativity = associativity;
    }
 };
 

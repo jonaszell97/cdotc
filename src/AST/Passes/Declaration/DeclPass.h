@@ -6,13 +6,11 @@
 #define CDOT_DECLPASS_H
 
 #include <string>
-#include <stack>
 
 #include "../AbstractPass.h"
 #include "../SemanticAnalysis/Function.h"
 #include "../../Attribute/Attribute.h"
-
-class Parser;
+#include "../../../Basic/Mangle.h"
 
 namespace llvm {
 
@@ -22,37 +20,65 @@ class MemoryBuffer;
 
 namespace cdot {
 
+struct Namespace;
 enum class AccessModifier : unsigned int;
 
 namespace cl {
 
 class Record;
-struct RecordTemplate;
+class AssociatedType;
 
 } // namespace cl
-} // namespace cdot
 
-namespace cdot {
 namespace ast {
+
+class SemaPass;
 
 using std::string;
 using namespace cdot;
 
-class DeclPass: public AbstractPass {
+class DeclPass: public AbstractPass<DeclPass, void> {
 public:
-   explicit DeclPass();
+   explicit DeclPass(SemaPass &SP);
+   explicit DeclPass(SemaPass &SP, size_t sourceId);
+
+   explicit DeclPass(SemaPass &SP, cl::Record *R, bool includeLast = true);
+   explicit DeclPass(SemaPass &SP,Callable *C, bool includeLast = true);
+
+   explicit DeclPass(SemaPass &SP, Namespace *NS);
+
+   void setCurrentNamespace(Namespace *NS);
+   void setRecordCtx(cl::Record *R, bool includeLast = true);
+
+   void resetCtx()
+   {
+      currentNamespace.clear();
+      currentSourceId = 0;
+      SelfStack.clear();
+   }
+
    void run(std::vector<CompilationUnit> &CUs);
 
-   void declareGlobalTypedefs(std::vector<std::shared_ptr<Statement>>& statements);
+   static void addGlobalStatement(Statement *node)
+   {
+      GlobalStatements.push_back(node);
+   }
 
-   static void DeclareClass(ClassDecl *node);
-   static void DeclareEnum(EnumDecl *node);
-   static void DeclareUnion(UnionDecl *node);
+   void visitRecordDeclIfNotAlreadyVisited(RecordDecl *node);
 
-   void DeclareRecordTemplate(RecordTemplateDecl *node);
-   void DeclareFunctionTemplate(CallableTemplateDecl *node);
-   void DeclareMethodTemplate(const string &recordName,
-                              MethodTemplateDecl *node);
+   void visitGlobalStmts();
+   void resolveTemplateParams();
+   void resolveExtensions();
+
+   void DeclareRecord(const std::shared_ptr<RecordDecl> &node);
+   void DeclareClass(ClassDecl *node);
+   void DeclareProto(ProtocolDecl *node);
+   void DeclareEnum(EnumDecl *node);
+   void DeclareUnion(UnionDecl *node);
+   void DeclareExtension(std::shared_ptr<ExtensionDecl> node);
+
+   void DeclareFunction(FunctionDecl *node);
+   void DeclareTypedef(TypedefDecl *node);
 
    void VisitNode(AstNode *node);
    void VisitNode(const std::shared_ptr<AstNode> &node)
@@ -60,187 +86,191 @@ public:
       VisitNode(node.get());
    }
 
-   void visit(AstNode *node)
-   {
+   void visitCompoundStmt(CompoundStmt *node);
 
-   }
+   void visitNamespaceDecl(NamespaceDecl *node);
+   void visitUsingStmt(UsingStmt *node);
 
-   void visit(CompoundStmt *node);
+   void visitFunctionDecl(FunctionDecl *node);
+   void visitFuncArgDecl(FuncArgDecl *node);
 
-   void visit(NamespaceDecl *node);
-   void visit(UsingStmt *node);
-   void visit(EndOfFileStmt *node);
+   void visitLocalVarDecl(LocalVarDecl *node);
+   void visitGlobalVarDecl(GlobalVarDecl *node);
 
-   void visit(FunctionDecl *node);
-   void visit(FuncArgDecl *node);
+   void visitRecordDecl(RecordDecl *node);
 
-   void visit(DeclStmt *node);
+   void visitClassDecl(ClassDecl *node);
+   void visitProtocolDecl(ProtocolDecl *node);
+   void visitExtensionDecl(ExtensionDecl *node);
+   void visitUnionDecl(UnionDecl *node);
+   void visitEnumDecl(EnumDecl *node);
 
-   void visit(ClassDecl *node);
-   void visit(ExtensionDecl *node);
-   void visit(UnionDecl *node);
-   void visit(EnumDecl *node);
+   void visitFieldDecl(FieldDecl *node);
+   void visitPropDecl(PropDecl *node);
+   void visitAssociatedTypeDecl(AssociatedTypeDecl *node);
 
-   void visit(FieldDecl *node);
-   void visit(PropDecl *node);
+   void visitMethodDecl(MethodDecl *node);
+   void visitConstrDecl(ConstrDecl *node);
+   void visitDestrDecl(DestrDecl *node);
 
-   void visit(MethodDecl *node);
-   void visit(ConstrDecl *node);
-   void visit(DestrDecl *node);
+   void visitTypedefDecl(TypedefDecl *node);
+   void visitAliasDecl(AliasDecl *node);
 
-   void visit(RecordTemplateDecl *node);
-   void visit(CallableTemplateDecl *node);
+   void visitTypeRef(TypeRef *node);
+   void visitDeclareStmt(DeclareStmt *node);
 
-   void visit(TypedefDecl *node);
-   void visit(TypeRef *node);
-   void visit(DeclareStmt *node);
+   void visitDebugStmt(DebugStmt *node);
 
-   void visit(DebugStmt *node);
-   void visit(Statement *node);
-   void visit(Expression *node);
+   void visitStaticIfStmt(StaticIfStmt *node);
+   void visitStaticAssertStmt(StaticAssertStmt *node);
+   void visitStaticForStmt(StaticForStmt *node);
 
-   string ns_prefix()
-   {
-      return currentNamespace.back().empty() ? "" : currentNamespace.back() + ".";
-   }
+   string ns_prefix();
 
    string declareVariable(
       const string &name,
-      QualType &type,
+      QualType type,
       AccessModifier access,
-      AstNode *cause
-   );
-
-   QualType declareFunction(
-      ast::Function::UniquePtr &&func,
-      bool isExternC = false
+      Statement *node
    );
 
    enum ResolveStatus {
       Res_Success,
-      Res_SubstituationFailure
+      Res_SubstituationFailure,
    };
 
-   static Type *resolveObjectTy(
-      TypeRef *node,
-      std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace,
+   Type *resolveObjectTy(TypeRef *node,
+                         const string &name,
+                         std::vector<TemplateArg>& templateArgs,
+                         ResolveStatus *status = nullptr);
 
-      const string &name,
-      TemplateArgList *argList,
-      ResolveStatus *status = nullptr,
-      const std::vector<TemplateArg> *templateArgs = nullptr,
-      const std::vector<TemplateConstraint> *constraints = nullptr
-   );
+   Type *resolveTemplateTy(TypeRef *node, const string &name);
 
-   static Type *resolveTemplateTy(
-      const TypeRef *node,
-      std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace,
+   Type *resolveTypedef(TypeRef *node,
+                        const string &name,
+                        std::vector<TemplateArg>& templateArgs,
+                        ResolveStatus *status = nullptr);
 
-      const string &name,
-      const std::vector<TemplateArg> *templateArgs = nullptr,
-      const std::vector<TemplateConstraint> *constraints = nullptr
-   );
+   Type *resolveAlias(TypeRef *node,
+                      const string &name,
+                      std::vector<TemplateArg>& templateArgs);
 
-   static Type *resolveTypedef(
-      const TypeRef *node,
-      std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace,
+   Type* getResolvedType(TypeRef *node, ResolveStatus *status = nullptr);
 
-      const string &name,
-      ResolveStatus *status = nullptr,
-      const std::vector<TemplateArg> *templateArgs = nullptr,
-      const std::vector<TemplateConstraint> *constraints = nullptr
-   );
+   void resolveType(TypeRef *node, ResolveStatus *status = nullptr);
 
-   static Type* getResolvedType(
-      TypeRef *node,
-      std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace,
-      ResolveStatus *status = nullptr,
-      const std::vector<TemplateArg> *templateArgs = nullptr,
-      const std::vector<TemplateConstraint> *constraints = nullptr
-   );
+   void resolveMethodTemplateParams(std::vector<TemplateParameter> &Params);
 
-   static void resolveType(
-      TypeRef *node,
-      std::vector<string>& importedNamespaces,
-      std::vector<string>& currentNamespace,
-      ResolveStatus *status = nullptr,
-      const std::vector<TemplateArg> *templateArgs = nullptr,
-      const std::vector<TemplateConstraint> *constraints = nullptr
-   );
+   void resolveTemplateParams(std::vector<TemplateParameter> &params);
 
-   static std::unique_ptr<Parser> prepareParser(
-       cl::Template *Templ,
-       std::vector<TemplateArg> const& templateArgs,
-       bool isRecord = false
-   );
+   void pushNamespace(const string &ns,
+                      bool isAnonymous = false);
 
-   static cl::Record *declareRecordInstantiation(
-      cl::RecordTemplate &Template,
-      TemplateArgList *argList,
-      bool *isNew = nullptr
-   );
-
-   static ast::Function *declareFunctionInstantiation(
-      cl::CallableTemplate &Template,
-      std::vector<TemplateArg> const& templateArgs,
-      bool *isNew = nullptr
-   );
-
-   static cl::Method *declareMethodInstantiation(
-      cl::MethodTemplate &Template,
-      std::vector<TemplateArg> const& templateArgs,
-      cl::Record *rec = nullptr,
-      bool *isNew = nullptr
-   );
-
-   static void resolveTemplateArgs(
-      TemplateArgList *&args,
-      std::vector<TemplateConstraint> &constraints,
-      const std::function<void (TypeRef*)> &resolver,
-      AstNode *cause
-   );
-
-   static void resolveTemplateConstraints(
-      std::vector<TemplateConstraint> &constraints,
-      const std::function<void (TypeRef*)> &resolver
-   );
-
-   static void checkTemplateConstraintCompatability(
-      TemplateArgList *argList,
-      const std::vector<TemplateConstraint> &constraints,
-      AstNode *cause,
-      AstNode *decl
-   );
-
-   void pushNamespace(const string &ns, bool declare = true);
    void popNamespace();
 
-   std::vector<string> &getCurrentNamespace()
+   SemaPass &getSema() { return SP; }
+
+   Namespace *getDeclNamespace() const;
+
+   llvm::ArrayRef<size_t> getCurrentNamespaceVec() { return currentNamespace; }
+   llvm::ArrayRef<size_t> getImportedNamespaces()
+   { return importedNamespaces(); }
+
+   size_t getCurrentNamespace() const
    {
-      return currentNamespace;
+      return currentNamespace.empty() ? 0 : currentNamespace.back();
    }
 
-   std::vector<string> &getImportedNamespaces()
+   void importNamespace(const string &ns);
+   void importNamespace(size_t id);
+
+   void pushTemplateParams(std::vector<TemplateParameter>* params)
    {
-      return importedNamespaces;
+      templateParamStack.push_back(params);
    }
 
-   void importNamespace(const string &ns)
+   void popTemplateParams()
    {
-      importedNamespaces.push_back(ns);
+      templateParamStack.pop_back();
    }
+
+   const TemplateParamStack &getTemplateParamStack() const
+   {
+      return templateParamStack;
+   }
+
+   TemplateParameter *getTemplateParam(llvm::StringRef name);
+
+   void beginRecordScope(cl::Record *Rec);
+   void endRecordScope();
+
+   static llvm::ArrayRef<size_t> getImportsForFile(size_t sourceId)
+   {
+      return FileImports.find(sourceId)->second;
+   }
+
+   llvm::ArrayRef<size_t> importedNamespaces() const
+   {
+      return FileImports[currentSourceId];
+   }
+
+   void importFileImports(size_t sourceId)
+   {
+      currentSourceId = sourceId;
+   }
+
+   size_t getCurrentSourceId() const
+   {
+      return currentSourceId;
+   }
+
+   static void beginFile(size_t sourceId);
+
+   Namespace *getPrivateFileNamespace(AstNode *node);
+
+   const SymbolMangler &getMangler() const
+   {
+      return mangle;
+   }
+
+   friend class SemaPass;
 
 protected:
-   std::vector<string> currentNamespace = {""};
-   std::vector<string> importedNamespaces = {""};
+   SemaPass &SP;
+   size_t currentSourceId;
+   llvm::SmallVector<size_t, 8> currentNamespace;
 
-   std::vector<std::vector<TemplateConstraint>*> GenericsStack;
+   std::vector<cl::Record*> SelfStack;
+   TemplateParamStack templateParamStack;
+
+   SymbolMangler mangle;
+
+   static llvm::SmallVector<ast::Statement*, 8> GlobalVariableDecls;
+
+   static std::unordered_map<size_t, llvm::SmallVector<size_t, 8>>
+      FileImports;
+
+   static llvm::SmallPtrSet<RecordDecl*, 4> VisitedRecordDecls;
+   static std::vector<Statement*> GlobalStatements;
+   static std::vector<cl::Record*> RecordsWithUnresolvedTemplateParams;
+   static std::vector<std::shared_ptr<ExtensionDecl>> DanglingExtensions;
 
    void CheckThrowsAttribute(Callable *callable, Attribute &attr);
+   bool checkProtocolConformance(cl::Record *R);
+
+   cl::Record *getRecord(llvm::StringRef name);
+   cl::Struct *getStruct(llvm::StringRef name);
+   cl::Enum *getEnum(llvm::StringRef name);
+   cl::Union *getUnion(llvm::StringRef name);
+
+   Namespace *getNamespace(llvm::StringRef name);
+   Function *getAnyFn(llvm::StringRef name);
+   Variable *getVariable(llvm::StringRef name);
+   llvm::ArrayRef<Alias*> getAliases(llvm::StringRef name);
+   Typedef *getTypedef(llvm::StringRef name);
+   llvm::ArrayRef<Function*> getFunctionOverloads(llvm::StringRef name);
+
+   size_t isNamespace(llvm::StringRef name);
 };
 
 } // namespace ast

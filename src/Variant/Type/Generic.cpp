@@ -2,6 +2,7 @@
 // Created by Jonas Zell on 30.09.17.
 //
 
+#include <sstream>
 #include "Generic.h"
 #include "../../AST/SymbolTable.h"
 #include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
@@ -11,103 +12,76 @@
 #include "TupleType.h"
 #include "GenericType.h"
 
+using cdot::lex::Token;
+using std::string;
+
+using namespace cdot::ast;
+
 namespace cdot {
 
-TemplateArg::TemplateArg()
-   : type(std::make_shared<TypeRef>())
+string Argument::toString() const
 {
-
+   return cstyleVararg ? "..." : type.toString();
 }
 
 TemplateArg::TemplateArg(std::shared_ptr<TypeRef> &&ty)
-   : type(ty)
+   : type(move(ty))
 {
 
 }
 
-TemplateArg::TemplateArg(std::vector<Token> &&tokens)
-   : tokens(tokens), kind(TemplateConstraint::Arbitrary)
+TemplateArg::TemplateArg(std::shared_ptr<StaticExpr> &&staticExpr)
+   : staticExpr(move(staticExpr)),
+     kind(TemplateParameter::Value)
 {
-
-}
-
-TemplateArg::TemplateArg(Variant &&val)
-   : val(val), kind(TemplateConstraint::Value)
-{
-
-}
-
-TemplateArg::TemplateArg(GenericType *ty)
-   : genericType(ty), type_resolved(true)
-{
-
-}
-
-TemplateArg::TemplateArg(std::vector<TemplateArg> &&args)
-   : is_variadic(true), variadicArgs(args)
-{
-
 
 }
 
 void TemplateArg::destroy()
 {
-   switch (kind) {
-      case TemplateConstraint::TypeName: {
-         if (is_variadic) {
-            variadicArgs.~vector();
-         }
-         else if (!type_resolved) {
-            type.~shared_ptr();
-         }
-         break;
-      }
-      case TemplateConstraint::Value: {
-         val.~Variant();
-         break;
-      }
-      case TemplateConstraint::Arbitrary: {
-         tokens.~vector();
-         break;
-      }
-   }
+   //FIXME
+//   switch (kind) {
+//      case TemplateParameter::TypeName:
+//         type.~shared_ptr();
+//         break;
+//      case TemplateParameter::Value:
+//         staticExpr.~shared_ptr();
+//         break;
+//      default:
+//         llvm_unreachable("bad template arg kind");
+//   }
 }
 
-TemplateArg::TemplateArg(const TemplateArg &arg)
+TemplateArg::TemplateArg(TemplateArg &&arg) noexcept
+   : sourceLoc(arg.sourceLoc),
+     kind(arg.kind)
 {
-   kind = arg.kind;
-   type_resolved = arg.type_resolved;
-   is_variadic = arg.is_variadic;
-
    switch (kind) {
-      case TemplateConstraint::TypeName: {
-         if (is_variadic) {
-            new (&variadicArgs) std::vector<TemplateArg>(arg.variadicArgs);
-         }
-         else if (!type_resolved) {
-            new (&type) std::shared_ptr<TypeRef>(arg.type);
-         }
-         else {
-            genericType = arg.genericType;
-         }
-
+      case TemplateParameter::TypeName:
+         new (&type) std::shared_ptr<TypeRef>(move(arg.type));
          break;
-      }
-      case TemplateConstraint::Value: {
-         new (&val) Variant(arg.val);
+      case TemplateParameter::Value:
+         new (&staticExpr) std::shared_ptr<StaticExpr>(move(arg.staticExpr));
          break;
-      }
-      case TemplateConstraint::Arbitrary: {
-         new (&tokens) std::vector<Token>(arg.tokens);
-         break;
-      }
    }
 }
 
-TemplateArg& TemplateArg::operator=(const TemplateArg &arg)
+TemplateArg& TemplateArg::operator=(TemplateArg &&arg) noexcept
 {
    destroy();
-   *this = TemplateArg(arg);
+
+   kind = arg.kind;
+   sourceLoc = arg.sourceLoc;
+
+   switch (kind) {
+      case TemplateParameter::TypeName:
+         new (&type) std::shared_ptr<TypeRef>(std::move(arg.type));
+         break;
+      case TemplateParameter::Value:
+         new (&staticExpr)
+            std::shared_ptr<StaticExpr>(std::move(arg.staticExpr));
+         break;
+   }
 
    return *this;
 }
@@ -119,226 +93,123 @@ TemplateArg::~TemplateArg()
 
 bool TemplateArg::isTypeName() const
 {
-   return kind == TemplateConstraint::TypeName;
+   return kind == TemplateParameter::TypeName;
 }
 
 bool TemplateArg::isValue() const
 {
-   return kind == TemplateConstraint::Value;
+   return kind == TemplateParameter::Value;
 }
 
-bool TemplateArg::isArbitrary() const
-{
-   return kind == TemplateConstraint::Arbitrary;
-}
-
-bool TemplateArg::isVariadic() const
-{
-   return is_variadic;
-}
-
-void TemplateArg::resolveType(GenericType *ty)
-{
-   assert(isTypeName());
-   type = nullptr;
-   genericType = ty;
-   type_resolved = true;
-}
-
-bool TemplateArg::isResolved() const
-{
-   return type_resolved;
-}
-
-TemplateConstraint::Kind TemplateArg::getKind() const
+TemplateParameter::Kind TemplateArg::getKind() const
 {
    return kind;
 }
 
-const std::vector<Token>& TemplateArg::getTokens() const
-{
-   assert(isArbitrary());
-   return tokens;
-}
-
-std::shared_ptr<TypeRef>& TemplateArg::getType()
-{
-   assert(!type_resolved && isTypeName());
-   return type;
-}
-
-std::vector<TemplateArg>& TemplateArg::getVariadicArgs()
-{
-   assert(is_variadic);
-   return variadicArgs;
-}
-
-const std::vector<TemplateArg>& TemplateArg::getVariadicArgs() const
-{
-   assert(is_variadic);
-   return variadicArgs;
-}
-
-GenericType *const TemplateArg::getGenericTy() const
-{
-   if (!type_resolved || !isTypeName()) {
-      return nullptr;
-   }
-
-   return genericType;
-}
-
-const Variant& TemplateArg::getValue() const
-{
-   assert(isValue());
-   return val;
-}
-
-ResolvedTemplateArgList::ResolvedTemplateArgList(
-   std::vector<TemplateArg> &&args) : args(args)
-{
-
-}
-
-bool ResolvedTemplateArgList::isResolved() const
-{
-   return true;
-}
-
-std::vector<TemplateArg>& ResolvedTemplateArgList::get()
-{
-   return args;
-}
-
-void ResolvedTemplateArgList::set(std::vector<TemplateArg> &&args)
-{
-   ResolvedTemplateArgList::args = std::move(args);
-}
-
-std::vector<Token>&& ResolvedTemplateArgList::getTokens()
-{
-   llvm_unreachable("already resolved");
-}
-
-UnresolvedTemplateArgList::UnresolvedTemplateArgList(
-   std::vector<Token> &&tokens,
-   size_t sourceId,
-   size_t line,
-   size_t col)
-   : tokens(tokens)
-{
-   loc.sourceId = sourceId;
-   loc.line = line;
-   loc.col = col;
-}
-
-bool UnresolvedTemplateArgList::isResolved() const
-{
-   return false;
-}
-
-std::vector<TemplateArg>& UnresolvedTemplateArgList::get()
-{
-   llvm_unreachable("resolve first");
-}
-
-void UnresolvedTemplateArgList::set(std::vector<TemplateArg> &&args)
-{
-   llvm_unreachable("resolve first");
-}
-
-std::vector<Token>&& UnresolvedTemplateArgList::getTokens()
-{
-   return std::move(tokens);
-}
-
-TemplateConstraint::TemplateConstraint(
+TemplateParameter::TemplateParameter(
    Kind kind, string &&typeName,
    std::shared_ptr<TypeRef> &&unresolvedCovariance,
    std::shared_ptr<TypeRef> &&unresolvedContravariance,
    std::shared_ptr<TemplateArg> &&defaultValue,
-   bool isVariadic)
-      : kind(kind), genericTypeName(typeName),
-        unresolvedCovariance(unresolvedCovariance),
-        unresolvedContravariance(unresolvedContravariance),
-        defaultValue(defaultValue), isVariadic(isVariadic)
+   bool isVariadic, const SourceLocation &loc)
+      : kind(kind),
+        genericTypeName(typeName),
+        isVariadic(isVariadic),
+        sourceLoc(loc),
+        unresolvedCovariance(std::move(unresolvedCovariance)),
+        unresolvedContravariance(std::move(unresolvedContravariance)),
+        defaultValue(std::move(defaultValue))
 {
 
 }
 
-TemplateConstraint::TemplateConstraint(
-   const TemplateConstraint &rhs) : unresolvedContravariance(nullptr),
-                                    unresolvedCovariance(nullptr)
+void TemplateParameter::copyFrom(TemplateParameter &&TP)
 {
-   if (rhs.resolved) {
-      covariance = rhs.covariance;
-      contravariance = rhs.contravariance;
-   }
-   else {
-      if (rhs.unresolvedCovariance) {
-         new(&unresolvedCovariance)
-            std::shared_ptr<TypeRef>(rhs.unresolvedCovariance);
-      }
-      if (rhs.unresolvedContravariance) {
-         new(&unresolvedContravariance)
-            std::shared_ptr<TypeRef>(rhs.unresolvedContravariance);
-      }
-   }
+   kind = TP.kind;
+   genericTypeName = std::move(TP.genericTypeName);
+   isVariadic = TP.isVariadic;
+   sourceLoc = TP.sourceLoc;
 
-   kind = rhs.kind;
-   defaultValue = rhs.defaultValue;
-   genericTypeName = rhs.genericTypeName;
-   resolved = rhs.resolved;
-   isVariadic = rhs.isVariadic;
+   new (&unresolvedCovariance)
+      std::shared_ptr<TypeRef>(std::move(TP.unresolvedCovariance));
+
+   new (&unresolvedContravariance)
+      std::shared_ptr<TypeRef>(std::move(TP.unresolvedContravariance));
+
+   covariance = TP.covariance;
+   contravariance = TP.contravariance;
+
+   new (&defaultValue)
+      std::shared_ptr<TemplateArg>(std::move(TP.defaultValue));
+
+   resolved = TP.resolved;
 }
 
-TemplateConstraint& TemplateConstraint::operator=(
-   const TemplateConstraint &rhs)
+void TemplateParameter::copyFrom(TemplateParameter const& TP)
 {
-   if (!resolved) {
-      if (unresolvedCovariance) {
-         unresolvedCovariance.~shared_ptr();
-      }
-      if (unresolvedContravariance) {
-         unresolvedContravariance.~shared_ptr();
-      }
-   }
+   kind = TP.kind;
+   genericTypeName = TP.genericTypeName;
+   isVariadic = TP.isVariadic;
+   sourceLoc = TP.sourceLoc;
 
-   if (rhs.resolved) {
-      covariance = rhs.covariance;
-      contravariance = rhs.contravariance;
-   }
-   else {
-      if (rhs.unresolvedCovariance) {
-         new(&unresolvedCovariance)
-            std::shared_ptr<TypeRef>(rhs.unresolvedCovariance);
-      }
-      if (rhs.unresolvedContravariance) {
-         new(&unresolvedContravariance)
-            std::shared_ptr<TypeRef>(rhs.unresolvedContravariance);
-      }
-   }
+   new (&unresolvedCovariance)
+      std::shared_ptr<TypeRef>(TP.unresolvedCovariance);
 
-   kind = rhs.kind;
-   defaultValue = rhs.defaultValue;
-   genericTypeName = rhs.genericTypeName;
-   resolved = rhs.resolved;
-   isVariadic = rhs.isVariadic;
+   new (&unresolvedContravariance)
+      std::shared_ptr<TypeRef>(TP.unresolvedContravariance);
+
+   covariance = TP.covariance;
+   contravariance = TP.contravariance;
+
+   new (&defaultValue) std::shared_ptr<TemplateArg>(TP.defaultValue);
+
+   resolved = TP.resolved;
+}
+
+void TemplateParameter::destroyValue()
+{
+   unresolvedCovariance.~shared_ptr();
+   unresolvedContravariance.~shared_ptr();
+   defaultValue.~shared_ptr();
+}
+
+TemplateParameter::TemplateParameter(TemplateParameter &&TP) noexcept
+{
+   copyFrom(std::move(TP));
+}
+
+TemplateParameter& TemplateParameter::operator=(TemplateParameter &&TP) noexcept
+{
+   destroyValue();
+   copyFrom(std::move(TP));
 
    return *this;
 }
 
-TemplateConstraint::~TemplateConstraint()
+TemplateParameter::TemplateParameter(TemplateParameter const& TP)
 {
-
+   copyFrom(TP);
 }
 
-bool TemplateConstraint::operator!=(const TemplateConstraint &rhs) const
+TemplateParameter& TemplateParameter::operator=(TemplateParameter const& TP)
+{
+   destroyValue();
+   copyFrom(TP);
+
+   return *this;
+}
+
+TemplateParameter::~TemplateParameter()
+{
+   destroyValue();
+}
+
+bool TemplateParameter::operator!=(const TemplateParameter &rhs) const
 {
    return !(*this == rhs);
 }
 
-bool TemplateConstraint::operator==(const TemplateConstraint &rhs) const
+bool TemplateParameter::operator==(const TemplateParameter &rhs) const
 {
    if (kind != rhs.kind) {
       return false;
@@ -358,227 +229,25 @@ bool TemplateConstraint::operator==(const TemplateConstraint &rhs) const
    return true;
 }
 
-bool TemplateArg::compatibleWith(const TemplateArg &other) const
+bool
+TemplateParameter::effectivelyEquals(const TemplateParameter &Other) const
 {
-   if (kind != other.kind) {
+   if (kind != Other.kind || isVariadic != Other.isVariadic)
       return false;
-   }
 
-   switch (kind) {
-      case TemplateConstraint::TypeName: {
-         return genericType->implicitlyCastableTo(other.genericType);
-      }
-      default:
-         return Variant(tokens.front()._value).applyBinaryOp(
-            other.tokens.front()._value, "==").intVal != 0;
-   }
-}
-
-string TemplateArg::toString() const
-{
-   switch (kind) {
-      case TemplateConstraint::TypeName: {
-         if (is_variadic) {
-            return
-               util::vectorToString<TemplateArg, '\0', ',', '\0'>(variadicArgs);
-         }
-         else if (!type_resolved) {
-            return type->getType()->toUniqueString();
-         }
-
-         return genericType->getActualType()->toUniqueString();
-      }
-      case TemplateConstraint::Value:
-         return val.toString();
-      default:
-         return Token::TokensToString(tokens);
-   }
-}
-
-bool GenericTypesCompatible(
-   GenericType* given,
-   const TemplateConstraint& needed)
-{
-   if (needed.kind != TemplateConstraint::TypeName) {
-      return false;
-   }
-
-   auto actual = given->getActualType();
-
-   assert(needed.resolved && "unresolved template constraint");
-   if (needed.covariance) {
-      if (!needed.covariance->isObjectTy()) {
-         return needed.covariance == actual;
-      }
-      if (!actual->isObjectTy()) {
+   if (isTypeName()) {
+      if (covariance && (covariance != Other.covariance))
          return false;
-      }
 
-      auto Covar = needed.covariance->asObjTy()->getRecord();
-      auto Given = actual->getRecord();
-
-      if (Covar->isProtocol()) {
-         return Given->conformsTo(Covar->getName());
-      }
-
-      if (Covar->isStruct() || Covar->isEnum() || Covar->isUnion()) {
-         return Given->getName() == Covar->getName();
-      }
-
-      if (!Given->isClass()) {
+      if (contravariance && (contravariance != Other.contravariance))
          return false;
-      }
-
-      auto CovarCl = Covar->getAs<Class>();
-      auto GivenCl = Given->getAs<Class>();
-
-      return CovarCl->isBaseClassOf(GivenCl->getName());
    }
-
-   if (needed.contravariance) {
-      assert(needed.covariance->isObjectTy());
-
-      auto Covar = needed.covariance->asObjTy()->getRecord();
-      assert(Covar->isClass());
-
-      if (!actual->isObjectTy() && actual->getRecord()->isClass()) {
+   else {
+      if (valueType != Other.valueType)
          return false;
-      }
-
-      auto CovarCl = Covar->getAs<Class>();
-      auto GivenCl = actual->getRecord()->getAs<Class>();
-
-      return GivenCl->isBaseClassOf(CovarCl->getName());
    }
 
    return true;
 }
 
-// --- forward declarations ---
-
-Type *resolveGenericTy(
-   GenericType *ty,
-   const std::vector<TemplateArg>& generics
-);
-
-Type *resolveFunctionTy(
-   FunctionType *ty,
-   const std::vector<TemplateArg>& generics
-);
-
-Type *resolveTupleTy(
-   TupleType *ty,
-   const std::vector<TemplateArg>& generics
-);
-
-Type *resolveObjectTy(
-   ObjectType *ty,
-   const std::vector<TemplateArg>& generics
-);
-
-// -----------------------------
-
-Type *resolveGenerics(
-   Type *ty,
-   const std::vector<TemplateArg>& generics)
-{
-   switch (ty->getTypeID()) {
-      case TypeID::ObjectTypeID:
-         return resolveObjectTy(ty->asObjTy(), generics);
-      case TypeID::FunctionTypeID:
-         return resolveFunctionTy(ty->asFunctionTy(), generics);
-      case TypeID::TupleTypeID:
-         return resolveTupleTy(ty->asTupleTy(), generics);
-      case TypeID::GenericTypeID:
-         return resolveGenericTy(ty->asGenericTy(), generics);
-      default:
-         return ty;
-   }
-}
-
-void resolveGenerics(
-   QualType& ty,
-   const std::vector<TemplateArg>& generics)
-{
-   *ty = resolveGenerics(*ty, generics);
-}
-
-Type *resolveGenericTy(
-   GenericType *ty,
-   const std::vector<TemplateArg>& generics)
-{
-   for (const auto& gen : generics) {
-      if (gen.getKind() != TemplateConstraint::TypeName) {
-         continue;
-      }
-
-      if (gen.getGenericTy()->getClassName()
-          == ty->getClassName()) {
-         return resolveGenerics(gen.getGenericTy()->getActualType(), generics);
-      }
-   }
-
-   return ty;
-}
-
-Type *resolveObjectTy(
-   ObjectType *ty,
-   const std::vector<TemplateArg>& generics)
-{
-   std::vector<TemplateArg> concreteGenerics;
-   if (ty->isDummyObject()) {
-      for (const auto &gen : ty->getTemplateArgs()) {
-         if (!gen.isTypeName()) {
-            concreteGenerics.push_back(gen);
-            continue;
-         }
-
-         auto actualTy = resolveGenerics(gen.getGenericTy()->getActualType(),
-                                         generics);
-
-         concreteGenerics.emplace_back(
-            GenericType::get(gen.getGenericTy()->getClassName(),
-                             actualTy));
-      }
-   }
-
-   string className = ty->getClassName();
-   if (!concreteGenerics.empty()) {
-      className += util::TemplateArgsToString(generics);
-   }
-
-   return ObjectType::get(className);
-}
-
-Type *resolveFunctionTy(
-   FunctionType *ty,
-   const std::vector<TemplateArg>& generics)
-{
-   QualType retType(ty->getReturnType());
-   std::vector<Argument> argTypes;
-
-   *retType = resolveGenerics(*ty->getReturnType(), generics);
-   for (auto& arg : ty->getArgTypes()) {
-      Argument newArg(arg);
-      *newArg.type = resolveGenerics(*arg.type, generics);
-   }
-
-   return FunctionType::get(retType, argTypes, ty->isRawFunctionTy());
-}
-
-Type *resolveTupleTy(
-   TupleType *ty,
-   const std::vector<TemplateArg>& generics)
-{
-   std::vector<pair<string, Type*>> containedTypes;
-   for (auto &cont : ty->getContainedTypes()) {
-      containedTypes.emplace_back(
-         cont.first,
-         resolveGenerics(cont.second, generics)
-      );
-   }
-
-   return TupleType::get(containedTypes);
-}
-
-}
+} // namespace cdot

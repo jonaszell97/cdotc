@@ -25,77 +25,22 @@ extern const char* OpNames[];
 
 Type *getResultTypeFor(Value *lhs, Value *rhs, OpCode op);
 
-//template<class ValueT>
-//class op_iterator_impl :
-//      public std::iterator<std::forward_iterator_tag, ValueT*> {
-//public:
-//   op_iterator_impl(ValueT *V) : Curr(V) {}
-//
-//   bool operator==(const op_iterator_impl &x) const { return Curr == x.Curr; }
-//   bool operator!=(const op_iterator_impl &x) const { return Curr != x.Curr; }
-//
-//   ValueT *operator*()
-//   {
-//      return Curr;
-//   }
-//
-//   op_iterator_impl &operator++() // pre-increment
-//   {
-//      ++Curr;
-//      return *this;
-//   }
-//
-//   op_iterator_impl operator++(int) // post-increment
-//   {
-//      auto tmp = *this;
-//      ++Curr;
-//
-//      return tmp;
-//   }
-//
-//   op_iterator_impl &operator--() // pre-decrement
-//   {
-//      ++Curr;
-//      return *this;
-//   }
-//
-//   op_iterator_impl operator--(int) // post-decrement
-//   {
-//      auto tmp = *this;
-//      ++Curr;
-//
-//      return tmp;
-//   }
-//
-//protected:
-//   ValueT *Curr;
-//};
-
 class OperatorInst: public Instruction {
 public:
-   Value *getOperand(unsigned idx);
-   unsigned getNumOperands() const;
-   void setOperand(unsigned idx, Value *val);
-
    OpCode getOpCode() const
    {
       return (OpCode)id;
    }
 
-   using op_iterator =       Value**;
-   using op_const_iterator = Value* const*;
-
-   op_iterator op_begin();
-   op_iterator op_end();
-
-   op_const_iterator op_begin() const;
-   op_const_iterator op_end() const;
-
 protected:
-   OperatorInst(TypeID id, Type *resultType, BasicBlock *parent,
-                const std::string &name = "",
-                const SourceLocation &loc = {})
-      : Instruction(id, resultType, parent,  name, loc)
+   OperatorInst(TypeID id, Type *resultType, BasicBlock *parent)
+      : Instruction(id, resultType, parent)
+   {
+
+   }
+
+   OperatorInst(TypeID id, QualType resultType, BasicBlock *parent)
+      : Instruction(id, resultType, parent)
    {
 
    }
@@ -124,11 +69,15 @@ public:
                      Value *lhs,
                      Value *rhs,
                      Type *resultType,
-                     BasicBlock *parent,
-                     const std::string &name = "",
-                     const SourceLocation &loc = {});
+                     BasicBlock *parent);
 
-   friend class OperatorInst;
+   BinaryInstruction(TypeID id,
+                     Value *lhs,
+                     Value *rhs,
+                     QualType resultType,
+                     BasicBlock *parent);
+
+   friend class Instruction;
 
 private:
    unsigned getNumOperandsImpl() const { return 2; }
@@ -145,11 +94,11 @@ private:
       Operands[idx] = V;
    }
 
-   op_iterator op_begin_impl();
-   op_iterator op_end_impl();
+   op_iterator op_begin_impl() { return Operands; }
+   op_iterator op_end_impl()   { return Operands + 2; }
 
-   op_const_iterator op_begin_impl() const;
-   op_const_iterator op_end_impl() const;
+   op_const_iterator op_begin_impl() const { return Operands; }
+   op_const_iterator op_end_impl()   const { return Operands + 2; }
 
 protected:
    Value *Operands[2];
@@ -173,11 +122,14 @@ public:
    UnaryInstruction(TypeID id,
                     Value *operand,
                     Type *resultType,
-                    BasicBlock *parent,
-                    const std::string &name = "",
-                    const SourceLocation &loc = { });
+                    BasicBlock *parent);
 
-   friend class OperatorInst;
+   UnaryInstruction(TypeID id,
+                    Value *operand,
+                    QualType resultType,
+                    BasicBlock *parent);
+
+   friend class Instruction;
 
 private:
    unsigned getNumOperandsImpl() const { return 1; }
@@ -194,11 +146,11 @@ private:
       Operand = V;
    }
 
-   op_iterator op_begin_impl();
-   op_iterator op_end_impl();
+   op_iterator op_begin_impl() { return &Operand; }
+   op_iterator op_end_impl()   { return &Operand + 1; }
 
-   op_const_iterator op_begin_impl() const;
-   op_const_iterator op_end_impl() const;
+   op_const_iterator op_begin_impl() const { return &Operand; }
+   op_const_iterator op_end_impl()   const { return &Operand + 1; }
 
 protected:
    Value *Operand;
@@ -223,11 +175,10 @@ public:
 #define CDOT_BIN_OP(Name) \
    class Name##Inst: public BinaryInstruction {                               \
    public:                                                                    \
-      Name##Inst(Value *lhs, Value *rhs, BasicBlock *parent,                  \
-                 const std::string &name = "", const SourceLocation &loc = {})\
+      Name##Inst(Value *lhs, Value *rhs, BasicBlock *parent)                  \
          : BinaryInstruction(Name##InstID, lhs, rhs,                          \
                              getResultTypeFor(lhs, rhs, OpCode::Name),        \
-                             parent, name, loc)                               \
+                             parent)                                          \
       {                                                                       \
       }                                                                       \
                                                                               \
@@ -252,10 +203,8 @@ public:
 #define CDOT_UN_OP(Name) \
    class Name##Inst: public UnaryInstruction {                                \
    public:                                                                    \
-      Name##Inst(Value *target, BasicBlock *parent,                           \
-                 const std::string &name = "", const SourceLocation &loc = {})\
-         : UnaryInstruction(Name##InstID, target, *target->getType(), parent, \
-                            name,loc)                                         \
+      Name##Inst(Value *target, BasicBlock *parent)                           \
+         : UnaryInstruction(Name##InstID, target, *target->getType(), parent) \
       {                                                                       \
       }                                                                       \
                                                                               \

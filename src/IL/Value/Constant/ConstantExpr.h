@@ -5,21 +5,21 @@
 #ifndef CDOT_CONSTANTEXPR_H
 #define CDOT_CONSTANTEXPR_H
 
-
-#include "../Instruction/Instruction.h"
+#include "Constant.h"
 
 namespace cdot {
 namespace il {
 
-class Constant;
+class ConstantBitCastInst;
+class ConstantAddrOfInst;
 
-class ConstantExpr: public Instruction {
+class ConstantExpr: public Constant {
+public:
+   static ConstantBitCastInst *getBitCast(Constant *Val, Type *toType);
+   static ConstantAddrOfInst *getAddrOf(Constant *Val);
+
 protected:
-   ConstantExpr(TypeID id,
-                Type *ty,
-                BasicBlock *parent,
-                const std::string &name = "",
-                const SourceLocation &loc = {});
+   ConstantExpr(TypeID id, Type *ty);
 
    static inline bool classof(Value const* T) {
       switch (T->getTypeID()) {
@@ -34,20 +34,42 @@ protected:
 };
 
 class ConstantBitCastInst: public ConstantExpr {
-public:
-   ConstantBitCastInst(Constant *Val,
-                       Type *toType,
-                       BasicBlock *parent,
-                       const std::string &name = "",
-                       const SourceLocation &loc = {});
-
-protected:
+private:
    Constant *target;
 
+   ConstantBitCastInst(Constant *Val,
+                       Type *toType);
+
 public:
+   friend class ConstantExpr;
+
+   Constant *getTarget() const
+   {
+      return target;
+   }
+
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ConstantBitCastInstID;
+   }
+};
+
+class ConstantAddrOfInst: public ConstantExpr {
+private:
+   Constant *target;
+   explicit ConstantAddrOfInst(Constant *Val);
+
+public:
+   friend class ConstantExpr;
+
+   Constant *getTarget() const
+   {
+      return target;
+   }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantAddrOfInstID;
    }
 };
 

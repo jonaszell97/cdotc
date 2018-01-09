@@ -12,27 +12,13 @@ namespace ast {
 
 class TypeRef;
 
-class FuncArgDecl : public Statement {
+class FuncArgDecl: public Statement {
 public:
    FuncArgDecl(std::string &&argName,
                std::shared_ptr<TypeRef> &&argType,
-               Expression::SharedPtr &&defaultValue = {});
-   
-   void setName(string name_) {
-      argName = name_;
-   }
-
-   void setType(std::shared_ptr<TypeRef> type) {
-      argType = type;
-   }
-
-   std::shared_ptr<TypeRef> getArgType() {
-      return argType;
-   }
-
-   void setDefault(Expression::SharedPtr def) {
-      defaultVal = def;
-   }
+               Expression::SharedPtr &&defaultValue,
+               bool variadicArgPackExpansion,
+               bool isConst);
 
    typedef std::shared_ptr<FuncArgDecl> SharedPtr;
 
@@ -43,28 +29,36 @@ public:
 
 protected:
    std::string argName;
-   std::shared_ptr<TypeRef> argType = nullptr;
+   std::shared_ptr<TypeRef> argType;
    std::shared_ptr<Expression> defaultVal;
 
+   bool variadicArgPackExpansion : 1;
+   bool is_const : 1;
+
 public:
-   const string &getArgName() const {
+   const string &getArgName() const
+   {
       return argName;
    }
 
-   void setArgName(const string &argName) {
-      FuncArgDecl::argName = argName;
+   std::shared_ptr<TypeRef> getArgType()
+   {
+      return argType;
    }
 
-   void setArgType(const std::shared_ptr<TypeRef> &argType) {
-      FuncArgDecl::argType = argType;
-   }
-
-   const std::shared_ptr<Expression> &getDefaultVal() const {
+   const std::shared_ptr<Expression> &getDefaultVal() const
+   {
       return defaultVal;
    }
 
-   void setDefaultVal(const std::shared_ptr<Expression> &defaultVal) {
-      FuncArgDecl::defaultVal = defaultVal;
+   bool isVariadicArgPackExpansion() const
+   {
+      return variadicArgPackExpansion;
+   }
+
+   bool isConst() const
+   {
+      return is_const;
    }
 };
 

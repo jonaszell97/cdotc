@@ -15,7 +15,7 @@ class Expression;
 class WhileStmt : public Statement {
 public:
    WhileStmt(std::shared_ptr<Expression> &&cond,
-             Statement::SharedPtr &&body,
+             std::shared_ptr<Statement> &&body,
              bool atLeastOnce);
 
    typedef std::shared_ptr<WhileStmt> SharedPtr;
@@ -27,13 +27,26 @@ public:
 
 protected:
    std::shared_ptr<Expression> condition;
-   Statement::SharedPtr body;
+   std::shared_ptr<Statement> body;
 
    bool atLeastOnce = false;
 
 public:
-   std::shared_ptr<Expression> &getCondition();
-   const Statement::SharedPtr &getBody() const;
+   const std::shared_ptr<Expression> &getCondition() const
+   {
+      return condition;
+   }
+
+   std::shared_ptr<Expression> &getCondition()
+   {
+      return condition;
+   }
+
+   std::shared_ptr<Statement> const& getBody() const
+   {
+      return body;
+   }
+
    bool isAtLeastOnce() const;
 };
 

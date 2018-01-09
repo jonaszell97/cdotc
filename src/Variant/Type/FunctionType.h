@@ -5,83 +5,80 @@
 #ifndef CDOT_FUNCTIONTYPE_H
 #define CDOT_FUNCTIONTYPE_H
 
-
-#include "Type.h"
-#include "../../AST/Passes/AbstractPass.h"
 #include "QualType.h"
-
-using std::pair;
 
 namespace cdot {
 
-   struct Argument;
-   class ObjectType;
+struct Argument;
+class ObjectType;
 
-   class FunctionType : public Type {
-   protected:
-      FunctionType(const QualType& returnType,
-                   const std::vector<Argument>& argTypes,
-                   bool raw);
+class FunctionType : public Type {
+protected:
+   FunctionType(const QualType& returnType,
+                const std::vector<Argument>& argTypes,
+                bool raw);
 
-      static string typesToString(
-         const QualType& returnType,
-         const std::vector<Argument>& argTypes
-      );
+   FunctionType(const QualType& returnType,
+                std::vector<Argument>&& argTypes,
+                bool raw);
 
-   public:
-      static FunctionType *get(
-         const QualType& returnType,
-         const std::vector<Argument>& argTypes,
-         bool isRawFunctionTy
-      );
+   static std::string typesToString(
+      const QualType& returnType,
+      const std::vector<Argument>& argTypes
+   );
 
-      QualType getReturnType() const
-      {
-         return returnType;
-      }
+public:
+   static FunctionType *get(
+      const QualType& returnType,
+      const std::vector<Argument>& argTypes,
+      bool isRawFunctionTy
+   );
 
-      const std::vector<Argument>& getArgTypes() const
-      {
-         return argTypes;
-      }
+   static FunctionType *get(
+      const QualType& returnType,
+      std::vector<Argument> &&argTypes,
+      bool isRawFunctionTy
+   );
 
-      bool isRawFunctionTy() const
-      {
-         return isRawFunctionTy_;
-      }
+   static FunctionType *get(llvm::ArrayRef<Type*> tys);
 
-      bool needsMemCpy() const override
-      {
-         return !isRawFunctionTy_;
-      }
+   static FunctionType *get(
+      const QualType& returnType,
+      const std::vector<Type*>& argTypes,
+      bool isRawFunctionTy
+   );
 
-      bool needsLvalueToRvalueConv() const override
-      {
-         return isRawFunctionTy_;
-      }
+   QualType getReturnType() const
+   {
+      return returnType;
+   }
 
-      size_t getSize() const override;
+   const std::vector<Argument>& getArgTypes() const
+   {
+      return argTypes;
+   }
 
-      string toString() const override;
-      llvm::Type* getLlvmType() const override;
-      llvm::Type* getLlvmFunctionType() const override;
+   bool isRawFunctionTy() const { return isRawFunctionTy_; }
 
-      bool implicitlyCastableTo(Type*) const override;
+   size_t getSize() const;
+   unsigned short getAlignment() const
+   {
+      return sizeof(void*);
+   }
 
-      static bool classof(Type const* T)
-      {
-         return T->getTypeID() == TypeID::FunctionTypeID;
-      }
+   std::string toString() const;
 
-      typedef std::unique_ptr<FunctionType> UniquePtr;
-      typedef std::shared_ptr<FunctionType> SharedPtr;
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::FunctionTypeID;
+   }
 
-   protected:
-      QualType returnType;
-      std::vector<Argument> argTypes;
+protected:
+   QualType returnType;
+   std::vector<Argument> argTypes;
 
-      bool isRawFunctionTy_ = false;
-   };
+   bool isRawFunctionTy_ = false;
+};
 
 } // namespace cdot
 

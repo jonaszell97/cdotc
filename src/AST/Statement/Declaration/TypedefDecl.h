@@ -9,8 +9,13 @@
 #include "../../../Variant/Type/Generic.h"
 
 namespace cdot {
+
+struct Alias;
+struct Typedef;
+
 namespace ast {
 
+class ConstraintExpr;
 class TypeRef;
 
 class TypedefDecl : public Statement {
@@ -19,8 +24,18 @@ public:
       AccessModifier access,
       string&& alias,
       std::shared_ptr<TypeRef>&& origin,
-      std::vector<TemplateConstraint>&& generics
+      std::vector<TemplateParameter>&& generics
    );
+
+   Typedef *getTypedef() const
+   {
+      return td;
+   }
+
+   void setTypedef(Typedef *td)
+   {
+      TypedefDecl::td = td;
+   }
 
    typedef std::shared_ptr<TypedefDecl> SharedPtr;
 
@@ -34,25 +49,112 @@ protected:
    string alias;
    std::shared_ptr<TypeRef> origin;
 
-   std::vector<TemplateConstraint> templateArgs;
+   std::vector<TemplateParameter> templateParams;
 
    cdot::cl::Record *record = nullptr;
+   Typedef *td = nullptr;
 
 public:
-   AccessModifier getAccess() const;
-   void setAccess(AccessModifier access);
+   AccessModifier getAccess() const
+   {
+      return access;
+   }
 
-   const string &getAlias() const;
-   void setAlias(const string &alias);
+   const string &getAlias() const
+   {
+      return alias;
+   }
 
-   const std::shared_ptr<TypeRef> &getOrigin() const;
-   void setOrigin(const std::shared_ptr<TypeRef> &origin);
+   const std::shared_ptr<TypeRef> &getOrigin() const
+   {
+      return origin;
+   }
 
-   std::vector<TemplateConstraint> &getTemplateArgs();
-   void setTemplateArgs(const std::vector<TemplateConstraint> &templateArgs);
+   std::vector<TemplateParameter> &getTemplateParams()
+   {
+      return templateParams;
+   }
 
-   cdot::cl::Record *getRecord() const;
-   void setRecord(cdot::cl::Record *record);
+   cl::Record *getRecord() const
+   {
+      return record;
+   }
+
+   void setRecord(cl::Record *record)
+   {
+      TypedefDecl::record = record;
+   }
+};
+
+class AliasDecl: public Statement {
+public:
+   AliasDecl(string &&name,
+             std::vector<TemplateParameter> &&templateParams,
+             std::vector<std::shared_ptr<StaticExpr>> &&constraints,
+             std::shared_ptr<StaticExpr> &&aliasExpr)
+      : Statement(AliasDeclID), name(move(name)),
+        templateParams(move(templateParams)),
+        constraints(move(constraints)), aliasExpr(move(aliasExpr))
+   { }
+
+   static bool classof(AstNode const* T)
+   {
+       return T->getTypeID() == AliasDeclID;
+   }
+
+private:
+   std::string name;
+   std::vector<TemplateParameter> templateParams;
+   std::vector<std::shared_ptr<StaticExpr>> constraints;
+
+   std::shared_ptr<StaticExpr> aliasExpr;
+   Alias *alias = nullptr;
+
+public:
+   const string &getName() const
+   {
+      return name;
+   }
+
+   std::vector<TemplateParameter> &getTemplateParams()
+   {
+      return templateParams;
+   }
+
+   std::vector<std::shared_ptr<StaticExpr>> &getConstraints()
+   {
+      return constraints;
+   }
+
+   std::shared_ptr<StaticExpr> &getAliasExpr()
+   {
+      return aliasExpr;
+   }
+
+   std::vector<TemplateParameter> const& getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   std::vector<std::shared_ptr<StaticExpr>> const& getConstraints() const
+   {
+      return constraints;
+   }
+
+   std::shared_ptr<StaticExpr> const& getAliasExpr() const
+   {
+      return aliasExpr;
+   }
+
+   Alias *getAlias() const
+   {
+      return alias;
+   }
+
+   void setAlias(Alias *alias)
+   {
+      AliasDecl::alias = alias;
+   }
 };
 
 } // namespace ast

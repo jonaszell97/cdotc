@@ -18,12 +18,7 @@ namespace cdot {
    public:
       static AutoType *get();
 
-      string toString() const override;
-      llvm::Type* getLlvmType() const override;
-
-      bool implicitlyCastableTo(Type*) const override;
-
-      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
+      std::string toString() const;
 
       static bool classof(Type const* T)
       {

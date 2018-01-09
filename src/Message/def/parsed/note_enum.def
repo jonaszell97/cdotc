@@ -14,4 +14,4 @@ note_duplicate_label,
 note_goto_skipped_decl,
 note_duplicate_case,
 note_func_redeclaration_memberwise_init,
-note_func_redeclaration
+note_func_redeclaration,

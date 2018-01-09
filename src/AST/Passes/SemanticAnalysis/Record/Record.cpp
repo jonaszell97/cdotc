@@ -2,56 +2,96 @@
 // Created by Jonas Zell on 10.10.17.
 //
 
-#include "Record.h"
+#include <sstream>
 
+#include "Record.h"
+#include "Enum.h"
 #include "Class.h"
+#include "Protocol.h"
+#include "Union.h"
+
 #include "../Function.h"
 #include "../../../SymbolTable.h"
 
-#include "../../../Statement/Declaration/Template/RecordTemplateDecl.h"
 #include "../../../Statement/Declaration/Class/RecordDecl.h"
+#include "../../../Statement/Declaration/Class/MethodDecl.h"
+#include "../../../Statement/Declaration/Class/FieldDecl.h"
+#include "../../../Statement/Declaration/Class/PropDecl.h"
+
 #include "../../../Expression/TypeRef.h"
 
+#include "../../../../Support/Casting.h"
+
 #include "../../../../Variant/Type/GenericType.h"
+#include "../../../../Variant/Type/TupleType.h"
+
 #include "../../../../Message/Diagnostics.h"
-#include "../../CodeGen/CodeGen.h"
+#include "../../../../Basic/Mangle.h"
 
 using namespace cdot::diag;
 using namespace cdot::ast;
+using namespace cdot::support;
+using namespace cdot::sema;
+
+using std::unordered_map;
+using std::string;
+using std::unordered_multimap;
 
 namespace cdot {
 namespace cl {
 
-size_t Record::lastTypeID = 0;
+size_t Record::lastRecordID = 0;
 
-Record::Record(
-   const string &name,
-   AccessModifier access,
-   const SourceLocation &loc,
-   RecordDecl *decl) :
+Record::Record(TypeID id,
+               const string &name,
+               Namespace *NS,
+               AccessModifier access,
+               std::vector<TemplateParameter> &&templateParams,
+               const SourceLocation &loc,
+               RecordDecl *decl)
+   : typeID(id),
+     access(access),
+     recordID(lastRecordID++),
      recordName(name),
-     declarationNamespace(name.substr(0, name.rfind('.'))),
-     typeID(lastTypeID++), loc(loc),
-     decl(decl)
+     fullName(NS ? NS->name + '.' + recordName : recordName),
+     templateParams(move(templateParams)),
+     loc(loc),
+     decl(decl),
+     declarationNamespace(NS)
 {
 
 }
+
+Record::~Record() = default;
 
 bool Record::isDeclared() const
 {
    return decl->isDeclaration();
 }
 
-void Record::isTemplate(
-   RecordTemplate *Template, TemplateArgList *templateArgs)
-{
-   this->Template = Template;
-   this->templateArgs = templateArgs;
-}
-
 AccessModifier Record::getAccess() const
 {
    return access;
+}
+
+#define IS_X(Name) \
+   bool Record::is##Name() const { return isa<Name>(this); }
+
+IS_X(Class)
+IS_X(Struct)
+IS_X(Protocol)
+IS_X(Union)
+IS_X(Enum)
+
+#undef IS_X
+
+bool Record::isRawEnum() const
+{
+   if (auto En = dyn_cast<Enum>(this)) {
+      return En->isRawEnum();
+   }
+
+   return false;
 }
 
 bool Record::isPrivate() const
@@ -64,140 +104,113 @@ bool Record::isProtected() const
    return access == AccessModifier::PROTECTED;
 }
 
-llvm::Type* Record::getSelfType() const
-{
-   return CodeGen::getStructTy(recordName);
-}
-
 string Record::getTypeName() const
 {
-   if (isStruct()) {
-      return "struct";
+   switch (typeID) {
+      case StructID: return "struct";
+      case EnumID: return "enum";
+      case ClassID: return "class";
+      case UnionID: return "union";
+      case ProtocolID: return "protocol";
    }
-   if (isProtocol()) {
-      return "protocol";
-   }
-   if (isNonUnion()) {
-      return "class";
-   }
-   if (isEnum()) {
-      return "enum";
-   }
-   if (isUnion()) {
-      return "union";
-   }
-
-   llvm_unreachable(0);
 }
 
 int Record::getNameSelector() const
 {
-   if (isNonUnion()) {
-      return 0;
+   switch (typeID) {
+      case ClassID: return 0;
+      case StructID: return 1;
+      case EnumID: return 2;
+      case UnionID: return 3;
+      case ProtocolID: return 4;
    }
-   if (isStruct()) {
-      return 1;
-   }
-   if (isEnum()) {
-      return 2;
-   }
-   if (isUnion()) {
-      return 3;
-   }
-   if (isProtocol()) {
-      return 4;
-   }
-
-   llvm_unreachable(0);
-}
-
-const std::vector<Typedef> &Record::getTypedefs() const
-{
-   return typedefs;
-}
-
-void Record::setTypedefs(const std::vector<Typedef> &typedefs)
-{
-   Record::typedefs = typedefs;
-}
-
-void Record::declareTypedef(
-   Type *ty, const string &alias,
-   const std::vector<TemplateConstraint> &templateArgs,
-   AccessModifier access, AstNode *decl)
-{
-   typedefs.emplace_back(ty, alias, templateArgs, access, decl);
 }
 
 bool Record::conformsTo(const string &name) const
 {
-   auto findFunc = [name](Class *cl) {
-      return cl->getName() == name;
-   };
+   for (const auto &Proto : conformances) {
+      if (Proto->getName().equals(name))
+         return true;
+   }
 
-   return std::find_if(conforms_to.begin(),
-                       conforms_to.end(),
-                       findFunc) != conforms_to.end();
+   return false;
 }
 
-void Record::addConformance(Class *cl)
+bool Record::conformsToTemplateBase(const std::string &name) const
+{
+   for (Record *Proto : conformances) {
+      while (Proto->getSpecializedTemplate())
+         Proto = Proto->getSpecializedTemplate();
+
+      if (Proto->getName().equals(name))
+         return true;
+   }
+
+   return false;
+}
+
+void Record::addConformance(Protocol *cl)
 {
    assert(cl != this && "circular conformance");
 
-   conforms_to.insert(cl);
+   conformances.insert(cl);
    for (const auto &byProxy : cl->getConformances()) {
       addConformance(byProxy);
    }
 }
 
-std::set<Class*>& Record::getConformances()
+void Record::calculateSize()
 {
-   return conforms_to;
+   assert(!occupiedBytes && "duplicate size calculation");
+
+   switch (typeID) {
+      case EnumID:
+         return static_cast<Enum*>(this)->calculateSizeImpl();
+      case UnionID:
+         return static_cast<Union*>(this)->calculateSizeImpl();
+      case StructID:
+      case ClassID:
+         return static_cast<Struct*>(this)->calculateSizeImpl();
+      case ProtocolID:
+         return static_cast<Protocol*>(this)->calculateSizeImpl();
+   }
 }
 
 bool Record::isTemplated() const
 {
-   return Template != nullptr;
+   return !templateParams.empty();
 }
 
-const TemplateArg& Record::getTemplateArg(const string &name) const
+ResolvedTemplateArg const* Record::getTemplateArg(llvm::StringRef name) const
 {
-   assert(Template && "not a templated class!");
+   return templateArgs.getNamedArg(name);
+}
 
-   size_t i = 0;
-   for (const auto &constraint : Template->constraints) {
-      if (constraint.genericTypeName == name) {
-         assert(templateArgs->get().size() > i);
-         return templateArgs->get()[i];
-      }
-
-      ++i;
+Record* Record::hasInstantiation(const string &templateArgStr)
+{
+   auto fullName = this->fullName + templateArgStr;
+   for (const auto &Inst : Instantiations) {
+      if (Inst->getRecord()->getName() == fullName)
+         return Inst->getRecord();
    }
 
-   llvm_unreachable("template arg does not exist");
-}
-
-const std::vector<TemplateArg>& Record::getTemplateArgs() const
-{
-   assert(Template && "not a templated class!");
-   return templateArgs->get();
-}
-
-RecordTemplate* Record::getTemplate()
-{
-   assert(Template && "not a templated class!");
-   return Template;
+   return nullptr;
 }
 
 bool Record::hasInnerRecord(const string &inner) const
 {
    auto innerCl = SymbolTable::getRecord(inner);
+   return hasInnerRecord(innerCl);
+}
+
+bool Record::hasInnerRecord(Record *innerCl) const
+{
    if(util::in_vector(innerRecords, innerCl)) {
       return true;
    }
 
    for (const auto& innerDecl : innerRecords) {
-      if (innerDecl->hasInnerRecord(inner)) {
+      if (innerDecl->hasInnerRecord(innerCl)) {
          return true;
       }
    }
@@ -215,35 +228,77 @@ void Record::setDecl(RecordDecl *decl)
    Record::decl = decl;
 }
 
-const unordered_multimap<string, std::shared_ptr<Method>> &
-Record::getMethods() const
-{
-   return methods;
-}
 
-void Record::setMethods(
-   const unordered_multimap<string, std::shared_ptr<Method>> &methods)
-{
-   Record::methods = methods;
-}
-
-
-Method* Record::getMethod(llvm::StringRef name)
+Method* Record::getMethod(llvm::StringRef name, bool checkParent)
 {
    for (auto& method : methods) {
-      if (name.equals(method.second->getMangledName())) {
-         return method.second.get();
+      if (name.equals(method.second.getLinkageName())
+          || name.equals(method.second.getName())) {
+         return &method.second;
+      }
+   }
+
+   if (checkParent) {
+      if (auto Cl = dyn_cast<Class>(this)) {
+         if (auto Parent = Cl->getParent()) {
+            return Parent->getMethod(name);
+         }
       }
    }
 
    return nullptr;
 }
 
-Method* Record::getMethod(unsigned id)
+Method* Record::getMethod(size_t id)
 {
    for (auto& method : methods) {
-      if (method.second->getMethodID() == id) {
-         return method.second.get();
+      if (method.second.getMethodID() == id) {
+         return &method.second;
+      }
+   }
+
+   if (auto Cl = dyn_cast<Class>(this)) {
+      if (auto Parent = Cl->getParent()) {
+         return Parent->getMethod(id);
+      }
+   }
+
+   return nullptr;
+}
+
+Method* Record::getConversionOperator(Type const *toType)
+{
+   for (auto &M : methods) {
+      if (M.second.isConversionOp() && *M.second.getReturnType() == toType) {
+         return &M.second;
+      }
+   }
+
+   if (auto Cl = dyn_cast<Class>(this)) {
+      if (auto Parent = Cl->getParent()) {
+         return Parent->getConversionOperator(toType);
+      }
+   }
+
+   return nullptr;
+}
+
+Method* Record::getComparisonOperator(Type const *withType)
+{
+   auto overloads = methods.equal_range("infix ==");
+   while (overloads.first != overloads.second) {
+      auto &M = overloads.first->second;
+      if (M.getArguments().size() == 1
+          && *M.getArguments().front().type == withType) {
+         return &M;
+      }
+
+      ++overloads.first;
+   }
+
+   if (auto Cl = dyn_cast<Class>(this)) {
+      if (auto Parent = Cl->getParent()) {
+         return Parent->getComparisonOperator(withType);
       }
    }
 
@@ -252,82 +307,133 @@ Method* Record::getMethod(unsigned id)
 
 void Record::declareMethodAlias(const string &name,
                                 const string &mangledOriginal) {
-   for (const auto& method : methods) {
-      if (method.second->getMangledName() == mangledOriginal) {
-         methods.emplace(name, method.second);
-         break;
-      }
-   }
 
-   llvm_unreachable("aliased method does not exist");
 }
-
-void RecordTemplate::addInstantiation(std::shared_ptr<Statement> &&inst)
-{
-   if (!outerTemplate) {
-      decl->addInstantiation(std::move(inst));
-      return;
-   }
-
-   auto current = outerTemplate;
-   while (current->Template->outerTemplate) {
-      current = current->Template->outerTemplate;
-   }
-
-   current->Template->decl->addInstantiation(std::move(inst));
-}
-
-namespace {
-
-string getOperatorEqualsName(Record *rec)
-{
-   string res;
-   auto len = res.length();
-
-   res += "infix ==";
-   res += std::to_string(len);
-   res += rec->getName();
-
-   return res;
-}
-
-} // anonymous namespace
 
 Method* Record::declareMethod(const string &methodName,
                               const QualType& ret_type,
                               AccessModifier access,
                               std::vector<Argument>&& args,
+                              std::vector<TemplateParameter> &&templateParams,
                               bool isStatic,
-                              MethodDecl* decl,
-                              SourceLocation loc) {
-   auto isInitializer = methodName == "init";
-
-   auto mangledName = SymbolTable::mangleMethod(recordName, methodName, args);
-   checkDuplicateMethodDeclaration((AstNode*)decl, methodName, mangledName);
-
-   auto method = std::make_shared<Method>(methodName, ret_type, access,
-                                          std::move(args), isStatic,
-                                          decl, loc, methods.size());
-
-   checkTemplateArgCompatability(*method);
-
-   method->isInitializer(isInitializer);
-   method->owningClass = this;
-
-   method->setMangledName(mangledName);
-
-   if (ret_type->needsStructReturn()) {
-      method->hasStructReturn(true);
+                              CallableDecl* decl,
+                              SourceLocation loc,
+                              size_t methodID) {
+   if (!methodID) {
+      methodID = ++lastMethodID;
+   }
+   else if (methodID >= lastMethodID) {
+      lastMethodID = methodID;
    }
 
-   auto ptr = method.get();
-   methods.emplace(methodName, std::move(method));
+   assert(!getMethod(methodID));
 
-   if (mangledName == getOperatorEqualsName(this)) {
-      operatorEquals = ptr;
+   auto &method =
+      methods.emplace(std::make_pair(
+         methodName, Method(methodName, ret_type, access,
+                            std::move(args), move(templateParams),
+                            OperatorInfo(), isStatic, decl, loc,
+                            declarationNamespace, methodID)
+      ))->second;
+
+   method.setOwningRecord(this);
+
+   if (isa<Protocol>(this)) {
+      method.setProtocolTableOffset(methods.size());
+      method.setProtocolDefaultImpl(decl && decl->getBody());
    }
 
-   return ptr;
+   method.setLinkageName(SymbolMangler().mangleMethod(&method));
+
+   if (methodName == "deinit")
+      deinitializer = &method;
+
+   return &method;
+}
+
+Method* Record::declareInitializer(const std::string &methodName,
+                                   AccessModifier access,
+                                   std::vector<Argument> &&args,
+                                std::vector<TemplateParameter> &&templateParams,
+                                   ast::CallableDecl *declaration,
+                                   size_t methodID) {
+   if (isTemplated()) {
+      templateParams.insert(templateParams.begin(),
+                            this->templateParams.begin(),
+                            this->templateParams.end());
+   }
+
+   auto M = declareMethod(methodName, QualType(ObjectType::get(this)),
+                          access, move(args), move(templateParams), false,
+                          declaration,
+                          declaration ? declaration->getSourceLoc() : loc,
+                          methodID);
+
+   if (auto Str = dyn_cast<Struct>(this)) {
+      if (args.empty()) {
+         Str->setParameterlessConstructor(M);
+      }
+
+      Str->addInitializer(M);
+   }
+
+   M->isInitializer(true);
+   return M;
+}
+
+Method* Record::declareMethod(const string &opName,
+                              const QualType &ret_type,
+                              OperatorInfo op,
+                              AccessModifier access,
+                              std::vector<Argument> &&args,
+                              std::vector<TemplateParameter> &&templateParams,
+                              bool isStatic,
+                              ast::CallableDecl *declaration,
+                              SourceLocation loc,
+                              size_t methodID) {
+   std::ostringstream methodName;
+   switch (op.getFix()) {
+      case FixKind::Infix: methodName << "infix "; break;
+      case FixKind::Prefix: methodName << "prefix "; break;
+      case FixKind::Postfix: methodName << "postfix "; break;
+   }
+
+   methodName << opName;
+
+   auto M = declareMethod(methodName.str(), ret_type, access, move(args),
+                          move(templateParams), isStatic, declaration, loc,
+                          methodID);
+
+   M->setOperator(op);
+
+   if (declaration) {
+      if (auto mDecl = dyn_cast<MethodDecl>(declaration)) {
+         if (mDecl->isIsCastOp_()) {
+            M->setIsConversionOp(true);
+            if (M->getReturnType()->isTupleTy())
+               destructuringOperators.emplace(
+                  cast<TupleType>(*M->getReturnType())->getArity(), M);
+         }
+      }
+   }
+
+   if (opName == "==" && op.getFix() == FixKind::Infix) {
+      if (*M->getArguments().front().type == ObjectType::get(this))
+         operatorEquals = M;
+   }
+
+   auto it = OperatorPrecedences.find(opName);
+   if (it != OperatorPrecedences.end()) {
+      it->second.addFix(op.getFix());
+   }
+   else {
+      OperatorPrecedences.try_emplace(opName, Operator(
+         op.getPrecedenceGroup().getAssociativity(),
+         op.getPrecedenceGroup().getPrecedence(),
+         op.getFix(), ret_type));
+   }
+
+   return M;
 }
 
 Property* Record::declareProperty(const string &propName,
@@ -343,36 +449,48 @@ Property* Record::declareProperty(const string &propName,
                                        decl)).first->second;
 }
 
-Method *Record::declareMethodTemplate(MethodTemplate *Template)
+Field* Record::declareField(const string &name,
+                            QualType type,
+                            AccessModifier access,
+                            bool isConst,
+                            bool isStatic,
+                            FieldDecl* decl) {
+   assert((isa<Struct>(this) || isStatic) && "non-static field in non-struct!");
+
+   fields.emplace_back(name, type, access, isConst, decl);
+   auto &field = fields.back();
+
+   field.isStatic = isStatic;
+   field.owningRecord = this;
+   field.linkageName = fullName + "." + name;
+
+   return &field;
+}
+
+Field* Record::getField(const string &field_name)
 {
-   auto method = std::make_shared<Method>(Template);
-   method->owningClass = this;
-   method->setMangledName(SymbolTable::mangleMethod(recordName,
-                                                    method->getName(),
-                                                    method->getArguments()));
+   for (auto &F: fields)
+      if (F.fieldName == field_name)
+         return &F;
 
-   checkDuplicateMethodDeclaration((AstNode*)Template->methodDecl,
-                                   Template->funcName,
-                                   method->getMangledName());
+   if (auto Cl = dyn_cast<Class>(this))
+      if (Cl->getParent())
+         return Cl->getParent()->getField(field_name);
 
-   checkTemplateArgCompatability(*method);
+   return nullptr;
+}
 
-   auto ptr = method.get();
-   methods.emplace(method->getName(), std::move(method));
-
-   return ptr;
+bool Record::hasField(const string &field_name)
+{
+   return getField(field_name) != nullptr;
 }
 
 namespace {
 
 void throwTemplateArgError(Method &newMethod, Method &method)
 {
-   auto NewDecl = newMethod.isTemplate()
-                  ? (AstNode*)newMethod.getMethodTemplate()->methodDecl
-                  : (AstNode*)newMethod.getDeclaration();
-   auto PrevDecl = method.isTemplate()
-                   ? (AstNode*)method.getMethodTemplate()->methodDecl
-                   : (AstNode*)method.getDeclaration();
+   auto NewDecl = newMethod.getDeclaration();
+   auto PrevDecl = method.getDeclaration();
 
    diag::err(err_overload_generic_params)
       << 1 /*method*/
@@ -381,10 +499,9 @@ void throwTemplateArgError(Method &newMethod, Method &method)
       << PrevDecl << diag::term;
 }
 
-}
+} // anonymous namespace
 
-void Record::checkTemplateArgCompatability(
-   Method &newMethod)
+void Record::checkTemplateArgCompatability(Method &newMethod)
 {
    // method overloads must have the same template arguments
    auto overloads = methods.equal_range(newMethod.getName());
@@ -392,7 +509,7 @@ void Record::checkTemplateArgCompatability(
       return;
    }
 
-   auto &method = *overloads.first->second;
+   auto &method = overloads.first->second;
    if (newMethod.isTemplate() != method.isTemplate()) {
       throwTemplateArgError(newMethod, method);
    }
@@ -400,16 +517,16 @@ void Record::checkTemplateArgCompatability(
       return;
    }
 
-   auto &NewTemplate = *newMethod.getTemplate();
-   auto &PrevTemplate = *method.getTemplate();
+   auto &NewParams = newMethod.getTemplateParams();
+   auto &PrevParams = method.getTemplateParams();
 
-   if (NewTemplate.constraints.size() != PrevTemplate.constraints.size()) {
+   if (NewParams.size() != PrevParams.size()) {
       throwTemplateArgError(newMethod, method);
    }
 
    size_t i = 0;
-   for (const auto &Constraint : NewTemplate.constraints) {
-      if (Constraint != PrevTemplate.constraints[i]) {
+   for (const auto &Constraint : NewParams) {
+      if (Constraint != PrevParams[i]) {
          throwTemplateArgError(newMethod, method);
       }
 
@@ -417,18 +534,37 @@ void Record::checkTemplateArgCompatability(
    }
 }
 
-void Record::checkDuplicateMethodDeclaration(
-   AstNode *decl, const string &name, const string &mangledName)
-{
+void Record::checkDuplicateMethodDeclaration(const SourceLocation &loc,
+                                             const string &name,
+                                             const string &mangledName) {
    auto overloads = methods.equal_range(name);
    for (auto it = overloads.first; it != overloads.second; ++it) {
-      if (it->second->getMangledName() == mangledName) {
+      if (it->second.getLinkageName() == mangledName) {
+         string nameWithArgs = name;
+         auto &args = it->second.getArguments();
+         if (!args.empty()) {
+            nameWithArgs += '(';
+            auto numArgs = args.size();
+            size_t i = 0;
+
+            while (i < numArgs) {
+               nameWithArgs += args[i].type.toString();
+
+               if (i < numArgs - 1)
+                  nameWithArgs += ", ";
+
+               ++i;
+            }
+
+            nameWithArgs += ')';
+         }
+
          diag::err(err_duplicate_method)
             << 1 /*method*/
-            << name << decl
+            << nameWithArgs << loc
             << diag::cont;
          diag::note(note_duplicate_method)
-            << it->second->getTemplateOrMethodDecl()
+            << it->second.getSourceLoc()
             << diag::term;
       }
    }
@@ -443,7 +579,7 @@ bool Record::hasMethodWithName(const string &name) const
 bool Record::hasMethodTemplate(const string &name) const
 {
    auto range = methods.equal_range(name);
-   return range.first != range.second && range.first->second->isTemplate();
+   return range.first != range.second && range.first->second.isTemplate();
 }
 
 bool Record::hasProperty(const string &name) const
@@ -470,99 +606,72 @@ auto Record::getMethodTemplates(const string &name)
    -> decltype(methods.equal_range(""))
 {
    auto range = methods.equal_range(name);
-   assert(range.first != range.second && range.first->second->isTemplate());
+   assert(range.first != range.second && range.first->second.isTemplate());
 
    return range;
 }
 
-std::vector<TemplateConstraint>& Record::getMethodConstraints(
-   const string &forMethod)
-{
+const std::vector<TemplateParameter>& Record::getMethodConstraints(
+                                                      const string &forMethod) {
    auto range = methods.equal_range(forMethod);
    assert(range.first != range.second && "call hasMethodWithName first");
-   assert(range.first->second->isTemplate() && "call hasMethodTemplate first");
+   assert(range.first->second.isTemplate() && "call hasMethodTemplate first");
 
-   return range.first->second->getTemplate()->constraints;
+   return range.first->second.getTemplateParams();
 }
 
-const ExtensionConstraint* Record::checkConstraints(
-   Method *method,
-   Type *caller) const
+void Record::addImplicitConformance(ImplicitConformanceKind kind)
 {
-   llvm_unreachable("should only be called on classes");
-}
+   if (getImplicitConformance(kind))
+      return;
 
-bool Record::checkConstraint(
-   const ExtensionConstraint &constr,
-   Type *&caller) const
-{
-   llvm_unreachable("should only be called on classes");
-}
-
-namespace {
-bool isBetterMatchThan(
-   bool& strict,
-   CallCompatability &best,
-   CallCompatability &candidate)
-{
-   if (!candidate.isCompatible()) {
-      return false;
-   }
-   if (strict) {
-      return candidate.perfectMatch && !best.isCompatible();
-   }
-   if (!best.isCompatible()) {
-      return true;
-   }
-
-   return candidate.castPenalty < best.castPenalty;
-}
-}
-
-void Record::addImplicitConformance(ImplicitConformanceKind kind,
-                                    std::vector<string> &protocolMethods) {
-   QualType returnType;
    Method* method;
 
    switch (kind) {
       case ImplicitConformanceKind::StringRepresentable: {
-         *returnType = ObjectType::get("String");
+         if (hasMethodWithName("infix as String"))
+            return;
+
          method = declareMethod(
-            "infix as String",
-            returnType,
+            "as String",
+            QualType(ObjectType::get("String")),
+            OperatorInfo(PrecedenceGroup(12, Associativity::Left),
+                         FixKind::Infix),
             AccessModifier::PUBLIC,
-            {},
+            {}, {},
             false,
             nullptr,
-            SourceLocation()
+            loc
          );
+
+         method->setIsConversionOp(true);
 
          break;
       }
       case ImplicitConformanceKind::Equatable: {
-         *returnType = ObjectType::get("Bool");
          method = declareMethod(
-            "infix ==",
-            returnType,
+            "==",
+            QualType(ObjectType::get(Type::Bool)),
+            OperatorInfo(PrecedenceGroup(5, Associativity::Left),
+                         FixKind::Infix),
             AccessModifier::PUBLIC,
-            { Argument("", QualType(ObjectType::get(recordName))) },
+            { Argument("", QualType(ObjectType::get(fullName))) }, {},
             false,
             nullptr,
-            SourceLocation()
+            loc
          );
 
          break;
       }
       case ImplicitConformanceKind::Hashable: {
-         *returnType = ObjectType::get("UInt64");
          method = declareMethod(
             "hashCode",
-            returnType,
+            QualType(ObjectType::get(Type::UInt64)),
             AccessModifier::PUBLIC,
-            {},
+            {}, {},
             false,
             nullptr,
-            SourceLocation()
+            loc
          );
 
          break;
@@ -571,7 +680,6 @@ void Record::addImplicitConformance(ImplicitConformanceKind kind,
 
    method->is_protocol_method = true;
    implicitConformances.emplace_back(kind, method);
-   protocolMethods.push_back(method->getMangledName());
 }
 
 Method* Record::getImplicitConformance(ImplicitConformanceKind kind)
@@ -603,8 +711,14 @@ Property::Property(const string &name,
                    Record *record,
                    string &&newValName,
                    PropDecl *decl)
-   : name(name), type(ty), getter(getter), setter(setter), record(record),
-     is_static(isStatic), decl(decl), newValName(move(newValName))
+   : name(name),
+     type(ty),
+     is_static(isStatic),
+     getter(getter),
+     setter(setter),
+     newValName(move(newValName)),
+     record(record),
+      decl(decl)
 {
 
 }
@@ -707,6 +821,198 @@ const string &Property::getNewValBinding() const
 void Property::setNewValBinding(const string &newValBinding)
 {
    Property::newValBinding = newValBinding;
+}
+
+SourceLocation Property::getSourceLoc() const
+{
+   return decl ? decl->getSourceLoc() : SourceLocation();
+}
+
+Field::Field(string name, QualType type, AccessModifier access_modifier,
+             bool isConst, FieldDecl* declaration) :
+   fieldName(name), fieldType(type), accessModifier(access_modifier),
+   isConst(isConst), declaration(declaration)
+{
+
+}
+
+bool Field::hasDefaultValue() const
+{
+   return declaration && declaration->getDefaultVal() != nullptr;
+}
+
+AssociatedType::AssociatedType(AssociatedTypeDecl *decl)
+   : name(decl->getName()), type(decl->getActualType()->getType()),
+     loc(decl->getSourceLoc()), decl(decl)
+{
+
+}
+
+AssociatedType::AssociatedType(const AssociatedType &other)
+   : name(other.name), type(other.type), loc(other.loc), decl(nullptr)
+{
+
+}
+
+const ExtensionConstraint* Record::checkConstraints(Method *method,
+                                                    Type *caller) const {
+   if (caller == nullptr || method->constraintIndex == -1) {
+      return nullptr;
+   }
+
+   auto& constraints = ConstraintSets[method->constraintIndex];
+   for (const auto& constr : constraints) {
+      if (!checkConstraint(constr, caller)) {
+         return &constr;
+      }
+   }
+
+   return nullptr;
+}
+
+bool Record::checkConstraint(const ExtensionConstraint &constr,
+                             Type *&caller) const {
+   auto asObj = caller->asObjTy();
+   auto Rec = asObj->getRecord();
+
+   auto targetTy = Rec->getTemplateArg(
+      constr.constrainedGenericTypeName)->getType();
+   switch (constr.kind) {
+      case ExtensionConstraint::IS_STRUCT:
+         return targetTy->isStruct();
+      case ExtensionConstraint::IS_CLASS:
+         return targetTy->isRefcounted();
+      case ExtensionConstraint::IS_ENUM:
+         return targetTy->isEnum();
+      case ExtensionConstraint::IS_PROTOCOL:
+         return targetTy->isProtocol();
+      case ExtensionConstraint::CONFORMANCE: {
+         auto cl = targetTy->getRecord();
+         return cl->conformsTo(constr.typeConstraint
+                                     ->getType()->getClassName());
+      }
+      case ExtensionConstraint::TYPE_EQUALITY:
+         return targetTy == *constr.typeConstraint->getType();
+      case ExtensionConstraint::TYPE_INEQUALITY:
+         return targetTy != *constr.typeConstraint->getType();
+      case ExtensionConstraint::DEFAULT_CONSTRUCTIBLE: {
+         auto rec = targetTy->getRecord();
+         if (!rec->isStruct()) {
+            return false;
+         }
+
+         return rec->getAs<Struct>()->getParameterlessConstructor()
+                != nullptr;
+      }
+   }
+
+   llvm_unreachable("unknown constraint kind");
+}
+
+void Record::inheritProtocols(Protocol* current)
+{
+   addConformance(current);
+   auto prot = SymbolTable::getProtocol(current->getName());
+   for (const auto& proto : prot->getConformances()) {
+      inheritProtocols(proto);
+   }
+}
+
+void Record::checkProtocolConformance(Protocol *protoObj)
+{
+
+}
+
+bool Record::protectedPropAccessibleFrom(Record *Rec)
+{
+   if (this == Rec) {
+      return true;
+   }
+
+   if (auto Cl = dyn_cast<Class>(this)) {
+      for (auto child : Cl->getSubclasses()) {
+         if (child->protectedPropAccessibleFrom(Rec)) {
+            return true;
+         }
+      }
+   }
+
+   if (hasInnerRecord(Rec)) {
+      return true;
+   }
+
+   return false;
+}
+
+bool Record::privatePropAccessibleFrom(Record *Rec)
+{
+   return this == Rec;
+}
+
+AssociatedType const* Record::getAssociatedType(llvm::StringRef name,
+                                                Protocol *P) const {
+   for (const auto &AT : associatedTypes)
+      if (AT.getName() == name) {
+         if (AT.getProto() && P != AT.getProto())
+            continue;
+
+         return &AT;
+      }
+
+   return nullptr;
+}
+
+Record::method_iterator::method_iterator(Record *R, llvm::StringRef methodName)
+   : methodName(methodName), R(R), phase(0)
+{
+   auto itPair = R->getMethods().equal_range(methodName);
+   currentBegin = itPair.first;
+   currentEnd = itPair.second;
+   moveNext();
+}
+
+bool Record::method_iterator::operator==(method_iterator const &rhs) const
+{
+   if (rhs.phase == 3)
+      return phase == 3;
+
+   return methodName == rhs.methodName
+          && R ==rhs.R
+          && phase == rhs.phase
+          && currentBegin == rhs.currentBegin
+          && currentEnd == rhs.currentEnd;
+}
+
+void Record::method_iterator::moveNext()
+{
+   if (currentBegin != currentEnd) {
+      current = &currentBegin->second;
+      ++currentBegin;
+   }
+   else {
+      ++phase;
+      if (phase == 1) {
+         if (auto C = support::dyn_cast<Class>(R)) {
+            if (auto P = C->getParent()) {
+               auto ItPair = P->getMethods().equal_range(methodName);
+               currentBegin = ItPair.first;
+               currentEnd = ItPair.second;
+            }
+         }
+      }
+      else if (phase == 2) {
+         if (auto B = R->getSpecializedTemplate()) {
+            auto ItPair = B->getMethods().equal_range(methodName);
+            currentBegin = ItPair.first;
+            currentEnd = ItPair.second;
+         }
+      }
+      else {
+         return;
+      }
+
+      moveNext();
+   }
 }
 
 }

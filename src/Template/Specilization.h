@@ -10,17 +10,22 @@
 #include <memory>
 
 class BuiltinType;
-class Token;
 
 namespace cdot {
 
-struct TemplateArg;
+namespace lex {
+
+struct Token;
+
+} // namespace lex
+
+class TemplateArg;
 
 namespace ast {
 
 class Expression;
 class TypeRef;
-class AbstractPass;
+class ASTPass;
 
 class TemplateSpecilizationConstraint {
 public:
@@ -111,19 +116,19 @@ public:
 
 class TokenConstraint: public TemplateSpecilizationConstraint {
 public:
-   const std::vector<Token> &getTokens() const;
+   const std::vector<lex::Token> &getTokens() const;
 
 protected:
    TokenConstraint(Kind kind, std::string &&argName,
-                   std::vector<Token> &&tokens);
+                   std::vector<lex::Token> &&tokens);
 
-   std::vector<Token> tokens;
+   std::vector<lex::Token> tokens;
 };
 
 class TokenEqualityConstraint: public TokenConstraint {
 public:
    TokenEqualityConstraint(std::string &&argName,
-                           std::vector<Token> &&tokens);
+                           std::vector<lex::Token> &&tokens);
 
    bool appliesTo(const TemplateArg &arg) override;
 };

@@ -16,11 +16,6 @@ public:
 
    typedef std::shared_ptr<StringInterpolation> SharedPtr;
 
-   bool createsTemporary() override
-   {
-      return true;
-   }
-
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == StringInterpolationID;
@@ -35,9 +30,9 @@ public:
       return strings;
    }
 
-   void setStrings(const std::vector<Expression::SharedPtr> &strings)
+   std::vector<Expression::SharedPtr> const& getStrings() const
    {
-      StringInterpolation::strings = strings;
+      return strings;
    }
 };
 

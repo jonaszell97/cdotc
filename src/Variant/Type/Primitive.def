@@ -1,0 +1,34 @@
+
+#ifdef CDOT_PRIMITIVE
+#  define CDOT_INTEGER(Name, BW, Unsigned) CDOT_PRIMITIVE(Name, BW, Unsigned)
+#  define CDOT_FP(Name, BW)                CDOT_PRIMITIVE(Name, BW, false)
+#  define CDOT_OTHER(Name, BW)             CDOT_PRIMITIVE(Name, BW, false)
+#endif
+
+#ifdef CDOT_INTEGER
+   CDOT_INTEGER(Int1,   1,  false)
+   CDOT_INTEGER(UInt1,  1,  true)
+   CDOT_INTEGER(Int8,   8,  false)
+   CDOT_INTEGER(UInt8,  8,  true)
+   CDOT_INTEGER(Int16,  16, false)
+   CDOT_INTEGER(UInt16, 16, true)
+   CDOT_INTEGER(Int32,  32, false)
+   CDOT_INTEGER(UInt32, 32, true)
+   CDOT_INTEGER(Int64,  64, false)
+   CDOT_INTEGER(UInt64, 64, true)
+#endif
+
+#ifdef CDOT_FP
+   CDOT_FP(Float,  32)
+   CDOT_FP(Double, 64)
+#endif
+
+#ifdef CDOT_OTHER
+   CDOT_OTHER(Bool, 1)
+   CDOT_OTHER(Char, 8)
+#endif
+
+#undef CDOT_INTEGER
+#undef CDOT_FP
+#undef CDOT_OTHER
+#undef CDOT_PRIMITIVE

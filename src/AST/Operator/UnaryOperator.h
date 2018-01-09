@@ -20,7 +20,9 @@ class CallExpr;
 
 class UnaryOperator : public Expression {
 public:
-   UnaryOperator(string &&op, string &&fix);
+   UnaryOperator(string &&op, const string &fix);
+   UnaryOperator(string &&op, std::shared_ptr<Expression> &&target,
+                 const string &fix);
 
    void setTarget(Expression::SharedPtr t)
    {
@@ -35,7 +37,7 @@ public:
    }
 
 protected:
-   Expression::SharedPtr target;
+   std::shared_ptr<Expression> target;
    string op;
    Type* operandType;
    bool prefix;
@@ -45,43 +47,66 @@ protected:
    cdot::cl::Method* method;
    string className;
 
-   bool isPointerArithmetic = false;
-   bool needsDereferenceLoad = true;
-
 public:
-   Expression::SharedPtr &getTarget();
+   std::shared_ptr<Expression> &getTarget()
+   {
+      return target;
+   }
 
-   const string &getOp() const;
+   std::shared_ptr<Expression> const& getTarget() const
+   {
+      return target;
+   }
 
-   void setOp(const string &op);
+   const string &getOp() const
+   {
+      return op;
+   }
 
-   Type *getOperandType() const;
+   void setOp(const string &op)
+   {
+      UnaryOperator::op = op;
+   }
 
-   void setOperandType(Type *operandType);
+   Type *getOperandType() const
+   {
+      return operandType;
+   }
 
-   bool isPrefix() const;
+   bool isPrefix() const
+   {
+      return prefix;
+   }
 
-   void setPrefix(bool prefix);
+   const std::shared_ptr<CallExpr> &getOverridenCall() const
+   {
+      return overridenCall;
+   }
 
-   const std::shared_ptr<CallExpr> &getOverridenCall() const;
+   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall)
+   {
+      UnaryOperator::overridenCall = overridenCall;
+   }
 
-   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);
+   void setMethod(cl::Method *method)
+   {
+      UnaryOperator::method = method;
+   }
 
-   cl::Method *getMethod() const;
+   void setClassName(const string &className)
+   {
+      UnaryOperator::className = className;
+   }
 
-   void setMethod(cl::Method *method);
+   cl::Method *getMethod() const
+   {
+      return method;
+   }
 
-   const string &getClassName() const;
-
-   void setClassName(const string &className);
-
-   bool isIsPointerArithmetic() const;
-
-   void setIsPointerArithmetic(bool isPointerArithmetic);
-
-   bool isNeedsDereferenceLoad() const;
-
-   void setNeedsDereferenceLoad(bool needsDereferenceLoad);
+   const string &getClassName() const
+   {
+      return className;
+   }
 };
 
 } // namespace ast

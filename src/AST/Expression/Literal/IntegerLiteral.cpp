@@ -11,10 +11,15 @@ namespace cdot {
 namespace ast {
 
 IntegerLiteral::IntegerLiteral(cdot::Variant &&v)
-   : Expression(IntegerLiteralID), value(v)
+   : Expression(IntegerLiteralID), value(std::move(v)), type(value.typeOf())
 {
-   assert(v.type == VariantType::INT);
-   type = IntegerType::get(value.bitwidth, value.is_unsigned);
+   assert(v.kind == VariantType::INT);
+}
+
+IntegerLiteral::IntegerLiteral(Type *type, cdot::Variant &&lexeme)
+   : Expression(IntegerLiteralID), value(lexeme), type(type)
+{
+   assert(type->isIntegerTy());
 }
 
 const Variant &IntegerLiteral::getValue() const
@@ -38,10 +43,15 @@ void IntegerLiteral::setType(Type *type)
 }
 
 FPLiteral::FPLiteral(cdot::Variant &&val)
-   : Expression(FPLiteralID), value(std::move(val))
+   : Expression(FPLiteralID), value(std::move(val)), type(value.typeOf())
 {
-   assert(val.type == VariantType::FLOAT);
-   type = FPType::get(val.bitwidth);
+   assert(val.kind == VariantType::FLOAT);
+}
+
+FPLiteral::FPLiteral(Type *type, cdot::Variant &&val)
+   : Expression(FPLiteralID), value(std::move(val)), type(type)
+{
+   assert(type->isFPType());
 }
 
 const Variant &FPLiteral::getValue() const
@@ -70,6 +80,12 @@ BoolLiteral::BoolLiteral(bool value)
    type = IntegerType::getBoolTy();
 }
 
+BoolLiteral::BoolLiteral(Type *type, bool value)
+   : Expression(BoolLiteralID), value(value), type(type)
+{
+
+}
+
 bool BoolLiteral::getValue() const
 {
    return value;
@@ -91,15 +107,21 @@ void BoolLiteral::setType(Type *type)
 }
 
 CharLiteral::CharLiteral(char value)
-   : Expression(CharLiteralID), is_wide(false), narrow(value)
+   : Expression(CharLiteralID), narrow(value), is_wide(false)
 {
    type = IntegerType::getCharTy();
 }
 
 CharLiteral::CharLiteral(wchar_t value)
-   : Expression(CharLiteralID), is_wide(true), wide(value)
+   : Expression(CharLiteralID), wide(value), is_wide(true)
 {
    type = IntegerType::getCharTy();
+}
+
+CharLiteral::CharLiteral(Type *type, char value)
+   : Expression(CharLiteralID), narrow(value), is_wide(false), type(type)
+{
+
 }
 
 char CharLiteral::getNarrow() const

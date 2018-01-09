@@ -7,14 +7,16 @@
 
 #include <vector>
 
-#include "../AstNode.h"
+#include "../Expression/Expression.h"
+#include "../Statement/Statement.h"
+
 #include "../AstDeclarations.h"
 #include "../../Compiler.h"
 
 namespace cdot {
 namespace ast {
 
-class AbstractPass {
+class ASTPass {
 public:
    enum TypeID {
 #  define CDOT_AST_PASS(Name) \
@@ -23,89 +25,10 @@ public:
 #  include "Passes.def"
    };
 
-//   void visit(AstNode *node)
-//   {
-//      switch (node->getTypeID()) {
-//#     define CDOT_ASTNODE(Name)             \
-//         case Name##ID:                      \
-//            visit(static_cast<Name*>(node)); \
-//            break;
-//#     define CDOT_INCLUDE_ALL
-//#     include "../AstNode.def"
-//      }
-//   }
-//
-//   void visit(Expression *node)
-//   {
-//      visit((AstNode*)node);
-//   }
-//
-//   void visit(Statement *node)
-//   {
-//      visit((AstNode*)node);
-//   }
+   explicit ASTPass(TypeID id) : typeID(id)
+   {}
 
-//   void visit(NamespaceDecl *node) {}
-//   void visit(UsingStmt *node) {}
-//   void visit(CompoundStmt *node) {}
-//   void visit(DeclStmt *node) {}
-//   void visit(FunctionDecl *node) {}
-//   void visit(CallableDecl *node) {}
-//   void visit(DeclareStmt *node) {}
-//   void visit(UnionDecl *node) {}
-//   void visit(ClassDecl *node) {}
-//   void visit(MethodDecl *node) {}
-//   void visit(FieldDecl *node) {}
-//   void visit(ConstrDecl *node) {}
-//   void visit(DestrDecl *node) {}
-//   void visit(ExtensionDecl *node) {}
-//   void visit(PropDecl *node) {}
-//   void visit(RecordTemplateDecl *node) {}
-//   void visit(CallableTemplateDecl *node) {}
-//   void visit(MethodTemplateDecl *node) {}
-//   void visit(EnumDecl *node) {}
-//   void visit(EnumCaseDecl *node) {}
-//   void visit(IdentifierRefExpr *node) {}
-//   void visit(SubscriptExpr *node) {}
-//   void visit(CallExpr *node) {}
-//   void visit(MemberRefExpr *node) {}
-//   void visit(ForStmt *node) {}
-//   void visit(ForInStmt *node) {}
-//   void visit(WhileStmt *node) {}
-//   void visit(IfStmt *node) {}
-//   void visit(MatchStmt *node) {}
-//   void visit(CaseStmt *node) {}
-//   void visit(LabelStmt *node) {}
-//   void visit(GotoStmt *node) {}
-//   void visit(ReturnStmt *node) {}
-//   void visit(BreakStmt *node) {}
-//   void visit(ContinueStmt *node) {}
-//   void visit(CollectionLiteral *node) {}
-//   void visit(IntegerLiteral *node) {}
-//   void visit(FPLiteral *node) {}
-//   void visit(BoolLiteral *node) {}
-//   void visit(CharLiteral *node) {}
-//   void visit(NoneLiteral *node) {}
-//   void visit(StringLiteral *node) {}
-//   void visit(StringInterpolation *node) {}
-//   void visit(TupleLiteral *node) {}
-//   void visit(UnaryOperator *node) {}
-//   void visit(BinaryOperator *node) {}
-//   void visit(TertiaryOperator *node) {}
-//   void visit(FuncArgDecl *node) {}
-//   void visit(LambdaExpr *node) {}
-//   void visit(ImplicitCastExpr *node) {}
-//   void visit(TypedefDecl *node) {}
-//   void visit(TypeRef *node) {}
-//   void visit(LvalueToRvalue *node) {}
-//   void visit(EndOfFileStmt *node) {}
-//   void visit(DebugStmt *node) {}
-//   void visit(TryStmt *node) {}
-//   void visit(ThrowStmt *node) {}
-//   void visit(InheritanceConstraint *constraint) {}
-//   void visit(ConformanceConstraint *constraint) {}
-//   void visit(ValueExprConstraint *constraint) {}
-//   void visit(TokenEqualityConstraint *constraint) {}
+   void RunOn(std::vector<CompilationUnit> &CUs);
 
    TypeID getTypeID() const
    {
@@ -113,7 +36,33 @@ public:
    }
 
 protected:
-   explicit AbstractPass(TypeID typeID) : typeID(typeID)
+   TypeID typeID;
+};
+
+template<class SubClass, class RetTy>
+class AbstractPass: public ASTPass {
+public:
+
+   RetTy visit(Expression *node);
+   void visit(Statement *node);
+
+   template<class T>
+   auto visit(const std::shared_ptr<T> &node) -> decltype(visit(node.get()))
+   {
+      return visit(node.get());
+   }
+
+#  define CDOT_EXPR(Name)                                   \
+   RetTy visit##Name(Name*) { return {}; }
+#  include "../AstNode.def"
+
+#  define CDOT_EXPR(Name)
+#  define CDOT_STMT(Name)                                   \
+   void visit##Name(Name*) { }
+#  include "../AstNode.def"
+
+protected:
+   explicit AbstractPass(TypeID typeID) : ASTPass(typeID)
    {}
 
    void deferVisit(const std::shared_ptr<AstNode> &node)
@@ -129,7 +78,40 @@ protected:
       }
    }
 
-   TypeID typeID;
+   std::vector<std::shared_ptr<AstNode>> DeferredNodes;
+};
+
+template<class SubClass>
+class AbstractPass<SubClass, void>: public ASTPass {
+public:
+   void visit(AstNode *node);
+
+   void visit(const std::shared_ptr<AstNode> &node)
+   {
+      visit(node.get());
+   }
+
+#  define CDOT_ASTNODE(Name) \
+   void visit##Name(Name*) {}
+#  include "../AstNode.def"
+
+protected:
+   explicit AbstractPass(TypeID typeID) : ASTPass(typeID)
+   {}
+
+   void deferVisit(const std::shared_ptr<AstNode> &node)
+   {
+      DeferredNodes.push_back(node);
+   }
+
+   void visitDeferred()
+   {
+      while (!DeferredNodes.empty()) {
+         auto next = DeferredNodes.back();
+         DeferredNodes.pop_back();
+      }
+   }
+
    std::vector<std::shared_ptr<AstNode>> DeferredNodes;
 };
 

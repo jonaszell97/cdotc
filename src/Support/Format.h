@@ -63,6 +63,65 @@ std::string formatInteger(uint64_t val)
    return res;
 }
 
+template<class T>
+std::string formatAsHexInteger(T val)
+{
+   union {
+      T t;
+      uint64_t i;
+   } Union { val };
+
+   return formatInteger<Base16Traits>(Union.i);
+}
+
+inline char unescape_char(char c)
+{
+   switch (c) {
+      case '\n':
+         return 'n';
+      case '\a':
+         return 'a';
+      case '\r':
+         return 'r';
+      case '\v':
+         return 'v';
+      case '\t':
+         return 't';
+      case '\b':
+         return 'b';
+      case '\0':
+         return '0';
+      default:
+         return c;
+   }
+}
+
+inline char escape_char(char c)
+{
+   switch (c) {
+      case 'n':
+         return '\n';
+      case 'a':
+         return '\a';
+      case 'r':
+         return '\r';
+      case 'v':
+         return '\v';
+      case 't':
+         return '\t';
+      case 'b':
+         return '\b';
+      case '"':
+         return '\"';
+      case '\'':
+         return '\'';
+      case '0':
+         return '\0';
+      default:
+         return c;
+   }
+}
+
 char hexdigit(unsigned i);
 
 } // namespace support

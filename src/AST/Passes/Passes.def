@@ -13,7 +13,6 @@ CDOT_AST_PASS(SemaPass)
 #if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_OUTPUT)
 
 CDOT_AST_PASS(ILGenPass)
-CDOT_AST_PASS(CodeGen)
 
 #endif
 

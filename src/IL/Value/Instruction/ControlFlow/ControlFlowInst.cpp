@@ -8,86 +8,74 @@
 #include "../../../../Variant/Type/VoidType.h"
 #include "../../../../Variant/Type/PointerType.h"
 #include "../../../../Variant/Type/IntegerType.h"
+#include "../../Constant/ConstantVal.h"
 
 namespace cdot {
 namespace il {
 
-ControlFlowInst::ControlFlowInst(TypeID id, BasicBlock *parent,
-                                 const std::string &name,
-                                 const SourceLocation &loc)
-   : Instruction(id, VoidType::get(), parent, name, loc)
-{
-
-}
-
 BrInst::BrInst(Value *Condition,
                BasicBlock *IfBranch,
-               llvm::SmallVector<Value*, 4> &&TargetArgs,
+               llvm::ArrayRef<Value*> TargetArgs,
                BasicBlock *ElseBranch,
-               llvm::SmallVector<Value*, 4> &&ElseArgs,
-               BasicBlock *parent,
-               const std::string &name, const SourceLocation &loc)
-   : ControlFlowInst(BrInstID, parent, name, loc), Condition(Condition),
-     TargetBranch(IfBranch), ElseBranch(ElseBranch),
-     TargetArgs(std::move(TargetArgs)), ElseArgs(std::move(ElseArgs))
+               llvm::ArrayRef<Value*> ElseArgs,
+               BasicBlock *parent)
+   : TerminatorInst(BrInstID, parent),
+     MultiOperandInst(unsigned(TargetArgs.size()) + unsigned(ElseArgs.size())),
+     Condition(Condition),
+     TargetBranch(IfBranch),
+     ElseBranch(ElseBranch),
+     numTargetArgs(TargetArgs.size())
 {
    Condition->addUse(this);
    IfBranch->addPredecessor(parent);
    ElseBranch->addPredecessor(parent);
 
+   size_t i = 0;
    for (const auto &arg : TargetArgs) {
+      Operands[i] = arg;
       arg->addUse(this);
+      ++i;
    }
    for (const auto &arg : ElseArgs) {
+      Operands[i] = arg;
       arg->addUse(this);
+      ++i;
    }
 }
 
 BrInst::BrInst(BasicBlock *TargetBranch,
-               llvm::SmallVector<Value*, 4> &&BlockArgs,
-               BasicBlock *parent,
-               const std::string &name, const SourceLocation &loc)
-   : ControlFlowInst(BrInstID, parent, name, loc), Condition(nullptr),
-     TargetBranch(TargetBranch), ElseBranch(nullptr),
-     TargetArgs(std::move(BlockArgs))
+               llvm::ArrayRef<Value*> BlockArgs,
+               BasicBlock *parent)
+   : TerminatorInst(BrInstID, parent),
+     MultiOperandInst(BlockArgs),
+     Condition(nullptr),
+     TargetBranch(TargetBranch),
+     ElseBranch(nullptr),
+     numTargetArgs(BlockArgs.size())
 {
    TargetBranch->addPredecessor(parent);
-   for (const auto &arg : TargetArgs) {
+   for (const auto &arg : BlockArgs) {
       arg->addUse(this);
    }
 }
 
-BrInst::BrInst(BasicBlock *parent, const string &name,
-               const SourceLocation &loc)
-   : ControlFlowInst(BrInstID, parent, name, loc),
-     Condition(nullptr), TargetBranch(nullptr), ElseBranch(nullptr)
+BrInst::BrInst(BasicBlock *parent)
+   : TerminatorInst(BrInstID, parent),
+     MultiOperandInst(0),
+     Condition(nullptr), TargetBranch(nullptr),
+     ElseBranch(nullptr), numTargetArgs(0)
 {
 
 }
 
-BasicBlock *BrInst::getTargetBranch() const
+llvm::ArrayRef<Value*> BrInst::getTargetArgs() const
 {
-   return TargetBranch;
+   return { Operands, numTargetArgs };
 }
 
-BasicBlock *BrInst::getElseBranch() const
+llvm::ArrayRef<Value*> BrInst::getElseArgs() const
 {
-   return ElseBranch;
-}
-
-Value *BrInst::getCondition() const
-{
-   return Condition;
-}
-
-const llvm::SmallVector<Value *, 4> &BrInst::getTargetArgs() const
-{
-   return TargetArgs;
-}
-
-const llvm::SmallVector<Value *, 4> &BrInst::getElseArgs() const
-{
-   return ElseArgs;
+   return { Operands + numTargetArgs, numOperands - numTargetArgs };
 }
 
 void BrInst::setTargetBranch(BasicBlock *TargetBranch)
@@ -96,15 +84,14 @@ void BrInst::setTargetBranch(BasicBlock *TargetBranch)
    BrInst::TargetBranch = TargetBranch;
 }
 
-SwitchInst::SwitchInst(Value *SwitchVal, BasicBlock *parent,
-                       const std::string &name, const SourceLocation &loc)
-   : ControlFlowInst(SwitchInstID, parent, name, loc), SwitchVal(SwitchVal),
-     Cases{}
+SwitchInst::SwitchInst(Value *SwitchVal, BasicBlock *parent)
+   : TerminatorInst(SwitchInstID, parent),
+     SwitchVal(SwitchVal), Cases{}
 {
 
 }
 
-void SwitchInst::addCase(Value *val, BasicBlock *Dst)
+void SwitchInst::addCase(ConstantInt *val, BasicBlock *Dst)
 {
    if (val) {
       val->addUse(this);
@@ -130,10 +117,17 @@ const llvm::SmallVector<SwitchInst::CasePair, 4> &SwitchInst::getCases() const
    return Cases;
 }
 
-LandingPadInst::LandingPadInst(BasicBlock *parent,
-                               const string &name,
-                               const SourceLocation &loc)
-   : ControlFlowInst(LandingPadInstID, parent, name, loc)
+BasicBlock* SwitchInst::getDefault() const
+{
+   for (const auto &C : Cases)
+      if (!C.first)
+         return C.second;
+
+   return nullptr;
+}
+
+LandingPadInst::LandingPadInst(BasicBlock *parent)
+   : TerminatorInst(LandingPadInstID, parent)
 {
    *type = IntegerType::get(8)->getPointerTo();
 }

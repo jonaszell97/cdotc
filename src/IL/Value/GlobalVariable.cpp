@@ -8,30 +8,34 @@
 namespace cdot {
 namespace il {
 
-GlobalVariable::GlobalVariable(Type *ty, bool isConstant,
+GlobalVariable::GlobalVariable(Type *ty,
+                               bool isConstant,
+                               llvm::StringRef name,
                                Module *module,
-                               Constant *initializer,
-                               const std::string &name,
-                               const SourceLocation &loc)
-   : Constant(GlobalVariableID, ty, name, loc),
-     initializer(initializer), module(module)
+                               Constant *initializer)
+   : GlobalObject(GlobalVariableID, ty, module, name),
+     initializer(initializer)
 {
-   module->insertGlobal(this);
+   setIsLvalue(true);
+
+   if (isConstant) {
+      type.isConst(true);
+      SubclassData |= Flags::Const;
+   }
+
+   if (module)
+      module->insertGlobal(this);
 }
 
-Module *GlobalVariable::getModule() const
+GlobalVariable::GlobalVariable(const GlobalVariable &var)
+   : GlobalObject(GlobalVariableID, *var.getType(), nullptr, var.name),
+     initializer(nullptr)
 {
-   return module;
-}
+   setIsLvalue(true);
+   if (auto L = var.getLocation())
+      addMetaData(L);
 
-Constant *GlobalVariable::getInitializer() const
-{
-   return initializer;
-}
-
-bool GlobalVariable::hasInitializer() const
-{
-   return initializer != nullptr;
+   SubclassData |= Flags::Declared;
 }
 
 void GlobalVariable::setInitializer(Constant *initializer)
@@ -41,8 +45,12 @@ void GlobalVariable::setInitializer(Constant *initializer)
 
 GlobalVariable* GlobalVariable::getDeclarationIn(Module *M)
 {
-   return new GlobalVariable(*type, isConstant, M, initializer,
-                             name, getLocation());
+   auto global = new GlobalVariable(*this);
+
+   global->parent = M;
+   M->insertGlobal(global);
+
+   return global;
 }
 
 } // namespace il

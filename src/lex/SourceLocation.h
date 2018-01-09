@@ -9,23 +9,19 @@
 namespace cdot {
 
 struct SourceLocation {
-   SourceLocation();
-   SourceLocation(
-      unsigned col,
-      const unsigned& line,
-      unsigned length,
-      const unsigned& sourceId
-   );
+   SourceLocation() : offset(0), sourceId(0) {}
+   SourceLocation(unsigned offset,
+                  unsigned sourceId)
+      : offset(offset), sourceId(sourceId)
+   {}
 
-   unsigned col : 16;
-   unsigned line : 16;
-   unsigned length : 16;
-   unsigned sourceId : 16;
+   unsigned offset : 32;
+   unsigned sourceId : 32;
 
-   unsigned getLine() const;
-   unsigned getCol() const;
-   unsigned getLength() const;
-   unsigned getSourceId() const;
+   unsigned getOffset() const { return offset; }
+   unsigned getSourceId() const { return sourceId; }
+
+   operator bool() const { return sourceId != 0; }
 };
 
 } // namespace cdot

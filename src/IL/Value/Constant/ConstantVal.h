@@ -16,7 +16,8 @@ namespace il {
 
 class ConstantInt: public Constant {
 public:
-   ConstantInt(Type *ty, uint64_t value);
+   static ConstantInt *get(Type *ty, uint64_t value);
+   static ConstantInt *getCTFE();
 
    uint64_t getU64() const;
    uint32_t getU32() const;
@@ -25,7 +26,15 @@ public:
    bool getU1() const;
    bool isUnsigned() const;
 
-protected:
+   bool isCTFE() const;
+
+private:
+   ConstantInt(Type *ty, uint64_t value);
+
+   enum Flags {
+      Ctfe = 1 << 2
+   };
+
    union {
       uint64_t u64;
       uint32_t u32;
@@ -40,15 +49,38 @@ public:
    }
 };
 
+class ConstantPointer: public Constant {
+public:
+   static ConstantPointer *get(Type *ty, uintptr_t value);
+   static ConstantPointer *getNull(Type *ty) { return get(ty, 0); }
+
+   uintptr_t getValue() const
+   {
+      return value;
+   }
+
+private:
+   ConstantPointer(Type *ty, uintptr_t value);
+   uintptr_t value;
+
+public:
+   static inline bool classof(Value const* T) {
+      return T->getTypeID() == ConstantPointerID;
+   }
+};
+
 class ConstantFloat: public Constant {
 public:
-   explicit ConstantFloat(double val);
-   explicit ConstantFloat(float val);
+   static ConstantFloat *get(double val);
+   static ConstantFloat *get(float val);
 
    double getDoubleVal() const;
    float getFloatVal() const;
 
-protected:
+private:
+   explicit ConstantFloat(double val);
+   explicit ConstantFloat(float val);
+
    union {
       double doubleVal;
       float floatVal;
@@ -62,11 +94,12 @@ public:
 
 class ConstantString: public Constant {
 public:
-   explicit ConstantString(const std::string &val);
+   static ConstantString *get(const std::string &val);
 
    const std::string &getValue() const;
 
-protected:
+private:
+   explicit ConstantString(const std::string &val);
    std::string value;
 
 public:
@@ -79,9 +112,9 @@ class ConstantArray: public Constant {
 public:
    typedef llvm::SmallVector<Constant*, 4> ArrayTy;
 
-   explicit ConstantArray(ArrayTy &&Arr);
-   explicit ConstantArray(llvm::ArrayRef<Constant*> vec);
-   ConstantArray(Type *ty, size_t numElements);
+   static ConstantArray *get(ArrayTy &&Arr);
+   static ConstantArray *get(llvm::ArrayRef<Constant*> vec);
+   static ConstantArray *get(Type *ty, size_t numElements);
 
    const ArrayTy &getVec() const;
    size_t getNumElements() const;
@@ -89,6 +122,10 @@ public:
    Type *getElementType() const;
 
 protected:
+   explicit ConstantArray(ArrayTy &&Arr, bool useInt8PtrTy = false);
+   explicit ConstantArray(llvm::ArrayRef<Constant*> vec);
+   ConstantArray(Type *ty, size_t numElements);
+
    ArrayTy vec;
    Type *elementType;
    size_t numElements;
@@ -98,6 +135,7 @@ public:
       switch (T->getTypeID()) {
          case ConstantArrayID:
          case VTableID:
+         case PTableID:
             return true;
          default:
             return false;
@@ -107,14 +145,15 @@ public:
 
 class VTable: public ConstantArray {
 public:
-   explicit VTable(ArrayTy &&Arr, ClassType *Owner);
+   static VTable *get(ArrayTy &&Arr, ClassType *Owner);
 
    ClassType *getOwner() const
    {
       return Owner;
    }
 
-protected:
+public:
+   explicit VTable(ArrayTy &&Arr, ClassType *Owner);
    ClassType *Owner;
 
 public:
@@ -125,8 +164,9 @@ public:
 
 class PTable: public ConstantArray {
 public:
-   typedef llvm::DenseMap<size_t, llvm::StringRef> PositionMap;
-   explicit PTable(ArrayTy &&Arr, PositionMap &&PosMap, ClassType *Owner);
+   typedef llvm::StringMap<size_t> PositionMap;
+
+   static PTable *get(ArrayTy &&Arr, PositionMap &&PosMap, AggregateType *Owner);
 
    AggregateType *getOwner() const
    {
@@ -138,7 +178,9 @@ public:
       return ContainedProtocols;
    }
 
-protected:
+private:
+   explicit PTable(ArrayTy &&Arr, PositionMap &&PosMap, AggregateType *Owner);
+
    AggregateType *Owner;
    PositionMap ContainedProtocols;
 
@@ -151,8 +193,9 @@ public:
 class ConstantStruct: public Constant {
 public:
    typedef llvm::SmallVector<Constant*, 8> ElementTy;
-   explicit ConstantStruct(AggregateType *structTy,
-                           llvm::ArrayRef<Constant*> vec);
+
+   static ConstantStruct *get(AggregateType *structTy,
+                              llvm::ArrayRef<Constant*> vec);
 
    AggregateType *getStructTy() const
    {
@@ -162,12 +205,64 @@ public:
    const ElementTy &getElements() const;
 
 protected:
+   ConstantStruct(AggregateType *structTy,
+                  llvm::ArrayRef<Constant*> vec);
+
+   ConstantStruct(TypeID id,
+                  AggregateType *structTy,
+                  llvm::ArrayRef<Constant*> vec);
+
    AggregateType *structTy;
    ElementTy elements;
 
 public:
-   static inline bool classof(Value const* T) {
-      return T->getTypeID() == ConstantStructID;
+   static inline bool classof(Value const* T)
+   {
+      switch (T->getTypeID()) {
+         case TypeID::ConstantStructID:
+         case TypeID::TypeInfoID:
+            return true;
+         default:
+            return false;
+      }
+   }
+};
+
+class TypeInfo: public ConstantStruct {
+public:
+   static TypeInfo *get(Module *M, Type* forType,
+                        il::Constant *ParentClass,
+                        il::Constant *TypeID,
+                        il::Constant *TypeName,
+                        il::Constant *Deinitializer,
+                        il::Constant *NumConformances,
+                        il::Constant *Conformances);
+
+   il::Constant* getParentClass()     const { return elements[0]; }
+   il::Constant* getTypeID()          const { return elements[1]; }
+   il::Constant* getTypeName()        const { return elements[2]; }
+   il::Constant* getDeinitializer()   const { return elements[3]; }
+   il::Constant* getNumConformances() const { return elements[4]; }
+   il::Constant* getConformances()    const { return elements[5]; }
+
+   Type *getForType() const { return forType; }
+
+private:
+   TypeInfo(Module *M, Type* forType,
+            il::Constant *ParentClass,
+            il::Constant *TypeID,
+            il::Constant *TypeName,
+            il::Constant *Deinitializer,
+            il::Constant *NumConformances,
+            il::Constant *Conformances);
+
+   Type* forType;
+
+public:
+   static inline bool classof(Value const* T)
+   {
+      return T->getTypeID() == TypeInfoID;
+
    }
 };
 

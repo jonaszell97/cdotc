@@ -3,12 +3,14 @@
 //
 
 #include "PointerType.h"
-#include "../../AST/Passes/CodeGen/CGMemory.h"
-#include "../../AST/Expression/Expression.h"
+
 #include "IntegerType.h"
 #include "ObjectType.h"
 #include "FPType.h"
 #include "VoidType.h"
+
+using namespace cdot::support;
+using std::string;
 
 namespace cdot {
 
@@ -33,37 +35,9 @@ PointerType::PointerType(const QualType& pointeeType) :
    id = TypeID::PointerTypeID;
 }
 
-bool PointerType::implicitlyCastableTo(Type *other) const
-{
-   if (other->isPointerTy()) {
-      auto pointee = other->asPointerTy()->getPointeeType();
-      return pointeeType.implicitlyCastableTo(pointee);
-   }
-
-   if (other->isRawFunctionTy()) {
-      return pointeeType->implicitlyCastableTo(other);
-   }
-
-   return false;
-}
-
-bool PointerType::explicitlyCastableTo(Type *other) const
-{
-   return isa<PointerType>(other) || isa<IntegerType>(other);
-}
-
-llvm::Type* PointerType::getLlvmType() const
-{
-   if (pointeeType->isFunctionTy()) {
-      return pointeeType->getLlvmFunctionType()->getPointerTo();
-   }
-
-   return pointeeType->getLlvmType()->getPointerTo();
-}
-
 string PointerType::toString() const
 {
-   return pointeeType->toString() + "*";
+   return pointeeType->toString() + '*';
 }
 
 } // namespace cdot

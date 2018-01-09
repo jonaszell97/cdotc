@@ -11,11 +11,11 @@
 namespace cdot {
 namespace ast {
 
-class DeclStmt;
+class LocalVarDecl;
 
 class ForInStmt: public Statement {
 public:
-   ForInStmt(std::shared_ptr<DeclStmt>&& decl,
+   ForInStmt(std::shared_ptr<LocalVarDecl>&& decl,
              std::shared_ptr<Expression>&& range,
              std::shared_ptr<Statement>&& body);
 
@@ -27,60 +27,71 @@ public:
    }
 
 protected:
-   std::shared_ptr<DeclStmt> decl;
+   std::shared_ptr<LocalVarDecl> decl;
    std::shared_ptr<Expression> rangeExpr;
    std::shared_ptr<Statement> body;
 
-   // codegen
-   string iteratorGetter;
-   string iteratorClass;
-   string nextFunc;
-   QualType iteratedType;
-   bool rangeIsRefcounted = false;
-   string rangeClassName;
+   Callable *getIteratorFn = {};
+   Callable *nextFn = {};
 
-   Type* protocolTy = nullptr;
+   QualType iteratedType;
+   QualType rangeType;
 
 public:
-   const std::shared_ptr<DeclStmt> &getDecl() const;
+   const std::shared_ptr<LocalVarDecl> &getDecl() const
+   {
+      return decl;
+   }
 
-   void setDecl(const std::shared_ptr<DeclStmt> &decl);
+   const std::shared_ptr<Expression> &getRangeExpr() const
+   {
+      return rangeExpr;
+   }
 
-   const std::shared_ptr<Expression> &getRangeExpr() const;
+   const std::shared_ptr<Statement> &getBody() const
+   {
+      return body;
+   }
 
-   void setRangeExpr(const std::shared_ptr<Expression> &rangeExpr);
+   Callable *getGetIteratorFn() const
+   {
+      return getIteratorFn;
+   }
 
-   const std::shared_ptr<Statement> &getBody() const;
+   void setGetIteratorFn(Callable *getIteratorMethod)
+   {
+      ForInStmt::getIteratorFn = getIteratorMethod;
+   }
 
-   void setBody(const std::shared_ptr<Statement> &body);
+   Callable *getNextFn() const
+   {
+      return nextFn;
+   }
 
-   const string &getIteratorGetter() const;
+   void setNextFn(Callable *nextMethod)
+   {
+      ForInStmt::nextFn = nextMethod;
+   }
 
-   void setIteratorGetter(const string &iteratorGetter);
+   const QualType &getIteratedType() const
+   {
+      return iteratedType;
+   }
 
-   const string &getIteratorClass() const;
+   void setIteratedType(const QualType &iteratedType)
+   {
+      ForInStmt::iteratedType = iteratedType;
+   }
 
-   void setIteratorClass(const string &iteratorClass);
+   const QualType &getRangeType() const
+   {
+      return rangeType;
+   }
 
-   const string &getNextFunc() const;
-
-   void setNextFunc(const string &nextFunc);
-
-   const QualType &getIteratedType() const;
-
-   void setIteratedType(const QualType &iteratedType);
-
-   bool isRangeIsRefcounted() const;
-
-   void setRangeIsRefcounted(bool rangeIsRefcounted);
-
-   const string &getRangeClassName() const;
-
-   void setRangeClassName(const string &rangeClassName);
-
-   Type *getProtocolTy() const;
-
-   void setProtocolTy(Type *protocolTy);
+   void setRangeType(const QualType &rangeType)
+   {
+      ForInStmt::rangeType = rangeType;
+   }
 };
 
 } // namespace ast

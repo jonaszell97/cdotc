@@ -17,6 +17,10 @@ public:
    IfStmt(std::shared_ptr<Expression> &&cond,
           Statement::SharedPtr &&body);
 
+   IfStmt(std::shared_ptr<Expression> &&cond,
+          Statement::SharedPtr &&body,
+          Statement::SharedPtr &&elseBody);
+
    inline void setElseBranch(Statement::SharedPtr &&elseBr)
    {
       elseBranch = std::move(elseBr);
@@ -31,17 +35,30 @@ public:
 
 protected:
    std::shared_ptr<Expression> condition;
-   Statement::SharedPtr ifBranch;
-   Statement::SharedPtr elseBranch;
+   std::shared_ptr<Statement> ifBranch;
+   std::shared_ptr<Statement> elseBranch;
 
 public:
-   std::shared_ptr<Expression> &getCondition();
-   void setCondition(const std::shared_ptr<Expression> &condition);
+   const std::shared_ptr<Expression> &getCondition() const
+   {
+      return condition;
+   }
 
-   const Statement::SharedPtr &getIfBranch() const;
-   void setIfBranch(const Statement::SharedPtr &ifBranch);
+   std::shared_ptr<Expression> &getCondition()
+   {
+      return condition;
+   }
 
-   const Statement::SharedPtr &getElseBranch() const;
+   const std::shared_ptr<Statement> &getIfBranch() const
+   {
+      return ifBranch;
+   }
+
+   const std::shared_ptr<Statement> &getElseBranch() const
+   {
+      return elseBranch;
+   }
+
 };
 
 } // namespace ast

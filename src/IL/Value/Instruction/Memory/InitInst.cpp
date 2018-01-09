@@ -7,71 +7,55 @@
 #include "../../Record/AggregateType.h"
 
 #include "../../../../Variant/Type/ObjectType.h"
+#include "../../../../Variant/Type/FunctionType.h"
 
 namespace cdot {
 namespace il {
 
 InitInst::InitInst(StructType *InitializedType,
-                                 Method *Init,
-                                 llvm::ArrayRef<Value *> args,
-                                 BasicBlock *parent,
-                                 const std::string &name,
-                                 const SourceLocation &loc)
-   : Instruction(InitInstID, nullptr, parent, name, loc),
-     Init(Init), args(args.begin(), args.end()),
+                   Method *Init,
+                   llvm::ArrayRef<Value *> args,
+                   BasicBlock *parent)
+   : CallInst(InitInstID, Init, args, parent),
      InitializedType(InitializedType)
 {
    *type = ObjectType::get(Init->getRecordType()->getName());
-}
-
-Method *InitInst::getInit() const
-{
-   return Init;
-}
-
-const llvm::SmallVector<Value *, 4> &InitInst::getArgs() const
-{
-   return args;
-}
-
-StructType *InitInst::getInitializedType() const
-{
-   return InitializedType;
+   setIsLvalue(!support::isa<ClassType>(InitializedType));
 }
 
 UnionInitInst::UnionInitInst(UnionType *UnionTy,
-                                 Value *InitializerVal,
-                                 BasicBlock *parent,
-                                 const std::string &name,
-                                 const SourceLocation &loc)
-   : Instruction(UnionInitInstID, ObjectType::get(UnionTy->getName()),
-                 parent, name, loc), UnionTy(UnionTy),
-     InitializerVal(InitializerVal)
+                             Value *InitializerVal,
+                             BasicBlock *parent)
+   : CallInst(UnionInitInstID, { InitializerVal }, parent),
+     UnionTy(UnionTy)
 {
-
+   *type = ObjectType::get(UnionTy->getName());
+   setIsLvalue(true);
 }
 
 EnumInitInst::EnumInitInst(EnumType *EnumTy,
-                               llvm::StringRef caseName,
-                               llvm::ArrayRef<Value *> args,
-                               BasicBlock *parent,
-                               const std::string &name,
-                               const SourceLocation &loc)
-   : Instruction(EnumInitInstID, ObjectType::get(EnumTy->getName()),
-                 parent, name, loc), EnumTy(EnumTy),
-     args(args.begin(), args.end()), caseName(caseName)
+                           std::string const& caseName,
+                           llvm::ArrayRef<Value *> args,
+                           BasicBlock *parent)
+   : CallInst(EnumInitInstID, args, parent),
+     EnumTy(EnumTy), caseName(caseName)
 {
-
+   *type = ObjectType::get(EnumTy->getName());
+   setIsLvalue(true);
 }
 
-LambdaInitInst::LambdaInitInst(Constant *Function, CaptureList &&Captures,
-                               BasicBlock *parent, const string &name,
-                               const SourceLocation &loc)
-   : Instruction(LambdaInitInstID, ObjectType::get("cdot.Lambda"), parent,
-                 name, loc), Function(Function),
-     Captures(std::move(Captures))
+LambdaInitInst::LambdaInitInst(il::Function *F,
+                               llvm::ArrayRef<Value*> Captures,
+                               BasicBlock *parent)
+   : Instruction(LambdaInitInstID, nullptr, parent),
+     MultiOperandInst(Captures),
+     F(F)
 {
+   auto FuncTy = support::cast<FunctionType>(*F->getType());
+   *type = FunctionType::get(FuncTy->getReturnType(), FuncTy->getArgTypes(),
+                             false);
 
+   setIsLvalue(true);
 }
 
 } // namespace il

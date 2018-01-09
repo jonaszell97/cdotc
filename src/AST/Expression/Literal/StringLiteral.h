@@ -16,11 +16,6 @@ public:
 
    typedef std::shared_ptr<StringLiteral> SharedPtr;
 
-   bool createsTemporary() override
-   {
-      return true;
-   }
-
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == StringLiteralID;

@@ -10,12 +10,19 @@
 #include <vector>
 #include <set>
 #include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/ilist_node.h>
 
-#include "../Constant/Constant.h"
+#include "../GlobalVariable.h"
+
+namespace llvm {
+
+class StructType;
+
+} // namespace llvm
 
 namespace cdot {
 
-struct QualType;
+class QualType;
 
 namespace cl {
 
@@ -30,8 +37,11 @@ class Method;
 class Initializer;
 class ConstantStruct;
 class ConstantArray;
+class ConstantInt;
 
-class AggregateType: public Constant {
+class AggregateType: public GlobalObject,
+                     public llvm::ilist_node_with_parent<AggregateType,
+                        Module> {
 public:
    typedef llvm::SmallVector<Method*, 4> MethodList;
 
@@ -44,17 +54,14 @@ public:
    typedef llvm::StringMap<Property> PropertyMap;
    typedef llvm::SmallVector<Initializer*, 4> InitializerList;
 
-   AggregateType(TypeID id,
-                 const std::string &name,
-                 SourceLocation loc,
+   AggregateType(llvm::StringRef name,
+                 TypeID id,
                  Module *m);
 
-   Module *getParent() const;
-   bool isForwardDeclared() const;
+   Module *getParent() const { return parent; }
+   void setParent(Module *m) { parent = m; }
 
-   MethodList getMethodsInModule(Module *M) const;
    const MethodList &getMethods() const;
-   void setIsForwardDeclared(bool b);
 
    void addMethod(Method *M);
    Method *getMethod(llvm::StringRef name);
@@ -74,21 +81,60 @@ public:
    const std::set<llvm::StringRef> &getConformances() const;
 
    const InitializerList &getInitializers() const;
-   InitializerList getInitializersInModule(Module *M) const;
+
    void addInitializer(Initializer *Init);
    Initializer *getInitializer(llvm::StringRef name);
 
-protected:
-   Module *parent;
+   llvm::StructType *getLlvmTy() const
+   {
+      return llvmTy;
+   }
 
+   void setLlvmTy(llvm::StructType *llvmTy) const
+   {
+      AggregateType::llvmTy = llvmTy;
+   }
+
+   GlobalVariable *getPTable() const
+   {
+      return PTable;
+   }
+
+   void setPTable(GlobalVariable *PTable)
+   {
+      AggregateType::PTable = PTable;
+   }
+
+   size_t getSize() const;
+   unsigned short getAlignment() const;
+
+   Method *getDeinitializer() const
+   {
+      return deinitializer;
+   }
+
+   void setDeinitializer(Method *deinitializer)
+   {
+      AggregateType::deinitializer = deinitializer;
+   }
+
+protected:
    MethodList Methods;
    PropertyMap Properties;
    InitializerList Initializers;
+
+   mutable size_t size;
+   mutable unsigned short alignment;
 
    std::set<llvm::StringRef> Conformances;
 
    ConstantStruct *TypeInfo = nullptr;
    llvm::StringMap<ConstantArray*> ProtocolTables;
+
+   il::GlobalVariable *PTable = nullptr;
+   il::Method *deinitializer = nullptr;
+
+   mutable llvm::StructType *llvmTy;
 
    enum Flag {
       ForwardDeclared = 0x1,
@@ -113,22 +159,35 @@ class StructType: public AggregateType {
 public:
    struct Field {
       std::string name;
-      Type *type;
+      QualType type;
       bool isStatic;
    };
 
    typedef llvm::SmallVector<Field, 4> FieldList;
 
-   StructType(const std::string &name, Module *m,
-              SourceLocation loc);
+   StructType(llvm::StringRef name,
+              Module *m);
 
    const FieldList &getFields() const;
 
    void addField(Field &&F);
    const Field &getField(llvm::StringRef name) const;
 
+   unsigned getFieldOffset(llvm::StringRef fieldName) const;
+
+   Method *getDefaultInitializer() const
+   {
+      return defaultInitializer;
+   }
+
+   void setDefaultInitializer(Method *defaultInitializer)
+   {
+      StructType::defaultInitializer = defaultInitializer;
+   }
+
 protected:
    FieldList Fields;
+   Method *defaultInitializer;
 
 public:
    static bool classof(StructType const* T) { return true; }
@@ -146,24 +205,40 @@ public:
 
 class ClassType: public StructType {
 public:
-   ClassType(const std::string &name,
+   ClassType(llvm::StringRef name,
              llvm::StringRef parentClass,
-             Module *m,
-             SourceLocation loc);
+             Module *m);
 
-   const llvm::StringRef &getParentClass() const;
+   llvm::StringRef getParentClass() const
+   {
+      return ParentClass;
+   }
 
-   ConstantArray *getVTable() const;
-   void setVTable(ConstantArray *VTable);
+   GlobalVariable *getVTable() const
+   {
+      return VTable;
+   }
 
-   void addVirtualMethod(llvm::StringRef M);
-   const llvm::SmallDenseSet<llvm::StringRef, 4> &getVirtualMethods() const;
+   void setVTable(GlobalVariable *VTable)
+   {
+      ClassType::VTable = VTable;
+   }
+
+   void addVirtualMethod(llvm::StringRef M)
+   {
+      VirtualMethods.insert(M);
+   }
+
+   const llvm::SmallDenseSet<llvm::StringRef, 4> &getVirtualMethods() const
+   {
+      return VirtualMethods;
+   }
 
 protected:
    llvm::StringRef ParentClass;
 
    llvm::SmallDenseSet<llvm::StringRef, 4> VirtualMethods;
-   ConstantArray *VTable = nullptr;
+   GlobalVariable *VTable = nullptr;
 
 public:
    static bool classof(Value const* T)
@@ -176,16 +251,20 @@ class EnumType: public AggregateType {
 public:
    struct Case {
       std::string name;
-      std::vector<std::pair<std::string, QualType>> AssociatedTypes;
+      std::vector<QualType> AssociatedTypes;
+      ConstantInt *caseVal;
    };
 
    typedef llvm::SmallVector<Case, 4> CaseList;
 
-   EnumType(const std::string &name, Type *rawType,
-            Module *m, SourceLocation loc);
+   EnumType(llvm::StringRef name,
+            Type *rawType,
+            Module *m);
 
    Type *getRawType() const;
    const CaseList &getCases() const;
+
+   const Case &getCase(llvm::StringRef name) const;
 
    void addCase(Case &&C);
    size_t getMaxAssociatedValues() const;
@@ -204,11 +283,10 @@ public:
 
 class UnionType: public StructType {
 public:
-   UnionType(const std::string &name,
-             Module *m,
-             SourceLocation loc);
+   UnionType(llvm::StringRef name,
+             Module *m);
 
-   Type *getFieldType(llvm::StringRef fieldName) const;
+   QualType getFieldType(llvm::StringRef fieldName) const;
 
    static bool classof(Value const* T)
    {
@@ -218,9 +296,8 @@ public:
 
 class ProtocolType: public AggregateType {
 public:
-   ProtocolType(const std::string &name,
-                Module *m,
-                SourceLocation loc);
+   ProtocolType(llvm::StringRef name,
+                Module *m);
 
 public:
    static bool classof(Value const* T)

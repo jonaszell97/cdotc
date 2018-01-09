@@ -3,56 +3,67 @@
 //
 
 #include "TupleType.h"
-#include "../../Util.h"
-#include "../../AST/Passes/CodeGen/CodeGen.h"
-#include "../../AST/SymbolTable.h"
-#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../../AST/Passes/CodeGen/CGMemory.h"
-#include "../../AST/Expression/TypeRef.h"
+#include "QualType.h"
+
+using namespace cdot::support;
+using std::string;
 
 namespace cdot {
 
-unordered_map<string, llvm::StructType*> TupleType::TupleTypes;
-
-TupleType* TupleType::get(std::vector<pair<string, Type*>>& containedTypes)
+TupleType* TupleType::get(std::vector<pair<string, QualType>>& containedTypes)
 {
    auto key = typesToString(containedTypes);
    if (Instances.find(key) == Instances.end()) {
-      Instances[key] = new TupleType(containedTypes, key);
+      Instances[key] = new TupleType(containedTypes);
    }
 
    return cast<TupleType>(Instances[key]);
 }
 
-TupleType::TupleType(std::vector<pair<string, Type*>> &containedTypes,
-                     string& className)
-   : arity(containedTypes.size()), align(1), size(0)
+TupleType::TupleType(std::vector<pair<string, QualType>> &containedTypes)
+   : arity(containedTypes.size())
 {
    id = TypeID::TupleTypeID;
-   this->className = className;
-
    for (const auto& ty : containedTypes) {
       this->containedTypes.push_back(ty);
-      string str = ty.second->toString();
-      className += std::to_string(str.length()) + str;
-
-      auto al = ty.second->getAlignment();
-      if (al > align) {
-         align = al;
-      }
-
-      size += ty.second->getSize();
+      string str = ty.second.toString();
    }
 }
 
+size_t TupleType::getSize() const
+{
+   size_t size = 0;
+   for (auto &ty : containedTypes)
+      size += ty.second->getMemberSize();
+
+   return size;
+}
+
+unsigned short TupleType::getAlignment() const
+{
+   unsigned short align = 1;
+   for (auto &ty : containedTypes) {
+      auto al = ty.second->getMemberAlignment();
+      if (al > align)
+         align = al;
+   }
+
+   return align;
+}
+
+QualType TupleType::getContainedType(size_t i) const
+{
+   return containedTypes[i].second;
+}
+
 string TupleType::typesToString(
-   const std::vector<pair<string, Type *>> &containedTypes)
+   const std::vector<pair<string, QualType>> &containedTypes)
 {
    string str = "(";
    size_t i = 0;
 
    for (const auto& ty : containedTypes) {
-      str += ty.second->toString();
+      str += ty.second->toUniqueString();
       if (i < containedTypes.size() - 1) {
          str += ", ";
       }
@@ -63,57 +74,9 @@ string TupleType::typesToString(
    return str + ")";
 }
 
-bool TupleType::implicitlyCastableTo(Type *other) const
-{
-   if (other->isTupleTy()) {
-      auto asTuple = cast<TupleType>(other);
-      if (asTuple->arity != arity) {
-         return false;
-      }
-
-      for (size_t i = 0; i < containedTypes.size(); ++i) {
-         if (!containedTypes[i].second->implicitlyCastableTo(asTuple->containedTypes[i].second)) {
-            return false;
-         }
-      }
-
-      return true;
-   }
-
-   return false;
-}
-
 string TupleType::toString() const
 {
-   return className;
+   return typesToString(containedTypes);
 }
 
-bool TupleType::needsMemCpy() const
-{
-   return true;
-}
-
-bool TupleType::needsLvalueToRvalueConv() const
-{
-   return false;
-}
-
-llvm::Type* TupleType::getLlvmType() const
-{
-   if (TupleTypes.find(className) != TupleTypes.end()) {
-      return TupleTypes[className];
-   }
-
-   std::vector<llvm::Type*> cont;
-   cont.reserve(containedTypes.size());
-
-   for (const auto& ty : containedTypes) {
-      cont.push_back(ty.second->getLlvmType());
-   }
-
-   llvm::StructType* tupleTy = llvm::StructType::get(CodeGen::Context, cont, true);
-   TupleTypes.emplace(className, tupleTy);
-
-   return tupleTy;
-}
 }

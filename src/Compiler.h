@@ -7,10 +7,16 @@
 
 #include <string>
 #include <vector>
+
 #include <llvm/IR/Module.h>
 #include <unordered_map>
+#include "IL/Module/Context.h"
 
-using std::string;
+namespace llvm {
+
+class DIBuilder;
+
+} // namespace llvm;
 
 namespace cdot {
 
@@ -27,13 +33,19 @@ class CompoundStmt;
 
 } // namespace ast
 
+namespace il {
+
+class Module;
+
+} // namespace module
+
 namespace codegen {
 
 class DebugInfo;
 
 } // namespace codegen
 
-enum class OutputKind {
+enum class OutputKind : unsigned {
    EXEC,
    OBJ,
    IR,
@@ -41,62 +53,54 @@ enum class OutputKind {
    HEADERS,
    MODULE,
    AST,
-   PRE_PROCESSED
+   PRE_PROCESSED,
+   LLVMBitCode,
+   CDotIL,
 };
 
 struct CompilationUnit {
-   CompilationUnit(
-      const string &fileName,
-      const string &path,
-      size_t ID,
-      std::shared_ptr<ast::CompoundStmt> root,
-      bool isHeader
-   ) : fileName(fileName), path(path), ID(ID), root(root), isHeader(isHeader)
-   {
+   CompilationUnit(const std::string &fileName,
+                   const std::string &path,
+                   size_t ID,
+                   std::shared_ptr<ast::CompoundStmt> &&root,
+                   bool isHeader);
 
-   }
+   CompilationUnit(CompilationUnit &&CU) noexcept;
+   ~CompilationUnit();
 
-   string fileName;
-   string path;
-   size_t ID;
+   std::string fileName;
+   std::string path;
+   size_t sourceId;
    std::shared_ptr<ast::CompoundStmt> root;
    bool isHeader = false;
 
-   llvm::Module *Module;
-   codegen::DebugInfo *DI;
-   std::unordered_map<string, llvm::Constant*> ModuleFunctions;
-   std::vector<cl::Class*> ModuleRecords;
+   llvm::Module *Module = nullptr;
+   std::unique_ptr<il::Module> ILModule;
+   llvm::DIBuilder *DI  = nullptr;
 };
 
 struct CompilerOptions {
-   std::vector<string> sourceFiles;
-   std::vector<string> linkedFiles;
-   std::vector<string> importedModules;
-   std::vector<string> headerFiles;
+   std::vector<std::string> sourceFiles;
+   std::vector<std::string> linkedFiles;
 
-   string executableOutFile;
-   string objectOutFile;
-   string asmOutFile;
-   string ppOutFile;
-   string moduleName;
-   string irOutPath;
+   std::unordered_map<OutputKind, std::string> outFiles;
 
-   string basePath;
-
+   std::string basePath;
    size_t optimizationLevel = 3;
 
-   std::vector<OutputKind> outputKinds;
-
-   bool hasOutputKind(OutputKind kind) {
-      return std::find(outputKinds.begin(), outputKinds.end(), kind) != outputKinds.end();
+   bool hasOutputKind(OutputKind kind)
+   {
+      return outFiles.find(kind) != outFiles.end();
    }
 
-   string headerOutPath;
+   llvm::StringRef getOutFile(OutputKind kind)
+   {
+      return outFiles[kind];
+   }
 
-   bool isStdLib = false;
-   bool linkStdLib = true;
+   std::string headerOutPath;
+
    bool emitDebugInfo = false;
-
    unsigned maxMacroRecursionDepth = 256;
 };
 
@@ -105,13 +109,20 @@ public:
    static void init(int argc, char *argv[]);
    static void compile();
 
-   static CompilerOptions& getOptions() {
+   static CompilerOptions& getOptions()
+   {
       return options;
    }
 
+   static il::Context &getContext()
+   {
+      return ILCtx;
+   }
+
 protected:
-   static string compilerLocation;
+   static std::string compilerLocation;
    static CompilerOptions options;
+   static il::Context ILCtx;
 };
 
 } // namespace cdot

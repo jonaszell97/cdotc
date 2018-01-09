@@ -8,25 +8,22 @@
 namespace cdot {
 namespace il {
 
-TerminatorInst::TerminatorInst(TypeID id, BasicBlock *parent,
-                               const std::string &name,
-                               const SourceLocation &loc)
-   : Instruction(id, VoidType::get(), parent, name, loc)
+TerminatorInst::TerminatorInst(TypeID id, BasicBlock *parent)
+   : Instruction(id, VoidType::get(), parent)
 {
 
 }
 
-RetInst::RetInst(Value *returnedValue, BasicBlock *parent,
-                 const std::string &name, const SourceLocation &loc)
-   : TerminatorInst(RetInstID, parent, name, loc),
+RetInst::RetInst(Value *returnedValue,
+                 BasicBlock *parent)
+   : TerminatorInst(RetInstID, parent),
      returnedValue(returnedValue)
 {
    returnedValue->addUse(this);
 }
 
-RetInst::RetInst(BasicBlock *parent, const std::string &name,
-                 const SourceLocation &loc)
-   : TerminatorInst(RetInstID, parent, name, loc),
+RetInst::RetInst(BasicBlock *parent)
+   : TerminatorInst(RetInstID, parent),
      returnedValue(nullptr)
 {
 
@@ -42,17 +39,16 @@ Value *RetInst::getReturnedValue() const
    return returnedValue;
 }
 
-ThrowInst::ThrowInst(Value *thrownValue, BasicBlock *parent,
-                     const string &name, const SourceLocation &loc)
-   : TerminatorInst(ThrowInstID, parent, name, loc), thrownValue(thrownValue)
+ThrowInst::ThrowInst(Value *thrownValue, GlobalVariable *typeInfo,
+                     BasicBlock *parent)
+   : TerminatorInst(ThrowInstID, parent), thrownValue(thrownValue),
+     typeInfo(typeInfo)
 {
    thrownValue->addUse(this);
 }
 
-UnreachableInst::UnreachableInst(BasicBlock *parent,
-                                 const std::string &name,
-                                 const SourceLocation &loc)
-   : TerminatorInst(UnreachableInstID, parent, name, loc)
+UnreachableInst::UnreachableInst(BasicBlock *parent)
+   : TerminatorInst(UnreachableInstID, parent)
 {
 
 }

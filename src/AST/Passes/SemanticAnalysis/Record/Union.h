@@ -26,15 +26,12 @@ class Union: public Record {
 public:
    Union(
       const string& name,
+      Namespace *NS,
       bool isConst,
+      std::vector<TemplateParameter> &&templateParams,
       const SourceLocation &loc,
       UnionDecl *decl
    );
-
-   bool isUnion() const override
-   {
-      return true;
-   }
 
    const unordered_map<string, Type *> &getFields() const;
    void setFields(const unordered_map<string, Type *> &types);
@@ -42,15 +39,20 @@ public:
    bool isConst() const;
    void isConst(bool is_const);
 
-   bool hasField(string &name);
-   Type *getFieldTy(string &name);
+   bool hasField(llvm::StringRef name);
+   Type *getFieldTy(llvm::StringRef name);
 
-   void declareField(
-      const string &fieldName,
-      Type *fieldTy
-   );
+   void declareField(const string &fieldName,
+                     QualType fieldTy);
 
    Type* initializableWith(Type *ty);
+
+   void calculateSizeImpl();
+
+   static bool classof(Record const * T)
+   {
+      return T->getTypeID() == UnionID;
+   }
 
 protected:
    unordered_map<string, Type*> fields;

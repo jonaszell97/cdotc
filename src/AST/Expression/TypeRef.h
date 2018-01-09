@@ -5,57 +5,79 @@
 #ifndef CDOT_TYPEREF_H
 #define CDOT_TYPEREF_H
 
-
 #include "../Expression/Expression.h"
 
 namespace cdot {
-class TemplateArgList;
-}
-
-namespace cdot {
 namespace ast {
+
+class StaticExpr;
 
 class TypeRef : public Expression {
 public:
    enum TypeKind {
       Auto,
       Primitive,
+      ArrayType,
       FunctionType,
       TupleType,
-      ObjectType
+      ObjectType,
+      DeclTypeExpr,
+      Pointer,
+      Option
    };
 
-   typedef std::vector<pair<string, TemplateArgList*>> NamespaceVec;
+   typedef std::vector<pair<string, std::vector<TemplateArg>>> NamespaceVec;
    typedef std::shared_ptr<TypeRef> SharedPtr;
 
    TypeRef();
+   ~TypeRef();
 
    // Object type
-   TypeRef(
-      NamespaceVec &&ns
-   );
+   explicit TypeRef(NamespaceVec &&ns);
 
    // function type
-   TypeRef(
-      TypeRef::SharedPtr &&returnType,
-      std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes
-   );
+   TypeRef(TypeRef::SharedPtr &&returnType,
+           std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes);
 
    // tuple type
-   explicit TypeRef(
-      std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes
-   );
+   explicit TypeRef(std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes);
 
-   TypeRef(const QualType &ty) : Expression(TypeRefID), type(ty), resolved(true)
-   {
+   // array type
+   explicit TypeRef(std::shared_ptr<TypeRef> &&elementTy,
+                    std::shared_ptr<StaticExpr> &&arraySize);
 
-   }
+   // decltype(expr)
+   explicit TypeRef(std::shared_ptr<Expression> &&declTypeExpr);
+
+   explicit TypeRef(const QualType &ty);
+
+   TypeRef(std::shared_ptr<TypeRef> &&subject, TypeKind kind);
+
 
    string toString();
+
+   bool isSingularType() const
+   {
+      return kind == ObjectType && namespaceQual.size() == 1;
+   }
+
+   llvm::StringRef getSingularTypeName() const;
+
+   void forEachContainedType(void (*func)(TypeRef *));
 
    inline QualType getType(bool force = false)
    {
       assert((force || resolved) && "Resolve type before accessing!");
+      return type;
+   }
+
+   QualType &operator*()
+   {
+      return type;
+   }
+
+   QualType const& operator*() const
+   {
       return type;
    }
 
@@ -95,35 +117,19 @@ public:
       is_reference = ref;
    }
 
-   bool isOption()
-   {
-      return is_option;
-   }
-
-   void isOption(bool opt)
-   {
-      is_option = opt;
-   }
-
-   size_t getPointerDepth() const
-   {
-      return pointerDepth;
-   }
-
-   void incrementPointerDepth()
-   {
-      ++pointerDepth;
-   }
-
    void setType(const QualType& t)
    {
       type = t;
    }
 
-   QualType &operator*()
+   bool isDeclTypeExpr() const
    {
-      assert(resolved && "resolve first");
-      return type;
+      return kind == TypeKind::DeclTypeExpr;
+   }
+
+   const std::shared_ptr<Expression> &getDeclTypeExpr() const
+   {
+      return declTypeExpr;
    }
 
    static bool classof(AstNode const* T)
@@ -133,23 +139,24 @@ public:
 
 protected:
    TypeKind kind;
-   bool resolved = false;
-
-   bool is_option = false;
-   bool is_reference = false;
-   bool return_dummy_obj_ty = false;
-   bool is_meta_ty = false;
-   size_t pointerDepth = 0;
-
    QualType type;
 
    NamespaceVec namespaceQual;
    std::vector<pair<string, TypeRef::SharedPtr>> containedTypes;
 
-   TypeRef::SharedPtr returnType = nullptr;
+   union {
+      std::shared_ptr<TypeRef> returnType = nullptr;
+      std::shared_ptr<StaticExpr> arraySize;
+      std::shared_ptr<TypeRef> subject;
+      std::shared_ptr<Expression> declTypeExpr;
+   };
 
-   bool vararg = false;
-   bool cstyleVararg = false;
+   bool resolved : 1;
+   bool is_reference : 1;
+   bool is_meta_ty : 1;
+   bool allow_unexpanded_template_args : 1;
+   bool vararg : 1;
+   bool cstyleVararg : 1;
 
 public:
    TypeKind getKind() const;
@@ -158,12 +165,9 @@ public:
    bool isResolved() const;
    void setResolved(bool resolved);
 
-   void setPointerDepth(size_t pointerDepth);
-
    const QualType &getType() const;
 
-   const NamespaceVec &getNamespaceQual() const;
-   void setNamespaceQual(const NamespaceVec &namespaceQual);
+   NamespaceVec &getNamespaceQual();
 
    const std::vector<pair<string, SharedPtr>> &getContainedTypes() const;
    void setContainedTypes(
@@ -177,11 +181,33 @@ public:
    bool isCstyleVararg() const;
    void setCstyleVararg(bool cstyleVararg);
 
-   bool returnDummyObjTy() const;
-   void setReturnDummyObjTy(bool b);
-
    bool isMetaTy() const;
    void isMetaTy(bool is_meta_ty);
+
+   const std::shared_ptr<TypeRef> &getSubject() const
+   {
+      return subject;
+   }
+
+   bool allowUnexpandedTemplateArgs() const
+   {
+      return allow_unexpanded_template_args;
+   }
+
+   void setAllowUnexpandedTemplateArgs(bool allow)
+   {
+      allow_unexpanded_template_args = allow;
+   }
+
+   const std::shared_ptr<StaticExpr> &getArraySize() const
+   {
+      return arraySize;
+   }
+
+   const std::shared_ptr<TypeRef> &getElementType() const
+   {
+      return containedTypes.front().second;
+   }
 };
 
 } // namespace ast

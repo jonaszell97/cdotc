@@ -22,22 +22,36 @@ using std::pair;
 namespace cdot {
 namespace fs {
 
-   class FileManager {
-   public:
-      static pair<size_t, std::unique_ptr<MemoryBuffer>> openFile(
-         const Twine &fileName,
-         bool isNewSourceFile = false
-      );
+class FileManager {
+public:
+   static pair<size_t, std::unique_ptr<MemoryBuffer>> openFile(
+      const Twine &fileName,
+      bool isNewSourceFile = false
+   );
 
-      static std::unique_ptr<MemoryBuffer> openFile(size_t sourceId);
-      static std::unique_ptr<MemoryBuffer> openFile(const SourceLocation &loc);
+   static std::unique_ptr<MemoryBuffer> openFile(size_t sourceId);
+   static std::unique_ptr<MemoryBuffer> openFile(const SourceLocation &loc);
 
-      static const Twine &getFileName(size_t sourceId);
+   static const Twine &getFileName(size_t sourceId);
 
-   protected:
-      static size_t sourceFileCount;
-      static unordered_map<size_t, Twine> openedFiles;
-   };
+   static std::pair<unsigned, unsigned>
+   getLineAndCol(const SourceLocation &loc);
+
+   static std::pair<unsigned, unsigned>
+   getLineAndCol(const SourceLocation &loc, llvm::MemoryBuffer *Buf);
+
+   static size_t createOrGetFileAlias(size_t aliasedSourceId);
+
+private:
+   static size_t sourceFileCount;
+   static unordered_map<size_t, std::string> openedFiles;
+
+   static unordered_map<size_t, std::vector<size_t>> LineOffsets;
+
+   static std::vector<size_t> const& collectLineOffsetsForFile(
+                                                      size_t sourceId,
+                                                      llvm::MemoryBuffer *Buf);
+};
 
 }
 }

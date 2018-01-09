@@ -22,18 +22,22 @@ protected:
 
 public:
    QualType();
-   explicit QualType(
+   QualType(
       Type *builtin,
       bool isLvalue = false,
       bool isConst = false
    );
 
-   bool operator==(const QualType& rhs) const {
-      return builtinTy == rhs.builtinTy;
+   bool operator==(const QualType& rhs) const
+   {
+      return builtinTy == rhs.builtinTy
+           && is_lvalue == rhs.is_lvalue
+           && is_const == rhs.is_const;
    }
 
-   bool operator!=(const QualType& rhs) const {
-      return builtinTy != rhs.builtinTy;
+   bool operator!=(const QualType& rhs) const
+   {
+      return !operator==(rhs);
    }
 
    bool isLvalue() const;
@@ -47,8 +51,6 @@ public:
 
    bool implicitlyCastableTo(const QualType &dest) const;
    bool needsLvalueToRvalueConv() const;
-
-   llvm::Type* getLlvmType() const;
 
    std::string toString() const;
 
@@ -70,6 +72,16 @@ public:
    Type *getBuiltinTy() const
    {
       return builtinTy;
+   }
+
+   explicit operator Type*()
+   {
+      return builtinTy;
+   }
+
+   operator bool() const
+   {
+      return !builtinTy->isAutoTy();
    }
 };
 

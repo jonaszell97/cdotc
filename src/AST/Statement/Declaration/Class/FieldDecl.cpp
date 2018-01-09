@@ -14,8 +14,8 @@ FieldDecl::FieldDecl(std::string &&fieldName,
                      bool isStatic,
                      bool isConst,
                      Expression::SharedPtr &&defaultVal)
-   : RecordSubDecl(FieldDeclID, std::move(fieldName), am, isStatic), type(type),
-     is_const(isConst), defaultVal(std::move(defaultVal))
+   : RecordSubDecl(FieldDeclID, std::move(fieldName), am, isStatic),
+     is_const(isConst), type(type), defaultVal(std::move(defaultVal))
 {
 
 }

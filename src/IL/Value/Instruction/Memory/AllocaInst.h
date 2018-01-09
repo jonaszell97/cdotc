@@ -18,12 +18,25 @@ public:
    AllocaInst(Type *ty,
               BasicBlock *parent,
               unsigned alignment = 0,
-              bool heap = false,
-              const std::string &name = "",
-              const SourceLocation &loc = {});
+              bool heap = false);
+
+   AllocaInst(Type *ty,
+              BasicBlock *parent,
+              size_t allocSize,
+              unsigned alignment = 0,
+              bool heap = false);
 
    unsigned int getAlignment() const;
    bool isHeapAlloca() const;
+
+   size_t getAllocSize() const { return allocSize; }
+
+private:
+   size_t allocSize = 1;
+
+   enum Flags : unsigned short {
+      Heap = Instruction::Flags::Initializer << 1,
+   };
 
 public:
    static bool classof(AllocaInst const* T) { return true; }

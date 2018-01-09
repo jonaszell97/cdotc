@@ -1,52 +1,58 @@
 
-using Builtin.Primitive.{ int8, word, int32 }
-using Extern.C.{ malloc, free }
+using Builtin.Primitive.*
+using Extern.C.{ malloc, free, printf }
+using System.Functional.{ Predicate }
 
-class Array<T> with Iterable<T> {
-    static let INITIAL_CAPACITY = 8
+class Array<T> {
+    static let INITIAL_CAPACITY = 8u
 
-    var raw: T*       { get } = __nullptr(T)
-    var capacity: Int { get } = INITIAL_CAPACITY
-    var size: Int     { get } = 0
+    var raw: T*        { get } = __nullptr
+    var capacity: UInt { get } = INITIAL_CAPACITY
+    var size: UInt     { get } = 0
 
-    private init (arr: T*, len: Int) {
+    private init (arr: T*, len: UInt) {
         raw = arr
         size = len
         capacity = len
     }
 
-    init (cap: Int) {
+    init (cap: UInt) {
         capacity = cap
-        raw = malloc(sizeof(word*) * capacity) as T*
+        raw = malloc(sizeof<word* >() * capacity) as! T*
     }
 
     init {
-        raw = malloc(sizeof(word*) * capacity) as T*
+        raw = malloc(sizeof<word* >() * capacity) as! T*
     }
 
     @inline(always)
     private def copyTo(lhs: T*) {
-        for let i in 0..size {
+        for let i in 0u..size {
             lhs[i] = raw[i]
         }
     }
 
-    private def resize (cap: Int) {
-        let newArr = malloc(sizeof(word*) * cap) as T*
+    private def resize (cap: UInt) {
+        let newArr = malloc(sizeof<word* >() * cap) as! T*
         copyTo(newArr)
-
-        free(raw as int8*)
+        
+        free(raw as! int8*)
         raw = newArr
         capacity = cap
     }
 
-    def push(t: T) unsafe {
-        if (size + 1 > capacity) {
+    def push(t: T) {
+        if size + 1 > capacity {
             resize(capacity << 1)
         }
         
         raw[size] = t
         ++size
+    }
+
+    def push <U, V, ...Ws> (u: U, v: V, ws: Ws...) {
+        push(u)
+        push(v, ws...)
     }
 
     def pop -> T {
@@ -56,7 +62,7 @@ class Array<T> with Iterable<T> {
         return back
     }
 
-    def reserve (cap: Int) {
+    def reserve (cap: UInt) {
         if capacity > cap {
             return
         }
@@ -76,13 +82,16 @@ class Array<T> with Iterable<T> {
         return self[i]
     }
 
-    def postfix [] (index: Int) -> ref T {
-        if (index >= size) {
-            print("No can do baby doll")
-            System.exit(1)
+    def postfix [] (index: UInt) -> ref T {
+        if index >= size {
+            throw 3
         }
 
         return raw[index]
+    }
+
+    def postfix [] (index: Int) -> ref T {
+        return self[index as! UInt]
     }
 
     def infix + (rhs: Array<T>) -> Array<T> {
@@ -93,24 +102,26 @@ class Array<T> with Iterable<T> {
     }
 
     def infix += (rhs: Array<T>) {
-        var newArr = malloc(size + rhs.size) as T*
+        var newArr = malloc(size + rhs.size) as! T*
 
         copyTo(newArr)
-        for let i in 0..rhs.size {
+        for let i in 0u..rhs.size {
             newArr[i + size] = rhs.raw[i]
         }
         
-        free(raw as int8*)
+        free(raw as! int8*)
         raw = newArr
         size = rhs.size + size
         capacity = size
     }
 }
 
-extend Array with Iterable<T> {
-    class Iterator<T> with Global.Iterator<T> {
-        let arr: [T]
-        var index = 0
+extend Array <T> with Iterable {
+    class Iterator with Global.Iterator {
+        var arr: [T]
+        var index: UInt = 0
+
+        associatedType Element = T
 
         init (_arr: [T]) {
             arr = _arr
@@ -125,43 +136,66 @@ extend Array with Iterable<T> {
         }
     }
     
-    def getIterator() -> Iterator<T> {
-        return Iterator<T>(self)
+    associatedType Element = T
+    associatedType It = Iterator
+
+    def getIterator () -> Iterator {
+        return Iterator(self)
     }
 }
 
-//FIXME
-// extend Array with StringRepresentable where T: StringRepresentable {
-//     def infix as String {
-//         var str = "["
-//         var i = 0
-//         for let el in self {
-//             print("hi")
-//             str += el as String
-//             print("bye")
-//             if i < size - 1 {
-//                 str += ", "
-//             }
+extend Array <T> with StringRepresentable where T: StringRepresentable {
+    def infix as String {
+        return join()
+    }
 
-//             ++i
-//         }
+    def join <value Separator: String = ", ",
+              value Begin: String = "[",
+              value End: String = "]"> () -> String {
+        var str = Begin
+        var i = 0u
+
+        for let el in self {
+            if i++ != 0 { str += Separator }
+            str += el as String
+        }
         
-//         return str + "]"
-//     }
-// }
+        return str + End
+    }
+}
 
-extend Array {
-    def forEach (func: (T) -> Void) {
+extend Array <T> {
+    def forEach <U> (func: (T) -> U) {
         for let el in self {
             func(el)
         }
     }
 
-    def filter (pred: (T) -> Bool) -> Array<T> {
+    def filter (pred: Predicate<T>) -> [T] {
         let arr = Array<T>()
         for let el in self {
-            if !pred(el) {
+            if pred(el) {
                 arr.push(el)
+            }
+        }
+    
+        return arr
+    }
+
+    def map <U> (mapping: (T) -> U) -> [U] {
+        let arr = Array<U>()
+        for let el in self {
+            arr.push(mapping(el))
+        }
+
+        return arr
+    }
+
+    def flatMap <U> (mapping: (T) -> U) -> [U] where T: class || T: * {
+        let arr = Array<U>()
+        for let el in self {
+            if !__builtin_isnull(el) {
+                arr.push(mapping(el))
             }
         }
 

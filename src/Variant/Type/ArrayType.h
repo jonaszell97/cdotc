@@ -13,15 +13,32 @@ class ArrayType: public Type {
 public:
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::ArrayTypeID;
+      switch (T->getTypeID()) {
+         case TypeID::ArrayTypeID:
+         case TypeID::InferredArrayTypeID:
+            return true;
+         default:
+            return false;
+      }
    }
 
    static ArrayType* get(Type *elementType, size_t numElements);
 
-   string toString() const override;
+   std::string toString() const;
+
+   size_t getSize() const
+   {
+      return elementType->getSize() * numElements;
+   }
+
+  unsigned short getAlignment() const
+   {
+      return elementType->getAlignment();
+   }
 
 protected:
-   ArrayType(Type *elementType, size_t numElements, string &&className);
+   ArrayType(Type *elementType, size_t numElements);
+   ArrayType(TypeID typeID, Type *elementType);
 
    Type *elementType;
    size_t numElements;
@@ -36,6 +53,28 @@ public:
    {
       return numElements;
    }
+};
+
+class InferredArrayType: public ArrayType {
+public:
+   static InferredArrayType *get(Type *elementType,
+                                 llvm::StringRef Param);
+
+   llvm::StringRef getParam() const
+   {
+      return Param;
+   }
+
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::InferredArrayTypeID;
+   }
+
+private:
+   InferredArrayType(Type *elementType,
+                     llvm::StringRef Param);
+
+   llvm::StringRef Param;
 };
 
 } // namespace cdot

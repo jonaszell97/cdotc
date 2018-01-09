@@ -17,31 +17,30 @@ MDSet::MDSet() : MetaData(MDSetID), ContainedMD{}
 
 }
 
-void MDSet::addNode(MetaData *MD)
+void MDSet::setNode(MetaData *MD)
 {
-   ContainedMD.push_back(MD);
+   ContainedMD[MD->getKind()] = MD;
 }
 
 MetaData* MDSet::getNode(MDKind kind) const
 {
-   for (const auto &node : ContainedMD) {
-      if (node->getKind() == kind) {
-         return node;
-      }
-   }
+   auto it = ContainedMD.find(kind);
+   if (it != ContainedMD.end())
+      return it->second;
 
    return nullptr;
 }
 
 bool MDSet::hasNode(MDKind kind) const
 {
-   for (const auto &node : ContainedMD) {
-      if (node->getKind() == kind) {
-         return true;
-      }
-   }
+   return getNode(kind) != nullptr;
+}
 
-   return false;
+void MDSet::removeIfPresent(MDKind kind)
+{
+   auto it = ContainedMD.find(kind);
+   if (it != ContainedMD.end())
+      ContainedMD.erase(it);
 }
 
 MDFile::MDFile(const std::string &fileName, const std::string &path)
@@ -50,7 +49,7 @@ MDFile::MDFile(const std::string &fileName, const std::string &path)
 
 }
 
-std::unordered_map<size_t, MDFile*> MDFile::Instances;
+llvm::SmallDenseMap<size_t, MDFile*> MDFile::Instances;
 
 MDFile* MDFile::get(size_t sourceID)
 {
@@ -64,32 +63,35 @@ MDFile* MDFile::get(size_t sourceID)
    auto path = fs::getPath(fullName);
 
    auto file = new MDFile(fileName, path);
-   Instances[sourceID] = file;
+   Instances.try_emplace(sourceID, file);
 
    return file;
 }
 
+llvm::SmallDenseMap<uint64_t, MDLocation*> MDLocation::Instances;
+
+MDLocation* MDLocation::get(const SourceLocation &loc)
+{
+   auto key = *reinterpret_cast<uint64_t const*>(&loc);
+   auto it = Instances.find(key);
+   if (it != Instances.end())
+      return it->second;
+
+   auto newInst = new MDLocation(loc);
+   Instances.try_emplace(key, newInst);
+
+   return newInst;
+}
+
 MDLocation::MDLocation(const SourceLocation &loc)
-   : MetaData(MDLocationID), File(loc.getLine()
-                                  ? MDFile::get(loc.getSourceId())
-                                  : nullptr)
+   : MetaData(MDLocationID), location(loc)
 {
+   if (!loc)
+      return;
 
-}
-
-const SourceLocation &MDLocation::getLocation() const
-{
-   return location;
-}
-
-void MDLocation::setLocation(const SourceLocation &location)
-{
-   MDLocation::location = location;
-}
-
-MDFile *MDLocation::getFile() const
-{
-   return File;
+   auto lineAndCol = fs::FileManager::getLineAndCol(loc);
+   line = lineAndCol.first;
+   col = lineAndCol.second;
 }
 
 } // namespace il

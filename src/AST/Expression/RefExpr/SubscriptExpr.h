@@ -14,7 +14,7 @@ class CallExpr;
 
 class SubscriptExpr : public Expression {
 public:
-   explicit SubscriptExpr(Expression::SharedPtr);
+   explicit SubscriptExpr(Expression::SharedPtr &&index);
 
    typedef std::shared_ptr<SubscriptExpr> SharedPtr;
 
@@ -24,18 +24,21 @@ public:
    }
 
 protected:
-   Expression::SharedPtr index;
+   std::shared_ptr<Expression> index;
 
    // codegen
-   bool is_subscript_op = false;
    std::shared_ptr<CallExpr> overridenCall;
 
 public:
-   Expression::SharedPtr &getIndex();
-   void setIndex(const Expression::SharedPtr &index);
+   std::shared_ptr<Expression> const& getIndex() const
+   {
+      return index;
+   }
 
-   bool isSubscriptOperator() const;
-   void setIsSubscriptOperator(bool is_subscript_op);
+   std::shared_ptr<Expression> &getIndex()
+   {
+      return index;
+   }
 
    const std::shared_ptr<CallExpr> &getOverridenCall() const;
    void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);

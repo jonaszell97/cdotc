@@ -9,106 +9,213 @@
 
 #include <iostream>
 
-Token::Token() : isInterpolationStart(false) {}
+namespace cdot {
+namespace lex {
+
+namespace tok {
+
+string tokenTypeToString(TokenType ty)
+{
+   switch (ty) {
+#  define CDOT_TOKEN(Name, Spelling) \
+      case Name:                     \
+         return #Name;
+
+#  include "Tokens.def"
+      default:
+         llvm_unreachable("bad token kind");
+   }
+}
+
+} // namespace tok
+
+using tok::TokenType;
+
+Token::Token() {}
 Token::~Token() = default;
 
-Token::Token(TokenType type, Variant&& content, SourceLocation loc,
-   unsigned start) : _type(type), _value(content), start(start), loc(loc),
-                     isInterpolationStart(false)
+Token::Token(TokenType type, Variant&& content, const SourceLocation &loc)
+   : _value(std::move(content)), loc(loc), _type(type)
 {
 
 }
+
+namespace {
+
+string unescape_char(char c)
+{
+   switch (c) {
+      case '\n':
+         return "\\n";
+      case '\a':
+         return "\\a";
+      case '\r':
+         return "\\r";
+      case '\v':
+         return "\\v";
+      case '\t':
+         return "\\t";
+      case '\b':
+         return "\\b";
+      case '\0':
+         return "\\0";
+      default:
+         return string(1,c);
+   }
+}
+
+} // anonymous namespace
 
 string Token::toString() const
 {
    switch (_type) {
-      case T_BOF: return "T_BOF";
-      case T_EOF: return "T_EOF";
-      case T_IDENT: return "T_IDENT";
-      case T_PREPROC_VAR: return "T_PREPROC_VAR";
-      case T_LITERAL: return "T_LITERAL";
-      case T_KEYWORD: return "T_KEYWORD";
-      case T_OP: return "T_OP";
-      case T_DIRECTIVE: return "T_DIRECTIVE";
-      case T_PUNCTUATOR: return "T_PUNCTUATOR";
-   }
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
+      case tok::Name: return string("'") + unescape_char((Spelling)) + "'";
+#  define CDOT_LITERAL_TOKEN(Name, Spelling) \
+      case tok::Name: return _value.toString();
+      case tok::sentinel: return "sentinel";
+      case tok::eof: return "eof";
+      case tok::ident: return _value.strVal;
+      case tok::dollar_ident: return "$" + _value.strVal;
+      case tok::dollar_dollar_ident: return "$$" + _value.strVal;
+      case tok::percent_ident: return "%" + _value.strVal;
+      case tok::percent_percent_ident: return "%%" + _value.strVal;
+      default:
+         llvm_unreachable("unhandled token kind");
 
-   llvm_unreachable("Unknown token type");
+#  include "Tokens.def"
+   }
 }
 
-Variant Token::get_value()
+string Token::rawRepr() const
 {
-   return _value;
-}
-
-TokenType Token::get_type()
-{
-   return _type;
-}
-
-bool Token::is_punctuator(char c) const
-{
-   if (c == '<') {
-      return _type == T_OP && _value.strVal == "<";
-   }
-   if (c == '>') {
-      return _type == T_OP && _value.strVal == ">";
+   if (_type == tok::space) {
+      return string(_value.getInt(), ' ');
    }
 
-   return _type == T_PUNCTUATOR && _value.intVal == c;
+   switch (_type) {
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling) \
+      case tok::Name: return (Spelling);
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
+      case tok::Name: return string(1, (Spelling));
+      case tok::integerliteral:
+      case tok::fpliteral:
+         return _value.toString();
+      case tok::stringliteral:
+         return '"' + _value.toString() + '"';
+      case tok::charliteral:
+         return '\'' + _value.toString() + '\'';
+      case tok::ident: return _value.strVal;
+      case tok::dollar_ident: return "$" + _value.strVal;
+      case tok::dollar_dollar_ident: return "$$" + _value.strVal;
+      case tok::percent_ident: return "%" + _value.strVal;
+      case tok::percent_percent_ident: return "%%" + _value.strVal;
+      case tok::expr_begin: return "<expr_begin>";
+      case tok::stringify_begin: return "<stringify_begin>";
+      case tok::eof: return "<eof>";
+      case tok::sentinel: return "<sentinel>";
+      default:
+         llvm_unreachable("unhandled token kind");
+
+#  include "Tokens.def"
+   }
 }
 
 bool Token::is_punctuator() const
 {
-   return _type == T_PUNCTUATOR;
-}
-
-bool Token::is_keyword(const string &keyword) const
-{
-   return _type == T_KEYWORD && _value.strVal == keyword;
+   switch (_type) {
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  include "Tokens.def"
+         return true;
+      default:
+         return false;
+   }
 }
 
 bool Token::is_keyword() const
 {
-   return _type == T_KEYWORD;
-}
-
-bool Token::is_operator(const string &op) const
-{
-   return _type == T_OP && _value.strVal == op;
+   switch (_type) {
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  define CDOT_MODULE_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  include "Tokens.def"
+         return true;
+      default:
+         return false;
+   }
 }
 
 bool Token::is_operator() const
 {
-   return _type == T_OP;
+   switch (_type) {
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  include "Tokens.def"
+         return true;
+      default:
+         return false;
+   }
 }
 
-bool Token::is_identifier(const string &ident) const
+bool Token::is_directive() const
 {
-   return _type == T_IDENT && _value.strVal == ident;
+   switch (_type) {
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  include "Tokens.def"
+         return true;
+      default:
+         return false;
+   }
 }
 
 bool Token::is_identifier() const
 {
-   return _type == T_IDENT;
+   return _type == tok::ident;
 }
 
 bool Token::is_separator() const
 {
-   return (_type == T_PUNCTUATOR
-            && (_value.intVal == '\n' || _value.intVal == ';'))
-          || _type == T_EOF;
+   return oneOf(tok::newline, tok::semicolon, tok::eof);
+}
+
+bool Token::is_literal() const
+{
+   switch (_type) {
+#  define CDOT_LITERAL_TOKEN(Name, Spelling) \
+      case tok::Name:
+#  include "Tokens.def"
+         return true;
+      default:
+         return false;
+   }
 }
 
 string Token::TokensToString(const std::vector<Token> &tokens)
 {
    string str;
-   unsigned i = 0;
-   auto numTokens = tokens.size();
-
    for (const auto &tok : tokens) {
       str += tok._value.toString();
    }
 
    return str;
 }
+
+} // namespace lex
+} // namespace cdot

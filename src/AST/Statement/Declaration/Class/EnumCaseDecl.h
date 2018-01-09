@@ -11,6 +11,7 @@
 namespace cdot {
 namespace ast {
 
+class Expression;
 class TypeRef;
 
 class EnumCaseDecl: public Statement {

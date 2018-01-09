@@ -3,7 +3,12 @@
 //
 
 #include "BinaryOperator.h"
-#include "../../lex/Lexer.h"
+#include "ExprSequence.h"
+
+#include "../../Variant/Type/ObjectType.h"
+#include "../Passes/SemanticAnalysis/Record/Record.h"
+
+#include "../../Support/Casting.h"
 
 using namespace cdot::cl;
 
@@ -11,7 +16,7 @@ namespace cdot {
 namespace ast {
 
 BinaryOperatorType getBinaryOpType(const string &op) {
-   if (!util::isAssignmentOperator(op).empty()) {
+   if (isAssignmentOperator(stringToOperator(op))) {
       return BinaryOperatorType::ASSIGNMENT;
    }
    if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%"
@@ -31,7 +36,7 @@ BinaryOperatorType getBinaryOpType(const string &op) {
    if (op == "<=" || op == ">=" || op == "<" || op == ">") {
       return BinaryOperatorType::COMPARISON;
    }
-   if (op == "as" || op == "as!") {
+   if (op == "as" || op == "as!" || op == "as?") {
       return BinaryOperatorType::CAST;
    }
 
@@ -39,7 +44,9 @@ BinaryOperatorType getBinaryOpType(const string &op) {
 }
 
 BinaryOperator::BinaryOperator(string &&op)
-   : Expression(BinaryOperatorID), op(op)
+   : Expression(BinaryOperatorID), op(move(op)),
+     kind(stringToOperator(this->op)), typePredicate(false),
+     typePredicateResult(false)
 {
 
 }
@@ -47,211 +54,32 @@ BinaryOperator::BinaryOperator(string &&op)
 BinaryOperator::BinaryOperator(string &&op,
                                Expression::SharedPtr &&lhs,
                                Expression::SharedPtr &&rhs)
-   : Expression(BinaryOperatorID), op(move(op)), lhs(move(lhs)), rhs(move(rhs)) {
-
-}
-
-void BinaryOperator::setLhs(Expression::SharedPtr exp) {
-   lhs = exp;
-}
-
-void BinaryOperator::setRhs(Expression::SharedPtr exp) {
-   rhs = exp;
-}
-
-Expression::SharedPtr &BinaryOperator::getLhs()
+   : Expression(BinaryOperatorID),
+     lhs(move(lhs)), rhs(move(rhs)), op(move(op)),
+     kind(stringToOperator(this->op)), typePredicate(false),
+     typePredicateResult(false)
 {
-   return lhs;
-}
+   if (auto obj = support::dyn_cast<ObjectType>(*this->lhs->getExprType())) {
+      if (obj->getRecord()->getMethod("infix " + this->op))
+         return;
+   }
 
-Expression::SharedPtr &BinaryOperator::getRhs()
-{
-   return rhs;
-}
+   if (isAssignmentOperator(kind) && kind != OperatorKind::Assign) {
+      llvm::SmallString<32> preAssignOperator(this->op);
+      assert(preAssignOperator.back() == '=');
 
-Type *BinaryOperator::getOperandType() const {
-   return operandType;
-}
+      preAssignOperator.pop_back();
+      this->op = "=";
+      this->kind = OperatorKind::Assign;
 
-void BinaryOperator::setOperandType(Type *operandType) {
-   BinaryOperator::operandType = operandType;
-}
+      auto rhsLoc = this->rhs->getSourceLoc();
+      this->rhs = std::make_shared<BinaryOperator>(
+         preAssignOperator.str().str(),
+         std::shared_ptr<Expression>(this->lhs),
+         std::shared_ptr<Expression>(this->rhs));
 
-const string &BinaryOperator::getOp() const {
-   return op;
-}
-
-void BinaryOperator::setOp(const string &op) {
-   BinaryOperator::op = op;
-}
-
-BinaryOperatorType BinaryOperator::getOpType() const {
-   return opType;
-}
-
-void BinaryOperator::setOpType(BinaryOperatorType opType) {
-   BinaryOperator::opType = opType;
-}
-
-Type *BinaryOperator::getPointerArithmeticType() const {
-   return pointerArithmeticType;
-}
-
-void BinaryOperator::setPointerArithmeticType(Type *pointerArithmeticType) {
-   BinaryOperator::pointerArithmeticType = pointerArithmeticType;
-}
-
-BinaryOperator *BinaryOperator::getPreAssignmentOp() const {
-   return preAssignmentOp;
-}
-
-void BinaryOperator::setPreAssignmentOp(BinaryOperator *preAssignmentOp) {
-   BinaryOperator::preAssignmentOp = preAssignmentOp;
-}
-
-QualType &BinaryOperator::getLhsType() {
-   return lhsType;
-}
-
-void BinaryOperator::setLhsType(const QualType &lhsType) {
-   BinaryOperator::lhsType = lhsType;
-}
-
-const QualType &BinaryOperator::getRhsType() const {
-   return rhsType;
-}
-
-void BinaryOperator::setRhsType(const QualType &rhsType) {
-   BinaryOperator::rhsType = rhsType;
-}
-
-llvm::Value *BinaryOperator::getLhsVal() const {
-   return lhsVal;
-}
-
-void BinaryOperator::setLhsVal(llvm::Value *lhsVal) {
-   BinaryOperator::lhsVal = lhsVal;
-}
-
-llvm::Value *BinaryOperator::getRhsVal() const {
-   return rhsVal;
-}
-
-void BinaryOperator::setRhsVal(llvm::Value *rhsVal) {
-   BinaryOperator::rhsVal = rhsVal;
-}
-
-const std::shared_ptr<CallExpr> &BinaryOperator::getOverridenCall() const {
-   return overridenCall;
-}
-
-void BinaryOperator::setOverridenCall(
-   const std::shared_ptr<CallExpr> &overridenCall) {
-   BinaryOperator::overridenCall = overridenCall;
-}
-
-const string &BinaryOperator::getClassName() const {
-   return className;
-}
-
-void BinaryOperator::setClassName(const string &className) {
-   BinaryOperator::className = className;
-}
-
-Method *BinaryOperator::getMethod() const {
-   return method;
-}
-
-void BinaryOperator::setMethod(Method *method) {
-   BinaryOperator::method = method;
-}
-
-bool BinaryOperator::needsMemCpy() const {
-   return needs_memcpy;
-}
-
-void BinaryOperator::needsMemCpy(bool isStructAssignment) {
-   BinaryOperator::needs_memcpy = isStructAssignment;
-}
-
-bool BinaryOperator::isSelfAssignment() const {
-   return is_self_assignment;
-}
-
-void BinaryOperator::isSelfAssignment(bool isSelfAssignment) {
-   BinaryOperator::is_self_assignment = isSelfAssignment;
-}
-
-bool BinaryOperator::isNullAssignment() const {
-   return is_null_assignment;
-}
-
-void BinaryOperator::isNullAssignment(bool isNullAssignment) {
-   BinaryOperator::is_null_assignment = isNullAssignment;
-}
-
-bool BinaryOperator::isProtocolAssignment() const {
-   return is_protocol_assignment;
-}
-
-void BinaryOperator::isProtocolAssignment(bool isProtocolAssignment) {
-   BinaryOperator::is_protocol_assignment = isProtocolAssignment;
-}
-
-bool BinaryOperator::isBoxedPrimitiveOp() const {
-   return boxed_primitive_op;
-}
-
-void BinaryOperator::isBoxedPrimitiveOp(bool boxedPrimitiveOp) {
-   BinaryOperator::boxed_primitive_op = boxedPrimitiveOp;
-}
-
-bool BinaryOperator::lhsIsBoxed() const {
-   return lhs_is_boxed;
-}
-
-void BinaryOperator::lhsIsBoxed(bool lhsIsBoxed) {
-   BinaryOperator::lhs_is_boxed = lhsIsBoxed;
-}
-
-bool BinaryOperator::rhsIsBoxed() const {
-   return rhs_is_boxed;
-}
-
-void BinaryOperator::rhsIsBoxed(bool rhsIsBoxed) {
-   BinaryOperator::rhs_is_boxed = rhsIsBoxed;
-}
-
-const string &BinaryOperator::getBoxedResultType() const {
-   return boxedResultType;
-}
-
-void BinaryOperator::setBoxedResultType(const string &boxedResultType) {
-   BinaryOperator::boxedResultType = boxedResultType;
-}
-
-bool BinaryOperator::isEnumComp() const {
-   return is_enum_comp;
-}
-
-void BinaryOperator::isEnumComp(bool isEnumComp) {
-   BinaryOperator::is_enum_comp = isEnumComp;
-}
-
-bool BinaryOperator::isTupleComp() const {
-   return is_tuple_comp;
-}
-
-void BinaryOperator::isTupleComp(bool isTupleComp) {
-   BinaryOperator::is_tuple_comp = isTupleComp;
-}
-
-bool BinaryOperator::updateRefCount() const {
-   return update_refcount;
-}
-
-void BinaryOperator::updateRefCount(bool updateRefCount) {
-   BinaryOperator::update_refcount = updateRefCount;
+      this->rhs->setSourceLoc(rhsLoc);
+   }
 }
 
 } // namespace ast

@@ -28,6 +28,7 @@ enum class Attr : unsigned int {
    Extern,
    Throws,
    NoThrow,
+   Implicit,
 
    _builtin,
    _opaque,

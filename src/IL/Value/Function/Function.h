@@ -5,16 +5,19 @@
 #ifndef CDOT_ILFUNCTION_H
 #define CDOT_ILFUNCTION_H
 
-#include "../Constant/Constant.h"
 #include "../../../Variant/Type/QualType.h"
 #include "../MetaData/MetaData.h"
+
+#include "../SymbolTableList.h"
+#include "../GlobalVariable.h"
+#include "BasicBlock.h"
+#include "Argument.h"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/ArrayRef.h>
 
 namespace cdot {
 
-struct Argument;
 class Callable;
 
 namespace cl {
@@ -35,50 +38,28 @@ class BasicBlock;
 class Module;
 class Argument;
 
-class MDFunction: public MetaData {
+class Function: public GlobalObject,
+                public llvm::ilist_node_with_parent<Function, Module> {
 public:
-   explicit MDFunction(Callable *c);
-
-   Callable *getCallable() const;
-   cl::Method *getMethod() const;
-   ast::Function *getFunction() const;
-
-protected:
-   union {
-      Callable *callable;
-      cl::Method *method;
-      ast::Function *function;
-   };
-
-public:
-   static bool classof(MetaData const* T)
-   {
-      return T->getKind() == MDFunctionID;
-   }
-};
-
-class Function: public Constant {
-public:
-   typedef llvm::SmallVector<BasicBlock*, 8> BBList;
-   typedef BBList::iterator                  iterator;
-   typedef BBList::const_iterator            const_iterator;
-
-   typedef llvm::SmallVector<Argument*, 4>   ArgList;
-
-   Function(Callable *c, Module *parent);
+   using BasicBlockList = SymbolTableList<BasicBlock>;
+   using iterator       = BasicBlockList::iterator;
+   using const_iterator = BasicBlockList::const_iterator;
 
    Function(const std::string &name,
             QualType returnType,
-            llvm::ArrayRef<cdot::Argument> args,
+            llvm::ArrayRef<Argument *> args,
             Module *parent,
-            SourceLocation loc,
-            bool mightThrow);
+            bool mightThrow,
+            bool isExternC);
 
-   Module *getParent() const;
-   const BBList &getBasicBlocks() const;
+   Module *getParent() const { return parent; }
+   void setParent(Module *p) { parent = p; }
+
+   BasicBlockList const& getBasicBlocks() const { return BasicBlocks; };
+   BasicBlockList& getBasicBlocks() { return BasicBlocks; };
+
    bool isDeclared() const;
-   QualType getReturnType() const;
-   const ArgList &getArgs() const;
+   QualType getReturnType() const { return returnType; }
 
    bool mightThrow() const;
 
@@ -87,62 +68,76 @@ public:
 
    bool isLambda() const;
 
-   void addArgument(const std::string &name, ILType ty);
-   void addArgumentAtBegin(const std::string &name, ILType ty);
-
-   void addArgument(Argument *arg);
-   void addArgumentAtBegin(Argument *arg);
-
-   Argument *getArgument(unsigned idx) const;
-
-   bool hasCallable() const;
-   const std::string &getMangledName() const;
-   std::string getLinkageName() const;
-   Callable *getCallable() const;
+   bool hasStructReturn() const;
 
    void addDefinition();
-   Function *getDeclarationIn(Module *M) const;
+   Function *getDeclarationIn(Module *M);
 
-   BBList::reference getEntryBlock();
+   const llvm::StringRef &getUnmangledName() const
+   {
+      return unmangledName;
+   }
 
-   iterator getIteratorForBB(BasicBlock *bb);
-   const_iterator getIteratorForBB(const BasicBlock *bb) const;
+   void setUnmangledName(const llvm::StringRef &unmangledName)
+   {
+      Function::unmangledName = unmangledName;
+   }
 
-   iterator removeBasicBlock(const BasicBlock *inst);
+   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
+   { return BasicBlocks.getSymTab(); }
 
-   iterator insertBasicBlockAfter(BasicBlock *bb, iterator after);
-   iterator insertBasicBlockBefore(BasicBlock *bb, iterator before);
-   iterator insertBasicBlockAtEnd(BasicBlock *bb);
-   iterator insertBasicBlockAtBegin(BasicBlock *bb);
+   BasicBlock const* getEntryBlock() const;
+   BasicBlock* getEntryBlock();
+
+   iterator begin() { return BasicBlocks.begin(); }
+   iterator end() { return BasicBlocks.end(); }
+   const_iterator begin() const { return BasicBlocks.begin(); }
+   const_iterator end() const { return BasicBlocks.end(); }
+
+   bool isGlobalInitFn() const;
+
+   static BasicBlockList Function::*getSublistAccess(BasicBlock*)
+   {
+      return &Function::BasicBlocks;
+   }
 
 protected:
    Module *parent;
-   ArgList args;
    QualType returnType;
-   BBList BasicBlocks;
+   BasicBlockList BasicBlocks;
+
+   llvm::StringRef unmangledName;
 
    enum Flag : unsigned short {
       Throws = 0x1,
-      Declared = 0x2,
-      ExternC = 0x4,
-      Lambda = 0x8,
-      Property = 0x10,
-      Static = 0x20,
+      Declared = 1 << 1,
+      ExternC = 1 << 2,
+      Property = 1 << 4,
+      Static = 1 << 5,
+      Operator = 1 << 6,
+      BoxedOperator = 1 << 7,
+      ConversionOp = 1 << 8,
+      SRet = 1 << 9,
+      Virtual = SRet << 1
    };
 
-   Function(const std::string &name,
-            FunctionType *ty,
+   Function(const Function &other);
+
+   Function(TypeID id,
+            FunctionType *Ty,
+            const std::string &name,
             QualType returnType,
-            llvm::ArrayRef<Argument*> args,
+            llvm::ArrayRef<Argument *> args,
             Module *parent,
-            SourceLocation loc,
-            unsigned SubClassData);
+            bool mightThrow,
+            bool isExternC);
 
 public:
    static bool classof(Function const* T) { return true; }
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
          case FunctionID:
+         case LambdaID:
          case MethodID:
          case InitializerID:
             return true;
@@ -150,6 +145,41 @@ public:
             return false;
       }
    }
+};
+
+class Lambda: public Function {
+public:
+   Lambda(QualType returnType,
+          llvm::ArrayRef<Argument *> args,
+          Module *parent,
+          bool mightThrow);
+
+   struct Capture {
+      Capture(uintptr_t id, QualType type)
+         : id(id), type(type)
+      { }
+
+      uintptr_t id;
+      QualType type;
+   };
+
+   llvm::ArrayRef<Capture> getCaptures() const
+   {
+      return captures;
+   }
+
+   void addCapture(uintptr_t id, QualType type)
+   {
+      captures.emplace_back(id, type);
+   }
+
+   static inline bool classof(Value const* T)
+   {
+      return T->getTypeID() == LambdaID;
+   }
+
+private:
+   std::vector<Capture> captures;
 };
 
 } // namespace il

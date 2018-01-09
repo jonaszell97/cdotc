@@ -9,9 +9,6 @@
 #include <string>
 #include <map>
 
-class Token;
-class Lexer;
-
 using std::string;
 
 namespace cdot {
@@ -23,6 +20,13 @@ namespace ast {
 class AstNode;
 }
 
+namespace lex {
+struct LexerTraits;
+
+template<class Traits>
+class Lexer;
+}
+
 }
 
 class ParseError : public std::exception {
@@ -31,7 +35,7 @@ private:
     string message_;
 
 public:
-    static void raise(string, Lexer *);
+    static void raise(string, cdot::lex::Lexer<cdot::lex::LexerTraits> *);
     virtual const char* what() const throw() {
         return message_.c_str();
     }

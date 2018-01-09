@@ -1,0 +1,13 @@
+
+#ifdef CDOT_INTRINSIC
+   CDOT_INTRINSIC(MemCpy, "__builtin_memcpy")
+   CDOT_INTRINSIC(MemSet, "__builtin_memset")
+   CDOT_INTRINSIC(MemCmp, "__builtin_memcmp")
+   CDOT_INTRINSIC(Retain, "__builtin_retain")
+   CDOT_INTRINSIC(Release, "__builtin_release")
+   CDOT_INTRINSIC(LifetimeBegin, "__builtin_lifetime_begin")
+   CDOT_INTRINSIC(LifetimeEnd, "__builtin_lifetime_end")
+   CDOT_INTRINSIC(__ctfe_stacktrace, "__ctfe_stacktrace")
+#endif
+
+#undef CDOT_INTRINSIC

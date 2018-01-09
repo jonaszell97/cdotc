@@ -8,22 +8,34 @@
 #include "../../Variant/Type/Generic.h"
 #include "../../Util.h"
 
+namespace cdot {
+namespace ast {
+
 TypeRef::TypeRef()
-   : Expression(TypeRefID), kind(TypeKind::Auto)
+   : Expression(TypeRefID), kind(TypeKind::Auto), resolved(false),
+     is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
 {
 
 }
 
 TypeRef::TypeRef(NamespaceVec &&ns)
-   : Expression(TypeRefID), kind(TypeKind::ObjectType), namespaceQual(ns)
+   : Expression(TypeRefID), kind(TypeKind::ObjectType),
+     namespaceQual(move(ns)),
+     resolved(false),is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
 {
 
 }
 
 TypeRef::TypeRef(TypeRef::SharedPtr &&returnType,
                  std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes)
-   : Expression(TypeRefID), kind(TypeKind::FunctionType),
-     returnType(returnType), containedTypes(argTypes)
+   : Expression(TypeRefID),
+     kind(TypeKind::FunctionType),
+     containedTypes(move(argTypes)),
+     returnType(move(returnType)),
+     resolved(false), is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
 {
 
 }
@@ -31,9 +43,58 @@ TypeRef::TypeRef(TypeRef::SharedPtr &&returnType,
 TypeRef::TypeRef(
    std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes)
    : Expression(TypeRefID), kind(TypeKind::TupleType),
-     containedTypes(tupleTypes)
+     containedTypes(move(tupleTypes)),
+     resolved(false), is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
 {
 
+}
+
+TypeRef::TypeRef(std::shared_ptr<TypeRef> &&elementTy,
+                 std::shared_ptr<StaticExpr> &&arraySize)
+   : Expression(TypeRefID), kind(TypeKind::ArrayType),
+     containedTypes{{"", move(elementTy)}},
+     arraySize(move(arraySize)),
+     resolved(false), is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+{
+
+}
+
+TypeRef::TypeRef(std::shared_ptr<Expression> &&declTypeExpr)
+   : Expression(TypeRefID),
+     kind(TypeKind::DeclTypeExpr),
+     declTypeExpr(move(declTypeExpr)),
+     resolved(false), is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+{
+
+}
+
+TypeRef::TypeRef(const QualType &ty)
+   : Expression(TypeRefID), type(ty), resolved(true),
+     is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+{
+
+}
+
+TypeRef::TypeRef(std::shared_ptr<TypeRef> &&subject, TypeKind kind)
+   : Expression(TypeRefID), kind(kind), subject(move(subject)),
+     resolved(false), is_reference(false), is_meta_ty(false),
+     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+{
+
+}
+
+TypeRef::~TypeRef()
+{
+   if (isDeclTypeExpr()) {
+      declTypeExpr.~shared_ptr();
+   }
+   else if (kind == TypeKind::FunctionType) {
+      returnType.~shared_ptr();
+   }
 }
 
 string TypeRef::toString()
@@ -53,10 +114,6 @@ string TypeRef::toString()
 
          first = false;
          res += obj.first;
-
-         if (obj.second) {
-            res += util::TemplateArgsToString(obj.second->get());
-         }
       }
 
       return res;
@@ -90,6 +147,37 @@ string TypeRef::toString()
    return res;
 }
 
+llvm::StringRef TypeRef::getSingularTypeName() const
+{
+   assert(kind == ObjectType && namespaceQual.size() == 1);
+   return namespaceQual.front().first;
+}
+
+void TypeRef::forEachContainedType(void (*func)(TypeRef *))
+{
+   switch (kind) {
+      case ObjectType:
+         for (auto &NS : namespaceQual) {
+            for (auto &TA : NS.second)
+               if (TA.isTypeName())
+                  func(TA.getType().get());
+         }
+
+         break;
+      case FunctionType:
+      case TupleType:
+         for (const auto &Ty : containedTypes)
+            func(Ty.second.get());
+
+         if (kind == FunctionType)
+            func(returnType.get());
+
+         break;
+      default:
+         break;
+   }
+}
+
 TypeRef::TypeKind TypeRef::getKind() const
 {
    return kind;
@@ -110,24 +198,14 @@ void TypeRef::setResolved(bool resolved)
    TypeRef::resolved = resolved;
 }
 
-void TypeRef::setPointerDepth(size_t pointerDepth)
-{
-   TypeRef::pointerDepth = pointerDepth;
-}
-
 const QualType &TypeRef::getType() const
 {
    return type;
 }
 
-const TypeRef::NamespaceVec &TypeRef::getNamespaceQual() const
+TypeRef::NamespaceVec &TypeRef::getNamespaceQual()
 {
    return namespaceQual;
-}
-
-void TypeRef::setNamespaceQual(const TypeRef::NamespaceVec &namespaceQual)
-{
-   TypeRef::namespaceQual = namespaceQual;
 }
 
 const std::vector<pair<string, TypeRef::SharedPtr>> &
@@ -167,16 +245,6 @@ void TypeRef::setCstyleVararg(bool cstyleVararg)
    TypeRef::cstyleVararg = cstyleVararg;
 }
 
-bool TypeRef::returnDummyObjTy() const
-{
-   return return_dummy_obj_ty;
-}
-
-void TypeRef::setReturnDummyObjTy(bool b)
-{
-   return_dummy_obj_ty = b;
-}
-
 bool TypeRef::isMetaTy() const
 {
    return is_meta_ty;
@@ -186,3 +254,6 @@ void TypeRef::isMetaTy(bool is_meta_ty)
 {
    TypeRef::is_meta_ty = is_meta_ty;
 }
+
+} // namespace ast
+} // namespace cdot

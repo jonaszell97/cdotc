@@ -10,6 +10,9 @@
 namespace cdot {
 namespace ast {
 
+class StaticExpr;
+class TypeRef;
+
 class RecordSubDecl: public Statement {
 protected:
    RecordSubDecl(
@@ -17,7 +20,9 @@ protected:
       std::string &&name,
       AccessModifier access,
       bool isStatic
-   );
+   ) : Statement(typeID), name(std::move(name)), access(access),
+      is_static(isStatic)
+   {}
 
    std::string name;
    AccessModifier access;
@@ -27,21 +32,89 @@ protected:
 
    static bool classof(AstNode const* T)
    {
-       return T->getTypeID() == FieldDeclID || T->getTypeID() == PropDeclID;
+      switch (T->getTypeID()) {
+         case AstNode::FieldDeclID:
+         case AstNode::PropDeclID:
+         case AstNode::AssociatedTypeDeclID:
+            return true;
+         default:
+            return false;
+      }
    }
 
 public:
-   const string &getName() const;
-   void setName(const string &name);
+   const string &getName() const
+   {
+      return name;
+   }
 
-   AccessModifier getAccess() const;
-   void setAccess(AccessModifier access);
+   AccessModifier getAccess() const
+   {
+      return access;
+   }
 
-   bool isStatic() const;
-   void isStatic(bool is_static);
+   void setAccess(AccessModifier access)
+   {
+      RecordSubDecl::access = access;
+   }
 
-   cdot::cl::Record *getRecord() const;
-   void setRecord(cdot::cl::Record *record);
+   bool isStatic() const
+   {
+      return is_static;
+   }
+
+   void setRecord(cl::Record *record)
+   {
+      RecordSubDecl::record = record;
+   }
+
+   cl::Record *getRecord() const
+   {
+      return record;
+   }
+};
+
+class AssociatedTypeDecl: public RecordSubDecl {
+public:
+   AssociatedTypeDecl(std::string &&protoSpec,
+                      string &&name,
+                      std::vector<std::shared_ptr<StaticExpr>> &&constraints,
+                      std::shared_ptr<TypeRef> &&actualType)
+      : RecordSubDecl(AssociatedTypeDeclID, move(name),
+                      (AccessModifier)0, false),
+        protocolSpecifier(move(protoSpec)),
+        constraints(move(constraints)), actualType(move(actualType))
+   {}
+
+   const std::vector<std::shared_ptr<StaticExpr>> &getConstraints() const
+   {
+      return constraints;
+   }
+
+   const std::shared_ptr<TypeRef> &getActualType() const
+   {
+      return actualType;
+   }
+
+   void setActualType(const std::shared_ptr<TypeRef> &actualType)
+   {
+      AssociatedTypeDecl::actualType = actualType;
+   }
+
+   llvm::StringRef getProtocolSpecifier() const
+   {
+      return protocolSpecifier;
+   }
+
+   static bool classof(AstNode const *T)
+   {
+      return T->getTypeID() == AssociatedTypeDeclID;
+   }
+
+private:
+   std::string protocolSpecifier;
+   std::vector<std::shared_ptr<StaticExpr>> constraints;
+   std::shared_ptr<TypeRef> actualType;
 };
 
 } // namespace ast

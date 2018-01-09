@@ -193,51 +193,5 @@ string nextAnonymousNamespace()
    return "__anonymous_namespace" + std::to_string(i++);
 }
 
-
-string TemplateArgsToString(
-   const std::vector<TemplateArg> &templateArgs, bool skipEmpty)
-{
-   if (skipEmpty && templateArgs.empty()) {
-      return "";
-   }
-
-   ostringstream templateName;
-   templateName << "<";
-   auto numArgs = templateArgs.size();
-
-   for (size_t i = 0; i < numArgs; ++i) {
-      templateName << templateArgs[i].toString();
-      if (i < numArgs - 1) {
-         templateName << ", ";
-      }
-   }
-
-   templateName << ">";
-   return templateName.str();
-}
-
-
-void checkTemplateArgs(
-   AstNode *cause,
-   std::vector<TemplateConstraint> &neededArgs,
-   std::vector<TemplateArg> &givenArgs)
-{
-   if (neededArgs.size() != givenArgs.size()) {
-      diag::err(err_generic_type_count) << neededArgs.size()
-                                        << givenArgs.size()
-                                        << cause << diag::term;
-   }
-   return;
-   size_t i = 0;
-   for (const auto &needed : neededArgs) {
-      auto &given = givenArgs[i];
-   }
-}
-
-QualType dummyResolver(ast::Expression *node)
-{
-   llvm_unreachable("dummy resolver called");
-}
-
 } // namespace util
 } // namespace cdot

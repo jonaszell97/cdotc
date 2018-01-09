@@ -3,6 +3,9 @@
 //
 
 #include "GenericType.h"
+#include "../../AST/SymbolTable.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 
@@ -19,10 +22,6 @@ GenericType* GenericType::get(
    const string &genericClassName,
    Type* actualType)
 {
-   while (actualType->isGenericTy()) {
-      actualType = actualType->asGenericTy()->getActualType();
-   }
-
    auto key = keyFrom(genericClassName, actualType);
    if (Instances.find(key) == Instances.end()) {
       Instances[key] = new GenericType(genericClassName, actualType);
@@ -34,7 +33,7 @@ GenericType* GenericType::get(
 GenericType::GenericType(
    const string &genericClassName,
    Type* actualType)
-   : ObjectType(genericClassName), actualType(actualType)
+   : actualType(actualType), genericTypeName(genericClassName)
 {
    id = TypeID::GenericTypeID;
 }
@@ -49,57 +48,7 @@ Type* GenericType::getActualType()
    return actualType;
 }
 
-bool GenericType::isStruct() const
-{
-   return actualType->isStruct();
-}
-
-bool GenericType::isProtocol() const
-{
-   return actualType->isProtocol();
-}
-
-bool GenericType::isEnum() const
-{
-   return actualType->isEnum();
-}
-
-bool GenericType::isRefcounted() const
-{
-   return actualType->isRefcounted();
-}
-
-bool GenericType::isValueType() const
-{
-   return actualType->isValueType();
-}
-
-bool GenericType::needsMemCpy() const
-{
-   return actualType->needsMemCpy();
-}
-
-bool GenericType::needsStructReturn() const
-{
-   return actualType->needsStructReturn();
-}
-
-bool GenericType::implicitlyCastableTo(Type *rhs) const
-{
-   return actualType->implicitlyCastableTo(rhs);
-}
-
-bool GenericType::explicitlyCastableTo(Type *rhs) const
-{
-   return actualType->explicitlyCastableTo(rhs);
-}
-
-cl::Record * GenericType::getRecord() const
-{
-   return actualType->getRecord();
-}
-
-short GenericType::getAlignment() const
+unsigned short GenericType::getAlignment() const
 {
    return actualType->getAlignment();
 }
@@ -109,18 +58,13 @@ size_t GenericType::getSize() const
    return actualType->getSize();
 }
 
-llvm::Type* GenericType::getLlvmType() const
-{
-   return actualType->getLlvmType();
-}
-
 string GenericType::toString() const
 {
-   return className;
+   return genericTypeName;
 }
 
 string GenericType::toUniqueString() const
 {
-   return className + ": " + actualType->toUniqueString();
+   return genericTypeName + ": " + actualType->toUniqueString();
 }
 }

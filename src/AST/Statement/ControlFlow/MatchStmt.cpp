@@ -15,9 +15,11 @@ MatchStmt::MatchStmt(Expression::SharedPtr &&switchVal)
 
 }
 
-std::shared_ptr<Expression> &MatchStmt::getSwitchValue()
+MatchStmt::MatchStmt(std::shared_ptr<Expression> &&switchVal,
+                     std::vector<std::shared_ptr<CaseStmt>> &&cases)
+   : Statement(MatchStmtID), switchValue(move(switchVal)), cases(move(cases))
 {
-   return switchValue;
+
 }
 
 Type *MatchStmt::getSwitchType() const
@@ -33,11 +35,6 @@ const std::vector<std::shared_ptr<CaseStmt>> &MatchStmt::getCases() const
 cl::Method *MatchStmt::getOperatorEquals() const
 {
    return operatorEquals;
-}
-
-void MatchStmt::setSwitchValue(const std::shared_ptr<Expression> &switchValue)
-{
-   MatchStmt::switchValue = switchValue;
 }
 
 void MatchStmt::setSwitchType(Type *switchType)

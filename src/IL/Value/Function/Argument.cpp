@@ -9,27 +9,25 @@ namespace il {
 
 Argument::Argument(Type *type,
                    bool vararg,
-                   Function *parent,
-                   const std::string &name,
-                   const SourceLocation &loc)
-   : Value(ArgumentID, type, name), parent(parent), vararg(vararg)
+                   BasicBlock *parent,
+                   llvm::StringRef name)
+   : Value(ArgumentID, type), parent(parent), vararg(vararg)
 {
-
+   new (&this->name) std::string(name.data(), name.size());
 }
 
-Argument::Argument(ILType type,
+Argument::Argument(QualType type,
                    bool vararg,
-                   Function *parent,
-                   const std::string &name,
-                   const SourceLocation &loc)
-   : Value(ArgumentID, type, name), parent(parent), vararg(vararg)
+                   BasicBlock *parent,
+                   llvm::StringRef name)
+   : Value(ArgumentID, type), parent(parent), vararg(vararg)
 {
-
+   new (&this->name) std::string(name.data(), name.size());
 }
 
-bool Argument::isVararg() const
+void Argument::setParent(BasicBlock *p)
 {
-   return vararg;
+   parent = p;
 }
 
 } // namespace il

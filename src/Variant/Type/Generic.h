@@ -6,18 +6,11 @@
 #define CDOT_GENERIC_H
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "../Variant.h"
 #include "QualType.h"
 #include "../../lex/Token.h"
-#include "../../Template/TokenStore.h"
-
-using std::string;
-using std::unordered_map;
-
-class Token;
 
 namespace cdot {
 
@@ -25,284 +18,202 @@ namespace ast {
 
 class CompoundStmt;
 class TypeRef;
-class RecordTemplateDecl;
-class CallableTemplateDecl;
-class MethodTemplateDecl;
+class StaticExpr;
 class Statement;
-enum class RecordTemplateKind : unsigned char;
+class Expression;
 
 } // namespace ast
 
-using namespace cdot::ast;
+namespace lex {
+
+struct Token;
+
+} // namespace lex
 
 struct Argument {
    Argument() = default;
-   Argument(const string &label, QualType ty,
+   Argument(const std::string &label, QualType ty,
             std::shared_ptr<ast::Expression> defVal = nullptr,
             bool vararg = false,
-            bool cstyleVararg = false)
+            bool cstyleVararg = false,
+            bool variadic = false)
       : label(label), type(ty), defaultVal(defVal), isVararg(vararg),
-        cstyleVararg(cstyleVararg)
+        cstyleVararg(cstyleVararg), variadic(variadic)
    {
 
    }
 
-   string toString() const
+   std::string toString() const;
+
+   const std::string &getLabel() const
    {
-      return type.toString();
+      return label;
    }
 
-   string label;
+   const QualType &getType() const
+   {
+      return type;
+   }
+
+   const std::shared_ptr<ast::Expression> &getDefaultVal() const
+   {
+      return defaultVal;
+   }
+
+   bool isIsVararg() const
+   {
+      return isVararg;
+   }
+
+   bool isCstyleVararg() const
+   {
+      return cstyleVararg;
+   }
+
+   bool isVariadic() const
+   {
+      return variadic;
+   }
+
+   std::string label;
    QualType type;
-   std::shared_ptr<Expression> defaultVal;
+   std::shared_ptr<ast::Expression> defaultVal;
 
    bool isVararg = false;
    bool cstyleVararg = false;
-   bool ref = false;
+   bool variadic = false;
 };
 
 
-struct TemplateArg;
-struct TemplateConstraint;
-class TokenStore;
-
-namespace cl {
-
-class Record;
-
-struct TemplateLoc {
-   size_t startIndex;
-   size_t line;
-   size_t col;
-   size_t length;
-   size_t sourceId;
-};
-
-struct RecordTemplateInitializer {
-   std::vector<std::shared_ptr<TypeRef>> args;
-};
-
-struct RecordTemplate;
-
-struct RecordTemplateInstantiation {
-   RecordTemplateInstantiation(
-      RecordTemplate *Template,
-      const std::vector<TemplateArg> &args
-   ) : Template(Template), args(args) {}
-
-   RecordTemplate *Template;
-   std::vector<TemplateArg> args;
-};
-
-struct Template {
-   std::unique_ptr<TokenStore> Store;
-   std::vector<TemplateConstraint> constraints;
-   RecordTemplateInstantiation *outerTemplate = nullptr;
-};
-
-struct RecordTemplate: Template {
-   RecordTemplateKind kind;
-
-   string recordName;
-   std::vector<RecordTemplateInitializer> initializers;
-
-   RecordTemplateDecl *decl;
-   std::vector<RecordTemplate> extensions;
-
-   void addInstantiation(std::shared_ptr<Statement> &&inst);
-};
-
-struct CallableTemplate: Template {
-   string funcName;
-
-   std::vector<std::shared_ptr<TypeRef>> args;
-   std::shared_ptr<TypeRef> returnType;
-
-   CallableTemplateDecl *decl;
-};
-
-struct CallableTemplateInstantiation {
-   CallableTemplateInstantiation(
-      CallableTemplate *Template,
-      const std::vector<TemplateArg> &args
-   ) : Template(Template), args(args) {}
-
-   CallableTemplate *Template;
-   std::vector<TemplateArg> args;
-};
-
-struct MethodTemplate: public CallableTemplate {
-   bool isStatic;
-   bool isOperator;
-   bool isMutating;
-
-   MethodTemplateDecl *methodDecl;
-   Record *record;
-};
-
-} // namespace cl
+class TemplateArg;
+struct TemplateParameter;
 
 class Type;
 class ObjectType;
 class GenericType;
 
-struct QualType;
+class QualType;
 
-struct TemplateConstraint {
+struct TemplateParameter {
    enum Kind : unsigned char {
       TypeName,
-      Value,
-      Arbitrary
+      Value
    };
 
-   TemplateConstraint(
+   TemplateParameter(
       Kind kind,
-      string &&typeName,
-      std::shared_ptr<TypeRef> &&unresolvedCovariance,
-      std::shared_ptr<TypeRef> &&unresolvedContravariance,
+      std::string &&typeName,
+      std::shared_ptr<ast::TypeRef> &&unresolvedCovariance,
+      std::shared_ptr<ast::TypeRef> &&unresolvedContravariance,
       std::shared_ptr<TemplateArg> &&defaultValue,
-      bool isVariadic = false
+      bool isVariadic = false,
+      const SourceLocation &loc = {}
    );
 
-   TemplateConstraint(const TemplateConstraint& rhs);
+   TemplateParameter(llvm::StringRef typeName)
+      : genericTypeName(typeName.str()), resolved(true)
+   {}
 
-   TemplateConstraint& operator=(const TemplateConstraint& rhs);
-   ~TemplateConstraint();
+   TemplateParameter(const TemplateParameter& rhs);
+   TemplateParameter& operator=(const TemplateParameter& rhs);
+
+   TemplateParameter(TemplateParameter&& rhs) noexcept;
+   TemplateParameter& operator=(TemplateParameter&& rhs) noexcept;
+
+   ~TemplateParameter();
+
+   bool isTypeName() const { return kind == TypeName; }
+
+   const SourceLocation &getSourceLoc() const
+   {
+      return sourceLoc;
+   }
+
+   void setSourceLoc(const SourceLocation &sourceLoc)
+   {
+      TemplateParameter::sourceLoc = sourceLoc;
+   }
+
+   bool effectivelyEquals(const TemplateParameter &Other) const;
+
+   const std::string &getGenericTypeName() const
+   {
+      return genericTypeName;
+   }
 
    Kind kind = TypeName;
-   string genericTypeName;
+   std::string genericTypeName;
    bool isVariadic = false;
+   SourceLocation sourceLoc;
+
+   std::shared_ptr<ast::TypeRef> unresolvedCovariance = nullptr;
+   std::shared_ptr<ast::TypeRef> unresolvedContravariance = nullptr;
 
    union {
-      std::shared_ptr<TypeRef> unresolvedCovariance;
-      Type *covariance;
+      Type *covariance = nullptr;
       Type *valueType;
    };
 
-   union {
-      std::shared_ptr<TypeRef> unresolvedContravariance;
-      Type* contravariance;
-   };
+   Type* contravariance = nullptr;
 
-   std::shared_ptr<TemplateArg> defaultValue;
+   std::shared_ptr<TemplateArg> defaultValue = nullptr;
    bool resolved = false;
 
-   bool operator ==(const TemplateConstraint &rhs) const;
-   bool operator !=(const TemplateConstraint &rhs) const;
+   bool operator ==(const TemplateParameter &rhs) const;
+   bool operator !=(const TemplateParameter &rhs) const;
+
+private:
+   void destroyValue();
+   void copyFrom(TemplateParameter &&TP);
+   void copyFrom(TemplateParameter const& TP);
 };
+
+typedef std::vector<std::vector<TemplateParameter>*> TemplateParamStack;
 
 class TemplateArg {
 public:
-   TemplateArg();
-   TemplateArg(const TemplateArg &arg);
-   TemplateArg &operator=(const TemplateArg &arg);
+//   TemplateArg(const TemplateArg &arg);
+//   TemplateArg &operator=(const TemplateArg &arg);
+   TemplateArg(TemplateArg &&arg) noexcept;
+   TemplateArg &operator=(TemplateArg &&arg) noexcept;
    ~TemplateArg();
 
-   explicit TemplateArg(std::shared_ptr<TypeRef> &&ty);
-   explicit TemplateArg(Variant &&val);
-   explicit TemplateArg(std::vector<Token> &&tokens);
-   explicit TemplateArg(GenericType *ty);
-   explicit TemplateArg(std::vector<TemplateArg> &&args);
+   explicit TemplateArg(std::shared_ptr<ast::TypeRef> &&ty);
+   explicit TemplateArg(std::shared_ptr<ast::StaticExpr> &&staticExpr);
 
    bool isTypeName() const;
    bool isValue() const;
-   bool isArbitrary() const;
-   bool isVariadic() const;
 
-   bool compatibleWith(const TemplateArg &other) const;
-   string toString() const;
+   TemplateParameter::Kind getKind() const;
 
-   TemplateConstraint::Kind getKind() const;
+   std::shared_ptr<ast::TypeRef> const& getType() const
+   {
+      assert(isTypeName());
+      return type;
+   }
 
-   std::shared_ptr<TypeRef> &getType();
-   GenericType *const getGenericTy() const;
+   const SourceLocation &getSourceLoc() const { return sourceLoc; }
+   void setSourceLoc(const SourceLocation &sourceLoc)
+   {
+      TemplateArg::sourceLoc = sourceLoc;
+   }
 
-   std::vector<TemplateArg> &getVariadicArgs();
-   const std::vector<TemplateArg> &getVariadicArgs() const;
-
-   const std::vector<Token> &getTokens() const;
-
-   const Variant &getValue() const;
-
-   void resolveType(GenericType *ty);
-   bool isResolved() const;
+   const std::shared_ptr<ast::StaticExpr> &getStaticExpr() const
+   {
+      return staticExpr;
+   }
 
 protected:
    union {
-      std::shared_ptr<TypeRef> type = nullptr;
-      GenericType *genericType;
-      std::vector<Token> tokens;
-      std::vector<TemplateArg> variadicArgs;
-      Variant val;
+      std::shared_ptr<ast::TypeRef> type = nullptr;
+      std::shared_ptr<ast::StaticExpr> staticExpr;
    };
 
-   TemplateConstraint::Kind kind = TemplateConstraint::TypeName;
-   bool type_resolved = false;
-   bool is_variadic = false;
+   SourceLocation sourceLoc;
+   TemplateParameter::Kind kind = TemplateParameter::TypeName;
 
    void destroy();
 };
-
-class TemplateArgList {
-public:
-   virtual ~TemplateArgList() = default;
-   virtual bool isResolved() const = 0;
-   virtual std::vector<TemplateArg> &get() = 0;
-   virtual void set(std::vector<TemplateArg> &&args) = 0;
-   virtual std::vector<Token> &&getTokens() = 0;
-
-protected:
-   TemplateArgList() = default;
-};
-
-class ResolvedTemplateArgList: public TemplateArgList {
-public:
-   explicit ResolvedTemplateArgList(std::vector<TemplateArg> && args);
-
-   bool isResolved() const override;
-   std::vector<TemplateArg> &get() override;
-   void set(std::vector<TemplateArg> &&args) override;
-   std::vector<Token> &&getTokens() override;
-
-protected:
-   std::vector<TemplateArg> args;
-};
-
-class UnresolvedTemplateArgList: public TemplateArgList {
-public:
-   explicit UnresolvedTemplateArgList(
-      std::vector<Token> &&tokens,
-      size_t sourceId,
-      size_t line,
-      size_t col
-   );
-
-   bool isResolved() const override;
-   std::vector<TemplateArg> &get() override;
-   void set(std::vector<TemplateArg> &&args) override;
-   std::vector<Token> &&getTokens() override;
-
-protected:
-   std::vector<Token> tokens;
-   struct Loc {
-      size_t sourceId;
-      size_t line;
-      size_t col;
-   } loc;
-
-public:
-   const Loc &getLoc() const
-   {
-      return loc;
-   }
-};
-
-bool GenericTypesCompatible(GenericType* given,
-                            const TemplateConstraint& needed);
-
-void resolveGenerics(QualType& ty, QualType& obj);
-void resolveGenerics(QualType& ty, ObjectType*& obj);
-void resolveGenerics(QualType& ty, const std::vector<TemplateArg>& generics);
 
 } // namespace cdot
 

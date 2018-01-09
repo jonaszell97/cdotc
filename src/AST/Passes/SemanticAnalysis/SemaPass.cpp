@@ -3,8 +3,7 @@
 //
 #include "SemaPass.h"
 
-#include <iostream>
-#include <fstream>
+#include <llvm/Support/raw_ostream.h>
 
 #include "../ASTIncludes.h"
 #include "../../SymbolTable.h"
@@ -12,8 +11,8 @@
 #include "Record/Class.h"
 #include "Record/Union.h"
 #include "Record/Enum.h"
+#include "Record/Protocol.h"
 
-#include "../../../Variant/Type/Type.h"
 #include "../../../Variant/Type/IntegerType.h"
 #include "../../../Variant/Type/ObjectType.h"
 #include "../../../Variant/Type/PointerType.h"
@@ -25,248 +24,263 @@
 #include "../../../Variant/Type/AutoType.h"
 #include "../../../Variant/Type/TypeGroup.h"
 #include "../../../Variant/Type/MetaType.h"
+#include "../../../Variant/Type/ArrayType.h"
 
 #include "../../../Message/Exceptions.h"
 #include "../../../Message/Diagnostics.h"
-#include "../../../parse/Parser.h"
 #include "../../../Util.h"
 
+#include "../ILGen/ILGenPass.h"
 #include "../Declaration/DeclPass.h"
+
 #include "OverloadResolver.h"
-
-#include "../../Statement/Declaration/Class/ExtensionDecl.h"
-
 #include "../../../Support/Casting.h"
+#include "TemplateInstantiator.h"
+#include "../StaticExpr/StaticExprEvaluator.h"
+#include "GlobalDependency.h"
+#include "ConformanceChecker.h"
 
 using namespace cdot::cl;
 using namespace cdot::diag;
+using namespace cdot::support;
+using namespace cdot::sema;
 
 using ast::Function;
 
 namespace cdot {
 namespace ast {
 
-std::vector<string> SemaPass::currentNamespace = { "" };
-std::vector<string> SemaPass::importedNamespaces = { "" };
-std::vector<std::vector<TemplateConstraint>*> SemaPass::GenericsStack;
-
-SemaPass::SemaPass() : AbstractPass(SemaPassID)
+SemaPass::SemaPass()
+   : AbstractPass(SemaPassID),
+     declPass(std::make_unique<DeclPass>(*this)),
+     ILGen(std::make_unique<ILGenPass>(Compiler::getContext())),
+     fatalError(false), fatalErrorInScope(false), encounteredError(false)
 {
-   pushScope();
-   classScopeStack.push("");
+   Scopes.push(Scope{});
+}
 
-   resolverFn = [this](Expression *node) {
-      return VisitNode(node);
-   };
+SemaPass::~SemaPass() = default;
 
-   TypeResolverFn = [this](TypeRef *node, const
-   std::vector<TemplateArg>&args,const std::vector<TemplateConstraint>&constr) {
-      DeclPass::ResolveStatus status;
-      return DeclPass::getResolvedType(
-         node,
-         importedNamespaces,
-         currentNamespace,
-         &status,
-         &args,
-         &constr
-      );
-   };
+SemaPass::DeclScopeRAII::DeclScopeRAII(SemaPass &S, DeclPass &DP)
+   : S(S), savedPass(S.declPass.release())
+{
+   S.declPass.reset(&DP);
+}
+
+SemaPass::DeclScopeRAII::~DeclScopeRAII()
+{
+   S.declPass.release();
+   S.declPass.reset(savedPass);
 }
 
 void SemaPass::run(std::vector<CompilationUnit> &CUs)
 {
+   // Create IL Modules for every compilation unit, required by
+   // ILGenPass::doInitialPas
+
+   ILGen->CreateModules(CUs);
+
+   // register all records, functions, aliases and globals in the symbol table
+   declPass->run(CUs);
+
+   stage = Stage::Sema;
+
+   // look for circular dependencies in struct layouts and global variable
+   // values, abort if any are found
+
+   calculateRecordSizes();
+   visitTypeInferredGlobals();
+
+   // visit record instantiations created during declaration stage
+
+   for (auto Inst : DelayedInstantiations)
+      visitRecordInstantiation(Inst);
+
+   DelayedInstantiations.clear();
+
+   // do semantic analysis
+
    for (const auto &CU : CUs) {
-      doInitialPass(CU.root->getStatements());
-   }
-   for (const auto &CU : CUs) {
-      visit(CU.root.get());
-   }
+      ILGenPass::ModuleRAII moduleRAII(*ILGen,
+                                       ILGen->getFileModule(CU.sourceId));
 
-   visitDeferred();
-}
+      declPass->importFileImports(CU.sourceId);
+      visitCompoundStmt(CU.root.get());
 
-QualType SemaPass::pop()
-{
-   auto res = std::move(Results.top());
-   Results.pop();
-
-   return std::move(res);
-}
-
-QualType SemaPass::VisitNode(AstNode *node)
-{
-   auto res = getAmbiguousResult(node);
-   if (res->isTypeGroup()) {
-      *res = res->getGroupDefault();
+      declPass->currentNamespace.clear();
+      issueDiagnostics();
    }
 
-   return res;
+   // instantiations might have added new globals and records
+   visitTypeInferredGlobals();
+   calculateRecordSizes();
+
+   issueDiagnostics();
+
+   if (encounteredError)
+      std::terminate();
+
+   stage = Stage::ILGen;
+
+   ILGen->run(CUs);
 }
 
-QualType SemaPass::VisitNode(std::shared_ptr<AstNode> node)
+void SemaPass::addDelayedInstantiation(cl::Record *R)
 {
-   return VisitNode(node.get());
+   DelayedInstantiations.insert(R);
 }
 
-QualType SemaPass::getAmbiguousResult(AstNode *node)
+void SemaPass::visitRecordInstantiation(cl::Record *R)
 {
+   DeclPass p(*this, R, false);
+   DeclScopeRAII declScope(*this, p);
+   ScopeStackRAII scopeStack(*this);
+   ILGenPass::ModuleRAII moduleRAII(*ILGen, ILGen->getTemplateModule(R));
+
+   p.visit(R->getDecl());
+   visitRecordDecl(R->getDecl());
+}
+
+void SemaPass::visitFunctionInstantiation(Callable *C)
+{
+   DeclPass p(*this, C, false);
+   DeclScopeRAII declScope(*this, p);
+   ScopeStackRAII scopeStack(*this);
+
+   ILGenPass::ModuleRAII moduleRAII(
+      *ILGen, ILGen->getTemplateModule(C->getSpecializedTemplate()));
+
+   if (auto M = dyn_cast<cl::Method>(C)) {
+      if (auto mDecl = dyn_cast<MethodDecl>(M->getDeclaration())) {
+         visitMethodDecl(mDecl);
+
+         if (M->getSpecializedTemplate()->isTemplate()) {
+            ILGen->DeclareMethod(M);
+         }
+      }
+      else {
+         auto cDecl = cast<ConstrDecl>(M->getDeclaration());
+         visitConstrDecl(cDecl);
+
+         if (M->getSpecializedTemplate()->isTemplate()) {
+            ILGen->DeclareMethod(M);
+         }
+      }
+   }
+   else if (auto F = dyn_cast<cdot::Function>(C)) {
+      auto fDecl = cast<FunctionDecl>(F->getDeclaration());
+      visitFunctionDecl(fDecl);
+
+//      ILGen->DeclareFunction(fDecl);
+   }
+   else {
+      llvm_unreachable("bad callable kind");
+   }
+}
+
+void SemaPass::declareRecordInstantiation(cl::Record *Inst)
+{
+   ILGen->declareRecordInstantiation(Inst);
+}
+
+QualType SemaPass::visit(Expression *node)
+{
+   if (!node->getExprType()->isAutoTy())
+      return node->getExprType();
+
+   QualType res;
    switch (node->getTypeID()) {
-#     define CDOT_ASTNODE(Name)              \
-         case AstNode::Name##ID:             \
-            visit(static_cast<Name*>(node)); \
-            break;
-#     define CDOT_INCLUDE_ALL
+#     define CDOT_EXPR(Name)                                \
+         case AstNode::Name##ID:                            \
+            res = visit##Name(static_cast<Name*>(node)); break;
 #     include "../../AstNode.def"
+
+      default:
+         llvm_unreachable("not an expression!");
    }
 
-   if (Results.empty()) {
-      return {};
-   }
-
-   auto res = Results.top();
-   Results.pop();
-
+   node->setExprType(res);
    return res;
 }
 
-QualType SemaPass::getAmbiguousResult(std::shared_ptr<AstNode> node)
+void SemaPass::pushRecordScope(cl::Record *cl)
 {
-   return getAmbiguousResult(node.get());
+   pushNamespace(cl->getNameWitoutNamespace());
+   declPass->SelfStack.push_back(cl);
+   pushTemplateParams(&cl->getTemplateParams());
 }
 
-void SemaPass::returnResult(QualType t)
-{
-   Results.push(t);
-}
-
-void SemaPass::returnResult(Type *t)
-{
-   Results.emplace(t);
-}
-
-void SemaPass::pushClassScope(cl::Record *cl)
-{
-   pushNamespace(cl->getName());
-   classScopeStack.push(cl->getName());
-}
-
-void SemaPass::popClassScope()
+void SemaPass::popRecordScope()
 {
    popNamespace();
-   classScopeStack.pop();
-   GenericsStack.pop_back();
+   declPass->SelfStack.pop_back();
+   popTemplateParams();
 }
 
-void SemaPass::doInitialPass(const std::shared_ptr<Statement> &stmt)
+cl::Record* SemaPass::currentClass()
 {
-   switch (stmt->getTypeID()) {
-      case AstNode::CompoundStmtID: {
-         auto compound = std::static_pointer_cast<CompoundStmt>(stmt);
-         doInitialPass(compound->getStatements());
-
-         break;
-      }
-      case AstNode::ClassDeclID: {
-         auto node = std::static_pointer_cast<ClassDecl>(stmt);
-         auto cl = node->getRecord()->getAs<Class>();
-
-         pushClassScope(cl);
-
-         doInitialPass(node->getInnerDeclarations());
-         for (const auto &field : node->getFields()) {
-            DefineField(field.get(), cl);
-         }
-
-         popClassScope();
-
-         break;
-      }
-      case AstNode::ExtensionDeclID: {
-         auto ext = std::static_pointer_cast<ExtensionDecl>(stmt);
-         doInitialPass(ext->getInnerDeclarations());
-
-         break;
-      }
-      case AstNode::RecordTemplateDeclID: {
-         auto Templ = std::static_pointer_cast<RecordTemplateDecl>(stmt);
-         doInitialPass(Templ->getInstantiations());
-
-         break;
-      }
-      case AstNode::NamespaceDeclID: {
-         auto ns = std::static_pointer_cast<NamespaceDecl>(stmt);
-         pushNamespace(ns->getNsName());
-         doInitialPass(ns->getContents()->getStatements());
-         popNamespace();
-         break;
-      }
-      case AstNode::UsingStmtID:
-         VisitNode(stmt);
-      default:
-         break;
-   }
+   return declPass->SelfStack.empty() ? nullptr
+                                      : declPass->SelfStack.back();
 }
 
-void SemaPass::doInitialPass(
-   const std::vector<std::shared_ptr<Statement>>& statements)
+std::vector<cl::Record*> const& SemaPass::getSelfStack() const
 {
-   for (const auto& stmt : statements) {
-      doInitialPass(stmt);
-   }
-
-   importedNamespaces.empty();
-   currentNamespace.empty();
+   return declPass->SelfStack;
 }
 
-void SemaPass::CopyScopeProps(
-   Scope* src,
-   Scope* dst)
+bool SemaPass::stopEvaluating(Statement *Stmt)
 {
-   if (src == nullptr) {
+   return (Stmt->getSubclassData()
+      & (Statement::TypeDependant | Statement::HadError
+         | Statement::CTFEDependant)) != 0;
+}
+
+bool SemaPass::stopEvaluating(std::shared_ptr<Statement> const &Stmt)
+{
+   return stopEvaluating(Stmt.get());
+}
+
+void SemaPass::issueDiagnostics()
+{
+   for (auto &diag : diagnostics)
+      diag << diag::cont;
+
+   diagnostics.clear();
+}
+
+void SemaPass::CopyScopeProps(Scope* src, Scope* dst)
+{
+   if (!src)
       return;
-   }
 
    dst->function = src->function;
    dst->enclosingScope = src;
    dst->captures = src->captures;
 }
 
-bool SemaPass::warnCast(QualType &lhs, QualType &rhs)
-{
-   return !lhs->isBoxedEquivOf(*rhs) && !rhs->isBoxedEquivOf(*lhs);
-}
-
-void SemaPass::raiseTypeError(QualType &lhs, QualType &rhs, AstNode* cause)
-{
-   diag::err(err_type_mismatch) << lhs << rhs << cause << diag::term;
-}
-
 void SemaPass::pushScope()
 {
    Scope scope;
    scope.id = lastScopeID++;
-   CopyScopeProps(latestScope, &scope);
+   CopyScopeProps(currentScope(), &scope);
 
    Scopes.push(scope);
-   latestScope = &Scopes.top();
 }
 
-void SemaPass::pushFunctionScope(QualType returnType, Callable *func)
+void SemaPass::pushFunctionScope(Callable *func)
 {
    Scope scope;
-   CopyScopeProps(latestScope, &scope);
+   CopyScopeProps(currentScope(), &scope);
    scope.id = lastScopeID++;
    scope.isLambdaRoot = !func;
    scope.returnable = true;
+   scope.function = func;
 
-   if (func) {
-      scope.function = func;
-   }
+   pushNamespace(func->getName());
+   pushTemplateParams(&func->getTemplateParams());
 
-   ReturnTypeStack.push(returnType);
-
+   ReturnTypeStack.push(func->getReturnType());
    Scopes.push(scope);
-   latestScope = &Scopes.top();
 }
 
 void SemaPass::pushMethodScope(Method *method)
@@ -275,7 +289,7 @@ void SemaPass::pushMethodScope(Method *method)
    scope.id = lastScopeID++;
    scope.returnable = true;
 
-   CopyScopeProps(latestScope, &scope);
+   CopyScopeProps(currentScope(), &scope);
    if (method->getName() != "init") {
       ReturnTypeStack.push(method->getReturnType());
    }
@@ -285,13 +299,17 @@ void SemaPass::pushMethodScope(Method *method)
 
    scope.method = method;
 
+   pushNamespace(method->getName());
+   pushTemplateParams(&method->getTemplateParams());
+
    Scopes.push(scope);
-   latestScope = &Scopes.top();
 }
 
 void SemaPass::popFunctionScope()
 {
+   popTemplateParams();
    popScope();
+   popNamespace();
    ReturnTypeStack.pop();
 }
 
@@ -300,13 +318,12 @@ void SemaPass::pushLoopScope(bool continuable, bool breakable)
    Scope scope;
    scope.id = lastScopeID++;
 
-   CopyScopeProps(&Scopes.top(), &scope);
+   CopyScopeProps(currentScope(), &scope);
 
    ContinueStack += continuable;
    BreakStack += breakable;
 
    Scopes.push(scope);
-   latestScope = &Scopes.top();
 }
 
 void SemaPass::popLoopScope(bool continuable, bool breakable)
@@ -319,115 +336,259 @@ void SemaPass::popLoopScope(bool continuable, bool breakable)
 void SemaPass::popScope()
 {
    Scopes.pop();
-   latestScope = &Scopes.top();
 }
 
-string SemaPass::declareVariable(
-   const string &name,
-   const QualType &type,
-   bool global,
-   AstNode *cause)
+void SemaPass::visitTypeInferredGlobals()
 {
+   GlobalDependency Dep(*this, DeclPass::GlobalVariableDecls);
+
+   if (!Dep.hasValidOrder()) {
+      llvm::StringRef fstName;
+      llvm::StringRef sndName;
+
+      auto pair = Dep.getOffendingPair();
+      if (auto fdecl = dyn_cast<FieldDecl>(pair.first))
+         fstName = fdecl->getField()->getLinkageName();
+      else
+         fstName = cast<GlobalVarDecl>(pair.first)->getIdentifiers().front();
+
+      if (auto fdecl = dyn_cast<FieldDecl>(pair.second))
+         sndName = fdecl->getField()->getLinkageName();
+      else
+         sndName = cast<GlobalVarDecl>(pair.second)->getIdentifiers().front();
+
+      diag::err(err_generic_error)
+         << "global values " + fstName +  " and " + sndName + " are "
+            "dependent on each others value"
+         << pair.first << diag::cont;
+
+      diag::note(note_generic_note)
+         << sndName + " declared here"
+         << pair.second << diag::term;
+   }
+
+   llvm::SmallDenseMap<size_t, size_t> OrderMap;
+
+   for (const auto &Stmt : Dep.getEvaluationOrder()) {
+      declPass->importFileImports(Stmt->getSourceLoc().getSourceId());
+
+      QualType ty;
+      llvm::StringRef ident;
+      bool typeDependant = false;
+
+      if (auto Decl = dyn_cast<GlobalVarDecl>(Stmt)) {
+         if (auto val = Decl->getValue().get()) {
+            declPass->setCurrentNamespace(Decl->getDeclarationNamespace());
+
+            ident = Decl->getIdentifiers().front();
+
+            val->setContextualType(Decl->getType()->getTypeRef());
+            ty = visit(val);
+
+            if (ty) {
+               Decl->getType()->setType(ty);
+               SymbolTable::setVariable(Decl->getBindings().front(), *ty);
+
+               visitGlobalVarDecl(Decl);
+            }
+            else if (val->isTypeDependant())
+               typeDependant = true;
+         }
+         else {
+            ty = Decl->getType()->getTypeRef();
+         }
+
+         Decl->setGlobalOrdering(
+            OrderMap[Decl->getSourceLoc().getSourceId()]++);
+      }
+      else if (auto FDecl = dyn_cast<FieldDecl>(Stmt)) {
+         if (auto val = FDecl->getDefaultVal().get()) {
+            declPass->setRecordCtx(FDecl->getRecord());
+
+            ident = FDecl->getName();
+
+            val->setContextualType(FDecl->getType()->getTypeRef());
+            ty = visit(val);
+
+            if (ty) {
+               FDecl->getType()->setType(ty);
+               auto F = cast<Struct>(FDecl->getRecord())
+                  ->getField(FDecl->getName());
+               F->fieldType = ty;
+
+               if (F->isStatic)
+                  SymbolTable::setVariable(FDecl->getBinding(), ty);
+            }
+            else if (val->isTypeDependant()|| FDecl->getRecord()->isTemplated())
+               typeDependant = true;
+         }
+         else {
+            ty = FDecl->getType()->getTypeRef();
+         }
+
+         FDecl->setGlobalOrdering(
+            OrderMap[FDecl->getSourceLoc().getSourceId()]++);
+      }
+      else {
+         llvm_unreachable("bad global kind");
+      }
+
+      if (!ty && !typeDependant)
+         diag::err(err_generic_error)
+            << "could not infer type of global variable " + ident
+            << Stmt << diag::term;
+
+      declPass->resetCtx();
+   }
+
+   DeclPass::GlobalVariableDecls.clear();
+}
+
+void SemaPass::checkDeclTypeReturnType(Callable *C)
+{
+   auto decl = C->getDeclaration();
+   if (!decl || !decl->getReturnType())
+      return;
+
+   if (decl->getReturnType()->isDeclTypeExpr()) {
+      ScopeGuard guard(*this, C);
+
+      visitTypeRef(decl->getReturnType().get());
+      C->setReturnType(decl->getReturnType()->getTypeRef());
+   }
+}
+
+string SemaPass::declareVariable(const string &name,
+                                 const QualType &type,
+                                 bool global,
+                                 bool typeDependant,
+                                 const SourceLocation &loc) {
    string var_name;
    if (global) {
       var_name = ns_prefix() + name;
    }
    else {
-      var_name = name + std::to_string(latestScope->id);
+      var_name = name + std::to_string(currentScope()->id);
    }
 
-   if (SymbolTable::hasVariable(var_name, importedNamespaces)) {
-      diag::err(err_var_redeclaration) << name << cause
+   if (declPass->getVariable(var_name)) {
+      diag::err(err_var_redeclaration) << name << loc
                                        << diag::term;
    }
 
-   SymbolTable::declareVariable(
-      var_name, type, AccessModifier::PUBLIC,
-      currentNamespace.back(), cause);
+   SymbolTable::declareVariable(var_name, type, AccessModifier::PUBLIC,
+                                typeDependant, declPass->getCurrentNamespace(),
+                                nullptr, loc);
 
    return var_name;
 }
 
-/**
- * Pushes a type on the type stack
- * @param type
- */
-void SemaPass::pushTy(const QualType& type)
+bool SemaPass::isPrivateNamespaceAccessible(size_t id)
 {
-   typeStack.push(type);
+   for (const auto &ns : declPass->currentNamespace)
+      if (ns == id)
+         return true;
+
+   return false;
 }
 
-/**
- * Removes a type from the type stack and returns it
- * @return
- */
-QualType SemaPass::popTy()
+SemaPass::VarResult SemaPass::getVariable(llvm::StringRef ident, AstNode *cause)
 {
-   auto top = typeStack.top();
-   typeStack.pop();
-
-   return top;
-}
-
-SemaPass::VarResult SemaPass::getVariable(string &ident, AstNode *cause)
-{
-   auto current = latestScope;
-   string curr;
+   auto current = currentScope();
+   llvm::SmallString<128> curr(ident);
    bool escapesLambdaScope = false;
 
+   Variable *V = nullptr;
+
    while (current != nullptr) {
-      curr = ident + std::to_string(current->id);
-      if (SymbolTable::hasVariable(curr)) {
+      curr += std::to_string(current->id);
+      V = declPass->getVariable(curr.str());
+
+      if (V)
          break;
-      }
 
       if (current->isLambdaRoot) {
          escapesLambdaScope = true;
       }
 
       current = current->enclosingScope;
+      curr.resize(ident.size());
    }
 
-   if (current == nullptr) {
-      if (SymbolTable::hasVariable(ident, importedNamespaces)) {
-         auto var = SymbolTable::getVariable(ident, importedNamespaces);
-         if (var.first.access == AccessModifier::PRIVATE
-             && std::find(currentNamespace.begin(),
-            currentNamespace.end(), var.first.declaredNamespace)
-                == currentNamespace.end()) {
+   if (!V) {
+      auto Global = declPass->getVariable(ident);
+      if (Global) {
+         if (Global->access == AccessModifier::PRIVATE
+             && !isPrivateNamespaceAccessible(Global->declaredNamespace)) {
             diag::err(err_private_access) << 0 /*variable*/ << ident << cause
                                           << diag::term;
          }
 
-         return { &var.first, std::move(var.second), false };
+         return { Global, false };
       }
 
-      diag::err(err_undeclared_identifer) << ident << cause
-                                          << diag::term;
+      diag::err(err_undeclared_identifer)
+         << ident << cause
+         << diag::term;
    }
 
-   return { &SymbolTable::getVariable(curr), curr , escapesLambdaScope };
+   return { V, escapesLambdaScope };
 }
 
 bool SemaPass::hasVariable(string ident)
 {
-   auto current = latestScope;
-   auto& ns = currentNamespace.back();
+   auto current = currentScope();
+   llvm::SmallString<128> curr(ident);
+   Variable *V;
 
    while (current != nullptr) {
-      auto scopedName = ident + std::to_string(current->id);
-      if (SymbolTable::hasVariable(scopedName)) {
-         break;
-      }
+      curr += std::to_string(current->id);
+      V = declPass->getVariable(curr.str());
+
+      if (V)
+         return true;
 
       current = current->enclosingScope;
+      curr.resize(ident.size());
    }
 
-   if (current == nullptr) {
-      return SymbolTable::hasVariable(ident, importedNamespaces);
+   return declPass->getVariable(ident) != nullptr;
+}
+
+Type* SemaPass::getPlaceholderType(Expression *expr)
+{
+   if (auto Int = dyn_cast<IntegerLiteral>(expr)) {
+      return Int->getType()->isUnsigned()
+             ? IntegerTypeGroup::getUnsigned()
+             : IntegerTypeGroup::getSigned();
+   }
+   else if (auto E = dyn_cast<EnumCaseExpr>(expr)) {
+      return EnumTypeGroup::get(E->getIdent());
+   }
+   else if (auto L = dyn_cast<LambdaExpr>(expr)) {
+      bool hasInferredArgType = false;
+      for (const auto &Arg : L->getArgs()) {
+         auto ty = visitTypeRef(Arg->getArgType().get());
+         if (!ty) {
+            hasInferredArgType = true;
+            break;
+         }
+      }
+
+      if (!hasInferredArgType)
+         return nullptr;
+
+      return LambdaTypeGroup::get(L->getArgs().size());
    }
 
-   return true;
+   switch (expr->getTypeID()) {
+      case AstNode::FPLiteralID:
+         return FPTypeGroup::get();
+      case AstNode::StringLiteralID:
+         return StringTypeGroup::get();
+      default:
+         return nullptr;
+   }
 }
 
 MetaType* SemaPass::getMetaType(Type *forType)
@@ -448,260 +609,407 @@ MetaType* SemaPass::getMetaType(Type *forType)
    return MetaType::get(forType);
 }
 
-namespace {
+Type* SemaPass::resolveDependencies(Type *Ty,
+                                    TemplateArgList const& templateArgs) {
+   using TypeID = cdot::TypeID;
+   switch (Ty->getTypeID()) {
+      case TypeID::GenericTypeID: {
+         auto &TypeName = cast<GenericType>(Ty)->getGenericTypeName();
 
-bool isBetterMatchThan(CallCompatability &result,
-                       CallCompatability &next) {
-   return (next.isCompatible()
-           && (!result.isCompatible()
-               || next.castPenalty <= result.castPenalty));
-}
+         auto TA = templateArgs.getNamedArg(TypeName);
+         if (!TA || !TA->isType() || TA->isVariadic())
+            return Ty;
 
-void compareMatches(bool &firstIncompatible,
-                    CallCompatability &result,
-                    CallCompatability &next,
-                    Function *func = nullptr, Method *method = nullptr) {
-   if (!next.isCompatible()) {
-      if (firstIncompatible) {
-         firstIncompatible = false;
-         result = next;
-         result.compatibility = CompatibilityType::NO_MATCHING_CALL;
+         return TA->getType();
       }
-
-      CallCandidate cand;
-      if (func) {
-         cand.func = func;
+      case TypeID::FPTypeGroupID:
+      case TypeID::IntegerTypeGroupID:
+      case TypeID::StringTypeGroupID:
+      case TypeID::EnumTypeGroupID:
+      case TypeID::LambdaTypeGroupID:
+         return Ty->getGroupDefault();
+      case TypeID::AutoTypeID:
+      case TypeID::VoidTypeID:
+      case TypeID::IntegerTypeID:
+      case TypeID::FPTypeID:
+         return Ty;
+      case TypeID::MetaTypeID:
+         return MetaType::get(
+            resolveDependencies(cast<MetaType>(Ty)->getUnderlyingType(),
+                                templateArgs));
+      case TypeID::PointerTypeID:
+         return PointerType::get(
+            resolveDependencies(*cast<PointerType>(Ty)->getPointeeType(),
+                                templateArgs));
+      case TypeID::ArrayTypeID: {
+         auto ArrTy = cast<ArrayType>(Ty);
+         return ArrayType::get(resolveDependencies(ArrTy->getElementType(),
+                                                   templateArgs),
+                               ArrTy->getNumElements());
       }
-      else {
-         cand.method = method;
+      case TypeID::InferredArrayTypeID: {
+         auto ArrTy = cast<InferredArrayType>(Ty);
+         auto TA = templateArgs.getNamedArg(ArrTy->getParam());
+         if (!TA || TA->isType())
+            return InferredArrayType::get(
+               resolveDependencies(ArrTy->getElementType(),
+                                   templateArgs),
+               ArrTy->getParam());
+
+         return ArrayType::get(
+            resolveDependencies(ArrTy->getElementType(), templateArgs),
+            TA->getValue().getInt());
       }
+      case TypeID::InconcreteObjectTypeID:
+      case TypeID::ObjectTypeID: {
+         if (!Ty->getRecord()->isTemplated())
+            return Ty;
 
-      cand.incompatibleArg = result.incompatibleArg;
-      cand.failedConstraint = result.failedConstraint;
+         TemplateArgList list(*this, Ty->getRecord());
 
-      result.failedCandidates.push_back(cand);
-      return;
-   }
+         auto &TAs = Ty->getTemplateArgs();
+         auto end_it = TAs.end();
 
-   if (next.perfectMatch || isBetterMatchThan(result, next)) {
-      firstIncompatible = false;
-      result = std::move(next);
-      if (func) {
-         result.func = func;
-      }
-      else {
-         result.method = method;
-      }
-   }
-}
+         for (auto it = TAs.begin(); it != end_it; ++it) {
+            auto &TA = *it;
+            auto &P = it.getParam();
 
-void checkIfAmbigous(const string &name,
-                     bool isFunction,
-                     AstNode *caller,
-                     llvm::SmallVector<AstNode*, 4> &perfectCalls) {
-   if (perfectCalls.size() <= 1) {
-      return;
-   }
-
-   diag::err(err_ambiguous_call) << !isFunction << name << diag::cont;
-   for (const auto &call : perfectCalls) {
-      diag::note(note_ambiguous_call) << call << diag::cont;
-   }
-
-   std::exit(1);
-}
-
-} // anonymous namespace
-
-CallCompatability SemaPass::getFunction(
-   const string& funcName,
-   std::vector<Argument>& args,
-   std::vector<TemplateArg> const& templateArgs)
-{
-   string context;
-   auto overloads = SymbolTable::getFunction(funcName, importedNamespaces);
-
-   CallCompatability result;
-   if (overloads.first == overloads.second) {
-      return result;
-   }
-
-   bool isTemplated = SymbolTable::isTemplatedFunction(funcName);
-   const std::vector<TemplateConstraint> &Constraints = isTemplated
-                                      ? SymbolTable::getConstraints(funcName)
-                                      : std::vector<TemplateConstraint>{};
-
-   OverloadResolver Resolver(args, templateArgs, resolverFn, TypeResolverFn,
-                             Constraints);
-
-   llvm::SmallVector<AstNode*, 4> perfectCalls;
-   bool firstIncompatible = true;
-
-   for (auto it = overloads.first; it != overloads.second; ++it) {
-      auto isComp = result.isCompatible();
-      auto& overload = it->second;
-
-      auto res = Resolver.checkIfViable(overload.get());
-      if (res.perfectMatch) {
-         perfectCalls.push_back(overload->getDeclaration());
-      }
-
-      compareMatches(firstIncompatible, result, res, overload.get());
-   }
-
-   checkIfAmbigous(funcName, true, nullptr, perfectCalls);
-
-   if (result.isCompatible() && isTemplated) {
-      result.func = DeclPass::declareFunctionInstantiation(
-         *result.func->getTemplate(),
-         result.generics
-      );
-   }
-
-   return result;
-}
-
-CallCompatability SemaPass::getMethod(Record *rec,
-                                      const string &methodName,
-                                      const std::vector<Argument> &args,
-                                 std::vector<TemplateArg> const& templateArgs) {
-   CallCompatability result;
-   auto overloads = rec->getMethods().equal_range(methodName);
-   if (overloads.first != overloads.second) {
-      result.compatibility = CompatibilityType::NO_MATCHING_CALL;
-   }
-   else {
-      return result;
-   }
-
-   const std::vector<TemplateConstraint> &Constraints =
-      overloads.first->second->isTemplate()
-         ? overloads.first->second->getTemplate()->constraints
-         : std::vector<TemplateConstraint>{};
-
-   OverloadResolver Resolver(args, templateArgs, resolverFn, TypeResolverFn,
-                             Constraints);
-
-   llvm::SmallVector<AstNode*, 4> perfectCalls;
-   bool firstIncompatible = true;
-
-   for (auto it = overloads.first; it != overloads.second; ++it) {
-      auto& overload = it->second;
-
-//      auto failedConstr = checkConstraints(overload.get(), caller);
-//      if (failedConstr != nullptr) {
-//         result.compatibility = CompatibilityType::CONSTRAINT_FAILED;
-//         result.failedConstraint = failedConstr;
-//
-//         continue;
-//      }
-
-      const auto& Constraints = overload->isTemplate()
-                                ? overload->getTemplate()->constraints
-                                : std::vector<TemplateConstraint>();
-      
-      auto res = Resolver.checkIfViable(overload.get());
-      if (res.perfectMatch) {
-         perfectCalls.push_back(overload->getDeclaration());
-      }
-
-      compareMatches(firstIncompatible, result, res, nullptr, overload.get());
-   }
-
-   if (!result.isCompatible() && rec->isNonUnion()) {
-      auto cl = rec->getAs<Class>();
-      if (cl->getParent()) {
-         result = getMethod(cl->getParent(), methodName, args, templateArgs);
-      }
-   }
-
-   if (!result.isCompatible()) {
-      for (const auto &proto : rec->getConformances()) {
-         result = getMethod(proto, methodName, args, templateArgs);
-         if (result.isCompatible()) {
-            break;
+            if (TA.isType()) {
+               auto resolved = resolveDependencies(TA.getType(), templateArgs);
+               list.insert(P.getGenericTypeName(), resolved);
+            }
+            else {
+               list.insert(P.getGenericTypeName(), Variant(TA.getValue()));
+            }
          }
-      }
-   }
 
-   checkIfAmbigous(methodName, false, nullptr, perfectCalls);
-   return result;
+         if (list.isStillDependant())
+            return InconcreteObjectType::get(Ty->getRecord(), std::move(list));
+
+         auto Base = Ty->getRecord();
+         while (Base->getSpecializedTemplate())
+            Base = Base->getSpecializedTemplate();
+
+         auto Inst = InstantiateRecord(Base, std::move(list));
+         return ObjectType::get(Inst);
+      }
+      case TypeID::FunctionTypeID: {
+         auto Func = cast<FunctionType>(Ty);
+         auto ret = Func->getReturnType();
+         *ret = resolveDependencies(*ret, templateArgs);
+
+         auto args = Func->getArgTypes();
+         for (auto &arg : args)
+            *arg.type = resolveDependencies(*arg.type, templateArgs);
+
+         return FunctionType::get(ret, args, Func->isRawFunctionTy());
+      }
+      case TypeID::TupleTypeID: {
+         std::vector<std::pair<std::string, QualType>> Tys;
+         for (auto &Ty : cast<TupleType>(Ty)->getContainedTypes()) {
+            if (auto G = dyn_cast<GenericType>(*Ty.second)) {
+               auto &TypeName = G->getGenericTypeName();
+               auto TA = templateArgs.getNamedArg(TypeName);
+               if (!TA || !TA->isType())
+                  continue;
+
+               if (TA->isVariadic()) {
+                  for (const auto &VA : TA->getVariadicArgs())
+                     Tys.emplace_back("", QualType(VA.getType()));
+               }
+               else {
+                  Tys.emplace_back("", QualType(TA->getType()));
+               }
+            }
+            else {
+               Tys.emplace_back("",
+                                QualType(resolveDependencies(*Ty.second,
+                                                             templateArgs),
+                                         Ty.second.isLvalue(),
+                                         Ty.second.isConst()));
+            }
+         }
+
+         return TupleType::get(Tys);
+      }
+      default:
+         llvm_unreachable("bad type kind!");
+   }
 }
 
-CallCompatability SemaPass::getCase(cl::Enum *en,
-                                    const string &caseName,
-                                    std::vector<Argument> const& args) {
-   CallCompatability res;
-   if (!en->hasCase(caseName)) {
-      return res;
-   }
+Type *SemaPass::resolveDependencies(
+                           Type *Ty,
+                           llvm::ArrayRef<cl::AssociatedType> associatedTypes) {
+   using TypeID = cdot::TypeID;
+   switch (Ty->getTypeID()) {
+      case TypeID::GenericTypeID: {
+         auto &TypeName = cast<GenericType>(Ty)->getGenericTypeName();
+         for (const auto &AT : associatedTypes) {
+            if (AT.getName().equals(TypeName))
+               return *AT.getType();
+         }
 
-   res.compatibility = CompatibilityType::NO_MATCHING_CALL;
-   auto types = en->getCases()[caseName].associatedValues;
-   if (types.size() != args.size()) {
-      return res;
-   }
-
-   std::vector<Argument> neededArgs;
-   for (const auto &ty : types) {
-      neededArgs.emplace_back(ty.first, ty.second);
-   }
-
-   OverloadResolver Resolver(args, {}, resolverFn, TypeResolverFn, {});
-   Resolver.isCallCompatible(res, args, neededArgs, resolverFn);
-   res.resolvedNeededArgs = std::move(neededArgs);
-
-   return res;
-}
-
-void SemaPass::ApplyCasts(
-   CallExpr *node,
-   std::vector<QualType> &givenArgs,
-   std::vector<Argument> &declaredArgs)
-{
-   size_t i = 0;
-   for (auto& arg : givenArgs) {
-      if (i >= declaredArgs.size()) {
-         break;
+         return Ty;
       }
-
-      assert(node->getArgs().size() > i && "No arg to cast");
-      if (arg != declaredArgs[i].type && !arg->isTypeGroup()
-          && !declaredArgs[i].type->isAutoTy()) {
-         wrapImplicitCast(node->getArgs()[i].second, arg, declaredArgs[i].type);
+      case TypeID::FPTypeGroupID:
+      case TypeID::IntegerTypeGroupID:
+      case TypeID::StringTypeGroupID:
+      case TypeID::EnumTypeGroupID:
+      case TypeID::LambdaTypeGroupID:
+         return Ty->getGroupDefault();
+      case TypeID::AutoTypeID:
+      case TypeID::VoidTypeID:
+      case TypeID::IntegerTypeID:
+      case TypeID::FPTypeID:
+         return Ty;
+      case TypeID::MetaTypeID:
+         return MetaType::get(
+            resolveDependencies(cast<MetaType>(Ty)->getUnderlyingType(),
+                                associatedTypes));
+      case TypeID::PointerTypeID:
+         return PointerType::get(
+            resolveDependencies(*cast<PointerType>(Ty)->getPointeeType(),
+                                associatedTypes));
+      case TypeID::ArrayTypeID:
+      case TypeID::InferredArrayTypeID:{
+         auto ArrTy = cast<ArrayType>(Ty);
+         return ArrayType::get(resolveDependencies(ArrTy->getElementType(),
+                                                   associatedTypes),
+                               ArrTy->getNumElements());
       }
+      case TypeID::InconcreteObjectTypeID:
+      case TypeID::ObjectTypeID: {
+         if (!Ty->getRecord()->isTemplated())
+            return Ty;
 
-      ++i;
+         TemplateArgList list(*this, Ty->getRecord());
+
+         auto &TAs = Ty->getTemplateArgs();
+         auto end_it = TAs.end();
+
+         for (auto it = TAs.begin(); it != end_it; ++it) {
+            auto &TA = *it;
+            auto &P = it.getParam();
+
+            if (TA.isType()) {
+               auto resolved = resolveDependencies(TA.getType(),
+                                                   associatedTypes);
+               list.insert(P.getGenericTypeName(), resolved);
+            }
+            else {
+               list.insert(P.getGenericTypeName(), Variant(TA.getValue()));
+            }
+         }
+
+         if (list.isStillDependant())
+            return InconcreteObjectType::get(Ty->getRecord(), std::move(list));
+
+         auto Base = Ty->getRecord();
+         while (Base->getSpecializedTemplate())
+            Base = Base->getSpecializedTemplate();
+
+         auto Inst = InstantiateRecord(Base, std::move(list));
+         return ObjectType::get(Inst);
+      }
+      case TypeID::FunctionTypeID: {
+         auto Func = cast<FunctionType>(Ty);
+         auto ret = Func->getReturnType();
+         *ret = resolveDependencies(*ret, associatedTypes);
+
+         auto args = Func->getArgTypes();
+         for (auto &arg : args)
+            *arg.type = resolveDependencies(*arg.type, associatedTypes);
+
+         return FunctionType::get(ret, args, Func->isRawFunctionTy());
+      }
+      case TypeID::TupleTypeID: {
+         std::vector<std::pair<std::string, QualType>> Tys;
+         for (auto &Ty : cast<TupleType>(Ty)->getContainedTypes()) {
+            Tys.emplace_back("",
+                             QualType(resolveDependencies(*Ty.second,
+                                                          associatedTypes)));
+         }
+
+         return TupleType::get(Tys);
+      }
+      default:
+         llvm_unreachable("bad type kind!");
    }
 }
 
 void SemaPass::pushNamespace(const string &ns)
 {
-   auto newNs = currentNamespace.size() == 1 ? ns : currentNamespace.back()
-                                                    + "." + ns;
-   currentNamespace.push_back(newNs);
-   importedNamespaces.push_back(newNs + ".");
+   declPass->pushNamespace(ns);
 }
 
 void SemaPass::popNamespace()
 {
-   importedNamespaces.pop_back();
-   currentNamespace.pop_back();
+   declPass->popNamespace();
 }
 
-void SemaPass::wrapImplicitCast(
-   Expression::SharedPtr& target,
-   const QualType &originTy,
-   const QualType &destTy)
+void SemaPass::clearCurrentNamespace()
 {
-   if (!originTy->needsCastTo(*destTy)) {
-      return;
+   declPass->currentNamespace.clear();
+}
+
+void SemaPass::importNamespace(const string &ns)
+{
+   declPass->importNamespace(ns);
+}
+
+string SemaPass::ns_prefix()
+{
+   return declPass->ns_prefix();
+}
+
+void SemaPass::pushTemplateParams(std::vector<TemplateParameter> *params)
+{
+   declPass->pushTemplateParams(params);
+}
+
+void SemaPass::popTemplateParams()
+{
+   declPass->popTemplateParams();
+}
+
+llvm::ArrayRef<size_t> SemaPass::importedNamespaces()
+{
+   return declPass->getImportedNamespaces();
+}
+
+Record* SemaPass::getRecord(llvm::StringRef name)
+{
+   return declPass->getRecord(name);
+}
+
+Struct* SemaPass::getStruct(llvm::StringRef name)
+{
+   return declPass->getStruct(name);
+}
+
+Union* SemaPass::getUnion(llvm::StringRef name)
+{
+   return declPass->getUnion(name);
+}
+
+Enum* SemaPass::getEnum(llvm::StringRef name)
+{
+   return declPass->getEnum(name);
+}
+
+Function* SemaPass::getAnyFn(llvm::StringRef name)
+{
+   return declPass->getAnyFn(name);
+}
+
+llvm::ArrayRef<Alias*> SemaPass::getAliases(llvm::StringRef name)
+{
+   return declPass->getAliases(name);
+}
+
+Namespace* SemaPass::getNamespace(llvm::StringRef name)
+{
+   return declPass->getNamespace(name);
+}
+
+Typedef* SemaPass::getTypedef(llvm::StringRef name)
+{
+   return declPass->getTypedef(name);
+}
+
+llvm::ArrayRef<Function *> SemaPass::getFunctionOverloads(llvm::StringRef name)
+{
+   return declPass->getFunctionOverloads(name);
+}
+
+Callable* SemaPass::getCurrentFunction()
+{
+   auto curr = &Scopes.top();
+   while (curr) {
+      if (curr->function)
+         return curr->function;
+
+      curr = curr->enclosingScope;
    }
+
+   return nullptr;
+}
+
+bool SemaPass::implicitCastIfNecessary(Expression::SharedPtr &target,
+                                       const QualType &originTy,
+                                       const QualType &destTy,
+                                       bool preCondition,
+                                       bool ignoreError) {
+   if (!preCondition || target->isTypeDependant()
+         || target->isVariadicArgPackExpansion())
+      return true;
+
+   if ((destTy.isLvalue() && !destTy.isConst()) && !originTy.isLvalue()) {
+      diagnose(target.get(), err_generic_error,
+               "expected lvalue of type " + destTy.toString() + " but found "
+                  "rvalue of type " + originTy.toString());
+
+      return false;
+   }
+
+   auto res = getCastKind(*originTy, *destTy);
+   if (res.getNeededCasts().empty())
+      return true;
+
+   if (!res.isValid()) {
+      if (!ignoreError)
+         diagnose(target.get(), err_type_mismatch, originTy, destTy);
+
+      return false;
+   }
+
+   if (res.isNoOp())
+      return true;
+
+   if (res.getStrength() != CastResult::Implicit) {
+      string asStr = "as";
+      switch (res.getStrength()) {
+         default: break;
+         case CastResult::Force:    asStr += '!'; break;
+         case CastResult::Fallible: asStr += '?'; break;
+      }
+
+      if (!ignoreError)
+         diagnose(target.get(), err_generic_error,
+                  "cast between " + originTy.toString() + " and "
+                  + destTy.toString() + " requires '" + asStr + "' operator");
+
+      return false;
+   }
+
+   if (auto M = res.getConversionOp())
+      maybeInstantiateMemberFunction(M, target->getSourceLoc());
 
    auto loc = target->getSourceLoc();
    auto ptr = target.get();
 
-   auto cast = new ImplicitCastExpr(originTy, destTy, move(target));
+   auto cast = new ImplicitCastExpr(originTy, destTy, move(target),
+                                    std::move(res));
+
+   cast->setSourceLoc(loc);
+   ptr->setParent(cast);
+
+   target.reset(cast);
+
+   return true;
+}
+
+void SemaPass::forceCast(std::shared_ptr<Expression> &target,
+                         const QualType &originTy,
+                         const QualType &destTy) {
+   auto res = getCastKind(*originTy, *destTy);
+   assert(res.isValid());
+
+   auto loc = target->getSourceLoc();
+   auto ptr = target.get();
+
+   auto cast = new ImplicitCastExpr(originTy, destTy, move(target),
+                                    std::move(res));
 
    cast->setSourceLoc(loc);
    ptr->setParent(cast);
@@ -709,74 +1017,79 @@ void SemaPass::wrapImplicitCast(
    target.reset(cast);
 }
 
-void SemaPass::lvalueToRvalue(
-   std::shared_ptr<Expression> &target)
+void SemaPass::lvalueToRvalue(std::shared_ptr<Expression> &target)
 {
    auto copy = target;
    auto ltor = new LvalueToRvalue(copy);
+
+   ltor->setIsTypeDependent(copy->isTypeDependant());
+   ltor->setIsValueDependent(copy->isValueDependant());
 
    target.reset(ltor);
    CopyNodeProperties(copy.get(), target.get());
 }
 
-void SemaPass::toRvalueIfNecessary(
-   QualType &ty,
-   std::shared_ptr<Expression> &target,
-   bool preCond)
-{
-   if (!preCond) {
-      return;
-   }
-
-   if (ty.isLvalue()) {
-      lvalueToRvalue(target);
-   }
+void SemaPass::toRvalueIfNecessary(QualType &ty,
+                                   std::shared_ptr<Expression> &target,
+                                   bool preCond) {
+//   if (!preCond)
+//      return;
+//
+//   if (ty.isLvalue()) {
+//      lvalueToRvalue(target);
+//   }
 
    ty.isLvalue(false);
 }
 
-/**
- * Visits all the nodes children
- * @param node
- * @return
- */
-void SemaPass::visit(NamespaceDecl *node)
+TemplateParameter const* SemaPass::hasTemplateParam(llvm::StringRef name)
 {
-   pushNamespace(node->getNsName());
-   if (node->isAnonymousNamespace()) {
-      importedNamespaces.push_back(currentNamespace.back());
+   for (const auto &Params : declPass->getTemplateParamStack()) {
+      for (const auto &Param : *Params) {
+         if (name.equals(Param.getGenericTypeName()))
+            return &Param;
+      }
    }
 
-   VisitNode(node->getContents());
-   if (!node->isAnonymousNamespace()) {
-      popNamespace();
-   }
-   else {
-      // keep imported namespace
-      currentNamespace.pop_back();
-   }
+   return nullptr;
 }
 
-/**
- * Visits all the nodes children
- * @param node
- * @return
- */
-void SemaPass::visit(CompoundStmt *node)
+AssociatedType const* SemaPass::hasAssociatedType(llvm::StringRef name)
+{
+   auto begin_it = getSelfStack().rbegin();
+   auto end_it = getSelfStack().rend();
+
+   for (; begin_it != end_it; ++begin_it) {
+      auto Self = *begin_it;
+      if (auto AT = Self->getAssociatedType(name)) {
+         return AT;
+      }
+   }
+
+   return nullptr;
+}
+
+void SemaPass::visitNamespaceDecl(NamespaceDecl *node)
+{
+   pushNamespace(node->getNsName());
+
+   visitCompoundStmt(node->getContents().get());
+
+   popNamespace();
+}
+
+void SemaPass::visitCompoundStmt(CompoundStmt *node)
 {
    if (!node->preservesScope()) {
       pushScope();
    }
 
    for (const auto &stmt : node->getStatements()) {
-      switch (stmt->getTypeID()) {
-         case AstNode::CallableTemplateDeclID:
-         case AstNode::RecordTemplateDeclID:
-            deferVisit(stmt);
-            break;
-         default:
-            VisitNode(stmt);
-            break;
+      visit(stmt.get());
+
+      if (fatalErrorInScope) {
+         fatalErrorInScope = false;
+         break;
       }
    }
 
@@ -785,35 +1098,28 @@ void SemaPass::visit(CompoundStmt *node)
    }
 }
 
-namespace {
-
-bool isReservedIdentifier(const string& ident)
+void SemaPass::visitFunctionDecl(FunctionDecl *node)
 {
-   return (ident == "_"   || ident == "Self");
+   if (!node->getBody()) {
+      ILGen->DeclareFunction(node);
+      return;
+   }
+
+   if (alreadyVisited(node))
+      return;
+
+   visitCallableDecl(node);
+   ILGen->DeclareFunction(node);
 }
 
-}
-
-void SemaPass::visit(FunctionDecl *node)
-{
-   visit((CallableDecl*)node);
-}
-
-/**
- * Checks if all code paths in the function return a value of the correct type 
- * and places the function in the symbol
- * table
- * @param node
- * @return
- */
-void SemaPass::visit(CallableDecl *node)
+void SemaPass::visitCallableDecl(CallableDecl *node)
 {
    if (node->isDeclaration()) {
       for (const auto& arg : node->getArgs()) {
          auto &defaultVal = arg->getDefaultVal();
          if (defaultVal) {
             defaultVal->setContextualType(arg->getArgType()->getTypeRef());
-            VisitNode(defaultVal);
+            visit(defaultVal);
          }
       }
 
@@ -834,851 +1140,669 @@ void SemaPass::visit(CallableDecl *node)
    }
 
    for (const auto& inner : node->getInnerDecls()) {
-      VisitNode(inner);
+      visit(inner.get());
    }
 
-   pushNamespace(node->getName());
-
-   auto return_type = node->getReturnType()->getType();
-   pushFunctionScope(return_type, node->getCallable());
+   ScopeGuard scope(*this, node->getCallable());
 
    for (const auto& arg : node->getArgs()) {
-      VisitNode(arg);
-      arg->setBinding(declareVariable(arg->getArgName(),
-                                      arg->getArgType()->getType()));
+      visitFuncArgDecl(arg.get());
    }
 
-   VisitNode(node->getBody());
+   if (auto Body = node->getBody()) {
+      visitCompoundStmt(Body.get());
 
-   attributes.clear();
-
-   if (!UnresolvedGotos.empty()) {
-      diag::err(err_label_not_found) << UnresolvedGotos.begin()->first().str()
-                                     << UnresolvedGotos.begin()->second
-                                     << diag::term;
+      if (!UnresolvedGotos.empty()) {
+         diag::err(err_label_not_found)
+            << UnresolvedGotos.begin()->first().str()
+            << UnresolvedGotos.begin()->second
+            << diag::term;
+      }
    }
-
-   node->hasStructRet(node->getReturnType()
-                          ->getTypeRef()
-                          ->needsStructReturn());
-
-   popFunctionScope();
-   popNamespace();
 }
 
-void SemaPass::CopyNodeProperties(
-   Expression *src,
-   Expression *dst)
+void SemaPass::CopyNodeProperties(Expression *src, Expression *dst)
 {
    dst->setIsLhsOfAssignment(src->getIsLhsOfAssigment());
    dst->setSourceLoc(src->getSourceLoc());
-   dst->isTemporary(src->isTemporary());
-   dst->setTempType(src->getTempType());
 }
 
-Type* SemaPass::HandleBuiltinIdentifier(IdentifierRefExpr *node)
+QualType SemaPass::visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node)
 {
-   if (builtinIdentifiers.find(node->getIdent())
-       == builtinIdentifiers.end()) {
-      return {};
-   }
-
-   Variant builtinValue;
-   Type *builtinType;
-
-   auto kind = builtinIdentifiers[node->getIdent()];
-   switch (kind) {
-      case BuiltinIdentifier::FUNC:
-         builtinValue = Variant(string(latestScope
-                                                ->function->getName()));
-         builtinType = ObjectType::get("String");
-         break;
-      case BuiltinIdentifier::MANGLED_FUNC:
-         builtinValue = Variant(string(latestScope->function
-                                                        ->getLinkageName()));
-         builtinType = ObjectType::get("String");
-         break;
-      case BuiltinIdentifier::FLOAT_QNAN:
-      case BuiltinIdentifier::FLOAT_SNAN:
-         builtinType = FPType::getFloatTy();
-         break;
-      case BuiltinIdentifier::DOUBLE_QNAN:
-      case BuiltinIdentifier::DOUBLE_SNAN:
-         builtinType = FPType::getDoubleTy();
-         break;
-   }
-
-   node->setBuiltinValue(builtinValue);
-   node->setBuiltinType(builtinType);
-   node->setBuiltinKind(kind);
-
-   return builtinType;
+   return QualType(node->getParam().valueType);
 }
 
-/**
- * Returns the type of a variable, if it exists
- * @param node
- * @return
- */
-void SemaPass::visit(IdentifierRefExpr *node)
+bool SemaPass::visitVarDecl(VarDecl *node)
 {
-   if (node->isLetExpr() || node->isVarExpr()) {
-      diag::err(err_unexpected_let_expr) << node << diag::term;
-   }
-
-   auto builtin = HandleBuiltinIdentifier(node);
-   if (builtin != nullptr) {
-      returnResult(QualType(builtin));
-      return;
-   }
-
-   string ns_name = node->getIdent();
-   for (const auto& ns : importedNamespaces) {
-      auto curr = ns + ns_name;
-      if (SymbolTable::isNamespace(curr)) {
-         ns_name = curr;
-         break;
-      }
-   }
-
-   if (SymbolTable::isNamespace(ns_name))
-   {
-      auto current = node->getMemberExpr();
-      while (current != nullptr && isa<MemberRefExpr>(current)) {
-         auto new_ns = ns_name + "." + current->getIdent();
-
-         if (!SymbolTable::isNamespace(new_ns)) {
-            break;
-         }
-
-         ns_name = new_ns;
-         current = current->getMemberExpr();
-      }
-
-      node->isNamespace(true);
-      node->setMemberExpr(current);
-
-      if (SymbolTable::hasTypedef(ns_name, importedNamespaces)) {
-         auto td = SymbolTable::getTypedef(ns_name, importedNamespaces);
-         if (td.aliasedType->isObjectTy()) {
-            ns_name = td.aliasedType->getClassName();
-         }
-      }
-
-      if (SymbolTable::hasRecordTemplate(ns_name, importedNamespaces)) {
-         auto &Template = *SymbolTable::getRecordTemplate(ns_name);
-         DeclPass::resolveTemplateArgs(
-            node->getTemplateArgs(),
-            Template.constraints,
-            [this](TypeRef *node) {
-               VisitNode(node);
-            },
-            node
-         );
-
-         auto rec = getRecord(ns_name, node->getTemplateArgs());
-         ns_name = rec->getName();
-      }
-
-      if (!node->getMemberExpr()) {
-         if (Record *rec = SymbolTable::getRecord(ns_name)) {
-            auto meta = getMetaType(ObjectType::get(rec->getName()));
-            node->setMetaType(ObjectType::get(rec->getName()));
-
-            return returnResult(meta);
-         }
-         else {
-            diag::err(err_undeclared_identifer) << ns_name << node
-                                                << diag::term;
-         }
-      }
-      else if (auto memberExpr
-            = dyn_cast<MemberRefExpr>(node->getMemberExpr())) {
-         memberExpr->setIsNsMember(true);
-         memberExpr->setClassName(ns_name);
-         memberExpr->setIdent(ns_name + "." + memberExpr->getIdent());
-      }
-      else if (auto Call = dyn_cast<CallExpr>(node->getMemberExpr())) {
-         Call->setIsNsMember(true);
-         Call->setClassName(ns_name);
-         Call->setType(CallType::METHOD_CALL);
-      }
-      else {
-         llvm_unreachable("Unknown operation");
-      }
-
-      node->getMemberExpr()->setContextualType(node->getContextualType());
-      return returnResult(VisitNode(node->getMemberExpr()));
-   }
-
-   if (node->getIdent() == "super") {
-      if (currentClass().empty()) {
-         diag::err(err_self_outside_method) << 1 /*super*/
-                                            << node << diag::term;
-      }
-
-      auto currentCl = SymbolTable::getClass(currentClass());
-      if (currentCl->getParent() == nullptr) {
-         diag::err(err_super_without_base) << currentClass()
-                                           << node << diag::term;
-      }
-
-      node->isSuper(true);
-      node->setSuperClassName(currentCl->getParent()->getName());
-
-      auto type = QualType(ObjectType::get(node->getSuperClassName()));
-      return ReturnMemberExpr(node, type);
-   }
-
-   // try a function instead
-   if (!hasVariable(node->getIdent())) {
-      auto ty = tryFunctionReference(node);
-      if (!ty->isAutoTy()) {
-         return returnResult(ty);
-      }
-   }
-
-   bool implicit_this = node->getIdent() != "self"
-                        && !hasVariable(node->getIdent())
-                        && !currentClass().empty();
-
-   if (node->getIdent() == "self" || implicit_this) {
-      if (currentClass().empty()) {
-         diag::err(err_self_outside_method) << 0 /*self*/
-                                            << node << diag::term;
-      }
-
-      if (implicit_this) {
-         auto mem_ref =
-            std::make_shared<MemberRefExpr>(std::move(node->getIdent()));
-         CopyNodeProperties(node, mem_ref.get());
-
-         mem_ref->setMemberExpr(node->getMemberExpr());
-         node->setMemberExpr(mem_ref);
-      }
-
-      node->setIsSelf(true);
-
-      auto cl = SymbolTable::getClass(currentClass());
-      QualType type(ObjectType::get(cl->getName()));
-
-      bool rawEnum = cl->isRawEnum();
-
-      auto mutableSelf = Scopes.top().method->mutableSelf;
-      type.isLvalue(mutableSelf || rawEnum);
-      type.isSelf(!rawEnum);
-
-      return ReturnMemberExpr(node, type);
-   }
-
-   auto func = Scopes.top().function;
-   size_t argNum = 0;
-   for (const auto &arg : func->getArguments()) {
-      if (arg.label == node->getIdent()) {
-         node->setFunctionArg(true);
-         node->setArgNo(argNum);
-
-         return ReturnMemberExpr(node, arg.type);
-      }
-
-      ++argNum;
-   }
-
-   auto res = getVariable(node->getIdent(), node);
-
-   // add capture for this variable
-   if (res.escapesLambdaScope) {
-      latestScope->captures->insert(res.scope);
-      node->setCapturedVar(true);
-      node->setCapturedType(*res.V->type);
-
-      auto decl = declarations.find(res.scope);
-      assert(decl != declarations.end());
-
-      decl->second->setCaptured(true);
-   }
-
-   node->setBinding(res.scope);
-   return ReturnMemberExpr(node, res.V->type);
-}
-
-QualType SemaPass::tryFunctionReference(IdentifierRefExpr *node)
-{
-   std::vector<Argument> args;
-   QualType returnType;
-   bool typeInferred = false;
-
-   if (node->getContextualType()->isFunctionTy()) {
-      auto asFunc = cast<FunctionType>(*node->getContextualType());
-      args = asFunc->getArgTypes();
-      returnType = asFunc->getReturnType();
-      typeInferred = true;
-   }
-   else {
-      *returnType = VoidType::get();
-   }
-
-   auto overloads = SymbolTable::getFunction(node->getIdent(),
-                                             importedNamespaces);
-   bool foundMatch = false;
-   Function* result;
-
-   if (!node->getContextualType()->isAutoTy()
-       && node->getContextualType()->isRawFunctionTy()) {
-      node->wrapLambda(false);
-   }
-
-   // only one result
-   if (!typeInferred && std::distance(overloads.first, overloads.second) == 1) {
-      result = overloads.first->second.get();
-
-      node->setBinding(result->getMangledName());
-      node->isFunction(true);
-
-      std::vector<Argument> argTypes;
-      for (const auto& arg : result->getArguments()) {
-         argTypes.emplace_back("", arg.type);
-      }
-
-      auto funcTy =
-         FunctionType::get(result->getReturnType(), argTypes,
-                           node->getContextualType()->isRawFunctionTy());
-
-      ReturnMemberExpr(node, QualType(funcTy));
-      return pop();
-   }
-
-   for (auto it = overloads.first; it != overloads.second; ++it) {
-      auto& argTypes = it->second->getArguments();
-      if (argTypes.size() != args.size()) {
-         continue;
-      }
-
-      size_t i = 0;
-      bool matches = true;
-      for (auto& arg : argTypes) {
-         if (!arg.type.implicitlyCastableTo(args.at(i).type)) {
-            matches = false;
-            break;
-         }
-      }
-
-      if (!matches) {
-         continue;
-      }
-
-      if (!it->second->getReturnType().implicitlyCastableTo(returnType)) {
-         continue;
-      }
-
-      foundMatch = true;
-      result = it->second.get();
-      break;
-   }
-
-   if (foundMatch) {
-      node->setBinding(result->getMangledName());
-      node->isFunction(true);
-
-      std::vector<Argument> argTypes;
-      for (const auto& arg : result->getArguments()) {
-         argTypes.emplace_back("", arg.type);
-      }
-
-      auto funcTy =
-         FunctionType::get(result->getReturnType(), argTypes,
-                           node->getContextualType()->isRawFunctionTy());
-
-      ReturnMemberExpr(node, QualType(funcTy));
-      return pop();
-   }
-
-   return {};
-}
-
-/**
- * Declares one or more variables
- * @param node
- * @return
- */
-void SemaPass::visit(DeclStmt *node)
-{
-   if (node->isDeclared() || node->isDeclaration()) {
-      return;
-   }
-
-   auto& ident = node->getIdentifier();
-   if (isReservedIdentifier(ident)) {
-      diag::err(err_reserved_identifier) << ident << node << diag::term;
-   }
-
-   if (!node->getType()->isResolved()) {
-      VisitNode(node->getType());
+   auto typeResult = visitExpr(node, node->getType());
+   if (typeResult.hadError()) {
+      return false;
    }
 
    auto declType = node->getType()->getType();
-   auto& val = node->getValue();
 
-   if (val != nullptr) {
-      if (!isa<AutoType>(*declType)) {
-         val->setContextualType(declType);
+   if (declType->isDependantType()) {
+      // dependant decls can only be type checked at instantiation time
+      node->setIsTypeDependent(true);
+   }
+   else if (auto &val = node->getValue()) {
+      val->setContextualType(declType);
+
+      QualType givenType;
+      auto result = visitExpr(node, val);
+
+      if (result.hadError()) {
+         givenType = declType;
+         if (!givenType)
+            return false;
+      }
+      else {
+         givenType = result.getType();
       }
 
-      QualType givenType = VisitNode(val);
       if (givenType->isVoidTy()) {
-         diag::err(err_cannot_assign_void) << node << diag::term;
+         diagnose(node, err_cannot_assign_void);
       }
 
-      toRvalueIfNecessary(givenType, val, !declType.isLvalue());
-      node->isProtocolDecl(givenType->isProtocol() && !declType->isProtocol());
+      if (node->getIdentifiers().size() > 1) {
+         auto validDestructure = tryDestructure(givenType, node);
+         if (!validDestructure)
+            return false;
 
-      // in case it has changed
-      declType = node->getType()->getType();
-
-      if (declType->isAutoTy()) {
+         if (auto C = node->getDestructuringFn())
+            if (auto M = dyn_cast<cl::Method>(C))
+               maybeInstantiateMemberFunction(M, node->getSourceLoc());
+      }
+      else if (declType->isAutoTy()) {
          declType = givenType;
          node->getType()->setType(declType);
       }
-      else if (!givenType.implicitlyCastableTo(declType)) {
-         diag::err(err_type_mismatch) << givenType << declType
-                                      << val << diag::term;
+      else {
+         implicitCastIfNecessary(val, givenType, declType);
       }
-
-      wrapImplicitCast(val, givenType, declType);
    }
    else if (!declType->hasDefaultValue()) {
-      diag::err(err_not_initialized) << node << diag::term;
+      diagnose(node, err_not_initialized);
    }
 
-   auto allocType = declType;
-   node->isStructAlloca(declType->needsMemCpy());
-   node->incRefCount(declType->isObjectTy() &&
-      SymbolTable::getRecord(declType->getClassName())->isRefcounted());
+   if (!node->getDestructuredType()) {
+      std::vector<std::pair<string, QualType>> declTypes{
+         { node->getIdentifiers().front(), declType }
+      };
 
-   allocType.isLvalue(true);
-   allocType.isConst(node->isConst());
-
-   if (!node->isGlobal()) {
-      node->setBinding(declareVariable(ident, allocType, false,
-                                       node));
-   }
-   else {
-      SymbolTable::setVariable(node->getBinding(), *allocType);
+      node->setDestructuredType(TupleType::get(declTypes));
    }
 
-   declarations.emplace(node->getBinding(), node);
-   node->setDeclared(true);
+   return true;
 }
 
-/**
- * Checks a for statement
- * @param node
- * @return
- */
-void SemaPass::visit(ForStmt *node)
+void SemaPass::visitLocalVarDecl(LocalVarDecl *node)
 {
-   pushScope();
+   auto valid = visitVarDecl(node);
+   if (!valid) {
+      node->setHadError(true);
+      fatalErrorInScope = true;
 
-   if (auto Init = node->getInitialization()) {
-      VisitNode(Init);
+      return;
    }
 
-   if (auto Inc = node->getIncrement()) {
-      VisitNode(Inc);
-   }
+   TupleType *Ty = node->getDestructuredType();
+   size_t i = 0;
 
-   if (auto Term = node->getTermination()) {
-      auto cond = VisitNode(Term);
-      auto boolTy = QualType(IntegerType::get(1));
-
-      if (cond->isObjectTy() && cond->getClassName() == "Bool") {
-         wrapImplicitCast(Term, cond, boolTy);
-      }
-      else if (!cond.implicitlyCastableTo(boolTy)) {
-         diag::err(err_cond_not_boolean) << 2 /*for*/ << Term
-                                         << diag::term;
-      }
-   }
-
-   if (auto body = node->getBody()) {
-      pushLoopScope();
-      VisitNode(body);
-      popLoopScope();
-   }
-
-   popScope();
-}
-
-void SemaPass::visit(ForInStmt *node)
-{
-//   auto range = pop(node->getRangeExpr());
-//   if (!range->isObjectTy() || !SymbolTable::getClass(range->getClassName())
-//      ->conformsTo("Iterable")) {
-//      diag::err(err_range_not_iterable) << node->rangeExpr << diag::term;
-//   }
-//
-//   toRvalueIfNecessary(range, node->rangeExpr);
-//
-//   auto cl = SymbolTable::getClass(range->getClassName());
-//   auto& prot = cl->getConformances();
-//   QualType itType;
-//   for (const auto& p : prot) {
-//      if (p->getName() == "Iterable") {
-//         *itType = p->getTemplateArg("T").getGenericTy()->getActualType();
-//         break;
-//      }
-//   }
-//
-//   assert(!itType->isAutoTy()
-//          && "Iterable conformance shouldn't be possible otherwise!");
-//
-//   if (itType->isProtocol()) {
-//      node->protocolTy = *itType;
-//   }
-//
-//   node->decl->type->accept(this);
-//   if (!node->decl->type->getType().implicitlyCastableTo(itType)) {
-//      diag::err(err_type_mismatch) << node->decl->type->getType() << itType
-//                                   << node->decl << diag::term;
-//   }
-//
-//   pushLoopScope();
-//   itType.isLvalue(true);
-//   itType.isConst(node->decl->is_const);
-//
-//   node->binding = declareVariable(node->decl->identifier, itType, false, node);
-//
-//   node->body->accept(this);
-//   popLoopScope();
-//
-//   auto getIterator = getMethod(cl, "getIterator");
-//   assert(getIterator.compatibility == CompatibilityType::COMPATIBLE
-//      && "Iterable not implemented correctly?");
-//
-//   auto iteratorCl = SymbolTable::getClass(getIterator.method->getReturnType()
-//                                                      ->getClassName());
-//
-//   auto nextFunc = getMethod(cl, "next");
-//   assert(nextFunc.compatibility == CompatibilityType::COMPATIBLE
-//      && "Iterator<> not implemented correctly?");
-//
-//   node->iteratorGetter = getIterator.method->getMangledName();
-//   node->iteratorClass = getIterator.method->getReturnType()->getClassName();
-//   node->nextFunc = nextFunc.method->getMangledName();
-//   node->iteratedType = itType;
-//
-//   node->rangeIsRefcounted = range->isRefcounted();
-//   if (node->rangeIsRefcounted) {
-//      node->rangeClassName = range->getClassName();
-//   }
-}
-
-/**
- * Checks a while statement
- * @param node
- * @return
- */
-void SemaPass::visit(WhileStmt *node)
-{
-   auto cond = VisitNode(node->getCondition());
-
-   auto boolTy = QualType(IntegerType::get(1));
-   if (cond->isObjectTy() && cond->getClassName() == "Bool") {
-      wrapImplicitCast(node->getCondition(), cond, boolTy);
-   }
-   else if (!cond.implicitlyCastableTo(boolTy)) {
-      diag::err(err_cond_not_boolean) << 1 /*while*/ << node->getCondition()
-                                      << diag::term;
-   }
-
-   pushLoopScope();
-   VisitNode(node->getBody());
-   popLoopScope();
-}
-
-pair<QualType, std::vector<QualType>> SemaPass::unify(
-   std::vector<Expression::SharedPtr>& types)
-{
-   QualType unified;
-   std::vector<QualType> evaledTypes;
-   evaledTypes.reserve(types.size());
-
-   bool anyCompatible = false;
-
-   for (auto& expr : types) {
-      auto type = VisitNode(expr);
-      evaledTypes.push_back(type);
-
-      if (unified->isAutoTy()) {
-         unified = type;
+   for (auto &ident : node->getIdentifiers()) {
+      if (ident == "_") {
+         ++i;
          continue;
       }
 
-      if (!unified.implicitlyCastableTo(type)) {
-         if (!type.implicitlyCastableTo(unified)) {
-            *unified = ObjectType::get("Any");
-            anyCompatible = true;
-         }
-      }
-      else if (!anyCompatible) {
-         *unified = *type;
-      }
+      QualType ty(*Ty->getContainedType(i++), true, node->isConst());
+      node->getBindings().push_back(
+         declareVariable(ident, ty, false, node->isTypeDependant(),
+                         node->getSourceLoc()));
    }
 
-   size_t i = 0;
-   for (auto& expr : types) {
-      wrapImplicitCast(expr, evaledTypes.at(i), QualType(unified));
-      ++i;
-   }
-
-   return pair<QualType, std::vector<QualType>>{ unified, evaledTypes };
+   for (auto &b : node->getBindings())
+      declarations.emplace(b, node);
 }
 
-QualType SemaPass::HandleDictionaryLiteral(CollectionLiteral *node)
+void SemaPass::visitGlobalVarDecl(GlobalVarDecl *node)
 {
-//   pop(node->getType());
-//
-//   auto dictTy = node->type->getType();
-//   auto HashableTy = ObjectType::get("Hashable");
-//   auto AnyTy = ObjectType::getAnyTy();
-//
-//   auto& keys = node->keys;
-//   auto& values = node->values;
-//
-//   assert(keys.size() == values.size() && "Should have raised a parse error");
-//
-//   if (node->contextualType->isObjectTy()) {
-//      auto dict = cast<ObjectType>(*node->contextualType);
-//      if (dict->getClassName() != "Dictionary") {
-//         raiseTypeError(node->contextualType, dictTy, node);
-//      }
-//
-//      auto keyTy = QualType(dict->getNamedTemplateArg("K"));
-//      auto valTy = QualType(dict->getNamedTemplateArg("V"));
-//
-//      for (auto& key : keys) {
-//         auto ty = pop(key);
-//         toRvalueIfNecessary(ty, key);
-//
-//         if (!ty.implicitlyCastableTo(keyTy)) {
-//            raiseTypeError(ty, keyTy, key.get());
-//         }
-//         else if (ty != keyTy) {
-//            wrapImplicitCast(key, ty, keyTy);
-//         }
-//
-//         wrapImplicitCast(key, keyTy, QualType(HashableTy));
-//      }
-//
-//      for (auto& val : values) {
-//         auto ty = pop(val);
-//         toRvalueIfNecessary(ty, val);
-//
-//         if (!ty.implicitlyCastableTo(valTy)) {
-//            raiseTypeError(ty, valTy, val.get());
-//         }
-//         else if (ty != valTy) {
-//            wrapImplicitCast(val, ty, valTy);
-//         }
-//
-//         wrapImplicitCast(val, valTy, QualType(AnyTy));
-//      }
-//
-//      return dictTy;
-//   }
-//
-//   auto keyTy = unify(keys);
-//   auto valTy = unify(values);
-//
-//   if (!keyTy.first->isObjectTy() || !keyTy.first->getRecord()->conformsTo("Hashable")) {
-//      diag::err(err_dict_key_not_hashable) << node << diag::term;
-//   }
-//
-//   size_t i = 0;
-//   for (auto& key : node->keys) {
-//      toRvalueIfNecessary(keyTy.second[i++], key);
-//      wrapImplicitCast(key, keyTy.first, QualType(HashableTy));
-//   }
-//
-//   i = 0;
-//   for (auto& val : node->values) {
-//      toRvalueIfNecessary(valTy.second[i++], val);
-//      wrapImplicitCast(val, valTy.first, QualType(AnyTy));
-//   }
-//
-//   std::vector<TemplateArg> generics{ TemplateArg(GenericType::get("K", *keyTy.first)),
-//      TemplateArg(GenericType::get("V", *valTy.first)) };
-//
-//   return QualType(ObjectType::get("Dictionary"));
-   return {};
+   if (alreadyVisited(node))
+      return;
+
+   auto valid = visitVarDecl(node);
+   if (!valid) {
+      node->setHadError(true);
+      fatalErrorInScope = true;
+
+      return;
+   }
+
+   TupleType *Ty = node->getDestructuredType();
+   size_t i = 0;
+
+   for (auto &binding : node->getBindings()) {
+      if (node->getIdentifiers()[i] == "_") {
+         ++i;
+         continue;
+      }
+
+      QualType ty(*Ty->getContainedType(i++), true, node->isConst());
+      SymbolTable::setVariable(binding, ty);
+   }
+
+   ILGenPass::ModuleRAII moduleRAII(*ILGen, ILGen->getTemplateModule(node));
+   ILGen->DeclareGlobalVariable(node);
+}
+
+bool SemaPass::tryDestructure(QualType givenTy, VarDecl *node)
+{
+   auto declTy = node->getType()->getType();
+   TupleType *tup = nullptr;
+   bool noteNumValues = false;
+
+   if (declTy) {
+      tup = dyn_cast<TupleType>(*declTy);
+      if (!tup)
+         goto fail;
+
+      node->setDestructuredType(tup);
+   }
+
+   if (givenTy->isObjectTy()) {
+      auto R = givenTy->getRecord();
+
+      auto &allOverloads = R->getDestructuringOperators();
+      auto viableOverloads = allOverloads.equal_range(node->getIdentifiers()
+                                                          .size());
+
+      if (!tup) {
+         auto dist = std::distance(viableOverloads.first,
+                                   viableOverloads.second);
+
+         if (dist == 1) {
+            node->setDestructuringFn(&*viableOverloads.first->second);
+            node->setDestructuredType(cast<TupleType>(
+               *node->getDestructuringFn()->getReturnType()));
+
+            return true;
+         }
+         else if (dist > 1) {
+            diagnose(node, err_generic_error,
+                     "call to destructuring operator is ambiguous");
+
+            while (viableOverloads.first != viableOverloads.second) {
+               diagnose(node, note_generic_note, "possible operator here",
+                        viableOverloads.first->second->getSourceLoc());
+
+               ++viableOverloads.first;
+            }
+
+            return false;
+         }
+      }
+      else {
+         cl::Method *destructuringOp = nullptr;
+         while (viableOverloads.first != viableOverloads.second) {
+            auto &overload = viableOverloads.first->second;
+            if (overload->getReturnType().implicitlyCastableTo(declTy)) {
+               if (destructuringOp) {
+                  diagnose(node, err_generic_error,
+                           "call to destructuring operator is ambiguous");
+
+                  diagnose(node, note_generic_note, "possible operator here",
+                           overload->getSourceLoc());
+
+                  diagnose(node, note_generic_note, "possible operator here",
+                           destructuringOp->getSourceLoc());
+
+                  return false;
+               }
+
+               destructuringOp = overload;
+            }
+
+            ++viableOverloads.first;
+         }
+
+         if (destructuringOp) {
+            node->setDestructuringFn(destructuringOp);
+            node->setDestructuredType(cast<TupleType>(
+               *node->getDestructuringFn()->getReturnType()));
+
+            return true;
+         }
+      }
+
+      auto S = dyn_cast<Struct>(R);
+      if (!S)
+         goto fail;
+
+      if (tup) {
+         size_t needed = 0;
+
+         for (auto &F : S->getFields()) {
+            if (F.isIsStatic())
+               continue;
+
+            auto next = tup->getContainedType(needed);
+            if (F.getFieldType().implicitlyCastableTo(next))
+               ++needed;
+            else
+               break;
+         }
+
+         if (needed == node->getIdentifiers().size())
+            return true;
+
+         noteNumValues = true;
+      }
+      else {
+         size_t needed = 0;
+         std::vector<std::pair<string, QualType>> tupleTys;
+
+         for (auto &F : S->getFields()) {
+            if (F.isIsStatic())
+               continue;
+
+            ++needed;
+            tupleTys.emplace_back(F.fieldName, F.getFieldType());
+         }
+
+         if (needed == node->getIdentifiers().size()) {
+            node->setDestructuredType(TupleType::get(tupleTys));
+            return true;
+         }
+
+         noteNumValues = true;
+      }
+   }
+   else if (givenTy->isTupleTy()) {
+      if (tup) {
+         return givenTy.implicitlyCastableTo(tup);
+      }
+      else {
+         node->setDestructuredType(cast<TupleType>(*givenTy));
+         return true;
+      }
+   }
+
+   fail:
+   if (declTy) {
+      diagnose(node, err_generic_error,
+               "type " + givenTy.toString() + " cannot be destructured "
+                  "into " + declTy.toString());
+   }
+   else {
+      auto msg = "type " + givenTy.toString() + " cannot be destructured";
+      if (noteNumValues) {
+         msg += " into ";
+         msg += std::to_string(node->getIdentifiers().size());
+         msg += " values";
+      }
+
+      diagnose(node, err_generic_error, msg);
+   }
+
+   return false;
+}
+
+void SemaPass::visitForStmt(ForStmt *node)
+{
+   ScopeGuard scope(*this);
+
+   if (auto Init = node->getInitialization()) {
+      if (!visitStmt(node, Init))
+         return;
+   }
+
+   if (auto Inc = node->getIncrement()) {
+      if (!visitStmt(node, Inc))
+         return;
+   }
+
+   if (auto Term = node->getTermination()) {
+      auto condResult = visitExpr(node, Term);
+
+      if (condResult.hadError())
+         return;
+
+      auto boolTy = QualType(IntegerType::get(1));
+      implicitCastIfNecessary(Term, condResult.getType(), boolTy);
+   }
+
+   if (auto body = node->getBody()) {
+      ScopeGuard guard(*this, true, true);
+      visitStmt(node, body);
+   }
+}
+
+void SemaPass::visitForInStmt(ForInStmt *node)
+{
+   ScopeGuard scope(*this);
+
+   auto RangeResult = visitExpr(node, node->getRangeExpr());
+   if (RangeResult.hadError())
+      return;
+
+   auto RangeTy = RangeResult.getType();
+
+   auto &Ident = node->getDecl()->getIdentifiers().front();
+   node->setRangeType(RangeTy);
+
+   std::vector<Argument> GetIteratorArgs{ Argument("", RangeTy) };
+   auto GetIteratorResult = getUFCS("getIterator", GetIteratorArgs, {}, node);
+
+   if (!GetIteratorResult->isCompatible())
+      return diagnose(node, err_generic_error,
+                      "no matching call to function getIterator found");
+
+   auto GetIteratorFn = GetIteratorResult->getCallable();
+   assert(GetIteratorFn && "Iterable conformance not correctly checked");
+
+   if (auto M = dyn_cast<cl::Method>(GetIteratorFn))
+      maybeInstantiateMemberFunction(M, node->getSourceLoc());
+
+   node->setGetIteratorFn(GetIteratorFn);
+
+   auto Iterator = GetIteratorFn->getReturnType();
+   std::vector<Argument> NextArgs{ Argument("", Iterator) };
+
+   auto NextRes = getUFCS("next", NextArgs, {}, node);
+   if (!NextRes->isCompatible())
+      return diagnose(node, err_generic_error,
+                      "no matching call to function next found");
+
+   auto NextFn = NextRes->getCallable();
+
+   if (auto M = dyn_cast<cl::Method>(NextFn))
+      maybeInstantiateMemberFunction(M, node->getSourceLoc());
+
+   node->setNextFn(NextFn);
+
+   auto OptionType = NextFn->getReturnType();
+   auto Option = OptionType->getRecord();
+
+   if (!Option->getSpecializedTemplate()
+       || Option->getSpecializedTemplate()->getName() != "Option") {
+      return diagnose(node, err_generic_error,
+                      "iterator must return option type");
+   }
+
+   auto IteratedType = QualType(Option->getTemplateArg("T")->getType());
+   IteratedType.isConst(node->getDecl()->isConst());
+
+   node->setIteratedType(OptionType);
+
+   if (auto Body = node->getBody()) {
+      ScopeGuard loopScope(*this, true, true);
+      node->getDecl()->setBinding(
+         declareVariable(Ident, IteratedType, false,
+                         false, node->getSourceLoc()));
+
+      visit(Body);
+   }
+}
+
+void SemaPass::visitWhileStmt(WhileStmt *node)
+{
+   auto &CondExpr = node->getCondition();
+   auto condResult = visitExpr(node, CondExpr);
+   if (condResult.hadError())
+      return;
+
+   auto condTy = condResult.getType();
+   auto boolTy = QualType(IntegerType::get(1));
+   implicitCastIfNecessary(CondExpr, condTy, boolTy);
+
+   ScopeGuard scope(*this, true, true);
+   visitStmt(node, node->getBody());
+}
+
+SemaPass::ExprResult SemaPass::unify(Statement *Stmt,
+                         std::vector<std::shared_ptr<Expression>> const& exprs){
+   QualType unifiedTy;
+
+   for (const auto &expr : exprs) {
+      expr->setContextualType(unifiedTy);
+
+      auto result = visitExpr(Stmt, expr);
+      if (result.hadError()) {
+         return ExprResult({}, true, expr->isTypeDependant());
+      }
+
+      auto exprTy = result.getType();
+      if (!unifiedTy) {
+         *unifiedTy = *exprTy;
+      }
+      else if (!exprTy.implicitlyCastableTo(unifiedTy)) {
+         return ExprResult({}, false, false);
+      }
+   }
+
+   return ExprResult(unifiedTy, false, false);
 }
 
 namespace {
 
-void createArrayInstantiation(Type *elementType)
+QualType diagnoseIncompatibleDictionaryTy(SemaPass &SP, DictionaryLiteral *node)
 {
-   auto argList = new ResolvedTemplateArgList(
-      {TemplateArg(GenericType::get("T", elementType))});
+   SP.diagnose(node, err_generic_error,
+            "dictionary literal cannot produce value of type "
+            + node->getContextualType().toString());
 
-   bool isNew;
-   SymbolTable::getRecord("Array", argList, {}, &isNew);
-
-   if (!isNew) {
-      delete argList;
-   }
+   return {};
 }
 
 } // anonymous namespace
 
-/**
- * Checks an array literal
- * @param node
- * @return
- */
-void SemaPass::visit(CollectionLiteral *node)
+QualType SemaPass::visitDictionaryLiteral(DictionaryLiteral *node)
 {
-//   if (node->is_dictionary) {
-//      return returnResult(HandleDictionaryLiteral(node));
-//   }
-//
-//   auto isInferred = node->contextualType->isAutoTy();
-//   if (isInferred) {
-//      QualType elTy;
-//      if (node->values.empty()) {
-//         *elTy = ObjectType::get("Any")->getPointerTo();
-//      }
-//      else {
-//         elTy = unify(node->values).first;
-//         if (elTy->isMetaType()) {
-//            node->isMetaTy(true);
-//            node->getType()->setType(elTy);
-//            createArrayInstantiation(
-//               cast<MetaType>(*elTy)->getUnderlyingType());
-//
-//            return returnResult(node->getType()->getTypeRef());
-//         }
-//
-//         for (auto& el : node->values) {
-//            toRvalueIfNecessary(elTy, el);
-//            wrapImplicitCast(el, QualType(ObjectType::getAnyTy()), elTy);
-//         }
-//      }
-//
-//      if (node->hasAttribute(Attr::CArray)) {
-//         node->type->setType(elTy);
-//      }
-//      else {
-//         std::vector<TemplateArg> generics{ TemplateArg(GenericType::get("T", *elTy )) };
-//         QualType ArrayTy(ObjectType::get("Array"));
-//         node->type->setType(ArrayTy);
-//      }
-//
-//      node->type->resolved = true;
-//      return ReturnMemberExpr(node, node->type->getType());
-//   }
-//
-//   if (!node->contextualType->isPointerTy() && !node->contextualType->isObjectTy()) {
-//      diag::err(err_type_mismatch) << node->contextualType << "Dictionary"
-//                                   << node << diag::term;
-//   }
-//
-//   bool isCarray = false;
-//   QualType elType;
-//   if (node->contextualType->isPointerTy()) {
-//      elType = node->contextualType->asPointerTy()->getPointeeType();
-//      isCarray = true;
-//   }
-//   else {
-//      *elType = node->contextualType->asObjTy()->getNamedTemplateArg("T");
-//   }
-//
-//   if (!node->values.empty()) {
-//      auto givenType = unify(node->values).first;
-//      for (auto& el : node->values) {
-//         toRvalueIfNecessary(givenType, el);
-//      }
-//
-//      if (!givenType.implicitlyCastableTo(elType)) {
-//         diag::err(err_type_mismatch) << elType << givenType
-//                                      << node << diag::term;
-//      }
-//      else if (elType != givenType) {
-//         for (auto &el : node->values) {
-//            wrapImplicitCast(el, givenType, elType);
-//         }
-//      }
-//
-//      if (!elType->isObjectTy() || elType->getClassName() != "Any") {
-//         for (auto &el : node->values) {
-//            wrapImplicitCast(el, elType, QualType(ObjectType::getAnyTy()));
-//         }
-//      }
-//   }
-//
-//   QualType ty(elType->getPointerTo());
-//   if (isCarray) {
-//      node->type->setType(ty);
-//   }
-//   else {
-//      node->type->setType(node->contextualType);
-//   }
-//
-//   return ReturnMemberExpr(node, node->type->getType());
-}
+   QualType keyTy;
+   QualType valueTy;
 
-void SemaPass::visit(IntegerLiteral *node)
-{
-   if (node->getContextualType()->isIntegerTy()) {
-      if (!node->getType()->implicitlyCastableTo(*node->getContextualType())) {
-         return returnResult(node->getType());
+   if (auto Ctx = node->getContextualType()) {
+      if (!Ctx->isObjectTy())
+         return diagnoseIncompatibleDictionaryTy(*this, node);
+
+      auto Dict = dyn_cast<Class>(Ctx->getRecord());
+      if (!Dict)
+         return diagnoseIncompatibleDictionaryTy(*this, node);
+
+      if (!Dict->getSpecializedTemplate()
+          || Dict->getSpecializedTemplate()->getName() != "Dictionary")
+         return diagnoseIncompatibleDictionaryTy(*this, node);
+
+      auto K = Dict->getTemplateArg("K");
+      auto V = Dict->getTemplateArg("V");
+
+      for (auto &key : node->getKeys()) {
+         auto res = visitExpr(node, key);
+         if (res.hadError())
+            return {};
+
+         if (!res.getType().implicitlyCastableTo(K->getType())) {
+            diagnose(key.get(), err_type_mismatch, K->getType(),
+                     res.getType());
+            return node->getContextualType();
+         }
+
+         implicitCastIfNecessary(key, res.getType(), keyTy);
       }
 
+      for (auto &val : node->getValues()) {
+         auto res = visitExpr(node, val);
+         if (res.hadError())
+            return {};
+
+         if (!res.getType().implicitlyCastableTo(V->getType())) {
+            diagnose(val.get(), err_type_mismatch, V->getType(),
+                     res.getType());
+            return node->getContextualType();
+         }
+
+         implicitCastIfNecessary(val, res.getType(), valueTy);
+      }
+
+      *keyTy = K->getType();
+      *valueTy = V->getType();
+   }
+   else {
+      auto keyRes = unify(node, node->getKeys());
+      if (keyRes.hadError())
+         return {};
+
+      keyTy = keyRes.getType();
+
+      auto valRes = unify(node, node->getValues());
+      if (valRes.hadError())
+         return {};
+
+      valueTy = valRes.getType();
+   }
+
+   auto Dictionary = getRecord("Dictionary");
+
+   TemplateArgList list(*this);
+   list.insert("K", *keyTy);
+   list.insert("V", *valueTy);
+   list.resolveWith(Dictionary);
+
+   auto Inst = TemplateInstantiator::InstantiateRecord(*this,
+                                                       node->getSourceLoc(),
+                                                       Dictionary,
+                                                       std::move(list));
+
+   auto put = Inst->getMethod("put");
+   maybeInstantiateMemberFunction(put, node->getSourceLoc());
+
+   return VisitSubExpr(node, QualType(ObjectType::get(Inst)));
+}
+
+QualType SemaPass::visitArrayLiteral(ArrayLiteral *node)
+{
+   QualType elementTy;
+   ArrayType *ArrTy = nullptr;
+
+   if (auto Ctx = node->getContextualType()) {
+      if ((ArrTy = dyn_cast<ArrayType>(*Ctx))) {
+         if (node->getValues().size() != ArrTy->getNumElements())
+            diagnose(node, err_generic_error,
+                     "incompatible element counts: ""expected "
+                     + std::to_string(ArrTy->getNumElements())
+                     + " but found "
+                     + std::to_string(node->getValues().size()));
+
+         *elementTy = ArrTy->getElementType();
+      }
+      else if (auto Obj = dyn_cast<ObjectType>(*Ctx)) {
+         auto R = Obj->getRecord();
+         if (R->getName() == "Array") {
+            node->setIsTypeDependent(true);
+         }
+         else if (auto Spec = R->getSpecializedTemplate()) {
+            if (Spec->getName() == "Array") {
+               *elementTy = R->getTemplateArg("T")->getType();
+            }
+         }
+      }
+
+      if (!elementTy && !node->isTypeDependant()) {
+         diagnose(node, err_generic_error,
+                  "array literal cannot produce value of type "
+                  + Ctx.toString());
+
+         return node->getContextualType();
+      }
+
+      for (const auto &el : node->getValues()) {
+         auto elTy = visit(el);
+         if (!elTy.implicitlyCastableTo(elementTy))
+            diagnose(el.get(), err_type_mismatch, elTy, elementTy);
+      }
+   }
+   else {
+      auto res = unify(node, node->getValues());
+      if (res.hadError()) {
+         return {};
+      }
+
+      elementTy = res.getType();
+      if (!elementTy) {
+         diagnose(node, err_generic_error,
+                  "could not infer array element type");
+
+         return {};
+      }
+   }
+
+   if (ArrTy)
+      return VisitSubExpr(node, QualType(ArrTy));
+
+   auto Array = getRecord("Array");
+
+   TemplateArgList list(*this);
+   list.insert("T", *elementTy);
+   list.resolveWith(Array);
+
+   auto Inst = TemplateInstantiator::InstantiateRecord(*this,
+                                                       node->getSourceLoc(),
+                                                       Array, std::move(list));
+
+   return VisitSubExpr(node, QualType(ObjectType::get(Inst)));
+}
+
+QualType SemaPass::visitIntegerLiteral(IntegerLiteral *node)
+{
+   if (node->getContextualType()->isRawEnum()) {
+      node->setContextualType(QualType(cast<Enum>(node->getContextualType()
+                                                      ->getRecord())
+                                          ->getRawType()));
+   }
+
+   if (node->getContextualType()->isIntegerTy()) {
       node->setType(*node->getContextualType());
       node->setValue(node->getValue().castTo(node->getType()));
 
-      return returnResult(node->getType());
+      return QualType(node->getType());
    }
-
-   if (node->getContextualType()->isAutoTy()) {
-      QualType ty (IntegerTypeGroup::getAll());
-      node->setType(ty->getGroupDefault());
-
-      return ReturnMemberExpr(node, ty);
+   else if (node->getContextualType()->isBoxedPrimitive()) {
+      if (node->getContextualType()->unbox()->isIntegerTy())
+         node->setType(*node->getContextualType());
    }
 
    if (!node->getType()->isObjectTy()) {
-      node->setValue(node->getValue().castTo(*node->getContextualType()));
+      if (node->getContextualType()->isBoxedPrimitive()) {
+         node->setValue(node->getValue().castTo(*node->getContextualType()));
+      }
+
       node->setType(node->getType()->box());
    }
 
-   return ReturnMemberExpr(node, QualType(node->getType()));
+   return VisitSubExpr(node, QualType(node->getType()));
 }
 
-void SemaPass::visit(FPLiteral *node)
+QualType SemaPass::visitFPLiteral(FPLiteral *node)
 {
    if (node->getContextualType()->isFPType()) {
-      if (!node->getType()->implicitlyCastableTo(*node->getContextualType())) {
-         return returnResult(node->getType());
-      }
-
       node->setType(*node->getContextualType());
       node->setValue(node->getValue().castTo(node->getType()));
 
-      return returnResult(node->getType());
+      return QualType(node->getType());
    }
 
-   if (node->getContextualType()->isAutoTy()) {
-      QualType ty (FPTypeGroup::get());
-      return ReturnMemberExpr(node, ty);
+   if (!node->getContextualType()->isAutoTy()) {
+      node->setValue(node->getValue().castTo(*node->getContextualType()));
+      node->setType(*node->getContextualType());
+   }
+   else {
+      node->setType(node->getType()->box());
    }
 
-   node->setValue(node->getValue().castTo(*node->getContextualType()));
-   node->setType(node->getType()->box());
-
-   return ReturnMemberExpr(node, QualType(node->getType()));
+   return VisitSubExpr(node, QualType(node->getType()));
 }
 
-void SemaPass::visit(BoolLiteral *node)
+QualType SemaPass::visitBoolLiteral(BoolLiteral *node)
 {
    if (node->getContextualType()->isInt1Ty()) {
       // default
@@ -1687,10 +1811,10 @@ void SemaPass::visit(BoolLiteral *node)
       node->setType(ObjectType::get("Bool"));
    }
 
-   return ReturnMemberExpr(node, QualType(node->getType()));
+   return VisitSubExpr(node, QualType(node->getType()));
 }
 
-void SemaPass::visit(CharLiteral *node)
+QualType SemaPass::visitCharLiteral(CharLiteral *node)
 {
    if (node->getContextualType()->isInt8Ty()) {
       // default
@@ -1699,10 +1823,10 @@ void SemaPass::visit(CharLiteral *node)
       node->setType(ObjectType::get("Char"));
    }
 
-   return ReturnMemberExpr(node, QualType(node->getType()));
+   return VisitSubExpr(node, QualType(node->getType()));
 }
 
-void SemaPass::visit(NoneLiteral *node)
+QualType SemaPass::visitNoneLiteral(NoneLiteral *node)
 {
    if (node->getContextualType()->isAutoTy()) {
       diag::err(err_requires_contextual_type) << "'none'"
@@ -1713,10 +1837,10 @@ void SemaPass::visit(NoneLiteral *node)
                                    << node << diag::term;
    }
 
-   return ReturnMemberExpr(node, node->getContextualType());
+   return VisitSubExpr(node, node->getContextualType());
 }
 
-void SemaPass::visit(StringLiteral *node)
+QualType SemaPass::visitStringLiteral(StringLiteral *node)
 {
    for (const auto& attr : node->getAttributes()) {
       switch (attr.kind) {
@@ -1737,368 +1861,303 @@ void SemaPass::visit(StringLiteral *node)
       QualType charTy(IntegerType::getCharTy());
       QualType charPtr(PointerType::get(charTy));
 
-      return ReturnMemberExpr(node, charPtr);
+      return VisitSubExpr(node, charPtr);
    }
 
-   return ReturnMemberExpr(node, QualType(ObjectType::get("String")));
+   QualType str(ObjectType::get("String"));
+   str.isLvalue(true);
+
+   return VisitSubExpr(node, str);
 }
 
-void SemaPass::visit(StringInterpolation *node)
+QualType SemaPass::visitStringInterpolation(StringInterpolation *node)
 {
-   bool first = true;
-   size_t i = 0;
    for (auto& expr : node->getStrings()) {
-      auto val = VisitNode(expr);
-      toRvalueIfNecessary(val, expr);
-
-      auto StringRepr = QualType(ObjectType::get("StringRepresentable"));
-      while (val->isPointerTy()) {
-         auto pointee = val->asPointerTy()->getPointeeType();
-         lvalueToRvalue(expr);
-         val = pointee;
-      }
-
-      if (val->isObjectTy()) {
-         auto cl = SymbolTable::getClass(val->getClassName());
-         if (cl->conformsTo("StringRepresentable")) {
-            if (!first) {
-               wrapImplicitCast(expr, val, StringRepr);
-            }
-
-            first = false;
-            ++i;
-            continue;
-         }
-      }
-      else if (isa<PrimitiveType>(*val)) {
-         assert(!first && "first element should always be string");
-
-         auto boxed = QualType(val->box());
-         wrapImplicitCast(expr, val, boxed);
-         wrapImplicitCast(expr, boxed, StringRepr);
-
-         first = false;
-         ++i;
-         continue;
-      }
-
-      diag::err(err_not_string_representable) << expr << diag::term;
+      auto result = visitExpr(node, expr);
+      if (result.hadError())
+         return {};
    }
 
-   return ReturnMemberExpr(node, QualType(ObjectType::get("String")));
+   return VisitSubExpr(node, QualType(ObjectType::get("String")));
 }
 
-/**
- * Checks if a break statement is valid
- * @param node
- * @return
- */
-void SemaPass::visit(BreakStmt *node)
+void SemaPass::visitBreakStmt(BreakStmt *node)
 {
-   if (BreakStack == 0) {
-      diag::err(err_loop_keyword_outside_loop) << 1 /*break*/
-                                               << node << diag::term;
-   }
+   if (BreakStack == 0)
+      diagnose(node, err_loop_keyword_outside_loop, /*break*/ 1);
 }
 
-/**
- * Checks if a continue statement is valid
- * @param node
- * @return
- */
-void SemaPass::visit(ContinueStmt *node)
+void SemaPass::visitContinueStmt(ContinueStmt *node)
 {
    if (ContinueStack == 0) {
-      diag::err(err_loop_keyword_outside_loop) << 0 /*continue*/
-                                               << node << diag::term;
+      bool lastCase = false;
+      bool nextCaseHasArgs = false;
+
+      auto Scope = currentScope();
+      while (Scope) {
+         if (Scope->isLastCase) {
+            lastCase = true;
+            break;
+         }
+         if (Scope->nonContinuableMatchStmt) {
+            nextCaseHasArgs = true;
+            break;
+         }
+
+         Scope = Scope->enclosingScope;
+      }
+
+      if (lastCase)
+         diagnose(node, err_generic_error, "cannot continue from last case");
+      else if (nextCaseHasArgs)
+         diagnose(node, err_generic_error,
+                  "cannot continue to match case with arguments");
+      else
+         diagnose(node, err_loop_keyword_outside_loop, /*continue*/ 0);
    }
 }
 
-/**
- * Checks if the condition is boolean (or convertible), and if all branches return
- * @param node
- * @return
- */
-void SemaPass::visit(IfStmt *node)
+void SemaPass::visitIfStmt(IfStmt *node)
 {
-   auto &Cond = node->getCondition();
-   QualType cond = VisitNode(Cond);
-   toRvalueIfNecessary(cond, Cond);
+   auto &CondExpr = node->getCondition();
+   auto condResult = visitExpr(node, CondExpr);
 
-   auto boolTy = QualType(IntegerType::get(1));
-   if (cond->isObjectTy() && cond->getClassName() == "Bool") {
-      wrapImplicitCast(Cond, cond, boolTy);
-   }
-   else if (!cond.implicitlyCastableTo(boolTy)) {
-      RuntimeError::raise("Condition must be boolean", Cond.get());
-   }
+   if (condResult.hadError())
+      return;
 
-   pushScope();
-   VisitNode(node->getIfBranch());
-   popScope();
+   QualType condTy = condResult.getType();
+
+   implicitCastIfNecessary(CondExpr, condTy,
+                           QualType(ObjectType::get("Bool")));
+
+   {
+      ScopeGuard scope(*this);
+      visitStmt(node, node->getIfBranch());
+   }
 
    if (auto Else = node->getElseBranch()) {
-      pushScope();
-      VisitNode(Else);
-      popScope();
+      ScopeGuard scope(*this);
+      visitStmt(node, Else);
    }
 }
 
-bool SemaPass::matchableAgainst(
-   QualType& matchTy,
-   std::shared_ptr<CaseStmt> const& case_)
-{
-   if (case_->isIsDefault()) {
+namespace {
+
+bool checkIfExhaustive(MatchStmt *node, QualType MatchedVal,
+                       std::set<llvm::StringRef> &neededCases) {
+   if (node->isHasDefault())
       return true;
-   }
 
-   auto& caseVal = case_->getCaseVal();
-   if ((matchTy->isNumeric() || matchTy->isTupleTy()) && !matchTy->isEnum()) {
-      caseVal->setContextualType(matchTy);
-      auto givenTy = VisitNode(caseVal);
-      case_->setCaseType(givenTy);
+   if (!MatchedVal->isObjectTy())
+      return false;
 
-      return givenTy.implicitlyCastableTo(matchTy);
-   }
+   auto R = MatchedVal->getRecord();
+   if (!R->isEnum())
+      return false;
 
-   if (matchTy->isEnum() && isa<MemberRefExpr>(caseVal)) {
-      auto memExpr = std::static_pointer_cast<MemberRefExpr>(caseVal);
-      if (!memExpr->isEnumCase()) {
-         return false;
-      }
+   auto E = cast<Enum>(R);
+   for (auto &C : E->getCases())
+      neededCases.insert(C.second.name);
 
-      auto en = SymbolTable::getClass(matchTy->getClassName())->getAs<Enum>();
-      if (!en->hasCase(memExpr->getIdent())) {
-         return false;
-      }
+   for (auto &C : node->getCases()) {
+      if (!C->getPattern())
+         continue;
 
-      case_->setEnumCaseVal(&en->getCase(memExpr->getIdent()));
-      return true;
-   }
+      auto CP = dyn_cast<CasePattern>(C->getPattern().get());
+      if (!CP)
+         continue;
 
-   if (matchTy->isEnum() && isa<CallExpr>(caseVal)) {
-      auto callExpr = std::static_pointer_cast<CallExpr>(caseVal);
-      if (!callExpr->isEnumCase()) {
-         return false;
-      }
-
-      auto en = SymbolTable::getClass(matchTy->getClassName())->getAs<Enum>();
-      auto& givenArgs = callExpr->getResolvedArgs();
-      givenArgs.reserve(callExpr->getArgs().size());
-      std::vector<string> letIdents;
-
-      bool var = false;
-      bool isLetExpr = false;
-      for (const auto& arg : callExpr->getArgs()) {
-         if (auto ident = dyn_cast<IdentifierRefExpr>(arg.second)) {
-            if (ident->isLetExpr() || ident->isVarExpr()) {
-               isLetExpr = true;
-               var = ident->isVarExpr();
-               letIdents.push_back(ident->getIdent());
-               continue;
-            }
+      bool allVars = true;
+      for (auto &arg : CP->getArgs())
+         if (arg.isExpr()) {
+            allVars = false;
+            break;
          }
 
-         if (isLetExpr) {
-            RuntimeError::raise("Expected all arguments to be 'let' "
-                                   "expressions", arg.second.get());
-         }
-      }
-
-      if (isLetExpr) {
-         if (en->hasCase(callExpr->getIdent())) {
-            auto& val = en->getCase(callExpr->getIdent());
-            if (val.associatedValues.size() == callExpr->getArgs().size()) {
-               if (var) {
-                  case_->setIsEnumVarCase(true);
-               }
-               else {
-                  case_->setIsEnumLetCase(true);
-               }
-
-               case_->setEnumCaseVal(&val);
-               for (size_t i = 0; i < val.associatedValues.size(); ++i) {
-                  case_->getLetIdentifiers().emplace_back(
-                     letIdents[i], QualType(val.associatedValues[i].second));
-               }
-
-               return true;
-            }
-         }
-
-         return false;
-      }
-
-      for (size_t i = givenArgs.size(); i < callExpr->getArgs().size(); ++i) {
-         const auto& arg = callExpr->getArgs().at(i);
-         givenArgs.emplace_back(arg.first, VisitNode(arg.second));
-      }
-
-      auto compat = getCase(en, callExpr->getIdent(), givenArgs);
-      if (compat.compatibility != CompatibilityType::COMPATIBLE) {
-         return false;
-      }
-
-      case_->setEnumCaseVal(&en->getCase(callExpr->getIdent()));
-      return true;
+      if (allVars)
+         neededCases.erase(CP->getCaseName());
    }
 
-   if (matchTy->isObjectTy()) {
-      caseVal->setContextualType(matchTy);
-
-      auto givenTy = VisitNode(caseVal);
-      case_->setCaseType(givenTy);
-
-      auto rec = matchTy->getRecord();
-      if (rec->isUnion()) {
-         return false;
-      }
-
-      auto cl = rec->getAs<Class>();
-      auto operatorEquals = getMethod(cl,
-                                      "infix ==",
-                                      { Argument{ "", givenTy } });
-
-      if (operatorEquals.compatibility == CompatibilityType::COMPATIBLE) {
-         case_->setOperatorEquals(operatorEquals.method);
-         return true;
-      }
-
-      // otherwise === will be used
-      return cl->isNonUnion();
-   }
-
-   return false;
+   return neededCases.empty();
 }
 
-void SemaPass::visit(MatchStmt *node)
+} // anonymous namespace
+
+void SemaPass::visitMatchStmt(MatchStmt *node)
 {
-   QualType switchType = VisitNode(node->getSwitchValue());
-   toRvalueIfNecessary(switchType, node->getSwitchValue());
+   QualType switchType = visit(node->getSwitchValue());
+   if (node->getSwitchValue()->isTypeDependant())
+      return node->setIsTypeDependent(true);
 
-   if (switchType->isObjectTy() && !switchType->isEnum()) {
-      auto cl = SymbolTable::getClass(switchType->getClassName());
-      string protName = "Equatable";
-
-      if (!cl->conformsTo(protName)) {
-         RuntimeError::raise("Types used as a match value must conform to"
-                                " 'Equatable'", node);
-      }
-   }
-   else if (!switchType->isNumeric() && !switchType->isTupleTy()
-            && !switchType->isEnum())
-   {
-      RuntimeError::raise("Types used as a match value must conform to "
-                             "'Equatable'", node);
-   }
-
-   std::vector<long> rawCaseValues;
-   std::vector<size_t> checkIfContinuable;
+   size_t i = 0;
    size_t numCases = node->getCases().size();
-   unsigned i = 0;
-   bool allCasesReturn = true;
 
-   for (const auto& case_ : node->getCases()) {
-      if (!matchableAgainst(switchType, case_)) {
-         RuntimeError::raise("Cannot match given value against value of type " +
-                     switchType.toString(), case_->getCaseVal().get());
+   for (const auto& C : node->getCases()) {
+      bool isNotLast = i != numCases - 1;
+      bool nextCaseHasArguments = false;
+
+      if (isNotLast) {
+         auto &nextCase = node->getCases()[i + 1];
+         if (nextCase->getPattern()) {
+            if (auto CP = dyn_cast<CasePattern>(nextCase->getPattern()))
+               for (auto &Arg : CP->getArgs())
+                  if (!Arg.isExpr()) {
+                     nextCaseHasArguments = true;
+                     break;
+                  }
+         }
       }
 
-      if (case_->isIsDefault()) {
+      ScopeGuard scope(*this, isNotLast && !nextCaseHasArguments, true);
+      currentScope()->isLastCase = !isNotLast;
+      currentScope()->nonContinuableMatchStmt = nextCaseHasArguments;
+
+      C->setContextualType(switchType);
+      visitStmt(node, C);
+
+      if (C->isDefault())
          node->setHasDefault(true);
-         node->setDefaultIndex(i);
-      }
-      else {
-         wrapImplicitCast(case_->getCaseVal(), case_->getCaseType(),
-                          switchType);
-      }
 
-      if (switchType->isEnum() && !case_->isIsDefault()) {
-         if (std::find(rawCaseValues.begin(), rawCaseValues.end(),
-                       case_->getEnumCaseVal()->rawValue)
-            != rawCaseValues.end())
-         {
-            RuntimeError::raise("Duplicate case "
-                                + case_->getEnumCaseVal()->name, case_.get());
-         }
-
-         rawCaseValues.push_back(case_->getEnumCaseVal()->rawValue);
-
-         if (case_->isIsEnumLetCase() || case_->isIsEnumVarCase()) {
-            auto en = SymbolTable::getClass(switchType->getClassName())
-               ->getAs<Enum>();
-
-            for (auto& val : case_->getLetIdentifiers()) {
-               auto ty = val.second;
-
-               ty.isLvalue(true);
-               ty.isConst(case_->isIsEnumLetCase());
-
-               case_->getLetBindings().push_back(
-                  declareVariable(val.first, ty, false, case_.get()));
-            }
-         }
-      }
-
-      if (auto body = case_->getBody()) {
-         pushLoopScope();
-
-         VisitNode(body);
-
-         popLoopScope();
-      }
+      if (auto body = C->getBody())
+         visitStmt(node, body);
 
       ++i;
    }
 
-   for (const auto& ind : checkIfContinuable) {
-      auto nextCase = node->getCases()[ind + 1];
-      if (nextCase->isIsEnumLetCase()) {
-         RuntimeError::raise("Cannot continue to case with 'let' expression",
-                             nextCase.get());
+   std::set<llvm::StringRef> neededCases;
+   if (!checkIfExhaustive(node, switchType, neededCases)) {
+      diagnose(node, err_generic_error, "match statements must be exhaustive");
+
+      if (!neededCases.empty()) {
+         auto E = cast<Enum>(switchType->getRecord());
+         for (auto &C : neededCases)
+            diagnose(node, note_generic_note,
+                     "case " + C.str() + " is either missing or conditional",
+                     E->getCase(C).loc);
       }
-   }
-
-   bool isExhaustive = false;
-   if (node->isHasDefault()) {
-      isExhaustive = true;
-   }
-   else if (switchType->isEnum()) {
-      auto numCases = SymbolTable::getClass(switchType->getClassName())
-                         ->getAs<Enum>()->getNumCases();
-
-      isExhaustive = numCases == node->getCases().size();
-   }
-
-   if (!isExhaustive) {
-      RuntimeError::raise("Match statements must be exhaustive", node);
    }
 
    node->setSwitchType(*switchType);
 }
 
-/**
- * Iterates over all children
- * @param node
- * @return
- */
-void SemaPass::visit(CaseStmt *node)
+void SemaPass::visitCaseStmt(CaseStmt *node)
 {
+   if (node->isDefault())
+      return;
 
+   auto &pattern = node->getPattern();
+   pattern->setContextualType(node->getContextualType());
+
+   auto caseVal = visit(pattern);
+   if (!isa<ExpressionPattern>(pattern))
+      return;
+
+   auto &matchVal = node->getContextualType();
+   assert(matchVal && "no value to match against");
+
+   if (matchVal->isEnum() && caseVal->isEnum()) {
+      auto needed = matchVal->getRecord();
+      auto given = caseVal->getRecord();
+
+      if (given != needed)
+         diagnose(node, err_generic_error,
+                  "cannot match value of type " + needed->getName()
+                  + " against value of type " + given->getName());
+
+      return;
+   }
+
+   if (matchVal->isObjectTy()) {
+      std::vector<Argument> args{ Argument("", caseVal) };
+
+      auto matchOp = getMethod(matchVal->getRecord(), "infix ~=", args);
+      if (matchOp->isCompatible())
+         return node->setComparisonOp(matchOp->getMethod());
+
+      auto compOp = getMethod(matchVal->getRecord(), "infix ==", args);
+      if (compOp->isCompatible())
+         return node->setComparisonOp(compOp->getMethod());
+   }
+
+   auto compOp = getBinaryOperatorResult(matchVal, caseVal,
+                                         OperatorKind::CompEQ);
+
+   if (!compOp.resultType)
+      diagnose(node, err_generic_error,
+               "cannot match value of type " + caseVal.toString()
+               + " against value of type " + matchVal.toString());
 }
 
-/**
- * Does nothing
- * @param node
- * @return
- */
-void SemaPass::visit(LabelStmt *node)
+QualType SemaPass::visitExpressionPattern(ExpressionPattern *node)
 {
-   if (std::find(labels.begin(), labels.end(), node->getLabelName())
-       != labels.end()) {
-      RuntimeError::raise("Label '" + node->getLabelName()
-                          + "' already exists in the same scope", node);
+   return visit(node->getExpr());
+}
+
+QualType SemaPass::visitIsPattern(IsPattern *node)
+{
+   return {};
+}
+
+QualType SemaPass::visitCasePattern(CasePattern *node)
+{
+   auto &contextual = node->getContextualType();
+   if (!contextual || !contextual->isEnum())
+      return {};
+
+   auto en = cast<Enum>(contextual->getRecord());
+   if (!en->hasCase(node->getCaseName())) {
+      diagnose(node, err_enum_case_not_found, en->getName(),
+               node->getCaseName(), false);
+
+      return {};
    }
+
+   auto &C = en->getCase(node->getCaseName());
+   if (node->getArgs().size() != C.associatedValues.size()) {
+      diagnose(node, err_enum_case_wrong_no_args, C.name,
+               C.associatedValues.size(), node->getArgs().size());
+
+      return {};
+   }
+
+   size_t i = 0;
+   std::vector<Argument> args;
+
+   for (const auto &arg : node->getArgs()) {
+      if (arg.isExpr()) {
+         auto argResult = visitExpr(node, arg.getExpr());
+         if (argResult.hadError())
+            return {};
+
+         args.emplace_back("", argResult.getType());
+      }
+      else {
+         auto ty = C.associatedValues[i].type;
+         ty.isConst(arg.isConst());
+         ty.isLvalue(true);
+
+         args.emplace_back("", ty);
+         node->setBinding(declareVariable(arg.getIdentifier(), ty, false,
+                                          false, arg.getSourceLoc()));
+      }
+
+      ++i;
+   }
+
+   auto res = getCase(en, node->getCaseName(), args);
+   if (!res->isCompatible())
+      diagnose(node, err_enum_case_not_found, en->getName(),
+               node->getCaseName(), !args.empty());
+
+   return {};
+}
+
+void SemaPass::visitLabelStmt(LabelStmt *node)
+{
+   if (std::find(labels.begin(), labels.end(),
+                 node->getLabelName()) != labels.end())
+      return diagnose(node, err_generic_error,
+                      "duplicate label " + node->getLabelName());
 
    auto it = UnresolvedGotos.find(node->getLabelName());
    if (it != UnresolvedGotos.end()) {
@@ -2108,117 +2167,79 @@ void SemaPass::visit(LabelStmt *node)
    labels.insert(node->getLabelName());
 }
 
-/**
- * Does nothing
- * @param node
- * @return
- */
-void SemaPass::visit(GotoStmt *node)
+void SemaPass::visitGotoStmt(GotoStmt *node)
 {
-   if (labels.find(node->getLabelName()) == labels.end()) {
+   if (labels.find(node->getLabelName()) == labels.end())
       UnresolvedGotos.try_emplace(node->getLabelName(), node);
-   }
 }
 
-/**
- * Checks a function argument declaration for type consistency of default
- * value and existence of declared type
- * @param node
- * @return
- */
-void SemaPass::visit(FuncArgDecl *node)
+void SemaPass::visitFuncArgDecl(FuncArgDecl *node)
 {
-   if (!node->getArgType()->isResolved()) {
-      VisitNode(node->getArgType());
-   }
+   if (!node->getArgType()->isResolved())
+      visit(node->getArgType());
 
-   auto ts = node->getArgType()->getType();
+   auto &ts = node->getArgType()->getTypeRef();
+   ts.isConst(node->isConst());
+
    if (auto defVal = node->getDefaultVal()) {
       defVal->setContextualType(ts);
 
-      QualType defaultType = VisitNode(defVal);
-      if (!defaultType.implicitlyCastableTo(ts)) {
-         diag::err(err_type_mismatch) << defaultType << ts
-                                      << defVal << diag::term;
-      }
-   }
+      auto result = visitExpr(node, defVal);
+      if (result.hadError())
+         return;
 
-   returnResult(ts);
+      auto defaultType = result.getType();
+      if (!defaultType.implicitlyCastableTo(ts))
+         diagnose(defVal.get(), err_type_mismatch, defaultType, ts);
+   }
 }
 
-/**
- * Returns the current context
- * @param node
- * @return
- */
-void SemaPass::visit(ReturnStmt *node)
+void SemaPass::visitReturnStmt(ReturnStmt *node)
 {
-   if (ReturnTypeStack.empty()) {
-      diag::err(err_return_outside_func) << node << diag::term;
-   }
+   if (ReturnTypeStack.empty())
+      return diagnose(node, err_return_outside_func);
 
-   QualType retType;
    auto &retVal = node->getReturnValue();
    auto &declaredReturnType = ReturnTypeStack.top();
 
    if (retVal) {
       retVal->setContextualType(declaredReturnType);
 
-      retType = VisitNode(retVal);
-      toRvalueIfNecessary(retType, retVal, !declaredReturnType.isLvalue());
-   }
-   else {
-      *retType = VoidType::get();
-   }
+      auto result = visitExpr(node, retVal);
+      if (result.hadError())
+         return;
 
-   if (!retType.implicitlyCastableTo(declaredReturnType)) {
-      diag::err(err_return_type_mismatch) << retType
-                                          << declaredReturnType
-                                          << node << diag::term;
-   }
-
-   if (retType != ReturnTypeStack.top()) {
-      wrapImplicitCast(retVal, retType, declaredReturnType);
+      auto retType = result.getType();
+      if (declaredReturnType)
+         implicitCastIfNecessary(retVal, retType, declaredReturnType);
+      else
+         *ReturnTypeStack.top() = *retType;
    }
 }
 
-/**
- * Does nothing
- * @param node
- * @return
- */
-void SemaPass::visit(Expression *node)
+QualType SemaPass::visitLambdaExpr(LambdaExpr *node)
 {
-
-}
-
-
-/**
- * Checks if all code paths return the correct type
- * @param node
- * @return
- */
-void SemaPass::visit(LambdaExpr *node)
-{
-   QualType returnType = VisitNode(node->getReturnType());
+   QualType returnType = visit(node->getReturnType());
    if (node->getContextualType()->isFunctionTy()) {
       auto asFunc = cast<FunctionType>(*node->getContextualType());
       auto& neededArgs = asFunc->getArgTypes();
 
       if (neededArgs.size() != node->getArgs().size()) {
-         RuntimeError::raise("Incompatible argument counts: Expected " +
-            std::to_string(neededArgs.size()) + ", but found "
-                             + std::to_string(node->getArgs().size()), node);
+         diagnose(node, err_generic_error,
+                  "incompatible argument counts: expected "
+                  + std::to_string(neededArgs.size()) + ", but found "
+                  + std::to_string(node->getArgs().size()));
+
+         return node->getContextualType();
       }
 
       size_t i = 0;
       for (const auto& arg : node->getArgs()) {
-         if (arg->getDefaultVal() != nullptr) {
-            RuntimeError::raise("Lambda expression arguments cannot have "
-                                   "default values",arg->getDefaultVal().get());
-         }
+         if (auto DefaultVal = arg->getDefaultVal())
+            diagnose(DefaultVal.get(), err_generic_error,
+                     "lambda expression arguments cannot have default values");
 
-         VisitNode(arg);
+         visitStmt(node, arg);
 
          auto given = arg->getArgType()->getType();
          auto& needed = neededArgs[i].type;
@@ -2227,9 +2248,7 @@ void SemaPass::visit(LambdaExpr *node)
             arg->getArgType()->setType(needed);
          }
          else if (!given.implicitlyCastableTo(needed)) {
-            RuntimeError::raise("Incompatible argument types: No implicit "
-                                   "conversion from " +
-               given.toString() + " to " + needed.toString(), arg.get());
+            diagnose(arg.get(), err_type_mismatch, given, needed);
          }
 
          ++i;
@@ -2241,268 +2260,612 @@ void SemaPass::visit(LambdaExpr *node)
          node->getReturnType()->setType(returnType);
       }
       else if (!returnType.implicitlyCastableTo(declaredRetTy)) {
-         RuntimeError::raise("Incompatible return types: No implicit "
-                                "conversion from " +
-            returnType.toString() + " to " + asFunc->getReturnType().toString(),
-                             node->getReturnType().get());
+         diagnose(node, err_type_mismatch, returnType,
+                  asFunc->getReturnType());
       }
    }
 
    bool isSingleStmt = !isa<CompoundStmt>(node->getBody());
    if (isSingleStmt && returnType->isAutoTy()) {
-      if (!isa<Expression>(node->getBody())) {
-         RuntimeError::raise("Expected single-statement lambda to "
-                                "contain a valid expression",
-                             node->getBody().get());
-      }
-
-      node->setBody(std::make_shared<ReturnStmt>
-                       (std::static_pointer_cast<Expression>(node->getBody())));
+      visitStmt(node, node->getBody());
    }
 
-   std::vector<Argument> argTypes;
-   string anon = "__anon";
-
-   pushFunctionScope(returnType, nullptr);
-   latestScope->captures = &node->getCaptures();
+   auto Fun = new Function("__anonymous_lambda", {}, {}, {});
+   Fun->setExternC(true);
 
    for (const auto& arg : node->getArgs()) {
-      if (!arg->getArgType()->isResolved()) {
-         VisitNode(arg);
-      }
-      if (arg->getArgType()->getType()->isAutoTy()) {
-         RuntimeError::raise("Could not infer type of argument "
-                             + arg->getArgName(), arg.get());
-      }
+      if (!arg->getArgType()->isResolved())
+         visit(arg);
 
-      argTypes.emplace_back("", arg->getArgType()->getType());
-      if (arg->getArgName() != "_") {
-         arg->setBinding(declareVariable(arg->getArgName(),
-                                         arg->getArgType()->getType()));
-      }
+      if (arg->getArgType()->getType()->isAutoTy())
+         diagnose(node, err_generic_error,
+                  "Could not infer type of argument " + arg->getArgName());
+
+      Fun->addArgument(Argument(arg->getArgName(),
+                                arg->getArgType()->getType()));
    }
 
-   auto ret = VisitNode(node->getBody());
-   if (returnType->isAutoTy()) {
-      returnType = ret;
-      node->getReturnType()->setType(ret);
-   }
+   ScopeGuard guard(*this, Fun);
+   currentScope()->isLambdaRoot = true;
+   currentScope()->captures = &node->getCaptures();
+
+   visit(node->getBody());
 
    if (returnType->isAutoTy()) {
-      *returnType = VoidType::get();
+      returnType = ReturnTypeStack.top();
+      if (returnType->isAutoTy())
+         *returnType = VoidType::get();
+
       node->getReturnType()->setType(returnType);
    }
 
-   auto funcTy = FunctionType::get(returnType, argTypes, false);
+   Fun->setReturnType(returnType);
+   Fun->setLinkageName(Fun->getName());
 
-   node->setLambdaType(funcTy);
-   popFunctionScope();
+   auto funcTy = FunctionType::get(returnType, Fun->getArguments(), false);
+   node->setFunc(Fun);
 
-   return ReturnMemberExpr(node,QualType(funcTy));
+   return VisitSubExpr(node, QualType(funcTy));
 }
 
-/**
- * Does nothing
- * @param node
- * @return
- */
-void SemaPass::visit(UsingStmt *node)
+void SemaPass::visitUsingStmt(UsingStmt *node)
 {
-   if (node->getKind() == UsingKind::NAMESPACE) {
-      importedNamespaces.push_back(node->getImportNamespace() + ".");
-   }
-   else {
-      size_t i = 0;
-      for (auto& fullName : node->getFullNames()) {
-         auto& item = node->getImportedItems()[i];
-         bool declarationFound = node->getKind() == UsingKind::NAMESPACE;
-         if (SymbolTable::hasClass(fullName)) {
-            if (SymbolTable::getClass(fullName)->isPrivate()) {
-               RuntimeError::raise("Class " + fullName + " is not accessible",
-                                   node);
-            }
-
-            declarationFound = true;
-            node->setKind(UsingKind::CLASS);
-         }
-         else if (SymbolTable::hasVariable(fullName)) {
-            declarationFound = true;
-            node->setKind(UsingKind::VARIABLE);
-         }
-         else if (SymbolTable::hasTypedef(fullName)) {
-            declarationFound = true;
-            node->setKind(UsingKind::TYPEDEF);
-         }
-         else {
-            auto functions = SymbolTable::numFunctionsWithName(fullName);
-            if (functions > 0) {
-               declarationFound = true;
-               node->setKind(UsingKind::FUNCTION);
-            }
-         }
-
-         if (!declarationFound) {
-            RuntimeError::raise("Namespace " + node->getImportNamespace() +
-               " does not have a member named " + item, node);
-         }
-
-         SymbolTable::declareTemporaryAlias(item, fullName);
-         ++i;
-      }
-   }
+   declPass->visitUsingStmt(node);
 }
 
-/**
- * Does nothing
- * @param node
- * @return
- */
-void SemaPass::visit(EndOfFileStmt *node)
+QualType SemaPass::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
-   importedNamespaces.clear();
-   importedNamespaces.push_back("");
-   SymbolTable::clearTemporaryAliases();
+   (void)visit(node->getTarget());
+
+   node->setIsTypeDependent(node->getTarget()->isTypeDependant());
+   node->setIsValueDependent(node->getTarget()->isValueDependant());
+
+   return node->getTo();
 }
 
-void SemaPass::visit(ImplicitCastExpr *node)
+QualType SemaPass::visitTypeRef(TypeRef *node)
 {
-   VisitNode(node->getTarget());
-   returnResult(node->getTo());
+   if (node->isResolved())
+      return node->getTypeRef();
+
+   declPass->resolveType(node);
+
+   return node->getTypeRef();
 }
 
-void SemaPass::visit(TypedefDecl *node)
-{
-
-}
-
-void SemaPass::visit(TypeRef *node)
-{
-   assert(!node->isResolved() && "Duplicate resolving");
-   DeclPass::resolveType(node, importedNamespaces, currentNamespace);
-
-   returnResult(node->getTypeRef());
-}
-
-void SemaPass::visit(DeclareStmt *node)
+void SemaPass::visitDeclareStmt(DeclareStmt *node)
 {
    for (const auto& decl : node->getDeclarations()) {
-      VisitNode(decl);
+      visit(decl.get());
    }
 }
 
-void SemaPass::visit(LvalueToRvalue* node)
-{
-   llvm_unreachable("Should only be applied after evaluating the node");
-}
-
-void SemaPass::visit(DebugStmt* node)
+void SemaPass::visitDebugStmt(DebugStmt* node)
 {
    if (node->isUnreachable()) {
+
    }
    else {
       int i = 3;
+      (void)i;
+
+      diag::note(note_generic_note)
+         << "__debug statement here" << node << diag::cont;
    }
 }
 
-void SemaPass::visit(Statement* node)
+QualType SemaPass::visitTupleLiteral(TupleLiteral* node)
 {
+   std::vector<pair<string, QualType>> containedTypes;
 
-}
-
-void SemaPass::visit(TupleLiteral* node)
-{
-   std::vector<pair<string, Type*>> containedTypes;
-
-   bool isMetaType = true;
    for (auto& el : node->getElements()) {
-      auto ty = VisitNode(el.second);
-      toRvalueIfNecessary(ty, el.second);
+      auto result = visitExpr(node, el.second);
+      if (result.hadError())
+         return {};
 
-      if (!ty->isMetaType()) {
-         isMetaType = false;
-      }
-
-      containedTypes.emplace_back(el.first, *ty);
-   }
-
-   if (isMetaType) {
-      for (auto &pair : containedTypes) {
-         if (pair.second->isMetaType()) {
-            pair.second = cast<MetaType>(pair.second)->getUnderlyingType();
-         }
-      }
-
-      auto tupleTy = TupleType::get(containedTypes);
-      node->setTupleType(tupleTy);
-      node->isMetaTy(true);
-
-      return returnResult(getMetaType(tupleTy));
+      containedTypes.emplace_back(el.first, result.getType());
    }
 
    auto tupleTy = TupleType::get(containedTypes);
-
    if (!node->getContextualType()->isAutoTy()) {
       if (!tupleTy->implicitlyCastableTo(*node->getContextualType())) {
-         RuntimeError::raise("Incompatible types " + tupleTy->toString()
-                             + " and " + node->getContextualType().toString(),
-                             node);
+         diagnose(node, err_type_mismatch, tupleTy, node->getContextualType());
       }
 
       auto asTuple = cast<TupleType>(*node->getContextualType());
       auto arity = tupleTy->getArity();
       for (size_t i = 0; i < arity; ++i) {
-         if (tupleTy->getContainedType(i) != asTuple->getContainedType(i)) {
-            auto cont =QualType(tupleTy->getContainedType(i));
-            wrapImplicitCast(node->getElements().at(i).second, cont,
-               QualType(asTuple->getContainedType(i)));
-         }
+         auto cont =QualType(tupleTy->getContainedType(i));
+         implicitCastIfNecessary(node->getElements().at(i).second, cont,
+                                 QualType(asTuple->getContainedType(i)));
       }
 
       tupleTy = cast<TupleType>(asTuple);
    }
 
    node->setTupleType(tupleTy);
-   returnResult(tupleTy);
+   return QualType(tupleTy);
 }
 
-void SemaPass::visit(TryStmt *node)
+void SemaPass::visitTryStmt(TryStmt *node)
 {
-   VisitNode(node->getBody());
+   visit(node->getBody());
 
    for (auto& catchBlock : node->getCatchBlocks()) {
-      auto caughtType = VisitNode(catchBlock.caughtType);
+      ScopeGuard guard(*this);
+      auto result = visitExpr(node, catchBlock.caughtType);
 
-      pushScope();
-
-      QualType ty(caughtType);
+      QualType ty(result.getType());
       ty.isConst(true);
       ty.isLvalue(true);
 
-      catchBlock.identifier = declareVariable(catchBlock.identifier, ty);
-      VisitNode(catchBlock.body);
+      catchBlock.identifier = declareVariable(catchBlock.identifier, ty,
+                                              false, false,
+                                              catchBlock.body->getSourceLoc());
 
-      popScope();
+      visitStmt(node, catchBlock.body);
    }
 
-   if (auto Finally = node->getFinallyBlock()) {
-      VisitNode(Finally);
-   }
+   if (auto Finally = node->getFinallyBlock())
+      visitStmt(node, Finally);
 }
 
-void SemaPass::visit(ThrowStmt *node)
+void SemaPass::visitThrowStmt(ThrowStmt *node)
 {
-   auto thrown = VisitNode(node->getThrownVal());
-   node->setThrownType(*thrown);
+   auto result = visitExpr(node, node->getThrownVal());
+   if (result.hadError()) {
+      return;
+   }
 
-   if (thrown->isObjectTy()) {
-      auto rec = thrown->getRecord();
+   auto thrownTy = result.getType();
+   if (thrownTy->isObjectTy()) {
+      auto rec = thrownTy->getRecord();
       if (rec->hasProperty("description")) {
          node->setDescFn(rec->getProperty("description")->getGetter());
       }
    }
 
-   assert(latestScope->function && "no function?");
-   latestScope->function->addThrownType(*thrown);
+   assert(currentScope()->function && "no function?");
+   currentScope()->function->addThrownType(*thrownTy);
+}
+
+void SemaPass::visitAliasDecl(AliasDecl *node)
+{
+   auto alias = node->getAlias();
+   if (alias->isTypeDependant() || !alias->getVal().isVoid())
+      return;
+
+   pushTemplateParams(&alias->getTemplateParams());
+
+   StaticExprEvaluator Eval(*this);
+   auto res = Eval.evaluate(alias->getAliasExpr().get());
+
+   popTemplateParams();
+
+   if (res.typeDependant)
+      return alias->setIsTypeDependant(true);
+
+   if (res.hadError) {
+      for (auto &diag : res.diagnostics)
+         diagnostics.emplace_back(std::move(diag));
+
+      encounteredError = true;
+      node->setHadError(true);
+
+      return;
+   }
+
+   alias->setVal(std::move(res.val));
+}
+
+void SemaPass::visitStaticAssertStmt(StaticAssertStmt *node)
+{
+   StaticExprEvaluator Eval(*this);
+   auto res = Eval.evaluate(node->getExpr().get());
+
+   if (res.typeDependant)
+      return;
+
+   auto &expr = res.val;
+   auto ty = expr.typeOf();
+
+   if (ty->isObjectTy() && ty->getClassName() == "Bool") {
+      expr = expr.getField(0);
+   }
+
+   if (!expr.isInt())
+      return diagnose(node, err_generic_error,
+                      "expected integer as first argument to static_assert");
+
+   if (!expr.intVal) {
+      string msg;
+      if (!node->getMessage().empty())
+         msg += ": " + node->getMessage();
+
+      diagnose(node, err_generic_error, "static assertion failed" + msg);
+   }
+
+   node->setEvaluated(true);
+}
+
+QualType SemaPass::visitStaticExpr(StaticExpr *node)
+{
+   auto Eval = StaticExprEvaluator(*this, {});
+   auto res = Eval.evaluate(node, node->getSourceLoc());
+
+   node->setIsTypeDependent(res.typeDependant);
+   if (res.typeDependant)
+      return {};
+
+   if (res.hadError) {
+      for (auto &diag : res.diagnostics)
+         diagnostics.emplace_back(std::move(diag));
+
+      encounteredError = true;
+      node->setHadError(true);
+   }
+
+   node->setEvaluatedExpr(res.val);
+   return QualType(res.val.typeOf());
+}
+
+Variant SemaPass::evalStaticExpr(StaticExpr *node,
+                                 TemplateArgList const& templateArgs,
+                                 bool useSavedResult) {
+   if (useSavedResult && !node->getEvaluatedExpr().isVoid())
+      return node->getEvaluatedExpr();
+
+   auto Eval = StaticExprEvaluator(*this, &templateArgs);
+   auto res = Eval.evaluate(node, node->getSourceLoc());
+
+   if (res.typeDependant) {
+      node->setIsTypeDependent(true);
+      return {};
+   }
+
+   if (res.hadError) {
+      node->setHadError(true);
+      return {};
+   }
+
+   node->setEvaluatedExpr(res.val);
+   return node->getEvaluatedExpr();
+}
+
+void SemaPass::visitStaticIfStmt(StaticIfStmt *node)
+{
+   auto expr = node->getEvaluatedCondition();
+   if (expr.getKind() == VariantType::VOID) {
+      auto Eval = StaticExprEvaluator(*this);
+      auto res = Eval.evaluate(node->getCondition().get(),
+                               node->getSourceLoc());
+
+      if (res.typeDependant)
+         return node->setIsTypeDependent(true);
+
+      if (res.hadError) {
+         for (auto &diag : res.diagnostics)
+            diag << diag::cont;
+
+         std::terminate();
+      }
+
+      expr = res.val;
+      auto ty = expr.typeOf();
+
+      if (ty->isObjectTy() && ty->getClassName() == "Bool") {
+         expr = expr.getField(0);
+      }
+
+      if (!expr.isInt())
+         return diagnose(node, err_generic_error,
+                         "expected integer as argument to static_if");
+
+      node->setEvaluatedCondition(expr);
+   }
+
+   if (expr.intVal)
+      visitStmt(node, node->getIfBranch());
+   else
+      visitStmt(node, node->getElseBranch());
+}
+
+void SemaPass::visitStaticForStmt(StaticForStmt *node)
+{
+   if (!node->isEvaluated()) {
+      auto Eval = StaticExprEvaluator(*this);
+      auto res = Eval.evaluate(node->getRange().get(), node->getSourceLoc());
+
+      if (res.typeDependant)
+         return;
+
+      if (!res.diagnostics.empty()) {
+         for (auto &diag : res.diagnostics)
+            diag << diag::cont;
+
+         std::terminate();
+      }
+
+      auto &Range = res.val;
+      if (!Range.isArray())
+         return diagnose(node->getRange().get(), err_generic_error,
+                         "expected array as argument to static_for");
+
+      TemplateParameter Constraint(node->getElementName());
+
+      for (const auto &El : Range) {
+         TemplateArgList list(*this);
+         list.insert(node->getElementName(), Variant(El));
+
+         auto stmt =
+            TemplateInstantiator::InstantiateStatement(*this,
+                                                       node->getSourceLoc(),
+                                                       node->getBody(),
+                                                       std::move(list));
+
+         node->addIteration(move(stmt));
+      }
+   }
+
+   for (const auto &It : node->getIterations())
+      visit(It);
+
+   node->setEvaluated(true);
+}
+
+void SemaPass::visitStaticPrintStmt(StaticPrintStmt *node)
+{
+   auto Eval = StaticExprEvaluator(*this, {});
+   auto res = Eval.evaluate(node->getExpr().get(), node->getSourceLoc());
+
+   if (!res.diagnostics.empty()) {
+      for (auto &diag : res.diagnostics)
+         diag << diag::cont;
+
+      std::terminate();
+   }
+
+   auto &val = res.val;
+   if (val.isVoid())
+      diagnose(node->getExpr().get(), err_generic_error,
+               "can't print given expression");
+
+   diag::note(note_generic_note)
+      << val.toString()
+      << node << diag::cont;
+}
+
+namespace {
+
+std::shared_ptr<TupleLiteral>
+makeTuple(llvm::MutableArrayRef<std::shared_ptr<Expression>> exprs)
+{
+   std::vector<std::pair<std::string, std::shared_ptr<Expression>>> elements;
+   for (auto &expr : exprs)
+      elements.emplace_back("", std::move(expr));
+
+   return std::make_shared<TupleLiteral>(move(elements));
+}
+
+} // anonymous namespace
+
+QualType SemaPass::visitTraitsExpr(TraitsExpr *node)
+{
+   enum ReturnType {
+      Bool,
+      Tuple,
+      Int,
+      UInt,
+      Other
+   };
+
+   ReturnType type;
+   switch (node->getKind()) {
+      case TraitsExpr::CompileErrors:
+         type = Tuple;
+         break;
+      case TraitsExpr::Arity:
+      case TraitsExpr::IntegerBitwidth:
+      case TraitsExpr::FPPrecision:
+         type = UInt;
+         break;
+      default:
+         type = Bool;
+         break;
+   }
+
+   auto &args = node->getArgs();
+   if (type == Bool) {
+      bool result = false;
+
+      if (node->getKind() == TraitsExpr::Compiles) {
+         bool savedEncounteredError = encounteredError;
+         bool savedFatalError = fatalErrorInScope;
+
+         size_t savedDiagSize = diagnostics.size();
+
+         encounteredError = false;
+         fatalErrorInScope = false;
+
+         auto &stmt = args.front().getStmt();
+         visit(stmt);
+
+         result = !encounteredError && !fatalErrorInScope;
+
+         diagnostics.resize(savedDiagSize);
+         encounteredError = savedEncounteredError;
+         fatalErrorInScope = savedFatalError;
+
+         if (stmt->isTypeDependant()) {
+            node->setIsTypeDependent(true);
+            return {};
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasMember) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto F = ty->getRecord()->getField(member);
+            result = F && !F->isStatic;
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasStaticMember) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto F = ty->getRecord()->getField(member);
+            result = F && F->isStatic;
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasProperty) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto F = ty->getRecord()->getProperty(member);
+            result = F && !F->isStatic();
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasStaticProperty) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto F = ty->getRecord()->getProperty(member);
+            result = F && F->isStatic();
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasMethod) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto M = ty->getRecord()->getMethod(member, true);
+            result = M && !M->isStatic();
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::HasStaticMethod) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         auto &member = args[1].getStr();
+
+         if (ty->isObjectTy()) {
+            auto M = ty->getRecord()->getMethod(member, true);
+            result = M && M->isStatic();
+         }
+         else {
+            result = false;
+         }
+      }
+      else if (node->getKind() == TraitsExpr::ValidIdentifier) {
+         result = wouldBeValidIdentifier(args.front().getStr());
+      }
+      else if (node->getKind() == TraitsExpr::ValidFunction) {
+         result = getAnyFn(args.front().getStr()) != nullptr;
+      }
+      else if (node->getKind() == TraitsExpr::IsInteger) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         result = ty->isIntegerTy();
+      }
+      else if (node->getKind() == TraitsExpr::IsFloat) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         result = ty->isFPType();
+      }
+      else if (node->getKind() == TraitsExpr::IsUnsigned) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         result = ty->isIntegerTy() && ty->isUnsigned();
+      }
+      else {
+         llvm_unreachable("bad trait!");
+      }
+
+      node->setResultExpr(std::make_shared<BoolLiteral>(result));
+   }
+   else if (type == Tuple) {
+      std::vector<std::shared_ptr<Expression>> elements;
+      if (node->getKind() == TraitsExpr::CompileErrors) {
+         bool savedEncounteredError = encounteredError;
+         size_t savedDiagSize = diagnostics.size();
+
+         visitStmt(node, args.front().getStmt());
+
+         string s;
+         llvm::raw_string_ostream sstream(s);
+
+         for (size_t i = savedDiagSize; i < diagnostics.size(); ++i) {
+            diagnostics[i].writeDiagnosticTo(sstream);
+            elements.push_back(
+               std::make_shared<StringLiteral>(move(sstream.str())));
+
+            sstream.str().clear();
+         }
+
+         diagnostics.resize(savedDiagSize);
+         encounteredError = savedEncounteredError;
+      }
+      else {
+         llvm_unreachable("bad trait!");
+      }
+
+      node->setResultExpr(makeTuple(elements));
+   }
+   else if (type == UInt) {
+      size_t val = 0;
+
+      if (node->getKind() == TraitsExpr::Arity) {
+         auto result = visitExpr(node, args.front().getExpr());
+         if (result.hadError())
+            val = 0;
+         else if (!result.getType()->isTupleTy())
+            diagnose(node, err_generic_error, "expected tuple typed value");
+         else
+            val = cast<TupleType>(*result.getType())->getArity();
+      }
+      else if (node->getKind() == TraitsExpr::IntegerBitwidth) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         if (!ty->isIntegerTy())
+            diagnose(node, err_generic_error, "not an integer type");
+         else
+            val = ty->getBitwidth();
+      }
+      else if (node->getKind() == TraitsExpr::FPPrecision) {
+         auto ty = visitTypeRef(args.front().getType().get());
+         if (!ty->isFPType())
+            diagnose(node, err_generic_error, "not a floating point type");
+         else
+            val = cast<FPType>(*ty)->getPrecision();
+      }
+      else {
+         llvm_unreachable("bad trait!");
+      }
+
+      Variant V(IntegerType::getUnsigned(), val);
+      node->setResultExpr(std::make_shared<IntegerLiteral>(std::move(V)));
+   }
+
+   QualType resultTy;
+   if (auto expr = node->getResultExpr())
+      resultTy = visit(expr.get());
+   else
+      *resultTy = VoidType::get();
+
+   return VisitSubExpr(node, resultTy);
 }
 
 } // namespace ast

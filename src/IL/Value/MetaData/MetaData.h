@@ -7,7 +7,7 @@
 
 #include <llvm/ADT/SmallVector.h>
 #include <string>
-#include <unordered_map>
+#include <llvm/ADT/DenseMap.h>
 
 #include "../../../lex/SourceLocation.h"
 
@@ -41,17 +41,13 @@ class MDSet: public MetaData {
 public:
    MDSet();
 
-   const llvm::SmallVector<MetaData *, 4> &getContainedMD() const
-   {
-      return ContainedMD;
-   }
-
-   void addNode(MetaData *MD);
+   void removeIfPresent(MDKind kind);
+   void setNode(MetaData *MD);
    MetaData *getNode(MDKind kind) const;
    bool hasNode(MDKind kind) const;
 
 protected:
-   llvm::SmallVector<MetaData*, 4> ContainedMD;
+   llvm::SmallDenseMap<unsigned, MetaData*> ContainedMD;
 
 public:
    static bool classof(MetaData const* M)
@@ -81,7 +77,7 @@ protected:
    std::string fileName;
    std::string path;
 
-   static std::unordered_map<size_t, MDFile*> Instances;
+   static llvm::SmallDenseMap<size_t, MDFile*> Instances;
 
 public:
    static bool classof(MetaData const* M)
@@ -92,16 +88,20 @@ public:
 
 class MDLocation: public MetaData {
 public:
+   static MDLocation *get(const SourceLocation &loc);
+
+   size_t getLine() const { return line; }
+   size_t getCol() const { return col; }
+   const SourceLocation &getLocation() const { return location; }
+
+private:
+   static llvm::SmallDenseMap<uint64_t, MDLocation*> Instances;
+
    explicit MDLocation(const SourceLocation &loc);
 
-   const SourceLocation &getLocation() const;
-   void setLocation(const SourceLocation &location);
-
-   MDFile *getFile() const;
-
-protected:
+   size_t line;
+   size_t col;
    SourceLocation location;
-   MDFile *File;
 
 public:
    static bool classof(MetaData const* M)

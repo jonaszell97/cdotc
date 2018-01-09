@@ -15,6 +15,7 @@ enum class UsingKind {
    CLASS,
    VARIABLE,
    TYPEDEF,
+   ALIAS,
    NAMESPACE
 };
 
@@ -100,6 +101,50 @@ public:
    void setResolved(bool resolved)
    {
       UsingStmt::resolved = resolved;
+   }
+};
+
+class ModuleStmt: public Statement {
+public:
+   explicit ModuleStmt(std::vector<std::string> &&qualifiedModuleName)
+      : Statement(ModuleStmtID),
+        qualifiedModuleName(std::move(qualifiedModuleName))
+   {}
+
+   static bool classof(AstNode const *T)
+   {
+      return T->getTypeID() == ModuleStmtID;
+   }
+
+private:
+   std::vector<std::string> qualifiedModuleName;
+
+public:
+   const std::vector<std::string> &getQualifiedModuleName() const
+   {
+      return qualifiedModuleName;
+   }
+};
+
+class ImportStmt: public Statement {
+public:
+   explicit ImportStmt(std::vector<std::string> &&qualifiedModuleName)
+      : Statement(ImportStmtID),
+        qualifiedModuleName(std::move(qualifiedModuleName))
+   {}
+
+   static bool classof(AstNode const *T)
+   {
+      return T->getTypeID() == ImportStmtID;
+   }
+
+private:
+   std::vector<std::string> qualifiedModuleName;
+
+public:
+   const std::vector<std::string> &getQualifiedModuleName() const
+   {
+      return qualifiedModuleName;
    }
 };
 

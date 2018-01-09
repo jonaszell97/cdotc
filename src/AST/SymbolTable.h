@@ -7,15 +7,14 @@
 
 #include <string>
 #include <unordered_map>
-#include <iostream>
-#include <map>
 #include <vector>
-#include "../Util.h"
+
+#include "../Variant/Type/Generic.h"
 #include "../Variant/Type/QualType.h"
+#include "../Util.h"
 
 using std::pair;
 using std::unordered_map;
-using std::unordered_multimap;
 
 namespace cdot {
 
@@ -23,19 +22,20 @@ class PointerType;
 class Type;
 class ObjectType;
 class ObjectType;
-class TemplateArgList;
 
 struct Argument;
 
 namespace cl {
 
 class Class;
+class Struct;
+class Protocol;
 class Enum;
 class Union;
 class Record;
+class AssociatedType;
+
 struct EnumCase;
-struct RecordTemplate;
-struct CallableTemplate;
 
 } // namespace cl
 
@@ -46,211 +46,459 @@ class ClassDecl;
 class AstNode;
 class TypeRef;
 class Function;
+class LocalVarDecl;
+class FieldDecl;
+class AliasDecl;
+class FunctionDecl;
+class MethodDecl;
 
 } // namespace ast
 
 using namespace cdot::ast;
 
 struct Variable {
+   Variable(const string &name, AccessModifier access, const QualType &type,
+            size_t declaredNamespace, const SourceLocation &loc,
+            bool isTypeDependant, ast::Statement *decl)
+      : name(name), access(access), type(type),
+        declaredNamespace(declaredNamespace),
+        loc(loc), isTypeDependant(isTypeDependant),
+        isGlobal(true), decl(decl)
+   { }
+
+   const string &getName() const
+   {
+      return name;
+   }
+
+   AccessModifier getAccess() const
+   {
+      return access;
+   }
+
+   const QualType &getType() const
+   {
+      return type;
+   }
+
+   size_t getDeclaredNamespace() const
+   {
+      return declaredNamespace;
+   }
+
+   const SourceLocation &getLoc() const
+   {
+      return loc;
+   }
+
+   bool isIsTypeDependant() const
+   {
+      return isTypeDependant;
+   }
+
+   bool isIsGlobal() const
+   {
+      return isGlobal;
+   }
+
+   Statement *getDecl() const
+   {
+      return decl;
+   }
+
+   string name;
    AccessModifier access;
    QualType type;
-   string declaredNamespace;
-   AstNode *decl;
+   size_t declaredNamespace;
+   SourceLocation loc;
+
+   bool isTypeDependant;
+   bool isGlobal;
+
+   ast::Statement *decl;
 };
 
 struct Typedef {
    Typedef(
-      Type *ty, const string &alias,
-      const std::vector<TemplateConstraint> &templateArgs = {},
+      Type *ty, llvm::StringRef alias,
+      std::vector<TemplateParameter> &&params,
       AccessModifier access = AccessModifier::PUBLIC,
-      AstNode *decl = nullptr) : aliasedType(ty), alias(alias),
-                                 generics(templateArgs),
-                                 access(access), decl(decl)
+      const SourceLocation &loc = {}) : access(access), alias(alias),
+                                        aliasedType(ty),
+                                        templateParams(std::move(params)),
+                                        loc(loc)
    {
 
    }
 
    Typedef() = default;
 
+   AccessModifier getAccess() const
+   {
+      return access;
+   }
+
+   const string &getAlias() const
+   {
+      return alias;
+   }
+
+   Type *getAliasedType() const
+   {
+      return aliasedType;
+   }
+
+   const std::vector<TemplateParameter> &getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   const SourceLocation &getLoc() const
+   {
+      return loc;
+   }
+
    AccessModifier access;
    string alias;
    Type *aliasedType;
-   std::vector<TemplateConstraint> generics;
-   AstNode *decl;
+   std::vector<TemplateParameter> templateParams;
+   SourceLocation loc;
 };
-}
+
+struct Alias {
+public:
+   Alias(string &&name,
+         std::vector<TemplateParameter> &&templateParams,
+         std::vector<std::shared_ptr<StaticExpr>> &&constraints,
+         std::shared_ptr<StaticExpr> &&aliasExpr,
+         ast::AliasDecl *decl)
+      : name(move(name)), templateParams(move(templateParams)),
+        constraints(move(constraints)), aliasExpr(move(aliasExpr)), decl(decl)
+   { }
+
+private:
+   std::string name;
+   std::vector<TemplateParameter> templateParams;
+   std::vector<std::shared_ptr<StaticExpr>> constraints;
+
+   std::shared_ptr<StaticExpr> aliasExpr;
+   ast::AliasDecl *decl;
+
+   Variant Val;
+   bool typeDependant = false;
+
+public:
+   const string &getName() const
+   {
+      return name;
+   }
+
+   std::vector<TemplateParameter> &getTemplateParams()
+   {
+      return templateParams;
+   }
+
+   std::vector<TemplateParameter> const& getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   const std::vector<std::shared_ptr<StaticExpr>> &getConstraints() const
+   {
+      return constraints;
+   }
+
+   const std::shared_ptr<StaticExpr> &getAliasExpr() const
+   {
+      return aliasExpr;
+   }
+
+   AliasDecl *getDecl() const
+   {
+      return decl;
+   }
+
+   const Variant &getVal() const
+   {
+      return Val;
+   }
+
+   void setVal(Variant &&Val)
+   {
+      Alias::Val = std::move(Val);
+   }
+
+   bool isTypeDependant() const
+   {
+      return typeDependant;
+   }
+
+   void setIsTypeDependant(bool isTypeDependant)
+   {
+      Alias::typeDependant = isTypeDependant;
+   }
+};
+
+struct Namespace {
+   Namespace(size_t id, string &&name, bool isAnonymous,
+             Namespace *parentNamespace)
+      : id(id), name(move(name)), isAnonymous(isAnonymous),
+        parentNamespace(parentNamespace)
+   {
+
+   }
+
+   size_t getId() const
+   {
+      return id;
+   }
+
+   const string &getName() const
+   {
+      return name;
+   }
+
+   bool isIsAnonymous() const
+   {
+      return isAnonymous;
+   }
+
+   Namespace *getParentNamespace() const
+   {
+      return parentNamespace;
+   }
+
+   size_t id;
+   std::string name;
+   bool isAnonymous;
+   Namespace *parentNamespace;
+
+   static size_t lastId;
+};
 
 using namespace cdot;
 using namespace cdot::cl;
 
 using std::string;
 
-class SymbolTable {
-   typedef unordered_multimap<string, std::unique_ptr<ast::Function>>::iterator
-      FunctionIterator;
+class SymbolTableEntry {
 public:
-   static void declareRecord(
-      Record *cl
-   );
+   enum Kind {
+      RecordID,
+      TypedefID,
+      VariableID,
+      FunctionID,
+      NamespaceID,
+      AliasID,
+   };
 
-   static void declareRecord(
-      const string &name,
-      Record *cl
-   );
+   SymbolTableEntry(Record *rec) : kind(RecordID), record(rec) {}
+   SymbolTableEntry(Typedef *td) : kind(TypedefID), td(td) {}
+   SymbolTableEntry(Alias *alias) : kind(AliasID), aliases{alias} {}
+   SymbolTableEntry(Variable *var)
+      : kind(VariableID), variable(var) {}
+   SymbolTableEntry(Function *func)
+      : kind(FunctionID), functions{func} {}
+   SymbolTableEntry(Namespace *NS)
+      : kind(NamespaceID), NS(NS) {}
+   SymbolTableEntry()
+      : kind(FunctionID), functions{} {}
 
-   static RecordTemplate *declareRecordTemplate(
-      RecordTemplate &&templ
-   );
+   SymbolTableEntry(const SymbolTableEntry &) = delete;
+   SymbolTableEntry &operator=(const SymbolTableEntry &) = delete;
 
-   static void declareFunctionTemplate(
-      CallableTemplate *templ
-   );
+   SymbolTableEntry(SymbolTableEntry &&);
+   SymbolTableEntry &operator=(SymbolTableEntry &&);
+   ~SymbolTableEntry() { destroyValue(); }
 
-   static void declareClass(
-      Class *cl
-   );
+   Kind getKind() const { return kind; }
+   Record *getRecord() const { return record; }
+   Typedef *getTypedef() const { return td; }
+   Variable *getVariable() const { return variable; }
+   std::vector<Function *> &getFunctions() { return functions; }
+   Namespace *getNamespace() const { return NS; }
+   std::vector<Alias*> &getAliases() { return aliases; }
 
-   static void declareClass(
-      const string &name,
-      Class *cl
-   );
+private:
+   void destroyValue();
 
-   static void declareEnum(
-      Enum *en
-   );
+   Kind kind;
 
-   static void declareEnum(
-      const string &name,
-      Enum *en
-   );
+   union {
+      Record *record;
+      Typedef *td;
+      Variable *variable;
+      Namespace *NS;
+      std::vector<Function*> functions;
+      std::vector<Alias*> aliases;
+   };
+};
 
-   static void declareTypedef(
-      const string& alias,
-      Type* originTy,
-      const std::vector<TemplateConstraint>& generics = {},
-      AccessModifier access = AccessModifier::PUBLIC,
-      AstNode *decl = nullptr
-   );
+class SymbolTable {
+public:
+   static void addBuiltins();
 
-   static void declareNamespace(const string &);
-   static void declareVariable(
-      const string &varName,
-      const QualType &varType,
-      AccessModifier access,
-      const string& declaredNamespace,
-      AstNode *decl
-   );
+   static size_t getNamespaceId(llvm::StringRef nsName);
+   static Namespace *getNamespace(size_t id)
+   {
+      auto it = NamespaceIDs.find(id);
+      if (it == NamespaceIDs.end())
+         return nullptr;
 
-   static void declareFunction(
-      const string &funcName,
-      std::unique_ptr<ast::Function> &&func
-   );
+      return it->second;
+   }
 
-   static void checkTemplateArgCompatability(
-      ast::Function &newFunc
-   );
+   static Namespace *getNamespace(llvm::StringRef name)
+   {
+      return getNamespace(getNamespaceId(name));
+   }
 
-   static void checkDuplicateFunctionDeclaration(
-      AstNode *decl,
-      const string &name,
-      const string &mangledName
-   );
+   static const string& getNamespaceName(size_t id);
 
-   static void declareUnion(
-      Union *union_
-   );
+   static SymbolTableEntry* declareRecord(Record *cl);
+   static SymbolTableEntry* declareRecord(llvm::StringRef name, Record *cl);
 
-   static void declareTemporaryAlias(const string &, const string &);
-   static void clearTemporaryAliases();
+   static SymbolTableEntry *ForwardDeclareTypedef(llvm::StringRef alias,
+                                                  AccessModifier access,
+                                                  SourceLocation loc);
 
-   static bool isNamespace(const string &);
+   static SymbolTableEntry* declareTypedef(
+                           llvm::StringRef alias,
+                           Type* originTy,
+                           std::vector<TemplateParameter> &&generics = {},
+                           AccessModifier access = AccessModifier::PUBLIC,
+                           const SourceLocation &loc = {});
 
-   static bool hasClass(const string&);
-   static bool hasClass(const string&, const std::vector<string> &);
+   static SymbolTableEntry*
+   declareAlias(llvm::StringRef name,
+                std::vector<TemplateParameter> &&templateParams,
+                std::vector<std::shared_ptr<StaticExpr>> &&constraints,
+                std::shared_ptr<StaticExpr> &&aliasExpr,
+                ast::AliasDecl *decl);
 
-   static bool hasUnion(const string&);
-   static bool hasUnion(const string&, const std::vector<string> &);
+   static size_t declareNamespace(llvm::StringRef name,
+                                  bool isAnonymous = false,
+                                  Namespace *parentNamespace = nullptr);
 
-   static bool hasRecord(const string&);
-   static bool hasRecord(const string&, const std::vector<string> &);
-   static bool hasRecord(const string& name,
-                         std::vector<TemplateArg> &args,
-                         const std::vector<string> &importedNamespaces);
+   static SymbolTableEntry* declareVariable(llvm::StringRef varName,
+                                            const QualType &varType,
+                                            AccessModifier access,
+                                            bool typeDependant,
+                                            size_t nsId,
+                                            ast::Statement *decl,
+                                            const SourceLocation &loc = {});
 
-   static bool hasRecordTemplate(const string &name);
-   static bool hasRecordTemplate(const string&, const std::vector<string> &);
+   static SymbolTableEntry* declareFunction(llvm::StringRef funcName,
+                                            ast::Function *func);
 
-   static bool hasFunctionTemplate(const string &name);
-   static bool hasFunctionTemplate(const string&, const std::vector<string> &);
+   static SymbolTableEntry* declareFunction(ast::Function *func);
 
-   static bool hasTypedef(const string&);
-   static bool hasTypedef(const string&, const std::vector<string> &);
+   static void checkTemplateArgCompatability(ast::Function &newFunc);
 
-   static bool hasVariable(const string&);
-   static bool hasVariable(const string&, const std::vector<string> &);
+   static void checkDuplicateFunctionDeclaration(const SourceLocation &loc,
+                                                 llvm::StringRef name,
+                                                 llvm::StringRef mangledName);
 
-   static size_t numFunctionsWithName(const string &funcName);
+   static void declareAlias(const llvm::Twine &alias,
+                            llvm::StringRef aliasee);
 
-   static cdot::cl::Class* getClass(const string&);
-   static cdot::cl::Class* getClass(const string&, const std::vector<string> &);
+   static size_t isNamespace(llvm::StringRef name,
+                             llvm::ArrayRef<size_t> imports = {},
+                             llvm::ArrayRef<size_t> ns = {});
 
-   static cdot::cl::Union* getUnion(const string&);
-   static cdot::cl::Union* getUnion(const string&, const std::vector<string> &);
+   static bool hasClass(llvm::StringRef name,
+                        llvm::ArrayRef<size_t> imports = {},
+                        llvm::ArrayRef<size_t> ns = {});
 
-   static Record *getRecord(const string &recordName);
-   static Record *getRecord(const string &recordName,
-                            const std::vector<string> &ns);
-   static Record *getRecord(const string &recordName,
-                            TemplateArgList *argList,
-                            const std::vector<string> &ns = {},
-                            bool *isNew = nullptr);
+   static bool hasStruct(llvm::StringRef name,
+                         llvm::ArrayRef<size_t> imports = {},
+                         llvm::ArrayRef<size_t> ns = {});
 
-   static ast::Function *getAnyFn(const string &withName,
-                                  const std::vector<string> &ns);
+   static bool hasProtocol(llvm::StringRef name,
+                           llvm::ArrayRef<size_t> imports = {},
+                          llvm::ArrayRef<size_t> ns = {});
 
-   static RecordTemplate *getRecordTemplate(const string &name);
-   static RecordTemplate *getRecordTemplate(const string &name,
-                                            const std::vector<string> &ns);
+   static bool hasUnion(llvm::StringRef name,
+                        llvm::ArrayRef<size_t> imports = {},
+                        llvm::ArrayRef<size_t> ns = {});
 
-   static CallableTemplate &getFunctionTemplate(const string &name);
-   static CallableTemplate &getFunctionTemplate(const string &name,
-                                                const std::vector<string> &ns);
+   static bool hasEnum(llvm::StringRef name,
+                       llvm::ArrayRef<size_t> imports = {},
+                       llvm::ArrayRef<size_t> ns = {});
 
-   static bool isTemplatedFunction(const string &funcName);
-   static std::vector<TemplateConstraint> &getConstraints(
-      const string &forFunction);
+   static bool hasRecord(llvm::StringRef name,
+                         llvm::ArrayRef<size_t> imports = {},
+                         llvm::ArrayRef<size_t> ns = {});
 
-   static Typedef getTypedef(const string&);
-   static Typedef getTypedef(const string&, const std::vector<string> &);
+   static bool hasFunctionTemplate(llvm::StringRef name,
+                                   llvm::ArrayRef<size_t> imports = {},
+                                   llvm::ArrayRef<size_t> ns = {});
 
-   static Variable& getVariable(const string &);
-   static pair<Variable&, string> getVariable(const string &,
-                                              const std::vector<string> &);
+   static bool hasTypedef(llvm::StringRef name,
+                          llvm::ArrayRef<size_t> imports = {},
+                          llvm::ArrayRef<size_t> ns = {});
 
-   static void setVariable(const string& name, Type* ty);
+   static bool hasVariable(llvm::StringRef name,
+                           llvm::ArrayRef<size_t> imports = {},
+                           llvm::ArrayRef<size_t> ns = {});
 
-   static pair<FunctionIterator, FunctionIterator> getFunction(const string &);
-   static pair<FunctionIterator, FunctionIterator> getFunction(
-      const string &, const std::vector<string> &);
+   static size_t numFunctionsWithName(llvm::StringRef funcName);
 
-   static string mangleVariable(const string &, size_t = 0);
-   static string mangleFunction(const string &, std::vector<Argument> &args);
-   static string mangleFunction(const string &,
-                                std::vector<std::shared_ptr<TypeRef>> &args);
+   static cdot::cl::Class* getClass(llvm::StringRef name,
+                                    llvm::ArrayRef<size_t> imports = {},
+                                    llvm::ArrayRef<size_t> ns = {});
 
-   static string mangleMethod(
-      const string &className,
-      const string &methodName,
-      std::vector<Argument> &args,
-      bool resolveSelf = false
-   );
+   static cdot::cl::Struct* getStruct(llvm::StringRef name,
+                                      llvm::ArrayRef<size_t> imports = {},
+                                     llvm::ArrayRef<size_t> ns = {});
 
-   static Typedef& resolveTypedef(
-      const string &typedefName,
-      std::vector<string> &importedNS
-   );
+   static cdot::cl::Protocol* getProtocol(llvm::StringRef name,
+                                          llvm::ArrayRef<size_t> imports = {},
+                                          llvm::ArrayRef<size_t> ns = {});
 
-   static const unordered_map<string, Record*>& getRecords();
+   static cdot::cl::Union* getUnion(llvm::StringRef name,
+                                    llvm::ArrayRef<size_t> imports = {},
+                                    llvm::ArrayRef<size_t> ns = {});
+
+   static cdot::cl::Enum* getEnum(llvm::StringRef name,
+                                  llvm::ArrayRef<size_t> imports = {},
+                                  llvm::ArrayRef<size_t> ns = {});
+
+   static Record *getRecord(llvm::StringRef recordName,
+                            llvm::ArrayRef<size_t> imports = {},
+                            llvm::ArrayRef<size_t> ns = {});
+
+   static ast::Function *getAnyFn(llvm::StringRef withName,
+                                  llvm::ArrayRef<size_t> imports = {},
+                                  llvm::ArrayRef<size_t> ns = {});
+
+   static bool isTemplatedFunction(llvm::StringRef funcName);
+   static const std::vector<TemplateParameter> &getConstraints(
+      llvm::StringRef forFunction);
+
+   static Typedef *getTypedef(llvm::StringRef name,
+                              llvm::ArrayRef<size_t> imports = {},
+                              llvm::ArrayRef<size_t> ns = {});
+
+   static llvm::ArrayRef<Alias*> getAliases(llvm::StringRef name,
+                                            llvm::ArrayRef<size_t> imports,
+                                            llvm::ArrayRef<size_t> ns);
+
+   static Variable *getVariable(llvm::StringRef name,
+                                llvm::ArrayRef<size_t> imports = {},
+                                llvm::ArrayRef<size_t> ns = {});
+
+   static void setVariable(llvm::StringRef name,
+                           QualType ty);
+
+   static const bool hasFunction(llvm::StringRef name,
+                                 llvm::ArrayRef<size_t> imports = {},
+                                 llvm::ArrayRef<size_t> ns = {});
+
+   static llvm::ArrayRef<Function*> getFunctionOverloads(
+                                          llvm::StringRef name,
+                                          llvm::ArrayRef<size_t> imports = { },
+                                          llvm::ArrayRef<size_t> ns = { });
 
    enum LookupKind {
       LK_Full,
@@ -272,46 +520,127 @@ public:
 
          LRK_Function,
          LRK_GlobalVariable,
+         LRK_Typedef,
 
-         LRK_RecordTemplate,
-         LRK_FunctionTemplate
+         LRK_Alias,
+
+         LRK_Namespace,
       };
 
       bool isRecord() const;
-      bool isFunction() const;
-      bool isGlobalVariable() const;
-      bool isRecordTemplate() const;
-      bool isFunctionTemplate() const;
+      bool isFunction() const { return kind == LRK_Function; }
+      bool isGlobalVariable() const { return kind == LRK_GlobalVariable; }
+      bool isTypedef() const { return kind == LRK_Typedef; }
+      bool isNamespace() const { return kind == LRK_Namespace; }
+      bool isAlias() const { return kind == LRK_Alias; }
+      size_t getNamespaceID() const { return namespaceID; }
+      size_t getSpecificity() const { return specificity; }
 
       LookupResultKind kind;
+      size_t namespaceID = 0;
+
       union {
-         Record *record = nullptr;
-         Class *cl;
-         Enum *en;
-         Union *un;
-         ast::Function *fun;
-         RecordTemplate *recordTemplate;
-         CallableTemplate *callableTemplate;
+         SymbolTableEntry *Entry;
+         Namespace *NS;
       };
+
+      size_t specificity = 0;
    };
 
-   static LookupResult lookup(const string &symbolName,
-                              const std::vector<string> &inNamespaces,
+   static SymbolTableEntry *findEntry(llvm::StringRef symbolName);
+   static LookupResult lookup(llvm::StringRef symbolName,
+                              llvm::ArrayRef<size_t> inNamespaces,
+                              llvm::ArrayRef<size_t> NSStack,
                               LookupKind kind = LK_Full);
 
 private:
    SymbolTable() = default;
 
-   static unordered_map<string, Record*> Records;
-   static unordered_map<string, RecordTemplate> RecordTemplates;
+public:
 
-   static unordered_map<string, Typedef> typedefs;
-   static unordered_map<string, Variable> variables;
-   static std::unordered_multimap<string, std::unique_ptr<ast::Function>>
-      functions;
-   static std::vector<string> namespaces;
-   static unordered_map<string, string> TemporaryAliases;
+   static const llvm::StringMap<SymbolTableEntry> &getEntries()
+   {
+      return Entries;
+   }
+
+private:
+   static SymbolTableEntry*
+   addEntry(llvm::StringRef name, SymbolTableEntry &&entry);
+
+   static llvm::StringMap<SymbolTableEntry> Entries;
+   static llvm::StringMap<Namespace> Namespaces;
+   static std::unordered_map<size_t, Namespace*> NamespaceIDs;
+
+   static llvm::StringMap<string> Aliases;
+
+   static Namespace *lookupNamespace(llvm::StringRef name);
+
+   template<class T>
+   static T *findSingleEntry(llvm::StringRef needle,
+                             llvm::StringMap<T> &haystack) {
+      auto it = Aliases.find(needle);
+      if (it != Aliases.end())
+         return findSingleEntry(it->second, haystack);
+
+      auto it2 = haystack.find(needle);
+      if (it2 != haystack.end())
+         return &it2->second;
+
+      return nullptr;
+   }
+
+   template<class T>
+   static T *lookupInNamespaces(llvm::StringRef needle,
+                                llvm::StringMap<T> &haystack,
+                                llvm::ArrayRef<size_t> NSStack,
+                                llvm::ArrayRef<size_t> imports) {
+      auto EntryPtr = findSingleEntry(needle, haystack);
+      bool foundInNamespace = false;
+      llvm::SmallString<128> ScratchBuf;
+
+      for (auto id : NSStack) {
+         auto ns = NamespaceIDs.find(id);
+         if (ns == NamespaceIDs.end())
+            continue;
+
+         ScratchBuf += ns->second->name;
+         ScratchBuf += '.';
+         ScratchBuf += needle;
+
+         auto NextEntry = findSingleEntry(ScratchBuf.str(), haystack);
+         if (NextEntry) {
+            EntryPtr = NextEntry;
+            foundInNamespace = true;
+            break;
+         }
+
+         ScratchBuf.clear();
+      }
+
+      if (!foundInNamespace) {
+         for (auto id : imports) {
+            auto ns = NamespaceIDs.find(id);
+            if (ns == NamespaceIDs.end())
+               continue;
+
+            ScratchBuf += ns->second->name;
+            ScratchBuf += '.';
+            ScratchBuf += needle;
+
+            auto NextEntry = findSingleEntry(ScratchBuf.str(), haystack);
+            if (NextEntry) {
+               EntryPtr = NextEntry;
+               break;
+            }
+
+            ScratchBuf.clear();
+         }
+      }
+
+      return EntryPtr;
+   }
 };
 
+} // namespace cdot
 
 #endif //CDOT_SYMBOLTABLE_H

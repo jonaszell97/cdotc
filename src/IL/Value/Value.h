@@ -10,9 +10,9 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/SmallVector.h>
 
-#include "../ILType.h"
-
+#include "../../Variant/Type/QualType.h"
 #include "../../lex/SourceLocation.h"
+#include "Use.h"
 
 namespace cdot {
 
@@ -22,8 +22,9 @@ namespace il {
 
 class MDSet;
 class MetaData;
-class Use;
 enum MDKind : unsigned;
+class ValueSymbolTable;
+class MDLocation;
 
 class Value {
 public:
@@ -32,20 +33,22 @@ public:
 #     include "Instructions.def"
    };
 
-protected:
-   Value(TypeID id, Type *ty,
-         const std::string &name = "",
-         const SourceLocation &loc = {});
+   friend class ValueSymbolTable;
 
-   Value(TypeID id, ILType ty,
-         const std::string &name = "",
-         const SourceLocation &loc = {});
+protected:
+   Value(TypeID id, Type *ty);
+   Value(TypeID id, QualType ty);
+
+#  ifndef NDEBUG
+   virtual
+#  endif
+   ~Value();
 
    TypeID id : 16;
    unsigned Flags : 16;
    unsigned SubclassData : 32;
 
-   ILType type;
+   QualType type;
    std::string name;
 
    Use *uses;
@@ -56,22 +59,26 @@ protected:
    };
 
 private:
-   static llvm::SmallVector<Value*, 16> CreatedValues;
+   static llvm::SmallVector<Value*, 256> CreatedValues;
+   void setNameNoCheck(llvm::StringRef name) { this->name = name.str(); }
 
 public:
    static bool classof(Value const* T) { return true; }
    static void cleanup();
 
    void deleteValue();
+   void checkIfStillInUse();
 
    TypeID getTypeID() const;
-   ILType getType() const;
+   QualType getType() const;
 
    void setFlag(Flag f, bool value);
    bool getFlag(Flag f) const;
 
    bool isLvalue() const;
    void setIsLvalue(bool lvalue);
+
+   bool isSelf() const;
 
    Use const* getUses() const
    {
@@ -83,19 +90,35 @@ public:
       return uses;
    }
 
+   Use::iterator use_begin() { return uses ? uses->begin() : Use::iterator(); }
+   Use::iterator use_end()   { return uses ? uses->end() : Use::iterator(); }
+
+//   Use::const_iterator use_begin() const { return uses->begin(); }
+//   Use::const_iterator use_end()   const { return uses->end(); }
+
+   void removeFromParent();
+
    void addUse(Value *User);
+   void removeUser(Value *User);
+
    size_t getNumUses() const;
    bool isUnused() const;
 
+   void replaceAllUsesWith(Value *V);
+
    llvm::StringRef getName() const;
-   void setName(const std::string &name);
+   void setName(llvm::StringRef name);
    bool hasName() const;
 
-   const SourceLocation &getLocation() const;
+   MDLocation *getLocation() const;
    void setLocation(const SourceLocation &location);
+
+   SourceLocation getSourceLoc() const;
 
    MDSet *getMetaData() const;
    bool hasMetaData(MDKind kind) const;
+
+   void addMetaData(MetaData *MD);
 
    MetaData *getMetaData(MDKind kind) const;
 

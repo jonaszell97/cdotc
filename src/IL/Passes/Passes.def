@@ -1,0 +1,30 @@
+
+#ifdef CDOT_ALL
+#  define CDOT_VERIFIER_PASS(Name) CDOT_ALL(Name)
+#  define CDOT_ANALYSIS_PASS(Name) CDOT_ALL(Name)
+#  define CDOT_SIMPLIFY_PASS(Name) CDOT_ALL(Name)
+#  define CDOT_OUTPUT_PASS(Name)   CDOT_ALL(Name)
+#endif
+
+#ifdef CDOT_VERIFIER_PASS
+   CDOT_VERIFIER_PASS(ReturnVerifierPass)
+   CDOT_VERIFIER_PASS(VerifierPass)
+#endif
+
+#ifdef CDOT_ANALYSIS_PASS
+
+#endif
+
+#ifdef CDOT_SIMPLIFY_PASS
+   CDOT_SIMPLIFY_PASS(PrimitivePromoter)
+#endif
+
+#ifdef CDOT_OUTPUT_PASS
+   CDOT_OUTPUT_PASS(IRGen)
+#endif
+
+#undef CDOT_ALL
+#undef CDOT_VERIFIER_PASS
+#undef CDOT_ANALYSIS_PASS
+#undef CDOT_SIMPLIFY_PASS
+#undef CDOT_OUTPUT_PASS

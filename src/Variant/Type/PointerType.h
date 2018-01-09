@@ -5,7 +5,6 @@
 #ifndef CDOT_POINTERTYPE_H
 #define CDOT_POINTERTYPE_H
 
-#include "Type.h"
 #include "QualType.h"
 
 namespace cdot {
@@ -23,43 +22,22 @@ namespace cdot {
          return pointeeType;
       }
 
-      inline bool hasDefaultValue() const override
+      size_t getSize() const
       {
-         return true;
+         return sizeof(void*);
       }
 
-      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override
+      unsigned short getAlignment() const
       {
-         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()
-                                                          ->getPointerTo());
+         return alignof(void*);
       }
 
-      llvm::Constant* getConstantVal(Variant& val) const override
-      {
-         return llvm::ConstantPointerNull::get(pointeeType->getLlvmType()
-                                                          ->getPointerTo());
-      }
-
-      bool isPointerToStruct() const override
-      {
-         return pointeeType->isStruct();
-      }
-
-      string toString() const override;
-      llvm::Type* getLlvmType() const override;
-
-      bool implicitlyCastableTo(Type*) const override;
-      bool explicitlyCastableTo(Type*) const override;
+      std::string toString() const;
 
       static bool classof(Type const* T)
       {
          return T->getTypeID() == TypeID::PointerTypeID;
       }
-
-      typedef std::unique_ptr<PointerType> UniquePtr;
-      typedef std::shared_ptr<PointerType> SharedPtr;
-
-      friend class TypeRef;
 
    protected:
       const QualType pointeeType;

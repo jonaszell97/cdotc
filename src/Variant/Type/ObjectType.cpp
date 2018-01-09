@@ -4,6 +4,8 @@
 
 #include "ObjectType.h"
 
+#include <llvm/ADT/StringSwitch.h>
+
 #include "../../AST/SymbolTable.h"
 
 #include "../../AST/Passes/CodeGen/CGMemory.h"
@@ -17,48 +19,58 @@
 #include "PointerType.h"
 #include "../../AST/Passes/CodeGen/CodeGen.h"
 #include "../../AST/Passes/Declaration/DeclPass.h"
+#include "../../AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+
+using namespace cdot::support;
+using cl::Class;
 
 namespace cdot {
 
-using cl::Class;
+namespace {
 
-ObjectType* ObjectType::get(const string &className)
+Type::BoxedPrimitive getBoxedPrimitiveType(llvm::StringRef name)
 {
-   auto key = "__obj." + className;
+   using BP = Type::BoxedPrimitive ;
+   return llvm::StringSwitch<Type::BoxedPrimitive>(name)
+#     define CDOT_PRIMITIVE(Name, BW, Unsigned) \
+      .Case(#Name, BP::Name)
+#     include "Primitive.def"
+      .Default(BP::BP_None);
+}
+
+} // anonymous namespace
+
+ObjectType* ObjectType::get(cl::Record *record)
+{
+   auto key = "__obj." + record->getName().str();
    if (Instances.find(key) == Instances.end()) {
-      Instances.try_emplace(key, new ObjectType(className));
+      Instances.try_emplace(key, new ObjectType(record,
+                                     getBoxedPrimitiveType(record->getName())));
    }
 
    return cast<ObjectType>(Instances[key]);
 }
 
-ObjectType::ObjectType(const string &className)
+ObjectType* ObjectType::get(llvm::StringRef className)
 {
-   this->className = className;
-   id = TypeID::ObjectTypeID;
-   if (SymbolTable::hasRecord(this->className)) {
-      auto cl = SymbolTable::getRecord(className);
-      is_struct = cl->isStruct();
-      is_protocol = cl->isProtocol();
-      is_enum = cl->isEnum();
-      is_union = cl->isUnion();
+   return get(SymbolTable::getRecord(className));
+}
 
-      if (is_enum) {
-         auto en = cl->getAs<Enum>();
-         is_raw_enum = !en->hasAssociatedValues();
-      }
+ObjectType* ObjectType::get(BoxedPrimitive primitive)
+{
+   switch (primitive) {
+#  define CDOT_PRIMITIVE(Name, BW, Unsigned) \
+      case Name: return get(#Name);
+#  include "Primitive.def"
+      default:
+         llvm_unreachable("not a primitive!");
    }
 }
 
-ObjectType* ObjectType::getOptionOf(Type *T)
+ObjectType::ObjectType(cl::Record *record, BoxedPrimitive primitive)
+   : Rec(record), primitiveType(primitive)
 {
-   std::vector<TemplateArg> templateArgs{TemplateArg(GenericType::get("T", T))};
-
-   // instantiate option type
-   auto rec = SymbolTable::getRecord("Option",
-      new ResolvedTemplateArgList(move(templateArgs)));
-
-   return get(rec->getName());
+   id = TypeID::ObjectTypeID;
 }
 
 ObjectType* ObjectType::getAnyTy()
@@ -66,359 +78,129 @@ ObjectType* ObjectType::getAnyTy()
    return get("Any");
 }
 
-Record* ObjectType::getRecord() const
+const sema::TemplateArgList& ObjectType::getTemplateArgs() const
 {
-   return SymbolTable::getRecord(className);
-}
-
-const std::vector<TemplateArg>& ObjectType::getTemplateArgs() const
-{
-   auto rec = getRecord();
-   assert(rec->isTemplated());
-
-   return rec->getTemplateArgs();
+   return Rec->getTemplateArgs();
 }
 
 bool ObjectType::hasTemplateArgs() const
 {
-   return getRecord()->isTemplated();
+   return !getTemplateArgs().empty();
 }
 
-GenericType *const
-ObjectType::getNamedTemplateArg(const string &genericName) const
-{
-   auto &templateArgs = getTemplateArgs();
-   for (const auto& gen : templateArgs) {
-      if (!gen.isTypeName()) {
-         continue;
-      }
-      if (gen.getGenericTy()->getClassName() == genericName) {
-         return gen.getGenericTy();
-      }
-   }
-
-   return nullptr;
-}
-
-bool ObjectType::isOptionTy() const
+bool ObjectType::isRawEnum() const
 {
    auto rec = getRecord();
-   if (!rec->isTemplated()) {
-      return false;
-   }
-
-   return rec->getTemplate()->recordName == "Option";
-}
-
-bool ObjectType::isOptionOf(const string &className) const
-{
-   if (!isOptionTy()) {
-      return false;
-   }
-
-   auto TemplateArg = getRecord()->getTemplateArg("T");
-   return TemplateArg.isTypeName() && TemplateArg.getGenericTy()
-                                                 ->getActualType()
-                                                 ->getClassName() == className;
-}
-
-bool ObjectType::needsCleanup() const
-{
-   return isRefcounted() || (is_struct && getRecord()
-      ->getAs<Class>()->hasNonEmptyDeinitializer());
+   return rec && rec->isRawEnum();
 }
 
 Type* ObjectType::unbox() const
 {
-   assert(util::matches(
-      "(Float|Double|U?Int(1|8|16|32|64)?)",
-      className
-   ) && "Not a primitive!");
+   assert(isBoxedPrimitive());
+   switch (primitiveType) {
+      case Float:
+         return FPType::getFloatTy();
+      case Double:
+         return FPType::getDoubleTy();
+      case Bool:
+         return IntegerType::getBoolTy();
+      case Char:
+         return IntegerType::getCharTy();
+      default: {
+         unsigned bw = primitiveType;
+         bool isUnsigned = false;
+         if (bw > 100) {
+            isUnsigned = true;
+            bw -= 100;
+         }
 
-   if (className == "Float") {
-      return FPType::getFloatTy();
+         return IntegerType::get(bw, isUnsigned);
+      }
    }
-   if (className == "Double") {
-      return FPType::getDoubleTy();
-   }
-
-   bool isUnsigned = false;
-   string className = this->className;
-
-   if (className.front() == 'U') {
-      isUnsigned = true;
-      className = className.substr(1);
-   }
-
-   if (className.length() <= 3) {
-      return IntegerType::get();
-   }
-
-   return IntegerType::get(std::stoi(className.substr(3)), isUnsigned);
 }
 
-bool ObjectType::implicitlyCastableTo(Type *other) const
+bool ObjectType::isBoxedEquivOf(Type const* other) const
 {
+   if (is(BP_None))
+      return false;
+
    switch (other->getTypeID()) {
-      case TypeID::GenericTypeID:
-         return implicitlyCastableTo(other->asGenericTy()->getActualType());
-      case TypeID::AutoTypeID:
-         return true;
-      case TypeID::FunctionTypeID:
-         return false;
-      case TypeID::PointerTypeID: {
-         auto asPtr = other->asPointerTy();
-         auto pointee = asPtr->getPointeeType();
-
-         // string to char array
-         if (pointee->isIntegerTy()) {
-            return pointee->getBitwidth() == 8 && !pointee->isUnsigned();
-         }
-
-         // special handling for structs
-         if (is_struct && implicitlyCastableTo(*pointee)) {
+      case TypeID::FPTypeID:
+         return primitiveType == (other->isFloatTy() ? Float : Double);
+      case TypeID::IntegerTypeID: {
+         if (other->getBitwidth() == 8 && primitiveType == Char)
             return true;
-         }
 
-         return false;
-      }
-      case TypeID::ObjectTypeID: {
-         auto asObj = other->asObjTy();
-         auto& otherClassName = other->getClassName();
+         if (other->getBitwidth() == 1 && primitiveType == Bool)
+            return true;
 
-         if (!SymbolTable::hasClass(otherClassName)) {
+         unsigned bw = primitiveType;
+         if (bw > 200)
             return false;
+
+         bool isUnsigned = false;
+         if (bw > 100) {
+            isUnsigned = true;
+            bw -= 100;
          }
 
-         if (SymbolTable::getClass(otherClassName)->isProtocol()) {
-            if (className == otherClassName) {
-               return true;
-            }
-
-            return SymbolTable::getClass(className)
-               ->conformsTo(otherClassName);
-         }
-
-         if (otherClassName == "String") {
-            return SymbolTable::getClass(className)
-               ->conformsTo("StringRepresentable");
-         }
-
-         if (className != asObj->className) {
-            cdot::cl::Class* cl = SymbolTable::getClass(asObj->className);
-
-            return cl->isBaseClassOf(className) ||
-               SymbolTable::getClass(className)->conformsTo(asObj->className);
-         }
-
-         return true;
-      }
-      case TypeID::IntegerTypeID: {
-         if (is_enum) {
-            auto en = SymbolTable::getClass(className);
-            return !en->getAs<Enum>()->hasAssociatedValues();
-         }
-
-         if (other->isIntNTy(8) && className == "Char") {
-            return true;
-         }
-
-         if (other->isIntNTy(1) && className == "Bool") {
-            return true;
-         }
-
-         if (isBoxedEquivOf(other)) {
-            return true;
-         }
-
-         if (isBoxedPrimitive()) {
-            auto unboxed = unbox();
-            if (unboxed->implicitlyCastableTo(other)) {
-               return true;
-            }
-         }
-
-         auto cl = SymbolTable::getClass(className);
-         auto op = "infix as " + other->toString();
-
-         return cl->hasMethodWithName(op);
-      }
-      case TypeID::FPTypeID: {
-         if (isBoxedEquivOf(other)) {
-            return true;
-         }
-
-         auto asFloat = cast<FPType>(other);
-         string boxedCl = asFloat->getPrecision() == 64 ? "Double" : "Float";
-
-         return className == boxedCl;
+         return other->isIntNTy(bw, isUnsigned);
       }
       default:
          return false;
    }
 }
 
-bool ObjectType::explicitlyCastableTo(Type *other) const
+unsigned short ObjectType::getAlignment() const
 {
-   if (implicitlyCastableTo(other)) {
-      return true;
-   }
-
-   switch (other->getTypeID()) {
-      case TypeID::IntegerTypeID:
-         return true;
-      default:
-         return false;
-   }
-}
-
-bool ObjectType::isBoxedEquivOf(Type *other) const
-{
-   switch (other->getTypeID()) {
-      case TypeID::IntegerTypeID: {
-         auto asInt = cast<IntegerType>(other);
-         if (className == "Bool") {
-            return asInt->getBitwidth() == 1;
-         }
-         if (className == "Char") {
-            return asInt->getBitwidth() == 8;
-         }
-
-         string boxedCl = string(asInt->isUnsigned() ? "U" : "")
-                          + "Int" + std::to_string(asInt->getBitwidth());
-         return className == boxedCl
-                || (asInt->getBitwidth() == sizeof(int*) * 8
-                    && className == "Int");
-      }
-      case TypeID::FPTypeID: {
-         auto asFloat = cast<FPType>(other);
-         return (className == "Double" && asFloat->getPrecision() == 64) ||
-            (className == "Float" && asFloat->getPrecision() == 32);
-      }
-      default:
-         return false;
-   }
-}
-
-bool ObjectType::isRefcounted() const
-{
-   return !is_protocol && !is_struct && !is_enum;
-}
-
-bool ObjectType::isValueType() const
-{
-   return is_protocol || is_struct || is_enum;
-}
-
-bool ObjectType::hasDefaultValue() const
-{
-   return false;
-}
-
-unsigned ObjectType::getBitwidth() const
-{
-   assert(is_raw_enum);
-   return getRecord()->getAs<Enum>()->getRawType()->getBitwidth();
-}
-
-bool ObjectType::isUnsigned() const
-{
-   assert(is_raw_enum);
-   return getRecord()->getAs<Enum>()->getRawType()->isUnsigned();
-}
-
-llvm::Value* ObjectType::getDefaultVal(ast::CodeGen &CGM) const
-{
-   if (is_struct) {
-      auto& fields = SymbolTable::getClass(className)->getFields();
-      std::vector<llvm::Constant*> vals;
-      for (const auto& field : fields) {
-         if (field.second->isStatic) {
-            continue;
-         }
-
-         vals.push_back(llvm::cast<llvm::Constant>(
-            field.second->fieldType->getDefaultVal(CGM)));
-      }
-
-      return llvm::ConstantStruct::get(ast::CodeGen::getStructTy(className),
-                                       vals);
-   }
-
-   return llvm::ConstantPointerNull::get(ast::CodeGen::getStructTy(className)
-                                            ->getPointerTo());
-}
-
-llvm::Constant* ObjectType::getConstantVal(Variant &val) const
-{
-   assert(isBoxedPrimitive() && "Can't emit constant val otherwise");
-
-   auto unboxed = unbox();
-   auto intVal = unboxed->getConstantVal(val);
-
-   return llvm::ConstantStruct::get(
-      ast::CodeGen::getStructTy(className),
-      { intVal }
-   );
-}
-
-short ObjectType::getAlignment() const
-{
-   if (is_raw_enum) {
-      return static_cast<cl::Enum*>(getRecord())->getRawType()->getAlignment();
-   }
-
-   return SymbolTable::getClass(className)->getAlignment();
+   return Rec->getAlignment();
 }
 
 size_t ObjectType::getSize() const
 {
-   return SymbolTable::getRecord(className)->getSize();
-}
-
-llvm::Type* ObjectType::getLlvmType() const
-{
-   if (is_enum) {
-      auto en = static_cast<cl::Enum*>(getRecord());
-      if (!is_raw_enum) {
-         return CodeGen::getStructTy(className);
-      }
-
-      return en->getRawType()->getLlvmType();
-   }
-   else if (is_struct || is_protocol) {
-      return CodeGen::getStructTy(className);
-   }
-   else if (is_union) {
-      return llvm::IntegerType::get(CodeGen::Context, 8)->getPointerTo();
-   }
-   else {
-      return CodeGen::getStructTy(className)->getPointerTo();
-   }
+   return Rec->getSize();
 }
 
 string ObjectType::toString() const
 {
-   return className;
+   return Rec->getName();
 }
 
-DummyObjectType::DummyObjectType(
-   const string &className,
-   std::vector<TemplateArg> &templateArgs)
-   : ObjectType(className), templateArgs(templateArgs)
+InconcreteObjectType*
+InconcreteObjectType::get(llvm::StringRef className,
+                          sema::TemplateArgList &&templateArgs) {
+   return get(SymbolTable::getRecord(className), std::move(templateArgs));
+}
+
+InconcreteObjectType*
+InconcreteObjectType::get(cl::Record *record,
+                          sema::TemplateArgList &&templateArgs) {
+   llvm::SmallString<128> fullName("__iobj");
+   fullName += record->getName();
+   fullName += templateArgs.toString();
+
+   if (Instances.find(fullName.str()) == Instances.end()) {
+      Instances.try_emplace(fullName.str(),
+                            new InconcreteObjectType(record,
+                                                     std::move(templateArgs)));
+   }
+
+   return cast<InconcreteObjectType>(Instances[fullName.str()]);
+}
+
+InconcreteObjectType::InconcreteObjectType(llvm::StringRef className,
+                                           sema::TemplateArgList &&templateArgs)
+   : InconcreteObjectType(SymbolTable::getRecord(className),
+                          std::move(templateArgs))
 {
 
 }
-
-DummyObjectType* DummyObjectType::get(const string &className,
-                                      std::vector<TemplateArg> &templateArgs) {
-   auto name = className + util::TemplateArgsToString(templateArgs);
-   if (Instances.find(name) == Instances.end()) {
-      Instances.try_emplace(name, new DummyObjectType(className,
-                                                  templateArgs));
-   }
-
-   return cast<DummyObjectType>(Instances[name]);
+InconcreteObjectType::InconcreteObjectType(cl::Record *record,
+                                           sema::TemplateArgList &&templateArgs)
+   : ObjectType(record), templateArgs(std::move(templateArgs))
+{
+   assert(!record->getSpecializedTemplate());
+   id = TypeID::InconcreteObjectTypeID;
 }
 
 } // namespace cdot

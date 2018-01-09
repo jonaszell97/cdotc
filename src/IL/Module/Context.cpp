@@ -4,28 +4,47 @@
 
 #include "Context.h"
 #include "Module.h"
+
+#include "../Value/ValueSymbolTable.h"
 #include "../Value/Function/Method.h"
 #include "../Value/Record/AggregateType.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-llvm::SmallVector<Context*, 4> Context::CreatedContexts;
-
 Context::Context()
 {
-   CreatedContexts.push_back(this);
+
+}
+
+void Context::registerType(AggregateType *Type)
+{
+   Types.try_emplace(Type->getName(), Type);
 }
 
 AggregateType *Context::getType(llvm::StringRef name,
-                                Module *M, bool recursive) const {
+                                Module *M) const {
    auto it = Types.find(name);
    if (it == Types.end()) {
       llvm_unreachable("type not found");
    }
 
-   M->addTypeReference(it->second, recursive);
-   return it->second;
+   auto ty = cast<AggregateType>(it->second);
+   M->addTypeReference(ty);
+
+   return ty;
+}
+
+AggregateType * Context::getType(llvm::StringRef name) const
+{
+   auto it = Types.find(name);
+   if (it == Types.end()) {
+      llvm_unreachable("type not found");
+   }
+
+   return cast<AggregateType>(it->second);
 }
 
 AggregateType * Context::hasType(llvm::StringRef name) const
@@ -35,14 +54,25 @@ AggregateType * Context::hasType(llvm::StringRef name) const
       return nullptr;
    }
 
-   return it->second;
+   return dyn_cast<AggregateType>(it->second);
 }
 
-Function *Context::getFunction(llvm::StringRef name)
+Function * Context::getFunction(llvm::StringRef name)
 {
    for (const auto &M : Modules) {
       auto fun = M->getOwnFunction(name);
-      if (fun) {
+      if (fun)
+         return fun;
+   }
+
+   return nullptr;
+}
+
+Function *Context::getFunctionDefinition(llvm::StringRef name)
+{
+   for (const auto &M : Modules) {
+      auto fun = M->getOwnFunction(name);
+      if (fun && !fun->isDeclared()) {
          return fun;
       }
    }
@@ -62,27 +92,16 @@ GlobalVariable *Context::getGlobal(llvm::StringRef name)
    return nullptr;
 }
 
-void Context::registerModule(Module *M)
+GlobalVariable * Context::getGlobalDefinition(llvm::StringRef name)
 {
-   Modules.push_back(M);
-}
+   for (const auto &M : Modules) {
+      auto glob = M->getOwnGlobal(name);
+      if (glob && !glob->isDeclared()) {
+         return glob;
+      }
+   }
 
-const llvm::SmallVector<Module *, 8> &Context::getModules() const
-{
-   return Modules;
-}
-
-void Context::registerType(AggregateType *Type)
-{
-   assert(Types.find(Type->getName()) == Types.end()
-          && "duplicate type declaration");
-
-   Types.try_emplace(Type->getName(), Type);
-}
-
-const llvm::StringMap<AggregateType *> &Context::getTypes() const
-{
-   return Types;
+   return nullptr;
 }
 
 } // namespace il

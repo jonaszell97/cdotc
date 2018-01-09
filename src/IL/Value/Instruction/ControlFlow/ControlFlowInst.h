@@ -5,70 +5,52 @@
 #ifndef CDOT_IFINST_H
 #define CDOT_IFINST_H
 
-#include "../Instruction.h"
+#include "../Terminator/TerminatorInst.h"
+#include "../MultiOperandInst.h"
 
 namespace cdot {
 namespace il {
 
 class Constant;
+class ConstantInt;
 
-class ControlFlowInst: public Instruction {
-public:
-   ControlFlowInst(TypeID id,
-                   BasicBlock *parent,
-                   const std::string &name = "",
-                   const SourceLocation &loc = {});
-
-   static inline bool classof(Value const* T) {
-      switch(T->getTypeID()) {
-#     define CDOT_TERM_INST(Name) \
-         case Name##ID:
-#     include "../../Instructions.def"
-            return true;
-         default:
-            return false;
-      }
-   }
-};
-
-class BrInst: public ControlFlowInst {
+class BrInst: public TerminatorInst, public MultiOperandInst {
 public:
    BrInst(Value *Condition,
           BasicBlock *IfBranch,
-          llvm::SmallVector<Value*, 4> &&TargetArgs,
+          llvm::ArrayRef<Value*> TargetArgs,
           BasicBlock *ElseBranch,
-          llvm::SmallVector<Value*, 4> &&ElseArgs,
-          BasicBlock *parent,
-          const std::string &name = "",
-          const SourceLocation &loc = {});
+          llvm::ArrayRef<Value*> ElseArgs,
+          BasicBlock *parent);
 
    BrInst(BasicBlock *TargetBranch,
-          llvm::SmallVector<Value*, 4> &&BlockArgs,
-          BasicBlock *parent,
-          const std::string &name = "",
-          const SourceLocation &loc = {});
+          llvm::ArrayRef<Value*> TargetArgs,
+          BasicBlock *parent);
 
-   explicit BrInst(BasicBlock *parent,
-                   const std::string &name = "",
-                   const SourceLocation &loc = {});
+   explicit BrInst(BasicBlock *parent);
 
-   BasicBlock *getTargetBranch() const;
+   BasicBlock *getTargetBranch() const { return TargetBranch; }
    void setTargetBranch(BasicBlock *TargetBranch);
 
-   Value *getCondition() const;
-   BasicBlock *getElseBranch() const;
+   Value *getCondition() const { return Condition; }
+   BasicBlock *getElseBranch() const { return ElseBranch; }
 
-   const llvm::SmallVector<Value *, 4> &getTargetArgs() const;
+   llvm::ArrayRef<Value*> getTargetArgs() const;
+   llvm::ArrayRef<Value*> getElseArgs() const;
 
-   const llvm::SmallVector<Value *, 4> &getElseArgs() const;
+   op_iterator op_begin_impl() { return &Operands[0]; }
+   op_iterator op_end_impl() { return Operands + numOperands; }
+   op_const_iterator op_begin_impl() const { return &Operands[0]; }
+   op_const_iterator op_end_impl() const { return Operands + numOperands; }
+
+   unsigned getNumOperandsImpl() const { return numOperands; }
 
 protected:
    Value *Condition;
    BasicBlock *TargetBranch;
    BasicBlock *ElseBranch;
 
-   llvm::SmallVector<Value*, 4> TargetArgs;
-   llvm::SmallVector<Value*, 4> ElseArgs;
+   size_t numTargetArgs;
 
 public:
    static bool classof(Value const* T)
@@ -77,20 +59,26 @@ public:
    }
 };
 
-class SwitchInst: public ControlFlowInst {
+class SwitchInst: public TerminatorInst {
 public:
-   typedef std::pair<Value*, BasicBlock*> CasePair;
+   typedef std::pair<ConstantInt*, BasicBlock*> CasePair;
 
    SwitchInst(Value *SwitchVal,
-              BasicBlock *parent,
-              const std::string &name = "",
-              const SourceLocation &loc = {});
+              BasicBlock *parent);
 
    Value *getSwitchVal() const;
    const llvm::SmallVector<CasePair, 4> &getCases() const;
+   BasicBlock* getDefault() const;
 
-   void addCase(Value *val, BasicBlock *Dst);
+   void addCase(ConstantInt *val, BasicBlock *Dst);
    void addDefaultCase(BasicBlock *dst);
+
+   op_iterator op_begin_impl() { return &SwitchVal; }
+   op_iterator op_end_impl() { return &SwitchVal + 1; }
+   op_const_iterator op_begin_impl() const { return &SwitchVal; }
+   op_const_iterator op_end_impl() const { return &SwitchVal + 1; }
+
+   unsigned getNumOperandsImpl() const { return 1; }
 
 protected:
    Value *SwitchVal;
@@ -103,7 +91,7 @@ public:
    }
 };
 
-class LandingPadInst: public ControlFlowInst {
+class LandingPadInst: public TerminatorInst {
 public:
    struct CatchClause {
       Type *CaughtType;
@@ -112,9 +100,7 @@ public:
 
    typedef llvm::SmallVector<CatchClause, 2> CatchClauseList;
 
-   explicit LandingPadInst(BasicBlock *parent,
-                           const std::string &name = "",
-                           const SourceLocation &loc = {});
+   explicit LandingPadInst(BasicBlock *parent);
 
    const CatchClauseList &getCatchClauses() const
    {

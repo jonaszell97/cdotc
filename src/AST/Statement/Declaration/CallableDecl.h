@@ -7,11 +7,13 @@
 
 #include "../Statement.h"
 #include "../../../Variant/Type/Generic.h"
+#include "../../../Basic/Precedence.h"
 
 namespace cdot {
 namespace ast {
 
 class FuncArgDecl;
+class StaticExpr;
 
 class CallableDecl: public Statement {
 public:
@@ -35,9 +37,15 @@ protected:
                 AccessModifier am,
                 string &&name,
                 std::shared_ptr<TypeRef> &&returnType,
-                std::vector<std::shared_ptr<FuncArgDecl>> &&args)
+                std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+                std::vector<TemplateParameter> &&templateParams,
+                std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
+                std::shared_ptr<CompoundStmt> &&body,
+                OperatorInfo op)
       : Statement(typeID), am(am), name(move(name)),
-        returnType(move(returnType)), args(move(args))
+        returnType(move(returnType)), args(move(args)),
+        body(move(body)), templateParams(move(templateParams)),
+        Constraints(move(Constraints)), op(op)
    {
 
    }
@@ -49,11 +57,19 @@ protected:
    std::vector<std::shared_ptr<FuncArgDecl>> args;
    std::shared_ptr<CompoundStmt> body;
 
+   std::vector<TemplateParameter> templateParams;
+   std::vector<std::shared_ptr<StaticExpr>> Constraints;
+
    std::vector<Statement::SharedPtr> innerDeclarations;
 
    bool has_sret = false;
 
    Callable *callable = nullptr;
+   size_t methodID = 0;
+
+   OperatorInfo op;
+
+   Callable *specializedTemplate = nullptr;
 
 public:
    AccessModifier getAm() const
@@ -86,9 +102,9 @@ public:
       CallableDecl::args = args;
    }
 
-   void setBody(std::shared_ptr<CompoundStmt> &body)
+   void setBody(std::shared_ptr<CompoundStmt> &&body)
    {
-      this->body = body;
+      this->body = move(body);
    }
 
    const std::shared_ptr<TypeRef> &getReturnType() const
@@ -145,6 +161,74 @@ public:
    void setCallable(Callable *callable)
    {
       CallableDecl::callable = callable;
+   }
+
+   std::vector<TemplateParameter> &getTemplateParams()
+   {
+      return templateParams;
+   }
+
+   const std::vector<std::shared_ptr<StaticExpr>> &getConstraints() const
+   {
+      return Constraints;
+   }
+
+   size_t getMethodID() const
+   {
+      return methodID;
+   }
+
+   void setMethodID(size_t methodID)
+   {
+      CallableDecl::methodID = methodID;
+   }
+
+   OperatorInfo &getOperator()
+   {
+      return op;
+   }
+
+   bool isOperator() const
+   {
+      return op.getPrecedenceGroup().isValid();
+   }
+
+   Callable *getSpecializedTemplate() const
+   {
+      return specializedTemplate;
+   }
+
+   void setSpecializedTemplate(Callable *specializedTemplate)
+   {
+      CallableDecl::specializedTemplate = specializedTemplate;
+   }
+};
+
+class TypeRef;
+class CompoundStmt;
+
+class FunctionDecl : public CallableDecl {
+public:
+   FunctionDecl(AccessModifier am,
+                string &&funcName,
+                std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+                std::shared_ptr<TypeRef> &&returnType,
+                std::vector<TemplateParameter> &&templateParams,
+                std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
+                std::shared_ptr<CompoundStmt> &&body,
+                OperatorInfo op)
+      : CallableDecl(FunctionDeclID, am, move(funcName), move(returnType),
+                     move(args), move(templateParams), move(Constraints),
+                     move(body), op)
+   {
+
+   }
+
+   typedef std::shared_ptr<FunctionDecl> SharedPtr;
+
+   static bool classof(AstNode const* T)
+   {
+      return T->getTypeID() == FunctionDeclID;
    }
 };
 

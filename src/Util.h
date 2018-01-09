@@ -19,21 +19,13 @@ class GenericType;
 enum class BuiltinFn : unsigned int;
 
 struct Argument;
-struct QualType;
+class QualType;
 
-struct TemplateArg;
-struct TemplateConstraint;
-
-enum class CompatibilityType {
-   COMPATIBLE,
-   FUNC_NOT_FOUND,
-   NO_MATCHING_CALL,
-
-   CONSTRAINT_FAILED
-};
+class TemplateArg;
+struct TemplateParameter;
 
 enum class AccessModifier : unsigned int {
-   DEFAULT,
+   DEFAULT = 0,
    PUBLIC,
    PRIVATE,
    PROTECTED
@@ -59,44 +51,11 @@ class AstNode;
 class SemaPass;
 class Expression;
 class Function;
+class StaticExpr;
 
 } // namespace ast
 
 } // namespace cdot
-
-struct CallCandidate {
-   union {
-      cl::Method* method;
-      ast::Function* func;
-   };
-
-   size_t incompatibleArg;
-   const cl::ExtensionConstraint* failedConstraint = nullptr;
-};
-
-struct CallCompatability {
-   CompatibilityType compatibility = CompatibilityType::FUNC_NOT_FOUND;
-   bool isCompatible() {
-      return compatibility == CompatibilityType::COMPATIBLE;
-   }
-
-   bool perfectMatch = false;
-   size_t castPenalty = 0;
-
-   std::vector<pair<size_t, bool>> argOrder;
-
-   std::vector<QualType> resolvedArgs;
-   std::vector<Argument> resolvedNeededArgs;
-   std::vector<TemplateArg> generics;
-
-   ast::Function* func = nullptr;
-   cl::Method* method = nullptr;
-
-   size_t incompatibleArg;
-   const cl::ExtensionConstraint* failedConstraint = nullptr;
-
-   std::vector<CallCandidate> failedCandidates;
-};
 
 namespace cdot {
 namespace util {
@@ -137,7 +96,8 @@ R get_second(const std::vector<std::pair<T, R>> &vec, T el)
    return pos->second;
 };
 
-template<typename T, char Begin = '(', char Sep = ',', char End = ')'>
+template<typename T, char Begin = '(', char Sep = ',', char End = ')',
+   bool withSpace = true>
 string vectorToString(const std::vector<T> &vec, bool withLength = false)
 {
    string s;
@@ -157,6 +117,8 @@ string vectorToString(const std::vector<T> &vec, bool withLength = false)
 
       if (i < numItems - 1 && Sep != '\0') {
          s += Sep;
+         if (withSpace)
+            s += ' ';
       }
 
       ++i;
@@ -224,15 +186,6 @@ QualType dummyResolver(ast::Expression *node);
 size_t castPenalty(const QualType &from, const QualType &to);
 
 string nextAnonymousNamespace();
-
-string TemplateArgsToString(
-   const std::vector<TemplateArg> &templateArgs, bool skipEmpty = true);
-
-void checkTemplateArgs(
-   ast::AstNode *cause,
-   std::vector<TemplateConstraint> &neededArgs,
-   std::vector<TemplateArg> &givenArgs
-);
 
 } // namespace util
 } // namespace cdot

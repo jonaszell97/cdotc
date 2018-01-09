@@ -2,7 +2,10 @@
 // Created by Jonas Zell on 04.10.17.
 //
 
-#include <assert.h>
+#include <cstdlib>
+#include <cassert>
+#include <sstream>
+
 #include <llvm/Support/MemoryBuffer.h>
 
 #include "Diagnostics.h"
@@ -17,56 +20,58 @@
 #include "../Compiler.h"
 #include "../Files/FileManager.h"
 
+#include "../AST/Passes/SemanticAnalysis/Record/Enum.h"
+#include "../AST/Passes/SemanticAnalysis/Function.h"
+
+using namespace cdot::lex;
+using namespace cdot::parse;
+using namespace cdot::ast;
+using namespace cdot::support;
+
 namespace cdot {
 namespace diag {
 
-using namespace cdot::ast;
-
-std::unordered_map<Warning, const char*> Warnings = {
-#     include "def/parsed/warn_msg.def"
+std::unordered_map<MessageKind, const char*> Messages = {
+#   include "def/parsed/warn_msg.def"
+#   include "def/parsed/errors_msg.def"
+#   include "def/parsed/note_msg.def"
 };
 
-std::unordered_map<Error, const char*> Errors = {
-#     include "def/parsed/errors_msg.def"
-};
-
-std::unordered_map<Note, const char*> Notes = {
-#     include "def/parsed/note_msg.def"
-};
-
-DiagnosticBuilder warn(Warning warn)
+DiagnosticBuilder warn(MessageKind warn)
 {
    return DiagnosticBuilder(warn);
 }
 
-DiagnosticBuilder err(Error err)
+DiagnosticBuilder err(MessageKind err)
 {
    return DiagnosticBuilder(err);
 }
 
-DiagnosticBuilder note(Note note)
+DiagnosticBuilder note(MessageKind note)
 {
    return DiagnosticBuilder(note);
 }
+
+std::vector<InstantiationContext> DiagnosticBuilder::InstContexts;
 
 string DiagnosticBuilder::prepareMessage()
 {
    string original(diag);
    auto buf = llvm::MemoryBuffer::getMemBuffer(original);
-   Lexer lex(buf.get(), "", 0);
+   Lexer<> lex(buf.get(), 0);
+   lex.lex();
 
    unsigned short substituted = 0;
    string msg = "";
    bool single = true;
 
-   lex.advance();
-   while (lex.lookahead().get_type() != T_EOF) {
+   while (!lex.currentTok().is(tok::eof)) {
       single = false;
-      if (lex.currentToken.isInterpolationStart) {
-         msg += lex.strVal();
-
+      if (lex.currentTok().is(tok::sentinel)) {
          lex.advance();
-         if (lex.currentToken.get_type() == T_IDENT && lex.strVal() == "$") {
+
+         if (lex.currentTok().is(tok::ident) && lex.currentTok()._value
+                                                   .strVal == "$") {
             msg += "$";
             lex.advance();
 
@@ -74,45 +79,42 @@ string DiagnosticBuilder::prepareMessage()
          }
 
          ++substituted;
-         if (lex.currentToken.is_punctuator('{')) {
-            lex.advance();
 
-            assert(lex.currentToken.get_type() == T_LITERAL && "expected arg index");
+         if (lex.lookahead().is(tok::sentinel)) {
+            assert(lex.currentTok().is(tok::integerliteral)
+                   && "expected arg index");
 
-            auto val = lex.currentToken.get_value();
-            assert(val.type == VariantType::INT && "expected arg index");
-            assert(providedArgs.size() > val.intVal && "no substitution provided");
-
-            auto& arg = providedArgs[val.intVal];
-            lex.advance();
-            assert(lex.currentToken.is_operator("|") && "expected pipe");
-
-            lex.advance();
-            msg += handleFunction(arg, lex);
-         }
-         else {
-            assert(lex.currentToken.get_type() == T_LITERAL && "expected arg index");
-
-            auto val = lex.currentToken.get_value();
-            assert(val.type == VariantType::INT && "expected arg index");
+            auto val = lex.currentTok().getValue();
+            assert(val.kind == VariantType::INT && "expected arg index");
             assert(providedArgs.size() > val.intVal && "no substitution provided");
 
             auto& arg = providedArgs[val.intVal];
             msg += arg.toString();
          }
+         else {
+            assert(lex.currentTok().is(tok::integerliteral)
+                   && "expected arg index");
 
-         lex.continueInterpolation = true;
-         lex.advance();
-         lex.continueInterpolation = false;
+            auto val = lex.currentTok().getValue();
+            assert(val.kind == VariantType::INT && "expected arg index");
+            assert(providedArgs.size() > val.intVal
+                   && "no substitution provided");
 
-         if (!lex.currentToken.isInterpolationStart) {
-            msg += lex.strVal();
-            break;
+            auto& arg = providedArgs[val.intVal];
+            lex.advance();
+            assert(lex.currentTok().is(tok::op_or) && "expected pipe");
+
+            lex.advance();
+            msg += handleFunction(arg, lex);
          }
+
+         lex.expect(tok::sentinel);
       }
       else {
          msg += lex.strVal();
       }
+
+      lex.advance();
    }
 
    if (single) {
@@ -124,37 +126,44 @@ string DiagnosticBuilder::prepareMessage()
 
 string DiagnosticBuilder::handleFunction(
    Variant &var,
-   Lexer &lex)
+   Lexer<> &lex)
 {
-   auto funcName = lex.strVal();
+   string funcName;
+   if (lex.currentTok().is_keyword()) {
+      switch (lex.currentTok().getKind()) {
+         case tok::kw_if:
+            funcName = "if";
+            break;
+         default:
+            llvm_unreachable("unexpected keyword in diagnostic");
+      }
+   }
+   else {
+      assert(lex.currentTok().is(tok::ident));
+      funcName = lex.strVal();
+   }
+
    std::vector<string> args;
 
-   lex.advance();
-   if (lex.currentToken.is_punctuator('(')) {
+   if (lex.lookahead().is(tok::open_paren)) {
+      lex.advance();
       lex.advance();
 
-      while (!lex.currentToken.is_punctuator(')')) {
-         size_t start = lex.currentToken.getStart();
-         while (!lex.currentToken.is_punctuator(',') && !lex.currentToken.is_punctuator(')')) {
+      while (!lex.currentTok().is(tok::close_paren)) {
+         auto beginOffset = lex.currentTok().getOffset();
+         while (!lex.currentTok().oneOf(tok::comma, tok::close_paren)) {
             lex.advance();
          }
 
-         if (start != lex.currentIndex) {
-            args.push_back(string(lex.getSrc() + start, lex.currentIndex - start - 1));
-         }
-         else {
-            args.push_back(lex.strVal());
-         }
+         args.push_back(string(lex.begin + beginOffset,
+                               lex.currentTok().getOffset() - beginOffset));
+         beginOffset = lex.currentTok().getOffset();
 
-         if (lex.currentToken.is_punctuator(',')) {
+         if (lex.currentTok().is(tok::comma)) {
             lex.advance();
          }
       }
-
-      lex.advance();
    }
-
-   assert(lex.currentToken.is_punctuator('}') && "expected }");
 
    if (funcName == "select") {
       assert(args.size() > var.intVal && "too few options for index");
@@ -162,7 +171,7 @@ string DiagnosticBuilder::handleFunction(
    }
    else if (funcName == "ordinal") {
       assert(args.empty() && "ordinal takes no arguments");
-      assert(var.type == VariantType::INT && "expected integer value");
+      assert(var.kind == VariantType::INT && "expected integer value");
 
       auto mod = var.intVal % 10;
       auto str = std::to_string(var.intVal);
@@ -175,8 +184,8 @@ string DiagnosticBuilder::handleFunction(
    }
    else if (funcName == "plural_s") {
       assert(args.size() == 1 && "plural_s takes 1 argument");
-      assert(var.type == VariantType::INT && "expected integer value");
-      if (var.intVal) {
+      assert(var.kind == VariantType::INT && "expected integer value");
+      if (var.intVal != 1) {
          return args.front() + "s";
       }
       else {
@@ -184,7 +193,7 @@ string DiagnosticBuilder::handleFunction(
       }
    }
    else if (funcName == "plural") {
-      assert(var.type == VariantType::INT && "expected integer value");
+      assert(var.kind == VariantType::INT && "expected integer value");
       assert(!args.empty() && "plural expects at least 1 argument");
 
       if (var.intVal >= args.size()) {
@@ -195,7 +204,7 @@ string DiagnosticBuilder::handleFunction(
    }
    else if (funcName == "if") {
       assert(args.size() == 1 && "if expects 1 arg");
-      assert(var.type == VariantType::INT && "expected integer value");
+      assert(var.kind == VariantType::INT && "expected integer value");
 
       if (var.intVal) {
          return args.front();
@@ -207,43 +216,84 @@ string DiagnosticBuilder::handleFunction(
    llvm_unreachable("unsupported function");
 }
 
-DiagnosticBuilder::DiagnosticBuilder(Warning warn)
-   : diag(Warnings[warn]), kind(DiagnosticKind::WARNING)
+DiagnosticBuilder::DiagnosticBuilder()
+   : showWiggle(false), showWholeLine(false), noInstCtx(false),
+     noteMemberwiseInit(false), valid(false), noExpansionInfo(false)
 {
 
 }
 
-DiagnosticBuilder::DiagnosticBuilder(Error err)
-   : diag(Errors[err]), kind(DiagnosticKind::ERROR)
+DiagnosticBuilder::DiagnosticBuilder(MessageKind msg,
+                                     bool templateInstInfo)
+   : diag(Messages[msg]), kind(isError(msg) ? DiagnosticKind::ERROR
+                                            : (isWarning(msg)
+                                               ? DiagnosticKind::WARNING
+                                               : DiagnosticKind::NOTE)),
+     showWiggle(false), showWholeLine(false), noInstCtx(false),
+     noteMemberwiseInit(false), valid(true), noExpansionInfo(false)
 {
-
+   if (templateInstInfo)
+      prepareInstantiationContextMsg();
 }
 
-DiagnosticBuilder::DiagnosticBuilder(Note note)
-   : diag(Notes[note]), kind(DiagnosticKind::NOTE)
-{
+namespace {
 
+void unescape_char(llvm::SmallString<128> &str, char c)
+{
+   switch (c) {
+      case '\n':
+         str += "\\n";
+         break;
+      case '\a':
+         str += "\\a";
+         break;
+      case '\r':
+         str += "\\r";
+         break;
+      case '\v':
+         str += "\\v";
+         break;
+      case '\t':
+         str += "\\t";
+         break;
+      case '\b':
+         str += "\\b";
+         break;
+      case '\0':
+         str += "\\0";
+         break;
+      default:
+         str += c;
+         break;
+   }
 }
+
+} // anonymous namespace
 
 void DiagnosticBuilder::writeDiagnostic()
 {
-   string err;
+   writeDiagnosticTo(llvm::outs());
+}
+
+void DiagnosticBuilder::writeDiagnosticTo(llvm::raw_ostream &out)
+{
+   std::ostringstream err;
    switch (kind) {
-      case DiagnosticKind::ERROR:
-         err += "\033[21;31merror:\033[0m ";
+      case DiagnosticKind::ERROR:err << "\033[21;31merror:\033[0m ";
          break;
-      case DiagnosticKind::WARNING:
-         err += "\033[33mwarning:\033[0m ";
+      case DiagnosticKind::WARNING:err << "\033[33mwarning:\033[0m ";
          break;
-      case DiagnosticKind::NOTE:
-         err += "\033[1;35mnote:\033[0m ";
+      case DiagnosticKind::NOTE:err << "\033[1;35mnote:\033[0m ";
          break;
    }
 
-   err += prepareMessage();
+   err << prepareMessage();
 
-   if (!locGiven) {
-      std::cout << err << std::endl;
+   if (noteMemberwiseInit)
+      err << " (the implicit memberwise initializer)";
+
+   if (!loc) {
+      out << err.str() << "\n";
       return;
    }
 
@@ -255,9 +305,10 @@ void DiagnosticBuilder::writeDiagnostic()
    string src(file.second->getBufferStart(), file.second->getBufferSize());
    auto srcLen = src.length();
 
-   size_t length = loc.getLength();
-   auto col = loc.getCol();
-   auto errLineNo = loc.getLine();
+   auto lineAndCol = fs::FileManager::getLineAndCol(loc, file.second.get());
+
+   auto col = lineAndCol.second;
+   auto errLineNo = lineAndCol.first;
 
    int currLine = 1;
    for (int i = 0; currLine < errLineNo; ++i) {
@@ -281,41 +332,83 @@ void DiagnosticBuilder::writeDiagnostic()
    string linePref = std::to_string(errLineNo) + " | ";
    fileName = fileName.substr(fileName.rfind('/') + 1);
 
-   err += " (" + fileName + ":" + std::to_string(errLineNo)
-      + ":" + std::to_string(col) + ")\n";
-   err += linePref + errLine + "\n";
+   err << " (" << fileName << ":" << std::to_string(errLineNo)
+       << ":" << std::to_string(col) << ":[" << loc.getSourceId() << "]" ")\n";
+   err << linePref << errLine << "\n";
 
    if (!showWholeLine) {
-      int i = 1;
+      int i = 2;
       for (; i < col + linePref.length(); ++i) {
-         err += ' ';
+         err << ' ';
       }
 
-      err += '^';
-
-      if ((length + i) > errLine.length()) {
-         length = errLine.length() - i + linePref.length();
-      }
-
-      if (showWiggle) {
-         for (int i = 0; i < length; ++i) {
-            err += '~';
-         }
-      }
+      err << '^';
    }
 
-   std::cout << err + "\033[0m" << std::endl;
+   out << err.str() << "\033[0m\n";
+
+   if (kind != DiagnosticKind::NOTE && !noInstCtx) {
+      llvm::outs() << additionalNotes;
+   }
+
+   if (noExpansionInfo)
+      return;
+
+   if (auto Info = lex::getExpansionInfo(loc)) {
+      llvm::SmallString<128> argString;
+      argString += "[";
+
+      size_t i = 0;
+      for (const auto &arg : Info->expansionArgs) {
+         if (i++ != 0) argString += ", ";
+         argString += arg.first;
+         argString += " = '";
+
+         for (auto c : arg.second) {
+            unescape_char(argString, c);
+         }
+
+         argString += "'";
+      }
+
+      argString += "]";
+
+      auto builder = DiagnosticBuilder(note_generic_note, false)
+         << "in expansion of macro " + Info->macroName
+            + " with arguments " + argString.str()
+         << Info->expandedMacroLoc
+         << no_expansion_info;
+
+      builder.writeDiagnosticTo(out);
+   }
+}
+
+void DiagnosticBuilder::prepareInstantiationContextMsg()
+{
+   if (InstContexts.empty())
+      return;
+
+   llvm::raw_string_ostream out(additionalNotes);
+
+   for (auto it = InstContexts.rbegin(); it != InstContexts.rend(); ++it) {
+      auto &Ctx = *it;
+      auto builder = DiagnosticBuilder(note_generic_note, false)
+         << "in instantiation of " + Ctx.toString()
+         << Ctx.getLoc() << no_inst_ctx;
+
+      builder.writeDiagnosticTo(out);
+   }
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(int const& i)
 {
-   providedArgs.emplace_back(i);
+   providedArgs.emplace_back((unsigned long long)i);
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t const& i)
 {
-   providedArgs.emplace_back((int)i);
+   providedArgs.emplace_back(i);
    return *this;
 }
 
@@ -325,15 +418,21 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(string const& str)
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* const& str)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::Twine const &str)
 {
-   providedArgs.emplace_back(string(str));
+   providedArgs.emplace_back(str.str());
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(bool const& b)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::StringRef const &str)
 {
-   providedArgs.emplace_back(b);
+   providedArgs.emplace_back(str.str());
+   return *this;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* const& str)
+{
+   providedArgs.emplace_back(string(str));
    return *this;
 }
 
@@ -345,44 +444,65 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(Variant const& v)
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& ty)
 {
-   providedArgs.emplace_back(ty.toString());
+   auto str = ty.toString();
+   if (ty->isRawEnum()) {
+      str += '(';
+      str += cast<Enum>(ty->getRecord())->getRawType()->toString();
+      str += ')';
+   }
+
+   providedArgs.emplace_back(move(str));
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(Type* const& ty)
 {
-   providedArgs.emplace_back(ty->toString());
+   auto str = ty->toString();
+   if (ty->isRawEnum()) {
+      str += '(';
+      str += cast<Enum>(ty->getRecord())->getRawType()->toString();
+      str += ')';
+   }
+
+   providedArgs.emplace_back(move(str));
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation const& loc)
 {
    this->loc = loc;
-   locGiven = true;
-
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Lexer* const& lex)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(Lexer<>* const& lex)
 {
-   loc = lex->currentToken.getSourceLoc();
-   locGiven = true;
-
+   loc = lex->getSourceLoc();
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(AstNode* const& node)
+DiagnosticBuilder&
+DiagnosticBuilder::operator<<(Lexer<module::ModuleLexerTraits>* const& lex)
+{
+   loc = lex->getSourceLoc();
+   return *this;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(AstNode *node)
 {
    loc = node->getSourceLoc();
-   locGiven = true;
-
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(AstNode::SharedPtr const& node)
 {
    loc = node->getSourceLoc();
-   locGiven = true;
+   return *this;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(cl::Method const *M)
+{
+   loc = M->getSourceLoc();
+   noteMemberwiseInit = M->isMemberwiseInitializer();
 
    return *this;
 }
@@ -396,18 +516,95 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(Option const &opt)
       case show_wiggle:
          showWiggle = true;
          break;
+      case no_inst_ctx:
+         noInstCtx = true;
+         break;
+      case no_expansion_info:
+         noExpansionInfo = true;
+         break;
+      case memberwise_init:
+         noteMemberwiseInit = true;
+         break;
    }
 
    return *this;
 }
 
+void DiagnosticBuilder::pushInstantiationCtx(InstantiationContext &&Ctx)
+{
+   InstContexts.push_back(std::move(Ctx));
+}
+
+void DiagnosticBuilder::pushInstantiationCtx(cl::Record *Rec) {
+   auto Base = Rec;
+   while (Base->getSpecializedTemplate())
+      Base = Base->getSpecializedTemplate();
+
+   InstContexts.emplace_back((InstantiationContext::Kind) Rec->getTypeID(),
+                             Base->getName(), Rec->getInstantiatedFrom(),
+                             &Rec->getTemplateArgs());
+}
+
+void DiagnosticBuilder::pushInstantiationCtx(Callable *C) {
+   InstContexts.emplace_back(support::isa<cl::Method>(C)
+                               ? InstantiationContext::Method
+                               : InstantiationContext::Function,
+                             C->getSpecializedTemplate()->getName(),
+                             C->getInstantiatedFrom(),
+                             &C->getTemplateArgs());
+}
+
+void DiagnosticBuilder::popInstantiationCtx()
+{
+   InstContexts.pop_back();
+}
+
 void DiagnosticBuilder::operator<<(Terminator const &terminator)
 {
    writeDiagnostic();
-   if (terminator == term) {
-      exit(1);
-   }
+   std::terminate();
 }
 
+void DiagnosticBuilder::operator<<(Continuator const &terminator)
+{
+   if (terminator == end)
+      return;
+
+   writeDiagnostic();
 }
+
+namespace {
+
+const char *Names[] = {
+   "struct", "class", "enum", "union", "protocol", "function", "method"
+};
+
+} // anonymous namespace
+
+InstantiationContext::InstantiationContext(
+                                 Kind kind,
+                                 llvm::StringRef name,
+                                 const SourceLocation &loc,
+                                 sema::TemplateArgList const* templateArgs)
+   : loc(loc), kind(kind), name(name), templateArgs(templateArgs)
+{
+
 }
+
+string InstantiationContext::toString() const
+{
+   string s;
+
+   llvm::raw_string_ostream out(s);
+   out << Names[kind] << " " << name;
+
+   if (!templateArgs || templateArgs->empty())
+      return out.str();
+
+   out << " with template arguments " << templateArgs->toString('[', ']', true);
+
+   return out.str();
+}
+
+} // namespace diag
+} // namespace cdot

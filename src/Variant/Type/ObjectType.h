@@ -7,7 +7,11 @@
 
 
 #include <unordered_map>
+#include <vector>
+
 #include "Type.h"
+#include "../../lex/SourceLocation.h"
+#include "../../AST/Passes/SemanticAnalysis/Template.h"
 
 using std::unordered_map;
 
@@ -22,143 +26,86 @@ class Record;
 
 class ObjectType : public Type {
 protected:
-   ObjectType() = default;
-   explicit ObjectType(const string &className);
+   explicit ObjectType(cl::Record *record,
+                       BoxedPrimitive primitive = BoxedPrimitive::BP_None);
+
+   cl::Record *Rec;
+   BoxedPrimitive primitiveType = BP_None;
 
 public:
-   static ObjectType *get(const string& className);
-   static ObjectType* getOptionOf(Type *T);
+   static ObjectType *get(cl::Record *record);
+   static ObjectType *get(llvm::StringRef className);
+   static ObjectType *get(BoxedPrimitive primitive);
+
    static ObjectType* getAnyTy();
 
-   void isStruct(bool str)
+   bool isRawEnum() const;
+
+   sema::TemplateArgList const& getTemplateArgs() const;
+   bool hasTemplateArgs() const;
+
+   bool isBoxedEquivOf(Type const* other) const;
+
+   std::string toString() const;
+
+   cl::Record *getRecord() const
    {
-      is_struct = str;
+      return Rec;
    }
 
-   bool isStruct() const override
+   unsigned short getAlignment() const;
+   size_t getSize() const;
+
+   Type* unbox() const;
+
+   BoxedPrimitive getPrimitiveKind() const
    {
-      return is_struct;
+      return primitiveType;
    }
-
-   bool isProtocol() const override
-   {
-      return is_protocol;
-   }
-
-   void isProtocol(bool proto)
-   {
-      is_protocol = proto;
-   }
-
-   bool isNumeric() const override
-   {
-      return isRawEnum();
-   }
-
-   bool isRawEnum() const
-   {
-      return is_raw_enum;
-   }
-
-   unsigned getBitwidth() const override;
-   bool isUnsigned() const override;
-
-   const std::vector<TemplateArg>& getTemplateArgs() const override;
-   bool hasTemplateArgs() const override;
-   GenericType *const getNamedTemplateArg(const string &genericName) const;
-   cl::Record* getRecord() const override;
-
-   bool isRefcounted() const override;
-   bool isValueType() const override;
-
-   bool needsMemCpy() const override
-   {
-      return is_struct || is_protocol || (is_enum && !is_raw_enum);
-   }
-
-   bool needsStructReturn() const override
-   {
-      return Type::needsStructReturn() && !is_raw_enum;
-   }
-
-   bool hasDefaultValue() const override;
-
-   bool needsCleanup() const override;
-
-   bool isBoxedEquivOf(Type* other) const override;
-
-   string toString() const override;
-   llvm::Type* getLlvmType() const override;
-
-   bool implicitlyCastableTo(Type*) const override;
-   bool explicitlyCastableTo(Type*) const override;
-
-   short getAlignment() const override;
-   size_t getSize() const override;
-
-   bool isEnum() const override
-   {
-      return is_enum;
-   }
-
-   void isEnum(bool en)
-   {
-      is_enum = en;
-      is_struct = en;
-   }
-
-   bool isOptionTy() const override;
-   bool isOptionOf(const string& className) const override;
-
-   Type* unbox() const override;
-
-   llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
-   llvm::Constant* getConstantVal(Variant&) const override;
 
    static bool classof(ObjectType const*) { return true; }
-   static bool classof(Type const* T) {
+   static bool classof(Type const* T)
+   {
       switch(T->getTypeID()) {
-         case TypeID::ObjectTypeID:
-         case TypeID::GenericTypeID:
-         case TypeID::MetaTypeID:
-            return true;
-         default:
-            return false;
+#     define CDOT_OBJ_TYPE(Name) \
+         case TypeID::Name##ID: return true;
+#     include "Types.def"
+
+         default: return false;
       }
    }
-
-protected:
-   bool is_struct = false;
-   bool is_enum = false;
-   bool is_union = false;
-   bool is_protocol = false;
-   bool is_raw_enum = false;
 };
 
 // to be used when resolving template arguments and the actual underlying
 // record of the type might not exist
-class DummyObjectType: public ObjectType {
+class InconcreteObjectType: public ObjectType {
 protected:
-   DummyObjectType(
-      const string &className, std::vector<TemplateArg> &templateArgs);
+   InconcreteObjectType(llvm::StringRef className,
+                        sema::TemplateArgList &&templateArgs);
 
-   std::vector<TemplateArg> &templateArgs;
+   InconcreteObjectType(cl::Record *record,
+                        sema::TemplateArgList &&templateArgs);
+
+   sema::TemplateArgList templateArgs;
 
 public:
-   static DummyObjectType *get(const string &className,
-                               std::vector<TemplateArg> &templateArgs);
+   static InconcreteObjectType *get(llvm::StringRef className,
+                                    sema::TemplateArgList &&templateArgs);
 
-   bool isDummyObject() const override
+   static InconcreteObjectType *get(cl::Record *record,
+                                    sema::TemplateArgList &&templateArgs);
+
+   static bool classof (Type const* T)
    {
-      return true;
+      return T->getTypeID() == TypeID::InconcreteObjectTypeID;
    }
 
-   const std::vector<TemplateArg>& getTemplateArgs() const override
+   const sema::TemplateArgList& getTemplateArgs() const
    {
       return templateArgs;
    }
 
-   bool hasTemplateArgs() const override
+   bool hasTemplateArgs() const
    {
       return true;
    }

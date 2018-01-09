@@ -6,73 +6,99 @@
 #define CDOT_BASICBLOCK_H
 
 #include "../Constant/Constant.h"
+#include "../SymbolTableList.h"
+#include "../Instruction/Instruction.h"
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
 namespace il {
 
-class Instruction;
 class Function;
 class TerminatorInst;
 class Argument;
+class ValueSymbolTable;
 
-class BasicBlock: public Constant {
+class BasicBlock: public Constant,
+                  public llvm::ilist_node_with_parent<BasicBlock, Function> {
 public:
-   typedef llvm::SmallVector<Instruction*, 8> InstList;
-   typedef InstList::iterator                 iterator;
-   typedef InstList::const_iterator           const_iterator;
-   typedef InstList::reverse_iterator         reverse_iterator;
-   typedef InstList::const_reverse_iterator   const_reverse_iterator;
+   using InstList       = SymbolTableList<Instruction>;
+   using iterator       = InstList::iterator;
+   using const_iterator = InstList::const_iterator;
 
-   struct BasicBlockArg {
-      std::string name;
-      Type *type;
-   };
+   using ArgList            = SymbolTableList<Argument>;
+   using arg_iterator       = ArgList::iterator;
+   using const_arg_iterator = ArgList::const_iterator;
 
-   typedef llvm::SmallVector<Argument*, 4>     BlockArgList;
    typedef llvm::SmallPtrSet<BasicBlock*, 4>   PredecessorList;
 
-   explicit BasicBlock(Function *parent,
-                       const std::string &name = "",
-                       const SourceLocation &loc = {});
+   explicit BasicBlock(Function *parent);
 
    BasicBlock(const BasicBlock&) = delete;
    const BasicBlock &operator=(const BasicBlock&) = delete;
 
    Function *getParent() const;
+   void setParent(Function *p) { parent = p; }
+
    InstList &getInstructions();
    const InstList &getInstructions() const;
 
-   const BlockArgList &getArgs() const;
-   BlockArgList &getArgs();
+   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
+   {
+      return Instructions.getSymTab();
+   }
 
-   void addBlockArg(BasicBlockArg &&arg);
-   void addBlockArg(Argument *arg);
+   std::shared_ptr<ValueSymbolTable> const& getArgSymTab() const
+   {
+      return Args.getSymTab();
+   }
 
-   Argument *getBlockArg(llvm::StringRef name);
-   Argument *getBlockArg(unsigned idx);
+   const ArgList &getArgs() const { return Args; }
+   ArgList &getArgs() { return Args; }
 
-   iterator getIteratorForInstruction(Instruction *inst);
-   const_iterator getIteratorForInstruction(const Instruction *inst) const;
+   Argument const *getBlockArg(llvm::StringRef name) const;
+   Argument const *getBlockArg(unsigned idx) const;
 
-   iterator removeInstruction(const Instruction *inst);
+   Argument* getBlockArg(llvm::StringRef name);
+   Argument* getBlockArg(unsigned idx);
 
-   iterator insertInstructionAfter(Instruction *inst, iterator after);
-   iterator insertInstructionBefore(Instruction *inst, iterator before);
-   iterator insertInstructionAtEnd(Instruction *inst);
-   iterator insertInstructionAtBegin(Instruction *inst);
-
-   TerminatorInst *getTerminator() const;
+   TerminatorInst const* getTerminator() const;
+   TerminatorInst* getTerminator();
 
    void addPredecessor(BasicBlock *pred);
    const PredecessorList &getPredecessors() const;
+   bool isEntryBlock() const;
+   bool hasNoPredecessors() const;
+
+   void addBlockArg(Type *ty, llvm::StringRef name = {});
+   void addBlockArg(QualType ty, llvm::StringRef name = {});
+
+   iterator begin() { return Instructions.begin(); }
+   iterator end() { return Instructions.end(); }
+   const_iterator begin() const { return Instructions.begin(); }
+   const_iterator end() const { return Instructions.end(); }
+
+   arg_iterator arg_begin() { return Args.begin(); }
+   arg_iterator arg_end() { return Args.end(); }
+   const_arg_iterator arg_begin() const { return Args.begin(); }
+   const_arg_iterator arg_end() const { return Args.end(); }
+
+   static InstList BasicBlock::*getSublistAccess(Instruction*)
+   {
+      return &BasicBlock::Instructions;
+   }
+
+   static ArgList BasicBlock::*getSublistAccess(Argument*)
+   {
+      return &BasicBlock::Args;
+   }
 
 protected:
    Function *parent;
 
    InstList Instructions;
-   BlockArgList Args;
+   ArgList Args;
 
    PredecessorList Predecessors;
 

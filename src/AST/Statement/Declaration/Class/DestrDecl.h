@@ -8,6 +8,9 @@
 #include "../CallableDecl.h"
 
 namespace cdot {
+
+enum class AccessModifier : unsigned;
+
 namespace cl {
 
 struct Method;
@@ -20,7 +23,16 @@ class CompoundStmt;
 
 class DestrDecl: public CallableDecl {
 public:
-   DestrDecl() : CallableDecl(DestrDeclID, AccessModifier::PUBLIC, {}, {}, {})
+   DestrDecl()
+      : CallableDecl(DestrDeclID, (AccessModifier)0, {}, {}, {},
+                     {}, {}, {}, {})
+   {
+
+   }
+
+   explicit DestrDecl(std::shared_ptr<CompoundStmt> &&body)
+      : CallableDecl(DestrDeclID, (AccessModifier)0, {}, {}, {}, {}, {},
+                     move(body), {})
    {
 
    }
@@ -34,20 +46,11 @@ public:
 
 protected:
    // codegen
-   cdot::cl::Method* declaredMethod = nullptr;
    cdot::cl::Record* record = nullptr;
 
 public:
 
-   cdot::cl::Method *getDeclaredMethod() const
-   {
-      return declaredMethod;
-   }
-
-   void setDeclaredMethod(cdot::cl::Method *declaredMethod)
-   {
-      DestrDecl::declaredMethod = declaredMethod;
-   }
+   cdot::cl::Method *getMethod() const;
 
    cdot::cl::Record* getRecord() const
    {

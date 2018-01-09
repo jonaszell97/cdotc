@@ -6,39 +6,24 @@
 
 namespace cdot {
 
-   AutoType *AutoType::Instance = nullptr;
+AutoType *AutoType::Instance = nullptr;
 
-   AutoType* AutoType::get()
-   {
-      if (Instance == nullptr) {
-         Instance = new AutoType;
-      }
-
-      return Instance;
+AutoType* AutoType::get()
+{
+   if (Instance == nullptr) {
+      Instance = new AutoType;
    }
 
-   AutoType::AutoType()
-   {
-      id = TypeID::AutoTypeID;
-   }
+   return Instance;
+}
 
-   llvm::Type* AutoType::getLlvmType() const
-   {
-      llvm_unreachable("resolve first!");
-   }
+AutoType::AutoType()
+{
+   id = TypeID::AutoTypeID;
+}
 
-   bool AutoType::implicitlyCastableTo(Type *) const
-   {
-      return true;
-   }
-
-   llvm::Value* AutoType::getDefaultVal(ast::CodeGen &CGM) const
-   {
-      llvm_unreachable("resolve first!");
-   }
-
-   string AutoType::toString() const
-   {
-      return "auto";
-   }
+std::string AutoType::toString() const
+{
+   return "auto";
+}
 }

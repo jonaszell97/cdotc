@@ -5,63 +5,37 @@
 #ifndef CDOT_BUILTIN_TYPE_H
 #define CDOT_BUILTIN_TYPE_H
 
-
-#include <llvm/IR/IRBuilder.h>
 #include <string>
-#include <unordered_map>
+
+#include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/ArrayRef.h>
 
 #include "../../Support/Casting.h"
 
-using std::string;
-using std::unordered_map;
-using std::pair;
-
 namespace cdot {
 
-namespace ast {
+namespace sema {
 
-class SemaPass;
-class DeclPass;
-class CodeGen;
-class Expression;
+class TemplateArgList;
 
-} // namespace ast
+} // namespace sema
 
-class Variant;
-class PointerType;
-class ObjectType;
-class GenericType;
-class IntegerType;
-class FPType;
-class FunctionType;
-class TupleType;
-
-struct TemplateArg;
-
+struct Variant;
+class TemplateArg;
 class QualType;
 
 namespace cl {
-   class Record;
-   struct EnumCase;
-}
+
+class Record;
+class AssociatedType;
+
+} // namespace cl
 
 enum class TypeID : unsigned {
-   AutoTypeID = 0,
-   VoidTypeID = 1,
-   PrimitiveTypeID = 2,
-   FunctionTypeID = 3,
-   GenericTypeID = 4,
-   PointerTypeID = 5,
-   ObjectTypeID = 6,
-   IntegerTypeID = 7,
-   FPTypeID = 8,
-   TupleTypeID = 9,
-   TypeGroupID = 10,
-   MetaTypeID = 11,
-   ArrayTypeID = 12,
+#  define CDOT_TYPE(Name) \
+   Name##ID,
+#  include "Types.def"
 };
-
-using cdot::cl::EnumCase;
 
 class AutoType;
 class PointerType;
@@ -75,18 +49,33 @@ class FPType;
 class MetaType;
 class TypeGroup;
 class GenericType;
+class NamespaceType;
 
 class Type {
 public:
+   enum BoxedPrimitive : unsigned short {
+#     define CDOT_INTEGER(Name, BW, Unsigned) \
+      Name = BW + (100 * Unsigned),
+#     define CDOT_FP(Name, BW)                \
+      Name = 200 + BW,
+#     define CDOT_OTHER(Name, BW)             \
+      Name = 300 + BW,
+
+#     include "Primitive.def"
+      BP_None = 0
+   };
+
+#  ifndef NDEBUG
+   virtual
+#  endif
+   ~Type();
+
+   static Type *get(BoxedPrimitive bp);
+
    static bool classof(Type const* T) { return true; }
    static void TearDown();
 
-   virtual llvm::Type* getLlvmType() const
-   {
-      llvm_unreachable("type does not have an llvm equivalent");
-   }
-
-   virtual bool needsLvalueToRvalueConv() const
+   bool needsLvalueToRvalueConv() const
    {
       return !isStruct() && !isProtocol();
    }
@@ -108,38 +97,28 @@ public:
 
    bool isFunctionTy() const;
    bool isRawFunctionTy() const;
+   bool isRawEnum() const;
 
-   virtual bool isNumeric() const
+   bool isSelfTy() const;
+
+   BoxedPrimitive getPrimitiveKind() const;
+   bool is(BoxedPrimitive primitive) const;
+
+   bool isNumeric() const
    {
-      return false;
+      return isIntegerTy() || isFPType() || isRawEnum();
    }
 
-   virtual Type *getGroupDefault() const
-   {
-      llvm_unreachable("call isTypeGroup first");
-   }
+   bool isDependantType() const;
 
-   virtual const std::vector<TemplateArg>& getTemplateArgs() const
-   {
-      llvm_unreachable("Call isObject first");
-   }
+   Type *getGroupDefault() const;
 
-   virtual bool hasTemplateArgs() const
-   {
-      return false;
-   }
+   sema::TemplateArgList const& getTemplateArgs() const;
+   bool hasTemplateArgs() const;
 
-   virtual const string& getClassName() const
-   {
-      return className;
-   }
-
-   virtual cl::Record *getRecord() const
-   {
-      llvm_unreachable("Call isObject first");
-   }
-
-   virtual bool isBoxedPrimitive() const;
+   llvm::StringRef getClassName() const;
+   cl::Record *getRecord() const;
+   bool isBoxedPrimitive() const;
 
    const PointerType* asPointerTy() const;
    PointerType* asPointerTy();
@@ -162,182 +141,101 @@ public:
    const GenericType* asGenericTy() const;
    GenericType* asGenericTy();
 
-   virtual bool isPointerToStruct() const
-   {
-      return false;
-   }
-
    PointerType* getPointerTo();
 
-   virtual string toString() const = 0;
-   virtual string toUniqueString() const
-   {
-      return toString();
-   }
+   std::string toString() const;
+   std::string toUniqueString() const;
 
-   virtual bool implicitlyCastableTo(Type*) const
-   {
-      return false;
-   }
+   QualType getPointeeType() const;
 
-   virtual bool explicitlyCastableTo(Type*) const
-   {
-      return false;
-   }
+   bool implicitlyCastableTo(Type const* to) const;
+   bool explicitlyCastableTo(Type const* to) const;
+   bool needsCastTo(const Type *ty) const;
 
-   virtual bool needsCastTo(const Type *ty) const;
+   Type* unbox() const;
+   Type* box() const;
 
-   virtual Type* unbox() const
-   {
-      llvm_unreachable("call isObjectTy first!");
-   }
+   bool hasDefaultValue() const;
 
-   virtual Type* box() const
-   {
-      llvm_unreachable("call isIntegerTy or isFPTy first");
-   }
+   unsigned short getAlignment() const;
+   size_t getSize() const;
 
-   virtual bool hasDefaultValue() const
-   {
-      return false;
-   }
+   size_t getMemberSize() const;
+   unsigned short getMemberAlignment() const;
 
-   virtual llvm::Value* getDefaultVal(ast::CodeGen &CGM) const
-   {
-      return nullptr;
-   }
 
-   virtual llvm::Constant* getConstantVal(Variant&) const
-   {
-      llvm_unreachable("Can't emit constant val for type");
-   }
-
-   virtual short getAlignment() const;
-   virtual size_t getSize() const
-   {
-      return getAlignment();
-   }
-
-   virtual TypeID getTypeID() const
+   TypeID getTypeID() const
    {
       return id;
    }
 
-   virtual bool isBoxedEquivOf(Type*) const
+   bool isStringRepresentable() const;
+   bool isSelfComparable() const;
+   bool isHashable() const;
+
+   bool isBoxedEquivOf(Type const* ty) const;
+   bool isUnsigned() const;
+   unsigned int getBitwidth() const;
+
+   bool isPtrSizedInt() const
    {
-      return false;
+      return isIntegerTy() && getBitwidth() == sizeof(void*) * 8;
    }
 
-   virtual bool isUnsigned() const
+   bool isInt64Ty(bool Unsigned = false) const
    {
-      return false;
+      return isIntegerTy() && getBitwidth() == 64 && isUnsigned() == Unsigned;
    }
 
-   virtual unsigned int getBitwidth() const
+   bool isInt8Ty(bool Unsigned = false) const
    {
-      llvm_unreachable("Not an integer type");
+      return isIntegerTy() && getBitwidth() == 8 && isUnsigned() == Unsigned;
    }
 
-   virtual bool isPtrSizedInt() const
+   bool isInt1Ty(bool Unsigned = false) const
    {
-      return false;
+      return isIntegerTy() && getBitwidth() == 1 && isUnsigned() == Unsigned;
    }
 
-   virtual bool isInt64Ty(bool isUnsigned = false) const
+   bool isIntNTy(unsigned n, bool Unsigned = false) const
    {
-      return false;
+      return isIntegerTy() && getBitwidth() == n && isUnsigned() == Unsigned;
    }
 
-   virtual bool isInt8Ty(bool isUnsigned = false) const
-   {
-      return false;
-   }
+   bool isDummyObject() const;
 
-   virtual bool isInt1Ty(bool isUnsigned = false) const
-   {
-      return false;
-   }
+   bool isClass() const;
+   bool isUnion() const;
+   bool isProtocol() const;
+   bool isStruct() const;
+   bool isEnum() const;
 
-   virtual bool isIntNTy(unsigned n, bool isUnsigned = false) const
-   {
-      return false;
-   }
+   bool needsStructReturn() const;
 
-   virtual bool isDummyObject() const
-   {
-      return false;
-   }
+   bool isOptionTy() const;
+   bool isOptionOf(const std::string&) const;
 
-   virtual bool isProtocol() const
-   {
-      return false;
-   }
-
-   virtual bool isStruct() const
-   {
-      return false;
-   }
-
-   virtual bool isEnum() const
-   {
-      return false;
-   }
-
-   virtual bool needsStructReturn() const
-   {
-      return isStruct() || isProtocol() || isEnum();
-   }
-
-   virtual void isEnum(bool) const
-   {
-
-   }
-
-   virtual bool isOptionTy() const
-   {
-      return false;
-   }
-
-   virtual bool isOptionOf(const string&) const
-   {
-      return false;
-   }
-
-   virtual bool isRefcounted() const
-   {
-      return false;
-   }
+   bool isRefcounted() const { return isClass(); }
 
    bool isReferenceType() const
    {
       return isRefcounted();
    }
 
-   virtual bool needsCleanup() const
+   bool needsCleanup() const;
+
+   bool isValueType() const
    {
-      return false;
+      return isNumeric() || isRawFunctionTy() || isStruct();
    }
 
-   virtual bool isValueType() const
-   {
-      return true;
-   }
+   bool needsMemCpy() const;
 
-   virtual bool needsMemCpy() const
-   {
-      return false;
-   }
-
-   virtual llvm::Type* getLlvmFunctionType() const
-   {
-      llvm_unreachable("Not a function type!");
-   }
+   operator QualType();
 
 protected:
    static llvm::StringMap<Type*> Instances;
-
    TypeID id;
-   string className;
 };
 
 } // namespace cdot

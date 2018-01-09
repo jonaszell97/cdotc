@@ -11,14 +11,63 @@ namespace cdot {
 namespace il {
 
 class Module;
+class Function;
+class GlobalVariable;
+class Instruction;
+class AggregateType;
+class BasicBlock;
 
 class ModuleWriter {
 public:
-   explicit ModuleWriter(Module *M);
+   enum class Kind : unsigned char {
+      Module,
+      Function,
+      GlobalVariable,
+      Type,
+      Instruction,
+      BasicBlock
+   };
+
+   explicit ModuleWriter(Module const* M)
+      : kind(Kind::Module), M(M)
+   {}
+
+   explicit ModuleWriter(Function const* F)
+      : kind(Kind::Function), F(F)
+   {}
+
+   explicit ModuleWriter(GlobalVariable const* G)
+      : kind(Kind::GlobalVariable), G(G)
+   {}
+
+   explicit ModuleWriter(AggregateType const* Ty)
+      : kind(Kind::Type), Ty(Ty)
+   {}
+
+   explicit ModuleWriter(Instruction const* I)
+      : kind(Kind::Instruction), I(I)
+   {}
+
+   explicit ModuleWriter(BasicBlock const* BB)
+      : kind(Kind::BasicBlock), BB(BB)
+   {}
+
+
    void WriteTo(llvm::raw_ostream &out);
+   void WriteFunctionDeclTo(llvm::raw_ostream &out);
+   void WriteBasicBlockDeclTo(llvm::raw_ostream &out);
 
 protected:
-   Module *M;
+   Kind kind;
+
+   union {
+      Module const* M;
+      Function const* F;
+      GlobalVariable const* G;
+      Instruction const* I;
+      AggregateType const* Ty;
+      BasicBlock const *BB;
+   };
 };
 
 } // namespace il

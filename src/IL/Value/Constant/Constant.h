@@ -13,12 +13,16 @@ namespace il {
 
 class Constant: public Value {
 public:
+   friend class Value; // for handleReplacement
+
    static bool classof(Constant const* T) { return true; }
    static bool classof(Value const* T) {
       switch (T->getTypeID()) {
-#     define CDOT_CONSTANT(Name) \
+#     define CDOT_CONSTANT(Name)  \
          case Name##ID:
 #     define CDOT_AGGR_TYPE(Name) \
+         case Name##ID:
+#     define CDOT_CONSTEXPR(Name) \
          case Name##ID:
 #     include "../Instructions.def"
             return true;
@@ -28,13 +32,11 @@ public:
    }
 
 protected:
-   Constant(TypeID id, Type *ty,
-            const std::string &name = "",
-            const SourceLocation &loc = {});
+   Constant(TypeID id, Type *ty);
+   Constant(TypeID id, QualType ty);
 
-   Constant(TypeID id, ILType ty,
-            const std::string &name = "",
-            const SourceLocation &loc = {});
+private:
+   void handleReplacement(Value *with);
 };
 
 } // namespace il

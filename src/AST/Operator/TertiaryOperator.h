@@ -12,9 +12,9 @@ namespace ast {
 
 class TertiaryOperator : public Expression {
 public:
-   TertiaryOperator(Expression::SharedPtr &&cond,
-                    Expression::SharedPtr &&lhs,
-                    Expression::SharedPtr &&rhs);
+   TertiaryOperator(std::shared_ptr<Expression> &&cond,
+                    std::shared_ptr<Expression> &&lhs,
+                    std::shared_ptr<Expression> &&rhs);
 
    typedef std::shared_ptr<TertiaryOperator> SharedPtr;
 
@@ -24,14 +24,40 @@ public:
    }
 
 protected:
-   Expression::SharedPtr condition;
-   Expression::SharedPtr lhs;
-   Expression::SharedPtr rhs;
+   std::shared_ptr<Expression> condition;
+   std::shared_ptr<Expression> lhs;
+   std::shared_ptr<Expression> rhs;
 
 public:
-   Expression::SharedPtr &getCondition();
-   Expression::SharedPtr &getLhs();
-   Expression::SharedPtr &getRhs();
+   const std::shared_ptr<Expression> &getCondition() const
+   {
+      return condition;
+   }
+
+   const std::shared_ptr<Expression> &getLhs() const
+   {
+      return lhs;
+   }
+
+   const std::shared_ptr<Expression> &getRhs() const
+   {
+      return rhs;
+   }
+
+   std::shared_ptr<Expression> &getCondition()
+   {
+      return condition;
+   }
+
+   std::shared_ptr<Expression> &getLhs()
+   {
+      return lhs;
+   }
+
+   std::shared_ptr<Expression> &getRhs()
+   {
+      return rhs;
+   }
 };
 
 } // namespace ast

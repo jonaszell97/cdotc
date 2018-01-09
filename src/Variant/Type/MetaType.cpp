@@ -3,19 +3,18 @@
 //
 
 #include "MetaType.h"
-
-#include "../../AST/SymbolTable.h"
 #include "../../AST/Passes/SemanticAnalysis/Record/Record.h"
-#include "../../AST/Passes/CodeGen/CodeGen.h"
+
+using namespace cdot::support;
+using std::string;
 
 namespace cdot {
 
-MetaType::MetaType(Type *forType) : forType(forType)
+MetaType::MetaType(Type *forType)
+   : ObjectType(SymbolTable::getRecord("cdot.TypeInfo")), forType(forType)
 {
    assert(forType);
    id = TypeID::MetaTypeID;
-   className = "cdot.TypeInfo";// "cdot.TypeInfo<" + forType->toString() + ">";
-   is_struct = true;
 }
 
 MetaType* MetaType::get(Type *forType)
@@ -23,10 +22,10 @@ MetaType* MetaType::get(Type *forType)
    auto key = string("cdot.TypeInfo.") + std::to_string((uintptr_t)forType);
    auto it = Instances.find(key);
    if (it == Instances.end()) {
-      it->second = new MetaType(forType);
+      Instances.try_emplace(key, new MetaType(forType));
    }
 
-   return cast<MetaType>(it->second);
+   return cast<MetaType>(Instances[key]);
 }
 
 Type* MetaType::getUnderlyingType() const
@@ -36,7 +35,7 @@ Type* MetaType::getUnderlyingType() const
 
 string MetaType::toString() const
 {
-   return className;
+   return "cdot.TypeInfo";
 }
 
 size_t MetaType::getSize() const
@@ -44,19 +43,27 @@ size_t MetaType::getSize() const
    return getRecord()->getSize();
 }
 
-short MetaType::getAlignment() const
+unsigned short MetaType::getAlignment() const
 {
    return sizeof(int*);
 }
 
-llvm::Type* MetaType::getLlvmType() const
+NamespaceType* NamespaceType::get(Namespace *NS)
 {
-   return ast::CodeGen::getStructTy(className);
-}
+   llvm::SmallString<128> str;
+   str += "__ns.";
+   str += NS->getName();
 
-llvm::Value* MetaType::getDefaultVal(ast::CodeGen &CGM) const
-{
-   return CGM.getTypeInfo(forType);
+   auto key = str.str();
+
+   auto it = Instances.find(key);
+   if (it != Instances.end())
+      return cast<NamespaceType>(it->second);
+
+   auto ty = new NamespaceType(NS);
+   Instances[key] = ty;
+
+   return ty;
 }
 
 } // namespace cdot

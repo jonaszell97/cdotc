@@ -23,20 +23,20 @@ namespace cdot {
          return precision;
       }
 
-      Type* box() const override;
+      size_t getSize() const
+      {
+         return size_t(precision) / 8;
+      }
 
-      string toString() const override;
-      llvm::Type* getLlvmType() const override;
+      unsigned short getAlignment() const
+      {
+         return (unsigned short)(precision / 8);
+      }
 
-      Type* ArithmeticReturnType(const string &op, Type *rhsTy) const override;
+      std::string toString() const;
 
-      bool implicitlyCastableTo(Type *destTy) const override;
-      bool explicitlyCastableTo(Type *destTy) const override;
-
-      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
-      llvm::Constant* getConstantVal(Variant &val) const override;
-
-      short getAlignment() const override;
+      Type *box() const;
+      Type *ArithmeticReturnType(const std::string &op, Type *rhsTy) const;
 
       static bool classof(Type const* T)
       {
@@ -45,7 +45,6 @@ namespace cdot {
 
    protected:
       unsigned short precision;
-      string className;
    };
 
 } // namespace cdot

@@ -3,8 +3,6 @@
 //
 
 #include "VoidType.h"
-#include "ObjectType.h"
-#include "../../AST/Passes/CodeGen/CodeGen.h"
 
 namespace cdot {
 
@@ -12,9 +10,8 @@ VoidType* VoidType::Instance = nullptr;
 
 VoidType* VoidType::get()
 {
-   if (Instance == nullptr) {
+   if (Instance == nullptr)
       Instance = new VoidType;
-   }
 
    return Instance;
 }
@@ -22,26 +19,6 @@ VoidType* VoidType::get()
 VoidType::VoidType()
 {
    id = TypeID::VoidTypeID;
-}
-
-bool VoidType::implicitlyCastableTo(Type *other) const
-{
-   return other == this;
-}
-
-llvm::Constant* VoidType::getConstantVal(Variant &) const
-{
-   return llvm::ConstantPointerNull::get(ast::CodeGen::Int8PtrTy);
-}
-
-llvm::Type *VoidType::getLlvmType() const
-{
-   return llvm::Type::getVoidTy(ast::CodeGen::Context);
-}
-
-string VoidType::toString() const
-{
-   return "Void";
 }
 
 } // namespace cdot

@@ -13,6 +13,7 @@ namespace cdot {
 
 class TokenStore {
 public:
+   using Token = cdot::lex::Token;
    virtual std::vector<Token> getTokens() = 0;
    virtual std::vector<Token> borrow() = 0;
    virtual void giveBack(std::vector<Token> &&tokens) = 0;

@@ -14,4 +14,4 @@
 { note_goto_skipped_decl, "\"skipped declaration of variable $0 here\""},
 { note_duplicate_case, "\"previous case is here\""},
 { note_func_redeclaration_memberwise_init, "\"previous declaration is the memberwise initializer\""},
-{ note_func_redeclaration, "\"previous declaration is here\""}
+{ note_func_redeclaration, "\"previous declaration is here\""},

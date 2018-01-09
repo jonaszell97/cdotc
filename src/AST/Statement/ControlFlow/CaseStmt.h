@@ -18,16 +18,13 @@ struct EnumCase;
 namespace ast {
 
 class Expression;
+class PatternExpr;
 
-class CaseStmt : public LabelStmt {
+class CaseStmt : public Statement {
 public:
-   explicit CaseStmt(std::shared_ptr<Expression> &&caseVal);
-   CaseStmt();
-
-   void setBody(Statement::SharedPtr &&stmt)
-   {
-      body = std::move(stmt);
-   }
+   explicit CaseStmt(std::shared_ptr<Statement> &&body);
+   CaseStmt(std::shared_ptr<PatternExpr> &&caseVal,
+            std::shared_ptr<Statement> &&body);
 
    typedef std::shared_ptr<CaseStmt> SharedPtr;
 
@@ -37,59 +34,37 @@ public:
    }
 
 protected:
-   bool isDefault = false;
-   std::shared_ptr<Expression> caseVal;
+   bool is_default = false;
+   std::shared_ptr<PatternExpr> pattern;
    std::shared_ptr<Statement> body;
-   QualType caseType;
 
-   // codegen
-   bool isEnumLetCase = false;
-   bool isEnumVarCase = false;
-
-   cl::Method* operatorEquals = nullptr;
-
-   cdot::cl::EnumCase* enumCaseVal;
-   std::vector<pair<string, QualType>> letIdentifiers;
-   std::vector<string> letBindings;
+   cl::Method *comparisonOp = nullptr;
 
 public:
-   bool isIsDefault() const;
+   bool isDefault() const
+   {
+      return is_default;
+   }
 
-   std::shared_ptr<Expression> &getCaseVal();
+   const std::shared_ptr<PatternExpr> &getPattern() const
+   {
+      return pattern;
+   }
 
-   const std::shared_ptr<Statement> &getBody() const;
+   const std::shared_ptr<Statement> &getBody() const
+   {
+      return body;
+   }
 
-   const QualType &getCaseType() const;
+   cl::Method *getComparisonOp() const
+   {
+      return comparisonOp;
+   }
 
-   bool isIsEnumLetCase() const;
-
-   bool isIsEnumVarCase() const;
-
-   cl::Method *getOperatorEquals() const;
-
-   cdot::cl::EnumCase *getEnumCaseVal() const;
-
-   std::vector<pair<string, QualType>> &getLetIdentifiers();
-   std::vector<string> &getLetBindings();
-
-   void setIsDefault(bool isDefault);
-
-   void setCaseVal(const std::shared_ptr<Expression> &caseVal);
-
-   void setCaseType(const QualType &caseType);
-
-   void setIsEnumLetCase(bool isEnumLetCase);
-
-   void setIsEnumVarCase(bool isEnumVarCase);
-
-   void setOperatorEquals(cdot::cl::Method *operatorEquals);
-
-   void setEnumCaseVal(cdot::cl::EnumCase *enumCaseVal);
-
-   void
-   setLetIdentifiers(const std::vector<pair<string, QualType>> &letIdentifiers);
-
-   void setLetBindings(const std::vector<string> &letBindings);
+   void setComparisonOp(cl::Method *comparisonOp)
+   {
+      CaseStmt::comparisonOp = comparisonOp;
+   }
 };
 
 } // namespace ast

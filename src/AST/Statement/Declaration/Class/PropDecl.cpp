@@ -22,8 +22,8 @@ PropDecl::PropDecl(string &&propName,
                    string &&newValName)
    : RecordSubDecl(PropDeclID, std::move(propName), access, isStatic),
      type(std::move(type)), has_definition(hasDefinition),
-     getterBody(getter), setterBody(setter), newValName(move(newValName)),
-     getter(hasGetter), setter(hasSetter)
+     getterBody(getter), setterBody(setter),
+     getter(hasGetter), setter(hasSetter), newValName(move(newValName))
 {
 
 }

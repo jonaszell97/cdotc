@@ -14,31 +14,40 @@ class AggregateType;
 
 class Method: public Function {
 public:
-   Method(cl::Method *m, Module *parent);
-   Method(const std::string &name,
-          QualType returnType,
-          llvm::ArrayRef<cdot::Argument> args,
-          AggregateType *forType,
-          bool isStatic,
-          Module *parent,
-          SourceLocation loc,
-          bool mightThrow);
+   friend class Function; // for copy init
 
    Method(const std::string &name,
-          FunctionType *ty,
           QualType returnType,
-          llvm::ArrayRef<Argument*> args,
+          llvm::ArrayRef<Argument *> args,
           AggregateType *forType,
           bool isStatic,
+          bool isVirtual,
+          bool isProperty,
+          bool isOperator,
+          bool isConversionOp,
           Module *parent,
-          SourceLocation loc,
           bool mightThrow);
 
    AggregateType *getRecordType() const;
-   bool isStatic() const;
-   bool isProperty() const;
 
-   Argument *getSelf() const;
+   bool isStatic() const
+   {
+      return (SubclassData & Flag::Static) != 0;
+   }
+
+   bool isProperty() const
+   {
+      return (SubclassData & Flag::Property) != 0;
+   }
+
+   bool isVirtual() const
+   {
+      return (SubclassData & Flag::Virtual) != 0;
+   }
+
+   bool isProtocolMethod() const;
+
+   Argument *getSelf();
 
    const llvm::StringRef &getSelfBinding() const
    {
@@ -50,10 +59,47 @@ public:
       Method::selfBinding = selfBinding;
    }
 
+   bool isPrimitiveOperator() const
+   {
+      return (SubclassData & Flag::BoxedOperator) != 0;
+   }
+
+   bool isOperator() const
+   {
+      return (SubclassData & Flag::Operator) != 0;
+   }
+
+   size_t getVtableOffset() const
+   {
+      return vtableOffset;
+   }
+
+   void setVtableOffset(size_t vtableOffset)
+   {
+      Method::vtableOffset = vtableOffset;
+   }
+
+   size_t getPtableOffset() const
+   {
+      return ptableOffset;
+   }
+
+   void setPtableOffset(size_t ptableOffset)
+   {
+      Method::ptableOffset = ptableOffset;
+   }
+
 protected:
    AggregateType *recordType;
    Argument *Self;
    llvm::StringRef selfBinding;
+
+   size_t vtableOffset = 0;
+   size_t ptableOffset = 0;
+
+   void checkIfPrimitiveOp();
+
+   Method(const Method &other);
 
 public:
    static inline bool classof(Value const* T) {
@@ -69,22 +115,16 @@ public:
 
 class Initializer: public Method {
 public:
-   Initializer(cl::Method *m, Module *parent);
-   Initializer(const std::string &name,
-               llvm::ArrayRef<cdot::Argument> args,
-               AggregateType *forType,
-               Module *parent,
-               SourceLocation loc,
-               bool mightThrow);
+   friend class Function; // for copy init
 
    Initializer(const std::string &name,
-               FunctionType *ty,
-               QualType returnType,
-               llvm::ArrayRef<Argument*> args,
+               llvm::ArrayRef<Argument *> args,
                AggregateType *forType,
                Module *parent,
-               SourceLocation loc,
                bool mightThrow);
+
+protected:
+   Initializer(const Initializer &other);
 
 public:
    static inline bool classof(Value const* T) {

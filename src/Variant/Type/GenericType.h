@@ -13,41 +13,32 @@
 
 namespace cdot {
 
-   class GenericType : public ObjectType {
+   class GenericType : public Type {
    protected:
       GenericType(const string& genericClassName, Type* actualType);
       static string keyFrom(const string& genericClassName,
                             Type* actualType);
 
       Type* actualType;
+      string genericTypeName;
 
    public:
       static GenericType* get(const string& genericClassName,
                               Type* actualType);
 
+      const string &getGenericTypeName() const
+      {
+         return genericTypeName;
+      }
+
       Type* getActualType() const;
       Type* getActualType();
 
-      bool isStruct() const override;
-      bool isProtocol() const override;
-      bool isEnum() const override;
-      bool isRefcounted() const override;
+      string toString() const;
+      string toUniqueString() const;
 
-      bool isValueType() const override;
-      bool needsMemCpy() const override;
-      bool needsStructReturn() const override;
-
-      cdot::cl::Record * getRecord() const override;
-
-      string toString() const override;
-      string toUniqueString() const override;
-      llvm::Type* getLlvmType() const override;
-
-      short getAlignment() const override;
-      size_t getSize() const override;
-
-      bool implicitlyCastableTo(Type* rhs) const override;
-      bool explicitlyCastableTo(Type* rhs) const override;
+     unsigned short getAlignment() const;
+      size_t getSize() const;
 
       static bool classof(Type const* T)
       {

@@ -2,70 +2,152 @@
 // Created by Jonas Zell on 16.10.17.
 //
 
+#include <llvm/Support/raw_ostream.h>
 #include "SemaPass.h"
 
-#include "../../Statement/Declaration/Class/ClassDecl.h"
+#include "../../Statement/Declaration/Class/RecordDecl.h"
 #include "../../Statement/Declaration/Class/FieldDecl.h"
 #include "../../Statement/Declaration/Class/PropDecl.h"
 #include "../../Statement/Declaration/Class/MethodDecl.h"
 #include "../../Statement/Declaration/Class/ConstrDecl.h"
 #include "../../Statement/Declaration/Class/DestrDecl.h"
-#include "../../Statement/Declaration/Class/ExtensionDecl.h"
-#include "../../Statement/Declaration/Class/EnumDecl.h"
 #include "../../Statement/Declaration/Class/EnumCaseDecl.h"
-#include "../../Statement/Declaration/Class/UnionDecl.h"
-#include "../../Statement/Declaration/Template/RecordTemplateDecl.h"
+#include "../../Statement/Declaration/FuncArgDecl.h"
+
 #include "../../Statement/Block/CompoundStmt.h"
+#include "../../Statement/Static/StaticStmt.h"
 
 #include "../../Expression/TypeRef.h"
+#include "../../Expression/StaticExpr.h"
 
 #include "Record/Class.h"
 #include "Record/Enum.h"
 #include "Record/Union.h"
+#include "Record/Protocol.h"
+
+#include "../ILGen/ILGenPass.h"
 
 #include "../../SymbolTable.h"
+
+#include "../../../Support/Casting.h"
+#include "../../../Message/Diagnostics.h"
+#include "TemplateInstantiator.h"
+
 #include "../../../Variant/Type/VoidType.h"
+#include "../../../Variant/Type/GenericType.h"
+#include "../StaticExpr/StaticExprEvaluator.h"
+#include "../Declaration/DeclPass.h"
+#include "../../../Basic/DependencyGraph.h"
+
+using namespace cdot::support;
+using namespace cdot::cl;
+using namespace cdot::diag;
 
 namespace cdot {
 namespace ast {
 
-void SemaPass::DefineField(
-   FieldDecl *node,
-   cdot::cl::Class *cl)
+void SemaPass::visitRecordCommon(RecordDecl *node)
 {
-   if (node->isDeclaration()) {
-      return;
+   auto R = node->getRecord();
+   ScopeGuard guard(*this, R);
+
+   if (R->isTemplated()) {
+      for (auto &Inst : R->getInstantiations())
+         visitRecordInstantiation(Inst->getRecord());
    }
 
-   auto &field_type = node->getType()->getTypeRef();
-   auto defaultVal = node->getDefaultVal();
+   for (const auto& decl : node->getInnerDeclarations()) {
+      visit(decl);
+   }
 
-   if (defaultVal != nullptr) {
-      defaultVal->setContextualType(field_type);
+   for (const auto &AT : node->getAssociatedTypes()) {
+      visitAssociatedTypeDecl(AT.get());
+   }
 
-      QualType def_type = VisitNode(defaultVal);
-      toRvalueIfNecessary(def_type, defaultVal);
+   for (const auto &prop : node->getProperties()) {
+      visitPropDecl(prop.get());
+   }
 
-      auto declaredField = cl->getField(node->getName());
-      if (declaredField != nullptr) {
-         declaredField->defaultVal = defaultVal;
-      }
+   for (const auto &field : node->getFields()) {
+      visitFieldDecl(field.get());
+   }
 
-      if (field_type->isAutoTy()) {
-         field_type = def_type;
-         node->getType()->setType(def_type);
-         cl->getField(node->getName())->fieldType = *field_type;
+   for (const auto &method : node->getMethods()) {
+      visitMethodDecl(method.get());
+   }
+
+   for (const auto &method : R->getProtocolMethodInstantiations()) {
+      DiagnosticBuilder::pushInstantiationCtx(method->getMethod());
+      visitMethodDecl(method.get());
+      DiagnosticBuilder::popInstantiationCtx();
+   }
+
+   for (const auto &Static : node->getStaticStatements()) {
+      visit(Static.get());
+   }
+
+   if (!isa<ExtensionDecl>(node)) {
+      for (auto &ext : R->getExtensions())
+         visitExtensionDecl(ext.get());
+   }
+}
+
+void SemaPass::visitRecordDecl(RecordDecl *node)
+{
+   switch (node->getTypeID()) {
+      case AstNode::ClassDeclID:
+         visitClassDecl(cast<ClassDecl>(node));
+         break;
+      case AstNode::EnumDeclID:
+         visitEnumDecl(cast<EnumDecl>(node));
+         break;
+      case AstNode::UnionDeclID:
+         visitUnionDecl(cast<UnionDecl>(node));
+         break;
+      case AstNode::ProtocolDeclID:
+         visitProtocolDecl(cast<ProtocolDecl>(node));
+         break;
+      default:
+         llvm_unreachable("not a record decl");
+   }
+}
+
+void SemaPass::visitFieldDecl(FieldDecl *node)
+{
+   if (alreadyVisited(node))
+      return;
+
+   if (node->isDeclaration())
+      return;
+
+   auto cl = cast<Struct>(node->getRecord());
+   auto &fieldType = node->getType()->getTypeRef();
+
+   if (auto defaultVal = node->getDefaultVal()) {
+      defaultVal->setContextualType(fieldType);
+
+      QualType givenType = visit(defaultVal);
+      toRvalueIfNecessary(givenType, defaultVal);
+
+      if (fieldType->isAutoTy()) {
+         fieldType = givenType;
+         node->getType()->setType(givenType);
+         cl->getField(node->getName())->fieldType = *fieldType;
 
          if (node->isStatic()) {
-            auto ty = field_type;
+            auto ty = fieldType;
             ty.isLvalue(true);
 
             SymbolTable::declareVariable(node->getBinding(), ty,
                                          node->getAccess(),
-                                         currentNamespace.back(), node);
+                                         node->getDefaultVal()
+                                             ->isTypeDependant(),
+                                         declPass->getCurrentNamespace(),
+                                         node,
+                                         node->getSourceLoc());
          }
          else {
-            auto ty = field_type;
+            auto ty = fieldType;
             if (node->hasGetter()) {
                node->getGetterMethod()->getReturnType() = ty;
             }
@@ -74,300 +156,355 @@ void SemaPass::DefineField(
             }
          }
       }
-      else if (!field_type.implicitlyCastableTo(def_type)) {
 
-      }
-      else if (def_type != field_type) {
-
-      }
+      implicitCastIfNecessary(defaultVal, givenType, fieldType);
    }
 
    auto field = cl->getField(node->getName());
    if (node->isStatic()) {
-      node->setBinding(field->mangledName);
+      node->setBinding(field->linkageName);
    }
 
    if (node->hasGetter() && node->getGetterBody() != nullptr) {
-      pushMethodScope(node->getGetterMethod());
-
-      VisitNode(node->getGetterBody());
-
-      popFunctionScope();
+      ScopeGuard scope(*this, node->getGetterMethod());
+      visit(node->getGetterBody());
    }
 
    if (node->hasSetter() && node->getSetterBody() != nullptr) {
-      pushMethodScope(node->getSetterMethod());
+      ScopeGuard scope(*this, node->getSetterMethod());
 
       auto typeref = std::make_shared<TypeRef>();
       typeref->setResolved(true);
-      typeref->setType(field_type);
+      typeref->setType(fieldType);
 
-      node->setNewVal(std::make_shared<FuncArgDecl>("newVal", move(typeref)));
+      node->setNewVal(std::make_shared<FuncArgDecl>("newVal", move(typeref),
+                                                    nullptr, false, true));
 
-      node->getNewVal()->setBinding(declareVariable("newVal", field_type));
-      VisitNode(node->getSetterBody());
-
-      popFunctionScope();
+      node->getNewVal()
+          ->setBinding(declareVariable("newVal", fieldType, false,
+                                       false, node->getSourceLoc()));
+      visit(node->getSetterBody());
    }
 }
 
-void SemaPass::visit(PropDecl *node)
+void SemaPass::visitPropDecl(PropDecl *node)
 {
+   if (alreadyVisited(node))
+      return;
+
    auto &propTy = node->getType()->getTypeRef();
+
+   if (propTy->isDependantType())
+      return node->setIsTypeDependent(true);
+
    auto prop = node->getProp();
-
    if (node->hasGetter() && node->getGetterBody() != nullptr) {
-      pushMethodScope(prop->getGetter());
-
-      VisitNode(node->getGetterBody());
-      popScope();
+      ScopeGuard scope(*this, prop->getGetter());
+      visit(node->getGetterBody());
    }
 
    if (node->hasSetter() && node->getSetterBody() != nullptr) {
-      pushMethodScope(prop->getSetter());
+      ScopeGuard scope(*this, prop->getSetter());
 
       auto typeref = std::make_shared<TypeRef>();
       typeref->setResolved(true);
       typeref->setType(propTy);
 
       prop->setNewValBinding(declareVariable(prop->getNewValName(),
-                                             prop->getType()));
+                                             prop->getType(),
+                                             false,
+                                             prop->getType()->isDependantType(),
+                                             node->getSourceLoc()));
 
-      VisitNode(node->getSetterBody());
-      popScope();
+      visit(node->getSetterBody());
    }
 }
 
-void SemaPass::DefineClass(ClassDecl *node,
-                           cdot::cl::Class *cl) {
-   pushClassScope(cl);
-
-   for (const auto& decl : node->getInnerDeclarations()) {
-      VisitNode(decl);
-   }
-
-   for (const auto &prop : node->getProperties()) {
-      VisitNode(prop);
-   }
-
-   for (const auto &method : cl->getMethods()) {
-      if (!method.second->getDeclaration()) {
-         continue;
-      }
-      if (method.second->getName() == "init") {
-         continue;
-      }
-
-      VisitNode(method.second->getDeclaration());
-   }
-
-   for (const auto &constr : node->getConstructors()) {
-      DefineConstr(constr.get(), cl);
-   }
-
-   if (auto Deinit = node->getDestructor()) {
-      DefineDestr(Deinit.get(), cl);
-   }
-
-   popClassScope();
-}
-
-void SemaPass::visit(ExtensionDecl *node)
+void SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
 {
-   auto rec = node->getRecord();
-   pushClassScope(rec);
+   auto Rec = node->getRecord();
+   if (!isa<Protocol>(Rec)) {
+      AssociatedType const* AT = nullptr;
+      Protocol* Proto = nullptr;
 
-   for (const auto& decl : node->getInnerDeclarations()) {
-      VisitNode(decl);
-   }
+      if (!node->getProtocolSpecifier().empty()) {
+         auto proto = getRecord(node->getProtocolSpecifier());
+         if (!proto || !isa<Protocol>(proto))
+            diag::err(err_generic_error)
+               << node->getProtocolSpecifier() + " is not a protocol"
+               << node << diag::term;
 
-   for (const auto &prop : node->getProperties()) {
-      VisitNode(prop);
-   }
+         if (!Rec->conformsTo(node->getProtocolSpecifier()))
+            diag::err(err_generic_error)
+               << Rec->getName() + " does not conform to " + proto->getName()
+               << node << diag::term;
 
-   for (const auto &stmt : node->getMethods()) {
-      VisitNode(stmt);
-   }
+         Proto = cast<Protocol>(proto);
+         AT = Proto->getAssociatedType(node->getName());
+      }
+      else {
+         for (const auto &CF : Rec->getConformances()) {
+            auto MaybeAT = CF->getAssociatedType(node->getName());
+            if (MaybeAT && AT) {
+               diag::err(err_generic_error)
+                  << "reference to associated type " + node->getName() + " is "
+                     "ambiguous" << node << diag::cont;
 
-   for (const auto &constr : node->getInitializers()) {
-      DefineConstr(constr.get(), rec->getAs<Class>());
-   }
+               diag::note(note_generic_note)
+                  << "possible type is here"
+                  << AT->getSourceLoc() << diag::cont;
 
-   popClassScope();
-}
+               diag::note(note_generic_note)
+                  << "possible type is here"
+                  << MaybeAT->getSourceLoc() << diag::term;
+            }
 
-void SemaPass::DefineMethod(
-   MethodDecl *node,
-   cdot::cl::Class *cl)
-{
-   if (node->isIsAlias() || node->isDeclaration()) {
-      return;
-   }
-
-   bool hasConstraints = node->getMethod()->constraintIndex != -1;
-   if (hasConstraints) {
-      auto& constraints = cl->getConstraintSet(
-         (unsigned)node->getMethod()->constraintIndex);
-      auto& classGenerics = GenericsStack.back();
-      auto* newConstraints = new std::vector<TemplateConstraint>();
-
-      for (const auto& constr : constraints) {
-         for (const auto& gen : *classGenerics) {
-//            if (gen.genericTypeName == constr.constrainedGenericTypeName) {
-//               switch (constr.kind) {
-//                  case ExtensionConstraint::CONFORMANCE:
-//                     newConstraints->push_back(TemplateConstraint{
-//                        TemplateConstraint::TypeName,
-//                        constr.constrainedGenericTypeName,
-//                        *constr.typeConstraint->type
-//                     });
-//                     break;
-//                  case ExtensionConstraint::TYPE_EQUALITY:
-//                     newConstraints->push_back(TemplateConstraint{
-//                        TemplateConstraint::TypeName,
-//                        constr.constrainedGenericTypeName,
-//                        *constr.typeConstraint->type
-//                     });
-//                     break;
-//                  default:
-//                     newConstraints->push_back(gen);
-//                     break; // no idea what to do with this
-//               }
-//            }
+            if (MaybeAT) {
+               AT = MaybeAT;
+               Proto = CF;
+            }
          }
       }
 
-      GenericsStack.push_back(newConstraints);
+      if (!AT)
+         diag::err(err_generic_error)
+            << Rec->getName() + " does not conform to a protocol that defines"
+               " associated type " + node->getName() << node << diag::term;
+
+      if (!node->getActualType()) {
+         if (!AT->getType())
+            diag::err(err_generic_error)
+               << "associated type " + node->getName() + " does not have a "
+                  "default type" << node << diag::term;
+
+         node->setActualType(std::make_shared<TypeRef>(AT->getType()));
+      }
+
+      if (!AT->getDecl() || AT->getDecl()->getConstraints().empty())
+         return;
+
+      DeclPass p(*this, Proto);
+      p.SelfStack.push_back(Rec);
+
+      DeclScopeRAII guard(*this, p);
+
+      for (const auto &C : AT->getDecl()->getConstraints()) {
+         TemplateArgList list(*this);
+         list.insert(node->getName(), *node->getActualType()->getType());
+
+         auto Inst =
+            TemplateInstantiator::InstantiateStaticExpr(*this,
+                                                        node->getSourceLoc(),
+                                                        C, list);
+
+         StaticExprEvaluator Eval(*this, Rec, {},
+                                  DeclPass::getImportsForFile
+                                     (Proto->getSourceLoc().getSourceId()),
+                                  &list);
+
+         auto res = Eval.evaluate(Inst.get());
+
+         if (res.hadError) {
+            issueDiagnostics();
+
+            for (auto &diag : res.diagnostics)
+               diag << diag::cont;
+
+            std::terminate();
+         }
+
+         auto &expr = res.val;
+         auto ty = expr.typeOf();
+         if (ty->isObjectTy() && ty->getClassName() == "Bool") {
+            expr = expr.getField(0);
+         }
+
+         if (!expr.isInt())
+            diag::err(err_generic_error)
+               << "constraint must be boolean"
+               << Inst.get() << diag::term;
+
+         if (!expr.intVal) {
+            diag::err(err_generic_error)
+               << "associated type does not satisfy constraint "
+               << node->getSourceLoc() << diag::cont;
+
+            diag::note(note_generic_note)
+               << "constraint declared here"
+               << Inst.get() << diag::term;
+         }
+      }
+   }
+}
+
+void SemaPass::visitExtensionDecl(ExtensionDecl *node)
+{
+   if (alreadyVisited(node))
+      return;
+
+   auto rec = node->getRecord();
+
+   visitRecordCommon(node);
+   ScopeGuard scope(*this, rec);
+
+   for (const auto &constr : node->getInitializers()) {
+      visitConstrDecl(constr.get());
+   }
+}
+
+void SemaPass::visitConstrDecl(ConstrDecl *node)
+{
+   if (node->isMemberwise() || !node->getBody())
+      return;
+
+   if (alreadyVisited(node))
+      return;
+
+   ScopeGuard scope(*this, node->getMethod());
+
+   for (auto& arg : node->getArgs()) {
+      visit(arg);
    }
 
-   auto return_type = node->getReturnType()->getType();
-   pushMethodScope(node->getMethod());
+   visit(node->getBody());
+}
 
-   attributes = node->getAttributes();
+void SemaPass::visitDestrDecl(DestrDecl *node)
+{
+   if (alreadyVisited(node))
+      return;
+
+   ScopeGuard scope(*this, node->getMethod());
+   visit(node->getBody());
+}
+
+void SemaPass::visitClassDecl(ClassDecl *node)
+{
+   if (alreadyVisited(node))
+      return;
+
+   auto rec = node->getRecord();
+
+   visitRecordCommon(node);
+   ScopeGuard scope(*this, rec);
+
+   for (const auto &constr : node->getConstructors()) {
+      visitConstrDecl(constr.get());
+   }
+
+   if (auto Deinit = node->getDestructor()) {
+      visitDestrDecl(Deinit.get());
+   }
+
+   ILGen->DeclareRecord(rec);
+}
+
+void SemaPass::visitMethodDecl(MethodDecl *node)
+{
+   if (!node->getBody())
+      return;
+
+   if (alreadyVisited(node))
+      return;
+
+   auto method = node->getMethod();
+   ScopeGuard scope(*this, method);
 
    if (auto Body = node->getBody()) {
       for (const auto &arg : node->getArgs()) {
-         VisitNode(arg);
-         arg->setBinding(declareVariable(arg->getArgName(),
-                                         arg->getArgType()->getType()));
+         visit(arg);
       }
 
-      VisitNode(Body);
-   }
-   else if (return_type->isAutoTy()) {
-      *return_type = VoidType::get();
-   }
-
-   if (hasConstraints) {
-      auto back = GenericsStack.back();
-      GenericsStack.pop_back();
-
-      delete back;
-   }
-
-   popFunctionScope();
-   attributes.clear();
-}
-
-namespace {
-   using cdot::cl::Field;
-
-   bool fieldNeedsInitializing(const Field::SharedPtr& field)
-   {
-      return field->defaultVal == nullptr;
+      visit(Body);
    }
 }
 
-void SemaPass::DefineConstr(
-   ConstrDecl *node,
-   cdot::cl::Class *cl)
+void SemaPass::visitEnumDecl(EnumDecl *node)
 {
-   if (node->isMemberwise() || node->getBody() == nullptr) {
+   if (alreadyVisited(node))
       return;
-   }
 
-   pushMethodScope(node->getMethod());
-
-   std::vector<string> uninitialized;
-   for (const auto& field : cl->getFields()) {
-      if (fieldNeedsInitializing(field.second)) {
-         uninitialized.push_back(field.second->fieldName);
-      }
-   }
-
-   for (auto& arg : node->getArgs()) {
-      arg->setBinding(declareVariable(arg->getArgName(),
-                                      arg->getArgType()->getType()));
-   }
-
-   VisitNode(node->getBody());
-   popFunctionScope();
+   visitRecordCommon(node);
+   ILGen->DeclareRecord(node->getRecord());
 }
 
-void SemaPass::DefineDestr(DestrDecl *node, cdot::cl::Class *cl)
+void SemaPass::visitUnionDecl(UnionDecl *node)
 {
-   pushMethodScope(node->getDeclaredMethod());
-   VisitNode(node->getBody());
-   popFunctionScope();
-}
+   if (alreadyVisited(node))
+      return;
 
-void SemaPass::visit(ClassDecl *node)
-{
-   DefineClass(node, node->getRecord()->getAs<Class>());
-}
-
-
-void SemaPass::visit(ConstrDecl *node)
-{
-
-}
-
-void SemaPass::visit(DestrDecl *node)
-{
-
-}
-
-void SemaPass::visit(FieldDecl *node)
-{
-
-}
-
-void SemaPass::visit(MethodDecl *node)
-{
-   DefineMethod(node, node->getMethod()->owningClass->getAs<Class>());
-}
-
-void SemaPass::visit(EnumDecl *node)
-{
-   pushNamespace(node->getRecordName());
-
-   for (const auto& inner : node->getInnerDeclarations()) {
-      VisitNode(inner);
-   }
-
-   popNamespace();
-
-   auto en = node->getDeclaredEnum();
-   pushClassScope(en);
-
-   for (const auto &method : en->getMethods()) {
-      if (auto decl = method.second->getDeclaration()) {
-         VisitNode(decl);
-      }
-   }
-
-   popClassScope();
-}
-
-void SemaPass::visit(UnionDecl *node)
-{
    auto un = node->getDeclaredUnion();
+
+   visitRecordCommon(node);
+   ScopeGuard scope(*this, un);
+
    for (const auto &ty : node->getContainedTypes()) {
       if (!ty.second->isResolved()) {
-         VisitNode(ty.second);
+         visit(ty.second);
       }
 
       un->declareField(ty.first, *ty.second->getType());
+   }
+
+   ILGen->DeclareRecord(un);
+}
+
+void SemaPass::visitProtocolDecl(ProtocolDecl *node)
+{
+   if (alreadyVisited(node))
+      return;
+
+   auto rec = node->getRecord();
+
+   visitRecordCommon(node);
+   ScopeGuard scope(*this, rec);
+
+   for (const auto &constr : node->getConstructors()) {
+      visit(constr);
+   }
+
+   ILGen->DeclareRecord(rec);
+}
+
+void SemaPass::calculateRecordSizes()
+{
+   DependencyGraph<Record> DG;
+   for (const auto &Entry : SymbolTable::getEntries()) {
+      if (Entry.second.getKind() == SymbolTableEntry::RecordID) {
+         auto R = Entry.second.getRecord();
+         if (R->getSize())
+            continue;
+
+         auto &V = DG.getOrAddVertex(R);
+         for (auto &F : R->getFields()) {
+            if (F.isStatic || !F.getFieldType()->isObjectTy())
+               continue;
+
+            auto DepRec = F.getFieldType()->getRecord();
+            if (DepRec->getSize())
+               continue;
+
+            auto &Dep = DG.getOrAddVertex(DepRec);
+            Dep.addOutgoing(&V);
+         }
+      }
+   }
+
+   auto Order = DG.constructOrderedList();
+   if (!Order.second) {
+      auto pair = DG.getOffendingPair();
+      diag::err(err_generic_error)
+         << "circular reference between fields of records "
+            + pair.first->getName() + " and " + pair.second->getName()
+         << pair.first->getSourceLoc() << diag::cont;
+
+      diag::note(note_generic_note)
+         << "other record declared here"
+         << pair.second->getSourceLoc() << diag::term;
+   }
+
+   for (auto &R : Order.first) {
+      R->calculateSize();
    }
 }
 

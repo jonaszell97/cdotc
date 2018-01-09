@@ -12,53 +12,44 @@
 #include "SourceLocation.h"
 
 namespace cdot {
+namespace lex {
 
-enum TokenType : unsigned char {
-   T_KEYWORD = 0,
-   T_IDENT,
-   T_PUNCTUATOR,
-   T_OP,
-   T_LITERAL,
-   T_BOF,
-   T_EOF,
+namespace tok {
 
-   T_DIRECTIVE,
-   T_PREPROC_VAR,
+enum TokenType: unsigned short {
+   __initial = 0,
+
+#  define CDOT_TOKEN(Name, Spelling) \
+      Name,
+#  include "Tokens.def"
 };
 
-} // namespace cdot
+string tokenTypeToString(TokenType ty);
 
-using namespace cdot;
+} // namespace tok
 
 struct Token {
    Token();
    ~Token();
-   Token(TokenType type, Variant &&val, SourceLocation loc = {},
-      unsigned start = 0);
+   Token(tok::TokenType type, Variant &&val,
+         const SourceLocation &loc);
 
-   TokenType get_type();
-   Variant get_value();
+   tok::TokenType getKind() const { return _type; }
+
+   Variant &getValue() { return _value; }
+   Variant const& getValue() const { return _value; }
+
+   bool isContextualKeyword(const string &kw) const
+   {
+      return _type == tok::ident && _value.strVal == kw;
+   }
 
    std::string toString() const;
+   std::string rawRepr() const;
 
-   unsigned getStart() const
+   unsigned getOffset() const
    {
-      return start;
-   }
-
-   unsigned getEnd() const
-   {
-      return start + loc.getLength();
-   }
-
-   unsigned getLine() const
-   {
-      return loc.getLine();
-   }
-
-   unsigned getCol() const
-   {
-      return loc.getCol();
+      return loc.getOffset();
    }
 
    const SourceLocation& getSourceLoc() const
@@ -66,29 +57,35 @@ struct Token {
       return loc;
    }
 
-   bool is_punctuator(char) const;
+   bool is(tok::TokenType ty) const { return _type == ty; }
+   bool isNot(tok::TokenType ty) const { return !is(ty); }
+
+   template<class ...Rest>
+   bool oneOf(tok::TokenType ty, Rest... rest) const
+   {
+      if (_type == ty) return true;
+      return oneOf(rest...);
+   }
+
+   bool oneOf(tok::TokenType ty) const { return is(ty); }
+
    bool is_punctuator() const;
-
-   bool is_keyword(const std::string &) const;
    bool is_keyword() const;
-
-   bool is_operator(const std::string &) const;
    bool is_operator() const;
-
-   bool is_identifier(const std::string &) const;
    bool is_identifier() const;
-
+   bool is_literal() const;
    bool is_separator() const;
+
+   bool is_directive() const;
 
    Variant _value;
    SourceLocation loc;
 
-   TokenType _type : 8;
-   bool isInterpolationStart : 8;
-   unsigned start : 32;
-
+   tok::TokenType _type;
    static std::string TokensToString(const std::vector<Token> &tokens);
 };
 
+} // namespace lex
+} // namespace cdot
 
 #endif //TOKEN_H

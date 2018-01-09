@@ -16,6 +16,7 @@ namespace ast {
 
 class FuncArgDecl;
 class TypeRef;
+class Function;
 
 class LambdaExpr : public Expression {
 public:
@@ -35,11 +36,9 @@ protected:
    std::vector<std::shared_ptr<FuncArgDecl>> args;
    Statement::SharedPtr body;
 
-   std::set<std::string> captures;
+   std::set<Statement*> captures;
 
-   // codegen
-   FunctionType* lambdaType = nullptr;
-   llvm::Function* lambdaFunc = nullptr;
+   ast::Function *func;
 
 public:
    const std::shared_ptr<TypeRef> &getReturnType() const {
@@ -66,30 +65,24 @@ public:
       LambdaExpr::body = body;
    }
 
-   std::set<string> &getCaptures()
+   std::set<Statement*> &getCaptures()
    {
       return captures;
    }
 
-   void setCaptures(const std::set<string> &captures)
+   void setCaptures(std::set<Statement*> &&captures)
    {
       LambdaExpr::captures = captures;
    }
 
-   FunctionType *getLambdaType() const {
-      return lambdaType;
+   Function *getFunc() const
+   {
+      return func;
    }
 
-   void setLambdaType(FunctionType *lambdaType) {
-      LambdaExpr::lambdaType = lambdaType;
-   }
-
-   llvm::Function *getLambdaFunc() const {
-      return lambdaFunc;
-   }
-
-   void setLambdaFunc(llvm::Function *lambdaFunc) {
-      LambdaExpr::lambdaFunc = lambdaFunc;
+   void setFunc(Function *func)
+   {
+      LambdaExpr::func = func;
    }
 };
 

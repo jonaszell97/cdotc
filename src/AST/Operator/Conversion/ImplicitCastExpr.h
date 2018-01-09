@@ -6,14 +6,17 @@
 #define CDOT_IMPLICITCASTEXPR_H
 
 #include "../../Expression/Expression.h"
+#include "../../../Basic/CastKind.h"
 
 namespace cdot {
 namespace ast {
 
 class ImplicitCastExpr : public Expression {
 public:
-   ImplicitCastExpr(const QualType& from, const QualType& to,
-                    Expression::SharedPtr &&target);
+   ImplicitCastExpr(const QualType& from,
+                    const QualType& to,
+                    Expression::SharedPtr &&target,
+                    CastResult &&cast);
 
    typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
 
@@ -27,15 +30,19 @@ protected:
    QualType to;
    Expression::SharedPtr target;
 
+   CastResult requiredCast;
+
 public:
-   const QualType &getFrom() const;
+   const QualType &getFrom() const { return from; }
    void setFrom(const QualType &from);
 
-   const QualType &getTo() const;
+   const QualType &getTo() const { return to; }
    void setTo(const QualType &to);
 
-   const Expression::SharedPtr &getTarget() const;
+   const Expression::SharedPtr &getTarget() const { return target; }
    void setTarget(const Expression::SharedPtr &target);
+
+   const CastResult &getRequiredCast() const { return requiredCast; }
 };
 
 } // namespace ast

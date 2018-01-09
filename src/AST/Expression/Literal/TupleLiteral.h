@@ -18,34 +18,32 @@ namespace ast {
 class TupleLiteral: public Expression {
 public:
    explicit TupleLiteral(
-      std::vector<pair<string, Expression::SharedPtr>> &&elements);
+      std::vector<pair<string, std::shared_ptr<Expression>>> &&elements);
 
    typedef std::shared_ptr<TupleLiteral> SharedPtr;
-
-   bool createsTemporary() override
-   {
-      return true;
-   }
-
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == TupleLiteralID;
    }
 
 protected:
-   std::vector<pair<string, Expression::SharedPtr>> elements;
+   std::vector<pair<string, std::shared_ptr<Expression>>> elements;
 
    // codegen
    TupleType* tupleType;
    bool is_meta_ty = false;
 
 public:
-   bool isMetaTy() const;
-   void isMetaTy(bool is_meta_ty);
+   const std::vector<pair<string, std::shared_ptr<Expression>>> &getElements()
+   const
+   {
+      return elements;
+   }
 
-   std::vector<pair<string, std::shared_ptr<Expression>>> &getElements();
-   void setElements(
-      const std::vector<pair<string, std::shared_ptr<Expression>>> &elements);
+   std::vector<pair<string, std::shared_ptr<Expression>>> &getElements()
+   {
+      return elements;
+   }
 
    TupleType *getTupleType() const;
    void setTupleType(TupleType *tupleType);

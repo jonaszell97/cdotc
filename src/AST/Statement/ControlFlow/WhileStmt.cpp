@@ -8,23 +8,13 @@
 namespace cdot {
 namespace ast {
 
-WhileStmt::WhileStmt(Expression::SharedPtr &&cond,
-                     Statement::SharedPtr &&body,
+WhileStmt::WhileStmt(std::shared_ptr<Expression> &&cond,
+                     std::shared_ptr<Statement> &&body,
                      bool atLeastOnce)
    : Statement(WhileStmtID), condition(move(cond)), body(move(body)),
      atLeastOnce(atLeastOnce)
 {
 
-}
-
-std::shared_ptr<Expression> &WhileStmt::getCondition()
-{
-   return condition;
-}
-
-const Statement::SharedPtr &WhileStmt::getBody() const
-{
-   return body;
 }
 
 bool WhileStmt::isAtLeastOnce() const

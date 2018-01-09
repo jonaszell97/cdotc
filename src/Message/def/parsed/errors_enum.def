@@ -91,4 +91,4 @@ err_lambda_arg_default_val,
 err_lambda_could_not_infer_type,
 err_typedef_generic_not_provided,
 err_not_throwable,
-err_duplicate_catch
+err_duplicate_catch,

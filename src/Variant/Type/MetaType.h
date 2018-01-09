@@ -9,6 +9,8 @@
 
 namespace cdot {
 
+struct Namespace;
+
 class MetaType: public ObjectType {
 public:
    static MetaType *get(Type *forType);
@@ -21,18 +23,39 @@ public:
 public:
    Type *getUnderlyingType() const;
 
-   string toString() const override;
-   llvm::Type* getLlvmType() const override;
+   std::string toString() const;
 
-   llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
-
-   size_t getSize() const override;
-   short getAlignment() const override;
+   size_t getSize() const;
+  unsigned short getAlignment() const;
 
 protected:
    explicit MetaType(Type *forType);
 
    Type *forType;
+};
+
+class NamespaceType: public Type {
+public:
+   static NamespaceType *get(Namespace *NS);
+
+   Namespace *getNamespace() const
+   {
+      return NS;
+   }
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::NamespaceTypeID;
+   }
+
+private:
+   explicit NamespaceType(Namespace *NS)
+      : NS(NS)
+   {
+      id = TypeID::NamespaceTypeID;
+   }
+
+   Namespace *NS;
 };
 
 } // namespace cdot

@@ -1,95 +1,118 @@
 
-#ifndef CDOT_ASTNODE
-#  error "define CDOT_ASTNODE before including"
+#ifdef CDOT_ASTNODE
+#  define CDOT_EXPR(Name) CDOT_ASTNODE(Name)
+#  define CDOT_STMT(Name) CDOT_ASTNODE(Name)
 #endif
 
-#if defined(CDOT_INCLUDE_ALL)
+#ifdef CDOT_STMT
 
-CDOT_ASTNODE(AstNode)
+#define CDOT_RECORD_DECL(Name) CDOT_STMT(Name)
 
+// expressions are also statements
+#ifndef CDOT_EXPR
+#  define CDOT_EXPR(Name) CDOT_STMT(Name)
 #endif
 
-#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_EXPR)
+CDOT_STMT(CompoundStmt)
+CDOT_STMT(BreakStmt)
+CDOT_STMT(ContinueStmt)
+CDOT_STMT(ReturnStmt)
+CDOT_STMT(CaseStmt)
+CDOT_STMT(LabelStmt)
+CDOT_STMT(GotoStmt)
+CDOT_STMT(ForStmt)
+CDOT_STMT(IfStmt)
+CDOT_STMT(WhileStmt)
+CDOT_STMT(ForInStmt)
+CDOT_STMT(MatchStmt)
 
-CDOT_ASTNODE(Expression)
-CDOT_ASTNODE(TypeRef)
-CDOT_ASTNODE(IntegerLiteral)
-CDOT_ASTNODE(FPLiteral)
-CDOT_ASTNODE(BoolLiteral)
-CDOT_ASTNODE(CharLiteral)
-CDOT_ASTNODE(NoneLiteral)
-CDOT_ASTNODE(StringLiteral)
-CDOT_ASTNODE(StringInterpolation)
-CDOT_ASTNODE(LambdaExpr)
-CDOT_ASTNODE(CollectionLiteral)
-CDOT_ASTNODE(TupleLiteral)
+CDOT_STMT(LocalVarDecl)
+CDOT_STMT(GlobalVarDecl)
 
-CDOT_ASTNODE(IdentifierRefExpr)
-CDOT_ASTNODE(MemberRefExpr)
-CDOT_ASTNODE(CallExpr)
-CDOT_ASTNODE(SubscriptExpr)
+CDOT_STMT(AliasDecl)
 
-CDOT_ASTNODE(UnaryOperator)
-CDOT_ASTNODE(BinaryOperator)
-CDOT_ASTNODE(TertiaryOperator)
+CDOT_STMT(EnumCaseDecl)
+CDOT_STMT(ConstrDecl)
+CDOT_STMT(FieldDecl)
+CDOT_STMT(MethodDecl)
+CDOT_STMT(AssociatedTypeDecl)
+CDOT_STMT(FuncArgDecl)
+CDOT_STMT(DestrDecl)
+CDOT_STMT(PropDecl)
+CDOT_STMT(ExtensionDecl)
+CDOT_STMT(CallableDecl)
+CDOT_STMT(FunctionDecl)
+CDOT_STMT(NamespaceDecl)
+CDOT_STMT(TypedefDecl)
+CDOT_STMT(DeclareStmt)
+CDOT_STMT(TryStmt)
+CDOT_STMT(ThrowStmt)
+CDOT_STMT(DebugStmt)
+CDOT_STMT(NullStmt)
 
-CDOT_ASTNODE(ImplicitCastExpr)
-CDOT_ASTNODE(LvalueToRvalue)
+CDOT_STMT(UsingStmt)
 
-#endif
+CDOT_STMT(ModuleStmt)
+CDOT_STMT(ImportStmt)
 
-#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_STMT)
-
-CDOT_ASTNODE(Statement)
-
-CDOT_ASTNODE(CompoundStmt)
-CDOT_ASTNODE(BreakStmt)
-CDOT_ASTNODE(ContinueStmt)
-CDOT_ASTNODE(ReturnStmt)
-CDOT_ASTNODE(CaseStmt)
-CDOT_ASTNODE(LabelStmt)
-CDOT_ASTNODE(GotoStmt)
-CDOT_ASTNODE(ForStmt)
-CDOT_ASTNODE(IfStmt)
-CDOT_ASTNODE(WhileStmt)
-CDOT_ASTNODE(ForInStmt)
-CDOT_ASTNODE(MatchStmt)
-
-CDOT_ASTNODE(EnumCaseDecl)
-CDOT_ASTNODE(ConstrDecl)
-CDOT_ASTNODE(FieldDecl)
-CDOT_ASTNODE(MethodDecl)
-CDOT_ASTNODE(FuncArgDecl)
-CDOT_ASTNODE(DestrDecl)
-CDOT_ASTNODE(PropDecl)
-CDOT_ASTNODE(ExtensionDecl)
-CDOT_ASTNODE(FunctionDecl)
-CDOT_ASTNODE(NamespaceDecl)
-CDOT_ASTNODE(TypedefDecl)
-CDOT_ASTNODE(DeclStmt)
-CDOT_ASTNODE(DeclareStmt)
-CDOT_ASTNODE(RecordTemplateDecl)
-CDOT_ASTNODE(MethodTemplateDecl)
-CDOT_ASTNODE(CallableTemplateDecl)
-CDOT_ASTNODE(TryStmt)
-CDOT_ASTNODE(ThrowStmt)
-CDOT_ASTNODE(UsingStmt)
-CDOT_ASTNODE(DebugStmt)
-CDOT_ASTNODE(NullStmt)
+CDOT_STMT(StaticIfStmt)
+CDOT_STMT(StaticForStmt)
+CDOT_STMT(StaticAssertStmt)
+CDOT_STMT(StaticPrintStmt)
 
 #endif
 
-#if defined(CDOT_INCLUDE_ALL) || defined(CDOT_INCLUDE_RECORD_DECL)
+#ifdef CDOT_RECORD_DECL
 
-CDOT_ASTNODE(RecordDecl)
-CDOT_ASTNODE(ClassDecl)
-CDOT_ASTNODE(EnumDecl)
-CDOT_ASTNODE(UnionDecl)
+CDOT_RECORD_DECL(RecordDecl)
+CDOT_RECORD_DECL(ClassDecl)
+CDOT_RECORD_DECL(EnumDecl)
+CDOT_RECORD_DECL(UnionDecl)
+CDOT_RECORD_DECL(ProtocolDecl)
+
+#endif
+
+#ifdef CDOT_EXPR
+
+CDOT_EXPR(TypeRef)
+CDOT_EXPR(IntegerLiteral)
+CDOT_EXPR(FPLiteral)
+CDOT_EXPR(BoolLiteral)
+CDOT_EXPR(CharLiteral)
+CDOT_EXPR(NoneLiteral)
+CDOT_EXPR(StringLiteral)
+CDOT_EXPR(StringInterpolation)
+CDOT_EXPR(LambdaExpr)
+CDOT_EXPR(DictionaryLiteral)
+CDOT_EXPR(ArrayLiteral)
+CDOT_EXPR(TupleLiteral)
+
+CDOT_EXPR(IdentifierRefExpr)
+CDOT_EXPR(MemberRefExpr)
+CDOT_EXPR(CallExpr)
+CDOT_EXPR(EnumCaseExpr)
+CDOT_EXPR(SubscriptExpr)
+CDOT_EXPR(NonTypeTemplateArgExpr)
+
+CDOT_EXPR(ExpressionPattern)
+CDOT_EXPR(CasePattern)
+CDOT_EXPR(IsPattern)
+
+CDOT_EXPR(ExprSequence)
+CDOT_EXPR(UnaryOperator)
+CDOT_EXPR(BinaryOperator)
+CDOT_EXPR(TertiaryOperator)
+
+CDOT_EXPR(ImplicitCastExpr)
+CDOT_EXPR(LvalueToRvalue)
+
+CDOT_EXPR(StaticExpr)
+CDOT_EXPR(ConstraintExpr)
+CDOT_EXPR(TraitsExpr)
 
 #endif
 
 #undef CDOT_ASTNODE
-#undef CDOT_INCLUDE_ALL
-#undef CDOT_INCLUDE_RECORD_DECL
-#undef CDOT_INCLUDE_STMT
-#undef CDOT_INCLUDE_EXPR
+#undef CDOT_EXPR
+#undef CDOT_STMT
+#undef CDOT_RECORD_DECL

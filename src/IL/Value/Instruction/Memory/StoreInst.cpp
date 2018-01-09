@@ -10,13 +10,10 @@
 namespace cdot {
 namespace il {
 
-StoreInst::StoreInst(Value *dst, Value *src, BasicBlock *parent,
-                     const std::string &name, const SourceLocation &loc)
-   : Instruction(StoreInstID, VoidType::get(), parent,  name, loc),
-     dst(dst), src(src)
+StoreInst::StoreInst(Value *dst, Value *src, BasicBlock *parent)
+   : BinaryInstruction(StoreInstID, dst, src, VoidType::get(), parent)
 {
-   dst->addUse(this);
-   src->addUse(this);
+
 }
 
 bool StoreInst::useMemCpy() const
@@ -24,24 +21,10 @@ bool StoreInst::useMemCpy() const
    return type->needsMemCpy();
 }
 
-Value *StoreInst::getDst() const
-{
-   return dst;
-}
-
-Value *StoreInst::getSrc() const
-{
-   return src;
-}
-
 LoadInst::LoadInst(Value *target,
-                   BasicBlock *parent,
-                   const std::string &name,
-                   const SourceLocation &loc)
-   : Instruction(LoadInstID, nullptr, parent, name, loc),
-     target(target)
+                   BasicBlock *parent)
+   : UnaryInstruction(LoadInstID, target, nullptr, parent)
 {
-   target->addUse(this);
    if (target->isLvalue()) {
       *type = *target->getType();
    }
@@ -51,9 +34,20 @@ LoadInst::LoadInst(Value *target,
    }
 }
 
-Value *LoadInst::getTarget() const
+AddrOfInst::AddrOfInst(Value *target,
+                       BasicBlock *parent)
+   : UnaryInstruction(AddrOfInstID, target, target->getType()->getPointerTo(),
+                      parent)
 {
-   return target;
+   assert(target->isLvalue());
+}
+
+PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)
+   : UnaryInstruction(PtrToLvalueInstID, target,
+                      QualType(*target->getType()->getPointeeType(), true),
+                      parent)
+{
+
 }
 
 } // namespace il

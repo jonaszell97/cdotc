@@ -5,37 +5,51 @@
 #ifndef CDOT_ARGUMENT_H
 #define CDOT_ARGUMENT_H
 
+#include <llvm/ADT/ilist_node.h>
 #include "../Value.h"
 
 namespace cdot {
 namespace il {
 
-class Function;
+class BasicBlock;
 
-class Argument: public Value {
+class Argument: public Value,
+                public llvm::ilist_node_with_parent<Argument, BasicBlock> {
 public:
    Argument(Type *type,
             bool vararg,
-            Function *parent,
-            const std::string &name = "",
-            const SourceLocation &loc = {});
+            BasicBlock *parent,
+            llvm::StringRef name = "");
 
-   Argument(ILType type,
+   Argument(QualType type,
             bool vararg,
-            Function *parent,
-            const std::string &name = "",
-            const SourceLocation &loc = {});
+            BasicBlock *parent,
+            llvm::StringRef name = "");
 
-   Function *getParent() const
+   BasicBlock *getParent() const { return parent; }
+   void setParent(BasicBlock *p);
+   bool isVararg() const { return vararg; }
+
+   bool isSelf() const { return self; }
+   void setSelf(bool self) { Argument::self = self; }
+
+   bool isReference() const { return (SubclassData & Flags::Reference) != 0; }
+   void setIsReference(bool ref)
    {
-      return parent;
+      if (ref)
+         SubclassData |= Flags::Reference;
+      else
+         SubclassData &= ~Flags::Reference;
    }
 
-   bool isVararg() const;
-
 protected:
-   Function *parent;
+   BasicBlock *parent;
    bool vararg = false;
+   bool self = false;
+
+   enum Flags {
+      Reference = 1,
+   };
 
 public:
    static bool classof(Argument const* T) { return true; }

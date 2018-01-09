@@ -5,8 +5,15 @@
 #ifndef CDOT_MODULE_H
 #define CDOT_MODULE_H
 
-#include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SmallPtrSet.h>
+
+#include "../Value/ValueSymbolTable.h"
+#include "../Value/SymbolTableList.h"
+
+#include "../Value/Function/Function.h"
+#include "../Value/GlobalVariable.h"
+#include "../Value/Record/AggregateType.h"
 
 namespace llvm {
 class raw_ostream;
@@ -18,27 +25,30 @@ struct CompilationUnit;
 
 namespace il {
 
-class Value;
-class Constant;
-class Function;
-class GlobalVariable;
 class ConstantString;
-class AggregateType;
 class Context;
 
 class Module {
 public:
-   typedef llvm::StringMap<Function *> FuncMap;
-   typedef llvm::StringMap<GlobalVariable *> GlobalVarMap;
-   typedef llvm::DenseSet<AggregateType *> TypeSet;
+   using FunctionList         = SymbolTableList<Function>;
+   using func_iterator        = FunctionList::iterator;
+   using func_const_iterator  = FunctionList::const_iterator;
 
-   explicit Module(Context &Ctx, CompilationUnit &CU);
+   using GlobalList           = SymbolTableList<GlobalVariable>;
+   using glob_iterator        = GlobalList::iterator;
+   using glob_const_iterator  = GlobalList::const_iterator;
 
-   const llvm::StringMap<Function *> &getFunctions() const;
-   const llvm::StringMap<GlobalVariable *> &getGlobalVariables() const;
-   CompilationUnit &getCU() const;
+   using TypeList             = SymbolTableList<AggregateType>;
+   using type_iterator        = TypeList::iterator;
+   using type_const_iterator  = TypeList::const_iterator;
 
-   const llvm::DenseSet<AggregateType *> &getReferencedTypes() const;
+   using RefTypeList          = llvm::SmallPtrSet<AggregateType*, 4>;
+
+   explicit Module(Context &Ctx, CompilationUnit const& CU);
+   explicit Module(Context &Ctx,
+                   size_t fileID = 0,
+                   llvm::StringRef fileName = {},
+                   llvm::StringRef path = {});
 
    Function *insertFunction(Function *func);
    Function *getFunction(llvm::StringRef name);
@@ -48,25 +58,96 @@ public:
    GlobalVariable *getGlobal(llvm::StringRef name);
    GlobalVariable *getOwnGlobal(llvm::StringRef name);
 
-   ConstantString *getString(const std::string &str);
+   void insertType(AggregateType *Ty);
 
-   AggregateType *getType(llvm::StringRef name, bool recursive = true);
-   void addTypeReference(AggregateType *ty, bool recursive = true);
+   std::shared_ptr<ValueSymbolTable> const& getFunSymTab() const
+   { return Functions.getSymTab(); }
+
+   std::shared_ptr<ValueSymbolTable> const& getGlobSymTab() const
+   { return GlobalVariables.getSymTab(); }
+
+   AggregateType *getType(llvm::StringRef name);
+   bool addTypeReference(AggregateType *ty);
+   bool addTypeReference(llvm::StringRef name);
+
+   const RefTypeList &getReferencedTypes() const { return ReferencedTypes; }
+
+   FunctionList const& getFuncList() const { return Functions; }
+   GlobalList const& getGlobalList() const { return GlobalVariables; }
+   TypeList const& getTypeList()     const { return Types; }
+
+   FunctionList& getFuncList() { return Functions; }
+   GlobalList& getGlobalList() { return GlobalVariables; }
 
    Context &getContext() const;
-   void AssignNames();
 
-   void dump();
-   void writeTo(llvm::raw_ostream &out);
+   void dump() const;
+   void writeTo(llvm::raw_ostream &out) const;
+
+   func_iterator begin() { return Functions.begin(); }
+   func_iterator end() { return Functions.end(); }
+   func_const_iterator begin() const { return Functions.begin(); }
+   func_const_iterator end() const { return Functions.end(); }
+
+   glob_iterator glob_begin() { return GlobalVariables.begin(); }
+   glob_iterator glob_end() { return GlobalVariables.end(); }
+   glob_const_iterator glob_begin() const { return GlobalVariables.begin(); }
+   glob_const_iterator glob_end() const { return GlobalVariables.end(); }
+
+   type_iterator type_begin() { return Types.begin(); }
+   type_iterator type_end() { return Types.end(); }
+   type_const_iterator type_begin() const { return Types.begin(); }
+   type_const_iterator type_end() const { return Types.end(); }
+
+   Function *getGlobalInitFn() const { return globalInitFn; }
+
+   void setGlobalInitFn(Function *globalInitFn)
+   { Module::globalInitFn = globalInitFn; }
+
+   static TypeList Module::*getSublistAccess(AggregateType*)
+   {
+      return &Module::Types;
+   }
+
+   static FunctionList Module::*getSublistAccess(Function*)
+   {
+      return &Module::Functions;
+   }
+
+   static GlobalList Module::*getSublistAccess(GlobalVariable*)
+   {
+      return &Module::GlobalVariables;
+   }
+
+   llvm::StringRef getFileName() const
+   {
+      return fileName;
+   }
+
+   llvm::StringRef getPath() const
+   {
+      return path;
+   }
+
+   size_t getFileID() const
+   {
+      return fileID;
+   }
 
 protected:
-   TypeSet ReferencedTypes;
-   llvm::StringMap<ConstantString*> Strings;
-   FuncMap Functions;
-   GlobalVarMap GlobalVariables;
+   TypeList Types;
+   FunctionList Functions;
+   GlobalList GlobalVariables;
+
+   RefTypeList ReferencedTypes;
 
    Context &Ctx;
-   CompilationUnit &CU;
+
+   size_t fileID;
+   std::string fileName;
+   std::string path;
+
+   Function *globalInitFn = nullptr;
 };
 
 } // namespace il

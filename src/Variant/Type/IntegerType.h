@@ -5,88 +5,54 @@
 #ifndef CDOT_INTEGERTYPE_H
 #define CDOT_INTEGERTYPE_H
 
-#include <unordered_map>
 #include "PrimitiveType.h"
-
-using std::unordered_map;
 
 namespace cdot {
 
-   class IntegerType : public PrimitiveType {
-   protected:
-      explicit IntegerType(unsigned int = sizeof(int*) * 8, bool = false);
+class IntegerType : public PrimitiveType {
+protected:
+   explicit IntegerType(unsigned int = sizeof(int*) * 8, bool = false);
 
-   public:
-      static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
-      static IntegerType* getBoolTy();
-      static IntegerType* getCharTy();
+public:
+   static IntegerType* get(unsigned int = sizeof(int*) * 8, bool = false);
+   static IntegerType* getUnsigned(unsigned int = sizeof(int*) * 8);
 
-      unsigned int getBitwidth() const override
-      {
-         return bitWidth;
-      }
+   static IntegerType* getBoolTy();
+   static IntegerType* getCharTy();
 
-      bool isUnsigned() const override
-      {
-         return is_unsigned;
-      }
+   unsigned int getBitwidth() const { return bitWidth; }
 
-      void isUnsigned(bool uns) {
-         is_unsigned = uns;
-      }
+   bool isUnsigned() const { return is_unsigned; }
 
-      bool isInt64Ty(bool isUnsigned) const override
-      {
-         return bitWidth == 64 && is_unsigned == isUnsigned;
-      }
+   void isUnsigned(bool uns)
+   {
+      is_unsigned = uns;
+   }
 
-      bool isInt8Ty(bool isUnsigned) const override
-      {
-         return bitWidth == 8 && is_unsigned == isUnsigned;
-      }
+   std::string toString() const;
+   Type* ArithmeticReturnType(const std::string&, Type *) const;
+   Type* box() const;
 
-      bool isInt1Ty(bool isUnsigned) const override
-      {
-         return bitWidth == 1 && is_unsigned == isUnsigned;
-      }
+   size_t getSize() const
+   {
+      return bitWidth == 1 ? 1 : size_t(bitWidth) / 8;
+   }
 
-      bool isIntNTy(unsigned n, bool isUnsigned) const override
-      {
-         return bitWidth == n && is_unsigned == isUnsigned;
-      }
+   unsigned short getAlignment() const
+   {
+      return bitWidth == 1 ? (unsigned short)1
+                           : (unsigned short)(bitWidth / 8);
+   }
 
-      bool isPtrSizedInt() const override
-      {
-         return bitWidth == sizeof(int*) * 8;
-      }
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::IntegerTypeID;
+   }
 
-      string toString() const override;
-      llvm::Type* getLlvmType() const override;
-
-      Type* ArithmeticReturnType(const string&, Type *) const override;
-
-      Type* box() const override;
-
-      bool implicitlyCastableTo(Type*) const override;
-      bool explicitlyCastableTo(Type*) const override;
-
-      llvm::Value* getDefaultVal(ast::CodeGen &CGM) const override;
-      llvm::Constant* getConstantVal(Variant& val) const override;
-
-      short getAlignment() const override;
-
-      static bool classof(Type const* T)
-      {
-         return T->getTypeID() == TypeID::IntegerTypeID;
-      }
-
-      typedef std::unique_ptr<IntegerType> UniquePtr;
-      typedef std::shared_ptr<IntegerType> SharedPtr;
-
-   protected:
-      int bitWidth;
-      bool is_unsigned;
-   };
+protected:
+   unsigned int bitWidth;
+   bool is_unsigned;
+};
 
 } // namespace cdot
 

@@ -18,8 +18,8 @@ class GenericType;
 
 class Callable;
 
-class TemplateArgList;
-struct TemplateConstraint;
+class TemplateArgListBuilder;
+struct TemplateParameter;
 
 enum class AccessModifier : unsigned int;
 
@@ -49,10 +49,18 @@ public:
 #  include "AstNode.def"
    };
 
-   void setSourceLoc(size_t start,
-                     size_t end,
-                     size_t line,
-                     size_t source);
+   void destroyValue();
+   void destroyValueImpl();
+
+   string getNodeTypeAsString() const
+   {
+      switch (typeID) {
+#        define CDOT_ASTNODE(Name)  \
+         case Name##ID:             \
+            return #Name;
+#        include "AstNode.def"
+      }
+   }
 
    void setAttributes(std::vector<Attribute> &&attr);
    std::vector<Attribute>& getAttributes();
@@ -75,18 +83,18 @@ public:
       return typeID;
    }
 
-   static bool classof(AstNode const* T)
-   {
-      return true;
-   }
+   static bool classof(AstNode const* T) { return true; }
 
 protected:
-   explicit AstNode(NodeType typeID) : typeID(typeID)
-   {
+   explicit AstNode(NodeType typeID);
 
-   }
+#  ifndef NDEBUG
+   virtual
+#  endif
+   ~AstNode();
 
    NodeType typeID;
+   uint32_t SubclassData;
 
    SourceLocation loc;
    AstNode* parent = nullptr;
@@ -95,6 +103,30 @@ protected:
 
    // codegen
    string binding;
+
+   void toggleFlag(uint32_t flag)
+   {
+      SubclassData ^= flag;
+   }
+
+   void setFlag(uint32_t flag, bool set)
+   {
+      if (set)
+         SubclassData |= flag;
+      else
+         SubclassData &= ~flag;
+   }
+
+   bool flagIsSet(uint32_t flag) const
+   {
+      return (SubclassData & flag) != 0;
+   }
+
+public:
+   uint32_t getSubclassData() const
+   {
+      return SubclassData;
+   }
 
 public:
    const SourceLocation &getSourceLoc() const;

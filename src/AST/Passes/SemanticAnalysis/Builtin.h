@@ -12,32 +12,37 @@ using std::string;
 
 namespace cdot {
 
-   enum class BuiltinFn : unsigned int {
-      SIZEOF,
-      ALIGNOF,
-      TYPEOF,
-      STACK_ALLOC,
-      MEMCPY,
-      MEMSET,
-      BITCAST,
-      NULLPTR,
-      ISNULL,
-      UNWRAP_PROTO,
+enum class BuiltinFn : unsigned int {
+   None = 0,
+   TYPEOF,
+   MEMCPY,
+   MEMSET,
+   MemCmp,
+   ISNULL,
+   UNWRAP_PROTO,
+   BuiltinSizeof,
+   CtfePrintStackTrace,
 
-      BuiltinSizeof
-   };
+   SIZEOF,
+   ALIGNOF,
+   NULLPTR,
+   DefaultVal,
 
-   extern std::vector<string> BuiltinNamespaces;
+   STACK_ALLOC,
+   BITCAST
+};
 
-   inline bool isBuilitinNamespace(const string& name) {
-      return std::find(BuiltinNamespaces.begin(),
-                       BuiltinNamespaces.end(), name) != BuiltinNamespaces.end();
-   }
+extern std::vector<string> BuiltinNamespaces;
 
-   class Builtin {
-   public:
-      static void ImportBuiltin(const string &name);
-   };
+inline bool isBuilitinNamespace(const string& name) {
+   return std::find(BuiltinNamespaces.begin(),
+                    BuiltinNamespaces.end(), name) != BuiltinNamespaces.end();
+}
+
+class Builtin {
+public:
+   static void ImportBuiltin(const string &name);
+};
 
 }
 

@@ -60,11 +60,11 @@ namespace codegen {
 
       llvm::dwarf::Tag getTagForRecord(Record *rec);
 
-      llvm::Instruction *emitLocalVarDI(ast::DeclStmt *node,
+      llvm::Instruction *emitLocalVarDI(ast::LocalVarDecl *node,
                                         llvm::Value *alloca,
                                         llvm::Instruction *inst);
       void emitAssignmentDI(ast::BinaryOperator *node, llvm::Value *addr);
-      llvm::MDNode *emitGlobalVarDI(ast::DeclStmt *node,
+      llvm::MDNode *emitGlobalVarDI(ast::LocalVarDecl *node,
                                     llvm::GlobalVariable *var);
 
       llvm::MDNode *emitMethodDI(Method *method, llvm::Function *func);

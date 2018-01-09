@@ -7,6 +7,7 @@
 
 #include <llvm/ADT/ArrayRef.h>
 #include "../Instruction.h"
+#include "../CallInst.h"
 
 namespace cdot {
 namespace il {
@@ -17,23 +18,18 @@ class StructType;
 class EnumType;
 class Constant;
 
-class InitInst: public Instruction {
+class InitInst: public CallInst {
 public:
    InitInst(StructType *InitializedType,
             Method *Init,
             llvm::ArrayRef<Value *> args,
-            BasicBlock *parent,
-            const std::string &name = "",
-            const SourceLocation &loc = {});
+            BasicBlock *parent);
 
-   Method *getInit() const;
-   const llvm::SmallVector<Value *, 4> &getArgs() const;
-   StructType *getInitializedType() const;
+   Method *getInit() const { return calledMethod; }
+   StructType *getInitializedType() const { return InitializedType; }
 
 protected:
-   llvm::SmallVector<Value*, 4> args;
    StructType *InitializedType;
-   Method *Init;
 
 public:
    static bool classof(InitInst const* T) { return true; }
@@ -47,27 +43,17 @@ public:
    }
 };
 
-class UnionInitInst: public Instruction {
+class UnionInitInst: public CallInst {
 public:
    UnionInitInst(UnionType *UnionTy,
                  Value *InitializerVal,
-                 BasicBlock *parent,
-                 const std::string &name = "",
-                 const SourceLocation &loc = {});
+                 BasicBlock *parent);
 
-   UnionType *getUnionTy() const
-   {
-      return UnionTy;
-   }
-
-   Value *getInitializerVal() const
-   {
-      return InitializerVal;
-   }
+   UnionType *getUnionTy() const { return UnionTy; }
+   Value *getInitializerVal() const { return Operands[0]; }
 
 protected:
    UnionType *UnionTy;
-   Value *InitializerVal;
 
 public:
    static bool classof(Value const* T)
@@ -76,36 +62,26 @@ public:
    }
 };
 
-class EnumInitInst: public Instruction {
+class EnumInitInst: public CallInst {
 public:
-   typedef llvm::SmallVector<Value*, 2> ArgList;
-
    EnumInitInst(EnumType *EnumTy,
-                llvm::StringRef caseName,
+                std::string const& caseName,
                 llvm::ArrayRef<Value *> args,
-                BasicBlock *parent,
-                const std::string &name = "",
-                const SourceLocation &loc = {});
+                BasicBlock *parent);
 
    EnumType *getEnumTy() const
    {
       return EnumTy;
    }
 
-   const llvm::StringRef &getCaseName() const
+   llvm::StringRef getCaseName() const
    {
       return caseName;
    }
 
-   const ArgList &getArgs() const
-   {
-      return args;
-   }
-
 protected:
    EnumType *EnumTy;
-   llvm::StringRef caseName;
-   ArgList args;
+   std::string caseName;
 
 public:
    static bool classof(Value const* T)
@@ -114,30 +90,23 @@ public:
    }
 };
 
-class LambdaInitInst: public Instruction {
+class LambdaInitInst: public Instruction, public MultiOperandInst {
 public:
-   typedef llvm::SmallVector<Value*, 4> CaptureList;
+   LambdaInitInst(Function *Function,
+                  llvm::ArrayRef<Value*> Captures,
+                  BasicBlock *parent);
 
-   LambdaInitInst(Constant *Function,
-                  CaptureList &&Captures,
-                  BasicBlock *parent,
-                  const std::string &name = "",
-                  const SourceLocation &loc = {});
+   Function *getFunction() const { return F; }
 
+   op_iterator op_begin_impl() { return &Operands[0]; }
+   op_iterator op_end_impl() { return Operands + numOperands; }
+   op_const_iterator op_begin_impl() const { return &Operands[0]; }
+   op_const_iterator op_end_impl() const { return Operands + numOperands; }
 
-   Constant *getFunction() const
-   {
-      return Function;
-   }
-
-   const CaptureList &getCaptures() const
-   {
-      return Captures;
-   }
+   unsigned getNumOperandsImpl() const { return numOperands; }
 
 protected:
-   Constant *Function;
-   CaptureList Captures;
+   Function *F;
 
 public:
    static bool classof(Value const* T)

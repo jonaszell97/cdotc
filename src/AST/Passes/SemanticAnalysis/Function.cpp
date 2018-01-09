@@ -5,6 +5,8 @@
 #include "Function.h"
 
 #include "../../Statement/Declaration/Class/MethodDecl.h"
+#include "../../Statement/Declaration/CallableDecl.h"
+
 #include "../../SymbolTable.h"
 #include "Record/Record.h"
 
@@ -13,82 +15,81 @@ using namespace cdot::ast;
 namespace cdot {
 
 Callable::Callable(
+   TypeID id,
    string &&name,
    AccessModifier am,
    const QualType &returnType,
-   std::vector<Argument> &&arguments) : name(name), accessModifier(am),
-                                        returnType(returnType),
-                                        arguments(arguments)
-{
-
-}
-
-Callable::Callable(cl::CallableTemplate *Template)
-   : name(string(Template->funcName)),
-     Template(Template),
-     is_template(true)
+   std::vector<Argument> &&arguments,
+   std::vector<TemplateParameter> &&templateParams,
+   OperatorInfo op,
+   Namespace *declarationNamespace)
+   : typeID(id),
+     name(name),
+     accessModifier(am),
+     returnType(returnType),
+     arguments(arguments),
+     is_nothrow(false),
+     externC(false),
+     native(false),
+     op(op),
+     declarationNamespace(declarationNamespace),
+     templateParams(move(templateParams))
 {
 
 }
 
 namespace cl {
 
-Method::Method(
-   string name,
-   const QualType& ret_type,
-   AccessModifier access_modifier,
-   std::vector<Argument>&& args,
-   bool isStatic,
-   MethodDecl* declaration,
-   SourceLocation loc,
-   unsigned id
-) : Callable(std::move(name), access_modifier, ret_type,
-             std::move(args)),
-   is_static(isStatic), methodID(id), loc(loc),
-   hasDefinition(declaration == nullptr || declaration->hasDefinition())
+Method::Method(string name, const QualType& ret_type,
+               AccessModifier access_modifier,
+               std::vector<Argument>&& args,
+               std::vector<TemplateParameter> &&templateParams,
+               OperatorInfo op,
+               bool isStatic,
+               CallableDecl* declaration,
+               SourceLocation loc,
+               Namespace *declarationNamespace,
+               size_t id)
+   : Callable(MethodID, std::move(name), access_modifier, ret_type,
+             std::move(args), move(templateParams), op, declarationNamespace),
+     methodID(id),
+     is_static(isStatic),
+     is_protocol_method(false),
+     is_virtual(false),
+     mutableSelf(false),
+     property(false),
+     is_initializer(false),
+     protocolDefaultImpl(false),
+     hasDefinition(declaration == nullptr || declaration->hasDefinition()),
+     conversionOp(false),
+     memberwiseInitializer(false)
 {
+   this->loc = loc;
    this->declaration = declaration;
 }
 
-Method::Method(MethodTemplate *Template) : Callable(Template)
+bool Method::hasMutableSelf() const
 {
-
+   return mutableSelf || (is_initializer && !owningRecord->isClass());
 }
 
-Method::Method(
-   string name,
-   const QualType& ret_type,
-   std::vector<Argument>&& args,
-   MethodDecl*declaration,
-   SourceLocation loc,
-   unsigned id
-) : Callable(std::move(name), AccessModifier::PUBLIC, ret_type,
-             std::move(args)),
-   is_static(false),
-   hasDefinition(declaration == nullptr || declaration->hasDefinition()),
-   loc(loc), methodID(id)
+bool Method::isTemplatedInitializer() const
 {
-   this->declaration = declaration;
+   return templateParams.size() > owningRecord->getTemplateParams().size();
 }
 
-string Method::getLinkageName() const
+Method* Method::hasInstantiation(const std::string &withName) const
 {
-   return owningClass->getName() + '.' + getMangledName();
+   auto fullName = name + withName;
+   for (const auto &Inst : Instantiations) {
+      if (Inst->getCallable()->getName() == fullName)
+         return support::cast<Method>(Inst->getCallable());
+   }
+
+   return nullptr;
 }
 
-Method::~Method()
-{
-   delete Template;
-}
-
-AstNode* Method::getTemplateOrMethodDecl()
-{
-   return is_template
-          ? (AstNode*)static_cast<MethodTemplate*>(Template)->methodDecl
-          : (AstNode*)declaration;
-}
-
-}
+} // namespace cl
 
 void Callable::copyThrows(Callable *callable)
 {
@@ -145,19 +146,44 @@ void Callable::setName(const string &name)
    Callable::name = name;
 }
 
-const string &Callable::getMangledName() const
+llvm::StringRef Callable::getNameWithoutNamespace() const
 {
-   return mangledName;
+   if (!declarationNamespace || support::isa<Method>(this))
+      return name;
+
+   auto nslen = declarationNamespace->name.length() + 1;
+   return llvm::StringRef(name.data() + nslen, name.length() - nslen);
 }
 
-string Callable::getLinkageName() const
+llvm::StringRef Callable::getNameWithoutFix() const
 {
-   return mangledName;
+   if (!isOperator())
+      return getNameWithoutNamespace();
+
+   size_t opLen;
+   switch (op.getFix()) {
+      case FixKind::Infix:
+         opLen = 6; // "infix "
+         break;
+      case FixKind::Prefix:
+         opLen = 7; // "prefix "
+         break;
+      case FixKind::Postfix:
+         opLen = 8; // "postfix "
+         break;
+   }
+
+   return getNameWithoutNamespace().substr(opLen);
 }
 
-void Callable::setMangledName(const string &mandledName)
+const string &Callable::getLinkageName() const
 {
-   Callable::mangledName = mandledName;
+   return linkageName;
+}
+
+void Callable::setLinkageName(const string &mandledName)
+{
+   Callable::linkageName = mandledName;
 }
 
 AccessModifier Callable::getAccessModifier() const
@@ -185,21 +211,6 @@ std::vector<Argument> &Callable::getArguments()
    return arguments;
 }
 
-void Callable::setArguments(const std::vector<Argument> &arguments)
-{
-   Callable::arguments = arguments;
-}
-
-bool Callable::hasStructReturn() const
-{
-   return has_struct_return;
-}
-
-void Callable::hasStructReturn(bool has_struct_return)
-{
-   Callable::has_struct_return = has_struct_return;
-}
-
 unsigned int Callable::getUses() const
 {
    return uses;
@@ -210,38 +221,38 @@ void Callable::setUses(unsigned int uses)
    Callable::uses = uses;
 }
 
-llvm::Function *Callable::getLlvmFunc() const
-{
-   return llvmFunc;
-}
-
-void Callable::setLlvmFunc(llvm::Function *llvmFunc)
-{
-   Callable::llvmFunc = llvmFunc;
-}
-
 namespace ast {
 
-Function::Function(string& name, const QualType& ret_type)
-   : Callable(std::move(name), AccessModifier::PUBLIC, ret_type, {})
+Function::Function(string &funcName, const QualType &returnType,
+                   std::vector<Argument> &&args,
+                   std::vector<TemplateParameter> &&templateParams,
+                   OperatorInfo op,
+                   Namespace *declarationNamespace)
+   : Callable(FunctionID,move(funcName), AccessModifier::PUBLIC, returnType,
+              move(args), move(templateParams), op, declarationNamespace)
 {
 
 }
 
-Function::Function(cl::CallableTemplate *Template) : Callable(Template)
+Function::Function(llvm::StringRef funcName,
+                   std::vector<TemplateParameter> &&templateParams,
+                   OperatorInfo op, Namespace *declarationNamespace)
+
+   : Callable(FunctionID, funcName.str(), AccessModifier::PUBLIC, {},
+              {}, move(templateParams), op, declarationNamespace)
 {
 
 }
 
-Function::~Function()
+Function* Function::hasInstantiation(const std::string &withName) const
 {
-   delete Template;
-}
+   auto fullName = name + withName;
+   for (const auto &Inst : Instantiations) {
+      if (Inst->getCallable()->getName() == fullName)
+         return support::cast<Function>(Inst->getCallable());
+   }
 
-AstNode* Function::getTemplateOrFunctionDecl() const
-{
-   return is_template ? (AstNode*)Template->decl
-                      : (AstNode*)declaration;
+   return nullptr;
 }
 
 } // namespace ast

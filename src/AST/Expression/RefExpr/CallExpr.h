@@ -9,18 +9,21 @@
 #include "../Expression.h"
 
 namespace cdot {
-   class FunctionType;
-   enum class BuiltinFn : unsigned int;
-   struct Argument;
-   class TemplateArgList;
 
-   namespace cl {
-      class Class;
-      class Method;
-      struct EnumCase;
-   }
+class FunctionType;
+enum class BuiltinFn : unsigned int;
+struct Argument;
+class TemplateArgListBuilder;
 
-}
+namespace cl {
+
+class Class;
+struct Method;
+struct EnumCase;
+
+} // namespace cl
+
+} // namespace cdot
 
 struct CallCompatability;
 
@@ -29,31 +32,35 @@ using cdot::cl::EnumCase;
 namespace cdot {
 namespace ast {
 
+class IdentifierRefExpr;
 class Function;
 
-enum class CallType : unsigned int {
-   METHOD_CALL,
-   FUNC_CALL,
-   CONSTR_CALL,
-   ANON_CALL
+enum class CallKind : unsigned {
+   Unknown,
+   Builtin,
+   NamedFunctionCall,
+   MethodCall,
+   UnionInitializer,
+   InitializerCall,
+   StaticMethodCall,
+   CallOperator,
+   AnonymousCall,
+   UnsafeTupleGet,
+   VariadicSizeof,
+   PrimitiveInitializer
 };
 
-class CallExpr : public Expression {
+class CallExpr : public IdentifiedExpr {
 public:
-   CallExpr(CallType kind,
-            std::vector<pair<string, Expression::SharedPtr>> &&args,
-            string &&name = "");
+   explicit CallExpr(std::vector<std::shared_ptr<Expression>> &&args,
+                     string &&name = "");
 
-   CallExpr(CallType kind,
-            std::vector<Expression::SharedPtr> &&args,
-            string &&name = "");
+   void destroyValueImpl();
 
    void isPointerAccess(bool ptr)
    {
       is_pointer_access = ptr;
    }
-
-   bool createsTemporary() override;
 
    typedef std::shared_ptr<CallExpr> SharedPtr;
 
@@ -63,147 +70,125 @@ public:
    }
 
 protected:
-   CallType type;
-   std::vector<pair<string, Expression::SharedPtr>> args;
+   CallKind kind = CallKind::Unknown;
+   std::vector<std::shared_ptr<Expression>> args;
 
-   // codegen
-   bool is_call_op = false;
-   bool load_before_call = false;
-   string callOpBinding;
+   bool is_pointer_access : 1;
+   bool implicitSelf : 1;
 
-   bool is_captured_var = false;
-   bool has_struct_return = false;
-
-   bool is_pointer_access = false;
-   CallCompatability* compatibility = nullptr;
-
-   // method call
-   bool is_ns_member = false;
-   bool is_static = false;
-   QualType returnType;
-   bool is_virtual = false;
-
-   bool is_builtin = false;
    BuiltinFn builtinFnKind;
    size_t alignment;
 
-   string className;
+   QualType returnType;
+
    union {
-      cdot::cl::Method *method;
+      cdot::cl::Method *method = nullptr;
       ast::Function *func;
    };
 
-   bool anonymous_call = false;
-   size_t anonymousFieldIndex;
+   IdentifierRefExpr *identExpr;
 
-   TemplateArgList *templateArgs;
-
+   std::vector<TemplateArg> templateArgs;
    std::vector<Argument> resolvedArgs;
-   std::vector<Argument> declaredArgTypes;
 
-   FunctionType* functionType;
-   bool implicitSelfCall = false;
-   string selfBinding;
+   llvm::ArrayRef<Argument> declaredArgTypes;
 
-   bool is_protocol_call = false;
-   bool castToBase = false;
+   union {
+      Type *builtinArgType = nullptr;
+      FunctionType* functionType;
+      cl::Union *U;
+   };
 
-   bool unionConstr = false;
 
 public:
-   CallType getType() const;
-   void setType(CallType type);
+   CallKind getKind() const;
+   void setKind(CallKind type);
 
-   std::vector<pair<string, std::shared_ptr<Expression>>> &getArgs();
-   void setArgs(
-      const std::vector<pair<string, std::shared_ptr<Expression>>> &args);
+   std::vector<std::shared_ptr<Expression>> &getArgs()
+   {
+      return args;
+   }
 
-   bool isCallOp() const;
-   void isCallOp(bool isCallOp);
-
-   bool loadBeforeCall() const;
-   void loadBeforeCall(bool load_before_call);
-
-   const string &getCallOpBinding() const;
-   void setCallOpBinding(const string &callOpBinding);
-
-   bool isCapturedVar() const;
-   void setIsCapturedVar(bool isCapturedVar);
-
-   bool hasStructReturn() const;
-   void setHasStructReturn(bool hasStructReturn);
+   std::vector<std::shared_ptr<Expression>> const& getArgs() const
+   {
+      return args;
+   }
 
    bool isPointerAccess_() const;
    void setIsPointerAccess_(bool isPointerAccess_);
 
-   CallCompatability *getCompatibility() const;
-   void setCompatibility(CallCompatability *compatibility);
-
-   bool isNsMember() const;
-   void setIsNsMember(bool isNsMember);
-
-   bool isStatic() const;
-   void setIsStatic(bool isStatic);
-
    QualType &getReturnType();
    void setReturnType(const QualType &returnType);
 
-   bool isVirtual() const;
-   void setIsVirtual(bool is_virtual);
-
-   bool isBuiltin() const;
-   void setIsBuiltin(bool isBuiltin);
-
    BuiltinFn getBuiltinFnKind() const;
    void setBuiltinFnKind(BuiltinFn builtinFnKind);
-
-   size_t getAlignment() const;
-   void setAlignment(size_t alignment);
-
-   const string &getClassName() const;
-   void setClassName(const string &className);
 
    cl::Method *getMethod() const;
    void setMethod(cl::Method *method);
 
    Function *getFunc() const;
-   void setFunc(Function *func)
+   void setFunc(Function *func);
+
+   std::vector<TemplateArg> &getTemplateArgs()
    {
-      CallExpr::func = func;
+      return templateArgs;
    }
 
-   bool isAnonymousCall() const;
-   void setIsAnonymousCall(bool isAnonymousCall_);
-
-   TemplateArgList *&getTemplateArgs();
-   void setTemplateArgs(TemplateArgList *templateArgs);
+   void setTemplateArgs(std::vector<TemplateArg> &&templateArgs)
+   {
+      CallExpr::templateArgs = std::move(templateArgs);
+   }
 
    std::vector<Argument> &getResolvedArgs();
    void setResolvedArgs(const std::vector<Argument> &resolvedArgs);
 
-   std::vector<Argument> &getDeclaredArgTypes();
-   void setDeclaredArgTypes(std::vector<Argument> &&declaredArgTypes);
+   llvm::ArrayRef<Argument> getDeclaredArgTypes() const
+   {
+      return declaredArgTypes;
+   }
 
    FunctionType *getFunctionType() const;
    void setFunctionType(FunctionType *functionType);
 
-   bool isImplicitSelfCall() const;
-   void setImplicitSelfCall(bool implicitSelfCall);
+   Type *getBuiltinArgType() const
+   {
+      return builtinArgType;
+   }
 
-   const string &getSelfBinding() const;
-   void setSelfBinding(const string &selfBinding);
+   void setBuiltinArgType(Type *BuiltinArgType)
+   {
+      CallExpr::builtinArgType = BuiltinArgType;
+   }
 
-   bool isProtocolCall() const;
-   void setIsProtocolCall(bool isProtocolCall);
+   IdentifierRefExpr *getIdentExpr() const
+   {
+      return identExpr;
+   }
 
-   bool isCastToBase() const;
-   void setCastToBase(bool castToBase);
+   void setIdentExpr(IdentifierRefExpr *identExpr)
+   {
+      CallExpr::identExpr = identExpr;
+   }
 
-   size_t getAnonymousFieldIndex() const;
-   void setAnonymousFieldIndex(size_t anonymousFieldIndex);
+   bool isImplicitSelf() const
+   {
+      return implicitSelf;
+   }
 
-   bool isUnionConstr() const;
-   void setUnionConstr(bool unionConstr);
+   void setImplicitSelf(bool implicitSelf)
+   {
+      CallExpr::implicitSelf = implicitSelf;
+   }
+
+   cl::Union *getUnion() const
+   {
+      return U;
+   }
+
+   void setUnion(cl::Union *U)
+   {
+      CallExpr::U = U;
+   }
 };
 
 } // namespace ast

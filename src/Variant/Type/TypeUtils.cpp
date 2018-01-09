@@ -11,6 +11,7 @@
 #include "TupleType.h"
 #include "FunctionType.h"
 
+using namespace cdot::support;
 
 namespace cdot {
 namespace util {
@@ -116,7 +117,7 @@ bool operator<=(const Type &ty, const Type &of)
    }
 
    auto cl2 = rec2->getAs<Class>();
-   if (!cl2->isBaseClassOf(rec1)) {
+   if (isa<Class>(rec1) && !cl2->isBaseClassOf(cast<Class>(rec1))) {
       return false;
    }
 
@@ -124,26 +125,6 @@ bool operator<=(const Type &ty, const Type &of)
    if (cl1->isTemplated()) {
       if (!cl2->isTemplated()) {
          return false;
-      }
-
-      auto &fstTemplateArgs = cl1->getTemplateArgs();
-      auto &sndTemplateArgs = cl2->getTemplateArgs();
-
-      if (fstTemplateArgs.size() != sndTemplateArgs.size()) {
-         return false;
-      }
-
-      size_t i = 0;
-      for (const auto &arg : fstTemplateArgs) {
-         if (!arg.isTypeName()) {
-            continue;
-         }
-
-         if (!(*arg.getGenericTy() <= *sndTemplateArgs[i].getGenericTy())) {
-            return false;
-         }
-
-         ++i;
       }
    }
 

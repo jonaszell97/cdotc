@@ -1,0 +1,45 @@
+
+
+#ifdef CDOT_KEYWORD_TOKEN
+   CDOT_KEYWORD_TOKEN(m_kw_file, "file_name")
+   CDOT_KEYWORD_TOKEN(m_kw_md5, "md5")
+   CDOT_KEYWORD_TOKEN(m_kw_modulename, "module_name")
+
+   CDOT_KEYWORD_TOKEN(kw_self, "self")
+   CDOT_KEYWORD_TOKEN(kw_true, "true")
+   CDOT_KEYWORD_TOKEN(kw_false, "false")
+   CDOT_KEYWORD_TOKEN(kw_none, "none")
+
+   CDOT_KEYWORD_TOKEN(kw_def, "def")
+   CDOT_KEYWORD_TOKEN(kw_let, "let")
+   CDOT_KEYWORD_TOKEN(kw_var, "var")
+
+   CDOT_KEYWORD_TOKEN(kw_typedef, "typedef")
+   CDOT_KEYWORD_TOKEN(kw_namespace, "namespace")
+   CDOT_KEYWORD_TOKEN(kw_struct, "struct")
+   CDOT_KEYWORD_TOKEN(kw_class, "class")
+   CDOT_KEYWORD_TOKEN(kw_union, "union")
+   CDOT_KEYWORD_TOKEN(kw_enum, "enum")
+   CDOT_KEYWORD_TOKEN(kw_protocol, "protocol")
+   CDOT_KEYWORD_TOKEN(kw_extend, "extend")
+
+   CDOT_KEYWORD_TOKEN(kw_public, "public")
+   CDOT_KEYWORD_TOKEN(kw_private, "private")
+   CDOT_KEYWORD_TOKEN(kw_protected, "protected")
+   CDOT_KEYWORD_TOKEN(kw_static, "static")
+   CDOT_KEYWORD_TOKEN(kw_abstract, "abstract")
+   CDOT_KEYWORD_TOKEN(kw_prop, "prop")
+   CDOT_KEYWORD_TOKEN(kw_with, "with")
+   CDOT_KEYWORD_TOKEN(kw_where, "where")
+   CDOT_KEYWORD_TOKEN(kw_init, "init")
+   CDOT_KEYWORD_TOKEN(kw_deinit, "deinit")
+
+   CDOT_KEYWORD_TOKEN(kw_infix, "infix")
+   CDOT_KEYWORD_TOKEN(kw_prefix, "prefix")
+   CDOT_KEYWORD_TOKEN(kw_postfix, "postfix")
+   CDOT_KEYWORD_TOKEN(kw_mutating, "mutating")
+
+   CDOT_KEYWORD_TOKEN(kw_ref, "ref")
+#endif
+
+#undef CDOT_KEYWORD_TOKEN

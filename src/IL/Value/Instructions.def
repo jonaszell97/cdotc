@@ -4,15 +4,16 @@
 #   define CDOT_CONSTANT(Name)    CDOT_ALL(Name)
 #   define CDOT_AGGR_TYPE(Name)   CDOT_ALL(Name)
 #   define CDOT_INSTRUCTION(Name) CDOT_ALL(Name)
+#   define CDOT_CONSTEXPR(Name)   CDOT_ALL(Name)
 #endif
 
 #ifdef CDOT_INSTRUCTION
-#   define CDOT_CONSTEXPR(Name)   CDOT_INSTRUCTION(Name)
 #   define CDOT_MEM_INST(Name)    CDOT_INSTRUCTION(Name)
 #   define CDOT_TERM_INST(Name)   CDOT_INSTRUCTION(Name)
 #   define CDOT_BINARY_INST(Name) CDOT_INSTRUCTION(Name)
 #   define CDOT_UNARY_INST(Name)  CDOT_INSTRUCTION(Name)
 #   define CDOT_CAST_INST(Name)   CDOT_INSTRUCTION(Name)
+#   define CDOT_CALL_INST(Name)   CDOT_INSTRUCTION(Name)
 #   define CDOT_OTHER_INST(Name)  CDOT_INSTRUCTION(Name)
 #endif
 
@@ -24,6 +25,7 @@
 #ifdef CDOT_CONSTANT
    CDOT_CONSTANT(BasicBlock)
    CDOT_CONSTANT(Function)
+   CDOT_CONSTANT(Lambda)
    CDOT_CONSTANT(Method)
    CDOT_CONSTANT(Initializer)
    CDOT_CONSTANT(GlobalVariable)
@@ -34,6 +36,8 @@
    CDOT_CONSTANT(VTable)
    CDOT_CONSTANT(PTable)
    CDOT_CONSTANT(ConstantStruct)
+   CDOT_CONSTANT(TypeInfo)
+   CDOT_CONSTANT(ConstantPointer)
 #endif
 
 #ifdef CDOT_AGGR_TYPE
@@ -46,20 +50,24 @@
 
 #ifdef CDOT_CONSTEXPR
    CDOT_CONSTEXPR(ConstantBitCastInst)
+   CDOT_CONSTEXPR(ConstantAddrOfInst)
 #endif
 
 // --- Instructions ---
 
 #ifdef CDOT_MEM_INST
    CDOT_MEM_INST(AllocaInst)
-   CDOT_MEM_INST(InitInst)
-   CDOT_MEM_INST(UnionInitInst)
-   CDOT_MEM_INST(EnumInitInst)
    CDOT_MEM_INST(LambdaInitInst)
    CDOT_MEM_INST(StoreInst)
    CDOT_MEM_INST(GEPInst)
+   CDOT_MEM_INST(FieldRefInst)
    CDOT_MEM_INST(TupleExtractInst)
+   CDOT_MEM_INST(EnumRawValueInst)
+   CDOT_MEM_INST(EnumExtractInst)
    CDOT_MEM_INST(LoadInst)
+   CDOT_MEM_INST(AddrOfInst)
+   CDOT_MEM_INST(PtrToLvalueInst)
+   CDOT_MEM_INST(CaptureExtractInst)
 #endif
 
 #ifdef CDOT_TERM_INST
@@ -69,11 +77,24 @@
    CDOT_TERM_INST(BrInst)
    CDOT_TERM_INST(SwitchInst)
    CDOT_TERM_INST(InvokeInst)
+   CDOT_TERM_INST(ProtocolInvokeInst)
+   CDOT_TERM_INST(VirtualInvokeInst)
 #endif
 
 #ifdef CDOT_OTHER_INST
    CDOT_OTHER_INST(LandingPadInst)
-   CDOT_OTHER_INST(CallInst)
+   CDOT_OTHER_INST(IntrinsicCallInst)
+#endif
+
+#ifdef CDOT_CALL_INST
+   CDOT_CALL_INST(CallInst)
+   CDOT_CALL_INST(IndirectCallInst)
+   CDOT_CALL_INST(LambdaCallInst)
+   CDOT_CALL_INST(ProtocolCallInst)
+   CDOT_CALL_INST(VirtualCallInst)
+   CDOT_CALL_INST(InitInst)
+   CDOT_CALL_INST(UnionInitInst)
+   CDOT_CALL_INST(EnumInitInst)
 #endif
 
 #ifdef CDOT_BINARY_INST
@@ -110,6 +131,7 @@
    CDOT_CAST_INST(BitCastInst)
    CDOT_CAST_INST(IntegerCastInst)
    CDOT_CAST_INST(FPCastInst)
+   CDOT_CAST_INST(IntToEnumInst)
 
    CDOT_CAST_INST(UnionCastInst)
 
@@ -129,4 +151,5 @@
 #undef CDOT_BINARY_INST
 #undef CDOT_UNARY_INST
 #undef CDOT_CAST_INST
+#undef CDOT_CALL_INST
 #undef CDOT_OTHER_INST

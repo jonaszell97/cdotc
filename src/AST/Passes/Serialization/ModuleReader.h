@@ -83,7 +83,7 @@ protected:
    QualType readQualType();
    Argument readArg();
    Attribute readAttr();
-   TemplateConstraint readGeneric();
+   TemplateParameter readGeneric();
 
    Variant readVariant();
 
@@ -107,7 +107,7 @@ protected:
    std::shared_ptr<UsingStmt> ReadUsingStmt();
    std::shared_ptr<CompoundStmt> ReadCompoundStmt();
 
-   std::shared_ptr<DeclStmt> ReadDeclStmt();
+   std::shared_ptr<LocalVarDecl> ReadDeclStmt();
    std::shared_ptr<FunctionDecl> ReadFunctionDecl();
    std::shared_ptr<DeclareStmt> ReadDeclareStmt();
 
@@ -139,7 +139,6 @@ protected:
    std::shared_ptr<BreakStmt> ReadBreakStmt();
    std::shared_ptr<ContinueStmt> ReadContinueStmt();
 
-   std::shared_ptr<CollectionLiteral> ReadCollectionLiteral();
    std::shared_ptr<IntegerLiteral> ReadNumericLiteral();
    std::shared_ptr<NoneLiteral> ReadNoneLiteral();
    std::shared_ptr<StringLiteral> ReadStringLiteral();
@@ -158,7 +157,6 @@ protected:
    std::shared_ptr<TypeRef> ReadTypeRef();
    std::shared_ptr<LvalueToRvalue> ReadLvalueToRvalue();
 
-   std::shared_ptr<EndOfFileStmt> ReadEndOfFileStmt();
    std::shared_ptr<DebugStmt> ReadDebugStmt();
 
    std::shared_ptr<Statement> ReadStatement();

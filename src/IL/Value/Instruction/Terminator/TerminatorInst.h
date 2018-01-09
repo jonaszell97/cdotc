@@ -10,12 +10,13 @@
 namespace cdot {
 namespace il {
 
+class GlobalVariable;
+class Function;
+
 class TerminatorInst: public Instruction {
 public:
    TerminatorInst(TypeID id,
-                  BasicBlock *parent,
-                  const std::string &name = "",
-                  const SourceLocation &loc = {});
+                  BasicBlock *parent);
 
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
@@ -32,13 +33,9 @@ public:
 class RetInst: public TerminatorInst {
 public:
    RetInst(Value *returnedValue,
-           BasicBlock *parent,
-           const std::string &name = "",
-           const SourceLocation &loc = {});
+           BasicBlock *parent);
 
-   explicit RetInst(BasicBlock *parent,
-                    const std::string &name = "",
-                    const SourceLocation &loc = {});
+   explicit RetInst(BasicBlock *parent);
 
    Value *getReturnedValue() const;
    bool isVoidReturn() const;
@@ -56,17 +53,34 @@ public:
 class ThrowInst: public TerminatorInst {
 public:
    ThrowInst(Value *thrownValue,
-             BasicBlock *parent,
-             const std::string &name = "",
-             const SourceLocation &loc = {});
+             GlobalVariable *typeInfo,
+             BasicBlock *parent);
 
    Value *getThrownValue() const
    {
       return thrownValue;
    }
 
+   GlobalVariable *getTypeInfo() const
+   {
+      return typeInfo;
+   }
+
+   Function *getDescFn() const
+   {
+      return descFn;
+   }
+
+   void setDescFn(Function *descFn)
+   {
+      ThrowInst::descFn = descFn;
+   }
+
 protected:
    Value *thrownValue;
+   GlobalVariable *typeInfo;
+
+   Function *descFn = nullptr;
 
 public:
    static bool classof(Value const* T)
@@ -77,9 +91,7 @@ public:
 
 class UnreachableInst: public TerminatorInst {
 public:
-   explicit UnreachableInst(BasicBlock *parent,
-                            const std::string &name = "",
-                            const SourceLocation &loc = {});
+   explicit UnreachableInst(BasicBlock *parent);
 
 public:
    static bool classof(Value const* T)

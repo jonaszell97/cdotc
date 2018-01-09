@@ -16,23 +16,37 @@ namespace il {
 
 namespace {
 
-const unsigned Shift = 1;
+const unsigned Shift = 3;
 
-}
+} // anonymous namespace
 
 AllocaInst::AllocaInst(Type *ty,
                        BasicBlock *parent,
                        unsigned alignment,
-                       bool heap,
-                       const std::string &name,
-                       const SourceLocation &loc)
-   : Instruction(AllocaInstID, ty, parent, name, loc)
+                       bool heap)
+   : Instruction(AllocaInstID, ty, parent)
 {
    setIsLvalue(true);
-   SubclassData |= heap;
-   if (alignment) {
+
+   if (heap)
+      SubclassData |= Flags::Heap;
+   if (alignment)
       SubclassData |= alignment << Shift;
-   }
+}
+
+AllocaInst::AllocaInst(Type *ty,
+                       BasicBlock *parent,
+                       size_t allocSize,
+                       unsigned alignment,
+                       bool heap)
+   : Instruction(AllocaInstID, ty, parent), allocSize(allocSize)
+{
+   setIsLvalue(true);
+
+   if (heap)
+      SubclassData |= Flags::Heap;
+   if (alignment)
+      SubclassData |= alignment << Shift;
 }
 
 unsigned int AllocaInst::getAlignment() const
@@ -42,7 +56,7 @@ unsigned int AllocaInst::getAlignment() const
 
 bool AllocaInst::isHeapAlloca() const
 {
-   return (SubclassData & 1) != 0;
+   return (SubclassData & Flags::Heap) != 0;
 }
 
 } // namespace il

@@ -8,8 +8,15 @@ struct Char {
         val = '\0'
     }
 
+    @implicit
     def infix as int8 {
         return val
+    }
+}
+
+extend Char with Equatable {
+    def infix == (c: Char) -> Bool {
+        return val == c.val
     }
 }
 

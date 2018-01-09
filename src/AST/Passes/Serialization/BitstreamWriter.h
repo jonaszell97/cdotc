@@ -21,35 +21,49 @@ public:
       assert(!currentWord && "didn't call finalize!");
    }
 
+   char *data() { return out.data(); }
+
    void Finalize(llvm::raw_ostream &outStream)
    {
-      if (currentWord) {
+      if (currentWord)
          WriteWord(currentWord);
-      }
 
-      outStream << out;
+      if (out.empty())
+         return;
+
+      outStream.write((const char*)&out.front(), out.size());
    }
 
-   void WriteByte(unsigned char byte)
+   void WriteByte(char byte)
    {
       out.push_back(byte);
    }
 
    void WriteWord(unsigned word)
    {
-      word = llvm::support::endian::byte_swap<uint32_t, llvm::support::little>(word);
-      out.append(reinterpret_cast<unsigned char*>(&word),
-                 reinterpret_cast<unsigned char*>(&word + 1));
+      word = llvm::support::endian::byte_swap<uint32_t,
+         llvm::support::little>(word);
+      out.append(reinterpret_cast<char*>(&word),
+                 reinterpret_cast<char*>(&word + 1));
+   }
+
+   template<typename IntTy>
+   void WriteInt(IntTy value)
+   {
+      for (unsigned i = 0; i < sizeof(IntTy); ++i) {
+         WriteByte((char)(value & 0xFF));
+         value >>= 8;
+      }
    }
 
    void WriteULEB128(size_t value)
    {
-      unsigned char byte;
+      char byte;
       do {
-         byte = (unsigned char)(value & 127);
+         byte = (char)(value & 0x7F);
          value >>= 7;
          if (value != 0) {
-            byte |= 128;
+            byte |= 0x80;
          }
 
          WriteByte(byte);
@@ -59,11 +73,10 @@ public:
    void WriteSLEB128(long long value)
    {
       bool more = true;
-      bool negative = (value < 0);
-      unsigned char byte;
+      char byte;
 
       while (more) {
-         byte = (unsigned char)(value & 127);
+         byte = (char)(value & 127);
          value >>= 7;
 
          /* sign bit of byte is second high order bit (0x40) */
@@ -99,17 +112,6 @@ public:
       }
 
       currentBit = (currentBit + numBits) & 31;
-   }
-
-   struct Block {
-      unsigned blockID;
-      unsigned blockSize;
-      unsigned char *blockBegin;
-   };
-
-   void BeginBlock()
-   {
-
    }
 
 protected:

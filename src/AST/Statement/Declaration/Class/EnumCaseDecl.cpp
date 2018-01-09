@@ -14,8 +14,8 @@ namespace ast {
 EnumCaseDecl::EnumCaseDecl(string &&name,
                            std::shared_ptr<Expression>&& rawValue,
                            AssociatedTypeVec &&associatedTypes)
-   : Statement(EnumCaseDeclID), caseName(name), rawVal(rawValue),
-     associatedTypes(associatedTypes), has_raw_value(true)
+   : Statement(EnumCaseDeclID), caseName(name), rawVal(move(rawValue)),
+     has_raw_value(true), associatedTypes(move(associatedTypes))
 {
 
 }
@@ -23,7 +23,7 @@ EnumCaseDecl::EnumCaseDecl(string &&name,
 EnumCaseDecl::EnumCaseDecl(string &&name,
                            AssociatedTypeVec &&associatedTypes)
    : Statement(EnumCaseDeclID), caseName(move(name)),
-     associatedTypes(move(associatedTypes)), has_raw_value(false)
+     has_raw_value(false), associatedTypes(move(associatedTypes))
 {
 
 }

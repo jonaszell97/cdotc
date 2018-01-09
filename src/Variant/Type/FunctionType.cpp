@@ -14,18 +14,26 @@
 #include "../../AST/Expression/TypeRef.h"
 #include "../../AST/Passes/CodeGen/CodeGen.h"
 
+using namespace cdot::support;
+
 namespace cdot {
 
-FunctionType* FunctionType::get(
-   const QualType &returnType,
-   const std::vector<Argument> &argTypes,
-   bool isRawFunctionTy)
-{
+FunctionType* FunctionType::get(const QualType &returnType,
+                                const std::vector<Argument> &argTypes,
+                                bool isRawFunctionTy) {
+   return get(returnType,
+              std::vector<Argument>(argTypes),
+              isRawFunctionTy);
+}
+
+FunctionType* FunctionType::get(const QualType &returnType,
+                                std::vector<Argument> &&argTypes,
+                                bool isRawFunctionTy) {
    auto key = typesToString(returnType, argTypes)
               + std::to_string((int)isRawFunctionTy) + ".__fun";
 
    if (Instances.find(key) == Instances.end()) {
-      Instances.try_emplace(key, new FunctionType(returnType, argTypes,
+      Instances.try_emplace(key, new FunctionType(returnType, move(argTypes),
                                                   isRawFunctionTy));
    }
 
@@ -34,22 +42,44 @@ FunctionType* FunctionType::get(
    return cast<FunctionType>(Instances[key]);
 }
 
-string FunctionType::typesToString(
-   const QualType &returnType,
-   const std::vector<Argument> &argTypes)
+FunctionType* FunctionType::get(const QualType &returnType,
+                                const std::vector<Type *> &argTypes,
+                                bool isRawFunctionTy) {
+   std::vector<Argument> args;
+   args.reserve(argTypes.size());
+   for (const auto &ty : argTypes) {
+      args.emplace_back("", QualType(ty));
+   }
+
+   return get(returnType, args, isRawFunctionTy);
+}
+
+FunctionType* FunctionType::get(llvm::ArrayRef<Type *> tys)
 {
+   auto it = tys.begin();
+
+   QualType ret(*it);
+   ++it;
+
+   std::vector<Argument> args;
+   for (; it != tys.end(); ++it) {
+      args.emplace_back("", QualType(*it));
+   }
+
+   return get(ret, move(args), true);
+}
+
+string FunctionType::typesToString(const QualType &returnType,
+                                   const std::vector<Argument> &argTypes) {
    std::ostringstream res;
    res << "(";
 
    size_t i = 0;
    for (const auto& arg : argTypes) {
-      if (auto gen = dyn_cast<GenericType>(*arg.type)) {
-         res << gen->getClassName() << ": "
-             << gen->getActualType()->toString();
-      }
-      else {
-         res << arg.type.toString();
-      }
+      if (arg.type.isLvalue())
+         res << "ref ";
+
+      res << arg.type->toUniqueString();
 
       if (i < argTypes.size() - 1) {
          res << ", ";
@@ -58,7 +88,7 @@ string FunctionType::typesToString(
       ++i;
    }
 
-   res << ") -> " << returnType->toString();
+   res << ") -> " << returnType->toUniqueString();
    return res.str();
 }
 
@@ -70,89 +100,24 @@ FunctionType::FunctionType(const QualType& returnType,
    isRawFunctionTy_(raw)
 {
    id = TypeID::FunctionTypeID;
-   className = "__lambda";
 }
 
-bool FunctionType::implicitlyCastableTo(Type *other) const
+FunctionType::FunctionType(const QualType &returnType,
+                           std::vector<Argument> &&argTypes, bool raw)
+   : returnType(returnType),
+     argTypes(move(argTypes)),
+     isRawFunctionTy_(raw)
 {
-   switch (other->getTypeID()) {
-      case TypeID::AutoTypeID:
-         return true;
-      case TypeID::FunctionTypeID: {
-         auto asFun = cast<FunctionType>(other);
-
-         if (argTypes.size() != asFun->argTypes.size()) {
-            return false;
-         }
-
-         if (!returnType.implicitlyCastableTo(asFun->returnType)) {
-            return false;
-         }
-
-         size_t i = 0;
-         for (auto& arg : argTypes) {
-            if (!arg.type.implicitlyCastableTo(asFun->argTypes.at(i).type)) {
-               return false;
-            }
-
-            ++i;
-         }
-
-         return true;
-      }
-      case TypeID::PointerTypeID: {
-         return isRawFunctionTy_ &&
-            implicitlyCastableTo(*other->asPointerTy()->getPointeeType());
-      }
-      case TypeID::IntegerTypeID: {
-         return isRawFunctionTy_;
-      }
-      default:
-         return false;
-   }
+   id = TypeID::FunctionTypeID;
 }
 
 size_t FunctionType::getSize() const
 {
    if (!isRawFunctionTy_) {
-      return 2 * sizeof(int *);
+      return 2 * sizeof(void*);
    }
 
-   return sizeof(void (*)(void));
-}
-
-llvm::Type* FunctionType::getLlvmType() const
-{
-   if (!isRawFunctionTy_) {
-      return CodeGen::LambdaTy;
-   }
-
-   return getLlvmFunctionType()->getPointerTo();
-}
-
-llvm::Type* FunctionType::getLlvmFunctionType() const
-{
-   std::vector<llvm::Type*> args;
-   if (!isRawFunctionTy_) {
-      args.push_back(CodeGen::Int8PtrTy->getPointerTo());
-   }
-
-   for (auto& arg : argTypes) {
-      auto llvmTy = arg.type->getLlvmType();
-      if (llvmTy->isStructTy()) {
-         llvmTy = llvmTy->getPointerTo();
-      }
-
-      args.push_back(llvmTy);
-   }
-
-   llvm::Type* ret = returnType->getLlvmType();
-   if (returnType->needsStructReturn()) {
-      args.insert(++args.begin(), ret->getPointerTo());
-      ret = llvm::Type::getVoidTy(CodeGen::Context);
-   }
-
-   return llvm::FunctionType::get(ret, args, false);
+   return sizeof(void*);
 }
 
 string FunctionType::toString() const

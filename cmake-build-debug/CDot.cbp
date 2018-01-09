@@ -17,6 +17,52 @@
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
+			<Target title="gen_builtins">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gen_builtins/fast">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
 			<Target title="rebuild_cache">
 				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
 				<Option type="4"/>
@@ -147,22 +193,16 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Attribute/Attribute.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Context.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Context.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Expression.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Expression.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/CollectionLiteral.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/DictionaryLiteral.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/CollectionLiteral.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/DictionaryLiteral.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/IntegerLiteral.cpp">
@@ -201,6 +241,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/Literal/TupleLiteral.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/PatternExpr.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/PatternExpr.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/RefExpr/CallExpr.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -223,6 +269,9 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/RefExpr/SubscriptExpr.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/StaticExpr.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression/TypeRef.cpp">
@@ -249,6 +298,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Operator/Conversion/LvalueToRvalue.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Operator/ExprSequence.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Operator/ExprSequence.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Operator/TertiaryOperator.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -265,6 +320,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AbstractPass.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AggregateVisitor.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AggregateVisitor.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/CodeGen/CGBinaryOperator.cpp">
@@ -333,22 +394,40 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Output/HeaderGen.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/PrettyPrint/PrettyPrinter.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/PrettyPrint/PrettyPrinter.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Builtin.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Builtin.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ConstExprPass.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ConformanceChecker.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ConstExprPass.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ConformanceChecker.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ExpressionResolver.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Function.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Function.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/GlobalDependency.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/GlobalDependency.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp">
@@ -367,6 +446,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Enum.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Protocol.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Protocol.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Record.cpp">
@@ -402,6 +487,24 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Template.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Template.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Variant/Variant.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Variant/Variant.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/BitstreamReader.h">
 			<Option target="cdotc"/>
 		</Unit>
@@ -421,6 +524,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleWriter.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/StaticExpr/StaticExprEvaluator.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/StaticExpr/StaticExprEvaluator.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Block/CompoundStmt.cpp">
@@ -504,12 +613,6 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/CallableDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ClassDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ClassDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ConstrDecl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -526,18 +629,6 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumCaseDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ExtensionDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ExtensionDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/FieldDecl.cpp">
@@ -570,18 +661,6 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordSubDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/UnionDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/UnionDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclareStmt.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -594,34 +673,16 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/FuncArgDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/FunctionDecl.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/FunctionDecl.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/CallableTemplateDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/CallableTemplateDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/MethodTemplateDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/MethodTemplateDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/RecordTemplateDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Template/RecordTemplateDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/TypedefDecl.cpp">
@@ -651,6 +712,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Statement.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Static/StaticStmt.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Static/StaticStmt.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/UsingStmt.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -661,6 +728,45 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/SymbolTable.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Builtin/BuiltinGen.h">
+			<Option target="gen_builtins"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Builtin/main.cpp">
+			<Option target="gen_builtins"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/CastKind.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/CastKind.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/DependencyGraph.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/DependencyGraph.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Mangle.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Mangle.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Precedence.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/CTFEEngine.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/CTFEEngine.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/Value.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/Value.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Compiler.cpp">
@@ -695,9 +801,6 @@
 		<Unit filename="/Users/Jonas/CDot/src/IL/ILBuilder.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/IL/ILType.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Module/Context.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -708,6 +811,45 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Module/Module.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/IRGen/DIGen.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/IRGen/IRGen.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/IRGen/IRGen.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/IRGen/IRGenModule.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/InstructionVisitor.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/PassManager.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/PassManager.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/PrimitivePromoter.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/PrimitivePromoter.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/ReturnVerifierPass.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/ReturnVerifierPass.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/VerifierPass.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/VerifierPass.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Constant/Constant.cpp">
@@ -740,12 +882,6 @@
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Function/BasicBlock.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Function/CallInst.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Function/CallInst.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Function/Function.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -762,6 +898,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/GlobalVariable.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/CallInst.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/CallInst.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Instruction/Cast/CastInst.cpp">
@@ -833,6 +975,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Record/AggregateType.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/SymbolTableList.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/SymbolTableList.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Use.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -843,6 +991,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Value.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/ValueSymbolTable.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Value/ValueSymbolTable.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Writer/ModuleWriter.cpp">
@@ -881,6 +1035,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Format.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/Various.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/WriterBase.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Template/Specilization.cpp">
@@ -1019,11 +1179,14 @@
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/lex/Preprocessor.cpp">
-			<Option target="parse_diagnostics"/>
+		<Unit filename="/Users/Jonas/CDot/src/lex/Persist.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/lex/SourceLocation.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/lex/Persist.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/lex/Preprocessor.cpp">
+			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/SourceLocation.h">
@@ -1040,6 +1203,39 @@
 		<Unit filename="/Users/Jonas/CDot/src/main.cpp">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/Module.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/Module.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleManager.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleManager.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleParser.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleParser.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleWriter.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleWriter.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/parse/DeclParser.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/parse/DeclParser.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/parse/DelayedParseLoc.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/parse/ParseRecord.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -1048,6 +1244,12 @@
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/parse/Parser.h">
 			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/support/Format.cpp">
+			<Option target="parse_diagnostics"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/support/Format.h">
+			<Option target="parse_diagnostics"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>

@@ -7,18 +7,19 @@
 namespace cdot {
 namespace il {
 
-Constant::Constant(TypeID id, Type *ty,
-                   const std::string &name,
-                   const SourceLocation &loc)
-   : Value(id, ty, name, loc)
+Constant::Constant(TypeID id, Type *ty)
+   : Constant(id, QualType(ty))
 {
 
 }
 
-Constant::Constant(TypeID id, ILType ty,
-                   const std::string &name,
-                   const SourceLocation &loc)
-   : Value(id, ty, name, loc)
+Constant::Constant(TypeID id, QualType ty)
+   : Value(id, ty)
+{
+
+}
+
+void Constant::handleReplacement(Value *with)
 {
 
 }

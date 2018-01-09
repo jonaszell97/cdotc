@@ -2,8 +2,8 @@
 using Builtin.Primitive.{int1}
 
 protocol BooleanProtocol {
-    def prefix ! -> Self
-    def infix as Bool
+    def prefix ! () -> Self
+    def infix as Bool ()
 }
 
 @inline(always)

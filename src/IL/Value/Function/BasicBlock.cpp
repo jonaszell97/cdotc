@@ -12,85 +12,40 @@
 
 #include <llvm/Support/ErrorHandling.h>
 
+using namespace cdot::support;
+using std::string;
+
 namespace cdot {
 namespace il {
 
-BasicBlock::BasicBlock(Function *parent,
-                       const std::string &name,
-                       const SourceLocation &loc)
-   : Constant(BasicBlockID, PointerType::get(IntegerType::getCharTy()),
-              name, loc), parent(parent)
+BasicBlock::BasicBlock(Function *parent)
+   : Constant(BasicBlockID, PointerType::get(IntegerType::getCharTy())),
+     parent(parent),
+     Instructions(parent && !parent->getBasicBlocks().empty()
+                  ? std::move(InstList(this, parent->getBasicBlocks().front()
+                                             .getInstructions().getSymTab()))
+                  : std::move(InstList(this))),
+     Args(this, Instructions.getSymTab())
 {
    if (parent) {
-      parent->insertBasicBlockAtEnd(this);
+      parent->getBasicBlocks().push_back(this);
    }
 }
 
-BasicBlock::iterator
-BasicBlock::getIteratorForInstruction(Instruction *inst)
+TerminatorInst const* BasicBlock::getTerminator() const
 {
-   auto it = Instructions.begin();
-   while (it != Instructions.end()) {
-      if (*it == inst) {
-         return it;
-      }
-
-      ++it;
-   }
-
-   llvm_unreachable("instruction does not belong to basic block!");
-}
-
-BasicBlock::const_iterator
-BasicBlock::getIteratorForInstruction(const Instruction *inst) const
-{
-   auto it = Instructions.begin();
-   while (it != Instructions.end()) {
-      if (*it == inst) {
-         return it;
-      }
-
-      ++it;
-   }
-
-   llvm_unreachable("instruction does not belong to basic block!");
-}
-
-BasicBlock::iterator BasicBlock::removeInstruction(const Instruction *inst)
-{
-   auto it = getIteratorForInstruction(inst);
-   return Instructions.erase(it);
-}
-
-BasicBlock::iterator BasicBlock::insertInstructionAfter(Instruction *inst,
-                                                        iterator it) {
-   return Instructions.insert(it, inst);
-}
-
-BasicBlock::iterator BasicBlock::insertInstructionBefore(Instruction *inst,
-                                                         iterator it) {
-   return Instructions.insert(--it, inst);
-}
-
-BasicBlock::iterator BasicBlock::insertInstructionAtEnd(Instruction *inst)
-{
-   Instructions.push_back(inst);
-   return Instructions.end();
-}
-
-BasicBlock::iterator BasicBlock::insertInstructionAtBegin(Instruction *inst)
-{
-   return Instructions.insert(Instructions.begin(), inst);
-}
-
-TerminatorInst* BasicBlock::getTerminator() const
-{
-   if (Instructions.empty()) {
+   if (Instructions.empty())
       return nullptr;
-   }
 
-   auto &Inst = Instructions.back();
-   return dyn_cast<TerminatorInst>(Inst);
+   return dyn_cast<TerminatorInst>(&Instructions.back());
+}
+
+TerminatorInst* BasicBlock::getTerminator()
+{
+   if (Instructions.empty())
+      return nullptr;
+
+   return dyn_cast<TerminatorInst>(&Instructions.back());
 }
 
 const BasicBlock::InstList &BasicBlock::getInstructions() const
@@ -108,31 +63,28 @@ Function *BasicBlock::getParent() const
    return parent;
 }
 
-const BasicBlock::BlockArgList &BasicBlock::getArgs() const
+Argument const* BasicBlock::getBlockArg(llvm::StringRef name) const
 {
-   return Args;
+   for (auto &arg : Args) {
+      if (arg.getName() == name) {
+         return &arg;
+      }
+   }
+
+   return nullptr;
 }
 
-BasicBlock::BlockArgList& BasicBlock::getArgs()
+Argument const* BasicBlock::getBlockArg(unsigned idx) const
 {
-   return Args;
+   assert(Args.size() > idx);
+   return &Args[idx];
 }
 
-void BasicBlock::addBlockArg(BasicBlockArg &&arg)
+Argument* BasicBlock::getBlockArg(llvm::StringRef name)
 {
-   Args.push_back(new Argument(arg.type, false, parent, arg.name));
-}
-
-void BasicBlock::addBlockArg(Argument *arg)
-{
-   Args.push_back(arg);
-}
-
-Argument * BasicBlock::getBlockArg(llvm::StringRef name)
-{
-   for (const auto &arg : Args) {
-      if (arg->getName() == name) {
-         return arg;
+   for (auto &arg : Args) {
+      if (arg.getName() == name) {
+         return &arg;
       }
    }
 
@@ -142,7 +94,7 @@ Argument * BasicBlock::getBlockArg(llvm::StringRef name)
 Argument* BasicBlock::getBlockArg(unsigned idx)
 {
    assert(Args.size() > idx);
-   return Args[idx];
+   return &Args[idx];
 }
 
 void BasicBlock::addPredecessor(BasicBlock *pred)
@@ -153,6 +105,33 @@ void BasicBlock::addPredecessor(BasicBlock *pred)
 const BasicBlock::PredecessorList &BasicBlock::getPredecessors() const
 {
    return Predecessors;
+}
+
+bool BasicBlock::isEntryBlock() const
+{
+   return this == parent->getEntryBlock();
+}
+
+bool BasicBlock::hasNoPredecessors() const
+{
+   if (isEntryBlock()) return false;
+   return Predecessors.empty();
+}
+
+void BasicBlock::addBlockArg(Type *ty, llvm::StringRef name)
+{
+   Args.push_back(new Argument(ty, false, this));
+   if (!name.empty()) {
+      Args.back().setName(name);
+   }
+}
+
+void BasicBlock::addBlockArg(QualType ty, llvm::StringRef name)
+{
+   Args.push_back(new Argument(ty, false, this));
+   if (!name.empty()) {
+      Args.back().setName(name);
+   }
 }
 
 } // namespace il

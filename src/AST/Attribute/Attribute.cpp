@@ -16,6 +16,7 @@ unordered_map<string, Attr> AttributeMap = {
    { "rawPtr", Attr::RawFunctionPtr },
    { "throws", Attr::Throws },
    { "nothrow", Attr::NoThrow },
+   { "implicit", Attr::Implicit },
 
    { "_builtin", Attr::_builtin },
    { "_opaque", Attr::_opaque },
@@ -45,6 +46,7 @@ string isValidAttribute(Attribute attr) {
       case Attr::_opaque:
       case Attr::RawFunctionPtr:
       case Attr::NoThrow:
+      case Attr::Implicit:
          if (!attr.args.empty()) {
             return "Attribute " + attr.name + " expects no arguments";
          }
@@ -56,12 +58,13 @@ string isValidAttribute(Attribute attr) {
 
          if (!attr.args.empty()) {
             auto& arg = attr.args.front();
-            if (arg.type != VariantType::STRING) {
+            if (arg.kind != VariantType::STRING) {
                return "attribute inline expects string argument";
             }
             auto &str = arg.strVal;
             if (str != "always" && str != "hint" && str != "never") {
-               return "invalid argument " + str + " (expected always, never or hint)";
+               return "invalid argument "
+                      + str + " (expected always, never or hint)";
             }
          }
          break;

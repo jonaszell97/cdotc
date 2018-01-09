@@ -11,91 +11,97 @@
 namespace cdot {
 namespace serial {
 
-   class BitstreamReader {
-   public:
-      BitstreamReader(std::unique_ptr<llvm::MemoryBuffer> &&buff) : buff(std::move(buff)),
-                                                                    current(this->buff->getBufferStart())
-      {
+class BitstreamReader {
+public:
+   explicit BitstreamReader(llvm::MemoryBuffer *buff)
+      : buff(buff),
+        current(this->buff->getBufferStart())
+   {
 
-      }
+   }
 
-      bool ReadBit()
-      {
-         auto res = (*current & (1 << currentBit)) != 0;
-         if (currentBit == 7) {
-            currentBit = 0;
-            ++current;
-         }
-         else {
-            ++currentBit;
-         }
-
-         return res;
-      }
-
-      void SkipCurrentByte()
-      {
-         ++current;
+   bool ReadBit()
+   {
+      auto res = (*current & (1 << currentBit)) != 0;
+      if (currentBit == 7) {
          currentBit = 0;
+         ++current;
+      }
+      else {
+         ++currentBit;
       }
 
-      unsigned char ReadByte()
-      {
-         return *(current++);
+      return res;
+   }
+
+   void SkipCurrentByte()
+   {
+      ++current;
+      currentBit = 0;
+   }
+
+   char ReadByte()
+   {
+      return *(current++);
+   }
+
+   template<typename IntTy>
+   IntTy ReadInt()
+   {
+      IntTy value = 0;
+      unsigned shift = 0;
+
+      for (unsigned i = 0; i < sizeof(IntTy); ++i) {
+         value |= ReadByte() << shift;
+         shift += CHAR_BIT;
       }
 
-      unsigned ReadWord()
-      {
-         unsigned value = 0;
-         value |= ReadByte();
-         value |= ReadByte() << 8;
-         value |= ReadByte() << 16;
-         value |= ReadByte() << 24;
+      return value;
+   }
 
-         return value;
+   size_t ReadULEB128()
+   {
+      size_t result = 0;
+      unsigned shift = 0;
+      char byte;
+
+      do {
+         byte = ReadByte();
+         result |= (byte & 0x7F) << shift;
+
+         shift += 7;
+      } while ((byte & 0x80) != 0);
+
+      return result;
+   }
+
+   long long ReadSLEB128()
+   {
+      long long result = 0;
+      unsigned shift = 0;
+      char byte;
+
+      do {
+         byte = ReadByte();
+         result |= (byte & 0x7F) << shift;
+         shift += 7;
+      } while ((byte & 0x80) != 0);
+
+      if (shift < 8 * sizeof(long long) && (byte & 0x40) != 0) {
+         result |= ~(0ull) << shift;
       }
 
-      size_t ReadULEB128()
-      {
-         size_t result = 0;
-         unsigned shift = 0;
-         unsigned char byte;
+      return result;
+   }
 
-         do {
-            byte = ReadByte();
-            result |= (byte & 0x7F) << shift;
+   const char* data() const { return current; }
 
-            shift += 7;
-         } while ((byte & 0x80) != 0);
+protected:
+   llvm::MemoryBuffer* buff;
+   const char *current;
 
-         return result;
-      }
-
-      long long ReadSLEB128()
-      {
-         long long result = 0;
-         unsigned shift = 0;
-         unsigned char byte;
-
-         do {
-            byte = ReadByte();
-            result |= (byte & 0x7F) << shift;
-            shift += 7;
-         } while ((byte & 0x80) != 0);
-
-         if (shift < 8 * sizeof(long long) && (byte & 0x40) != 0) {
-            result |= ~(0ull) << shift;
-         }
-
-         return result;
-      }
-
-   protected:
-      std::unique_ptr<llvm::MemoryBuffer> buff;
-      const char *current;
-
-      unsigned short currentBit = 0;
-   };
+   unsigned short currentBit = 0;
+};
 
 }
 }

@@ -6,6 +6,7 @@
 #define CDOT_TYPEGROUP_H
 
 #include "Type.h"
+#include "QualType.h"
 #include <vector>
 
 class SemaPass;
@@ -22,11 +23,23 @@ class TypeGroup: public Type {
 public:
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::TypeGroupID;
+      switch (T->getTypeID()) {
+#     define CDOT_TYPE_GROUP(Name) \
+         case TypeID::Name##ID: return true;
+#     include "Types.def"
+
+         default:
+            return false;
+      }
    }
 
+   Type *getGroupDefault() const;
+
 protected:
-   TypeGroup();
+   explicit TypeGroup(TypeID id)
+   {
+      this->id = id;
+   }
 };
 
 class IntegerTypeGroup: public TypeGroup {
@@ -35,9 +48,13 @@ public:
    static IntegerTypeGroup *getUnsigned();
    static IntegerTypeGroup *getSigned();
 
-   bool implicitlyCastableTo(Type*) const override;
-   string toString() const override;
-   Type *getGroupDefault() const override;
+   std::string toString() const;
+   Type *getGroupDefault() const;
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::IntegerTypeGroupID;
+   }
 
 protected:
    enum Kind : int {
@@ -52,38 +69,107 @@ class FPTypeGroup: public TypeGroup {
 public:
    static FPTypeGroup *get();
 
-   bool implicitlyCastableTo(Type*) const override;
-   string toString() const override;
-   Type *getGroupDefault() const override;
+   std::string toString() const;
+   Type *getGroupDefault() const;
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::FPTypeGroupID;
+   }
 
 protected:
    FPTypeGroup();
    static FPTypeGroup *Instance;
 };
 
-//class EnumCaseTypeGroup: public TypeGroup {
+class StringTypeGroup: public TypeGroup {
+public:
+   static StringTypeGroup *get();
+
+   std::string toString() const;
+   Type *getGroupDefault() const;
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::StringTypeGroupID;
+   }
+
+protected:
+   StringTypeGroup();
+   static StringTypeGroup *Instance;
+};
+
+class EnumTypeGroup: public TypeGroup {
+public:
+   static EnumTypeGroup *get(llvm::StringRef caseName);
+
+   llvm::StringRef getCaseName() const { return caseName; }
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::EnumTypeGroupID;
+   }
+
+protected:
+   explicit EnumTypeGroup(llvm::StringRef caseName)
+      : TypeGroup(TypeID::EnumTypeGroupID), caseName(caseName)
+   {}
+
+   llvm::StringRef caseName;
+};
+
+//class LambdaTypeGroup: public TypeGroup {
 //public:
-//   typedef std::function<bool(cl::Enum*, const string&,
-//      const std::vector<Argument>&)> DeciderFunction;
+//   static LambdaTypeGroup *get(QualType returnType,
+//                               std::vector<QualType> &&argTypes);
 //
-//   static EnumCaseTypeGroup *get(const string &caseName,
-//                                 const DeciderFunction &func,
-//                                 const std::vector<Argument> &argTypes = {});
+//   QualType getReturnType() const
+//   {
+//      return returnType;
+//   }
 //
-//   bool implicitlyCastableTo(BuiltinType*) const override;
-//   string toString() const override;
-//   BuiltinType *getGroupDefault() const override;
+//   const std::vector<QualType> &getArgTypes() const
+//   {
+//      return argTypes;
+//   }
 //
-//protected:
-//   EnumCaseTypeGroup(const string &caseName,
-//                     const std::vector<Argument> &argTypes = {});
+//   static bool classof(Type const *T)
+//   {
+//      return T->getTypeID() == TypeID::LambdaTypeGroupID;
+//   }
 //
-//   string caseName;
-//   const DeciderFunction &func;
-//   std::vector<Argument> argTypes;
+//private:
+//   LambdaTypeGroup(QualType returnType,
+//                   std::vector<QualType> &&argTypes)
+//      : TypeGroup(TypeID::LambdaTypeGroupID), returnType(returnType),
+//        argTypes(std::move(argTypes))
+//   { }
 //
-//   static llvm::StringMap<EnumCaseTypeGroup*> Instances;
+//   QualType returnType;
+//   std::vector<QualType> argTypes;
 //};
+
+class LambdaTypeGroup: public TypeGroup {
+public:
+   static LambdaTypeGroup *get(size_t numArgs);
+
+   size_t getNumArgs() const
+   {
+      return numArgs;
+   }
+
+   static bool classof(Type const *T)
+   {
+      return T->getTypeID() == TypeID::LambdaTypeGroupID;
+   }
+
+private:
+   explicit LambdaTypeGroup(size_t numArgs)
+      : TypeGroup(TypeID::LambdaTypeGroupID), numArgs(numArgs)
+   {}
+
+   size_t numArgs;
+};
 
 } // namespace cdot
 

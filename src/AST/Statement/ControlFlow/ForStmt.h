@@ -10,6 +10,7 @@
 namespace cdot {
 namespace ast {
 
+class Expression;
 class IdentifierRefExpr;
 
 class ForStmt : public Statement {
@@ -17,6 +18,11 @@ public:
    ForStmt(Statement::SharedPtr &&init,
            std::shared_ptr<Expression> &&term,
            Statement::SharedPtr &&inc);
+
+   ForStmt(Statement::SharedPtr &&init,
+           std::shared_ptr<Expression> &&term,
+           Statement::SharedPtr &&inc,
+           Statement::SharedPtr &&body);
 
    void setBody(Statement::SharedPtr &&_body)
    {

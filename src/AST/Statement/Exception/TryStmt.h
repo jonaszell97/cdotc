@@ -13,6 +13,14 @@ namespace ast {
 class TypeRef;
 
 struct CatchBlock {
+   CatchBlock(std::shared_ptr<TypeRef> &&caughtType,
+              string &&identifier, Statement::SharedPtr &&body)
+      : caughtType(move(caughtType)), identifier(move(identifier)),
+        body(move(body))
+   { }
+
+   CatchBlock() = default;
+
    std::shared_ptr<TypeRef> caughtType;
    string identifier;
 
@@ -24,7 +32,11 @@ struct CatchBlock {
 
 class TryStmt: public Statement {
 public:
-   TryStmt(Statement::SharedPtr &&body);
+   explicit TryStmt(Statement::SharedPtr &&body);
+
+   TryStmt(std::shared_ptr<Statement> &&body,
+           std::vector<CatchBlock> &&catchBlocks,
+           std::shared_ptr<Statement> &&finally);
 
    void addCatch(CatchBlock&& catchBlock)
    {

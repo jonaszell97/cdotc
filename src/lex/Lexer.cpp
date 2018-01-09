@@ -4,149 +4,232 @@
 
 #include "Lexer.h"
 
+#include <cassert>
 #include <regex>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 
 #ifndef CDOT_LEXER_STANDALONE
 #include "../Message/Diagnostics.h"
+#include "../Support/Casting.h"
+#include "../Variant/Type/IntegerType.h"
+
 #endif
 
-Lexer::Lexer(llvm::MemoryBuffer *buf,
-             string const& fileName,
-             unsigned sourceId) : curr(buf->getBufferStart()),
-                                  begin(buf->getBufferStart()),
-                                  srcLen(buf->getBufferSize()),
-                                  sourceId(sourceId), fileName(fileName) {
-   currentToken = Token(T_BOF, {}, SourceLocation(), 0);
+using cdot::lex::Token;
+
+namespace cdot {
+namespace lex {
+
+const char* LexerTraits::CommentBegin = "//";
+const char* LexerTraits::CommentEnd = "\n";
+
+const char* LexerTraits::MultiLineCommentBegin = "/*";
+const char* LexerTraits::MultiLineCommentEnd = "*/";
+
+tok::TokenType LexerTraits::getKeywordToken(const string &potentialKeyword)
+{
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
+   if ((Spelling) == potentialKeyword) return tok::Name;
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
+      CDOT_KEYWORD_TOKEN(Name, Spelling)
+#  include "Tokens.def"
+
+   return tok::sentinel;
 }
 
-Lexer::Lexer(std::vector<Token> &&tokens)
-   : lookaheadList(tokens), srcLen(0)
+tok::TokenType LexerTraits::getOperatorToken(const string &potentialOperator)
+{
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
+   if ((Spelling) == potentialOperator) return tok::Name;
+#  include "Tokens.def"
+
+   return tok::sentinel;
+}
+
+tok::TokenType LexerTraits::getPunctuatorToken(char potentialPunctuator)
+{
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
+   if ((Spelling) == potentialPunctuator) return tok::Name;
+#  include "Tokens.def"
+
+   return tok::sentinel;
+}
+
+template <class T>
+Lexer<T>::Lexer(llvm::MemoryBuffer *buf,
+                unsigned sourceId)
+   : typeID(LexerID),
+     srcLen(buf->getBufferSize()),
+     sourceId(sourceId),
+     curr(buf->getBufferStart()),
+     begin(buf->getBufferStart()),
+     ignoreMacro(false), ignoreDirective(false), ignoreValue(false),
+     doneLexing(false), ignoreInterpolation(false)
 {
 
 }
 
-Lexer::Lexer()
-   : curr(nullptr)
+template <class T>
+Lexer<T>::Lexer(std::vector<Token> &&toks)
+   : typeID(LexerID),
+     srcLen(0),
+     tokenIndex(1),
+     ignoreMacro(false),
+     ignoreDirective(false),
+     ignoreValue(false),
+     doneLexing(true), ignoreInterpolation(false)
+{
+   for (auto &tok : toks) {
+      tokens.push_back(getNextToken(tok));
+   }
+
+   tokenIndex = 1;
+   doneLexing = true;
+}
+
+template <class T>
+MacroExpansionLexer<T>::MacroExpansionLexer(const Macro &M,
+                                            Super *Outer, unsigned offset,
+                                            MacroArgList &macroArgs)
+   : Super(Super::TypeID::MacroExpansionLexerID), prelexedTokens(M.tokens)
+{
+   this->Outer = Outer;
+   this->expandedFromMacro = offset;
+
+   if (Outer) {
+      this->macroExpansionDepth = Outer->getMacroExpansionDepth() + 1;
+      this->sourceId = Outer->getSourceId();
+      this->currentLine = Outer->currentLine;
+   }
+
+   auto numArgs = macroArgs.first.size();
+   size_t i = 0;
+   for (; i < numArgs; ++i) {
+      this->Macros.try_emplace(M.args[i], macroArgs.first[i]);
+      this->Values.try_emplace(M.args[i], move(macroArgs.second[i]));
+   }
+}
+
+template<class T>
+MacroExpansionLexer<T>::MacroExpansionLexer(typename Super::TokenVec &&tokens,
+                                            unsigned offset,
+                                            Super *Outer)
+   : Super(Super::TypeID::MacroExpansionLexerID),
+     prelexedTokens(std::move(tokens))
+{
+   this->Outer = Outer;
+   this->expandedFromMacro = offset;
+
+   if (Outer) {
+      this->macroExpansionDepth = Outer->getMacroExpansionDepth() + 1;
+      this->sourceId = Outer->getSourceId();
+      this->currentLine = Outer->currentLine;
+   }
+}
+
+template <class T>
+Lexer<T>::Lexer(TypeID id)
+   : typeID(id),
+     curr(nullptr),
+     ignoreMacro(false),
+     ignoreDirective(false),
+     ignoreValue(false),
+     doneLexing(false),
+     ignoreInterpolation(false)
 {
 
+}
+
+template<class T>
+void Lexer<T>::lex()
+{
+   if (doneLexing)
+      return;
+
+   for (;;) {
+      auto tok = getNextToken();
+
+      if (!tok.is(tok::sentinel)) {
+         tokens.push_back(std::move(tok));
+      }
+
+      if (tokens.back().is(tok::eof)) {
+         break;
+      }
+   }
+
+   tokenIndex = 1;
+   doneLexing = true;
 }
 
 // RAII utility classes
 
-Lexer::ModeScopeGuard::ModeScopeGuard(Mode m, Lexer *lex)
+
+template<class T>
+void Lexer<T>::printTokensTo(llvm::raw_ostream &out)
+{
+   for (const auto& tok : tokens)
+      out << tok.rawRepr();
+
+   out << "\n";
+}
+
+template<class T>
+Lexer<T>::ModeScopeGuard::ModeScopeGuard(Mode m, Lexer *lex)
    : lex(lex), prevMode(lex->mode)
 {
    lex->setMode(m);
 }
 
-Lexer::ModeScopeGuard::~ModeScopeGuard()
+template<class T>
+Lexer<T>::ModeScopeGuard::~ModeScopeGuard()
 {
    lex->setMode(prevMode);
 }
 
-Lexer::StateSaveGuard::StateSaveGuard(Lexer *lex)
-   : lex(lex), shrinkTo(lex->tokens.size())
+template<class T>
+Lexer<T>::StateSaveGuard::StateSaveGuard(Lexer *lex)
+   : lex(lex), shrinkTo(lex->tokenIndex)
 {
-
+   assert(shrinkTo);
 }
 
-Lexer::StateSaveGuard::~StateSaveGuard()
+template<class T>
+Lexer<T>::StateSaveGuard::~StateSaveGuard()
 {
-   assert(lex->tokens.size() >= shrinkTo);
-   while (lex->tokens.size() > shrinkTo) {
-      lex->lookaheadList.push_back(std::move(lex->tokens.back()));
-      lex->tokens.pop_back();
+   if (lex->tokens.size() < shrinkTo) {
+      return;
    }
 
-   lex->currentToken = lex->tokens.back();
+   lex->tokenIndex = shrinkTo;
 }
 
-std::vector<Token> Lexer::lexString(const string &s)
-{
-   auto buf = llvm::MemoryBuffer::getMemBuffer(llvm::StringRef(s.data(),
-                                                               s.length()));
-
-   Lexer lex(buf.get(), fileName, sourceId);
-   lex.advance();
-
-   std::vector<Token> res;
-   while (lex.currentToken.get_type() != T_EOF) {
-      res.push_back(lex.currentToken);
-      lex.advance();
-   }
-
-   return std::move(res);
-}
-
-std::vector<Token> Lexer::templateArgToTokens(const TemplateArg &templateArg)
-{
-   llvm_unreachable("unsupported template arg kind");
-}
-
-std::vector<Token> Lexer::valueToTokens(const TemplateArg &templateArg)
-{
-//   auto &val = templateArg.getValue();
-//   return {Token(T_LITERAL, val};
-   llvm_unreachable("henlo");
-}
-
-void Lexer::addTemplateArg(const string &name, const string &value)
-{
-   Values[name] = Variant(string(value));
-   TemplateArgs[name] = lexString(value);
-}
-
-void Lexer::addTemplateArg(
-   const string &name, const std::vector<Token> &tokens)
-{
-   TemplateArgs.emplace(name, tokens);
-   Values[name] = Variant(Token::TokensToString(tokens));
-}
-
-void Lexer::addTemplateArg(const string &name, const Variant &val)
-{
-   string str = val.toString();
-   if (val.type == VariantType::STRING) {
-      str = "\"" + str;
-      str += "\"";
-   }
-
-   addTemplateArg(name, str);
-   Values[name] = val;
-}
-
-void Lexer::addVariadicTemplateArg(const string &name,
-                                   std::vector<Variant> &vec) {
-   Values[name] = Variant(std::move(vec));
-}
-
-void Lexer::reset(const char *src, size_t len)
+template<class T>
+void Lexer<T>::reset(const char *src, size_t len)
 {
    this->curr = src;
-   currentToken = Token(T_BOF, {}, SourceLocation(), 0);
-   continueInterpolation = false;
-   indexOnLine = 0;
-   currentLine = 1;
    currentIndex = 0;
    srcLen = len;
+   doneLexing = false;
    tokens.clear();
 }
 
-string Lexer::strVal()
+template<class T>
+string Lexer<T>::strVal()
 {
-   if (currentToken.get_value().strVal.empty()
-       && currentToken.get_type() != T_LITERAL) {
-      CDOT_DIAGNOSE("Unexpected token " + currentToken.toString());
+   if (currentTok().getValue().strVal.empty()
+       && currentTok().getKind() != tok::stringliteral) {
+      CDOT_DIAGNOSE("Unexpected token " + currentTok().toString());
    }
 
-   return currentToken._value.strVal;
+   return currentTok()._value.strVal;
 }
 
-string& Lexer::strRef()
+template<class T>
+string& Lexer<T>::strRef()
 {
-   return currentToken._value.strVal;
+   return tokens[tokenIndex - 1]._value.strVal;
 }
 
 /**
@@ -155,12 +238,14 @@ string& Lexer::strRef()
  * @param allowDecimalPoint Whether to allow a decimal point or not
  * @return
  */
-bool Lexer::is_number(char c, bool allowDecimalPoint) {
+template<class T>
+bool Lexer<T>::is_number(char c, bool allowDecimalPoint) {
    // digits and dot
    return (c >= '0' && c <= '9') || (allowDecimalPoint && c == '.');
 }
 
-bool Lexer::is_hex(char c) {
+template<class T>
+bool Lexer<T>::is_hex(char c) {
    return (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')
           || (c >= '0' && c <= '9');
 }
@@ -171,7 +256,8 @@ bool Lexer::is_hex(char c) {
  * @param _c
  * @return
  */
-bool Lexer::is_identifier_char(char c) {
+template<class T>
+bool Lexer<T>::is_identifier_char(char c) {
    // valid identifiers contain ANYTHING (almost)
    return !is_operator_char(c) && !is_punctuator(c) && c != ' ' && c != '\0';
 }
@@ -193,36 +279,8 @@ bool matches(const string &pattern, const string &subject)
 
 } // anonymous namespace
 
-/**
- * Decides whether a value can be an identifier or not.
- * @param _c
- * @return
- */
-bool Lexer::is_operator(const string &s) {
-   if ((mode == TemplateArgMode || mode == TemplateConstraints)
-       && (matches("^[<>].+", s))) {
-      return false;
-   }
-   if (std::regex_match(s, validOp)) {
-      return true;
-   }
-   if (in_vector(util::binary_operators, s)) {
-      return true;
-   }
-   if (in_vector(util::assignmentOperators, s)) {
-      return true;
-   }
-   if (in_vector(util::PrefixUnaryOperators, s)) {
-      return true;
-   }
-   if (in_vector(util::PostfixUnaryOperators, s)) {
-      return true;
-   }
-
-   return false;
-}
-
-bool Lexer::is_operator_char(char c) {
+template<class T>
+bool Lexer<T>::is_operator_char(char c) {
    if (in_vector(util::operator_chars, c)) {
       return true;
    }
@@ -230,93 +288,53 @@ bool Lexer::is_operator_char(char c) {
    return false;
 }
 
-/**
- * Returns true if the given string is a language keyword.
- * @param s
- * @return
- */
-bool Lexer::is_keyword(const string &s)
-{
-   if (in_vector(util::keywords, s)) {
-      return true;
-   }
-
-   if (mode == TemplateConstraints) {
-      return s == "typename" || s == "value" || s == "any";
-   }
-
-   return false;
-}
-
-bool Lexer::is_punctuator(char c)
+template<class T>
+bool Lexer<T>::is_punctuator(char c)
 {
    return in_vector(util::punctuators, c);
 }
-
-bool Lexer::is_bool_literal(const string &s)
-{
-   return s == "true" || s == "false";
-}
-
 
 /**
  * Gets the next character in the program
  * @return
  */
-char Lexer::get_next_char()
+template<class T>
+char Lexer<T>::get_next_char()
 {
-   if (currentIndex >= srcLen) {
-      ++currentIndex;
-      return '\0';
-   }
-
-   ++indexOnLine;
    ++currentIndex;
-
    return *(curr++);
 }
 
-char Lexer::char_lookahead()
+template<class T>
+char Lexer<T>::char_lookahead()
 {
-   if (currentIndex >= srcLen) {
-      currentIndex++;
-      return '\0';
-   }
-
    return *curr;
 }
 
 /**
  * Backtracks to the last token
  */
-void Lexer::backtrack(bool discard)
+template<class T>
+void Lexer<T>::backtrack()
 {
-   if (!discard) {
-      lookaheadList.push_back(std::move(tokens.back()));
-   }
-   else {
-      currentIndex = tokens.back().start;
-      currentLine = tokens.back().getLine();
-      indexOnLine = tokens.back().getCol();
-      curr = begin + currentIndex;
-   }
-
-   tokens.pop_back();
-   currentToken = tokens.back();
+   --tokenIndex;
+   if (currentTok().is(tok::space))
+      backtrack();
 }
 
 /**
  * Backtracks by the passed amount of characters
  * @param length
  */
-void Lexer::backtrack_c(int length)
+template<class T>
+void Lexer<T>::backtrack_c(int length)
 {
    currentIndex -= length;
-   indexOnLine -= length;
    curr -= length;
 }
 
-char Lexer::escape_char(char c)
+template<class T>
+char Lexer<T>::escape_char(char c)
 {
    switch (c) {
       case 'n':
@@ -342,7 +360,8 @@ char Lexer::escape_char(char c)
    }
 }
 
-string Lexer::unescape_char(char c)
+template<class T>
+string Lexer<T>::unescape_char(char c)
 {
    switch (c) {
       case '\n':
@@ -360,7 +379,116 @@ string Lexer::unescape_char(char c)
       case '\0':
          return "\\0";
       default:
-         return string(1,c);
+         return string(1, c);
+   }
+}
+
+template<class T>
+SourceLocation Lexer<T>::getSourceLoc()
+{
+   if (doneLexing)
+      return currentTok().getSourceLoc();
+
+   if (auto MA = support::dyn_cast<MacroExpansionLexer<T>>(this))
+      return MA->prelexedTokens[MA->lexedIndex - 1].getSourceLoc();
+
+   return SourceLocation(currentIndex, sourceId);
+}
+
+template<class Traits>
+Token Lexer<Traits>::getNextToken(bool ignoreNewline)
+{
+   return getNextToken(lex_next_token(), ignoreNewline);
+}
+
+template<class Traits>
+Token Lexer<Traits>::getNextToken(const Token &tok, bool ignoreNewline)
+{
+   switch (tok.getKind()) {
+      case tok::ident: {
+         auto &ident = tok._value.strVal;
+         if (hasMacro(ident)) {
+            auto toks = expand_macro(ident);
+            tokens.insert(tokens.end(),
+                          std::make_move_iterator(toks.begin()),
+                          std::make_move_iterator(toks.end()) - 1);
+
+            pp_finish();
+            return getNextToken(ignoreNewline);
+         }
+         else {
+            auto it = BuiltinMacros.find(ident);
+            if (it != BuiltinMacros.end()) {
+               auto exprTok = handlePreprocFunc(ident);
+               pp_finish();
+
+               return exprTok;
+            }
+         }
+
+         return tok;
+      }
+      case tok::dollar_ident: {
+         auto &ident = tok._value.getString();
+         auto M = tryGetLispMacro(ident);
+
+         if (!M) {
+            currentIndex = tok.getOffset();
+            CDOT_DIAGNOSE("undeclared macro " + ident);
+         }
+
+         auto toks = expand_lisp_macro(M, tok.getSourceLoc());
+         tokens.insert(tokens.end(),
+                       std::make_move_iterator(toks.begin()),
+                       std::make_move_iterator(toks.end()));
+
+         pp_finish();
+         return getNextToken(ignoreNewline);
+      }
+      case tok::expr_begin: {
+         pp_advance();
+
+         auto loc = tok.getSourceLoc();
+         auto val = valueToToken(loc, parseExpression());
+
+         pp_finish();
+
+         return val;
+      }
+      case tok::stringify_begin: {
+         pp_advance();
+
+         auto loc = currentTok().getSourceLoc();
+         auto expr = valueToToken(loc, parseExpression());
+
+         expr._value = expr._value.castTo(VariantType::STRING);
+         expr._type = tok::stringliteral;
+
+         pp_finish();
+
+         return expr;
+      }
+#     define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
+      case tok::Name:
+
+#     include "Tokens.def"
+      {
+         if (tok.getKind() == tok::pound_include) {
+            auto toks = handle_include();
+            tokens.insert(tokens.end(),
+                          std::make_move_iterator(toks.begin()),
+                          std::make_move_iterator(toks.end()) - 1);
+         }
+         else {
+            handle_directive(tok.getKind());
+         }
+
+         pp_finish();
+
+         return getNextToken(ignoreNewline);
+      }
+      default:
+         return tok;
    }
 }
 
@@ -368,103 +496,85 @@ string Lexer::unescape_char(char c)
  * Parses the next token
  * @return
  */
-Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
+template<class Traits>
+Token Lexer<Traits>::lex_next_token(bool preprocessing)
 {
-   if (currentToken.get_type() == T_EOF) {
-      CDOT_DIAGNOSE("Unexpected end of file");
+   if (typeID == MacroExpansionLexerID) {
+      return static_cast<MacroExpansionLexer<Traits>*>(this)
+         ->lex_next_token();
    }
-
    if (currentIndex >= srcLen) {
-      return makeToken(T_EOF, { }, currentIndex, 0);
+      return makeToken(tok::eof, {}, currentIndex);
    }
 
    string t;
-   size_t _start_index = currentIndex;
-   size_t indent = 0;
-   size_t col;
+   size_t startOffset = currentIndex;
    char first;
    char next;
 
-   if (continueInterpolation) {
-      goto string_literal;
-   }
-
    first = get_next_char();
-
-   if (first == ' ' && significantWhiteSpace) {
-      return makeToken(T_PUNCTUATOR, { first }, currentIndex, indexOnLine);
+   if (skipCommentIfPresent(first)) {
+      return makeToken(tok::newline, {}, startOffset);
    }
 
+   if (first == ' ') {
+      size_t numSpaces = 1;
+      while (char_lookahead() == ' ') {
+         (void)get_next_char();
+         ++numSpaces;
+      }
 
-   col = indexOnLine;
-   while (first == ' ') {
-      first = get_next_char();
-      ++_start_index;
-      ++col;
+      return makeToken(tok::space, Variant(IntegerType::getUnsigned(),
+                                           numSpaces), startOffset);
    }
 
-   if (first == '\0' && currentIndex >= srcLen) {
-      return makeToken(T_EOF, { }, currentIndex, col);
+   if (first == '\\') {
+      if (char_lookahead() == '\n') {
+         get_next_char();
+      }
+
+      return lex_next_token();
    }
 
-   // comment
-   if (first == '/') {
-      next = get_next_char();
-      if (next == '*') {
-         ignore_ml_comment();
-
-         return lex_next_token(ignore_newline, significantWhiteSpace);
-      }
-      else if (next == '/') {
-         ignore_comment();
-         return lex_next_token(ignore_newline, significantWhiteSpace);
-      }
-      else {
-         backtrack_c(1);
-      }
+   if (currentIndex > srcLen) {
+      return makeToken(tok::eof, { }, startOffset);
    }
 
    // preprocessor variable
-   if (first == '#' && char_lookahead() == '{') {
-      if (ignoreValue) {
-         advance();
-         skip_until_even(BRACE);
-
-         return makeToken(T_IDENT, {string("__pl")}, _start_index, col);
-      }
-
-      get_next_char();
-      advance();
-
-      SourceLocation loc(indexOnLine, currentLine, 0, sourceId);
-      auto tok = valueToToken(loc, parseExpression());
-      advance();
-
-      if (!currentToken.is_punctuator('}')) {
-         CDOT_DIAGNOSE("expected '}'");
-      }
-
-      return tok;
-   }
-
-   // preprocessor directive
    if (first == '#') {
-      next = get_next_char();
-      while (next != ' ' && next != '\n' && next != '\0') {
-         t += next;
+      // preprocessor expression
+      next = char_lookahead();
+      if (next == '{') {
+         get_next_char();
+
+         return makeToken(tok::expr_begin, {}, startOffset);
+      }
+      // stringify operator
+      else if (next == '#') {
+         get_next_char();
+         get_next_char();
+
+         return makeToken(tok::stringify_begin, {}, startOffset);
+      }
+      // directive
+      else {
+         t += '#';
          next = get_next_char();
+
+         while (next == ' ') {
+            next = get_next_char();
+         }
+
+         while (next != ' ' && next != '\n' && next != '\0') {
+            t += next;
+            next = get_next_char();
+         }
+
+         backtrack_c(1);
+
+         auto kind = Traits::getKeywordToken(t);
+         return makeToken(kind, {}, startOffset);
       }
-
-      backtrack_c(1);
-
-      if (!ignoreDirective) {
-         handle_directive(std::move(t));
-         advance(ignore_newline, significantWhiteSpace);
-
-         return currentToken;
-      }
-
-      return makeToken(T_DIRECTIVE, { std::move(t) }, _start_index, col);
    }
 
    // character literal
@@ -479,45 +589,12 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
          CDOT_DIAGNOSE("Expected \"'\" after character literal");
       }
 
-      return makeToken(T_LITERAL, { next }, _start_index, col);
+      return makeToken(tok::charliteral, { next }, startOffset);
    }
 
    // string literal
    if (first == '\"') {
-      string_literal:
-      while (currentIndex < srcLen) {
-         next = get_next_char();
-         switch (next) {
-            case '\"':
-               goto done;
-            case '\\': {
-               auto esc = escape_char(get_next_char());
-               if (esc != next) {
-                  t += esc;
-               } else {
-                  t += '\\';
-                  t += esc;
-               }
-               break;
-            }
-            case '$': {
-               if (!ignore_interpolation) {
-                  auto tok = makeToken(T_LITERAL, {std::move(t)}, _start_index,
-                                       col);
-                  tok.isInterpolationStart = true;
-
-                  return tok;
-               }
-               [[clang::fallthrough]];
-            }
-            default:
-               t += next;
-         }
-      }
-
-      done:
-      continueInterpolation = false;
-      return makeToken(T_LITERAL, { std::move(t) }, _start_index, col);
+      return lexStringLiteral(startOffset, preprocessing);
    }
 
    // escape sequence
@@ -529,16 +606,36 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
 
       }
 
-      return makeToken(T_IDENT, { std::move(t) }, _start_index, col, true);
+      return makeToken(tok::ident, { std::move(t) }, startOffset);
    }
 
-   if (first == '-') {
-      next = char_lookahead();
-      if (next >= 48 && next <= 57) {
-         t += "-";
-         first = next;
+   // dollar identifier
+   if (first == '$') {
+      tok::TokenType kind = tok::dollar_ident;
+      if (char_lookahead() == '$') {
+         kind = tok::dollar_dollar_ident;
          get_next_char();
       }
+
+      while (is_identifier_char(char_lookahead()) || char_lookahead() == '.')
+         t += get_next_char();
+
+      return makeToken(kind, { std::move(t) }, startOffset);
+   }
+
+   // percent identifier
+   if (first == '%') {
+      tok::TokenType kind = tok::percent_ident;
+      if (char_lookahead() == '%') {
+         kind = tok::percent_percent_ident;
+         get_next_char();
+      }
+
+      while (is_identifier_char(char_lookahead()) || char_lookahead() == '.')
+         t += get_next_char();
+
+      if (!t.empty())
+         return makeToken(kind, { std::move(t) }, startOffset);
    }
 
    // numeric literal (decimal, octal, hexadecimal or binary; with or without
@@ -555,8 +652,10 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
          }
 
          backtrack_c(1);
-         return makeToken(T_LITERAL, { std::stoull(hex_s, nullptr, 16) },
-                          _start_index, col);
+         return makeToken(tok::integerliteral,
+                          Variant(IntegerType::get(),
+                                  std::stoull(hex_s, nullptr, 16)),
+                          startOffset);
       }
 
       if (first == '0' && (_pref == 'b' || _pref == 'B')) {
@@ -573,8 +672,10 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
          }
 
          backtrack_c(1);
-         return makeToken(T_LITERAL, { std::stoull(bin_s, nullptr, 2) },
-                          _start_index, col);
+         return makeToken(tok::integerliteral,
+                          Variant(IntegerType::get(),
+                                  std::stoull(bin_s, nullptr, 2)),
+                          startOffset);
       }
 
       backtrack_c(1);
@@ -587,8 +688,9 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
             // tuple member access
             if (mode == MemberAccess) {
                backtrack_c(1);
-               return makeToken(T_LITERAL, { std::stoull(t) },
-                                _start_index, col);
+               return makeToken(tok::integerliteral,
+                                Variant(IntegerType::get(), std::stoull(t)),
+                                startOffset);
             }
 
             if (char_lookahead() < '0' || char_lookahead() > '9'
@@ -607,8 +709,10 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
       // octal literal
       if (matches("0[0-7]+", t)) {
          backtrack_c(1);
-         return makeToken(T_LITERAL, { std::stoull(t, nullptr, 8) },
-                          _start_index, col);
+         return makeToken(tok::integerliteral,
+                          Variant(IntegerType::get(),
+                                  std::stoull(t, nullptr, 8)),
+                          startOffset);
       }
 
       // exponent
@@ -624,7 +728,7 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
          double base = std::stod(t);
          double exp = pow(10, std::stoull(_exp));
 
-         return makeToken(T_LITERAL, { base * exp }, _start_index, col);
+         return makeToken(tok::fpliteral, { base * exp }, startOffset);
       }
 
       backtrack_c(1);
@@ -633,104 +737,83 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
          next = char_lookahead();
 
          bool isUnsigned = false;
-         bool isIntegral = false;
+         bool isIntegral = true;
+         bool isFloat = false;
+         unsigned short bitwidth = sizeof(long long) * 8;
          Variant val;
 
-         if (next == 'u' || next == 'U') {
+         while (1) {
+            bool isModifier = true;
+            switch (tolower(next)) {
+               case 'u':
+                  isUnsigned = true;
+                  break;
+               case 'l':
+                  break;
+               case 's':
+                  bitwidth = 16;
+                  break;
+               case 'd':
+                  isIntegral = false;
+                  break;
+               case 'f':
+                  bitwidth = 32;
+                  isFloat = true;
+                  isIntegral = false;
+                  break;
+               default:
+                  isModifier = false;
+                  break;
+            }
+
+            if (!isModifier)
+               break;
+
             get_next_char();
-            isUnsigned = true;
-            isIntegral = true;
             next = char_lookahead();
          }
 
-         if (next == 'l' || next == 'L') {
-            isIntegral = true;
-            get_next_char();
-            val = Variant(std::stoull(t));
-            next = char_lookahead();
-         }
+         if (isIntegral && isFloat)
+            CDOT_DIAGNOSE("incompatible modifiers");
+         if (!isIntegral && isUnsigned)
+            CDOT_DIAGNOSE("incompatible modifiers");
 
-         if ((next == 'u' || next == 'U') && !isUnsigned) {
-            get_next_char();
-            isUnsigned = true;
-            isIntegral = true;
-            next = char_lookahead();
-         }
-
-         if ((next == 'd' || next == 'D') && !isIntegral) {
-            get_next_char();
-            val = Variant(std::stod(t));
+         if (isIntegral) {
+            val = Variant(IntegerType::get(bitwidth, isUnsigned),
+                          std::stoull(t));
          }
          else {
-            val = Variant(std::stoull(t));
+            val = Variant(std::stod(t));
          }
 
-         val.is_unsigned = isUnsigned;
+         tok::TokenType kind = val.isInt()
+                               ? tok::integerliteral
+                               : tok::fpliteral;
 
-         return makeToken(T_LITERAL, std::move(val), _start_index, col);
+         return makeToken(kind, std::move(val), startOffset);
       }
       else {
          next = char_lookahead();
          if (next == 'f' || next == 'F') {
             get_next_char();
-            return makeToken(T_LITERAL, { std::stof(t) }, _start_index, col);
+            return makeToken(tok::fpliteral, { std::stof(t) }, startOffset);
          }
          else if (next == 'd' || next == 'D') {
             get_next_char();
          }
 
-         return makeToken(T_LITERAL, { std::stod(t) }, _start_index, col);
-      }
-   }
-
-   if (is_identifier_char(first)) {
-      // advance keyword or identifier
-      t += first;
-      next = first;
-      while (is_identifier_char(char_lookahead())) {
-         next = get_next_char();
-         t += next;
-      }
-
-      if (t == "as" && next == '!') {
-         get_next_char();
-         t = "as!";
-      }
-
-      if (is_operator(t)) {
-         return makeToken(T_OP, { std::move(t) }, _start_index, col);
-      }
-      else if (t == "none") {
-         return makeToken(T_LITERAL, { }, _start_index, col);
-      }
-      else if (is_keyword(t)) {
-         return makeToken(T_KEYWORD, { std::move(t) }, _start_index, col);
-      }
-      else if (is_bool_literal(t)) {
-         return makeToken(T_LITERAL, { t == "true" }, _start_index, col);
-      }
-      else if (!ignoreMacro && Macros.find(t) != Macros.end()) {
-         expand_macro(std::move(t));
-         return get_next_token(ignore_newline, significantWhiteSpace);
-      }
-      else if (!ignoreMacro && BuiltinMacros.find(t) != BuiltinMacros.end()) {
-         return handlePreprocFunc(std::move(t));
-      }
-      else if (!ignoreValue && TemplateArgs.find(t) != TemplateArgs.end()) {
-         expand_template_arg(std::move(t));
-         return get_next_token(ignore_newline, significantWhiteSpace);
-      }
-      else {
-         return makeToken(T_IDENT, { std::move(t) }, _start_index, col);
+         return makeToken(tok::fpliteral, { std::stod(t) }, startOffset);
       }
    }
 
    if (is_operator_char(first)) {
       bool lastWasPeriod = first == '.';
+
       while (is_operator_char(first)) {
          t += first;
          first = get_next_char();
-         if (lastWasPeriod && first != '.') {
+         if ((lastWasPeriod && first != '.')
+             || (!lastWasPeriod && first == '.')) {
             break;
          }
 
@@ -740,252 +823,428 @@ Token Lexer::lex_next_token(bool ignore_newline, bool significantWhiteSpace)
       backtrack_c(1);
 
       if (t == ".") {
-         return makeToken(T_PUNCTUATOR, { '.' }, _start_index, col);
+         return makeToken(tok::period, {}, startOffset);
       }
 
-      while (!is_operator(t) && t.length() > 0) {
-         t.pop_back();
-         backtrack_c(1);
-      }
-
-      return makeToken(T_OP, { std::move(t) }, _start_index, col);
-   }
-
-   if (is_punctuator(first)) {
-      if (first == '\n') {
-         ++currentLine;
-         indexOnLine = 0;
-      }
-
-      return makeToken(T_PUNCTUATOR, { first }, _start_index, col);
-   }
-
-   CDOT_DIAGNOSE(u8"Unexpected character " + std::string(1, first));
-   llvm_unreachable(0);
-}
-
-/**
- * Advances to the next token, while expecting 'type'
- * @param type
- */
-void Lexer::advance(TokenType type, bool ignore_newline,
-                    bool significantWhiteSpace)
-{
-   advance(ignore_newline, significantWhiteSpace);
-   if (currentToken.get_type() != type) {
-      CDOT_DIAGNOSE("Expected " + util::token_names[type]
-         + " but got " + util::token_names[currentToken.get_type()]);
-   }
-}
-
-/**
- * Advances to the next token without restriction
- */
-Token Lexer::get_next_token(bool ignore_newline, bool significantWhiteSpace)
-{
-   if (!lookaheadList.empty()) {
-      auto tok = std::move(lookaheadList.back());
-      lookaheadList.pop_back();
-
-      return tok;
-   }
-   if (ExpansionStack.size() > macroExpansionDepth) {
-      auto &latest = ExpansionStack.top();
-      auto &lex = *latest.lex;
-
-      auto tok = lex.get_next_token(ignore_newline, significantWhiteSpace);
-      if (tok.get_type() == T_EOF) {
-         ExpansionStack.pop();
-
-         return get_next_token(ignore_newline, significantWhiteSpace);
-      }
-
-      return tok;
-   }
-//   else if (!TemplateArgStack.empty()) {
-//      auto &top = TemplateArgStack.top();
-//      if (top.tokenIndex >= top.tokens.size()) {
-//         TemplateArgStack.pop();
-//         return get_next_token(ignore_newline, significantWhiteSpace);
+//      while (!is_operator(t) && t.length() > 0) {
+//         t.pop_back();
+//         backtrack_c(1);
 //      }
-//      else {
-//         auto tok = std::move(top.tokens[top.tokenIndex]);
-//         top.tokenIndex++;
-//         top.index += tok.getSourceLoc().getLength();
-//
-//         return tok;
-//      }
-//   }
 
-   return lex_next_token(ignore_newline, significantWhiteSpace);
+      auto kind = Traits::getOperatorToken(t);
+      if (kind != tok::sentinel)
+         return makeToken(kind, {}, startOffset);
+
+      return makeToken(tok::ident, { move(t) }, startOffset);
+   }
+
+   auto kind = Traits::getPunctuatorToken(first);
+   if (kind != tok::sentinel)
+      return makeToken(kind, {}, startOffset);
+
+   // advance keyword or identifier
+   t += first;
+   next = first;
+   while (is_identifier_char(char_lookahead())) {
+      t += get_next_char();
+   }
+
+   if ((char_lookahead() == '?' || char_lookahead() == '!') && t == "as") {
+      t += get_next_char();
+   }
+
+   kind = Traits::getOperatorToken(t);
+   if (kind != tok::sentinel) {
+      return makeToken(kind, {}, startOffset);
+   }
+
+   kind = Traits::getKeywordToken(t);
+   if (kind != tok::sentinel) {
+      return makeToken(kind, {}, startOffset);
+   }
+
+   return makeToken(tok::ident, { std::move(t) }, startOffset);
 }
 
-Token Lexer::makeToken(
-   TokenType ty,
-   Variant &&val,
-   size_t start,
-   size_t col,
-   bool isEscaped)
+template<class T>
+Token Lexer<T>::lexStringLiteral(unsigned startIndex, bool preprocessing)
 {
+   string s;
+   llvm::SmallVector<Token, 8> tokens;
+   char c = get_next_char();
+
+   while (1) {
+      if (c == '"')
+         break;
+      if (currentIndex >= srcLen)
+         CDOT_DIAGNOSE("unexpected end of file, expecting '\"'");
+
+      if (c == '\\') {
+         auto next = get_next_char();
+         s += escape_char(next);
+      }
+      else if (c == '$' && !ignoreInterpolation) {
+         tokens.push_back(makeToken(tok::stringliteral, { move(s) },
+                                    startIndex));
+         s.clear();
+
+         tokens.push_back(makeToken(tok::sentinel, {},
+                                    startIndex));
+
+         if (char_lookahead() == '{') {
+            get_next_char();
+            unsigned openParens = 1;
+            unsigned closeParens = 0;
+            size_t numTokens = 0;
+
+            while (1) {
+               auto tok = lex_next_token();
+               switch (tok.getKind()) {
+                  case tok::open_brace:
+                     ++openParens; break;
+                  case tok::close_brace:
+                     ++closeParens; break;
+                  default:
+                     break;
+               }
+
+               if (openParens == closeParens)
+                  break;
+
+               ++numTokens;
+               tokens.push_back(std::move(tok));
+            }
+         }
+         else {
+            tokens.push_back(lex_next_token());
+         }
+
+         tokens.push_back(makeToken(tok::sentinel, {},
+                                    startIndex));
+      }
+      else {
+         s += c;
+      }
+
+      c = get_next_char();
+   }
+
+   if (preprocessing)
+      preprocessingTokens.insert(preprocessingTokens.end(),
+                                 std::make_move_iterator(tokens.begin()),
+                                 std::make_move_iterator(tokens.end()));
+   else
+      this->tokens.insert(this->tokens.end(),
+                          std::make_move_iterator(tokens.begin()),
+                          std::make_move_iterator(tokens.end()));
+
+   return makeToken(tok::stringliteral, { move(s) }, startIndex);
+}
+
+
+template <class T>
+Token MacroExpansionLexer<T>::lex_next_token()
+{
+   if (lexedIndex >= prelexedTokens.size()) {
+      return Token(tok::eof, {}, this->tokens.empty()
+                                 ? SourceLocation()
+                                 : this->tokens.back().getSourceLoc());
+   }
+
+   return prelexedTokens[lexedIndex++];
+}
+
+
+template<class T>
+void Lexer<T>::lexUntilClosingBrace()
+{
+   unsigned openBraces = 1;
+   unsigned closeBraces = 0;
+
+   while (1) {
+      auto tok =lex_next_token();
+      switch (tok.getKind()) {
+         case tok::open_brace:
+            ++openBraces;
+            break;
+         case tok::close_brace:
+            ++closeBraces;
+            break;
+         case tok::eof:
+            CDOT_DIAGNOSE("unexpected end of file, expecting '}'");
+            break;
+         default:
+            tokens.push_back(std::move(tok));
+            break;
+      }
+
+      if (openBraces == closeBraces)
+         break;
+   }
+}
+
+template<class T>
+void Lexer<T>::lexUntilClosingParen(unsigned beginAt)
+{
+   unsigned openParens = beginAt;
+   unsigned closeParens = 0;
+
+   while (1) {
+      auto tok = lex_next_token();
+      switch (tok.getKind()) {
+         case tok::open_paren:
+            ++openParens;
+            break;
+         case tok::close_paren:
+            ++closeParens;
+            break;
+         case tok::eof:
+            CDOT_DIAGNOSE("unexpected end of file, expecting ')'");
+            break;
+         default:
+            break;
+      }
+
+      tokens.push_back(std::move(tok));
+
+      if (openParens & (openParens == closeParens))
+         break;
+   }
+}
+
+template<class T>
+void Lexer<T>::lexUntil(tok::TokenType type)
+{
+   while (1) {
+      tokens.push_back(lex_next_token());
+      auto &tok = tokens.back();
+
+      if (tok.getKind() == tok::backslash)
+         lex_next_token();
+      else if (tok.oneOf(type, tok::eof))
+         break;
+   }
+}
+
+template<class T>
+Token Lexer<T>::makeToken(tok::TokenType ty,
+                          Variant &&val,
+                          size_t start) {
+   if (ty == tok::newline)
+      ++currentLine;
+
    return Token(ty, std::move(val),
-      SourceLocation(col, currentLine, currentIndex - start, sourceId),
-      start);
+                SourceLocation(expandedFromMacro ? expandedFromMacro + offset
+                                                 : start + offset, sourceId));
 }
 
-LexerLoc Lexer::getLexerLoc()
+template<class T>
+void Lexer<T>::expect_impl(tok::TokenType ty)
 {
-   return LexerLoc { curr, currentIndex, currentLine, indexOnLine };
-}
-
-void Lexer::setLoc(LexerLoc &loc)
-{
-   curr = loc.curr;
-   currentIndex = loc.currentIndex;
-   currentLine = loc.currentLine;
-   indexOnLine = loc.indexOnLine;
-}
-
-/**
- * Returns the next token
- * @return
- */
-void Lexer::advance(bool ignore_newline, bool significantWhiteSpace)
-{
-   if (!tokens.empty() && tokens.back().get_type() == T_EOF) {
-      currentToken = tokens.back();
-      return;
+   if (currentTok()._type != ty) {
+      CDOT_DIAGNOSE("unexpected token " + currentTok().toString());
    }
+}
 
-   pushToken(get_next_token(ignore_newline, significantWhiteSpace));
+template<class T>
+void Lexer<T>::advance(bool ignore_newline, bool significantWhiteSpace)
+{
+   assert(tokenIndex < tokens.size() && "advancing past the end of the file!");
 
-   Token &t = tokens.back();
-   if ((t.is_punctuator('\n') && ignore_newline)
-       || (t.is_punctuator(' ') && !significantWhiteSpace)
-       || t.is_punctuator('\\')) {
+   Token &t = tokens[tokenIndex++];
+   if ((t.is(tok::newline) && ignore_newline)
+       || (t.is(tok::space) && !significantWhiteSpace)
+       || t.is(tok::backslash)) {
       return advance(ignore_newline, significantWhiteSpace);
    }
-   else if (t.get_type() == T_DIRECTIVE && !ignoreDirective) {
-      handle_directive(std::move(t._value.strVal));
-      return advance(ignore_newline, significantWhiteSpace);
-   }
-   else if (t.get_type() == T_PREPROC_VAR && !ignoreValue) {
-      currentToken = t;
-      substitute_value();
-      t = get_next_token(ignore_newline, significantWhiteSpace);
-   }
-   else if (!ignoreValue && t.get_type() == T_IDENT) {
-      auto &str = t._value.strVal;
-      if (TemplateArgs.find(str) != TemplateArgs.end()) {
-         expand_template_arg(std::move(str));
-         t = get_next_token(ignore_newline, significantWhiteSpace);
-      }
-   }
-
-   currentToken = t;
 }
 
-Token Lexer::lookahead(bool ignore_newline, size_t offset)
-{
-   bool wasNewLine = currentToken.is_punctuator('\n');
-   for (size_t i = 0; i < offset + 1; ++i) {
-      advance(ignore_newline);
-   }
+template<class T>
+Token Lexer<T>::lookahead(bool ignore_newline, bool sw,
+                          size_t offset) {
+   if(tokenIndex + offset >= tokens.size())
+      return tokens.back();
 
-   auto tok = currentToken;
-   for (size_t i = 0; i < offset + 1;) {
-      backtrack();
-
-      // backtrack doesn't skip newlines
-      if (!ignore_newline || !currentToken.is_punctuator('\n')) {
-         ++i;
-      }
-   }
-
-   while (!wasNewLine && currentToken.is_punctuator('\n')) {
-      backtrack();
-   }
-
-   if (ignore_newline && tok.is_punctuator('\n')) {
-      return lookahead(ignore_newline, offset + 1);
+   auto &tok = tokens[tokenIndex + offset];
+   if ((tok.is(tok::newline) && ignore_newline)
+       || (tok.is(tok::space) && !sw)
+       || tok.oneOf(tok::backslash)) {
+      return lookahead(ignore_newline, sw, offset + 1);
    }
 
    return tok;
 }
 
-void Lexer::commit()
+template<class T>
+void Lexer<T>::pp_advance(bool ignoreNewline, bool sw)
 {
-   tokens.clear();
+   if (doneLexing)
+      return advance(ignoreNewline, sw);
+
+   while (ppTokenIndex >= preprocessingTokens.size()) {
+      preprocessingTokens.push_back(lex_next_token(true));
+   }
+
+   ++ppTokenIndex;
+   auto &tok = ppCurrentTok();
+
+   if ((ignoreNewline && tok.is(tok::newline))
+        || (!sw && tok.is(tok::space))) {
+      return pp_advance(ignoreNewline, sw);
+   }
+}
+
+template<class T>
+void Lexer<T>::pp_backtrack()
+{
+   if (doneLexing)
+      return backtrack();
+
+   --ppTokenIndex;
+}
+
+template<class T>
+Token &Lexer<T>::ppCurrentTok()
+{
+   if (doneLexing)
+      return tokens[tokenIndex - 1];
+
+   assert(preprocessingTokens.size() > ppTokenIndex - 1);
+   return preprocessingTokens[ppTokenIndex - 1];
+}
+
+template<class T>
+Token Lexer<T>::pp_lookahead(bool ignoreNewline, unsigned offset)
+{
+   if (doneLexing)
+      return lookahead(ignoreNewline);
+
+   while (ppTokenIndex + offset >= preprocessingTokens.size()) {
+      preprocessingTokens.push_back(lex_next_token());
+   }
+
+   auto tok = preprocessingTokens[ppTokenIndex + offset];
+   if ((ignoreNewline && tok.is(tok::newline))
+       || tok.is(tok::space)) {
+      return pp_lookahead(ignoreNewline, offset + 1);
+   }
+
+   return tok;
+}
+
+template<class T>
+void Lexer<T>::pp_finish()
+{
+   if (doneLexing)
+      return;
+
+   if (ppTokenIndex < preprocessingTokens.size()) {
+      for (auto i = ppTokenIndex; i < preprocessingTokens.size(); ++i)
+         if (preprocessingTokens[i].is(tok::newline))
+            --currentLine;
+
+      if (typeID == MacroExpansionLexerID) {
+         auto self = static_cast<MacroExpansionLexer<T>*>(this);
+         self->lexedIndex -= (preprocessingTokens.size() - ppTokenIndex);
+      }
+      else {
+         auto &last = preprocessingTokens[ppTokenIndex];
+         currentIndex = last.getSourceLoc().getOffset();
+         curr = begin + currentIndex;
+      }
+   }
+
+   ppTokenIndex = 0;
+   preprocessingTokens.clear();
+}
+
+template<class T>
+bool Lexer<T>::hasMacro(llvm::StringRef name)
+{
+   if (Macros.find(name) != Macros.end())
+      return true;
+
+   if (Outer)
+      return Outer->hasMacro(name);
+
+   return false;
+}
+
+template<class T>
+typename Lexer<T>::Macro &Lexer<T>::getMacro(llvm::StringRef name)
+{
+   auto current = this;
+   while (1) {
+      auto it = current->Macros.find(name);
+      if (it != current->Macros.end())
+         return it->second;
+
+      current = current->Outer;
+      assert(current && "call hasMacro first!");
+   }
 }
 
 /**
  * Skips to the end of a comment
  */
-void Lexer::ignore_comment()
+template<class Traits>
+void Lexer<Traits>::ignore_comment(const char *End)
 {
-   char c = get_next_char();
-
-   while (c != '\n') {
-      if (currentIndex >= srcLen) {
+   while (true) {
+      if (currentIndex >= srcLen)
          return;
+
+      auto c = char_lookahead();
+
+      if (c == End[0]) {
+         size_t i = 0;
+         bool isEnd = true;
+
+         while (End[i] != '\0') {
+            if (End[i] != c) {
+               isEnd = false;
+               break;
+            }
+
+            get_next_char();
+            c = char_lookahead();
+            ++i;
+         }
+
+         if (isEnd) {
+            return;
+         }
       }
 
-      c = get_next_char();
-   }
-
-   ++currentLine;
-   indexOnLine = 0;
-}
-
-/**
- * Skips to the end of a multiline comment
- */
-void Lexer::ignore_ml_comment()
-{
-   char c = get_next_char();
-
-   main_loop:
-   while (c != '*') {
-      if (currentIndex >= srcLen) {
-         return;
-      }
-      if (c == '\n') {
-         ++currentLine;
-         indexOnLine = 0;
-      }
-
-      c = get_next_char();
-   }
-
-   c = get_next_char();
-   if (c != '/') {
-      goto main_loop;
+      get_next_char();
    }
 }
 
-void Lexer::skip_until_even(ParenKind kind)
+template<class T>
+void Lexer<T>::skip_until_even(ParenKind kind)
 {
-   char open;
-   char close;
+   tok::TokenType open;
+   tok::TokenType close;
    switch (kind) {
       case PAREN:
-         open = '(';
-         close = ')';
+         open = tok::open_paren;
+         close = tok::close_paren;
          break;
       case BRACE:
-         open = '{';
-         close = '}';
+         open = tok::open_brace;
+         close = tok::close_brace;
          break;
       case ANGLED:
-         open = '<';
-         close = '>';
+         open = tok::smaller;
+         close = tok::greater;
          break;
       case SQUARE:
-         open = '[';
-         close = ']';
+         open = tok::open_square;
+         close = tok::close_square;
          break;
    }
 
-   if (!currentToken.is_punctuator(open)) {
+   if (!currentTok().is(open)) {
       return;
    }
 
@@ -995,10 +1254,10 @@ void Lexer::skip_until_even(ParenKind kind)
    unsigned closeCount = 0;
 
    for (;;) {
-      if (currentToken.is_punctuator(open)) {
+      if (currentTok().is(open)) {
          ++openCount;
       }
-      else if (currentToken.is_punctuator(close)) {
+      else if (currentTok().is(close)) {
          ++closeCount;
       }
 
@@ -1010,10 +1269,121 @@ void Lexer::skip_until_even(ParenKind kind)
    }
 }
 
-namespace cdot {
+template<class Traits>
+bool Lexer<Traits>::skipCommentIfPresent(char first)
+{
+   // escaped newline
+   if (first == '\\' && char_lookahead() == '\n') {
+      get_next_char();
+      first = get_next_char();
+   }
+
+   size_t i = 0;
+   char c = first;
+
+   bool isSingleLineComment = false;
+   while (Traits::CommentBegin[i] != '\0' && c == Traits::CommentBegin[i]) {
+      if (currentIndex >= srcLen)
+         return false;
+
+      c = get_next_char();
+      ++i;
+
+      if (Traits::CommentBegin[i] == '\0') {
+         isSingleLineComment = true;
+         break;
+      }
+   }
+
+   if (isSingleLineComment) {
+      ignore_comment(Traits::CommentEnd);
+      return true;
+   }
+   else {
+      backtrack_c(i);
+      c = first;
+   }
+
+   i = 0;
+   bool isMultiLineComment = false;
+   while (Traits::MultiLineCommentBegin[i] != '\0'
+          && c == Traits::MultiLineCommentBegin[i]) {
+      if (currentIndex >= srcLen)
+         return false;
+
+      c = get_next_char();
+      ++i;
+
+      if (Traits::MultiLineCommentBegin[i] == '\0') {
+         isMultiLineComment = true;
+         break;
+      }
+   }
+
+   if (isMultiLineComment) {
+      ignore_comment(Traits::MultiLineCommentEnd);
+      return true;
+   }
+   else {
+      backtrack_c(i);
+   }
+
+   return false;
+}
+
+template class Lexer<LexerTraits>;
+template class Lexer<module::ModuleLexerTraits>;
+
+template class MacroExpansionLexer<LexerTraits>;
+template class MacroExpansionLexer<module::ModuleLexerTraits>;
+
+} // namespace lex
+
+namespace module {
+
+using namespace cdot::lex;
+
+tok::TokenType
+ModuleLexerTraits::getKeywordToken(const string &potentialKeyword)
+{
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
+      if (potentialKeyword == (Spelling)) return tok::Name;
+#  include "Tokens.def"
+
+   return tok::sentinel;
+}
+
+tok::TokenType
+ModuleLexerTraits::getOperatorToken(const string &potentialOperator)
+{
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
+      if (potentialOperator == (Spelling)) return tok::Name;
+#  include "../lex/Tokens.def"
+
+   return tok::sentinel;
+}
+
+tok::TokenType
+ModuleLexerTraits::getPunctuatorToken(char potentialPunctuator)
+{
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
+      if (potentialPunctuator == (Spelling)) return tok::Name;
+#  include "../lex/Tokens.def"
+
+   return tok::sentinel;
+}
+
+const char *ModuleLexerTraits::CommentBegin = "//";
+const char *ModuleLexerTraits::CommentEnd = "\n";
+
+const char *ModuleLexerTraits::MultiLineCommentBegin = "";
+const char *ModuleLexerTraits::MultiLineCommentEnd = "";
+
+} // namespace module
+
 namespace util {
 
-std::unordered_map<string, int> op_precedence {
+llvm::StringMap<int> op_precedence {
    { "?",     -1 },
    { ":",     -1 },
    { "=",     0 },
@@ -1056,148 +1426,9 @@ std::unordered_map<string, int> op_precedence {
    { "infix", 13 }
 };
 
-string token_names[] = {
-   "T_KEYWORD",
-   "T_IDENT",
-   "T_PUNCTUATOR",
-   "T_OP",
-   "T_LITERAL",
-   "T_BOF",
-   "T_EOF"
-};
-
-std::vector<string> binary_operators = {
-   "=",
-   "+=",
-   "-=",
-   "*=",
-   "/=",
-   "||",
-   "&&",
-   "|",
-   "&",
-   "!=",
-   "==",
-   "<=",
-   ">=",
-   "<",
-   ">",
-   "<<",
-   ">>",
-   ">>>",
-   "+",
-   "-",
-   "*",
-   "/",
-   "%",
-   "**",
-   "..",
-   "??",
-   "^",
-   "->",
-   "=>",
-   "as",
-   "as!",
-   "isa",
-   "===",
-   "!=="
-};
-
-std::vector<string> assignmentOperators = {
-   "=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^="
-};
-
-string isAssignmentOperator(const string &op)
-{
-   if (op == "=") {
-      return op;
-   }
-
-   if (in_vector(assignmentOperators, op)) {
-      return op.substr(0, op.length() - 1);
-   }
-
-   return "";
-}
-
 std::vector<char> operator_chars = {
-   '+', '-', '=', '<', '>', '&', '|', '%', '!', '*', '/', '~', '?', ':', '.',
+   '+', '-', '=', '<', '>', '&', '|', '%', '!', '*', '/', '~', '?', '.',
    '^'
-};
-
-std::vector<string> PrefixUnaryOperators = {
-   "!",
-   "+",
-   "-",
-   "~",
-   "++",
-   "--",
-   "&",
-   "*",
-   "..."
-};
-
-std::vector<string> PostfixUnaryOperators = {
-   "++",
-   "--"
-};
-
-std::vector<string> tertiary_operators = {
-   "?",
-   ":"
-};
-
-std::vector<string> keywords = {
-   "def",
-   "return",
-   "if",
-   "else",
-   "while",
-   "loop",
-   "match",
-   "for",
-   "case",
-   "default",
-   "struct",
-   "throw",
-   "try",
-   "catch",
-   "finally",
-   "class",
-   "union",
-   "public",
-   "private",
-   "protected",
-   "static",
-   "abstract",
-   "protocol",
-   "prop",
-   "enum",
-   "with",
-   "where",
-   "namespace",
-   "typeof",
-   "continue",
-   "break",
-   "goto",
-   "infix",
-   "prefix",
-   "postfix",
-   "mutating",
-   "declare",
-   "using",
-   "native",
-   "let",
-   "var",
-   "extend",
-   "typedef",
-   "init",
-   "deinit",
-   "ref",
-   "unsafe",
-   "memberwise",
-   "__debug",
-   "__unreachable"
 };
 
 std::vector<char> punctuators = {
@@ -1216,7 +1447,10 @@ std::vector<char> punctuators = {
    '`',
    '#',
    '\'',
-   '"'
+   '"',
+   ' ',
+   ':',
+   '?'
 };
 
 } // namespace util

@@ -10,22 +10,27 @@
 
 namespace cdot {
 enum class BuiltinIdentifier {
-   FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN, FLOAT_SNAN, DOUBLE_SNAN
+   NULLPTR, FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN,
+   FLOAT_SNAN, DOUBLE_SNAN, __ctfe
 };
 
 extern unordered_map<string, BuiltinIdentifier> builtinIdentifiers;
 
-class TemplateArgList;
+class TemplateArgListBuilder;
 }
 
 namespace cdot {
+
+struct Alias;
+
 namespace ast {
 
 class MemberRefExpr;
 
-class IdentifierRefExpr : public Expression {
+class IdentifierRefExpr : public IdentifiedExpr {
 public:
    explicit IdentifierRefExpr(string &&ident);
+   ~IdentifierRefExpr();
 
    typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
 
@@ -35,15 +40,12 @@ public:
    }
 
 protected:
-   // codegen
-   bool captured_var = false;
-
    union {
       Type *builtinType = nullptr;
-      Type *capturedType;
+      Type *metaType;
+      Statement *capturedValue;
+      Callable *callable;
    };
-
-   Type *metaType = nullptr;
 
    Variant builtinValue;
    BuiltinIdentifier builtinKind;
@@ -56,13 +58,14 @@ protected:
    bool is_function : 1;
    bool is_metatype : 1;
    bool functionArg : 1;
+   bool is_capture : 1;
+   bool is_alias : 1;
    
    size_t argNo = 0;
 
-   bool wrap_lambda = true;
-   string superClassName;
+   std::vector<TemplateArg> templateArgs;
 
-   TemplateArgList *templateArgs;
+   Variant aliasVal;
 
 public:
    bool isLetExpr()
@@ -85,24 +88,14 @@ public:
       is_var_expr = varExpr;
    }
 
-   bool isCapturedVar() const
+   bool isCaptured() const
    {
-      return captured_var;
+      return is_capture;
    }
 
-   void setCapturedVar(bool captured_var)
+   void setIsCaptured(bool captured_var)
    {
-      IdentifierRefExpr::captured_var = captured_var;
-   }
-
-   Type *getCapturedType() const
-   {
-      return capturedType;
-   }
-
-   void setCapturedType(Type *capturedType)
-   {
-      IdentifierRefExpr::capturedType = capturedType;
+      IdentifierRefExpr::is_capture = captured_var;
    }
 
    const Variant &getBuiltinValue() const
@@ -175,27 +168,7 @@ public:
       IdentifierRefExpr::is_function = is_function;
    }
 
-   const string &getSuperClassName() const
-   {
-      return superClassName;
-   }
-
-   void setSuperClassName(const string &superClassName)
-   {
-      IdentifierRefExpr::superClassName = superClassName;
-   }
-
-   bool wrapLambda() const
-   {
-      return wrap_lambda;
-   }
-
-   void wrapLambda(bool b)
-   {
-      wrap_lambda = b;
-   }
-
-   TemplateArgList *&getTemplateArgs()
+   std::vector<TemplateArg> const& getTemplateArgs() const
    {
       return templateArgs;
    }
@@ -230,7 +203,68 @@ public:
       IdentifierRefExpr::argNo = argNo;
    }
 
-   void setTemplateArgs(TemplateArgList *templateArgs);
+   void setTemplateArgs(std::vector<TemplateArg> &&templateArgs)
+   {
+      IdentifierRefExpr::templateArgs = move(templateArgs);
+   }
+
+   const Variant &getAliasVal() const
+   {
+      return aliasVal;
+   }
+
+   void setAliasVal(Variant &&aliasVal)
+   {
+      IdentifierRefExpr::aliasVal = std::move(aliasVal);
+      is_alias = true;
+   }
+
+   bool isAlias() const
+   {
+      return is_alias;
+   }
+
+   Statement *getCapturedValue() const
+   {
+      return capturedValue;
+   }
+
+   void setCapturedValue(Statement *capturedValue)
+   {
+      IdentifierRefExpr::capturedValue = capturedValue;
+   }
+
+   Callable *getCallable() const
+   {
+      return callable;
+   }
+
+   void setCallable(Callable *callable)
+   {
+      IdentifierRefExpr::callable = callable;
+   }
+};
+
+class NonTypeTemplateArgExpr: public Expression {
+public:
+   explicit NonTypeTemplateArgExpr(const TemplateParameter &Param);
+   ~NonTypeTemplateArgExpr();
+
+   typedef std::shared_ptr<NonTypeTemplateArgExpr> SharedPtr;
+
+private:
+   const TemplateParameter &Param;
+
+public:
+   const TemplateParameter &getParam() const
+   {
+      return Param;
+   }
+
+   static bool classof(AstNode const* T)
+   {
+      return T->getTypeID() == NonTypeTemplateArgExprID;
+   }
 };
 
 } // namespace ast

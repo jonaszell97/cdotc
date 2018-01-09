@@ -6,14 +6,15 @@
 #define CDOT_CASTING_H
 
 #include <cassert>
+#include <llvm/Support/Casting.h>
+#include <memory>
 
 namespace cdot {
+namespace support {
 
-template <class T, class U>
-bool isa(const U* v)
-{
-   return T::classof(v);
-}
+using llvm::dyn_cast;
+using llvm::isa;
+using llvm::cast;
 
 template<class T, class U>
 bool isa(const std::shared_ptr<U> &v)
@@ -21,57 +22,44 @@ bool isa(const std::shared_ptr<U> &v)
    return T::classof(v.get());
 };
 
-template <class T, class U>
-const T* cast(const U* v)
-{
-   assert(T::classof(v) && "Check isa<> before casting");
-   return static_cast<const T*>(v);
-}
-
-template <class T, class U>
-T* cast(const std::shared_ptr<U> v)
+template<class T, class U>
+T *cast(const std::shared_ptr<U> &v)
 {
    assert(T::classof(v.get()) && "Check isa<> before casting");
-   return static_cast<T*>(v.get());
+   return static_cast<T *>(v.get());
 }
 
-template <class T, class U>
-T* cast(U* v)
-{
-   assert(T::classof(v) && "Check isa<> before casting");
-   return static_cast<T*>(v);
-}
-
-template <class T, class U>
-const T* dyn_cast(const U* v)
-{
-   if (!T::classof(v)) {
-      return nullptr;
-   }
-
-   return static_cast<const T*>(v);
-}
-
-template <class T, class U>
-T* dyn_cast(U* v)
-{
-   if (!T::classof(v)) {
-      return nullptr;
-   }
-
-   return static_cast<T*>(v);
-}
-
-template <class T, class U>
-T* dyn_cast(const std::shared_ptr<U> v)
+template<class T, class U>
+T *dyn_cast(const std::shared_ptr<U> &v)
 {
    if (!T::classof(v.get())) {
       return nullptr;
    }
 
-   return static_cast<T*>(v.get());
+   return static_cast<T *>(v.get());
 }
 
+template<class T, class U>
+T *dyn_cast_if_not_null(const std::shared_ptr<U> &v)
+{
+   if (!v || !T::classof(v.get())) {
+      return nullptr;
+   }
+
+   return static_cast<T *>(v.get());
+}
+
+template<class T, class U>
+T *dyn_cast_if_not_null(U* v)
+{
+   if (!v || !T::classof(v)) {
+      return nullptr;
+   }
+
+   return static_cast<T *>(v);
+}
+
+} // namespace support
 } // namespace cdot
 
 #endif //CDOT_CASTING_H

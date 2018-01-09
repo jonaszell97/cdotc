@@ -23,10 +23,11 @@ class CompoundStmt;
 class ConstrDecl : public CallableDecl {
 public:
    ConstrDecl();
-   ConstrDecl(
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-      AccessModifier am
-   );
+   ConstrDecl(std::vector<std::shared_ptr<FuncArgDecl>> &&args,
+              AccessModifier am,
+              std::vector<TemplateParameter> &&TPs,
+              std::shared_ptr<CompoundStmt> &&body,
+              string &&name = "init");
 
    typedef std::shared_ptr<ConstrDecl> SharedPtr;
 
@@ -37,9 +38,6 @@ public:
 
 protected:
    bool memberwise = false;
-
-   // codegen
-   cdot::cl::Method* method;
    cdot::cl::Record *record;
 
 public:
@@ -53,18 +51,17 @@ public:
       ConstrDecl::memberwise = memberwise;
    }
 
-   cdot::cl::Method *getMethod() const
+   cdot::cl::Method *getMethod() const;
+
+   cl::Record *getRecord() const
    {
-      return method;
+      return record;
    }
 
-   void setMethod(cdot::cl::Method *method)
+   void setRecord(cl::Record *record)
    {
-      ConstrDecl::method = method;
+      ConstrDecl::record = record;
    }
-
-   cdot::cl::Record *getRecord() const;
-   void setRecord(cdot::cl::Record *record);
 };
 
 } // namespace ast

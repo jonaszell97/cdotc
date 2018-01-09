@@ -9,6 +9,7 @@
 
 #include <string>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/ilist.h>
 
 namespace cdot {
 namespace il {
@@ -17,8 +18,11 @@ class Context;
 class Module;
 class BasicBlock;
 
-class Instruction: public Value {
+class Instruction: public Value,
+                   public llvm::ilist_node_with_parent<Instruction, BasicBlock>{
 public:
+   friend class Value; // for handleReplacement
+
    static bool classof(Instruction const* T) { return true; }
    static bool classof(Value const* T)
    {
@@ -33,30 +37,65 @@ public:
    }
 
    BasicBlock *getParent() const;
-   void removeFromParent() const;
-
-   void insertAfter(Instruction *inst);
-   void insertBefore(Instruction *inst);
 
    Context &getContext() const;
    Module *getModule() const;
 
    void setParent(BasicBlock *parent);
 
+   Value *getOperand(unsigned idx) const;
+   unsigned getNumOperands() const;
+   void setOperand(unsigned idx, Value *val);
+
+   using op_iterator =       Value**;
+   using op_const_iterator = Value* const*;
+
+   op_iterator op_begin();
+   op_iterator op_end();
+
+   op_const_iterator op_begin() const;
+   op_const_iterator op_end() const;
+
+   op_iterator op_begin_impl() { return nullptr; }
+   op_iterator op_end_impl()  { return nullptr; }
+
+   op_const_iterator op_begin_impl() const  { return nullptr; }
+   op_const_iterator op_end_impl() const  { return nullptr; }
+
+   unsigned getNumOperandsImpl() const { return 0; }
+
+   void replaceOperand(Value *Prev, Value *New);
+
+   bool isInitializer() const
+   { return (SubclassData & Flags::Initializer) != 0; }
+
+   void setIsInitializer(bool b)
+   {
+      if (b)
+         SubclassData |= Flags::Initializer;
+      else
+         SubclassData &= ~Flags::Initializer;
+   }
+
+   ~Instruction();
+
 protected:
    Instruction(TypeID id,
                Type *ty,
-               BasicBlock *parent,
-               const std::string &name = "",
-               const SourceLocation &loc = {});
+               BasicBlock *parent);
 
    Instruction(TypeID id,
-               ILType ty,
-               BasicBlock *parent,
-               const std::string &name = "",
-               const SourceLocation &loc = {});
+               QualType ty,
+               BasicBlock *parent);
 
    BasicBlock *parent;
+
+   enum Flags : unsigned short {
+      Initializer = 1,
+   };
+
+private:
+   void handleReplacement(Value *with);
 };
 
 } // namespace il

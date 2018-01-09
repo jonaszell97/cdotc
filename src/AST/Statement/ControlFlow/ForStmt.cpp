@@ -17,5 +17,15 @@ ForStmt::ForStmt(Statement::SharedPtr &&init,
 
 }
 
+ForStmt::ForStmt(Statement::SharedPtr &&init,
+                 std::shared_ptr<Expression> &&term,
+                 Statement::SharedPtr &&inc,
+                 Statement::SharedPtr &&body)
+   : Statement(ForStmtID), initialization(move(init)), termination(move(term)),
+     increment(move(inc)), body(move(body))
+{
+
+}
+
 } // namespace ast
 } // namespace cdot

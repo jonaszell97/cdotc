@@ -4,9 +4,37 @@
 
 #include "AstNode.h"
 #include "Attribute/Attribute.h"
+#include "../Variant/Type/Generic.h"
+
+#include "Passes/ASTIncludes.h"
 
 namespace cdot {
 namespace ast {
+
+AstNode::AstNode(NodeType typeID) : typeID(typeID), SubclassData(0) { }
+
+AstNode::~AstNode()
+{
+   destroyValue();
+}
+
+void AstNode::destroyValue()
+{
+   switch (typeID) {
+#  define CDOT_ASTNODE(Name)                                   \
+      case Name##ID:                                           \
+         static_cast<Name*>(this)->destroyValueImpl(); return;
+#  include "AstNode.def"
+
+      default:
+         llvm_unreachable("bad ASTNode kind");
+   }
+}
+
+void AstNode::destroyValueImpl()
+{
+
+}
 
 void AstNode::setAttributes(std::vector<Attribute> &&attr)
 {
@@ -16,11 +44,6 @@ void AstNode::setAttributes(std::vector<Attribute> &&attr)
 std::vector<Attribute>& AstNode::getAttributes()
 {
    return attributes;
-}
-
-void AstNode::setSourceLoc(size_t start, size_t end,
-                           size_t line, size_t source) {
-   loc = SourceLocation(start, line, end - start, source);
 }
 
 bool AstNode::hasAttribute(Attr kind) const

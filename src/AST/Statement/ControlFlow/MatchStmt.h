@@ -15,7 +15,9 @@ class CaseStmt;
 
 class MatchStmt : public Statement {
 public:
-   MatchStmt(std::shared_ptr<Expression> &&switchVal);
+   explicit MatchStmt(std::shared_ptr<Expression> &&switchVal);
+   MatchStmt(std::shared_ptr<Expression> &&switchVal,
+             std::vector<std::shared_ptr<CaseStmt>> &&cases);
 
    void addCase(std::shared_ptr<CaseStmt> &&case_)
    {
@@ -44,15 +46,16 @@ protected:
    bool allCasesReturn;
 
 public:
-   std::shared_ptr<Expression> &getSwitchValue();
+   const std::shared_ptr<Expression> &getSwitchValue() const
+   {
+      return switchValue;
+   }
 
    Type *getSwitchType() const;
 
    const std::vector<std::shared_ptr<CaseStmt>> &getCases() const;
 
    cl::Method *getOperatorEquals() const;
-
-   void setSwitchValue(const std::shared_ptr<Expression> &switchValue);
 
    void setSwitchType(Type *switchType);
 

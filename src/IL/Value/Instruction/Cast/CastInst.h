@@ -9,6 +9,9 @@
 #include "../Operator/OperatorInst.h"
 
 namespace cdot {
+
+enum class CastKind : unsigned char;
+
 namespace il {
 
 class UnionType;
@@ -22,10 +25,8 @@ public:
    CastInst(TypeID id,
             Value *target,
             Type *toType,
-            BasicBlock *parent,
-            const std::string &name = "",
-            const SourceLocation &loc = {})
-      : UnaryInstruction(id, target, toType, parent, name, loc)
+            BasicBlock *parent)
+      : UnaryInstruction(id, target, toType, parent)
    {
 
    }
@@ -44,45 +45,22 @@ public:
    }
 };
 
-#define CDOT_CAST_INST(name)                                                  \
-   class name##Inst: public CastInst {                                        \
-      public:                                                                 \
-         name##Inst(Value *target,                                            \
-                    Type *toType,                                             \
-                    BasicBlock *parent,                                       \
-                    const std::string &name_ = "",                            \
-                    const SourceLocation &loc = {})                           \
-         : CastInst(name##InstID, target, toType, parent, name_, loc) {       \
-         }                                                                    \
-                                                                              \
-         static bool classof(Value const* T)                                  \
-         {                                                                    \
-            return T->getTypeID() == name##InstID;                            \
-         }                                                                    \
-   };
-
-CDOT_CAST_INST(BitCast)
-CDOT_CAST_INST(DynamicCast)
-
-#undef CDOT_CAST_INST
-
 class IntegerCastInst: public CastInst {
 public:
-   IntegerCastInst(Value *target,
+   IntegerCastInst(CastKind kind,
+                   Value *target,
                    Type *toType,
-                   BasicBlock *parent,
-                   const std::string &name = "",
-                   const SourceLocation &loc = {});
+                   BasicBlock *parent);
 
-   enum Kind : unsigned char {
-      Ext = 0, Trunc, IntToPtr, IntToFP, PtrToInt, SignFlip, FPToInt, Box,
-      Unbox, NoOp
-   };
+   IntegerCastInst(CastKind kind,
+                   Value *target,
+                   QualType toType,
+                   BasicBlock *parent);
 
-   Kind getKind() const;
+   CastKind getKind() const { return kind; }
 
 protected:
-   Kind kind;
+   CastKind kind;
 
 public:
    static bool classof(Value const* T)
@@ -91,24 +69,36 @@ public:
    }
 };
 
-extern const char* IntCastNames[];
+class IntToEnumInst: public CastInst {
+public:
+   IntToEnumInst(Value *target,
+                 Type *toType,
+                 BasicBlock *parent)
+      : CastInst(IntToEnumInstID, target, toType, parent)
+   {}
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == IntToEnumInstID;
+   }
+};
 
 class FPCastInst: public CastInst {
 public:
-   FPCastInst(Value *target,
+   FPCastInst(CastKind kind,
+              Value *target,
               Type *toType,
-              BasicBlock *parent,
-              const std::string &name = "",
-              const SourceLocation &loc = {});
+              BasicBlock *parent);
 
-   enum Kind : unsigned char {
-      FPExt = 0, FPTrunc, Box, Unbox, NoOp
-   };
+   FPCastInst(CastKind kind,
+              Value *target,
+              QualType toType,
+              BasicBlock *parent);
 
-   Kind getKind() const;
+   CastKind getKind() const { return kind; }
 
 protected:
-   Kind kind;
+   CastKind kind;
 
 public:
    static bool classof(Value const* T)
@@ -117,30 +107,19 @@ public:
    }
 };
 
-extern const char* FPCastNames[];
-
 class UnionCastInst: public CastInst {
 public:
    UnionCastInst(Value *target,
                  UnionType *UnionTy,
-                 llvm::StringRef fieldName,
-                 BasicBlock *parent,
-                 const std::string &name = "",
-                 const SourceLocation &loc = {});
+                 std::string const& fieldName,
+                 BasicBlock *parent);
 
-   UnionType *getUnionTy() const
-   {
-      return UnionTy;
-   }
-
-   const llvm::StringRef &getFieldName() const
-   {
-      return fieldName;
-   }
+   UnionType *getUnionTy() const { return UnionTy; }
+   llvm::StringRef getFieldName() const { return fieldName; }
 
 protected:
    UnionType *UnionTy;
-   llvm::StringRef fieldName;
+   std::string fieldName;
 
 public:
    static bool classof(Value const* T)
@@ -153,9 +132,7 @@ class ProtoCastInst: public CastInst {
 public:
    ProtoCastInst(Value *target,
                  Type *toType,
-                 BasicBlock *parent,
-                 const std::string &name = "",
-                 const SourceLocation &loc = {});
+                 BasicBlock *parent);
 
    bool isWrap() const;
    bool isUnwrap() const;
@@ -176,14 +153,44 @@ class ExceptionCastInst: public CastInst {
 public:
    ExceptionCastInst(Value *target,
                      Type *toType,
-                     BasicBlock *parent,
-                     const std::string &name = "",
-                     const SourceLocation &loc = {});
+                     BasicBlock *parent);
 
 public:
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ExceptionCastInstID;
+   }
+};
+
+class BitCastInst: public CastInst {
+public:
+   BitCastInst(CastKind kind,
+               Value *target,
+               Type *toType,
+               BasicBlock *parent);
+
+   CastKind getKind() const { return kind; }
+
+protected:
+   CastKind kind;
+
+public:
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == BitCastInstID;
+   }
+};
+
+class DynamicCastInst: public CastInst {
+public:
+   DynamicCastInst(Value *target,
+                   Type *toType,
+                   BasicBlock *parent);
+
+public:
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == DynamicCastInstID;
    }
 };
 

@@ -5,6 +5,8 @@
 #ifndef CDOT_TUPLETYPE_H
 #define CDOT_TUPLETYPE_H
 
+#include <vector>
+
 #include "Type.h"
 
 using std::pair;
@@ -13,64 +15,37 @@ namespace cdot {
 
 class TupleType: public Type {
 protected:
-   explicit TupleType(std::vector<pair<string, Type*>>& containedTypes,
-                      string& className);
+   explicit TupleType(std::vector<pair<std::string, QualType>>
+                              &containedTypes);
 
-   static string typesToString(const std::vector<pair<string, Type*>>& types);
+   static std::string typesToString(
+      const std::vector<pair<std::string, QualType>>& types);
 
 public:
-   static TupleType *get(std::vector<pair<string, Type*>>& containedTypes);
+   static TupleType *get(std::vector<pair<std::string, QualType>>
+                              &containedTypes);
 
-   Type*& getContainedType(size_t i) {
-      return containedTypes[i].second;
-   }
+   QualType getContainedType(size_t i) const;
 
-   const std::vector<pair<string, Type*>>& getContainedTypes() const
+   const std::vector<pair<std::string, QualType>>& getContainedTypes() const
    {
       return containedTypes;
    }
 
-   Type* getNamedType(string& name) const;
+   size_t getArity() const { return arity; }
+   unsigned short getAlignment() const;
+   size_t getSize() const;
 
-   size_t getArity() const
-   {
-      return arity;
-   }
-
-   short getAlignment() const override
-   {
-      return align;
-   }
-
-   size_t getSize() const override
-   {
-      return size;
-   }
-
-   bool needsMemCpy() const override;
-   bool needsLvalueToRvalueConv() const override;
-
-   string toString() const override;
-   llvm::Type* getLlvmType() const override;
-
-   bool implicitlyCastableTo(Type*) const override;
+   std::string toString() const;
 
    static bool classof(Type const* T)
    {
       return T->getTypeID() == TypeID::TupleTypeID;
    }
 
-   static inline llvm::StructType* getTupleType(string& typeNames) {
-      return TupleTypes[typeNames];
-   }
-
 protected:
-   static unordered_map<string, llvm::StructType*> TupleTypes;
-
-   std::vector<pair<string, Type*>> containedTypes;
+   std::vector<pair<std::string, QualType>> containedTypes;
    size_t arity;
-   size_t size;
-   unsigned short align;
 };
 
 }

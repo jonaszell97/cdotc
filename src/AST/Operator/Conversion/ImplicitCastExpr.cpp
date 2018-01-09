@@ -7,16 +7,14 @@
 namespace cdot {
 namespace ast {
 
-ImplicitCastExpr::ImplicitCastExpr(const QualType& from, const QualType& to,
-                                   Expression::SharedPtr &&target)
-   : Expression(ImplicitCastExprID), from(from), to(to), target(move(target))
+ImplicitCastExpr::ImplicitCastExpr(const QualType& from,
+                                   const QualType& to,
+                                   Expression::SharedPtr &&target,
+                                   CastResult &&requiredCast)
+   : Expression(ImplicitCastExprID), from(from), to(to), target(move(target)),
+     requiredCast(std::move(requiredCast))
 {
    this->target->setParent(this);
-}
-
-const QualType &ImplicitCastExpr::getFrom() const
-{
-   return from;
 }
 
 void ImplicitCastExpr::setFrom(const QualType &from)
@@ -24,19 +22,9 @@ void ImplicitCastExpr::setFrom(const QualType &from)
    ImplicitCastExpr::from = from;
 }
 
-const QualType &ImplicitCastExpr::getTo() const
-{
-   return to;
-}
-
 void ImplicitCastExpr::setTo(const QualType &to)
 {
    ImplicitCastExpr::to = to;
-}
-
-const Expression::SharedPtr &ImplicitCastExpr::getTarget() const
-{
-   return target;
 }
 
 void ImplicitCastExpr::setTarget(const Expression::SharedPtr &target)

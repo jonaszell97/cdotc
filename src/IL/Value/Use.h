@@ -96,7 +96,7 @@ public:
       UseT *current;
    };
 
-   using iterator = iterator_impl<Use>;
+   using iterator =       iterator_impl<Use>;
    using const_iterator = iterator_impl<const Use>;
 
    size_t count() const
@@ -131,15 +131,8 @@ public:
       return { first };
    }
 
-   iterator end()
-   {
-      return {};
-   }
-
-   const_iterator end() const
-   {
-      return {};
-   }
+   iterator end() { return {}; }
+   const_iterator end() const { return {}; }
 
    Value *getUser()
    {
@@ -155,6 +148,9 @@ public:
    {
       return User;
    }
+
+   bool hasNext() const { return Next != nullptr; }
+   bool hasPrev() const { return Prev != nullptr; }
 
 protected:
    Value *User;

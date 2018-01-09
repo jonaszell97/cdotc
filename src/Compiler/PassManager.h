@@ -14,7 +14,7 @@ namespace ast {
 
 class CompoundStmt;
 class ConstExprPass;
-class AbstractPass;
+class ASTPass;
 
 }
 
@@ -31,15 +31,12 @@ public:
    };
 
    explicit PassManager(std::vector<cdot::CompilationUnit> &CUs);
-   ~PassManager();
 
-   PassManager &addPass(PassKind kind);
-   PassManager &addPass(ast::AbstractPass *pass);
-
+   PassManager &addPass(ast::ASTPass *pass);
    void runPasses();
 
 protected:
-   std::vector<ast::AbstractPass*> passes;
+   std::vector<ast::ASTPass*> passes;
    std::vector<CompilationUnit> &CUs;
 };
 

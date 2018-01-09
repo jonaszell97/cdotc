@@ -7,37 +7,84 @@
 
 #include <vector>
 #include "../../../Util.h"
+#include "../../../Message/Diagnostics.h"
+#include "Template.h"
 
 namespace cdot {
 
 class Callable;
 
-struct TemplateArg;
+class TemplateArg;
 struct TemplateConstriant;
 struct Argument;
-struct QualType;
+class QualType;
+class FunctionType;
+
+namespace cl {
+
+struct EnumCase;
+
+} // namespace cl
 
 namespace ast {
 
 class Expression;
 class TypeRef;
+class SemaPass;
+class StaticExpr;
+
+enum class FailureReason : unsigned char {
+   None,
+   IncompatibleArgCount,
+   IncompatibleArgument,
+   IncompatibleTemplateArg,
+   CouldNotInferTemplateArg,
+   FailedConstraint
+};
+
+struct CallCompatability {
+   bool isCompatible() const
+   {
+      return failureReason == FailureReason::None;
+   }
+
+   bool isPerfectMatch()   const { return perfectMatch; }
+   size_t getCastPenalty() const { return castPenalty; }
+
+   FailureReason getFailureReason() const
+   {
+      return failureReason;
+   }
+
+   FailureReason failureReason = FailureReason::None;
+
+   bool perfectMatch = false;
+
+   union {
+      size_t castPenalty = 0;
+      StaticExpr *failedConstraint;
+   };
+
+   std::vector<QualType> resolvedArgs;
+   std::vector<Argument> resolvedNeededArgs;
+   sema::TemplateArgList templateArgList;
+   sema::TemplateArgList initializerTemplateArgList;
+
+   size_t incompatibleArg;
+   llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
+};
 
 class OverloadResolver {
-   typedef std::function<QualType(Expression*)> ArgResolverFn;
-   typedef std::function<Type*
-      (TypeRef*, const std::vector<TemplateArg>&,
-       const std::vector<TemplateConstraint>&)> TypeResolverFn;
-
 public:
-   OverloadResolver(const std::vector<Argument> &givenArgs,
+   OverloadResolver(SemaPass &SP,
+                    const std::vector<Argument> &givenArgs,
                     const std::vector<TemplateArg> &givenTemplateArgs,
-                    const ArgResolverFn &argResolver,
-                    const TypeResolverFn &typeResolver,
-                    const std::vector<TemplateConstraint> &Constraints);
+                    SourceLocation callerLoc = {});
 
    CallCompatability checkIfViable(Callable *callable);
+   CallCompatability checkIfViable(FunctionType *funcTy);
+   CallCompatability checkIfViable(cl::EnumCase const &Case);
 
-   typedef std::shared_ptr<TypeRef> TemplateParameter;
    typedef std::vector<pair<size_t, bool>> ArgOrder;
 
    enum InferenceStatus {
@@ -46,18 +93,9 @@ public:
       Inf_SubstituationFailure
    };
 
-   InferenceStatus inferTemplateArgs(const std::vector<QualType> &givenArgs,
-                                     std::vector<TemplateParameter> &neededArgs,
-                                     std::vector<TemplateArg>& templateArgs);
-
-   InferenceStatus inferTemplateArgs(const std::vector<Argument> &givenArgs,
-                                     std::vector<TemplateParameter> &neededArgs,
-                                     std::vector<TemplateArg>& templateArgs);
-
    static void isCallCompatible(CallCompatability &comp,
                                 const std::vector<Argument> &givenArgs,
-                                const std::vector<Argument> &neededArgs,
-                                ArgResolverFn &argResolver);
+                                const std::vector<Argument> &neededArgs);
 
    static void isCallCompatible(CallCompatability &comp,
                                 const std::vector<QualType> &givenArgs,
@@ -65,23 +103,17 @@ public:
                                 size_t checkUntil = 0);
 
 protected:
+   SemaPass &SP;
    const std::vector<Argument> &givenArgs;
    const std::vector<TemplateArg> &givenTemplateArgs;
-   const ArgResolverFn &argResolver;
-   const TypeResolverFn &typeResolver;
-   const std::vector<TemplateConstraint> &Constraints;
+   SourceLocation callerLoc;
 
-   InferenceStatus inferTemplateArg(Type* given,
-                                    Type *needed,
-                                    std::vector<TemplateArg> &templateArgs);
+   void resolveTemplateArgs(std::vector<Argument> &resolvedNeededArgs,
+                            sema::TemplateArgList const& templateArgs);
 
-   void resolveTemplateArgs(std::vector<TemplateParameter> &neededArgs,
-                            std::vector<Argument> &resolvedNeededArgs,
-                            const std::vector<TemplateArg>& templateArgs);
-
-   static std::vector<QualType> resolveContextual(const std::vector<Argument>&given,
-                                            const std::vector<Argument> &needed,
-                                              const ArgResolverFn &argResolver);
+   static std::vector<QualType> resolveContextual(
+                                          const std::vector<Argument>&given,
+                                          const std::vector<Argument> &needed);
 
    static void isVarargCallCompatible(CallCompatability &comp,
                                       const std::vector<QualType> &givenArgs,

@@ -13,6 +13,7 @@ namespace ast {
 class IntegerLiteral : public Expression {
 public:
    explicit IntegerLiteral(cdot::Variant &&lexeme);
+   IntegerLiteral(Type *type, cdot::Variant &&lexeme);
 
    typedef std::shared_ptr<IntegerLiteral> SharedPtr;
 
@@ -36,6 +37,7 @@ public:
 class FPLiteral: public Expression {
 public:
    explicit FPLiteral(cdot::Variant &&val);
+   FPLiteral(Type *type, cdot::Variant &&val);
 
    typedef std::shared_ptr<FPLiteral> SharedPtr;
 
@@ -59,6 +61,7 @@ public:
 class BoolLiteral: public Expression {
 public:
    explicit BoolLiteral(bool value);
+   BoolLiteral(Type *type, bool value);
 
    typedef std::shared_ptr<BoolLiteral> SharedPtr;
 
@@ -83,6 +86,8 @@ class CharLiteral: public Expression {
 public:
    explicit CharLiteral(char value);
    explicit CharLiteral(wchar_t value);
+
+   CharLiteral(Type *type, char value);
 
    typedef std::shared_ptr<CharLiteral> SharedPtr;
 

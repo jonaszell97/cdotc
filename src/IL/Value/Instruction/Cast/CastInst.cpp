@@ -12,137 +12,66 @@
 
 #include "../../../../Variant/Type/PointerType.h"
 #include "../../../../Variant/Type/IntegerType.h"
+#include "../../../../Basic/CastKind.h"
 
 namespace cdot {
 namespace il {
 
 const char* CastNames[] = {
-   "bitcast", "intcast", "fpcast", "union_cast", "dyn_cast", "proto_cast",
-   "exception_cast"
-};
+   "bitcast", "intcast", "fpcast", "int_to_enum", "union_cast", "dyn_cast",
+   "proto_cast", "exception_cast",
 
-const char* IntCastNames[] = {
    "ext", "trunc", "inttoptr", "inttofp", "ptrtoint", "sign_cast", "fptoint",
-   "box", "unbox", "noop"
+   "box", "unbox", "noop",
+
+   "fpext", "fptrunc", "box", "unbox"
 };
 
-IntegerCastInst::IntegerCastInst(Value *target,
+IntegerCastInst::IntegerCastInst(CastKind kind,
+                                 Value *target,
                                  Type *toType,
-                                 BasicBlock *parent,
-                                 const std::string &name,
-                                 const SourceLocation &loc)
-   : CastInst(IntegerCastInstID, target, toType, parent, name, loc)
+                                 BasicBlock *parent)
+   : CastInst(IntegerCastInstID, target, toType, parent), kind(kind)
 {
-   auto from = target->getType();
-   if (from->isIntegerTy()) {
-      if (type->isPointerTy()) {
-         kind = IntToPtr;
-      }
-      else if (type->isFPType()) {
-         kind = IntToFP;
-      }
-      else if (type->isBoxedEquivOf(*from)) {
-         kind = Box;
-      }
-      else {
-         assert(type->isIntegerTy());
 
-         auto fromBW = from->getBitwidth();
-         auto toBW = type->getBitwidth();
-         if (from->isUnsigned() != type->isUnsigned()) {
-            if (fromBW != toBW) {
-               llvm_unreachable("should be treated as two casts");
-            }
-            else {
-               kind = SignFlip;
-               return;
-            }
-         }
-
-         if (fromBW < toBW) {
-            kind = Ext;
-         }
-         else if (fromBW > toBW) {
-            kind = Trunc;
-         }
-         else {
-            kind = NoOp;
-         }
-      }
-   }
-   else if (from->isFPType()) {
-      assert(toType->isIntegerTy());
-      kind = FPToInt;
-   }
-   else if (from->isPointerTy()) {
-      kind = PtrToInt;
-   }
-   else if (from->isBoxedEquivOf(toType)) {
-      kind = Unbox;
-   }
-   else {
-      llvm_unreachable("invalid integer cast");
-   }
 }
 
-IntegerCastInst::Kind IntegerCastInst::getKind() const
+IntegerCastInst::IntegerCastInst(CastKind kind, Value *target,
+                                 QualType toType,
+                                 BasicBlock *parent)
+   : CastInst(IntegerCastInstID, target, *toType, parent), kind(kind)
 {
-   return kind;
+   if (kind == CastKind::IUnbox)
+      setIsLvalue(toType.isLvalue());
 }
 
-const char* FPCastNames[] = {
-   "fpext", "fptrunc", "box", "unbox", "noop"
-};
-
-FPCastInst::FPCastInst(Value *target, Type *toType, BasicBlock *parent,
-                       const std::string &name, const SourceLocation &loc)
-   : CastInst(FPCastInstID, target, toType, parent, name, loc)
+FPCastInst::FPCastInst(CastKind kind,Value *target, Type *toType,
+                       BasicBlock *parent)
+   : CastInst(FPCastInstID, target, toType, parent), kind(kind)
 {
-   auto from = target->getType();
 
-   if (from->isObjectTy()) {
-      assert(from->isBoxedEquivOf(toType));
-      kind = Unbox;
-      return;
-   }
-   if (toType->isObjectTy()) {
-      assert(toType->isBoxedEquivOf(*from));
-      kind = Box;
-      return;
-   }
-
-   assert(from->isFPType() && type->isFPType());
-   if (from->isFloatTy() == type->isFloatTy()) {
-      kind = NoOp;
-   }
-   else if (from->isFloatTy()) {
-      kind = FPExt;
-   }
-   else {
-      kind = FPTrunc;
-   }
 }
 
-FPCastInst::Kind FPCastInst::getKind() const
+FPCastInst::FPCastInst(CastKind kind, Value *target, QualType toType,
+                       BasicBlock *parent)
+   : CastInst(FPCastInstID, target, *toType, parent), kind(kind)
 {
-   return kind;
+   if (kind == CastKind::FPUnbox)
+      setIsLvalue(toType.isLvalue());
 }
 
 UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
-                             llvm::StringRef fieldName,
-                             BasicBlock *parent,
-                             const std::string &name,
-                             const SourceLocation &loc)
-   : CastInst(UnionCastInstID, target, UnionTy->getFieldType(fieldName),
-              parent, name, loc),
+                             std::string const& fieldName,
+                             BasicBlock *parent)
+   : CastInst(UnionCastInstID, target, *UnionTy->getFieldType(fieldName),
+              parent),
      UnionTy(UnionTy), fieldName(fieldName)
 {
-   type.setIsLvalue(true);
+   type.isLvalue(true);
 }
 
-ProtoCastInst::ProtoCastInst(Value *target, Type *toType, BasicBlock *parent,
-                             const string &name, const SourceLocation &loc)
-   : CastInst(ProtoCastInstID, target, toType, parent, name, loc)
+ProtoCastInst::ProtoCastInst(Value *target, Type *toType, BasicBlock *parent)
+   : CastInst(ProtoCastInstID, target, toType, parent)
 {
    if (toType->isObjectTy() && toType->getRecord()->isProtocol()) {
       SubclassData |= Flag::Wrap;
@@ -160,11 +89,24 @@ bool ProtoCastInst::isUnwrap() const
 }
 
 ExceptionCastInst::ExceptionCastInst(Value *target, Type *toType,
-                             BasicBlock *parent, const string &name,
-                             const SourceLocation &loc)
-   : CastInst(ExceptionCastInstID, target, toType, parent, name, loc)
+                                     BasicBlock *parent)
+   : CastInst(ExceptionCastInstID, target, toType, parent)
 {
    *type = type->getPointerTo();
+}
+
+BitCastInst::BitCastInst(CastKind kind, Value *target, Type *toType,
+                         BasicBlock *parent)
+   : CastInst(BitCastInstID, target, toType, parent), kind(kind)
+{
+
+}
+
+DynamicCastInst::DynamicCastInst(Value *target, Type *toType,
+                                 BasicBlock *parent)
+   : CastInst(DynamicCastInstID, target, toType, parent)
+{
+
 }
 
 } // namespace il

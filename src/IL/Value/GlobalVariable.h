@@ -6,33 +6,109 @@
 #define CDOT_GLOBALVARIABLE_H
 
 #include <string>
+#include <llvm/ADT/ilist_node.h>
 #include "Constant/Constant.h"
+#include "SymbolTableList.h"
 
 namespace cdot {
 namespace il {
 
 class Module;
 
-class GlobalVariable: public Constant {
+class GlobalObject: public Constant {
 public:
-   GlobalVariable(Type *ty, bool isConstant,
-                  Module *module,
-                  Constant *initializer = nullptr,
-                  const std::string &name = "",
-                  const SourceLocation &loc = {});
+   GlobalObject(TypeID id,
+                Type* ty,
+                Module *module,
+                llvm::StringRef name)
+      : Constant(id, ty), parent(module)
+   {
+      this->name = name;
+   }
 
-   Module *getModule() const;
-   Constant *getInitializer() const;
-   bool hasInitializer() const;
+   Module *getParent() const { return parent; }
+   void setParent(Module *m) { parent = m; }
+
+protected:
+   Module *parent;
+
+public:
+   static bool classof(Value const *T)
+   {
+      switch (T->getTypeID()) {
+         case FunctionID:
+         case GlobalVariableID:
+         case MethodID:
+         case InitializerID:
+         case StructTypeID:
+         case ClassTypeID:
+         case EnumTypeID:
+         case UnionTypeID:
+         case ProtocolTypeID:
+            return true;
+         default:
+            return false;
+      }
+   }
+};
+
+class GlobalVariable: public GlobalObject,
+                      public llvm::ilist_node_with_parent<GlobalVariable,
+                         Module> {
+public:
+   GlobalVariable(Type *ty,
+                  bool isConstant,
+                  llvm::StringRef name,
+                  Module *module,
+                  Constant *initializer = nullptr);
+
+   Constant *getInitializer() const { return initializer; }
+   bool hasInitializer() const { return initializer != nullptr; }
 
    GlobalVariable *getDeclarationIn(Module *M);
 
    void setInitializer(Constant *initializer);
 
+   BasicBlock *getInitBB() const
+   {
+      return InitBB;
+   }
+
+   void setInitBB(BasicBlock *InitBB)
+   {
+      GlobalVariable::InitBB = InitBB;
+   }
+
+   bool isDeclared() const
+   {
+      return (SubclassData & Flags::Declared) != 0;
+   }
+
 protected:
-   Module *module;
    Constant *initializer;
-   bool isConstant;
+
+   BasicBlock *InitBB = nullptr;
+
+   enum Flags {
+      Const = 1,
+      LateInitialized = Const << 1,
+      Declared = LateInitialized << 2,
+   };
+
+public:
+   bool isConstant() const { return (SubclassData & Flags::Const) != 0; }
+   bool isLateInitialized() const
+   {
+      return (SubclassData & Flags::LateInitialized) != 0;
+   }
+
+   void setIsLateInitialized()
+   {
+      SubclassData |= Flags::LateInitialized;
+   }
+
+private:
+   GlobalVariable(const GlobalVariable &var);
 
 public:
    static bool classof(GlobalVariable const* T) { return true; }

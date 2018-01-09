@@ -9,7 +9,8 @@
 namespace cdot {
 namespace ast {
 
-DeclareStmt::DeclareStmt(ExternKind kind) : Statement(DeclareStmtID)
+DeclareStmt::DeclareStmt(ExternKind kind)
+   : Statement(DeclareStmtID)
 {
    externKind = kind;
 }

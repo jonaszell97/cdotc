@@ -15,6 +15,28 @@ struct Double {
     init (f: float) {
         val = f as double
     }
+
+    #let types = ["Int", "UInt"]
+    #let bitwidths = [8, 32, 64]
+
+    #for Ty in types
+    #for Width in bitwidths
+
+        init (i: #{Ty + Width}) {
+            val = i.val as! double
+        }
+
+    #endfor
+    #endfor
+
+    #let Ops = [+, -, *, /, **]
+    #for Op in Ops
+
+        def infix #{Op} (s: Self) -> Self {
+            return Double(val #{Op} s.val)
+        }
+
+    #endfor
 }
 
 extend Double with Equatable {
@@ -51,32 +73,32 @@ extend Double with Ordered {
     }
 
     def advanced(by: Int) -> Double {
-        return self + by
+        return self + Double(by)
     }
 }
 
 extend Double with StringRepresentable {
-    def toString (precision: Int) -> String {
-        if val == 0 {
+    def toString (precision: UInt) -> String {
+        let negative = val < 0.0
+        var num = Math.round(self * (10u ** precision))
+
+        if num == 0 {
             return "0." + String(chr: '0', repeat: precision)
         }
         
-        let negative = val < 0
-        var num = Math.round(self * (10 ** precision))
-        
-        if (negative) {
+        if negative {
             num = -num
         }
 
-        var powerOfTen = Math.floor(Math.log10(num as Double))
-        var strLen = powerOfTen + 2
-        if (negative) {
+        var powerOfTen = Math.floor(Math.log10(Double(num.val as double)))
+        var strLen = UInt((powerOfTen + 2) as! uword)
+        if negative {
             strLen = strLen + 1
         }
         
         let str = String(strLen)
-        var i = 0
-        if (negative) {
+        var i = UInt()
+        if negative {
             str[0] = '-'
             ++i
         }
@@ -86,7 +108,7 @@ extend Double with StringRepresentable {
                 ++i
             }
 
-            var fits = Math.floor(num / (10 ** powerOfTen))
+            var fits = Math.floor((num / (10 ** powerOfTen)) as Double)
             str[i] = (fits + 48) as int8
 
             num = num - fits * (10 ** powerOfTen)

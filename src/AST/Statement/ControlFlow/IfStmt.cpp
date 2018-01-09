@@ -16,29 +16,13 @@ IfStmt::IfStmt(Expression::SharedPtr &&cond,
 
 }
 
-std::shared_ptr<Expression> &IfStmt::getCondition()
+IfStmt::IfStmt(Expression::SharedPtr &&cond,
+               Statement::SharedPtr &&body,
+               Statement::SharedPtr &&elseBody)
+   : Statement(IfStmtID), condition(move(cond)), ifBranch(move(body)),
+     elseBranch(move(elseBody))
 {
-   return condition;
-}
 
-void IfStmt::setCondition(const std::shared_ptr<Expression> &condition)
-{
-   IfStmt::condition = condition;
-}
-
-const Statement::SharedPtr &IfStmt::getIfBranch() const
-{
-   return ifBranch;
-}
-
-void IfStmt::setIfBranch(const Statement::SharedPtr &ifBranch)
-{
-   IfStmt::ifBranch = ifBranch;
-}
-
-const Statement::SharedPtr &IfStmt::getElseBranch() const
-{
-   return elseBranch;
 }
 
 } // namespace ast

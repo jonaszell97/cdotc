@@ -12,9 +12,11 @@
 namespace cdot {
 
 namespace cl {
+
 struct Method;
 struct Field;
-}
+
+} // namespace cl
 
 namespace ast {
 
@@ -65,9 +67,6 @@ protected:
    std::shared_ptr<CompoundStmt> getterBody = nullptr;
    std::shared_ptr<CompoundStmt> setterBody = nullptr;
 
-   string getterSelfBinding;
-   string setterSelfBinding;
-
    cdot::cl::Method *getterMethod;
    cdot::cl::Method *setterMethod;
 
@@ -77,11 +76,11 @@ protected:
    std::shared_ptr<TypeRef> type;
    std::shared_ptr<Expression> defaultVal;
 
+   cl::Field *field;
+
    bool protocol_field = false;
 
-   // codegen
-   string getterBinding;
-   string setterBinding;
+   size_t globalOrdering = 0;
 
 public:
    bool hasGetter() const
@@ -122,26 +121,6 @@ public:
    void setSetterBody(const std::shared_ptr<CompoundStmt> &setterBody)
    {
       FieldDecl::setterBody = setterBody;
-   }
-
-   const string &getGetterSelfBinding() const
-   {
-      return getterSelfBinding;
-   }
-
-   void setGetterSelfBinding(const string &getterSelfBinding)
-   {
-      FieldDecl::getterSelfBinding = getterSelfBinding;
-   }
-
-   const string &getSetterSelfBinding() const
-   {
-      return setterSelfBinding;
-   }
-
-   void setSetterSelfBinding(const string &setterSelfBinding)
-   {
-      FieldDecl::setterSelfBinding = setterSelfBinding;
    }
 
    cdot::cl::Method *getGetterMethod() const
@@ -214,24 +193,24 @@ public:
       FieldDecl::protocol_field = protocol_field;
    }
 
-   const string &getGetterBinding() const
+   size_t getGlobalOrdering() const
    {
-      return getterBinding;
+      return globalOrdering;
    }
 
-   void setGetterBinding(const string &getterBinding)
+   void setGlobalOrdering(size_t globalOrder)
    {
-      FieldDecl::getterBinding = getterBinding;
+      FieldDecl::globalOrdering = globalOrder;
    }
 
-   const string &getSetterBinding() const
+   cl::Field *getField() const
    {
-      return setterBinding;
+      return field;
    }
 
-   void setSetterBinding(const string &setterBinding)
+   void setField(cl::Field *field)
    {
-      FieldDecl::setterBinding = setterBinding;
+      FieldDecl::field = field;
    }
 };
 

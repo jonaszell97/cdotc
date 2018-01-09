@@ -4,10 +4,10 @@
 
 #include "Parser.h"
 
+#include <cassert>
 #include <vector>
 #include <string>
-#include <iostream>
-#include <fstream>
+#include <llvm/ADT/StringSwitch.h>
 
 #include "../lex/Lexer.h"
 #include "../Message/Exceptions.h"
@@ -22,33 +22,28 @@
 #include "../Variant/Type/Generic.h"
 #include "../Files/FileManager.h"
 #include "../Message/Diagnostics.h"
+#include "../AST/Passes/SemanticAnalysis/Builtin.h"
 
 using namespace cdot::diag;
 using namespace cdot::cl;
+using namespace cdot::support;
+using namespace cdot::lex;
+
+namespace cdot {
+namespace parse {
 
 static const unsigned MAX_TEMPLATE_ARGS = 32;
-static const unsigned MAX_FUNCTION_ARGS = 64;
 
-Parser::Parser(std::unique_ptr<llvm::MemoryBuffer> &&buf,
-               string &fileName,
-               size_t sourceId)
-   : lexer(new Lexer(buf.get(), fileName, sourceId)), source_id(sourceId),
-     decl(new DeclPass), buf(std::move(buf))
+Parser::Parser(lex::Lexer<lex::LexerTraits> *lexer, DeclPass *decl)
+   : source_id(lexer->getSourceId()),
+     lexer(lexer),
+     decl(decl)
 {
-   lexer->advance();
+   lexer->lex();
+   decl->importFileImports(lexer->getSourceId());
 }
 
-Parser::Parser(std::vector<Token> &&tokens)
-   : lexer(new Lexer(std::move(tokens))), decl(new DeclPass)
-{
-   lexer->advance();
-}
-
-Parser::~Parser()
-{
-   delete lexer;
-   delete decl;
-}
+Parser::~Parser() = default;
 
 void Parser::pushNamespace(const string &nsName)
 {
@@ -65,145 +60,211 @@ string Parser::currentNS()
    return decl->ns_prefix();
 }
 
-void Parser::setIndex(
-   AstNode *node,
-   const Token &start)
+Token Parser::lookahead(bool ignoreNewline, bool sw)
 {
-   node->setSourceLoc(
-      SourceLocation(start.getCol(),
-                     start.getLine(),
-                     lexer->currentToken.getStart() - start.getStart() - 1,
-                     lexer->currentToken.getSourceLoc().getSourceId()));
+   return lexer->lookahead(ignoreNewline, sw);
 }
 
-void Parser::isTemplateInstantiation(
-   const unordered_map<string, TemplateArg> &templateArgs)
+void Parser::advance(bool ignoreNewline, bool sw)
 {
-   for (const auto &arg : templateArgs) {
-      if (arg.second.isVariadic()) {
-         std::vector<Variant> vec;
-         for (const auto &val : arg.second.getVariadicArgs()) {
-            vec.emplace_back(val.toString());
-         }
+   lexer->advance(ignoreNewline, sw);
+}
 
-         lexer->addVariadicTemplateArg(arg.first, vec);
-      }
-      else switch (arg.second.getKind()) {
-         case TemplateConstraint::TypeName:
-            lexer->addTemplateArg(
-               arg.first,
-               arg.second.getGenericTy()->getActualType()->toString()
-            );
-            break;
-         case TemplateConstraint::Value:
-            lexer->addTemplateArg(
-               arg.first,
-               arg.second.getValue()
-            );
-            break;
-         case TemplateConstraint::Arbitrary:
-            lexer->addTemplateArg(
-               arg.first,
-               arg.second.getTokens()
-            );
-            break;
-      }
+const lex::Token& Parser::currentTok() const
+{
+   return lexer->currentTok();
+}
+
+AccessModifier Parser::maybeParseAccessModifier()
+{
+   switch (currentTok().getKind()) {
+      case tok::kw_public:
+         advance();
+         return AccessModifier::PUBLIC;
+      case tok::kw_private:
+         advance();
+         return AccessModifier::PRIVATE;
+      case tok::kw_protected:
+         advance();
+         return AccessModifier::PROTECTED;
+      default:
+         return AccessModifier::DEFAULT;
    }
 }
 
-std::shared_ptr<TypeRef> Parser::parse_type(bool ignoreError, bool metaTy)
+TemplateParameter const* Parser::getTemplateParam(llvm::StringRef name)
 {
+   for (const auto &Params : templateParamStack) {
+      for (const auto &Param : *Params) {
+         if (name.equals(Param.genericTypeName)) {
+            return &Param;
+         }
+      }
+   }
+
+   return nullptr;
+}
+
+namespace {
+
+void markAllowUnexpandedParams(TypeRef *ty)
+{
+   ty->setAllowUnexpandedTemplateArgs(true);
+}
+
+} // anonymous namespace
+
+std::shared_ptr<TypeRef> Parser::parse_type(bool allowVariadic)
+{
+   auto start = currentTok().getSourceLoc();
+
    bool isReference = false;
-   if (lexer->currentToken.is_keyword("ref")) {
-      lexer->advance();
+   if (currentTok().is(tok::kw_ref)) {
+      advance();
       isReference = true;
    }
 
    auto attrs = parse_attributes();
+   auto typeref = parse_type_impl();
 
-   Token start = lexer->currentToken;
-   auto typeref = parse_type_impl(ignoreError);
+   // pointer type
+   auto next = lookahead();
+   while (1) {
+      if (next.oneOf(tok::times, tok::times_times) || next.is_identifier()) {
+         if (next.is(tok::times)) {
+            advance();
+            typeref = makeExpr<TypeRef>(start, move(typeref), TypeRef::Pointer);
+            break;
+         }
+         if (next.is(tok::times_times)) {
+            advance();
+            typeref = makeExpr<TypeRef>(start, move(typeref), TypeRef::Pointer);
+            typeref = makeExpr<TypeRef>(start, move(typeref), TypeRef::Pointer);
+            break;
+         }
+
+         auto op = next.getValue().strVal;
+         if (util::matches("\\*+", op)) {
+            while (op.length() > 0) {
+               typeref = makeExpr<TypeRef>(start, move(typeref),
+                                           TypeRef::Pointer);
+               op = op.substr(0, op.length() - 1);
+            }
+
+            advance();
+         }
+         else {
+            break;
+         }
+      }
+      // optional type
+      else if (next.is(tok::question)) {
+         advance();
+         typeref = makeExpr<TypeRef>(start, move(typeref), TypeRef::Option);
+      }
+      // array type
+      else if (next.is(tok::open_square)) {
+         advance();
+         advance();
+
+         auto arraySize = parse_static_expr();
+         lexer->expect(tok::close_square);
+
+         typeref = makeExpr<TypeRef>(start, move(typeref), move(arraySize));
+      }
+      else {
+         break;
+      }
+
+      next = lookahead();
+   }
 
    if (typeref) {
-      setIndex(typeref.get(), start);
       typeref->isReference(isReference);
       typeref->setAttributes(std::move(attrs));
-      typeref->isMetaTy(metaTy);
+   }
+
+   if (typeref->isVariadicArgPackExpansion()) {
+      if (!allowVariadic) {
+         diag::err(err_generic_error)
+            << "variadic expansion is not allowed here"
+            << lexer << diag::term;
+      }
+
+      typeref->forEachContainedType(markAllowUnexpandedParams);
    }
 
    return typeref;
 }
 
-/**
- * Parses a type specifier, like "int", "bool[3]", "any[18 * x]"
- * @return
- */
-std::shared_ptr<TypeRef> Parser::parse_type_impl(bool ignoreError)
+std::shared_ptr<TypeRef> Parser::parse_type_impl()
 {
-   std::vector<pair<string, TemplateArgList*>> ns;
+   auto start = currentTok().getSourceLoc();
+
+   if (currentTok().isContextualKeyword("decltype")) {
+      lexer->expect(tok::open_paren);
+      advance();
+
+      auto expr = parse_expr_sequence();
+      lexer->expect(tok::close_paren);
+
+      return makeExpr<TypeRef>(start, move(expr));
+   }
+
+   std::vector<pair<string, std::vector<TemplateArg>>> ns;
 
    // collection type
-   if (lexer->currentToken.is_punctuator('[')) {
-      lexer->advance();
+   if (currentTok().is(tok::open_square)) {
+      advance();
 
       auto elType = parse_type();
-      lexer->advance();
+      advance();
 
-      if (lexer->currentToken.is_operator(":")) {
-         lexer->advance();
+      if (currentTok().is(tok::colon)) {
+         advance();
 
          auto valType = parse_type();
-         lexer->advance();
+         advance();
 
-         if (!lexer->currentToken.is_punctuator(']')) {
+         if (!currentTok().is(tok::close_square)) {
             ParseError::raise("Expected ']' after dictionary type", lexer);
          }
 
-         std::vector<TemplateArg> templateArgs = {
-            TemplateArg(std::move(elType)), TemplateArg(std::move(valType))
-         };
+         std::vector<TemplateArg> templateArgs;
+         templateArgs.emplace_back(std::move(elType));
+         templateArgs.emplace_back(std::move(valType));
 
-         ns.emplace_back("Dictionary", new ResolvedTemplateArgList(
-            std::move(templateArgs)
-         ));
+         ns.emplace_back("Dictionary", move(templateArgs));
 
-         return std::make_shared<TypeRef>(std::move(ns));
+         return makeExpr<TypeRef>(start, std::move(ns));
       }
 
-      if (!lexer->currentToken.is_punctuator(']')) {
-         if (ignoreError) {
-            return nullptr;
-         }
-
+      if (!currentTok().is(tok::close_square)) {
          ParseError::raise("Expected ']' after array type", lexer);
       }
 
-      std::vector<TemplateArg> templateArgs = {
-         TemplateArg(std::move(elType))
-      };
+      std::vector<TemplateArg> templateArgs;
+      templateArgs.emplace_back(std::move(elType));
 
-      ns.emplace_back("Array", new ResolvedTemplateArgList(
-         std::move(templateArgs)
-      ));
-
-      return std::make_shared<TypeRef>(std::move(ns));
+      ns.emplace_back("Array", std::move(templateArgs));
+      return makeExpr<TypeRef>(start, std::move(ns));
    }
 
    // function or tuple type
-   if (lexer->currentToken.is_punctuator('(')) {
+   if (currentTok().is(tok::open_paren)) {
       auto argTypes = parse_tuple_type();
-      lexer->advance();
+      advance();
 
       // tuple
-      if (!lexer->currentToken.is_operator("->")) {
+      if (!currentTok().is(tok::arrow_single)) {
          lexer->backtrack();
-         return std::make_shared<TypeRef>(std::move(argTypes));
+         return makeExpr<TypeRef>(start, std::move(argTypes));
       }
 
-      lexer->advance();
+      advance();
 
       auto returnType = parse_type();
-      return std::make_shared<TypeRef>(std::move(returnType),
+      return makeExpr<TypeRef>(start, std::move(returnType),
                                        std::move(argTypes));
    }
 
@@ -213,187 +274,214 @@ std::shared_ptr<TypeRef> Parser::parse_type_impl(bool ignoreError)
    Token next;
    bool initial = true;
 
-   while (initial || next.is_punctuator('.')) {
+   while (initial || next.is(tok::period)) {
       if (!initial) {
-         lexer->advance();
-         lexer->advance();
+         advance();
+         advance();
       }
       else {
          initial = false;
       }
 
-      if (lexer->currentToken.get_type() != T_IDENT) {
-         if (ignoreError) {
-            return nullptr;
-         }
+      if (currentTok().getKind() != tok::ident) {
          ParseError::raise("Unexpected character in type reference", lexer);
       }
 
       string subName = lexer->strVal();
-      TemplateArgList *subTemplateArgs = nullptr;
+      std::vector<TemplateArg> subTemplateArgs;
 
-      next = lexer->lookahead(false);
-      if (next.is_operator("<")) {
-         lexer->advance();
+      next = lookahead(false);
+      if (next.is(tok::smaller)) {
+         advance();
 
          subTemplateArgs = parse_unresolved_template_args();
-         next = lexer->lookahead(false);
+         next = lookahead(false);
       }
 
       ns.emplace_back(std::move(subName), std::move(subTemplateArgs));
    }
 
-   auto typeref = std::make_shared<TypeRef>(std::move(ns));
+   bool variadic = false;
+   if (next.is(tok::triple_period)) {
+      if (ns.size() != 1)
+         diag::err(err_generic_error)
+            << "parameter pack expansion operator must be applied to "
+               "variadic template arg"
+            << lexer << diag::term;
 
-   // pointer type
-   while (next.get_type() == T_OP) {
-      auto op = next.get_value().strVal;
-      if (util::matches("\\*+", op)) {
-         while (op.length() > 0) {
-            typeref->incrementPointerDepth();
-            op = op.substr(0, op.length() - 1);
-         }
-
-         lexer->advance();
-         next = lexer->lookahead(false);
-      }
-      else {
-         break;
-      }
+      advance();
+      variadic = true;
    }
 
-   // optional type
-   if (next.is_operator("?")) {
-      lexer->advance();
-      typeref->isOption(true);
-   }
+   auto typeref = makeExpr<TypeRef>(start, std::move(ns));
+   typeref->setIsVariadicArgPackExpansion(variadic);
 
    return typeref;
 }
 
-std::shared_ptr<TypedefDecl> Parser::parse_typedef(AccessModifier am)
-{
-   Token start = lexer->currentToken;
-   auto attrs = attributes;
-   attributes.clear();
+std::shared_ptr<TypedefDecl> Parser::parse_typedef(AccessModifier am,
+                                                   bool inRecord) {
+   auto start = currentTok().getSourceLoc();
 
-   auto originTy = parse_type();
-   lexer->advance();
-
-   if (!lexer->currentToken.is_operator("=")) {
-      ParseError::raise("Expected =", lexer);
+   if (am == AccessModifier::DEFAULT) {
+      am = maybeParseAccessModifier();
    }
 
-   lexer->advance();
-   auto alias = lexer->strVal();
-   auto generics = parse_template_constraints();
+   if (currentTok().is(tok::kw_typedef)) {
+      advance();
+   }
 
-   auto td = std::make_shared<TypedefDecl>(am,
-                                           std::move(alias),
-                                           std::move(originTy),
-                                           std::move(generics));
+   auto originTy = parse_type();
 
-   td->setAttributes(std::move(attrs));
-   setIndex(td.get(), start);
+   lexer->expect(tok::as);
+   lexer->expect(tok::ident);
+
+   auto alias = move(lexer->strRef());
+
+   auto generics = try_parse_template_parameters();
+   auto td = makeExpr<TypedefDecl>(start, am, std::move(alias),
+                                   std::move(originTy), std::move(generics));
+
+   decl->DeclareTypedef(td.get());
+   DeclPass::addGlobalStatement(td.get());
 
    return td;
 }
 
+std::shared_ptr<AliasDecl> Parser::parse_alias()
+{
+   auto start = currentTok().getSourceLoc();
+   lexer->expect(tok::ident);
+
+   string name = move(lexer->strRef());
+   auto params = try_parse_template_parameters();
+
+   std::vector<std::shared_ptr<StaticExpr>> constraints;
+   while (lookahead().is(tok::kw_where)) {
+      advance();
+      advance();
+
+      constraints.push_back(parse_static_expr());
+   }
+
+   lexer->expect(tok::equals);
+   advance();
+
+   auto aliasExpr = parse_static_expr();
+
+   return makeExpr<AliasDecl>(start, move(name), move(params),
+                              move(constraints), move(aliasExpr));
+}
+
 namespace {
 
-bool identifierTemplateDecider(char c)
+bool identifierTemplateDecider(const Token &t)
 {
-   return c == '\n' || c == ')' || c == ',' || c == ']' || c == ';'
-          || Lexer::is_operator_char(c);
+   return t.oneOf(tok::newline, tok::close_paren, tok::comma, tok::period,
+                  tok::close_square, tok::semicolon, tok::open_brace)
+          || t.is_operator();
 }
 
-}
+} // anonymous namespace
 
 Expression::SharedPtr Parser::parse_identifier()
 {
-   Token start = lexer->currentToken;
-   string ident = lexer->strVal();
+   auto start = currentTok().getSourceLoc();
+   string ident;
 
-   if (ident=="self") {
-       int i=3;
+   switch (currentTok().getKind()) {
+      case tok::ident:
+         ident = move(lexer->strRef());
+         break;
+      case tok::kw_self:
+         ident = "self";
+         break;
+      case tok::kw_super:
+         ident = "super";
+         break;
+      default:
+         diag::err(err_generic_error) << "expected identifier"
+                                      << lexer << diag::term;
    }
 
-   auto ident_expr = std::make_shared<IdentifierRefExpr>(std::move(ident));
+   auto expr = makeExpr<IdentifierRefExpr>(start, std::move(ident));
 
    if (_is_generic_any(identifierTemplateDecider)) {
-      lexer->advance();
-      ident_expr->setTemplateArgs(parse_unresolved_template_args());
+      advance();
+      expr->setTemplateArgs(parse_unresolved_template_args());
    }
 
-   ident_expr->setMemberExpr(try_parse_member_expr());
-   setIndex(ident_expr.get(), start);
+   expr->setMemberExpr(try_parse_member_expr());
 
-   return ident_expr;
+   return expr;
 }
 
 std::shared_ptr<Expression> Parser::try_parse_member_expr()
 {
-   Token start = lexer->currentToken;
-   lexer->advance(false);
+   auto start = currentTok().getSourceLoc();
+   advance(false);
 
    // member access
-   bool pointerAccess = lexer->currentToken.is_operator("->");
-   if (lexer->currentToken.is_punctuator('.') || pointerAccess) {
-      Lexer::ModeScopeGuard guard((Lexer::MemberAccess), lexer);
-      lexer->advance(false);
+   bool pointerAccess = currentTok().is(tok::arrow_single);
+   if (currentTok().is(tok::period) || pointerAccess) {
+      Lexer<>::ModeScopeGuard guard((Lexer<>::MemberAccess), lexer);
+      advance(false);
 
       // tuple access
-      if (lexer->currentToken.get_type() == T_LITERAL) {
-         size_t index = lexer->currentToken.get_value().intVal;
+      if (currentTok().is(tok::integerliteral)) {
+         size_t index = currentTok().getValue().intVal;
 
-         auto mem_ref = std::make_shared<MemberRefExpr>(index, pointerAccess);
+         auto mem_ref = makeExpr<MemberRefExpr>(start, index, pointerAccess);
          mem_ref->setMemberExpr(try_parse_member_expr());
-         setIndex(mem_ref.get(), start);
 
          return mem_ref;
       }
 
       // method call
-      Token next = lexer->lookahead();
-      if (next.is_punctuator('(') || is_generic_call()) {
-         auto call = parse_function_call(CallType::METHOD_CALL);
+      Token next = lookahead();
+      if (next.is(tok::open_paren) || is_generic_call()) {
+         auto call = parse_function_call();
          call->isPointerAccess(pointerAccess);
 
          return call;
       }
 
-      string ident = lexer->strVal();
+      string ident = move(lexer->strRef());
 
-      auto mem_ref = std::make_shared<MemberRefExpr>(std::move(ident),
-                                                     pointerAccess);
+      auto mem_ref = makeExpr<MemberRefExpr>(start, std::move(ident),
+                                             pointerAccess);
 
       if (_is_generic_any(identifierTemplateDecider)) {
-         lexer->advance();
+         advance();
          mem_ref->setTemplateArgs(parse_unresolved_template_args());
       }
 
       mem_ref->setMemberExpr(try_parse_member_expr());
-      setIndex(mem_ref.get(), start);
 
       return mem_ref;
    }
 
+   // call
+   if (currentTok().is(tok::open_paren)) {
+      auto args = parse_arguments();
+      auto call = makeExpr<CallExpr>(start, std::move(args.args));
+
+      call->setMemberExpr(try_parse_member_expr());
+
+      return call;
+   }
+
    // array access
-   if (lexer->currentToken.is_punctuator('[')) {
-      lexer->advance();
+   if (currentTok().is(tok::open_square)) {
+      advance();
 
-      Expression::SharedPtr expr = parse_expression();
-      setIndex(expr.get(), start);
+      Expression::SharedPtr expr = parse_expr_sequence();
+      SubscriptExpr::SharedPtr arr_acc = makeExpr<SubscriptExpr>(start,
+                                                                 move(expr));
 
-      SubscriptExpr::SharedPtr arr_acc = std::make_shared<SubscriptExpr>(expr);
-
-      lexer->advance();
-      if (!lexer->currentToken.is_punctuator(']')) {
-         ParseError::raise("Expected ']'", lexer);
-      }
+      lexer->expect(tok::close_square);
 
       arr_acc->setMemberExpr(try_parse_member_expr());
-      setIndex(arr_acc.get(), start);
 
       return arr_acc;
    }
@@ -402,44 +490,42 @@ std::shared_ptr<Expression> Parser::try_parse_member_expr()
    return nullptr;
 }
 
-/**
- * Parses an array literal in the form of
- * [val1, val2, val3, ..., valn]
- * @return
- */
-CollectionLiteral::SharedPtr Parser::parse_collection_literal()
+std::shared_ptr<Expression> Parser::parse_collection_literal()
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
 
    bool isDictionary = false;
    bool first = true;
    std::vector<Expression::SharedPtr> keys;
    std::vector<Expression::SharedPtr> values;
 
-   while (!lexer->currentToken.is_punctuator(']')) {
-      if (lexer->lookahead().is_punctuator(']')) {
-         lexer->advance();
+   while (!currentTok().is(tok::close_square)) {
+      if (lookahead().is(tok::close_square)) {
+         advance();
          break;
       }
 
-      if (lexer->lookahead().is_punctuator(':')) {
+      if (lookahead().is(tok::colon)) {
          isDictionary = true;
-         lexer->advance();
+         advance();
          continue;
       }
 
-      lexer->advance();
+      advance();
 
-      auto key = parse_expression();
-      lexer->advance();
+      if (currentTok().is(tok::comma))
+         advance();
 
-      if (lexer->currentToken.is_operator(":")) {
+      auto key = parse_expr_sequence(false, true);
+      advance();
+
+      if (currentTok().is(tok::colon)) {
          if (!first && !isDictionary) {
             ParseError::raise("Unexpected token ':'", lexer);
          }
 
-         lexer->advance();
-         auto value = parse_expression();
+         advance();
+         auto value = parse_expr_sequence();
          keys.push_back(key);
          values.push_back(value);
 
@@ -456,99 +542,89 @@ CollectionLiteral::SharedPtr Parser::parse_collection_literal()
       first = false;
    }
 
-   if (!lexer->currentToken.is_punctuator(']')) {
+   if (!currentTok().is(tok::close_square)) {
       ParseError::raise("Expected ']' after array literal", lexer);
    }
 
-   if (isDictionary) {
-      auto dict = std::make_shared<CollectionLiteral>(std::move(keys),
-                                                      std::move(values));
-      setIndex(dict.get(), start);
+   if (isDictionary)
+      return makeExpr<DictionaryLiteral>(start, std::move(keys),
+                                         std::move(values));
 
-      return dict;
-   }
-
-   auto arr = std::make_shared<CollectionLiteral>(std::move(values));
-   setIndex(arr.get(), start);
-
-   return arr;
+   return makeExpr<ArrayLiteral>(start, std::move(values));
 }
 
-/**
- * Parses an atomic part of an expression, like a single identifier or literal
- * @return
- */
 Expression::SharedPtr Parser::parse_unary_expr_target()
 {
    std::vector<Attribute> attributes;
 
-   if (lexer->currentToken.is_punctuator('@')) {
+   if (currentTok().is(tok::at)) {
       attributes = parse_attributes();
    }
 
-   if (lexer->currentToken.is_punctuator('[')) {
+   if (currentTok().isContextualKeyword("__traits")) {
+      auto expr = parse_traits_expr();
+      expr->setAttributes(move(attributes));
+
+      return expr;
+   }
+
+   if (currentTok().is(tok::kw_static)) {
+      lexer->expect(tok::open_paren);
+      advance();
+
+      auto expr = parse_static_expr();
+
+      lexer->expect(tok::close_paren);
+      return expr;
+   }
+
+   if (currentTok().is(tok::open_square)) {
       auto arr = parse_collection_literal();
       arr->setAttributes(std::move(attributes));
 
       return arr;
    }
-   if (lexer->currentToken.is_punctuator('(')) {
+
+   if (currentTok().is(tok::open_paren)) {
       auto expr = parse_paren_expr();
       expr->setAttributes(std::move(attributes));
-      expr->setMemberExpr(try_parse_member_expr());
 
       return expr;
    }
+
    // enum case with inferred type
-   if (lexer->currentToken.is_punctuator('.')) {
-      Token start = lexer->currentToken;
-      lexer->advance(T_IDENT);
-
-      auto caseName = lexer->strVal();
-
-      if (!lexer->lookahead().is_punctuator('(')) {
-         auto expr = std::make_shared<MemberRefExpr>(std::move(caseName));
-         expr->setAttributes(std::move(attributes));
-         setIndex(expr.get(), start);
-         expr->isEnumCase(true);
-
-         return expr;
-      }
-      else {
-         auto call = parse_function_call(CallType::METHOD_CALL, true);
-         call->isEnumCase(true);
-
-         return call;
-      }
+   if (currentTok().is(tok::period)) {
+      advance(tok::ident);
+      return parse_enum_case_expr();
    }
-   if (lexer->currentToken.get_type() == T_IDENT) {
-      Token start = lexer->currentToken;
-      Token next = lexer->lookahead(false);
+
+   if (currentTok().oneOf(tok::ident, tok::kw_self, tok::kw_super)) {
+      auto start = currentTok().getSourceLoc();
+      Token next = lookahead(false);
 
       // function call
-      if (next.is_punctuator('(') || is_generic_call()) {
-         return parse_function_call(CallType::FUNC_CALL);
+      bool isVariadicSizeof = currentTok().isContextualKeyword("sizeof")
+                              && lookahead().is(tok::triple_period);
+      if (isVariadicSizeof || next.is(tok::open_paren) || is_generic_call()) {
+         return parse_function_call();
       }
 
       // single argument lambda
-      if (next.is_operator("=>")) {
+      if (next.is(tok::arrow_double)) {
          auto argName = lexer->strVal();
-         auto arg = std::make_shared<FuncArgDecl>(move(argName),
-                                                  std::make_shared<TypeRef>());
-         setIndex(arg.get(), start);
-         start = lexer->currentToken;
+         auto arg = makeExpr<FuncArgDecl>(start, move(argName),
+                                          makeExpr<TypeRef>(start), nullptr,
+                                          false, true);
 
-         lexer->advance();
-         lexer->advance();
+         start = currentTok().getSourceLoc();
+
+         advance();
+         advance();
 
          auto body = parse_next_stmt();
-         auto lambda = std::make_shared<LambdaExpr>(
-            std::make_shared<TypeRef>(),
-            std::vector<FuncArgDecl::SharedPtr>{ arg },
-            std::move(body)
-         );
+         auto lambda = makeExpr<LambdaExpr>(start, makeExpr<TypeRef>(start),
+            std::vector<FuncArgDecl::SharedPtr>{ arg }, std::move(body));
 
-         setIndex(lambda.get(), start);
          lambda->setMemberExpr(try_parse_member_expr());
 
          return lambda;
@@ -559,138 +635,125 @@ Expression::SharedPtr Parser::parse_unary_expr_target()
 
       return ident;
    }
-   if (lexer->currentToken.get_type() == T_LITERAL) {
-      Token start = lexer->currentToken;
-      auto val = lexer->currentToken.get_value();
 
-      if (val.type == VariantType::STRING) {
-         Token next = lexer->lookahead(false);
-         auto str = lexer->strVal();
+   auto start = currentTok().getSourceLoc();
 
-         auto strLiteral = std::make_shared<StringLiteral>(move(str));
-         setIndex(strLiteral.get(), start);
-         strLiteral->setMemberExpr(try_parse_member_expr());
+   if (currentTok().is(tok::kw_none)) {
+      auto noneLiteral = makeExpr<NoneLiteral>(start);
+      noneLiteral->setAttributes(std::move(attributes));
+
+      return noneLiteral;
+   }
+
+   if (currentTok().oneOf(tok::kw_true, tok::kw_false)) {
+      auto expr = makeExpr<BoolLiteral>(start, currentTok().is(tok::kw_true));
+      expr->setAttributes(move(attributes));
+
+      return expr;
+   }
+
+   if (currentTok().oneOf(tok::integerliteral, tok::fpliteral,
+                          tok::charliteral)) {
+      auto &val = currentTok()._value;
+      Expression::SharedPtr expr;
+
+      if (val.kind == VariantType::INT) {
+         switch (val.getBitwidth()) {
+            case CHAR_BIT:
+               expr = makeExpr<CharLiteral>(start, val.charVal);
+               break;
+            default:
+               expr = makeExpr<IntegerLiteral>(start, Variant(val));
+               break;
+         }
+      }
+      else if (val.kind == VariantType::FLOAT) {
+         expr = makeExpr<FPLiteral>(start, Variant(val));
+      }
+
+      expr->setMemberExpr(try_parse_member_expr());
+      expr->setAttributes(std::move(attributes));
+
+      return expr;
+   }
+
+   if (currentTok().is(tok::stringliteral)) {
+      auto val = currentTok().getValue();
+
+      if (val.kind == VariantType::STRING) {
+         Token next = lookahead(false);
+
+         auto strLiteral = makeExpr<StringLiteral>(start,
+                                                   move(lexer->strRef()));
+
          strLiteral->setAttributes(std::move(attributes));
 
-         if (!lexer->currentToken.isInterpolationStart) {
+         if (!lookahead().is(tok::sentinel)) {
+            // concatenate adjacent string literals
+            if (lookahead().is(tok::stringliteral)) {
+               string s = strLiteral->getValue();
+               while (lookahead().is(tok::stringliteral)) {
+                  advance();
+                  s += currentTok()._value.getString();
+               }
+
+               strLiteral = makeExpr<StringLiteral>(start, move(s));
+            }
+
+            strLiteral->setMemberExpr(try_parse_member_expr());
             return strLiteral;
          }
 
-         std::vector<Expression::SharedPtr> strings{ strLiteral };
-         lexer->advance();
+         std::vector<std::shared_ptr<Expression>> strings{ strLiteral };
+         advance();
 
-         for (;;) {
-            Expression::SharedPtr expr;
+         while (1) {
+            advance();
+            strings.push_back(parse_expr_sequence());
 
-            if (lexer->currentToken.is_punctuator('{')) {
-               lexer->advance();
-               expr = parse_expression();
+            lexer->expect(tok::sentinel);
 
-               lexer->advance();
-               if (!lexer->currentToken.is_punctuator('}')) {
-                  ParseError::raise("Expected '}", lexer);
-               }
-            }
-            else {
-               expr = std::make_shared<IdentifierRefExpr>(
-                  std::move(lexer->strRef()));
-            }
-
-            lexer->continueInterpolation = true;
-            lexer->advance();
-
-            strings.push_back(expr);
-            strings.push_back(
-               std::make_shared<StringLiteral>(lexer->strVal()));
-
-            lexer->continueInterpolation = false;
-            if (!lexer->currentToken.isInterpolationStart) {
+            if (!lookahead().is(tok::stringliteral)) {
                break;
             }
+            else {
+               advance();
+               auto lit = makeExpr<StringLiteral>(start, move(lexer->strRef()));
+               strings.push_back(move(lit));
 
-            lexer->advance();
+               if (!lookahead().is(tok::sentinel)) {
+                  break;
+               }
+               else {
+                  advance();
+               }
+            }
          }
 
-         auto interp = std::make_shared<StringInterpolation>(
-            std::move(strings));
-         setIndex(interp.get(), start);
+         auto interp = makeExpr<StringInterpolation>(start, move(strings));
          interp->setMemberExpr(try_parse_member_expr());
          interp->setAttributes(std::move(attributes));
 
          return interp;
       }
-      else if (val.type == VariantType::VOID) {
-         auto noneLiteral = std::make_shared<NoneLiteral>();
-         setIndex(noneLiteral.get(), start);
-         noneLiteral->setAttributes(std::move(attributes));
-
-         return noneLiteral;
-      }
-
-      Expression::SharedPtr expr;
-      if (val.type == VariantType::INT) {
-         switch (val.bitwidth) {
-            case 1:
-               expr = std::make_shared<BoolLiteral>(val.intVal != 0);
-               break;
-            case CHAR_BIT:
-               expr = std::make_shared<CharLiteral>(val.charVal);
-               break;
-            default:
-               expr = std::make_shared<IntegerLiteral>(std::move(val));
-               break;
-         }
-      }
-      else if (val.type == VariantType::FLOAT) {
-         expr = std::make_shared<FPLiteral>(std::move(val));
-      }
-
-      expr->setMemberExpr(try_parse_member_expr());
-      setIndex(expr.get(), start);
-      expr->setAttributes(std::move(attributes));
-
-      return expr;
-   }
-   else {
-      ParseError::raise("Expected expression but found " +
-               util::token_names[lexer->currentToken.get_type()], lexer);
    }
 
-   return nullptr;
+   ParseError::raise("Expected expression but found " +
+                     currentTok().rawRepr(), lexer);
+   llvm_unreachable(0);
 }
 
-namespace {
-
-bool followsPostfixUnaryOp(const Token &tok)
-{
-   return tok.is_separator() || tok.is_operator()
-          || (tok.is_punctuator() && !tok.is_punctuator('.')
-              && !tok.is_punctuator('('));
-}
-
-} // anonymous namespace
-
-/**
- * Recursively parses a unary expression for example an identifier or a literal
- * with unary expressions applied to it, e.g.
- *     - ++3
- *     - x.foo()++
- *     - !bar[3]
- * @return
- */
-Expression::SharedPtr Parser::parse_unary_expr(
-   UnaryOperator::SharedPtr literal, bool postfix)
-{
-   Token start = lexer->currentToken;
+Expression::SharedPtr Parser::parse_unary_expr(UnaryOperator::SharedPtr literal,
+                                               bool postfix) {
+   auto start = currentTok().getSourceLoc();
 
    // prefix unary op
-   if (lexer->currentToken.get_type() == T_OP) {
-      auto unary_op = std::make_shared<UnaryOperator>(lexer->strVal(),
-                                                      "prefix");
-      lexer->advance();
+   if (currentTok().is_operator()) {
+      auto unary_op = makeExpr<UnaryOperator>(start, currentTok().toString(),
+                                              "prefix");
 
+      advance();
       unary_op->setTarget(parse_unary_expr());
-      setIndex(unary_op.get(), start);
 
       return unary_op;
    }
@@ -705,64 +768,52 @@ Expression::SharedPtr Parser::parse_unary_expr(
       expr = literal;
    }
 
-   Token next = lexer->lookahead(false);
+   Token next = lookahead(false);
 
    // postfix unary op
-   if (next.get_type() == T_OP) {
-      lexer->advance();
-      next = lexer->lookahead();
+   if (next.oneOf(tok::plus_plus, tok::minus_minus)) {
+      advance();
+      auto unary_op = makeExpr<UnaryOperator>(start, currentTok().toString(),
+                                              "postfix");
 
-      if (followsPostfixUnaryOp(next)) {
-         auto unary_op = std::make_shared<UnaryOperator>(lexer->strVal(),
-                                                         "postfix");
-         unary_op->setMemberExpr(try_parse_member_expr());
-         unary_op->setTarget(expr);
-         setIndex(unary_op.get(), start);
+      unary_op->setMemberExpr(try_parse_member_expr());
+      unary_op->setTarget(expr);
 
-         return unary_op;
-      }
-      else {
-         next = lexer->currentToken;
-         lexer->backtrack();
-      }
+      return unary_op;
    }
 
    // call
-   if (next.is_punctuator('(') || is_generic_call()) {
-      lexer->advance();
+   if (next.is(tok::open_paren) || is_generic_call()) {
+      advance();
 
       auto generics = parse_unresolved_template_args();
 
-      auto call = std::make_shared<CallExpr>(CallType::FUNC_CALL,
-                                             parse_arguments());
-      call->setTemplateArgs(generics);
+      auto call = makeExpr<CallExpr>(start, parse_arguments().args);
+
+      call->setTemplateArgs(std::move(generics));
       expr->setMemberExpr(call);
    }
 
    return expr;
 }
 
-TertiaryOperator::SharedPtr Parser::parse_tertiary_operator(
-   Expression::SharedPtr cond)
+std::shared_ptr<TertiaryOperator>
+Parser::parse_tertiary_operator(std::shared_ptr<Expression> cond)
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
 
-   lexer->advance();
-   Expression::SharedPtr if_branch = parse_expression();
+   advance();
+   auto lhs = parse_static_expr(false, true);
 
-   lexer->advance();
-   if (!lexer->currentToken.is_operator(":")) {
-      ParseError::raise("Expected ':' in tertiary expression", lexer);
+   advance();
+   if (!currentTok().is(tok::colon)) {
+      ParseError::raise("expected ':' in tertiary expression", lexer);
    }
 
-   lexer->advance();
-   Expression::SharedPtr else_branch = parse_expression();
+   advance();
+   auto rhs = parse_expr_sequence();
 
-   auto op = std::make_shared<TertiaryOperator>(move(cond), move(if_branch),
-                                                move(else_branch));
-   setIndex(op.get(), start);
-
-   return op;
+   return makeExpr<TertiaryOperator>(start, move(cond), move(lhs), move(rhs));
 }
 
 ParenExprType Parser::get_paren_expr_type()
@@ -774,26 +825,35 @@ ParenExprType Parser::get_paren_expr_type()
    bool isTuple = false;
    bool maybeFuncTy = false;
 
-   Lexer::StateSaveGuard guard(lexer);
-   assert(lexer->currentToken.is_punctuator('('));
+   Lexer<>::StateSaveGuard guard(lexer);
+   assert(currentTok().is(tok::open_paren));
+
+   if (lookahead().is(tok::close_paren)) {
+      isTuple = true;
+   }
+
+   auto begin = currentTok().getSourceLoc();
 
    while (open_parens > closed_parens) {
-      lexer->advance();
-      if (!lexer->currentToken.is_punctuator()) {
-         continue;
-      }
-
-      char c = lexer->currentToken._value.charVal;
-      switch (c) {
-         case '(':
+      advance();
+      switch (currentTok().getKind()) {
+         case tok::open_paren:
             ++open_parens;
             break;
-         case ')':
+         case tok::close_paren:
             ++closed_parens;
             break;
-         case ',':
-            isTuple = true;
+         case tok::comma:
+            isTuple |= (open_parens - closed_parens) == 1;
             break;
+         case tok::eof:
+            diag::err(err_generic_error)
+               << "unexpected end of file, expecting ')'"
+               << lexer->tokens[lexer->tokens.size() - 2].getSourceLoc()
+               << diag::cont;
+
+            diag::note(note_generic_note)
+               << "to match this" << begin << diag::term;
          default:
             break;
       }
@@ -803,13 +863,13 @@ ParenExprType Parser::get_paren_expr_type()
       ParseError::raise("Expression contains unmatched parentheses", lexer);
    }
 
-   lexer->advance();
+   advance();
 
-   if (lexer->currentToken.is_operator("->")) {
+   if (currentTok().is(tok::arrow_single)) {
       maybeFuncTy = true;
-      lexer->advance();
+      advance();
    }
-   if (lexer->currentToken.is_operator("=>")) {
+   if (currentTok().is(tok::arrow_double)) {
       isLambda = true;
    }
 
@@ -829,17 +889,17 @@ ParenExprType Parser::get_paren_expr_type()
 
 namespace {
 
-bool openParenDecider(char c)
+bool openParenDecider(const lex::Token &tok)
 {
-   return c == '(';
+   return tok.is(tok::open_paren);
 }
 
-bool periodDecider(char c)
+bool periodDecider(const lex::Token &tok)
 {
-   return c == '.';
+   return tok.is(tok::period);
 }
 
-}
+} // anonymous namespace
 
 bool Parser::is_generic_call()
 {
@@ -851,77 +911,48 @@ bool Parser::is_generic_member_access()
    return _is_generic_any(periodDecider);
 }
 
-bool Parser::_is_generic_any(bool (*decider)(char))
+bool Parser::_is_generic_any(bool (*decider)(const lex::Token &))
 {
-   Lexer::StateSaveGuard guard(lexer);
-   lexer->advance();
+   Lexer<>::IgnoreScope ignore(lexer);
+   Lexer<>::StateSaveGuard guard(lexer);
+   advance();
 
-   if (!lexer->currentToken.is_punctuator('<')) {
+   if (!currentTok().is(tok::smaller)) {
       return false;
    }
 
    auto openBrackets = 1;
    auto closeBrackets = 0;
 
-   bool maybeArrow = false;
    while (openBrackets > closeBrackets) {
-      lexer->advance(false);
+      advance(false);
 
-      char c;
-      if (lexer->currentToken.is_operator()) {
-         auto &op = lexer->currentToken._value.strVal;
-         if (op == "<") {
-            c = '<';
-         }
-         else if (op == ">") {
-            c = '>';
-         }
-         else {
-            continue;
-         }
-      }
-      else if (lexer->currentToken.is_punctuator()) {
-         c = lexer->currentToken._value.charVal;
-      }
-      else if (lexer->currentToken.get_type() == T_EOF) {
-         return false;
-      }
-      else {
-         continue;
-      }
-
-      switch (c) {
-         case '-':
-         case '=':
-            maybeArrow = true;
+      switch (currentTok().getKind()) {
+         case tok::smaller:
+            ++openBrackets;
             break;
-         case '\n': return false;
-         case '<':
-            if (!maybeArrow) {
-               ++openBrackets;
-            }
-            maybeArrow = false;
+         case tok::greater:
+            ++closeBrackets;
             break;
-         case '>':
-            if (!maybeArrow) {
-               ++closeBrackets;
-            }
-            maybeArrow = false;
-            break;
+         case tok::newline:
+            return false;
+         case tok::eof:
+            return false;
          default:
-            maybeArrow = false;
+            break;
       }
    }
 
-   lexer->advance();
-   if (!lexer->currentToken.is_punctuator()) {
+   if (!currentTok().is(tok::greater))
       return false;
-   }
 
-   return decider(lexer->currentToken._value.charVal);
+   advance(false);
+
+   return decider(currentTok());
 }
 
-Expression::SharedPtr Parser::parse_paren_expr() {
+Expression::SharedPtr Parser::parse_paren_expr()
+{
    ParenExprType type = get_paren_expr_type();
    Expression::SharedPtr expr;
    switch (type) {
@@ -929,206 +960,609 @@ Expression::SharedPtr Parser::parse_paren_expr() {
          expr = parse_lambda_expr();
          break;
       case ParenExprType::FunctionType:
-         return parse_type(false, true);
+         return parse_type();
       case ParenExprType::EXPR:
-         lexer->advance();
+         advance();
 
-         expr = parse_expression();
-         lexer->advance(); // last part of expr
-         if (!lexer->currentToken.is_punctuator(')')) {
+         expr = parse_expr_sequence(true);
+         advance(); // last part of expr
+         if (!currentTok().is(tok::close_paren)) {
             ParseError::raise("Expected ')'", lexer);
          }
+
+         expr->setMemberExpr(try_parse_member_expr());
+
          break;
       case ParenExprType::TUPLE:
          expr = parse_tuple_literal();
          break;
    }
 
-
    return expr;
 }
 
-std::shared_ptr<TupleLiteral> Parser::parse_tuple_literal() {
-
-   Token start = lexer->currentToken;
+std::shared_ptr<TupleLiteral> Parser::parse_tuple_literal()
+{
+   auto start = currentTok().getSourceLoc();
    std::vector<pair<string, Expression::SharedPtr>> elements;
 
-   lexer->advance();
+   advance();
 
-   while (!lexer->currentToken.is_punctuator(')'))
-   {
+   while (!currentTok().is(tok::close_paren)) {
       std::vector<Attribute> attributes = parse_attributes();
       string label;
 
-      if (lexer->currentToken.get_type() == T_IDENT
-          && lexer->lookahead().is_operator(":")) {
+      if (currentTok().getKind() == tok::ident
+          && lookahead().is(tok::colon)) {
          label = lexer->strVal();
-         lexer->advance();
+         advance();
       }
 
-      auto expr = parse_expression();
+      auto expr = parse_expr_sequence();
       expr->setAttributes(std::move(attributes));
 
       elements.emplace_back(label, expr);
 
-      lexer->advance();
+      advance();
 
-      if (lexer->currentToken.is_punctuator(',')) {
-         lexer->advance();
+      if (currentTok().is(tok::comma)) {
+         advance();
       }
-      else if (!lexer->currentToken.is_punctuator(')')) {
+      else if (!currentTok().is(tok::close_paren)) {
          ParseError::raise("Expected ',' or ')'", lexer);
       }
    }
 
-   if (!lexer->currentToken.is_punctuator(')')) {
+   if (!currentTok().is(tok::close_paren)) {
       ParseError::raise("Expected closing parenthesis after tuple literal",
                         lexer);
    }
 
-   auto tuple = std::make_shared<TupleLiteral>(move(elements));
-   setIndex(tuple.get(), start);
+   auto tup = makeExpr<TupleLiteral>(start, move(elements));
+   tup->setMemberExpr(try_parse_member_expr());
 
-   return tuple;
+   return tup;
 }
 
 namespace {
 
-   bool hasHigherPrecedence(Token& next, int& min_precedence) {
-      if (next.get_type() == T_OP) {
-         auto op = next.get_value().strVal;
-         return util::op_precedence.find(op) != util::op_precedence.end()
-            && util::op_precedence[op] > min_precedence;
-      }
+using SeqVec = std::vector<ExprSequence::SequenceElement>;
+using iterator = SeqVec::iterator;
 
-      if (next.get_type() == T_IDENT) {
-         return util::op_precedence["infix"] > min_precedence;
-      }
+bool match(SeqVec const& fragments, iterator const& it) { return true; }
 
+template <class ...Rest>
+bool match(SeqVec const& fragments,
+           iterator const& it,
+           ExprSequence::SequenceElement::Kind kind,
+           Rest... rest) {
+   if (it == fragments.end())
       return false;
-   }
 
-   bool hasHigherOrEqualPrecedence(Token& next, int& min_precedence) {
-      if (next.get_type() == T_OP) {
-         auto op = next.get_value().strVal;
-         return (util::op_precedence.find(op) != util::op_precedence.end()
-            && util::op_precedence[op] >= min_precedence)
-            || (min_precedence == 0 && op != "?" && op != ":");
-      }
-
-      if (next.get_type() == T_IDENT) {
-         return util::op_precedence["infix"] >= min_precedence;
-      }
-
+   if (it->getKind() != kind)
       return false;
-   }
 
+   return match(fragments, it + 1, rest...);
 }
 
-Expression::SharedPtr Parser::parse_expression(Expression::SharedPtr lhs,
-                                               int min_precedence) {
-   Token start = lexer->currentToken;
+template <class ...Rest>
+bool match(SeqVec const& fragments, size_t idx, Rest... rest)
+{
+   assert(fragments.size() > idx);
+   return match(fragments, fragments.begin() + idx, rest...);
+}
 
+LLVM_ATTRIBUTE_UNUSED
+std::shared_ptr<Expression> getExpr(ExprSequence::SequenceElement &El)
+{
+   std::shared_ptr<Expression> expr;
+   switch (El.getKind()) {
+      case ExprSequence::SequenceElement::EF_Operator:
+         expr = std::make_shared<IdentifierRefExpr>(
+            string(operatorToString(El.getOperatorKind())));
+         break;
+      case ExprSequence::SequenceElement::EF_Expression:
+         expr = El.getExpr();
+         break;
+      case ExprSequence::SequenceElement::EF_PossibleOperator:
+         expr = std::make_shared<IdentifierRefExpr>(
+            string(El.getOp()));
+         break;
+   }
+
+   expr->setSourceLoc(El.getLoc());
+   return expr;
+}
+
+} // anonymous namespace
+
+Expression::SharedPtr Parser::parse_expr_sequence(bool parenthesized,
+                                                  bool ignoreColon) {
+   if (StaticExprStack)
+      return parse_static_expr();
+
+   auto start = currentTok().getSourceLoc();
+   bool foundQuestion = false;
+
+   std::vector<ExprSequence::SequenceElement> frags;
+   for (;;) {
+      if (currentTok().oneOf(tok::ident, tok::kw_self, tok::kw_super)) {
+         auto expr = parse_unary_expr_target();
+         auto ident = dyn_cast<IdentifierRefExpr>(expr.get());
+
+         if (ident && !ident->getMemberExpr()
+                                          && ident->getTemplateArgs().empty()) {
+            frags.emplace_back(string(ident->getIdent()),
+                               ident->getSourceLoc());
+         }
+         else {
+            frags.emplace_back(move(expr));
+         }
+      }
+      else if (currentTok().oneOf(tok::as, tok::as_question, tok::as_exclaim)) {
+         frags.emplace_back(stringToOperator(currentTok().toString()),
+                            currentTok().getSourceLoc());
+
+         advance();
+         frags.emplace_back(parse_type());
+      }
+      else if (currentTok().is(tok::triple_period)) {
+         if (frags.empty()) {
+            diag::err(err_generic_error)
+               << "unexpected pack expansion operator"
+               << lexer << diag::term;
+         }
+
+         if (frags.size() == 1) {
+            auto &back = frags.back();
+
+            if (back.isExpression()) {
+               back.getExpr()->setIsVariadicArgPackExpansion(true);
+            }
+            else {
+               string ident = back.isOperator()
+                              ? operatorToString(back.getOperatorKind())
+                              : back.getOp();
+
+               auto expr = makeExpr<IdentifierRefExpr>(back.getLoc(),
+                                                       move(ident));
+
+               expr->setIsVariadicArgPackExpansion(true);
+
+               frags.pop_back();
+               frags.emplace_back(move(expr));
+            }
+         }
+         else {
+            using Kind = ExprSequence::SequenceElement::Kind;
+
+            auto it = frags.end() - 2;
+
+            // ++args...
+            if (match(frags, it, Kind::EF_Operator, Kind::EF_PossibleOperator)){
+               auto &back = frags.back();
+               string ident = back.isOperator()
+                              ? operatorToString(back.getOperatorKind())
+                              : back.getOp();
+
+               auto expr = makeExpr<IdentifierRefExpr>(back.getLoc(),
+                                                       move(ident));
+
+               frags.pop_back();
+               frags.emplace_back(move(expr));
+            }
+            // args && ...
+            else if (match(frags, it, Kind::EF_PossibleOperator,
+                           Kind::EF_Operator)) {
+               auto op = std::move(frags.back());
+               frags.pop_back();
+
+               auto ident = std::move(frags.back());
+               frags.pop_back();
+
+               auto identExpr =
+                  makeExpr<IdentifierRefExpr>(ident.getLoc(),
+                                              move(ident.getOp()));
+
+               auto triplePeriod =
+                  makeExpr<IdentifierRefExpr>(currentTok().getSourceLoc(),
+                                              "...");
+
+               frags.emplace_back(makeExpr<BinaryOperator>(
+                  op.getLoc(),
+                  operatorToString(op.getOperatorKind()),
+                  move(identExpr), move(triplePeriod)));
+            }
+            // args op ...
+            else if (match(frags, it, Kind::EF_PossibleOperator,
+                           Kind::EF_PossibleOperator)) {
+               auto op = std::move(frags.back());
+               frags.pop_back();
+
+               auto ident = std::move(frags.back());
+               frags.pop_back();
+
+               auto identExpr =
+                  makeExpr<IdentifierRefExpr>(ident.getLoc(),
+                                              move(ident.getOp()));
+
+               auto triplePeriod =
+                  makeExpr<IdentifierRefExpr>(currentTok().getSourceLoc(),
+                                              "...");
+
+               frags.emplace_back(makeExpr<BinaryOperator>(
+                  op.getLoc(),
+                  move(op.getOp()),
+                  move(identExpr), move(triplePeriod)));
+            }
+         }
+      }
+      else if (currentTok().is(tok::question)) {
+         foundQuestion = true;
+         frags.emplace_back("?", currentTok().getSourceLoc());
+      }
+      else if (currentTok().is(tok::colon) && foundQuestion) {
+         foundQuestion = false;
+         frags.emplace_back(":", currentTok().getSourceLoc());
+      }
+      else if (currentTok().is(tok::colon) && ignoreColon) {
+         lexer->backtrack();
+         break;
+      }
+      else if (currentTok().is_operator()) {
+         frags.emplace_back(stringToOperator(currentTok().toString()),
+                            currentTok().getSourceLoc());
+      }
+      else if (!currentTok().oneOf(tok::comma, tok::semicolon,
+                                   tok::close_paren, tok::eof,
+                                   tok::newline, tok::sentinel,
+                                   tok::open_brace, tok::close_brace,
+                                   tok::close_square, tok::colon,
+                                   tok::question)) {
+         frags.emplace_back(parse_unary_expr_target());
+      }
+      else {
+         lexer->backtrack();
+         break;
+      }
+
+      advance(frags.back().isOperator());
+   }
+
+   if (frags.size() == 1 && !parenthesized) {
+      std::shared_ptr<Expression> singleExpr;
+      switch (frags.front().getKind()) {
+         case ExprSequence::SequenceElement::EF_Operator:
+            singleExpr = makeExpr<IdentifierRefExpr>(
+               start, operatorToString(frags.front().getOperatorKind()));
+            break;
+         case ExprSequence::SequenceElement::EF_Expression:
+            singleExpr = frags.front().getExpr();
+            break;
+         case ExprSequence::SequenceElement::EF_PossibleOperator:
+            singleExpr = makeExpr<IdentifierRefExpr>(
+               start, string(frags.front().getOp()));
+            break;
+      }
+
+      return singleExpr;
+   }
+   else if (frags.empty()) {
+      diag::err(err_generic_error) << "unexpected token "
+                                      + currentTok().toString()
+                                   << lexer << diag::term;
+   }
+
+   return makeExpr<ExprSequence>(start, move(frags), parenthesized);
+}
+
+namespace {
+
+int hasHigherPrecedence(Token& next, int& min_precedence) {
+   if (next.isContextualKeyword(":>") || next.isContextualKeyword("<:"))
+      return util::op_precedence["as"];
+
+   if (next.is(tok::colon))
+      return util::op_precedence["as"];
+
+   if (next.is_operator()) {
+      auto op = next.toString();
+      auto it = util::op_precedence.find(op);
+
+      return (it != util::op_precedence.end() && it->second > min_precedence)
+             ? it->second : 0;
+   }
+
+   return 0;
+}
+
+int hasHigherOrEqualPrecedence(Token& next, int& min_precedence) {
+   if (next.isContextualKeyword(":>") || next.isContextualKeyword("<:"))
+      return util::op_precedence["as"];
+
+   if (next.is(tok::colon))
+      return util::op_precedence["as"];
+
+   if (next.is_operator()) {
+      auto op = next.toString();
+      auto it = util::op_precedence.find(op);
+
+      return (it != util::op_precedence.end() && it->second >= min_precedence)
+             ? it->second : 0;
+   }
+
+   return 0;
+}
+
+} // anonymous namespace
+
+std::shared_ptr<StaticExpr> Parser::parse_static_expr(
+                                                bool ignoreGreater,
+                                                bool ignoreColon,
+                                                std::shared_ptr<Expression> lhs,
+                                                int minPrecedence) {
+   ++StaticExprStack;
+
+   auto start = currentTok().getSourceLoc();
    if (lhs == nullptr) {
       lhs = parse_unary_expr();
    }
 
-   Token next = lexer->lookahead(false);
+   Token next = lookahead(false);
+   while (auto prec = hasHigherOrEqualPrecedence(next, minPrecedence)) {
+      if (next.is(tok::greater) && ignoreGreater)
+         break;
+      if (next.is(tok::colon) && ignoreColon)
+         break;
 
-   // ...while the next operator has a higher precedence than the minimum
-   while (hasHigherOrEqualPrecedence(next, min_precedence)) {
-      string op = next.get_value().strVal;
       Expression::SharedPtr rhs;
+      string op = next.rawRepr();
+      auto operatorLoc = next.getSourceLoc();
 
-      if (op == "as" || op == "as!" || op == "isa") {
-         lexer->advance();
-         lexer->advance();
+      if (next.oneOf(tok::as, tok::isa, tok::isa,
+                     tok::as_exclaim, tok::as_question)
+          || op == ":>" || op == "<:") {
+         advance();
+         advance();
 
          rhs = parse_type();
       }
+      else if (next.is(tok::colon)) {
+         advance();
+         advance();
+
+         rhs = parse_constraint_expr();
+      }
       else {
-         lexer->advance();
-         lexer->advance();
+         advance();
+         advance();
 
          rhs = parse_unary_expr();
       }
 
-      next = lexer->lookahead(false);
-
-      // continue recursively while a higher precedence operator follows
-      while (hasHigherPrecedence(next, util::op_precedence[op])) {
-         rhs = parse_expression(rhs,
-                                util::op_precedence[next.get_value().strVal]);
-         next = lexer->lookahead(false);
+      next = lookahead(false);
+      while (auto nextPrec = hasHigherPrecedence(next, prec)) {
+         rhs = parse_static_expr(ignoreGreater, ignoreColon, rhs, nextPrec);
+         next = lookahead(false);
       }
 
-      // return the expression so far
-      auto binary_op = std::make_shared<BinaryOperator>(move(op));
-      setIndex(binary_op.get(), start);
-      binary_op->setLhs(move(lhs));
-      binary_op->setRhs(move(rhs));
-
-      lhs = binary_op;
+      lhs = makeExpr<BinaryOperator>(operatorLoc, move(op),
+                                     move(lhs), move(rhs));
    }
 
    // tertiary operator
-   if (next.is_operator("?")) {
-      lexer->advance(false);
-      auto op = parse_tertiary_operator(lhs);
-      setIndex(op.get(), start);
-
-      return op;
+   if (next.is(tok::question)) {
+      advance(false);
+      lhs = parse_tertiary_operator(lhs);
    }
 
-   setIndex(lhs.get(), start);
-   return lhs;
+   --StaticExprStack;
+
+   return makeExpr<StaticExpr>(start, move(lhs));
 }
 
-Statement::SharedPtr Parser::parse_declaration(
-   bool is_const, bool is_declaration)
+std::shared_ptr<ConstraintExpr> Parser::parse_constraint_expr()
 {
-   std::vector<DeclStmt::SharedPtr> declarations;
-   auto access = AccessModifier::DEFAULT;
+   auto start = currentTok().getSourceLoc();
+   ConstraintExpr::Kind kind;
 
-   while (lexer->currentToken.get_type() == T_KEYWORD) {
-      auto keyword = lexer->strVal();
-      if (keyword == "var" || keyword == "let") {
+   switch (currentTok().getKind()) {
+      case tok::kw_class:
+         kind = ConstraintExpr::Class;
          break;
-      }
-      else if (keyword == "public") {
-         access = AccessModifier::PUBLIC;
-      }
-      else if (keyword == "private") {
-         access = AccessModifier::PRIVATE;
-      }
-      else {
-         llvm_unreachable("Unexpected keyword");
-      }
-
-      lexer->advance();
+      case tok::kw_struct:
+         kind = ConstraintExpr::Struct;
+         break;
+      case tok::kw_enum:
+         kind = ConstraintExpr::Enum;
+         break;
+      case tok::kw_union:
+         kind = ConstraintExpr::Union;
+         break;
+      case tok::kw_def:
+         kind = ConstraintExpr::Function;
+         break;
+      case tok::times:
+         kind = ConstraintExpr::Pointer;
+         break;
+      case tok::kw_ref:
+         kind = ConstraintExpr::Reference;
+         break;
+      case tok::ident:
+         if (currentTok().isContextualKeyword("default")) {
+            kind = ConstraintExpr::DefaultConstructible;
+            break;
+         }
+         LLVM_FALLTHROUGH;
+      default:
+         return makeExpr<ConstraintExpr>(start, parse_type());
    }
 
-   for (;;) {
-      Token start = lexer->currentToken;
-      lexer->advance();
+   return makeExpr<ConstraintExpr>(start, kind);
+}
 
-      bool inferred = true;
-      string identifier = lexer->strVal();
+namespace {
+
+struct TraitArguments {
+   enum Kind : unsigned char {
+      None,
+      Expr,
+      Stmt,
+      Type,
+      String,
+      Identifier
+   };
+
+   TraitArguments(Kind arg1 = None, Kind arg2 = None,
+                  Kind arg3 = None, Kind arg4 = None)
+      : args{ arg1, arg2, arg3, arg4 }
+   { }
+
+   Kind args[4];
+};
+
+using Kind = TraitArguments::Kind;
+
+TraitArguments traitArgs[] = {
+   { Kind::Stmt },               // Compiles
+   { Kind::Stmt },               // CompileErrors
+   { Kind::Type, Kind::String }, // HasMember
+   { Kind::Type, Kind::String }, // HasProperty
+   { Kind::Type, Kind::String }, // HasStaticMember
+   { Kind::Type, Kind::String }, // HasStaticProperty
+   { Kind::Type, Kind::String }, // HasMethod
+   { Kind::Type, Kind::String }, // HasStaticMethod,
+   { Kind::Identifier },         // ValidIdentifier
+   { Kind::Identifier },         // ValidFunction
+   { Kind::Type },               // IsInteger
+   { Kind::Type },               // IsFloat
+   { Kind::Type },               // IntegerBitwidth
+   { Kind::Type },               // IsUnsigned
+   { Kind::Type },               // FPPrecision
+   { Kind::Expr },               // Arity
+};
+
+} // anonymous namespace
+
+std::shared_ptr<TraitsExpr> Parser::parse_traits_expr()
+{
+   auto prev = StaticExprStack;
+   StaticExprStack = 0;
+
+   auto start = currentTok().getSourceLoc();
+
+   lexer->expect(tok::open_paren);
+   lexer->expect(tok::ident);
+
+   auto str = currentTok()._value.getString();
+   auto kind = llvm::StringSwitch<TraitsExpr::Kind>(str)
+      .Case("compiles", TraitsExpr::Compiles)
+      .Case("compile_errors", TraitsExpr::CompileErrors)
+      .Case("has_member", TraitsExpr::HasMember)
+      .Case("has_static_member", TraitsExpr::HasStaticMember)
+      .Case("has_property", TraitsExpr::HasProperty)
+      .Case("has_static_property", TraitsExpr::HasStaticProperty)
+      .Case("has_method", TraitsExpr::HasMethod)
+      .Case("has_static_method", TraitsExpr::HasStaticMethod)
+      .Case("valid_identifier", TraitsExpr::ValidIdentifier)
+      .Case("valid_function", TraitsExpr::ValidFunction)
+      .Case("is_integer", TraitsExpr::IsInteger)
+      .Case("is_fp", TraitsExpr::IsFloat)
+      .Case("bitwidth_of", TraitsExpr::IntegerBitwidth)
+      .Case("is_unsigned", TraitsExpr::IsUnsigned)
+      .Case("fp_precision", TraitsExpr::FPPrecision)
+      .Case("arity", TraitsExpr::Arity)
+      .Default(TraitsExpr::Invalid);
+
+   if (kind == TraitsExpr::Invalid)
+      diag::err(err_generic_error)
+         << "invalid __traits directive" << lexer << diag::term;
+
+   std::vector<TraitsExpr::TraitsArgument> args;
+   auto &argKinds = traitArgs[kind];
+
+   size_t i = 0;
+   while (argKinds.args[i] != TraitArguments::None) {
+      advance();
+      if (currentTok().is(tok::comma))
+         advance();
+
+      switch (argKinds.args[i]) {
+         case TraitArguments::Expr:
+            args.emplace_back(parse_expr_sequence());
+            break;
+         case TraitArguments::Stmt:
+            args.emplace_back(parse_next_stmt());
+            break;
+         case TraitArguments::Type:
+            args.emplace_back(parse_type());
+            break;
+         case TraitArguments::Identifier:
+            if (!currentTok().is(tok::ident))
+               diag::err(err_generic_error)
+                  << "expected identifier" << lexer << diag::term;
+
+            args.emplace_back(string(currentTok()._value.getString()));
+            break;
+         case TraitArguments::String:
+            if (!currentTok().is(tok::stringliteral))
+               diag::err(err_generic_error)
+                  << "expected string literal" << lexer << diag::term;
+
+            args.emplace_back(string(currentTok()._value.getString()));
+            break;
+         default:
+            llvm_unreachable("bad arg kind");
+      }
+
+      ++i;
+   }
+
+   lexer->expect(tok::close_paren);
+   StaticExprStack = prev;
+
+   return makeExpr<TraitsExpr>(start, kind, std::move(args));
+}
+
+Statement::SharedPtr Parser::parse_declaration(bool is_const,
+                                               bool is_declaration) {
+   std::vector<Statement::SharedPtr> declarations;
+   auto access = maybeParseAccessModifier();
+
+   auto start = currentTok().getSourceLoc();
+
+   for (;;) {
+      auto start = currentTok().getSourceLoc();
+      advance();
+      std::vector<string> identifiers;
+
+      if (currentTok().is(tok::open_paren)) {
+         advance();
+
+         while (!currentTok().is(tok::close_paren)) {
+            identifiers.emplace_back(move(lexer->strRef()));
+
+            advance();
+            if (currentTok().is(tok::comma))
+               advance();
+         }
+      }
+      else {
+         identifiers.emplace_back(move(lexer->strRef()));
+      }
 
       Expression::SharedPtr value = nullptr;
-      TypeRef::SharedPtr typeref = std::make_shared<TypeRef>();
+      TypeRef::SharedPtr typeref = makeExpr<TypeRef>(start);
 
-      Token next = lexer->lookahead(false);
+      Token next = lookahead(false);
 
-      if (next.is_operator(":")) {
-         inferred = false;
-
-         lexer->advance();
-         lexer->advance();
+      if (next.is(tok::colon)) {
+         advance();
+         advance();
 
          typeref = parse_type();
 
-         next = lexer->lookahead();
+         next = lookahead();
       }
       else if (is_declaration) {
          ParseError::raise("Declared variables must be type annotated", lexer);
@@ -1136,33 +1570,31 @@ Statement::SharedPtr Parser::parse_declaration(
 
       typeref->getType(true).isConst(is_const);
 
-      if (next.is_operator("=")) {
+      if (next.is(tok::equals)) {
          if (is_declaration) {
             ParseError::raise("Declared variables cannot be assigned", lexer);
          }
 
-         lexer->advance(false);
-         lexer->advance();
+         advance(false);
+         advance();
 
-         value = parse_expression();
+         value = parse_expr_sequence();
       }
 
-      auto decl_stmt = std::make_shared<DeclStmt>(move(identifier),
-                                                  move(typeref),
-                                                  is_const,
-                                                  move(value));
+      std::shared_ptr<Statement> decl;
+      if (top_level) {
+         decl = makeExpr<GlobalVarDecl>(start, access, move(identifiers),
+                                        move(typeref), is_const, move(value));
+      }
+      else {
+         decl = makeExpr<LocalVarDecl>(start, move(identifiers), move(typeref),
+                                       is_const, move(value));
+      }
 
-      decl_stmt->setAccess(access);
-      decl_stmt->setAttributes(std::move(attributes));
-      decl_stmt->isDeclaration(is_declaration);
-      decl_stmt->isGlobal(top_level);
+      declarations.push_back(decl);
 
-      setIndex(decl_stmt.get(), start);
-
-      declarations.push_back(decl_stmt);
-
-      next = lexer->lookahead();
-      if (!next.is_punctuator(',')) {
+      next = lookahead();
+      if (!next.is(tok::comma)) {
          break;
       }
       else if (is_declaration) {
@@ -1170,47 +1602,45 @@ Statement::SharedPtr Parser::parse_declaration(
       }
    }
 
-   attributes.clear();
-
    if (declarations.size() == 1) {
       return declarations.front();
    }
 
-   CompoundStmt::SharedPtr comp = std::make_shared<CompoundStmt>(true);
-   for (const auto & decl : declarations) {
-      comp->addStatement(decl);
+   auto compound = makeExpr<CompoundStmt>(start, true);
+   for (auto & decl : declarations) {
+      compound->addStatement(move(decl));
    }
 
-   return comp;
+   return compound;
 }
 
 std::vector<pair<string, std::shared_ptr<TypeRef>>> Parser::parse_tuple_type()
 {
    std::vector<pair<string, std::shared_ptr<TypeRef>>> tupleTypes;
 
-   while (!lexer->currentToken.is_punctuator(')')) {
-      lexer->advance();
+   while (!currentTok().is(tok::close_paren)) {
+      advance();
 
-      if (lexer->currentToken.is_punctuator(')')) {
+      if (currentTok().is(tok::close_paren)) {
          break;
       }
 
       string label;
-      if (lexer->currentToken.get_type() == T_IDENT
-          && lexer->lookahead().is_operator(":")) {
+      if (currentTok().getKind() == tok::ident
+          && lookahead().is(tok::colon)) {
          label = lexer->strVal();
-         lexer->advance();
-         lexer->advance();
+         advance();
+         advance();
       }
 
       bool vararg = false;
-      if (lexer->currentToken.is_operator("...")) {
+      if (currentTok().is(tok::triple_period)) {
          vararg = true;
-         lexer->advance();
+         advance();
 
          // c style vararg
-         if (lexer->currentToken.get_type() != T_IDENT) {
-            auto typeref = std::make_shared<TypeRef>();
+         if (currentTok().getKind() != tok::ident) {
+            auto typeref = makeExpr<TypeRef>(currentTok().getSourceLoc());
             typeref->isCStyleVararg(true);
 
             tupleTypes.emplace_back(label, typeref);
@@ -1218,13 +1648,13 @@ std::vector<pair<string, std::shared_ptr<TypeRef>>> Parser::parse_tuple_type()
          }
       }
 
-      auto argType = parse_type();
+      auto argType = parse_type(true);
       argType->isVararg(vararg);
 
       tupleTypes.emplace_back(label, argType);
-      lexer->advance();
-      if (!lexer->currentToken.is_punctuator(',')
-          && !lexer->currentToken.is_punctuator(')')) {
+      advance();
+      if (!currentTok().is(tok::comma)
+          && !currentTok().is(tok::close_paren)) {
          ParseError::raise("Expected closing parenthesis after argument list",
                            lexer);
       }
@@ -1237,12 +1667,12 @@ std::vector<pair<string, std::shared_ptr<TypeRef>>> Parser::parse_tuple_type()
  * Parses a method's argument list
  * @return
  */
-std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(
-   bool optionalNames, bool optionalTypes, bool isTemplateArgList)
-{
-   Token start = lexer->currentToken;
+std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(bool optionalNames,
+                                                           bool optionalTypes,
+                                                       bool isTemplateArgList) {
+   auto start = currentTok().getSourceLoc();
    std::vector<FuncArgDecl::SharedPtr> args;
-   if (!lexer->currentToken.is_punctuator('(')) {
+   if (!currentTok().is(tok::open_paren)) {
       lexer->backtrack();
       return args;
    }
@@ -1250,13 +1680,9 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(
    bool def_arg = false;
    bool var_arg = false;
 
-   lexer->advance();
+   advance();
 
-   while (!lexer->currentToken.is_punctuator(')')) {
-      if (args.size() > MAX_FUNCTION_ARGS) {
-         ParseError::raise("functions cannot have more than "
-            + std::to_string(MAX_FUNCTION_ARGS) + " arguments", lexer);
-      }
+   while (!currentTok().is(tok::close_paren)) {
       if (var_arg) {
          ParseError::raise("Vararg arguments can only be the last argument"
                               "of a function", lexer);
@@ -1264,46 +1690,60 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(
 
       std::vector<Attribute> attributes = parse_attributes();
 
-      start = lexer->currentToken;
+      start = currentTok().getSourceLoc();
 
       string argName;
       TypeRef::SharedPtr argType;
       Expression::SharedPtr defaultVal;
+      bool templateArgExpansion = false;
+      bool isConst = true;
 
-      if (!optionalNames || lexer->lookahead().is_operator(":")) {
-         if (lexer->currentToken.get_type() != T_IDENT) {
+      if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
+         isConst = currentTok().is(tok::kw_let);
+         advance();
+      }
+
+      if (!optionalNames || lookahead().is(tok::colon)) {
+         if (currentTok().getKind() != tok::ident) {
             ParseError::raise("Expected identifier", lexer);
          }
 
          argName = std::move(lexer->strRef());
-         lexer->advance();
+         advance();
       }
-      else if (lexer->currentToken.is_operator("...")) {
+      else if (currentTok().is(tok::triple_period)) {
          var_arg = true;
-         lexer->advance();
-         if (lexer->lookahead().get_type() != T_IDENT) {
-            auto typeref = std::make_shared<TypeRef>();
+         advance();
+         if (lookahead().getKind() != tok::ident) {
+            auto typeref = makeExpr<TypeRef>(start);
             typeref->isCStyleVararg(true);
 
-            auto argDecl = std::make_shared<FuncArgDecl>("", move(typeref));
-            setIndex(argDecl.get(), start);
-
+            auto argDecl = makeExpr<FuncArgDecl>(start, "", move(typeref),
+                                                 nullptr, false, true);
             args.push_back(move(argDecl));
             break;
          }
       }
 
-      if (lexer->currentToken.is_operator(":") || optionalNames) {
-         if (lexer->currentToken.is_operator(":")) {
-            lexer->advance();
+      if (currentTok().is(tok::colon) || optionalNames) {
+         if (currentTok().is(tok::colon)) {
+            advance();
          }
 
-         argType = parse_type();
+         argType = parse_type(true);
 
          argType->isVararg(var_arg);
-         argType->setReturnDummyObjTy(isTemplateArgList);
 
-         lexer->advance();
+         advance();
+
+         if (argType->isVariadicArgPackExpansion()) {
+            if (var_arg) {
+               diag::err(err_generic_error) << "template parameter pack "
+                  "expansions cannot be vararg" << lexer << diag::term;
+            }
+
+            templateArgExpansion = true;
+         }
       }
       else if (!optionalTypes) {
          ParseError::raise("Function arguments have to have a specified type",
@@ -1311,44 +1751,45 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(
       }
 
       // optional default value
-      if (lexer->currentToken.is_operator("=")) {
+      if (currentTok().is(tok::equals)) {
          if (var_arg) {
             ParseError::raise("Vararg arguments cannot have a default value",
                               lexer);
          }
 
-         lexer->advance();
+         advance();
 
-         defaultVal = parse_expression();
+         defaultVal = parse_expr_sequence();
          def_arg = true;
 
-         lexer->advance();
+         advance();
 
       } else if (def_arg) {
          ParseError::raise("Default values are only allowed as last items of "
                               "an argument list", lexer);
       }
 
-      auto argDecl = std::make_shared<FuncArgDecl>(move(argName),
-                                                   move(argType),
-                                                   move(defaultVal));
+      auto argDecl = makeExpr<FuncArgDecl>(start, move(argName),
+                                           move(argType),
+                                           move(defaultVal),
+                                           templateArgExpansion,
+                                           isConst);
 
-      setIndex(argDecl.get(), start);
       args.push_back(move(argDecl));
 
       // end of argument list or next argument
-      if (lexer->currentToken.is_punctuator(',')) {
-         lexer->advance();
+      if (currentTok().is(tok::comma)) {
+         advance();
       }
-      else if (!lexer->currentToken.is_punctuator(')')) {
+      else if (!currentTok().is(tok::close_paren)) {
          ParseError::raise("Expected closing parenthesis after "
                               "argument list", lexer);
       }
 
-      start = lexer->currentToken;
+      start = currentTok().getSourceLoc();
    }
 
-   if (!lexer->currentToken.is_punctuator(')')) {
+   if (!currentTok().is(tok::close_paren)) {
       ParseError::raise("Expected closing parenthesis after argument "
                            "list", lexer);
    }
@@ -1356,60 +1797,40 @@ std::vector<FuncArgDecl::SharedPtr> Parser::parse_arg_list(
    return args;
 }
 
-bool Parser::isValidOperatorChar(Token& next) {
-   return next.get_type() != T_PUNCTUATOR
-          && next.get_type() != T_EOF && !next.is_operator("->");
+bool Parser::isValidOperatorChar(const Token& next) {
+   return !next.is_punctuator() && !next.is(tok::eof)
+          && !next.is(tok::arrow_single);
 }
 
-Statement::SharedPtr Parser::parse_function_decl(
-   bool is_declaration, string *templateFuncName)
+FunctionDecl::SharedPtr Parser::parse_function_decl(bool is_declaration)
 {
-   Token start = lexer->currentToken;
-   size_t beginIndex = lexer->tokens.size() - 1;
+   auto start = currentTok().getSourceLoc();
 
-   bool isOperatorDecl = false;
-   string opType;
-   if (lexer->lookahead().get_type() == T_KEYWORD) {
-      isOperatorDecl = true;
-      lexer->advance();
+   AccessModifier am = maybeParseAccessModifier();
+   OperatorInfo op;
 
-      opType = lexer->strVal();
+   if (lookahead().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
+      advance();
+
+      switch (currentTok().getKind()) {
+         case tok::kw_infix: op.setFix(FixKind::Infix); break;
+         case tok::kw_prefix: op.setFix(FixKind::Prefix); break;
+         case tok::kw_postfix: op.setFix(FixKind::Postfix); break;
+         default:
+            llvm_unreachable("bad fix kind");
+      }
+
+      op.setPrecedenceGroup(PrecedenceGroup(12, Associativity::Left));
    }
 
-   // function name
-   lexer->advance();
+   advance();
 
    string funcName;
-   string op;
+   TypeRef::SharedPtr returnType;
+   bool isCastOp;
 
-   if (templateFuncName) {
-      funcName = *templateFuncName;
-      if (isOperatorDecl) {
-         while (isValidOperatorChar(lexer->currentToken)) {
-            op += lexer->strVal();
-            lexer->advance(false, true);
-         }
-
-         lexer->backtrack();
-      }
-   }
-   else if (isOperatorDecl) {
-      while (isValidOperatorChar(lexer->currentToken)) {
-         op += lexer->strVal();
-         lexer->advance(false, true);
-      }
-
-      if (lexer->currentToken.is_punctuator(' ')) {
-         lexer->advance();
-      }
-
-      if (!util::matches("(..+|[^.])*", op)) {
-         ParseError::raise("Custom operators can only contain periods "
-                              "in sequences of two or more", lexer);
-      }
-
-      lexer->backtrack();
-      funcName = opType + " " + op;
+   if (op.getPrecedenceGroup().isValid()) {
+      funcName = parse_operator_name(isCastOp, returnType);
    }
    else {
       funcName = lexer->strVal();
@@ -1418,209 +1839,79 @@ Statement::SharedPtr Parser::parse_function_decl(
    std::vector<Statement::SharedPtr> innerDecls;
    CurrentFuncDecls = &innerDecls;
 
-   bool isMain = funcName == "main";
-   bool isTemplate = false;
+   auto templateParams = try_parse_template_parameters();
+   templateParamStack.push_back(&templateParams);
 
-   std::vector<TemplateConstraint> generics;
+   advance();
 
-   if (!templateFuncName) {
-      generics = parse_template_constraints();
-      lexer->advance();
-      if (!generics.empty()) {
-         isTemplate = true;
-      }
-   }
-   else {
-      lexer->advance();
-      lexer->skip_until_even(Lexer::ANGLED);
-      if (lexer->currentToken.is_punctuator('>')) {
-         lexer->advance();
-      }
-   }
-
-   // template
-   if (isTemplate) {
-      return parse_function_template(
-         beginIndex,
-         funcName,
-         generics
-      );
-   }
-
-   std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list(is_declaration);
-   FunctionDecl::SharedPtr fun_dec = std::make_shared<FunctionDecl>(
-      AccessModifier::PUBLIC, std::move(funcName)
-   );
-
-   if (isMain) {
-      fun_dec->setExternKind(ExternKind::C);
-   }
-
-   fun_dec->setAttributes(std::move(attributes));
-   attributes.clear();
-
-   for (auto arg : args) {
-      // TODO meta type arg
-      fun_dec->addArgument(arg);
-   }
+   auto args = parse_arg_list(true);
 
    // optional return type
-   if (lexer->lookahead().is_operator("->")) {
-      lexer->advance();
-      lexer->advance();
-      fun_dec->setReturnType(parse_type());
+   if (lookahead().is(tok::arrow_single)) {
+      advance();
+      advance();
+      returnType = parse_type();
    }
    else if (is_declaration) {
       ParseError::raise("Declared functions have to have a defined return type",
                         lexer);
    }
    else {
-      fun_dec->setReturnType(std::make_shared<TypeRef>());
+      returnType = makeExpr<TypeRef>(start);
    }
 
-   if (lexer->lookahead().is_punctuator('{')
-            || lexer->lookahead().is_keyword("unsafe")) {
+   std::vector<std::shared_ptr<StaticExpr>> constraints;
+   while (lookahead().is(tok::kw_where)) {
+      advance();
+      advance();
+
+      constraints.push_back(parse_static_expr());
+   }
+
+   CompoundStmt::SharedPtr body = nullptr;
+
+   if (lookahead().is(tok::open_brace)) {
       if (is_declaration) {
-         ParseError::raise("Declared functions cannot have a body", lexer);
+         ParseError::raise("declared functions cannot have a body", lexer);
       }
 
-      // function body
-      CompoundStmt::SharedPtr func_body = parse_block();
-      fun_dec->setBody(func_body);
+      body = parse_block();
    }
 
    CurrentFuncDecls = nullptr;
 
-   fun_dec->isDeclaration(is_declaration);
-   fun_dec->setInnerDecls(std::move(innerDecls));
+   auto funcDecl = makeExpr<FunctionDecl>(start, am, std::move(funcName),
+                                          std::move(args),
+                                          std::move(returnType),
+                                          std::move(templateParams),
+                                          move(constraints),
+                                          move(body), op);
 
-   setIndex(fun_dec.get(), start);
+   funcDecl->isDeclaration(is_declaration);
+   funcDecl->setInnerDecls(std::move(innerDecls));
 
-   return fun_dec;
+   decl->DeclareFunction(funcDecl.get());
+   templateParamStack.pop_back();
+
+   return funcDecl;
 }
 
-std::shared_ptr<CallableTemplateDecl> Parser::parse_function_template(
-   size_t beginIndex,
-   string &name,
-   std::vector<TemplateConstraint> &constraints)
-{
-   Lexer::IgnoreScope guard(lexer);
-   std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
-
-   auto returnType = std::make_shared<TypeRef>();
-   lexer->advance();
-
-   if (lexer->currentToken.is_operator("->")) {
-      lexer->advance();
-      returnType = parse_type();
-      lexer->advance();
-   }
-
-   lexer->skip_until_even(Lexer::BRACE);
-
-   std::vector<Token> tokens;
-   tokens.reserve(lexer->tokens.size() - beginIndex - 1);
-
-   auto current = lexer->tokens.size() - 1;
-   for (;;) {
-      tokens.push_back(std::move(lexer->tokens[current]));
-      if (current == beginIndex) {
-         break;
-      }
-
-      --current;
-   }
-
-   auto Store = std::make_unique<SimpleTokenStore>(move(tokens));
-   auto Template = std::make_shared<CallableTemplateDecl>(
-      std::move(name),
-      std::move(Store),
-      std::move(constraints),
-      std::move(args),
-      std::move(returnType)
-   );
-
-   return Template;
-}
-
-std::shared_ptr<MethodTemplateDecl> Parser::parse_method_template(
-   size_t beginIndex,
-   string &name,
-   bool isStatic,
-   bool isMutating,
-   bool isOperator,
-   bool isProtocol,
-   std::vector<TemplateConstraint> &constraints)
-{
-   Lexer::IgnoreScope guard(lexer);
-   std::vector<FuncArgDecl::SharedPtr> args = parse_arg_list();
-
-   auto returnType = std::make_shared<TypeRef>();
-   lexer->advance();
-
-   if (lexer->currentToken.is_operator("->")) {
-      lexer->advance();
-      returnType = parse_type(true);
-      lexer->advance();
-   }
-
-   lexer->skip_until_even(Lexer::BRACE);
-
-   std::vector<Token> tokens;
-   tokens.reserve(lexer->tokens.size() - beginIndex - 1);
-
-   auto current = lexer->tokens.size() - 1;
-   for (;;) {
-      tokens.push_back(std::move(lexer->tokens[current]));
-      if (current == beginIndex) {
-         break;
-      }
-
-      --current;
-   }
-
-   if (isProtocol) {
-      constraints.emplace_back(TemplateConstraint::TypeName, "Self", nullptr,
-                               nullptr, nullptr);
-   }
-
-   auto Store = std::make_unique<SimpleTokenStore>(move(tokens));
-   auto Template = std::make_shared<MethodTemplateDecl>(
-      std::move(name),
-      std::move(Store),
-      std::move(constraints),
-      std::move(args),
-      std::move(returnType),
-      isStatic
-   );
-
-   Template->isMutating(isMutating);
-   Template->setOuterRecord(outerTemplate);
-   Template->isOperator(isOperator);
-
-   return Template;
-}
-
-/**
- * Parses a lambda expression
- * @return
- */
 LambdaExpr::SharedPtr Parser::parse_lambda_expr()
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
    auto args = parse_arg_list(false, true);
 
-   lexer->advance();
-   auto retType = std::make_shared<TypeRef>();
+   advance();
+   auto retType = makeExpr<TypeRef>(start);
 
-   if (lexer->currentToken.is_operator("->")) {
-      lexer->advance();
+   if (currentTok().is(tok::arrow_single)) {
+      advance();
       retType = parse_type();
-      lexer->advance();
+      advance();
    }
 
-   if (lexer->currentToken.is_operator("=>")) {
-      lexer->advance(); // =>
+   if (currentTok().is(tok::arrow_double)) {
+      advance(); // =>
    }
    else {
       llvm_unreachable("function should never be called in this case");
@@ -1628,95 +1919,80 @@ LambdaExpr::SharedPtr Parser::parse_lambda_expr()
 
    Statement::SharedPtr body = parse_next_stmt();
 
-   auto lambda_expr = std::make_shared<LambdaExpr>(std::move(retType),
-                                                   std::move(args),
-                                                   std::move(body));
+   auto lambda_expr = makeExpr<LambdaExpr>(start, std::move(retType),
+                                           std::move(args), std::move(body));
 
-   setIndex(lambda_expr.get(), start);
    lambda_expr->setMemberExpr(try_parse_member_expr());
 
    return lambda_expr;
 }
 
-std::vector<TemplateConstraint> Parser::parse_template_constraints()
+std::vector<TemplateParameter> Parser::try_parse_template_parameters()
 {
-   std::vector<TemplateConstraint> templateArgs;
-   auto guard = lexer->makeModeGuard(Lexer::TemplateConstraints);
+   std::vector<TemplateParameter> templateArgs;
+   auto guard = lexer->makeModeGuard(Lexer<>::TemplateConstraints);
 
-   if (!lexer->lookahead().is_operator("<")
-       && !lexer->currentToken.is_operator("<")) {
+   if (!lookahead().is(tok::smaller)) {
       return templateArgs;
    }
 
-   if (!lexer->currentToken.is_operator("<")) {
-      lexer->advance();
-   }
+   advance();
 
    bool defaultGiven = false;
-   bool variadic = false;
 
-   lexer->advance();
-   while (!lexer->currentToken.is_operator(">")) {
+   advance();
+   while (!currentTok().is(tok::greater)) {
       if (templateArgs.size() > MAX_TEMPLATE_ARGS) {
          ParseError::raise("templates cannot have more than "
             + std::to_string(MAX_TEMPLATE_ARGS) + " arguments", lexer);
       }
 
-      TemplateConstraint::Kind kind = TemplateConstraint::TypeName;
+      bool variadic = false;
+      auto loc = currentTok().getSourceLoc();
 
-      if (lexer->currentToken.get_type() == T_KEYWORD) {
-         auto &keyword = lexer->currentToken._value.strVal;
-         if (keyword == "typename") {
+      TemplateParameter::Kind kind = TemplateParameter::TypeName;
+
+      if (currentTok().is(tok::ident)) {
+         if (currentTok().isContextualKeyword("typename")) {
             // default
+            advance();
          }
-         else if (keyword == "value") {
-            kind = TemplateConstraint::Value;
+         else if (currentTok().isContextualKeyword("value")) {
+            kind = TemplateParameter::Value;
+            advance();
          }
-         else if (keyword == "any") {
-            kind = TemplateConstraint::Arbitrary;
-         }
-         else {
-            ParseError::raise("expected template arg kind", lexer);
-         }
-
-         lexer->advance();
       }
 
-      if (lexer->currentToken.is_operator("...")) {
-         if (variadic) {
-            ParseError::raise("variadic arguments must be last in a template "
-                                 "parameter list", lexer);
-         }
-
+      if (currentTok().is(tok::triple_period)) {
          variadic = true;
-         lexer->advance();
+         advance();
       }
 
-      if (lexer->currentToken.get_type() != T_IDENT) {
+      if (currentTok().getKind() != tok::ident) {
          ParseError::raise("expected template argument name", lexer);
       }
 
-      auto genericTypeName = std::move(lexer->currentToken._value.strVal);
+      auto genericTypeName = std::move(currentTok()._value.strVal);
       std::shared_ptr<TypeRef> unresolvedCovariance = nullptr;
       std::shared_ptr<TypeRef> unresolvedContravariance = nullptr;
 
-      if (lexer->lookahead().is_operator(":")) {
-         lexer->advance();
-         lexer->advance();
+      if (lookahead().is(tok::colon)) {
+         advance();
+         advance();
 
-         if (kind == TemplateConstraint::TypeName) {
+         if (kind == TemplateParameter::TypeName) {
             bool covarSet = false;
             bool contravarSet = false;
 
             for (;;) {
                auto isCovar = true;
-               if (lexer->currentToken.is_operator("+")) {
+               if (currentTok().is(tok::plus)) {
                   isCovar = false;
-                  lexer->advance();
+                  advance();
                }
-               else if (lexer->currentToken.is_operator("-")) {
+               else if (currentTok().is(tok::minus)) {
                   // default
-                  lexer->advance();
+                  advance();
                }
 
                if (isCovar) {
@@ -1738,15 +2014,15 @@ std::vector<TemplateConstraint> Parser::parse_template_constraints()
                   unresolvedContravariance = parse_type();
                }
 
-               if (lexer->lookahead().is_punctuator(',')
-                   || lexer->lookahead().is_operator(">")) {
+               if (lookahead().is(tok::comma)
+                   || lookahead().is(tok::greater)) {
                   break;
                }
 
-               lexer->advance();
+               advance();
             }
          }
-         else if (kind == TemplateConstraint::Value) {
+         else if (kind == TemplateParameter::Value) {
             unresolvedCovariance = parse_type();
          }
          else {
@@ -1754,40 +2030,30 @@ std::vector<TemplateConstraint> Parser::parse_template_constraints()
          }
       }
 
-      lexer->advance();
+      advance();
 
       std::shared_ptr<TemplateArg> defaultValue = nullptr;
-      if (lexer->currentToken.is_operator("=")) {
+      if (currentTok().is(tok::equals)) {
          defaultGiven = true;
-         lexer->advance();
+         advance();
 
-         while (!lexer->currentToken.is_operator(">")
-                && !lexer->currentToken.is_punctuator(',')) {
+         while (!currentTok().is(tok::greater)
+                && !currentTok().is(tok::comma)) {
             switch (kind) {
-               case TemplateConstraint::TypeName: {
-                  defaultValue = std::make_shared<TemplateArg>(parse_type());
+               case TemplateParameter::TypeName: {
+                  defaultValue = makeExpr<TemplateArg>(
+                     currentTok().getSourceLoc(), parse_type());
                   break;
                }
-               case TemplateConstraint::Value: {
-                  defaultValue = std::make_shared<TemplateArg>(
-                     lexer->parseExpression({}, 0, true));
-                  break;
-               }
-               case TemplateConstraint::Arbitrary: {
-                  std::vector<Token> tokens;
-                  while (!lexer->currentToken.is_punctuator(',')
-                         && lexer->currentToken.get_type() != T_EOF) {
-                     tokens.push_back(lexer->currentToken);
-                     lexer->advance(false, true);
-                  }
-
-                  defaultValue = std::make_shared<TemplateArg>(
-                     std::move(tokens));
+               case TemplateParameter::Value: {
+                  defaultValue = makeExpr<TemplateArg>(
+                     currentTok().getSourceLoc(),
+                     parse_static_expr(true));
                   break;
                }
             }
 
-            lexer->advance();
+            advance();
          }
       }
       else if (defaultGiven) {
@@ -1797,234 +2063,316 @@ std::vector<TemplateConstraint> Parser::parse_template_constraints()
                                       << lexer << diag::term;
       }
 
-      templateArgs.emplace_back(
-         kind,
-         std::move(genericTypeName),
-         std::move(unresolvedCovariance),
-         std::move(unresolvedContravariance),
-         std::move(defaultValue),
-         variadic
-      );
+      templateArgs.emplace_back(kind, std::move(genericTypeName),
+                                std::move(unresolvedCovariance),
+                                std::move(unresolvedContravariance),
+                                std::move(defaultValue), variadic, loc);
 
-      if (lexer->currentToken.is_punctuator(',')) {
-         lexer->advance();
+      if (currentTok().is(tok::comma)) {
+         advance();
       }
    }
 
-   return std::move(templateArgs);
+   return templateArgs;
 }
 
-TemplateArgList *Parser::parse_unresolved_template_args()
+std::vector<TemplateArg> Parser::parse_unresolved_template_args()
 {
-   if (!lexer->currentToken.is_operator("<")) {
-      return new ResolvedTemplateArgList({});
+   if (!currentTok().is(tok::smaller)) {
+      return {};
    }
 
-   Lexer::ModeScopeGuard guard((Lexer::TemplateArgMode), lexer);
-   std::vector<Token> tokens;
+   Lexer<>::ModeScopeGuard guard((Lexer<>::TemplateArgMode), lexer);
+   std::vector<TemplateArg> args;
 
-   lexer->advance();
+   advance();
 
    unsigned openCount = 1;
    unsigned closeCount = 0;
 
    for (;;) {
-      if (lexer->currentToken.is_punctuator('<')) {
-         ++openCount;
-      }
-      else if (lexer->currentToken.is_punctuator('>')) {
-         ++closeCount;
+      auto loc = currentTok().getSourceLoc();
+      switch (currentTok().getKind()) {
+#        define CDOT_LITERAL_TOKEN(Name, Spelling) \
+         case tok::Name:
+#        include "../lex/Tokens.def"
+            args.emplace_back(parse_static_expr(true));
+            break;
+#        define CDOT_OPERATOR_TOKEN(Name, Spelling)               \
+         case tok::Name:                                          \
+            if (currentTok().is(tok::smaller)) ++openCount;       \
+            else if (currentTok().is(tok::greater)) ++closeCount; \
+            else args.emplace_back(parse_static_expr(true));     \
+            break;
+#        include "../lex/Tokens.def"
+         case tok::open_paren:
+            args.emplace_back(parse_type(true));
+            break;
+         case tok::kw_true:
+         case tok::kw_false:
+            args.emplace_back(parse_static_expr(true));
+            break;
+         case tok::ident:
+            if (lexer->strRef() == "value") {
+               advance();
+               args.emplace_back(parse_static_expr(true));
+            }
+            else {
+               auto next = lookahead();
+               if (next.is_operator() && !next.oneOf(tok::greater,
+                                                     tok::smaller,
+                                                     tok::times,
+                                                     tok::times_times,
+                                                     tok::triple_period)) {
+                  args.emplace_back(parse_static_expr(true));
+               }
+               else {
+                  args.emplace_back(parse_type(true));
+               }
+            }
+
+            break;
+         default:
+            args.emplace_back(parse_type(true));
+            break;
       }
 
       if (openCount == closeCount) {
          break;
       }
 
-      tokens.push_back(std::move(lexer->currentToken));
-      lexer->advance();
+      args.back().setSourceLoc(loc);
+      advance();
+
+      if (currentTok().is(tok::comma))
+         advance();
    }
 
-   std::reverse(tokens.begin(), tokens.end());
-
-   return new UnresolvedTemplateArgList(
-      std::move(tokens),
-      source_id, lexer->currentToken.getLine(), lexer->currentToken.getCol()
-   );
+   return args;
 }
 
-ResolvedTemplateArgList* Parser::resolve_template_args(
-   TemplateArgList *argList,
-   std::vector<TemplateConstraint> &constraints)
+namespace {
+
+void copyRecordDecls(RecordInner &Inner, std::shared_ptr<CompoundStmt> &cmpnd)
 {
-   assert(!argList->isResolved());
+   for (auto &C : Inner.constructors)
+      cmpnd->addStatement(move(C));
 
-   auto unresolved = static_cast<UnresolvedTemplateArgList*>(argList);
-   auto &&tokens = unresolved->getTokens();
+   for (auto &F : Inner.fields)
+      cmpnd->addStatement(move(F));
 
-   Parser p(std::move(tokens));
+   for (auto &M : Inner.methods)
+      cmpnd->addStatement(move(M));
 
-   auto &lexer = *p.getLexer();
-   lexer.setLine(unresolved->getLoc().line);
-   lexer.setCol(unresolved->getLoc().col);
+   for (auto &T : Inner.typedefs)
+      cmpnd->addStatement(move(T));
 
-   unsigned i = 0;
-   std::vector<TemplateArg> args;
-   bool variadic = false;
+   for (auto &P : Inner.properties)
+      cmpnd->addStatement(move(P));
 
-   while (lexer.currentToken.get_type() != T_EOF) {
-      TemplateConstraint::Kind kind;
-      if (i == constraints.size() - 1 && constraints[i].isVariadic) {
-         args.emplace_back(std::vector<TemplateArg>());
-         variadic = true;
-      }
-      else if (i >= constraints.size()) {
-         kind = constraints.back().kind;
-      }
-      else {
-         kind = constraints[i].kind;
-      }
+   for (auto &I : Inner.innerDeclarations)
+      cmpnd->addStatement(move(I));
 
-      auto &target = variadic ? args.back().getVariadicArgs()
-                              : args;
+   for (auto &C : Inner.cases)
+      cmpnd->addStatement(move(C));
 
-      if (kind == TemplateConstraint::TypeName) {
-         target.emplace_back(p.parse_type());
-      }
-      else if (constraints[i].kind == TemplateConstraint::Value) {
-         target.emplace_back(lexer.parseExpression({}, 0, true));
-      }
-      else {
-         std::vector<Token> tokens;
-         while (!lexer.currentToken.is_punctuator(',')
-                && lexer.currentToken.get_type() != T_EOF) {
-            tokens.push_back(lexer.currentToken);
-            lexer.advance(false, true);
-         }
+   for (auto &S : Inner.staticStatements)
+      cmpnd->addStatement(move(S));
 
-         target.emplace_back(std::move(tokens));
-      }
-
-      lexer.advance();
-      if (lexer.currentToken.is_punctuator(',')) {
-         lexer.advance();
-      }
-
-      ++i;
-   }
-
-   return new ResolvedTemplateArgList(std::move(args));
+   if (Inner.destructor)
+      cmpnd->addStatement(move(Inner.destructor));
 }
 
-/**
- * Parses an if/else statement
- * @return
- */
+} // anonymous namespace
+
 IfStmt::SharedPtr Parser::parse_if_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
-   Expression::SharedPtr if_cond = parse_expression();
-   lexer->advance(); // last part of expression
+   auto cond = parse_expr_sequence();
+   advance();
 
-   Statement::SharedPtr if_branch = parse_next_stmt();
-   IfStmt::SharedPtr if_stmt = std::make_shared<IfStmt>(move(if_cond),
-                                                        move(if_branch));
+   auto ifBranch = parse_next_stmt();
+   std::shared_ptr<Statement> elseBranch;
 
-   Token next = lexer->lookahead();
-   if (next.get_type() == T_KEYWORD && next.get_value().strVal == "else") {
-      lexer->advance();
-      lexer->advance();
+   if (lookahead().is(tok::kw_else)) {
+      advance();
+      advance();
 
-      auto else_branch = std::static_pointer_cast<CompoundStmt>(
-         parse_next_stmt());
-      if_stmt->setElseBranch(else_branch);
+      elseBranch = parse_next_stmt();
+   }
+   else {
+      elseBranch = makeExpr<NullStmt>(start);
    }
 
-   setIndex(if_stmt.get(), start);
+   return makeExpr<IfStmt>(start, move(cond), move(ifBranch),
+                           move(elseBranch));
+}
 
-   return if_stmt;
+std::shared_ptr<StaticIfStmt> Parser::parse_static_if(ClassHead *head)
+{
+   auto start = currentTok().getSourceLoc();
+   lexer->advanceIf(tok::kw_static_if);
+
+   auto cond = parse_static_expr();
+   advance();
+
+   std::shared_ptr<Statement> ifBranch;
+   std::shared_ptr<Statement> elseBranch;
+
+   if (head) {
+      RecordInner Inner;
+      parse_class_inner(Inner, *head, false, false, false, false, false,
+                        nullptr);
+
+      auto body = makeExpr<CompoundStmt>(start);
+      copyRecordDecls(Inner, body);
+
+      ifBranch = body;
+   }
+   else {
+      ifBranch = parse_next_stmt();
+   }
+
+   if (lookahead().is(tok::kw_else)) {
+      advance();
+      advance();
+
+      if (head) {
+         RecordInner Inner;
+         parse_class_inner(Inner, *head, false, false, false, false, false,
+                           nullptr);
+
+         auto body = makeExpr<CompoundStmt>(start);
+         copyRecordDecls(Inner, body);
+
+         elseBranch = body;
+      }
+      else {
+         elseBranch = parse_next_stmt();
+      }
+   }
+   else {
+      elseBranch = makeExpr<NullStmt>(start);
+   }
+
+   return makeExpr<StaticIfStmt>(start, move(cond), move(ifBranch),
+                                 move(elseBranch));
+}
+
+std::shared_ptr<PatternExpr> Parser::parse_pattern()
+{
+   auto start = currentTok().getSourceLoc();
+
+   if (currentTok().is(tok::isa)) {
+      advance();
+
+      return makeExpr<IsPattern>(start, parse_type());
+   }
+
+   if (currentTok().is(tok::period)) {
+      advance();
+
+      string caseName = move(lexer->strRef());
+      std::vector<CasePattern::Argument> args;
+
+      if (!lookahead().is(tok::open_paren))
+         return makeExpr<CasePattern>(start, move(caseName), move(args));
+
+      advance();
+      while (!currentTok().is(tok::close_paren)) {
+         advance();
+
+         auto loc = currentTok().getSourceLoc();
+         if (currentTok().oneOf(tok::kw_let, tok::kw_var)) {
+            bool isConst = currentTok().is(tok::kw_let);
+            lexer->expect(tok::ident);
+
+            auto ident = move(lexer->strRef());
+            args.emplace_back(move(ident), isConst, loc);
+         }
+         else {
+            args.emplace_back(parse_expr_sequence(), loc);
+         }
+
+         switch (lookahead().getKind()) {
+            case tok::comma:
+            case tok::close_paren:
+               advance();
+               break;
+            default:
+               diag::err(err_generic_error)
+                  << "unexpected token " + lookahead().toString()
+                  << lexer << diag::term;
+         }
+      }
+
+      return makeExpr<CasePattern>(start, move(caseName), move(args));
+   }
+
+   return makeExpr<ExpressionPattern>(start, parse_expr_sequence());
 }
 
 CaseStmt::SharedPtr Parser::parse_case_stmt(bool default_)
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
 
-   CaseStmt::SharedPtr case_stmt;
+   std::shared_ptr<CompoundStmt> body;
+   std::shared_ptr<PatternExpr> pattern;
 
    if (!default_) {
-      Expression::SharedPtr case_val = parse_expression();
-      case_stmt = std::make_shared<CaseStmt>(move(case_val));
-      lexer->advance();
-   }
-   else {
-      case_stmt = std::make_shared<CaseStmt>();
+      advance();
+      pattern = parse_pattern();
    }
 
-   if (!lexer->currentToken.is_operator(":")) {
-      ParseError::raise("Expected ':' after case label", lexer);
-   }
+   lexer->expect(tok::colon);
 
-   lexer->advance();
-   Statement::SharedPtr stmt;
-   if (lexer->currentToken.is_keyword("case")
-       || lexer->currentToken.is_punctuator('}')
-       || lexer->currentToken.is_keyword("default")) {
-      // implicit fallthrough
-      stmt = nullptr;
-   }
-   else {
-      stmt = parse_next_stmt();
-      lexer->advance();
-   }
+   bool isDefault = lookahead().isContextualKeyword("default");
+   if (!lookahead().oneOf(tok::kw_case, tok::close_brace) && !isDefault) {
+      body = std::make_shared<CompoundStmt>();
 
-   if (stmt && isa<CompoundStmt>(stmt)) {
-      CompoundStmt::SharedPtr compound = std::make_shared<CompoundStmt>();
-      compound->addStatement(move(stmt));
-      lexer->advance();
+      while (!lookahead().oneOf(tok::kw_case, tok::close_brace) && !isDefault) {
+         advance();
+         body->addStatement(parse_next_stmt());
 
-      while (!lexer->currentToken.is_keyword("case")
-             && !lexer->currentToken.is_keyword("default") &&
-         !lexer->currentToken.is_punctuator('}'))
-      {
-         compound->addStatement(parse_next_stmt());
-         lexer->advance();
+         isDefault = lookahead().isContextualKeyword("default");
       }
-
-      case_stmt->setBody(compound);
-   }
-   else {
-      case_stmt->setBody(move(stmt));
    }
 
-   setIndex(case_stmt.get(), start);
-   return case_stmt;
+   std::shared_ptr<CaseStmt> caseStmt;
+   if (default_)
+      caseStmt = makeExpr<CaseStmt>(start, move(body));
+   else
+      caseStmt = makeExpr<CaseStmt>(start, move(pattern), move(body));
+
+   advance();
+
+   return caseStmt;
 }
 
 MatchStmt::SharedPtr Parser::parse_match_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
-   Expression::SharedPtr switch_val = parse_expression();
-   lexer->advance();
-   if (!lexer->currentToken.is_punctuator('{')) {
+   Expression::SharedPtr switch_val = parse_expr_sequence();
+   advance();
+   if (!currentTok().is(tok::open_brace)) {
       ParseError::raise("Expected '{' after 'match'", lexer);
    }
 
-   MatchStmt::SharedPtr switch_stmt = std::make_shared<MatchStmt>
-      (move(switch_val));
-   lexer->advance();
+   auto switch_stmt = makeExpr<MatchStmt>(start, move(switch_val));
+   advance();
 
    bool isDefault = false;
-   while (!lexer->currentToken.is_punctuator('}')) {
+   while (!currentTok().is(tok::close_brace)) {
       if (isDefault) {
          ParseError::raise("Expected no more cases after 'default'", lexer);
       }
 
-      isDefault = lexer->currentToken.is_keyword("default");
-      if (!lexer->currentToken.is_keyword("case") && !isDefault) {
+      isDefault = currentTok().isContextualKeyword("default");
+      if (!currentTok().is(tok::kw_case) && !isDefault) {
          ParseError::raise("Expected 'case' or 'default'", lexer);
       }
 
@@ -2032,124 +2380,207 @@ MatchStmt::SharedPtr Parser::parse_match_stmt()
       switch_stmt->addCase(move(caseStmt));
    }
 
-   setIndex(switch_stmt.get(), start);
    return switch_stmt;
 }
 
 WhileStmt::SharedPtr Parser::parse_while_stmt(bool conditionBefore)
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
-   Expression::SharedPtr cond = std::make_shared<BoolLiteral>(true);
+   Expression::SharedPtr cond = makeExpr<BoolLiteral>(start, true);
    if (conditionBefore) {
-      cond = parse_expression();
-      lexer->advance();
+      cond = parse_expr_sequence();
+      advance();
    }
 
    auto body = std::static_pointer_cast<CompoundStmt>(parse_next_stmt());
-   if (!conditionBefore && lexer->lookahead().is_keyword("while")) {
-      lexer->advance();
-      lexer->advance();
+   if (!conditionBefore && lookahead().is(tok::kw_while)) {
+      advance();
+      advance();
 
-      cond = parse_expression();
+      cond = parse_expr_sequence();
    }
 
-   auto whileStmt = std::make_shared<WhileStmt>(move(cond), move(body),
-                                                !conditionBefore);
-   setIndex(whileStmt.get(), start);
+   auto whileStmt = makeExpr<WhileStmt>(start, move(cond), move(body),
+                                        !conditionBefore);
 
    return whileStmt;
 }
 
 Statement::SharedPtr Parser::parse_for_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
    Statement::SharedPtr init;
-   if (lexer->currentToken.is_punctuator(';')) {
+   if (currentTok().is(tok::semicolon)) {
       init = nullptr;
    }
    else {
       init = parse_next_stmt();
-      lexer->advance();
+
+      // parse in as keyword
+      auto guard = lexer->makeModeGuard(Lexer<>::ForInStmt);
+      advance();
    }
 
    // range based for loop
-   if (lexer->currentToken.is_identifier("in")) {
-      if (!isa<DeclStmt>(init)) {
+   if (currentTok().isContextualKeyword("in")) {
+      if (!isa<LocalVarDecl>(init)) {
          ParseError::raise("Expected declaration before 'in' in range based"
                               "for loop", lexer);
       }
 
-      lexer->advance();
+      advance();
 
-      Expression::SharedPtr range = parse_expression();
-      lexer->advance();
+      Expression::SharedPtr range = parse_expr_sequence();
+      advance();
 
-      if (lexer->currentToken.is_punctuator(')')) {
-         lexer->advance();
+      if (currentTok().is(tok::close_paren)) {
+         advance();
       }
 
       auto body = std::static_pointer_cast<CompoundStmt>(parse_next_stmt());
-      auto decl = std::static_pointer_cast<DeclStmt>(init);
+      auto decl = std::static_pointer_cast<LocalVarDecl>(init);
 
-      auto forInStmt =
-         std::make_shared<ForInStmt>(std::move(decl),
-                                     std::move(range),
-                                     std::move(body));
-      setIndex(forInStmt.get(), start);
-      forInStmt->setAttributes(std::move(attributes));
+      auto forInStmt = makeExpr<ForInStmt>(start, std::move(decl),
+                                           std::move(range), std::move(body));
 
       return forInStmt;
    }
 
-   if (!lexer->currentToken.is_punctuator(';')) {
+   if (!currentTok().is(tok::semicolon)) {
       ParseError::raise("Expected ';' to seperate for loop arguments", lexer);
    }
 
    Expression::SharedPtr term;
-   lexer->advance();
-   if (lexer->currentToken.is_punctuator(';')) {
-      term = std::make_shared<BoolLiteral>(true);
+   advance();
+   if (currentTok().is(tok::semicolon)) {
+      term = makeExpr<BoolLiteral>(start, true);
    }
    else {
-      term = parse_expression();
-      lexer->advance();
+      term = parse_expr_sequence();
+      advance();
    }
 
-   if (!lexer->currentToken.is_punctuator(';')) {
+   if (!currentTok().is(tok::semicolon)) {
       ParseError::raise("Expected ';' to seperate for loop arguments", lexer);
    }
 
    Statement::SharedPtr inc;
-   lexer->advance();
-   if (lexer->currentToken.is_punctuator('{')) {
+   advance();
+   if (currentTok().is(tok::open_brace)) {
       inc = nullptr;
    }
    else {
       inc = parse_next_stmt();
-      lexer->advance();
+      advance();
    }
 
    auto block = std::static_pointer_cast<CompoundStmt>(parse_next_stmt());
 
-   ForStmt::SharedPtr for_stmt = std::make_shared<ForStmt>(move(init),
-                                                           move(term),
-                                                           move(inc));
+   ForStmt::SharedPtr for_stmt = makeExpr<ForStmt>(start, move(init),
+                                                   move(term), move(inc));
    for_stmt->setBody(move(block));
-   setIndex(for_stmt.get(), start);
 
    return for_stmt;
 }
 
-DeclareStmt::SharedPtr Parser::parse_declare_stmt(
-   ExternKind externKind, std::shared_ptr<DeclareStmt> decl)
+std::shared_ptr<StaticForStmt> Parser::parse_static_for(ClassHead *head)
 {
-   Token start = lexer->currentToken;
-   if (lexer->lookahead().get_type() == T_IDENT) {
-      lexer->advance();
+   auto start = currentTok().getSourceLoc();
+
+   lexer->expect(tok::kw_let);
+   lexer->expect(tok::ident);
+
+   auto ident = std::move(lexer->strRef());
+   lexer->expect(tok::ident);
+   if (!currentTok().isContextualKeyword("in"))
+      diag::err(err_generic_error) << "expected 'in'" << lexer << diag::term;
+
+   advance();
+
+   auto range = parse_static_expr();
+   advance();
+
+   Statement::SharedPtr body;
+   if (head) {
+      RecordInner Inner;
+      parse_class_inner(Inner, *head, false, false, false, false, false,
+                        nullptr);
+
+      auto compound = makeExpr<CompoundStmt>(start);
+      copyRecordDecls(Inner, compound);
+
+      body = compound;
+   }
+   else {
+      body = parse_next_stmt();
+   }
+
+   return makeExpr<StaticForStmt>(start, move(ident), move(range),
+                                  move(body));
+}
+
+std::shared_ptr<StaticStmt> Parser::parse_static_stmt(ClassHead *head)
+{
+   switch (currentTok().getKind()) {
+      case tok::kw_static_assert:
+         return parse_static_assert();
+      case tok::kw_static_for:
+         return parse_static_for(head);
+      case tok::kw_static_if:
+         return parse_static_if(head);
+      default:
+         llvm_unreachable("bad static stmt kind");
+   }
+}
+
+std::shared_ptr<StaticAssertStmt> Parser::parse_static_assert()
+{
+   auto start = currentTok().getSourceLoc();
+   lexer->expect(tok::open_paren);
+   advance();
+
+   auto expr = parse_static_expr();
+
+   string msg;
+   if (lookahead().is(tok::comma)) {
+      advance();
+      advance();
+
+      auto StringLit = parse_unary_expr_target();
+      if (!isa<StringLiteral>(StringLit))
+         diag::err(err_generic_error)
+            << "expected string literal as second argument to static_assert"
+            << lexer << diag::term;
+
+      msg = move(cast<StringLiteral>(StringLit.get())->getValue());
+   }
+
+   lexer->expect(tok::close_paren);
+
+   return makeExpr<StaticAssertStmt>(start, move(expr), move(msg));
+}
+
+std::shared_ptr<StaticPrintStmt> Parser::parse_static_print()
+{
+   auto start = currentTok().getSourceLoc();
+   lexer->expect(tok::open_paren);
+   advance();
+
+   auto expr = parse_static_expr();
+   lexer->expect(tok::close_paren);
+
+   return makeExpr<StaticPrintStmt>(start, move(expr));
+}
+
+DeclareStmt::SharedPtr Parser::parse_declare_stmt(ExternKind externKind,
+                                            std::shared_ptr<DeclareStmt> decl) {
+   auto start = currentTok().getSourceLoc();
+   if (lookahead().getKind() == tok::ident) {
+      advance();
       auto str = lexer->strVal();
 
       if (str == "C") {
@@ -2158,500 +2589,360 @@ DeclareStmt::SharedPtr Parser::parse_declare_stmt(
       else if (str == "C++" || str == "CPP") {
          externKind = ExternKind::CPP;
       }
+      else if (str == "__native") {
+         externKind = ExternKind::Native;
+      }
       else {
          ParseError::raise("Unknown extern kind " + str, lexer);
       }
    }
 
-   if (lexer->lookahead().is_punctuator('{')) {
-      lexer->advance();
+   if (lookahead().is(tok::open_brace)) {
+      advance();
       return parse_multiple_declare_stmt(externKind);
    }
 
-   lexer->advance();
-   auto attrs = parse_attributes();
+   advance();
 
-   if (lexer->currentToken.get_type() != T_KEYWORD) {
-      ParseError::raise("Unexpected token", lexer);
-   }
-
-   AccessModifier access = AccessModifier::DEFAULT;
-   string keyword = lexer->strVal();
-
-   if (keyword == "public") {
-      access = AccessModifier::PUBLIC;
-      lexer->advance();
-      keyword = lexer->strVal();
-   }
-   else if (keyword == "private") {
-      access = AccessModifier::PRIVATE;
-      lexer->advance();
-      keyword = lexer->strVal();
-   }
-   else if (keyword == "protected") {
-      access = AccessModifier::PROTECTED;
-      lexer->advance();
-      keyword = lexer->strVal();
+   if (!decl) {
+      decl = makeExpr<DeclareStmt>(start, externKind);
    }
 
-   bool wasNull = decl == nullptr;
-   if (wasNull) {
-      decl = std::make_shared<DeclareStmt>(externKind);
-   }
-
-   bool isAbstract = false;
-   bool isClass = keyword == "class";
-   bool isStruct = !isClass && keyword == "struct";
-   bool isProtocol = !isStruct && keyword == "protocol";
-
-   if (keyword == "extend") {
-      auto ext = parse_extend_stmt(true);
-      decl->addDeclaration(std::move(ext));
-   }
-   else if (keyword == "abstract") {
-      auto cl = parse_class_decl(isStruct, isProtocol, true);
-      decl->addDeclaration(std::move(cl));
-   }
-   else if (keyword == "def") {
-      auto func = parse_function_decl(true);
-      decl->addDeclaration(std::move(func));
-   }
-   else if (isClass || isStruct || isProtocol) {
-      auto cl = parse_class_decl(isStruct, isProtocol, true);
-      decl->addDeclaration(std::move(cl));
-   }
-   else if (keyword == "enum") {
-      auto en = parse_enum_decl(true);
-      decl->addDeclaration(std::move(en));
-   }
-   else if (keyword == "var" || keyword == "let") {
-      auto assign = std::static_pointer_cast<DeclStmt>(
-         parse_declaration(keyword == "let", true));
-      decl->addDeclaration(std::move(assign));
-   }
-   else {
-      ParseError::raise("Unexpected keyword '" + keyword + "' after declare",
-                        lexer);
-   }
-
-   if (wasNull) {
-      setIndex(decl.get(), start);
-   }
-
-   decl->setAttributes(std::move(attrs));
+   decl->addDeclaration(parse_next_stmt());
    return decl;
 }
 
 DeclareStmt::SharedPtr Parser::parse_multiple_declare_stmt(
-   ExternKind externKind)
-{
-   Token start = lexer->currentToken;
-   auto decl = std::make_shared<DeclareStmt>(externKind);
+                                                        ExternKind externKind) {
+   auto start = currentTok().getSourceLoc();
+   auto decl = makeExpr<DeclareStmt>(start, externKind);
 
-   while (!lexer->lookahead().is_punctuator('}')
-          && lexer->currentToken.get_type() != T_EOF) {
+   while (!lookahead().is(tok::close_brace)
+          && currentTok().getKind() != tok::eof) {
       parse_declare_stmt(externKind, decl);
    }
 
-   lexer->advance();
-
-   setIndex(decl.get(), start);
+   advance();
    return decl;
 }
 
 TryStmt::SharedPtr Parser::parse_try_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
    auto tryBody = parse_next_stmt();
-   TryStmt::SharedPtr tryStmt = std::make_shared<TryStmt>(std::move(tryBody));
+   TryStmt::SharedPtr tryStmt = makeExpr<TryStmt>(start, std::move(tryBody));
 
-   while (lexer->lookahead().get_type() == T_KEYWORD) {
-      lexer->advance();
+   while (lookahead().oneOf(tok::kw_catch, tok::kw_finally)) {
+      advance();
 
+      auto kind = currentTok().getKind();
       bool finallySet = false;
-      auto keyword = lexer->strVal();
 
-      if (keyword == "catch") {
-         lexer->advance();
+      if (kind == tok::kw_catch) {
+         advance();
          CatchBlock catchBlock;
 
-         if (lexer->currentToken.get_type() != T_IDENT) {
+         if (currentTok().getKind() != tok::ident) {
             ParseError::raise("expected identifier", lexer);
          }
 
          catchBlock.identifier = lexer->strVal();
-         lexer->advance();
+         advance();
 
-         if (!lexer->currentToken.is_operator(":")) {
+         if (!currentTok().is(tok::colon)) {
             ParseError::raise("expected ':'", lexer);
          }
 
-         lexer->advance();
+         advance();
          catchBlock.caughtType = parse_type();
 
-         lexer->advance();
+         advance();
          catchBlock.body = parse_next_stmt();
 
          tryStmt->addCatch(std::move(catchBlock));
       }
-      else if (keyword == "finally") {
+      else {
          if (finallySet) {
             ParseError::raise("finally block already defined", lexer);
          }
 
-         lexer->advance();
+         advance();
 
          auto finallyBody = parse_next_stmt();
          tryStmt->setFinally(std::move(finallyBody));
 
          finallySet = true;
       }
-      else {
-         lexer->backtrack();
-         break;
-      }
    }
 
-   setIndex(tryStmt.get(), start);
    return tryStmt;
 }
 
 ThrowStmt::SharedPtr Parser::parse_throw_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
-   auto thrownVal = parse_expression();
-   auto throwStmt = std::make_shared<ThrowStmt>(std::move(thrownVal));
+   return makeExpr<ThrowStmt>(start, parse_expr_sequence());
+}
 
-   setIndex(throwStmt.get(), start);
-   return throwStmt;
+std::shared_ptr<ReturnStmt> Parser::parse_return_stmt()
+{
+   auto start = currentTok().getSourceLoc();
+   Token next = lookahead(false);
+   ReturnStmt::SharedPtr ret;
+
+   if (!next.is_separator()) {
+      advance();
+      ret = makeExpr<ReturnStmt>(start, parse_expr_sequence());
+   }
+   else {
+      ret = makeExpr<ReturnStmt>(start);
+   }
+
+   return ret;
 }
 
 /**
  * Interprets a keyword statement
  */
-Statement::SharedPtr Parser::parse_keyword() {
-   Token start = lexer->currentToken;
+Statement::SharedPtr Parser::parse_keyword()
+{
+   auto start = currentTok().getSourceLoc();
 
-   string &keyword = lexer->strRef();
+   auto kind = currentTok().getKind();
+   tok::TokenType relevantToken = tok::sentinel;
 
-   if (keyword == "var" || keyword == "let") {
-      auto assignment = parse_declaration(keyword == "let");
-
-      return assignment;
-   }
-   else if (keyword == "def") {
-      auto fun_dec = parse_function_decl();
-      setIndex(fun_dec.get(), start);
-
-      return fun_dec;
-   }
-   else if (keyword == "if") {
-      IfStmt::SharedPtr if_stmt = parse_if_stmt();
-      setIndex(if_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(if_stmt);
-         return nullptr;
-      }
-
-      return if_stmt;
-   }
-   else if (keyword == "while" || keyword == "loop") {
-      WhileStmt::SharedPtr while_stmt = parse_while_stmt(keyword == "while");
-      setIndex(while_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(while_stmt);
-         return nullptr;
-      }
-
-      return while_stmt;
-   }
-   else if (keyword == "match") {
-      auto switch_stmt = parse_match_stmt();
-      setIndex(switch_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(switch_stmt);
-         return nullptr;
-      }
-
-      return switch_stmt;
-   }
-   else if (keyword == "default") {
-      auto def_stmt = parse_case_stmt(true);
-      setIndex(def_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(def_stmt);
-         return nullptr;
-      }
-
-      return def_stmt;
-   }
-   else if (keyword == "for") {
-      Statement::SharedPtr for_stmt = parse_for_stmt();
-      setIndex(for_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(for_stmt);
-         return nullptr;
-      }
-
-      return for_stmt;
-   }
-   else if (keyword == "continue") {
-      ContinueStmt::SharedPtr cont_stmt = std::make_shared<ContinueStmt>();
-      setIndex(cont_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(cont_stmt);
-         return nullptr;
-      }
-
-      return cont_stmt;
-   }
-   else if (keyword == "typedef") {
-      lexer->advance();
-      return parse_typedef(AccessModifier::PUBLIC);
-   }
-   else if (keyword == "unsafe") {
-      lexer->advance();
-      auto block = parse_block();
-      block->isUnsafe(true);
-
-      return block;
-   }
-   else if (keyword == "break") {
-      BreakStmt::SharedPtr break_stmt = std::make_shared<BreakStmt>();
-      setIndex(break_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(break_stmt);
-         return nullptr;
-      }
-
-      return break_stmt;
-   }
-   else if (keyword == "declare") {
-      return parse_declare_stmt(ExternKind::NONE);
-   }
-   else if (keyword == "class") {
-      return parse_class_decl();
-   }
-   else if (keyword == "public" || keyword == "private") {
-      auto next = lexer->lookahead();
-      if (next.is_keyword("class") || next.is_keyword("struct")) {
-         return parse_class_decl();
-      }
-      else if (next.is_keyword("enum")) {
-         return parse_enum_decl();
-      }
-      else if (next.is_keyword("let") || next.is_keyword("var")) {
-         return parse_declaration(next.is_keyword("let"));
-      }
-      else if (next.is_keyword("typedef")) {
-         if (keyword == "public") {
-            return parse_typedef(AccessModifier::PUBLIC);
+   switch (kind) {
+      case tok::kw_self:
+      case tok::kw_true:
+      case tok::kw_false:
+      case tok::kw_none:
+         return parse_expr_sequence();
+      case tok::kw_var:
+      case tok::kw_let:
+         return parse_declaration(kind == tok::kw_let);
+      case tok::kw_def:
+         return parse_function_decl();
+      case tok::kw_if:
+         return parse_if_stmt();
+      case tok::kw_while:
+      case tok::kw_loop:
+         return parse_while_stmt(kind == tok::kw_while);
+      case tok::kw_match:
+         return parse_match_stmt();
+      case tok::kw_for:
+         return parse_for_stmt();
+      case tok::kw_continue:
+      case tok::kw_break: {
+         Statement::SharedPtr stmt;
+         if (kind == tok::kw_continue) {
+            stmt = makeExpr<ContinueStmt>(start);
+         }
+         else {
+            stmt = makeExpr<BreakStmt>(start);
          }
 
-         return parse_typedef(AccessModifier::PRIVATE);
+         return stmt;
       }
-   }
-   else if (keyword == "abstract") {
-      auto next = lexer->lookahead();
-      if (next.is_keyword("class")) {
-         return parse_class_decl();
+      case tok::kw_typedef:
+         return parse_typedef();
+      case tok::kw_alias:
+         return parse_alias();
+      case tok::kw_declare:
+         return parse_declare_stmt(ExternKind::NONE);
+      case tok::kw_return:
+         return parse_return_stmt();
+      case tok::kw_try:
+         return parse_try_stmt();
+      case tok::kw_throw:
+         return parse_throw_stmt();
+      case tok::kw_goto: {
+         advance();
+         auto gotoStmt = makeExpr<GotoStmt>(start, move(lexer->strRef()));
+         return gotoStmt;
       }
-      else {
-         ParseError::raise("Unexpected keyword 'abstract'", lexer);
-      }
-   }
-   else if (keyword == "enum") {
-      return parse_enum_decl();
-   }
-   else if (keyword == "struct") {
-      return parse_struct_decl();
-   }
-   else if (keyword == "protocol") {
-      return parse_class_decl(false, true);
-   }
-   else if (keyword == "union") {
-      return parse_union_decl();
-   }
-   else if (keyword == "extend") {
-      return parse_extend_stmt();
-   }
-   else if (keyword == "return") {
-      Token next = lexer->lookahead(false);
-      if (!next.is_separator()) {
-         lexer->advance();
+      case tok::kw_namespace:
+         return parse_namespace_decl();
+      case tok::kw_using:
+         return parse_using_stmt();
+      case tok::kw_module:
+         CDOT_DIAGNOSE("module declaration is only allowed at the beginning "
+                          "of a file");
+         break;
+      case tok::kw_import:
+         CDOT_DIAGNOSE("import declaration is only allowed at the beginning "
+                          "of a file");
+         break;
+      case tok::kw___debug:
+         return makeExpr<DebugStmt>(start, false);
+      case tok::kw___unreachable:
+         return makeExpr<DebugStmt>(start, true);
+      case tok::kw_static_assert:
+         return parse_static_assert();
+      case tok::kw_static_print:
+         return parse_static_print();
+      case tok::kw_static_if:
+         return parse_static_if();
+      case tok::kw_static_for:
+         return parse_static_for();
+      case tok::kw_struct:
+      case tok::kw_enum:
+      case tok::kw_class:
+      case tok::kw_protocol:
+      case tok::kw_union:
+      case tok::kw_extend:
+         relevantToken = kind;
+         LLVM_FALLTHROUGH;
+      case tok::kw_public:
+      case tok::kw_abstract:
+      case tok::kw_private:
+         {
+            Lexer<>::StateSaveGuard guard(lexer);
+            while (relevantToken == tok::sentinel) {
+               if (currentTok().oneOf(tok::kw_struct, tok::kw_enum,
+                                             tok::kw_class, tok::kw_union,
+                                             tok::kw_protocol, tok::kw_let,
+                                             tok::kw_var, tok::kw_def,
+                                             tok::kw_typedef, tok::kw_extend)) {
+                  relevantToken = currentTok().getKind();
+                  break;
+               }
 
-         auto return_stmt = std::make_shared<ReturnStmt>(parse_expression());
-         setIndex(return_stmt.get(), start);
-
-         if (top_level) {
-            implicit_main_stmts.push_back(return_stmt);
-            return nullptr;
+               advance();
+            }
          }
-
-         return return_stmt;
-      }
-      else {
-         ReturnStmt::SharedPtr return_stmt = std::make_shared<ReturnStmt>();
-         setIndex(return_stmt.get(), start);
-         lexer->advance(false);
-
-         if (top_level) {
-            implicit_main_stmts.push_back(return_stmt);
-            return nullptr;
+         switch (relevantToken) {
+            case tok::kw_struct:
+               return parse_struct_decl();
+            case tok::kw_class:
+               return parse_class_decl();
+            case tok::kw_enum:
+               return parse_enum_decl();
+            case tok::kw_union:
+               return parse_union_decl();
+            case tok::kw_protocol:
+               return parse_class_decl(false, true);
+            case tok::kw_extend:
+               return parse_extend_stmt();
+            case tok::kw_typedef:
+               return parse_typedef();
+            case tok::kw_var:
+            case tok::kw_let:
+               return parse_declaration(relevantToken == tok::kw_let);
+            case tok::kw_def:
+               return parse_function_decl();
+            default:
+               break;
          }
-
-         return return_stmt;
-      }
-   }
-   else if (keyword == "try") {
-      return parse_try_stmt();
-   }
-   else if (keyword == "throw") {
-      return parse_throw_stmt();
-   }
-   else if (keyword == "goto") {
-      lexer->advance();
-      auto goto_stmt = std::make_shared<GotoStmt>(lexer->strVal());
-      setIndex(goto_stmt.get(), start);
-
-      if (top_level) {
-         implicit_main_stmts.push_back(goto_stmt);
-         return nullptr;
-      }
-
-      return goto_stmt;
-   }
-   else if (keyword == "namespace") {
-      return parse_namespace_decl();
-   }
-   else if (keyword == "using") {
-      ParseError::raise("Keyword '" + keyword + "' is only allowed at the"
-         "beginning of a file", lexer);
-   }
-   else if (keyword == "__debug") {
-      return std::make_shared<DebugStmt>();
-   }
-   else if (keyword == "__unreachable") {
-      return std::make_shared<DebugStmt>(true);
-   }
-   else {
-      ParseError::raise("'" + keyword + "' is a reserved keyword", lexer);
+         LLVM_FALLTHROUGH;
+      default:
+         ParseError::raise("unexpected keyword "
+                            + currentTok().toString(), lexer);
    }
 
-   return nullptr;
+   llvm_unreachable("bad keyword");
 }
 
-CallExpr::SharedPtr Parser::parse_function_call(
-   CallType callTy, bool allowLet)
+CallExpr::SharedPtr Parser::parse_function_call(bool allowLet)
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
 
-   string funcName = lexer->strVal();
-   lexer->advance();
+   BuiltinFn Builtin = BuiltinFn::None;
+
+   string funcName;
+   if (currentTok().is(tok::kw_init)) {
+      funcName = "init";
+   }
+   else if (currentTok().is(tok::kw_deinit)) {
+      funcName = "deinit";
+   }
+   else if (Builtin == BuiltinFn::None) {
+      funcName = move(lexer->strRef());
+      Builtin = llvm::StringSwitch<BuiltinFn>(funcName)
+         .Case("sizeof", BuiltinFn::SIZEOF)
+         .Case("alignof", BuiltinFn::ALIGNOF)
+         .Case("typeof", BuiltinFn::TYPEOF)
+         .Case("default", BuiltinFn::DefaultVal)
+         .Case("__builtin_sizeof", BuiltinFn::BuiltinSizeof)
+         .Case("__builtin_isnull", BuiltinFn::ISNULL)
+         .Case("__builtin_memcpy", BuiltinFn::MEMCPY)
+         .Case("__builtin_memset", BuiltinFn::MEMSET)
+         .Case("__builtin_memcmp", BuiltinFn::MemCmp)
+         .Case("__nullptr", BuiltinFn::NULLPTR)
+         .Case("__builtin_bitcast", BuiltinFn::BITCAST)
+         .Case("stackalloc", BuiltinFn::STACK_ALLOC)
+         .Case("__ctfe_stacktrace", BuiltinFn::CtfePrintStackTrace)
+         .Default(BuiltinFn::None);
+   }
+
+   advance();
+
+   bool isVariadicSizeof = false;
+   if (Builtin == BuiltinFn::SIZEOF && currentTok().is(tok::triple_period)) {
+      isVariadicSizeof = true;
+      advance();
+   }
 
    auto generics = parse_unresolved_template_args();
-   if (!generics->isResolved()) {
-      lexer->advance();
+   if (!generics.empty()) {
+      advance();
    }
 
-   CallExpr::SharedPtr call;
-   if (funcName == "sizeof" || funcName == "alignof"
-       || funcName == "__nullptr") {
-      lexer->advance();
+   auto args = parse_arguments(allowLet);
 
-      auto type = parse_type();
-      lexer->advance();
+   auto call = makeExpr<CallExpr>(start, move(args.args), move(funcName));
 
-      std::vector<pair<string, Expression::SharedPtr>> args;
-      args.emplace_back("", type);
-
-      call = std::make_shared<CallExpr>(callTy, std::move(args),
-                                        std::move(funcName));
-   }
-   else if (funcName == "__builtin_bitcast") {
-      lexer->advance();
-
-      auto target = parse_expression();
-      lexer->advance(T_PUNCTUATOR);
-      lexer->advance();
-
-      auto type = parse_type();
-      lexer->advance();
-
-      std::vector<pair<string, Expression::SharedPtr>> args;
-      args.emplace_back("", target);
-      args.emplace_back("", type);
-
-      call = std::make_shared<CallExpr>(callTy, std::move(args),
-                                        std::move(funcName));
-   }
-   else if (funcName == "stackalloc") {
-      lexer->advance();
-
-      auto type = parse_type();
-      lexer->advance(T_PUNCTUATOR);
-      lexer->advance();
-
-      auto target = parse_expression();
-      lexer->advance();
-
-      std::vector<pair<string, Expression::SharedPtr>> args;
-      args.emplace_back("", type);
-      args.emplace_back("", target);
-
-      call = std::make_shared<CallExpr>(callTy, std::move(args),
-                                        std::move(funcName));
-   }
-   else {
-      call = std::make_shared<CallExpr>(callTy, parse_arguments(allowLet),
-                                        std::move(funcName));
-   }
-
+   call->setBuiltinFnKind(Builtin);
    call->setMemberExpr(try_parse_member_expr());
-   setIndex(call.get(), start);
-   call->setAttributes(std::move(attributes));
-   call->setTemplateArgs(generics);
+   call->setTemplateArgs(std::move(generics));
+
+   if (isVariadicSizeof)
+      call->setKind(CallKind::VariadicSizeof);
 
    return call;
 }
 
-std::vector<pair<string, std::shared_ptr<Expression>>>
-Parser::parse_arguments(bool allowLet)
+std::shared_ptr<EnumCaseExpr> Parser::parse_enum_case_expr()
 {
-   std::vector<pair<string, std::shared_ptr<Expression>>> args;
+   auto start = currentTok().getSourceLoc();
+   auto ident = move(lexer->strRef());
+
+   std::shared_ptr<EnumCaseExpr> expr;
+   if (lookahead().is(tok::open_paren)) {
+      advance();
+
+      expr = makeExpr<EnumCaseExpr>(start, move(ident), parse_arguments().args);
+   }
+   else {
+      expr = makeExpr<EnumCaseExpr>(start, move(ident));
+   }
+
+   return expr;
+}
+
+Parser::ArgumentList Parser::parse_arguments(bool allowLet)
+{
+   ArgumentList args;
    bool isLabeled = false;
 
-   while (!lexer->currentToken.is_punctuator(')')) {
-      if (args.size() > MAX_FUNCTION_ARGS) {
-         ParseError::raise("functions cannot have more than "
-            + std::to_string(MAX_FUNCTION_ARGS) + " arguments", lexer);
-      }
-
+   while (!currentTok().is(tok::close_paren)) {
       string label;
 
-      if (lexer->currentToken.is_punctuator('(')
-          || lexer->currentToken.is_punctuator(',')) {
-         lexer->advance();
-         if (lexer->currentToken.get_type() == T_IDENT
-             && lexer->lookahead().is_operator(":")) {
+      if (currentTok().is(tok::open_paren)
+          || currentTok().is(tok::comma)) {
+         advance();
+         if (currentTok().getKind() == tok::ident
+             && lookahead().is(tok::colon)) {
             label = lexer->strVal();
-            lexer->advance();
-            lexer->advance();
+            advance();
+            advance();
 
             isLabeled = true;
          }
-         else if (lexer->currentToken.is_punctuator(')')) {
+         else if (currentTok().is(tok::close_paren)) {
             break;
          }
          else if (isLabeled) {
@@ -2662,16 +2953,16 @@ Parser::parse_arguments(bool allowLet)
 
       bool isVar = false;
       bool isLet = false;
-      if (lexer->currentToken.is_keyword("let") && allowLet) {
+      if (currentTok().is(tok::kw_let) && allowLet) {
          isLet = true;
-         lexer->advance();
+         advance();
       }
-      else if (lexer->currentToken.is_keyword("var") && allowLet) {
+      else if (currentTok().is(tok::kw_var) && allowLet) {
          isVar = true;
-         lexer->advance();
+         advance();
       }
 
-      auto argVal = parse_expression();
+      auto argVal = parse_expr_sequence();
       if ((isLet || isVar) && !isa<IdentifierRefExpr>(argVal)) {
          ParseError::raise("Expected identifier after 'let' / 'var'", lexer);
       }
@@ -2682,13 +2973,10 @@ Parser::parse_arguments(bool allowLet)
          std::static_pointer_cast<IdentifierRefExpr>(argVal)->isVarExpr(true);
       }
 
-      args.emplace_back(label, argVal);
+      args.labels.emplace_back(move(label));
+      args.args.emplace_back(move(argVal));
 
-      lexer->advance();
-      if (!lexer->currentToken.is_punctuator(',')
-          && !lexer->currentToken.is_punctuator(')')) {
-         ParseError::raise("Expected ',' or ')'", lexer);
-      }
+      lexer->expect(tok::comma, tok::close_paren);
    }
 
    return args;
@@ -2699,9 +2987,9 @@ std::vector<Attribute> Parser::parse_attributes()
    std::vector<Attribute> attributes;
    std::vector<string> foundAttrs;
 
-   while (lexer->currentToken.is_punctuator('@')) {
-      lexer->advance();
-      if (lexer->currentToken.get_type() != T_IDENT) {
+   while (currentTok().is(tok::at)) {
+      advance();
+      if (currentTok().getKind() != tok::ident) {
          ParseError::raise("Expected attribute name", lexer);
       }
 
@@ -2715,18 +3003,18 @@ std::vector<Attribute> Parser::parse_attributes()
 
       attr.kind = AttributeMap[attr.name];
 
-      if (lexer->lookahead().is_punctuator('(')) {
-         lexer->advance();
-         lexer->advance();
+      if (lookahead().is(tok::open_paren)) {
+         advance();
+         advance();
 
-         while (!lexer->currentToken.is_punctuator(')')
-                && lexer->currentToken.get_type() != T_EOF) {
-            attr.args.push_back(lexer->parseExpression({}, 0, false, true));
-            if (lexer->lookahead().is_punctuator(',')) {
-               lexer->advance();
+         while (!currentTok().is(tok::close_paren)
+                && currentTok().getKind() != tok::eof) {
+            attr.args.push_back(lexer->parseExpression({}, 0, true));
+            if (lookahead().is(tok::comma)) {
+               advance();
             }
 
-            lexer->advance();
+            advance();
          }
       }
 
@@ -2737,7 +3025,7 @@ std::vector<Attribute> Parser::parse_attributes()
 
       attributes.push_back(attr);
       foundAttrs.push_back(attr.name);
-      lexer->advance();
+      advance();
    }
 
    return attributes;
@@ -2745,36 +3033,29 @@ std::vector<Attribute> Parser::parse_attributes()
 
 CompoundStmt::SharedPtr Parser::parse_block(bool preserveTopLevel)
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
    bool last_top_level = top_level;
-   bool unsafe = false;
 
    if (!preserveTopLevel) {
       top_level = false;
    }
 
-   lexer->advance();
+   advance();
 
-   if (lexer->currentToken.get_type() == T_KEYWORD
-       && lexer->strVal() == "unsafe") {
-      lexer->advance();
-      unsafe = true;
-   }
-
-   if (!(lexer->currentToken.is_punctuator('{'))) {
+   if (!(currentTok().is(tok::open_brace))) {
       ParseError::raise("Expected '{' to start a block statement.", lexer);
    }
 
-   lexer->advance();
+   advance();
 
-   CompoundStmt::SharedPtr block = std::make_shared<CompoundStmt>();
-   while (!lexer->currentToken.is_punctuator('}')) {
-      while (lexer->currentToken.is_separator()) {
-         lexer->advance();
+   CompoundStmt::SharedPtr block = makeExpr<CompoundStmt>(start);
+   while (!currentTok().is(tok::close_brace)) {
+      while (currentTok().oneOf(tok::semicolon, tok::newline)) {
+         advance();
       }
 
-      if (lexer->currentToken.get_type() == T_EOF
-          || lexer->currentToken.is_punctuator('}')) {
+      if (currentTok().getKind() == tok::eof
+          || currentTok().is(tok::close_brace)) {
          break;
       }
 
@@ -2789,16 +3070,12 @@ CompoundStmt::SharedPtr Parser::parse_block(bool preserveTopLevel)
          block->addStatement(move(stmt));
       }
 
-      lexer->commit();
-      lexer->advance();
+      advance();
    }
 
-   if (!lexer->currentToken.is_punctuator('}')) {
+   if (!currentTok().is(tok::close_brace)) {
       ParseError::raise("Expected '}' to end a block statement", lexer);
    }
-
-   setIndex(block.get(), start);
-   block->isUnsafe(unsafe);
 
    top_level = last_top_level;
 
@@ -2810,19 +3087,19 @@ void Parser::skip_block()
    auto openedBraces = 1;
    auto closedBraces = 0;
 
-   if (!lexer->currentToken.is_punctuator('{')) {
+   if (!currentTok().is(tok::open_brace)) {
       ParseError::raise("expected '{'", lexer);
    }
 
-   Lexer::IgnoreScope guard(lexer);
+   Lexer<>::IgnoreScope guard(lexer);
 
    while (openedBraces > closedBraces) {
-      lexer->advance();
+      advance();
 
-      if (lexer->currentToken.is_punctuator('{')) {
+      if (currentTok().is(tok::open_brace)) {
          ++openedBraces;
       }
-      else if (lexer->currentToken.is_punctuator('}')) {
+      else if (currentTok().is(tok::close_brace)) {
          ++closedBraces;
       }
    }
@@ -2830,50 +3107,32 @@ void Parser::skip_block()
 
 Statement::SharedPtr Parser::parse_next_stmt()
 {
-   if (lexer->currentToken.is_punctuator('{')) {
+   auto attrs = parse_attributes();
+   std::shared_ptr<Statement> stmt;
+
+   if (currentTok().is(tok::open_brace)) {
       lexer->backtrack();
-      CompoundStmt::SharedPtr cmp_stmt = parse_block();
-
-      if (top_level) {
-         implicit_main_stmts.push_back(cmp_stmt);
-         return nullptr;
-      }
-
-      return cmp_stmt;
+      stmt = parse_block();
    }
-   else if (lexer->currentToken.get_type() == T_KEYWORD) {
-      Statement::SharedPtr expr = parse_keyword();
-
-      return expr;
+   else if (currentTok().is_keyword()) {
+      stmt = parse_keyword();
    }
-   else if (lexer->currentToken.get_type() == T_IDENT
-            && lexer->lookahead().is_operator(":")) {
+   else if (currentTok().getKind() == tok::ident
+            && lookahead().is(tok::colon)) {
       string label = std::move(lexer->strRef());
-      lexer->advance();
+      advance();
 
-      auto label_stmt = std::make_shared<LabelStmt>(move(label));
+      auto label_stmt = makeExpr<LabelStmt>(currentTok().getSourceLoc(),
+                                            move(label));
 
-      if (top_level) {
-         implicit_main_stmts.push_back(label_stmt);
-         return nullptr;
-      }
-
-      return label_stmt;
-   }
-   else if (lexer->currentToken.is_punctuator('@')) {
-      attributes = parse_attributes();
-      return parse_next_stmt();
+      stmt = label_stmt;
    }
    else {
-      Expression::SharedPtr expr = parse_expression();
-
-      if (top_level) {
-         implicit_main_stmts.push_back(expr);
-         return nullptr;
-      }
-
-      return expr;
+      stmt = parse_expr_sequence();
    }
+
+   stmt->setAttributes(move(attrs));
+   return stmt;
 }
 
 /**
@@ -2882,41 +3141,36 @@ Statement::SharedPtr Parser::parse_next_stmt()
  */
 NamespaceDecl::SharedPtr Parser::parse_namespace_decl()
 {
-   Token start = lexer->currentToken;
+   auto start = currentTok().getSourceLoc();
    bool anonymous = false;
    string nsName;
 
-   lexer->advance();
-   if (lexer->currentToken.get_type() != T_IDENT) {
+   if (lookahead().getKind() != tok::ident) {
       anonymous = true;
-      nsName = decl->ns_prefix() + util::nextAnonymousNamespace();
-
-      lexer->backtrack();
+      nsName = util::nextAnonymousNamespace();
    }
    else {
-      nsName = decl->ns_prefix() + lexer->strVal();
+      advance();
+      nsName = lexer->strVal();
    }
 
-   while (lexer->lookahead().is_punctuator('.')) {
-      lexer->advance();
-      lexer->advance();
+   while (lookahead().is(tok::period)) {
+      advance();
+      advance();
 
-      if (lexer->currentToken.get_type() != T_IDENT) {
+      if (currentTok().getKind() != tok::ident) {
          ParseError::raise("Expected identifier after 'namespace'", lexer);
       }
 
       nsName += "." + lexer->strVal();
    }
 
-   pushNamespace(nsName);
+   decl->pushNamespace(nsName, anonymous);
 
-   auto mod = std::make_shared<NamespaceDecl>(move(nsName),
-                                              parse_block(true),
-                                              anonymous);
-   setIndex(mod.get(), start);
+   auto mod = makeExpr<NamespaceDecl>(start, move(nsName),
+                                      parse_block(true), anonymous);
 
    popNamespace();
-
    return mod;
 }
 
@@ -2926,41 +3180,41 @@ NamespaceDecl::SharedPtr Parser::parse_namespace_decl()
  */
 UsingStmt::SharedPtr Parser::parse_using_stmt()
 {
-   Token start = lexer->currentToken;
-   lexer->advance();
+   auto start = currentTok().getSourceLoc();
+   advance();
 
    string importNs;
    std::vector<string> items;
 
-   while (lexer->currentToken.get_type() == T_IDENT
-          || lexer->currentToken.is_operator("*")) {
-      if (lexer->lookahead().is_punctuator('.')) {
+   while (currentTok().oneOf(tok::ident, tok::times)) {
+      if (lookahead().is(tok::period)) {
          if (!importNs.empty()) {
             importNs += ".";
          }
 
          importNs += lexer->strVal();
 
-         lexer->advance();
-         if (lexer->lookahead().is_punctuator('{')) {
-            lexer->advance();
-            lexer->advance();
+         advance();
+         if (lookahead().is(tok::open_brace)) {
+            advance();
+            advance();
 
-            while (!lexer->currentToken.is_punctuator('}')) {
+            while (!currentTok().is(tok::close_brace)) {
                items.push_back(lexer->strVal());
-               lexer->advance();
-               if (lexer->currentToken.is_punctuator(',')) {
-                  lexer->advance();
+               advance();
+               if (currentTok().is(tok::comma)) {
+                  advance();
                }
             }
 
             break;
          }
 
-         lexer->advance();
+         advance();
       }
       else {
-         items.push_back(lexer->strVal());
+         items.push_back(currentTok().is(tok::ident) ? lexer->strVal()
+                                                     : "*");
          break;
       }
    }
@@ -2972,48 +3226,98 @@ UsingStmt::SharedPtr Parser::parse_using_stmt()
 
    decl->importNamespace(importNs);
 
-   auto usingStmt = std::make_shared<UsingStmt>(std::move(importNs),
-                                                std::move(items));
-   setIndex(usingStmt.get(), start);
+   auto stmt = makeExpr<UsingStmt>(start, std::move(importNs),
+                                   std::move(items));
 
-   return usingStmt;
+   decl->addGlobalStatement(stmt.get());
+
+   return stmt;
 }
 
-/**
- * Parses the program into an AST
- * @return
- */
-CompoundStmt::SharedPtr Parser::parse()
+std::shared_ptr<ModuleStmt> Parser::parse_module_stmt()
 {
-   CompoundStmt::SharedPtr root = std::make_shared<CompoundStmt>();
-   while (lexer->currentToken.is_keyword("using")) {
-      root->addStatement(parse_using_stmt());
-      lexer->advance();
+   auto start = currentTok().getSourceLoc();
+
+   assert(currentTok().is(tok::kw_module));
+   lexer->expect(tok::ident);
+
+   std::vector<string> moduleName;
+
+   while (1) {
+      moduleName.emplace_back(std::move(lexer->strRef()));
+
+      if (lookahead().is(tok::period)) {
+         advance();
+         lexer->expect(tok::ident);
+      }
+      else {
+         break;
+      }
    }
 
-   while(lexer->currentToken.get_type() != T_EOF) {
-      while (lexer->currentToken.is_separator()
-             || lexer->currentToken.is_punctuator(';')) {
-         lexer->advance();
+   return makeExpr<ModuleStmt>(start, move(moduleName));
+}
+
+std::shared_ptr<ImportStmt> Parser::parse_import_stmt()
+{
+   auto start = currentTok().getSourceLoc();
+
+   assert(currentTok().is(tok::kw_import));
+   lexer->expect(tok::ident);
+
+   std::vector<string> moduleName;
+
+   while (1) {
+      moduleName.emplace_back(std::move(lexer->strRef()));
+
+      if (lookahead().is(tok::period)) {
+         advance();
+         lexer->expect(tok::ident);
+      }
+      else {
+         break;
+      }
+   }
+
+   return makeExpr<ImportStmt>(start, move(moduleName));
+}
+
+CompoundStmt::SharedPtr Parser::parse()
+{
+   auto root = makeExpr<CompoundStmt>(currentTok().getSourceLoc());
+   while (currentTok().oneOf(tok::newline, tok::semicolon)) {
+      advance();
+   }
+
+   if (currentTok().is(tok::kw_module)) {
+      root->addStatement(parse_module_stmt());
+      advance();
+   }
+
+   while (currentTok().is(tok::kw_import)) {
+      root->addStatement(parse_import_stmt());
+      advance();
+   }
+
+   while(currentTok().getKind() != tok::eof) {
+      while (currentTok().oneOf(tok::newline, tok::semicolon)) {
+         advance();
       }
 
-      if (lexer->currentToken.get_type() == T_EOF) {
+      if (currentTok().getKind() == tok::eof) {
          break;
       }
 
       Statement::SharedPtr stmt = parse_next_stmt();
-
-      if (!attributes.empty()) {
-         ParseError::raise("Attributes not allowed here", lexer);
-      }
-
       if (stmt != nullptr) {
          root->addStatement(move(stmt));
       }
 
-      lexer->commit();
-      lexer->advance();
+      advance();
    }
 
    return root;
 }
+
+} // namespace parse
+} // namespace cdot
