@@ -111,7 +111,7 @@
 ////   for (auto &CU : CUs) {
 ////      restore(CU);
 ////
-////      visit(CU.root.get());
+////      visit(CU.root);
 ////      finalize(CU);
 ////   }
 ////
@@ -375,7 +375,7 @@
 ////            exit(1);
 ////         }
 ////
-////         string& clangPath = clangPathOrError.get();
+////         string& clangPath = clangPathOrError;
 ////         std::stringstream args;
 ////         args << clangPath << " -lc -o " << options.executableOutFile << " " <<
 ////              options.objectOutFile;
@@ -409,7 +409,7 @@
 ////            return;
 ////         }
 ////
-////         string& dsym = dsymPath.get();
+////         string& dsym = dsymPath;
 ////         string dsymCmd = dsym + " " + options.executableOutFile;
 ////
 ////         if(!(in = popen(dsymCmd.c_str(), "r"))){

@@ -8,7 +8,7 @@ namespace cdot {
 namespace ast {
 
 StringInterpolation::StringInterpolation(
-   std::vector<Expression::SharedPtr>&& strings)
+   std::vector<Expression*>&& strings)
    : Expression(StringInterpolationID), strings(move(strings))
 {
 

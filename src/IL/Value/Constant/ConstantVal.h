@@ -5,7 +5,7 @@
 #ifndef CDOT_CONSTANTINT_H
 #define CDOT_CONSTANTINT_H
 
-
+#include <cstdint>
 #include <string>
 #include <llvm/ADT/ArrayRef.h>
 #include "Constant.h"
@@ -16,20 +16,63 @@ namespace il {
 
 class ConstantInt: public Constant {
 public:
-   static ConstantInt *get(Type *ty, uint64_t value);
-   static ConstantInt *getCTFE();
+   static ConstantInt* get(Type *ty, uint64_t value)
+   {
+      return new ConstantInt(ty, value);
+   }
 
-   uint64_t getU64() const;
-   uint32_t getU32() const;
-   uint16_t getU16() const;
-   uint8_t getU8() const;
-   bool getU1() const;
-   bool isUnsigned() const;
+   uint64_t getU64() const
+   {
+      return u64;
+   }
 
-   bool isCTFE() const;
+   uint32_t getU32() const
+   {
+      return u32;
+   }
+
+   uint16_t getU16() const
+   {
+      return u16;
+   }
+
+   uint8_t getU8() const
+   {
+      return u8;
+   }
+
+   bool getU1() const
+   {
+      return u1;
+   }
+
+   bool isUnsigned() const
+   {
+      return type->isUnsigned();
+   }
+
+   static ConstantInt *getCTFE(IntegerType *BoolTy)
+   {
+      auto I = get(BoolTy, 0);
+      I->u64 = Flags::Ctfe;
+
+      return I;
+   }
+
+   bool isCTFE() const
+   {
+      if (!type->isInt1Ty())
+         return false;
+
+      return (u64 & Flags::Ctfe) != 0;
+   }
 
 private:
-   ConstantInt(Type *ty, uint64_t value);
+   ConstantInt(Type *ty, uint64_t value)
+      : Constant(ConstantIntID, ty), u64(value)
+   {
+      assert(ty->isIntegerType());
+   }
 
    enum Flags {
       Ctfe = 1 << 2
@@ -71,15 +114,38 @@ public:
 
 class ConstantFloat: public Constant {
 public:
-   static ConstantFloat *get(double val);
-   static ConstantFloat *get(float val);
+   static ConstantFloat* get(FPType *Ty, float val)
+   {
+      return new ConstantFloat(Ty, val);
+   }
 
-   double getDoubleVal() const;
-   float getFloatVal() const;
+   static ConstantFloat* get(FPType *Ty, double val)
+   {
+      return new ConstantFloat(Ty, val);
+   }
+
+   double getDoubleVal() const
+   {
+      return doubleVal;
+   }
+
+   float getFloatVal() const
+   {
+      return floatVal;
+   }
 
 private:
-   explicit ConstantFloat(double val);
-   explicit ConstantFloat(float val);
+   explicit ConstantFloat(FPType *Ty, double val)
+      : Constant(ConstantFloatID, Ty), doubleVal(val)
+   {
+
+   }
+
+   explicit ConstantFloat(FPType *Ty, float val)
+      : Constant(ConstantFloatID, Ty), floatVal(val)
+   {
+
+   }
 
    union {
       double doubleVal;
@@ -94,12 +160,19 @@ public:
 
 class ConstantString: public Constant {
 public:
-   static ConstantString *get(const std::string &val);
+   static ConstantString *get(PointerType *Int8PtrTy,
+                              const std::string &val);
 
-   const std::string &getValue() const;
+   const std::string &getValue() const { return value; }
 
 private:
-   explicit ConstantString(const std::string &val);
+   explicit ConstantString(PointerType *Int8PtrTy, llvm::StringRef val)
+      : Constant(ConstantStringID, Int8PtrTy),
+        value(val)
+   {
+
+   }
+
    std::string value;
 
 public:
@@ -110,83 +183,43 @@ public:
 
 class ConstantArray: public Constant {
 public:
-   typedef llvm::SmallVector<Constant*, 4> ArrayTy;
+   typedef std::vector<Constant*> ArrayTy;
 
-   static ConstantArray *get(ArrayTy &&Arr);
-   static ConstantArray *get(llvm::ArrayRef<Constant*> vec);
-   static ConstantArray *get(Type *ty, size_t numElements);
+   static ConstantArray *get(ArrayType *ty, ArrayTy &&Arr);
+   static ConstantArray *get(ArrayType *ty, llvm::ArrayRef<Constant*> vec);
+   static ConstantArray *get(ArrayType *ty);
 
-   const ArrayTy &getVec() const;
-   size_t getNumElements() const;
+   const ArrayTy &getVec() const { return vec; }
 
-   Type *getElementType() const;
+   size_t getNumElements() const
+   {
+      return support::cast<ArrayType>(type)->getNumElements();
+   }
+
+   QualType getElementType() const
+   {
+      return support::cast<ArrayType>(type)->getElementType();
+   }
 
 protected:
-   explicit ConstantArray(ArrayTy &&Arr, bool useInt8PtrTy = false);
-   explicit ConstantArray(llvm::ArrayRef<Constant*> vec);
-   ConstantArray(Type *ty, size_t numElements);
+   explicit ConstantArray(ArrayType *ty, ArrayTy &&Arr)
+      : Constant(ConstantArrayID, ty), vec(std::move(Arr))
+   {}
+
+   explicit ConstantArray(ArrayType *ty, llvm::ArrayRef<Constant*> vec = {})
+      : Constant(ConstantArrayID, ty), vec(vec.begin(), vec.end())
+   {}
 
    ArrayTy vec;
-   Type *elementType;
-   size_t numElements;
 
 public:
    static inline bool classof(Value const* T) {
       switch (T->getTypeID()) {
          case ConstantArrayID:
-         case VTableID:
-         case PTableID:
             return true;
          default:
             return false;
       }
-   }
-};
-
-class VTable: public ConstantArray {
-public:
-   static VTable *get(ArrayTy &&Arr, ClassType *Owner);
-
-   ClassType *getOwner() const
-   {
-      return Owner;
-   }
-
-public:
-   explicit VTable(ArrayTy &&Arr, ClassType *Owner);
-   ClassType *Owner;
-
-public:
-   static inline bool classof(Value const* T) {
-      return T->getTypeID() == VTableID;
-   }
-};
-
-class PTable: public ConstantArray {
-public:
-   typedef llvm::StringMap<size_t> PositionMap;
-
-   static PTable *get(ArrayTy &&Arr, PositionMap &&PosMap, AggregateType *Owner);
-
-   AggregateType *getOwner() const
-   {
-      return Owner;
-   }
-
-   const PositionMap &getContainedProtocols() const
-   {
-      return ContainedProtocols;
-   }
-
-private:
-   explicit PTable(ArrayTy &&Arr, PositionMap &&PosMap, AggregateType *Owner);
-
-   AggregateType *Owner;
-   PositionMap ContainedProtocols;
-
-public:
-   static inline bool classof(Value const* T) {
-      return T->getTypeID() == PTableID;
    }
 };
 

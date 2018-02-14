@@ -2,24 +2,50 @@
 // Created by Jonas Zell on 28.11.17.
 //
 
+#include <llvm/ADT/SmallString.h>
+
 #include "Module.h"
+#include "IdentifierTable.h"
+
+#include "../Files/FileUtils.h"
+#include "../AST/Statement/Declaration/NamedDecl.h"
 
 namespace cdot {
 namespace module {
 
-llvm::StringMap<Module*> Module::Instances;
-
-Module * Module::get(std::string &&Name, std::string &&fileName,
-                     std::string &&md5)
+void Module::addDecl(ast::NamedDecl *decl)
 {
-   auto it = Instances.find(Name);
-   if (it != Instances.end())
-      return it->second;
+   declarations.try_emplace(decl->getName(), decl);
+}
 
-   auto M = new Module(move(Name), move(fileName), move(md5));
-   Instances[Name] = M;
+std::string Module::getJoinedName(char seperator) const
+{
+   llvm::SmallVector<Module const*, 4> modules{ this };
 
-   return M;
+   auto M = this;
+   while ((M = M->getParentModule()))
+      modules.push_back(M);
+
+   llvm::SmallString<128> fullName;
+   auto end_it = modules.rend();
+   size_t i = 0;
+
+   for (auto it = modules.rbegin(); it != end_it; ++it, ++i) {
+      if (i != 0) fullName += seperator;
+      fullName += (*it)->getName();
+   }
+
+   return fullName.str();
+}
+
+void Module::setModuleMapFile(std::string &&moduleMapFile)
+{
+   this->moduleMapFile = std::move(moduleMapFile);
+
+   baseFile = fs::getPath(this->moduleMapFile);
+   baseFile += getJoinedName(fs::PathSeperator);
+   baseFile += fs::PathSeperator;
+   baseFile += name;
 }
 
 } // namespace module

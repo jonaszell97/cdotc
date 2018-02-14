@@ -5,14 +5,9 @@
 #ifndef CDOT_BUILTIN_H
 #define CDOT_BUILTIN_H
 
-#include <string>
-#include <vector>
-
-using std::string;
-
 namespace cdot {
 
-enum class BuiltinFn : unsigned int {
+enum class BuiltinFn : unsigned char {
    None = 0,
    TYPEOF,
    MEMCPY,
@@ -32,18 +27,6 @@ enum class BuiltinFn : unsigned int {
    BITCAST
 };
 
-extern std::vector<string> BuiltinNamespaces;
-
-inline bool isBuilitinNamespace(const string& name) {
-   return std::find(BuiltinNamespaces.begin(),
-                    BuiltinNamespaces.end(), name) != BuiltinNamespaces.end();
-}
-
-class Builtin {
-public:
-   static void ImportBuiltin(const string &name);
-};
-
-}
+} // namespace cdot
 
 #endif //CDOT_BUILTIN_H

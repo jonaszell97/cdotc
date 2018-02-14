@@ -3,6 +3,7 @@
 //
 
 #include "GEPInst.h"
+
 #include "../../../Module/Module.h"
 #include "../../Record/AggregateType.h"
 #include "../../Function/Function.h"
@@ -10,15 +11,10 @@
 #include "../../Constant/ConstantVal.h"
 
 #include "../../../../Variant/Type/Type.h"
-#include "../../../../Variant/Type/FunctionType.h"
-#include "../../../../Variant/Type/TupleType.h"
-#include "../../../../Variant/Type/PointerType.h"
-#include "../../../../Variant/Type/ArrayType.h"
-#include "../../../../Variant/Type/IntegerType.h"
-
-#include "../../../../AST/Passes/SemanticAnalysis/Record/Enum.h"
+#include "../../../../AST/Statement/Declaration/Class/RecordDecl.h"
 
 using namespace cdot::support;
+using namespace cdot::ast;
 
 namespace cdot {
 namespace il {
@@ -34,22 +30,14 @@ FieldRefInst::FieldRefInst(Value *val,
    setIsLvalue(true);
 }
 
-GEPInst::GEPInst(Value *val, size_t idx, BasicBlock *parent)
-   : GEPInst(val, ConstantInt::get(IntegerType::get(), idx), parent)
-{
-
-}
-
-GEPInst::GEPInst(AggregateType *AggrTy, Value *val, size_t idx,
+GEPInst::GEPInst(AggregateType *AggrTy, Value *val, ConstantInt *idx,
                  BasicBlock *parent)
-   : BinaryInstruction(GEPInstID, val,
-                       ConstantInt::get(IntegerType::get(), idx),
-                       nullptr, parent),
+   : BinaryInstruction(GEPInstID, val, idx, nullptr, parent),
      AggrTy(AggrTy)
 {
    val->addUse(this);
-   if (support::isa<StructType>(AggrTy)) {
-      type = support::cast<StructType>(AggrTy)->getFields()[idx].type;
+   if (isa<StructType>(AggrTy)) {
+      type = cast<StructType>(AggrTy)->getFields()[idx->getU64()].type;
    }
 
    type.isLvalue(true);
@@ -62,16 +50,16 @@ GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
    val->addUse(this);
    auto valTy = val->getType();
 
-   if (valTy->isPointerTy()) {
-      *type = *valTy->getPointeeType();
+   if (valTy->isPointerType()) {
+      type = *valTy->getPointeeType();
    }
-   else if (valTy->isTupleTy()) {
+   else if (valTy->isTupleType()) {
       assert(isa<ConstantInt>(idx));
-      type = valTy->asTupleTy()
+      type = valTy->asTupleType()
                   ->getContainedType(cast<ConstantInt>(idx)->getU64());
    }
-   else if (valTy->isArrayTy()) {
-      *type = cast<ArrayType>(*valTy)->getElementType();
+   else if (valTy->isArrayType()) {
+      type = valTy->asArrayType()->getElementType();
    }
    else {
       type = valTy;
@@ -80,7 +68,7 @@ GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
    type.isLvalue(true);
 }
 
-TupleExtractInst::TupleExtractInst(Value *val, size_t idx,
+TupleExtractInst::TupleExtractInst(Value *val, ConstantInt *idx,
                                    BasicBlock *parent)
    : GEPInst(val, idx, parent)
 {
@@ -97,44 +85,44 @@ EnumRawValueInst::EnumRawValueInst(Value *Val,
    : UnaryInstruction(EnumRawValueInstID, Val, nullptr, parent)
 {
    auto rec = Val->getType()->getRecord();
-   assert(isa<cl::Enum>(rec) && "can't extract raw value of non-enum");
+   assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
    auto EnumTy = cast<EnumType>(getParent()->getParent()->getParent()
                                            ->getType(rec->getName()));
 
-   *type = EnumTy->getRawType();
+   type = EnumTy->getRawType();
 }
 
 EnumExtractInst::EnumExtractInst(Value *Val, llvm::StringRef caseName,
-                                 size_t caseVal, BasicBlock *parent)
+                                 ConstantInt *caseVal, BasicBlock *parent)
    : UnaryInstruction(EnumExtractInstID, Val, nullptr, parent),
-     caseVal(ConstantInt::get(IntegerType::get(), caseVal))
+     caseVal(caseVal)
 {
    auto rec = Val->getType()->getRecord();
-   assert(isa<cl::Enum>(rec) && "can't extract raw value of non-enum");
+   assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
    EnumTy = cast<EnumType>(getParent()->getParent()->getParent()
                                       ->getType(rec->getName()));
 
    auto &Case = EnumTy->getCase(caseName);
-   assert(Case.AssociatedTypes.size() > caseVal && "invalid case index");
 
-   type = Case.AssociatedTypes[caseVal];
+   auto idx = caseVal->getU64();
+   assert(Case.AssociatedTypes.size() > idx && "invalid case index");
+
+   type = Case.AssociatedTypes[idx];
    this->caseName = Case.name;
 
    setIsLvalue(true);
 }
 
-CaptureExtractInst::CaptureExtractInst(size_t idx, BasicBlock *parent)
-   : UnaryInstruction(CaptureExtractInstID,
-                      ConstantInt::get(IntegerType::getUnsigned(), idx),
-                      nullptr, parent)
+CaptureExtractInst::CaptureExtractInst(ConstantInt *idx, BasicBlock *parent)
+   : UnaryInstruction(CaptureExtractInstID, idx, nullptr, parent)
 {
    auto F = dyn_cast<Lambda>(parent->getParent());
    assert(F && "cannot extract capture in non-lambda func");
-   assert(F->getCaptures().size() > idx && "invalid capture idx");
+   assert(F->getCaptures().size() > idx->getU64() && "invalid capture idx");
 
-   type = F->getCaptures()[idx].type;
+   type = F->getCaptures()[idx->getU64()].type;
 }
 
 ConstantInt* CaptureExtractInst::getIdx() const

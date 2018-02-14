@@ -2,44 +2,35 @@
 // Created by Jonas Zell on 24.10.17.
 //
 
-#include <llvm/Support/raw_ostream.h>
-#include <sstream>
 #include "SemaPass.h"
 
-#include "../../Operator/UnaryOperator.h"
-#include "../../Operator/BinaryOperator.h"
-#include "../../Operator/TertiaryOperator.h"
-#include "../../Operator/ExprSequence.h"
+#include "AST/Passes/SemanticAnalysis/ExpressionResolver.h"
+#include "AST/Passes/Declaration/DeclPass.h"
 
-#include "../../Expression/RefExpr/CallExpr.h"
-#include "../../Expression/StaticExpr.h"
-#include "../../Expression/TypeRef.h"
+#include "AST/Operator/UnaryOperator.h"
+#include "AST/Operator/BinaryOperator.h"
+#include "AST/Operator/TertiaryOperator.h"
+#include "AST/Operator/ExprSequence.h"
 
-#include "../../../Util.h"
-#include "../../SymbolTable.h"
+#include "AST/Expression/RefExpr/CallExpr.h"
+#include "AST/Expression/StaticExpr.h"
+#include "AST/Expression/TypeRef.h"
 
-#include "Function.h"
-#include "Record/Class.h"
-#include "Record/Union.h"
-#include "Record/Enum.h"
-#include "Record/Protocol.h"
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Statement/Declaration/Class/MethodDecl.h"
+#include "AST/Statement/Declaration/LocalVarDecl.h"
 
-#include "../../../Variant/Type/Type.h"
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/ObjectType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/VoidType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/AutoType.h"
-#include "../../../Variant/Type/MetaType.h"
+#include "AST/ASTContext.h"
+#include "AST/Transform.h"
 
-#include "ExpressionResolver.h"
+#include "Variant/Type/Type.h"
+
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/ADT/StringSwitch.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/Twine.h>
 
 using namespace cdot::diag;
-using namespace cdot::cl;
 using namespace cdot::support;
 
 namespace cdot {
@@ -48,7 +39,7 @@ namespace ast {
 QualType SemaPass::HandleCastOp(QualType& lhs,
                                 QualType& rhs,
                                 BinaryOperator *node) {
-   auto res = getCastKind(*lhs, *rhs);
+   auto res = getCastKind(*this, *lhs, *rhs);
    if (!res.isValid()) {
       diagnose(node, err_generic_error, "cannot cast from " + lhs.toString()
                + " to unrelated type " + rhs.toString());
@@ -102,8 +93,17 @@ QualType SemaPass::HandleAssignmentOp(QualType& fst,
                "cannot assign value of type " + snd.toString() + " to variable "
                   "of type " + fst.toString());
 
-   return QualType(VoidType::get());
+   return QualType(Context.getVoidType());
 }
+
+namespace {
+
+bool isMetaType(Expression* const &expr)
+{
+   return isa<TypeRef>(expr) || expr->getExprType()->isMetaType();
+}
+
+} // anonymous namespace
 
 QualType SemaPass::HandleTypePredicate(QualType &lhs, BinaryOperator *node)
 {
@@ -126,26 +126,45 @@ QualType SemaPass::HandleTypePredicate(QualType &lhs, BinaryOperator *node)
          return {};
       }
       else {
-         lhsTy = cast<MetaType>(*lhs)->getUnderlyingType();
+         lhsTy = *lhs->asMetaType()->getUnderlyingType();
       }
 
-      auto rhs = cast<ConstraintExpr>(node->getRhs().get());
+      QualType rhsTy;
+      ConstraintExpr::Kind kind;
 
-      switch (rhs->getKind()) {
+      if (auto C = dyn_cast<ConstraintExpr>(node->getRhs())) {
+         kind = C->getKind();
+
+         if (kind == ConstraintExpr::Type)
+            rhsTy = visitTypeRef(C->getTypeConstraint());
+      }
+      else {
+         kind = ConstraintExpr::Type;
+
+         auto res = visitExpr(node, node->getRhs());
+         if (!res.hadError()) {
+            if (!res.getType()->isMetaType())
+               diagnose(node->getRhs(), err_generic_error,
+                        "expected meta type expression");
+
+            rhsTy = res.getType();
+         }
+      }
+
+      switch (kind) {
          case ConstraintExpr::Type: {
-            auto rhsTy = visitTypeRef(rhs->getTypeConstraint().get());
             if (lhsTy == *rhsTy)
                result = true;
-            else if (!lhsTy->isObjectTy() || !rhsTy->isObjectTy())
+            else if (!lhsTy->isObjectType() || !rhsTy->isObjectType())
                result = false;
             else {
                auto Self = lhsTy->getRecord();
                auto Other = rhsTy->getRecord();
 
-               if (!isa<Protocol>(Other))
+               if (!isa<ProtocolDecl>(Other))
                   result = false;
                else
-                  result = Self->conformsTo(Other->getName());
+                  result = Self->conformsTo(cast<ProtocolDecl>(Other));
             }
 
             break;
@@ -154,59 +173,65 @@ QualType SemaPass::HandleTypePredicate(QualType &lhs, BinaryOperator *node)
          case ConstraintExpr::Struct:
          case ConstraintExpr::Enum:
          case ConstraintExpr::Union: {
-            if (!lhsTy->isObjectTy()) {
+            if (!lhsTy->isObjectType()) {
                result = false;
             }
             else {
                auto rec = lhsTy->getRecord();
-               result = rec->getTypeID() == (Record::TypeID)rhs->getKind();
+               result = rec->getTypeID() == (AstNode::NodeType)kind;
             }
 
             break;
          }
          case ConstraintExpr::DefaultConstructible:
-            result = lhsTy->hasDefaultValue();
+            result = hasDefaultValue(lhsTy);
             break;
          case ConstraintExpr::Function:
-            result = isa<FunctionType>(*lhsTy);
+            result = lhsTy->isFunctionType();
             break;
          case ConstraintExpr::Pointer:
-            result = isa<PointerType>(*lhsTy) || lhsTy->isRawFunctionTy();
+            result = lhsTy->isPointerType() || lhsTy->isRawFunctionTy();
             break;
          case ConstraintExpr::Reference:
             llvm_unreachable("Hmmm....");
       }
    }
-   else if (!isa<TypeRef>(node->getLhs().get())
-            || !isa<TypeRef>(node->getRhs().get())) {
-      diagnose(node, err_generic_error,
-               "type predicate needs two types as operands");
-   }
    else {
-      auto lhsTy = *lhs;
-      if (auto Meta = dyn_cast<MetaType>(lhsTy))
-         lhsTy = Meta->getUnderlyingType();
+      visit(node->getRhs());
 
-      auto rhsTy = *node->getRhs()->getExprType();
-
-      if (op == "==") {
-         result = rhsTy == lhsTy;
-      }
-      else if (op == "!=") {
-         result = rhsTy != lhsTy;
+      if (!isMetaType(node->getLhs()) || !isMetaType(node->getRhs())) {
+         diagnose(node, err_generic_error,
+                  "type predicate needs two types as operands");
       }
       else {
-         diagnose(node, err_generic_error,
-                  "unsupported type predicate " + node->getOp());
+         auto lhsTy = *lhs;
+         if (auto Meta = lhsTy->asMetaType())
+            lhsTy = *Meta->getUnderlyingType();
+
+         auto rhsTy = *node->getRhs()->getExprType();
+         if (auto Meta = rhsTy->asMetaType())
+            rhsTy = *Meta->getUnderlyingType();
+
+         if (op == "==") {
+            result = rhsTy == lhsTy;
+         }
+         else if (op == "!=") {
+            result = rhsTy != lhsTy;
+         }
+         else {
+            diagnose(node, err_generic_error,
+                     "unsupported type predicate " + node->getOp());
+         }
       }
    }
 
    node->setTypePredicateResult(result);
 
-   if (node->getContextualType()->isIntegerTy())
-      return QualType(IntegerType::getBoolTy());
+   auto Bool = getRecord("Bool");
+   if (node->getContextualType()->isIntegerType() || !Bool)
+      return QualType(Context.getBoolTy());
 
-   return QualType(ObjectType::get("Bool"));
+   return QualType(Context.getRecordType(Bool));
 }
 
 QualType SemaPass::HandleBinaryOperator(QualType& lhs,
@@ -234,8 +259,8 @@ QualType SemaPass::HandleBinaryOperator(QualType& lhs,
    }
 
    if ((lhs->isBoxedPrimitive() || rhs->isBoxedPrimitive())
-       && isa<PrimitiveType>(res.resultType))
-      res.resultType = res.resultType->box();
+       && res.resultType->isPrimitiveType())
+      res.resultType = *getBoxedType(res.resultType);
 
    return QualType(res.resultType);
 }
@@ -243,35 +268,22 @@ QualType SemaPass::HandleBinaryOperator(QualType& lhs,
 QualType SemaPass::tryBinaryOperatorMethod(QualType& fst,
                                            QualType& snd,
                                            BinaryOperator *node,
-                                           const string &opName,
-                                           bool wasLvalue) {
-   std::vector<Argument> args{ Argument { "", snd } };
-   if (node->getOpType() == BinaryOperatorType::CAST) {
-      args.pop_back();
+                                           const string &opName) {
+   llvm::ArrayRef<Expression*> args;
+   if (node->getOpType() != BinaryOperatorType::CAST) {
+      args = llvm::ArrayRef<Expression*>(node->getRhs());
    }
 
    auto cl = getRecord(fst->getClassName());
 
    auto binOpResult = getMethod(cl, opName, args, {}, node);
    if (binOpResult->isCompatible()) {
-      auto call = std::make_shared<CallExpr>(
-         std::vector<Expression::SharedPtr>{ std::move(node->getRhs()) },
-         string(opName)
-      );
+      auto call = new (getContext()) CallExpr(args, binOpResult->getMethod());
 
-      if (node->getOpType() == BinaryOperatorType::CAST) {
-         call->getArgs().pop_back();
-      }
-      else {
-         call->getResolvedArgs().push_back(std::move(args.back()));
-      }
+      replaceExpressionWith(*this, node, node->getLhs());
+      node->getLhs()->setSubExpr(call);
 
-      call->setMemberExpr(node->getMemberExpr());
-      CopyNodeProperties(node, call.get());
-
-      node->setOverridenCall(call);
-
-      return visitCallExpr(call.get(), fst);
+      return visitCallExpr(call, fst);
    }
 
    return {};
@@ -280,29 +292,15 @@ QualType SemaPass::tryBinaryOperatorMethod(QualType& fst,
 QualType SemaPass::tryFreeStandingBinaryOp(QualType& fst,
                                            QualType& snd,
                                            BinaryOperator *node,
-                                           const string &opName,
-                                           bool wasLvalue) {
-   std::vector<Argument> args{ Argument{ "", fst }, Argument{ "", snd } };
+                                           const string &opName) {
+   llvm::ArrayRef<Expression*> args{ node->getLhs(), node->getRhs() };
 
    auto freeOp = getFunction(opName, args, {}, node);
    if (freeOp->isCompatible()) {
-      if (wasLvalue) {
-         lvalueToRvalue(node->getLhs());
-      }
+      auto call = new (getContext()) CallExpr(args, freeOp->getFunction());
 
-      auto call = std::make_shared<CallExpr>(
-         std::vector<Expression::SharedPtr>{ node->getLhs(), node->getRhs() },
-         string(freeOp->getFunction()->getName())
-      );
-
-      // we already resolved the argument, don't want to visit it again
-      call->setResolvedArgs(args);
-      call->setMemberExpr(node->getMemberExpr());
-      CopyNodeProperties(node, call.get());
-
-      node->setOverridenCall(call);
-
-      return visit(call);
+      replaceExpressionWith(*this, node, call);
+      return visitCallExpr(call);
    }
 
    return {};
@@ -334,21 +332,39 @@ QualType SemaPass::visitExprSequence(ExprSequence *node)
       return {};
 
    node->setResolvedExpression(Expr);
-   return VisitSubExpr(node, result.getType());
+   return result.getType();
 }
 
 QualType SemaPass::visitBinaryOperator(BinaryOperator *node)
 {
-   auto &lhsNode = node->getLhs();
-
-   //NONBINARY
+   // compound assignment
    auto &op = node->getOp();
-   auto opType = cdot::ast::getBinaryOpType(node->getOp());
+   auto kind = stringToOperator(op);
+   if (isAssignmentOperator(kind) && kind != OperatorKind::Assign) {
+      llvm::SmallString<32> preAssignOperator(op);
+      assert(preAssignOperator.back() == '=');
+
+      preAssignOperator.pop_back();
+
+      auto preOp = makeStmt<BinaryOperator>(preAssignOperator.str(),
+                                            node->getLhs(), node->getRhs());
+
+      preOp->setSourceLoc(node->getRhs()->getSourceLoc());
+
+      auto newOp = makeStmt<BinaryOperator>("=", node->getLhs(), preOp);
+      replaceExpressionWith(*this, node, newOp);
+
+      node = newOp;
+   }
+
+   auto lhsNode = node->getLhs();
+   auto opType = getBinaryOpType(node->getOp());
+
    node->setOpType(opType);
 
    auto isAssignment = opType == BinaryOperatorType::ASSIGNMENT;
    if (isAssignment) {
-      lhsNode->setIsLhsOfAssignment();
+      lhsNode->setIsLhsOfAssignment(true);
    }
 
    if (auto Ctx = node->getContextualType())
@@ -361,51 +377,29 @@ QualType SemaPass::visitBinaryOperator(BinaryOperator *node)
 
    auto lhs = lhsRes.getType();
 
-   if (op == ":") {
+   if (lhs->isMetaType())
       return HandleTypePredicate(lhs, node);
+
+   if (auto Setter = lhsNode->getAccessorMethod()) {
+      auto Call = new (getContext()) CallExpr({ node->getRhs() }, Setter);
+      replaceExpressionWith(*this, node, Call);
+
+      return visitCallExpr(Call);
    }
-   if (isa<TypeRef>(node->getRhs()) && opType != BinaryOperatorType::CAST) {
-      return HandleTypePredicate(lhs, node);
-   }
-
-   if (setterMethod) {
-      node->isSetterCall(true);
-      node->setAccessorMethod(setterMethod);
-      setterMethod = nullptr;
-
-      node->getRhs()->setContextualType(lhs);
-      QualType rhs = visit(node->getRhs());
-
-      implicitCastIfNecessary(node->getRhs(), rhs, lhs);
-
-      return QualType(VoidType::get());
-   }
-
-   // checked if this is an assignment operator method, so the lhs will
-   // be lvalue to rvalue converted
-   bool wasLvalue = lhs.needsLvalueToRvalueConv() && isAssignment;
 
    if (isAssignment) {
       if (lhs.isConst()) {
-         diagnose(lhsNode.get(), err_reassign_constant, 0);
+         diagnose(lhsNode, err_reassign_constant, 0);
       }
       else if (!lhs.isLvalue()) {
-         if (lhs.isSelf()) {
-            diagnose(lhsNode.get(), err_generic_error,
-                     "cannot assign to self in a non-mutating method");
-         }
-
          diagnose(node, err_generic_error,
                   "cannot assign to rvalue of type " + lhs.toString());
       }
 
       lhs.isLvalue(false);
    }
-   else {
-      toRvalueIfNecessary(lhs, lhsNode, op != "===");
-   }
 
-   auto &rhsNode = node->getRhs();
+   auto rhsNode = node->getRhs();
    rhsNode->setContextualType(lhs);
 
    auto rhsRes = visitExpr(node, rhsNode);
@@ -421,24 +415,23 @@ QualType SemaPass::visitBinaryOperator(BinaryOperator *node)
    if (!isAssignment) {
       auto res = HandleBinaryOperator(lhs, rhs, opType, node);
       if (res)
-         return VisitSubExpr(node, res);
+         return res;
    }
 
-   if (lhs->isObjectTy() && getRecord(lhs->getClassName())) {
-      auto methodRes = tryBinaryOperatorMethod(lhs, rhs, node, opName,
-                                               wasLvalue);
+   if (lhs->isObjectType() && getRecord(lhs->getClassName())) {
+      auto methodRes = tryBinaryOperatorMethod(lhs, rhs, node, opName);
       if (methodRes)
          return methodRes;
    }
 
-   auto freeOpRes = tryFreeStandingBinaryOp(lhs, rhs, node, opName, wasLvalue);
+   auto freeOpRes = tryFreeStandingBinaryOp(lhs, rhs, node, opName);
    if (freeOpRes)
       return freeOpRes;
 
    if (isAssignment) {
       auto res = HandleBinaryOperator(lhs, rhs, opType, node);
       if (res)
-         return VisitSubExpr(node, res);
+         return res;
    }
 
    diagnose(node, err_binop_not_applicable, node->getOp(), lhs, rhs);
@@ -454,7 +447,7 @@ QualType SemaPass::visitTertiaryOperator(TertiaryOperator *node)
 
    QualType condTy = condRes.getType();
 
-   implicitCastIfNecessary(Cond, condTy, IntegerType::getBoolTy());
+   implicitCastIfNecessary(Cond, condTy, Context.getBoolTy());
 
    node->getLhs()->setContextualType(node->getContextualType());
    node->getRhs()->setContextualType(node->getContextualType());
@@ -475,23 +468,16 @@ QualType SemaPass::visitTertiaryOperator(TertiaryOperator *node)
 QualType SemaPass::tryFreeStandingUnaryOp(QualType& lhs,
                                           UnaryOperator *node,
                                           const string &opName) {
-   std::vector<Argument> args{ Argument{"", lhs} };
+   llvm::ArrayRef<Expression*> args(node->getTarget());
    string methodName = (node->isPrefix() ? "prefix " : "postfix ") + opName;
 
    auto freeOp = getFunction(methodName, args, {}, node);
    if (freeOp->isCompatible()) {
-      auto call = std::make_shared<CallExpr>(
-         std::vector<Expression::SharedPtr>{ node->getTarget() },
-         string(freeOp->getFunction()->getName())
-      );
+      auto call = new (getContext()) CallExpr(args, freeOp->getFunction());
+      call->setSubExpr(node->getSubExpr());
 
-      // we already resolved the argument, don't want to visit it again
-      call->setResolvedArgs(args);
-      call->setMemberExpr(node->getMemberExpr());
-      CopyNodeProperties(node, call.get());
-
-      node->setOverridenCall(call);
-      return visitCallExpr(call.get(), lhs);
+      replaceExpressionWith(*this, node, call);
+      return visitCallExpr(call);
    }
 
    return {};
@@ -508,32 +494,29 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
    QualType target = result.getType();
 
    auto freeStanding = tryFreeStandingUnaryOp(target, node, op);
-   if (!freeStanding->isAutoTy()) {
+   if (!freeStanding.isNull()) {
       return freeStanding;
    }
 
-   if (target->isObjectTy()) {
+   if (target->isObjectType()) {
       auto cl = target->getRecord();
       auto unOpResult = getMethod(cl, (node->isPrefix() ? "prefix "
                                                         : "postfix ") + op,
                                   {}, {}, node);
 
       if (unOpResult->isCompatible()) {
-         auto call = std::make_shared<CallExpr>(
-            std::vector<Expression::SharedPtr>{},
-            (node->isPrefix() ? "prefix " : "postfix ") + op
-         );
+         auto call = new (getContext()) CallExpr({}, unOpResult->getMethod());
 
-         node->setOverridenCall(call);
-         call->setMemberExpr(node->getMemberExpr());
+         replaceExpressionWith(*this, node, node->getTarget());
+         node->getTarget()->setSubExpr(call);
 
-         return visitCallExpr(call.get(), target);
+         return visitCallExpr(call, target);
       }
    }
 
    if (op == "++" || op == "--") {
       if (!target.isLvalue() || (!target->isNumeric()
-                                 && !target->isPointerTy())) {
+                                 && !target->isPointerType())) {
          diagnose(node, err_unary_op_not_applicable, op, !target.isLvalue(),
                   target);
 
@@ -545,21 +528,21 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
       }
 
       target.isLvalue(false);
-      return VisitSubExpr(node, target);
+      return target;
    }
 
    if (op == "*") {
-      if (!target->isPointerTy()) {
+      if (!target->isPointerType()) {
          diagnose(node, err_generic_error,
                   "trying to dereference non-pointer type");
 
          return {};
       }
 
-      target = target->asPointerTy()->getPointeeType();
+      target = target->asPointerType()->getPointeeType();
       target.isLvalue(true);
 
-      return VisitSubExpr(node, target);
+      return target;
    }
 
    if (op == "&") {
@@ -567,9 +550,9 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
          diagnose(node, err_unary_op_not_applicable, 1, op, target);
 
       target.isLvalue(false);
-      *target = target->getPointerTo();
+      target = target.getPointerTo(Context);
 
-      return VisitSubExpr(node, target);
+      return target;
    }
 
    QualType resultTy;
@@ -590,7 +573,7 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
       resultTy = target;
    }
    else if (op == "~") {
-      if (!target->isIntegerTy()) {
+      if (!target->isIntegerType()) {
          diagnose(node, err_unary_op_not_applicable, op, !target.isLvalue(),
                   target);
          return {};
@@ -599,8 +582,8 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
       resultTy = target;
    }
    else if (op == "!") {
-      auto boolTy = QualType(IntegerType::get(1));
-      if (!target.implicitlyCastableTo(boolTy)) {
+      auto boolTy = Context.getBoolTy();
+      if (!implicitlyCastableTo(target, boolTy)) {
          diagnose(node, err_unary_op_not_applicable, op, !target.isLvalue(),
                   target);
          return {};
@@ -609,7 +592,7 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
       resultTy = boolTy;
    }
    else if (op == "typeof") {
-      resultTy = ObjectType::get("cdot.TypeInfo");
+      resultTy = getObjectTy("cdot.TypeInfo");
    }
    else {
       diagnose(node, err_unary_op_not_applicable, op, !target.isLvalue(),
@@ -617,7 +600,131 @@ QualType SemaPass::visitUnaryOperator(UnaryOperator *node)
       return {};
    }
 
-   return VisitSubExpr(node, resultTy);
+   return resultTy;
+}
+
+static void registerBuiltinBinaryOpAllTypes(SemaPass &SP,
+                                            OperatorKind kind,
+                                            prec::PrecedenceLevel Prec,
+                                            Associativity Assoc) {
+   OperatorInfo operatorInfo(PrecedenceGroup(Prec, Assoc), FixKind::Infix);
+
+#  define CDOT_PRIMITIVE(Name, BW, Unsigned)                                   \
+   SP.registerBuiltinOp(SP.getContext().get##Name##Ty(), kind, operatorInfo);
+#  include "Variant/Type/Primitive.def"
+}
+
+static void registerBuiltinBinaryOpIntTypes(SemaPass &SP,
+                                            OperatorKind kind,
+                                            prec::PrecedenceLevel Prec,
+                                            Associativity Assoc) {
+   OperatorInfo operatorInfo(PrecedenceGroup(Prec, Assoc), FixKind::Infix);
+
+#  define CDOT_INTEGER(Name, BW, Unsigned)                                     \
+   SP.registerBuiltinOp(SP.getContext().get##Name##Ty(), kind, operatorInfo);
+#  include "Variant/Type/Primitive.def"
+}
+
+void SemaPass::registerBuiltinOp(QualType opTy,
+                                 OperatorKind kind,
+                                 OperatorInfo opInfo) {
+   std::vector<QualType> args{ opTy, opTy };
+   auto *FuncTy = getContext().getFunctionType(opTy, args);
+   BuiltinBinaryOperators.emplace(kind, BuiltinOperator(FuncTy, opInfo));
+}
+
+void SemaPass::registerBuiltinOperators(OperatorKind opKind)
+{
+   using OK = OperatorKind;
+
+   if (BuiltinBinaryOperators.find(opKind) != BuiltinBinaryOperators.end())
+      return;
+
+   switch (opKind) {
+      case OK::Assign:
+      case OK::AddAssign:
+      case OK::SubAssign:
+      case OK::MulAssign:
+      case OK::DivAssign:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Assignment,
+                                                Associativity::Right);
+      case OK::ShlAssign:
+      case OK::LShrAssign:
+      case OK::AShrAssign:
+      case OK::OrAssign:
+      case OK::AndAssign:
+      case OK::XorAssign:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::Assignment,
+                                                Associativity::Right);
+      case OK::LOr:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::LogicalOr,
+                                                Associativity::Left);
+      case OK::LAnd:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::LogicalAnd,
+                                                Associativity::Left);
+      case OK::Or:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::InclusiveOr,
+                                                Associativity::Left);
+      case OK::And:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::And,
+                                                Associativity::Left);
+      case OK::Xor:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::ExclusiveOr,
+                                                Associativity::Left);
+      case OK::CompNE:
+      case OK::CompRefNE:
+      case OK::CompEQ:
+      case OK::CompRefEQ:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Equality,
+                                                Associativity::Left);
+      case OK::CompLE:
+      case OK::CompLT:
+      case OK::CompGE:
+      case OK::CompGT:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Relational,
+                                                Associativity::Left);
+      case OK::Shl:
+      case OK::AShr:
+      case OK::LShr:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::Shift,
+                                                Associativity::Left);
+      case OK::Add:
+      case OK::Sub:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Additive,
+                                                Associativity::Left);
+      case OK::Mul:
+      case OK::Div:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Multiplicative,
+                                                Associativity::Left);
+      case OK::Mod:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::Multiplicative,
+                                                Associativity::Left);
+      case OK::Exp:
+         return registerBuiltinBinaryOpIntTypes(*this, opKind,
+                                                prec::Exponentiation,
+                                                Associativity::Left);
+      case OK::As:
+      case OK::AsQuestion:
+      case OK::AsExclaim:
+         return registerBuiltinBinaryOpAllTypes(*this, opKind,
+                                                prec::Cast,
+                                                Associativity::Left);
+      default:
+         break;
+   }
 }
 
 PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
@@ -626,14 +733,17 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
    using OK = OperatorKind;
 
    if (lhsType->isRawEnum()) {
-      *lhsType = cast<Enum>(lhsType->getRecord())->getRawType();
+      lhsType = cast<EnumDecl>(lhsType->getRecord())->getRawType()->getType();
+   }
+   else if (lhsType->isMetaType()) {
+      return PrecedenceGroup(5, Associativity::Left);
    }
 
    switch (op) {
       case OK::As:
       case OK::AsQuestion:
       case OK::AsExclaim:
-         return PrecedenceGroup(10, Associativity::Left);
+         return PrecedenceGroup(prec::Cast, Associativity::Left);
       case OK::Assign:
       case OK::AddAssign:
       case OK::SubAssign:
@@ -645,23 +755,23 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
       case OK::OrAssign:
       case OK::AndAssign:
       case OK::XorAssign:
-         return PrecedenceGroup(0, Associativity::Right);
+         return PrecedenceGroup(prec::Assignment, Associativity::Right);
       case OK::CompRefNE:
       case OK::CompRefEQ:
-         return PrecedenceGroup(6, Associativity::Left);
+         return PrecedenceGroup(prec::Equality, Associativity::Left);
       default:
          break;
    }
 
    BP Kind;
 
-   if (auto Obj = dyn_cast<ObjectType>(*lhsType)) {
-      if (lhsType->is(BP::BP_None))
+   if (auto Obj = lhsType->asObjectType()) {
+      if (lhsType->isBoxedPrimitive(BP::BP_None))
          return getPrecedence(lhsType, operatorToString(op));
 
       Kind = Obj->getPrimitiveKind();
    }
-   else if (lhsType->isIntegerTy()) {
+   else if (lhsType->isIntegerType()) {
       auto bw = lhsType->getBitwidth();
       auto isUnsigned = lhsType->isUnsigned();
 
@@ -688,7 +798,7 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
    else if (lhsType->isFPType()) {
       Kind = lhsType->isFloatTy() ? BP::Float : BP::Double;
    }
-   else if (lhsType->isPointerTy()) {
+   else if (lhsType->isPointerType()) {
       Kind = BP::UInt64;
    }
    else {
@@ -763,53 +873,57 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
       case OK::OrAssign:
       case OK::AndAssign:
       case OK::XorAssign:
-         precedence = 0;
+         precedence = prec::Assignment;
          assoc = Associativity::Right;
          break;
       case OK::LOr:
-         precedence = 1;
+         precedence = prec::LogicalOr;
          break;
       case OK::LAnd:
-         precedence = 2;
+         precedence = prec::LogicalAnd;
          break;
       case OK::Or:
-         precedence = 3;
+         precedence = prec::InclusiveOr;
          break;
       case OK::And:
+         precedence = prec::And;
+         break;
       case OK::Xor:
-         precedence = 4;
+         precedence = prec::ExclusiveOr;
          break;
       case OK::CompNE:
       case OK::CompRefNE:
       case OK::CompEQ:
       case OK::CompRefEQ:
-         precedence = 5;
+         precedence = prec::Equality;
          break;
       case OK::CompLE:
       case OK::CompLT:
       case OK::CompGE:
       case OK::CompGT:
-         precedence = 6;
+         precedence = prec::Relational;
          break;
       case OK::Shl:
       case OK::AShr:
       case OK::LShr:
-         precedence = 7;
+         precedence = prec::Shift;
          break;
       case OK::Add:
       case OK::Sub:
-         precedence = 8;
+         precedence = prec::Additive;
          break;
       case OK::Mul:
       case OK::Div:
       case OK::Mod:
+         precedence = prec::Multiplicative;
+         break;
       case OK::Exp:
-         precedence = 9;
+         precedence = prec::Exponentiation;
          break;
       case OK::As:
       case OK::AsQuestion:
       case OK::AsExclaim:
-         precedence = 10;
+         precedence = prec::Cast;
          break;
       default:
          return PrecedenceGroup();
@@ -820,11 +934,11 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType,
 
 PrecedenceGroup SemaPass::getPrecedence(QualType lhsType, llvm::StringRef op)
 {
-   if (lhsType->isMetaType() && op == ":") {
-      return PrecedenceGroup(10, Associativity::Left);
+   if (lhsType->isMetaType()) {
+      return PrecedenceGroup(prec::Cast, Associativity::Left);
    }
 
-   if (!lhsType->isObjectTy())
+   if (!lhsType->isObjectType())
       return PrecedenceGroup();
 
    auto rec = lhsType->getRecord();
@@ -840,77 +954,21 @@ PrecedenceGroup SemaPass::getPrecedence(QualType lhsType, llvm::StringRef op)
       return PrecedenceGroup();
 
    // try free standing operator function
-   auto functions = getFunctionOverloads(opName.str());
-
-   for (const auto &fun : functions) {
-      auto &firstArg = fun->getArguments().front();
-      if (!lhsType->implicitlyCastableTo(*firstArg.type))
-         continue;
-
-      return fun->getOperator().getPrecedenceGroup();
-   }
+   llvm_unreachable("todo!");
+//   auto functions = getFunctionOverloads(opName.str());
+//
+//   for (const auto &fun : functions) {
+//      auto &firstArg = fun->getArgs().front();
+//      if (!implicitlyCastableTo(lhsType, *firstArg->getArgType()->getType()))
+//         continue;
+//
+//      return fun->getOperator().getPrecedenceGroup();
+//   }
 
    return PrecedenceGroup();
 }
 
 namespace {
-
-Type *getBiggerType(Type::BoxedPrimitive lhs, Type::BoxedPrimitive rhs)
-{
-   using BP = Type::BoxedPrimitive;
-   BP bigger;
-
-   switch (lhs) {
-      case BP::Float:
-         switch (rhs) {
-            case BP::Double:
-               bigger = BP::Double;
-               break;
-            default:
-               bigger = BP::Float;
-               break;
-         }
-         break;
-      case BP::Double:
-         bigger = BP::Double;
-         break;
-      case BP::Char:
-      case BP::Bool:
-         lhs = (BP)(lhs - 300);
-         LLVM_FALLTHROUGH;
-      default: {
-         switch (rhs) {
-            case BP::Double:
-            case BP::Float:
-               bigger = rhs;
-               break;
-            case BP::Char:
-            case BP::Bool:
-               rhs = (BP)(rhs - 300);
-               LLVM_FALLTHROUGH;
-            default:
-               unsigned lhsBw = lhs;
-               bool lhsIsUnsigned = false;
-               if (lhsBw > 100) {
-                  lhsBw -= 100;
-                  lhsIsUnsigned = true;
-               }
-
-               unsigned rhsBw = rhs;
-               bool rhsIsUnsigned = false;
-               if (rhsBw > 100) {
-                  rhsBw -= 100;
-                  rhsIsUnsigned = true;
-               }
-
-               bigger = lhsBw > rhsBw ? lhs : rhs;
-               break;
-         }
-      }
-   }
-
-   return Type::get(bigger);
-}
 
 bool isFPType(Type::BoxedPrimitive ty)
 {
@@ -951,24 +1009,44 @@ SemaPass::getBinaryOperatorResult(const QualType &lhsQualTy,
    using BP = Type::BoxedPrimitive;
    using OP = OperatorKind;
 
-   if (lhsQualTy->isPointerTy())
+   if (lhsQualTy->isPointerType())
       return getPointerArithmeticResult(lhsQualTy, rhsQualTy, op);
 
    BinaryOperatorResult result{ nullptr, nullptr };
 
-   auto lhsTy = *lhsQualTy;
-   auto rhsTy = *rhsQualTy;
-
-   BP lhs = lhsTy->getPrimitiveKind();
-   BP rhs = rhsTy->getPrimitiveKind();
-
-   if (lhs == BP::BP_None || rhs == BP::BP_None) {
-      if (op != OperatorKind::CompRefEQ && op != OperatorKind::CompRefNE)
-         return result;
-   }
-
-   if (isSignMismatch(lhs, rhs))
+   if (!lhsQualTy->isIntOrBoxedInt() && !lhsQualTy->isFPOrBoxedFP())
       return result;
+
+   if (!rhsQualTy->isIntOrBoxedInt() && !rhsQualTy->isFPOrBoxedFP())
+      return result;
+
+   auto lhsTy = getUnboxedType(lhsQualTy);
+   auto rhsTy = getUnboxedType(rhsQualTy);
+
+   if (lhsTy->isIntegerType()) {
+      if (rhsTy->isIntegerType()) {
+         if (lhsTy->getBitwidth() > rhsTy->getBitwidth())
+            result.castOperandsTo = lhsTy;
+         else
+            result.castOperandsTo = rhsTy;
+      }
+      else {
+         assert(rhsTy->isFPType());
+         result.castOperandsTo = rhsTy;
+      }
+   }
+   else {
+      assert(lhsTy->isFPType());
+      if (rhsTy->isFPType()) {
+         if (rhsTy->isDoubleTy())
+            result.castOperandsTo = rhsTy;
+         else
+            result.castOperandsTo = lhsTy;
+      }
+      else {
+         result.castOperandsTo = lhsTy;
+      }
+   }
 
    switch (op) {
       case OP::As:
@@ -979,40 +1057,20 @@ SemaPass::getBinaryOperatorResult(const QualType &lhsQualTy,
       case OP::Add:
       case OP::Sub:
       case OP::Mul:
-         result.resultType = getBiggerType(lhs, rhs);
-         result.castOperandsTo = result.resultType;
-         break;
       case OP::Div:
-      case OP::Exp:
-      case OP::Mod: {
-         bool lhsIsFloat = isFPType(lhs);
-         bool rhsIsFloat = isFPType(rhs);
-
-         if (lhsIsFloat & rhsIsFloat)
-            result.resultType = getBiggerType(lhs, rhs);
-         else if (lhsIsFloat)
-            result.resultType = lhsTy;
-         else if (rhsIsFloat)
-            result.resultType = rhsTy;
-         else
-            result.resultType = getBiggerType(lhs, rhs);
-
-         result.castOperandsTo = result.resultType;
-         break;
-      }
-      case OP::LAnd:
-      case OP::LOr:
-         result.resultType = IntegerType::getBoolTy();
-         result.castOperandsTo = result.resultType;
-         break;
       case OP::And:
       case OP::Or:
       case OP::Xor:
       case OP::Shl:
       case OP::AShr:
       case OP::LShr:
-         result.resultType = getBiggerType(lhs, rhs);
-         result.castOperandsTo = result.resultType;
+      case OP::Exp:
+      case OP::Mod:
+         result.resultType = result.castOperandsTo;
+         break;
+      case OP::LAnd:
+      case OP::LOr:
+         result.resultType = Context.getBoolTy();
          break;
       case OP::CompEQ:
       case OP::CompNE:
@@ -1022,12 +1080,10 @@ SemaPass::getBinaryOperatorResult(const QualType &lhsQualTy,
       case OP::CompGT:
       case OP::CompRefEQ:
       case OP::CompRefNE:
-         result.resultType = IntegerType::getBoolTy();
-         result.castOperandsTo = lhsTy;
+         result.resultType = Context.getBoolTy();
          break;
       case OP::Assign:
-         result.resultType = VoidType::get();
-         result.castOperandsTo = lhsTy;
+         result.resultType = Context.getVoidType();
          break;
       default:
          llvm_unreachable("bad operator kind");
@@ -1048,8 +1104,8 @@ SemaPass::getPointerArithmeticResult(const QualType &lhsQualTy,
    auto lhsTy = *lhsQualTy;
    auto rhsTy = *rhsQualTy;
 
-   if (rhsTy->isPointerTy())
-      rhsTy = IntegerType::get(sizeof(void*) * 8, true);
+   if (rhsTy->isPointerType())
+      rhsTy = Context.getUIntTy();
 
    BP rhs = rhsTy->getPrimitiveKind();
 
@@ -1075,13 +1131,13 @@ SemaPass::getPointerArithmeticResult(const QualType &lhsQualTy,
       case OP::CompGE:
       case OP::CompRefEQ:
       case OP::CompRefNE:
-         result.resultType = IntegerType::getBoolTy();
+         result.resultType = Context.getBoolTy();
          break;
       default:
          return result;
    }
 
-   result.castOperandsTo = Type::get(rhs);
+   result.castOperandsTo = getObjectTy(rhs);
 
    return result;
 }

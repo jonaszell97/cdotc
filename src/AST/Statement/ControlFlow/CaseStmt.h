@@ -9,36 +9,31 @@
 
 namespace cdot {
 
-namespace cl {
-
-struct EnumCase;
-
-} // namespace cdot
-
 namespace ast {
 
+class MethodDecl;
 class Expression;
 class PatternExpr;
 
 class CaseStmt : public Statement {
 public:
-   explicit CaseStmt(std::shared_ptr<Statement> &&body);
-   CaseStmt(std::shared_ptr<PatternExpr> &&caseVal,
-            std::shared_ptr<Statement> &&body);
-
-   typedef std::shared_ptr<CaseStmt> SharedPtr;
+   explicit CaseStmt(Statement* body);
+   CaseStmt(PatternExpr* caseVal,
+            Statement* body);
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == CaseStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
    bool is_default = false;
-   std::shared_ptr<PatternExpr> pattern;
-   std::shared_ptr<Statement> body;
+   PatternExpr* pattern;
+   Statement* body;
 
-   cl::Method *comparisonOp = nullptr;
+   MethodDecl *comparisonOp = nullptr;
 
 public:
    bool isDefault() const
@@ -46,22 +41,22 @@ public:
       return is_default;
    }
 
-   const std::shared_ptr<PatternExpr> &getPattern() const
+   PatternExpr* getPattern() const
    {
       return pattern;
    }
 
-   const std::shared_ptr<Statement> &getBody() const
+   Statement* getBody() const
    {
       return body;
    }
 
-   cl::Method *getComparisonOp() const
+   MethodDecl *getComparisonOp() const
    {
       return comparisonOp;
    }
 
-   void setComparisonOp(cl::Method *comparisonOp)
+   void setComparisonOp(MethodDecl *comparisonOp)
    {
       CaseStmt::comparisonOp = comparisonOp;
    }

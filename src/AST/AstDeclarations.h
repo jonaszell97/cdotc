@@ -10,12 +10,19 @@ namespace ast {
 
 #include "AstNode.def"
 
+class RecordDecl;
+class NamedDecl;
+class CallableDecl;
+
+class DeclContext;
+
 class Statement;
 class Expression;
 class AstNode;
 
 class StaticStmt;
 class VarDecl;
+class DestructuringDecl;
 class PatternExpr;
 
 class InheritanceConstraint;

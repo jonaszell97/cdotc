@@ -3,13 +3,12 @@
 //
 
 #include "TerminatorInst.h"
-#include "../../../../Variant/Type/VoidType.h"
 
 namespace cdot {
 namespace il {
 
 TerminatorInst::TerminatorInst(TypeID id, BasicBlock *parent)
-   : Instruction(id, VoidType::get(), parent)
+   : Instruction(id, nullptr, parent)
 {
 
 }

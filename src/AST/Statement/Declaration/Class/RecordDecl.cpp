@@ -1,333 +1,340 @@
-//
-// Created by Jonas Zell on 03.11.17.
-//
 
 #include "RecordDecl.h"
+#include "../../../SymbolTable.h"
 
-#include "../../../../Variant/Type/Generic.h"
+#include "FieldDecl.h"
+#include "MethodDecl.h"
+#include "PropDecl.h"
+#include "EnumCaseDecl.h"
+#include "../TypedefDecl.h"
+#include "../NamespaceDecl.h"
 
-#include "../../../Passes/SemanticAnalysis/Record/Class.h"
-#include "../../../Passes/SemanticAnalysis/Record/Protocol.h"
-#include "../../../Passes/SemanticAnalysis/Record/Enum.h"
-#include "../../../Passes/SemanticAnalysis/Record/Union.h"
+#include "../LocalVarDecl.h"
 
-using std::move;
+#include "../../../Expression/TypeRef.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-RecordDecl::RecordDecl(
-   NodeType typeID,
-   AccessModifier am,
-   string &&recordName,
-   std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-   std::vector<std::shared_ptr<FieldDecl>> &&fields,
-   std::vector<std::shared_ptr<MethodDecl>> &&methods,
-   std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-   std::vector<std::shared_ptr<PropDecl>> &&properties,
-   std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-   std::vector<TemplateParameter> &&templateParams,
-   std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-   std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-   std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-   : Statement(typeID), am(am), recordName(move(recordName)),
-     conformsTo(move(conformsTo)), fields(move(fields)),
-     methods(move(methods)), typedefs(move(typedefs)),
-     properties(move(properties)), associatedTypes(move(associatedTypes)),
-     templateParams(move(templateParams)),
-     Constraints(move(Constraints)),
-     innerDeclarations(move(innerDeclarations)),
-     staticStatements(move(staticStatements))
+void RecordDecl::addInnerRecord(RecordDecl *R)
 {
-
+   R->setOuterRecord(this);
+   innerRecords.insert(R);
 }
 
-std::vector<std::shared_ptr<TypedefDecl>> &RecordDecl::getTypedefs()
+DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
 {
-   return typedefs;
+   decl->setDeclContext(this);
+
+   if (auto I = dyn_cast<InitDecl>(decl)) {
+      if (I->getArgs().empty())
+         if (auto S = dyn_cast<StructDecl>(this))
+            S->setParameterlessConstructor(I);
+   }
+
+   if (auto D = dyn_cast<DeinitDecl>(decl))
+      deinitializer = D;
+
+   if (auto E = dyn_cast<EnumCaseDecl>(decl)) {
+      auto EDecl = cast<EnumDecl>(this);
+      if (E->getArgs().size() > EDecl->maxAssociatedTypes)
+         EDecl->maxAssociatedTypes = E->getArgs().size();
+   }
+
+   if (auto F = dyn_cast<FieldDecl>(decl)) {
+      if (!F->isStatic())
+         if (auto S = dyn_cast<StructDecl>(this))
+            S->fields.push_back(F);
+   }
+
+   if (auto C = dyn_cast<EnumCaseDecl>(decl)) {
+      if (auto E = dyn_cast<EnumDecl>(this))
+         E->cases.push_back(C);
+   }
+
+
+   if (auto R = dyn_cast<RecordDecl>(decl))
+      addInnerRecord(R);
+
+   return DeclContext::addDecl(decl);
 }
 
-void
-RecordDecl::setTypedefs(
-   const std::vector<std::shared_ptr<TypedefDecl>> &typedefs)
+void RecordDecl::declareOperator(MethodDecl *M)
 {
-   RecordDecl::typedefs = typedefs;
+   Operator opInfo(M->getOperator().getPrecedenceGroup().getAssociativity(),
+                   M->getOperator().getPrecedenceGroup().getPrecedence(),
+                   M->getOperator().getFix(),
+                   M->getReturnType()->getType());
+
+   OperatorPrecedences.try_emplace(M->getNameWithoutFix(), opInfo);
 }
 
-std::vector<std::shared_ptr<RecordDecl>> &
-RecordDecl::getInnerDeclarations()
+#define CDOT_RECORD_IS_X(Name) \
+bool RecordDecl::is##Name() const { return isa<Name##Decl>(this); }
+
+CDOT_RECORD_IS_X(Struct)
+CDOT_RECORD_IS_X(Class)
+CDOT_RECORD_IS_X(Enum)
+CDOT_RECORD_IS_X(Union)
+CDOT_RECORD_IS_X(Protocol)
+
+#undef CDOT_RECORD_IS_X
+
+bool RecordDecl::isRawEnum() const
 {
-   return innerDeclarations;
+   if (auto E = dyn_cast<EnumDecl>(this))
+      return E->getMaxAssociatedTypes() == 0;
+
+   return false;
 }
 
-void RecordDecl::setInnerDeclarations(
-   const std::vector<std::shared_ptr<RecordDecl>> &innerDeclarations)
+llvm::StringRef RecordDecl::getOwnName() const
 {
-   RecordDecl::innerDeclarations = innerDeclarations;
+   if (!outerRecord)
+      return name;
+
+   return llvm::StringRef(
+      name.data() + outerRecord->getName().size() + 1,
+      name.size() - outerRecord->getName().size() - 1);
 }
 
-AccessModifier RecordDecl::getAm() const
+int RecordDecl::getNameSelector() const
 {
-   return am;
+   switch (typeID) {
+      case ClassDeclID: return 0;
+      case StructDeclID: return 1;
+      case EnumDeclID: return 2;
+      case UnionDeclID: return 3;
+      case ProtocolDeclID: return 4;
+      default:
+         llvm_unreachable("bad record decl");
+   }
 }
 
-void RecordDecl::setAm(AccessModifier am)
-{
-   RecordDecl::am = am;
+AssociatedTypeDecl* RecordDecl::getAssociatedType(llvm::StringRef name,
+                                                  ProtocolDecl *P) const {
+   auto AT = dyn_cast_or_null<AssociatedTypeDecl>(lookupSingle(name));
+   if (AT) {
+      if (!AT->getProto() || AT->getProto() == P)
+         return AT;
+   }
+
+   return nullptr;
 }
 
-const string &RecordDecl::getRecordName() const
+MethodDecl* RecordDecl::getConversionOperator(Type const *toType) const
 {
-   return recordName;
+   for (auto &decl : getDecls()) {
+      auto Method = dyn_cast<MethodDecl>(decl);
+      if (!Method)
+         continue;
+
+      if (!Method->isCastOp())
+         continue;
+
+      if (*Method->getReturnType()->getType() == toType)
+         return Method;
+   }
+
+   if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto P = C->getParentClass()) {
+         return P->getConversionOperator(toType);
+      }
+   }
+
+   return nullptr;
 }
 
-void RecordDecl::setRecordName(const string &recordName)
+MethodDecl* RecordDecl::getComparisonOperator(Type const *withType) const
 {
-   RecordDecl::recordName = recordName;
+   for (auto &decl : getDecls()) {
+      auto Method = dyn_cast<MethodDecl>(decl);
+      if (!Method)
+         continue;
+
+      if (Method->getNameWithoutFix() != "==" || Method->getArgs().size() != 1)
+         continue;
+
+      if (*Method->getArgs().front()->getArgType()->getType() == withType)
+         return Method;
+   }
+
+   if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto P = C->getParentClass()) {
+         return P->getComparisonOperator(withType);
+      }
+   }
+
+   return nullptr;
 }
 
-size_t RecordDecl::getNamespaceLength() const
+bool RecordDecl::hasMethodWithName(llvm::StringRef name) const
 {
-   return namespaceLength;
+   for (auto &decl : getDecls()) {
+      auto Method = dyn_cast<MethodDecl>(decl);
+      if (Method && Method->getName() == name)
+         return true;
+   }
+
+   if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto P = C->getParentClass()) {
+         return P->hasMethodWithName(name);
+      }
+   }
+
+   return false;
 }
 
-void RecordDecl::setNamespaceLength(size_t namespaceLength)
+bool RecordDecl::hasMethodTemplate(llvm::StringRef name) const
 {
-   RecordDecl::namespaceLength = namespaceLength;
+   for (auto &decl : getDecls()) {
+      auto Method = dyn_cast<MethodDecl>(decl);
+      if (Method && Method->getName() == name && Method->isTemplate())
+         return true;
+   }
+
+   if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto P = C->getParentClass()) {
+         return P->hasMethodTemplate(name);
+      }
+   }
+
+   return false;
 }
 
-const std::vector<std::shared_ptr<TypeRef>> &RecordDecl::getConformsTo() const
+PropDecl* RecordDecl::getProperty(llvm::StringRef name) const
 {
-   return conformsTo;
+   return dyn_cast_or_null<PropDecl>(lookupSingle(name));
 }
 
-void RecordDecl::setConformsTo(
-   const std::vector<std::shared_ptr<TypeRef>> &conformsTo)
+FieldDecl* RecordDecl::getField(llvm::StringRef name) const
 {
-   RecordDecl::conformsTo = conformsTo;
+   return dyn_cast_or_null<FieldDecl>(lookupSingle(name));
 }
 
-bool RecordDecl::isVisited() const
+MethodDecl* RecordDecl::getMethod(llvm::StringRef name, bool checkParent) const
 {
-   return record != nullptr;
+   auto M = dyn_cast_or_null<MethodDecl>(lookupSingle(name));
+   if (M)
+      return M;
+
+   for (auto &decl : getDecls()) {
+      auto MDecl = dyn_cast<MethodDecl>(decl);
+      if (MDecl && MDecl->getLinkageName() == name)
+         return MDecl;
+   }
+
+   if (checkParent) {
+      if (auto C = dyn_cast<ClassDecl>(this)) {
+         if (auto P = C->getParentClass()) {
+            return P->getMethod(name, checkParent);
+         }
+      }
+   }
+
+   return nullptr;
 }
 
-const std::vector<std::shared_ptr<PropDecl>> &RecordDecl::getProperties() const
+MethodDecl* RecordDecl::getMethod(size_t id) const
 {
-   return properties;
+   for (auto &decl : getDecls()) {
+      auto Method = dyn_cast<MethodDecl>(decl);
+      if (Method && Method->getMethodID() == id)
+         return Method;
+   }
+
+   if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto P = C->getParentClass()) {
+         return P->getMethod(id);
+      }
+   }
+
+   return nullptr;
 }
 
-void RecordDecl::setProperties(
-   const std::vector<std::shared_ptr<PropDecl>> &properties)
+MethodDecl* RecordDecl::getOwnMethod(llvm::StringRef name)
 {
-   RecordDecl::properties = properties;
+   return lookupOwn<MethodDecl>(name);
 }
 
-Record *RecordDecl::getRecord() const
+bool RecordDecl::conformsToBaseTemplate(ProtocolDecl *P) const
 {
-   return record;
+   for (auto C : conformances)
+      if (C->getSpecializedTemplate() == P)
+         return true;
+
+   return false;
 }
 
-void RecordDecl::setRecord(Record *record)
+sema::ResolvedTemplateArg const* RecordDecl::getTemplateArg(
+   llvm::StringRef name) const
 {
-   RecordDecl::record = record;
+   assert(isInstantiation());
+   return instantiationInfo->templateArgs.getNamedArg(name);
 }
 
-ClassDecl::ClassDecl(
-   string &&class_name,
-   std::vector<std::shared_ptr<FieldDecl>> &&fields,
-   std::vector<std::shared_ptr<MethodDecl>> &&methods,
-   std::vector<std::shared_ptr<ConstrDecl>> &&constr,
-   std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-   std::vector<std::shared_ptr<PropDecl>> &&properties,
-   std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-   std::vector<TemplateParameter> &&templateParams,
-   std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-   AccessModifier am,
-   bool is_abstract,
-   bool isStruct,
-   std::shared_ptr<TypeRef> &&extends,
-   std::vector<std::shared_ptr<TypeRef>> &&implements,
-   std::shared_ptr<DestrDecl> &&destr,
-   std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-   std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-   : RecordDecl(
-         ClassDeclID,
-         am,
-         move(class_name),
-         move(implements),
-         move(fields),
-         move(methods),
-         move(typedefs),
-         move(properties),
-         move(associatedTypes),
-         move(templateParams),
-         move(Constraints),
-         move(innerDeclarations),
-         move(staticStatements)
-      ),
-     parentClass(move(extends)),
-     is_abstract(is_abstract),
-     is_struct(isStruct),
-     constructors(move(constr)),
-     destructor(move(destr))
+void RecordDecl::addExtension(ExtensionDecl *E)
 {
+   E->setDeclContext(this);
 
+   for (auto &decl : E->getDecls())
+      addDecl(decl);
+
+   conformanceTypes.insert(conformanceTypes.end(),
+                           E->getConformanceTypes().begin(),
+                           E->getConformanceTypes().end());
+
+   staticStatements.insert(staticStatements.end(),
+                           E->getStaticStatements().begin(),
+                           E->getStaticStatements().end());
 }
 
-ClassDecl::ClassDecl(
-   string &&className,
-   std::vector<std::shared_ptr<FieldDecl>> &&fields,
-   std::vector<std::shared_ptr<MethodDecl>> &&methods,
-   std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
-   std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-   std::vector<std::shared_ptr<PropDecl>> &&properties,
-   std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-   std::vector<TemplateParameter> &&templateParams,
-   std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-   AccessModifier am,
-   std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-   std::shared_ptr<DestrDecl> &&destr,
-   std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-   std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-   : RecordDecl(
-         ClassDeclID,
-         am,
-         move(className),
-         move(conformsTo),
-         move(fields),
-         move(methods),
-         move(typedefs),
-         move(properties),
-         move(associatedTypes),
-         move(templateParams),
-         move(Constraints),
-         move(innerDeclarations),
-         move(staticStatements)
-      ),
-     is_abstract(true),
-     constructors(move(constructors)),
-     destructor(move(destr))
+void RecordDecl::calculateSize()
 {
+   if (auto S = dyn_cast<StructDecl>(this)) {
+      if (occupiedBytes)
+         return;
 
+      for (const auto &f : S->getFields()) {
+         auto ty = f->getType()->getType();
+         occupiedBytes += ty->getMemberSize();
+
+         if (ty->getAlignment() > alignment)
+            alignment = ty->getAlignment();
+      }
+
+      if (!occupiedBytes) {
+         occupiedBytes = sizeof(void*);
+         alignment = alignof(void*);
+      }
+   }
+   else if (auto E = dyn_cast<EnumDecl>(this)) {
+      occupiedBytes = sizeof(void*) * E->getMaxAssociatedTypes()
+                      + E->getRawType()->getType()->getSize();
+
+      alignment = alignof(void*);
+   }
+   else if (isa<UnionDecl>(this)) {
+      for (auto &decl : getDecls()) {
+         auto f = dyn_cast<FieldDecl>(decl);
+         if (!f)
+            continue;
+
+         auto ty = f->getType()->getType();
+         if (ty->getSize() > occupiedBytes)
+            occupiedBytes = ty->getSize();
+
+         if (ty->getAlignment() > alignment)
+            alignment = ty->getAlignment();
+      }
+   }
 }
 
-void ClassDecl::setParentClass(const std::shared_ptr<TypeRef> &parentClass)
+EnumCaseDecl* EnumDecl::hasCase(llvm::StringRef name)
 {
-   ClassDecl::parentClass = parentClass;
-}
-
-bool ClassDecl::isAbstract() const
-{
-   return is_abstract;
-}
-
-void ClassDecl::setIsAbstract(bool is_abstract)
-{
-   ClassDecl::is_abstract = is_abstract;
-}
-
-bool ClassDecl::isStruct() const
-{
-   return is_struct;
-}
-
-void ClassDecl::setIsStruct(bool is_struct)
-{
-   ClassDecl::is_struct = is_struct;
-}
-
-const std::vector<std::shared_ptr<ConstrDecl>> &
-ClassDecl::getConstructors() const
-{
-   return constructors;
-}
-
-void ClassDecl::setConstructors(
-   const std::vector<std::shared_ptr<ConstrDecl>> &constructors)
-{
-   ClassDecl::constructors = constructors;
-}
-
-void ClassDecl::setDestructor(const std::shared_ptr<DestrDecl> &destructor)
-{
-   ClassDecl::destructor = destructor;
-}
-
-Class *ClassDecl::getDeclaredClass() const
-{
-   return record->getAs<Class>();
-}
-
-EnumDecl::EnumDecl(AccessModifier am,
-                   string &&enumName,
-                   std::shared_ptr<TypeRef> &&rawType,
-                   std::vector<std::shared_ptr<FieldDecl>> &&fields,
-                   std::vector<std::shared_ptr<MethodDecl>> &&methods,
-                   std::vector<std::shared_ptr<PropDecl>> &&properties,
-                   std::vector<std::shared_ptr<AssociatedTypeDecl>>
-                                                            &&associatedTypes,
-                   std::vector<TemplateParameter> &&templateParams,
-                   std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-                   std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-                   std::vector<std::shared_ptr<EnumCaseDecl>> &&cases,
-                   std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-                   std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-   : RecordDecl(
-         EnumDeclID,
-         am,
-         std::move(enumName),
-         std::move(conformsTo),
-         move(fields),
-         std::move(methods),
-         {},
-         move(properties),
-         move(associatedTypes),
-         move(templateParams),
-         move(Constraints),
-         std::move(innerDeclarations),
-         move(staticStatements)
-      ),
-     cases(move(cases)),
-     rawType(move(rawType))
-{
-
-}
-
-cl::Enum* EnumDecl::getDeclaredEnum() const
-{
-   return record->getAs<Enum>();
-}
-
-UnionDecl::UnionDecl(string &&name,
-                     UnionTypes &&types,
-                     bool isConst,
-                     std::vector<std::shared_ptr<FieldDecl>> &&fields,
-                     std::vector<std::shared_ptr<MethodDecl>> &&methods,
-                     std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-                     std::vector<std::shared_ptr<PropDecl>> &&properties,
-                     std::vector<std::shared_ptr<AssociatedTypeDecl>>
-                                                            &&associatedTypes,
-
-                     std::vector<TemplateParameter> &&templateParams,
-                     std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-                     std::vector<std::shared_ptr<RecordDecl>> &&innerDecls,
-                     std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-   : RecordDecl(UnionDeclID, AccessModifier::PUBLIC, move(name), {},
-                move(fields),
-                move(methods), move(typedefs), move(properties),
-                move(associatedTypes),
-                move(templateParams), move(Constraints),
-                move(innerDecls), move(staticStatements)),
-     containedTypes(move(types)),
-     is_const(isConst)
-{
-
-}
-
-Union* UnionDecl::getDeclaredUnion() const
-{
-   return support::cast<Union>(record);
+   return lookupSingle<EnumCaseDecl>(name);
 }
 
 } // namespace ast

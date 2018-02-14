@@ -23,7 +23,7 @@
 //}
 //
 //enum class ExternKind : unsigned char;
-//enum class AccessModifier : unsigned int;
+//enum class AccessModifier : unsigned char;
 //
 //using std::string;
 //using std::stringstream;
@@ -89,12 +89,12 @@
 //   void writeExternKind(ExternKind& kind);
 //
 //   void writeGenerics(const std::vector<TemplateConstraint>& generics);
-//   void writeGenerics(const std::vector<TemplateArg>& generics);
+//   void writeGenerics(const std::vector<TemplateArgExpr*>& generics);
 //
 //   void writeProtocols(const std::vector<ObjectType*>& conformsTo);
-//   void writeProtocols(const std::vector<std::shared_ptr<TypeRef>>& conformsTo);
+//   void writeProtocols(const std::vector<TypeRef* >& conformsTo);
 //
-//   void writeArgs(const std::vector<std::shared_ptr<FuncArgDecl>>& args);
+//   void writeArgs(const std::vector<FuncArgDecl* >& args);
 //   void writeAccess(const AccessModifier& access);
 //
 //   void writeIdent(const string& ident, bool newLine = true);

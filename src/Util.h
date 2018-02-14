@@ -6,8 +6,6 @@
 #define UTIL_H
 
 #include <unordered_map>
-#include <set>
-#include <llvm/IR/Type.h>
 #include <regex>
 
 namespace cdot {
@@ -16,41 +14,22 @@ class Type;
 class ObjectType;
 class GenericType;
 
-enum class BuiltinFn : unsigned int;
+enum class BuiltinFn : unsigned char;
 
-struct Argument;
 class QualType;
 
-class TemplateArg;
-struct TemplateParameter;
 
-enum class AccessModifier : unsigned int {
-   DEFAULT = 0,
-   PUBLIC,
-   PRIVATE,
-   PROTECTED
-};
 
 }
-using std::pair;
-using std::string;
-using std::unordered_map;
+
 using namespace cdot;
 
 namespace cdot {
-namespace cl {
-
-struct Method;
-struct ExtensionConstraint;
-
-} // namespace cl
-
 namespace ast {
 
 class AstNode;
 class SemaPass;
 class Expression;
-class Function;
 class StaticExpr;
 
 } // namespace ast
@@ -60,13 +39,10 @@ class StaticExpr;
 namespace cdot {
 namespace util {
 
-std::vector<string> str_split(const string &, char);
+std::vector<std::string> str_split(const std::string &, char);
 
-string args_to_string(std::vector<Argument> &);
-
-extern std::vector<string> stdLibImports;
-
-extern std::vector<pair<string, string>> LlvmFunctionAttrs;
+extern std::vector<std::string> stdLibImports;
+extern std::vector<std::pair<std::string, std::string>> LlvmFunctionAttrs;
 
 template<class T>
 bool in_vector(const std::vector<T> &vec, const T &el)
@@ -74,7 +50,7 @@ bool in_vector(const std::vector<T> &vec, const T &el)
    return std::find(vec.begin(), vec.end(), el) != vec.end();
 }
 
-string str_escape(const string &);
+std::string str_escape(const std::string &);
 
 template<class T, class R>
 bool in_pair_vector(const std::vector<std::pair<T, R>> &vec, const T &el)
@@ -98,9 +74,9 @@ R get_second(const std::vector<std::pair<T, R>> &vec, T el)
 
 template<typename T, char Begin = '(', char Sep = ',', char End = ')',
    bool withSpace = true>
-string vectorToString(const std::vector<T> &vec, bool withLength = false)
+std::string vectorToString(const std::vector<T> &vec, bool withLength = false)
 {
-   string s;
+   std::string s;
    if (Begin != '\0') {
       s += Begin;
    }
@@ -132,9 +108,9 @@ string vectorToString(const std::vector<T> &vec, bool withLength = false)
 };
 
 template<typename T, char Begin = '(', char Sep = ',', char End = ')'>
-string vectorToString(const std::vector<std::shared_ptr<T>> &vec,
-                      bool withLength = false) {
-   string s;
+std::string vectorToString(const std::vector<T* > &vec,
+                           bool withLength = false) {
+   std::string s;
    if (Begin != '\0') {
       s += Begin;
    }
@@ -143,7 +119,7 @@ string vectorToString(const std::vector<std::shared_ptr<T>> &vec,
    size_t i = 0;
 
    for (const auto &item : vec) {
-      auto str = item->toString();
+      auto str = item->tostd::string();
       if (withLength) {
          s += std::to_string(str.length());
       }
@@ -163,29 +139,12 @@ string vectorToString(const std::vector<std::shared_ptr<T>> &vec,
    return s;
 };
 
-bool matches(const string &pattern, const string &subject);
+bool matches(const std::string &pattern, const std::string &subject);
 
-std::smatch get_match(string pattern, string &subject);
+std::string generate_getter_name(const std::string &);
+std::string generate_setter_name(const std::string &);
 
-string generate_getter_name(const string &);
-
-string generate_setter_name(const string &);
-
-extern std::vector<string> types;
-extern std::unordered_map<AccessModifier, string> am_map;
-
-bool is_reversible(const string &);
-
-extern std::vector<string> attributes;
-
-typedef std::function<QualType(ast::Expression *)> ResolverFn;
-
-QualType dummyResolver(ast::Expression *node);
-
-
-size_t castPenalty(const QualType &from, const QualType &to);
-
-string nextAnonymousNamespace();
+extern std::vector<std::string> attributes;
 
 } // namespace util
 } // namespace cdot

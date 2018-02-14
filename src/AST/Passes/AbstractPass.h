@@ -2,121 +2,94 @@
 // Created by Jonas Zell on 25.06.17.
 //
 
-#ifndef CDOT_VISITOR_H
-#define CDOT_VISITOR_H
+#ifndef CDOT_ASTVISITOR_H
+#define CDOT_ASTVISITOR_H
 
-#include <vector>
-
-#include "../Expression/Expression.h"
-#include "../Statement/Statement.h"
-
-#include "../AstDeclarations.h"
-#include "../../Compiler.h"
+#include "AST/Passes/ASTIncludes.h"
+#include "AST/Traverse.h"
 
 namespace cdot {
 namespace ast {
 
-class ASTPass {
+template<class SubClass, class RetTy = void, class ...ParamTys>
+class AbstractPass {
 public:
-   enum TypeID {
-#  define CDOT_AST_PASS(Name) \
-      Name##ID,
-#  define CDOT_INCLUDE_ALL
-#  include "Passes.def"
-   };
-
-   explicit ASTPass(TypeID id) : typeID(id)
-   {}
-
-   void RunOn(std::vector<CompilationUnit> &CUs);
-
-   TypeID getTypeID() const
-   {
-      return typeID;
-   }
-
-protected:
-   TypeID typeID;
-};
-
-template<class SubClass, class RetTy>
-class AbstractPass: public ASTPass {
-public:
-
-   RetTy visit(Expression *node);
-   void visit(Statement *node);
-
-   template<class T>
-   auto visit(const std::shared_ptr<T> &node) -> decltype(visit(node.get()))
-   {
-      return visit(node.get());
-   }
-
 #  define CDOT_EXPR(Name)                                   \
-   RetTy visit##Name(Name*) { return {}; }
+   RetTy visit##Name(Name*, ParamTys...) { return RetTy(); }
 #  include "../AstNode.def"
 
 #  define CDOT_EXPR(Name)
 #  define CDOT_STMT(Name)                                   \
-   void visit##Name(Name*) { }
-#  include "../AstNode.def"
+   void visit##Name(Name*, ParamTys...) { }
+#  include "AST/AstNode.def"
 
-protected:
-   explicit AbstractPass(TypeID typeID) : ASTPass(typeID)
-   {}
 
-   void deferVisit(const std::shared_ptr<AstNode> &node)
+   RetTy visit(Expression *node, ParamTys... params)
    {
-      DeferredNodes.push_back(node);
-   }
+      switch (node->getTypeID()) {
+#     define CDOT_EXPR(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                         \
+               ->visit##Name(static_cast<Name*>(node),                  \
+                             std::forward<ParamTys>(params)...);
+#     include "AST/AstNode.def"
 
-   void visitDeferred()
-   {
-      while (!DeferredNodes.empty()) {
-         auto next = DeferredNodes.back();
-         DeferredNodes.pop_back();
+         default:
+            llvm_unreachable("not an expression!");
       }
    }
 
-   std::vector<std::shared_ptr<AstNode>> DeferredNodes;
+   void visit(Statement *node, ParamTys... params)
+   {
+      switch (node->getTypeID()) {
+#     define CDOT_EXPR(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            static_cast<SubClass*>(this)                                \
+               ->visit##Name(static_cast<Name*>(node),                  \
+                             std::forward<ParamTys>(params)...);        \
+            return;
+#     define CDOT_STMT(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                         \
+               ->visit##Name(static_cast<Name*>(node),                  \
+                             std::forward<ParamTys>(params)...);
+#     include "AST/AstNode.def"
+      }
+   }
 };
+
 
 template<class SubClass>
-class AbstractPass<SubClass, void>: public ASTPass {
+class RecursiveASTVisitor {
 public:
-   void visit(AstNode *node);
-
-   void visit(const std::shared_ptr<AstNode> &node)
-   {
-      visit(node.get());
+#  define CDOT_STMT(Name)                                                 \
+   void visit##Name(Name *stmt)                                           \
+   {                                                                      \
+      visitDirectChildren(stmt, [&](Statement *Child) { visit(Child); }); \
    }
 
-#  define CDOT_ASTNODE(Name) \
-   void visit##Name(Name*) {}
-#  include "../AstNode.def"
+#  define CDOT_EXPR(Name) CDOT_STMT(Name)
+#  include "AST/AstNode.def"
 
-protected:
-   explicit AbstractPass(TypeID typeID) : ASTPass(typeID)
-   {}
-
-   void deferVisit(const std::shared_ptr<AstNode> &node)
+   void visit(Statement *node)
    {
-      DeferredNodes.push_back(node);
-   }
-
-   void visitDeferred()
-   {
-      while (!DeferredNodes.empty()) {
-         auto next = DeferredNodes.back();
-         DeferredNodes.pop_back();
+      switch (node->getTypeID()) {
+#     define CDOT_EXPR(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            static_cast<SubClass*>(this)                                \
+               ->visit##Name(static_cast<Name*>(node));                 \
+            return;
+#     define CDOT_STMT(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                         \
+               ->visit##Name(static_cast<Name*>(node));
+#     include "AST/AstNode.def"
       }
    }
-
-   std::vector<std::shared_ptr<AstNode>> DeferredNodes;
 };
 
-}
-}
+} // namespace ast
+} // namespace cdot
 
 
-#endif //CDOT_VISITOR_H
+#endif //CDOT_ASTVISITOR_H

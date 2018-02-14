@@ -8,99 +8,51 @@
 #include "Statement.h"
 
 namespace cdot {
-namespace ast {
 
-enum class UsingKind {
-   FUNCTION,
-   CLASS,
-   VARIABLE,
-   TYPEDEF,
-   ALIAS,
-   NAMESPACE
-};
+namespace module {
+   class Module;
+} // namespace module
+
+namespace ast {
 
 class UsingStmt : public Statement {
 public:
-   explicit UsingStmt(string&& importNamespace, std::vector<string>&& item);
-   explicit UsingStmt(std::vector<string> &&fullNames);
-
-   typedef std::shared_ptr<UsingStmt> SharedPtr;
+   UsingStmt(std::vector<string> &&declContextSpecifier,
+             std::vector<string> &&importedItems,
+             bool wildCardImport)
+      : Statement(UsingStmtID),
+        declContextSpecifier(move(declContextSpecifier)),
+        importedItems(move(importedItems)),
+        wildCardImport(wildCardImport)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == UsingStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   string importNamespace;
-   std::vector<string> importedItems;
+   std::vector<std::string> declContextSpecifier;
+   std::vector<std::string> importedItems;
 
-   bool isWildcardImport = false;
-
-   std::vector<string> fullNames;
-   UsingKind kind;
-
-   bool resolved = false;
+   bool wildCardImport;
 
 public:
-   const string &getImportNamespace() const
+   const std::vector<std::string> &getDeclContextSpecifier() const
    {
-      return importNamespace;
+      return declContextSpecifier;
    }
 
-   void setImportNamespace(const string &importNamespace)
-   {
-      UsingStmt::importNamespace = importNamespace;
-   }
-
-   const std::vector<string> &getImportedItems() const
+   const std::vector<std::string> &getImportedItems() const
    {
       return importedItems;
    }
 
-   void setImportedItems(const std::vector<string> &importedItems)
+   bool isWildCardImport() const
    {
-      UsingStmt::importedItems = importedItems;
-   }
-
-   bool isIsWildcardImport() const
-   {
-      return isWildcardImport;
-   }
-
-   void setIsWildcardImport(bool isWildcardImport)
-   {
-      UsingStmt::isWildcardImport = isWildcardImport;
-   }
-
-   std::vector<string> &getFullNames()
-   {
-      return fullNames;
-   }
-
-   void setFullNames(const std::vector<string> &fullNames)
-   {
-      UsingStmt::fullNames = fullNames;
-   }
-
-   UsingKind getKind() const
-   {
-      return kind;
-   }
-
-   void setKind(UsingKind kind)
-   {
-      UsingStmt::kind = kind;
-   }
-
-   bool isResolved() const
-   {
-      return resolved;
-   }
-
-   void setResolved(bool resolved)
-   {
-      UsingStmt::resolved = resolved;
+      return wildCardImport;
    }
 };
 
@@ -130,7 +82,8 @@ class ImportStmt: public Statement {
 public:
    explicit ImportStmt(std::vector<std::string> &&qualifiedModuleName)
       : Statement(ImportStmtID),
-        qualifiedModuleName(std::move(qualifiedModuleName))
+        qualifiedModuleName(std::move(qualifiedModuleName)),
+        module(nullptr)
    {}
 
    static bool classof(AstNode const *T)
@@ -140,11 +93,22 @@ public:
 
 private:
    std::vector<std::string> qualifiedModuleName;
+   module::Module *module;
 
 public:
    const std::vector<std::string> &getQualifiedModuleName() const
    {
       return qualifiedModuleName;
+   }
+
+   module::Module *getModule() const
+   {
+      return module;
+   }
+
+   void setModule(module::Module *module)
+   {
+      ImportStmt::module = module;
    }
 };
 

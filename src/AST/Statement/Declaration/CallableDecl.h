@@ -5,172 +5,186 @@
 #ifndef CDOT_CALLABLEDECL_H
 #define CDOT_CALLABLEDECL_H
 
-#include "../Statement.h"
+#include <llvm/ADT/SmallPtrSet.h>
+#include "NamedDecl.h"
+
 #include "../../../Variant/Type/Generic.h"
 #include "../../../Basic/Precedence.h"
 
 namespace cdot {
+
+class FunctionType;
+
 namespace ast {
 
+class SemaPass;
 class FuncArgDecl;
 class StaticExpr;
+class CompoundStmt;
 
-class CallableDecl: public Statement {
+class CallableDecl: public NamedDecl, public DeclContext,
+                    public llvm::FoldingSetNode {
 public:
-   void setInnerDecls(std::vector<std::shared_ptr<Statement>>&& decls)
+   static bool classof(AstNode const* T)
    {
-      innerDeclarations = decls;
+      return classofKind(T->getTypeID());
    }
 
-   void addInnerDecl(Statement::SharedPtr&& decl)
+   static bool classofKind(NodeType kind)
    {
-      innerDeclarations.push_back(decl);
+      switch (kind) {
+         case FunctionDeclID:
+         case MethodDeclID:
+         case InitDeclID:
+         case DeinitDeclID:
+         case EnumCaseDeclID:
+            return true;
+         default:
+            return false;
+      }
    }
 
-   std::vector<Statement::SharedPtr>& getInnerDecls()
+   static bool classof(DeclContext const* T) { return true; }
+
+   void Profile(llvm::FoldingSetNodeID &ID)
    {
-      return innerDeclarations;
+      Profile(ID, instantiationInfo->specializedTemplate,
+              instantiationInfo->templateArgs);
    }
+
+   static void Profile(llvm::FoldingSetNodeID &ID, CallableDecl *Template,
+                       sema::TemplateArgList &list) {
+      ID.AddPointer(Template);
+      list.Profile(ID);
+   }
+
+   friend class TransformImpl;
 
 protected:
    CallableDecl(NodeType typeID,
                 AccessModifier am,
-                string &&name,
-                std::shared_ptr<TypeRef> &&returnType,
-                std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-                std::vector<TemplateParameter> &&templateParams,
-                std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-                std::shared_ptr<CompoundStmt> &&body,
+                std::string &&name,
+                TypeRef* returnType,
+                std::vector<FuncArgDecl* > &&args,
+                std::vector<StaticExpr* > &&Constraints,
+                CompoundStmt* body,
                 OperatorInfo op)
-      : Statement(typeID), am(am), name(move(name)),
-        returnType(move(returnType)), args(move(args)),
-        body(move(body)), templateParams(move(templateParams)),
-        Constraints(move(Constraints)), op(op)
+      : NamedDecl(typeID, am, move(name), move(Constraints)),
+        DeclContext(typeID),
+        returnType(returnType), args(move(args)),
+        body(body), op(op), Flags(0)
    {
 
    }
 
-   AccessModifier am;
+   std::string linkageName;
 
-   string name;
-   std::shared_ptr<TypeRef> returnType;
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
-   std::shared_ptr<CompoundStmt> body;
+   FunctionType *functionType = nullptr;
 
-   std::vector<TemplateParameter> templateParams;
-   std::vector<std::shared_ptr<StaticExpr>> Constraints;
+   TypeRef* returnType;
+   std::vector<FuncArgDecl* > args;
+   CompoundStmt* body;
 
-   std::vector<Statement::SharedPtr> innerDeclarations;
+   std::vector<TemplateParamDecl*> templateParams;
+   InstantiationInfo<CallableDecl> *instantiationInfo = nullptr;
 
-   bool has_sret = false;
-
-   Callable *callable = nullptr;
+   llvm::SmallPtrSet<Type*, 2> thrownTypes;
    size_t methodID = 0;
 
    OperatorInfo op;
 
-   Callable *specializedTemplate = nullptr;
+   enum Flag : uint32_t {
+      // general flags
+      NoThrow  = 1,
+      ExternC  = NoThrow << 1,
+      Native   = ExternC << 1,
+      ConvOp   = Native  << 1,
+      External = ConvOp << 1,
+      Main     = External << 1,
+      Vararg   = Main << 1,
+      CVarArg  = Vararg << 1,
+      Defined  = CVarArg << 1,
+
+      // method flags
+      Abstract         = Defined << 1,
+      Alias            = Abstract << 1,
+      MutableSelf      = Alias << 1,
+      ProtoMethod      = MutableSelf << 1,
+      Virtual          = ProtoMethod << 1,
+      Override         = Virtual << 1,
+      Property         = Override << 1,
+      MemberwiseInit   = Property << 1,
+      DefaultInit      = MemberwiseInit << 1,
+      ProtoDefaultImpl = DefaultInit << 1,
+   };
+
+   uint32_t Flags;
+
+   void setFlag(Flag F, bool val)
+   {
+      if (val)
+         Flags |= F;
+      else
+         Flags &= ~F;
+   }
+
+   bool getFlag(Flag F) const
+   {
+      return (Flags & F) != 0;
+   }
 
 public:
-   AccessModifier getAm() const
+   FunctionType *getFunctionType() const
    {
-      return am;
+      return functionType;
    }
 
-   void setAm(AccessModifier am)
-   {
-      CallableDecl::am = am;
-   }
+   void createFunctionType(SemaPass &SP, unsigned flags = 0);
 
-   const string &getName() const
-   {
-      return name;
-   }
-
-   void setName(const string &funcName)
-   {
-      CallableDecl::name = funcName;
-   }
-
-   std::vector<std::shared_ptr<FuncArgDecl>> &getArgs()
+   std::vector<FuncArgDecl* > &getArgs()
    {
       return args;
    }
 
-   void setArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args)
+   std::vector<FuncArgDecl* > const& getArgs() const
    {
-      CallableDecl::args = args;
+      return args;
    }
 
-   void setBody(std::shared_ptr<CompoundStmt> &&body)
+   void setArgs(std::vector<FuncArgDecl* > &&args)
    {
-      this->body = move(body);
+      CallableDecl::args = move(args);
    }
 
-   const std::shared_ptr<TypeRef> &getReturnType() const
+   void setLinkageName(std::string &&linkageName)
+   {
+      CallableDecl::linkageName = move(linkageName);
+   }
+
+   void setBody(CompoundStmt* body)
+   {
+      setHasDefinition(body != nullptr);
+      this->body = body;
+   }
+
+   TypeRef* getReturnType() const
    {
       return returnType;
    }
 
-   void setReturnType(const std::shared_ptr<TypeRef> &returnType)
+   void setReturnType(TypeRef* returnType)
    {
       CallableDecl::returnType = returnType;
    }
 
-   const std::vector<Statement::SharedPtr> &getInnerDeclarations() const
+   const std::string &getLinkageName() const
    {
-      return innerDeclarations;
+      return linkageName;
    }
 
-   void setInnerDeclarations(
-      const std::vector<Statement::SharedPtr> &innerDeclarations)
-   {
-      CallableDecl::innerDeclarations = innerDeclarations;
-   }
-
-   bool hasStructRet() const
-   {
-      return has_sret;
-   }
-
-   void hasStructRet(bool has_sret)
-   {
-      CallableDecl::has_sret = has_sret;
-   }
-
-   void addArgument(std::shared_ptr<FuncArgDecl> arg)
-   {
-      args.push_back(arg);
-   }
-
-   bool hasDefinition()
-   {
-      return !is_declaration;
-   }
-
-   std::shared_ptr<CompoundStmt>& getBody()
+   CompoundStmt* const& getBody() const
    {
       return body;
-   }
-
-   Callable *getCallable()
-   {
-      return callable;
-   }
-
-   void setCallable(Callable *callable)
-   {
-      CallableDecl::callable = callable;
-   }
-
-   std::vector<TemplateParameter> &getTemplateParams()
-   {
-      return templateParams;
-   }
-
-   const std::vector<std::shared_ptr<StaticExpr>> &getConstraints() const
-   {
-      return Constraints;
    }
 
    size_t getMethodID() const
@@ -188,20 +202,91 @@ public:
       return op;
    }
 
+   OperatorInfo const& getOperator() const
+   {
+      return op;
+   }
+
    bool isOperator() const
    {
       return op.getPrecedenceGroup().isValid();
    }
 
-   Callable *getSpecializedTemplate() const
+   bool isConversionOp() const { return getFlag(ConvOp); }
+   void setIsConversionOp(bool conversionOp) { setFlag(ConvOp, conversionOp); }
+
+   bool isMain() const { return getFlag(Main); }
+   void setIsMain(bool main) { setFlag(Main, main); }
+
+   bool isExternal() const { return getFlag(External); }
+   void setExternal(bool external) { setFlag(External, external); }
+
+   bool isExternC() const { return getFlag(ExternC); }
+   void setExternC(bool externC) { setFlag(ExternC, externC); }
+
+   bool isNative() const { return getFlag(Native); }
+   void setNative(bool native) { setFlag(Native, native); }
+
+   bool isVararg() const { return getFlag(Vararg); }
+   void setVararg(bool vararg) { setFlag(Vararg, vararg); }
+
+   bool isCstyleVararg() const { return getFlag(CVarArg); }
+   void setCstyleVararg(bool cstyleVararg) { setFlag(CVarArg, cstyleVararg); }
+
+   uint32_t getFunctionFlags() const { return Flags; }
+   void setFunctionFlags(uint32_t Flags) { CallableDecl::Flags = Flags; }
+
+   const llvm::SmallPtrSet<Type*, 2> &getThrownTypes() const
+   { return thrownTypes; }
+
+   void addThrownType(Type *ty) { thrownTypes.insert(ty); }
+
+   bool throws(Type *ty) const
    {
-      return specializedTemplate;
+      return thrownTypes.find(ty) != thrownTypes.end();
    }
 
-   void setSpecializedTemplate(Callable *specializedTemplate)
+   bool throws() const { return !thrownTypes.empty(); }
+
+   bool isNoThrow() const { return getFlag(NoThrow); }
+   void isNoThrow(bool nothrow) { setFlag(NoThrow, nothrow); }
+
+   void setInstantiationInfo(InstantiationInfo<CallableDecl> *instantiationInfo)
    {
-      CallableDecl::specializedTemplate = specializedTemplate;
+      CallableDecl::instantiationInfo = instantiationInfo;
    }
+
+   void setTemplateParams(std::vector<TemplateParamDecl *> &&templateParams)
+   {
+      CallableDecl::templateParams = move(templateParams);
+   }
+
+   llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   bool isInstantiation() const
+   {
+      return instantiationInfo != nullptr;
+   }
+
+   const SourceLocation &getInstantiatedFrom() const
+   {
+      return instantiationInfo->instantiatedFrom;
+   }
+
+   CallableDecl* getSpecializedTemplate() const
+   {
+      return instantiationInfo->specializedTemplate;
+   }
+
+   const sema::TemplateArgList &getTemplateArgs() const
+   {
+      return instantiationInfo->templateArgs;
+   }
+
+   llvm::StringRef getNameWithoutFix() const;
 };
 
 class TypeRef;
@@ -210,25 +295,38 @@ class CompoundStmt;
 class FunctionDecl : public CallableDecl {
 public:
    FunctionDecl(AccessModifier am,
-                string &&funcName,
-                std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-                std::shared_ptr<TypeRef> &&returnType,
-                std::vector<TemplateParameter> &&templateParams,
-                std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-                std::shared_ptr<CompoundStmt> &&body,
+                std::string &&funcName,
+                std::vector<FuncArgDecl* > &&args,
+                TypeRef* returnType,
+                std::vector<StaticExpr* > &&Constraints,
+                CompoundStmt* body,
                 OperatorInfo op)
-      : CallableDecl(FunctionDeclID, am, move(funcName), move(returnType),
-                     move(args), move(templateParams), move(Constraints),
-                     move(body), op)
+      : CallableDecl(FunctionDeclID, am, move(funcName), returnType,
+                     move(args), move(Constraints), body, op)
    {
 
    }
 
-   typedef std::shared_ptr<FunctionDecl> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == FunctionDeclID;
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(NodeType kind)
+   {
+      return kind == FunctionDeclID;
+   }
+
+   static DeclContext *castToDeclContext(FunctionDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<FunctionDecl*>(D));
+   }
+
+   static FunctionDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<FunctionDecl*>(const_cast<DeclContext*>(Ctx));
    }
 };
 

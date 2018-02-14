@@ -7,18 +7,18 @@
 namespace cdot {
 namespace ast {
 
-LvalueToRvalue::LvalueToRvalue(Expression::SharedPtr expr)
+LvalueToRvalue::LvalueToRvalue(Expression* expr)
    : Expression(LvalueToRvalueID), target(expr)
 {
-    target->setParent(this);
+
 }
 
-const Expression::SharedPtr &LvalueToRvalue::getTarget() const
+Expression* LvalueToRvalue::getTarget() const
 {
    return target;
 }
 
-void LvalueToRvalue::setTarget(const Expression::SharedPtr &target)
+void LvalueToRvalue::setTarget(Expression* target)
 {
    LvalueToRvalue::target = target;
 }

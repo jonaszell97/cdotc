@@ -5,76 +5,87 @@
 #ifndef CDOT_PROPDECL_H
 #define CDOT_PROPDECL_H
 
-#include "RecordSubDecl.h"
+#include "../NamedDecl.h"
 
 namespace cdot {
-
-namespace cl {
-class Property;
-}
-
 namespace ast {
 
 class TypeRef;
 class CompoundStmt;
 
-class PropDecl: public RecordSubDecl {
+class PropDecl: public NamedDecl {
 public:
-   PropDecl(
-      string &&propName,
-      std::shared_ptr<TypeRef> &&type,
-      AccessModifier access,
-      bool isStatic,
-      bool hasDefinition,
-      bool hasGetter,
-      bool hasSetter,
-      std::shared_ptr<CompoundStmt> &&getter,
-      std::shared_ptr<CompoundStmt> &&setter,
-      string &&newValName
-   );
-
-   typedef std::shared_ptr<PropDecl> SharedPtr;
+   PropDecl(string &&propName,
+            TypeRef* type,
+            AccessModifier access,
+            bool isStatic,
+            bool hasDefinition,
+            bool hasGetter,
+            bool hasSetter,
+            CompoundStmt* getter,
+            CompoundStmt* setter,
+            string &&newValName)
+      : NamedDecl(PropDeclID, access, std::move(propName)),
+        type(type),
+        getterBody(getter), setterBody(setter),
+        getter(hasGetter), setter(hasSetter), newValName(move(newValName))
+   {
+      setDeclFlag(DF_Static, isStatic);
+      setDeclFlag(DF_HasDefinition, hasDefinition);
+   }
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == PropDeclID;
    }
 
-protected:
-   std::shared_ptr<TypeRef> type;
-   bool has_definition;
+   friend class TransformImpl;
 
-   std::shared_ptr<CompoundStmt> getterBody = nullptr;
-   std::shared_ptr<CompoundStmt> setterBody = nullptr;
+protected:
+   TypeRef* type;
+
+   CompoundStmt* getterBody = nullptr;
+   CompoundStmt* setterBody = nullptr;
 
    bool getter = false;
    bool setter = false;
 
    string newValName;
 
-   cl::Property *prop = nullptr;
+   MethodDecl *getterMethod;
+   MethodDecl *setterMethod;
 
 public:
-   const std::shared_ptr<TypeRef> &getType() const;
-   void setType(const std::shared_ptr<TypeRef> &type);
+   TypeRef* getType() const { return type; }
 
-   bool hasGetter() const;
-   bool hasSetter() const;
+   bool hasGetter() const { return getter; }
+   bool hasSetter() const { return setter; }
 
-   bool hasDefinition() const;
-   void hasDefinition(bool has_definition);
+   CompoundStmt* getGetterBody() const { return getterBody; }
+   CompoundStmt* getSetterBody() const { return setterBody; }
 
-   const std::shared_ptr<CompoundStmt> &getGetterBody() const;
-   void setGetterBody(const std::shared_ptr<CompoundStmt> &getterBody);
+   string &getNewValName() { return newValName; }
+   string const& getNewValName() const { return newValName; }
 
-   const std::shared_ptr<CompoundStmt> &getSetterBody() const;
-   void setSetterBody(const std::shared_ptr<CompoundStmt> &setterBody);
+   MethodDecl *getGetterMethod() const
+   {
+      return getterMethod;
+   }
 
-   string &getNewValName();
-   void setNewValName(const string &newValName);
+   void setGetterMethod(MethodDecl *getterMethod)
+   {
+      PropDecl::getterMethod = getterMethod;
+   }
 
-   cl::Property *getProp() const;
-   void setProp(cl::Property *prop);
+   MethodDecl *getSetterMethod() const
+   {
+      return setterMethod;
+   }
+
+   void setSetterMethod(MethodDecl *setterMethod)
+   {
+      PropDecl::setterMethod = setterMethod;
+   }
 };
 
 } // namespace ast

@@ -10,10 +10,6 @@
 
 #include "../Constant/ConstantVal.h"
 
-#include "../../../Variant/Type/VoidType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/IntegerType.h"
-
 using namespace cdot::support;
 
 namespace cdot {
@@ -48,7 +44,7 @@ CallInst::CallInst(TypeID id, Function *func, llvm::ArrayRef<Value *> args,
 
 CallInst::CallInst(TypeID id, Value *func, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent)
-   : Instruction(id, cast<FunctionType>(*func->getType())->getReturnType(),
+   : Instruction(id, func->getType()->asFunctionType()->getReturnType(),
                  parent),
      MultiOperandInst(args),
      indirectFunction(func)
@@ -164,30 +160,14 @@ VirtualInvokeInst::VirtualInvokeInst(Method *M,
 }
 
 IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
+                                     QualType returnType,
                                      llvm::ArrayRef<Value *> args,
                                      BasicBlock *parent)
-   : Instruction(IntrinsicCallInstID, getIntrinsicReturnType(id), parent),
+   : Instruction(IntrinsicCallInstID, returnType, parent),
      MultiOperandInst(args),
      calledIntrinsic(id)
 {
 
-}
-
-Type* IntrinsicCallInst::getIntrinsicReturnType(Intrinsic id)
-{
-   switch (id) {
-      case Intrinsic::MemCpy:
-      case Intrinsic::MemSet:
-      case Intrinsic::LifetimeBegin:
-      case Intrinsic::LifetimeEnd:
-      case Intrinsic::Retain:
-      case Intrinsic::Release:
-         return VoidType::get();
-      case Intrinsic::MemCmp:
-         return IntegerType::getBoolTy();
-      case Intrinsic::__ctfe_stacktrace:
-         return VoidType::get();
-   }
 }
 
 } // namespace il

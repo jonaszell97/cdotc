@@ -2,210 +2,315 @@
 // Created by Jonas Zell on 14.06.17.
 //
 
-#ifndef VALUE_H
-#define VALUE_H
+#ifndef CDOT_VARIANT_H
+#define CDOT_VARIANT_H
 
 #include <string>
-#include <llvm/IR/IRBuilder.h>
+#include <cassert>
+#include <vector>
 
-using std::string;
-using std::pair;
+#include <llvm/ADT/APSInt.h>
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/StringRef.h>
 
 namespace cdot {
 
-namespace lex {
-namespace tok {
-
-enum TokenType: unsigned short;
-
-} // namespace tok
-} // namespace lex
-
+class QualType;
 class Type;
 
 enum class VariantType : unsigned char {
-   STRING = 0,
-   INT = 1,
-   FLOAT = 2,
-   VOID = 3,
-   ARRAY = 4,
+   String = 0,
+   Int = 1,
+   Floating = 2,
+   Void = 3,
+   Array = 4,
    MetaType = 5,
-   TokenKind = 6,
-   STRUCT = 7,
+   Struct = 6,
 };
 
 struct Variant {
-   using Field = std::pair<llvm::StringRef, Variant>;
+   Variant() : kind(VariantType::Void), Data{}
+   {
 
-   Variant();
-   Variant(string &&s);
-   Variant(size_t l);
-   Variant(Type *Ty);
-   Variant(Type *ty, unsigned long long l);
-   Variant(unsigned long long l);
-   Variant(bool b);
-   Variant(char c);
-   Variant(double d);
-   Variant(float f);
-   Variant(lex::tok::TokenType tokenType);
-   Variant(std::vector<Variant> &&v, Type *ty = nullptr);
-   Variant(Type *ty, std::vector<Field> &&v);
+   }
+
+   Variant(std::string &&s) : kind(VariantType::String), Data{}
+   {
+      new (Data.buffer) std::string(move(s));
+   }
+
+   Variant(llvm::StringRef s) : kind(VariantType::String), Data{}
+   {
+      new (Data.buffer) std::string(s.data(), s.size());
+   }
+
+   Variant(Type *Ty, bool isLvalue = false, bool isConst = false);
+   Variant(QualType const& ty);
+
+   Variant(uint64_t l, unsigned numBits = 64, bool isUnsigned = false)
+      : kind(VariantType::Int), Data{}
+   {
+      new (Data.buffer) llvm::APInt(numBits, (uint64_t)l, !isUnsigned);
+   }
+
+   Variant(bool b) : kind(VariantType::Int), Data{}
+   {
+      new (Data.buffer) llvm::APInt(1, (uint64_t)b, false);
+   }
+
+   Variant(char c) : kind(VariantType::Int), Data{}
+   {
+      new (Data.buffer) llvm::APInt(CHAR_BIT, (uint64_t)c, false);
+   }
+
+   Variant(double d) : kind(VariantType::Floating), Data{}
+   {
+      new (Data.buffer) llvm::APFloat(d);
+   }
+
+   Variant(float f) : kind(VariantType::Floating), Data{}
+   {
+      new (Data.buffer) llvm::APFloat(f);
+   }
+
+   Variant(VariantType kind, std::vector<Variant> &&v)
+      : kind(kind), Data{}
+   {
+      assert(kind == VariantType::Struct || kind == VariantType::Array);
+      new (Data.buffer) std::vector<Variant>(move(v));
+   }
+
+   Variant(llvm::APSInt &&Int)
+      : kind(VariantType::Int), Data{}
+   {
+      new (Data.buffer) llvm::APSInt(std::move(Int));
+   }
+
+   Variant(llvm::APInt &&Int)
+      : kind(VariantType::Int), Data{}
+   {
+      new (Data.buffer) llvm::APInt(std::move(Int));
+   }
+
+   Variant(llvm::APFloat &&F)
+      : kind(VariantType::Floating), Data{}
+   {
+      new (Data.buffer) llvm::APFloat(std::move(F));
+   }
 
    Variant(Variant &&var) noexcept;
    Variant(const Variant &var);
    ~Variant();
-
-   void destroyValue();
 
    Variant& operator=(const Variant &var);
    Variant& operator=(Variant &&var);
 
    enum PrintOptions : unsigned char {
       Opt_ExactFP    = 1,
-      Opt_ShowQuotes = Opt_ExactFP << 1
+      Opt_ShowQuotes = Opt_ExactFP << 1,
+      Opt_IntAsPtr   = Opt_ShowQuotes << 1,
    };
 
-   string toString(unsigned char opts = 0) const;
+   std::string toString(unsigned char opts = 0) const;
 
-   bool isVoid() const;
-   bool isArray() const;
-   bool isStr() const;
-   bool isInt() const;
-   bool isFloat() const;
+   bool isVoid() const { return kind == VariantType::Void; }
+   bool isArray() const { return kind == VariantType::Array; }
+   bool isStr() const { return kind == VariantType::String; }
+   bool isInt() const { return kind == VariantType::Int; }
+   bool isFloat() const { return kind == VariantType::Floating; }
+   bool isMetaType() const { return kind == VariantType::MetaType; }
+   bool isStruct() const { return kind == VariantType::Struct; }
 
-   bool isTokenKind() const
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+
+   operator bool() const
    {
-      return kind == VariantType::TokenKind;
+      return !isVoid();
    }
 
-   bool isMetaType() const
-   {
-      return kind == VariantType::MetaType;
-   }
-
-   bool isStruct() const
-   {
-      return kind == VariantType::STRUCT;
-   }
-
-   size_t getInt() const
+   int64_t getSExtValue() const
    {
       assert(isInt());
-      return intVal;
+      return getAPSInt().getSExtValue();
+   }
+
+   uint64_t getZExtValue() const
+   {
+      assert(isInt());
+      return getAPSInt().getZExtValue();
+   }
+
+   llvm::APSInt const& getAPSInt() const
+   {
+      return *reinterpret_cast<llvm::APSInt const*>(Data.buffer);
+   }
+
+   unsigned getBitwidth() const
+   {
+      assert(isInt());
+      return getAPSInt().getBitWidth();
+   }
+
+   bool isUnsigned() const
+   {
+      assert(isInt());
+      return getAPSInt().isUnsigned();
    }
 
    double getDouble() const
    {
       assert(isFloat());
-      return floatVal;
+      return getAPFloat().convertToDouble();
+   }
+
+   float getFloat() const
+   {
+      assert(isFloat());
+      return getAPFloat().convertToFloat();
+   }
+
+   llvm::APFloat const& getAPFloat() const
+   {
+      return *reinterpret_cast<llvm::APFloat const*>(Data.buffer);
    }
 
    char getChar() const
    {
       assert(isInt());
-      return charVal;
+      return (char)getSExtValue();
    }
 
-   Type *getType() const
-   {
-      assert(isMetaType());
-      return typeVal;
-   }
+   QualType getMetaType() const;
 
-   const string &getString() const
+   const std::string &getString() const
    {
       assert(isStr());
-      return strVal;
+      return *reinterpret_cast<std::string const*>(Data.buffer);;
    }
 
-   lex::tok::TokenType getTokenType() const
+   bool isString(llvm::StringRef str) const
    {
-      assert(isTokenKind());
-      return tokenType;
+      if (!isStr())
+         return false;
+
+      return str.equals(getString());
    }
 
-   unsigned getBitwidth() const;
-   bool isUnsigned() const;
-   bool isBoxed() const;
-   bool isRawStr() const;
-   VariantType getKind() const;
+   const std::vector<Variant> &getVec() const
+   {
+      assert(isArray() || isStruct());
+      return *reinterpret_cast<std::vector<Variant> const*>(Data.buffer);
+   }
 
-   void push(Variant &&v);
-   Variant pop();
-   Variant &operator[](size_t index);
+   VariantType getKind() const { return kind; }
 
-   VariantType kind : 8;
-   Type *type;
+   size_t size() const
+   {
+      assert(isStruct() || isArray());
+      return getVec().size();
+   }
 
-   union {
-      size_t intVal = 0;
-      double floatVal;
-      char charVal;
-      Type *typeVal;
-      std::string strVal;
-      std::vector<Variant> vec;
-      std::vector<Field> fields;
-      lex::tok::TokenType tokenType;
-   };
+   void push(Variant &&V) { getVecRef().push_back(std::move(V)); }
 
-   static string typeToString(VariantType type);
-   Variant applyBinaryOp(const Variant& rhs, const string& op) const;
-   Variant applyUnaryOp(const string& op) const;
+   Variant pop()
+   {
+      auto V = std::move(getVecRef().back());
+      getVecRef().pop_back();
 
-   Variant castTo(VariantType targetTy) const;
-   Variant castTo(Type* targetTy) const;
+      return V;
+   }
+
+   Variant &operator[](unsigned index)
+   {
+      assert((isArray() || isStruct()) && "cannot index variant");
+      return getVecRef()[index];
+   }
+
+   Variant const& operator[](unsigned index) const
+   {
+      assert((isArray() || isStruct()) && "cannot index variant");
+      return getVec()[index];
+   }
+
+
+   using VecTy = std::vector<Variant>;
+
+   // no QualType here because we want to avoid a dependency on Type.h
+   // a static assertion will trigger if the size is not big enough (which
+   // should never be the case)
+   using DataType = llvm::AlignedCharArrayUnion<llvm::APSInt, llvm::APFloat,
+      std::string, VecTy>;
+
+   Variant applyBinaryOp(const Variant& rhs, const std::string& op) const;
+   Variant applyUnaryOp(const std::string& op) const;
 
    std::vector<Variant>::iterator begin()
    {
-      assert(isArray() && "not an array");
-      return vec.begin();
+      assert((isArray() || isStruct()) && "not an array");
+      return getVecRef().begin();
    }
 
    std::vector<Variant>::iterator end()
    {
-      assert(isArray() && "not an array");
-      return vec.end();
+      assert((isArray() || isStruct()) && "not an array");
+      return getVecRef().end();
    }
 
    std::vector<Variant>::const_iterator begin() const
    {
-      assert(isArray() && "not an array");
-      return vec.begin();
+      assert((isArray() || isStruct()) && "not an array");
+      return getVec().begin();
    }
 
    std::vector<Variant>::const_iterator end() const
    {
-      assert(isArray() && "not an array");
-      return vec.end();
+      assert((isArray() || isStruct()) && "not an array");
+      return getVec().end();
    }
 
-   const std::vector<Field> &getFields() const
+   const std::vector<Variant> &getFields() const
    {
-      return fields;
+      return getVec();
    }
-
-   Variant const& getField(llvm::StringRef name) const
-   {
-      for (auto &F : fields)
-         if (F.first == name)
-            return F.second;
-
-      llvm_unreachable("field not found");
-   }
-
-   Variant const& getField(size_t idx) const
-   {
-      assert(fields.size() > idx);
-      return fields[idx].second;
-   }
-
-   Type *typeOf() const;
 
 private:
+   VariantType kind : 8;
+
+   union {
+      DataType Data;
+      std::string _str;
+      llvm::APSInt _int;
+      std::vector<Variant> _vec;
+   };
+
    void copyFrom(Variant &&V);
    void copyFrom(Variant const& V);
+
+   void destroyValue();
+
+   std::vector<Variant> &getVecRef()
+   {
+      assert(isArray() || isStruct());
+      return *reinterpret_cast<std::vector<Variant>*>(Data.buffer);
+   }
+
+   std::string &getStringRef()
+   {
+      assert(isStr());
+      return *reinterpret_cast<std::string*>(Data.buffer);;
+   }
+
+   llvm::APSInt& getAPSIntRef()
+   {
+      return *reinterpret_cast<llvm::APSInt*>(Data.buffer);
+   }
+
+   llvm::APFloat& getAPFloatRef()
+   {
+      return *reinterpret_cast<llvm::APFloat*>(Data.buffer);
+   }
 };
 
 } // namespace cdot
 
-#endif //VALUE_H
+#endif //CDOT_VARIANT_H

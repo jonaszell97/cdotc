@@ -23,10 +23,15 @@ class Lexer;
 struct Token;
 
 namespace tok {
-enum TokenType: unsigned short;
+   enum TokenType: unsigned short;
 } // namespace tok
 
 } // namespace lex
+
+
+namespace parse {
+   class Parser;
+} // namespace parse
 
 namespace module {
 
@@ -36,8 +41,7 @@ class ParserImpl;
 
 class ModuleParser {
 public:
-   explicit ModuleParser(llvm::MemoryBuffer *Buf,
-                         unsigned sourceId);
+   explicit ModuleParser(parse::Parser &parser);
 
    ~ModuleParser();
 

@@ -11,7 +11,7 @@ CasePattern::Argument::Argument(Argument &&arg)
    : sourceLoc(arg.sourceLoc), is_expr(arg.is_expr), is_const(arg.is_const)
 {
    if (is_expr)
-      new(&expr) std::shared_ptr<Expression>(move(arg.expr));
+      expr = arg.expr;
    else
       new(&identifier) std::string(move(arg.identifier));
 }
@@ -25,7 +25,7 @@ CasePattern::Argument& CasePattern::Argument::operator=(Argument &&arg)
    is_const = arg.is_const;
 
    if (is_expr)
-      new(&expr) std::shared_ptr<Expression>(move(arg.expr));
+      expr = arg.expr;
    else
       new(&identifier) std::string(move(arg.identifier));
 
@@ -34,9 +34,7 @@ CasePattern::Argument& CasePattern::Argument::operator=(Argument &&arg)
 
 void CasePattern::Argument::destroyValue()
 {
-   if (is_expr)
-      expr.~shared_ptr();
-   else
+   if (!is_expr)
       identifier.~string();
 }
 

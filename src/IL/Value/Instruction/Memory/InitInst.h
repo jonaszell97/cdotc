@@ -93,6 +93,7 @@ public:
 class LambdaInitInst: public Instruction, public MultiOperandInst {
 public:
    LambdaInitInst(Function *Function,
+                  QualType LambdaTy,
                   llvm::ArrayRef<Value*> Captures,
                   BasicBlock *parent);
 

@@ -6,7 +6,7 @@ using System.Functional.{ Predicate }
 class Array<T> {
     static let INITIAL_CAPACITY = 8u
 
-    var raw: T*        { get } = __nullptr
+    var raw: T*       { get } = __nullptr
     var capacity: UInt { get } = INITIAL_CAPACITY
     var size: UInt     { get } = 0
 

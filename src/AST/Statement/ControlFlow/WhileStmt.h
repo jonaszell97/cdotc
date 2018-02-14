@@ -14,35 +14,35 @@ class Expression;
 
 class WhileStmt : public Statement {
 public:
-   WhileStmt(std::shared_ptr<Expression> &&cond,
-             std::shared_ptr<Statement> &&body,
+   WhileStmt(Expression* cond,
+             Statement* body,
              bool atLeastOnce);
-
-   typedef std::shared_ptr<WhileStmt> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == WhileStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<Expression> condition;
-   std::shared_ptr<Statement> body;
+   Expression* condition;
+   Statement* body;
 
    bool atLeastOnce = false;
 
 public:
-   const std::shared_ptr<Expression> &getCondition() const
+   Expression* getCondition() const
    {
       return condition;
    }
 
-   std::shared_ptr<Expression> &getCondition()
+   Expression* &getCondition()
    {
       return condition;
    }
 
-   std::shared_ptr<Statement> const& getBody() const
+   Statement* const& getBody() const
    {
       return body;
    }

@@ -6,12 +6,15 @@
 #define CDOT_MEMBERREFEXPR_H
 
 #include "../Expression.h"
-#include "../../Passes/SemanticAnalysis/Record/Record.h"
 
 namespace cdot {
 namespace ast {
 
 class CallExpr;
+class EnumDecl;
+class CallableDecl;
+class VarDecl;
+class FieldDecl;
 
 enum class MemberKind : unsigned {
    Unknown,
@@ -21,6 +24,7 @@ enum class MemberKind : unsigned {
    UnionAccess,
    Type,
    GlobalVariable,
+   StaticField,
    Namespace,
    Field,
    EnumRawValue,
@@ -30,83 +34,72 @@ enum class MemberKind : unsigned {
 
 class MemberRefExpr: public IdentifiedExpr {
 public:
-   explicit MemberRefExpr(string &&, bool pointerAccess = false);
+   explicit MemberRefExpr(std::string &&, bool pointerAccess = false);
    explicit MemberRefExpr(size_t, bool pointerAccess = false);
 
    ~MemberRefExpr();
-
-   typedef std::shared_ptr<MemberRefExpr> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == MemberRefExprID;
    }
 
+   friend class TransformImpl;
+
 protected:
    MemberKind kind = MemberKind::Unknown;
-   std::vector<TemplateArg> templateArgs;
+   std::vector<TemplateArgExpr*> templateArgs;
 
-   Record *record = nullptr;
+   RecordDecl *record = nullptr;
    QualType fieldType;
 
-   bool is_pointer_access : 1;
-   bool is_tuple_access   : 1;
-
-   Variant aliasVal;
+   bool pointerAccess : 1;
+   bool tupleAccess   : 1;
+   bool lhsOfAssignment   : 1;
 
    union {
       Type *metaType = nullptr;
-      Callable *callable;
+      CallableDecl *callable;
+      VarDecl *globalVar;
+      FieldDecl *staticFieldDecl;
+      Variant *aliasVal;
+      MethodDecl *accessorMethod;
    };
 
    size_t tupleIndex;
 
-   std::shared_ptr<CallExpr> getterOrSetterCall = nullptr;
-
 public:
-   const std::shared_ptr<CallExpr> &getGetterOrSetterCall() const;
-   void setGetterOrSetterCall(
-      const std::shared_ptr<CallExpr> &getterOrSetterCall);
-
-   Type *getMetaType() const;
-   void setMetaType(Type *metaType);
-
-   bool isPointerAccess() const;
-   void setIsPointerAccess(bool is_pointer_access);
-
-   Record *getRecord() const
+   RecordDecl *getRecord() const
    {
       return record;
    }
 
-   void setRecord(Record *record)
+   void setRecord(RecordDecl *record)
    {
-      MemberRefExpr::record = record;
+      this->record = record;
    }
-
-   const QualType &getFieldType() const;
-   void setFieldType(const QualType &fieldType);
-
-   size_t getTupleIndex() const;
-
-   std::vector<TemplateArg> const& getTemplateArgs() const
+   
+   std::vector<TemplateArgExpr*> const& getTemplateArgs() const
    {
       return templateArgs;
    }
 
-   void setTemplateArgs(std::vector<TemplateArg> &&templateArgs)
+   std::vector<TemplateArgExpr*>& getTemplateArgRef()
    {
-      MemberRefExpr::templateArgs = std::move(templateArgs);
+      return templateArgs;
    }
+
+   void setTemplateArgs(std::vector<TemplateArgExpr*> &&templateArgs);
 
    const Variant &getAliasVal() const
    {
-      return aliasVal;
+      assert(aliasVal && "not an alias");
+      return *aliasVal;
    }
 
-   void setAliasVal(Variant &&aliasVal)
+   void setAliasVal(Variant *aliasVal)
    {
-      MemberRefExpr::aliasVal = std::move(aliasVal);
+      this->aliasVal = aliasVal;
       kind = MemberKind::Alias;
    }
 
@@ -117,37 +110,114 @@ public:
 
    void setKind(MemberKind kind)
    {
-      MemberRefExpr::kind = kind;
+      this->kind = kind;
    }
 
-   Callable *getCallable() const
+   CallableDecl *getCallable() const
    {
       return callable;
    }
 
-   void setCallable(Callable *callable)
+   void setCallable(CallableDecl *callable)
    {
-      MemberRefExpr::callable = callable;
+      this->callable = callable;
    }
 
    bool isTupleAccess() const
    {
-      return is_tuple_access;
+      return tupleAccess;
    }
 
    void isTupleAccess(bool is_tuple_access)
    {
-      MemberRefExpr::is_tuple_access = is_tuple_access;
+      this->tupleAccess = is_tuple_access;
+   }
+
+   const QualType &getFieldType() const
+   {
+      return fieldType;
+   }
+
+   void setFieldType(const QualType &fieldType)
+   {
+      this->fieldType = fieldType;
+   }
+
+   size_t getTupleIndex() const
+   {
+      return tupleIndex;
+   }
+
+   bool isPointerAccess() const
+   {
+      return pointerAccess;
+   }
+
+   void setIsPointerAccess(bool is_pointer_access)
+   {
+      this->pointerAccess = is_pointer_access;
+   }
+
+   Type *getMetaType() const
+   {
+      return metaType;
+   }
+
+   void setMetaType(Type *metaType)
+   {
+      this->metaType = metaType;
+   }
+
+   void setGlobalVar(VarDecl *globalVar)
+   {
+      kind = MemberKind::GlobalVariable;
+      MemberRefExpr::globalVar = globalVar;
+   }
+
+   FieldDecl *getStaticFieldDecl() const
+   {
+      return staticFieldDecl;
+   }
+
+   void setFieldDecl(FieldDecl *staticFieldDecl)
+   {
+      kind = MemberKind::StaticField;
+      MemberRefExpr::staticFieldDecl = staticFieldDecl;
+   }
+
+   MethodDecl *getAccessorMethod() const
+   {
+      return accessorMethod;
+   }
+
+   void setAccessorMethod(MethodDecl *accessorMethod)
+   {
+      MemberRefExpr::accessorMethod = accessorMethod;
+   }
+
+   bool isLhsOfAssignment() const
+   {
+      return lhsOfAssignment;
+   }
+
+   void setLhsOfAssignment(bool lhsOfAssignment)
+   {
+      MemberRefExpr::lhsOfAssignment = lhsOfAssignment;
+   }
+
+   VarDecl *getGlobalVar() const
+   {
+      return globalVar;
    }
 };
 
 class EnumCaseExpr: public IdentifiedExpr {
 public:
-   using ArgList = std::vector<std::shared_ptr<Expression>>;
+   using ArgList = std::vector<Expression* >;
 
    EnumCaseExpr(std::string &&caseName,
                 ArgList &&args = {})
-      : IdentifiedExpr(EnumCaseExprID, move(caseName)),
+      : IdentifiedExpr(EnumCaseExprID, move(caseName), true),
         args(move(args)), en(nullptr)
    {}
 
@@ -156,9 +226,11 @@ public:
       return T->getTypeID() == EnumCaseExprID;
    }
 
+   friend class TransformImpl;
+
 private:
    ArgList args;
-   cl::Enum *en;
+   EnumDecl *en;
 
 public:
    ArgList &getArgs()
@@ -171,12 +243,12 @@ public:
       return args;
    }
 
-   cl::Enum *getEnum() const
+   EnumDecl *getEnum() const
    {
       return en;
    }
 
-   void setEnum(cl::Enum *en)
+   void setEnum(EnumDecl *en)
    {
       EnumCaseExpr::en = en;
    }

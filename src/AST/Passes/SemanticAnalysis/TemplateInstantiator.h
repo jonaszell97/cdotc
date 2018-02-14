@@ -8,23 +8,21 @@
 #include <vector>
 #include <llvm/ADT/ArrayRef.h>
 
+#include "lex/SourceLocation.h"
+
 namespace cdot {
 
 struct SourceLocation;
 
-namespace cl {
-class Record;
-struct Method;
-} // namespace cl
-
 namespace ast {
-
-class Function;
-class DeclPass;
-class Statement;
-class StaticExpr;
-class SemaPass;
-
+   class FunctionDecl;
+   class RecordDecl;
+   class MethodDecl;
+   class DeclPass;
+   class Statement;
+   class StaticExpr;
+   class SemaPass;
+   class AliasDecl;
 } // namespace ast
 
 class TemplateArg;
@@ -33,62 +31,59 @@ namespace sema {
    class TemplateArgList;
 } // namespace sema
 
-struct Alias;
-
 class TemplateInstantiator {
 public:
-   static cl::Record *InstantiateRecord(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 cl::Record *rec,
-                                 sema::TemplateArgList&& templateArgs,
-                                 bool *isNew = nullptr);
+   static ast::RecordDecl *
+   InstantiateRecord(ast::SemaPass &SP,
+                     SourceLocation instantiatedFrom,
+                     ast::RecordDecl *rec,
+                     sema::TemplateArgList&& templateArgs,
+                     bool *isNew = nullptr);
 
-   static ast::Function *InstantiateFunction(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 ast::Function *F,
-                                 sema::TemplateArgList&& templateArgs,
-                                 bool *isNew = nullptr);
+   static ast::FunctionDecl *
+   InstantiateFunction(ast::SemaPass &SP,
+                       SourceLocation instantiatedFrom,
+                       ast::FunctionDecl *F,
+                       sema::TemplateArgList&& templateArgs,
+                       bool *isNew = nullptr);
 
-   static cl::Method *InstantiateMethod(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 cl::Method *M,
-                                 sema::TemplateArgList &&templateArgs,
-                                 bool *isNew = nullptr,
-                                 cl::Record *R = nullptr);
+   static ast::MethodDecl *
+   InstantiateMethod(ast::SemaPass &SP,
+                     SourceLocation instantiatedFrom,
+                     ast::MethodDecl *M,
+                     sema::TemplateArgList &&templateArgs,
+                     bool *isNew = nullptr,
+                     ast::RecordDecl *R = nullptr);
 
-   static cl::Method *InstantiateProtocolDefaultImpl(
-                                       ast::SemaPass &SP,
-                                       const SourceLocation &instantiatedFrom,
-                                       cl::Record *Rec,
-                                       cl::Method const* M);
+   static ast::MethodDecl *
+   InstantiateProtocolDefaultImpl(ast::SemaPass &SP,
+                                  SourceLocation instantiatedFrom,
+                                  ast::RecordDecl *Rec,
+                                  ast::MethodDecl *M);
 
-   static std::shared_ptr<ast::Statement> InstantiateStatement(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::Statement> &stmt,
-                                 sema::TemplateArgList const& templateArgs);
+   static ast::Statement*
+   InstantiateStatement(ast::SemaPass &SP,
+                        SourceLocation instantiatedFrom,
+                        ast::Statement* stmt,
+                        sema::TemplateArgList const& templateArgs);
 
-   static std::shared_ptr<ast::Statement> InstantiateMethodBody(
-                                    ast::SemaPass &SP,
-                                    const SourceLocation &instantiatedFrom,
-                                    cl::Method const* baseMethod,
-                                    cl::Method* newMethod);
+   static ast::Statement*
+   InstantiateMethodBody(ast::SemaPass &SP,
+                         SourceLocation instantiatedFrom,
+                         ast::MethodDecl const* baseMethod,
+                         ast::MethodDecl *newMethod);
 
-   static std::shared_ptr<ast::StaticExpr> InstantiateStaticExpr(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::StaticExpr> &stmt,
-                                 sema::TemplateArgList const& templateArgs);
+   static ast::StaticExpr*
+   InstantiateStaticExpr(ast::SemaPass &SP,
+                         SourceLocation instantiatedFrom,
+                         ast::StaticExpr* stmt,
+                         sema::TemplateArgList const& templateArgs);
 
-   static std::shared_ptr<ast::StaticExpr> InstantiateAlias(
-                                 ast::SemaPass &SP,
-                                 Alias *alias,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::StaticExpr> &stmt,
-                                 sema::TemplateArgList const& templateArgs);
+   static ast::AliasDecl*
+   InstantiateAlias(ast::SemaPass &SP,
+                    ast::AliasDecl *alias,
+                    SourceLocation instantiatedFrom,
+                    sema::TemplateArgList&& templateArgs);
 };
 
 } // namespace cdot

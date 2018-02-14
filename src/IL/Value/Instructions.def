@@ -33,8 +33,6 @@
    CDOT_CONSTANT(ConstantFloat)
    CDOT_CONSTANT(ConstantString)
    CDOT_CONSTANT(ConstantArray)
-   CDOT_CONSTANT(VTable)
-   CDOT_CONSTANT(PTable)
    CDOT_CONSTANT(ConstantStruct)
    CDOT_CONSTANT(TypeInfo)
    CDOT_CONSTANT(ConstantPointer)

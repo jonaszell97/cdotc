@@ -262,7 +262,7 @@
 ////void CodeGen::DefineDefaultDestructor(
 ////   const string &selfBinding,
 ////   cdot::cl::Class *cl,
-////   std::shared_ptr<CompoundStmt> body)
+////   CompoundStmt* body)
 ////{
 ////   if (cl->isDeclared()) {
 ////      return;
@@ -352,7 +352,7 @@
 ////   }
 ////
 ////   for (const auto& field : cl->getFields()) {
-////      DeclareField(field.second.get());
+////      DeclareField(field.second);
 ////   }
 ////
 ////   for (const auto& method : cl->getMethods()) {
@@ -393,7 +393,7 @@
 ////                            ->getDeclaredClass());
 ////            break;
 ////         case NodeType::ENUM_DECL:
-////            DeclareEnum(std::static_pointer_cast<EnumDecl>(inner).get());
+////            DeclareEnum(std::static_pointer_cast<EnumDecl>(inner));
 ////            break;
 ////         case NodeType::UNION_DECL:
 ////            break;
@@ -448,7 +448,7 @@
 ////                                      (field_type->getDefaultVal(*this)));
 ////
 ////            field->defaultVal->setGlobalVar(global);
-////            global_initializers.emplace_back(field->defaultVal.get(), field_type);
+////            global_initializers.emplace_back(field->defaultVal, field_type);
 ////         }
 ////      }
 ////   }
@@ -830,7 +830,7 @@
 ////
 ////
 ////   for (const auto& field : cl->getFields()) {
-////      DefineField(field.second.get());
+////      DefineField(field.second);
 ////   }
 ////
 ////   for (auto &prop : cl->getProperties()) {
@@ -930,7 +930,7 @@
 ////   }
 ////}
 ////
-////void CodeGen::DefineMethod(Method *method, std::shared_ptr<CompoundStmt> body)
+////void CodeGen::DefineMethod(Method *method, CompoundStmt* body)
 ////{
 ////   if (!body) {
 ////      return;

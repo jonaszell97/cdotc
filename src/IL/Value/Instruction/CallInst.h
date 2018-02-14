@@ -18,6 +18,9 @@ class Method;
 class ProtocolType;
 class ClassType;
 
+class CallSite;
+class ImmutableCallSite;
+
 class CallInst: public Instruction, public MultiOperandInst {
 public:
    CallInst(Function *func,
@@ -36,6 +39,9 @@ public:
    op_const_iterator op_end_impl() const { return Operands + numOperands; }
 
    unsigned getNumOperandsImpl() const { return numOperands; }
+
+   CallSite getAsCallSite();
+   ImmutableCallSite getAsImmutableCallSite() const;
 
 protected:
    CallInst(TypeID id,
@@ -149,6 +155,9 @@ public:
 
    unsigned getNumOperandsImpl() const { return numOperands; }
 
+   CallSite getAsCallSite();
+   ImmutableCallSite getAsImmutableCallSite() const;
+
 protected:
    InvokeInst(TypeID id,
               Function *F,
@@ -214,6 +223,7 @@ enum class Intrinsic : unsigned char {
 class IntrinsicCallInst: public Instruction, public MultiOperandInst {
 public:
    IntrinsicCallInst(Intrinsic id,
+                     QualType returnType,
                      llvm::ArrayRef<Value*> args,
                      BasicBlock *parent);
 
@@ -226,8 +236,6 @@ public:
 
    unsigned getNumOperandsImpl() const { return numOperands; }
    Intrinsic getCalledIntrinsic() const { return calledIntrinsic; }
-
-   static Type *getIntrinsicReturnType(Intrinsic id);
 
    std::string getIntrinsicName() const
    {
@@ -247,6 +255,144 @@ public:
       return T->getTypeID() == IntrinsicCallInstID;
    }
 };
+
+template<class CallInstTy, class InvokeInstTy, class InstTy>
+class CallSiteBase {
+protected:
+   explicit CallSiteBase(CallInstTy *C)
+      : Val(C, true)
+   {}
+
+   explicit CallSiteBase(InvokeInstTy *I)
+      : Val(I, false)
+   {}
+
+public:
+   operator bool() const
+   {
+      return Val.getPointer() != nullptr;
+   }
+
+   bool isCallInst() const
+   {
+      return Val.getInt();
+   }
+
+   CallInstTy const* getAsCallInst() const
+   {
+      assert(isCallInst() && "not a CallInst");
+      return reinterpret_cast<CallInstTy*>(Val.getPointer());
+   }
+
+   InvokeInstTy const* getAsInvokeInst() const
+   {
+      assert(!isCallInst() && "not an InvokeInst");
+      return reinterpret_cast<InvokeInstTy*>(Val.getPointer());
+   }
+
+   CallInstTy* getAsCallInst()
+   {
+      assert(isCallInst() && "not a CallInst");
+      return reinterpret_cast<CallInstTy*>(Val.getPointer());
+   }
+
+   InvokeInstTy* getAsInvokeInst()
+   {
+      assert(!isCallInst() && "not an InvokeInst");
+      return reinterpret_cast<InvokeInstTy*>(Val.getPointer());
+   }
+
+   using op_iterator = CallInst::op_iterator;
+   using op_const_iterator = CallInst::op_const_iterator;
+
+#  define DISPATCH_CALLSITE_VALUE(METHOD)  \
+   isCallInst() ? getAsCallInst()->METHOD : getAsInvokeInst()->METHOD
+
+#  define DISPATCH_CALLSITE_VOID(METHOD)   \
+   if (isCallInst()) { getAsCallInst()->METHOD } \
+   else { getAsInvokeInst()->METHOD }
+
+   op_iterator op_begin()
+   {
+      return DISPATCH_CALLSITE_VALUE(op_begin());
+   }
+
+   op_iterator op_end()
+   {
+      return DISPATCH_CALLSITE_VALUE(op_end());
+   }
+
+   op_const_iterator op_begin() const
+   {
+      return DISPATCH_CALLSITE_VALUE(op_begin());
+   }
+
+   op_const_iterator op_end() const
+   {
+      return DISPATCH_CALLSITE_VALUE(op_end());
+   }
+
+   Function *getCalledFunction() const
+   {
+      return DISPATCH_CALLSITE_VALUE(getCalledFunction());
+   }
+
+   Value::TypeID getTypeID() const
+   {
+      return DISPATCH_CALLSITE_VALUE(getTypeID());
+   }
+
+   QualType getType() const
+   {
+      return DISPATCH_CALLSITE_VALUE(getType());
+   }
+
+   llvm::ArrayRef<Value*> getArgs() const
+   {
+      return DISPATCH_CALLSITE_VALUE(getArgs());
+   }
+
+#  undef DISPATCH_CALLSITE_VALUE
+#  undef DISPATCH_CALLSITE_VOID
+
+private:
+   llvm::PointerIntPair<InstTy*, 1, bool> Val;
+};
+
+class CallSite : CallSiteBase<CallInst, InvokeInst, Instruction> {
+public:
+   explicit CallSite(CallInst* C) : CallSiteBase(C) {}
+   explicit CallSite(InvokeInst* C) : CallSiteBase(C) {}
+   explicit CallSite() : CallSiteBase((CallInst*)nullptr) {}
+};
+
+class ImmutableCallSite:
+   CallSiteBase<CallInst const, InvokeInst const, Instruction const> {
+public:
+   explicit ImmutableCallSite(CallInst const* C) : CallSiteBase(C) {}
+   explicit ImmutableCallSite(InvokeInst const* C) : CallSiteBase(C) {}
+   explicit ImmutableCallSite() : CallSiteBase((CallInst*)nullptr) {}
+};
+
+inline CallSite CallInst::getAsCallSite()
+{
+   return CallSite(this);
+}
+
+inline ImmutableCallSite CallInst::getAsImmutableCallSite() const
+{
+   return ImmutableCallSite(this);
+}
+
+inline CallSite InvokeInst::getAsCallSite()
+{
+   return CallSite(this);
+}
+
+inline ImmutableCallSite InvokeInst::getAsImmutableCallSite() const
+{
+   return ImmutableCallSite(this);
+}
 
 } // namespace il
 } // namespace cdot

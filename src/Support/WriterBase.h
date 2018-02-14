@@ -44,6 +44,23 @@ public:
       }
    }
 
+   void WriteIdentifier(llvm::StringRef str)
+   {
+      bool first = true;
+      for (auto c : str) {
+         if ((!isalnum(c) && c != '_' && c != '.')
+             || (first && isdigit(c))) {
+            out << '`' << str << '`';
+
+            return;
+         }
+
+         first = false;
+      }
+
+      out << str;
+   }
+
    void WriteHex(uint64_t val)
    {
       out << support::formatInteger<>(val);
@@ -57,6 +74,11 @@ public:
    void WriteHex(float f)
    {
       out << support::formatAsHexInteger(f);
+   }
+
+   void WritePointer(void const* Ptr)
+   {
+      out << support::formatAsHexInteger(Ptr);
    }
 
    void WriteString(llvm::StringRef str)
@@ -78,7 +100,11 @@ public:
    void WriteList(const T& arr, Writer write,
                   const char *begin = "(",
                   const char *delim = ", ",
-                  const char *end = ")") {
+                  const char *end = ")",
+                  bool skipIfEmpty = false) {
+      if (arr.empty() && skipIfEmpty)
+         return;
+
       auto NumElements = arr.size();
       size_t i = 0;
       out << begin;

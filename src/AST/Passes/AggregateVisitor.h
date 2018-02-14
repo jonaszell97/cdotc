@@ -21,11 +21,11 @@ namespace ast {
 template<class TargetNode, typename Predicate>
 class AggregateVisitor {
 public:
-   AggregateVisitor(std::shared_ptr<Expression> const& expr,
+   AggregateVisitor(Expression* const& expr,
                     Predicate const& pred)
       : pred(pred)
    {
-      visit(expr.get());
+      visit(expr);
    }
 
    llvm::ArrayRef<TargetNode*> getFoundNodes()
@@ -53,14 +53,22 @@ public:
       }
    }
 
+   void visitTemplateArgExpr(TemplateArgExpr *expr)
+   {
+      if (expr->isTypeName())
+         visit(expr->getType());
+      else
+         visit(expr->getExpr());
+   }
+
    void visitIdentifierRefExpr(IdentifierRefExpr *node) {}
-   void visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node) {}
+   void visitBuiltinExpr(BuiltinExpr *node) {}
    void visitSubscriptExpr(SubscriptExpr *node) {}
 
    void visitCallExpr(CallExpr *node)
    {
       for (const auto &arg : node->getArgs())
-         visit(arg.get());
+         visit(arg);
    }
 
    void visitMemberRefExpr(MemberRefExpr *node) {}
@@ -68,7 +76,7 @@ public:
    void visitEnumCaseExpr(EnumCaseExpr *node)
    {
       for (const auto &arg : node->getArgs())
-         visit(arg.get());
+         visit(arg);
    }
 
    void visitIntegerLiteral(IntegerLiteral *node) {}
@@ -79,16 +87,16 @@ public:
    void visitDictionaryLiteral(DictionaryLiteral *node)
    {
       for (const auto &str : node->getKeys())
-         visit(str.get());
+         visit(str);
 
       for (const auto &str : node->getValues())
-         visit(str.get());
+         visit(str);
    }
 
    void visitArrayLiteral(ArrayLiteral *node)
    {
       for (const auto &str : node->getValues())
-         visit(str.get());
+         visit(str);
    }
 
    void visitNoneLiteral(NoneLiteral *node) {}
@@ -97,13 +105,13 @@ public:
    void visitStringInterpolation(StringInterpolation *node)
    {
       for (const auto &str : node->getStrings())
-         visit(str.get());
+         visit(str);
    }
 
    void visitTupleLiteral(TupleLiteral *node)
    {
       for (const auto &str : node->getElements())
-         visit(str.second.get());
+         visit(str.second);
    }
 
    void visitExprSequence(ExprSequence *node)
@@ -111,7 +119,7 @@ public:
       for (const auto &F : node->getFragments()) {
          switch (F.getKind()) {
             case ExprSequence::SequenceElement::EF_Expression:
-               visit(F.getExpr().get());
+               visit(F.getExpr());
                break;
             case ExprSequence::SequenceElement::EF_PossibleOperator: {
                IdentifierRefExpr refExpr(string(F.getOp()));
@@ -126,20 +134,20 @@ public:
 
    void visitBinaryOperator(BinaryOperator *node)
    {
-      visit(node->getLhs().get());
-      visit(node->getRhs().get());
+      visit(node->getLhs());
+      visit(node->getRhs());
    }
 
    void visitTertiaryOperator(TertiaryOperator *node)
    {
-      visit(node->getCondition().get());
-      visit(node->getLhs().get());
-      visit(node->getRhs().get());
+      visit(node->getCondition());
+      visit(node->getLhs());
+      visit(node->getRhs());
    }
 
    void visitUnaryOperator(UnaryOperator *node)
    {
-      visit(node->getTarget().get());
+      visit(node->getTarget());
    }
 
    void visitLambdaExpr(LambdaExpr *node) {}
@@ -150,14 +158,14 @@ public:
 
    void visitImplicitCastExpr(ImplicitCastExpr *node)
    {
-      visit(node->getTarget().get());
+      visit(node->getTarget());
    }
 
    void visitConstraintExpr(ConstraintExpr *node) {}
 
    void visitLvalueToRvalue(LvalueToRvalue *node)
    {
-      visit(node->getTarget().get());
+      visit(node->getTarget());
    }
 
    void visitTypeRef(TypeRef *node)
@@ -176,7 +184,7 @@ private:
 
 template<class TargetNode, typename Predicate>
 AggregateVisitor<TargetNode, Predicate>
-makeAggrVisitor(std::shared_ptr<Expression> const& expr,
+makeAggrVisitor(Expression* const& expr,
                 Predicate const& pred) {
    return { expr, pred };
 }

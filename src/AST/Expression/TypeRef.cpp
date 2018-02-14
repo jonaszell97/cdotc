@@ -3,18 +3,21 @@
 //
 
 #include "TypeRef.h"
-
-#include "../../Variant/Type/AutoType.h"
-#include "../../Variant/Type/Generic.h"
+#include "../Statement/Declaration/NamedDecl.h"
 #include "../../Util.h"
+
+using std::string;
+using std::pair;
 
 namespace cdot {
 namespace ast {
 
 TypeRef::TypeRef()
    : Expression(TypeRefID), kind(TypeKind::Auto), resolved(false),
-     is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     is_reference(false),
+     globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
@@ -22,79 +25,87 @@ TypeRef::TypeRef()
 TypeRef::TypeRef(NamespaceVec &&ns)
    : Expression(TypeRefID), kind(TypeKind::ObjectType),
      namespaceQual(move(ns)),
-     resolved(false),is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
-TypeRef::TypeRef(TypeRef::SharedPtr &&returnType,
-                 std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes)
+TypeRef::TypeRef(TypeRef* returnType,
+                 std::vector<pair<string, TypeRef*>> &&argTypes)
    : Expression(TypeRefID),
      kind(TypeKind::FunctionType),
      containedTypes(move(argTypes)),
-     returnType(move(returnType)),
-     resolved(false), is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     returnType(returnType),
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
 TypeRef::TypeRef(
-   std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes)
+   std::vector<pair<string, TypeRef*>> &&tupleTypes)
    : Expression(TypeRefID), kind(TypeKind::TupleType),
      containedTypes(move(tupleTypes)),
-     resolved(false), is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
-TypeRef::TypeRef(std::shared_ptr<TypeRef> &&elementTy,
-                 std::shared_ptr<StaticExpr> &&arraySize)
+TypeRef::TypeRef(TypeRef* elementTy,
+                 StaticExpr* arraySize)
    : Expression(TypeRefID), kind(TypeKind::ArrayType),
-     containedTypes{{"", move(elementTy)}},
-     arraySize(move(arraySize)),
-     resolved(false), is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     containedTypes{{"", elementTy}},
+     arraySize(arraySize),
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
-TypeRef::TypeRef(std::shared_ptr<Expression> &&declTypeExpr)
+TypeRef::TypeRef(Expression* declTypeExpr)
    : Expression(TypeRefID),
      kind(TypeKind::DeclTypeExpr),
-     declTypeExpr(move(declTypeExpr)),
-     resolved(false), is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     declTypeExpr(declTypeExpr),
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
 TypeRef::TypeRef(const QualType &ty)
    : Expression(TypeRefID), type(ty), resolved(true),
-     is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+     is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
-TypeRef::TypeRef(std::shared_ptr<TypeRef> &&subject, TypeKind kind)
-   : Expression(TypeRefID), kind(kind), subject(move(subject)),
-     resolved(false), is_reference(false), is_meta_ty(false),
-     allow_unexpanded_template_args(false), vararg(false), cstyleVararg(false)
+TypeRef::TypeRef(TypeRef* subject, TypeKind kind)
+   : Expression(TypeRefID), kind(kind), subject(subject),
+     resolved(false), is_reference(false), globalLookup(false),
+     is_meta_ty(false),
+     allow_unexpanded_template_args(false)
 {
 
 }
 
 TypeRef::~TypeRef()
 {
-   if (isDeclTypeExpr()) {
-      declTypeExpr.~shared_ptr();
-   }
-   else if (kind == TypeKind::FunctionType) {
-      returnType.~shared_ptr();
-   }
+
+}
+
+void TypeRef::setType(const cdot::QualType &t)
+{
+   resolved = true;
+   type = t;
 }
 
 string TypeRef::toString()
@@ -159,18 +170,18 @@ void TypeRef::forEachContainedType(void (*func)(TypeRef *))
       case ObjectType:
          for (auto &NS : namespaceQual) {
             for (auto &TA : NS.second)
-               if (TA.isTypeName())
-                  func(TA.getType().get());
+               if (TA->isTypeName())
+                  func(TA->getType());
          }
 
          break;
       case FunctionType:
       case TupleType:
          for (const auto &Ty : containedTypes)
-            func(Ty.second.get());
+            func(Ty.second);
 
          if (kind == FunctionType)
-            func(returnType.get());
+            func(returnType);
 
          break;
       default:
@@ -206,53 +217,6 @@ const QualType &TypeRef::getType() const
 TypeRef::NamespaceVec &TypeRef::getNamespaceQual()
 {
    return namespaceQual;
-}
-
-const std::vector<pair<string, TypeRef::SharedPtr>> &
-TypeRef::getContainedTypes() const
-{
-   return containedTypes;
-}
-
-void TypeRef::setContainedTypes(
-   const std::vector<pair<string, TypeRef::SharedPtr>> &containedTypes)
-{
-   TypeRef::containedTypes = containedTypes;
-}
-
-const TypeRef::SharedPtr &TypeRef::getReturnType() const
-{
-   return returnType;
-}
-
-void TypeRef::setReturnType(const TypeRef::SharedPtr &returnType)
-{
-   TypeRef::returnType = returnType;
-}
-
-void TypeRef::setVararg(bool vararg)
-{
-   TypeRef::vararg = vararg;
-}
-
-bool TypeRef::isCstyleVararg() const
-{
-   return cstyleVararg;
-}
-
-void TypeRef::setCstyleVararg(bool cstyleVararg)
-{
-   TypeRef::cstyleVararg = cstyleVararg;
-}
-
-bool TypeRef::isMetaTy() const
-{
-   return is_meta_ty;
-}
-
-void TypeRef::isMetaTy(bool is_meta_ty)
-{
-   TypeRef::is_meta_ty = is_meta_ty;
 }
 
 } // namespace ast

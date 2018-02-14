@@ -6,12 +6,6 @@
 #include "../Writer/ModuleWriter.h"
 #include "../../Basic/CastKind.h"
 
-#include "../../Variant/Type/FPType.h"
-#include "../../Variant/Type/PointerType.h"
-#include "../../Variant/Type/VoidType.h"
-#include "../../Variant/Type/FunctionType.h"
-#include "../../Variant/Type/Generic.h"
-
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
 
@@ -93,9 +87,14 @@ void VerifierPass::visitModule(Module const& M)
 
 namespace {
 
-bool typesComptatible(const QualType &lhs, const QualType &rhs)
+bool typesCompatible(const QualType &lhs, const QualType &rhs)
 {
-   return *lhs == *rhs && lhs.isLvalue() == rhs.isLvalue();
+   return lhs == rhs && lhs.isLvalue() == rhs.isLvalue();
+}
+
+bool typesCompatible(Type* lhs, Type* rhs)
+{
+   return lhs == rhs;
 }
 
 } // anonymous namespace
@@ -144,7 +143,7 @@ void VerifierPass::visitAggregateType(AggregateType const &Ty)
 void VerifierPass::visitGlobalVariable(GlobalVariable const &G)
 {
    if (auto Init = G.getInitializer()) {
-      errorIf(*Init->getType() != *G.getType(),
+      errorIf(!typesCompatible(*Init->getType(), *G.getType()),
               "global initializer type does not equal global type", G);
    }
 }
@@ -179,7 +178,7 @@ void VerifierPass::visitBasicBlock(BasicBlock const &B)
 
 void VerifierPass::visitAllocaInst(AllocaInst const& I)
 {
-   errorIf(isa<VoidType>(*I.getType()), "allocated type cannot be void", I);
+   errorIf((I.getType()->isVoidType()), "allocated type cannot be void", I);
    errorIf(I.getAlignment() != 1 && I.getAlignment() % 2 != 0, "invalid "
       "alignment", I);
 }
@@ -195,13 +194,13 @@ void  VerifierPass::visitStoreInst(StoreInst const& I)
    auto src = I.getSrc()->getType();
 
    errorIf(!dst.isLvalue(), "invalid store target", I);
-   errorIf(*dst != *src, "stored operand must have the same "
+   errorIf(!typesCompatible(*dst, *src), "stored operand must have the same "
       "type as destination", I);
 }
 
 void VerifierPass::visitGEPInst(GEPInst const& I)
 {
-   errorIf(!I.getIndex()->getType()->isIntegerTy(), "gep index must be "
+   errorIf(!I.getIndex()->getType()->isIntegerType(), "gep index must be "
       "integral", I);
 }
 
@@ -233,7 +232,7 @@ void  VerifierPass::visitEnumRawValueInst(EnumRawValueInst const& I)
 void  VerifierPass::visitLoadInst(LoadInst const& I)
 {
    auto OpType = I.getOperand(0)->getType();
-   errorIf(!OpType.isLvalue() && !isa<PointerType>(*OpType),
+   errorIf(!OpType.isLvalue() && !OpType->isPointerType(),
            "cannot load value", I);
 }
 
@@ -255,9 +254,9 @@ void VerifierPass::visitRetInst(RetInst const& I)
    if (auto Val = I.getReturnedValue())
       returnedType = Val->getType();
    else
-      *returnedType = VoidType::get();
+      return;
 
-   errorIf(!typesComptatible(returnedType, func->getReturnType()),
+   errorIf(!typesCompatible(returnedType, func->getReturnType()),
            "type of returned value does not equal declared return type", I);
 }
 
@@ -299,7 +298,7 @@ void VerifierPass::visitBrInst(BrInst const& I)
       for (const auto &needed : NeededArgs) {
          auto &given = GivenArgs[i];
 
-         errorIf(!typesComptatible(needed.getType(), given->getType()),
+         errorIf(!typesCompatible(needed.getType(), given->getType()),
                  "invalid argument type", I, *Br);
 
          ++i;
@@ -326,7 +325,7 @@ void VerifierPass::visitBrInst(BrInst const& I)
       for (const auto &needed : NeededArgs) {
          auto &given = GivenArgs[i];
 
-         errorIf(!typesComptatible(needed.getType(), given->getType()),
+         errorIf(!typesCompatible(needed.getType(), given->getType()),
                  "invalid argument type", I, *Else);
 
          ++i;
@@ -336,7 +335,7 @@ void VerifierPass::visitBrInst(BrInst const& I)
 
 void VerifierPass::visitSwitchInst(SwitchInst const& I)
 {
-   errorIf(!I.getSwitchVal()->getType()->isIntegerTy(), "switch type must be "
+   errorIf(!I.getSwitchVal()->getType()->isIntegerType(), "switch type must be "
       "integral", I);
 
    auto InstFn = I.getParent()->getParent();
@@ -359,8 +358,8 @@ namespace {
 
 bool compatibleArgCount(BasicBlock::ArgList const &Needed,
                         llvm::ArrayRef<il::Value *> Given,
+                        bool vararg,
                         bool omitSelf = false) {
-   bool vararg = !Needed.empty() && Needed.back().isVararg();
    auto neededCnt = Needed.size();
    auto givenCnt = Given.size();
 
@@ -374,10 +373,10 @@ bool compatibleArgCount(BasicBlock::ArgList const &Needed,
    return givenCnt == neededCnt;
 }
 
-bool compatibleArgCount(llvm::ArrayRef<cdot::Argument> Needed,
+bool compatibleArgCount(FunctionType const* FuncTy,
                         llvm::ArrayRef<il::Value *> Given) {
-   bool vararg = !Needed.empty() && Needed.back().cstyleVararg;
-   auto neededCnt = Needed.size();
+   bool vararg = FuncTy->isCStyleVararg();
+   auto neededCnt = FuncTy->getArgTypes().size();
    auto givenCnt = Given.size();
 
    if (vararg) {
@@ -407,7 +406,7 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    auto &NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
-   if (!compatibleArgCount(NeededArgs, GivenArgs)) {
+   if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg())) {
       errorIf(true, "invalid number of arguments for call", I);
       return;
    }
@@ -418,7 +417,7 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
          break;
 
       auto &given = GivenArgs[i];
-      errorIf(!typesComptatible(needed.getType(), given->getType()),
+      errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
       ++i;
@@ -457,7 +456,7 @@ void VerifierPass::visitCallInst(CallInst const& I)
    auto &NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
-   if (!compatibleArgCount(NeededArgs, GivenArgs)) {
+   if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg())) {
       errorIf(true, "invalid number of arguments for call", I, *F);
       return;
    }
@@ -468,7 +467,7 @@ void VerifierPass::visitCallInst(CallInst const& I)
          break;
 
       auto &given = GivenArgs[i];
-      errorIf(!typesComptatible(needed.getType(), given->getType()),
+      errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I, *F);
 
       ++i;
@@ -491,24 +490,21 @@ void VerifierPass::visitProtocolCallInst(const ProtocolCallInst &I)
 void  VerifierPass::visitIndirectCallInst(IndirectCallInst const& I)
 {
    auto F = I.getCalledFunction();
-   errorIf(!isa<FunctionType>(*F->getType()), "called value is not a "
+   errorIf(!(F->getType()->isFunctionType()), "called value is not a "
       "function", I);
 
-   auto &NeededArgs = cast<FunctionType>(*F->getType())->getArgTypes();
+   auto NeededArgs = F->getType()->asFunctionType()->getArgTypes();
    auto GivenArgs = I.getArgs();
 
-   if (!compatibleArgCount(NeededArgs, GivenArgs)) {
+   if (!compatibleArgCount(cast<FunctionType>(F->getType()), GivenArgs)) {
       errorIf(true, "invalid number of arguments for call", I);
       return;
    }
 
    size_t i = 0;
    for (const auto &needed : NeededArgs) {
-      if (needed.cstyleVararg)
-         break;
-
       auto &given = GivenArgs[i];
-      errorIf(!typesComptatible(needed.type, given->getType()),
+      errorIf(!typesCompatible(needed, given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
       ++i;
@@ -529,7 +525,7 @@ void  VerifierPass::visitInitInst(InitInst const& I)
    auto &NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
-   if (!compatibleArgCount(NeededArgs, GivenArgs, true)) {
+   if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg(), true)) {
       errorIf(true, "invalid number of arguments for call", I, *F);
       return;
    }
@@ -546,7 +542,7 @@ void  VerifierPass::visitInitInst(InitInst const& I)
          break;
 
       auto &given = GivenArgs[i];
-      errorIf(!typesComptatible(needed.getType(), given->getType()),
+      errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I, *F);
 
       ++i;
@@ -567,13 +563,14 @@ namespace {
 
 bool hasValidBinOpType(Value const* V)
 {
-   switch (V->getType()->getTypeID()) {
+   auto ty = V->getType();
+   switch (ty->getTypeID()) {
       case TypeID::IntegerTypeID:
       case TypeID::FPTypeID:
       case TypeID::PointerTypeID:
          return true;
       case TypeID::ObjectTypeID:
-         return V->getType()->isClass();
+         return ty->isClass();
       default:
          return false;
    }
@@ -586,7 +583,8 @@ void VerifierPass::visit##Name##Inst(Name##Inst const& I)                    \
 {                                                                            \
    errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);  \
    errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);  \
-   errorIf(I.getOperand(0)->getType() != I.getOperand(1)->getType(),         \
+   errorIf(!typesCompatible(*I.getOperand(0)->getType(),                     \
+            *I.getOperand(1)->getType()),                                    \
            "operands to " #Name " instruction are not of the same type", I); \
 }
 
@@ -630,7 +628,8 @@ void VerifierPass::visitMinInst(MinInst const& I)
 
 void VerifierPass::visitBitCastInst(BitCastInst const& I)
 {
-   errorIf(!I.getType()->isPointerTy() && !I.getType()->isRefcounted(),
+   errorIf(!I.getType()->isPointerType() && !I.getType()->isRefcounted()
+           && !I.getType()->isRawFunctionTy(),
            "bitcast type must be a pointer type", I);
 }
 
@@ -647,41 +646,41 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
          errorIf(!to->isBoxedEquivOf(from), "invalid boxing types", I);
          break;
       case CastKind::IntToPtr:
-         errorIf(!from->isIntegerTy(), "inttoptr operand must be integral", I);
-         errorIf(!to->isPointerTy(), "not a pointer type", I);
+         errorIf(!from->isIntegerType(), "inttoptr operand must be integral", I);
+         errorIf(!to->isPointerType(), "not a pointer type", I);
          break;
       case CastKind::PtrToInt:
-         errorIf(!to->isIntegerTy(), "ptrtoint result type must be integral", I);
-         errorIf(!from->isPointerTy() && !from->isObjectTy(),
+         errorIf(!to->isIntegerType(), "ptrtoint result type must be integral", I);
+         errorIf(!from->isPointerType() && !from->isObjectType(),
                  "ptrtoint operand must be pointer", I);
          break;
       case CastKind::IntToFP:
-         errorIf(!from->isIntegerTy(), "inttofp operand must be integral", I);
+         errorIf(!from->isIntegerType(), "inttofp operand must be integral", I);
          errorIf(!to->isFPType(), "not a floating point type", I);
          break;
       case CastKind::FPToInt:
-         errorIf(!to->isIntegerTy(), "fptoint result type must be integral", I);
+         errorIf(!to->isIntegerType(), "fptoint result type must be integral", I);
          errorIf(!from->isFPType(), "fptoint operand must be floating", I);
          break;
       case CastKind::Ext:
-         errorIf(!to->isIntegerTy(), "not an integer type", I);
-         errorIf(!from->isIntegerTy(), "not an integer type", I);
+         errorIf(!to->isIntegerType(), "not an integer type", I);
+         errorIf(!from->isIntegerType(), "not an integer type", I);
 
          errorIf(to->getBitwidth() < from->getBitwidth(), "ext result "
             "bitwidth must be higher or equal", I);
 
          break;
       case CastKind::Trunc:
-         errorIf(!to->isIntegerTy(), "not an integer type", I);
-         errorIf(!from->isIntegerTy(), "not an integer type", I);
+         errorIf(!to->isIntegerType(), "not an integer type", I);
+         errorIf(!from->isIntegerType(), "not an integer type", I);
 
          errorIf(to->getBitwidth() > from->getBitwidth(), "trunc result "
             "bitwidth must be lower or equal", I);
 
          break;
       case CastKind::SignFlip:
-         errorIf(!to->isIntegerTy(), "not an integer type", I);
-         errorIf(!from->isIntegerTy(), "not an integer type", I);
+         errorIf(!to->isIntegerType(), "not an integer type", I);
+         errorIf(!from->isIntegerType(), "not an integer type", I);
 
          errorIf(to->isUnsigned() == from->isUnsigned(), "same sign on operand "
             "and result types", I);
@@ -708,8 +707,8 @@ void  VerifierPass::visitFPCastInst(FPCastInst const& I)
          errorIf(!to->isFPType(), "not a floating type", I);
          errorIf(!from->isFPType(), "not a floating type", I);
 
-         errorIf(cast<FPType>(to)->getPrecision()
-                 < cast<FPType>(from)->getPrecision(),
+         errorIf(to->asFPType()->getPrecision()
+                 < from->asFPType()->getPrecision(),
                  "fpext result bitwidth must be higher or equal", I);
 
          break;
@@ -717,8 +716,8 @@ void  VerifierPass::visitFPCastInst(FPCastInst const& I)
          errorIf(!to->isFPType(), "not a floating type", I);
          errorIf(!from->isFPType(), "not a floating type", I);
 
-         errorIf(cast<FPType>(to)->getPrecision()
-                 > cast<FPType>(from)->getPrecision(),
+         errorIf(to->asFPType()->getPrecision()
+                 > from->asFPType()->getPrecision(),
                  "fpext result bitwidth must be higher or equal", I);
 
          break;

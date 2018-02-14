@@ -2,31 +2,37 @@
 // Created by Jonas Zell on 04.10.17.
 //
 
+#include "Diagnostics.h"
+
+#include "Variant/Variant.h"
+
+#include "lex/Token.h"
+#include "lex/Lexer.h"
+
+#include "Files/FileManager.h"
+
+#include "Support/Casting.h"
+#include "Basic/IdentifierInfo.h"
+
 #include <cstdlib>
 #include <cassert>
 #include <sstream>
 
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/ADT/SmallString.h>
 
-#include "Diagnostics.h"
-
-#include "../Variant/Variant.h"
-#include "../Variant/Type/QualType.h"
-#include "../Variant/Type/Type.h"
-#include "../lex/Token.h"
-#include "../lex/Lexer.h"
-#include "../parse/Parser.h"
-#include "../AST/AstNode.h"
-#include "../Compiler.h"
-#include "../Files/FileManager.h"
-
-#include "../AST/Passes/SemanticAnalysis/Record/Enum.h"
-#include "../AST/Passes/SemanticAnalysis/Function.h"
+#ifndef CDOT_SMALL_VARIANT
+#  include "AST/AstNode.h"
+#  include "module/Module.h"
+#  include "Variant/Type/Type.h"
+#endif
 
 using namespace cdot::lex;
 using namespace cdot::parse;
 using namespace cdot::ast;
 using namespace cdot::support;
+
+using std::string;
 
 namespace cdot {
 namespace diag {
@@ -52,14 +58,33 @@ DiagnosticBuilder note(MessageKind note)
    return DiagnosticBuilder(note);
 }
 
-std::vector<InstantiationContext> DiagnosticBuilder::InstContexts;
+#ifndef NDEBUG
+   static bool lexingDiagnosticMsg = false;
+#endif
 
 string DiagnosticBuilder::prepareMessage()
 {
+#ifndef NDEBUG
+   assert(!lexingDiagnosticMsg && "error lexing diagnostic message!");
+#endif
+
    string original(diag);
    auto buf = llvm::MemoryBuffer::getMemBuffer(original);
-   Lexer<> lex(buf.get(), 0);
+
+   IdentifierTable IT(16);
+   Lexer lex(IT, buf.get(), 0);
+
+#ifndef NDEBUG
+   lexingDiagnosticMsg = true;
+#endif
+
    lex.lex();
+
+#ifndef NDEBUG
+   lexingDiagnosticMsg = false;
+#endif
+
+   assert(lex.getDiagnostics().empty() && "error parsing diagnostic message");
 
    unsigned short substituted = 0;
    string msg = "";
@@ -70,8 +95,7 @@ string DiagnosticBuilder::prepareMessage()
       if (lex.currentTok().is(tok::sentinel)) {
          lex.advance();
 
-         if (lex.currentTok().is(tok::ident) && lex.currentTok()._value
-                                                   .strVal == "$") {
+         if (lex.currentTok().isIdentifier("$")) {
             msg += "$";
             lex.advance();
 
@@ -84,23 +108,20 @@ string DiagnosticBuilder::prepareMessage()
             assert(lex.currentTok().is(tok::integerliteral)
                    && "expected arg index");
 
-            auto val = lex.currentTok().getValue();
-            assert(val.kind == VariantType::INT && "expected arg index");
-            assert(providedArgs.size() > val.intVal && "no substitution provided");
+            auto txt = lex.currentTok().getText();
+            auto val = std::stoull(txt);
 
-            auto& arg = providedArgs[val.intVal];
+            auto& arg = providedArgs[val];
             msg += arg.toString();
          }
          else {
             assert(lex.currentTok().is(tok::integerliteral)
                    && "expected arg index");
 
-            auto val = lex.currentTok().getValue();
-            assert(val.kind == VariantType::INT && "expected arg index");
-            assert(providedArgs.size() > val.intVal
-                   && "no substitution provided");
+            auto txt = lex.currentTok().getText();
+            auto val = std::stoull(txt);
 
-            auto& arg = providedArgs[val.intVal];
+            auto& arg = providedArgs[val];
             lex.advance();
             assert(lex.currentTok().is(tok::op_or) && "expected pipe");
 
@@ -111,22 +132,20 @@ string DiagnosticBuilder::prepareMessage()
          lex.expect(tok::sentinel);
       }
       else {
-         msg += lex.strVal();
+         msg += lex.currentTok().getText();
       }
 
       lex.advance();
    }
 
    if (single) {
-      msg += lex.strVal();
+      msg += lex.currentTok().getText();
    }
 
    return msg;
 }
 
-string DiagnosticBuilder::handleFunction(
-   Variant &var,
-   Lexer<> &lex)
+string DiagnosticBuilder::handleFunction(Variant &var, Lexer &lex)
 {
    string funcName;
    if (lex.currentTok().is_keyword()) {
@@ -140,7 +159,7 @@ string DiagnosticBuilder::handleFunction(
    }
    else {
       assert(lex.currentTok().is(tok::ident));
-      funcName = lex.strVal();
+      funcName = lex.getCurrentIdentifier();
    }
 
    std::vector<string> args;
@@ -155,8 +174,8 @@ string DiagnosticBuilder::handleFunction(
             lex.advance();
          }
 
-         args.push_back(string(lex.begin + beginOffset,
-                               lex.currentTok().getOffset() - beginOffset));
+         args.emplace_back(lex.getSrc() + beginOffset,
+                           lex.currentTok().getOffset() - beginOffset);
          beginOffset = lex.currentTok().getOffset();
 
          if (lex.currentTok().is(tok::comma)) {
@@ -166,15 +185,15 @@ string DiagnosticBuilder::handleFunction(
    }
 
    if (funcName == "select") {
-      assert(args.size() > var.intVal && "too few options for index");
-      return args[var.intVal];
+      assert(args.size() > var.getZExtValue() && "too few options for index");
+      return args[var.getZExtValue()];
    }
    else if (funcName == "ordinal") {
       assert(args.empty() && "ordinal takes no arguments");
-      assert(var.kind == VariantType::INT && "expected integer value");
+      assert(var.isInt() && "expected integer value");
 
-      auto mod = var.intVal % 10;
-      auto str = std::to_string(var.intVal);
+      auto mod = var.getZExtValue() % 10;
+      auto str = std::to_string(var.getZExtValue());
       switch (mod) {
          case 1: return str + "st";
          case 2: return str + "nd";
@@ -184,8 +203,8 @@ string DiagnosticBuilder::handleFunction(
    }
    else if (funcName == "plural_s") {
       assert(args.size() == 1 && "plural_s takes 1 argument");
-      assert(var.kind == VariantType::INT && "expected integer value");
-      if (var.intVal != 1) {
+      assert(var.isInt() && "expected integer value");
+      if (var.getZExtValue() != 1) {
          return args.front() + "s";
       }
       else {
@@ -193,20 +212,20 @@ string DiagnosticBuilder::handleFunction(
       }
    }
    else if (funcName == "plural") {
-      assert(var.kind == VariantType::INT && "expected integer value");
+      assert(var.isInt() && "expected integer value");
       assert(!args.empty() && "plural expects at least 1 argument");
 
-      if (var.intVal >= args.size()) {
+      if (var.getZExtValue() >= args.size()) {
          return args.back();
       }
 
-      return args[var.intVal];
+      return args[var.getZExtValue()];
    }
    else if (funcName == "if") {
       assert(args.size() == 1 && "if expects 1 arg");
-      assert(var.kind == VariantType::INT && "expected integer value");
+      assert(var.isInt() && "expected integer value");
 
-      if (var.intVal) {
+      if (var.getZExtValue()) {
          return args.front();
       }
 
@@ -218,7 +237,8 @@ string DiagnosticBuilder::handleFunction(
 
 DiagnosticBuilder::DiagnosticBuilder()
    : showWiggle(false), showWholeLine(false), noInstCtx(false),
-     noteMemberwiseInit(false), valid(false), noExpansionInfo(false)
+     noteMemberwiseInit(false), valid(false), noExpansionInfo(false),
+     noImportInfo(false)
 {
 
 }
@@ -230,10 +250,10 @@ DiagnosticBuilder::DiagnosticBuilder(MessageKind msg,
                                                ? DiagnosticKind::WARNING
                                                : DiagnosticKind::NOTE)),
      showWiggle(false), showWholeLine(false), noInstCtx(false),
-     noteMemberwiseInit(false), valid(true), noExpansionInfo(false)
+     noteMemberwiseInit(false), valid(true), noExpansionInfo(false),
+     noImportInfo(false)
 {
-   if (templateInstInfo)
-      prepareInstantiationContextMsg();
+
 }
 
 namespace {
@@ -351,53 +371,46 @@ void DiagnosticBuilder::writeDiagnosticTo(llvm::raw_ostream &out)
       llvm::outs() << additionalNotes;
    }
 
+#ifndef CDOT_SMALL_VARIANT
+   if (!noImportInfo) {
+      if (auto M = fs::FileManager::getImportedModule(loc.getSourceId())) {
+         DiagnosticBuilder(note_generic_note)
+            << "imported from module " + M->getFullName()
+            << M->getSourceLoc() << diag::no_import_info << diag::cont;
+      }
+   }
+#endif
+
    if (noExpansionInfo)
       return;
 
-   if (auto Info = lex::getExpansionInfo(loc)) {
-      llvm::SmallString<128> argString;
-      argString += "[";
+//   if (auto Info = lex::getExpansionInfo(loc)) {
+//      llvm::SmallString<128> argString;
+//      argString += "[";
+//
+//      size_t i = 0;
+//      for (const auto &arg : Info->expansionArgs) {
+//         if (i++ != 0) argString += ", ";
+//         argString += arg.first;
+//         argString += " = '";
+//
+//         for (auto c : arg.second) {
+//            unescape_char(argString, c);
+//         }
+//
+//         argString += "'";
+//      }
 
-      size_t i = 0;
-      for (const auto &arg : Info->expansionArgs) {
-         if (i++ != 0) argString += ", ";
-         argString += arg.first;
-         argString += " = '";
-
-         for (auto c : arg.second) {
-            unescape_char(argString, c);
-         }
-
-         argString += "'";
-      }
-
-      argString += "]";
-
-      auto builder = DiagnosticBuilder(note_generic_note, false)
-         << "in expansion of macro " + Info->macroName
-            + " with arguments " + argString.str()
-         << Info->expandedMacroLoc
-         << no_expansion_info;
-
-      builder.writeDiagnosticTo(out);
-   }
-}
-
-void DiagnosticBuilder::prepareInstantiationContextMsg()
-{
-   if (InstContexts.empty())
-      return;
-
-   llvm::raw_string_ostream out(additionalNotes);
-
-   for (auto it = InstContexts.rbegin(); it != InstContexts.rend(); ++it) {
-      auto &Ctx = *it;
-      auto builder = DiagnosticBuilder(note_generic_note, false)
-         << "in instantiation of " + Ctx.toString()
-         << Ctx.getLoc() << no_inst_ctx;
-
-      builder.writeDiagnosticTo(out);
-   }
+//      argString += "]";
+//
+//      auto builder = DiagnosticBuilder(note_generic_note, false)
+//         << "in expansion of macro " + Info->macroName
+//            + " with arguments " + argString.str()
+//         << Info->expandedMacroLoc
+//         << no_expansion_info;
+//
+//      builder.writeDiagnosticTo(out);
+//   }
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(int const& i)
@@ -408,7 +421,7 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(int const& i)
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t const& i)
 {
-   providedArgs.emplace_back(i);
+   providedArgs.emplace_back(uint64_t(i));
    return *this;
 }
 
@@ -442,70 +455,31 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(Variant const& v)
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& ty)
-{
-   auto str = ty.toString();
-   if (ty->isRawEnum()) {
-      str += '(';
-      str += cast<Enum>(ty->getRecord())->getRawType()->toString();
-      str += ')';
-   }
-
-   providedArgs.emplace_back(move(str));
-   return *this;
-}
-
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Type* const& ty)
-{
-   auto str = ty->toString();
-   if (ty->isRawEnum()) {
-      str += '(';
-      str += cast<Enum>(ty->getRecord())->getRawType()->toString();
-      str += ')';
-   }
-
-   providedArgs.emplace_back(move(str));
-   return *this;
-}
-
 DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation const& loc)
 {
    this->loc = loc;
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Lexer<>* const& lex)
+#ifndef CDOT_SMALL_VARIANT
+DiagnosticBuilder& DiagnosticBuilder::operator<<(Type *Ty)
 {
-   loc = lex->getSourceLoc();
+   providedArgs.push_back(Ty->toString());
    return *this;
 }
 
-DiagnosticBuilder&
-DiagnosticBuilder::operator<<(Lexer<module::ModuleLexerTraits>* const& lex)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& Ty)
 {
-   loc = lex->getSourceLoc();
+   providedArgs.push_back(Ty.toString());
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(AstNode *node)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(ast::AstNode *node)
 {
-   loc = node->getSourceLoc();
+   this->loc = node->getSourceLoc();
    return *this;
 }
-
-DiagnosticBuilder& DiagnosticBuilder::operator<<(AstNode::SharedPtr const& node)
-{
-   loc = node->getSourceLoc();
-   return *this;
-}
-
-DiagnosticBuilder& DiagnosticBuilder::operator<<(cl::Method const *M)
-{
-   loc = M->getSourceLoc();
-   noteMemberwiseInit = M->isMemberwiseInitializer();
-
-   return *this;
-}
+#endif
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(Option const &opt)
 {
@@ -525,38 +499,12 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(Option const &opt)
       case memberwise_init:
          noteMemberwiseInit = true;
          break;
+      case no_import_info:
+         noImportInfo = true;
+         break;
    }
 
    return *this;
-}
-
-void DiagnosticBuilder::pushInstantiationCtx(InstantiationContext &&Ctx)
-{
-   InstContexts.push_back(std::move(Ctx));
-}
-
-void DiagnosticBuilder::pushInstantiationCtx(cl::Record *Rec) {
-   auto Base = Rec;
-   while (Base->getSpecializedTemplate())
-      Base = Base->getSpecializedTemplate();
-
-   InstContexts.emplace_back((InstantiationContext::Kind) Rec->getTypeID(),
-                             Base->getName(), Rec->getInstantiatedFrom(),
-                             &Rec->getTemplateArgs());
-}
-
-void DiagnosticBuilder::pushInstantiationCtx(Callable *C) {
-   InstContexts.emplace_back(support::isa<cl::Method>(C)
-                               ? InstantiationContext::Method
-                               : InstantiationContext::Function,
-                             C->getSpecializedTemplate()->getName(),
-                             C->getInstantiatedFrom(),
-                             &C->getTemplateArgs());
-}
-
-void DiagnosticBuilder::popInstantiationCtx()
-{
-   InstContexts.pop_back();
 }
 
 void DiagnosticBuilder::operator<<(Terminator const &terminator)
@@ -571,39 +519,6 @@ void DiagnosticBuilder::operator<<(Continuator const &terminator)
       return;
 
    writeDiagnostic();
-}
-
-namespace {
-
-const char *Names[] = {
-   "struct", "class", "enum", "union", "protocol", "function", "method"
-};
-
-} // anonymous namespace
-
-InstantiationContext::InstantiationContext(
-                                 Kind kind,
-                                 llvm::StringRef name,
-                                 const SourceLocation &loc,
-                                 sema::TemplateArgList const* templateArgs)
-   : loc(loc), kind(kind), name(name), templateArgs(templateArgs)
-{
-
-}
-
-string InstantiationContext::toString() const
-{
-   string s;
-
-   llvm::raw_string_ostream out(s);
-   out << Names[kind] << " " << name;
-
-   if (!templateArgs || templateArgs->empty())
-      return out.str();
-
-   out << " with template arguments " << templateArgs->toString('[', ']', true);
-
-   return out.str();
 }
 
 } // namespace diag

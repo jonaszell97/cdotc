@@ -3,28 +3,24 @@
 //
 
 #include "TemplateInstantiator.h"
-#include "Template.h"
+
+#include "AST/Passes/SemanticAnalysis/Template.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+
+#include "AST/Passes/StaticExpr/StaticExprEvaluator.h"
+#include "AST/Passes/Declaration/DeclPass.h"
+
+#include "AST/Passes/AggregateVisitor.h"
+
+#include "AST/ASTContext.h"
+
+#include "Message/Diagnostics.h"
+
 
 #include <sstream>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/ErrorHandling.h>
-
-#include "../Declaration/DeclPass.h"
-
-#include "../AggregateVisitor.h"
-
-#include "Record/Class.h"
-#include "Record/Union.h"
-
-#include "../../SymbolTable.h"
-#include "../../../Message/Diagnostics.h"
-#include "../../../Variant/Type/PointerType.h"
-
-#include "../StaticExpr/StaticExprEvaluator.h"
-
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/IntegerType.h"
+#include <llvm/ADT/SmallString.h>
 
 using namespace cdot::ast;
 using namespace cdot::support;
@@ -46,37 +42,31 @@ public:
       IK_Alias,
    };
 
-   InstantiatorImpl(InstantiationKind kind,
+   InstantiatorImpl(SemaPass &SP, TemplateArgList const& templateArgs)
+      : SP(SP), kind(IK_AnyStmt), templateArgs(templateArgs),
+        templateArgString(templateArgs.toString())
+   {
+
+   }
+
+   InstantiatorImpl(SemaPass &SP,
                     TemplateArgList const& templateArgs,
-                    Callable const* C)
-      : kind(kind), templateArgs(templateArgs), C(C),
+                    NamedDecl const* Template)
+      : SP(SP), kind(IK_AnyStmt), templateArgs(templateArgs),
+        Template(Template),
         templateArgString(templateArgs.toString())
    {
-
+      if (isa<FunctionDecl>(Template))
+         kind = IK_Function;
+      else if (isa<MethodDecl>(Template))
+         kind = IK_Method;
+      else if (isa<AliasDecl>(Template))
+         kind = IK_Alias;
+      else if (isa<RecordDecl>(Template))
+         kind = IK_Record;
    }
 
-   InstantiatorImpl(TemplateArgList const& templateArgs)
-      : kind(IK_AnyStmt), templateArgs(templateArgs), C(nullptr),
-        templateArgString(templateArgs.toString())
-   {
-
-   }
-
-   InstantiatorImpl(TemplateArgList const& templateArgs, Record const* R)
-      : kind(IK_Record), templateArgs(templateArgs), R(R),
-        templateArgString(templateArgs.toString())
-   {
-
-   }
-
-   InstantiatorImpl(TemplateArgList const& templateArgs, Alias const* alias)
-      : kind(IK_Alias), templateArgs(templateArgs), alias(alias),
-        templateArgString(templateArgs.toString())
-   {
-
-   }
-
-   std::shared_ptr<Expression> visitExpr(Expression *expr)
+   Expression* visitExpr(Expression *expr)
    {
       switch (expr->getTypeID()) {
 #        define CDOT_EXPR(Name)                                \
@@ -89,13 +79,7 @@ public:
       }
    }
 
-   std::shared_ptr<Expression>
-   visitExpr(const std::shared_ptr<Expression> &expr)
-   {
-      return visitExpr(expr.get());
-   }
-
-   std::shared_ptr<Statement> visitStmt(Statement *stmt)
+   Statement* visitStmt(Statement *stmt)
    {
       switch (stmt->getTypeID()) {
 #        define CDOT_STMT(Name)                                \
@@ -108,74 +92,58 @@ public:
       }
    }
 
-   std::shared_ptr<Statement>
-   visitStmt(const std::shared_ptr<Statement> &stmt)
+   CompoundStmt* visitCompoundStmt(CompoundStmt *node);
+   TranslationUnit* visitTranslationUnit(TranslationUnit *node)
    {
-      return visitStmt(stmt.get());
+      llvm_unreachable("can't instantiate translation unit!");
    }
 
-   struct CommonRecordContents {
-      AccessModifier am;
-      string recordName;
-      size_t namespaceLength;
-
-      std::vector<std::shared_ptr<TypeRef>> conformsTo;
-
-      std::vector<std::shared_ptr<FieldDecl>> fields;
-      std::vector<std::shared_ptr<MethodDecl>> methods;
-      std::vector<std::shared_ptr<TypedefDecl>> typedefs;
-      std::vector<std::shared_ptr<PropDecl>> properties;
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> associatedTypes;
-
-      std::vector<TemplateParameter> templateParams;
-      std::vector<std::shared_ptr<StaticExpr>> constraints;
-
-      std::vector<std::shared_ptr<RecordDecl>> innerDeclarations;
-      std::vector<std::shared_ptr<StaticStmt>> staticStatements;
-   };
-
-   std::shared_ptr<CompoundStmt> visitCompoundStmt(CompoundStmt *node);
-
-   std::shared_ptr<NamespaceDecl> visitNamespaceDecl(NamespaceDecl *node)
+   NamespaceDecl* visitNamespaceDecl(NamespaceDecl *node)
    {
       llvm_unreachable("should not be in a template!");
    }
 
-   std::shared_ptr<UsingStmt> visitUsingStmt(UsingStmt *node);
-   std::shared_ptr<ModuleStmt> visitModuleStmt(ModuleStmt *node);
-   std::shared_ptr<ImportStmt> visitImportStmt(ImportStmt *node);
+   UsingStmt* visitUsingStmt(UsingStmt *node);
+   ModuleStmt* visitModuleStmt(ModuleStmt *node);
+   ImportStmt* visitImportStmt(ImportStmt *node);
 
-   std::shared_ptr<LocalVarDecl> visitLocalVarDecl(LocalVarDecl *node);
-   std::shared_ptr<GlobalVarDecl> visitGlobalVarDecl(GlobalVarDecl *node);
-   std::shared_ptr<FunctionDecl> visitFunctionDecl(FunctionDecl *node);
+   LocalVarDecl* visitLocalVarDecl(LocalVarDecl *node);
+   GlobalVarDecl* visitGlobalVarDecl(GlobalVarDecl *node);
 
-   std::shared_ptr<CallableDecl> visitCallableDecl(CallableDecl *node)
+   LocalDestructuringDecl*
+   visitLocalDestructuringDecl(LocalDestructuringDecl *node);
+
+   GlobalDestructuringDecl*
+   visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+
+   FunctionDecl* visitFunctionDecl(FunctionDecl *F);
+
+   CallableDecl* visitCallableDecl(CallableDecl *node)
    {
       llvm_unreachable("call visitFunctionDecl or visitMethodDecl");
    }
 
-   std::shared_ptr<DeclareStmt> visitDeclareStmt(DeclareStmt *node)
-   {
-      llvm_unreachable("should not be in a template!");
-   }
+   RecordDecl *visitRecordCommon(RecordDecl *src,
+                                 RecordDecl *outer = nullptr);
 
-   bool visitRecordDecl(CommonRecordContents &contents, RecordDecl *node);
-
-   std::shared_ptr<RecordDecl> visitRecordDecl(RecordDecl *node)
+   RecordDecl* visitRecordDecl(RecordDecl *node, RecordDecl *outer = nullptr)
    {
-      std::shared_ptr<RecordDecl> res;
+      RecordDecl* res;
       switch (node->getTypeID()) {
          case AstNode::ClassDeclID:
-            res = visitClassDecl(cast<ClassDecl>(node));
+            res = visitClassDecl(cast<ClassDecl>(node), outer);
+            break;
+         case AstNode::StructDeclID:
+            res = visitStructDecl(cast<StructDecl>(node), outer);
             break;
          case AstNode::EnumDeclID:
-            res = visitEnumDecl(cast<EnumDecl>(node));
+            res = visitEnumDecl(cast<EnumDecl>(node), outer);
             break;
          case AstNode::UnionDeclID:
-            res = visitUnionDecl(cast<UnionDecl>(node));
+            res = visitUnionDecl(cast<UnionDecl>(node), outer);
             break;
          case AstNode::ProtocolDeclID:
-            res = visitProtocolDecl(cast<ProtocolDecl>(node));
+            res = visitProtocolDecl(cast<ProtocolDecl>(node), outer);
             break;
          case AstNode::ExtensionDeclID:
             res = visitExtensionDecl(cast<ExtensionDecl>(node));
@@ -187,114 +155,119 @@ public:
       return res;
    }
 
-   std::shared_ptr<ClassDecl> visitClassDecl(ClassDecl *node);
-   std::shared_ptr<ProtocolDecl> visitProtocolDecl(ProtocolDecl *node);
-   std::shared_ptr<ExtensionDecl> visitExtensionDecl(ExtensionDecl *node);
-   std::shared_ptr<EnumDecl> visitEnumDecl(EnumDecl *node);
-   std::shared_ptr<UnionDecl> visitUnionDecl(UnionDecl *node);
+   TemplateArgExpr *visitTemplateArgExpr(TemplateArgExpr *expr);
+   TemplateParamDecl *visitTemplateParamDecl(TemplateParamDecl *decl);
 
-   std::shared_ptr<EnumCaseDecl> visitEnumCaseDecl(EnumCaseDecl *node);
+   ClassDecl* visitClassDecl(ClassDecl *node, RecordDecl *outer = nullptr);
+   StructDecl* visitStructDecl(StructDecl *node, RecordDecl *outer = nullptr);
+   ProtocolDecl* visitProtocolDecl(ProtocolDecl *node,
+                                   RecordDecl *outer = nullptr);
+   ExtensionDecl* visitExtensionDecl(ExtensionDecl *node);
+   EnumDecl* visitEnumDecl(EnumDecl *node, RecordDecl *outer = nullptr);
+   UnionDecl* visitUnionDecl(UnionDecl *node, RecordDecl *outer = nullptr);
 
-   std::shared_ptr<FieldDecl> visitFieldDecl(FieldDecl *node);
-   std::shared_ptr<PropDecl> visitPropDecl(PropDecl *node);
-   std::shared_ptr<AssociatedTypeDecl> visitAssociatedTypeDecl
+   EnumCaseDecl* visitEnumCaseDecl(EnumCaseDecl *node);
+
+   FieldDecl* visitFieldDecl(FieldDecl *node);
+   PropDecl* visitPropDecl(PropDecl *node);
+   AssociatedTypeDecl* visitAssociatedTypeDecl
       (AssociatedTypeDecl *node);
 
-   std::shared_ptr<MethodDecl> visitMethodDecl(MethodDecl *node,
-                                               bool skipBody = false);
-   std::shared_ptr<ConstrDecl> visitConstrDecl(ConstrDecl *node,
-                                               bool skipBody = false);
-   std::shared_ptr<DestrDecl> visitDestrDecl(DestrDecl *node,
-                                             bool skipBody = false);
+   MethodDecl* visitMethodDecl(MethodDecl *node,
+                               bool skipBody = false);
+   InitDecl* visitInitDecl(InitDecl *node,
+                               bool skipBody = false);
+   DeinitDecl* visitDeinitDecl(DeinitDecl *node,
+                             bool skipBody = false);
 
-   std::shared_ptr<FuncArgDecl> visitFuncArgDecl(FuncArgDecl *node);
-   std::shared_ptr<TypedefDecl> visitTypedefDecl(TypedefDecl *node);
-   std::shared_ptr<AliasDecl> visitAliasDecl(AliasDecl *node);
+   FuncArgDecl* visitFuncArgDecl(FuncArgDecl *node);
+   TypedefDecl* visitTypedefDecl(TypedefDecl *node);
+   AliasDecl* visitAliasDecl(AliasDecl *node);
 
-   std::shared_ptr<Expression>
+   Expression*
    visitIdentifierRefExpr(IdentifierRefExpr *node);
 
-   std::shared_ptr<Expression>
-   visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node);
+   Expression*
+   visitBuiltinExpr(BuiltinExpr *node);
 
-   std::shared_ptr<SubscriptExpr> visitSubscriptExpr(SubscriptExpr *node);
-   std::shared_ptr<Expression> visitCallExpr(CallExpr *node);
-   std::shared_ptr<MemberRefExpr> visitMemberRefExpr(MemberRefExpr *node);
-   std::shared_ptr<EnumCaseExpr> visitEnumCaseExpr(EnumCaseExpr *node);
+   SubscriptExpr* visitSubscriptExpr(SubscriptExpr *node);
+   Expression* visitCallExpr(CallExpr *node);
+   MemberRefExpr* visitMemberRefExpr(MemberRefExpr *node);
+   EnumCaseExpr* visitEnumCaseExpr(EnumCaseExpr *node);
 
-   std::shared_ptr<ForStmt> visitForStmt(ForStmt *node);
-   std::shared_ptr<ForInStmt> visitForInStmt(ForInStmt *node);
-   std::shared_ptr<WhileStmt> visitWhileStmt(WhileStmt *node);
-   std::shared_ptr<IfStmt> visitIfStmt(IfStmt *node);
-   std::shared_ptr<LabelStmt> visitLabelStmt(LabelStmt *node);
-   std::shared_ptr<GotoStmt> visitGotoStmt(GotoStmt *node);
+   ForStmt* visitForStmt(ForStmt *node);
+   ForInStmt* visitForInStmt(ForInStmt *node);
+   WhileStmt* visitWhileStmt(WhileStmt *node);
+   IfStmt* visitIfStmt(IfStmt *node);
+   LabelStmt* visitLabelStmt(LabelStmt *node);
+   GotoStmt* visitGotoStmt(GotoStmt *node);
 
-   std::shared_ptr<MatchStmt> visitMatchStmt(MatchStmt *node);
-   std::shared_ptr<CaseStmt> visitCaseStmt(CaseStmt *node);
+   MatchStmt* visitMatchStmt(MatchStmt *node);
+   CaseStmt* visitCaseStmt(CaseStmt *node);
 
-   std::shared_ptr<ExpressionPattern>
+   ExpressionPattern*
    visitExpressionPattern(ExpressionPattern *node);
 
-   std::shared_ptr<IsPattern> visitIsPattern(IsPattern *node);
-   std::shared_ptr<CasePattern> visitCasePattern(CasePattern *node);
+   IsPattern* visitIsPattern(IsPattern *node);
+   CasePattern* visitCasePattern(CasePattern *node);
 
-   std::shared_ptr<ReturnStmt> visitReturnStmt(ReturnStmt *node);
-   std::shared_ptr<BreakStmt> visitBreakStmt(BreakStmt *node);
-   std::shared_ptr<ContinueStmt> visitContinueStmt(ContinueStmt *node);
+   ReturnStmt* visitReturnStmt(ReturnStmt *node);
+   BreakStmt* visitBreakStmt(BreakStmt *node);
+   ContinueStmt* visitContinueStmt(ContinueStmt *node);
 
-   std::shared_ptr<IntegerLiteral> visitIntegerLiteral(IntegerLiteral *node);
-   std::shared_ptr<FPLiteral> visitFPLiteral(FPLiteral *node);
-   std::shared_ptr<BoolLiteral> visitBoolLiteral(BoolLiteral *node);
-   std::shared_ptr<CharLiteral> visitCharLiteral(CharLiteral *node);
+   IntegerLiteral* visitIntegerLiteral(IntegerLiteral *node);
+   FPLiteral* visitFPLiteral(FPLiteral *node);
+   BoolLiteral* visitBoolLiteral(BoolLiteral *node);
+   CharLiteral* visitCharLiteral(CharLiteral *node);
 
-   std::shared_ptr<DictionaryLiteral>
+   DictionaryLiteral*
    visitDictionaryLiteral(DictionaryLiteral *node);
 
-   std::shared_ptr<ArrayLiteral>
+   ArrayLiteral*
    visitArrayLiteral(ArrayLiteral *node);
 
-   std::shared_ptr<NoneLiteral> visitNoneLiteral(NoneLiteral *node);
-   std::shared_ptr<StringLiteral> visitStringLiteral(StringLiteral *node);
+   NoneLiteral* visitNoneLiteral(NoneLiteral *node);
+   StringLiteral* visitStringLiteral(StringLiteral *node);
 
-   std::shared_ptr<StringInterpolation>
+   StringInterpolation*
    visitStringInterpolation(StringInterpolation *node);
 
-   std::shared_ptr<TupleLiteral> visitTupleLiteral(TupleLiteral *node);
+   TupleLiteral* visitTupleLiteral(TupleLiteral *node);
 
-   std::shared_ptr<Expression> visitExprSequence(ExprSequence *node);
-   std::shared_ptr<Expression> visitBinaryOperator(BinaryOperator *node);
-   std::shared_ptr<TertiaryOperator>
+   Expression* visitExprSequence(ExprSequence *node);
+   Expression* visitBinaryOperator(BinaryOperator *node);
+   TertiaryOperator*
    visitTertiaryOperator(TertiaryOperator *node);
-   std::shared_ptr<UnaryOperator> visitUnaryOperator(UnaryOperator *node);
+   UnaryOperator* visitUnaryOperator(UnaryOperator *node);
 
-   std::shared_ptr<StaticExpr> visitStaticExpr(StaticExpr *node);
-   std::shared_ptr<ConstraintExpr> visitConstraintExpr(ConstraintExpr *node);
-   std::shared_ptr<TraitsExpr> visitTraitsExpr(TraitsExpr *node);
+   StaticExpr* visitStaticExpr(StaticExpr *node);
+   ConstraintExpr* visitConstraintExpr(ConstraintExpr *node);
+   TraitsExpr* visitTraitsExpr(TraitsExpr *node);
 
-   std::shared_ptr<StaticStmt> visitStaticStmt(StaticStmt *node);
-   std::shared_ptr<StaticAssertStmt>
+   StaticStmt* visitStaticStmt(StaticStmt *node);
+   StaticAssertStmt*
    visitStaticAssertStmt(StaticAssertStmt *node);
 
-   std::shared_ptr<StaticPrintStmt>
+   StaticPrintStmt*
    visitStaticPrintStmt(StaticPrintStmt *node);
 
-   std::shared_ptr<StaticIfStmt> visitStaticIfStmt(StaticIfStmt *node);
-   std::shared_ptr<StaticForStmt> visitStaticForStmt(StaticForStmt *node);
+   StaticIfStmt* visitStaticIfStmt(StaticIfStmt *node);
+   StaticForStmt* visitStaticForStmt(StaticForStmt *node);
 
-   std::shared_ptr<TryStmt> visitTryStmt(TryStmt *node);
-   std::shared_ptr<ThrowStmt> visitThrowStmt(ThrowStmt *node);
+   TryStmt* visitTryStmt(TryStmt *node);
+   ThrowStmt* visitThrowStmt(ThrowStmt *node);
 
-   std::shared_ptr<LambdaExpr> visitLambdaExpr(LambdaExpr *node);
+   LambdaExpr* visitLambdaExpr(LambdaExpr *node);
 
-   std::shared_ptr<Expression>
+   Expression*
    visitImplicitCastExpr(ImplicitCastExpr *node);
 
-   std::shared_ptr<TypeRef> visitTypeRef(TypeRef *node);
+   TypeRef* visitTypeRef(TypeRef *node);
 
-   std::shared_ptr<Expression> visitLvalueToRvalue(LvalueToRvalue *node);
+   Expression* visitLvalueToRvalue(LvalueToRvalue *node);
 
-   std::shared_ptr<DebugStmt> visitDebugStmt(DebugStmt *node);
-   std::shared_ptr<NullStmt> visitNullStmt(NullStmt *node);
+   DebugStmt* visitDebugStmt(DebugStmt *node);
+   NullStmt* visitNullStmt(NullStmt *node);
 
    const string &getTemplateArgString() const
    {
@@ -306,26 +279,23 @@ public:
       return failedConstraintLoc;
    }
 
-   using ArgListTy = std::vector<std::shared_ptr<FuncArgDecl>>;
+   using ArgListTy = std::vector<FuncArgDecl*>;
 
    void findVariadicArgs(const ArgListTy &argList,
-                         llvm::ArrayRef<TemplateParameter> pars);
+                         llvm::ArrayRef<TemplateParamDecl*> pars);
 
 private:
+   SemaPass &SP;
    InstantiationKind kind;
    TemplateArgList const& templateArgs;
 
    union {
-      Callable const* C;
-      Record const* R;
-      Alias const* alias;
+      NamedDecl const* Template = nullptr;
    };
 
    llvm::StringMap<ResolvedTemplateArg const*> VariadicTemplateArgs;
 
    string templateArgString;
-
-   llvm::SmallVector<TemplateParameter const*, 4> InnerParams;
    size_t InnerDecls = 0;
 
    std::pair<llvm::StringRef, llvm::StringRef> CurrentVariadicArgSubstitution;
@@ -334,50 +304,46 @@ private:
 
    SourceLocation failedConstraintLoc;
 
-   static TemplateParameter const* hasTemplateParam(
+   struct InnerDeclRAII {
+      InnerDeclRAII(InstantiatorImpl &I) : I(I)
+      {
+         ++I.InnerDecls;
+      }
+
+      ~InnerDeclRAII()
+      {
+         --I.InnerDecls;
+      }
+
+   private:
+      InstantiatorImpl &I;
+   };
+
+   static TemplateParamDecl const* hasTemplateParam(
                               const std::string &Name,
-                              llvm::ArrayRef<TemplateParameter> params) {
+                              llvm::ArrayRef<TemplateParamDecl*> params) {
       for (const auto &TP : params) {
-         if (TP.genericTypeName == Name)
-            return &TP;
+         if (TP->getName() == Name)
+            return TP;
       }
 
       return nullptr;
    }
 
-   TemplateParameter const* hasTemplateParam(const std::string &Name) const
+   TemplateParamDecl const* hasTemplateParam(const std::string &Name) const
    {
-      for (const auto &Inner : InnerParams)
-         if (Name == Inner->genericTypeName)
-            return nullptr;
-
-      if (kind == IK_AnyStmt)
+      if (!Template)
          return nullptr;
 
-      if (kind == IK_Record) {
-         return hasTemplateParam(Name, R->getTemplateParams());
-      }
-      else if (kind == IK_Alias) {
-         return hasTemplateParam(Name, alias->getTemplateParams());
-      }
-      else {
-         if (auto TP = hasTemplateParam(Name, C->getTemplateParams()))
-            return TP;
-
-         if (auto M = dyn_cast<Method>(C))
-            return hasTemplateParam(Name, M->getOwningRecord()
-                                           ->getTemplateParams());
-      }
+      for (auto Param : Template->getTemplateParams())
+         if (Param->getName() == Name)
+            return Param;
 
       return nullptr;
    }
 
    ResolvedTemplateArg const* hasTemplateArg(const std::string &Name) const
    {
-      for (const auto &Inner : InnerParams)
-         if (Name == Inner->genericTypeName)
-            return nullptr;
-
       if (CurrentVariadicTypeSubstitution.first.equals(Name))
          return CurrentVariadicTypeSubstitution.second;
 
@@ -388,10 +354,26 @@ private:
       return TA;
    }
 
-   template<class T, class ...Args>
-   std::shared_ptr<T> makeStmt(Statement *node, Args&& ...args)
+   ASTContext const& getContext() const
    {
-      auto ret = std::shared_ptr<T>::make_shared(std::forward<Args>(args)...);
+      return SP.getCompilationUnit().getContext();
+   }
+
+   template<class T, class ...Args>
+   T* makeStmt(Statement const* node, Args&& ...args)
+   {
+      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
+
+      auto loc = node->getSourceLoc();
+      ret->setSourceLoc({ loc.getOffset(), loc.getSourceId() });
+
+      return ret;
+   }
+
+   template<class T, class ...Args>
+   T* makeStmt(NamedDecl const* node, Args&& ...args)
+   {
+      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
 
       auto loc = node->getSourceLoc();
       ret->setSourceLoc({ loc.getOffset(), loc.getSourceId() });
@@ -401,43 +383,39 @@ private:
    }
 
    template<class T, class ...Args>
-   std::shared_ptr<T> makeExpr(Expression *node, Args&& ...args)
+   T* makeExpr(Expression const* node, Args&& ...args)
    {
-      auto ret = std::shared_ptr<T>::make_shared(std::forward<Args>(args)...);
+      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
+
       ret->setSourceLoc(node->getSourceLoc());
       ret->setIsVariadicArgPackExpansion(node->isVariadicArgPackExpansion());
 
-      if (auto M = node->getMemberExpr())
-         ret->setMemberExpr(visitExpr(M.get()));
+      if (auto M = node->getSubExpr())
+         ret->setSubExpr(visitExpr(M));
 
       return ret;
    }
 
    template<class T>
-   std::vector<std::shared_ptr<T>>
-   cloneVector(const std::vector<std::shared_ptr<T>> &vec)
+   std::vector<T*>
+   cloneVector(const std::vector<T*> &vec)
    {
-      std::vector<std::shared_ptr<T>> newVec;
+      std::vector<T*> newVec;
       for (const auto &v : vec) {
-         auto newStmt = visitStmt(v.get());
-         assert(isa<T>(newStmt.get()));
-
-         newVec.push_back(std::static_pointer_cast<T>(newStmt));
+         auto newStmt = visitStmt(v);
+         newVec.push_back(cast<T>(newStmt));
       }
 
       return newVec;
    }
 
    template<class T>
-   std::shared_ptr<T> copyOrNull(const std::shared_ptr<T> &sp)
+   T* copyOrNull(T* sp)
    {
       if (!sp)
          return nullptr;
 
-      auto copy = visitStmt(sp.get());
-      assert(isa<T>(copy.get()));
-
-      return std::static_pointer_cast<T>(copy);
+      return cast<T>(visitStmt(sp));
    }
 
    template<class T, class U>
@@ -447,18 +425,18 @@ private:
    }
 
    ArgListTy copyArgListAndFindVariadic(const ArgListTy &argList,
-                                        llvm::ArrayRef<TemplateParameter> pars);
+                                        llvm::ArrayRef<TemplateParamDecl*> pars);
 
-   using ExprList = std::vector<std::shared_ptr<Expression>>;
+   using ExprList = std::vector<Expression*>;
    ExprList copyExprList(const ExprList &exprList);
 
-   using TypeList = std::vector<std::shared_ptr<TypeRef>>;
+   using TypeList = std::vector<TypeRef*>;
    TypeList copyTypeList(const TypeList &typeList);
 
    template<class T>
-   void copyVariadicExpr(std::vector<std::shared_ptr<T>> &exprList,
-                         std::shared_ptr<T> const& expr) {
-      llvm::SmallVector<std::shared_ptr<Expression>, 4> exprs;
+   void copyVariadicExpr(std::vector<T*> &exprList,
+                         T* const& expr) {
+      llvm::SmallVector<Expression* , 4> exprs;
       bool hasContainedPacks = expandVariadicArgument(exprs, expr);
 
       if (hasContainedPacks) {
@@ -468,9 +446,9 @@ private:
          return;
       }
 
-      std::vector<std::shared_ptr<T>> copy;
+      std::vector<T*> copy;
       llvm::SmallVector<llvm::StringRef, 4> ContainedVariadics;
-      getContainedVariadicTypes(ContainedVariadics, expr.get());
+      getContainedVariadicTypes(ContainedVariadics, expr);
 
       if (ContainedVariadics.empty()) {
          if (expr->isVariadicArgPackExpansion())
@@ -478,7 +456,8 @@ private:
                << "expression does not contain expandable parameter packs"
                << expr;
 
-         return exprList.emplace_back(visitExpr(expr));
+         exprList.emplace_back(visitExpr(expr));
+         return;
       }
 
       bool madeCopy = false;
@@ -508,8 +487,8 @@ private:
    }
 
    bool expandVariadicArgument(
-                       llvm::SmallVector<std::shared_ptr<Expression>, 4> &exprs,
-                       std::shared_ptr<Expression> const& variadicExpr) {
+                       llvm::SmallVector<Expression* , 4> &exprs,
+                       Expression* const& variadicExpr) {
       llvm::SmallVector<llvm::StringRef, 4> ContainedPacks;
       getContainedParameterPacks(ContainedPacks, variadicExpr);
 
@@ -555,24 +534,24 @@ private:
             case TypeRef::ObjectType: {
                if (Ty->isSingularType()) {
                   auto Arg = hasTemplateParam(Ty->getSingularTypeName());
-                  if (Arg && Arg->isVariadic)
+                  if (Arg && Arg->isVariadic())
                      Tys.push_back(Ty->getSingularTypeName());
                }
 
                for (auto &NS : Ty->getNamespaceQual())
                   for (auto &TA : NS.second)
-                     if (TA.isTypeName())
-                        getContainedVariadicTypes(Tys, TA.getType().get());
+                     if (TA->isTypeName())
+                        getContainedVariadicTypes(Tys, TA->getType());
 
                break;
             }
             case TypeRef::FunctionType:
             case TypeRef::TupleType:
                for (const auto &Cont : Ty->getContainedTypes())
-                  getContainedVariadicTypes(Tys, Cont.second.get());
+                  getContainedVariadicTypes(Tys, Cont.second);
 
                if (Ty->getKind() == TypeRef::FunctionType)
-                  getContainedVariadicTypes(Tys, Ty->getReturnType().get());
+                  getContainedVariadicTypes(Tys, Ty->getReturnType());
 
                break;
             default:
@@ -583,40 +562,40 @@ private:
       }
       else if (auto Ident = dyn_cast<IdentifierRefExpr>(expr)) {
          for (const auto &TA : Ident->getTemplateArgs())
-            if (TA.isTypeName())
-               getContainedVariadicTypes(Tys, TA.getType().get());
+            if (TA->isTypeName())
+               getContainedVariadicTypes(Tys, TA->getType());
 
          if (auto P = hasTemplateParam(Ident->getIdent()))
-            if (P->isVariadic)
+            if (P->isVariadic())
                Tys.push_back(Ident->getIdent());
       }
       else if (auto RefExpr = dyn_cast<MemberRefExpr>(expr)) {
          for (const auto &TA : RefExpr->getTemplateArgs())
-            if (TA.isTypeName())
-               getContainedVariadicTypes(Tys, TA.getType().get());
+            if (TA->isTypeName())
+               getContainedVariadicTypes(Tys, TA->getType());
 
          if (auto P = hasTemplateParam(RefExpr->getIdent()))
-            if (P->isVariadic)
+            if (P->isVariadic())
                Tys.push_back(RefExpr->getIdent());
       }
       else if (auto Call = dyn_cast<CallExpr>(expr)) {
          for (const auto &TA : Call->getTemplateArgs())
-            if (TA.isTypeName())
-               getContainedVariadicTypes(Tys, TA.getType().get());
+            if (TA->isTypeName())
+               getContainedVariadicTypes(Tys, TA->getType());
 
          if (auto P = hasTemplateParam(Call->getIdent()))
-            if (P->isVariadic)
+            if (P->isVariadic())
                Tys.push_back(Call->getIdent());
       }
       else if (auto Seq = dyn_cast<ExprSequence>(expr)) {
          for (const auto &F : Seq->getFragments()) {
             switch (F.getKind()) {
                case ExprSequence::SequenceElement::EF_Expression:
-                  getContainedVariadicTypes(Tys, F.getExpr().get());
+                  getContainedVariadicTypes(Tys, F.getExpr());
                   break;
                case ExprSequence::SequenceElement::EF_PossibleOperator:
                   if (auto P = hasTemplateParam(F.getOp()))
-                     if (P->isVariadic)
+                     if (P->isVariadic())
                         Tys.push_back(F.getOp());
 
                   break;
@@ -626,12 +605,12 @@ private:
          }
       }
 
-      if (auto MemExpr = expr->getMemberExpr())
-         getContainedVariadicTypes(Tys, MemExpr.get());
+      if (auto MemExpr = expr->getSubExpr())
+         getContainedVariadicTypes(Tys, MemExpr);
    }
 
    void getContainedParameterPacks(llvm::SmallVector<llvm::StringRef, 4> &Packs,
-                                   std::shared_ptr<Expression> const& expr) {
+                                   Expression* const& expr) {
       auto Predicate = [this](IdentifierRefExpr *node) {
          auto it = VariadicTemplateArgs.find(node->getIdent());
          return it != VariadicTemplateArgs.end();
@@ -642,306 +621,231 @@ private:
          Packs.push_back(node->getIdent());
    }
 
-   std::vector<TemplateArg> copyTAList(const std::vector<TemplateArg>& list);
+   std::vector<TemplateArgExpr*> copyTAList(const std::vector<TemplateArgExpr*>& list);
    TypeRef::NamespaceVec copyTAList(const TypeRef::NamespaceVec& list);
 };
 
-bool InstantiatorImpl::visitRecordDecl(CommonRecordContents &contents,
-                                       RecordDecl *node) {
-//   StaticExprEvaluator Eval(SP, nullptr, nullptr, {}, templateArgs);
-//   for (const auto &Const : node->getConstraints()) {
-//      auto copy = visitStaticExpr(Const.get());
-//      auto res = Eval.evaluate(copy.get());
-//      assert(res.val.isInt());
-//
-//      if (!res.val.intVal) {
-//         failedConstraintLoc = copy->getSourceLoc();
-//         return false;
-//      }
-//   }
-
-   contents.am = node->getAm();
-   contents.namespaceLength = node->getNamespaceLength();
-
-   contents.recordName = node->getRecordName();
-   if (!InnerDecls)
-      contents.recordName += templateArgString;
-
-   contents.conformsTo = copyTypeList(node->getConformsTo());
-
-   for (const auto &Prop : node->getProperties()) {
-      contents.properties.push_back(visitPropDecl(Prop.get()));
+TemplateArgExpr* InstantiatorImpl::visitTemplateArgExpr(TemplateArgExpr *expr)
+{
+   if (expr->isTypeName()) {
+      return makeExpr<TemplateArgExpr>(expr, visitTypeRef(expr->getType()));
    }
-
-   for (const auto &F : node->getFields()) {
-      contents.fields.push_back(visitFieldDecl(F.get()));
+   else {
+      return makeExpr<TemplateArgExpr>(expr, visitStaticExpr(expr->getExpr()));
    }
-
-   for (const auto &AssTy : node->getAssociatedTypes()) {
-      contents.associatedTypes.push_back(visitAssociatedTypeDecl(AssTy.get()));
-   }
-
-   for (const auto &M : node->getMethods()) {
-      contents.methods.push_back(
-         visitMethodDecl(M.get(), !M->getMethod()->isProtocolMethod()));
-   }
-
-   for (const auto &TD : node->getTypedefs()) {
-      contents.typedefs.push_back(visitTypedefDecl(TD.get()));
-   }
-
-   for (const auto &Inner : node->getInnerDeclarations()) {
-      auto prevSize = InnerParams.size();
-      for (const auto &TP : Inner->getTemplateParams())
-         InnerParams.push_back(&TP);
-
-      ++InnerDecls;
-
-      contents.innerDeclarations.push_back(visitRecordDecl(Inner.get()));
-
-      InnerParams.resize(prevSize);
-      --InnerDecls;
-   }
-
-   for (const auto &Static : node->getStaticStatements()) {
-      contents.staticStatements.push_back(visitStaticStmt(Static.get()));
-   }
-
-   auto const& params = node->getRecord()
-                        ? node->getRecord()->getTemplateParams()
-                        : node->getTemplateParams();
-
-   for (const auto &TP : params) {
-      if (!hasTemplateArg(TP.genericTypeName))
-         contents.templateParams.push_back(TP);
-   }
-
-   return true;
 }
 
-std::shared_ptr<ClassDecl> InstantiatorImpl::visitClassDecl(ClassDecl *node)
+TemplateParamDecl*
+InstantiatorImpl::visitTemplateParamDecl(TemplateParamDecl *P)
 {
-   CommonRecordContents contents;
-   auto isValid = visitRecordDecl(contents, node);
-
-   if (!isValid)
-      return nullptr;
-
-   return makeStmt<ClassDecl>(node,
-                              move(contents.recordName),
-                              move(contents.fields),
-                              move(contents.methods),
-                              cloneVector(node->getConstructors()),
-                              move(contents.typedefs),
-                              move(contents.properties),
-                              move(contents.associatedTypes),
-                              move(contents.templateParams),
-                              move(contents.constraints),
-                              contents.am,
-                              node->isAbstract(),
-                              node->isStruct(),
-                              copyOrNull(node->getParentClass()),
-                              move(contents.conformsTo),
-                              copyOrNull(node->getDestructor()),
-                              move(contents.innerDeclarations),
-                              move(contents.staticStatements));
+   if (P->isTypeName()) {
+      return makeStmt<TemplateParamDecl>(
+         P, string(P->getName()),
+         visitTypeRef(P->getCovariance()),
+         visitTypeRef(P->getContravariance()), P->isVariadic(),
+         copyOrNull(P->getDefaultValue()));
+   }
+   else {
+      return makeStmt<TemplateParamDecl>(
+         P, string(P->getName()),
+         visitTypeRef(P->getCovariance()),
+         P->isVariadic(),
+         copyOrNull(P->getDefaultValue()));
+   }
 }
 
-std::shared_ptr<EnumDecl> InstantiatorImpl::visitEnumDecl(EnumDecl *node)
-{
-   CommonRecordContents contents;
-   auto isValid = visitRecordDecl(contents, node);
+RecordDecl *InstantiatorImpl::visitRecordCommon(RecordDecl *src,
+                                                RecordDecl *outer) {
+   auto access = src->getAccess();
+   string recordName;
 
-   if (!isValid)
-      return nullptr;
+   if (outer) {
+      recordName += outer->getName();
 
-   return makeStmt<EnumDecl>(node, contents.am,
-                             move(contents.recordName),
-                             copyOrNull(node->getRawType()),
-                             move(contents.fields),
-                             move(contents.methods), move(contents.properties),
-                             move(contents.associatedTypes),
-                             move(contents.templateParams),
-                             move(contents.constraints),
-                             move(contents.conformsTo),
-                             cloneVector(node->getCases()),
-                             move(contents.innerDeclarations),
-                             move(contents.staticStatements));
-}
-
-std::shared_ptr<ast::EnumCaseDecl>
-InstantiatorImpl::visitEnumCaseDecl(EnumCaseDecl *node)
-{
-   EnumCaseDecl::AssociatedTypeVec associatedTypes;
-   for (const auto &Ty : node->getAssociatedTypes()) {
-      associatedTypes.emplace_back(Ty.first, visitTypeRef(Ty.second.get()));
+      auto skip = outer->getName().size() - templateArgString.size();
+      recordName += src->getName().substr(skip);
+   }
+   else {
+      recordName += src->getName();
+      recordName += templateArgString;
    }
 
+   auto conformances = copyTypeList(src->getConformanceTypes());
+   auto constraints = cloneVector(src->getConstraints());
+
+   TypeRef *enumRawTypeOrExtends = nullptr;
+   bool isAbstract = false;
+
+   if (auto E = dyn_cast<EnumDecl>(src)) {
+      enumRawTypeOrExtends = copyOrNull(E->getRawType());
+   }
+   else if (auto C = dyn_cast<ClassDecl>(src)) {
+      isAbstract = C->isAbstract();
+      enumRawTypeOrExtends = copyOrNull(C->getParentType());
+   }
+
+   RecordDecl *decl;
+   switch (src->getTypeID()) {
+      case AstNode::StructDeclID:
+         decl = makeStmt<StructDecl>(src, access,
+                                     move(recordName),
+                                     move(conformances),
+                                     move(constraints));
+         break;
+      case AstNode::ClassDeclID:
+         decl = makeStmt<ClassDecl>(src, access,
+                                    move(recordName),
+                                    move(conformances),
+                                    move(constraints),
+                                    enumRawTypeOrExtends, isAbstract);
+         break;
+      case AstNode::EnumDeclID:
+         decl = makeStmt<EnumDecl>(src, access,
+                                   move(recordName),
+                                   move(conformances),
+                                   move(constraints),
+                                   enumRawTypeOrExtends);
+         break;
+      case AstNode::UnionDeclID:
+         decl = makeStmt<UnionDecl>(src, access,
+                                    move(recordName),
+                                    move(conformances),
+                                    move(constraints));
+         break;
+      case AstNode::ProtocolDeclID:
+         decl = makeStmt<ProtocolDecl>(src, access,
+                                       move(recordName),
+                                       move(conformances),
+                                       move(constraints));
+         break;
+      case AstNode::ExtensionDeclID:
+         decl = makeStmt<ExtensionDecl>(src, access,
+                                        move(recordName),
+                                        move(conformances),
+                                        move(constraints));
+         break;
+      default:
+         llvm_unreachable("not a record decl!");
+   }
+
+   for (const auto &namedDecl : src->getDecls()) {
+      if (auto R = dyn_cast<RecordDecl>(namedDecl)) {
+         decl->addDecl(visitRecordDecl(R, decl));
+      }
+      else if (isa<TemplateParamDecl>(namedDecl)) {
+         continue;
+      }
+      else {
+         decl->addDecl(cast<NamedDecl>(visitStmt(namedDecl)));
+      }
+   }
+
+   for (const auto &Static : src->getStaticStatements()) {
+      decl->addStaticStatement(visitStaticStmt(Static));
+   }
+
+   return decl;
+}
+
+ClassDecl* InstantiatorImpl::visitClassDecl(ClassDecl *node,
+                                            RecordDecl *outer) {
+   return cast<ClassDecl>(visitRecordCommon(node, outer));
+}
+
+StructDecl* InstantiatorImpl::visitStructDecl(StructDecl *node,
+                                              RecordDecl *outer) {
+   return cast<StructDecl>(visitRecordCommon(node, outer));
+}
+
+EnumDecl* InstantiatorImpl::visitEnumDecl(EnumDecl *node, RecordDecl *outer)
+{
+   return cast<EnumDecl>(visitRecordCommon(node, outer));
+}
+
+EnumCaseDecl* InstantiatorImpl::visitEnumCaseDecl(EnumCaseDecl *node)
+{
    return makeStmt<EnumCaseDecl>(node,
-                                 string(node->getCaseName()),
-                                 copyOrNull(node->getRawVal()),
-                                 move(associatedTypes));
+                                 string(node->getName()),
+                                 copyOrNull(node->getRawValExpr()),
+                                 cloneVector(node->getArgs()));
 }
 
-std::shared_ptr<UnionDecl> InstantiatorImpl::visitUnionDecl(UnionDecl *node)
+UnionDecl* InstantiatorImpl::visitUnionDecl(UnionDecl *node, RecordDecl *outer)
 {
-   CommonRecordContents contents;
-   auto isValid = visitRecordDecl(contents, node);
-
-   if (!isValid)
-      return nullptr;
-
-   UnionDecl::UnionTypes typeMap;
-   for (const auto &Ty : node->getContainedTypes()) {
-      typeMap.emplace(Ty.first, visitTypeRef(Ty.second.get()));
-   }
-
-   return makeStmt<UnionDecl>(node,
-                              move(contents.recordName), move(typeMap),
-                              node->isConst(), move(contents.fields),
-                              move(contents.methods),
-                              move(contents.typedefs),
-                              move(contents.properties),
-                              move(contents.associatedTypes),
-                              move(contents.templateParams),
-                              move(contents.constraints),
-                              move(contents.innerDeclarations),
-                              move(contents.staticStatements));
+   return cast<UnionDecl>(visitRecordCommon(node, outer));
 }
 
-std::shared_ptr<ProtocolDecl>
-InstantiatorImpl::visitProtocolDecl(ProtocolDecl *node)
-{
-   CommonRecordContents c;
-   auto isValid = visitRecordDecl(c, node);
-
-   if (!isValid)
-      return nullptr;
-
-   return makeStmt<ProtocolDecl>(node, c.am, move(c.recordName),
-                                 move(c.conformsTo), move(c.methods),
-                                 move(c.typedefs), move(c.properties),
-                                 move(c.associatedTypes),
-                                 cloneVector(node->getConstructors()),
-                                 move(c.templateParams),
-                                 move(c.constraints),
-                                 move(c.innerDeclarations),
-                                 move(c.staticStatements));
+ProtocolDecl* InstantiatorImpl::visitProtocolDecl(ProtocolDecl *node,
+                                                  RecordDecl *outer) {
+   return cast<ProtocolDecl>(visitRecordCommon(node, outer));
 }
 
-std::shared_ptr<ast::ExtensionDecl>
-InstantiatorImpl::visitExtensionDecl(ExtensionDecl *node)
+ExtensionDecl* InstantiatorImpl::visitExtensionDecl(ExtensionDecl *node)
 {
-   CommonRecordContents c;
-   auto isValid = visitRecordDecl(c, node);
-
-   if (!isValid)
-      return nullptr;
-
-   return makeStmt<ExtensionDecl>(node, c.am,
-                                  move(c.recordName),
-                                  move(c.conformsTo),
-                                  move(c.fields),
-                                  move(c.methods),
-                                  move(c.typedefs), move(c.properties),
-                                  move(c.associatedTypes),
-                                  move(c.templateParams),
-                                  move(c.constraints),
-                                  cloneVector(node->getInitializers()),
-                                  move(c.innerDeclarations),
-                                  move(c.staticStatements));
+   return cast<ExtensionDecl>(visitRecordCommon(node));
 }
 
-std::shared_ptr<PropDecl> InstantiatorImpl::visitPropDecl(PropDecl *node)
+PropDecl* InstantiatorImpl::visitPropDecl(PropDecl *node)
 {
-   auto prop = node->getProp();
    return makeStmt<PropDecl>(node,
-                             string(prop->getName()),
-                             visitTypeRef(node->getType().get()),
+                             string(node->getName()),
+                             visitTypeRef(node->getType()),
                              node->getAccess(), node->isStatic(),
                              node->hasDefinition(),
                              node->hasGetter(), node->hasSetter(),
                              copyOrNull(node->getGetterBody()),
                              copyOrNull(node->getSetterBody()),
-                             string(prop->getNewValName()));
+                             string(node->getNewValName()));
 }
 
-std::shared_ptr<MethodDecl>
+MethodDecl*
 InstantiatorImpl::visitMethodDecl(MethodDecl *node, bool skipBody)
 {
    skipBody &= InnerDecls == 0;
 
-   std::vector<std::shared_ptr<FuncArgDecl>> args =
+   std::vector<FuncArgDecl*> args =
       copyArgListAndFindVariadic(node->getArgs(),
-                                 node->getMethod()
-                                     ->getTemplateParams());
-
-   std::vector<TemplateParameter> templateParams;
-
-   // node might never have been declared if it's in a static_if
-   if (node->getCallable()) {
-      for (const auto &TP : node->getMethod()->getTemplateParams()) {
-         if (!hasTemplateArg(TP.genericTypeName))
-            templateParams.push_back(TP);
-      }
-   }
-   else {
-      for (const auto &TP : node->getTemplateParams()) {
-         if (!hasTemplateArg(TP.genericTypeName))
-            templateParams.push_back(TP);
-      }
-   }
+                                 node->getTemplateParams());
 
    string methodName = node->getName();
    if (kind == IK_Method)
       methodName += templateArgString;
 
-   MethodDecl::SharedPtr decl;
-   if (node->isIsAlias()) {
+   MethodDecl* decl;
+   if (node->isAlias()) {
       decl = makeStmt<MethodDecl>(node,
                                   string(node->getAlias()),
                                   move(methodName), move(args));
    }
-   else if (!node->getBody()) {
-      decl = makeStmt<MethodDecl>(node,
-                                  move(methodName),
-                                  visitTypeRef(node->getReturnType().get()),
-                                  move(args),
-                                  move(templateParams),
-                                  cloneVector(node->getConstraints()),
-                                  node->getAm(), node->isIsStatic());
-   }
    else {
-      std::shared_ptr<CompoundStmt> body = nullptr;
-      if (!skipBody)
-         body = visitCompoundStmt(node->getBody().get());
-
       decl = makeStmt<MethodDecl>(node,
                                   move(methodName),
-                                  visitTypeRef(node->getReturnType().get()),
-                                  move(args), move(templateParams),
+                                  visitTypeRef(node->getReturnType()),
+                                  move(args),
                                   cloneVector(node->getConstraints()),
-                                  move(body),
+                                  skipBody ? nullptr
+                                           : copyOrNull(node->getBody()),
                                   node->getOperator(),
-                                  node->isIsCastOp_(),
-                                  node->getAm(), node->isIsStatic());
+                                  node->isCastOp(),
+                                  node->getAccess(), node->isStatic());
    }
 
-   decl->setIsStatic(node->isIsStatic());
-   decl->setIsMutating_(node->isIsMutating_());
-   decl->setInnerDecls(cloneVector(node->getInnerDecls()));
-   decl->setSpecializedTemplate(node->getMethod());
+   decl->setFunctionFlags(node->getFunctionFlags());
 
-   if (auto M = node->getMethod())
-      if (kind == IK_Record)
-         decl->setMethodID(M->getMethodID());
+   auto instantiationInfo = new (getContext()) InstantiationInfo<CallableDecl>;
+   instantiationInfo->specializedTemplate = node;
+
+   decl->setInstantiationInfo(instantiationInfo);
+
+   if (kind == IK_Record)
+      decl->setMethodID(node->getMethodID());
 
    VariadicTemplateArgs.clear();
 
    return decl;
 }
 
-std::shared_ptr<ast::AssociatedTypeDecl>
+AssociatedTypeDecl*
 InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
 {
    return makeStmt<AssociatedTypeDecl>(node,
@@ -951,146 +855,110 @@ InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
                                        copyOrNull(node->getActualType()));
 }
 
-std::shared_ptr<TypedefDecl>
+TypedefDecl*
 InstantiatorImpl::visitTypedefDecl(TypedefDecl *node)
 {
-   auto td = node->getTypedef();
-
-   std::vector<TemplateParameter> templateParams;
-
-   if (td) {
-      for (const auto &TP : td->templateParams) {
-         if (!hasTemplateArg(TP.genericTypeName))
-            templateParams.push_back(TP);
-      }
-   }
-   else {
-      for (const auto &TP : node->getTemplateParams()) {
-         if (!hasTemplateArg(TP.genericTypeName))
-            templateParams.push_back(TP);
-      }
-   }
-
    return makeStmt<TypedefDecl>(node,
                                 node->getAccess(),
-                                string(node->getAlias()),
-                                visitTypeRef(node->getOrigin().get()),
-                                move(templateParams));
+                                string(node->getName()),
+                                visitTypeRef(node->getOriginTy()));
 }
 
-std::shared_ptr<ast::AliasDecl>
+AliasDecl*
 InstantiatorImpl::visitAliasDecl(AliasDecl *node)
 {
-   auto alias = node->getAlias();
-   std::vector<TemplateParameter> templateParams;
-
-   for (const auto &TP : alias->getTemplateParams()) {
-      if (!hasTemplateArg(TP.genericTypeName))
-         templateParams.push_back(TP);
-   }
-
    return makeStmt<AliasDecl>(node, string(node->getName()),
-                              move(templateParams),
-                              cloneVector(alias->getConstraints()),
-                              visitStaticExpr(alias->getAliasExpr().get()));
+                              cloneVector(node->getConstraints()),
+                              visitStaticExpr(node->getAliasExpr()));
 }
 
-std::shared_ptr<FieldDecl> InstantiatorImpl::visitFieldDecl(FieldDecl *node)
+FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *node)
 {
    return makeStmt<FieldDecl>(node, string(node->getName()),
-                              visitTypeRef(node->getType().get()),
+                              visitTypeRef(node->getType()),
                               node->getAccess(), node->isStatic(),
                               node->isConst(),
                               copyOrNull(node->getDefaultVal()));
 }
 
-std::shared_ptr<ConstrDecl>
-InstantiatorImpl::visitConstrDecl(ConstrDecl *node, bool skipBody)
+InitDecl*
+InstantiatorImpl::visitInitDecl(InitDecl *node, bool skipBody)
 {
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
+   std::vector<FuncArgDecl*> args;
    if (!skipBody) {
       args = cloneVector(node->getArgs());
    }
    else {
       args = copyArgListAndFindVariadic(node->getArgs(),
-                                        node->getMethod()
-                                            ->getTemplateParams());
+                                        node->getTemplateParams());
    }
 
-   std::vector<TemplateParameter> templateParams;
-   for (size_t i = node->getRecord()->getTemplateParams().size();
-        i < node->getMethod()->getTemplateParams().size(); ++i) {
-      auto &TP = node->getMethod()->getTemplateParams()[i];
-      if (!hasTemplateArg(TP.genericTypeName))
-         templateParams.push_back(TP);
-   }
-
-   string methodName = "init";
+   string methodName = node->getName();
    if (kind == IK_Method)
       methodName += templateArgString;
 
-   auto decl = makeStmt<ConstrDecl>(node, move(args),
-                                    node->getAm(),
-                                    move(templateParams),
-                                    copyOrNull(node->getBody()),
-                                    move(methodName));
+   auto decl = makeStmt<InitDecl>(node, move(args),
+                                  node->getAccess(),
+                                  copyOrNull(node->getBody()),
+                                  move(methodName));
 
-   if (auto M = node->getMethod())
-      if (kind == IK_Record)
-         decl->setMethodID(M->getMethodID());
+   if (kind == IK_Record)
+      decl->setMethodID(node->getMethodID());
 
-   decl->setSpecializedTemplate(node->getMethod());
+   decl->setFunctionFlags(node->getFunctionFlags());
+
+   auto info = new (SP.getContext()) InstantiationInfo<CallableDecl>;
+   info->specializedTemplate = node;
+
+   decl->setInstantiationInfo(info);
 
    return decl;
 }
 
-std::shared_ptr<DestrDecl> InstantiatorImpl::visitDestrDecl(DestrDecl *node,
-                                                            bool skipBody) {
-   auto decl = makeStmt<DestrDecl>(node,
+DeinitDecl* InstantiatorImpl::visitDeinitDecl(DeinitDecl *node,
+                                            bool skipBody) {
+   auto decl = makeStmt<DeinitDecl>(node,
                                    copyOrNull(node->getBody()));
 
-   if (auto M = node->getMethod())
-      decl->setMethodID(M->getMethodID());
+   if (kind == IK_Record)
+      decl->setMethodID(node->getMethodID());
 
-   decl->setSpecializedTemplate(node->getMethod());
+   decl->setFunctionFlags(node->getFunctionFlags());
+
+   auto info = new (SP.getContext()) InstantiationInfo<CallableDecl>;
+   info->specializedTemplate = node;
+
+   decl->setInstantiationInfo(info);
 
    return decl;
 }
 
-std::shared_ptr<ast::FunctionDecl>
-InstantiatorImpl::visitFunctionDecl(FunctionDecl *node)
+FunctionDecl*
+InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
 {
-   auto args = copyArgListAndFindVariadic(node->getArgs(),
-                                          node->getCallable()
-                                              ->getTemplateParams());
-   auto F = node->getCallable();
-
-   std::vector<TemplateParameter> templateParams;
-   for (const auto &TP : F->getTemplateParams()) {
-      if (!hasTemplateArg(TP.genericTypeName))
-         templateParams.push_back(TP);
-   }
+   auto args = copyArgListAndFindVariadic(F->getArgs(),
+                                          F->getTemplateParams());
 
    string funcName = F->getNameWithoutFix();
    if (kind == IK_Function)
       funcName += templateArgString;
 
-   auto func = makeStmt<FunctionDecl>(node,
-                                      node->getAm(), move(funcName),
+   auto func = makeStmt<FunctionDecl>(F, F->getAccess(), move(funcName),
                                       move(args),
-                                      visitTypeRef(node->getReturnType().get()),
-                                      move(templateParams),
-                                      cloneVector(node->getConstraints()),
-                                      copyOrNull(node->getBody()),
-                                      node->getOperator());
+                                      visitTypeRef(F->getReturnType()),
+                                      cloneVector(F->getConstraints()),
+                                      copyOrNull(F->getBody()),
+                                      F->getOperator());
+
+   func->setFunctionFlags(F->getFunctionFlags());
 
    VariadicTemplateArgs.clear();
    return func;
 }
 
-std::shared_ptr<TypeRef> InstantiatorImpl::visitTypeRef(TypeRef *node)
+TypeRef* InstantiatorImpl::visitTypeRef(TypeRef *node)
 {
-   TypeRef::SharedPtr TR = nullptr;
+   TypeRef* TR = nullptr;
    switch (node->getKind()) {
       case TypeRef::ObjectType: {
          auto &SubTypes = node->getNamespaceQual();
@@ -1102,11 +970,11 @@ std::shared_ptr<TypeRef> InstantiatorImpl::visitTypeRef(TypeRef *node)
             llvm::StringRef name;
             if (auto Arg = hasTemplateArg(Ty.first)) {
                if (Arg->isType() && !Arg->isVariadic()) {
-                  if (!Arg->getType()->isObjectTy())
+                  if (!Arg->getType()->isObjectType())
                      substitution = Arg->getType();
                   else
                      NSCopy.emplace_back(Arg->getType()->getClassName(),
-                                         std::vector<TemplateArg>());
+                                         std::vector<TemplateArgExpr*>());
 
                   break;
                }
@@ -1130,33 +998,32 @@ std::shared_ptr<TypeRef> InstantiatorImpl::visitTypeRef(TypeRef *node)
          break;
       }
       case TypeRef::FunctionType: {
-         std::vector<pair<string, TypeRef::SharedPtr>> argTypes;
+         std::vector<pair<string, TypeRef*>> argTypes;
          for (const auto &arg : node->getContainedTypes()) {
-            std::vector<std::shared_ptr<Expression>> variadicTypes;
+            std::vector<Expression*> variadicTypes;
             copyVariadicExpr<Expression>(variadicTypes, arg.second);
 
             if (variadicTypes.empty())
-               argTypes.emplace_back("", visitTypeRef(arg.second.get()));
+               argTypes.emplace_back("", visitTypeRef(arg.second));
             else for (auto &var : variadicTypes)
-               argTypes.emplace_back("",
-                                     std::static_pointer_cast<TypeRef>(var));
+               argTypes.emplace_back("", cast<TypeRef>(var));
          }
 
          TR = makeExpr<TypeRef>(node,
-                                visitTypeRef(node->getReturnType().get()),
+                                visitTypeRef(node->getReturnType()),
                                 move(argTypes));
          break;
       }
       case TypeRef::TupleType: {
-         std::vector<pair<string, TypeRef::SharedPtr>> cont;
+         std::vector<pair<string, TypeRef*>> cont;
          for (const auto &arg : node->getContainedTypes()) {
-            std::vector<std::shared_ptr<Expression>> variadicTypes;
+            std::vector<Expression*> variadicTypes;
             copyVariadicExpr<Expression>(variadicTypes, arg.second);
 
             if (variadicTypes.empty())
-               cont.emplace_back("", visitTypeRef(arg.second.get()));
+               cont.emplace_back("", visitTypeRef(arg.second));
             else for (auto &var : variadicTypes)
-               cont.emplace_back("", std::static_pointer_cast<TypeRef>(var));
+               cont.emplace_back("", cast<TypeRef>(var));
          }
 
          TR = makeExpr<TypeRef>(node, move(cont));
@@ -1164,23 +1031,25 @@ std::shared_ptr<TypeRef> InstantiatorImpl::visitTypeRef(TypeRef *node)
       }
       case TypeRef::ArrayType:
          TR = makeExpr<TypeRef>(node,
-                                visitTypeRef(node->getElementType().get()),
-                                visitStaticExpr(node->getArraySize().get()));
+                                visitTypeRef(node->getElementType()),
+                                visitStaticExpr(node->getArraySize()));
          break;
       case TypeRef::DeclTypeExpr:
          TR = makeExpr<TypeRef>(node, visitExpr(node->getDeclTypeExpr()));
          break;
       case TypeRef::Pointer:
-         TR = makeExpr<TypeRef>(node, visitTypeRef(node->getSubject().get()),
+         TR = makeExpr<TypeRef>(node, visitTypeRef(node->getSubject()),
                                 TypeRef::Pointer);
          break;
       case TypeRef::Option:
-         TR = makeExpr<TypeRef>(node, visitTypeRef(node->getSubject().get()),
+         TR = makeExpr<TypeRef>(node, visitTypeRef(node->getSubject()),
                                 TypeRef::Option);
          break;
       default:
          if (node->isResolved())
-            TR = makeExpr<TypeRef>(node, node->getType());
+            TR = makeExpr<TypeRef>(node,
+                                   SP.resolveDependencies(*node->getType(),
+                                                          templateArgs));
          else
             TR = makeExpr<TypeRef>(node);
 
@@ -1188,40 +1057,41 @@ std::shared_ptr<TypeRef> InstantiatorImpl::visitTypeRef(TypeRef *node)
    }
 
    TR->isReference(node->isReference());
+   TR->setGlobalLookup(node->isGlobalLookup());
 
    return TR;
 }
 
-std::shared_ptr<ast::Expression>
+Expression*
 InstantiatorImpl::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
    return visitExpr(node->getTarget());
 }
 
-std::shared_ptr<ast::Expression>
+Expression*
 InstantiatorImpl::visitLvalueToRvalue(LvalueToRvalue *node)
 {
    return visitExpr(node->getTarget());
 }
 
-std::shared_ptr<CompoundStmt>
+CompoundStmt*
 InstantiatorImpl::visitCompoundStmt(CompoundStmt *node)
 {
    auto Compound = makeStmt<CompoundStmt>(node,
                                           node->preservesScope());
 
    for (const auto &stmt : node->getStatements()) {
-      Compound->addStatement(visitStmt(stmt.get()));
+      Compound->addStatement(visitStmt(stmt));
    }
 
    return Compound;
 }
 
-std::vector<std::shared_ptr<FuncArgDecl>>
+std::vector<FuncArgDecl*>
 InstantiatorImpl::copyArgListAndFindVariadic(
-                     const std::vector<std::shared_ptr<FuncArgDecl>> &argList,
-                     llvm::ArrayRef<TemplateParameter> params) {
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
+                     const std::vector<FuncArgDecl*> &argList,
+                     llvm::ArrayRef<TemplateParamDecl*> params) {
+   std::vector<FuncArgDecl*> args;
    for (const auto &arg : argList) {
       bool isVariadic = false;
       if (arg->isVariadicArgPackExpansion()) {
@@ -1241,11 +1111,11 @@ InstantiatorImpl::copyArgListAndFindVariadic(
                               arg->getArgType()->isReference(),
                               arg->isConst());
 
-               auto typeref = makeExpr<TypeRef>(arg->getArgType().get(),
+               auto typeref = makeExpr<TypeRef>(arg->getArgType(),
                                                 argTy);
 
                args.push_back(
-                  makeStmt<FuncArgDecl>(arg.get(),
+                  makeStmt<FuncArgDecl>(arg,
                                         move(newName),
                                         move(typeref),
                                         copyOrNull(arg->getDefaultVal()),
@@ -1260,14 +1130,14 @@ InstantiatorImpl::copyArgListAndFindVariadic(
       }
 
       if (!isVariadic)
-         args.push_back(visitFuncArgDecl(arg.get()));
+         args.push_back(visitFuncArgDecl(arg));
    }
 
    return args;
 }
 
 void InstantiatorImpl::findVariadicArgs(const ArgListTy &argList,
-                                        llvm::ArrayRef<TemplateParameter> pars){
+                                        llvm::ArrayRef<TemplateParamDecl*> pars){
    for (const auto &arg : argList) {
       if (arg->isVariadicArgPackExpansion()) {
          auto &name = arg->getArgType()->getNamespaceQual().front().first;
@@ -1302,7 +1172,7 @@ InstantiatorImpl::copyTypeList(const TypeList &typeList)
       bool madeCopy = false;
       if (Ty->isVariadicArgPackExpansion()) {
          llvm::SmallVector<llvm::StringRef, 4> ContainedVariadics;
-         getContainedVariadicTypes(ContainedVariadics, Ty.get());
+         getContainedVariadicTypes(ContainedVariadics, Ty);
 
          for (const auto &TypeName : ContainedVariadics) {
             auto Arg = hasTemplateArg(TypeName);
@@ -1313,12 +1183,12 @@ InstantiatorImpl::copyTypeList(const TypeList &typeList)
                madeCopy = true;
 
                CurrentVariadicTypeSubstitution.first =
-                  Param->getGenericTypeName();
+                  Param->getName();
 
                for (const auto &VA : Arg->getVariadicArgs()) {
                   CurrentVariadicTypeSubstitution.second = &VA;
 
-                  auto newTy = visitTypeRef(Ty.get());
+                  auto newTy = visitTypeRef(Ty);
                   newTy->setIsVariadicArgPackExpansion(false);
 
                   copy.emplace_back(std::move(newTy));
@@ -1330,23 +1200,24 @@ InstantiatorImpl::copyTypeList(const TypeList &typeList)
       }
 
       if (!madeCopy)
-         copy.push_back(visitTypeRef(Ty.get()));
+         copy.push_back(visitTypeRef(Ty));
    }
 
    return copy;
 }
 
-std::vector<TemplateArg>
-InstantiatorImpl::copyTAList(const std::vector<TemplateArg> &list)
+std::vector<TemplateArgExpr*>
+InstantiatorImpl::copyTAList(const std::vector<TemplateArgExpr*> &list)
 {
-   std::vector<TemplateArg> copy;
+   std::vector<TemplateArgExpr*> copy;
    for (auto &TA : list) {
-      if (!TA.isTypeName()) {
-         copy.emplace_back(visitStaticExpr(TA.getStaticExpr().get()));
+      if (!TA->isTypeName()) {
+         copy.push_back(makeExpr<TemplateArgExpr>(
+            TA, visitStaticExpr(TA->getExpr())));
          continue;
       }
 
-      auto &type = TA.getType();
+      auto type = TA->getType();
       if (!type)
          continue;
 
@@ -1356,12 +1227,12 @@ InstantiatorImpl::copyTAList(const std::vector<TemplateArg> &list)
             if (Arg->isValue()) {
                if (Arg->isVariadic() && type->isVariadicArgPackExpansion()) {
                   for (const auto &VA : Arg->getVariadicArgs())
-                     copy.emplace_back(
-                        std::make_shared<StaticExpr>(Variant(VA.getValue())));
+                     copy.push_back(new (getContext()) TemplateArgExpr(
+                        SP.makeStmt<StaticExpr>(Variant(VA.getValue()))));
                }
                else {
-                  copy.emplace_back(
-                     std::make_shared<StaticExpr>(Variant(Arg->getValue())));
+                  copy.push_back(new (getContext()) TemplateArgExpr(
+                     SP.makeStmt<StaticExpr>(Variant(Arg->getValue()))));
                }
 
                continue;
@@ -1370,13 +1241,14 @@ InstantiatorImpl::copyTAList(const std::vector<TemplateArg> &list)
       }
 
       if (!type->isVariadicArgPackExpansion()) {
-         copy.emplace_back(visitTypeRef(type.get()));
+         copy.emplace_back(new (getContext()) TemplateArgExpr(
+            visitTypeRef(type)));
          continue;
       }
 
       auto newList = copyTypeList({ type });
       for (auto &el : newList)
-         copy.emplace_back(move(el));
+         copy.push_back(new (getContext()) TemplateArgExpr(el));
    }
 
    return copy;
@@ -1393,25 +1265,25 @@ InstantiatorImpl::copyTAList(const TypeRef::NamespaceVec &list)
    return copy;
 }
 
-std::shared_ptr<FuncArgDecl>
+FuncArgDecl*
 InstantiatorImpl::visitFuncArgDecl(FuncArgDecl *node)
 {
    return makeStmt<FuncArgDecl>(node,
                                 string(node->getArgName()),
-                                visitTypeRef(node->getArgType().get()),
+                                visitTypeRef(node->getArgType()),
                                 copyOrNull(node->getDefaultVal()),
                                 node->isVariadicArgPackExpansion(),
-                                node->isConst());
+                                node->isConst(), node->isCstyleVararg());
 }
 
 #define CDOT_INSTANTIATE_SIMPLE(Name)                               \
-std::shared_ptr<Name> InstantiatorImpl::visit##Name(Name *node)     \
+Name* InstantiatorImpl::visit##Name(Name *node)                     \
 {                                                                   \
    return makeStmt<Name>(node, *node);                              \
 }
 
 #define CDOT_INSTANTIATE_EXPR(Name)                                 \
-std::shared_ptr<Name> InstantiatorImpl::visit##Name(Name *node)     \
+Name* InstantiatorImpl::visit##Name(Name *node)                     \
 {                                                                   \
    return makeExpr<Name>(node, *node);                              \
 }
@@ -1431,28 +1303,28 @@ CDOT_INSTANTIATE_SIMPLE(ContinueStmt)
 #undef CDOT_INSTANTIATE_SIMPLE
 #undef CDOT_INSTANTIATE_EXPR
 
-std::shared_ptr<ast::DebugStmt>
+DebugStmt*
 InstantiatorImpl::visitDebugStmt(DebugStmt *node)
 {
    return makeStmt<DebugStmt>(node, *node);
 }
 
-std::shared_ptr<NoneLiteral>
+NoneLiteral*
 InstantiatorImpl::visitNoneLiteral(NoneLiteral *node)
 {
    return makeExpr<NoneLiteral>(node);
 }
 
-std::shared_ptr<StringInterpolation>
+StringInterpolation*
 InstantiatorImpl::visitStringInterpolation(StringInterpolation *node)
 {
    return makeExpr<StringInterpolation>(node, cloneVector(node->getStrings()));
 }
 
-std::shared_ptr<TupleLiteral>
+TupleLiteral*
 InstantiatorImpl::visitTupleLiteral(TupleLiteral *node)
 {
-   std::vector<pair<string, Expression::SharedPtr>> elements;
+   std::vector<pair<string, Expression*>> elements;
    for (const auto &El : node->getElements()) {
       elements.emplace_back(El.first, visitExpr(El.second));
    }
@@ -1460,78 +1332,112 @@ InstantiatorImpl::visitTupleLiteral(TupleLiteral *node)
    return makeExpr<TupleLiteral>(node, move(elements));
 }
 
-std::shared_ptr<LocalVarDecl>
+LocalVarDecl*
 InstantiatorImpl::visitLocalVarDecl(LocalVarDecl *node)
 {
-   return makeStmt<LocalVarDecl>(node,
-                                 std::vector<string>(node->getIdentifiers()),
-                                 visitTypeRef(node->getType().get()),
-                                 node->isConst(), copyOrNull(node->getValue()));
+   return makeStmt<LocalVarDecl>(node, node->getAccess(), node->isConst(),
+                                 string(node->getName()),
+                                 copyOrNull(node->getTypeRef()),
+                                 copyOrNull(node->getValue()));
 }
 
-std::shared_ptr<ast::GlobalVarDecl>
+GlobalVarDecl*
 InstantiatorImpl::visitGlobalVarDecl(GlobalVarDecl *node)
 {
-   return makeStmt<GlobalVarDecl>(node, node->getAccess(),
-                                  std::vector<string>(node->getIdentifiers()),
-                                  visitTypeRef(node->getType().get()),
-                                  node->isConst(),copyOrNull(node->getValue()));
+   return makeStmt<GlobalVarDecl>(node, node->getAccess(), node->isConst(),
+                                  string(node->getName()),
+                                  copyOrNull(node->getTypeRef()),
+                                  copyOrNull(node->getValue()));
 }
 
-std::shared_ptr<Expression>
-InstantiatorImpl::visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node)
+ast::LocalDestructuringDecl*
+InstantiatorImpl::visitLocalDestructuringDecl(LocalDestructuringDecl *node)
+{
+   VarDecl **decls = new (SP.getContext()) VarDecl*[node->getNumDecls()];
+
+   size_t i = 0;
+   for (auto it = node->getDecls().begin(); it; ++it)
+      decls[i] = cast<VarDecl>(visitStmt(*it));
+
+   return makeStmt<LocalDestructuringDecl>(node, node->getAccess(),
+                                           node->isConst(), decls,
+                                           node->getNumDecls(),
+                                           copyOrNull(node->getType()),
+                                           copyOrNull(node->getValue()));
+}
+
+ast::GlobalDestructuringDecl*
+InstantiatorImpl::visitGlobalDestructuringDecl(GlobalDestructuringDecl *node)
+{
+   VarDecl **decls = new (SP.getContext()) VarDecl*[node->getNumDecls()];
+
+   size_t i = 0;
+   for (auto it = node->getDecls().begin(); it; ++it)
+      decls[i] = cast<VarDecl>(visitStmt(*it));
+
+   return makeStmt<GlobalDestructuringDecl>(node, node->getAccess(),
+                                            node->isConst(), decls,
+                                            node->getNumDecls(),
+                                            copyOrNull(node->getType()),
+                                            copyOrNull(node->getValue()));
+}
+
+Expression*
+InstantiatorImpl::visitBuiltinExpr(BuiltinExpr *node)
 {
    llvm_unreachable("suck my peepee");
 }
 
-std::shared_ptr<Expression>
+Expression*
 InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *node)
 {
    string ident;
    if (auto Arg = hasTemplateArg(node->getIdent())) {
       if (Arg->isType()) {
-         if (!node->getMemberExpr()) {
-            return makeExpr<TypeRef>(node, QualType(Arg->getType()));
+         if (!node->getSubExpr()) {
+            ident = Arg->getType()->toString(); //FIXME function types, array
+            // types, etc
          }
-
-         if (Arg->getType()->isObjectTy())
+         else if (Arg->getType()->isObjectType())
             ident = Arg->getType()->toString();
       }
       else {
-         auto valTy = hasTemplateParam(node->getIdent())->valueType;
-         std::shared_ptr<Expression> literal;
+         auto valTy = *hasTemplateParam(node->getIdent())->getValueType()
+                                                         ->getType();
 
-         if (valTy->isIntegerTy()) {
+         Expression* literal;
+         if (valTy->isIntegerType()) {
             switch (valTy->getBitwidth()) {
                case 1:
-                  literal = makeExpr<BoolLiteral>(node,
-                                                  Arg->getValue().intVal != 0);
+                  literal =
+                     makeExpr<BoolLiteral>(node, getContext().getBoolTy(),
+                                           Arg->getValue().getZExtValue() != 0);
                case 8:
-                  literal = makeExpr<CharLiteral>(node,
-                                                  (char)Arg->getValue().intVal);
+                  literal =
+                     makeExpr<CharLiteral>(node, getContext().getCharTy(),
+                                           Arg->getValue().getChar());
                default: {
-                  auto Int = makeExpr<IntegerLiteral>(node,
-                                                      Variant(Arg->getValue()));
-
-                  Int->setType(valTy);
-                  literal = Int;
-
+                  literal =
+                     makeExpr<IntegerLiteral>(node, valTy,
+                                              llvm::APSInt(Arg->getValue()
+                                                              .getAPSInt()));
                   break;
                }
             }
          }
          else if (valTy->isFPType()) {
-            auto FP = makeExpr<FPLiteral>(node, Variant(Arg->getValue()));
-            FP->setType(valTy);
-
-            literal = FP;
+            literal = makeExpr<FPLiteral>(node, valTy,
+                                          llvm::APFloat(Arg->getValue()
+                                                           .getAPFloat()));
          }
-         else if (valTy->isObjectTy() && valTy->getClassName() == "String") {
+         else if (valTy->isObjectType() && valTy->getClassName() == "String") {
             literal = makeExpr<StringLiteral>(
                node, string(Arg->getValue().getString()));
          }
+         else {
+            llvm_unreachable("bad variant kind!");
+         }
 
-         literal->setContextualType(QualType(valTy));
          return literal;
       }
    }
@@ -1542,14 +1448,12 @@ InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *node)
       ident = node->getIdent();
 
    auto expr = makeExpr<IdentifierRefExpr>(node, move(ident));
-   expr->isLetExpr(node->isLetExpr());
-   expr->isVarExpr(node->isVarExpr());
    copyTemplateArgs(node, expr);
 
    return expr;
 }
 
-std::shared_ptr<MemberRefExpr>
+MemberRefExpr*
 InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *node)
 {
    if (node->isTupleAccess()) {
@@ -1567,17 +1471,17 @@ InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *node)
    return expr;
 }
 
-std::shared_ptr<ast::EnumCaseExpr>
+EnumCaseExpr*
 InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr *node)
 {
    return makeExpr<EnumCaseExpr>(node, string(node->getIdent()),
                                  copyExprList(node->getArgs()));
 }
 
-std::shared_ptr<Expression> InstantiatorImpl::visitCallExpr(CallExpr *node)
+Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 {
    if (node->getKind() == CallKind::VariadicSizeof) {
-      auto TA = hasTemplateArg(node->getTemplateArgs().front().getType()
+      auto TA = hasTemplateArg(node->getTemplateArgs().front()->getType()
                                ->getSingularTypeName());
 
 
@@ -1588,10 +1492,11 @@ std::shared_ptr<Expression> InstantiatorImpl::visitCallExpr(CallExpr *node)
                   + TA->toString() + " given"
                << node;
          else {
-            auto var = Variant(IntegerType::getUnsigned(),
-                               TA->getVariadicArgs().size());
+            llvm::APInt Int(sizeof(size_t) * 8,
+                            uint64_t(TA->getVariadicArgs().size()));
 
-            return makeExpr<IntegerLiteral>(node, std::move(var));
+            return makeExpr<IntegerLiteral>(node, getContext().getUIntTy(),
+                                            std::move(Int));
          }
       }
    }
@@ -1609,31 +1514,31 @@ std::shared_ptr<Expression> InstantiatorImpl::visitCallExpr(CallExpr *node)
                                   move(ident));
 
    call->setBuiltinFnKind(node->getBuiltinFnKind());
-   call->setIsPointerAccess_(node->isPointerAccess_());
+   call->setIsPointerAccess(node->isPointerAccess());
 
    copyTemplateArgs(node, call);
 
    return call;
 }
 
-std::shared_ptr<SubscriptExpr>
+SubscriptExpr*
 InstantiatorImpl::visitSubscriptExpr(SubscriptExpr *node)
 {
-   return makeExpr<SubscriptExpr>(node, visitExpr(node->getIndex()));
+   return makeExpr<SubscriptExpr>(node, cloneVector(node->getIndices()));
 }
 
-std::shared_ptr<ReturnStmt>
+ReturnStmt*
 InstantiatorImpl::visitReturnStmt(ReturnStmt *node)
 {
    if (auto Val = node->getReturnValue()) {
-      return makeStmt<ReturnStmt>(node, visitExpr(Val.get()));
+      return makeStmt<ReturnStmt>(node, visitExpr(Val));
    }
    else {
       return makeStmt<ReturnStmt>(node);
    }
 }
 
-std::shared_ptr<UnaryOperator>
+UnaryOperator*
 InstantiatorImpl::visitUnaryOperator(UnaryOperator *node)
 {
    return makeExpr<UnaryOperator>(node, string(node->getOp()),
@@ -1641,12 +1546,12 @@ InstantiatorImpl::visitUnaryOperator(UnaryOperator *node)
                                   node->isPrefix() ? "prefix" : "postfix");
 }
 
-std::shared_ptr<Expression>
+Expression*
 InstantiatorImpl::visitBinaryOperator(BinaryOperator *node)
 {
-   if (auto Ident = dyn_cast<IdentifierRefExpr>(node->getRhs().get())) {
+   if (auto Ident = dyn_cast<IdentifierRefExpr>(node->getRhs())) {
       if (Ident->getIdent() == "...") {
-         llvm::SmallVector<std::shared_ptr<Expression>, 4> exprs;
+         llvm::SmallVector<Expression* , 4> exprs;
          expandVariadicArgument(exprs, node->getLhs());
 
          if (exprs.empty()) {
@@ -1665,12 +1570,12 @@ InstantiatorImpl::visitBinaryOperator(BinaryOperator *node)
          else {
             size_t i = 2;
             auto binOp = makeExpr<BinaryOperator>(node, string(node->getOp()),
-                                                  move(exprs[0]),
-                                                  move(exprs[1]));
+                                                  exprs[0],
+                                                  exprs[1]);
 
             while (i < numExprs) {
                binOp = makeExpr<BinaryOperator>(node, string(node->getOp()),
-                                                move(binOp), move(exprs[i]));
+                                                binOp, exprs[i]);
 
                ++i;
             }
@@ -1686,7 +1591,7 @@ InstantiatorImpl::visitBinaryOperator(BinaryOperator *node)
                                    visitExpr(node->getRhs()));
 }
 
-std::shared_ptr<TertiaryOperator>
+TertiaryOperator*
 InstantiatorImpl::visitTertiaryOperator(TertiaryOperator *node)
 {
    return makeExpr<TertiaryOperator>(node, visitExpr(node->getCondition()),
@@ -1694,18 +1599,18 @@ InstantiatorImpl::visitTertiaryOperator(TertiaryOperator *node)
                                      visitExpr(node->getRhs()));
 }
 
-std::shared_ptr<Expression>
+Expression*
 InstantiatorImpl::visitExprSequence(ExprSequence *node)
 {
    if (node->getFragments().size() == 1
        && node->isParenthesized()
        && node->getFragments().front().getExpr()
               ->isVariadicArgPackExpansion()) {
-      std::vector<std::shared_ptr<Expression>> tupleElements;
+      std::vector<Expression*> tupleElements;
       copyVariadicExpr(tupleElements,
                        node->getFragments().front().getExpr());
 
-      std::vector<pair<string, Expression::SharedPtr>> namedEls;
+      std::vector<pair<string, Expression*>> namedEls;
       for (auto &el : tupleElements)
          namedEls.emplace_back("", move(el));
 
@@ -1720,14 +1625,14 @@ InstantiatorImpl::visitExprSequence(ExprSequence *node)
             break;
          case ExprSequence::SequenceElement::EF_PossibleOperator: {
             auto maybeIdent =
-               std::make_shared<IdentifierRefExpr>(string(El.getOp()));
+               SP.makeStmt<IdentifierRefExpr>(string(El.getOp()));
 
             maybeIdent->setSourceLoc(El.getLoc());
-            auto expr = visitIdentifierRefExpr(maybeIdent.get());
+            auto expr = visitIdentifierRefExpr(maybeIdent);
 
-            auto ident = dyn_cast<IdentifierRefExpr>(expr.get());
+            auto ident = dyn_cast<IdentifierRefExpr>(expr);
             if (!ident || ident->getIdent() != El.getOp())
-               fragments.emplace_back(std::move(expr));
+               fragments.emplace_back(expr);
             else
                fragments.emplace_back(string(El.getOp()), El.getLoc());
 
@@ -1743,37 +1648,37 @@ InstantiatorImpl::visitExprSequence(ExprSequence *node)
                                  node->isParenthesized());
 }
 
-std::shared_ptr<ast::LambdaExpr>
+LambdaExpr*
 InstantiatorImpl::visitLambdaExpr(LambdaExpr *node)
 {
    return makeExpr<LambdaExpr>(node,
-                               visitTypeRef(node->getReturnType().get()),
+                               visitTypeRef(node->getReturnType()),
                                cloneVector(node->getArgs()),
                                visitStmt(node->getBody()));
 }
 
-std::shared_ptr<ast::DictionaryLiteral>
+DictionaryLiteral*
 InstantiatorImpl::visitDictionaryLiteral(DictionaryLiteral *node)
 {
    return makeExpr<DictionaryLiteral>(node, cloneVector(node->getKeys()),
                                       cloneVector(node->getValues()));
 }
 
-std::shared_ptr<ast::ArrayLiteral>
+ArrayLiteral*
 InstantiatorImpl::visitArrayLiteral(ArrayLiteral *node)
 {
    return makeExpr<ArrayLiteral>(node, cloneVector(node->getValues()));
 }
 
-std::shared_ptr<IfStmt> InstantiatorImpl::visitIfStmt(IfStmt *node)
+IfStmt* InstantiatorImpl::visitIfStmt(IfStmt *node)
 {
    return makeStmt<IfStmt>(node,
-                           visitExpr(node->getCondition().get()),
-                           visitStmt(node->getIfBranch().get()),
+                           visitExpr(node->getCondition()),
+                           visitStmt(node->getIfBranch()),
                            copyOrNull(node->getElseBranch()));
 }
 
-std::shared_ptr<WhileStmt> InstantiatorImpl::visitWhileStmt(WhileStmt *node)
+WhileStmt* InstantiatorImpl::visitWhileStmt(WhileStmt *node)
 {
    return makeStmt<WhileStmt>(node,
                               visitExpr(node->getCondition()),
@@ -1781,7 +1686,7 @@ std::shared_ptr<WhileStmt> InstantiatorImpl::visitWhileStmt(WhileStmt *node)
                               node->isAtLeastOnce());
 }
 
-std::shared_ptr<ForStmt> InstantiatorImpl::visitForStmt(ForStmt *node)
+ForStmt* InstantiatorImpl::visitForStmt(ForStmt *node)
 {
    return makeStmt<ForStmt>(node,
                             visitStmt(node->getInitialization()),
@@ -1790,15 +1695,15 @@ std::shared_ptr<ForStmt> InstantiatorImpl::visitForStmt(ForStmt *node)
                             visitStmt(node->getBody()));
 }
 
-std::shared_ptr<ForInStmt> InstantiatorImpl::visitForInStmt(ForInStmt *node)
+ForInStmt* InstantiatorImpl::visitForInStmt(ForInStmt *node)
 {
    return makeStmt<ForInStmt>(node,
-                              visitLocalVarDecl(node->getDecl().get()),
+                              visitLocalVarDecl(node->getDecl()),
                               visitExpr(node->getRangeExpr()),
                               visitStmt(node->getBody()));
 }
 
-std::shared_ptr<ast::MatchStmt>
+MatchStmt*
 InstantiatorImpl::visitMatchStmt(MatchStmt *node)
 {
    return makeStmt<MatchStmt>(node,
@@ -1806,7 +1711,7 @@ InstantiatorImpl::visitMatchStmt(MatchStmt *node)
                               cloneVector(node->getCases()));
 }
 
-std::shared_ptr<ast::CaseStmt> InstantiatorImpl::visitCaseStmt(CaseStmt *node)
+CaseStmt* InstantiatorImpl::visitCaseStmt(CaseStmt *node)
 {
    if (node->isDefault())
       return makeStmt<CaseStmt>(node,
@@ -1817,19 +1722,19 @@ std::shared_ptr<ast::CaseStmt> InstantiatorImpl::visitCaseStmt(CaseStmt *node)
                              copyOrNull(node->getBody()));
 }
 
-std::shared_ptr<ast::ExpressionPattern>
+ExpressionPattern*
 InstantiatorImpl::visitExpressionPattern(ExpressionPattern *node)
 {
    return makeExpr<ExpressionPattern>(node, visitExpr(node->getExpr()));
 }
 
-std::shared_ptr<ast::IsPattern>
+IsPattern*
 InstantiatorImpl::visitIsPattern(IsPattern *node)
 {
-   return makeExpr<IsPattern>(node, visitTypeRef(node->getIsType().get()));
+   return makeExpr<IsPattern>(node, visitTypeRef(node->getIsType()));
 }
 
-std::shared_ptr<ast::CasePattern>
+CasePattern*
 InstantiatorImpl::visitCasePattern(CasePattern *node)
 {
    std::vector<CasePattern::Argument> args;
@@ -1846,12 +1751,12 @@ InstantiatorImpl::visitCasePattern(CasePattern *node)
    return makeExpr<CasePattern>(node, string(node->getCaseName()), move(args));
 }
 
-std::shared_ptr<ast::TryStmt> InstantiatorImpl::visitTryStmt(TryStmt *node)
+TryStmt* InstantiatorImpl::visitTryStmt(TryStmt *node)
 {
    std::vector<CatchBlock> catchBlocks;
    for (const auto &CB : node->getCatchBlocks()) {
-      catchBlocks.emplace_back(visitTypeRef(CB.caughtType.get()),
-         string(CB.identifier), visitStmt(CB.body));
+      catchBlocks.emplace_back(visitLocalVarDecl(CB.varDecl),
+                               visitStmt(CB.body));
    }
 
    return makeStmt<TryStmt>(node, visitStmt(node->getBody()),
@@ -1859,50 +1764,48 @@ std::shared_ptr<ast::TryStmt> InstantiatorImpl::visitTryStmt(TryStmt *node)
                             copyOrNull(node->getFinallyBlock()));
 }
 
-std::shared_ptr<ast::ThrowStmt>
-InstantiatorImpl::visitThrowStmt(ThrowStmt *node)
+ThrowStmt* InstantiatorImpl::visitThrowStmt(ThrowStmt *node)
 {
    return makeStmt<ThrowStmt>(node,
                               visitExpr(node->getThrownVal()));
 }
 
-std::shared_ptr<UsingStmt> InstantiatorImpl::visitUsingStmt(UsingStmt *node)
+UsingStmt* InstantiatorImpl::visitUsingStmt(UsingStmt *node)
 {
-   return makeStmt<UsingStmt>(node,
-                              std::vector<string>(node->getFullNames()));
+   return makeStmt<UsingStmt>(
+      node,
+      std::vector<string>(node->getDeclContextSpecifier()),
+      std::vector<string>(node->getImportedItems()),
+      node->isWildCardImport());
 }
 
-std::shared_ptr<ast::ModuleStmt>
-InstantiatorImpl::visitModuleStmt(ModuleStmt *node)
+ModuleStmt* InstantiatorImpl::visitModuleStmt(ModuleStmt *node)
 {
    return makeStmt<ModuleStmt>(
       node, std::vector<string>(node->getQualifiedModuleName()));
 }
 
-std::shared_ptr<ast::ImportStmt>
-InstantiatorImpl::visitImportStmt(ImportStmt *node)
+ImportStmt* InstantiatorImpl::visitImportStmt(ImportStmt *node)
 {
    return makeStmt<ImportStmt>(
       node, std::vector<string>(node->getQualifiedModuleName()));
 }
 
-std::shared_ptr<ast::StaticExpr>
-InstantiatorImpl::visitStaticExpr(StaticExpr *node)
+StaticExpr* InstantiatorImpl::visitStaticExpr(StaticExpr *node)
 {
    return makeExpr<StaticExpr>(node, visitExpr(node->getExpr()));
 }
 
-std::shared_ptr<ast::ConstraintExpr>
-InstantiatorImpl::visitConstraintExpr(ConstraintExpr *node)
+ConstraintExpr* InstantiatorImpl::visitConstraintExpr(ConstraintExpr *node)
 {
    if (node->getKind() == ConstraintExpr::Type)
       return makeExpr<ConstraintExpr>(node,
-                                visitTypeRef(node->getTypeConstraint().get()));
+                                visitTypeRef(node->getTypeConstraint()));
 
    return makeExpr<ConstraintExpr>(node, node->getKind());
 }
 
-std::shared_ptr<ast::TraitsExpr>
+TraitsExpr*
 InstantiatorImpl::visitTraitsExpr(TraitsExpr *node)
 {
    std::vector<TraitsExpr::TraitsArgument> args;
@@ -1915,7 +1818,7 @@ InstantiatorImpl::visitTraitsExpr(TraitsExpr *node)
             args.emplace_back(visitStmt(arg.getStmt()));
             break;
          case TraitsExpr::TraitsArgument::Type:
-            args.emplace_back(visitTypeRef(arg.getType().get()));
+            args.emplace_back(visitTypeRef(arg.getType()));
             break;
          case TraitsExpr::TraitsArgument::String:
             args.emplace_back(string(arg.getStr()));
@@ -1926,7 +1829,7 @@ InstantiatorImpl::visitTraitsExpr(TraitsExpr *node)
    return makeExpr<TraitsExpr>(node, node->getKind(), move(args));
 }
 
-std::shared_ptr<ast::StaticStmt>
+StaticStmt*
 InstantiatorImpl::visitStaticStmt(StaticStmt *node)
 {
    switch (node->getTypeID()) {
@@ -1941,335 +1844,277 @@ InstantiatorImpl::visitStaticStmt(StaticStmt *node)
    }
 }
 
-std::shared_ptr<ast::StaticIfStmt>
+StaticIfStmt*
 InstantiatorImpl::visitStaticIfStmt(StaticIfStmt *node)
 {
    return makeStmt<StaticIfStmt>(node,
-                                 visitStaticExpr(node->getCondition().get()),
+                                 visitStaticExpr(node->getCondition()),
                                  visitStmt(node->getIfBranch()),
                                  copyOrNull(node->getElseBranch()));
 }
 
-std::shared_ptr<ast::StaticForStmt>
+StaticForStmt*
 InstantiatorImpl::visitStaticForStmt(StaticForStmt *node)
 {
    return makeStmt<StaticForStmt>(node,
                                   string(node->getElementName()),
-                                  visitStaticExpr(node->getRange().get()),
+                                  visitStaticExpr(node->getRange()),
                                   visitStmt(node->getBody()));
 }
 
-std::shared_ptr<ast::StaticAssertStmt>
+StaticAssertStmt*
 InstantiatorImpl::visitStaticAssertStmt(StaticAssertStmt *node)
 {
    return makeStmt<StaticAssertStmt>(node,
-                                     visitStaticExpr(node->getExpr().get()),
+                                     visitStaticExpr(node->getExpr()),
                                      string(node->getMessage()));
 }
 
-std::shared_ptr<ast::StaticPrintStmt>
+StaticPrintStmt*
 InstantiatorImpl::visitStaticPrintStmt(StaticPrintStmt *node)
 {
    return makeStmt<StaticPrintStmt>(node,
-                                    visitStaticExpr(node->getExpr().get()));
-}
-
-void emitErrors(InstantiatorImpl &Inst)
-{
-   bool isFatal = false;
-   for (auto &diag : Inst.getDiagnostics()) {
-      isFatal |= diag.getDiagnosticKind() == DiagnosticKind::ERROR;
-      diag << diag::cont;
-   }
-
-   if (isFatal)
-      exit(EXIT_FAILURE);
+                                    visitStaticExpr(node->getExpr()));
 }
 
 } // anonymous namespace
 
-cl::Record* TemplateInstantiator::InstantiateRecord(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 cl::Record *rec,
-                                 TemplateArgList&& templateArgs,
-                                 bool *isNew) {
-   if (templateArgs.isStillDependant())
-      return rec;
+RecordDecl *
+TemplateInstantiator::InstantiateRecord(SemaPass &SP,
+                                        SourceLocation instantiatedFrom,
+                                        RecordDecl *Template,
+                                        TemplateArgList&& templateArgs,
+                                        bool *isNew) {
+   if (templateArgs.isStillDependent())
+      return Template;
 
-   assert(!rec->getSpecializedTemplate() && "only instantiate base template!");
+   assert(!Template->isInstantiation() && "only instantiate base template!");
 
-   InstantiatorImpl Instantiator(templateArgs, rec);
+   void *insertPos;
+   if (auto R = SP.getContext().getRecordTemplateInstantiation(Template,
+                                                               templateArgs,
+                                                               insertPos)) {
+      if (isNew) *isNew = false;
+      return R;
+   }
 
-   if (auto Inst = rec->hasInstantiation(Instantiator.getTemplateArgString())) {
-      rec = Inst;
+   InstantiatorImpl Instantiator(SP, templateArgs, Template);
 
-      if (isNew)
-         *isNew = false;
+   auto &pass = *SP.getDeclPass();
+   DeclPass::DeclScopeRAII scopeRAII(pass, SP.getNearestDeclContext(Template));
+
+   auto recordDecl = Instantiator.visitRecordDecl(Template);
+   SP.updateParentMapForTemplateInstantiation(Template, recordDecl);
+
+   pass.DeclareRecord(recordDecl);
+   SP.getContext().insertRecordTemplateInstantiation(recordDecl, insertPos);
+
+   if (auto Loc = Instantiator.getFailedConstraintLoc())
+      diag::err(err_generic_error)
+         << "constraint not satisfied"
+         << Loc << diag::term;
+
+   auto instInfo = new (SP.getContext()) InstantiationInfo<RecordDecl>;
+   instInfo->specializedTemplate = Template;
+   instInfo->templateArgs = move(templateArgs);
+   instInfo->instantiatedFrom = instantiatedFrom;
+
+   recordDecl->setInstantiationInfo(instInfo);
+
+   if (SP.getStage() != SemaPass::Stage::Declaration) {
+      SP.visitRecordInstantiation(recordDecl);
    }
    else {
-      DeclPass pass(SP, rec, false);
-      pass.visitRecordDeclIfNotAlreadyVisited(rec->getDecl());
-
-      diag::DiagnosticBuilder::pushInstantiationCtx(
-         InstantiationContext((InstantiationContext::Kind)rec->getTypeID(),
-                              rec->getName(), instantiatedFrom, &templateArgs));
-
-      auto recordDecl_ = Instantiator.visitRecordDecl(rec->getDecl());
-      emitErrors(Instantiator);
-
-      if (!recordDecl_) {
-         diag::DiagnosticBuilder::popInstantiationCtx();
-         return rec;
-      }
-
-      pass.DeclareRecord(recordDecl_);
-
-      auto recordDecl = recordDecl_.get();
-      rec->addInstantiation(move(recordDecl_));
-
-      if (auto Loc = Instantiator.getFailedConstraintLoc())
-         diag::err(err_generic_error)
-            << "constraint not satisfied"
-            << Loc << diag::term;
-
-
-      pass.pushNamespace(rec->getNameWitoutNamespace().str()
-                         + Instantiator.getTemplateArgString());
-
-      pass.importFileImports(rec->getSourceLoc().getSourceId());
-      pass.popNamespace();
-
-      for (const auto &ext : rec->getExtensions()) {
-         auto newExt = Instantiator.visitExtensionDecl(ext.get());
-         if (newExt)
-            pass.DeclareRecord(newExt);
-      }
-
-      auto newRec = recordDecl->getRecord();
-      newRec->setTemplateArgs(std::move(templateArgs));
-      newRec->setSpecializedTemplate(rec);
-      newRec->setInstantiatedFrom(instantiatedFrom);
-
-      diag::DiagnosticBuilder::popInstantiationCtx();
-      diag::DiagnosticBuilder::pushInstantiationCtx(newRec);
-
-      if (SP.getStage() != SemaPass::Stage::Declaration)
-         SP.visitRecordInstantiation(newRec);
-      else
-         SP.addDelayedInstantiation(newRec);
-
-      rec = newRec;
-
-      diag::DiagnosticBuilder::popInstantiationCtx();
-
-      if (isNew)
-         *isNew = true;
+      pass.visitScoped(recordDecl);
+      SP.registerDelayedInstantiation(recordDecl);
    }
 
-   return rec;
+   if (isNew)
+      *isNew = true;
+
+   return recordDecl;
 }
 
-Function* TemplateInstantiator::InstantiateFunction(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 Function *F,
-                                 TemplateArgList&& templateArgs,
-                                 bool *isNew) {
-   if (templateArgs.isStillDependant())
-      return F;
+FunctionDecl*
+TemplateInstantiator::InstantiateFunction(SemaPass &SP,
+                                          SourceLocation instantiatedFrom,
+                                          FunctionDecl *Template,
+                                          TemplateArgList&& templateArgs,
+                                          bool *isNew) {
+   if (templateArgs.isStillDependent())
+      return Template;
 
-   InstantiatorImpl Instantiator(InstantiatorImpl::IK_Function,
-                                 templateArgs, F);
+   void *insertPos;
+   if (auto F = SP.getContext().getFunctionTemplateInstantiation(Template,
+                                                                 templateArgs,
+                                                                 insertPos)) {
+      if (isNew) *isNew = false;
+      return cast<FunctionDecl>(F);
+   }
 
-   if (auto Inst = F->hasInstantiation(Instantiator.getTemplateArgString())) {
-      if (isNew)
-         *isNew = false;
+   InstantiatorImpl Instantiator(SP, templateArgs, Template);
 
-      return Inst;
+   auto &pass = *SP.getDeclPass();
+   DeclPass::DeclScopeRAII guard(pass, SP.getNearestDeclContext(Template));
+
+   auto decl = Instantiator.visitFunctionDecl(Template);
+   SP.updateParentMapForTemplateInstantiation(Template, decl);
+
+   pass.DeclareFunction(decl);
+   pass.visitScoped(decl);
+
+   SP.getContext().insertFunctionTemplateInstantiation(decl, insertPos);
+
+   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
+      instantiatedFrom, move(templateArgs), Template
+   };
+
+   decl->setInstantiationInfo(instInfo);
+
+   SP.visitFunctionInstantiation(decl);
+
+   if (isNew)
+      *isNew = true;
+
+   return decl;
+}
+
+MethodDecl*
+TemplateInstantiator::InstantiateMethod(SemaPass &SP,
+                                        SourceLocation instantiatedFrom,
+                                        MethodDecl *Template,
+                                        TemplateArgList&& templateArgs,
+                                        bool *isNew,
+                                        RecordDecl *R) {
+   if (templateArgs.isStillDependent())
+      return Template;
+
+   void *insertPos;
+   if (auto M = SP.getContext().getFunctionTemplateInstantiation(Template,
+                                                                 templateArgs,
+                                                                 insertPos)) {
+      if (isNew) *isNew = false;
+      return cast<MethodDecl>(M);
+   }
+
+   InstantiatorImpl Instantiator(SP, templateArgs, Template);
+
+   if (!R)
+      R = Template->getRecord();
+
+   MethodDecl* decl;
+   if (auto C = dyn_cast<InitDecl>(Template)) {
+      decl = Instantiator.visitInitDecl(C);
+   }
+   else if (auto D = dyn_cast<DeinitDecl>(Template)) {
+      decl = Instantiator.visitDeinitDecl(D);
    }
    else {
-      DeclPass pass(SP, F->getDeclarationNamespace());
-
-      auto decl = Instantiator.visitFunctionDecl(
-         cast<FunctionDecl>(F->getDeclaration()));
-
-      emitErrors(Instantiator);
-
-      diag::DiagnosticBuilder::pushInstantiationCtx(
-         InstantiationContext(InstantiationContext::Kind::Function,
-                              F->getName(),
-                              instantiatedFrom,
-                              &templateArgs));
-
-      pass.DeclareFunction(decl.get());
-
-      pass.importFileImports(F->getSourceLoc().getSourceId());
-      pass.visitFunctionDecl(decl.get());
-
-      auto newFun = cast<Function>(decl->getCallable());
-      newFun->setInstantiatedFrom(instantiatedFrom);
-      newFun->setTemplateArgs(std::move(templateArgs));
-      newFun->setSpecializedTemplate(F);
-
-      F->addInstantiation(move(decl));
-      SP.visitFunctionInstantiation(newFun);
-
-      diag::DiagnosticBuilder::popInstantiationCtx();
-
-      if (isNew)
-         *isNew = true;
-
-      return newFun;
+      decl = Instantiator.visitMethodDecl(Template);
    }
+
+   SP.updateParentMapForTemplateInstantiation(Template, decl);
+
+   auto &pass = *SP.getDeclPass();
+   DeclPass::DeclScopeRAII scopeRAII(pass, SP.getNearestDeclContext(Template));
+
+   pass.visit(decl);
+
+   SP.getContext().insertFunctionTemplateInstantiation(decl, insertPos);
+
+   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
+      instantiatedFrom, move(templateArgs), Template
+   };
+
+   decl->setInstantiationInfo(instInfo);
+   SP.visitFunctionInstantiation(decl);
+
+   if (isNew)
+      *isNew = true;
+
+   return decl;
 }
 
-cl::Method* TemplateInstantiator::InstantiateMethod(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 cl::Method *M,
-                                 TemplateArgList&& templateArgs,
-                                 bool *isNew, cl::Record *R) {
-   InstantiatorImpl Instantiator(InstantiatorImpl::IK_Method, templateArgs, M);
+MethodDecl*TemplateInstantiator::InstantiateProtocolDefaultImpl(
+                                       SemaPass &SP,
+                                       SourceLocation instantiatedFrom,
+                                       RecordDecl *Rec,
+                                       MethodDecl *M) {
+   InstantiatorImpl Instantiator(SP, {});
 
-   if (auto Inst = M->hasInstantiation(Instantiator.getTemplateArgString())) {
-      if (isNew)
-         *isNew = false;
+   auto decl = Instantiator.visitMethodDecl(M);
+   auto &pass = *SP.getDeclPass();
 
-      return Inst;
-   }
-   else {
-      if (!R)
-         R = M->getOwningRecord();
+   DeclPass::DeclScopeRAII scopeRAII(pass, Rec);
+   pass.visit(decl);
 
-      std::shared_ptr<CallableDecl> decl;
-      if (M->isInitializer()) {
-         auto initDecl = Instantiator.visitConstrDecl(
-            cast<ConstrDecl>(M->getDeclaration()));
+   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
+      instantiatedFrom, {}, M
+   };
 
-         initDecl->setRecord(R);
-         decl = initDecl;
-      }
-      else {
-         auto methodDecl = Instantiator.visitMethodDecl(
-            cast<MethodDecl>(M->getDeclaration()));
+   decl->setInstantiationInfo(instInfo);
+   Rec->addDecl(decl);
 
-         methodDecl->setRecord(R);
-         decl = methodDecl;
-      }
-
-      emitErrors(Instantiator);
-
-      diag::DiagnosticBuilder::pushInstantiationCtx(
-         InstantiationContext(InstantiationContext::Kind::Method,
-                              M->getName(),
-                              instantiatedFrom,
-                              &templateArgs));
-
-      DeclPass pass(SP, R->getDeclarationNamespace());
-      pass.importFileImports(M->getSourceLoc().getSourceId());
-      pass.beginRecordScope(R);
-      pass.visit(decl.get());
-
-      auto newMethod = cast<Method>(decl->getCallable());
-      newMethod->setInstantiatedFrom(instantiatedFrom);
-      newMethod->setSpecializedTemplate(M);
-      newMethod->setTemplateArgs(std::move(templateArgs));
-
-      M->addInstantiation(move(decl));
-
-      SP.visitFunctionInstantiation(newMethod);
-
-      diag::DiagnosticBuilder::popInstantiationCtx();
-
-      if (isNew)
-         *isNew = true;
-
-      return newMethod;
-   }
+   return decl;
 }
 
-cl::Method* TemplateInstantiator::InstantiateProtocolDefaultImpl(
-                                       ast::SemaPass &SP,
-                                       const SourceLocation &instantiatedFrom,
-                                       cl::Record *Rec, cl::Method const* M) {
-   InstantiatorImpl Instantiator(InstantiatorImpl::IK_ProtocolDefaultImpl,
-                                 {}, M);
-
-   auto decl = Instantiator.visitMethodDecl(
-      cast<MethodDecl>(M->getDeclaration()));
-
-   emitErrors(Instantiator);
-
-   decl->setRecord(Rec);
-
-   diag::DiagnosticBuilder::pushInstantiationCtx(
-      InstantiationContext(InstantiationContext::Kind::Method,
-                           M->getName(),
-                           instantiatedFrom, {}));
-
-   DeclPass pass(SP);
-   pass.importFileImports(M->getSourceLoc().getSourceId());
-   pass.beginRecordScope(Rec);
-   pass.visitMethodDecl(decl.get());
-
-   auto newMethod = cast<Method>(decl->getCallable());
-   newMethod->setInstantiatedFrom(instantiatedFrom);
-   newMethod->setSpecializedTemplate(M);
-
-   Rec->addProtocolMethodInstantiation(decl);
-
-   diag::DiagnosticBuilder::popInstantiationCtx();
-
-   return newMethod;
-}
-
-std::shared_ptr<ast::Statement>
+Statement*
 TemplateInstantiator::InstantiateStatement(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::Statement> &stmt,
-                                 sema::TemplateArgList const& templateArgs) {
-   InstantiatorImpl Instantiator(templateArgs);
-   auto res = Instantiator.visitStmt(stmt.get());
-   emitErrors(Instantiator);
-
-   return res;
+                                    SemaPass &SP,
+                                    SourceLocation instantiatedFrom,
+                                    Statement* stmt,
+                                    sema::TemplateArgList const& templateArgs) {
+   InstantiatorImpl Instantiator(SP, templateArgs);
+   return Instantiator.visitStmt(stmt);
 }
 
-std::shared_ptr<ast::Statement> TemplateInstantiator::InstantiateMethodBody(
-                                    ast::SemaPass &SP,
-                                    const SourceLocation &instantiatedFrom,
-                                    cl::Method const*baseMethod,
-                                    cl::Method* newMethod) {
-   InstantiatorImpl Instantiator(InstantiatorImpl::IK_Method,
-                                 newMethod->getOwningRecord()
-                                          ->getTemplateArgs(),
-                                 baseMethod);
+Statement* TemplateInstantiator::InstantiateMethodBody(
+                                    SemaPass &SP,
+                                    SourceLocation instantiatedFrom,
+                                    MethodDecl const* baseMethod,
+                                    MethodDecl* newMethod) {
+   InstantiatorImpl Instantiator(SP, newMethod->getRecord()
+                                              ->getTemplateArgs());
 
-   Instantiator.findVariadicArgs(baseMethod->getDeclaration()->getArgs(),
-                                 baseMethod->getTemplateParams());
+//   Instantiator.findVariadicArgs(baseMethod->getArgs(),
+//                                 baseMethod->getTemplateParams());
 
-   return Instantiator.visitStmt(baseMethod->getDeclaration()->getBody());
+   return Instantiator.visitStmt(baseMethod->getBody());
 }
 
-std::shared_ptr<ast::StaticExpr> TemplateInstantiator::InstantiateStaticExpr(
-                                 ast::SemaPass &SP,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::StaticExpr> &stmt,
-                                 sema::TemplateArgList const& templateArgs) {
-   return std::static_pointer_cast<StaticExpr>(
-      InstantiateStatement(SP, instantiatedFrom, stmt, templateArgs));
+StaticExpr*
+TemplateInstantiator::InstantiateStaticExpr(SemaPass &SP,
+                                            SourceLocation instantiatedFrom,
+                                            StaticExpr* stmt,
+                                            TemplateArgList const& templateArgs) {
+   return cast<StaticExpr>(InstantiateStatement(SP, instantiatedFrom,
+                                                stmt, templateArgs));
 }
 
-std::shared_ptr<ast::StaticExpr> TemplateInstantiator::InstantiateAlias(
-                                 ast::SemaPass &SP,
-                                 Alias *alias,
-                                 const SourceLocation &instantiatedFrom,
-                                 const std::shared_ptr<ast::StaticExpr> &stmt,
-                                 sema::TemplateArgList const &templateArgs) {
-   InstantiatorImpl Inst(templateArgs, alias);
-   return Inst.visitStaticExpr(stmt.get());
+AliasDecl*
+TemplateInstantiator::InstantiateAlias(SemaPass &SP,
+                                       AliasDecl *Template,
+                                       SourceLocation instantiatedFrom,
+                                       TemplateArgList &&templateArgs) {
+   void *insertPos;
+   if (auto Inst = SP.getContext().getAliasTemplateInstantiation(Template,
+                                                                 templateArgs,
+                                                                 insertPos)) {
+      return Inst;
+   }
+
+   InstantiatorImpl Instantiator(SP, templateArgs, Template);
+
+   auto Inst = Instantiator.visitAliasDecl(Template);
+   SP.updateParentMapForTemplateInstantiation(Template, Inst);
+
+   Inst->setInstantiationInfo(new(SP.getContext()) InstantiationInfo<AliasDecl>(
+      instantiatedFrom, move(templateArgs), Template
+   ));
+
+   SP.getContext().insertAliasTemplateInstantiation(Inst, insertPos);
+
+   return Inst;
 }
 
 } // namespace cdot

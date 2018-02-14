@@ -10,11 +10,15 @@
 namespace cdot {
 namespace ast {
 
+class TypeRef;
+
 class StaticExpr: public Expression {
 public:
-   explicit StaticExpr(std::shared_ptr<Expression> &&expr)
-      : Expression(StaticExprID), expr(move(expr))
-   {}
+   explicit StaticExpr(Expression* expr)
+      : Expression(StaticExprID), expr(expr)
+   {
+      loc = expr->getSourceLoc();
+   }
 
    StaticExpr(Variant &&V)
       : Expression(StaticExprID), expr(nullptr), evaluatedExpr(std::move(V))
@@ -25,12 +29,14 @@ public:
       return T->getTypeID() == StaticExprID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<Expression> expr;
+   Expression* expr;
    Variant evaluatedExpr;
 
 public:
-   const std::shared_ptr<Expression> &getExpr() const
+   Expression* getExpr() const
    {
       return expr;
    }
@@ -49,17 +55,19 @@ public:
 class ConstraintExpr: public Expression {
 public:
    enum Kind {
-      Struct = 0, Class, Enum, Union, Function,
+      Struct = StructDeclID, Class = ClassDeclID,
+      Enum = EnumDeclID, Union = UnionDeclID, Function = FunctionDeclID,
       DefaultConstructible, Pointer, Reference, Type
    };
 
    explicit ConstraintExpr(Kind kind)
-      : Expression(ConstraintExprID), kind(kind)
+      : Expression(ConstraintExprID), kind(kind),
+        typeConstraint(nullptr)
    {}
 
-   explicit ConstraintExpr(std::shared_ptr<TypeRef> &&typeConstraint)
+   explicit ConstraintExpr(TypeRef* typeConstraint)
       : Expression(ConstraintExprID), kind(Type),
-        typeConstraint(move(typeConstraint))
+        typeConstraint(typeConstraint)
    {}
 
    Kind getKind() const
@@ -67,14 +75,21 @@ public:
       return kind;
    }
 
-   const std::shared_ptr<TypeRef> &getTypeConstraint() const
+   TypeRef* getTypeConstraint() const
    {
       return typeConstraint;
    }
 
+   static bool classof(AstNode const *T)
+   {
+      return T->getTypeID() == ConstraintExprID;
+   }
+
+   friend class TransformImpl;
+
 private:
    Kind kind;
-   std::shared_ptr<TypeRef> typeConstraint;
+   TypeRef* typeConstraint;
 };
 
 class TraitsExpr: public Expression {
@@ -107,16 +122,16 @@ public:
          Stmt, Expr, Type, String
       };
 
-      explicit TraitsArgument(std::shared_ptr<Statement> &&stmt)
-         : kind(Stmt), stmt(move(stmt))
+      explicit TraitsArgument(Statement* stmt)
+         : kind(Stmt), stmt(stmt)
       {}
 
-      explicit TraitsArgument(std::shared_ptr<Expression> &&expr)
-         : kind(Expr), expr(move(expr))
+      explicit TraitsArgument(Expression* expr)
+         : kind(Expr), expr(expr)
       {}
 
-      explicit TraitsArgument(std::shared_ptr<TypeRef> &&type)
-         : kind(Type), type(move(type))
+      explicit TraitsArgument(TypeRef* type)
+         : kind(Type), type(type)
       {}
 
       explicit TraitsArgument(std::string &&str)
@@ -147,19 +162,19 @@ public:
          return kind;
       }
 
-      const std::shared_ptr<Statement> &getStmt() const
+      Statement* getStmt() const
       {
          assert(kind == Stmt);
          return stmt;
       }
 
-      const std::shared_ptr<Expression> &getExpr() const
+      Expression* getExpr() const
       {
          assert(kind == Expr);
          return expr;
       }
 
-      const std::shared_ptr<TypeRef> &getType() const
+      TypeRef* getType() const
       {
          assert(kind == Type);
          return type;
@@ -171,27 +186,22 @@ public:
          return str;
       }
 
+      friend class TransformImpl;
+
    private:
       Kind kind;
 
       union {
-         std::shared_ptr<Statement> stmt;
-         std::shared_ptr<Expression> expr;
-         std::shared_ptr<TypeRef> type;
+         Statement* stmt;
+         Expression* expr;
+         TypeRef* type;
          std::string str;
       };
 
       void destroyValue()
       {
          switch (kind) {
-            case Stmt:
-               stmt.~shared_ptr();
-               break;
-            case Expr:
-               expr.~shared_ptr();
-               break;
-            case Type:
-               type.~shared_ptr();
+            default:
                break;
             case String:
                str.~string();
@@ -205,13 +215,13 @@ public:
 
          switch (kind) {
             case Expr:
-               new (&expr) std::shared_ptr<Expression>(move(other.expr));
+               expr = other.expr;
                break;
             case Stmt:
-               new (&stmt) std::shared_ptr<Statement>(move(other.stmt));
+               stmt = other.stmt;
                break;
             case Type:
-               new (&type) std::shared_ptr<TypeRef>(move(other.type));
+               type = other.type;
                break;
             case String:
                new (&str) std::string(move(other.str));
@@ -229,6 +239,8 @@ public:
       return T->getTypeID() == TraitsExprID;
    }
 
+   friend class TransformImpl;
+
    Kind getKind() const
    {
       return kind;
@@ -239,21 +251,21 @@ public:
       return args;
    }
 
-   const std::shared_ptr<Expression> &getResultExpr() const
+   Expression* getResultExpr() const
    {
       return resultExpr;
    }
 
-   void setResultExpr(std::shared_ptr<Expression> &&resultExpr)
+   void setResultExpr(Expression* resultExpr)
    {
-      TraitsExpr::resultExpr = move(resultExpr);
+      TraitsExpr::resultExpr = resultExpr;
    }
 
 private:
    Kind kind;
    std::vector<TraitsArgument> args;
 
-   std::shared_ptr<Expression> resultExpr = nullptr;
+   Expression* resultExpr = nullptr;
 };
 
 } // namespace ast

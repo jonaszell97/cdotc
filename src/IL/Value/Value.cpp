@@ -11,7 +11,6 @@
 
 #define CDOT_VALUE_INCLUDE
 #include "ValueIncludes.def"
-#include "../../Variant/Type/VoidType.h"
 
 using namespace cdot::support;
 
@@ -31,8 +30,6 @@ void Value::cleanup()
 Value::Value(TypeID id, QualType ty)
    : id(id), Flags(0), SubclassData(0), type(ty), uses(0), metaData(nullptr)
 {
-   if (!*ty)
-      *type = VoidType::get();
 }
 
 Value::Value(TypeID id, Type *ty)
@@ -325,6 +322,28 @@ void Value::addMetaData(MetaData *MD)
       metaData = new MDSet;
 
    metaData->setNode(MD);
+}
+
+CallSite Value::getAsCallSite()
+{
+   if (auto C = dyn_cast<CallInst>(this))
+      return CallSite(C);
+
+   if (auto C = dyn_cast<InvokeInst>(this))
+      return CallSite(C);
+
+   return CallSite();
+}
+
+ImmutableCallSite Value::getAsImmutableCallSite() const
+{
+   if (auto C = dyn_cast<CallInst>(this))
+      return ImmutableCallSite(C);
+
+   if (auto C = dyn_cast<InvokeInst>(this))
+      return ImmutableCallSite(C);
+
+   return ImmutableCallSite();
 }
 
 } // namespace il

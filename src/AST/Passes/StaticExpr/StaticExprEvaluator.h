@@ -5,56 +5,56 @@
 #ifndef CDOT_STATICEXPREVALUATOR_H
 #define CDOT_STATICEXPREVALUATOR_H
 
+#include "Message/Diagnostics.h"
+#include "Variant/Variant.h"
+
 #include <cstddef>
 #include <vector>
-#include "../../../Message/Diagnostics.h"
+#include <llvm/ADT/SmallVector.h>
 
 namespace cdot {
 
 struct Variant;
-class Callable;
-
-namespace cl {
-
-class Record;
-
-} // namespace cl
 
 namespace diag {
-
-class DiagnosticBuilder;
-
+   class DiagnosticBuilder;
 } // namespace diag
+
+namespace sema {
+   class TemplateArgList;
+} // namespace sema
 
 namespace ast {
 
+class RecordDecl;
 class SemaPass;
+class CallableDecl;
 class StaticExpr;
 
 class EvaluatorImpl;
 
 struct StaticExprResult {
    explicit StaticExprResult(Variant &&V)
-      : val(std::move(V)), typeDependant(false), hadError(false),
+      : val(std::move(V)), typeDependent(false), hadError(false),
         hasDependencies(false)
    {}
 
    StaticExprResult(bool typeDependant, bool hadError,
                     llvm::SmallVector<diag::DiagnosticBuilder, 4> &&diagnostics)
-      : typeDependant(typeDependant), hadError(hadError),
+      : typeDependent(typeDependant), hadError(hadError),
         hasDependencies(false), diagnostics(std::move(diagnostics))
    {
 
    }
 
    StaticExprResult()
-      : typeDependant(false), hadError(false), hasDependencies(true)
+      : typeDependent(false), hadError(false), hasDependencies(true)
    {
 
    }
 
    Variant val;
-   bool typeDependant;
+   bool typeDependent;
    bool hadError;
    bool hasDependencies;
    llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
@@ -68,8 +68,8 @@ struct StaticExprResult {
 class StaticExprEvaluator {
 public:
    StaticExprEvaluator(SemaPass &S,
-                       cl::Record *ClassContext,
-                       Callable *FuncCtx,
+                       RecordDecl *ClassContext,
+                       CallableDecl *FuncCtx,
                        llvm::ArrayRef<size_t> importedNamespaces,
                        sema::TemplateArgList const* = nullptr);
 

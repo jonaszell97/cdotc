@@ -15,28 +15,26 @@ class CaseStmt;
 
 class MatchStmt : public Statement {
 public:
-   explicit MatchStmt(std::shared_ptr<Expression> &&switchVal);
-   MatchStmt(std::shared_ptr<Expression> &&switchVal,
-             std::vector<std::shared_ptr<CaseStmt>> &&cases);
+   explicit MatchStmt(Expression* switchVal);
+   MatchStmt(Expression* switchVal,
+             std::vector<CaseStmt* > &&cases);
 
-   void addCase(std::shared_ptr<CaseStmt> &&case_)
+   void addCase(CaseStmt* case_)
    {
-      cases.push_back(move(case_));
+      cases.push_back(case_);
    }
-
-   typedef std::shared_ptr<MatchStmt> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == MatchStmtID;
    }
 
-protected:
-   std::shared_ptr<Expression> switchValue;
-   Type *switchType = nullptr;
-   std::vector<std::shared_ptr<CaseStmt>> cases;
+   friend class TransformImpl;
 
-   cl::Method* operatorEquals = nullptr;
+protected:
+   Expression* switchValue;
+   Type *switchType = nullptr;
+   std::vector<CaseStmt* > cases;
 
    // codegen
    bool hasDefault = false;
@@ -46,22 +44,18 @@ protected:
    bool allCasesReturn;
 
 public:
-   const std::shared_ptr<Expression> &getSwitchValue() const
+   Expression* getSwitchValue() const
    {
       return switchValue;
    }
 
    Type *getSwitchType() const;
 
-   const std::vector<std::shared_ptr<CaseStmt>> &getCases() const;
-
-   cl::Method *getOperatorEquals() const;
+   const std::vector<CaseStmt* > &getCases() const;
 
    void setSwitchType(Type *switchType);
 
-   void setCases(const std::vector<std::shared_ptr<CaseStmt>> &cases);
-
-   void setOperatorEquals(cl::Method *operatorEquals);
+   void setCases(const std::vector<CaseStmt* > &cases);
 
    bool isHasDefault() const;
 

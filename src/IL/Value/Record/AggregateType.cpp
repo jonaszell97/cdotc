@@ -8,75 +8,27 @@
 #include "../../Module/Module.h"
 #include "../Function/Method.h"
 
-#include "../../../AST/Passes/SemanticAnalysis/Record/Enum.h"
-#include "../../../Variant/Type/ObjectType.h"
+#include "../../../AST/Statement/Declaration/Class/RecordDecl.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-AggregateType::AggregateType(llvm::StringRef name,
+AggregateType::AggregateType(ObjectType *Ty,
+                             llvm::StringRef name,
                              TypeID id,
                              Module *m)
-   : GlobalObject(id, nullptr, m, name)
+   : GlobalObject(id, Ty, m, name)
 {
    SubclassData |= Flag::ForwardDeclared;
+
+   if (Ty->getRecord()->isExternal())
+      SubclassData |= Flag::External;
+
    if (m) {
       m->insertType(this);
    }
-}
-
-void AggregateType::addMethod(Method *M)
-{
-   Methods.push_back(M);
-}
-
-Method* AggregateType::getMethod(llvm::StringRef name)
-{
-   for (const auto &M : Methods) {
-      if (M->getName() == name) {
-         return M;
-      }
-   }
-   for (const auto &M : Initializers) {
-      if (M->getName() == name) {
-         return M;
-      }
-   }
-
-   if (auto ClassTy = dyn_cast<ClassType>(this)) {
-      auto parentName = ClassTy->getParentClass();
-      if (!parentName.empty()) {
-         return parent->getType(parentName)->getMethod(name);
-      }
-   }
-
-   return nullptr;
-}
-
-const AggregateType::MethodList &AggregateType::getMethods() const
-{
-   return Methods;
-}
-
-void AggregateType::addProperty(AggregateType::Property &&P)
-{
-   Properties.try_emplace(P.name, P);
-}
-
-const AggregateType::Property &
-AggregateType::getProperty(llvm::StringRef name) const
-{
-   auto it = Properties.find(name);
-   assert(it != Properties.end());
-
-   return it->second;
-}
-
-const AggregateType::PropertyMap &AggregateType::getProperties() const
-{
-   return Properties;
 }
 
 ConstantStruct *AggregateType::getTypeInfo() const
@@ -110,59 +62,16 @@ void AggregateType::setTypeInfo(ConstantStruct *TypeInfo)
    AggregateType::TypeInfo = TypeInfo;
 }
 
-void AggregateType::addInitializer(Initializer *Init)
-{
-   Initializers.push_back(Init);
-}
-
-Initializer * AggregateType::getInitializer(llvm::StringRef name)
-{
-   for (const auto &I : Initializers) {
-      if (name.equals(I->getName())) {
-         return I;
-      }
-   }
-
-   return nullptr;
-}
-
-const AggregateType::InitializerList &AggregateType::getInitializers() const
-{
-   return Initializers;
-}
-
-size_t AggregateType::getSize() const
-{
-   if (!size) {
-      auto R = SymbolTable::getRecord(name);
-      size = R->getSize();
-      alignment = R->getAlignment();
-   }
-
-   return size;
-}
-
-unsigned short AggregateType::getAlignment() const
-{
-   if (!alignment) {
-      auto R = SymbolTable::getRecord(name);
-      size = R->getSize();
-      alignment = R->getAlignment();
-   }
-
-   return alignment;
-}
-
-ClassType::ClassType(llvm::StringRef name,
-                     llvm::StringRef parentClass,
+ClassType::ClassType(ObjectType *Ty,
+                     llvm::StringRef name,
                      Module *m)
-   : StructType(name, m), ParentClass(parentClass)
+   : StructType(Ty, name, m), ParentClass(nullptr)
 {
    id = ClassTypeID;
 }
 
-StructType::StructType(llvm::StringRef name, Module *m)
-   : AggregateType(name, StructTypeID, m)
+StructType::StructType(ObjectType *Ty, llvm::StringRef name, Module *m)
+   : AggregateType(Ty, name, StructTypeID, m)
 {
 
 }
@@ -201,9 +110,10 @@ unsigned StructType::getFieldOffset(llvm::StringRef fieldName) const
    llvm_unreachable("field does not exist");
 }
 
-EnumType::EnumType(llvm::StringRef name,
-                   Type *rawType, Module *m)
-   : AggregateType(name, EnumTypeID, m), rawType(rawType)
+EnumType::EnumType(ObjectType *Ty,
+                   llvm::StringRef name,
+                   Module *m)
+   : AggregateType(Ty, name, EnumTypeID, m), rawType(nullptr)
 {
 
 }
@@ -241,8 +151,8 @@ size_t EnumType::getMaxAssociatedValues() const
    return maxAssociatedValues;
 }
 
-UnionType::UnionType(llvm::StringRef name, Module *m)
-   : StructType(name, m)
+UnionType::UnionType(ObjectType *Ty, llvm::StringRef name, Module *m)
+   : StructType(Ty, name, m)
 {
    id = UnionTypeID;
 }
@@ -258,9 +168,10 @@ QualType UnionType::getFieldType(llvm::StringRef fieldName) const
    return nullptr;
 }
 
-ProtocolType::ProtocolType(llvm::StringRef name,
+ProtocolType::ProtocolType(ObjectType *Ty,
+                           llvm::StringRef name,
                            Module *m)
-   : AggregateType(name, ProtocolTypeID, m)
+   : AggregateType(Ty, name, ProtocolTypeID, m)
 {
 
 }

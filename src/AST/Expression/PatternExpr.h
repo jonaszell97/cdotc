@@ -8,16 +8,10 @@
 #include "Expression.h"
 
 namespace cdot {
-
-namespace cl {
-
-struct Method;
-
-} // namespace cl
-
 namespace ast {
 
 class TypeRef;
+class LocalVarDecl;
 
 class PatternExpr: public Expression {
 public:
@@ -41,21 +35,21 @@ protected:
 
 class ExpressionPattern: public PatternExpr {
 public:
-   explicit ExpressionPattern(std::shared_ptr<Expression> &&expr)
-      : PatternExpr(ExpressionPatternID), expr(move(expr))
+   explicit ExpressionPattern(Expression* expr)
+      : PatternExpr(ExpressionPatternID), expr(expr)
    {}
 
-   const std::shared_ptr<Expression> &getExpr() const
+   Expression* getExpr() const
    {
       return expr;
    }
 
-   cl::Method *getComparisonOperator() const
+   MethodDecl *getComparisonOperator() const
    {
       return comparisonOperator;
    }
 
-   void setComparisonOperator(cl::Method *comparisonOperator)
+   void setComparisonOperator(MethodDecl *comparisonOperator)
    {
       ExpressionPattern::comparisonOperator = comparisonOperator;
    }
@@ -65,17 +59,20 @@ public:
       return T->getTypeID() == ExpressionPatternID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<Expression> expr;
-   cl::Method *comparisonOperator = nullptr;
+   Expression* expr;
+   MethodDecl *comparisonOperator = nullptr;
 };
 
 class CasePattern: public PatternExpr {
 public:
    struct Argument {
-      explicit Argument(std::shared_ptr<Expression> &&expr,
-                        SourceLocation loc)
-         : expr(move(expr)), sourceLoc(loc), is_expr(true), is_const(false)
+      explicit Argument(Expression* expr,
+                        SourceLocation loc = {})
+         : expr(expr), sourceLoc(this->expr->getSourceLoc()),
+           is_expr(true), is_const(false)
       {}
 
       Argument(std::string &&ident, bool isConst, SourceLocation loc)
@@ -88,17 +85,19 @@ public:
 
       ~Argument();
 
-      const std::shared_ptr<Expression> &getExpr() const { return expr; }
+      Expression* getExpr() const { return expr; }
       const string &getIdentifier() const { return identifier; }
       bool isExpr() const { return is_expr; }
       bool isConst() const { return is_const; }
       const SourceLocation &getSourceLoc() const { return sourceLoc; }
 
+      friend class TransformImpl;
+
    private:
       void destroyValue();
 
       union {
-         std::shared_ptr<Expression> expr = nullptr;
+         Expression* expr = nullptr;
          std::string identifier;
       };
 
@@ -123,23 +122,39 @@ public:
       return args;
    }
 
+   using iterator_range = llvm::iterator_range<LocalVarDecl**>;
+
+   iterator_range getVarDecls() const
+   {
+      return iterator_range(varDecls, nullptr);
+   }
+
+   void setVarDecls(LocalVarDecl **varDecls)
+   {
+      CasePattern::varDecls = varDecls;
+   }
+
    static bool classof(AstNode const *T)
    {
       return T->getTypeID() == CasePatternID;
    }
 
+   friend class TransformImpl;
+
 private:
    std::string caseName;
    std::vector<Argument> args;
+
+   LocalVarDecl **varDecls = nullptr;
 };
 
 class IsPattern: public PatternExpr {
 public:
-   explicit IsPattern(std::shared_ptr<TypeRef> &&isType)
-      : PatternExpr(IsPatternID), isType(move(isType))
+   explicit IsPattern(TypeRef* isType)
+      : PatternExpr(IsPatternID), isType(isType)
    {}
 
-   const std::shared_ptr<TypeRef> &getIsType() const
+   TypeRef* getIsType() const
    {
       return isType;
    }
@@ -149,8 +164,10 @@ public:
       return T->getTypeID() == IsPatternID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<TypeRef> isType;
+   TypeRef* isType;
 };
 
 } // namespace ast

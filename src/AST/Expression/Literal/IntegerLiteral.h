@@ -7,94 +7,138 @@
 
 #include "../Expression.h"
 
+#include <llvm/ADT/APInt.h>
+#include <llvm/ADT/APFloat.h>
+
 namespace cdot {
 namespace ast {
 
 class IntegerLiteral : public Expression {
 public:
-   explicit IntegerLiteral(cdot::Variant &&lexeme);
-   IntegerLiteral(Type *type, cdot::Variant &&lexeme);
-
-   typedef std::shared_ptr<IntegerLiteral> SharedPtr;
+   IntegerLiteral(Type *type, llvm::APInt &&value)
+      :  Expression(IntegerLiteralID, true),
+         value(std::move(value)), type(type)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == IntegerLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   cdot::Variant value;
+   llvm::APInt value;
    Type* type = nullptr;
 
 public:
-   const Variant &getValue() const;
-   void setValue(const Variant &value);
+   const llvm::APInt &getValue() const
+   {
+      return value;
+   }
 
-   Type *getType() const;
-   void setType(Type *type);
+   Type *getType() const
+   {
+      return type;
+   }
+
+   void setType(Type *type)
+   {
+      IntegerLiteral::type = type;
+   }
 };
 
 class FPLiteral: public Expression {
 public:
-   explicit FPLiteral(cdot::Variant &&val);
-   FPLiteral(Type *type, cdot::Variant &&val);
-
-   typedef std::shared_ptr<FPLiteral> SharedPtr;
+   FPLiteral(Type *type, llvm::APFloat &&value)
+      :  Expression(FPLiteralID, true),
+         value(std::move(value)), type(type)
+   {}
 
    static bool classof(AstNode const* T)
    {
       return T->getTypeID() == FPLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   cdot::Variant value;
+   llvm::APFloat value;
    cdot::Type *type;
 
 public:
-   const Variant &getValue() const;
-   void setValue(const Variant &val);
+   const llvm::APFloat &getValue() const
+   {
+      return value;
+   }
 
-   Type *getType() const;
-   void setType(Type *type);
+   Type *getType() const
+   {
+      return type;
+   }
+
+   void setType(Type *type)
+   {
+      FPLiteral::type = type;
+   }
 };
 
 class BoolLiteral: public Expression {
 public:
-   explicit BoolLiteral(bool value);
-   BoolLiteral(Type *type, bool value);
+   BoolLiteral(Type *type, bool value)
+      : Expression(BoolLiteralID), value(value), type(type)
+   {
 
-   typedef std::shared_ptr<BoolLiteral> SharedPtr;
+   }
 
    static bool classof(AstNode const* T)
    {
       return T->getTypeID() == BoolLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
    bool value;
    cdot::Type *type;
 
 public:
-   bool getValue() const;
-   void setValue(bool value);
+   bool getValue() const
+   {
+      return value;
+   }
 
-   Type *getType() const;
-   void setType(Type *type);
+   Type *getType() const
+   {
+      return type;
+   }
+
+   void setType(Type *type)
+   {
+      BoolLiteral::type = type;
+   }
 };
 
 class CharLiteral: public Expression {
 public:
-   explicit CharLiteral(char value);
-   explicit CharLiteral(wchar_t value);
+   CharLiteral(Type *type, char value)
+      : Expression(CharLiteralID), narrow(value), is_wide(false), type(type)
+   {
 
-   CharLiteral(Type *type, char value);
+   }
 
-   typedef std::shared_ptr<CharLiteral> SharedPtr;
+   CharLiteral(Type *type, wchar_t value)
+      : Expression(CharLiteralID), wide(value), is_wide(true), type(type)
+   {
+
+   }
 
    static bool classof(AstNode const* T)
    {
       return T->getTypeID() == CharLiteralID;
    }
+
+   friend class TransformImpl;
 
 protected:
    union {
@@ -103,20 +147,33 @@ protected:
    };
 
    bool is_wide;
-   cdot::Type *type;
+   Type *type;
 
 public:
-   char getNarrow() const;
-   void setNarrow(char narrow);
+   char getNarrow() const
+   {
+      return narrow;
+   }
 
-   wchar_t getWide() const;
-   void setWide(wchar_t wide);
+   wchar_t getWide() const
+   {
+      return wide;
+   }
 
-   bool isWide() const;
-   void isWide(bool is_wide);
+   bool isIs_wide() const
+   {
+      return is_wide;
+   }
 
-   Type *getType() const;
-   void setType(Type *type);
+   Type *getType() const
+   {
+      return type;
+   }
+
+   void setType(Type *type)
+   {
+      CharLiteral::type = type;
+   }
 };
 
 } // namespace ast

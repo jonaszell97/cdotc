@@ -12,25 +12,25 @@ namespace ast {
 
 class StringInterpolation: public Expression {
 public:
-   explicit StringInterpolation(std::vector<Expression::SharedPtr>&& strings);
-
-   typedef std::shared_ptr<StringInterpolation> SharedPtr;
+   explicit StringInterpolation(std::vector<Expression*>&& strings);
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == StringInterpolationID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::vector<Expression::SharedPtr> strings;
+   std::vector<Expression*> strings;
 
 public:
-   std::vector<Expression::SharedPtr> &getStrings()
+   std::vector<Expression*> &getStrings()
    {
       return strings;
    }
 
-   std::vector<Expression::SharedPtr> const& getStrings() const
+   std::vector<Expression*> const& getStrings() const
    {
       return strings;
    }

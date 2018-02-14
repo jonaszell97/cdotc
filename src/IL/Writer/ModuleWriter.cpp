@@ -2,6 +2,8 @@
 // Created by Jonas Zell on 17.11.17.
 //
 
+#include <llvm/ADT/Twine.h>
+
 #include "ModuleWriter.h"
 
 #include "../Module/Module.h"
@@ -9,13 +11,7 @@
 
 #include "../../Compiler.h"
 
-#include "../../Variant/Type/Generic.h"
-#include "../../Variant/Type/PointerType.h"
-#include "../../Variant/Type/FunctionType.h"
-#include "../../Variant/Type/TupleType.h"
-#include "../../Variant/Type/ArrayType.h"
-#include "../../Variant/Type/GenericType.h"
-
+#include "../../Variant/Type/Type.h"
 #include "../../Support/Format.h"
 
 #define CDOT_VALUE_INCLUDE
@@ -70,12 +66,8 @@ protected:
    void WriteName(llvm::StringRef name,
                   ValPrefix prefix, bool islvalue = false);
 
-   void WriteTuplePair(const std::pair<string, QualType> &Pair);
-   void WriteCDotArgument(const cdot::Argument &arg);
-
    void WriteType(const Type *ty, bool islvalue = false);
    void WriteQualType(QualType type);
-   void WriteLabeledType(const std::pair<std::string, QualType> &pair);
 
    void WriteCapture(Lambda::Capture const& C);
 
@@ -119,13 +111,13 @@ void ModuleWriterImpl::WriteName(llvm::StringRef name, ValPrefix prefix,
 
 void ModuleWriterImpl::WriteType(const Type *ty, bool islvalue)
 {
-   assert(!ty->isAutoTy());
+   assert(!ty->isAutoType());
 
-   if (ty->isVoidTy()) {
+   if (ty->isVoidType()) {
       out << "void";
       return;
    }
-   else if (ty->isIntegerTy()) {
+   else if (ty->isIntegerType()) {
       if (islvalue) {
          out << (unsigned char)ValPrefix::Lvalue;
       }
@@ -142,16 +134,16 @@ void ModuleWriterImpl::WriteType(const Type *ty, bool islvalue)
       out << (ty->isFloatTy() ? "float" : "double");
       return;
    }
-   else if (ty->isObjectTy()) {
+   else if (ty->isObjectType()) {
       WriteName(ty->getClassName(), ValPrefix::Type, islvalue);
       return;
    }
-   else if (ty->isPointerTy()) {
+   else if (ty->isPointerType()) {
       if (islvalue) {
          out << (unsigned char)ValPrefix::Lvalue;
       }
 
-      WriteQualType(ty->asPointerTy()->getPointeeType());
+      WriteQualType(ty->asPointerType()->getPointeeType());
       out << '*';
 
       return;
@@ -162,41 +154,26 @@ void ModuleWriterImpl::WriteType(const Type *ty, bool islvalue)
       out << (unsigned char)ValPrefix::Lvalue;
    }
 
-   if (ty->isFunctionTy() ) {
-      auto &Args = ty->asFunctionTy()->getArgTypes();
-      WriteList(Args, &ModuleWriterImpl::WriteCDotArgument);
+   if (ty->isFunctionType() ) {
+      auto Args = ty->asFunctionType()->getArgTypes();
+      WriteList(Args, &ModuleWriterImpl::WriteQualType);
 
       out << " -> ";
-      WriteQualType(ty->asFunctionTy()->getReturnType());
+      WriteQualType(ty->asFunctionType()->getReturnType());
    }
-   else if (ty->isTupleTy()) {
-      auto &Cont = ty->asTupleTy()->getContainedTypes();
-      WriteList(Cont, &ModuleWriterImpl::WriteTuplePair);
+   else if (ty->isTupleType()) {
+      auto Cont = ty->asTupleType()->getContainedTypes();
+      WriteList(Cont, &ModuleWriterImpl::WriteQualType);
    }
-   else if (ty->isArrayTy()) {
-      auto ArrTy = cast<ArrayType>(ty);
+   else if (ty->isArrayType()) {
+      auto ArrTy = ty->asArrayType();
       out << '[';
-      WriteType(ArrTy->getElementType());
+      WriteQualType(ArrTy->getElementType());
       out << " x " << ArrTy->getNumElements() << ']';
    }
    else {
       llvm_unreachable("bad type kind");
    }
-}
-
-void ModuleWriterImpl::WriteCDotArgument(const cdot::Argument &arg)
-{
-   if (arg.isVararg) {
-      out << "...";
-   }
-   else {
-      WriteQualType(arg.type);
-   }
-}
-
-void ModuleWriterImpl::WriteTuplePair(const std::pair<string, QualType> &Pair)
-{
-   WriteQualType(Pair.second);
 }
 
 void ModuleWriterImpl::WriteQualType(QualType type)
@@ -207,17 +184,6 @@ void ModuleWriterImpl::WriteQualType(QualType type)
 void ModuleWriterImpl::WriteCapture(Lambda::Capture const &C)
 {
    WriteQualType(C.type);
-}
-
-void ModuleWriterImpl::WriteLabeledType(
-   const std::pair<std::string, QualType> &pair)
-{
-   if (!pair.first.empty()) {
-      WriteName(pair.first, ValPrefix::Value);
-      out << ": ";
-   }
-
-   WriteQualType(pair.second);
 }
 
 void ModuleWriterImpl::WriteField(const StructType::Field &F)
@@ -333,15 +299,7 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       return;
    }
 
-   if (auto VT = dyn_cast<VTable>(C)) {
-      out << "vtable ";
-      WriteName(VT->getOwner()->getName(), ValPrefix::Type);
-   }
-   else if (auto VT = dyn_cast<PTable>(C)) {
-      out << "ptable ";
-      WriteName(VT->getOwner()->getName(), ValPrefix::Type);
-   }
-   else if (auto TI = dyn_cast<TypeInfo>(C)) {
+   if (auto TI = dyn_cast<TypeInfo>(C)) {
       out << "typeinfo ";
       WriteType(TI->getForType());
    }
@@ -385,8 +343,6 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
          out << '"';
          break;
       case Value::ConstantArrayID: {
-      case Value::VTableID:
-      case Value::PTableID:
          auto &Elements = cast<ConstantArray>(C)->getVec();
          WriteList(Elements, &ModuleWriterImpl::WriteConstant,
                    "[", ", ", "]");
@@ -480,50 +436,9 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
 
 void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 {
-   if (!I->getType()->isVoidTy()) {
+   if (!I->getType()->isVoidType()) {
       WriteName(I->getName(), ValPrefix::Value);
       out << " = ";
-   }
-
-   if (auto Cast = dyn_cast<CastInst>(I)) {
-      if (auto IntCast = dyn_cast<IntegerCastInst>(Cast)) {
-         out << cdot::CastNames[(unsigned char)IntCast->getKind()];
-      }
-      else if (auto FPCast = dyn_cast<FPCastInst>(Cast)) {
-         out << cdot::CastNames[(unsigned char)FPCast->getKind()];
-      }
-      else if (auto BC = dyn_cast<BitCastInst>(Cast)) {
-         out << cdot::CastNames[(unsigned char)BC->getKind()];
-      }
-      else if (isa<IntToEnumInst>(Cast)) {
-         out << "inttoenum";
-      }
-      else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
-         out << (ProtoCast->isWrap() ? "proto_wrap" : "proto_unwrap");
-      }
-      else {
-         out << il::CastNames[(unsigned short)Cast->getTypeID() - FirstCast];
-      }
-
-      out << ' ';
-      WriteValue(Cast->getOperand(0));
-
-      out << " to ";
-      WriteQualType(Cast->getType());
-
-      return;
-   }
-
-   if (auto Op = dyn_cast<OperatorInst>(I)) {
-      out << OpNames[(unsigned short)Op->getOpCode() - FirstOp] << ' ';
-      WriteValue(Op->getOperand(0));
-
-      if (Op->getNumOperands() == 2) {
-         out << ',' << ' ';
-         WriteValue(Op->getOperand(1));
-      }
-
-      return;
    }
 
    if (auto Alloca = dyn_cast<AllocaInst>(I)) {
@@ -696,9 +611,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    if (auto ICall = dyn_cast<IntrinsicCallInst>(I)) {
       out << "call intrinsic ";
 
-      WriteType(IntrinsicCallInst::getIntrinsicReturnType
-                   (ICall->getCalledIntrinsic()));
-
+      WriteType(ICall->getType());
       out << " " << ICall->getIntrinsicName() << " ";
       WriteList(ICall->getArgs(), &ModuleWriterImpl::WriteValue);
 
@@ -860,6 +773,47 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       return;
    }
 
+   if (auto Cast = dyn_cast<CastInst>(I)) {
+      if (auto IntCast = dyn_cast<IntegerCastInst>(Cast)) {
+         out << cdot::CastNames[(unsigned char)IntCast->getKind()];
+      }
+      else if (auto FPCast = dyn_cast<FPCastInst>(Cast)) {
+         out << cdot::CastNames[(unsigned char)FPCast->getKind()];
+      }
+      else if (auto BC = dyn_cast<BitCastInst>(Cast)) {
+         out << cdot::CastNames[(unsigned char)BC->getKind()];
+      }
+      else if (isa<IntToEnumInst>(Cast)) {
+         out << "inttoenum";
+      }
+      else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
+         out << (ProtoCast->isWrap() ? "proto_wrap" : "proto_unwrap");
+      }
+      else {
+         out << il::CastNames[(unsigned short)Cast->getTypeID() - FirstCast];
+      }
+
+      out << ' ';
+      WriteValue(Cast->getOperand(0));
+
+      out << " to ";
+      WriteQualType(Cast->getType());
+
+      return;
+   }
+
+   if (auto Op = dyn_cast<OperatorInst>(I)) {
+      out << OpNames[(unsigned short)Op->getOpCode() - FirstOp] << ' ';
+      WriteValue(Op->getOperand(0));
+
+      if (Op->getNumOperands() == 2) {
+         out << ',' << ' ';
+         WriteValue(Op->getOperand(1));
+      }
+
+      return;
+   }
+
    llvm_unreachable("bad instruction kind");
 }
 
@@ -910,8 +864,20 @@ void ModuleWriterImpl::WriteFunction(const Function *F, bool onlyDecl)
 
    WriteName(F->getName(), ValPrefix::Constant);
 
-   auto &args = F->getEntryBlock()->getArgs();
-   WriteList(args, &ModuleWriterImpl::WriteArgumentNoName);
+   size_t i = 0;
+   out << "(";
+
+   for (auto &arg : F->getEntryBlock()->getArgs()) {
+      if (i++ != 0) out << ", ";
+      WriteArgumentNoName(arg);
+   }
+
+   if (F->isCStyleVararg()) {
+      if (i) out << ", ";
+      out << "...";
+   }
+
+   out << ")";
 
    if (auto L = dyn_cast<Lambda>(F)) {
       out << " captures";

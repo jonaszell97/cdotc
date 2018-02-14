@@ -6,8 +6,7 @@
 #include "../../Function/Method.h"
 #include "../../Record/AggregateType.h"
 
-#include "../../../../Variant/Type/ObjectType.h"
-#include "../../../../Variant/Type/FunctionType.h"
+using namespace cdot::support;
 
 namespace cdot {
 namespace il {
@@ -19,8 +18,8 @@ InitInst::InitInst(StructType *InitializedType,
    : CallInst(InitInstID, Init, args, parent),
      InitializedType(InitializedType)
 {
-   *type = ObjectType::get(Init->getRecordType()->getName());
-   setIsLvalue(!support::isa<ClassType>(InitializedType));
+   type = Init->getRecordType()->getType();
+   setIsLvalue(!isa<ClassType>(InitializedType));
 }
 
 UnionInitInst::UnionInitInst(UnionType *UnionTy,
@@ -29,7 +28,7 @@ UnionInitInst::UnionInitInst(UnionType *UnionTy,
    : CallInst(UnionInitInstID, { InitializerVal }, parent),
      UnionTy(UnionTy)
 {
-   *type = ObjectType::get(UnionTy->getName());
+   type = UnionTy->getType();
    setIsLvalue(true);
 }
 
@@ -40,21 +39,18 @@ EnumInitInst::EnumInitInst(EnumType *EnumTy,
    : CallInst(EnumInitInstID, args, parent),
      EnumTy(EnumTy), caseName(caseName)
 {
-   *type = ObjectType::get(EnumTy->getName());
+   type = EnumTy->getType();
    setIsLvalue(true);
 }
 
 LambdaInitInst::LambdaInitInst(il::Function *F,
+                               QualType LambdaTy,
                                llvm::ArrayRef<Value*> Captures,
                                BasicBlock *parent)
-   : Instruction(LambdaInitInstID, nullptr, parent),
+   : Instruction(LambdaInitInstID, LambdaTy, parent),
      MultiOperandInst(Captures),
      F(F)
 {
-   auto FuncTy = support::cast<FunctionType>(*F->getType());
-   *type = FunctionType::get(FuncTy->getReturnType(), FuncTy->getArgTypes(),
-                             false);
-
    setIsLvalue(true);
 }
 

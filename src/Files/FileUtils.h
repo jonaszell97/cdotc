@@ -8,40 +8,55 @@
 #include <string>
 #include <vector>
 #include <system_error>
-#include <dirent.h>
+#include <llvm/ADT/Twine.h>
+#include <llvm/ADT/ArrayRef.h>
 
 namespace llvm {
    class raw_fd_ostream;
-}
+   class MemoryBuffer;
+} // namespace llvm
 
 namespace cdot {
 namespace fs {
 
-   using std::string;
+#ifdef _WIN32
+   static char PATH_SEPARATOR = '\\';
+#else
+   static char PathSeperator = '/';
+#endif
 
-   #ifdef _WIN32
-      static char PATH_SEPARATOR = '\\';
-   #else
-      static char PATH_SEPARATOR = '/';
-   #endif
+std::string getPath(const std::string& fullPath);
+std::string getFileName(const std::string& fullPath);
 
-   string getPath(const string& fullPath);
-   string getFileName(const string& fullPath);
+std::string getExtension(const std::string& fullPath);
+std::string withoutExtension(const std::string &fullPath);
+std::string swapExtension(const std::string& fileName,
+                          const std::string &newExt);
 
-   string getExtension(const string& fullPath);
-   string swapExtension(const string& fileName, const string &newExt);
+std::string getFileNameAndExtension(const std::string& fullPath);
+bool fileExists(const std::string& name);
 
-   string getFileNameAndExtension(const string& fullPath);
-   bool fileExists(const string& name);
+void createDirectories(const std::string &fullPath);
 
-   void mkdirIfNotExists(const string& fullPath);
+std::vector<std::string> getAllFilesInDirectory(std::string& dirName,
+                                           bool recursive = false);
 
-   std::vector<string> getAllFilesInDirectory(string& dirName, bool recurse, DIR* dir = nullptr);
+llvm::raw_fd_ostream* createFile(const std::string& fileName,
+                                 std::error_code ec, bool overwrite = false);
 
-   llvm::raw_fd_ostream* createFile(const string& fileName, std::error_code ec, bool overwrite = false);
+std::string findFileInDirectories(llvm::Twine const &fileName,
+                                  llvm::ArrayRef<std::string> directories);
 
-}
-}
+int executeCommand(llvm::StringRef Program, llvm::ArrayRef<std::string> args);
+long long getLastModifiedTime(llvm::Twine const& pathToFile);
+
+void getAllMatchingFiles(llvm::StringRef fileName,
+                         llvm::SmallVectorImpl<std::string> &Out);
+
+std::error_code makeAbsolute(llvm::SmallVectorImpl<char> &Buf);
+
+} // namespace fs
+} // namespace cdot
 
 
 #endif //CDOT_FILEUTILS_H

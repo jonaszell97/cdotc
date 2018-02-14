@@ -2,27 +2,18 @@
 #ifdef CDOT_TYPE
 #  define CDOT_OBJ_TYPE(Name)       CDOT_TYPE(Name)
 #  define CDOT_PRIMITIVE_TYPE(Name) CDOT_TYPE(Name)
-#  define CDOT_TYPE_GROUP(Name)     CDOT_TYPE(Name)
 #  define CDOT_OTHER_TYPE(Name)     CDOT_TYPE(Name)
+// intentionally leaving out CDOT_BASE_TYPE
 #endif
 
 #ifdef CDOT_OBJ_TYPE
    CDOT_OBJ_TYPE(ObjectType)
-   CDOT_OBJ_TYPE(MetaType)
    CDOT_OBJ_TYPE(InconcreteObjectType)
 #endif
 
 #ifdef CDOT_PRIMITIVE_TYPE
    CDOT_PRIMITIVE_TYPE(IntegerType)
    CDOT_PRIMITIVE_TYPE(FPType)
-#endif
-
-#ifdef CDOT_TYPE_GROUP
-   CDOT_TYPE_GROUP(IntegerTypeGroup)
-   CDOT_TYPE_GROUP(FPTypeGroup)
-   CDOT_TYPE_GROUP(StringTypeGroup)
-   CDOT_TYPE_GROUP(EnumTypeGroup)
-   CDOT_TYPE_GROUP(LambdaTypeGroup)
 #endif
 
 #ifdef CDOT_OTHER_TYPE
@@ -35,10 +26,19 @@
    CDOT_OTHER_TYPE(ArrayType)
    CDOT_OTHER_TYPE(InferredArrayType)
    CDOT_OTHER_TYPE(NamespaceType)
+   CDOT_OTHER_TYPE(MetaType)
+   CDOT_OTHER_TYPE(TypedefType)
+
+   CDOT_OTHER_TYPE(UnknownAnyType)
+#endif
+
+#ifdef CDOT_BASE_TYPE
+   CDOT_BASE_TYPE(PrimitiveType)
+   CDOT_BASE_TYPE(Type)
 #endif
 
 #undef CDOT_TYPE
 #undef CDOT_OBJ_TYPE
 #undef CDOT_PRIMITIVE_TYPE
-#undef CDOT_TYPE_GROUP
 #undef CDOT_OTHER_TYPE
+#undef CDOT_BASE_TYPE

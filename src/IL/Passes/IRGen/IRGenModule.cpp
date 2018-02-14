@@ -3,8 +3,10 @@
 //
 
 #include "IRGen.h"
+
 #include "../../../Compiler.h"
 #include "../../../Files/FileUtils.h"
+#include "../../../Message/Diagnostics.h"
 
 #include <sstream>
 
@@ -24,7 +26,9 @@
 
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ADT/StringSwitch.h>
 
+using namespace cdot::diag;
 using std::string;
 
 namespace cdot {
@@ -48,25 +52,19 @@ void IRGen::finalize(const CompilationUnit &CU)
 
       exit(1);
    }
-
-   auto& options = Compiler::getOptions();
-   auto doOutputIR = options.hasOutputKind(OutputKind::IR);
-   if (doOutputIR) {
-      outputIR(CU);
-   }
 }
 
 void IRGen::outputIR(const CompilationUnit &CU)
 {
-   auto &options = Compiler::getOptions();
-   auto outFile = options.getOutFile(OutputKind::IR).str();
+   auto &options = CU.getOptions();
+   auto outFile = options.getOutFile(OutputKind::LlvmIR).str();
 
    if (outFile.empty()) {
       M->dump();
       return;
    }
 
-   fs::mkdirIfNotExists(fs::getPath(outFile));
+   fs::createDirectories(fs::getPath(outFile));
 
    std::error_code ec;
    llvm::raw_fd_ostream outstream(outFile, ec,
@@ -77,12 +75,9 @@ void IRGen::outputIR(const CompilationUnit &CU)
    outstream.close();
 }
 
-void IRGen::linkAndEmit(llvm::LLVMContext &Ctx,
-                        std::vector<CompilationUnit> &CUs) {
-   if (CUs.empty()) {
-      return;
-   }
-
+void IRGen::linkAndEmit(CompilationUnit &CU)
+{
+   auto Module = CU.getLLVMModule();
    auto TargetTriple = llvm::sys::getDefaultTargetTriple();
 
    llvm::InitializeAllTargetInfos();
@@ -107,21 +102,14 @@ void IRGen::linkAndEmit(llvm::LLVMContext &Ctx,
    auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features,
                                                     opt, RM);
 
-   auto& options = Compiler::getOptions();
-   auto outputAsm = options.hasOutputKind(OutputKind::ASM);
-   auto outputObj = options.hasOutputKind(OutputKind::OBJ);
-   auto outputExec = options.hasOutputKind(OutputKind::EXEC);
-   if (!outputAsm && !outputObj && !outputExec) {
+   auto& options = CU.getOptions();
+   auto outputAsm = options.hasOutputKind(OutputKind::Asm);
+   auto outputObj = options.hasOutputKind(OutputKind::ObjectFile);
+   auto outputExec = options.hasOutputKind(OutputKind::Executable);
+   auto outputStaticLib = options.hasOutputKind(OutputKind::StaticLib);
+
+   if (!outputAsm && !outputObj && !outputExec && !outputStaticLib) {
       return;
-   }
-
-   auto Module = std::make_unique<llvm::Module>("main", Ctx);
-   auto numCUs = CUs.size();
-
-   llvm::Linker linker(*Module);
-   for (int i = 0; i < numCUs; ++i) {
-      auto M = std::unique_ptr<llvm::Module>(CUs[i].Module);
-      linker.linkInModule(std::move(M));
    }
 
    Module->setDataLayout(TargetMachine->createDataLayout());
@@ -130,30 +118,36 @@ void IRGen::linkAndEmit(llvm::LLVMContext &Ctx,
    if (outputAsm) {
       std::error_code EC;
       llvm::legacy::PassManager pass;
-      llvm::raw_fd_ostream asmDest(options.getOutFile(OutputKind::ASM), EC,
-                                   llvm::sys::fs::F_None);
+
+      llvm::SmallString<512> s;
+      llvm::raw_svector_ostream sstream(s);
+
       auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
-      if (TargetMachine->addPassesToEmitFile(pass, asmDest, FileType)) {
+      if (TargetMachine->addPassesToEmitFile(pass, sstream, FileType)) {
          llvm::outs() << "TargetMachine can't emit a file of this type\n";
          exit(1);
       }
 
       pass.run(*Module);
-      asmDest.flush();
+
+      auto asmFile = options.getOutFile(OutputKind::Asm);
+      llvm::raw_fd_ostream asmDest(asmFile, EC, llvm::sys::fs::F_RW);
+
+      asmDest << s.str();
    }
 
    if (outputObj || outputExec) {
       std::error_code EC;
       llvm::legacy::PassManager pass;
 
-      string &objOutFile = options.outFiles[OutputKind::OBJ];
+      string &objOutFile = options.outFiles[OutputKind::ObjectFile];
       if (objOutFile.empty()) {
-         objOutFile = fs::swapExtension(options.getOutFile(OutputKind::EXEC),
-                                        "o");
+         objOutFile =
+            fs::swapExtension(options.getOutFile(OutputKind::Executable), "o");
       }
 
-      llvm::raw_fd_ostream objDest(objOutFile, EC,
-                                   llvm::sys::fs::F_None);
+      llvm::raw_fd_ostream objDest(objOutFile, EC, llvm::sys::fs::F_RW);
+
       auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
       if (TargetMachine->addPassesToEmitFile(pass, objDest, FileType)) {
          llvm::outs() << "TargetMachine can't emit a file of this type\n";
@@ -163,72 +157,76 @@ void IRGen::linkAndEmit(llvm::LLVMContext &Ctx,
       pass.run(*Module);
       objDest.flush();
 
-      if (outputExec) {
+      if (outputExec || outputStaticLib) {
          auto clangPathOrError = llvm::sys::findProgramByName("clang");
          if (clangPathOrError.getError()) {
             llvm::outs() << "clang executable not found\n";
-            exit(1);
+            std::terminate();
          }
 
-         string &clangPath = clangPathOrError.get();
-         std::stringstream args;
-         args << clangPath << " -lc -o "
-              << options.getOutFile(OutputKind::EXEC).str() << " "
-              << options.getOutFile(OutputKind::OBJ).str();
+         llvm::SmallString<128> ScratchBuf;
+         llvm::SmallVector<string, 8> args{
+            clangPathOrError.get(),
+            options.getOutFile(OutputKind::ObjectFile)
+         };
 
-         for (const auto &obj : options.linkedFiles) {
-            args << " " << obj;
+         for (auto &file : options.getInputFiles(InputKind::LinkerInput)) {
+            args.push_back(file);
          }
 
-         if (options.emitDebugInfo)
-            args << " -g";
+         if (options.emitDebugInfo())
+            args.push_back("-g");
 
-         std::stringstream res;
-         auto cmd = args.str();
-         FILE *in;
-         char buff[512];
+         auto initialSize = args.size();
 
-         if (!(in = popen(cmd.c_str(), "r"))) {
-            llvm::outs() << "popen failed\n";
-            exit(1);
+         if (outputExec) {
+            args.push_back("-lc");
+            args.push_back("-o");
+            args.push_back(options.getOutFile(OutputKind::Executable));
+
+            fs::executeCommand(clangPathOrError.get(), args);
+
+            args.resize(initialSize);
          }
 
-         while (fgets(buff, sizeof(buff), in) != 0) {
-            res << buff;
+         // create .a file if requested
+         if (outputStaticLib) {
+            args.clear();
+
+            auto arExec = llvm::sys::findProgramByName("ar");
+            if (!arExec)
+               diag::err(err_generic_error)
+                  << "'ar' executable not found"
+                  << diag::term;
+
+            args.push_back(arExec.get());
+            args.push_back("-r");
+            args.push_back("-c");
+            args.push_back("-s");
+
+            for (auto &file : options.getInputFiles(InputKind::LinkerInput))
+               args.push_back(file);
+
+            ScratchBuf += options.getOutFile(OutputKind::StaticLib);
+            llvm::sys::fs::make_absolute(ScratchBuf);
+
+            args.push_back(ScratchBuf.str());
+            args.push_back(options.getOutFile(OutputKind::ObjectFile));
+
+            fs::executeCommand(arExec.get(), args);
+
+            ScratchBuf.clear();
          }
 
-         if (res.str() != "\n") {
-            llvm::outs() << res.str();
+         if (!outputObj) {
+            auto rm = llvm::sys::findProgramByName("rm");
+            if (!rm)
+               return;
+
+            fs::executeCommand(rm.get(), {
+               rm.get(), "-f", objOutFile
+            });
          }
-
-         pclose(in);
-
-//         if (options.emitDebugInfo) {
-//            auto dsymPath = llvm::sys::findProgramByName("dsymutil");
-//            if (!dsymPath) {
-//               return;
-//            }
-//
-//            string &dsym = dsymPath.get();
-//            string dsymCmd = dsym + " "
-//                             + options.getOutFile(OutputKind::EXEC).str();
-//
-//            if (!(in = popen(dsymCmd.c_str(), "r"))) {
-//               llvm::outs() << "popen failed\n";
-//               exit(1);
-//            }
-//
-//            res.flush();
-//            while (fgets(buff, sizeof(buff), in) != 0) {
-//               res << buff;
-//            }
-//
-//            if (res.str() != "\n") {
-//               llvm::outs() << res.str();
-//            }
-//
-//            pclose(in);
-//         }
       }
    }
 }

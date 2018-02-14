@@ -33,7 +33,7 @@ public:
 
    typedef llvm::SmallPtrSet<BasicBlock*, 4>   PredecessorList;
 
-   explicit BasicBlock(Function *parent);
+   explicit BasicBlock(PointerType *Int8PtrTy, Function *parent);
 
    BasicBlock(const BasicBlock&) = delete;
    const BasicBlock &operator=(const BasicBlock&) = delete;
@@ -44,14 +44,14 @@ public:
    InstList &getInstructions();
    const InstList &getInstructions() const;
 
-   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
+   ValueSymbolTable* getSymTab() const
    {
-      return Instructions.getSymTab();
+      return Instructions.getSymTab().get();
    }
 
-   std::shared_ptr<ValueSymbolTable> const& getArgSymTab() const
+   ValueSymbolTable* getArgSymTab() const
    {
-      return Args.getSymTab();
+      return Args.getSymTab().get();
    }
 
    const ArgList &getArgs() const { return Args; }

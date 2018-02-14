@@ -5,19 +5,9 @@
 #ifndef CDOT_CLASSMEMBERDECL_H
 #define CDOT_CLASSMEMBERDECL_H
 
-
-#include "../../Statement.h"
-#include "RecordSubDecl.h"
+#include "../NamedDecl.h"
 
 namespace cdot {
-
-namespace cl {
-
-struct Method;
-struct Field;
-
-} // namespace cl
-
 namespace ast {
 
 class TypeRef;
@@ -25,34 +15,36 @@ class FuncArgDecl;
 class Expression;
 class CompoundStmt;
 
-class FieldDecl : public RecordSubDecl {
+class FieldDecl: public NamedDecl {
 public:
-   FieldDecl(
-      std::string &&name,
-      std::shared_ptr<TypeRef> &&type,
-      AccessModifier am,
-      bool isStatic = false,
-      bool isConst = false,
-      std::shared_ptr<Expression> &&defaultVal = {}
-   );
-
-   inline void setDefault(std::shared_ptr<Expression> &&expr)
+   FieldDecl(std::string &&name,
+             TypeRef* type,
+             AccessModifier am,
+             bool isStatic = false,
+             bool isConst = false,
+             Expression* defaultVal = {})
+      : NamedDecl(FieldDeclID, am, move(name)),
+        type(type), defaultVal(defaultVal)
    {
-      defaultVal = move(expr);
+      setDeclFlag(DF_Static, isStatic);
+      setDeclFlag(DF_Const, isConst);
    }
 
-   typedef std::shared_ptr<FieldDecl> SharedPtr;
+   inline void setDefault(Expression* expr)
+   {
+      defaultVal = expr;
+   }
 
-   void addGetter(std::shared_ptr<CompoundStmt> &&body = nullptr)
+   void addGetter(CompoundStmt* body = nullptr)
    {
       has_getter = true;
-      getterBody = move(body);
+      getterBody = body;
    }
 
-   void addSetter(std::shared_ptr<CompoundStmt> &&body = nullptr)
+   void addSetter(CompoundStmt* body = nullptr)
    {
       has_setter = true;
-      setterBody = move(body);
+      setterBody = body;
    }
 
    static bool classof(AstNode const* T)
@@ -60,29 +52,38 @@ public:
        return T->getTypeID() == FieldDeclID;
    }
 
+   friend class TransformImpl;
+
 protected:
+   std::string linkageName;
+
    bool has_getter = false;
    bool has_setter = false;
 
-   std::shared_ptr<CompoundStmt> getterBody = nullptr;
-   std::shared_ptr<CompoundStmt> setterBody = nullptr;
+   CompoundStmt* getterBody = nullptr;
+   CompoundStmt* setterBody = nullptr;
 
-   cdot::cl::Method *getterMethod;
-   cdot::cl::Method *setterMethod;
+   MethodDecl *getterMethod;
+   MethodDecl *setterMethod;
 
-   std::shared_ptr<FuncArgDecl> newVal = nullptr;
+   FuncArgDecl* newVal = nullptr;
 
-   bool is_const;
-   std::shared_ptr<TypeRef> type;
-   std::shared_ptr<Expression> defaultVal;
-
-   cl::Field *field;
-
-   bool protocol_field = false;
+   TypeRef* type;
+   Expression* defaultVal;
 
    size_t globalOrdering = 0;
 
 public:
+   const string &getLinkageName() const
+   {
+      return linkageName;
+   }
+
+   void setLinkageName(string &&linkageName)
+   {
+      FieldDecl::linkageName = move(linkageName);
+   }
+
    bool hasGetter() const
    {
       return has_getter;
@@ -103,94 +104,69 @@ public:
       FieldDecl::has_setter = hasSetter;
    }
 
-   const std::shared_ptr<CompoundStmt> &getGetterBody() const
+   CompoundStmt* getGetterBody() const
    {
       return getterBody;
    }
 
-   void setGetterBody(const std::shared_ptr<CompoundStmt> &getterBody)
+   void setGetterBody(CompoundStmt* getterBody)
    {
       FieldDecl::getterBody = getterBody;
    }
 
-   const std::shared_ptr<CompoundStmt> &getSetterBody() const
+   CompoundStmt* getSetterBody() const
    {
       return setterBody;
    }
 
-   void setSetterBody(const std::shared_ptr<CompoundStmt> &setterBody)
+   void setSetterBody(CompoundStmt* setterBody)
    {
       FieldDecl::setterBody = setterBody;
    }
 
-   cdot::cl::Method *getGetterMethod() const
+   MethodDecl *getGetterMethod() const
    {
       return getterMethod;
    }
 
-   void setGetterMethod(cdot::cl::Method *getterMethod)
+   void setGetterMethod(MethodDecl *getterMethod)
    {
       FieldDecl::getterMethod = getterMethod;
    }
 
-   cdot::cl::Method *getSetterMethod() const
+   MethodDecl *getSetterMethod() const
    {
       return setterMethod;
    }
 
-   void setSetterMethod(cdot::cl::Method *setterMethod)
+   void setSetterMethod(MethodDecl *setterMethod)
    {
       FieldDecl::setterMethod = setterMethod;
    }
 
-   const std::shared_ptr<FuncArgDecl> &getNewVal() const
+   FuncArgDecl* getNewVal() const
    {
       return newVal;
    }
 
-   void setNewVal(const std::shared_ptr<FuncArgDecl> &newVal)
+   void setNewVal(FuncArgDecl* newVal)
    {
       FieldDecl::newVal = newVal;
    }
 
-   bool isConst() const
-   {
-      return is_const;
-   }
-
-   void isConst(bool is_const)
-   {
-      FieldDecl::is_const = is_const;
-   }
-
-   const std::shared_ptr<TypeRef> &getType() const
+   TypeRef* getType() const
    {
       return type;
    }
 
-   void setType(const std::shared_ptr<TypeRef> &type)
+   void setType(TypeRef* type)
    {
       FieldDecl::type = type;
    }
 
-   const std::shared_ptr<Expression> &getDefaultVal() const
+   Expression* getDefaultVal() const
    {
       return defaultVal;
-   }
-
-   void setDefaultVal(const std::shared_ptr<Expression> &defaultVal)
-   {
-      FieldDecl::defaultVal = defaultVal;
-   }
-
-   bool isProtocolFfield() const
-   {
-      return protocol_field;
-   }
-
-   void isProtocolField(bool protocol_field)
-   {
-      FieldDecl::protocol_field = protocol_field;
    }
 
    size_t getGlobalOrdering() const
@@ -202,16 +178,59 @@ public:
    {
       FieldDecl::globalOrdering = globalOrder;
    }
+};
 
-   cl::Field *getField() const
+class AssociatedTypeDecl: public NamedDecl {
+public:
+   AssociatedTypeDecl(std::string &&protoSpec,
+                      string &&name,
+                      std::vector<StaticExpr* > &&constraints,
+                      TypeRef* actualType)
+      : NamedDecl(AssociatedTypeDeclID, (AccessModifier)0, move(name)),
+        protocolSpecifier(move(protoSpec)),
+        constraints(move(constraints)), actualType(actualType)
+   {}
+
+   const std::vector<StaticExpr* > &getConstraints() const
    {
-      return field;
+      return constraints;
    }
 
-   void setField(cl::Field *field)
+   TypeRef* getActualType() const
    {
-      FieldDecl::field = field;
+      return actualType;
    }
+
+   void setActualType(TypeRef* actualType)
+   {
+      AssociatedTypeDecl::actualType = actualType;
+   }
+
+   llvm::StringRef getProtocolSpecifier() const
+   {
+      return protocolSpecifier;
+   }
+
+   ProtocolDecl *getProto() const { return Proto; }
+
+   void setProto(ProtocolDecl *Proto)
+   {
+      AssociatedTypeDecl::Proto = Proto;
+   }
+
+   static bool classof(AstNode const *T)
+   {
+      return T->getTypeID() == AssociatedTypeDeclID;
+   }
+
+   friend class TransformImpl;
+
+private:
+   std::string protocolSpecifier;
+   std::vector<StaticExpr* > constraints;
+   TypeRef* actualType;
+
+   ProtocolDecl *Proto = nullptr;
 };
 
 } // namespace ast

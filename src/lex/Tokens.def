@@ -16,8 +16,10 @@
 
    CDOT_OTHER_TOKEN(expr_begin, "")
    CDOT_OTHER_TOKEN(stringify_begin, "")
+   CDOT_OTHER_TOKEN(preprocessor_value, "")
 
    CDOT_OTHER_TOKEN(ident, "")
+   CDOT_OTHER_TOKEN(op_ident, "")
    CDOT_OTHER_TOKEN(dollar_ident, "")
    CDOT_OTHER_TOKEN(percent_ident, "")
    CDOT_OTHER_TOKEN(dollar_dollar_ident, "")
@@ -32,81 +34,90 @@
 #endif
 
 #ifdef CDOT_KEYWORD_TOKEN
-   CDOT_KEYWORD_TOKEN(kw_self, "self")
-   CDOT_KEYWORD_TOKEN(kw_super, "super")
-   CDOT_KEYWORD_TOKEN(kw_true, "true")
-   CDOT_KEYWORD_TOKEN(kw_false, "false")
-   CDOT_KEYWORD_TOKEN(kw_none, "none")
+#  define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
+#endif
+
+#ifdef CDOT_KEYWORD
+   CDOT_KEYWORD(self)
+   CDOT_KEYWORD(super)
+   CDOT_KEYWORD(true)
+   CDOT_KEYWORD(false)
+   CDOT_KEYWORD(none)
    
-   CDOT_KEYWORD_TOKEN(kw_def, "def")
-   CDOT_KEYWORD_TOKEN(kw_let, "let")
-   CDOT_KEYWORD_TOKEN(kw_var, "var")
-   CDOT_KEYWORD_TOKEN(kw_return, "return")
-   CDOT_KEYWORD_TOKEN(kw_if, "if")
-   CDOT_KEYWORD_TOKEN(kw_else, "else")
-   CDOT_KEYWORD_TOKEN(kw_while, "while")
-   CDOT_KEYWORD_TOKEN(kw_loop, "loop")
-   CDOT_KEYWORD_TOKEN(kw_match, "match")
-   CDOT_KEYWORD_TOKEN(kw_for, "for")
-   CDOT_KEYWORD_TOKEN(kw_case, "case")
+   CDOT_KEYWORD(def)
+   CDOT_KEYWORD(let)
+   CDOT_KEYWORD(var)
+   CDOT_KEYWORD(return)
+   CDOT_KEYWORD(if)
+   CDOT_KEYWORD(else)
+   CDOT_KEYWORD(while)
+   CDOT_KEYWORD(loop)
+   CDOT_KEYWORD(match)
+   CDOT_KEYWORD(for)
+   CDOT_KEYWORD(case)
   
-   CDOT_KEYWORD_TOKEN(kw_throw, "throw")
-   CDOT_KEYWORD_TOKEN(kw_try, "try")
-   CDOT_KEYWORD_TOKEN(kw_catch, "catch")
-   CDOT_KEYWORD_TOKEN(kw_finally, "finally")
+   CDOT_KEYWORD(throw)
+   CDOT_KEYWORD(try)
+   CDOT_KEYWORD(catch)
+   CDOT_KEYWORD(finally)
 
-   CDOT_KEYWORD_TOKEN(kw_alias, "alias")
+   CDOT_KEYWORD(alias)
 
-   CDOT_KEYWORD_TOKEN(kw_typedef, "typedef")
-   CDOT_KEYWORD_TOKEN(kw_namespace, "namespace")
-   CDOT_KEYWORD_TOKEN(kw_struct, "struct")
-   CDOT_KEYWORD_TOKEN(kw_class, "class")
-   CDOT_KEYWORD_TOKEN(kw_union, "union")
-   CDOT_KEYWORD_TOKEN(kw_enum, "enum")
-   CDOT_KEYWORD_TOKEN(kw_protocol, "protocol")
-   CDOT_KEYWORD_TOKEN(kw_extend, "extend")
+   CDOT_KEYWORD(typedef)
+   CDOT_KEYWORD(namespace)
+   CDOT_KEYWORD(struct)
+   CDOT_KEYWORD(class)
+   CDOT_KEYWORD(union)
+   CDOT_KEYWORD(enum)
+   CDOT_KEYWORD(protocol)
+   CDOT_KEYWORD(extend)
    
-   CDOT_KEYWORD_TOKEN(kw_public, "public")
-   CDOT_KEYWORD_TOKEN(kw_private, "private")
-   CDOT_KEYWORD_TOKEN(kw_protected, "protected")
-   CDOT_KEYWORD_TOKEN(kw_static, "static")
-   CDOT_KEYWORD_TOKEN(kw_abstract, "abstract")
-   CDOT_KEYWORD_TOKEN(kw_prop, "prop")
-   CDOT_KEYWORD_TOKEN(kw_with, "with")
-   CDOT_KEYWORD_TOKEN(kw_where, "where")
-   CDOT_KEYWORD_TOKEN(kw_continue, "continue")
-   CDOT_KEYWORD_TOKEN(kw_init, "init")
-   CDOT_KEYWORD_TOKEN(kw_deinit, "deinit")
-   CDOT_KEYWORD_TOKEN(kw_associatedType, "associatedType")
+   CDOT_KEYWORD(public)
+   CDOT_KEYWORD(private)
+   CDOT_KEYWORD(protected)
+   CDOT_KEYWORD(static)
+   CDOT_KEYWORD(abstract)
+   CDOT_KEYWORD(prop)
+   CDOT_KEYWORD(with)
+   CDOT_KEYWORD(where)
+   CDOT_KEYWORD(continue)
+   CDOT_KEYWORD(init)
+   CDOT_KEYWORD(deinit)
+   CDOT_KEYWORD(associatedType)
 
-   CDOT_KEYWORD_TOKEN(kw_break, "break")
-   CDOT_KEYWORD_TOKEN(kw_goto, "goto")
-   CDOT_KEYWORD_TOKEN(kw_infix, "infix")
-   CDOT_KEYWORD_TOKEN(kw_prefix, "prefix")
-   CDOT_KEYWORD_TOKEN(kw_postfix, "postfix")
-   CDOT_KEYWORD_TOKEN(kw_mutating, "mutating")
-   CDOT_KEYWORD_TOKEN(kw_declare, "declare")
+   CDOT_KEYWORD(break)
+   CDOT_KEYWORD(goto)
+   CDOT_KEYWORD(infix)
+   CDOT_KEYWORD(prefix)
+   CDOT_KEYWORD(postfix)
+   CDOT_KEYWORD(mutating)
+   CDOT_KEYWORD(declare)
 
-   CDOT_KEYWORD_TOKEN(kw_module, "module")
-   CDOT_KEYWORD_TOKEN(kw_import, "import")
-   CDOT_KEYWORD_TOKEN(kw_using, "using")
+   CDOT_KEYWORD(module)
+   CDOT_KEYWORD(import)
+   CDOT_KEYWORD(using)
 
-   CDOT_KEYWORD_TOKEN(kw_ref, "ref")
-   CDOT_KEYWORD_TOKEN(kw_memberwise, "memberwise")
+   CDOT_KEYWORD(ref)
+   CDOT_KEYWORD(memberwise)
 
-   CDOT_KEYWORD_TOKEN(kw_static_if, "static_if")
-   CDOT_KEYWORD_TOKEN(kw_static_for, "static_for")
-   CDOT_KEYWORD_TOKEN(kw_static_assert, "static_assert")
-   CDOT_KEYWORD_TOKEN(kw_static_print, "static_print")
+   CDOT_KEYWORD(static_if)
+   CDOT_KEYWORD(static_for)
+   CDOT_KEYWORD(static_assert)
+   CDOT_KEYWORD(static_print)
 
-   CDOT_KEYWORD_TOKEN(kw___debug, "__debug")
-   CDOT_KEYWORD_TOKEN(kw___unreachable, "__unreachable")
+   CDOT_KEYWORD(__debug)
+   CDOT_KEYWORD(__unreachable)
 #endif
 
 #ifdef CDOT_MODULE_KW_TOKEN
-   CDOT_KEYWORD_TOKEN(m_kw_file, "file_name")
-   CDOT_KEYWORD_TOKEN(m_kw_md5, "md5")
-   CDOT_KEYWORD_TOKEN(m_kw_modulename, "module_name")
+   CDOT_MODULE_KW_TOKEN(kw_source_files, "source_files")
+   CDOT_MODULE_KW_TOKEN(kw_timestamp, "timestamp")
+   CDOT_MODULE_KW_TOKEN(kw_build_options, "build_options")
+#endif
+
+#ifdef CDOT_TABLEGEN_KW_TOKEN
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_foreach, "foreach")
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_print, "print")
 #endif
 
 #ifdef CDOT_CONTEXTUAL_KW_TOKEN
@@ -116,24 +127,28 @@
 #endif
 
 #ifdef CDOT_POUND_KEYWORD_TOKEN
-   CDOT_POUND_KEYWORD_TOKEN(pound_if, "#if")
-   CDOT_POUND_KEYWORD_TOKEN(pound_else, "#else")
-   CDOT_POUND_KEYWORD_TOKEN(pound_elseif, "#elseif")
-   CDOT_POUND_KEYWORD_TOKEN(pound_endif, "#endif")
-   CDOT_POUND_KEYWORD_TOKEN(pound_ifdef, "#ifdef")
-   CDOT_POUND_KEYWORD_TOKEN(pound_ifndef, "#ifndef")
-   CDOT_POUND_KEYWORD_TOKEN(pound_for, "#for")
-   CDOT_POUND_KEYWORD_TOKEN(pound_endfor, "#endfor")
-   CDOT_POUND_KEYWORD_TOKEN(pound_pragma, "#pragma")
-   CDOT_POUND_KEYWORD_TOKEN(pound_define, "#define")
-   CDOT_POUND_KEYWORD_TOKEN(pound_macro, "#macro")
-   CDOT_POUND_KEYWORD_TOKEN(pound_undef, "#undef")
-   CDOT_POUND_KEYWORD_TOKEN(pound_let, "#let")
-   CDOT_POUND_KEYWORD_TOKEN(pound_print, "#print")
-   CDOT_POUND_KEYWORD_TOKEN(pound_include, "#include")
-   CDOT_POUND_KEYWORD_TOKEN(pound_using, "#using")
-   CDOT_POUND_KEYWORD_TOKEN(pound_namespace, "#namespace")
-   CDOT_POUND_KEYWORD_TOKEN(pound_endnamespace, "#endnamespace")
+#  define CDOT_POUND_KEYWORD(Name) CDOT_POUND_KEYWORD_TOKEN(pound_##Name, "#" #Name)
+#endif
+
+#ifdef CDOT_POUND_KEYWORD
+   CDOT_POUND_KEYWORD(if)
+   CDOT_POUND_KEYWORD(else)
+   CDOT_POUND_KEYWORD(elseif)
+   CDOT_POUND_KEYWORD(endif)
+   CDOT_POUND_KEYWORD(ifdef)
+   CDOT_POUND_KEYWORD(ifndef)
+   CDOT_POUND_KEYWORD(for)
+   CDOT_POUND_KEYWORD(endfor)
+   CDOT_POUND_KEYWORD(pragma)
+   CDOT_POUND_KEYWORD(define)
+   CDOT_POUND_KEYWORD(macro)
+   CDOT_POUND_KEYWORD(undef)
+   CDOT_POUND_KEYWORD(let)
+   CDOT_POUND_KEYWORD(print)
+   CDOT_POUND_KEYWORD(include)
+   CDOT_POUND_KEYWORD(using)
+   CDOT_POUND_KEYWORD(namespace)
+   CDOT_POUND_KEYWORD(endnamespace)
 #endif
 
 #ifdef CDOT_PUNCTUATOR_TOKEN
@@ -155,6 +170,7 @@
    CDOT_PUNCTUATOR_TOKEN(double_quote, '"')
    CDOT_PUNCTUATOR_TOKEN(backtick, '`')
    CDOT_PUNCTUATOR_TOKEN(colon, ':')
+   CDOT_PUNCTUATOR_TOKEN(dollar, '$')
 #endif
 
 #ifdef CDOT_OPERATOR_TOKEN
@@ -224,3 +240,7 @@
 #undef CDOT_LITERAL_TOKEN
 #undef CDOT_CONTEXTUAL_KW_TOKEN
 #undef CDOT_MODULE_KW_TOKEN
+#undef CDOT_TABLEGEN_KW_TOKEN
+
+#undef CDOT_KEYWORD
+#undef CDOT_POUND_KEYWORD

@@ -23,10 +23,11 @@ SequenceElement::SequenceElement(std::string &&possibleOp,
 
 }
 
-SequenceElement::SequenceElement(std::shared_ptr<Expression> &&expr)
-   : expr(move(expr)), kind(EF_Expression)
+SequenceElement::SequenceElement(Expression* expr)
+   : expr(expr), kind(EF_Expression)
 {
-   loc = getExpr()->getSourceLoc();
+   if (expr)
+      loc = expr->getSourceLoc();
 }
 
 SequenceElement::SequenceElement(SequenceElement &&other)
@@ -38,7 +39,7 @@ SequenceElement::SequenceElement(SequenceElement &&other)
       new (&op) std::string(move(other.op));
    }
    else if (kind == EF_Expression) {
-      new (&expr) std::shared_ptr<Expression>(move(other.expr));
+      expr = other.expr;
    }
    else {
       operatorKind = other.operatorKind;
@@ -47,10 +48,7 @@ SequenceElement::SequenceElement(SequenceElement &&other)
 
 SequenceElement& SequenceElement::operator=(SequenceElement &&other)
 {
-   if (kind == EF_Expression) {
-      expr.~shared_ptr();
-   }
-   else if (kind == EF_PossibleOperator) {
+   if (kind == EF_PossibleOperator) {
       op.~string();
    }
 
@@ -61,7 +59,7 @@ SequenceElement& SequenceElement::operator=(SequenceElement &&other)
       new (&op) std::string(move(other.op));
    }
    else if (kind == EF_Expression) {
-      new (&expr) std::shared_ptr<Expression>(move(other.expr));
+      expr = other.expr;
    }
    else {
       operatorKind = other.operatorKind;
@@ -72,10 +70,7 @@ SequenceElement& SequenceElement::operator=(SequenceElement &&other)
 
 SequenceElement::~SequenceElement()
 {
-   if (kind == EF_Expression) {
-      expr.~shared_ptr();
-   }
-   else if (kind == EF_PossibleOperator) {
+   if (kind == EF_PossibleOperator) {
       op.~string();
    }
 }

@@ -4,40 +4,48 @@
 
 #include "SemaPass.h"
 
-#include "../ASTIncludes.h"
-#include "Builtin.h"
+#include "AST/ASTContext.h"
+#include "AST/Transform.h"
 
-#include "../../../Util.h"
-#include "../../SymbolTable.h"
+#include "AST/Expression/RefExpr/CallExpr.h"
+#include "AST/Expression/RefExpr/MemberRefExpr.h"
+#include "AST/Expression/RefExpr/IdentifierRefExpr.h"
 
-#include "TemplateInstantiator.h"
+#include "AST/Expression/Literal/IntegerLiteral.h"
+#include "AST/Expression/Literal/StringLiteral.h"
 
-#include "Record/Class.h"
-#include "Record/Union.h"
-#include "Record/Enum.h"
-#include "Record/Protocol.h"
+#include "AST/Expression/TypeRef.h"
+#include "AST/Expression/StaticExpr.h"
 
-#include "../../../Variant/Type/Type.h"
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/ObjectType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/VoidType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/AutoType.h"
-#include "../../../Variant/Type/MetaType.h"
+#include "AST/Operator/BinaryOperator.h"
+#include "AST/Operator/ExprSequence.h"
 
-#include "../../../Message/Exceptions.h"
-#include "../../../Message/Diagnostics.h"
+#include "AST/Statement/Declaration/LocalVarDecl.h"
+#include "AST/Statement/Declaration/CallableDecl.h"
+#include "AST/Statement/Declaration/LocalVarDecl.h"
+#include "AST/Statement/Declaration/TypedefDecl.h"
+#include "AST/Statement/Declaration/NamespaceDecl.h"
+#include "AST/Statement/Declaration/Class/EnumCaseDecl.h"
+#include "AST/Statement/Declaration/Class/FieldDecl.h"
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Statement/Declaration/Class/MethodDecl.h"
+#include "AST/Statement/Block/CompoundStmt.h"
 
-#include "../Declaration/DeclPass.h"
-#include "OverloadResolver.h"
+#include "AST/Passes/Declaration/DeclPass.h"
+
+#include "AST/Passes/SemanticAnalysis/OverloadResolver.h"
+#include "AST/Passes/SemanticAnalysis/Builtin.h"
+#include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+
+#include "Util.h"
+
+#include "Variant/Type/Type.h"
+#include "Message/Diagnostics.h"
+
+#include <llvm/ADT/SmallString.h>
 
 using namespace cdot::diag;
 using namespace cdot::support;
-using ast::Function;
 
 namespace cdot {
 namespace ast {
@@ -50,25 +58,25 @@ SemaPass::CallResult::~CallResult()
 //      static_cast<IncompatibleCallResult*>(this)->destroyValue();
 }
 
-Function* SemaPass::CallResult::getFunction() const
+FunctionDecl* SemaPass::CallResult::getFunction() const
 {
    assert(isCompatible());
    return static_cast<CompatibleCallResult const*>(this)->F;
 }
 
-cl::Method* SemaPass::CallResult::getMethod() const
+MethodDecl* SemaPass::CallResult::getMethod() const
 {
    assert(isCompatible());
    return static_cast<CompatibleCallResult const*>(this)->M;
 }
 
-Callable* SemaPass::CallResult::getCallable() const
+CallableDecl* SemaPass::CallResult::getCallable() const
 {
    assert(isCompatible());
    return static_cast<CompatibleCallResult const*>(this)->C;
 }
 
-cl::EnumCase* SemaPass::CallResult::getCase() const
+EnumCaseDecl* SemaPass::CallResult::getCase() const
 {
    assert(isCompatible());
    return static_cast<CompatibleCallResult const*>(this)->Case;
@@ -78,11 +86,6 @@ sema::TemplateArgList& SemaPass::CallResult::getTemplateArgs()
 {
    assert(isCompatible());
    return static_cast<CompatibleCallResult*>(this)->templateArgs;
-}
-
-std::vector<QualType> const& SemaPass::CallResult::getResolvedGivenArgs() const
-{
-   return static_cast<CompatibleCallResult const*>(this)->resolvedGivenArgs;
 }
 
 FunctionType* SemaPass::CallResult::getFunctionType() const
@@ -108,19 +111,129 @@ void SemaPass::IncompatibleCallResult::destroyValue()
    failedCandidates.~vector();
 }
 
-SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp, Callable *C)
+static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
+                                   Expression *Expr) {
+   if (auto BinOp = dyn_cast<BinaryOperator>(Expr)) {
+      auto lhsValid = tryStringifyConstraint(Str, BinOp->getLhs());
+      if (!lhsValid)
+         return false;
+
+      auto &op = BinOp->getOp();
+      if (op == "==" || op == "===") {
+         Str += " must equal ";
+      }
+      else if (op == "!=" || op == "!==") {
+         Str += " must not equal ";
+      }
+      else if (op == "<") {
+         Str += " must be lower than ";
+      }
+      else if (op == ">") {
+         Str += " must be greater than ";
+      }
+      else if (op == "<=") {
+         Str += " must be lower than or equal to ";
+      }
+      else if (op == ">=") {
+         Str += " must be greater than or equal to ";
+      }
+      else if (op == ":") {
+         switch (cast<ConstraintExpr>(BinOp->getRhs())->getKind()) {
+            case ConstraintExpr::Struct: Str += " be a struct"; break;
+            case ConstraintExpr::Class: Str += " be a class"; break;
+            case ConstraintExpr::Enum: Str += " be an enum"; break;
+            case ConstraintExpr::Union: Str += " be a union"; break;
+            case ConstraintExpr::Function: Str += " be a function"; break;
+            case ConstraintExpr::DefaultConstructible:
+               Str += " be default constructible";
+               break;
+            case ConstraintExpr::Pointer: Str += " be a pointer"; break;
+            case ConstraintExpr::Reference: Str += " be a reference"; break;
+            case ConstraintExpr::Type: {
+               auto ty = cast<ConstraintExpr>(BinOp->getRhs())
+                  ->getTypeConstraint()->getType();
+
+               if (ty->isProtocol()) {
+                  Str += " conform to ";
+                  Str += ty->getRecord()->getName();
+               }
+               else if (ty->isClass()) {
+                  Str += " be a subclass of or equal to ";
+                  Str += ty->getRecord()->getName();
+               }
+               else {
+                  Str += " be equal to ";
+                  Str += ty->getRecord()->getName();
+               }
+
+               break;
+            }
+
+            return true;
+         }
+      }
+
+      auto rhsValid = tryStringifyConstraint(Str, BinOp->getRhs());
+      return rhsValid;
+   }
+   else if (auto Seq = dyn_cast<ExprSequence>(Expr)) {
+      return tryStringifyConstraint(Str, Seq->getResolvedExpression());
+   }
+   else if (auto ID = dyn_cast<IdentifierRefExpr>(Expr)) {
+      Str += ID->getIdent();
+      return true;
+   }
+   else if (auto M = dyn_cast<MemberRefExpr>(Expr)) {
+      Str += M->getIdent();
+      return true;
+   }
+   else if (auto I = dyn_cast<IntegerLiteral>(Expr)) {
+      if (I->getType()->isInt1OrBool()) {
+         Str += (I->getValue().getBoolValue() ? "true" : "false");
+      }
+      else if (I->getType()->isInt8OrChar()) {
+         Str += "'";
+         Str += (char)I->getValue().getZExtValue();
+         Str += "'";
+      }
+      else {
+         I->getValue().toString(Str, 10, !I->getType()->isUnsigned());
+      }
+
+      return true;
+   }
+   else if (auto FP = dyn_cast<FPLiteral>(Expr)) {
+      FP->getValue().toString(Str);
+      return true;
+   }
+   else if (auto S = dyn_cast<StringLiteral>(Expr)) {
+      Str += '"';
+      Str += S->getValue();
+      Str += '"';
+
+      return true;
+   }
+
+   return false;
+}
+
+SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
+                                       llvm::ArrayRef<Expression*> resolvedArgs,
+                                       CallableDecl *C)
    : loc(C->getSourceLoc())
 {
    auto reason = Comp.getFailureReason();
    if (reason == FailureReason::IncompatibleArgCount) {
       diagnostic = diag::note(note_cand_mismatched_arg_count)
-         << Comp.resolvedNeededArgs.size() << Comp.resolvedArgs.size()
+         << Comp.FuncTy->getArgTypes().size()
+         << resolvedArgs.size()
          << C->getSourceLoc();
    }
    else if (reason == FailureReason::IncompatibleArgument) {
-      auto &neededArg = Comp.resolvedNeededArgs[Comp.incompatibleArg];
+      auto &neededArg = Comp.FuncTy->getArgTypes()[Comp.incompatibleArg];
       diagnostic = diag::note(note_cand_no_implicit_conv)
-         << Comp.resolvedArgs[Comp.incompatibleArg] << neededArg.type
+         << resolvedArgs[Comp.incompatibleArg]->getExprType()
+         << neededArg
          << Comp.incompatibleArg + 1 << C->getSourceLoc();
    }
    else if (reason == FailureReason::CouldNotInferTemplateArg) {
@@ -134,37 +247,45 @@ SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp, Callable *C)
                    : Comp.templateArgList.getDiagnostics().front();
    }
    else if (reason == FailureReason::FailedConstraint) {
-      if (Comp.diagnostics.empty()) {
-         diagnostic = diag::err(err_generic_error)
-            << "failed constraint" << Comp.failedConstraint;
+      diagnostic = diag::note(note_generic_note);
+
+      llvm::SmallString<128> str("candidate function not viable: ");
+      if (tryStringifyConstraint(str, Comp.failedConstraint->getExpr())) {
+         diagnostic << str;
       }
-      else
-         diagnostic = Comp.diagnostics.front();
+      else {
+         diagnostic << "candidate function not viable: failed constraint";
+      }
+
+      diagnostic << Comp.failedConstraint->getSourceLoc();
    }
    else {
       llvm_unreachable("bad reason");
    }
 
-   if (auto M = dyn_cast<cl::Method>(C))
+   if (auto M = dyn_cast<MethodDecl>(C))
       if (M->isMemberwiseInitializer())
          diagnostic << diag::memberwise_init;
 }
 
 SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
-                                       cl::EnumCase *Case)
-   : loc(Case->loc)
+                                       llvm::ArrayRef<Expression*> resolvedArgs,
+                                       EnumCaseDecl *Case)
+   : loc(Case->getSourceLoc())
 {
    auto reason = Comp.getFailureReason();
    if (reason == FailureReason::IncompatibleArgCount) {
       diagnostic = diag::note(note_cand_mismatched_arg_count)
-         << Comp.resolvedNeededArgs.size() << Comp.resolvedArgs.size()
-         << Case->loc;
+         << Comp.FuncTy->getArgTypes().size()
+         << resolvedArgs.size()
+         << Case->getSourceLoc();
    }
    else if (reason == FailureReason::IncompatibleArgument) {
-      auto &neededArg = Case->associatedValues[Comp.incompatibleArg];
+      auto &neededArg = Case->getArgs()[Comp.incompatibleArg];
       diagnostic = diag::note(note_cand_no_implicit_conv)
-         << Comp.resolvedArgs[Comp.incompatibleArg] << neededArg.type
-         << Comp.incompatibleArg + 1 << Case->loc;
+         << resolvedArgs[Comp.incompatibleArg]->getExprType()
+         << neededArg->getArgType()->getType()
+         << Comp.incompatibleArg + 1 << Case->getSourceLoc();
    }
    else {
       llvm_unreachable("bad reason");
@@ -172,6 +293,7 @@ SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
 }
 
 SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
+                                       llvm::ArrayRef<Expression*> resolvedArgs,
                                        FunctionType *FTy,
                                        SourceLocation declLoc)
    : loc(declLoc)
@@ -179,13 +301,15 @@ SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
    auto reason = Comp.getFailureReason();
    if (reason == FailureReason::IncompatibleArgCount) {
       diagnostic = diag::note(note_cand_mismatched_arg_count)
-         << Comp.resolvedNeededArgs.size() << Comp.resolvedArgs.size()
+         << Comp.FuncTy->getArgTypes().size()
+         << resolvedArgs.size()
          << declLoc;
    }
    else if (reason == FailureReason::IncompatibleArgument) {
       auto &neededArg = FTy->getArgTypes()[Comp.incompatibleArg];
       diagnostic = diag::note(note_cand_no_implicit_conv)
-         << Comp.resolvedArgs[Comp.incompatibleArg] << neededArg.type
+         << resolvedArgs[Comp.incompatibleArg]->getExprType()
+         << neededArg
          << Comp.incompatibleArg + 1 << declLoc;
    }
    else {
@@ -193,13 +317,14 @@ SemaPass::CallCandidate::CallCandidate(CallCompatability &Comp,
    }
 }
 
-void SemaPass::diagnoseAmbiguousCall(llvm::ArrayRef<Callable*> perfectMatches,
-                                     Statement *Caller) {
+void
+SemaPass::diagnoseAmbiguousCall(llvm::ArrayRef<CallableDecl*> perfectMatches,
+                                Statement *Caller) {
    if (perfectMatches.size() <= 1)
       return;
 
    auto &first = perfectMatches.front();
-   diagnose(Caller, err_ambiguous_call, isa<cl::Method>(first),
+   diagnose(Caller, err_ambiguous_call, isa<MethodDecl>(first),
             first->getName());
 
    for (size_t i = 0; i < perfectMatches.size(); ++i) {
@@ -209,83 +334,101 @@ void SemaPass::diagnoseAmbiguousCall(llvm::ArrayRef<Callable*> perfectMatches,
 }
 
 SemaPass::ConstraintResult SemaPass::checkConstraint(
-                                 std::shared_ptr<StaticExpr> const &constraint,
+                                 StaticExpr* const &constraint,
                                  TemplateArgList &TAs) {
    llvm_unreachable("fuck it");
 }
 
-SemaPass::FunctionResult SemaPass::getUFCS(
-                                 const string &funcName,
-                                 std::vector<Argument> &args,
-                                 const std::vector<TemplateArg> &templateArgs,
-                                 Statement *caller) {
-   if (!args.empty() && args.front().type->isObjectTy()) {
-      Argument firstArg = std::move(args.front());
-      args.erase(args.begin());
-
-      auto result = getMethod(firstArg.type->getRecord(), funcName, args,
+SemaPass::FunctionResult
+SemaPass::getUFCS(llvm::StringRef funcName,
+                  llvm::ArrayRef<Expression*> args,
+                  const std::vector<TemplateArgExpr*> &templateArgs,
+                  Statement *caller) {
+   if (!args.empty() && args.front()->getExprType()->isObjectType()) {
+      auto result = getMethod(args.front()->getExprType()->getRecord(),
+                              funcName, { args.data() + 1, args.size() - 1 },
                               templateArgs, caller);
 
       if (result->isCompatible())
          return result;
-
-      args.insert(args.begin(), std::move(firstArg));
    }
 
    return getFunction(funcName, args, templateArgs, caller);
 }
 
-SemaPass::FunctionResult SemaPass::getFunction(const string& funcName,
-                                 std::vector<Argument>& args,
-                                 std::vector<TemplateArg> const& templateArgs,
-                                               Statement *caller) {
+SemaPass::FunctionResult
+SemaPass::getFunction(llvm::StringRef funcName,
+                      llvm::ArrayRef<Expression*> args,
+                      std::vector<TemplateArgExpr*> const& templateArgs,
+                      Statement *caller) {
+   llvm::SmallVector<FunctionDecl*, 8> overloads;
+   auto lookupResult = declPass->getDeclContext().lookup(funcName);
+
+   for (auto decl : lookupResult)
+      if (auto C = dyn_cast<FunctionDecl>(decl))
+         overloads.push_back(C);
+
+   return getFunction(overloads, args, templateArgs, caller);
+}
+
+bool SemaPass::checkFunctionCompatibility(
+                           NamedDecl *Decl,
+                           OverloadResolver &Resolver,
+                           std::unique_ptr<CompatibleCallResult> &Res,
+                           llvm::SmallVectorImpl<CallableDecl *> &perfectCalls,
+                           std::vector<CallCandidate> &failedCandidates,
+                           size_t &bestMatch,
+                           size_t &maxSatisfiedConstraints) {
+   CallableDecl *C = dyn_cast<CallableDecl>(Decl);
+   auto res = Resolver.checkIfViable(C);
+   if (res.isCompatible()) {
+      size_t numConstraints = C->getConstraints().size();
+
+      if (res.perfectMatch && numConstraints <= maxSatisfiedConstraints) {
+         perfectCalls.push_back(C);
+      }
+
+      bool satisifiesMoreConstraints =
+         numConstraints > maxSatisfiedConstraints;
+
+      if (res.perfectMatch || satisifiesMoreConstraints
+          || res.castPenalty < bestMatch) {
+         Res = std::make_unique<CompatibleCallResult>(
+            C, std::move(res.templateArgList));
+
+         bestMatch = res.getCastPenalty();
+         maxSatisfiedConstraints = numConstraints;
+
+         return true;
+      }
+   }
+   else if (!Res) {
+      failedCandidates.emplace_back(res, Resolver.getGivenArgs(), C);
+   }
+
+   return false;
+}
+
+SemaPass::FunctionResult
+SemaPass::getFunction(llvm::ArrayRef<FunctionDecl*> overloads,
+                      llvm::ArrayRef<Expression*> args,
+                      const std::vector<ast::TemplateArgExpr *> &templateArgs,
+                      Statement *caller) {
    std::vector<CallCandidate> failedCandidates;
-   if (!getAnyFn(funcName))
+   if (overloads.empty())
       return std::make_unique<IncompatibleCallResult>(move(failedCandidates));
 
-   string context;
-   auto overloads = getFunctionOverloads(funcName);
-   assert(!overloads.empty());
-
-   OverloadResolver Resolver(*this, args, templateArgs,
-                             caller ? caller->getSourceLoc()
-                                    : SourceLocation());
-
-   llvm::SmallVector<Callable*, 4> perfectCalls;
+   OverloadResolver Resolver(*this, args, templateArgs, caller);
+   llvm::SmallVector<CallableDecl*, 4> perfectCalls;
    std::unique_ptr<CompatibleCallResult> Res = nullptr;
 
-   size_t bestMatch = -1;
+   size_t bestMatch = size_t(-1);
    size_t maxSatisfiedConstraints = 0;
 
    for (const auto &overload : overloads) {
-      auto res = Resolver.checkIfViable(overload);
-
-      if (res.isCompatible()) {
-         size_t numConstraints = 0;
-         if (auto decl = overload->getDeclaration()) {
-            numConstraints = decl->getConstraints().size();
-         }
-
-         if (res.perfectMatch && numConstraints <= maxSatisfiedConstraints) {
-            perfectCalls.push_back(overload);
-         }
-
-         bool satisifiesMoreConstraints =
-            numConstraints > maxSatisfiedConstraints;
-
-         if (res.perfectMatch || satisifiesMoreConstraints
-                                             || res.castPenalty < bestMatch) {
-            Res = std::make_unique<CompatibleCallResult>(
-               overload, std::move(res.resolvedArgs),
-               std::move(res.templateArgList));
-
-            bestMatch = res.getCastPenalty();
-            maxSatisfiedConstraints = numConstraints;
-         }
-      }
-      else if (!Res) {
-         failedCandidates.emplace_back(res, overload);
-      }
+      checkFunctionCompatibility(overload, Resolver, Res, perfectCalls,
+                                 failedCandidates, bestMatch,
+                                 maxSatisfiedConstraints);
    }
 
    if (!Res)
@@ -309,70 +452,84 @@ SemaPass::FunctionResult SemaPass::getFunction(const string& funcName,
    return std::move(Res);
 }
 
-SemaPass::FunctionResult SemaPass::getMethod(Record *rec,
-                                             const string &methodName,
-                                             const std::vector<Argument> &args,
-                                             std::vector<TemplateArg> const&
-                                                                  templateArgs,
-                                             Statement *caller,
-                                             bool isStatic) {
-   std::vector<CallCandidate> failedCandidates;
-   auto overloads = rec->getMethods().equal_range(methodName);
+static MethodDecl *getEquivalentMethod(MethodDecl *Orig,
+                                       RecordDecl *Inst) {
+   for (auto &decl : Inst->getDecls())
+      if (auto M = dyn_cast<MethodDecl>(decl))
+         if (Orig == M->getSpecializedTemplate())
+            return M;
 
-   if (overloads.first == overloads.second)
-      return std::make_unique<IncompatibleCallResult>(move(failedCandidates));
+   llvm_unreachable("no equivalent method!");
+}
 
-   OverloadResolver Resolver(*this, args, templateArgs,
-                             caller ? caller->getSourceLoc()
-                                    : SourceLocation());
+SemaPass::FunctionResult
+SemaPass::getMethod(RecordDecl *R,
+                    llvm::StringRef methodName,
+                    llvm::ArrayRef<Expression*> args,
+                    std::vector<TemplateArgExpr*> const& templateArgs,
+                    Statement *caller,
+                    bool isStatic) {
+   llvm::SmallVector<MethodDecl*, 8> overloads;
 
-   llvm::SmallVector<Callable*, 4> perfectCalls;
-   std::unique_ptr<CompatibleCallResult> Res = nullptr;
-
-   size_t bestMatch = -1;
-   size_t maxSatisfiedConstraints = 0;
-
-   while (overloads.first != overloads.second) {
-      auto& overload = overloads.first->second;
-      if (isStatic && !overload.isStatic())
-         continue;
-
-      auto res = Resolver.checkIfViable(&overload);
-      if (res.isCompatible()) {
-         size_t numConstraints = 0;
-         if (auto decl = overload.getDeclaration()) {
-            numConstraints = decl->getConstraints().size();
-         }
-
-         if (res.perfectMatch && numConstraints <= maxSatisfiedConstraints) {
-            perfectCalls.push_back(&overload);
-         }
-
-         bool satisifiesMoreConstraints =
-            numConstraints > maxSatisfiedConstraints;
-
-         if (res.perfectMatch || satisifiesMoreConstraints
-                                          || res.getCastPenalty() < bestMatch) {
-            Res = std::make_unique<CompatibleCallResult>(
-               &overload, std::move(res.resolvedArgs),
-               std::move(res.templateArgList),
-               std::move(res.initializerTemplateArgList));
-
-            bestMatch = res.getCastPenalty();
-            maxSatisfiedConstraints = numConstraints;
-         }
+   while (R) {
+      auto lookupResult = R->lookupOwn(methodName);
+      for (auto decl : lookupResult) {
+         if (auto M = dyn_cast<MethodDecl>(decl))
+            overloads.push_back(M);
       }
-      else if (!Res) {
-         failedCandidates.emplace_back(res, &overload);
+
+      if (auto C = dyn_cast<ClassDecl>(R)) {
+         R = C->getParentClass();
       }
-      ++overloads.first;
+      else
+         break;
    }
 
-   if (!Res && rec->isClass()) {
-      auto cl = rec->getAs<Class>();
-      if (cl->getParent()) {
-         return getMethod(cl->getParent(), methodName, args, templateArgs);
-      }
+   return getMethod(R, overloads, args, templateArgs, caller, isStatic);
+}
+
+SemaPass::FunctionResult
+SemaPass::getMethod(RecordDecl *R,
+                    LookupResult &lookupResult,
+                    llvm::ArrayRef<Expression *> args,
+                    const std::vector<TemplateArgExpr *> &templateArgs,
+                    Statement *caller,
+                    bool isStatic) {
+   llvm::SmallVector<MethodDecl*, 8> overloads;
+   for (auto decl : lookupResult) {
+      if (auto M = dyn_cast<MethodDecl>(decl))
+         overloads.push_back(M);
+   }
+
+   return getMethod(R, overloads, args, templateArgs, caller, isStatic);
+}
+
+SemaPass::FunctionResult
+SemaPass::getMethod(RecordDecl *rec,
+                    llvm::ArrayRef<MethodDecl*> overloads,
+                    llvm::ArrayRef<Expression*> args,
+                    const std::vector<TemplateArgExpr *> &templateArgs,
+                    Statement *caller,
+                    bool isStatic) {
+   std::vector<CallCandidate> failedCandidates;
+   if (overloads.empty())
+      return std::make_unique<IncompatibleCallResult>(move(failedCandidates));
+
+   OverloadResolver Resolver(*this, args, templateArgs, caller);
+
+   llvm::SmallVector<CallableDecl*, 4> perfectCalls;
+   std::unique_ptr<CompatibleCallResult> Res = nullptr;
+
+   size_t bestMatch(-1);
+   size_t maxSatisfiedConstraints = 0;
+
+   for (auto &overload : overloads) {
+      if (isStatic && !overload->isStatic())
+         continue;
+
+      checkFunctionCompatibility(overload, Resolver, Res, perfectCalls,
+                                 failedCandidates, bestMatch,
+                                 maxSatisfiedConstraints);
    }
 
    diagnoseAmbiguousCall(perfectCalls, caller);
@@ -381,10 +538,10 @@ SemaPass::FunctionResult SemaPass::getMethod(Record *rec,
       return std::make_unique<IncompatibleCallResult>(move(failedCandidates));
 
    auto method = Res->getMethod();
-   auto R = method->getOwningRecord();
+   auto R = method->getRecord();
    auto &argList = Res->getTemplateArgs();
 
-   if (method->isInitializer() && R->isTemplated()) {
+   if (isa<InitDecl>(method) && R->isTemplate()) {
       auto initializerArgs = argList.moveInitializerArgs();
       auto offset = method->getTemplateParams().size()
                     - R->getTemplateParams().size();
@@ -392,11 +549,10 @@ SemaPass::FunctionResult SemaPass::getMethod(Record *rec,
       initializerArgs.setParameterOffsetBegin(offset);
       argList.setParameterOffsetEnd(offset);
 
-      auto Inst = InstantiateRecord(rec,
-                                    std::move(argList),
+      auto Inst = InstantiateRecord(rec, std::move(argList),
                                     caller->getSourceLoc());
 
-      method = Inst->getMethod(Res->getMethod()->getMethodID());
+      method = getEquivalentMethod(Res->getMethod(), Inst);
       Res->setMethod(method);
 
       argList = std::move(initializerArgs);
@@ -405,8 +561,7 @@ SemaPass::FunctionResult SemaPass::getMethod(Record *rec,
    maybeInstantiateMemberFunction(Res->getMethod(), caller->getSourceLoc());
 
    bool needsInstantiation =
-      (!method->isInitializer()
-         || method->isTemplatedInitializer())
+      (!isa<InitDecl>(method) || method->isTemplatedInitializer())
       && !argList.empty()
       && method->isTemplate();
 
@@ -425,112 +580,94 @@ SemaPass::FunctionResult SemaPass::getMethod(Record *rec,
    return std::move(Res);
 }
 
-void SemaPass::maybeInstantiateMemberFunction(cl::Method *M,
+void SemaPass::maybeInstantiateMemberFunction(MethodDecl *M,
                                               const SourceLocation &callerLoc) {
-   if (!M->getDeclaration() || M->getDeclaration()->getBody()
-         || !M->getSpecializedTemplate())
+   if (M->getBody() || !M->isInstantiation())
+      return;
+
+   if (!M->getSpecializedTemplate()->getBody())
       return;
 
    auto instantiatedBody =
       TemplateInstantiator::InstantiateMethodBody(
-         *this, callerLoc, cast<cl::Method>(M->getSpecializedTemplate()), M);
+         *this, callerLoc, cast<MethodDecl>(M->getSpecializedTemplate()), M);
 
-   M->setInstantiatedFrom(callerLoc);
-   M->getDeclaration()
-    ->setBody(std::static_pointer_cast<CompoundStmt>(instantiatedBody));
-
-   DiagnosticBuilder::pushInstantiationCtx(M->getOwningRecord());
-   DiagnosticBuilder::pushInstantiationCtx(M);
+   M->setBody(cast<CompoundStmt>(instantiatedBody));
 
    visitFunctionInstantiation(M);
-
-   DiagnosticBuilder::popInstantiationCtx();
-   DiagnosticBuilder::popInstantiationCtx();
 }
 
-SemaPass::FunctionResult SemaPass::getCase(cl::Enum *en,
+SemaPass::FunctionResult SemaPass::getCase(EnumDecl *E,
                                            const string &caseName,
-                                           std::vector<Argument> const& args) {
-   if (!en->hasCase(caseName))
+                                           llvm::ArrayRef<Expression*> args,
+                                           Statement *Caller) {
+   auto Case = E->hasCase(caseName);
+   if (!Case)
       return std::make_unique<IncompatibleCallResult>();
 
-   auto types = en->getCases()[caseName].associatedValues;
+   auto &types = Case->getArgs();
    if (types.size() != args.size())
       return std::make_unique<IncompatibleCallResult>();
 
-   auto &Case = en->getCase(caseName);
-
-   OverloadResolver Resolver(*this, args, {});
+   OverloadResolver Resolver(*this, args, {}, Caller);
    auto res = Resolver.checkIfViable(Case);
 
    if (!res.isCompatible()) {
       std::vector<CallCandidate> candidates;
-      candidates.emplace_back(res, &Case);
+      candidates.emplace_back(res, args, Case);
 
       return std::make_unique<IncompatibleCallResult>(move(candidates));
    }
 
-   return std::make_unique<CompatibleCallResult>(&Case,
-                                                 std::move(res.resolvedArgs));
+   return std::make_unique<CompatibleCallResult>(Case);
 }
 
-SemaPass::FunctionResult SemaPass::checkAnonymousCall(
-                                          FunctionType *FTy,
-                                          const std::vector<Argument>& args,
-                                          SourceLocation const& loc) {
-   OverloadResolver Resolver(*this, args, {}, loc);
+SemaPass::FunctionResult
+SemaPass::checkAnonymousCall(FunctionType *FTy,
+                             llvm::ArrayRef<Expression*> args,
+                             Statement *Caller) {
+   OverloadResolver Resolver(*this, args, {}, Caller);
    auto res = Resolver.checkIfViable(FTy);
 
    if (!res.isCompatible()) {
       std::vector<CallCandidate> candidates;
-      candidates.emplace_back(res, FTy, loc);
+      candidates.emplace_back(res, args, FTy, Caller->getSourceLoc());
 
       return std::make_unique<IncompatibleCallResult>(move(candidates));
    }
 
-   return std::make_unique<CompatibleCallResult>(FTy,
-                                                 std::move(res.resolvedArgs));
+   return std::make_unique<CompatibleCallResult>(FTy);
 }
 
-void SemaPass::ApplyCasts(std::vector<std::shared_ptr<Expression>> &args,
-                          std::vector<QualType> const& givenArgs,
-                          const std::vector<Argument> &declaredArgs) {
+void SemaPass::ApplyCasts(std::vector<Expression* > &args,
+                          FunctionType *FuncTy) {
    size_t i = 0;
-   for (auto& arg : givenArgs) {
+   auto declaredArgs = FuncTy->getArgTypes();
+
+   for (auto& arg : args) {
       if (i >= declaredArgs.size()) {
          break;
       }
 
       assert(args.size() > i && "No arg to cast");
-      implicitCastIfNecessary(args[i], arg,
-                              declaredArgs[i].type,
-                              !arg->isTypeGroup()
-                              && !declaredArgs[i].type->isAutoTy());
+      implicitCastIfNecessary(arg, arg->getExprType(), declaredArgs[i]);
 
       ++i;
    }
 }
 
-void SemaPass::PrepareCallArgs(std::vector<std::shared_ptr<Expression>>& args,
-                               std::vector<Argument> &givenArgs,
-                               std::vector<Argument> const& declaredArgs) {
+void SemaPass::PrepareCallArgs(std::vector<Expression*>& args,
+                               FunctionType *FuncTy) {
    size_t i = 0;
-   bool vararg = !declaredArgs.empty() && declaredArgs.back().cstyleVararg;
+   bool vararg = FuncTy->isCStyleVararg();
+   auto declaredArgs = FuncTy->getArgTypes();
+
    for (auto& arg : args) {
-      if (i >= givenArgs.size()) {
-         break;
-      }
-
-      auto &given = givenArgs[i].type;
-
+      auto given = arg->getExprType();
       if (i >= declaredArgs.size() || (vararg && i >= declaredArgs.size() - 1)){
-         if (given->isTypeGroup()) {
-            given = visit(arg);
-         }
-
          // assume that c style varargs need a primitive...
          if (given->isBoxedPrimitive()) {
-            QualType unboxed(given->unbox());
+            QualType unboxed = getUnboxedType(given);
             forceCast(arg, given, unboxed);
 
             given = unboxed;
@@ -546,19 +683,27 @@ void SemaPass::PrepareCallArgs(std::vector<std::shared_ptr<Expression>>& args,
       auto &declared = i >= declaredArgs.size() ? declaredArgs.back()
                                                 : declaredArgs[i];
 
-      if (given->isTypeGroup()) {
-         arg->setContextualType(declared.type);
-         given = visit(arg);
-      }
-
-      toRvalueIfNecessary(given, arg, !declared.type.isLvalue());
+      toRvalueIfNecessary(given, arg, !declared.isLvalue());
       ++i;
    }
 
-   if (!vararg) {
+   if (!vararg && args.size() < declaredArgs.size()) {
+      llvm_unreachable("no default args on anonymous calls!");
+   }
+}
+
+void SemaPass::PrepareCallArgs(std::vector<Expression*>& args,
+                               CallableDecl *C) {
+   auto &declaredArgs = C->getArgs();
+   auto FuncTy = C->getFunctionType();
+
+   PrepareCallArgs(args, FuncTy);
+
+   if (!FuncTy->isCStyleVararg() && args.size() < declaredArgs.size()) {
+      assert(C && "no default arguments!");
+
       while (args.size() < declaredArgs.size()) {
-         assert(declaredArgs[args.size()].getDefaultVal());
-         args.push_back(declaredArgs[args.size()].getDefaultVal());
+         args.push_back(C->getArgs()[args.size()]->getDefaultVal());
       }
    }
 }
@@ -575,32 +720,27 @@ QualType SemaPass::visitCallExpr(CallExpr *node, QualType ty)
    }
 
    auto &args = node->getArgs();
-   for (size_t i = node->getResolvedArgs().size(); i < args.size(); ++i) {
-      auto& arg = args.at(i);
-      QualType ty;
-
-      if (auto Pl = getPlaceholderType(arg.get())) {
-         *ty = Pl;
-      }
-      else {
+   for (auto &arg : args) {
+      if (!arg->isContextDependent()) {
          auto result = visitExpr(node, arg);
          if (result.hadError()) {
             return {};
          }
-
-         ty = result.getType();
       }
-
-      node->getResolvedArgs().emplace_back("", ty, arg);
    }
 
    for (auto &TA : node->getTemplateArgs()) {
-      if (TA.isTypeName()) {
-         auto res = visitExpr(node, TA.getType().get());
+      if (TA->isTypeName()) {
+         auto res = visitExpr(node, TA->getType());
          if (res.hadError()) {
             return { };
          }
       }
+   }
+
+   // expression was previously resolved (for example by a binary operator node)
+   if (node->getKind() != CallKind::Unknown) {
+      return node->getReturnType();
    }
 
    bool isBuiltin = node->getBuiltinFnKind() != BuiltinFn::None;
@@ -608,96 +748,81 @@ QualType SemaPass::visitCallExpr(CallExpr *node, QualType ty)
       HandleBuiltinCall(node);
    }
    else if (ty) {
-      if (ty->isFunctionTy())
+      if (ty->isFunctionType()) {
          HandleAnonCall(node, ty);
-      else if (node->getIdent().empty())
-         HandleCallOperator(node, ty);
-      else
+      }
+      else if (node->getIdent().empty()) {
+         if (ty->isMetaType()) {
+            HandleStaticTypeCall(node, ty->asMetaType()->getUnderlyingType());
+         }
+         else {
+            HandleCallOperator(node, ty);
+         }
+      }
+      else {
          HandleMethodCall(node, ty);
+      }
    }
    else {
-      HandleFunctionCall(node, node->getIdent());
-   }
+      auto lookupResult = declPass->getDeclContext().lookup(node->getIdent());
+      if (!lookupResult) {
+         if (auto Rec = getCurrentRecord()) {
+            if (Rec->hasMethodWithName(node->getIdent())) {
+               if (Rec->isTemplate()) {
+                  node->setIsTypeDependent(true);
+                  return {};
+               }
 
-   return VisitSubExpr(node, node->getReturnType());
-}
-
-void SemaPass::HandleFunctionCall(CallExpr *node, llvm::StringRef ident)
-{
-   // resolve given template args
-   auto Fun = getAnyFn(ident);
-   if (!Fun) {
-      if (auto Rec = currentClass()) {
-         if (Rec->hasMethodWithName(ident)) {
-            if (Rec->isTemplated()) {
-               node->setIsTypeDependent(true);
-               return;
+               node->setImplicitSelf(true);
+               HandleMethodCall(node, Context.getRecordType(Rec));
             }
-
-            node->setImplicitSelf(true);
-
-            return HandleMethodCall(node, ObjectType::get(Rec));
          }
-      }
-
-      if (auto R = getRecord(ident)) {
-         return HandleConstructorCall(node, R->getName());
-      }
-
-      if (wouldBeValidIdentifier(ident)) {
-         node->setIdentExpr(new IdentifierRefExpr(string(ident)));
-
-         auto expr = node->getIdentExpr();
-         auto Ty = visitIdentifierRefExpr(expr);
-
-         if (isa<FunctionType>(*Ty)) {
-            node->setBinding(expr->getBinding());
-            return HandleAnonCall(node, Ty);
+         else if (auto ty = getBuiltinType(node->getIdent())) {
+            HandleStaticTypeCall(node, ty);
          }
+         else if (auto I = wouldBeValidIdentifier(node->getIdent())) {
+            node->setIdentExpr(I);
 
-         return HandleCallOperator(node, Ty);
-      }
+            auto expr = node->getIdentExpr();
+            auto Ty = visitIdentifierRefExpr(expr);
 
-      if (auto td = getTypedef(node->getIdent())) {
-         if (isa<PrimitiveType>(td->aliasedType)) {
-            auto& resolvedArgs = node->getResolvedArgs();
-            if (resolvedArgs.size() != 1) {
-               diagnose(node, err_generic_error,
-                        "primitive initializer expects one argument");
-
-               return node->setHadError(true);
-            }
-
-            auto &given = resolvedArgs.front();
-            if (given.getType()->isTypeGroup()) {
-               node->getArgs().front()->setContextualType(td->aliasedType);
-               visitExpr(node, node->getArgs().front());
+            if (Ty->isFunctionType()) {
+               HandleAnonCall(node, Ty);
             }
             else {
-               implicitCastIfNecessary(node->getArgs().front(),
-                                       given.getType(), td->aliasedType);
+               HandleCallOperator(node, Ty);
             }
-
-            node->setKind(CallKind::PrimitiveInitializer);
-            node->setReturnType(td->aliasedType);
-
-            return;
+         }
+         else {
+            diagnose(node, err_func_not_found, 0, node->getIdent());
          }
       }
+      else if (lookupResult.size() == 1) {
+         if (auto R = dyn_cast<RecordDecl>(lookupResult.front())) {
+            HandleConstructorCall(node, R);
+         }
+         else {
+            llvm::SmallVector<FunctionDecl *, 8> Fns;
+            for (auto decl : lookupResult) {
+               if (auto Fn = dyn_cast<FunctionDecl>(decl))
+                  Fns.push_back(Fn);
+            }
 
-      return diagnose(node, err_func_not_found, 0, ident);
+            HandleFunctionCall(node, Fns);
+         }
+      }
    }
 
-   if (!Fun->isTemplate() && !node->getTemplateArgs().empty()) {
-      diagnose(node, err_generic_type_count, 0,
-               node->getTemplateArgs().size(), ident);
+   if (node->hadError())
+      return {};
 
-      node->getTemplateArgs().clear();
-   }
+   return node->getReturnType();
+}
 
-   auto& resolvedArgs = node->getResolvedArgs();
-   auto result = getFunction(ident, resolvedArgs, node->getTemplateArgs(),
-                             node);
+void SemaPass::HandleFunctionCall(CallExpr *node,
+                                  llvm::ArrayRef<FunctionDecl*> overloads) {
+   auto result = getFunction(overloads, node->getArgs(),
+                             node->getTemplateArgs(), node);
 
    if (!result->isCompatible()) {
       return diagnoseNoMatchingCall(result.get(), NoMatchingCallKind::Function,
@@ -706,30 +831,64 @@ void SemaPass::HandleFunctionCall(CallExpr *node, llvm::StringRef ident)
 
    auto func = result->getFunction();
 
-   PrepareCallArgs(node->getArgs(), resolvedArgs, func->getArguments());
-   ApplyCasts(node->getArgs(), result->getResolvedGivenArgs(),
-              func->getArguments());
+   PrepareCallArgs(node->getArgs(), func);
+   ApplyCasts(node->getArgs(), func->getFunctionType());
 
    node->setKind(CallKind::NamedFunctionCall);
    node->setFunc(func);
-   node->setReturnType(func->getReturnType());
+   node->setReturnType(func->getReturnType()->getType());
+}
+
+bool SemaPass::TryTypedef(CallExpr *node, TypedefDecl *td)
+{
+   if (!td)
+      td = getTypedef(node->getIdent());
+
+   if (td) {
+      if (td->getOriginTy()->getType()->isPrimitiveType()) {
+         auto& args = node->getArgs();
+         if (args.size() != 1) {
+            diagnose(node, err_generic_error,
+                     "primitive initializer expects one argument");
+
+            node->setHadError(true);
+            return true;
+         }
+
+         auto given = args.front()->getExprType();
+         implicitCastIfNecessary(node->getArgs().front(),
+                                 given, td->getOriginTy()->getType());
+
+         node->setKind(CallKind::PrimitiveInitializer);
+         node->setReturnType(td->getOriginTy()->getType());
+
+         return true;
+      }
+      else if (td->getOriginTy()->getType()->isObjectType()) {
+         HandleConstructorCall(node, td->getOriginTy()->getType()
+                                       ->getRecord());
+         return true;
+      }
+   }
+
+   return false;
 }
 
 void SemaPass::HandleBuiltinCall(CallExpr *node)
 {
    if (node->getKind() == CallKind::VariadicSizeof) {
-      node->setReturnType(ObjectType::get("UInt"));
+      node->setReturnType(getObjectTy("UInt"));
 
       auto &TA = node->getTemplateArgs().front();
-      if (!TA.isTypeName()) {
+      if (!TA->isTypeName()) {
          return diagnose(node, err_generic_error, "expected typename");
       }
 
-      TA.getType()->setAllowUnexpandedTemplateArgs(true);
+      TA->getType()->setAllowUnexpandedTemplateArgs(true);
 
-      auto GenericTy = *visitTypeRef(TA.getType().get());
+      auto GenericTy = *visitTypeRef(TA->getType());
 
-      auto G = dyn_cast<GenericType>(GenericTy);
+      auto G = GenericTy->asGenericType();
       if (!G)
          return diagnose(node, err_generic_error,
                          "sizeof... expects variadic type parameter");
@@ -737,14 +896,14 @@ void SemaPass::HandleBuiltinCall(CallExpr *node)
       auto TP = hasTemplateParam(G->getGenericTypeName());
       assert(TP && "invalid template parameter");
 
-      if (!TP->isVariadic)
+      if (!TP->isVariadic())
          return diagnose(node, err_generic_error,
                          "sizeof... expects variadic type parameter");
 
       return;
    }
 
-   HandleFunctionCall(node, node->getIdent());
+   HandleFunctionCall(node, {});
    node->setKind(CallKind::Builtin);
 }
 
@@ -752,212 +911,264 @@ void SemaPass::HandleMethodCall(CallExpr *node, QualType ty)
 {
    bool staticCall = false;
 
-   if (ty->isPointerTy()) {
-      if (!node->isPointerAccess_()) {
+   if (ty->isPointerType()) {
+      if (!node->isPointerAccess()) {
          diagnose(node, err_generic_error,
                   "cannot access value on pointer, did you mean to use '->'?");
       }
 
       ty = ty->getPointeeType();
    }
-   else if (node->isPointerAccess_()) {
+   else if (node->isPointerAccess()) {
       diagnose(node, err_generic_error, "value is not a pointer");
    }
 
-   if (auto NS = dyn_cast<NamespaceType>(*ty)) {
-      return HandleNamespaceMember(node, NS->getNamespace());
+   if (auto NS = ty->asNamespaceType()) {
+      return HandleDeclContextMember(node, NS->getNamespace());
    }
-   else if (auto Meta = dyn_cast<MetaType>(*ty)) {
+   else if (auto Meta = ty->asMetaType()) {
       auto underlying = Meta->getUnderlyingType();
 
-      if (!underlying->isObjectTy())
-         return HandleStaticTypeCall(node, underlying);
+      if (!underlying->isObjectType())
+         return HandleStaticTypeCall(node, *underlying);
 
       staticCall = true;
-      *ty = underlying;
+      ty = underlying;
    }
-   else if (!ty->isObjectTy()) {
+   else if (!ty->isObjectType()) {
       return HandleOtherTypeCall(node, *ty);
    }
 
-   Record *R = ty->getRecord();
+   auto R = ty->getRecord();
 
-   if (staticCall) {
-      if (auto E = dyn_cast<Enum>(R)) {
-         auto enumCaseExpr = std::make_shared<EnumCaseExpr>(
-            string(node->getIdent()), move(node->getArgs()));
+   if (auto lookupResult = R->lookup(node->getIdent())) {
+      auto decl = lookupResult.front();
 
-         enumCaseExpr->setEnum(E);
-         enumCaseExpr->setContextualType(node->getContextualType());
-         enumCaseExpr->setSourceLoc(node->getSourceLoc());
-         enumCaseExpr->setMemberExpr(node->getMemberExpr());
+      if (auto F = dyn_cast<FieldDecl>(decl)) {
+         QualType fieldTy(F->getType()->getType());
 
-         node->getParentExpr()->setMemberExpr(enumCaseExpr);
-         node->setReturnType(visitEnumCaseExpr(enumCaseExpr.get()));
+         if (fieldTy->isFunctionType()) {
+            auto subExpr = new (getContext())
+               MemberRefExpr(string(node->getIdent()));
+
+            subExpr->setIsPointerAccess(node->isPointerAccess());
+
+            node->setIsPointerAccess(false);
+            node->setKind(CallKind::AnonymousCall);
+
+            visitMemberRefExpr(subExpr,
+                               subExpr->isPointerAccess()
+                                  ? QualType(Context.getPointerType(ty))
+                                  : ty);
+
+            auto sub = node->getSubExpr();
+            replaceExpressionWith(*this, node, subExpr);
+
+            subExpr->setSubExpr(sub);
+            visitMemberRefExpr(subExpr, ty);
+
+            return;
+         }
+      }
+      else if (auto M = dyn_cast<MethodDecl>(decl)) {
+         if (staticCall && !M->isStatic())
+            diagnose(node, err_generic_error,
+                     "cannot call non-static method statically");
+
+         auto &args = node->getArgs();
+         auto result = getMethod(R, lookupResult, args,
+                                 node->getTemplateArgs(), node, staticCall);
+
+         if (!result->isCompatible()) {
+            return diagnoseNoMatchingCall(result.get(),
+                                          NoMatchingCallKind::Method,
+                                          node->getIdent(), node);
+         }
+
+         auto method = result->getMethod();
+
+         checkMemberAccessibility(R, method->getName(),
+                                  method->getAccess(), node);
+
+         auto returnTy = method->getReturnType()->getType();
+         node->setReturnType(returnTy);
+
+         node->setKind(method->isStatic() ? CallKind::StaticMethodCall
+                                          : CallKind::MethodCall);
+
+         node->setMethod(method);
+
+         PrepareCallArgs(node->getArgs(), method);
+         ApplyCasts(node->getArgs(), method->getFunctionType());
 
          return;
       }
+      else if (auto C = dyn_cast<EnumCaseDecl>(decl)) {
+         auto enumCaseExpr = new (getContext())
+            EnumCaseExpr(string(node->getIdent()),
+                         move(node->getArgs()));
 
-      if (!R->hasMethodWithName(node->getIdent())) {
-         auto NS = SymbolTable::getNamespace(R->getName());
-         assert(NS && "no namespace created for record");
+         enumCaseExpr->setEnum(cast<EnumDecl>(R));
 
-         return HandleNamespaceMember(node, NS);
+         replaceExpressionWith(*this, node, enumCaseExpr);
+         node->setReturnType(visitEnumCaseExpr(enumCaseExpr));
+
+         return;
+      }
+      else if (auto Inner = dyn_cast<RecordDecl>(decl)) {
+         return HandleConstructorCall(node, Inner);
+      }
+      else if (auto TD = dyn_cast<TypedefDecl>(decl)) {
+         return HandleStaticTypeCall(node, *TD->getOriginTy()->getType());
+      }
+      else {
+         llvm_unreachable("unhandled decl kind");
       }
    }
 
-   // resolve given template args
-   if (!R->hasMethodTemplate(node->getIdent())
-                                          && !node->getTemplateArgs().empty()) {
-      diagnose(node, err_no_template_method, R->getNameSelector(),
-               R->getName(), node->getIdent());
-
-      node->getTemplateArgs().clear();
-   }
-
-   checkClassAccessibility(R, node);
-
-   auto &givenArgs = node->getResolvedArgs();
-   auto result = getMethod(R, node->getIdent(), givenArgs,
-                           node->getTemplateArgs(), node, staticCall);
-
-   if (!result->isCompatible()) {
-      if (auto TheStruct = dyn_cast<Struct>(R)) {
-         if (TheStruct->hasField(node->getIdent())) {
-            auto field = TheStruct->getField(node->getIdent());
-            QualType fieldTy(field->fieldType);
-
-            if (fieldTy->isFunctionTy()) {
-               auto subExpr = std::make_shared<MemberRefExpr>(
-                  string(node->getIdent()));
-
-               auto parent = node->getParentExpr();
-               auto nodePtr = parent->getMemberExpr();
-
-               subExpr->setSourceLoc(node->getSourceLoc());
-               subExpr->setMemberExpr(nodePtr);
-               subExpr->setIsPointerAccess(node->isPointerAccess_());
-
-               parent->setMemberExpr(subExpr);
-
-               node->setIsPointerAccess_(false);
-               node->setKind(CallKind::AnonymousCall);
-
-               visitMemberRefExpr(subExpr.get(),
-                                  subExpr->isPointerAccess()
-                                     ? QualType(ty->getPointerTo())
-                                     : ty);
-
-               return;
-            }
-         }
-      }
-
-      return diagnoseNoMatchingCall(result.get(), NoMatchingCallKind::Method,
-                                    node->getIdent(), node);
-   }
-
-   auto method = result->getMethod();
-
-   checkMemberAccessibility(R, method->getName(),
-                            method->getAccessModifier(), node);
-
-   auto returnTy = method->getReturnType();
-   node->setReturnType(returnTy);
-
-   node->setKind(method->isStatic() ? CallKind::StaticMethodCall
-                                    : CallKind::MethodCall);
-
-   node->setMethod(method);
-
-   PrepareCallArgs(node->getArgs(), givenArgs, method->getArguments());
-   ApplyCasts(node->getArgs(), result->getResolvedGivenArgs(),
-              method->getArguments());
+   diagnose(node, err_generic_error,
+            "method " + node->getIdent() + " does not exist on type "
+            + R->getName());
 }
 
-void SemaPass::HandleNamespaceMember(CallExpr *node, Namespace *NS)
+void SemaPass::HandleDeclContextMember(CallExpr *node, DeclContext *Ctx)
 {
-   llvm::SmallString<128> qualifiedName;
-   qualifiedName += NS->getName();
-   qualifiedName += ".";
-   qualifiedName += node->getIdent();
+   auto lookupResult = Ctx->lookup(node->getIdent());
+   if (!lookupResult) {
+      return diagnoseMemberNotFound(Ctx, node, node->getIdent(), "function");
+   }
 
-   auto lookup = SymbolTable::lookup(qualifiedName.str(),
-                                     declPass->importedNamespaces(),
-                                     declPass->currentNamespace);
+   auto lookup = lookupResult.front();
+   if (auto R = dyn_cast<RecordDecl>(lookup)) {
+      return HandleConstructorCall(node, R);
+   }
+   else if (auto F = dyn_cast<FunctionDecl>(lookup)) {
+      return HandleFunctionCall(node, { F });
+   }
+   else if (auto GV = dyn_cast<GlobalVarDecl>(lookup)) {
+      node->setGlobalVar(GV);
 
-   using Kind = SymbolTable::LookupResult::LookupResultKind;
+      auto res = GV->getTypeRef()->getType();
+      res.isLvalue(true);
 
-   switch (lookup.kind) {
-      case Kind::LRK_Nothing:
-         break;
-      case Kind::LRK_Record:
-      case Kind::LRK_Class:
-      case Kind::LRK_Enum:
-      case Kind::LRK_Struct:
-      case Kind::LRK_Union:
-      case Kind::LRK_Protocol: {
-         auto R = lookup.Entry->getRecord();
-         if (R->isTemplated()) {
-            TemplateArgList list(*this, R, node->getTemplateArgs());
-            if (!list.checkCompatibility()) {
-               issueDiagnostics(list);
-               node->setHadError(true);
-
-               return;
-            }
-
-            R = TemplateInstantiator::InstantiateRecord(*this,
-                                                        node->getSourceLoc(),
-                                                        R, std::move(list));
-         }
-
-         return HandleConstructorCall(node, R->getName());
+      return HandleAnonCall(node, res);
+   }
+   else if (auto TD = dyn_cast<TypedefDecl>(lookup)) {
+      if (TryTypedef(node, TD)) {
+         return;
       }
-      case Kind::LRK_Function:
-         return HandleFunctionCall(node, qualifiedName.str());
-      case Kind::LRK_GlobalVariable: {
-         auto &G = *lookup.Entry->getVariable();
-         node->setBinding(G.getName());
 
-         auto res = G.getType();
-         res.isLvalue(true);
-
-         return HandleAnonCall(node, res);
-      }
-      case Kind::LRK_Typedef:
-         return diagnose(node, err_generic_error, "cannot call typedef");
-      case Kind::LRK_Alias:
-         return diagnose(node, err_generic_error, "cannot call alias");
-      case Kind::LRK_Namespace:
-         return diagnose(node, err_generic_error, "cannot call namespace");
+      return diagnose(node, err_generic_error, "cannot call typedef");
+   }
+   else if (isa<AliasDecl>(lookup)) {
+      return diagnose(node, err_generic_error, "cannot call alias");
+   }
+   else if (isa<NamespaceDecl>(lookup)) {
+      return diagnose(node, err_generic_error, "cannot call namespace");
+   }
+   else {
+      llvm_unreachable("bad lookup result");
    }
 }
 
 void SemaPass::HandleStaticTypeCall(CallExpr *node, Type *Ty)
 {
-   llvm_unreachable("TODO");
+   if (Ty->isPrimitiveType()) {
+      auto& args = node->getArgs();
+      if (args.size() != 1) {
+         diagnose(node, err_generic_error,
+                  "primitive initializer expects one argument");
+
+         node->setHadError(true);
+         return;
+      }
+
+      if (Ty->isIntegerType()) {
+         if (auto lit = dyn_cast<IntegerLiteral>(args.front())) {
+            lit->setContextualType(Ty);
+            lit->setType(Ty);
+
+            visitIntegerLiteral(lit);
+         }
+         else if (auto B = dyn_cast<BoolLiteral>(args.front())) {
+            B->setContextualType(Ty);
+            B->setType(Ty);
+
+            visitBoolLiteral(B);
+         }
+         else {
+            diagnose(node, err_generic_error,
+                     "primitive initializer expects an integral constant");
+
+            return;
+         }
+      }
+      else {
+         assert(Ty->isFPType());
+         auto lit = dyn_cast<FPLiteral>(args.front());
+         if (!lit) {
+            diagnose(node, err_generic_error,
+                     "primitive initializer expects a floating point constant");
+
+            return;
+         }
+
+         lit->setContextualType(Ty);
+         lit->setType(Ty);
+
+         visitFPLiteral(lit);
+      }
+
+      node->setKind(CallKind::PrimitiveInitializer);
+      node->setReturnType(Ty);
+
+      return;
+   }
+   else if (Ty->isVoidType()) {
+      auto& args = node->getArgs();
+      if (!args.empty()) {
+         diagnose(node, err_generic_error,
+                  "'void' initializer takes no arguments");
+
+         node->setHadError(true);
+         return;
+      }
+
+      node->setKind(CallKind::PrimitiveInitializer);
+      node->setReturnType(Ty);
+
+      return;
+   }
+   else if (Ty->isObjectType()) {
+      return HandleConstructorCall(node, Ty->getRecord());
+   }
+
+   diagnose(node, err_generic_error, "type " + Ty->toUniqueString() + " "
+      "cannot be called statically");
 }
 
 void SemaPass::HandleOtherTypeCall(CallExpr *node, Type *ty)
 {
-   if (auto tup = dyn_cast<TupleType>(ty)) {
+   if (auto tup = ty->asTupleType()) {
       if (node->getIdent() == "__get_unsafe") {
-         auto &args = node->getResolvedArgs();
+         auto &args = node->getArgs();
          if (args.empty())
             return diagnose(node, err_generic_error,
                             "expected one integral argument");
 
-         implicitCastIfNecessary(node->getArgs().front(), args.front().type,
-                                 IntegerType::getUnsigned());
+         implicitCastIfNecessary(node->getArgs().front(),
+                                 args.front()->getExprType(),
+                                 Context.getUIntTy());
 
-         std::vector<std::pair<std::string, QualType>> elementTys{
-            { "", QualType(ObjectType::get("cdot.TypeInfo")->getPointerTo()) },
-            { "", QualType(IntegerType::getCharTy()->getPointerTo()) },
-         };
+         QualType elementTypes[2];
+         elementTypes[0] = Context.getPointerType(
+            Context.getRecordType(getRecord("cdot.TypeInfo"))
+         );
+
+         elementTypes[1] = Context.getPointerType(Context.getCharTy());
 
          node->setKind(CallKind::UnsafeTupleGet);
-         node->setReturnType(TupleType::get(elementTys));
+         node->setReturnType(Context.getTupleType(elementTypes));
 
          return;
       }
@@ -967,62 +1178,68 @@ void SemaPass::HandleOtherTypeCall(CallExpr *node, Type *ty)
             "cannot call method on value of type " + ty->toString());
 }
 
-void SemaPass::HandleConstructorCall(CallExpr *node, llvm::StringRef ident)
+void SemaPass::HandleConstructorCall(CallExpr *node, RecordDecl *record)
 {
-   auto record = getRecord(ident);
-   if (!record->isTemplated() && !node->getTemplateArgs().empty()) {
+   assert(record && "should not be called otherwise");
+
+   if (!record->isTemplate() && !node->getTemplateArgs().empty()) {
       diagnose(node, err_generic_type_count, 0, node->getTemplateArgs().size(),
-               ident);
+               node->getIdent());
 
       node->getTemplateArgs().clear();
    }
 
    if (record->isUnion()) {
-      if (node->getResolvedArgs().size() != 1)
+      if (node->getArgs().size() != 1)
          return diagnose(node, err_union_initializer_arg_count);
-      if (record->isTemplated() && node->getTemplateArgs().empty()) {
+      if (record->isTemplate() && node->getTemplateArgs().empty()) {
          return diagnose(node, err_generic_error,
                          "union template parameters cannot be inferred");
       }
 
-      auto& ty = node->getResolvedArgs().front().type;
-      auto U = record->getAs<Union>();
+      auto ty = node->getArgs().front()->getExprType();
+      auto U = cast<UnionDecl>(record);
 
-      auto neededTy = U->initializableWith(*ty);
+      cdot::Type *neededTy = nullptr;
+      for (auto &decl : U->getDecls()) {
+         if (auto F = dyn_cast<FieldDecl>(decl)) {
+            auto fieldType = F->getType()->getType();
+            if (implicitlyCastableTo(ty, fieldType)) {
+               neededTy = *fieldType;
+               break;
+            }
+         }
+      }
+
       if (!neededTy) {
          diag::err(err_union_initializer_type) << node
                                                << diag::term;
-      }
-
-      if (ty->isTypeGroup()) {
-         node->getArgs().front()->setContextualType(QualType(neededTy));
-         ty = visit(node->getArgs().front());
       }
 
       toRvalueIfNecessary(ty, node->getArgs().front());
       implicitCastIfNecessary(node->getArgs().front(), ty,
                               QualType(neededTy));
 
-      node->setReturnType({ObjectType::get(U->getName())});
+      node->setReturnType(Context.getRecordType(U));
       node->setKind(CallKind::UnionInitializer);
       node->setUnion(U);
 
       return;
    }
 
-   if (isa<Enum>(record)) {
+   if (isa<EnumDecl>(record)) {
       return diagnose(node, err_generic_error,
                       "enums cannot be constructed directly");
    }
 
-   if (isa<Protocol>(record))
+   if (isa<ProtocolDecl>(record))
       return diagnose(node, err_generic_error,
                       "protocols cannot be constructed directly");
 
-   auto rec = cast<Struct>(record);
+   auto rec = cast<StructDecl>(record);
    checkClassAccessibility(rec, node);
 
-   auto& givenArgs = node->getResolvedArgs();
+   auto& givenArgs = node->getArgs();
    auto result = getMethod(rec, "init", givenArgs, node->getTemplateArgs(),
                            node);
 
@@ -1032,25 +1249,24 @@ void SemaPass::HandleConstructorCall(CallExpr *node, llvm::StringRef ident)
    }
 
    auto method = result->getMethod();
-   rec = cast<Struct>(method->getOwningRecord());
+   rec = cast<StructDecl>(method->getRecord());
 
    // check accessibility
-   checkMemberAccessibility(rec, method->getName(), method->getAccessModifier(),
+   checkMemberAccessibility(rec, method->getName(), method->getAccess(),
                             node);
 
-   if (auto Cl = dyn_cast<Class>(rec)) {
+   if (auto Cl = dyn_cast<ClassDecl>(rec)) {
       if (Cl->isAbstract())
          diagnose(node, err_instantiate_abstract_class, Cl->getName());
    }
 
    node->setKind(CallKind::InitializerCall);
 
-   node->setReturnType(QualType(ObjectType::get(rec)));
+   node->setReturnType(Context.getRecordType(rec));
    node->setMethod(method);
 
-   PrepareCallArgs(node->getArgs(), givenArgs, method->getArguments());
-   ApplyCasts(node->getArgs(), result->getResolvedGivenArgs(),
-              method->getArguments());
+   PrepareCallArgs(node->getArgs(), method);
+   ApplyCasts(node->getArgs(), method->getFunctionType());
 }
 
 void SemaPass::diagnoseNoMatchingCall(CallResult *Res,
@@ -1069,14 +1285,14 @@ void SemaPass::diagnoseNoMatchingCall(CallResult *Res,
 
 void SemaPass::HandleCallOperator(CallExpr *node, QualType latest)
 {
-   if (!latest->isObjectTy() || !getRecord(latest->getClassName())) {
+   if (!latest->isObjectType() || !getRecord(latest->getClassName())) {
       return HandleAnonCall(node, latest);
    }
 
    string methodName = "postfix ()";
    auto rec = latest->getRecord();
 
-   auto& givenArgs = node->getResolvedArgs();
+   auto& givenArgs = node->getArgs();
    auto result = getMethod(rec, methodName, givenArgs);
 
    if (!result->isCompatible()) {
@@ -1090,41 +1306,39 @@ void SemaPass::HandleCallOperator(CallExpr *node, QualType latest)
    node->setKind(CallKind::CallOperator);
    node->setMethod(method);
 
-   PrepareCallArgs(node->getArgs(), givenArgs, method->getArguments());
-   ApplyCasts(node->getArgs(), result->getResolvedGivenArgs(),
-              method->getArguments());
+   PrepareCallArgs(node->getArgs(), method);
+   ApplyCasts(node->getArgs(), method->getFunctionType());
 
-   node->setReturnType(method->getReturnType());
+   node->setReturnType(method->getReturnType()->getType());
 }
 
 void SemaPass::HandleAnonCall(CallExpr *node, QualType latest)
 {
-   auto& givenArgs = node->getResolvedArgs();
-
-   if (latest->isPointerTy()) {
-      latest = latest->asPointerTy()->getPointeeType();
+   auto& givenArgs = node->getArgs();
+   if (latest->isPointerType()) {
+      latest = latest->asPointerType()->getPointeeType();
    }
 
-   if (latest->isObjectTy()) {
+   if (latest->isObjectType()) {
       auto R = latest->getRecord();
       auto CallOp = getMethod(R, "postfix ()", givenArgs);
 
       if (CallOp->isCompatible()) {
          node->setKind(CallKind::CallOperator);
          node->setMethod(CallOp->getMethod());
-         node->setReturnType(node->getMethod()->getReturnType());
+         node->setReturnType(node->getMethod()->getReturnType()->getType());
 
          return;
       }
    }
 
-   if (!latest->isFunctionTy()) {
+   if (!latest->isFunctionType()) {
       return diagnose(node, err_generic_error,
                       latest.toString() + " is not a callable type");
    }
 
-   auto func = cast<FunctionType>(*latest);
-   auto result = checkAnonymousCall(func, givenArgs, node->getSourceLoc());
+   auto func = latest->asFunctionType();
+   auto result = checkAnonymousCall(func, givenArgs, node);
 
    if (!result->isCompatible()) {
       return diagnoseNoMatchingCall(result.get(),
@@ -1132,9 +1346,8 @@ void SemaPass::HandleAnonCall(CallExpr *node, QualType latest)
                                     node->getIdent(), node);
    }
 
-   PrepareCallArgs(node->getArgs(), givenArgs, func->getArgTypes());
-   ApplyCasts(node->getArgs(), result->getResolvedGivenArgs(),
-              func->getArgTypes());
+   PrepareCallArgs(node->getArgs(), func);
+   ApplyCasts(node->getArgs(), func);
 
    node->setKind(CallKind::AnonymousCall);
    node->setReturnType(func->getReturnType());

@@ -2,6 +2,8 @@
 // Created by Jonas Zell on 22.11.17.
 //
 
+#include "../../Variant/Variant.h"
+
 #include "ReturnVerifierPass.h"
 #include "../../Message/Diagnostics.h"
 
@@ -24,7 +26,7 @@ void ReturnVerifierPass::visitModule(Module &M)
 
 void ReturnVerifierPass::visitFunction(Function &F)
 {
-   if (F.getReturnType()->isVoidTy() || F.isDeclared()
+   if (F.getReturnType()->isVoidType() || F.isDeclared()
        || F.getName() == "main" || isa<Initializer>(F)) {
       return;
    }

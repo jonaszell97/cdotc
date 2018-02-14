@@ -11,20 +11,31 @@
 namespace cdot {
 namespace ast {
 
+class MethodDecl;
+class TemplateArgExpr;
+
+using TemplateArgVec = std::vector<TemplateArgExpr*>;
+
 class Expression : public Statement {
 public:
-   typedef std::shared_ptr<Expression> SharedPtr;
+   friend class TransformImpl;
 
    Expression& operator=(const Expression &rhs) = default;
 
-   void setIsLhsOfAssignment();
-
-   const QualType &getExprType() const
+   QualType getExprType() const
    {
       return exprType;
    }
 
-   void setExprType(const QualType &exprType);
+   void setExprType(QualType exprType)
+   {
+      Expression::exprType = exprType;
+   }
+
+   bool isContextDependent() const
+   {
+      return contextDependent;
+   }
 
    static bool classof(AstNode const* T)
    {
@@ -38,48 +49,41 @@ public:
       }
    }
 
-   Type *getPlaceholderType() const;
-   bool isTripleColon() const;
+   bool isMetaTypeAllowed() const
+   {
+      return metaTypeAllowed;
+   }
+
+   void setMetaTypeAllowed(bool metaTypeAllowed)
+   {
+      Expression::metaTypeAllowed = metaTypeAllowed;
+   }
 
 protected:
-   explicit Expression(NodeType typeID)
-      : Statement(typeID), lhs_of_assignment(false), setter_call(false),
-        getter_call(false), variadicArgPackExpansion(false)
+   explicit Expression(NodeType typeID, bool contextDependent = false)
+      : Statement(typeID),
+        variadicArgPackExpansion(false), metaTypeAllowed(false),
+        contextDependent(contextDependent)
    {}
-
-   ~Expression();
 
    QualType exprType;
 
-   Expression::SharedPtr memberExpr;
-   Expression* parentExpr = nullptr;
+   Expression* subExpr = nullptr;
 
-   bool lhs_of_assignment : 1;
-   bool setter_call : 1;
-   bool getter_call : 1;
    bool variadicArgPackExpansion : 1;
-
-   cl::Method *accessorMethod = nullptr;
+   bool metaTypeAllowed : 1;
+   bool contextDependent : 1;
 
 public:
-   const Expression::SharedPtr &getMemberExpr() const;
+   Expression* getSubExpr() const { return subExpr; }
 
-   Expression *getParentExpr() const;
-   void setParentExpr(Expression *parentExpr);
-
-   bool getIsLhsOfAssigment() const;
    void setIsLhsOfAssignment(bool lhsOfAssignment);
+   MethodDecl *getAccessorMethod();
 
-   bool isSetterCall() const;
-   void isSetterCall(bool isSetterCall);
-
-   void setMemberExpr(const SharedPtr &memberExpr);
-
-   cl::Method *getAccessorMethod() const;
-   void setAccessorMethod(cl::Method *accessorMethod);
-
-   bool isGetterCall() const;
-   void isGetterCall(bool getter_call);
+   void setSubExpr(Expression *memberExpr)
+   {
+      this->subExpr = memberExpr;
+   }
 
    bool isVariadicArgPackExpansion() const
    {
@@ -91,16 +95,18 @@ public:
 
 class IdentifiedExpr: public Expression {
 public:
-   IdentifiedExpr(NodeType typeID, string &&ident)
-      : Expression(typeID), ident(move(ident))
+   IdentifiedExpr(NodeType typeID, std::string &&ident,
+                  bool contextDependent = false)
+      : Expression(typeID, contextDependent),
+        ident(move(ident))
    {}
 
-   const string &getIdent() const
+   const std::string &getIdent() const
    {
       return ident;
    }
 
-   void setIdent(string &&ident)
+   void setIdent(std::string &&ident)
    {
       IdentifiedExpr::ident = move(ident);
    }
@@ -118,7 +124,7 @@ public:
    }
 
 protected:
-   string ident;
+   std::string ident;
 };
 
 } // namespace ast

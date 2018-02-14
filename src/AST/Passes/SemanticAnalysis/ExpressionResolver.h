@@ -5,9 +5,8 @@
 #ifndef CDOT_EXPRESSIONRESOLVER_H
 #define CDOT_EXPRESSIONRESOLVER_H
 
-#include <memory>
 #include <llvm/ADT/SmallVector.h>
-#include "../../../Message/Diagnostics.h"
+#include "Message/Diagnostics.h"
 
 namespace cdot {
 namespace ast {
@@ -19,7 +18,7 @@ class ExprSequence;
 class ExpressionResolver {
 public:
    struct ExprResult {
-      std::shared_ptr<Expression> expr;
+      Expression* expr;
       llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
       bool hadError;
    };

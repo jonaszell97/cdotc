@@ -15,10 +15,10 @@ class ImplicitCastExpr : public Expression {
 public:
    ImplicitCastExpr(const QualType& from,
                     const QualType& to,
-                    Expression::SharedPtr &&target,
+                    Expression* target,
                     CastResult &&cast);
 
-   typedef std::shared_ptr<ImplicitCastExpr> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -28,7 +28,7 @@ public:
 protected:
    QualType from;
    QualType to;
-   Expression::SharedPtr target;
+   Expression* target;
 
    CastResult requiredCast;
 
@@ -39,8 +39,8 @@ public:
    const QualType &getTo() const { return to; }
    void setTo(const QualType &to);
 
-   const Expression::SharedPtr &getTarget() const { return target; }
-   void setTarget(const Expression::SharedPtr &target);
+   Expression* getTarget() const { return target; }
+   void setTarget(Expression* target);
 
    const CastResult &getRequiredCast() const { return requiredCast; }
 };

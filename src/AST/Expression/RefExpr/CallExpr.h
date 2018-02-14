@@ -11,29 +11,22 @@
 namespace cdot {
 
 class FunctionType;
-enum class BuiltinFn : unsigned int;
-struct Argument;
-class TemplateArgListBuilder;
-
-namespace cl {
-
-class Class;
-struct Method;
-struct EnumCase;
-
-} // namespace cl
+enum class BuiltinFn : unsigned char;
 
 } // namespace cdot
 
 struct CallCompatability;
 
-using cdot::cl::EnumCase;
-
 namespace cdot {
 namespace ast {
 
 class IdentifierRefExpr;
-class Function;
+class CallableDecl;
+class MethodDecl;
+class FunctionDecl;
+class UnionDecl;
+class GlobalVarDecl;
+class LocalVarDecl;
 
 enum class CallKind : unsigned {
    Unknown,
@@ -47,22 +40,25 @@ enum class CallKind : unsigned {
    AnonymousCall,
    UnsafeTupleGet,
    VariadicSizeof,
-   PrimitiveInitializer
+   PrimitiveInitializer,
+   GlobalVariableCall,
+   LocalVariableCall,
 };
 
 class CallExpr : public IdentifiedExpr {
 public:
-   explicit CallExpr(std::vector<std::shared_ptr<Expression>> &&args,
+   explicit CallExpr(std::vector<Expression* > &&args,
                      string &&name = "");
 
-   void destroyValueImpl();
+   explicit CallExpr(std::vector<Expression* > &&args,
+                     CallableDecl *C);
 
    void isPointerAccess(bool ptr)
    {
       is_pointer_access = ptr;
    }
 
-   typedef std::shared_ptr<CallExpr> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -71,7 +67,7 @@ public:
 
 protected:
    CallKind kind = CallKind::Unknown;
-   std::vector<std::shared_ptr<Expression>> args;
+   std::vector<Expression* > args;
 
    bool is_pointer_access : 1;
    bool implicitSelf : 1;
@@ -82,73 +78,60 @@ protected:
    QualType returnType;
 
    union {
-      cdot::cl::Method *method = nullptr;
-      ast::Function *func;
+      MethodDecl *method = nullptr;
+      FunctionDecl *func;
+      GlobalVarDecl *globalVar;
+      LocalVarDecl *localVar;
    };
 
-   IdentifierRefExpr *identExpr;
+   IdentifierRefExpr *identExpr = nullptr;
 
-   std::vector<TemplateArg> templateArgs;
-   std::vector<Argument> resolvedArgs;
-
-   llvm::ArrayRef<Argument> declaredArgTypes;
+   std::vector<TemplateArgExpr*> templateArgs;
 
    union {
       Type *builtinArgType = nullptr;
       FunctionType* functionType;
-      cl::Union *U;
+      UnionDecl *U;
    };
 
 
 public:
-   CallKind getKind() const;
-   void setKind(CallKind type);
-
-   std::vector<std::shared_ptr<Expression>> &getArgs()
+   std::vector<Expression* > &getArgs()
    {
       return args;
    }
 
-   std::vector<std::shared_ptr<Expression>> const& getArgs() const
+   std::vector<Expression* > const& getArgs() const
    {
       return args;
    }
 
-   bool isPointerAccess_() const;
-   void setIsPointerAccess_(bool isPointerAccess_);
+   MethodDecl *getMethod() const { return method; }
+   void setMethod(MethodDecl *method) { this->method = method; }
 
-   QualType &getReturnType();
-   void setReturnType(const QualType &returnType);
+   FunctionDecl *getFunc() const { return func; }
+   void setFunc(FunctionDecl *func) { this->func = func; }
 
-   BuiltinFn getBuiltinFnKind() const;
-   void setBuiltinFnKind(BuiltinFn builtinFnKind);
-
-   cl::Method *getMethod() const;
-   void setMethod(cl::Method *method);
-
-   Function *getFunc() const;
-   void setFunc(Function *func);
-
-   std::vector<TemplateArg> &getTemplateArgs()
+   std::vector<TemplateArgExpr*> &getTemplateArgs()
    {
       return templateArgs;
    }
 
-   void setTemplateArgs(std::vector<TemplateArg> &&templateArgs)
+   std::vector<TemplateArgExpr*> const& getTemplateArgs() const
+   {
+      return templateArgs;
+   }
+
+   void setTemplateArgs(std::vector<TemplateArgExpr*> &&templateArgs)
    {
       CallExpr::templateArgs = std::move(templateArgs);
    }
 
-   std::vector<Argument> &getResolvedArgs();
-   void setResolvedArgs(const std::vector<Argument> &resolvedArgs);
-
-   llvm::ArrayRef<Argument> getDeclaredArgTypes() const
+   FunctionType *getFunctionType() const { return functionType; }
+   void setFunctionType(FunctionType *functionType)
    {
-      return declaredArgTypes;
+      this->functionType = functionType;
    }
-
-   FunctionType *getFunctionType() const;
-   void setFunctionType(FunctionType *functionType);
 
    Type *getBuiltinArgType() const
    {
@@ -180,14 +163,77 @@ public:
       CallExpr::implicitSelf = implicitSelf;
    }
 
-   cl::Union *getUnion() const
+   UnionDecl *getUnion() const
    {
       return U;
    }
 
-   void setUnion(cl::Union *U)
+   void setUnion(UnionDecl *U)
    {
       CallExpr::U = U;
+   }
+
+   GlobalVarDecl *getGlobalVar() const
+   {
+      return globalVar;
+   }
+
+   void setGlobalVar(GlobalVarDecl *globalVar)
+   {
+      kind = CallKind::GlobalVariableCall;
+      CallExpr::globalVar = globalVar;
+   }
+
+   LocalVarDecl *getLocalVar() const
+   {
+      return localVar;
+   }
+
+   void setLocalVar(LocalVarDecl *localVar)
+   {
+      kind = CallKind::LocalVariableCall;
+      CallExpr::localVar = localVar;
+   }
+
+
+   CallKind getKind() const
+   {
+      return kind;
+   }
+
+   void setKind(CallKind type)
+   {
+      CallExpr::kind = type;
+   }
+
+   bool isPointerAccess() const
+   {
+      return is_pointer_access;
+   }
+
+   void setIsPointerAccess(bool isPointerAccess_)
+   {
+      CallExpr::is_pointer_access = isPointerAccess_;
+   }
+
+   QualType &getReturnType()
+   {
+      return returnType;
+   }
+
+   void setReturnType(const QualType &returnType)
+   {
+      CallExpr::returnType = returnType;
+   }
+
+   BuiltinFn getBuiltinFnKind() const
+   {
+      return builtinFnKind;
+   }
+
+   void setBuiltinFnKind(BuiltinFn builtinFnKind)
+   {
+      CallExpr::builtinFnKind = builtinFnKind;
    }
 };
 

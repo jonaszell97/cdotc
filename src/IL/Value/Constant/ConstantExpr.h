@@ -16,10 +16,14 @@ class ConstantAddrOfInst;
 class ConstantExpr: public Constant {
 public:
    static ConstantBitCastInst *getBitCast(Constant *Val, Type *toType);
-   static ConstantAddrOfInst *getAddrOf(Constant *Val);
+   static ConstantAddrOfInst *getAddrOf(Constant *Val, PointerType *PtrTy);
 
 protected:
-   ConstantExpr(TypeID id, Type *ty);
+   ConstantExpr(TypeID id, Type *ty)
+      : Constant(id, ty)
+   {
+
+   }
 
    static inline bool classof(Value const* T) {
       switch (T->getTypeID()) {
@@ -37,8 +41,12 @@ class ConstantBitCastInst: public ConstantExpr {
 private:
    Constant *target;
 
-   ConstantBitCastInst(Constant *Val,
-                       Type *toType);
+   ConstantBitCastInst(Constant *Val, Type *toType)
+      : ConstantExpr(ConstantBitCastInstID, toType),
+        target(Val)
+   {
+
+   }
 
 public:
    friend class ConstantExpr;
@@ -57,7 +65,14 @@ public:
 class ConstantAddrOfInst: public ConstantExpr {
 private:
    Constant *target;
-   explicit ConstantAddrOfInst(Constant *Val);
+
+   ConstantAddrOfInst(Constant *Val, PointerType *PtrTy)
+      : ConstantExpr(ConstantAddrOfInstID, PtrTy),
+        target(Val)
+   {
+      assert(Val->getType() == PtrTy->getPointeeType());
+      assert(Val->isLvalue());
+   }
 
 public:
    friend class ConstantExpr;
@@ -72,6 +87,16 @@ public:
       return T->getTypeID() == ConstantAddrOfInstID;
    }
 };
+
+inline ConstantBitCastInst* ConstantExpr::getBitCast(Constant *Val,
+                                                     Type *toType) {
+   return new ConstantBitCastInst(Val, toType);
+}
+
+inline ConstantAddrOfInst* ConstantExpr::getAddrOf(Constant *Val,
+                                                   PointerType *PtrTy) {
+   return new ConstantAddrOfInst(Val, PtrTy);
+}
 
 } // namespace il
 } // namespace cdot

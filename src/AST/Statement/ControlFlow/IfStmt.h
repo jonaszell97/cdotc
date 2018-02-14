@@ -14,47 +14,47 @@ class Expression;
 
 class IfStmt : public Statement {
 public:
-   IfStmt(std::shared_ptr<Expression> &&cond,
-          Statement::SharedPtr &&body);
+   IfStmt(Expression* cond,
+          Statement* body);
 
-   IfStmt(std::shared_ptr<Expression> &&cond,
-          Statement::SharedPtr &&body,
-          Statement::SharedPtr &&elseBody);
+   IfStmt(Expression* cond,
+          Statement* body,
+          Statement* elseBody);
 
-   inline void setElseBranch(Statement::SharedPtr &&elseBr)
+   inline void setElseBranch(Statement* elseBr)
    {
       elseBranch = std::move(elseBr);
    }
-
-   typedef std::shared_ptr<IfStmt> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == IfStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<Expression> condition;
-   std::shared_ptr<Statement> ifBranch;
-   std::shared_ptr<Statement> elseBranch;
+   Expression* condition;
+   Statement* ifBranch;
+   Statement* elseBranch;
 
 public:
-   const std::shared_ptr<Expression> &getCondition() const
+   Expression* getCondition() const
    {
       return condition;
    }
 
-   std::shared_ptr<Expression> &getCondition()
+   Expression* &getCondition()
    {
       return condition;
    }
 
-   const std::shared_ptr<Statement> &getIfBranch() const
+   Statement* getIfBranch() const
    {
       return ifBranch;
    }
 
-   const std::shared_ptr<Statement> &getElseBranch() const
+   Statement* getElseBranch() const
    {
       return elseBranch;
    }

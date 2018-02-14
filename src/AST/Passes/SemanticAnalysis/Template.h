@@ -7,30 +7,34 @@
 
 #include <llvm/ADT/ArrayRef.h>
 #include <string>
-#include "../../../lex/SourceLocation.h"
+
+#include "Variant/Type/Type.h"
+#include "lex/SourceLocation.h"
+
+namespace llvm {
+   class FoldingSetNodeID;
+} // namespace llvm
 
 namespace cdot {
 
-class TemplateArg;
-struct TemplateParameter;
 class QualType;
 struct Variant;
-struct Argument;
 class Type;
-class Callable;
-struct Typedef;
-struct Alias;
-
-namespace cl {
-   class Record;
-} // namespace cl
 
 namespace diag {
    class DiagnosticBuilder;
 } // namespace diag
 
 namespace ast {
+   class RecordDecl;
+   class CallableDecl;
+   class TypedefDecl;
+   class AliasDecl;
    class SemaPass;
+   class FuncArgDecl;
+   class TemplateArgExpr;
+   class TemplateParamDecl;
+   class NamedDecl;
 } // namespace ast
 
 namespace sema {
@@ -39,12 +43,13 @@ class TemplateArgListImpl;
 class TemplateArgList;
 
 struct ResolvedTemplateArg {
-   explicit ResolvedTemplateArg(Type *type, SourceLocation loc = {})
+   explicit ResolvedTemplateArg(QualType type, SourceLocation loc = {})
       : is_type(true), is_variadic(false), is_inferred(false), ignore(false),
         type(type), loc(loc)
    {}
 
    explicit ResolvedTemplateArg(Variant &&V,
+                                QualType valueType,
                                 SourceLocation loc = {}) noexcept;
 
    explicit ResolvedTemplateArg(
@@ -61,9 +66,15 @@ struct ResolvedTemplateArg {
 
    ResolvedTemplateArg& operator=(ResolvedTemplateArg &&other);
 
-   Type *getType() const
+   QualType getType() const
    {
       assert(isType());
+      return type;
+   }
+
+   QualType getValueType() const
+   {
+      assert(isValue());
       return type;
    }
 
@@ -73,7 +84,7 @@ struct ResolvedTemplateArg {
    void emplace_back(Args&&... args)
    {
       assert(isVariadic());
-      variadicArgs.emplace_back(std::forward<Args>(args)...);
+      variadicArgs.emplace_back(std::forward<Args&&>(args)...);
    }
 
    std::vector<ResolvedTemplateArg> const& getVariadicArgs() const
@@ -102,6 +113,8 @@ struct ResolvedTemplateArg {
       return loc;
    }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+
    friend class TemplateArgListImpl; // for is_inferred, ignore
 
 private:
@@ -110,8 +123,9 @@ private:
    bool is_inferred : 1;
    bool ignore      : 1;
 
+   QualType type;
+
    union {
-      Type *type = nullptr;
       std::unique_ptr<Variant> V;
       std::vector<ResolvedTemplateArg> variadicArgs;
    };
@@ -123,28 +137,19 @@ private:
 
 class TemplateArgList {
 public:
+   using TemplateArgExpr = ast::TemplateArgExpr;
+   using TemplateParamDecl = ast::TemplateParamDecl;
+
    TemplateArgList()
       : pImpl(nullptr)
    {}
 
    TemplateArgList(ast::SemaPass &S,
-                   cl::Record *R,
-                   llvm::ArrayRef<TemplateArg> templateArguments = {});
-
-   TemplateArgList(ast::SemaPass &S,
-                   Callable *C,
-                   llvm::ArrayRef<TemplateArg> templateArguments = {});
-
-   TemplateArgList(ast::SemaPass &S,
-                   Typedef *td,
-                   llvm::ArrayRef<TemplateArg> templateArguments = {});
-
-   TemplateArgList(ast::SemaPass &S,
-                   Alias *alias,
-                   llvm::ArrayRef<TemplateArg> templateArguments = {});
+                   ast::NamedDecl *Template,
+                   llvm::ArrayRef<TemplateArgExpr*> templateArguments = {});
 
    explicit TemplateArgList(ast::SemaPass &S,
-                            llvm::ArrayRef<TemplateArg> templateArguments = {});
+                            llvm::ArrayRef<TemplateArgExpr*> templateArguments = {});
 
    ~TemplateArgList();
 
@@ -165,13 +170,18 @@ public:
       return *this;
    }
 
-   void inferFromArgList(std::vector<QualType> const& givenArgs,
-                         std::vector<Argument> const& neededArgs);
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, *this);
+   }
 
-   void resolveWith(cl::Record *R);
-   void resolveWith(Callable *C);
-   void resolveWith(Typedef *td);
-   void resolveWith(Alias *alias);
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       TemplateArgList const& list);
+
+   void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
+                         llvm::ArrayRef<ast::FuncArgDecl*> neededArgs);
+
+   void resolveWith(ast::NamedDecl *R);
 
    TemplateArgList moveInitializerArgs();
 
@@ -184,20 +194,22 @@ public:
    bool checkCompatibility() const;
    llvm::SmallVector<diag::DiagnosticBuilder, 4> &getDiagnostics();
 
-   bool isStillDependant() const;
+   bool isStillDependent() const;
 
-   TemplateParameter const* getMissingArgument() const;
+   TemplateParamDecl const* getMissingArgument() const;
    ResolvedTemplateArg const* getNamedArg(llvm::StringRef name) const;
 
    bool insert(llvm::StringRef name, Type *ty);
-   bool insert(llvm::StringRef name, Variant &&V);
+   bool insert(llvm::StringRef name, Variant &&V, QualType valueTy);
    bool insert(llvm::StringRef name, bool isType,
                std::vector<ResolvedTemplateArg> &&variadicArgs);
+
+   bool insert(llvm::StringRef name, ResolvedTemplateArg &&arg);
 
    bool empty() const;
    size_t size() const;
 
-   llvm::ArrayRef<TemplateArg> getOriginalArgs() const;
+   llvm::ArrayRef<TemplateArgExpr*> getOriginalArgs() const;
 
    struct arg_iterator: public std::iterator<std::forward_iterator_tag,
                                              const ResolvedTemplateArg> {
@@ -229,7 +241,7 @@ public:
          return !operator==(rhs);
       }
 
-      TemplateParameter const& getParam() const
+      TemplateParamDecl* const& getParam() const
       {
          return *it;
       }
@@ -237,7 +249,7 @@ public:
    private:
       ResolvedTemplateArg const* arg;
       TemplateArgList const* list;
-      llvm::ArrayRef<TemplateParameter>::iterator it;
+      llvm::ArrayRef<TemplateParamDecl*>::iterator it;
    };
 
    std::string toString(char begin = '<', char end = '>',

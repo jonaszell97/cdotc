@@ -14,7 +14,7 @@ class LabelStmt : public Statement {
 public:
    explicit LabelStmt(string &&name);
 
-   typedef std::shared_ptr<LabelStmt> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {

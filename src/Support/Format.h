@@ -8,6 +8,8 @@
 #include <string>
 #include <cmath>
 #include <cassert>
+#include <llvm/ADT/SmallString.h>
+#include <ctime>
 
 namespace cdot {
 namespace support {
@@ -35,14 +37,22 @@ struct Base16Traits {
 template<class FormatTraits = Base16Traits>
 std::string formatInteger(uint64_t val)
 {
-   std::string res(FormatTraits::Prefix);
+   llvm::SmallString<128> res;
+   res += FormatTraits::Prefix;
+
    if (val == 0) {
       res += std::to_string(0);
-      return res;
+      return res.str().str();
    }
 
    auto neededDigits = uint64_t(std::ceil(std::log(val)
                                         / std::log(FormatTraits::Base)));
+
+   if (neededDigits == 0) {
+      res += FormatTraits::Digits[val];
+      return res.str().str();
+   }
+
    uint64_t power = neededDigits - 1;
 
    for (;;) {
@@ -60,7 +70,7 @@ std::string formatInteger(uint64_t val)
       val -= fits * pow;
    }
 
-   return res;
+   return res.str().str();
 }
 
 template<class T>
@@ -69,10 +79,27 @@ std::string formatAsHexInteger(T val)
    union {
       T t;
       uint64_t i;
-   } Union { val };
+   } Union;
+
+   Union.i = 0; // zero out upper bits if the given type is smaller
+   Union.t = val;
 
    return formatInteger<Base16Traits>(Union.i);
 }
+
+inline std::string formatTime(time_t time = -1,
+                              const char *fmt = "%Y/%m/%d %H:%M:%S") {
+   if (time == -1)
+      time = std::time(nullptr);
+
+   char buffer[40];
+   struct tm* time_s = localtime(&time);
+
+   auto len = strftime(buffer, sizeof(buffer), fmt, time_s);
+   return std::string(buffer, len);
+}
+
+char hexdigit(unsigned i);
 
 inline char unescape_char(char c)
 {
@@ -93,6 +120,66 @@ inline char unescape_char(char c)
          return '0';
       default:
          return c;
+   }
+}
+
+template <class Stream>
+inline Stream& unescape_char(char c, Stream &out)
+{
+   switch (c) {
+      case '\n':
+         return out << "\\n";
+      case '\a':
+         return out << "\\a";
+      case '\r':
+         return out << "\\r";
+      case '\v':
+         return out << "\\v";
+      case '\t':
+         return out << "\\t";
+      case '\b':
+         return out << "\\b";
+      case '\0':
+         return out << "\\0";
+      default:
+         if (!::isprint(c)) {
+            return out << '\\'
+                       << hexdigit((c & 0b11110000) >> 4)
+                       << hexdigit(c & 0b1111);
+         }
+         else
+            return out << c;
+   }
+}
+
+template<unsigned N>
+inline llvm::SmallString<N> &unescape_char(char c, llvm::SmallString<N> &out)
+{
+   switch (c) {
+      case '\n':
+         return out += "\\n";
+      case '\a':
+         return out += "\\a";
+      case '\r':
+         return out += "\\r";
+      case '\v':
+         return out += "\\v";
+      case '\t':
+         return out += "\\t";
+      case '\b':
+         return out += "\\b";
+      case '\0':
+         return out += "\\0";
+      default:
+         if (!::isprint(c)) {
+            out += '\\';
+            out += hexdigit((c & 0b11110000) >> 4);
+            out += hexdigit(c & 0b1111);
+
+            return out;
+         }
+         else
+            return out += c;
    }
 }
 
@@ -121,8 +208,6 @@ inline char escape_char(char c)
          return c;
    }
 }
-
-char hexdigit(unsigned i);
 
 } // namespace support
 } // namespace cdot

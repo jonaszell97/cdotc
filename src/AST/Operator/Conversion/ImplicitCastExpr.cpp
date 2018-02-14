@@ -9,12 +9,12 @@ namespace ast {
 
 ImplicitCastExpr::ImplicitCastExpr(const QualType& from,
                                    const QualType& to,
-                                   Expression::SharedPtr &&target,
+                                   Expression* target,
                                    CastResult &&requiredCast)
-   : Expression(ImplicitCastExprID), from(from), to(to), target(move(target)),
+   : Expression(ImplicitCastExprID), from(from), to(to), target(target),
      requiredCast(std::move(requiredCast))
 {
-   this->target->setParent(this);
+   assert(from != to);
 }
 
 void ImplicitCastExpr::setFrom(const QualType &from)
@@ -27,7 +27,7 @@ void ImplicitCastExpr::setTo(const QualType &to)
    ImplicitCastExpr::to = to;
 }
 
-void ImplicitCastExpr::setTarget(const Expression::SharedPtr &target)
+void ImplicitCastExpr::setTarget(Expression* target)
 {
    ImplicitCastExpr::target = target;
 }

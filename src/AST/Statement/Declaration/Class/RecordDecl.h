@@ -5,131 +5,270 @@
 #ifndef CDOT_RECORDDECL_H
 #define CDOT_RECORDDECL_H
 
-#include "../../Statement.h"
-#include "../../../Passes/SemanticAnalysis/Record/Record.h"
+#include <llvm/ADT/SmallPtrSet.h>
+
+#include "../NamedDecl.h"
+#include "../../../../Basic/Precedence.h"
 
 namespace cdot {
 
-struct TemplateParameter;
-enum class AccessModifier : unsigned int;
-
-namespace cl {
-
-struct Method;
-
-class Record;
-class Enum;
-class Protocol;
-class Union;
-
-} // namespace cl
+enum class AccessModifier : unsigned char;
 
 namespace ast {
 
 class FieldDecl;
 class PropDecl;
 class MethodDecl;
-class ConstrDecl;
+class InitDecl;
 class TypedefDecl;
-class DestrDecl;
+class DeinitDecl;
 class TypeRef;
 class StaticStmt;
 class StaticExpr;
 class AssociatedTypeDecl;
 
-class RecordDecl: public Statement {
-public:
-   typedef std::shared_ptr<RecordDecl> SharedPtr;
+class EnumDecl;
+class UnionDecl;
+class ProtocolDecl;
+class ExtensionDecl;
 
+enum class ImplicitConformanceKind : unsigned char {
+   StringRepresentable,
+   Hashable,
+   Equatable
+};
+
+struct ImplicitConformance {
+   ImplicitConformance(ImplicitConformanceKind kind,
+                       MethodDecl *method)
+      : kind(kind), method(method) {}
+
+   ImplicitConformanceKind kind;
+   MethodDecl *method;
+};
+
+class RecordDecl: public NamedDecl, public DeclContext,
+                  public llvm::FoldingSetNode {
+public:
    static bool classof(AstNode const* T)
    {
-      switch (T->getTypeID()) {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(NodeType type)
+   {
+      switch (type) {
 #      define CDOT_RECORD_DECL(Name) \
           case Name##ID:
 #      include "../../../AstNode.def"
-         return true;
+            return true;
          default:
             return false;
       }
    }
 
-protected:
-   RecordDecl(
-      NodeType typeID,
-      AccessModifier am,
-      string &&recordName,
+   static bool classof(DeclContext const* T) { return true; }
 
-      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-
-      std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements
-   );
-
-   AccessModifier am;
-   string recordName;
-   size_t namespaceLength;
-
-   std::vector<std::shared_ptr<TypeRef>> conformsTo;
-
-   std::vector<std::shared_ptr<FieldDecl>> fields;
-   std::vector<std::shared_ptr<MethodDecl>> methods;
-   std::vector<std::shared_ptr<TypedefDecl>> typedefs;
-   std::vector<std::shared_ptr<PropDecl>> properties;
-   std::vector<std::shared_ptr<AssociatedTypeDecl>> associatedTypes;
-
-   std::vector<TemplateParameter> templateParams;
-   std::vector<std::shared_ptr<StaticExpr>> Constraints;
-
-   std::vector<std::shared_ptr<RecordDecl>> innerDeclarations;
-   std::vector<std::shared_ptr<StaticStmt>> staticStatements;
-
-   Record* record = nullptr;
-   RecordDecl *outerRecord = nullptr;
-
-public:
-   AccessModifier getAm() const;
-   void setAm(AccessModifier am);
-
-   const string &getRecordName() const;
-   void setRecordName(const string &recordName);
-
-   size_t getNamespaceLength() const;
-   void setNamespaceLength(size_t namespaceLength);
-
-   const std::vector<std::shared_ptr<TypeRef>> &getConformsTo() const;
-   void setConformsTo(const std::vector<std::shared_ptr<TypeRef>> &conformsTo);
-
-   const std::vector<std::shared_ptr<MethodDecl>> &getMethods() const
+   static DeclContext *castToDeclContext(RecordDecl const *D)
    {
-      return methods;
+      return static_cast<DeclContext*>(const_cast<RecordDecl*>(D));
    }
 
-   std::vector<std::shared_ptr<TypedefDecl>> &getTypedefs();
-   void setTypedefs(const std::vector<std::shared_ptr<TypedefDecl>> &typedefs);
+   static RecordDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<RecordDecl*>(const_cast<DeclContext*>(Ctx));
+   }
 
-   const std::vector<std::shared_ptr<PropDecl>> &getProperties() const;
-   void setProperties(const std::vector<std::shared_ptr<PropDecl>> &properties);
+   void Profile(llvm::FoldingSetNodeID &ID)
+   {
+      Profile(ID, instantiationInfo->specializedTemplate,
+              instantiationInfo->templateArgs);
+   }
 
-   std::vector<std::shared_ptr<RecordDecl>> &getInnerDeclarations();
-   void setInnerDeclarations(
-      const std::vector<std::shared_ptr<RecordDecl>> &innerDeclarations);
+   static void Profile(llvm::FoldingSetNodeID &ID, RecordDecl *Template,
+                       sema::TemplateArgList &list) {
+      ID.AddPointer(Template);
+      list.Profile(ID);
+   }
 
-   bool isVisited() const;
+   friend class TransformImpl;
 
-   Record *getRecord() const;
-   void setRecord(Record *record);
+   AssociatedTypeDecl* getAssociatedType(llvm::StringRef name,
+                                         ProtocolDecl *P = nullptr) const;
 
-   std::vector<TemplateParameter> &getTemplateParams()
-   { return templateParams; }
+   MethodDecl *getConversionOperator(Type const* toType) const;
+   MethodDecl *getComparisonOperator(Type const* withType) const;
+
+   bool hasMethodWithName(llvm::StringRef name) const;
+   bool hasMethodTemplate(llvm::StringRef name) const;
+
+   PropDecl *getProperty(llvm::StringRef name) const;
+   FieldDecl* getField(llvm::StringRef name) const;
+
+   MethodDecl* getMethod(llvm::StringRef name, bool checkParent = true) const;
+   MethodDecl* getMethod(size_t id) const;
+
+   MethodDecl* getOwnMethod(llvm::StringRef name);
+
+   RecordDecl *getInnerRecord(llvm::StringRef name) const
+   {
+      return lookupSingle<RecordDecl>(name);
+   }
+
+   bool hasInnerRecord(RecordDecl *R) const
+   {
+      return innerRecords.find(R) != innerRecords.end();
+   }
+
+   bool conformsTo(ProtocolDecl *P) const
+   {
+      return conformances.find(P) != conformances.end();
+   }
+
+   bool conformsToBaseTemplate(ProtocolDecl *P) const;
+   void addExtension(ExtensionDecl *E);
+
+   void calculateSize();
+
+   [[nodiscard]]
+   DeclContext::AddDeclResultKind addDecl(NamedDecl *decl);
+
+   void addStaticStatement(StaticStmt *stmt)
+   {
+      staticStatements.push_back(stmt);
+   }
+
+protected:
+   RecordDecl(NodeType typeID,
+              AccessModifier access,
+              std::string &&recordName,
+              std::vector<TypeRef*> &&conformanceTypes,
+              std::vector<StaticExpr*> &&constraints)
+      : NamedDecl(typeID, access, move(recordName), move(constraints)),
+        DeclContext(typeID),
+        conformanceTypes(move(conformanceTypes)),
+        manualAlignment(false), opaque(false),
+        implicitlyEquatable(false), implicitlyHashable(false),
+        implicitlyStringRepresentable(false)
+   {}
+
+   static size_t lastRecordID;
+
+   size_t lastMethodID = 1;
+   size_t uses = 0;
+   size_t recordID;
+
+   std::vector<TypeRef*> conformanceTypes;
+
+   std::vector<TemplateParamDecl*> templateParams;
+   InstantiationInfo<RecordDecl> *instantiationInfo = nullptr;
+
+   std::vector<StaticStmt*> staticStatements;
+
+   llvm::SmallPtrSet<ProtocolDecl*, 4> conformances;
+   llvm::SmallPtrSet<RecordDecl*, 4> innerRecords;
+   RecordDecl *outerRecord = nullptr;
+
+   DeinitDecl *deinitializer = nullptr;
+
+   size_t occupiedBytes = 0;
+   unsigned short alignment = 1;
+
+   bool manualAlignment : 1;
+   bool opaque          : 1;
+   bool implicitlyEquatable : 1;
+   bool implicitlyHashable : 1;
+   bool implicitlyStringRepresentable : 1;
+
+   MethodDecl *operatorEquals = nullptr;
+   MethodDecl *hashCodeFn = nullptr;
+   MethodDecl *toStringFn = nullptr;
+
+   std::unordered_multimap<size_t, MethodDecl*> destructuringOperators;
+
+public:
+   struct Operator {
+      Operator(Associativity assoc,
+               int precedence,
+               FixKind fix,
+               QualType returnType)
+         : fixKind((unsigned char)fix), precedenceGroup(precedence, assoc),
+           returnType(returnType)
+      {}
+
+      void addFix(FixKind fix)
+      {
+         fixKind |= (unsigned char)fix;
+      }
+
+      bool isInfix()  const { return fixKind & (unsigned char)FixKind::Infix; }
+      bool isPrefix() const { return fixKind & (unsigned char)FixKind::Prefix; }
+      bool isPostfix() const
+      {
+         return fixKind & (unsigned char)FixKind::Postfix;
+      }
+
+      bool hasFix(FixKind fix) const { return fixKind & (unsigned char)fix; }
+
+      QualType getReturnType() const { return returnType; }
+
+      const PrecedenceGroup &getPrecedenceGroup() const
+      {
+         return precedenceGroup;
+      }
+
+   private:
+      unsigned char fixKind : 8;
+      PrecedenceGroup precedenceGroup;
+      QualType returnType;
+   };
+
+   void declareOperator(MethodDecl* M);
+
+protected:
+   llvm::StringMap<Operator> OperatorPrecedences;
+
+public:
+   Operator *getOperatorPrecedence(FixKind fix,
+                                   const std::string &op) {
+      auto it = OperatorPrecedences.find(op);
+      if (it == OperatorPrecedences.end()) {
+         return nullptr;
+      }
+
+      if (!it->second.hasFix(fix)) {
+         return nullptr;
+      }
+
+      return &it->second;
+   }
+
+   void removeCastOperators()
+   {
+      namedDecls.erase("infix as");
+   }
+
+   bool isStruct() const;
+   bool isClass() const;
+   bool isEnum() const;
+   bool isUnion() const;
+   bool isProtocol() const;
+   bool isRawEnum() const;
+
+   const std::vector<TypeRef*> &getConformanceTypes() const
+   {
+      return conformanceTypes;
+   }
+
+   const llvm::SmallPtrSet<ProtocolDecl *, 4> &getConformances() const
+   {
+      return conformances;
+   }
+
+   void addConformance(ProtocolDecl *P)
+   {
+      conformances.insert(P);
+   }
 
    RecordDecl *getOuterRecord() const
    {
@@ -141,326 +280,517 @@ public:
       RecordDecl::outerRecord = outerRecord;
    }
 
-   const std::vector<std::shared_ptr<StaticStmt>> &getStaticStatements() const
+   const llvm::SmallPtrSet<RecordDecl *, 4> &getInnerRecords() const
+   {
+      return innerRecords;
+   }
+
+   void addInnerRecord(RecordDecl *R);
+
+   const std::vector<StaticStmt*> &getStaticStatements() const
    {
       return staticStatements;
    }
 
-   const std::vector<std::shared_ptr<StaticExpr>> &getConstraints() const
+   DeinitDecl *getDeinitializer() const
    {
-      return Constraints;
+      return deinitializer;
    }
 
-   const std::vector<std::shared_ptr<AssociatedTypeDecl>> &
-   getAssociatedTypes() const
+   const std::unordered_multimap<size_t, MethodDecl*> &
+   getDestructuringOperators() const
    {
-      return associatedTypes;
+      return destructuringOperators;
    }
 
-   const std::vector<std::shared_ptr<FieldDecl>> &getFields() const
+   bool isTemplate() const
    {
-      return fields;
+      if (NamedDecl::isTemplate())
+         return true;
+
+      return outerRecord && outerRecord->isTemplate();
+   }
+
+   void setInstantiationInfo(InstantiationInfo<RecordDecl> *instantiationInfo)
+   {
+      RecordDecl::instantiationInfo = instantiationInfo;
+   }
+
+   void setTemplateParams(std::vector<TemplateParamDecl *> &&templateParams)
+   {
+      RecordDecl::templateParams = move(templateParams);
+   }
+
+   llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   bool isInstantiation() const
+   {
+      return instantiationInfo != nullptr;
+   }
+
+   RecordDecl *getSpecializedTemplate() const
+   {
+      assert(isInstantiation() && "not a record instantiation!");
+      return instantiationInfo->specializedTemplate;
+   }
+
+   const SourceLocation &getInstantiatedFrom() const
+   {
+      assert(isInstantiation() && "not a record instantiation!");
+      return instantiationInfo->instantiatedFrom;
+   }
+
+   sema::TemplateArgList const& getTemplateArgs() const
+   {
+      assert(isInstantiation() && "not a record instantiation!");
+      return instantiationInfo->templateArgs;
+   }
+
+   sema::ResolvedTemplateArg const* getTemplateArg(llvm::StringRef name) const;
+
+   size_t getUses() const
+   {
+      return uses;
+   }
+
+   size_t getRecordID() const
+   {
+      return recordID;
+   }
+
+   size_t getSize() const
+   {
+      return occupiedBytes;
+   }
+
+   unsigned short getAlignment() const
+   {
+      return alignment;
+   }
+
+   bool hasManualAlignment() const
+   {
+      return manualAlignment;
+   }
+
+   void setAlignment(unsigned short align)
+   {
+      alignment = align;
+      manualAlignment = true;
+   }
+
+   bool isOpaque() const
+   {
+      return opaque;
+   }
+
+   void setOpaque(bool opaque)
+   {
+      RecordDecl::opaque = opaque;
+   }
+
+   MethodDecl *getOperatorEquals() const
+   {
+      return operatorEquals;
+   }
+
+   void setOperatorEquals(MethodDecl *operatorEquals)
+   {
+      RecordDecl::operatorEquals = operatorEquals;
+   }
+
+   MethodDecl *getHashCodeFn() const
+   {
+      return hashCodeFn;
+   }
+
+   void setHashCodeFn(MethodDecl *hashCodeFn)
+   {
+      RecordDecl::hashCodeFn = hashCodeFn;
+   }
+
+   MethodDecl *getToStringFn() const
+   {
+      return toStringFn;
+   }
+
+   void setToStringFn(MethodDecl *toStringFn)
+   {
+      RecordDecl::toStringFn = toStringFn;
+   }
+
+   llvm::StringRef getOwnName() const;
+
+   int getNameSelector() const;
+
+   bool isImplicitlyEquatable() const
+   {
+      return implicitlyEquatable;
+   }
+
+   void setImplicitlyEquatable(bool implicitlyEquatable)
+   {
+      RecordDecl::implicitlyEquatable = implicitlyEquatable;
+   }
+
+   bool isImplicitlyHashable() const
+   {
+      return implicitlyHashable;
+   }
+
+   void setImplicitlyHashable(bool implicitlyHashable)
+   {
+      RecordDecl::implicitlyHashable = implicitlyHashable;
+   }
+
+   bool isImplicitlyStringRepresentable() const
+   {
+      return implicitlyStringRepresentable;
+   }
+
+   void setImplicitlyStringRepresentable(bool implicitlyStringRepresentable)
+   {
+      RecordDecl::implicitlyStringRepresentable = implicitlyStringRepresentable;
    }
 };
 
 struct FunctionTemplateInstantiation;
 
-class FieldDecl;
-class MethodDecl;
-class ConstrDecl;
-class TypedefDecl;
-class DestrDecl;
-class TypeRef;
-
-using cdot::cl::ExtensionConstraint;
-
-class ClassDecl : public RecordDecl {
+class StructDecl: public RecordDecl {
 public:
-   // class or struct
-   ClassDecl(
-      string &&class_name,
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<ConstrDecl>> &&constr,
-      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      AccessModifier am,
-      bool is_abstract,
-      bool isStruct,
-      std::shared_ptr<TypeRef> &&extends,
-      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-      std::shared_ptr<DestrDecl> &&destr,
-      std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements
-   );
+   StructDecl(AccessModifier access,
+              std::string &&recordName,
+              std::vector<TypeRef*> &&conformanceTypes,
+              std::vector<StaticExpr*> &&constraints)
+      : RecordDecl(StructDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints))
+   {}
 
-   // protocol
-   ClassDecl(
-      string &&className,
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
-      std::vector<std::shared_ptr<TypedefDecl>>&&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      AccessModifier am,
-      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-      std::shared_ptr<DestrDecl> &&destr,
-      std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements
-   );
+   InitDecl *getParameterlessConstructor() const
+   {
+      return parameterlessConstructor;
+   }
 
-   std::shared_ptr<TypeRef> getParentClass()
+   void setParameterlessConstructor(InitDecl *parameterlessConstructor)
+   {
+      StructDecl::parameterlessConstructor = parameterlessConstructor;
+   }
+
+   InitDecl *getMemberwiseInitializer() const
+   {
+      return memberwiseInitializer;
+   }
+
+   void setMemberwiseInitializer(InitDecl *memberwiseInitializer)
+   {
+      StructDecl::memberwiseInitializer = memberwiseInitializer;
+   }
+
+   InitDecl *getDefaultInitializer() const
+   {
+      return defaultInitializer;
+   }
+
+   void setDefaultInitializer(InitDecl *defaultInitializer)
+   {
+      StructDecl::defaultInitializer = defaultInitializer;
+   }
+
+   llvm::ArrayRef<FieldDecl*> getFields() const
+   {
+      return fields;
+   }
+
+   static bool classof(AstNode const* T)
+   {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(NodeType kind)
+   {
+      switch (kind) {
+         case StructDeclID:
+         case ClassDeclID:
+            return true;
+         default:
+            return false;
+      }
+   }
+
+   static DeclContext *castToDeclContext(StructDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<StructDecl*>(D));
+   }
+
+   static StructDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<StructDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class RecordDecl; // for access to fields
+
+protected:
+   StructDecl(NodeType typeID,
+              AccessModifier access,
+              std::string &&recordName,
+              std::vector<TypeRef*> &&conformanceTypes,
+              std::vector<StaticExpr*> &&constraints)
+      : RecordDecl(typeID, access, move(recordName),
+                   move(conformanceTypes), move(constraints))
+   {}
+
+   std::vector<FieldDecl*> fields;
+
+   InitDecl* parameterlessConstructor = nullptr;
+   InitDecl* memberwiseInitializer    = nullptr;
+   InitDecl* defaultInitializer       = nullptr;
+};
+
+class ClassDecl: public StructDecl {
+public:
+   ClassDecl(AccessModifier access,
+             std::string &&recordName,
+             std::vector<TypeRef*> &&conformanceTypes,
+             std::vector<StaticExpr*> &&constraints,
+             TypeRef *parentClass,
+             bool isAbstract)
+      : StructDecl(ClassDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints)),
+        parentType(parentClass), is_abstract(isAbstract)
+   {}
+
+   TypeRef* getParentType() const
+   {
+      return parentType;
+   }
+
+   ClassDecl *getParentClass() const
    {
       return parentClass;
    }
 
-   std::shared_ptr<DestrDecl>& getDestructor()
+   void setParentClass(ClassDecl *parentClass)
    {
-      return destructor;
+      ClassDecl::parentClass = parentClass;
    }
 
-   typedef std::shared_ptr<ClassDecl> SharedPtr;
+   bool isBaseClassOf(ClassDecl const* C) const
+   {
+      auto Outer = C->getParentClass();
+      while (Outer) {
+         if (Outer == this)
+            return true;
+
+         Outer = Outer->getParentClass();
+      }
+
+      return false;
+   }
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == ClassDeclID;
+      return classofKind(T->getTypeID());
    }
 
+   static bool classofKind(NodeType kind)
+   {
+      return kind == ClassDeclID;
+   }
+
+   static DeclContext *castToDeclContext(ClassDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<ClassDecl*>(D));
+   }
+
+   static ClassDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<ClassDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<TypeRef> parentClass = nullptr;
+   TypeRef* parentType = nullptr;
+   ClassDecl *parentClass = nullptr;
 
    bool is_abstract = false;
-   bool is_struct = false;
-
-   std::vector<std::shared_ptr<ConstrDecl>> constructors;
-   std::shared_ptr<DestrDecl> destructor;
 
 public:
-   void setParentClass(const std::shared_ptr<TypeRef> &parentClass);
-
-   bool isAbstract() const;
-   void setIsAbstract(bool is_abstract);
-
-   bool isStruct() const;
-   void setIsStruct(bool is_struct);
-
-   const std::vector<std::shared_ptr<ConstrDecl>> &getConstructors() const;
-   void setConstructors(
-      const std::vector<std::shared_ptr<ConstrDecl>> &constructors);
-
-   void setDestructor(const std::shared_ptr<DestrDecl> &destructor);
-
-   Class *getDeclaredClass() const;
+   bool isAbstract() const { return is_abstract; }
 };
 
 class EnumCaseDecl;
 
 class EnumDecl: public RecordDecl {
 public:
-   EnumDecl(
-      AccessModifier am,
-      string&& enumName,
-      std::shared_ptr<TypeRef> &&rawType,
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>>&& methods,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      std::vector<std::shared_ptr<TypeRef>>&& conformsTo,
-      std::vector<std::shared_ptr<EnumCaseDecl>>&& cases,
-      std::vector<std::shared_ptr<RecordDecl>>&& innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements
-   );
+   EnumDecl(AccessModifier access,
+            std::string &&recordName,
+            std::vector<TypeRef*> &&conformanceTypes,
+            std::vector<StaticExpr*> &&constraints,
+            TypeRef *rawType)
+      : RecordDecl(EnumDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints)),
+        rawType(rawType)
+   {}
 
-   typedef std::shared_ptr<EnumDecl> SharedPtr;
+   EnumCaseDecl *hasCase(llvm::StringRef name);
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == EnumDeclID;
+      return classofKind(T->getTypeID());
    }
+
+   static bool classofKind(NodeType kind)
+   {
+      return kind == EnumDeclID;
+   }
+
+   static DeclContext *castToDeclContext(EnumDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<EnumDecl*>(D));
+   }
+
+   static EnumDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<EnumDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
+   friend class RecordDecl; // for maxAssociatedTypes, cases
 
 protected:
-   std::vector<std::shared_ptr<EnumCaseDecl>> cases;
-   std::shared_ptr<TypeRef> rawType;
-
-   // codegen
-   string selfBinding;
+   TypeRef* rawType;
+   size_t maxAssociatedTypes = 0;
+   std::vector<EnumCaseDecl*> cases;
 
 public:
-   const std::vector<std::shared_ptr<EnumCaseDecl>> &getCases() const
-   {
-      return cases;
-   }
-
-   void setCases(const std::vector<std::shared_ptr<EnumCaseDecl>> &cases)
-   {
-      EnumDecl::cases = cases;
-   }
-
-   const std::shared_ptr<TypeRef> &getRawType() const
+   TypeRef* getRawType() const
    {
       return rawType;
    }
 
-   void setRawType(const std::shared_ptr<TypeRef> &rawType)
+   void setRawType(TypeRef* rawType)
    {
       EnumDecl::rawType = rawType;
    }
 
-   const string &getSelfBinding() const
+   size_t getMaxAssociatedTypes() const
    {
-      return selfBinding;
+      return maxAssociatedTypes;
    }
 
-   void setSelfBinding(const string &selfBinding)
+   const std::vector<EnumCaseDecl *> &getCases() const
    {
-      EnumDecl::selfBinding = selfBinding;
+      return cases;
    }
-
-   cdot::cl::Enum *getDeclaredEnum() const;
 };
 
 class UnionDecl: public RecordDecl {
 public:
-   typedef unordered_map<string, std::shared_ptr<TypeRef>> UnionTypes;
-   typedef std::shared_ptr<UnionDecl> SharedPtr;
-   typedef std::unique_ptr<UnionDecl> UniquePtr;
-
-   UnionDecl(
-      string&& name,
-      UnionTypes&& types,
-      bool isConst,
-
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-
-      std::vector<std::shared_ptr<RecordDecl>> &&innerdecls,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements
-   );
-
-   const UnionTypes &getContainedTypes() const {
-      return containedTypes;
-   }
-
-   void setContainedTypes(const UnionTypes &containedTypes) {
-      UnionDecl::containedTypes = containedTypes;
-   }
+   UnionDecl(AccessModifier access,
+             std::string &&recordName,
+             std::vector<TypeRef*> &&conformanceTypes,
+             std::vector<StaticExpr*> &&constraints)
+      : RecordDecl(UnionDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints))
+   {}
 
    bool isConst() const { return is_const; }
    void isConst(bool is_const) { this->is_const = is_const; }
 
-   Union *getDeclaredUnion() const;
-
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == UnionDeclID;
+      return classofKind(T->getTypeID());
    }
 
-protected:
-   UnionTypes containedTypes;
-   bool is_const = false;
+   static bool classofKind(NodeType kind)
+   {
+      return kind == UnionDeclID;
+   }
 
-   Union *declaredUnion;
+   static DeclContext *castToDeclContext(UnionDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<UnionDecl*>(D));
+   }
+
+   static UnionDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<UnionDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
+
+protected:
+   bool is_const = false;
 };
 
 class ProtocolDecl: public RecordDecl {
 public:
-   ProtocolDecl(
-      AccessModifier am,
-      string &&recordName,
-
-      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-      std::vector<std::shared_ptr<ConstrDecl>> &&constructors,
-
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-
-      std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-      : RecordDecl(ProtocolDeclID, am, move(recordName), move(conformsTo),
-                   {}, move(methods), move(typedefs), move(properties),
-                   move(associatedTypes), move(templateParams),
-                   move(Constraints),
-                   move(innerDeclarations), move(staticStatements)),
-        constructors(move(constructors))
+   ProtocolDecl(AccessModifier access,
+                std::string &&recordName,
+                std::vector<TypeRef*> &&conformanceTypes,
+                std::vector<StaticExpr*> &&constraints)
+      : RecordDecl(ProtocolDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints))
    {}
-
-   typedef std::shared_ptr<ProtocolDecl> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == ProtocolDeclID;
+      return classofKind(T->getTypeID());
    }
 
-protected:
-   std::vector<std::shared_ptr<ConstrDecl>> constructors;
-
-public:
-   const std::vector<std::shared_ptr<ConstrDecl>> &getConstructors() const
+   static bool classofKind(NodeType kind)
    {
-      return constructors;
+      return kind == ProtocolDeclID;
    }
+
+   static DeclContext *castToDeclContext(ProtocolDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<ProtocolDecl*>(D));
+   }
+
+   static ProtocolDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<ProtocolDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
 };
 
 class ExtensionDecl: public RecordDecl {
 public:
-   ExtensionDecl(
-      AccessModifier am,
-      string &&recordName,
-
-      std::vector<std::shared_ptr<TypeRef>> &&conformsTo,
-
-      std::vector<std::shared_ptr<FieldDecl>> &&fields,
-      std::vector<std::shared_ptr<MethodDecl>> &&methods,
-      std::vector<std::shared_ptr<TypedefDecl>> &&typedefs,
-      std::vector<std::shared_ptr<PropDecl>> &&properties,
-      std::vector<std::shared_ptr<AssociatedTypeDecl>> &&associatedTypes,
-
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-
-      std::vector<std::shared_ptr<ConstrDecl>> &&initializers,
-      std::vector<std::shared_ptr<RecordDecl>> &&innerDeclarations,
-      std::vector<std::shared_ptr<StaticStmt>> &&staticStatements)
-         : RecordDecl(ExtensionDeclID, am, move(recordName), move(conformsTo),
-                      move(fields), move(methods), move(typedefs),
-                      move(properties), move(associatedTypes),
-                      move(templateParams), move(Constraints),
-                      move(innerDeclarations), move(staticStatements)),
-           initializers(move(initializers))
+   ExtensionDecl(AccessModifier access,
+                 std::string &&recordName,
+                 std::vector<TypeRef*> &&conformanceTypes,
+                 std::vector<StaticExpr*> &&constraints)
+      : RecordDecl(ExtensionDeclID, access, move(recordName),
+                   move(conformanceTypes), move(constraints))
    {}
-
-   typedef std::shared_ptr<ExtensionDecl> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == ExtensionDeclID;
+      return classofKind(T->getTypeID());
    }
 
-protected:
-   std::vector<std::shared_ptr<ConstrDecl>> initializers;
+   static bool classofKind(NodeType kind)
+   {
+      return kind == ExtensionDeclID;
+   }
 
-public:
-   const std::vector<std::shared_ptr<ConstrDecl>> &getInitializers() const
-   { return initializers; }
+   static DeclContext *castToDeclContext(ExtensionDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<ExtensionDecl*>(D));
+   }
+
+   static ExtensionDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<ExtensionDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
 };
 
 } // namespace ast

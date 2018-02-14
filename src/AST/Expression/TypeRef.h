@@ -16,7 +16,6 @@ class TypeRef : public Expression {
 public:
    enum TypeKind {
       Auto,
-      Primitive,
       ArrayType,
       FunctionType,
       TupleType,
@@ -26,8 +25,9 @@ public:
       Option
    };
 
-   typedef std::vector<pair<string, std::vector<TemplateArg>>> NamespaceVec;
-   typedef std::shared_ptr<TypeRef> SharedPtr;
+   typedef std::vector<std::pair<std::string, std::vector<TemplateArgExpr*>>>
+      NamespaceVec;
+   friend class TransformImpl;
 
    TypeRef();
    ~TypeRef();
@@ -36,25 +36,25 @@ public:
    explicit TypeRef(NamespaceVec &&ns);
 
    // function type
-   TypeRef(TypeRef::SharedPtr &&returnType,
-           std::vector<pair<string, TypeRef::SharedPtr>> &&argTypes);
+   TypeRef(TypeRef* returnType,
+           std::vector<std::pair<std::string, TypeRef*>> &&argTypes);
 
    // tuple type
-   explicit TypeRef(std::vector<pair<string, TypeRef::SharedPtr>> &&tupleTypes);
+   explicit TypeRef(std::vector<std::pair<std::string, TypeRef*>> &&tupleTypes);
 
    // array type
-   explicit TypeRef(std::shared_ptr<TypeRef> &&elementTy,
-                    std::shared_ptr<StaticExpr> &&arraySize);
+   explicit TypeRef(TypeRef* elementTy,
+                    StaticExpr* arraySize);
 
    // decltype(expr)
-   explicit TypeRef(std::shared_ptr<Expression> &&declTypeExpr);
+   explicit TypeRef(Expression* declTypeExpr);
 
    explicit TypeRef(const QualType &ty);
 
-   TypeRef(std::shared_ptr<TypeRef> &&subject, TypeKind kind);
+   TypeRef(TypeRef* subject, TypeKind kind);
 
 
-   string toString();
+   std::string toString();
 
    bool isSingularType() const
    {
@@ -86,28 +86,12 @@ public:
       return type;
    }
 
-   void isVararg(bool va)
+   operator QualType() const
    {
-      vararg = va;
+      return type;
    }
 
-   bool isVararg()
-   {
-      return vararg;
-   }
-
-   void isCStyleVararg(bool va)
-   {
-      cstyleVararg = va;
-      vararg = va;
-   }
-
-   bool isCStyleVararg()
-   {
-      return cstyleVararg;
-   }
-
-   bool isReference()
+   bool isReference() const
    {
       return is_reference;
    }
@@ -117,19 +101,26 @@ public:
       is_reference = ref;
    }
 
-   void setType(const QualType& t)
-   {
-      type = t;
-   }
+   void setType(const QualType& t);
 
    bool isDeclTypeExpr() const
    {
       return kind == TypeKind::DeclTypeExpr;
    }
 
-   const std::shared_ptr<Expression> &getDeclTypeExpr() const
+   Expression* getDeclTypeExpr() const
    {
       return declTypeExpr;
+   }
+
+   bool isGlobalLookup() const
+   {
+      return globalLookup;
+   }
+
+   void setGlobalLookup(bool globalLookup)
+   {
+      TypeRef::globalLookup = globalLookup;
    }
 
    static bool classof(AstNode const* T)
@@ -142,21 +133,20 @@ protected:
    QualType type;
 
    NamespaceVec namespaceQual;
-   std::vector<pair<string, TypeRef::SharedPtr>> containedTypes;
+   std::vector<std::pair<std::string, TypeRef*>> containedTypes;
 
    union {
-      std::shared_ptr<TypeRef> returnType = nullptr;
-      std::shared_ptr<StaticExpr> arraySize;
-      std::shared_ptr<TypeRef> subject;
-      std::shared_ptr<Expression> declTypeExpr;
+      TypeRef* returnType = nullptr;
+      StaticExpr* arraySize;
+      TypeRef* subject;
+      Expression* declTypeExpr;
    };
 
    bool resolved : 1;
    bool is_reference : 1;
+   bool globalLookup : 1;
    bool is_meta_ty : 1;
    bool allow_unexpanded_template_args : 1;
-   bool vararg : 1;
-   bool cstyleVararg : 1;
 
 public:
    TypeKind getKind() const;
@@ -169,22 +159,24 @@ public:
 
    NamespaceVec &getNamespaceQual();
 
-   const std::vector<pair<string, SharedPtr>> &getContainedTypes() const;
-   void setContainedTypes(
-      const std::vector<pair<string, SharedPtr>> &containedTypes);
+   NamespaceVec const& getNamespaceQual() const
+   {
+      return namespaceQual;
+   }
 
-   const SharedPtr &getReturnType() const;
-   void setReturnType(const SharedPtr &returnType);
+   const std::vector<std::pair<std::string, TypeRef* >>
+   &getContainedTypes() const
+   {
+      return containedTypes;
+   };
 
-   void setVararg(bool vararg);
+   TypeRef* getReturnType() const { return returnType; }
+   void setReturnType(TypeRef* returnType) { this->returnType =returnType; }
 
-   bool isCstyleVararg() const;
-   void setCstyleVararg(bool cstyleVararg);
+   bool isMetaTy() const { return is_meta_ty; }
+   void isMetaTy(bool is_meta_ty) { this->is_meta_ty = is_meta_ty; }
 
-   bool isMetaTy() const;
-   void isMetaTy(bool is_meta_ty);
-
-   const std::shared_ptr<TypeRef> &getSubject() const
+   TypeRef* getSubject() const
    {
       return subject;
    }
@@ -199,12 +191,12 @@ public:
       allow_unexpanded_template_args = allow;
    }
 
-   const std::shared_ptr<StaticExpr> &getArraySize() const
+   StaticExpr* getArraySize() const
    {
       return arraySize;
    }
 
-   const std::shared_ptr<TypeRef> &getElementType() const
+   TypeRef* getElementType() const
    {
       return containedTypes.front().second;
    }

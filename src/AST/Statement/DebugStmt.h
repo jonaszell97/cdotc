@@ -28,7 +28,7 @@ public:
        return T->getTypeID() == DebugStmtID;
    }
 
-   typedef std::shared_ptr<DebugStmt> SharedPtr;
+   friend class TransformImpl;
 
 protected:
    bool unreachable;

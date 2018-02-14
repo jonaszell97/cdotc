@@ -28,7 +28,7 @@ class ExprSequence: public Expression {
 public:
    class SequenceElement {
    public:
-      SequenceElement(std::shared_ptr<Expression> &&expr);
+      SequenceElement(Expression* expr);
       SequenceElement(std::string &&possibleOp,
                       SourceLocation loc);
       SequenceElement(OperatorKind opKind,
@@ -69,8 +69,7 @@ public:
                 && ::cdot::ast::isAssignmentOperator(operatorKind);
       }
 
-      std::shared_ptr<Expression> &getExpr() { return expr; }
-      std::shared_ptr<Expression> const& getExpr() const { return expr; }
+      Expression* getExpr() const { return expr; }
 
       OperatorKind getOperatorKind() const { return operatorKind; }
 
@@ -80,9 +79,11 @@ public:
       Kind getKind() const { return kind; }
       const SourceLocation &getLoc() const { return loc; }
 
+      friend class TransformImpl;
+
    protected:
       union {
-         std::shared_ptr<Expression> expr;
+         Expression* expr;
          OperatorKind operatorKind;
          std::string op;
       };
@@ -94,13 +95,13 @@ public:
    explicit ExprSequence(std::vector<SequenceElement> &&fragments,
                          bool parenthesized);
 
-   const std::shared_ptr<Expression> &getResolvedExpression() const
+   Expression*getResolvedExpression() const
    {
       return ResolvedExpression;
    }
 
    void
-   setResolvedExpression(const std::shared_ptr<Expression> &ResolvedExpression)
+   setResolvedExpression(Expression* ResolvedExpression)
    {
       ExprSequence::ResolvedExpression = ResolvedExpression;
    }
@@ -138,7 +139,7 @@ public:
 
 protected:
    std::vector<SequenceElement> fragments;
-   std::shared_ptr<Expression> ResolvedExpression;
+   Expression* ResolvedExpression;
 
    bool parenthesized;
 
@@ -147,6 +148,8 @@ public:
    {
        return T->getTypeID() == ExprSequenceID;
    }
+
+   friend class TransformImpl;
 
    bool isParenthesized() const
    {

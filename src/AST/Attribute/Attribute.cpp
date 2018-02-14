@@ -4,6 +4,9 @@
 
 #include "Attribute.h"
 
+using std::string;
+using std::unordered_map;
+
 namespace cdot {
 
 unordered_map<string, Attr> AttributeMap = {
@@ -58,10 +61,10 @@ string isValidAttribute(Attribute attr) {
 
          if (!attr.args.empty()) {
             auto& arg = attr.args.front();
-            if (arg.kind != VariantType::STRING) {
+            if (arg.getKind() != VariantType::String) {
                return "attribute inline expects string argument";
             }
-            auto &str = arg.strVal;
+            auto &str = arg.getString();
             if (str != "always" && str != "hint" && str != "never") {
                return "invalid argument "
                       + str + " (expected always, never or hint)";

@@ -8,12 +8,15 @@
 
 #include "llvm/Support/ErrorOr.h"
 
+using std::string;
+
 namespace cdot {
 namespace fs {
 
 size_t FileManager::sourceFileCount = 0;
 unordered_map<size_t, string> FileManager::openedFiles;
 unordered_map<size_t, std::vector<size_t>> FileManager::LineOffsets;
+unordered_map<size_t, module::Module*> FileManager::ModuleFiles;
 
 namespace {
 
@@ -26,8 +29,7 @@ FileManager::openFile(const Twine &fileName, bool isNewSourceFile)
 {
    auto file = llvm::MemoryBuffer::getFileAsStream(fileName);
    if (!file) {
-      llvm::outs() << "error opening file " << fileName.str() << "\n";
-      std::terminate();
+      return std::make_pair(size_t(0), std::unique_ptr<MemoryBuffer>{});
    }
 
    auto id = ++sourceFileCount;

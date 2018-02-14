@@ -126,8 +126,8 @@
 //   void visitFieldDecl(FieldDecl *node) {}
 //
 //   void visitMethodDecl(MethodDecl *node) {}
-//   void visitConstrDecl(ConstrDecl *node) {}
-//   void visitDestrDecl(DestrDecl *node) {}
+//   void visitInitDecl(ConstrDecl *node) {}
+//   void visitDeinitDecl(DestrDecl *node) {}
 //
 //   llvm::Value *visitIdentifierRefExpr(IdentifierRefExpr *node) {return{};}
 //   llvm::Value *visitSubscriptExpr(SubscriptExpr *node) {return{};}
@@ -184,7 +184,7 @@
 //   void DeclareClass(Class *cl);
 //   void DeclareEnum(EnumDecl*);
 //   void DeclareClasses(
-//      const std::vector<std::shared_ptr<Statement>>&statements);
+//      const std::vector<Statement* >&statements);
 //
 //   void VisitFunctionDecl(FunctionDecl *node);
 //
@@ -215,7 +215,7 @@
 //   );
 //
 //   llvm::Value* getStaticVal(
-//      std::shared_ptr<Expression> &expr,
+//      Expression* &expr,
 //      Type*& ty,
 //      bool global = false
 //   );
@@ -299,7 +299,7 @@
 //
 //   llvm::Value *getResult();
 //   llvm::Value *getResult(AstNode *node);
-//   llvm::Value *getResult(std::shared_ptr<AstNode> node);
+//   llvm::Value *getResult(AstNode* node);
 //   void returnResult(llvm::Value *v);
 //
 //   void declareFunction(
@@ -409,7 +409,7 @@
 //
 //   llvm::Function *DeclareFunction(
 //      const string &bound_name,
-//      const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+//      const std::vector<FuncArgDecl* > &args,
 //      QualType return_type,
 //      bool throws,
 //      bool set_this_arg = false,
@@ -454,7 +454,7 @@
 //
 //   llvm::Function* DeclareMethod(
 //      const string &bound_name,
-//      const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+//      const std::vector<FuncArgDecl* > &args,
 //      QualType return_type,
 //      bool throws,
 //      llvm::Type *selfTy,
@@ -467,17 +467,17 @@
 //
 //   void DefineFunction(
 //      llvm::Function *func,
-//      std::shared_ptr<Statement> body,
+//      Statement* body,
 //      const string &name = ""
 //   );
 //
 //   void DefineFunction(
 //      const string& bound_name,
-//      std::shared_ptr<Statement> body
+//      Statement* body
 //   );
 //
 //   pair<std::vector<Argument>, std::vector<pair<string, string>>>
-//   getArgBindings(const std::vector<std::shared_ptr<FuncArgDecl>> &args);
+//   getArgBindings(const std::vector<FuncArgDecl* > &args);
 //
 //   llvm::Function* DeclareDefaultConstructor(
 //      const string &bound_name,
@@ -498,7 +498,7 @@
 //   void DefineDefaultDestructor(
 //      const string &selfBinding,
 //      cdot::cl::Class* cl,
-//      std::shared_ptr<CompoundStmt> body = nullptr
+//      CompoundStmt* body = nullptr
 //   );
 //
 //   llvm::Value* DispatchProtocolCall(
@@ -529,10 +529,10 @@
 //   void DefineProp(cl::Property *prop);
 //
 //   void DeclareMethod(Method *method);
-//   void DefineMethod(Method *method, std::shared_ptr<CompoundStmt> body);
+//   void DefineMethod(Method *method, CompoundStmt* body);
 //
 ////   void DeclareConstr(Method *method);
-////   void DefineConstr(Method *method, std::shared_ptr<CompoundStmt> body);
+////   void DefineConstr(Method *method, CompoundStmt* body);
 //
 //   void DeclareMemberwiseInitializer(cdot::cl::Class *cl);
 //   void DefineMemberwiseInitializer(cdot::cl::Class *cl);
@@ -569,13 +569,13 @@
 //   );
 //
 //   llvm::ReturnInst *CreateRet(
-//      std::shared_ptr<Expression> retVal = nullptr,
+//      Expression* retVal = nullptr,
 //      bool sret = false,
 //      bool incRefCount = false
 //   );
 //
 //   llvm::ReturnInst *DoRet(
-//      std::shared_ptr<Expression> retVal = nullptr,
+//      Expression* retVal = nullptr,
 //      bool sret = false,
 //      bool incRefCount = false
 //   );
@@ -588,8 +588,8 @@
 //   unordered_map<string, llvm::Value*> Strings;
 //
 //   // collections
-//   llvm::Value* CreateCStyleArray(Type* type, std::vector<std::shared_ptr<Expression>>& elements);
-//   llvm::Value* CreateArray(ObjectType* type, std::vector<std::shared_ptr<Expression>>& elements);
+//   llvm::Value* CreateCStyleArray(Type* type, std::vector<Expression* >& elements);
+//   llvm::Value* CreateArray(ObjectType* type, std::vector<Expression* >& elements);
 //
 //   // binary operators
 //   llvm::Value* HandleBinaryOperator(llvm::Value *lhs, llvm::Value *rhs, BinaryOperatorType, BinaryOperator* node);

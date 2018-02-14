@@ -7,17 +7,6 @@
 #include "../../../Compiler.h"
 
 #include "../../../Variant/Type/Type.h"
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/ArrayType.h"
-#include "../../../Variant/Type/ObjectType.h"
-#include "../../../Variant/Type/Generic.h"
-
-#include "../../../AST/Passes/SemanticAnalysis/Record/Record.h"
-
 #include "../../../Files/FileUtils.h"
 #include "../../../Basic/CastKind.h"
 #include "../../../Files/FileManager.h"
@@ -31,9 +20,11 @@ using namespace cdot::fs;
 namespace cdot {
 namespace il {
 
-IRGen::IRGen(llvm::LLVMContext &Ctx)
-   : InstructionVisitor(IRGenID),
-     DI(nullptr), Ctx(Ctx), Builder(Ctx)
+IRGen::IRGen(llvm::LLVMContext &Ctx,
+             llvm::Module *M,
+             bool emitDebugInfo)
+   : InstructionVisitor(IRGenID), emitDebugInfo(emitDebugInfo),
+     DI(nullptr), Ctx(Ctx), M(M), Builder(Ctx)
 {
    WordTy = llvm::IntegerType::get(Ctx, sizeof(void*) * 8);
    Int8PtrTy = llvm::IntegerType::get(Ctx, 8)->getPointerTo();
@@ -88,9 +79,22 @@ IRGen::~IRGen()
 
 void IRGen::visitCompilationUnit(CompilationUnit &CU)
 {
-   visitModule(*CU.ILModule);
-   CU.Module = M;
+   if (emitDebugInfo) {
+      DI = new llvm::DIBuilder(*this->M);
+      File = getFileDI(CU.getSourceLoc());
+      this->CU =  DI->createCompileUnit(
+         llvm::dwarf::DW_LANG_C,
+         File,
+         "cdotc v0.1",
+         false,
+         "",
+         0
+      );
 
+      beginScope(this->CU);
+   }
+
+   visitModule(*CU.getILModule());
    finalize(CU);
 
    if (DI) {
@@ -103,16 +107,7 @@ void IRGen::visitCompilationUnit(CompilationUnit &CU)
 
 void IRGen::visitModule(Module& ILMod)
 {
-   this->M = new llvm::Module((ILMod.getPath() + ILMod.getFileName()).str(),
-                              Ctx);
-
    this->ILMod = &ILMod;
-
-   if (Compiler::getOptions().emitDebugInfo) {
-      DI = new llvm::DIBuilder(*this->M);
-      File = getFileDI(ILMod.getFileID(), ILMod.getFileName(), ILMod.getPath());
-      beginScope(File);
-   }
 
    MallocFn = nullptr;
    FreeFn = nullptr;
@@ -171,112 +166,93 @@ void IRGen::visitModule(Module& ILMod)
       visitFunction(F);
 }
 
-llvm::Function* IRGen::getMallocFn()
+llvm::Constant* IRGen::getMallocFn()
 {
    if (!MallocFn)
-      MallocFn = cast<llvm::Function>(M->getOrInsertFunction("__cdot_malloc",
-                                                             Int8PtrTy, WordTy,
-                                                             nullptr));
+      MallocFn = M->getOrInsertFunction("__cdot_malloc",
+                                        Int8PtrTy, WordTy,
+                                        nullptr);
 
    return MallocFn;
 }
 
-llvm::Function* IRGen::getFreeFn()
+llvm::Constant* IRGen::getFreeFn()
 {
    if (!FreeFn)
-      FreeFn = cast<llvm::Function>(M->getOrInsertFunction("__cdot_free",
-                                                           VoidTy, Int8PtrTy,
-                                                           nullptr));
+      FreeFn = M->getOrInsertFunction("__cdot_free",
+                                      VoidTy, Int8PtrTy,
+                                      nullptr);
 
    return FreeFn;
 }
 
-llvm::Function* IRGen::getThrowFn()
+llvm::Constant* IRGen::getThrowFn()
 {
    if (!ThrowFn)
-      ThrowFn = cast<llvm::Function>(M->getOrInsertFunction("__cdot_throw",
-                                                            VoidTy, Int8PtrTy,
-                                                            nullptr));
+      ThrowFn = M->getOrInsertFunction("__cdot_throw",
+                                       VoidTy, Int8PtrTy,
+                                       nullptr);
 
    return ThrowFn;
 }
 
-llvm::Function* IRGen::getAllocExcnFn()
+llvm::Constant* IRGen::getAllocExcnFn()
 {
    if (!AllocExcFn)
-      AllocExcFn = cast<llvm::Function>(
-         M->getOrInsertFunction("__cdot_allocate_exception", Int8PtrTy,
-                                WordTy, Int8PtrTy, Int8PtrTy, Int8PtrTy,
-                                nullptr)
-      );
+      AllocExcFn = M->getOrInsertFunction("__cdot_allocate_exception",
+                                          Int8PtrTy, WordTy, Int8PtrTy,
+                                          Int8PtrTy, Int8PtrTy, nullptr);
 
    return AllocExcFn;
 }
 
-llvm::Function* IRGen::getRetainFn()
+llvm::Constant* IRGen::getRetainFn()
 {
    if (!RetainFn)
-      RetainFn = cast<llvm::Function>(
-         M->getOrInsertFunction("__cdot_retain", VoidTy, Int8PtrTy, nullptr)
-      );
+      RetainFn = M->getOrInsertFunction("__cdot_retain", VoidTy, Int8PtrTy,
+                                        nullptr);
 
    return RetainFn;
 }
 
-llvm::Function* IRGen::getReleaseFn()
+llvm::Constant* IRGen::getReleaseFn()
 {
    if (!ReleaseFn)
-      ReleaseFn = cast<llvm::Function>(
-         M->getOrInsertFunction("__cdot_release", VoidTy, Int8PtrTy, nullptr)
-      );
+      ReleaseFn = M->getOrInsertFunction("__cdot_release", VoidTy, Int8PtrTy,
+                                         nullptr);
 
    return ReleaseFn;
 }
 
-llvm::Function* IRGen::getPrintfFn()
+llvm::Constant* IRGen::getPrintfFn()
 {
    if (!PrintfFn)
-      PrintfFn = cast<llvm::Function>(
-         M->getOrInsertFunction("printf",
-            llvm::FunctionType::get(Builder.getInt32Ty(), { Int8PtrTy }, true))
-      );
+      PrintfFn = M->getOrInsertFunction("printf",
+            llvm::FunctionType::get(Builder.getInt32Ty(), { Int8PtrTy }, true));
 
    return PrintfFn;
 }
 
-llvm::Function* IRGen::getMemCmpFn()
+llvm::Constant* IRGen::getMemCmpFn()
 {
    if (!MemCmpFn)
-      MemCmpFn = cast<llvm::Function>(
-         M->getOrInsertFunction("memcmp",
-                                llvm::FunctionType::get(Builder.getInt32Ty(),
-                                                        { Int8PtrTy,
-                                                           Int8PtrTy, WordTy },
-                                                        false))
-      );
+      MemCmpFn = M->getOrInsertFunction("memcmp",
+                                        llvm::FunctionType::get(
+                                           Builder.getInt32Ty(), { Int8PtrTy,
+                                              Int8PtrTy, WordTy }, false));
 
    return MemCmpFn;
 }
 
-llvm::Function* IRGen::getIntPowFn()
+llvm::Constant* IRGen::getIntPowFn()
 {
    if (!IntPowFn)
-      IntPowFn = cast<llvm::Function>(
-         M->getOrInsertFunction("__cdot_intpow",
-                                llvm::FunctionType::get(WordTy,
-                                                        { WordTy, WordTy },
-                                                        false)));
+      IntPowFn = M->getOrInsertFunction("__cdot_intpow",
+                                        llvm::FunctionType::get(
+                                           WordTy, { WordTy, WordTy }, false));
 
    return IntPowFn;
 }
-
-namespace {
-
-static const char *typePrefixes[] = {
-   "struct.", "class.", "enum.", "union."
-};
-
-} // anonymous namespace
 
 llvm::StructType* IRGen::getStructTy(Type *Ty)
 {
@@ -286,14 +262,10 @@ llvm::StructType* IRGen::getStructTy(Type *Ty)
    if (Ty->getClassName() == "cdot.Lambda")
       return LambdaTy;
 
-   llvm::SmallString<64> name(typePrefixes[(unsigned)Ty->getRecord()
-                                                       ->getTypeID()]);
-   name += Ty->getClassName();
+   auto it = TypeMap.find((uintptr_t)Ty->getRecord());
+   assert(it != TypeMap.end() && "referenced type was not imported");
 
-   auto ty = M->getTypeByName(name);
-   assert(ty && "referenced type was not imported");
-
-   return ty;
+   return it->getSecond();
 }
 
 llvm::StructType* IRGen::getStructTy(AggregateType *Ty)
@@ -304,34 +276,7 @@ llvm::StructType* IRGen::getStructTy(AggregateType *Ty)
    if (Ty->getName() == "cdot.Lambda")
       return LambdaTy;
 
-   llvm::SmallString<64> typeName;
-   switch (Ty->getTypeID()) {
-      case Value::TypeID::ClassTypeID:
-         typeName += "class";
-         break;
-      case Value::TypeID::StructTypeID:
-         typeName += "struct";
-         break;
-      case Value::TypeID::EnumTypeID:
-         typeName += "enum";
-         break;
-      case Value::TypeID::UnionTypeID:
-         typeName += "union";
-         break;
-      default:
-         llvm_unreachable("bad type kind");
-   }
-
-   typeName += '.';
-   typeName += Ty->getName();
-
-   auto str = typeName.str();
-   (void)str;
-
-   auto ty = M->getTypeByName(typeName);
-   assert(ty && "referenced type was not imported");
-
-   return ty;
+   return Ty->getLlvmTy();
 }
 
 llvm::StructType* IRGen::getStructTy(llvm::StringRef name)
@@ -354,10 +299,9 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
       case TypeID::FPTypeID:
          return Ty->isFloatTy() ? Builder.getFloatTy() : Builder.getDoubleTy();
       case TypeID::PointerTypeID:
-         return getLlvmType(*cast<PointerType>(Ty)->getPointeeType())
-                     ->getPointerTo();
+         return getLlvmType(Ty->getPointeeType())->getPointerTo();
       case TypeID::ArrayTypeID: {
-         auto ArrTy = cast<ArrayType>(Ty);
+         ArrayType *ArrTy = Ty->asArrayType();
          return llvm::ArrayType::get(getLlvmType(ArrTy->getElementType()),
                                      ArrTy->getNumElements());
       }
@@ -365,29 +309,23 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
          if (!Ty->isRawFunctionTy())
             return LambdaTy;
 
-         auto FuncTy = cast<FunctionType>(Ty);
+         FunctionType *FuncTy = Ty->asFunctionType();
          auto ret = getLlvmType(*FuncTy->getReturnType());
          llvm::SmallVector<llvm::Type*, 4> argTypes;
 
-         bool vararg = false;
-         for (const auto &arg : FuncTy->getArgTypes()) {
-            if (arg.cstyleVararg) {
-               vararg = true;
-               break;
-            }
+         for (const auto &arg : FuncTy->getArgTypes())
+            argTypes.push_back(getLlvmType(arg));
 
-            argTypes.push_back(getLlvmType(*arg.type));
-         }
-
-         return llvm::FunctionType::get(ret, argTypes, vararg)
+         return llvm::FunctionType::get(ret, argTypes,
+                                        FuncTy->isCStyleVararg())
             ->getPointerTo();
       }
       case TypeID::TupleTypeID: {
-         auto TupleTy = cast<TupleType>(Ty);
+         TupleType *TupleTy = Ty->asTupleType();
          llvm::SmallVector<llvm::Type*, 4> argTypes;
 
          for (const auto &cont : TupleTy->getContainedTypes())
-            argTypes.push_back(getLlvmType(cont.second));
+            argTypes.push_back(getLlvmType(cont));
 
          return llvm::StructType::get(Ctx, argTypes);
       }
@@ -431,7 +369,7 @@ void IRGen::DeclareFunction(il::Function const* F)
       if (M->isProtocolMethod())
          return;
 
-   auto funcTy = cast<FunctionType>(*F->getType());
+   auto funcTy = F->getType()->asFunctionType();
 
    llvm::SmallVector<llvm::Type*, 8> argTypes;
    llvm::Type *retType;
@@ -451,14 +389,8 @@ void IRGen::DeclareFunction(il::Function const* F)
       retType = getLlvmType(funcTy->getReturnType());
    }
 
-   bool vararg = false;
    for (const auto &arg : funcTy->getArgTypes()) {
-      if (arg.cstyleVararg) {
-         vararg = true;
-         break;
-      }
-
-      auto argTy = getLlvmType(arg.type);
+      auto argTy = getLlvmType(arg);
       if (argTy->isStructTy() || argTy->isArrayTy())
          argTy = argTy->getPointerTo();
 
@@ -469,9 +401,10 @@ void IRGen::DeclareFunction(il::Function const* F)
                   ? llvm::Function::InternalLinkage
                   : llvm::Function::ExternalLinkage;
 
-   auto llvmTy = llvm::FunctionType::get(retType, argTypes, vararg);
-   auto fn = llvm::Function::Create(llvmTy, linkage, F->getName(), M);
+   auto llvmTy = llvm::FunctionType::get(retType, argTypes,
+                                         funcTy->isCStyleVararg());
 
+   auto fn = llvm::Function::Create(llvmTy, linkage, F->getName(), M);
    if (DI)
       emitFunctionDI(*F, fn);
 }
@@ -503,6 +436,8 @@ void IRGen::ForwardDeclareType(il::AggregateType const *Ty)
    typeName += Ty->getName();
 
    Ty->setLlvmTy(llvm::StructType::create(Ctx, typeName));
+
+   TypeMap.try_emplace((uintptr_t)Ty->getType()->getRecord(), Ty->getLlvmTy());
 }
 
 void IRGen::DeclareType(il::AggregateType const* Ty)
@@ -785,30 +720,6 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       return llvm::ConstantExpr::getBitCast(GV, Int8PtrTy);
    }
 
-   if (auto PT = dyn_cast<PTable>(C)) {
-      llvm::SmallVector<llvm::Constant*, 8> Els;
-      for (const auto &el : PT->getVec()) {
-         auto V = getConstantVal(el);
-         Els.push_back(llvm::ConstantExpr::getBitCast(V, Int8PtrTy));
-      }
-
-      return llvm::ConstantArray::get(llvm::ArrayType::get(Int8PtrTy,
-                                                           Els.size()),
-                                      Els);
-   }
-
-   if (auto VT = dyn_cast<VTable>(C)) {
-      llvm::SmallVector<llvm::Constant*, 8> Els;
-      for (const auto &el : VT->getVec()) {
-         auto V = getConstantVal(el);
-         Els.push_back(llvm::ConstantExpr::getBitCast(V, Int8PtrTy));
-      }
-
-      return llvm::ConstantArray::get(llvm::ArrayType::get(Int8PtrTy,
-                                                           Els.size()),
-                                      Els);
-   }
-
    if (auto A = dyn_cast<ConstantArray>(C)) {
       llvm::SmallVector<llvm::Constant*, 8> Els;
       for (const auto &el : A->getVec()) {
@@ -1020,6 +931,10 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
 
    if (!llvmCaseTy->isPointerTy())
       llvmCaseTy = llvmCaseTy->getPointerTo();
+
+   if (caseTy->isPrimitiveType() || caseTy->isPointerType()
+         || caseTy->isRawEnum())
+      return Builder.CreateBitCast(gep, llvmCaseTy);
 
    if (caseTy->needsStructReturn())
       gep = Builder.CreateLoad(gep);
@@ -1367,7 +1282,7 @@ llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
    }
 
    for (const auto &arg : FTy->getArgTypes()) {
-      auto argTy = getLlvmType(arg.type);
+      auto argTy = getLlvmType(arg);
       if (argTy->isStructTy())
          argTy = argTy->getPointerTo();
 
@@ -1387,8 +1302,7 @@ llvm::Value * IRGen::visitLambdaCallInst(LambdaCallInst const& I)
    llvm::Value *Fun = Builder.CreateLoad(Builder.CreateStructGEP(LambdaTy,
                                                                  Lambda, 0));
 
-   auto funTy = cast<FunctionType>(*I.getLambda()->getType());
-
+   FunctionType *funTy = I.getLambda()->getType()->asFunctionType();
    llvm::SmallVector<llvm::Value*, 8> args{ Env };
 
    bool sret = funTy->getReturnType()->needsStructReturn();
@@ -1414,8 +1328,7 @@ llvm::Value * IRGen::visitInitInst(InitInst const& I)
    llvm::Value *alloca;
    if (I.getType()->isClass()) {
       alloca = Builder.CreateCall(getMallocFn(),
-                                  wordSizedInt(I.getType()->getRecord()
-                                                ->getSize()));
+                                  wordSizedInt(I.getType()->getSize()));
 
       alloca = Builder.CreateBitCast(alloca, getStructTy(I.getInitializedType())
                                         ->getPointerTo());
@@ -1475,7 +1388,12 @@ llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
       gep = Builder.CreateStructGEP(LlvmTy, alloca, i);
 
       auto val = getLlvmValue(AV);
-      if (AV->getType()->needsStructReturn()) {
+      if (AV->getType()->isPointerType() || AV->getType()->isPrimitiveType()
+                                            || AV->getType()->isRawEnum()) {
+         auto bc = Builder.CreateBitCast(gep, val->getType()->getPointerTo());
+         Builder.CreateStore(val, bc);
+      }
+      else if (AV->getType()->needsStructReturn()) {
          auto ptr = Builder.CreateCall(getMallocFn(), {
             llvm::ConstantInt::get(WordTy, AV->getType()->getSize())
          });
@@ -1483,10 +1401,12 @@ llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
          Builder.CreateMemCpy(ptr, val, AV->getType()->getSize(),
                               AV->getType()->getAlignment());
 
-         val = ptr;
+         Builder.CreateStore(toInt8Ptr(val), gep);
+      }
+      else {
+         Builder.CreateStore(toInt8Ptr(val), gep);
       }
 
-      Builder.CreateStore(toInt8Ptr(val), gep);
       ++i;
    }
 
@@ -1514,7 +1434,7 @@ llvm::Value* IRGen::visitAddInst(AddInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateNUWAdd(lhs, rhs);
 
@@ -1530,7 +1450,7 @@ llvm::Value* IRGen::visitSubInst(SubInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateNUWSub(lhs, rhs);
 
@@ -1546,7 +1466,7 @@ llvm::Value* IRGen::visitMulInst(MulInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateNUWMul(lhs, rhs);
 
@@ -1562,7 +1482,7 @@ llvm::Value* IRGen::visitDivInst(DivInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateUDiv(lhs, rhs);
 
@@ -1578,7 +1498,7 @@ llvm::Value* IRGen::visitModInst(ModInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateURem(lhs, rhs);
 
@@ -1593,7 +1513,7 @@ llvm::Value* IRGen::visitExpInst(ExpInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   llvm::Function *powFn;
+   llvm::Constant *powFn;
    if (lhs->getType()->isIntegerTy()) {
       powFn = getIntPowFn();
    }
@@ -1641,10 +1561,10 @@ llvm::Value * IRGen::visitCompGEInst(CompGEInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isPointerTy())
+   if (ty->isPointerType())
       return Builder.CreateICmpUGE(lhs, rhs);
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateICmpUGE(lhs, rhs);
 
@@ -1660,10 +1580,10 @@ llvm::Value * IRGen::visitCompLEInst(CompLEInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isPointerTy())
+   if (ty->isPointerType())
       return Builder.CreateICmpULE(lhs, rhs);
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateICmpULE(lhs, rhs);
 
@@ -1679,10 +1599,10 @@ llvm::Value * IRGen::visitCompGTInst(CompGTInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isPointerTy())
+   if (ty->isPointerType())
       return Builder.CreateICmpUGT(lhs, rhs);
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateICmpUGT(lhs, rhs);
 
@@ -1698,10 +1618,10 @@ llvm::Value * IRGen::visitCompLTInst(CompLTInst const& I)
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isPointerTy())
+   if (ty->isPointerType())
       return Builder.CreateICmpULT(lhs, rhs);
 
-   if (ty->isIntegerTy()) {
+   if (ty->isIntegerType()) {
       if (ty->isUnsigned())
          return Builder.CreateICmpULT(lhs, rhs);
 

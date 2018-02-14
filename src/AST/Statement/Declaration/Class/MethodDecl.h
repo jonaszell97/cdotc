@@ -21,182 +21,313 @@ class FuncArgDecl;
 
 class MethodDecl : public CallableDecl {
 public:
-   MethodDecl(
-      string &&methodName,
-      std::shared_ptr<TypeRef> &&returnType,
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      std::shared_ptr<CompoundStmt> &&body,
-      AccessModifier access,
-      bool isStatic = false
-   );
-
-   MethodDecl(
-      string &&methodName,
-      std::shared_ptr<TypeRef> &&returnType,
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      std::shared_ptr<CompoundStmt> &&body,
-      OperatorInfo op,
-      bool isCastOp,
-      AccessModifier access,
-      bool isStatic
-   );
-
-   MethodDecl(
-      string &&methodName,
-      std::shared_ptr<TypeRef> &&returnType,
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-      std::vector<TemplateParameter> &&templateParams,
-      std::vector<std::shared_ptr<StaticExpr>> &&Constraints,
-      AccessModifier access,
-      bool isStatic = false
-   );
-
-   MethodDecl(
-      string &&methodName,
-      string &&aliasedMethod,
-      std::vector<std::shared_ptr<FuncArgDecl>> &&args
-   );
-
-   void isMutating(bool mut)
+   MethodDecl(string &&methodName,
+              TypeRef* returnType,
+              std::vector<FuncArgDecl* > &&args,
+              std::vector<StaticExpr* > &&Constraints,
+              CompoundStmt* body,
+              AccessModifier access,
+              bool isStatic = false)
+      : CallableDecl(MethodDeclID, access, std::move(methodName), returnType,
+                     std::move(args), move(Constraints),
+                     body, {})
    {
-      isMutating_ = mut;
+      setFlag(Abstract, !body);
+      setDeclFlag(DF_Static, isStatic);
    }
 
-   void isCastOp(bool castop)
+   MethodDecl(string &&methodName,
+              TypeRef* returnType,
+              std::vector<FuncArgDecl* > &&args,
+              std::vector<StaticExpr* > &&Constraints,
+              CompoundStmt* body,
+              OperatorInfo op,
+              bool isCastOp,
+              AccessModifier access,
+              bool isStatic)
+      : CallableDecl(MethodDeclID, access, std::move(methodName), returnType,
+                     std::move(args), move(Constraints),
+                     body, op)
    {
-      isCastOp_ = castop;
+      setFlag(Abstract, !body);
+      setFlag(ConvOp, isCastOp);
+      setDeclFlag(DF_Static, isStatic);
    }
 
-   typedef std::shared_ptr<MethodDecl> SharedPtr;
-   typedef std::unique_ptr<MethodDecl> UniquePtr;
+   MethodDecl(string &&methodName,
+              string &&aliasedMethod,
+              std::vector<FuncArgDecl* > &&args)
+      : CallableDecl(MethodDeclID, (AccessModifier)0,
+                     std::move(methodName),
+                     {}, std::move(args), {}, {}, {}),
+        alias(move(aliasedMethod))
+   {
+      setFlag(Alias, true);
+   }
 
    static bool classof(AstNode const* T)
    {
-       return T->getTypeID() == MethodDeclID;
+      return classofKind(T->getTypeID());
    }
+
+   static bool classofKind(AstNode::NodeType kind)
+   {
+      switch (kind) {
+         case MethodDeclID:
+         case InitDeclID:
+         case DeinitDeclID:
+            return true;
+         default:
+            return false;
+      }
+   }
+
+   static DeclContext *castToDeclContext(MethodDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<MethodDecl*>(D));
+   }
+
+   static MethodDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<MethodDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
 
 protected:
-   bool isStatic;
-   bool isAbstract;
-   bool isAlias = false;
+   MethodDecl(NodeType typeID,
+              string &&methodName,
+              TypeRef* returnType,
+              std::vector<FuncArgDecl* > &&args,
+              std::vector<StaticExpr* > &&Constraints,
+              CompoundStmt* body,
+              AccessModifier access,
+              bool isStatic = false)
+      : CallableDecl(typeID, access, std::move(methodName), returnType,
+                     std::move(args), move(Constraints),
+                     body, {})
+   {
+      setFlag(Abstract, !body);
+      setDeclFlag(DF_Static, isStatic);
+   }
 
    string alias;
-   bool isMutating_ = false;
-   bool isCastOp_ = false;
 
-   bool hasDefinition_ = false;
-   bool is_protocol_method = false;
+   size_t methodID;
+   size_t protocolTableOffset = 0;
 
-   FixKind fix;
-   Associativity associativity;
-
-   // codegen
-   cdot::cl::Record *record;
-   bool isUsed = false;
+   std::vector<ast::CallableDecl* > Instantiations;
 
 public:
-   bool isProtocolMethod() const
+   const string &getAlias() const
    {
-      return is_protocol_method;
-   }
-
-   void isProtocolMethod(bool proto)
-   {
-      is_protocol_method = proto;
-   }
-
-   bool isIsStatic() const {
-      return isStatic;
-   }
-
-   void setIsStatic(bool isStatic) {
-      MethodDecl::isStatic = isStatic;
-   }
-
-   bool isIsAbstract() const {
-      return isAbstract;
-   }
-
-   void setIsAbstract(bool isAbstract) {
-      MethodDecl::isAbstract = isAbstract;
-   }
-
-   bool isIsAlias() const {
-      return isAlias;
-   }
-
-   void setIsAlias(bool isAlias) {
-      MethodDecl::isAlias = isAlias;
-   }
-
-   const string &getAlias() const {
       return alias;
    }
 
-   void setAlias(const string &alias) {
-      MethodDecl::alias = alias;
-   }
-
-   bool isIsMutating_() const {
-      return isMutating_;
-   }
-
-   void setIsMutating_(bool isMutating_) {
-      MethodDecl::isMutating_ = isMutating_;
-   }
-
-   bool isIsCastOp_() const {
-      return isCastOp_;
-   }
-
-   void setIsCastOp_(bool isCastOp_) {
-      MethodDecl::isCastOp_ = isCastOp_;
-   }
-
-   bool isHasDefinition_() const {
-      return hasDefinition_;
-   }
-
-   void setHasDefinition_(bool hasDefinition_) {
-      MethodDecl::hasDefinition_ = hasDefinition_;
-   }
-
-   cdot::cl::Record *getRecord() const;
-   void setRecord(cdot::cl::Record *record);
-
-   cdot::cl::Method *getMethod() const;
-
-   bool isIsUsed() const {
-      return isUsed;
-   }
-
-   void setIsUsed(bool isUsed) {
-      MethodDecl::isUsed = isUsed;
-   }
-
-   FixKind getFix() const
+   size_t getMethodID() const
    {
-      return fix;
+      return methodID;
    }
 
-   void setFix(FixKind fix)
+   size_t getProtocolTableOffset() const
    {
-      MethodDecl::fix = fix;
+      return protocolTableOffset;
    }
 
-   Associativity getAssociativity() const
+   void setProtocolTableOffset(size_t protocolTableOffset)
    {
-      return associativity;
+      MethodDecl::protocolTableOffset = protocolTableOffset;
    }
 
-   void setAssociativity(Associativity associativity)
+   bool isAbstract() const
    {
-      MethodDecl::associativity = associativity;
+      return getFlag(Abstract);
    }
+
+   bool isAlias() const
+   {
+      return getFlag(Alias);
+   }
+
+   bool hasMutableSelf() const
+   {
+      return getFlag(MutableSelf);
+   }
+
+   bool isProtocolMethod() const
+   {
+      return getFlag(ProtoMethod);
+   }
+
+   bool isVirtual() const
+   {
+      return getFlag(Virtual);
+   }
+
+   bool isOverride() const
+   {
+      return getFlag(Override);
+   }
+
+   bool isProperty() const
+   {
+      return getFlag(Property);
+   }
+
+   bool isTemplatedInitializer() const;
+
+   bool isProtocolDefaultImpl() const
+   {
+      return getFlag(ProtoMethod);
+   }
+
+   bool isHasDefinition() const
+   {
+      return getFlag(Defined);
+   }
+
+   bool isMemberwiseInitializer() const
+   {
+      return getFlag(MemberwiseInit);
+   }
+
+   bool isDefaultInitializer() const
+   {
+      return getFlag(DefaultInit);
+   }
+
+   void setDefaultInitializer(bool defaultInitializer)
+   {
+      setFlag(DefaultInit, defaultInitializer);
+   }
+
+   const std::vector<CallableDecl *> &getInstantiations() const
+   {
+      return Instantiations;
+   }
+
+   bool isCastOp() const
+   {
+      return getFlag(ConvOp);
+   }
+
+   void setMutating(bool mutating)
+   {
+      setFlag(MutableSelf, mutating);
+   }
+
+   void setIsProtocolMethod(bool is_protocol_method)
+   {
+      setFlag(ProtoMethod, is_protocol_method);
+   }
+
+   void setIsVirtual(bool is_virtual)
+   {
+      setFlag(Virtual, is_virtual);
+   }
+
+   void setProperty(bool property)
+   {
+      setFlag(Property, property);
+   }
+
+   void setProtocolDefaultImpl(bool protocolDefaultImpl)
+   {
+      setFlag(ProtoDefaultImpl, protocolDefaultImpl);
+   }
+
+   void setMemberwiseInitializer(bool memberwiseInitializer)
+   {
+      setFlag(MemberwiseInit, memberwiseInitializer);
+   }
+};
+
+class InitDecl: public MethodDecl {
+public:
+   InitDecl()
+      : MethodDecl(InitDeclID, "init", nullptr, {}, {}, nullptr,
+                   (AccessModifier)0),
+        memberwise(true)
+   {
+      setMemberwiseInitializer(true);
+   }
+
+   InitDecl(std::vector<FuncArgDecl* > &&args,
+              AccessModifier am,
+              CompoundStmt* body,
+              string &&name = "init")
+      : MethodDecl(InitDeclID, move(name), {}, std::move(args),
+                   {}, body, am),
+        memberwise(false)
+   {}
+
+   std::vector<TemplateParamDecl*> &getTemplateParamsRef()
+   {
+      return templateParams;
+   }
+
+   static bool classof(AstNode const* T)
+   {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(NodeType kind)
+   {
+      return kind == InitDeclID;
+   }
+
+   static DeclContext *castToDeclContext(InitDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<InitDecl*>(D));
+   }
+
+   static InitDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<InitDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
+
+protected:
+   bool memberwise : 1;
+
+public:
+   bool isMemberwise() const
+   {
+      return memberwise;
+   }
+};
+
+class DeinitDecl: public MethodDecl {
+public:
+   explicit DeinitDecl(CompoundStmt* body = nullptr)
+      : MethodDecl(DeinitDeclID, "deinit", {}, {}, {}, body,
+                   (AccessModifier)0)
+   {
+
+   }
+
+   static bool classof(AstNode const* T)
+   {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(NodeType kind)
+   {
+      return kind == DeinitDeclID;
+   }
+
+   static DeclContext *castToDeclContext(DeinitDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<DeinitDecl*>(D));
+   }
+
+   static DeinitDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<DeinitDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
 };
 
 } // namespace ast

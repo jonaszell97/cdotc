@@ -10,8 +10,10 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/SmallVector.h>
 
-#include "../../Variant/Type/QualType.h"
+#include "../../Variant/Type/Type.h"
 #include "../../lex/SourceLocation.h"
+#include "../../Support/Casting.h"
+
 #include "Use.h"
 
 namespace cdot {
@@ -25,15 +27,20 @@ class MetaData;
 enum MDKind : unsigned;
 class ValueSymbolTable;
 class MDLocation;
+class ILBuilder;
+
+class CallSite;
+class ImmutableCallSite;
 
 class Value {
 public:
-   enum TypeID : unsigned short {
+   enum TypeID : unsigned char {
 #     define CDOT_ALL(name) name##ID,
 #     include "Instructions.def"
    };
 
    friend class ValueSymbolTable;
+   friend class ILBuilder;
 
 protected:
    Value(TypeID id, Type *ty);
@@ -44,8 +51,8 @@ protected:
 #  endif
    ~Value();
 
-   TypeID id : 16;
-   unsigned Flags : 16;
+   TypeID id : 8;
+   unsigned Flags : 24;
    unsigned SubclassData : 32;
 
    QualType type;
@@ -137,6 +144,9 @@ public:
 
       return static_cast<T*>(this);
    }
+
+   CallSite getAsCallSite();
+   ImmutableCallSite getAsImmutableCallSite() const;
 };
 
 } // namespace il

@@ -4,21 +4,19 @@
 
 #include "CallExpr.h"
 #include "IdentifierRefExpr.h"
+#include "../TypeRef.h"
 
 #include "../../SymbolTable.h"
 
-#include "../../Passes/SemanticAnalysis/Record/Class.h"
-#include "../../Passes/SemanticAnalysis/Record/Enum.h"
-#include "../../Passes/SemanticAnalysis/Function.h"
 #include "../../Passes/SemanticAnalysis/Builtin.h"
-
-#include "../../../Variant/Type/FunctionType.h"
+#include "../../Statement/Declaration/CallableDecl.h"
+#include "../../Statement/Declaration/Class/MethodDecl.h"
 
 namespace cdot {
 namespace ast {
 
 
-CallExpr::CallExpr(std::vector<std::shared_ptr<Expression>> &&args,
+CallExpr::CallExpr(std::vector<Expression* > &&args,
                    string &&ident)
    : IdentifiedExpr(CallExprID, move(ident)), args(move(args)),
      is_pointer_access(false),
@@ -28,83 +26,27 @@ CallExpr::CallExpr(std::vector<std::shared_ptr<Expression>> &&args,
 
 }
 
-void CallExpr::destroyValueImpl()
+CallExpr::CallExpr(std::vector<Expression *> &&args, CallableDecl *C)
+   : IdentifiedExpr(CallExprID, ""), args(move(args)),
+     is_pointer_access(false),
+     implicitSelf(false),
+     builtinFnKind(BuiltinFn::None)
 {
-   if (kind == CallKind::AnonymousCall && identExpr)
-      delete identExpr;
-}
+   if (auto F = support::dyn_cast<FunctionDecl>(C)) {
+      func = F;
+      returnType = func->getReturnType()->getType();
 
-CallKind CallExpr::getKind() const {
-   return kind;
-}
+      kind = CallKind::NamedFunctionCall;
+   }
+   else {
+      method = support::cast<MethodDecl>(C);
+      returnType = method->getReturnType()->getType();
 
-void CallExpr::setKind(CallKind type) {
-   CallExpr::kind = type;
-}
-
-bool CallExpr::isPointerAccess_() const {
-   return is_pointer_access;
-}
-
-void CallExpr::setIsPointerAccess_(bool isPointerAccess_) {
-   CallExpr::is_pointer_access = isPointerAccess_;
-}
-
-QualType &CallExpr::getReturnType()
-{
-   return returnType;
-}
-
-void CallExpr::setReturnType(const QualType &returnType) {
-   CallExpr::returnType = returnType;
-}
-
-BuiltinFn CallExpr::getBuiltinFnKind() const {
-   return builtinFnKind;
-}
-
-void CallExpr::setBuiltinFnKind(BuiltinFn builtinFnKind) {
-   CallExpr::builtinFnKind = builtinFnKind;
-}
-
-Method *CallExpr::getMethod() const {
-   return method;
-}
-
-void CallExpr::setMethod(Method *method)
-{
-   declaredArgTypes = method->getArguments();
-   CallExpr::method = method;
-}
-
-std::vector<Argument> &CallExpr::getResolvedArgs()
-{
-   return resolvedArgs;
-}
-
-void CallExpr::setResolvedArgs(const std::vector<Argument> &resolvedArgs) {
-   CallExpr::resolvedArgs = resolvedArgs;
-}
-
-FunctionType *CallExpr::getFunctionType() const {
-   return functionType;
-}
-
-void CallExpr::setFunctionType(FunctionType *functionType)
-{
-   declaredArgTypes = functionType->getArgTypes();
-   CallExpr::functionType = functionType;
-}
-
-Function *CallExpr::getFunc() const
-{
-   return func;
-}
-
-void CallExpr::setFunc(Function *func)
-{
-   declaredArgTypes = func->getArguments();
-   CallExpr::func = func;
+      if (method->isStatic())
+         kind = CallKind::StaticMethodCall;
+      else
+         kind = CallKind::MethodCall;
+   }
 }
 
 } // namespace ast

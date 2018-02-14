@@ -8,16 +8,16 @@
 namespace cdot {
 namespace ast {
 
-CaseStmt::CaseStmt(std::shared_ptr<Statement> &&body)
-   : Statement(CaseStmtID), is_default(true), pattern(nullptr),
-     body(move(body))
+CaseStmt::CaseStmt(Statement* body)
+   : Statement(CaseStmtID),
+     is_default(true), pattern(nullptr), body(body)
 {
 
 }
 
-CaseStmt::CaseStmt(std::shared_ptr<PatternExpr> &&pattern,
-                   std::shared_ptr<Statement> &&body)
-   : Statement(CaseStmtID), pattern(move(pattern)), body(move(body))
+CaseStmt::CaseStmt(PatternExpr* pattern,
+                   Statement* body)
+   : Statement(CaseStmtID), pattern(pattern), body(body)
 {
 
 }

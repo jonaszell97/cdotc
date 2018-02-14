@@ -8,21 +8,21 @@
 namespace cdot {
 namespace ast {
 
-ForStmt::ForStmt(Statement::SharedPtr &&init,
-                 std::shared_ptr<Expression> &&term,
-                 Statement::SharedPtr &&inc)
-   : Statement(ForStmtID), initialization(move(init)), termination(move(term)),
-     increment(move(inc))
+ForStmt::ForStmt(Statement* init,
+                 Expression* term,
+                 Statement* inc)
+   : Statement(ForStmtID), initialization(init), termination(term),
+     increment(inc)
 {
 
 }
 
-ForStmt::ForStmt(Statement::SharedPtr &&init,
-                 std::shared_ptr<Expression> &&term,
-                 Statement::SharedPtr &&inc,
-                 Statement::SharedPtr &&body)
-   : Statement(ForStmtID), initialization(move(init)), termination(move(term)),
-     increment(move(inc)), body(move(body))
+ForStmt::ForStmt(Statement* init,
+                 Expression* term,
+                 Statement* inc,
+                 Statement* body)
+   : Statement(ForStmtID), initialization(init), termination(term),
+     increment(inc), body(body)
 {
 
 }

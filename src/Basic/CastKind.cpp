@@ -7,21 +7,16 @@
 #include "../Support/Casting.h"
 
 #include "../AST/SymbolTable.h"
-#include "../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../AST/Passes/SemanticAnalysis/Record/Enum.h"
-#include "../AST/Passes/SemanticAnalysis/Function.h"
+#include "../AST/Passes/SemanticAnalysis/SemaPass.h"
 
-#include "../Variant/Type/TypeGroup.h"
-#include "../Variant/Type/PointerType.h"
-#include "../Variant/Type/QualType.h"
-#include "../Variant/Type/FPType.h"
-#include "../Variant/Type/TupleType.h"
-#include "../Variant/Type/FunctionType.h"
-#include "../Variant/Type/GenericType.h"
-#include "../Variant/Type/IntegerType.h"
-#include "../Variant/Type/ArrayType.h"
+#include "../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "../AST/Statement/Declaration/Class/MethodDecl.h"
+#include "../AST/Expression/TypeRef.h"
+
+#include "../Variant/Type/Type.h"
 
 using namespace cdot::support;
+using namespace cdot::ast;
 
 namespace cdot {
 
@@ -35,25 +30,25 @@ const char* CastNames[] = {
 
 namespace {
 
-CastResult HandleFromInteger(Type const* from, Type const* to)
-{
+CastResult HandleFromInteger(ast::SemaPass const& SP, Type* from,
+                             Type* to) {
    if (to->isRawEnum()) {
       return { CastKind::IntToEnum, CastResult::Implicit, to  };
    }
 
-   if (to->isPointerTy()) {
+   if (to->isPointerType()) {
       return { CastKind::IntToPtr, CastResult::Force, to  };
    }
    else if (to->isFPType()) {
       return { CastKind::IntToFP, CastResult::Normal, to  };
    }
    else if (to->isBoxedPrimitive()) {
-      auto cast = getCastKind(from, to->unbox());
+      auto cast = getCastKind(SP, from, *SP.getUnboxedType(QualType(to)));
       cast.addCast(CastKind::IBox, to);
 
       return cast;
    }
-   else if (!to->isIntegerTy()) {
+   else if (!to->isIntegerType()) {
       return { CastKind::Invalid, CastResult::Normal, to  };
    }
 
@@ -67,8 +62,8 @@ CastResult HandleFromInteger(Type const* from, Type const* to)
                         CastResult::Force, to );
 
          res.addCastAtBegin(CastKind::SignFlip,
-                            IntegerType::get(from->getBitwidth(),
-                                             !from->isUnsigned()));
+                            SP.getContext().getIntegerTy(from->getBitwidth(),
+                                                         !from->isUnsigned()));
          return res;
       }
       else {
@@ -87,11 +82,11 @@ CastResult HandleFromInteger(Type const* from, Type const* to)
    }
 }
 
-CastResult HandleFromFP(Type const*from, Type const*to)
+CastResult HandleFromFP(ast::SemaPass const& SP, Type*from, Type*to)
 {
    if (to->isFPType()) {
-      auto fromBw = cast<FPType>(from)->getPrecision();
-      auto toBw = cast<FPType>(to)->getPrecision();
+      auto fromBw = from->asFPType()->getPrecision();
+      auto toBw = to->asFPType()->getPrecision();
       if (fromBw > toBw) {
          return { CastKind::FPTrunc, CastResult::Normal, to  };
       }
@@ -101,11 +96,11 @@ CastResult HandleFromFP(Type const*from, Type const*to)
 
       return { CastKind::NoOp, CastResult::Implicit, to  };
    }
-   else if (to->isIntegerTy()) {
+   else if (to->isIntegerType()) {
       return { CastKind::FPToInt, CastResult::Normal, to  };
    }
    else if (to->isBoxedPrimitive()) {
-      auto cast = getCastKind(from, to->unbox());
+      auto cast = getCastKind(SP, from, *SP.getUnboxedType(to));
       cast.addCast(CastKind::FPBox, to);
 
       return cast;
@@ -114,38 +109,40 @@ CastResult HandleFromFP(Type const*from, Type const*to)
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult HandleFromFunc(FunctionType const* from, Type const* to);
+CastResult HandleFromFunc(ast::SemaPass const& SP, FunctionType* from,
+                          Type* to);
 
-CastResult HandleFromPtr(Type const*from, Type const*to)
+CastResult HandleFromPtr(ast::SemaPass const& SP, Type*from, Type*to)
 {
-   if (to->isPointerTy()) {
+   if (to->isPointerType()) {
       return { CastKind::BitCast, CastResult::Force, to  };
    }
-   if (to->isIntegerTy()) {
+   if (to->isIntegerType()) {
       return { CastKind::PtrToInt, CastResult::Force, to  };
    }
    if (to->isBoxedPrimitive()) {
-      auto unboxed = to->unbox();
-      auto cast = getCastKind(from, unboxed);
+      auto unboxed = *SP.getUnboxedType(to);
+      auto cast = getCastKind(SP, from, unboxed);
 
       if (cast.isValid()) {
          cast.addCast(CastKind::IBox, to);
          return cast;
       }
    }
-   if (to->isRawFunctionTy() && from->getPointeeType()->isFunctionTy()) {
-      return HandleFromFunc(cast<FunctionType>(*from->getPointeeType()), to);
+   if (to->isRawFunctionTy() && from->getPointeeType()->isFunctionType()) {
+      return HandleFromFunc(SP, from->getPointeeType()->asFunctionType(), to);
    }
-   if (to->isObjectTy()) {
+
+   if (to->isObjectType() || to->isRawFunctionTy()) {
       return { CastKind::BitCast, CastResult::Force, to  };
    }
 
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult HandleFromObject(Type const* from, Type const* to)
+CastResult HandleFromObject(ast::SemaPass const& SP, Type* from, Type* to)
 {
-   auto fromRec = SymbolTable::getRecord(from->getClassName());
+   auto fromRec = from->getRecord();
    if (auto Conv = fromRec->getConversionOperator(to)) {
       return CastResult(CastKind::ConversionOp,
                         Conv->getOperator().isImplicit()
@@ -154,29 +151,30 @@ CastResult HandleFromObject(Type const* from, Type const* to)
                         to, Conv);
    }
 
-   if (from->isBoxedPrimitive() && isa<PrimitiveType>(to)) {
-      auto unboxed = from->unbox();
-      auto cast = getCastKind(unboxed, to);
-      cast.addCastAtBegin(to->isIntegerTy() ? CastKind::IUnbox
+   if (from->isBoxedPrimitive() && to->isPrimitiveType()) {
+      auto unboxed = *SP.getUnboxedType(from);
+      auto cast = getCastKind(SP, unboxed, to);
+      cast.addCastAtBegin(to->isIntegerType() ? CastKind::IUnbox
                                             : CastKind::FPUnbox, unboxed);
 
       return cast;
    }
    if (from->isBoxedPrimitive() && to->isBoxedPrimitive()) {
-      auto unboxed = to->unbox();
-      auto cast = getCastKind(from->unbox(), unboxed);
-      cast.addCastAtBegin(unboxed->isIntegerTy() ? CastKind::IUnbox
+      auto unboxed = *SP.getUnboxedType(to);
+      auto cast = getCastKind(SP, *SP.getUnboxedType(from), unboxed);
+      cast.addCastAtBegin(unboxed->isIntegerType() ? CastKind::IUnbox
                                                  : CastKind::FPUnbox, unboxed);
-      cast.addCast(unboxed->isIntegerTy() ? CastKind::IBox
+      cast.addCast(unboxed->isIntegerType() ? CastKind::IBox
                                           : CastKind::FPBox, to);
 
       return cast;
    }
 
-   if (to->isIntegerTy()) {
+   if (to->isIntegerType()) {
       if (from->isRawEnum()) {
-         auto rawTy = cast<Enum>(from->getRecord())->getRawType();
-         auto res = getCastKind(rawTy, to);
+         auto rawTy = *cast<EnumDecl>(from->getRecord())->getRawType()
+                                                        ->getType();
+         auto res = getCastKind(SP, rawTy, to);
 
          res.addCastAtBegin(CastKind::EnumToInt, rawTy);
          return res;
@@ -184,10 +182,11 @@ CastResult HandleFromObject(Type const* from, Type const* to)
 
       return { CastKind::PtrToInt, CastResult::Force, to  };
    }
-   if (to->isPointerTy()) {
+   if (to->isPointerType()) {
       if (from->isRawEnum()) {
-         auto rawTy = cast<Enum>(from->getRecord())->getRawType();
-         auto res = getCastKind(rawTy, to);
+         auto rawTy = *cast<EnumDecl>(from->getRecord())->getRawType()
+                                                        ->getType();
+         auto res = getCastKind(SP, rawTy, to);
 
          res.addCastAtBegin(CastKind::EnumToInt, rawTy);
          return res;
@@ -195,10 +194,11 @@ CastResult HandleFromObject(Type const* from, Type const* to)
 
       return { CastKind::BitCast, CastResult::Force, to  };
    }
-   if (!to->isObjectTy()) {
+   if (!to->isObjectType()) {
       if (from->isRawEnum()) {
-         auto rawTy = cast<Enum>(from->getRecord())->getRawType();
-         auto res = getCastKind(rawTy, to);
+         auto rawTy = *cast<EnumDecl>(from->getRecord())->getRawType()
+                                                        ->getType();
+         auto res = getCastKind(SP, rawTy, to);
 
          res.addCastAtBegin(CastKind::EnumToInt, rawTy);
          return res;
@@ -207,7 +207,7 @@ CastResult HandleFromObject(Type const* from, Type const* to)
       return { CastKind::Invalid, CastResult::Normal, to  };
    }
 
-   auto toRec = SymbolTable::getRecord(to->getClassName());
+   auto toRec = to->getRecord();
    if (fromRec == toRec) {
       return { CastKind::NoOp, CastResult::Implicit, to  };
    }
@@ -220,14 +220,17 @@ CastResult HandleFromObject(Type const* from, Type const* to)
 
    if (!fromRec->isClass() || !toRec->isClass()) {
       if (from->isRawEnum() && to->isRawEnum())
-         return getCastKind(cast<Enum>(from->getRecord())->getRawType(),
-                            cast<Enum>(to->getRecord())->getRawType());
+         return getCastKind(SP,
+                            *cast<EnumDecl>(from->getRecord())->getRawType()
+                                                              ->getType(),
+                            *cast<EnumDecl>(to->getRecord())->getRawType()
+                                                            ->getType());
 
       return { CastKind::Invalid, CastResult::Normal, to  };
    }
 
-   auto fromCl = fromRec->getAs<Class>();
-   auto toCl = toRec->getAs<Class>();
+   auto fromCl = cast<ClassDecl>(fromRec);
+   auto toCl = cast<ClassDecl>(toRec);
 
    if (fromCl->isBaseClassOf(toCl)) {
       return { CastKind::DynCast, CastResult::Fallible, to  };
@@ -240,84 +243,22 @@ CastResult HandleFromObject(Type const* from, Type const* to)
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult HandleFromTypeGroup(Type const* from, Type const* to)
-{
-   if (isa<IntegerTypeGroup>(from)) {
-      if (to->isIntegerTy()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-      else if (to->isBoxedPrimitive() && to->unbox()->isIntegerTy()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-
-      return HandleFromInteger(from->getGroupDefault(), to);
-   }
-   else if (isa<FPTypeGroup>(from)) {
-      if (to->isFPType()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-      else if (to->isBoxedPrimitive() && to->unbox()->isFPType()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-
-      return HandleFromFP(from->getGroupDefault(), to);
-   }
-   else if (isa<StringTypeGroup>(from)) {
-      if (to->isPointerTy() && cast<PointerType>(to)->getPointeeType()
-                                                    ->isInt8Ty()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-      if (to->isObjectTy() && to->getClassName() == "String") {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-
-      return HandleFromObject(from->getGroupDefault(), to);
-   }
-   else if (auto TG = dyn_cast<EnumTypeGroup>(from)) {
-      if (to->isIntegerTy()) {
-         // return true for now, in case the underlying type of the enum matches
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-      if (!to->isObjectTy())
-         return { CastKind::Invalid, CastResult::Normal, to  };
-
-      auto rec = to->getRecord();
-      if (!isa<Enum>(rec))
-         return { CastKind::Invalid, CastResult::Normal, to  };
-
-      if (!cast<Enum>(rec)->hasCase(TG->getCaseName()))
-         return { CastKind::Invalid, CastResult::Normal, to  };
-
-      return { CastKind::NoOp, CastResult::Implicit, to  };
-   }
-   else if (auto LG = dyn_cast<LambdaTypeGroup>(from)) {
-      auto fun = dyn_cast<FunctionType>(to);
-      if (fun && fun->getArgTypes().size() == LG->getNumArgs()) {
-         return { CastKind::NoOp, CastResult::Implicit, to  };
-      }
-
-      return {};
-   }
-
-   llvm_unreachable("invalid type group");
-}
-
-CastResult HandleFromTupleToTuple(TupleType const* from, TupleType const* to)
-{
+CastResult HandleFromTupleToTuple(ast::SemaPass const& SP, TupleType* from,
+                                  TupleType* to) {
    CastKind kind = CastKind::NoOp;
    CastResult::RequiredStrength strength = CastResult::Implicit;
 
-   auto &fromTys = from->getContainedTypes();
-   auto &toTys = to->getContainedTypes();
+   auto fromTys = from->getContainedTypes();
+   auto toTys = to->getContainedTypes();
 
    if (fromTys.size() != toTys.size())
       return { CastKind::Invalid, CastResult::Normal, to  };
 
    for (size_t i = 0; i < fromTys.size(); ++i) {
-      auto &fromTy = fromTys[i].second;
-      auto &toTy = toTys[i].second;
+      auto &fromTy = fromTys[i];
+      auto &toTy = toTys[i];
 
-      auto cast = getCastKind(*fromTy, *toTy);
+      auto cast = getCastKind(SP, *fromTy, *toTy);
       if (cast.getStrength() > strength) {
          strength = cast.getStrength();
          kind = CastKind::TupleCast;
@@ -327,33 +268,33 @@ CastResult HandleFromTupleToTuple(TupleType const* from, TupleType const* to)
    return { kind, strength, to };
 }
 
-CastResult HandleFromTuple(TupleType const* from, Type const* to)
-{
-   if (auto Tup = dyn_cast<TupleType>(to))
-      return HandleFromTupleToTuple(from, Tup);
+CastResult HandleFromTuple(ast::SemaPass const& SP, TupleType* from,
+                           Type* to) {
+   if (auto Tup = to->asTupleType())
+      return HandleFromTupleToTuple(SP, from, Tup);
 
-   if (to->isObjectTy() && to->getClassName() == "String")
+   if (to->isObjectType() && to->getClassName() == "String")
       return { CastKind::TupleCast, CastResult::Normal, to };
 
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult getFuncCast(FunctionType const* from, FunctionType const* to)
-{
+CastResult getFuncCast(ast::SemaPass const& SP, FunctionType* from,
+                       FunctionType* to) {
    CastKind kind = CastKind::NoOp;
    CastResult::RequiredStrength strength = CastResult::Implicit;
 
-   auto &fromTys = from->getArgTypes();
-   auto &toTys = to->getArgTypes();
+   auto fromTys = from->getArgTypes();
+   auto toTys = to->getArgTypes();
 
    if (fromTys.size() != toTys.size())
       return { CastKind::Invalid, CastResult::Normal, to  };
 
    for (size_t i = 0; i < fromTys.size(); ++i) {
-      auto fromTy = *fromTys[i].type;
-      auto toTy = *toTys[i].type;
+      auto fromTy = *fromTys[i];
+      auto toTy = *toTys[i];
 
-      auto cast = getCastKind(fromTy, toTy);
+      auto cast = getCastKind(SP, fromTy, toTy);
       if (!cast.isValid())
          return { CastKind::Invalid, CastResult::Normal, to  };
 
@@ -363,10 +304,10 @@ CastResult getFuncCast(FunctionType const* from, FunctionType const* to)
       }
    }
 
-   auto &fromRet = *from->getReturnType();
-   auto &toRet = *to->getReturnType();
+   auto fromRet = *from->getReturnType();
+   auto toRet = *to->getReturnType();
 
-   auto cast = getCastKind(fromRet, toRet);
+   auto cast = getCastKind(SP, fromRet, toRet);
    if (!cast.isValid())
       return { CastKind::Invalid, CastResult::Normal, to  };
 
@@ -378,44 +319,47 @@ CastResult getFuncCast(FunctionType const* from, FunctionType const* to)
    return { kind, strength, to };
 }
 
-CastResult HandleFromRawFunc(FunctionType const* from, Type const* to)
-{
+CastResult HandleFromRawFunc(ast::SemaPass const& SP, FunctionType* from,
+                             Type* to) {
    if (to->isRawFunctionTy()) {
-      auto c = getFuncCast(from, cast<FunctionType>(to));
+      auto c = getFuncCast(SP, from, to->asFunctionType());
       if (c.isValid())
          return { CastKind::BitCast, CastResult::Implicit, to };
    }
 
-   if (to->isPointerTy())
+   if (to->isPointerType())
       return { CastKind::BitCast, CastResult::Force, to };
 
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult HandleFromFunc(FunctionType const* from, Type const* to)
-{
+CastResult HandleFromFunc(ast::SemaPass const& SP, FunctionType* from,
+                          Type* to) {
    if (from->isRawFunctionTy())
-      return HandleFromRawFunc(from, to);
+      return HandleFromRawFunc(SP, from, to);
 
-   if (to->isFunctionTy())
-      return getFuncCast(from, cast<FunctionType>(to));
+   if (to->isFunctionType())
+      return getFuncCast(SP, from, to->asFunctionType());
 
    return { CastKind::Invalid, CastResult::Normal, to  };
 }
 
-CastResult HandleFromArray(ArrayType const *from, Type const* to)
-{
-   if (auto toArr = dyn_cast<ArrayType>(to)) {
+CastResult HandleFromArray(ast::SemaPass const& SP, ArrayType const *from,
+                           Type* to) {
+   if (auto toArr = to->asArrayType()) {
       if (from->getNumElements() < toArr->getNumElements())
          return {};
 
-      auto cast = getCastKind(from->getElementType(), toArr->getElementType());
+      auto cast = getCastKind(SP, *from->getElementType(),
+                              *toArr->getElementType());
+      
       if (cast.isValid())
          return { CastKind::BitCast, cast.getStrength(), to };
    }
 
-   if (auto Ptr = dyn_cast<PointerType>(to)) {
-      auto cast = getCastKind(from->getElementType(), *Ptr->getPointeeType());
+   if (auto Ptr = to->asPointerType()) {
+      auto cast = getCastKind(SP, *from->getElementType(),
+                              *Ptr->getPointeeType());
       if (cast.isValid())
          return { CastKind::BitCast, cast.getStrength(), to };
    }
@@ -425,35 +369,33 @@ CastResult HandleFromArray(ArrayType const *from, Type const* to)
 
 } // anonymous namespace
 
-CastResult getCastKind(Type const* from, Type const* to)
-{
+CastResult getCastKind(ast::SemaPass const& SP, Type* from,
+                       Type* to) {
    if (from == to)
       return { CastKind::NoOp, CastResult::Implicit, to  };
 
-   if (auto Gen = dyn_cast<GenericType>(from))
-      return getCastKind(Gen->getActualType(), to);
+   if (auto Gen = from->asGenericType())
+      return getCastKind(SP, *Gen->getActualType(), to);
 
-   if (auto Gen = dyn_cast<GenericType>(to))
-      return getCastKind(from, Gen->getActualType());
+   if (auto Gen = to->asGenericType())
+      return getCastKind(SP, from, *Gen->getActualType());
 
-   if (from->isIntegerTy())
-      return HandleFromInteger(from, to);
+   if (from->isIntegerType())
+      return HandleFromInteger(SP, from, to);
    if (from->isFPType())
-      return HandleFromFP(from, to);
-   if (from->isPointerTy())
-      return HandleFromPtr(from, to);
-   if (from->isObjectTy())
-      return HandleFromObject(from, to);
-   if (from->isTypeGroup())
-      return HandleFromTypeGroup(from, to);
-   if (from->isTupleTy())
-      return HandleFromTuple(cast<TupleType>(from), to);
+      return HandleFromFP(SP, from, to);
+   if (from->isPointerType())
+      return HandleFromPtr(SP, from, to);
+   if (from->isObjectType())
+      return HandleFromObject(SP, from, to);
+   if (from->isTupleType())
+      return HandleFromTuple(SP, from->asTupleType(), to);
    if (from->isRawFunctionTy())
-      return HandleFromRawFunc(cast<FunctionType>(from), to);
-   if (from->isFunctionTy())
-      return HandleFromFunc(cast<FunctionType>(from), to);
-   if (from->isArrayTy())
-      return HandleFromArray(cast<ArrayType>(from), to);
+      return HandleFromRawFunc(SP, from->asFunctionType(), to);
+   if (from->isFunctionType())
+      return HandleFromFunc(SP, from->asFunctionType(), to);
+   if (from->isArrayType())
+      return HandleFromArray(SP, from->asArrayType(), to);
 
    return { CastKind::Invalid, CastResult::Normal, to  };
 }

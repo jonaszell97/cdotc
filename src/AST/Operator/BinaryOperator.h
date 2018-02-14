@@ -9,11 +9,6 @@
 #include "../../Basic/CastKind.h"
 
 namespace cdot {
-
-namespace cl {
-struct Method;
-} // namespace cl
-
 namespace ast {
 
 class CallExpr;
@@ -36,11 +31,10 @@ BinaryOperatorType getBinaryOpType(const string &op);
 
 class BinaryOperator: public Expression {
 public:
-   explicit BinaryOperator(string &&op);
-   BinaryOperator(string &&op, Expression::SharedPtr &&lhs,
-                  Expression::SharedPtr &&rhs);
+   BinaryOperator(string &&op, Expression* lhs,
+                  Expression* rhs);
 
-   typedef std::shared_ptr<BinaryOperator> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -48,35 +42,27 @@ public:
    }
 
 protected:
-   std::shared_ptr<Expression> lhs;
-   std::shared_ptr<Expression> rhs;
+   Expression* lhs;
+   Expression* rhs;
    string op;
+
    OperatorKind kind;
    BinaryOperatorType opType;
 
-   std::shared_ptr<CallExpr> overridenCall = nullptr;
    CastResult requiredCast;
 
    bool typePredicate        : 1;
    bool typePredicateResult  : 1;
 
+   MethodDecl *accessorMethod = nullptr;
+
 public:
-   std::shared_ptr<Expression> &getLhs()
+   Expression* getLhs() const
    {
       return lhs;
    }
 
-   std::shared_ptr<Expression> &getRhs()
-   {
-      return rhs;
-   }
-
-   std::shared_ptr<Expression> const& getLhs() const
-   {
-      return lhs;
-   }
-
-   std::shared_ptr<Expression> const& getRhs() const
+   Expression* getRhs() const
    {
       return rhs;
    }
@@ -96,11 +82,6 @@ public:
       return opType;
    }
 
-   const std::shared_ptr<CallExpr> &getOverridenCall() const
-   {
-      return overridenCall;
-   }
-
    void setKind(OperatorKind kind)
    {
       BinaryOperator::kind = kind;
@@ -109,11 +90,6 @@ public:
    void setOpType(BinaryOperatorType opType)
    {
       BinaryOperator::opType = opType;
-   }
-
-   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall)
-   {
-      BinaryOperator::overridenCall = overridenCall;
    }
 
    const CastResult &getRequiredCast() const
@@ -144,6 +120,16 @@ public:
    void setTypePredicate(bool typePredicate)
    {
       BinaryOperator::typePredicate = typePredicate;
+   }
+
+   MethodDecl *getAccessorMethod() const
+   {
+      return accessorMethod;
+   }
+
+   void setAccessorMethod(MethodDecl *accessorMethod)
+   {
+      BinaryOperator::accessorMethod = accessorMethod;
    }
 };
 

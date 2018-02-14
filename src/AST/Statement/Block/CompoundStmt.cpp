@@ -3,6 +3,7 @@
 //
 
 #include "CompoundStmt.h"
+#include "../UsingStmt.h"
 
 namespace cdot {
 namespace ast {
@@ -13,9 +14,12 @@ CompoundStmt::CompoundStmt(bool keep_scope)
 
 }
 
-void CompoundStmt::addStatement(Statement::SharedPtr &&stmt)
+CompoundStmt::CompoundStmt(std::vector<Statement* > &&stmts,
+                           bool preserveScope)
+   : Statement(CompoundStmtID), statements(std::move(stmts)),
+     preserveScope(preserveScope)
 {
-   statements.push_back(std::move(stmt));
+
 }
 
 } // namespace ast

@@ -13,42 +13,41 @@ namespace ast {
 class TypeRef;
 
 struct CatchBlock {
-   CatchBlock(std::shared_ptr<TypeRef> &&caughtType,
-              string &&identifier, Statement::SharedPtr &&body)
-      : caughtType(move(caughtType)), identifier(move(identifier)),
-        body(move(body))
+   CatchBlock(LocalVarDecl *varDecl, Statement* body)
+      : varDecl(varDecl),
+        body(body)
    { }
 
    CatchBlock() = default;
 
-   std::shared_ptr<TypeRef> caughtType;
-   string identifier;
-
-   ast::Statement::SharedPtr body;
-
-   bool needsCast = false;
-   QualType castTo;
+   LocalVarDecl *varDecl;
+   Statement* body;
 };
 
 class TryStmt: public Statement {
 public:
-   explicit TryStmt(Statement::SharedPtr &&body);
+   explicit TryStmt(Statement* body)
+      : Statement(TryStmtID), body(body)
+   {}
 
-   TryStmt(std::shared_ptr<Statement> &&body,
+   TryStmt(Statement* body,
            std::vector<CatchBlock> &&catchBlocks,
-           std::shared_ptr<Statement> &&finally);
+           Statement* finally)
+      : Statement(TryStmtID), body(body),
+        catchBlocks(std::move(catchBlocks)), finallyBlock(finally)
+   {}
 
-   void addCatch(CatchBlock&& catchBlock)
+   void addCatch(CatchBlock const& catchBlock)
    {
       catchBlocks.push_back(catchBlock);
    }
 
-   void setFinally(Statement::SharedPtr&& finallyBlock)
+   void setFinally(Statement* finallyBlock)
    {
       this->finallyBlock = finallyBlock;
    }
 
-   typedef std::shared_ptr<TryStmt> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -56,15 +55,21 @@ public:
    }
 
 protected:
-   Statement::SharedPtr body;
+   Statement* body;
 
    std::vector<CatchBlock> catchBlocks;
-   Statement::SharedPtr finallyBlock = nullptr;
+   Statement* finallyBlock = nullptr;
 
 public:
-   const Statement::SharedPtr &getBody() const;
-   std::vector<CatchBlock> &getCatchBlocks();
-   const Statement::SharedPtr &getFinallyBlock() const;
+   Statement* getBody() const { return body; }
+
+   std::vector<CatchBlock> &getCatchBlocks() { return catchBlocks; }
+   std::vector<CatchBlock> const& getCatchBlocks() const
+   {
+      return catchBlocks;
+   }
+
+   Statement* getFinallyBlock() const { return finallyBlock; }
 };
 
 } // namespace ast

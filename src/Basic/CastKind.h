@@ -12,9 +12,10 @@ namespace cdot {
 
 class Type;
 
-namespace cl {
-struct Method;
-} // namespace cl
+namespace ast {
+   class MethodDecl;
+   class SemaPass;
+} // namespace ast
 
 enum class CastKind : unsigned char {
    NoOp = 0, Invalid,
@@ -40,7 +41,7 @@ public:
    CastResult(CastKind kind,
               RequiredStrength strength,
               Type const* Ty,
-              cl::Method *op = nullptr)
+              ast::MethodDecl *op = nullptr)
       : neededCasts{ { kind, const_cast<Type*>(Ty) } }, strength(strength),
         conversionOp(op)
    {
@@ -69,7 +70,7 @@ public:
    }
 
    RequiredStrength getStrength() const { return strength; }
-   cl::Method *getConversionOp() const { return conversionOp; }
+   ast::MethodDecl *getConversionOp() const { return conversionOp; }
 
    bool isValid() const
    {
@@ -93,10 +94,11 @@ private:
    llvm::SmallVector<std::pair<CastKind, Type*>, 4> neededCasts;
    RequiredStrength strength;
 
-   cl::Method *conversionOp = nullptr;
+   ast::MethodDecl *conversionOp = nullptr;
 };
 
-CastResult getCastKind(Type const* from, Type const* to);
+CastResult getCastKind(ast::SemaPass const& SP, Type* from,
+                       Type* to);
 
 } // namespace cdot
 

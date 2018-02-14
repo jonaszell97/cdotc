@@ -8,9 +8,6 @@
 #include "../../Function/BasicBlock.h"
 #include "../../Record/AggregateType.h"
 
-#include "../../../../Variant/Type/ObjectType.h"
-#include "../../../../Variant/Type/VoidType.h"
-
 namespace cdot {
 namespace il {
 

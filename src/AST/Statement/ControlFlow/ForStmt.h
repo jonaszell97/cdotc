@@ -15,65 +15,65 @@ class IdentifierRefExpr;
 
 class ForStmt : public Statement {
 public:
-   ForStmt(Statement::SharedPtr &&init,
-           std::shared_ptr<Expression> &&term,
-           Statement::SharedPtr &&inc);
+   ForStmt(Statement* init,
+           Expression* term,
+           Statement* inc);
 
-   ForStmt(Statement::SharedPtr &&init,
-           std::shared_ptr<Expression> &&term,
-           Statement::SharedPtr &&inc,
-           Statement::SharedPtr &&body);
+   ForStmt(Statement* init,
+           Expression* term,
+           Statement* inc,
+           Statement* body);
 
-   void setBody(Statement::SharedPtr &&_body)
+   void setBody(Statement* _body)
    {
       body = std::move(_body);
    }
-
-   typedef std::shared_ptr<ForStmt> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == ForStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<Statement> initialization;
-   std::shared_ptr<Expression> termination;
-   Statement::SharedPtr increment;
-   Statement::SharedPtr body;
+   Statement* initialization;
+   Expression* termination;
+   Statement* increment;
+   Statement* body;
 
 public:
-   const std::shared_ptr<Statement> &getInitialization() const
+   Statement* getInitialization() const
    {
       return initialization;
    }
 
-   void setInitialization(const std::shared_ptr<Statement> &initialization)
+   void setInitialization(Statement* initialization)
    {
       ForStmt::initialization = initialization;
    }
 
-   const std::shared_ptr<Expression> &getTermination() const
+   Expression* getTermination() const
    {
       return termination;
    }
 
-   void setTermination(const std::shared_ptr<Expression> &termination)
+   void setTermination(Expression* termination)
    {
       ForStmt::termination = termination;
    }
 
-   const Statement::SharedPtr &getIncrement() const
+   Statement* getIncrement() const
    {
       return increment;
    }
 
-   void setIncrement(const Statement::SharedPtr &increment)
+   void setIncrement(Statement* increment)
    {
       ForStmt::increment = increment;
    }
 
-   const Statement::SharedPtr &getBody() const
+   Statement* getBody() const
    {
       return body;
    }

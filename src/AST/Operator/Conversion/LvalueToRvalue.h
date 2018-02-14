@@ -12,9 +12,9 @@ namespace ast {
 
 class LvalueToRvalue : public Expression {
 public:
-   explicit LvalueToRvalue(Expression::SharedPtr expr);
+   explicit LvalueToRvalue(Expression* expr);
 
-   typedef std::shared_ptr<LvalueToRvalue> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -22,11 +22,11 @@ public:
    }
 
 protected:
-   Expression::SharedPtr target;
+   Expression* target;
 
 public:
-   const Expression::SharedPtr &getTarget() const;
-   void setTarget(const Expression::SharedPtr &target);
+   Expression* getTarget() const;
+   void setTarget(Expression* target);
 };
 
 } // namespace ast

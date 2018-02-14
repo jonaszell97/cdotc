@@ -4,241 +4,244 @@
 
 #include "DeclPass.h"
 
+#include "Compiler.h"
+
+#include "Message/Diagnostics.h"
+
+#include "AST/ASTContext.h"
+#include "AST/Transform.h"
+
+#include "AST/Passes/ASTIncludes.h"
+#include "AST/Passes/SemanticAnalysis/Builtin.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+#include "AST/Passes/SemanticAnalysis/Template.h"
+
+#include "AST/Passes/ILGen/ILGenPass.h"
+
+#include "AST/Statement/Declaration/Class/PropDecl.h"
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Passes/StaticExpr/StaticExprEvaluator.h"
+
+#include "module/Module.h"
+#include "module/ModuleManager.h"
+
+#include "Variant/Type/Type.h"
+#include "Support/Casting.h"
+
 #include <cstdlib>
 #include <cassert>
-#include <sstream>
-#include <functional>
-#include <llvm/Support/raw_ostream.h>
-
-#include "../ASTIncludes.h"
-#include "../../SymbolTable.h"
-#include "../../../Message/Exceptions.h"
-#include "../../../Message/Diagnostics.h"
-#include "../../../Compiler.h"
-
-#include "../SemanticAnalysis/Builtin.h"
-#include "../SemanticAnalysis/Record/Class.h"
-#include "../SemanticAnalysis/Record/Enum.h"
-#include "../SemanticAnalysis/Record/Union.h"
-#include "../SemanticAnalysis/Record/Protocol.h"
-#include "../SemanticAnalysis/Function.h"
-#include "../SemanticAnalysis/ConformanceChecker.h"
-
-#include "../ILGen/ILGenPass.h"
-
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/VoidType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/AutoType.h"
-#include "../../../Variant/Type/Generic.h"
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/MetaType.h"
-
-#include "../../../Support/Casting.h"
-
-#include "../../Statement/Declaration/Class/PropDecl.h"
-#include "../../Statement/Declaration/Class/RecordDecl.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../SemanticAnalysis/TemplateInstantiator.h"
-#include "../StaticExpr/StaticExprEvaluator.h"
-#include "../../../Variant/Type/ArrayType.h"
-#include "../SemanticAnalysis/Template.h"
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/Twine.h>
 
 using std::ostringstream;
-using cl::Class;
-using cl::Enum;
-using ast::Function;
 
 using namespace cdot::support;
 using namespace cdot::diag;
 using namespace cdot::lex;
 using namespace cdot::sema;
+using namespace cdot::module;
 
 namespace cdot {
 namespace ast {
 
-std::vector<Statement*> DeclPass::GlobalStatements;
-std::vector<cl::Record*> DeclPass::RecordsWithUnresolvedTemplateParams;
-std::vector<std::shared_ptr<ExtensionDecl>> DeclPass::DanglingExtensions;
-llvm::SmallPtrSet<RecordDecl*, 4> DeclPass::VisitedRecordDecls;
-std::unordered_map<size_t, llvm::SmallVector<size_t, 8>> DeclPass::FileImports;
-llvm::SmallVector<ast::Statement*, 8> DeclPass::GlobalVariableDecls;
-
 DeclPass::DeclPass(SemaPass &SP)
-   : AbstractPass(DeclPassID), SP(SP)
+   : SP(SP),
+     declContext(&SP.getCompilationUnit().getGlobalDeclCtx()),
+     FileImports{{ 0, {} }}
 {
 
 }
 
-DeclPass::DeclPass(SemaPass &SP, cl::Record *R, bool includeLast)
-   : AbstractPass(DeclPassID), SP(SP)
+ObjectType* DeclPass::getObjectTy(llvm::StringRef name)
 {
-   setRecordCtx(R, includeLast);
+   return SP.Context.getRecordType(getRecord(name));
 }
 
-DeclPass::DeclPass(SemaPass &SP, Callable *C, bool includeLast)
-   : AbstractPass(DeclPassID), SP(SP)
+void DeclPass::visit(Statement *stmt)
 {
-   if (auto M = dyn_cast<Method>(C)) {
-      setRecordCtx(M->getOwningRecord());
-   }
-   else {
-      importFileImports(C->getSourceLoc().getSourceId());
-      setCurrentNamespace(C->getDeclarationNamespace());
-   }
-
-   if (includeLast)
-      pushNamespace(C->getNameWithoutNamespace());
-}
-
-DeclPass::DeclPass(SemaPass &SP, Namespace *NS)
-   : AbstractPass(DeclPassID), SP(SP)
-{
-   setCurrentNamespace(NS);
-}
-
-DeclPass::DeclPass(SemaPass &SP, size_t sourceId)
-   : AbstractPass(DeclPassID), SP(SP), currentSourceId(sourceId)
-{
-
-}
-
-void DeclPass::setCurrentNamespace(Namespace *NS)
-{
-   llvm::SmallVector<size_t, 8> namespaces;
-
-   auto ns = NS;
-   while (ns) {
-      namespaces.push_back(ns->getId());
-      ns = ns->getParentNamespace();
-   }
-
-   for (auto it = namespaces.rbegin(); it != namespaces.rend(); ++it) {
-      currentNamespace.push_back(*it);
+   switch (stmt->getTypeID()) {
+#     define CDOT_EXPR(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            visit##Name(cast<Name>(stmt));                              \
+            return;
+#     define CDOT_STMT(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            return visit##Name(cast<Name>(stmt));
+#     include "AST/AstNode.def"
    }
 }
 
-void DeclPass::setRecordCtx(cl::Record *R, bool includeLast)
+bool DeclPass::alreadyVisited(cdot::ast::NamedDecl *decl)
 {
-   importFileImports(R->getSourceLoc().getSourceId());
-   setCurrentNamespace(R->getDeclarationNamespace());
-
-   if (includeLast)
-      pushNamespace(R->getNameWitoutNamespace());
-
-   llvm::SmallVector<cl::Record*, 4> records{ R };
-   while ((R = R->getOuterRecord()))
-      records.push_back(R);
-
-   SelfStack.insert(SelfStack.end(), records.rbegin(), records.rend());
+   return !DeclSet.insert(decl).second;
 }
 
-void DeclPass::VisitNode(AstNode *node)
+void DeclPass::addDanglingExtension(ExtensionDecl *decl)
 {
-   switch (node->getTypeID()) {
-#     define CDOT_ASTNODE(Name)              \
-         case AstNode::Name##ID:             \
-            visit##Name(static_cast<Name*>(node)); \
-            break;
-#     define CDOT_INCLUDE_ALL
-#     include "../../AstNode.def"
+   DeclSet.insert(decl);
+}
+
+void DeclPass::deferTemplateParamResolving(NamedDecl *decl)
+{
+   DeclSet.insert(decl);
+}
+
+void DeclPass::doInitialPass()
+{
+   for (auto decl : DeclSet) {
+      if (auto Ctx = dyn_cast<DeclContext>(decl)) {
+         DeclContextRAII declContextRAII(*this, Ctx);
+         for (auto &P : decl->getTemplateParams())
+            visitTemplateParamDecl(P);
+      }
+
+      if (auto Ext = dyn_cast<ExtensionDecl>(decl)) {
+         if (Ext->getRecord())
+            continue;
+
+         auto R = getRecord(Ext->getName());
+         if (!R) {
+            diag::err(err_class_not_found)
+               << Ext->getName()
+               << Ext << diag::cont;
+
+            replaceStatementWith(SP, Ext, new (SP.getContext()) NullStmt);
+            continue;
+         }
+
+         R->addExtension(Ext);
+      }
+   }
+
+   DeclSet.clear();
+}
+
+void DeclPass::run()
+{
+   doInitialPass();
+
+   auto translationUnits = SP.getCompilationUnit().getGlobalDeclCtx()
+                             .getTranslationUnits();
+
+   for (auto &translationUnit : translationUnits) {
+      DeclContextRAII declContextRAII(*this, translationUnit);
+
+      for (auto &stmt : translationUnit->getImports())
+         visitImportStmt(stmt);
+
+      for (auto &stmt : translationUnit->getStatements())
+         visit(stmt);
    }
 }
 
-void DeclPass::run(std::vector<CompilationUnit> &CUs)
+size_t DeclPass::getCurrentSourceId() const
 {
-   visitGlobalStmts();
-   resolveTemplateParams();
-   resolveExtensions();
+   if (isa<GlobalDeclContext>(declContext))
+      return 0;
 
-   for (auto &CU : CUs) {
-      currentSourceId = CU.sourceId;
-      visitCompoundStmt(CU.root.get());
-      currentNamespace.clear();
+   return cast<Statement>(declContext)->getSourceLoc().getSourceId();
+}
+
+RecordDecl* DeclPass::getCurrentRecord() const
+{
+   for (auto ctx = declContext; ctx; ctx = ctx->getParentCtx())
+      if (auto R = dyn_cast<RecordDecl>(ctx))
+         return R;
+
+   return nullptr;
+}
+
+NamespaceDecl* DeclPass::getCurrentNamespace() const
+{
+   return declContext->getClosestNamespace();
+}
+
+module::Module* DeclPass::getModuleBeingCompiled()
+{
+   return SP.getCompilationUnit().getCompiledModule();
+}
+
+bool DeclPass::inGlobalDeclContext() const
+{
+   return getDeclContext().isGlobalDeclContext();
+}
+
+ast::NamedDecl* DeclPass::lookup(llvm::StringRef name, unsigned lvl) const
+{
+   assert(lvl > 0 && lvl <= 3 && "invalid lookup level");
+
+   auto res = getDeclContext().lookup(name);
+   if (res) {
+      assert(res.size() == 1);
+      return res.front();
    }
+
+   for (auto M : getImportedModules()) {
+      auto &IT = M->getIdentifierTable();
+      auto lookupRes = IT.lookup(name,
+                                 (module::IdentifierTable::QueryLevel)lvl);
+
+      if (lookupRes)
+         return lookupRes;
+   }
+
+   return nullptr;
 }
 
-string DeclPass::ns_prefix()
+RecordDecl* DeclPass::getRecord(llvm::StringRef name) const
 {
-   if (currentNamespace.empty())
-      return "";
-
-   auto NS = SymbolTable::getNamespace(currentNamespace.back());
-   return NS->name + '.';
+   return lookup<RecordDecl>(name);
 }
 
-Namespace* DeclPass::getDeclNamespace() const
+StructDecl* DeclPass::getStruct(llvm::StringRef name) const
 {
-   if (currentNamespace.empty())
-      return nullptr;
-
-   return SymbolTable::getNamespace(currentNamespace.back());
+   return lookup<StructDecl>(name);
 }
 
-Record* DeclPass::getRecord(llvm::StringRef name)
+ClassDecl* DeclPass::getClass(llvm::StringRef name) const
 {
-   return SymbolTable::getRecord(name, importedNamespaces(), currentNamespace);
+   return lookup<ClassDecl>(name);
 }
 
-Struct* DeclPass::getStruct(llvm::StringRef name)
+EnumDecl* DeclPass::getEnum(llvm::StringRef name) const
 {
-   return SymbolTable::getStruct(name, importedNamespaces(), currentNamespace);
+   return lookup<EnumDecl>(name);
 }
 
-Enum* DeclPass::getEnum(llvm::StringRef name)
+UnionDecl* DeclPass::getUnion(llvm::StringRef name) const
 {
-   return SymbolTable::getEnum(name, importedNamespaces(), currentNamespace);
+   return lookup<UnionDecl>(name);
 }
 
-Union* DeclPass::getUnion(llvm::StringRef name)
+ProtocolDecl* DeclPass::getProtocol(llvm::StringRef name) const
 {
-   return SymbolTable::getUnion(name, importedNamespaces(), currentNamespace);
+   return lookup<ProtocolDecl>(name);
 }
 
-Function* DeclPass::getAnyFn(llvm::StringRef name)
+FunctionDecl* DeclPass::getAnyFn(llvm::StringRef name) const
 {
-   return SymbolTable::getAnyFn(name, importedNamespaces(), currentNamespace);
+   return lookup<FunctionDecl>(name);
 }
 
-Variable* DeclPass::getVariable(llvm::StringRef name)
+GlobalVarDecl* DeclPass::getVariable(llvm::StringRef name) const
 {
-   return SymbolTable::getVariable(name, importedNamespaces(),
-                                   currentNamespace);
+   return lookup<GlobalVarDecl>(name);
 }
 
-Namespace* DeclPass::getNamespace(llvm::StringRef name)
+NamespaceDecl* DeclPass::getNamespace(llvm::StringRef name) const
 {
-   auto id = SymbolTable::isNamespace(name, importedNamespaces(),
-                                      currentNamespace);
-
-   if (id == 0)
-      return nullptr;
-
-   return SymbolTable::getNamespace(id);
+   return lookup<NamespaceDecl>(name);
 }
 
-llvm::ArrayRef<Alias*> DeclPass::getAliases(llvm::StringRef name)
+AliasDecl* DeclPass::getAlias(llvm::StringRef name) const
 {
-   return SymbolTable::getAliases(name, importedNamespaces(), currentNamespace);
+   return lookup<AliasDecl>(name);
 }
 
-Typedef* DeclPass::getTypedef(llvm::StringRef name)
+TypedefDecl* DeclPass::getTypedef(llvm::StringRef name) const
 {
-   return SymbolTable::getTypedef(name, importedNamespaces(), currentNamespace);
-}
-
-llvm::ArrayRef<Function *> DeclPass::getFunctionOverloads(llvm::StringRef name)
-{
-   return SymbolTable::getFunctionOverloads(name, importedNamespaces(),
-                                            currentNamespace);
-}
-
-size_t DeclPass::isNamespace(llvm::StringRef name)
-{
-   return SymbolTable::isNamespace(name, importedNamespaces(),
-                                   currentNamespace);
+   return lookup<TypedefDecl>(name);
 }
 
 namespace {
@@ -251,621 +254,501 @@ bool isReservedIdentifier(const string &ident)
 }
 }
 
-void DeclPass::DeclareRecord(const std::shared_ptr<RecordDecl> &node)
+void DeclPass::DeclareRecord(RecordDecl* R)
 {
+   if (isReservedIdentifier(R->getName())) {
+      diag::err(err_reserved_identifier)
+         << R->getName()
+         << R << diag::term;
+   }
 
-   switch (node->getTypeID()) {
+   switch (R->getTypeID()) {
+      case AstNode::StructDeclID:
       case AstNode::ClassDeclID:
-         DeclareClass(cast<ClassDecl>(node.get())); break;
+         DeclareStruct(cast<StructDecl>(R));
+         break;
       case AstNode::EnumDeclID:
-         DeclareEnum(cast<EnumDecl>(node.get())); break;
+         DeclareEnum(cast<EnumDecl>(R));
+         break;
       case AstNode::UnionDeclID:
-         DeclareUnion(cast<UnionDecl>(node.get())); break;
+         DeclareUnion(cast<UnionDecl>(R));
+         break;
       case AstNode::ProtocolDeclID:
-         DeclareProto(cast<ProtocolDecl>(node.get())); break;
+         DeclareProto(cast<ProtocolDecl>(R));
+         break;
       case AstNode::ExtensionDeclID:
-         DeclareExtension(std::static_pointer_cast<ExtensionDecl>(node)); break;
+         return DeclareExtension(cast<ExtensionDecl>(R));
       default:
          llvm_unreachable("bad record decl kind");
    }
 
-   pushNamespace(node->getRecord()->getNameWitoutNamespace());
-
-   for (const auto &Inner : node->getInnerDeclarations()) {
-      DeclareRecord(Inner);
-      node->getRecord()->addInnerRecord(Inner->getRecord());
+   if (R->getAccess() == AccessModifier::DEFAULT) {
+      R->setAccess(AccessModifier::PUBLIC);
    }
 
-   popNamespace();
+   if (R->isTemplate())
+      deferTemplateParamResolving(R);
+
+   SP.addDeclToContext(getDeclContext(), R);
 }
 
-void DeclPass::DeclareClass(ClassDecl *node)
+void DeclPass::DeclareStruct(StructDecl *S)
 {
-   if (isReservedIdentifier(node->getRecordName())) {
-      diag::err(err_reserved_identifier) << node->getRecordName()
-                                         << node << diag::term;
-   }
-   if (node->getAm() == AccessModifier::DEFAULT) {
-      node->setAm(AccessModifier::PUBLIC);
-   }
 
-   Record *rec;
-   if (node->isStruct()) {
-      rec = new Struct(node->getAm(), node->getRecordName(),
-                       getDeclNamespace(),
-                       move(node->getTemplateParams()),
-                       node, node->getSourceLoc());
-   }
-   else {
-      rec = new Class(node->getAm(), node->getRecordName(),
-                      getDeclNamespace(),
-                      move(node->getTemplateParams()),
-                      node, node->getSourceLoc(), node->isAbstract());
-   }
-
-   SymbolTable::declareRecord(rec);
-   node->setRecord(rec);
-
-   if (rec->isTemplated())
-      RecordsWithUnresolvedTemplateParams.push_back(rec);
 }
 
-void DeclPass::DeclareProto(ProtocolDecl *node)
+void DeclPass::DeclareProto(ProtocolDecl *P)
 {
-   if (getRecord(node->getRecordName())) {
-      diag::err(err_generic_error)
-         << "duplicate declaration of"
-            + node->getRecordName() << node
-         << diag::term;
-   }
-
-   if (!node->getTemplateParams().empty())
+   if (!P->getTemplateParams().empty())
       diag::err(err_generic_error)
          << "protocols may not define template parameters, use associated "
             "types instead"
-         << node->getTemplateParams().front().getSourceLoc()
+         << P->getTemplateParams().front()->getSourceLoc()
          << diag::term;
-
-   if (node->getAm() == AccessModifier::DEFAULT) {
-      node->setAm(AccessModifier::PUBLIC);
-   }
-
-   auto Proto = new Protocol(node->getAm(),
-                             node->getRecordName(),
-                             getDeclNamespace(),
-                             node->getSourceLoc(),
-                             node);
-
-   SymbolTable::declareRecord(Proto);
-   node->setRecord(Proto);
-
-   if (Proto->isTemplated())
-      RecordsWithUnresolvedTemplateParams.push_back(Proto);
 }
 
-void DeclPass::DeclareEnum(EnumDecl *node)
+void DeclPass::DeclareEnum(EnumDecl *E)
 {
-   if (getRecord(node->getRecordName())) {
-      diag::err(err_generic_error)
-         << "duplicate declaration of" + node->getRecordName() << node
-         << diag::term;
-   }
 
-   auto en = new Enum(
-      node->getAm(),
-      node->getRecordName(),
-      getDeclNamespace(),
-      move(node->getTemplateParams()),
-      node->getSourceLoc(),
-      node
-   );
-
-   for (const auto &case_ : node->getCases()) {
-      if (!case_->getAssociatedTypes().empty()) {
-         en->hasAssociatedValues(true);
-      }
-   }
-
-   SymbolTable::declareRecord(en);
-   node->setRecord(en);
-
-   if (en->isTemplated())
-      RecordsWithUnresolvedTemplateParams.push_back(en);
 }
 
-void DeclPass::DeclareUnion(UnionDecl *node)
+void DeclPass::DeclareUnion(UnionDecl *U)
 {
-   if (getRecord(node->getRecordName())) {
-      diag::err(err_generic_error)
-         << "duplicate declaration of" + node->getRecordName() << node
-         << diag::term;
+
+}
+
+void DeclPass::DeclareExtension(ExtensionDecl* E)
+{
+   auto R = getRecord(E->getName());
+   if (!R) {
+      addDanglingExtension(E);
    }
-
-   auto union_ = new Union(
-      node->getRecordName(),
-      getDeclNamespace(),
-      node->isConst(),
-      move(node->getTemplateParams()),
-      node->getSourceLoc(),
-      node
-   );
-
-   SymbolTable::declareRecord(union_);
-   node->setRecord(union_);
-
-   if (union_->isTemplated())
-      RecordsWithUnresolvedTemplateParams.push_back(union_);
-}
-
-void DeclPass::DeclareExtension(std::shared_ptr<ExtensionDecl> node)
-{
-   if (!getRecord(node->getRecordName()))
-      return DanglingExtensions.push_back(node);
-
-   auto rec = getRecord(node->getRecordName());
-
-   node->setRecordName(rec->getName());
-   node->setRecord(rec);
-
-   rec->addExtension(node);
-}
-
-void DeclPass::visitRecordDeclIfNotAlreadyVisited(RecordDecl *node)
-{
-   if (VisitedRecordDecls.find(node) != VisitedRecordDecls.end())
-      return;
-
-   switch (node->getTypeID()) {
-      case AstNode::ClassDeclID:
-         return visitClassDecl(cast<ClassDecl>(node));
-      case AstNode::EnumDeclID:
-         return visitEnumDecl(cast<EnumDecl>(node));
-      case AstNode::UnionDeclID:
-         return visitUnionDecl(cast<UnionDecl>(node));
-      case AstNode::ProtocolDeclID:
-         return visitProtocolDecl(cast<ProtocolDecl>(node));
-      default:
-         llvm_unreachable("bad record decl kind");
+   else {
+      R->addExtension(E);
    }
 }
 
-void DeclPass::DeclareTypedef(TypedefDecl *node)
+void DeclPass::DeclareTypedef(TypedefDecl *TD)
 {
-   auto td = SymbolTable::ForwardDeclareTypedef(ns_prefix() + node->getAlias(),
-                                                node->getAccess(),
-                                                node->getSourceLoc());
+   if (TD->isTemplate())
+      deferTemplateParamResolving(TD);
 
-   node->setTypedef(td->getTypedef());
+   SP.addDeclToContext(getDeclContext(), TD);
 }
 
-void DeclPass::visitGlobalStmts()
+void DeclPass::DeclareAlias(AliasDecl *alias)
 {
-   for (const auto &stmt : GlobalStatements) {
-      if (auto node = dyn_cast<TypedefDecl>(stmt)) {
-         importFileImports(node->getSourceLoc().getSourceId());
+   if (alias->isTemplate())
+      deferTemplateParamResolving(alias);
 
-         auto td = node->getTypedef();
-
-         assert(td && "typedef not declared");
-
-         if (auto R = node->getRecord())
-            pushTemplateParams(&R->getTemplateParams());
-
-         templateParamStack.push_back(&node->getTemplateParams());
-         VisitNode(node->getOrigin());
-         templateParamStack.pop_back();
-
-         if (node->getRecord())
-            popTemplateParams();
-
-         td->aliasedType = *node->getOrigin()->getTypeRef();
-         td->templateParams = move(node->getTemplateParams());
-      }
-      else if (auto use = dyn_cast<UsingStmt>(stmt)) {
-         visitUsingStmt(use);
-      }
-   }
-
-   GlobalStatements.clear();
+   SP.addDeclToContext(getDeclContext(), alias);
 }
 
-void DeclPass::resolveTemplateParams()
+void DeclPass::pushDeclContext(DeclContext *Ctx)
 {
-   for (const auto &Rec : RecordsWithUnresolvedTemplateParams) {
-      resolveTemplateParams(Rec->getTemplateParams());
-   }
-
-   RecordsWithUnresolvedTemplateParams.clear();
+   declContext = Ctx;
 }
 
-void DeclPass::resolveExtensions()
+void DeclPass::popDeclContext()
 {
-   for (const auto &node : DanglingExtensions) {
-      auto rec = getRecord(node->getRecordName());
-      if (!rec)
-         diag::err(err_class_not_found)
-            << node->getRecordName()
-            << node << diag::term;
-
-
-      node->setRecord(rec);
-      rec->addExtension(node);
-   }
-
-   DanglingExtensions.clear();
-}
-
-string DeclPass::declareVariable(const string &name, QualType type,
-                                 AccessModifier access, Statement *node) {
-   if (auto var = getVariable(name)) {
-      diag::err(err_var_redeclaration) << name << node << diag::cont;
-      diag::note(note_var_redeclaration) << var->loc
-                                         << diag::whole_line << diag::term;
-   }
-
-   if (access == AccessModifier::DEFAULT) {
-      access = AccessModifier::PUBLIC;
-   }
-
-   type.isLvalue(true);
-
-   SymbolTable::declareVariable(name, type, access, false,
-                                getCurrentNamespace(),
-                                node, node->getSourceLoc());
-
-   return name;
-}
-
-void DeclPass::pushNamespace(const string &ns, bool isAnonymous)
-{
-   llvm::SmallString<256> newNamespace(ns_prefix());
-   newNamespace += ns;
-
-   size_t id = SymbolTable::declareNamespace(newNamespace.str(), isAnonymous,
-                                             getDeclNamespace());
-
-   currentNamespace.push_back(id);
-   if (isAnonymous)
-      importNamespace(id);
-}
-
-void DeclPass::popNamespace()
-{
-   currentNamespace.pop_back();
-}
-
-void DeclPass::importNamespace(const string &ns)
-{
-   auto id = SymbolTable::getNamespaceId(ns);
-   if (id != 0) {
-      FileImports[currentSourceId].push_back(id);
-   }
+   declContext = declContext->getParentCtx();
 }
 
 void DeclPass::importNamespace(size_t id)
 {
-   FileImports[currentSourceId].push_back(id);
+   FileImports[getCurrentSourceId()].push_back(id);
 }
 
-void DeclPass::beginFile(size_t sourceId)
+NamespaceDecl* DeclPass::getPrivateFileNamespace(size_t sourceId)
 {
-   llvm::SmallVector<size_t, 8> newVec;
    llvm::SmallString<128> name;
    name += "__file_namespace_";
    name += std::to_string(sourceId);
 
-   auto ns = SymbolTable::declareNamespace(name.str(), true);
-   newVec.push_back(ns);
-
-   FileImports.emplace(sourceId, std::move(newVec));
+   return getNamespace(name.str());
 }
 
-Namespace* DeclPass::getPrivateFileNamespace(AstNode *node)
+TemplateParamDecl const* DeclPass::getTemplateParam(llvm::StringRef name)
 {
-   llvm::SmallString<128> name;
-   name += "__file_namespace_";
-   name += std::to_string(node->getSourceLoc().getSourceId());
-
-   return SymbolTable::getNamespace(name.str());
-}
-
-TemplateParameter* DeclPass::getTemplateParam(llvm::StringRef name)
-{
-   for (auto &TPs : templateParamStack) {
-      for (auto &Param : *TPs) {
-         if (name.equals(Param.getGenericTypeName()))
-            return &Param;
+   for (auto ctx = &getDeclContext(); ctx; ctx = ctx->getParentCtx()) {
+      if (auto ND = dyn_cast<NamedDecl>(ctx)) {
+         for (auto &TP : ND->getTemplateParams())
+            if (TP->getName() == name)
+               return TP;
       }
    }
 
    return nullptr;
 }
 
-void DeclPass::visitCompoundStmt(CompoundStmt *node)
+AssociatedTypeDecl const* DeclPass::getAssociatedType(llvm::StringRef name)
 {
-   for (const auto &stmt : node->getStatements()) {
-      VisitNode(stmt);
+   for (auto ctx = &getDeclContext(); ctx; ctx = ctx->getParentCtx()) {
+      if (auto R = dyn_cast<RecordDecl>(ctx)) {
+         if (auto AT = R->getAssociatedType(name))
+            return AT;
+      }
+   }
+
+   return nullptr;
+}
+
+void DeclPass::doInitialPass(Statement* const& Stmt)
+{
+   switch (Stmt->getTypeID()) {
+      case AstNode::CompoundStmtID:
+         for (auto &s : cast<CompoundStmt>(Stmt)->getStatements())
+            doInitialPass(s);
+
+         break;
+      case AstNode::NamespaceDeclID: {
+         auto ns = cast<NamespaceDecl>(Stmt);
+         DeclContextRAII declContextRAII(*this, ns);
+         doInitialPass(ns->getBody());
+
+         break;
+      }
+      case AstNode::ClassDeclID:
+      case AstNode::StructDeclID:
+      case AstNode::EnumDeclID:
+      case AstNode::UnionDeclID:
+      case AstNode::ProtocolDeclID:
+      case AstNode::ExtensionDeclID:
+         DeclareRecord(cast<RecordDecl>(Stmt));
+         break;
+      case AstNode::TypedefDeclID:
+         DeclareTypedef(cast<TypedefDecl>(Stmt));
+         break;
+      case AstNode::FunctionDeclID:
+         DeclareFunction(cast<FunctionDecl>(Stmt));
+         break;
+      case AstNode::AliasDeclID:
+         DeclareAlias(cast<AliasDecl>(Stmt));
+         break;
+      case AstNode::UsingStmtID:
+         visitUsingStmt(cast<UsingStmt>(Stmt));
+         break;
+      default:
+         break;
    }
 }
 
-void DeclPass::visitNamespaceDecl(NamespaceDecl *node)
+void DeclPass::visitScoped(Statement *Stmt)
 {
-   pushNamespace(node->getNsName(), node->isAnonymousNamespace());
-   if (node->isAnonymousNamespace())
-      importNamespace(currentNamespace.back());
+   DeclScopeRAII raii(*this, SP.getNearestDeclContext(Stmt));
+   visit(Stmt);
+}
 
-   VisitNode(node->getContents());
+void DeclPass::visitImportStmt(ImportStmt *node)
+{
+   if (node->getModule())
+      return;
 
-   popNamespace();
+   auto M = ModuleManager::importModule(SP, node);
+   node->setModule(M);
+
+   ModuleImportsByFile[node->getSourceLoc().getSourceId()].push_back(M);
+}
+
+void DeclPass::visitModule(module::Module &M)
+{
+   if (auto Stmt = M.getDeclRoot()) {
+      doInitialPass(Stmt);
+      doInitialPass();
+
+      visit(Stmt);
+   }
+
+   for (auto &Sub : M.getSubModules())
+      visitModule(*Sub);
+}
+
+void DeclPass::visitCompoundStmt(CompoundStmt *node)
+{
+   for (const auto &stmt : node->getStatements()) {
+      visit(stmt);
+   }
+}
+
+void DeclPass::visitNamespaceDecl(NamespaceDecl *NS)
+{
+   DeclContextRAII declContextRAII(*this, NS);
+   visit(NS->getBody());
 }
 
 void DeclPass::visitUsingStmt(UsingStmt *node)
 {
-   if (node->isResolved())
-      return;
+   auto *declContext = &getDeclContext();
+   for (auto &ctx : node->getDeclContextSpecifier()) {
+      auto subDecl = declContext->lookup(ctx);
+      if (!subDecl) {
+         diag::err(err_generic_error)
+            << declContext->getSpecifierForDiagnostic()
+            + " does not have a member named " + ctx
+            << node << diag::cont;
 
-   if (isBuilitinNamespace(node->getImportNamespace()))
-      Builtin::ImportBuiltin(node->getImportNamespace());
+         return;
+      }
+      if (subDecl.size() != 1) {
+         diag::err(err_generic_error)
+            << "reference to member " + ctx + " is ambiguous"
+            << node << diag::cont;
 
-   if (!SymbolTable::isNamespace(node->getImportNamespace()))
-      diag::err(err_namespace_not_found)
-         << node->getImportNamespace()
-         << node << diag::whole_line << diag::term;
+         return;
+      }
 
-   if (node->getFullNames().empty()) {
-      for (auto &item : node->getImportedItems()) {
-         if (item == "*") {
-            if (node->getImportedItems().size() > 1) {
-               diag::err(err_import_multiple_with_wildcar) << node
-                                                           << diag::term;
-            }
+      declContext = dyn_cast<DeclContext>(subDecl.front());
+      if (!declContext) {
+         diag::err(err_generic_error)
+            << ctx + " is not a valid declaration context"
+            << node << diag::cont;
 
-            node->setKind(UsingKind::NAMESPACE);
-            node->setIsWildcardImport(true);
-
-            importNamespace(node->getImportNamespace());
-            return;
-         }
-
-         node->getFullNames().push_back(
-            node->getImportNamespace() + "." + item);
+         return;
       }
    }
 
-   using LRK = SymbolTable::LookupResult::LookupResultKind;
-
-   size_t i = 0;
-   for (auto& fullName : node->getFullNames()) {
-      auto& item = node->getImportedItems()[i];
-      auto lookup = SymbolTable::lookup(fullName, importedNamespaces(),
-                                        currentNamespace);
-
-      switch (lookup.kind) {
-         case LRK::LRK_Namespace:
-            node->setKind(UsingKind::NAMESPACE);
-            importNamespace(node->getImportNamespace());
-            continue;
-         case LRK::LRK_Record:
-         case LRK::LRK_Class:
-         case LRK::LRK_Struct:
-         case LRK::LRK_Protocol:
-         case LRK::LRK_Enum:
-         case LRK::LRK_Union:
-            node->setKind(UsingKind::CLASS);
-            break;
-         case LRK::LRK_Function:
-            node->setKind(UsingKind::FUNCTION);
-            break;
-         case LRK::LRK_Typedef:
-            node->setKind(UsingKind::TYPEDEF);
-            break;
-         case LRK::LRK_Alias:
-            node->setKind(UsingKind::ALIAS);
-            break;
-         case LRK::LRK_GlobalVariable:
-            node->setKind(UsingKind::VARIABLE);
-            break;
-         case LRK::LRK_Nothing:
-            diag::err(err_generic_error)
-               << "namespace " + node->getImportNamespace()
-                  + " does not have a member named " + item
-               << node << diag::term;
-      }
-
-      SymbolTable::declareAlias(llvm::Twine(getPrivateFileNamespace(node)
-                                   ->getName()) + "." + item, fullName);
-
-      ++i;
+   if (node->isWildCardImport()) {
+      return getDeclContext().makeAllDeclsAvailable(declContext);
    }
 
-   node->setResolved(true);
+   for (auto &item : node->getImportedItems()) {
+      auto decl = declContext->lookup(item);
+      if (!decl) {
+         diag::err(err_generic_error)
+            << declContext->getSpecifierForDiagnostic()
+               + " does not have a member named " + item
+            << node << diag::cont;
+
+         return;
+      }
+      if (decl.size() != 1) {
+         diag::err(err_generic_error)
+            << "reference to member " + item + " is ambiguous"
+            << node << diag::cont;
+
+         return;
+      }
+
+      getDeclContext().makeDeclAvailable(decl.front());
+   }
 }
 
 void DeclPass::DeclareFunction(FunctionDecl *node)
 {
-   string qualifiedName = ns_prefix() + node->getName();
-   if (node->isOperator()) {
-      std::ostringstream methodName;
-      switch (node->getOperator().getFix()) {
-         case FixKind::Infix: methodName << "infix ";
-            break;
-         case FixKind::Prefix: methodName << "prefix ";
-            break;
-         case FixKind::Postfix: methodName << "postfix ";
-            break;
-      }
+   bool isMain = node->getName() == "main"
+                 && isa<TranslationUnit>(getDeclContext());
 
-      methodName << qualifiedName;
-      qualifiedName = methodName.str();
+   if (isMain) {
+      node->setAccess(AccessModifier::PRIVATE);
+      node->setExternKind(ExternKind::C);
+      node->setIsMain(true);
    }
-
-   auto fun = new Function(qualifiedName, move(node->getTemplateParams()),
-                           node->getOperator(), getDeclNamespace());
-
-   fun->setSourceLoc(node->getSourceLoc());
-   fun->setExternC(node->getName() == "main");
-   fun->setDecl(node);
-
-   node->setCallable(fun);
-
-   SymbolTable::declareFunction(fun);
-}
-
-void DeclPass::visitFunctionDecl(FunctionDecl *node)
-{
-   if (isReservedIdentifier(node->getName())) {
-      diag::err(err_reserved_identifier) << node->getName() << node
-                                         << diag::whole_line << diag::term;
-   }
-
-   for (const auto &inner : node->getInnerDecls()) {
-      VisitNode(inner);
-   }
-
-   auto fun = cast<Function>(node->getCallable());
 
    if (node->hasAttribute(Attr::Extern)) {
       auto ext = node->getAttribute(Attr::Extern);
-      if (ext.args.front().strVal == "C")
-         fun->setExternC(true);
+      if (ext.args.front().isString("C"))
+         node->setExternC(true);
    }
 
-   if (node->hasAttribute(Attr::Implicit))
-      fun->getOperator().setImplicit(true);
-
-   resolveTemplateParams(fun->getTemplateParams());
-   templateParamStack.push_back(&fun->getTemplateParams());
-
-   QualType returnType;
-   if (!node->getReturnType()->isDeclTypeExpr()) {
-      visitTypeRef(node->getReturnType().get());
-      returnType = node->getReturnType()->getType();
-
-      if (returnType->isAutoTy()) {
-         *returnType = VoidType::get();
-         node->getReturnType()->setType(returnType);
-      }
-   }
-
-   if (node->getName() == "main") {
-      if (!isa<IntegerType>(*returnType) && !isa<VoidType>(*returnType)) {
-         diag::warn(warn_main_return_type) << node << diag::cont;
+   if (node->isOperator()) {
+      llvm::SmallString<128> funcName;
+      switch (node->getOperator().getFix()) {
+         case FixKind::Infix: funcName += "infix ";
+            break;
+         case FixKind::Prefix: funcName += "prefix ";
+            break;
+         case FixKind::Postfix: funcName += "postfix ";
+            break;
       }
 
-      *returnType = IntegerType::get();
-
-      node->getReturnType()->setType(returnType);
+      funcName += node->getName();
+      node->setName(funcName.str());
    }
 
-   fun->setReturnType(returnType);
+   SP.addDeclToContext(getDeclContext(), node);
+}
 
-   switch (node->getExternKind()) {
+void DeclPass::visitFunctionDecl(FunctionDecl *F)
+{
+   // an error occured while declaring this function
+   if (F->hadError())
+      return;
+
+   if (isReservedIdentifier(F->getName())) {
+      diag::err(err_reserved_identifier) << F->getName() << F
+                                         << diag::whole_line << diag::term;
+   }
+
+   DeclContextRAII declContextRAII(*this, F);
+
+   for (auto &TP : F->getTemplateParams())
+      visitTemplateParamDecl(TP);
+
+   if (F->hasAttribute(Attr::Implicit))
+      F->getOperator().setImplicit(true);
+
+   switch (F->getExternKind()) {
       case ExternKind::C:
-         fun->setExternC(true);
+         F->setExternC(true);
          break;
       case ExternKind::Native:
-         fun->setNative(true);
+         F->setNative(true);
          break;
       default:
          break;
    }
 
-   std::vector<Argument> args;
-   for (const auto &arg : node->getArgs()) {
+   for (const auto &arg : F->getArgs()) {
       if (isReservedIdentifier(arg->getArgName())) {
-         diag::err(err_reserved_identifier) << arg->getArgName() << node
+         diag::err(err_reserved_identifier) << arg->getArgName() << F
                                             << diag::whole_line << diag::term;
       }
 
-      visitFuncArgDecl(arg.get());
-
-      auto resolvedArg = arg->getArgType()->getType();
-      fun->addArgument(
-         Argument(arg->getArgName(), resolvedArg,
-                  arg->getDefaultVal(),
-                  arg->getArgType()->isVararg(),
-                  arg->getArgType()->isCStyleVararg(),
-                  arg->getArgType()->isVariadicArgPackExpansion()));
+      visitFuncArgDecl(arg);
    }
 
-   if (!fun->isExternC()) {
-      fun->setLinkageName(mangle.mangleFunction(fun));
+   if (!F->isExternC()) {
+      F->setLinkageName(mangle.mangleFunction(F));
    }
    else {
-      fun->setLinkageName(fun->getNameWithoutNamespace());
+      F->setLinkageName(F->getNameWithoutNamespace());
    }
 
-   if (node->hasAttribute(Attr::Throws)) {
-      CheckThrowsAttribute(fun, node->getAttribute(Attr::Throws));
+   if (SP.getStage() == SemaPass::Stage::Declaration) {
+      SP.registerDelayedFunctionDecl(F);
+   }
+   else {
+      SP.visitDelayedDecl(F);
    }
 
-   templateParamStack.pop_back();
+   if (auto M = getModuleBeingCompiled()) {
+      if (F->isExported()) {
+         M->addDecl(F);
+      }
+   }
+
+   checkDuplicateFunctionDeclaration(F, "function");
+
+   if (auto body = F->getBody())
+      visitCompoundStmt(body);
+
+   if (F->hasAttribute(Attr::Throws)) {
+//      CheckThrowsAttribute(fun, node->getAttribute(Attr::Throws));
+   }
+}
+
+void DeclPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
+                                                 llvm::StringRef fnKind) const {
+   for (auto &decl : C->getDeclContext()->lookup(C->getName())) {
+      auto Fn = dyn_cast<CallableDecl>(decl);
+      if (Fn == C || !Fn)
+         continue;
+
+      if (Fn->getLinkageName() == C->getLinkageName()) {
+         diag::err(err_generic_error)
+            << llvm::Twine("redeclaration of ") + fnKind + " " + C->getName()
+            << C->getSourceLoc() << diag::cont;
+
+         diag::note(note_generic_note)
+            << "previous declaration was here"
+            << Fn->getSourceLoc() << diag::term;
+      }
+   }
 }
 
 void DeclPass::visitFuncArgDecl(FuncArgDecl *node)
 {
    if (!node->getArgType()->isDeclTypeExpr()) {
-      VisitNode(node->getArgType());
+      visit(node->getArgType());
       node->getArgType()->getTypeRef().isConst(node->isConst());
    }
+
+   auto &ctx = getDeclContext();
+   assert(isa<CallableDecl>(ctx) && "argument outside of function");
+
+
+   SP.addDeclToContext(ctx, node);
 }
 
-void DeclPass::visitLocalVarDecl(LocalVarDecl *node)
+void DeclPass::visitTemplateParamDecl(TemplateParamDecl *P)
 {
+   if (auto cov = P->getCovariance()) {
+      visitTypeRef(cov);
+   }
+   if (auto con = P->getContravariance()) {
+      visitTypeRef(con);
+   }
 
+   if (P->getCovariance()->getType()->isAutoType()) {
+      if (P->isTypeName() && getRecord("Any"))
+         P->getCovariance()->setType(SP.getObjectTy("Any"));
+      else
+         P->getValueType()->setType(SP.getContext().getIntTy());
+   }
+
+   SP.addDeclToContext(getDeclContext(), P);
 }
 
 void DeclPass::visitGlobalVarDecl(GlobalVarDecl *node)
 {
-   visitTypeRef(node->getType().get());
-
-   node->setDeclarationNamespace(getDeclNamespace());
+   if (auto ty = node->getTypeRef())
+      visitTypeRef(ty);
 
    if (node->getAccess() == AccessModifier::DEFAULT)
       node->setAccess(AccessModifier::PUBLIC);
 
-   auto &ty = node->getType()->getTypeRef();
-   ty.isConst(node->isConst());
+   node->getTypeRef()->getTypeRef().isConst(node->isConst());
+   GlobalVariableDecls.push_back(node);
+}
 
-   for (auto &ident : node->getIdentifiers())
-      ident = ns_prefix() + ident;
+void DeclPass::visitGlobalDestructuringDecl(GlobalDestructuringDecl *node)
+{
+   if (auto ty = node->getType()) {
+      visitTypeRef(ty);
+
+      auto declTy = ty->getType();
+      if (!declTy->isTupleType()) {
+         diag::err(err_generic_error)
+            << "destructured declaration must have tuple type"
+            << node->getSourceLoc() << diag::cont;
+
+         return;
+      }
+
+      auto containedTypes = declTy->asTupleType()->getContainedTypes();
+      auto numContainedTys = containedTypes.size();
+      size_t i = 0;
+
+      for (auto decl : node->getDecls()) {
+         if (numContainedTys < i) {
+            diag::err(err_generic_error)
+               << "expected " + std::to_string(i) + " types, found "
+                  + std::to_string(numContainedTys)
+               << decl->getSourceLoc() << diag::term;
+
+            break;
+         }
+
+
+      }
+   }
+
+   if (node->getAccess() == AccessModifier::DEFAULT)
+      node->setAccess(AccessModifier::PUBLIC);
 
    GlobalVariableDecls.push_back(node);
-
-   for (auto &ident : node->getIdentifiers())
-      node->getBindings().push_back(declareVariable(ident, {},
-                                                    node->getAccess(), node));
 }
 
-namespace {
-
-} // anonymous namespace
-
-void DeclPass::beginRecordScope(cl::Record *Rec)
+void DeclPass::visitRecordDecl(RecordDecl *Rec)
 {
-   pushNamespace(Rec->getNameWitoutNamespace());
-   templateParamStack.push_back(&Rec->getTemplateParams());
-   SelfStack.push_back(Rec);
-}
+   Rec->setOpaque(Rec->hasAttribute(Attr::_opaque));
 
-void DeclPass::endRecordScope()
-{
-   popNamespace();
-   templateParamStack.pop_back();
-   SelfStack.pop_back();
-}
-
-void DeclPass::visitRecordDecl(RecordDecl *node)
-{
-   auto Rec = node->getRecord();
-   Rec->isOpaque(node->hasAttribute(Attr::_opaque));
-
-   if (node->hasAttribute(Attr::_align)) {
-      auto attr = node->getAttribute(Attr::_align);
+   if (Rec->hasAttribute(Attr::_align)) {
+      auto attr = Rec->getAttribute(Attr::_align);
       assert(!attr.args.empty() && "no argument for _align");
 
-      auto &specifiedAlignment = attr.args.front().strVal;
-      short alignment;
+      auto &specifiedAlignment = attr.args.front().getString();
+      unsigned short alignment;
       if (specifiedAlignment == "word") {
          alignment = sizeof(int *);
       }
@@ -873,10 +756,10 @@ void DeclPass::visitRecordDecl(RecordDecl *node)
          alignment = 2 * sizeof(int *);
       }
       else if (util::matches("\\d+", specifiedAlignment)) {
-         alignment = (short) std::stoi(specifiedAlignment);
+         alignment = (unsigned short) std::stoi(specifiedAlignment);
       }
       else {
-         diag::err(err_attr_not_applicable) << node
+         diag::err(err_attr_not_applicable) << Rec
                                             << diag::term;
       }
 
@@ -884,252 +767,282 @@ void DeclPass::visitRecordDecl(RecordDecl *node)
    }
 
    if (Rec->getName() != "Any") {
-      Rec->addConformance(SymbolTable::getProtocol("Any"));
+      if (auto Any = getProtocol("Any"))
+         Rec->addConformance(Any);
    }
 
-   beginRecordScope(Rec);
-
-   for (const auto &prot : node->getConformsTo()) {
-      VisitNode(prot);
+   for (const auto &prot : Rec->getConformanceTypes()) {
+      visit(prot);
       auto protoTy = prot->getType();
 
       if (!protoTy) {
-         node->setIsTypeDependent(true);
+         Rec->setIsTypeDependent(true);
          break;
       }
 
       auto Proto = protoTy->getRecord();
-      if (Proto->isTemplated())
+      if (Proto->isTemplate())
          break;
 
-      if (!isa<Protocol>(Proto))
+      if (!isa<ProtocolDecl>(Proto))
          diag::err(err_conforming_to_non_protocol)
             << Proto->getName() << prot << diag::term;
 
-      Rec->addConformance(cast<Protocol>(Proto));
+      Rec->addConformance(cast<ProtocolDecl>(Proto));
    }
 
-   for (const auto &AT : node->getAssociatedTypes())
-      visitAssociatedTypeDecl(AT.get());
+   // associated types and typedefs must be visited first because their types
+   // might be used in fields / method signatures / etc.
 
-   for (const auto &td : node->getTypedefs()) {
-      visitTypedefDecl(td.get());
-   }
-
-   for (const auto &decl : node->getInnerDeclarations()) {
-      if (auto RecDecl = dyn_cast<RecordDecl>(decl.get())) {
-         VisitNode(RecDecl);
+   for (auto &decl : Rec->getDecls()) {
+      switch (decl->getTypeID()) {
+         case AstNode::TypedefDeclID:
+         case AstNode::AssociatedTypeDeclID:
+         case AstNode::AliasDeclID:
+            visit(decl);
+            break;
+         default:
+            break;
       }
-      else {
-         llvm_unreachable("hmm");
+   }
+
+   for (auto &decl : Rec->getDecls()) {
+      switch (decl->getTypeID()) {
+         case AstNode::TypedefDeclID:
+         case AstNode::AssociatedTypeDeclID:
+         case AstNode::AliasDeclID:
+         case AstNode::TemplateParamDeclID:
+            break;
+         default:
+            visit(decl);
+            break;
       }
    }
 
-   for (const auto &F : node->getFields()) {
-      if (!F->isStatic() && isa<ExtensionDecl>(node))
-         diag::err(err_generic_error)
-            << "extensions can only contain static fields"
-            << F << diag::term;
+   Rec->removeCastOperators();
 
-      visitFieldDecl(F.get());
+   for (const auto &Static : Rec->getStaticStatements()) {
+      visit(Static);
    }
 
-   for (auto &prop : node->getProperties()) {
-      visitPropDecl(prop.get());
-   }
-
-   for (const auto &method : node->getMethods()) {
-      visitMethodDecl(method.get());
-   }
-
-   for (const auto &Static : node->getStaticStatements()) {
-      visit(Static.get());
-   }
-
-   endRecordScope();
-
-   if (!isa<ExtensionDecl>(node)) {
-      for (const auto &Ext : Rec->getExtensions()) {
-         visitExtensionDecl(Ext.get());
+   if (!isa<ExtensionDecl>(Rec)) {
+      if (auto M = getModuleBeingCompiled()) {
+         if (Rec->isExported()) {
+            M->addDecl(Rec);
+         }
       }
 
-      checkProtocolConformance(Rec);
       SP.ILGen->ForwardDeclareRecord(Rec);
    }
 }
 
-void DeclPass::visitClassDecl(ClassDecl *node)
+void DeclPass::visitStructDecl(StructDecl *S)
 {
-   if (!VisitedRecordDecls.insert(node).second)
-      return;
+   DeclContextRAII declContextRAII(*this, S);
 
-   Struct *S = cast<Struct>(node->getRecord());
-
-   if (isa<Class>(S))
-      S->declareField("__classInfo",QualType(ObjectType::get("cdot.ClassInfo")),
-                      AccessModifier::PUBLIC, true, false, nullptr);
-
-   beginRecordScope(S);
-
-   auto parent = node->getParentClass();
-   if (parent != nullptr) {
-      if (auto TheClass = dyn_cast<Class>(S)) {
-         VisitNode(parent);
-
-         auto parentTy = parent->getType();
-         if (!parentTy) {
-            node->setIsTypeDependent(true);
-         }
-         else {
-            auto ParentClass = parentTy->getRecord();
-            if (!ParentClass->isTemplated()) {
-               if (!isa<Class>(ParentClass))
-                  diag::err(err_generic_error)
-                     << ("cannot extend non-class "
-                         + ParentClass->getName()).str()
-                     << parent << diag::term;
-
-               TheClass->setParentClass(cast<Class>(ParentClass));
-            }
-         }
-      }
-      else {
-         diag::err(err_generic_error) << "structs may not inherit from other "
-            "classes or structs" << node << diag::term;
-      }
+   if (!isa<ClassDecl>(S)) {
+      if (!DeclSet.insert(S).second)
+         return;
    }
 
-   for (const auto &constr:  node->getConstructors()) {
-      constr->setRecord(S);
-      VisitNode(constr);
+   visitRecordDecl(S);
+
+   // Instantiations will 'inherit' these declarations from their template
+   if (!S->isInstantiation()) {
+      declareDefaultInitializer(S);
+
+      if (!S->isClass())
+         declareMemberwiseInitializer(S);
+
+      if (!S->getDeinitializer())
+         declareDefaultDeinitializer(S);
    }
-
-   auto &deinit = node->getDestructor();
-   if (deinit != nullptr) {
-      deinit->setRecord(S);
-      VisitNode(deinit);
-
-      S->hasNonEmptyDeinitializer(!node->getDestructor()->getBody()
-                                       ->getStatements().empty());
-   }
-   else {
-      S->declareMethod("deinit", QualType(VoidType::get()),
-                               AccessModifier::PUBLIC, {}, {}, false,
-                               nullptr, S->getSourceLoc());
-   }
-
-   endRecordScope();
-
-   visitRecordDecl(node);
-
-   if (node->isStruct())
-      S->declareMemberwiseInitializer();
 }
 
-void DeclPass::visitProtocolDecl(ProtocolDecl *node)
+void DeclPass::visitClassDecl(ClassDecl *C)
 {
-   if (!VisitedRecordDecls.insert(node).second)
+   if (!DeclSet.insert(C).second)
       return;
 
-   auto proto = node->getRecord();
-   visitRecordDecl(node);
+   DeclContextRAII declContextRAII(*this, C);
 
-   beginRecordScope(proto);
+   auto ty = new (SP.getContext()) TypeRef(getObjectTy("cdot.ClassInfo"));
+   auto F = new (SP.getContext()) FieldDecl("__classInfo", ty,
+                                            AccessModifier::PUBLIC, false,
+                                            true);
 
-   for (const auto &constr:  node->getConstructors()) {
-      constr->setRecord(node->getRecord());
-      VisitNode(constr);
+   SP.addDeclToContext(*C, F);
+
+   auto parent = C->getParentType();
+   if (parent != nullptr) {
+      visit(parent);
+
+      auto parentTy = parent->getType();
+      if (!parentTy) {
+         C->setIsTypeDependent(true);
+      }
+      else {
+         auto ParentClass = parentTy->getRecord();
+         if (!ParentClass->isTemplate()) {
+            if (!isa<ClassDecl>(ParentClass))
+               diag::err(err_generic_error)
+                  << "cannot extend non-class " + ParentClass->getName()
+                  << parent << diag::term;
+
+            C->setParentClass(cast<ClassDecl>(ParentClass));
+         }
+      }
    }
 
-   endRecordScope();
+   visitStructDecl(C);
+}
+
+static void inheritInitTemplateParams(SemaPass &SP, InitDecl *Decl)
+{
+   for (auto &TP : Decl->getRecord()->getTemplateParams()) {
+      auto *Cpy = new (SP.getContext()) TemplateParamDecl(*TP);
+      Cpy->setNextDeclInContext(nullptr);
+
+      Decl->getTemplateParamsRef().insert(Decl->getTemplateParamsRef().begin(),
+                                          Cpy);
+   }
+}
+
+void DeclPass::declareMemberwiseInitializer(StructDecl *S)
+{
+   llvm::SmallString<32> argName("arg");
+   std::vector<FuncArgDecl*> args;
+
+   size_t i = 0;
+   for (auto &F : S->getFields()) {
+      if (!F->isStatic() && !F->getDefaultVal()) {
+         visitTypeRef(F->getType());
+
+         argName += i - '1';
+         auto arg = new (SP.getContext()) FuncArgDecl(argName.str(),
+                                                      F->getType(),
+                                                      nullptr, false, true,
+                                                      false);
+
+         ++i;
+         argName.pop_back();
+         args.push_back(arg);
+      }
+   }
+
+   auto MDecl = new (SP.getContext()) InitDecl(move(args),
+                                               AccessModifier::PUBLIC, {});
+
+   SP.addDeclToContext(*S, MDecl);
+   S->setMemberwiseInitializer(MDecl);
+
+   MDecl->setMemberwiseInitializer(true);
+   MDecl->setSourceLoc(S->getSourceLoc());
+
+   // Initializers inherit their record's template parameters
+   inheritInitTemplateParams(SP, MDecl);
+
+   MDecl->setLinkageName(mangle.mangleMethod(MDecl));
+   MDecl->createFunctionType(SP);
+}
+
+void DeclPass::declareDefaultInitializer(StructDecl *S)
+{
+   auto Decl = new (SP.getContext()) InitDecl({}, AccessModifier::PRIVATE,
+                                              nullptr, "__default_init");
+
+   SP.addDeclToContext(*S, Decl);
+   S->setDefaultInitializer(Decl);
+
+   Decl->setDefaultInitializer(true);
+   Decl->setSourceLoc(S->getSourceLoc());
+
+   // Initializers inherit their record's template parameters
+   inheritInitTemplateParams(SP, Decl);
+
+   Decl->setLinkageName(mangle.mangleMethod(Decl));
+   Decl->createFunctionType(SP);
+}
+
+void DeclPass::declareDefaultDeinitializer(StructDecl *S)
+{
+   auto DDecl = new (SP.getContext()) DeinitDecl();
+   SP.addDeclToContext(*S, DDecl);
+
+   DDecl->setReturnType(
+      new (SP.getContext()) TypeRef(SP.getContext().getVoidType()));
+   DDecl->createFunctionType(SP);
+   DDecl->setSourceLoc(S->getSourceLoc());
+   DDecl->setLinkageName(mangle.mangleMethod(DDecl));
+}
+
+void DeclPass::visitProtocolDecl(ProtocolDecl *P)
+{
+   if (!DeclSet.insert(P).second)
+      return;
+
+   DeclContextRAII declContextRAII(*this, P);
+   visitRecordDecl(P);
 }
 
 void DeclPass::visitExtensionDecl(ExtensionDecl *node)
 {
-   if (!VisitedRecordDecls.insert(node).second)
+   if (!DeclSet.insert(node).second)
       return;
 
-   auto rec = getRecord(node->getRecordName());
-   if (!rec)
-      diag::err(err_class_not_found)
-         << node->getRecordName() << node
-         << diag::term;
+   if (!node->getRecord()->isExternal())
+      return;
 
-   if (rec->isProtocol()) {
-      diag::err(err_generic_error) << "protocols cannot be extended" << node
-                                   << diag::term;
-   }
-
-   resolveTemplateParams(node->getTemplateParams());
-
-   auto &GivenParams = node->getTemplateParams();
-   auto &NeededParams = rec->getTemplateParams();
-   bool incompatibleTemplateParams = GivenParams.size() != NeededParams.size();
-
-   if (!incompatibleTemplateParams) {
-      size_t i = 0;
-      for (const auto &TP : GivenParams) {
-         auto &OtherParam = NeededParams[i];
-         if (!TP.effectivelyEquals(OtherParam)) {
-            incompatibleTemplateParams = true;
-            break;
-         }
-      }
-   }
-
-   if (incompatibleTemplateParams)
-      diag::err(err_generic_error)
-         << "extensions must have the same template parameters as the extended "
-            "record"
-         << node << diag::term;
-
-   node->setRecord(rec);
-   beginRecordScope(rec);
-
-   for (const auto &init : node->getInitializers()) {
-      init->setRecord(rec);
-      VisitNode(init);
-   }
-
-   endRecordScope();
-
+   DeclContextRAII declContextRAII(*this, node->getRecord());
    visitRecordDecl(node);
 }
 
-void DeclPass::visitEnumDecl(EnumDecl *node)
+void DeclPass::visitEnumDecl(EnumDecl *E)
 {
-   if (!VisitedRecordDecls.insert(node).second)
+   if (!DeclSet.insert(E).second)
       return;
 
-   auto en = cast<Enum>(node->getRecord());
+   DeclContextRAII declContextRAII(*this, E);
 
    // all enums are implicitly equatable
-   en->addConformance(SymbolTable::getProtocol("Equatable"));
-   en->addImplicitConformance(ImplicitConformanceKind::Equatable);
+   if (auto Equatable = getProtocol("Equatable")) {
+      E->addConformance(Equatable);
+      SP.addImplicitConformance(E, ImplicitConformanceKind::Equatable);
+   }
 
-   beginRecordScope(en);
+   if (!E->getRawType()) {
+      auto rawTy = new(SP.getContext()) TypeRef(SP.getContext().getIntTy());
+      E->setRawType(rawTy);
+   }
+   else {
+      visitTypeRef(E->getRawType());
+   }
 
-   long last;
+   long long last;
    bool first = true;
-   std::vector<long> caseVals;
+   std::unordered_map<long long, EnumCaseDecl *> caseVals;
 
-   for (const auto &case_ : node->getCases()) {
-      EnumCase c;
-      c.name = case_->getCaseName();
-      for (const auto &assoc : case_->getAssociatedTypes()) {
-         visitTypeRef(assoc.second.get());
-         c.associatedValues.emplace_back(assoc.first,
-                                         assoc.second->getType());
-      }
+   for (const auto &Case : E->getCases()) {
+      for (const auto &assoc : Case->getArgs())
+         visitTypeRef(assoc->getArgType());
 
-      if (case_->hasRawValue() && false) {
-//         auto val = VisitNode(case_->getRawVal());
-//         if (val.isVoid() || val.type != VariantType::INT) {
-//            RuntimeError::raise("Expected constant integer value", node);
-//         }
-//
-//         case_->setRawValue(val.intVal);
-//         last = val.intVal;
+      if (auto expr = Case->getRawValExpr()) {
+         expr->setContextualType(E->getRawType()->getType());
+
+         auto res = SP.evalStaticExpr(expr);
+         if (!res)
+            continue;
+
+         if (!SP.implicitlyCastableTo(expr->getExprType(),
+                                      E->getRawType()->getType())) {
+            diag::err(err_generic_error)
+               << "enum case value must be of the same type as the underlying"
+                  " enum type"
+               << Case->getRawValExpr()->getSourceLoc() << diag::term;
+         }
+
+         Case->setRawValue(res.getValue().getSExtValue());
+         last = Case->getRawValue();
       }
       else {
          if (first) {
@@ -1139,65 +1052,48 @@ void DeclPass::visitEnumDecl(EnumDecl *node)
             ++last;
          }
 
-         case_->setRawValue(last);
+         Case->setRawValue(last);
       }
 
-      if (std::find(caseVals.begin(), caseVals.end(), last) != caseVals.end()) {
-         diag::err(err_duplicate_case) << std::to_string(last) << case_
-                                       << diag::cont;
-         for (const auto &dupCase : node->getCases()) {
-            if (case_->getRawValue() == last) {
-               diag::note(note_duplicate_case) << dupCase << diag::term;
-            }
-         }
+      auto it = caseVals.find(last);
+      if (it != caseVals.end()) {
+         diag::err(err_generic_error)
+            << "duplicate case value " + std::to_string(last)
+            << Case->getSourceLoc() << diag::cont;
 
-         llvm_unreachable(0);
+         diag::note(note_duplicate_case)
+            << it->second->getSourceLoc() << diag::term;
       }
 
-      c.rawValue = last;
-      caseVals.push_back(last);
+      Case->setRawValue(last);
+
+      caseVals.emplace(last, Case);
       first = false;
-
-      en->addCase(case_->getCaseName(), std::move(c), case_->getSourceLoc());
    }
 
-   if (node->getRawType() != nullptr) {
-      VisitNode(node->getRawType());
-      en->setRawType(*node->getRawType()->getTypeRef());
-   }
-
-   endRecordScope();
-
-   visitRecordDecl(node);
+   visitRecordDecl(E);
 }
 
-void DeclPass::visitUnionDecl(UnionDecl *node)
+void DeclPass::visitUnionDecl(UnionDecl *U)
 {
-   if (!VisitedRecordDecls.insert(node).second)
+   if (!DeclSet.insert(U).second)
       return;
 
-   auto rec = node->getDeclaredUnion();
-   beginRecordScope(rec);
-
-   for (const auto &ty : node->getContainedTypes()) {
-      VisitNode(ty.second);
-      rec->declareField(ty.first, ty.second->getType());
-   }
-
-   endRecordScope();
-
-   visitRecordDecl(node);
+   DeclContextRAII declContextRAII(*this, U);
+   visitRecordDecl(U);
 }
 
-void DeclPass::resolveMethodTemplateParams(
-                                       std::vector<TemplateParameter> &Params) {
-   resolveTemplateParams(Params);
+void DeclPass::resolveMethodTemplateParams(MethodDecl *M)
+{
+   for (const auto &P : M->getTemplateParams())
+      if (auto Prev = getTemplateParam(P->getName())) {
+         if (Prev == P)
+            // can happen with initializers of templated records
+            continue;
 
-   for (const auto &P : Params)
-      if (auto Prev = getTemplateParam(P.getGenericTypeName())) {
          diag::err(err_generic_error)
-            << "template parameter " + P.getGenericTypeName() + " shadows a "
-               "template parameter in an enclosing scope" << P.getSourceLoc()
+            << "template parameter " + P->getName() + " shadows a "
+               "template parameter in an enclosing scope" << P->getSourceLoc()
             << diag::cont;
 
          diag::note(note_generic_note)
@@ -1206,183 +1102,182 @@ void DeclPass::resolveMethodTemplateParams(
       }
 }
 
-void DeclPass::visitMethodDecl(MethodDecl *node)
+void DeclPass::visitMethodDecl(MethodDecl *M)
 {
-   node->setRecord(SelfStack.back());
-   auto rec = node->getRecord();
-   std::vector<Argument> args;
+   if (!DeclSet.insert(M).second)
+      return;
 
-   resolveMethodTemplateParams(node->getTemplateParams());
-   pushTemplateParams(&node->getTemplateParams());
+   DeclContextRAII declContextRAII(*this, M);
+   for (auto &TP : M->getTemplateParams())
+      visitTemplateParamDecl(TP);
 
-   if (!node->getReturnType()->isDeclTypeExpr()) {
-      visitTypeRef(node->getReturnType().get());
-      auto returnType = node->getReturnType()->getType();
-      if (returnType->isAutoTy()) {
-         *returnType = VoidType::get();
-         node->getReturnType()->setType(returnType);
+   if (M->isCastOp()) {
+      visitTypeRef(M->getReturnType());
+      M->setName("infix as " + M->getReturnType()->getType().toString());
+
+      // re-add declaration with new name
+      SP.addDeclToContext(*M->getRecord(), M);
+   }
+   else if (M->isOperator()) {
+      llvm::SmallString<128> opName;
+      switch (M->getOperator().getFix()) {
+         case FixKind::Infix:
+            opName += "infix ";
+            break;
+         case FixKind::Prefix:
+            opName += "prefix ";
+            break;
+         case FixKind::Postfix:
+            opName += "postfix ";
+            break;
       }
 
-      if (node->isIsCastOp_()) {
-         node->setName("as " + returnType.toString());
-      }
+      opName += M->getName();
+      M->setName(opName.str());
    }
 
-   for (const auto &arg : node->getArgs()) {
-      visitFuncArgDecl(arg.get());
-      args.emplace_back(arg->getArgName(), arg->getArgType()->getTypeRef(),
-                        arg->getDefaultVal(),
-                        arg->getArgType()->isVararg(),
-                        arg->getArgType()->isCStyleVararg(),
-                        arg->getArgType()->isVariadicArgPackExpansion());
+   for (const auto &arg : M->getArgs()) {
+      visitFuncArgDecl(arg);
    }
 
-   if (node->getAm() == AccessModifier::DEFAULT) {
-      node->setAm(AccessModifier::PUBLIC);
-   }
+   M->setLinkageName(mangle.mangleMethod(M));
 
-   Method *method;
-   if (node->isOperator()) {
-      if (node->hasAttribute(Attr::Implicit))
-         node->getOperator().setImplicit(true);
+   checkDuplicateFunctionDeclaration(M, "method");
 
-      method = rec->declareMethod(node->getName(),
-                                  node->getReturnType()->getTypeRef(),
-                                  node->getOperator(),
-                                  node->getAm(),
-                                  std::move(args),
-                                  move(node->getTemplateParams()),
-                                  node->isIsStatic(),
-                                  node, node->getSourceLoc(),
-                                  node->getMethodID());
+   if (SP.getStage() == SemaPass::Stage::Declaration) {
+      SP.registerDelayedFunctionDecl(M);
    }
    else {
-      method = rec->declareMethod(node->getName(),
-                                  node->getReturnType()->getTypeRef(),
-                                  node->getAm(),
-                                  std::move(args),
-                                  move(node->getTemplateParams()),
-                                  node->isIsStatic(),
-                                  node, node->getSourceLoc(),
-                                  node->getMethodID());
+      SP.visitDelayedDecl(M);
    }
 
-   node->setCallable(method);
-
-   method->setSpecializedTemplate(node->getSpecializedTemplate());
-   method->setMutableSelf(node->isIsMutating_());
-   method->setAttributes(std::move(node->getAttributes()));
-
-   if (method->hasAttribute(Attr::Throws)) {
-      CheckThrowsAttribute(node->getMethod(), node->getAttribute(Attr::Throws));
+   if (M->getAccess() == AccessModifier::DEFAULT) {
+      M->setAccess(AccessModifier::PUBLIC);
    }
 
-   popTemplateParams();
+   if (M->isOperator()) {
+      if (M->hasAttribute(Attr::Implicit))
+         M->getOperator().setImplicit(true);
+
+      M->getRecord()->declareOperator(M);
+   }
+
+   if (M->hasAttribute(Attr::Throws)) {
+//      CheckThrowsAttribute(node->getMethod(), node->getAttribute(Attr::Throws));
+   }
 }
 
-void DeclPass::visitFieldDecl(FieldDecl *node)
+void DeclPass::visitFieldDecl(FieldDecl *F)
 {
-   node->setRecord(SelfStack.back());
-   auto rec = node->getRecord();
+   auto R = F->getRecord();
 
-   if (!isa<Struct>(rec) && !node->isStatic())
-      diag::err(err_generic_error)
-         << "enums and unions may only contain static fields"
-         << node << diag::term;
+   if (!F->isStatic()) {
+      if (isa<EnumDecl>(R)) {
+         diag::err(err_generic_error)
+            << "enums may only contain static fields"
+            << F << diag::term;
+      }
+      if (isa<ProtocolDecl>(R)) {
+         diag::err(err_generic_error)
+            << "protocols may only contain static fields"
+            << F << diag::term;
+      }
+      if (auto U = dyn_cast<UnionDecl>(R)) {
+         if (U->isConst() && !F->isConst())
+            diag::err(err_generic_error)
+               << "expected union field to be constant"
+               << F << diag::term;
 
-   VisitNode(node->getType());
-
-   auto &fieldTy = node->getType()->getTypeRef();
-   fieldTy.isConst(node->isConst());
-
-   if (node->isStatic())
-      GlobalVariableDecls.push_back(node);
-
-   if (!node->isStatic() && rec->isStruct() && fieldTy->isObjectTy() &&
-       fieldTy->getClassName() == rec->getName()) {
-      diag::err(err_struct_member_of_self) << node << diag::term;
+         U->isConst(F->isConst());
+      }
    }
 
-   if (node->isConst() && node->hasSetter()) {
-      diag::err(err_constant_field_setter) << node << diag::term;
+   visit(F->getType());
+
+   auto &fieldTy = F->getType()->getTypeRef();
+   fieldTy.isConst(F->isConst());
+
+   if (F->isStatic())
+      GlobalVariableDecls.push_back(F);
+
+   if (!F->isStatic() && R->isStruct() && fieldTy->isObjectType() &&
+       fieldTy->getClassName() == R->getName()) {
+      diag::err(err_struct_member_of_self) << F << diag::term;
    }
 
-   if (rec->isPrivate()) {
-      node->setAccess(AccessModifier::PRIVATE);
+   if (F->isConst() && F->hasSetter()) {
+      diag::err(err_constant_field_setter) << F << diag::term;
    }
 
-   if (node->isStatic()) {
-      node->setField(rec->declareField(node->getName(), fieldTy,
-                                       node->getAccess(),
-                                       node->isConst(), true, node));
+   if (F->isStatic()) {
+      if (!R->isProtocol()) {
+         llvm::SmallString<128> linkageName;
+         linkageName += R->getFullName();
+         linkageName += ".";
+         linkageName += F->getName();
 
-      if (!rec->isProtocol()) {
-         node->setBinding(declareVariable(ns_prefix() + node->getName(),
-                                          fieldTy, node->getAccess(), node));
+         F->setLinkageName(linkageName.str());
       }
 
       return;
    }
 
-   if (node->getAccess() == AccessModifier::DEFAULT) {
-      if (rec->isProtocol() || rec->isEnum() || rec->isStruct()) {
-         node->setAccess(AccessModifier::PUBLIC);
+   if (F->getAccess() == AccessModifier::DEFAULT) {
+      if (R->isProtocol() || R->isEnum() || R->isStruct()) {
+         F->setAccess(AccessModifier::PUBLIC);
       }
       else {
-         node->setAccess(AccessModifier::PRIVATE);
+         F->setAccess(AccessModifier::PRIVATE);
       }
    }
 
-   auto field = rec->declareField(node->getName(), fieldTy, node->getAccess(),
-                                  node->isConst(), false, node);
+   if (F->hasGetter()) {
+      string getterName = "__";
+      getterName += util::generate_getter_name(F->getName());
 
-   node->setField(field);
+      auto ty = new (SP.getContext()) TypeRef(fieldTy);
+      auto Getter = new (SP.getContext()) MethodDecl(move(getterName), ty,
+                                                     {}, {},
+                                                     F->getGetterBody(),
+                                                     AccessModifier::PUBLIC);
 
-   if (rec->isProtocol()) {
-      node->isProtocolField(true);
+      SP.addDeclToContext(*R, Getter);
+      F->setGetterMethod(Getter);
+
+      visitMethodDecl(Getter);
    }
 
-   if (node->hasGetter()) {
-      std::vector<Argument> args;
-      string getterName = "__" + util::generate_getter_name(node->getName());
+   if (F->hasSetter()) {
+      auto argType = new (SP.getContext()) TypeRef(fieldTy);
+      auto arg = new (SP.getContext()) FuncArgDecl(string(F->getName()),
+                                                   argType, nullptr, false,
+                                                   true);
 
-      node->setGetterMethod(rec->declareMethod(getterName, fieldTy,
-                                              AccessModifier::PUBLIC, {}, {},
-                                              node->isStatic(), nullptr,
-                                              node->getSourceLoc()));
+      string setterName = "__";
+      setterName += util::generate_setter_name(F->getName());
 
-      field->getter = node->getGetterMethod();
-   }
+      auto retTy = new (SP.getContext()) TypeRef(SP.Context.getVoidType());
+      auto Setter = new (SP.getContext()) MethodDecl(move(setterName), retTy,
+                                                     { arg }, {},
+                                                     F->getSetterBody(),
+                                                     AccessModifier::PUBLIC);
 
-   if (node->hasSetter()) {
-      std::vector<Argument> args { Argument{ node->getName(), fieldTy }};
-      string setterName = "__" + util::generate_setter_name(node->getName());
-      QualType setterRetType(VoidType::get());
+      SP.addDeclToContext(*R, Setter);
+      F->setSetterMethod(Setter);
 
-      node->setSetterMethod(rec->declareMethod(setterName, setterRetType,
-                                              AccessModifier::PUBLIC,
-                                              move(args), {},
-                                              node->isStatic(), nullptr,
-                                              node->getSourceLoc()));
-
-      field->setter = node->getSetterMethod();
+      visitMethodDecl(Setter);
    }
 }
 
 void DeclPass::visitPropDecl(PropDecl *node)
 {
-   node->setRecord(SelfStack.back());
-   auto rec = node->getRecord();
+   auto R = node->getRecord();
 
-   VisitNode(node->getType());
-   auto &field_type = node->getType()->getTypeRef();
-
-   if (rec->isPrivate()) {
-      node->setAccess(AccessModifier::PRIVATE);
-   }
+   visit(node->getType());
+   auto &propType = node->getType()->getTypeRef();
 
    if (node->getAccess() == AccessModifier::DEFAULT) {
-      if (rec->isProtocol() || rec->isEnum() || rec->isStruct()) {
+      if (R->isProtocol() || R->isEnum() || R->isStruct()) {
          node->setAccess(AccessModifier::PUBLIC);
       }
       else {
@@ -1390,155 +1285,127 @@ void DeclPass::visitPropDecl(PropDecl *node)
       }
    }
 
-   Method *getter = nullptr;
-   Method *setter = nullptr;
-
    if (node->hasGetter()) {
-      std::vector<Argument> args;
-      string getterName = "__" + util::generate_getter_name(node->getName());
+      string getterName = "__";
+      getterName += util::generate_getter_name(node->getName());
 
-      getter = rec->declareMethod(getterName, field_type,
-                                  AccessModifier::PUBLIC, {}, {},
-                                  node->isStatic(), nullptr,
-                                  node->getSourceLoc());
+      auto ty = new (SP.getContext()) TypeRef(propType);
+      auto Getter = new (SP.getContext()) MethodDecl(move(getterName), ty,
+                                                     {}, {},
+                                                     node->getGetterBody(),
+                                                     AccessModifier::PUBLIC);
 
-      getter->setIsProperty(true);
-      getter->hasDefinition = node->getGetterBody() != nullptr;
+      Getter->setProperty(true);
+
+      SP.addDeclToContext(*R, Getter);
+      node->setGetterMethod(Getter);
+
+      visitMethodDecl(Getter);
    }
 
    if (node->hasSetter()) {
-      std::vector<Argument> args{ Argument(node->getNewValName(), field_type)};
+      auto argType = new (SP.getContext()) TypeRef(propType);
+      auto arg = new (SP.getContext()) FuncArgDecl(string(node->getName()),
+                                                   argType, nullptr, false,
+                                                   true);
 
-      string setterName = "__" + util::generate_setter_name(node->getName());
-      QualType setterRetType(VoidType::get());
+      string setterName = "__";
+      setterName += util::generate_setter_name(node->getName());
 
-      setter = rec->declareMethod(setterName, setterRetType,
-                                  AccessModifier::PUBLIC,
-                                  move(args), {},
-                                  node->isStatic(), nullptr,
-                                  node->getSourceLoc());
+      auto retTy = new (SP.getContext()) TypeRef(SP.Context.getVoidType());
+      auto Setter = new (SP.getContext()) MethodDecl(move(setterName), retTy,
+                                                     { arg }, {},
+                                                     node->getSetterBody(),
+                                                     AccessModifier::PUBLIC);
 
-      setter->setIsProperty(true);
-      setter->hasDefinition = node->getSetterBody() != nullptr;
+      Setter->setProperty(true);
+
+      SP.addDeclToContext(*R, Setter);
+      node->setSetterMethod(Setter);
+
+      visitMethodDecl(Setter);
    }
-
-   auto prop = rec->declareProperty(
-      node->getName(), node->getType()->getTypeRef(), node->isStatic(),
-      getter, setter, move(node->getNewValName()), node
-   );
-
-   node->setProp(prop);
 }
 
 void DeclPass::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
 {
-   node->setRecord(SelfStack.back());
-
-   auto Rec = node->getRecord();
-   visitTypeRef(node->getActualType().get());
-
-   auto &AT = Rec->declareAssociatedType(node);
+   visitTypeRef(node->getActualType());
 
    if (!node->getProtocolSpecifier().empty()) {
       auto P = getRecord(node->getProtocolSpecifier());
-      if (P && isa<Protocol>(P))
-         AT.setProto(cast<Protocol>(P));
-   }
-
-   if (!isa<Protocol>(Rec)) {
-      SymbolTable::declareTypedef(ns_prefix() + node->getName(),
-                                  *node->getActualType()->getType());
+      if (P && isa<ProtocolDecl>(P))
+         node->setProto(cast<ProtocolDecl>(P));
    }
 }
 
-void DeclPass::visitConstrDecl(ConstrDecl *node)
+void DeclPass::visitInitDecl(InitDecl *Init)
 {
-   node->setRecord(SelfStack.back());
-   auto cl = node->getRecord();
+   if (!DeclSet.insert(Init).second)
+      return;
 
-   if (node->isMemberwise()) {
-      if (auto Str = dyn_cast<Struct>(cl)) {
-         Str->declareMemberwiseInitializer();
+   DeclContextRAII declContextRAII(*this, Init);
+   for (auto &TP : Init->getTemplateParams())
+      visitTemplateParamDecl(TP);
+
+   auto R = Init->getRecord();
+   if (Init->isMemberwise()) {
+      if (auto Str = dyn_cast<StructDecl>(R)) {
+         declareMemberwiseInitializer(Str);
          return;
       }
 
       llvm_unreachable("memberwise init should have been rejected");
    }
 
-   resolveMethodTemplateParams(node->getTemplateParams());
-   pushTemplateParams(&node->getTemplateParams());
+   if (Init->isDefaultInitializer())
+      cast<StructDecl>(R)->setDefaultInitializer(Init);
 
-   std::vector<Argument> args;
-   for (auto &arg : node->getArgs()) {
-      VisitNode(arg);
+   if (Init->isMemberwiseInitializer())
+      cast<StructDecl>(R)->setMemberwiseInitializer(Init);
 
-      auto &resolvedArg = arg->getArgType()->getTypeRef();
-      args.emplace_back(arg->getArgName(), resolvedArg, arg->getDefaultVal());
+   resolveMethodTemplateParams(Init);
+
+   // Initializers inherit their record's template parameters
+   inheritInitTemplateParams(SP, Init);
+
+   for (auto &arg : Init->getArgs())
+      visitFuncArgDecl(arg);
+
+   Init->createFunctionType(SP);
+   Init->setLinkageName(mangle.mangleMethod(Init));
+
+   checkDuplicateFunctionDeclaration(Init, "initializer");
+
+   if (Init->hasAttribute(Attr::Throws)) {
+//      CheckThrowsAttribute(method, node->getAttribute(Attr::Throws));
    }
-
-   popTemplateParams();
-
-   auto method = cl->declareInitializer(node->getName(),
-                                        node->getAm(),
-                                        std::move(args),
-                                        std::move(node->getTemplateParams()),
-                                        node, node->getMethodID());
-
-   if (node->hasAttribute(Attr::Throws)) {
-      CheckThrowsAttribute(method, node->getAttribute(Attr::Throws));
-   }
-
-   method->setAttributes(std::move(node->getAttributes()));
-
-   if (node->getBody() == nullptr) {
-      method->hasDefinition = false;
-   }
-
-   node->setCallable(method);
 }
 
-void DeclPass::visitDestrDecl(DestrDecl *node)
+void DeclPass::visitDeinitDecl(DeinitDecl *node)
 {
-   node->setRecord(SelfStack.back());
-   auto cl = node->getRecord()->getAs<Struct>();
-   string methodName = "deinit";
-   std::vector<Argument> args;
+   DeclContextRAII declContextRAII(*this, node);
 
-   auto method = cl->declareMethod(
-      methodName,
-      QualType(VoidType::get()),
-      AccessModifier::PUBLIC,
-      {}, {},
-      false,
-      node,
-      node->getSourceLoc(),
-      node->getMethodID()
-   );
-
-   method->setSpecializedTemplate(node->getSpecializedTemplate());
-   node->setCallable(method);
-
-   if (node->hasAttribute(Attr::Throws)) {
-      CheckThrowsAttribute(node->getMethod(),
-                           node->getAttribute(Attr::Throws));
-   }
+   node->createFunctionType(SP);
+   node->setLinkageName(mangle.mangleMethod(node));
 }
 
 void DeclPass::visitTypedefDecl(TypedefDecl *node)
 {
+   if (node->getOriginTy()->isResolved())
+      return;
 
+   visitTypeRef(node->getOriginTy());
+
+   if (auto M = getModuleBeingCompiled())
+      if (node->isExported())
+         M->addDecl(node);
 }
 
 void DeclPass::visitAliasDecl(AliasDecl *node)
 {
-   resolveTemplateParams(node->getTemplateParams());
-
-   auto entry = SymbolTable::declareAlias(ns_prefix() + node->getName(),
-                                          move(node->getTemplateParams()),
-                                          move(node->getConstraints()),
-                                          move(node->getAliasExpr()), node);
-
-   node->setAlias(entry->getAliases().back());
+   if (auto M = getModuleBeingCompiled())
+      if (node->isExported())
+         M->addDecl(node);
 }
 
 void DeclPass::resolveType(TypeRef *node,
@@ -1552,16 +1419,18 @@ void DeclPass::resolveType(TypeRef *node,
       return;
    }
 
-   node->setIsTypeDependent(node->isTypeDependant()
-                            || resolvedType->isDependantType());
+   assert(resolvedType && "unreported error!");
 
-   if (node->isVariadicArgPackExpansion() && !node->isTypeDependant())
+   node->setIsTypeDependent(node->isTypeDependent()
+                            || resolvedType->isDependentType());
+
+   if (node->isVariadicArgPackExpansion() && !node->isTypeDependent())
       diag::err(err_generic_error)
          << "parameter pack expansion operator must be applied to "
             "variadic template arg"
          << node->getSourceLoc() << diag::term;
 
-   *node->getTypeRef() = resolvedType;
+   node->getTypeRef() = resolvedType;
    node->getTypeRef().isLvalue(node->isReference());
    node->setResolved(true);
 }
@@ -1578,86 +1447,50 @@ Type *DeclPass::getResolvedType(TypeRef *node,
    }
    else if (node->getKind() == TypeRef::TypeKind::ObjectType) {
       assert(!node->getNamespaceQual().empty());
-
-      auto &fst = node->getNamespaceQual()[0];
-      type = resolveObjectTy(node, fst.first, fst.second, status);
-
-      if (node->isTypeDependant())
-         return type;
-
-      if (type && type->isGenericTy())
-         goto end;
-
-      auto className = type && type->isObjectTy() ? type->getClassName().str()
-                                                  : fst.first;
-
-      if (node->getNamespaceQual().size() > 1
-          && (type == nullptr || type->isObjectTy())) {
-         for (size_t i = 1; i < node->getNamespaceQual().size(); ++i) {
-            className += '.';
-            className += node->getNamespaceQual()[i].first;
-
-            auto next = resolveObjectTy(
-               node,
-               className,
-               node->getNamespaceQual()[i].second,
-               status
-            );
-
-            if (status && *status == Res_SubstituationFailure) {
-               return nullptr;
-            }
-
-            if (!next) {
-               continue;
-            }
-
-            type = next;
-            className = next->getClassName();
-         }
-
-         assert(type && "no type yo");
-      }
+      type = resolveObjectTy(node);
    }
    else if (node->getKind() == TypeRef::TypeKind::TupleType) {
-      std::vector<pair<string, QualType>> tupleTypes;
+      llvm::SmallVector<QualType, 4> tupleTypes;
       for (const auto &ty : node->getContainedTypes()) {
-         resolveType(ty.second.get(), status);
-         tupleTypes.emplace_back(ty.first, ty.second->getTypeRef());
+         resolveType(ty.second, status);
+         tupleTypes.push_back(ty.second->getTypeRef());
       }
 
-      type = TupleType::get(tupleTypes);
+      type = SP.Context.getTupleType(tupleTypes);
    }
    else if (node->getKind() == TypeRef::TypeKind::FunctionType) {
-      std::vector<Argument> argTypes;
+      llvm::SmallVector<QualType, 4> argTypes;
       for (const auto &ty : node->getContainedTypes()) {
-         resolveType(ty.second.get(), status);
-         argTypes.emplace_back("", ty.second->getTypeRef());
+         resolveType(ty.second, status);
+         argTypes.push_back(ty.second->getTypeRef());
       }
 
-      resolveType(node->getReturnType().get(), status);
+      resolveType(node->getReturnType(), status);
 
-      type = FunctionType::get(node->getReturnType()->getTypeRef(), argTypes,
-                               node->hasAttribute(Attr::RawFunctionPtr));
+      type = SP.Context.getFunctionType(node->getReturnType()->getTypeRef(),
+                                      argTypes,
+                                      node->hasAttribute(Attr::RawFunctionPtr));
    }
    else if (node->getKind() == TypeRef::ArrayType) {
-      resolveType(node->getElementType().get(), status);
+      resolveType(node->getElementType(), status);
 
       if (auto Ident = dyn_cast<IdentifierRefExpr>(node->getArraySize()
-                                                       ->getExpr().get())) {
+                                                       ->getExpr())) {
          if (getTemplateParam(Ident->getIdent())) {
-            type = InferredArrayType::get(*node->getElementType()->getType(),
-                                          Ident->getIdent());
+            type = SP.Context.getValueDependentSizedArrayType(
+               node->getElementType()->getType(),
+               Ident);
          }
       }
       else {
-         Record *Self = SelfStack.empty() ? nullptr : SelfStack.back();
-         StaticExprEvaluator Eval(SP, Self, nullptr, importedNamespaces());
-         auto res = Eval.evaluate(node->getArraySize().get());
+         StaticExprEvaluator Eval(SP, getCurrentRecord(), nullptr,
+                                  importedNamespaces());
 
-         if (res.typeDependant) {
+         auto res = Eval.evaluate(node->getArraySize());
+
+         if (res.typeDependent) {
             node->setIsTypeDependent(true);
-            return AutoType::get();
+            return SP.Context.getAutoType();
          }
 
          auto &expr = res.val;
@@ -1666,16 +1499,16 @@ Type *DeclPass::getResolvedType(TypeRef *node,
                << "array size must be integral"
                << node << diag::term;
 
-         type = ArrayType::get(*node->getElementType()->getTypeRef(),
-                               expr.getInt());
+         type = SP.Context.getArrayType(node->getElementType()->getTypeRef(),
+                                        expr.getSExtValue());
       }
    }
    else if (node->getKind() == TypeRef::Pointer) {
-      resolveType(node->getSubject().get(), status);
-      type = node->getSubject()->getTypeRef()->getPointerTo();
+      resolveType(node->getSubject(), status);
+      type = SP.Context.getPointerType(node->getSubject()->getTypeRef());
    }
    else if (node->getKind() == TypeRef::Option) {
-      resolveType(node->getSubject().get(), status);
+      resolveType(node->getSubject(), status);
       type = *node->getSubject()->getTypeRef();
 
       auto Opt = getRecord("Option");
@@ -1683,8 +1516,9 @@ Type *DeclPass::getResolvedType(TypeRef *node,
       TemplateArgList list(SP, Opt);
       list.insert("T", type);
 
-      if (type->isDependantType()) {
-         type = InconcreteObjectType::get("Option", std::move(list));
+      if (type->isDependentType()) {
+         type = SP.Context.getDependentRecordType(
+            getRecord("Option"), new (SP.Context) TemplateArgList(move(list)));
       }
       else {
          auto Inst =
@@ -1692,86 +1526,130 @@ Type *DeclPass::getResolvedType(TypeRef *node,
                                                     node->getSourceLoc(), Opt,
                                                     std::move(list));
 
-         type = ObjectType::get(Inst->getName());
+         type = SP.Context.getRecordType(Inst);
       }
    }
    else {
-      type = AutoType::get();
+      type = SP.Context.getAutoType();
    }
 
-   end:
-
    if (node->isMetaTy()) {
-      type = MetaType::get(type);
+      type = SP.Context.getMetaType(type);
    }
 
    return type;
 }
 
-Type *DeclPass::resolveObjectTy(TypeRef *node,
-                                const string &className,
-                                std::vector<TemplateArg> &templateArgs,
-                                ResolveStatus *status) {
-   if (className == "Self") {
-      if (SelfStack.empty())
-         diag::err(err_generic_error) << "'Self' is only allowed inside of"
-            " record definitions" << node << diag::term;
+Type* DeclPass::resolveObjectTy(TypeRef *TS)
+{
+   DeclContext *declContext = &getDeclContext();
+   if (TS->isGlobalLookup())
+      declContext = declContext->getTranslationUnit();
 
-      cdot::Type *type = ObjectType::get(SelfStack.back()->getName());
+   auto &nestedQualifier = TS->getNamespaceQual();
+   size_t i = 0;
+   size_t nestingLevel = nestedQualifier.size();
 
-      if (type->getRecord()->isProtocol())
-         type = GenericType::get("Self", type);
-
-      return type;
+   if (nestingLevel == 1 && nestedQualifier.front().second.empty()) {
+      if (auto ty = SP.getBuiltinType(nestedQualifier.front().first))
+            return ty;
    }
 
-   if (getTypedef(className)) {
-      return resolveTypedef(
-         node,
-         className,
-         templateArgs,
-         status
-      );
-   }
+   for (auto &pair : nestedQualifier) {
+      llvm::StringRef lookupName = pair.first;
+      bool last = i == nestingLevel - 1;
 
-   if (auto gen = resolveTemplateTy(node, className))
-      return gen;
+      if (i == 0 && pair.first == "Self") {
+         auto R = getCurrentRecord();
+         if (!R)
+            diag::err(err_generic_error) << "'Self' is only allowed inside of"
+               " record definitions" << TS << diag::term;
 
-   if (node->isTypeDependant() || node->hadError())
-      return AutoType::get();
-
-   if (auto alias = resolveAlias(node, className, templateArgs))
-      return alias;
-
-   if (node->isTypeDependant() || node->hadError())
-      return AutoType::get();
-
-   Record *record = getRecord(className);
-   if (!record) {
-      if (SymbolTable::isNamespace(className)) {
-         return nullptr;
+         lookupName = R->getName();
       }
 
-      if (status) {
-         *status = Res_SubstituationFailure;
-         return nullptr;
+      auto lookupResult = declContext->lookup(lookupName);
+      if (!lookupResult) {
+         diag::err(err_generic_error)
+            << declContext->getSpecifierForDiagnostic() + " does not have "
+               + " a member named " + lookupName.str() << TS << diag::term;
       }
-      else {
-         diag::err(err_class_not_found) << className
-                                        << node << diag::term;
+
+      if (lookupResult.size() != 1) {
+         llvm_unreachable("not yet");
       }
-   }
 
-   if (record->isTemplated()) {
-      TemplateArgList list(SP, record, templateArgs);
+      auto result = lookupResult.front();
+      if (last) {
+         if (auto R = dyn_cast<RecordDecl>(result)) {
+            return SP.Context.getRecordType(R);
+         }
+         else if (auto TD = dyn_cast<TypedefDecl>(result)) {
+            return *TD->getOriginTy()->getType();
+         }
+         else if (auto alias = dyn_cast<AliasDecl>(result)) {
+            auto AliasRes = SP.checkAlias(lookupResult, pair.second,
+                                          TD->getSourceLoc());
 
-      for (const auto &R : SelfStack) {
-         if (templateArgs.empty()) {
-            if (R->getSpecializedTemplate() == record || R == record)
-               return ObjectType::get(R);
+            if (AliasRes) {
+               auto &V = AliasRes.getAlias()->getAliasExpr()
+                                 ->getEvaluatedExpr();
+
+               if (!V.isMetaType())
+                  diag::err(err_generic_error)
+                     << "alias is not a type" << TS << diag::term;
+
+               return *V.getMetaType();
+            }
+            else if (AliasRes.isTypeDependent() || AliasRes.isValueDependent()) {
+               TD->setIsTypeDependent(AliasRes.isTypeDependent());
+               TD->setIsValueDependent(AliasRes.isValueDependent());
+
+               return {};
+            }
+            else {
+               SP.issueDiagnostics(AliasRes);
+               return {};
+            }
+
+            return {};
+         }
+         else if (auto TP = dyn_cast<TemplateParamDecl>(result)) {
+            TS->setIsTypeDependent(true);
+            return SP.Context.getTemplateArgType(TP->getCovariance()->getType(),
+                                                 TP->getName());
+         }
+         else {
+            diag::err(err_generic_error)
+               << result->getFullName() + " is not a type"
+               << TS << diag::term;
          }
       }
+      else {
+         declContext = dyn_cast<DeclContext>(result);
+         if (!declContext)
+            diag::err(err_generic_error)
+               << result->getName() + " is not declaration context"
+               << TS << diag::term;
+      }
 
+      ++i;
+   }
+
+   llvm_unreachable("no last import item?");
+}
+
+Type *DeclPass::resolveTypedef(TypedefDecl *td,
+                               TypeRef *node,
+                               const string &name,
+                               std::vector<TemplateArgExpr*>& templateArgs,
+                               ResolveStatus *status) {
+   assert(td && "should not be called otherwise");
+   visitScoped(td);
+
+   QualType resolvedTy;
+   if (td->isTemplate()) {
+      TemplateArgList list(SP, td, templateArgs);
       if (!list.checkCompatibility()) {
          diag::err(err_generic_error)
             << "invalid template parameters"
@@ -1781,145 +1659,48 @@ Type *DeclPass::resolveObjectTy(TypeRef *node,
             diag << diag::cont;
 
          node->setHadError(true);
-         return nullptr;
+         return { };
       }
 
-      if (list.isStillDependant())
-         return InconcreteObjectType::get(record->getName(),
-                                          std::move(list));
+      if (list.isStillDependent()) {
+         node->setIsTypeDependent(true);
+         return SP.Context.getTypedefType(td);
+      }
 
-      record = TemplateInstantiator::InstantiateRecord(SP,
-                                                       node->getSourceLoc(),
-                                                       record, std::move(list));
+      resolvedTy = SP.resolveDependencies(*td->getOriginTy()->getType(),
+                                          list);
    }
-   else if (!templateArgs.empty()) {
-      diag::err(err_generic_type_count)
-         << 0 << templateArgs.size()
-         << node << diag::term;
+   else {
+      resolvedTy = td->getOriginTy()->getType();
    }
 
-   return ObjectType::get(record);
-}
-
-Type *DeclPass::resolveTypedef(TypeRef *node,
-                               const string &name,
-                               std::vector<TemplateArg>& templateArgs,
-                               ResolveStatus *status) {
-   auto td = getTypedef(name);
-   assert(td && "should not be called in this case");
-
-   TemplateArgList list(SP, td, templateArgs);
-   if (!list.checkCompatibility()) {
-      diag::err(err_generic_error)
-         << "invalid template parameters"
-         << node << diag::cont;
-
-      for (auto &diag : list.getDiagnostics())
-         diag << diag::cont;
-
-      node->setHadError(true);
-      return {};
-   }
-
-   if (list.isStillDependant()) {
-      node->setIsTypeDependent(true);
-      return td->aliasedType;
-   }
-
-   return SP.resolveDependencies(td->aliasedType, list);
-}
-
-Type* DeclPass::resolveAlias(TypeRef *node,
-                             const string &name,
-                             std::vector<TemplateArg> &templateArgs) {
-   auto res = SP.tryAlias(name, templateArgs, node);
-   if (!res.isMetaType())
-      return nullptr;
-
-   return res.getType();
+   return SP.Context.getTypedefType(td);
 }
 
 Type *DeclPass::resolveTemplateTy(TypeRef *node,
                                   const string &name) {
-   for (const auto &Params : templateParamStack) {
-      for (const auto &Param : *Params) {
-         if (Param.genericTypeName == name) {
-            if (Param.isVariadic && !node->isVariadicArgPackExpansion()
-                && !node->allowUnexpandedTemplateArgs()) {
-               diag::err(err_generic_error) << "variadic template arg must be"
-                  " expanded" << node->getSourceLoc() << diag::term;
-            }
-
-            auto *covar = Param.covariance
-                          ? (Type *) Param.covariance
-                          : (Type *) ObjectType::get("Any");
-
-            return GenericType::get(name, covar);
-         }
+   if (auto Param = getTemplateParam(name)) {
+      if (Param->isVariadic() && !node->isVariadicArgPackExpansion()
+          && !node->allowUnexpandedTemplateArgs()) {
+         diag::err(err_generic_error) << "variadic template arg must be"
+            " expanded" << node->getSourceLoc() << diag::term;
       }
-   }
-   
-   for (auto it = SelfStack.rbegin(); it != SelfStack.rend(); ++it) {
-      auto &Self = *it;
-      if (!isa<Protocol>(Self))
-         continue;
 
-      for (const auto &AT : Self->getAssociatedTypes())
-         if (AT.getName().equals(name))
-            return GenericType::get(AT.getName(), *AT.getType());
+      return SP.Context.getTemplateArgType(Param->getCovariance()->getType(),
+                                           name);
+   }
+
+   if (auto AT = getAssociatedType(name)) {
+      return SP.Context.getTemplateArgType(AT->getActualType()->getType(),
+                                           AT->getName());
    }
 
    return nullptr;
 }
 
-void DeclPass::resolveTemplateParams(std::vector<TemplateParameter> &Params)
-{
-   for (auto &P : Params) {
-      if (P.resolved) {
-         continue;
-      }
-
-      if (P.unresolvedCovariance) {
-         visitTypeRef(P.unresolvedCovariance.get());
-
-         auto ty = *P.unresolvedCovariance->getTypeRef();
-         P.covariance = ty;
-      }
-      if (P.unresolvedContravariance) {
-         visitTypeRef(P.unresolvedContravariance.get());
-
-         auto ty = *P.unresolvedContravariance->getTypeRef();
-         P.contravariance = ty;
-      }
-
-      if (!P.covariance) {
-         if (P.isTypeName())
-            P.covariance = ObjectType::get("Any");
-         else
-            P.valueType = IntegerType::get();
-      }
-
-      if (P.defaultValue) {
-         if (P.isTypeName())
-            SP.visitTypeRef(P.defaultValue->getType().get());
-//         else
-//            SP.visitStaticExpr(P.defaultValue->getStaticExpr().get());
-      }
-
-      P.resolved = true;
-   }
-}
-
 void DeclPass::visitTypeRef(TypeRef *node)
 {
    resolveType(node);
-}
-
-void DeclPass::visitDeclareStmt(DeclareStmt *node)
-{
-   for (const auto &decl : node->getDeclarations()) {
-      VisitNode(decl);
-   }
 }
 
 void DeclPass::visitDebugStmt(DebugStmt *node)
@@ -1930,30 +1711,15 @@ void DeclPass::visitDebugStmt(DebugStmt *node)
    }
 }
 
-void DeclPass::CheckThrowsAttribute(Callable *callable, Attribute &attr)
+void DeclPass::CheckThrowsAttribute(CallableDecl *callable, Attribute &attr)
 {
    for (const auto &arg : attr.args) {
       if (!getRecord(arg.getString()))
          diag::err(err_class_not_found) << arg << diag::term;
 
 
-      callable->addThrownType(ObjectType::get(arg.strVal));
+      callable->addThrownType(getObjectTy(arg.getString()));
    }
-}
-
-bool DeclPass::checkProtocolConformance(Record *R)
-{
-   bool fatal = false;
-   cdot::sema::ConformanceChecker CC(SP, R);
-   CC.checkConformance();
-
-   for (auto &diag : CC.getDiagnostics()) {
-      diag << diag::cont;
-      if (diag.getDiagnosticKind() == DiagnosticKind::ERROR)
-         fatal = true;
-   }
-
-   return fatal;
 }
 
 void DeclPass::visitStaticAssertStmt(StaticAssertStmt *node)
@@ -1963,27 +1729,17 @@ void DeclPass::visitStaticAssertStmt(StaticAssertStmt *node)
 
 void DeclPass::visitStaticIfStmt(StaticIfStmt *node)
 {
-   if (SelfStack.empty())
-      diag::err(err_generic_error)
-         << "static_if is not allowed at top level"
-         << node << diag::term;
-
-   Record *Self = SelfStack.back();
-
-   StaticExprEvaluator Eval(SP, Self, nullptr, importedNamespaces());
-   auto res = Eval.evaluate(node->getCondition().get());
-
-   if (res.typeDependant || !res.diagnostics.empty())
+   if (!inGlobalDeclContext())
       return;
 
-   auto &expr = res.val;
+   auto res = SP.evaluateAsBool(node->getCondition());
+   if (!res)
+      return;
+
+   auto &expr = res.getValue();
    node->setEvaluatedCondition(expr);
 
-   if (!expr.isInt())
-      diag::err(err_generic_error) << "expected integer as argument to "
-         "static_if" << node << diag::term;
-
-   if (expr.intVal)
+   if (expr.getZExtValue())
       visit(node->getIfBranch());
    else
       visit(node->getElseBranch());
@@ -1991,17 +1747,12 @@ void DeclPass::visitStaticIfStmt(StaticIfStmt *node)
 
 void DeclPass::visitStaticForStmt(StaticForStmt *node)
 {
-   if (SelfStack.empty())
-      diag::err(err_generic_error)
-         << "static_if is not allowed at top level"
-         << node << diag::term;
-
-   Record *Self = SelfStack.back();
+   auto Self = getCurrentRecord();
 
    StaticExprEvaluator Eval(SP, Self, nullptr, importedNamespaces());
-   auto res = Eval.evaluate(node->getRange().get());
+   auto res = Eval.evaluate(node->getRange());
 
-   if (res.typeDependant || !res.diagnostics.empty())
+   if (res.typeDependent || !res.diagnostics.empty())
       return;
 
    auto &Range = res.val;
@@ -2010,14 +1761,14 @@ void DeclPass::visitStaticForStmt(StaticForStmt *node)
          "static_for" << node->getRange() << diag::term;
 
    for (auto &El : Range) {
-      TemplateArgList list(SP);
-      list.insert(node->getElementName(), std::move(El));
-
-      auto stmt =
-         TemplateInstantiator::InstantiateStatement(SP, node->getSourceLoc(),
-                                                    node->getBody(), list);
-
-      node->addIteration(std::move(stmt));
+//      TemplateArgList list(SP);
+//      list.insert(node->getElementName(), std::move(El));
+//
+//      auto stmt =
+//         TemplateInstantiator::InstantiateStatement(SP, node->getSourceLoc(),
+//                                                    node->getBody(), list);
+//
+//      node->addIteration(stmt);
    }
 
    for (const auto &It : node->getIterations())

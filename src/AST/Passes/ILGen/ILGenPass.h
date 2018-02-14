@@ -7,70 +7,42 @@
 
 #include <stack>
 #include <llvm/ADT/DenseSet.h>
-#include "../AbstractPass.h"
-#include "../../../IL/ILBuilder.h"
-#include "../../../Basic/CastKind.h"
+#include <unordered_map>
+
+#include "AST/Passes/NullASTVisitor.h"
+
+#include "IL/ILBuilder.h"
+#include "Basic/CastKind.h"
 
 namespace cdot {
 
-namespace cl {
-
-struct Method;
-struct Field;
-class Property;
-
-class Record;
-class Class;
-class Enum;
-class Struct;
-class Protocol;
-class Union;
-
-} // namespace cl
+struct Variable;
 
 namespace ctfe {
-
-struct CTFEResult;
-
+   struct CTFEResult;
 } // namespace ctfe
 
 namespace ast {
 
+class SemaPass;
 class VarDecl;
 
-class ILGenPass: public AbstractPass<ILGenPass, il::Value*> {
+class ILGenPass: public NullASTVisitor<il::Value*> {
 public:
-   explicit ILGenPass(il::Context &Ctx);
-   void run(std::vector<CompilationUnit> &CUs);
+   explicit ILGenPass(il::Context &Ctx, SemaPass &SP);
+   void run();
 
-   void outputIL(const CompilationUnit &CU);
+   void outputIL();
 
    il::Value *visit(Expression *expr);
-
-   void visit(Statement *node)
-   {
-      AbstractPass::visit(node);
-   }
-
-   template<class T>
-   auto visit(const std::shared_ptr<T> &node) -> decltype(visit(node.get()))
-   {
-      return visit(node.get());
-   }
+   void visit(Statement *node);
 
    ctfe::CTFEResult evaluateStaticExpr(StaticExpr *expr);
 
-   void ForwardDeclareRecord(cl::Record* Rec);
+   void ForwardDeclareRecord(RecordDecl* R);
    void GenerateTypeInfo();
-   void GenerateTypeInfo(cl::Record *R, bool innerDecls = false);
+   void GenerateTypeInfo(RecordDecl *R, bool innerDecls = false);
    void GenerateTypeInfo(il::AggregateType *R);
-
-   void CreateModules(std::vector<CompilationUnit> &CUs);
-
-   void doInitialPass(CompilationUnit &CU);
-   void doInitialPass(std::shared_ptr<Statement> const& statement);
-   void doInitialPass(
-      std::vector<std::shared_ptr<Statement>> const& statements);
 
    void visitCompoundStmt(CompoundStmt *node);
    void visitNamespaceDecl(NamespaceDecl *node);
@@ -78,13 +50,16 @@ public:
    void visitLocalVarDecl(LocalVarDecl *node);
    void visitGlobalVarDecl(GlobalVarDecl *node);
 
+   void visitLocalDestructuringDecl(LocalDestructuringDecl *node);
+   void visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+
    void visitFunctionDecl(FunctionDecl *node);
    void visitCallableDecl(CallableDecl *node);
-   void visitDeclareStmt(DeclareStmt *node);
 
    void visitRecordCommon(RecordDecl *node);
    void visitRecordDecl(RecordDecl *node);
    void visitClassDecl(ClassDecl *node);
+   void visitStructDecl(StructDecl *node);
    void visitExtensionDecl(ExtensionDecl *node);
    void visitEnumDecl(EnumDecl *node);
    void visitUnionDecl(UnionDecl *node);
@@ -93,8 +68,8 @@ public:
    void visitPropDecl(PropDecl *node);
 
    void visitMethodDecl(MethodDecl *node);
-   void visitConstrDecl(ConstrDecl *node);
-   void visitDestrDecl(DestrDecl *node);
+   void visitInitDecl(InitDecl *node);
+   void visitDeinitDecl(DeinitDecl *node);
 
    void visitFuncArgDecl(FuncArgDecl *node);
 
@@ -165,16 +140,17 @@ public:
    il::Value *visitTraitsExpr(TraitsExpr *node);
 
    void DeclareFunction(FunctionDecl *func);
-   void DeclareMethod(cl::Method *method);
+   void DeclareMethod(MethodDecl *method);
 
-   void DeclareRecord(cl::Record *R);
-   void declareRecordInstantiation(cl::Record *Inst);
+   void DeclareRecord(RecordDecl *R);
+   void declareRecordInstantiation(RecordDecl *Inst);
 
    void DeclareGlobalVariable(GlobalVarDecl *decl);
+   void DeclareGlobalVariable(GlobalDestructuringDecl *decl);
 
    struct ModuleRAII {
-      ModuleRAII(ILGenPass &ILGen, cl::Record *R);
-      ModuleRAII(ILGenPass &ILGen, Callable *C);
+      ModuleRAII(ILGenPass &ILGen, RecordDecl *R);
+      ModuleRAII(ILGenPass &ILGen, CallableDecl *C);
       ModuleRAII(ILGenPass &ILGen, il::Module *M);
 
       ~ModuleRAII();
@@ -195,41 +171,76 @@ public:
       return Modules[id];
    }
 
+   CallableDecl *getCallableDecl(il::Function const* F);
+
+   struct InsertPointRAII {
+      InsertPointRAII(ILGenPass &ILGen) : ILGen(ILGen),
+                                          IP(ILGen.Builder.saveIP())
+      {
+
+      }
+
+      InsertPointRAII(ILGenPass &ILGen, il::BasicBlock *IB)
+         : ILGen(ILGen), IP(ILGen.Builder.saveIP())
+      {
+         ILGen.Builder.SetInsertPoint(IB);
+      }
+
+      InsertPointRAII(ILGenPass &ILGen, il::BasicBlock::iterator IB)
+         : ILGen(ILGen), IP(ILGen.Builder.saveIP())
+      {
+         ILGen.Builder.SetInsertPoint(IB);
+      }
+
+      ~InsertPointRAII()
+      {
+         ILGen.Builder.restoreIP(IP);
+      }
+
+   private:
+      ILGenPass &ILGen;
+      il::ILBuilder::InsertPoint IP;
+   };
+
+   il::Function *getFunc(CallableDecl *C);
+   il::Method *getFunc(MethodDecl *M);
+
 protected:
+   SemaPass &SP;
 
    void setUnmangledName(il::Function *F);
 
-   void DeclareClassOrStruct(cl::Struct *Str);
-   void DeclareEnum(cl::Enum *cl);
-   void DeclareUnion(cl::Union *un);
-   void DeclareProtocol(cl::Protocol *cl);
-   void DeclareRecord(cl::Record *rec, il::AggregateType *Ty);
+   void DeclareClassOrStruct(StructDecl *S);
+   void DeclareEnum(EnumDecl *E);
+   void DeclareUnion(UnionDecl *U);
+   void DeclareProtocol(ProtocolDecl *cl);
+   void DeclareRecord(RecordDecl *R, il::AggregateType *Ty);
 
-   void DeclareField(const cl::Field &field, il::AggregateType *Ty);
-   void DeclareMethod(cl::Method *method, il::AggregateType *Ty);
+   void DeclareField(FieldDecl *field, il::AggregateType *Ty);
+   void DeclareMethod(MethodDecl *method, il::AggregateType *Ty);
 
-   void DeclareProperty(const cl::Property &P, il::AggregateType *Ty);
+   void DeclareProperty(PropDecl *P, il::AggregateType *Ty);
 
-   void DeclareValue(const string &name, il::Value *Val);
+   void DeclareValue(const std::string &name, il::Value *Val);
    void DeclareValue(il::Value *Val);
 
-   void DefineProperty(const cl::Property &P, il::AggregateType *Ty);
+   void DefineProperty(PropDecl *P, il::AggregateType *Ty);
 
    void DefineFunction(il::Function *F,
-                       const std::shared_ptr<Statement> &body);
+                       Statement* body);
 
    void DefineGlobal(il::GlobalVariable *G,
-                     std::shared_ptr<Expression> const &defaultVal,
+                     Expression* const &defaultVal,
                      size_t ordering);
 
    void FinalizeGlobalInitFn();
 
-   void doDestructure(VarDecl *node);
+   void doDestructure(DestructuringDecl *node);
 
    il::AggregateType *getType(il::Value *val);
    il::AggregateType *getType(QualType ty);
    il::AggregateType *getType(Type *ty);
-   il::AggregateType *getType(cl::Record *R);
+   il::AggregateType *getType(RecordDecl *R);
 
    il::Context &getContext();
    il::Module *getModule();
@@ -237,25 +248,24 @@ protected:
 
    il::Function *getPrintf();
 
-   il::Module *getCTFEModule();
+   il::Function *getCTFEFunc();
 
    il::Value *getRValue(il::Value *V);
    il::Value *unboxIfNecessary(il::Value *V, bool load = true);
 
    il::Value *getBoxedInt(uint64_t value,
-                          const string &className = "");
+                          const std::string &className = "");
 
-   il::Function *getFunc(Callable *C);
-   il::Method *getFunc(cl::Method *M);
-
-   il::Value *BoxPrimitive(il::Value *V, const string &className = "");
+   il::Value *BoxPrimitive(il::Value *V, const std::string &className = "");
    il::Function *wrapNonLambdaFunction(il::Function *F);
 
    il::Value *getDefaultValue(Type *Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);
 
+   il::Instruction *CreateFieldRef(il::Value *V, llvm::StringRef fieldName);
+
    llvm::SmallVector<il::Argument*, 4> makeArgVec(
-      const std::vector<cdot::Argument> &from);
+      llvm::ArrayRef<QualType> from);
 
    il::Value *VisitSubExpr(Expression *node, il::Value *Val);
 
@@ -271,7 +281,7 @@ protected:
    il::Value *CreateLogicalAnd(il::Value *lhs, Expression *rhsNode);
    il::Value *CreateLogicalOr(il::Value *lhs, Expression *rhsNode);
 
-   il::Instruction *CreateCall(Callable *C,
+   il::Instruction *CreateCall(CallableDecl *C,
                                llvm::ArrayRef<il::Value*> args);
 
    il::Value *HandleIntrinsic(CallExpr *node);
@@ -282,11 +292,11 @@ protected:
    void GenerateVTable(il::ClassType *Ty);
    void GeneratePTable(il::AggregateType *Ty);
 
-   void FindVirtualMethods(il::ClassType *Ty, cl::Class *cl);
+   void FindVirtualMethods(il::ClassType *Ty, ClassDecl *cl);
 
    il::Value *stringify(il::Value *Val);
    il::Value *getString(const llvm::Twine &str);
-   il::Constant *getConstantVal(const cdot::Variant &V);
+   il::Constant *getConstantVal(Type *Ty, const cdot::Variant &V);
 
    il::Value *getCStyleArray(Type *Ty,
                              llvm::ArrayRef<il::Value*> elements);
@@ -302,13 +312,15 @@ protected:
 
    void deinitializeValue(il::Value *Val);
 
-   void MaybeDefineDefaultDeinitializer(il::AggregateType *Ty);
-   void DefineDefaultInitializer(il::StructType *Ty);
-   void DefineMemberwiseInitializer(cl::Struct *S, il::StructType *Ty);
-   void DefineImplicitEquatableConformance(cl::Method *M, cl::Record *R);
-   void DefineImplicitHashableConformance(cl::Method *M, cl::Record *R);
-   void DefineImplicitStringRepresentableConformance(cl::Method *M,
-                                                     cl::Record *R);
+   void AppendDefaultDeinitializer(il::Method *M, il::AggregateType *Ty);
+   void DefineDefaultInitializer(StructDecl *S, InitDecl *Init);
+   void DefineMemberwiseInitializer(StructDecl *S, il::StructType *Ty);
+   void DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R);
+   void DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R);
+   void DefineImplicitStringRepresentableConformance(MethodDecl *M,
+                                                     RecordDecl *R);
+
+   void visitTemplateInstantiations();
 
    il::Value *HandleUnsafeTupleGet(il::Value *tup, il::Value *idx,
                                    TupleType *Ty);
@@ -318,26 +330,20 @@ protected:
    void CreateTypeInfo(Type *ty);
    il::GlobalVariable *GetTypeInfo(Type *ty);
 
-   Callable *getCallable(il::Function *F);
-   void collectDependencies(il::Function *fn,
-                            llvm::SmallPtrSet<Callable*, 8> &deps);
-
    void deinitializeTemporaries();
    void deinitializeLocals();
    void declareLocal(il::Value *V);
 
    il::StoreInst *CreateStore(il::Value *src, il::Value *dst);
 
-   llvm::StringMap<Callable*> FuncDeclMap;
    llvm::SmallDenseMap<Type*, il::GlobalVariable*> TypeInfoMap;
 
-   Type *VoidTy;
-   Type *Int8PtrTy;
-   Type *UInt8PtrTy;
-   Type *BoolTy;
+   VoidType *VoidTy;
+   PointerType *Int8PtrTy;
+   PointerType *UInt8PtrTy;
+   IntegerType *BoolTy;
    Type *DeinitializerTy;
 
-   il::Module *CTFEMod = nullptr;
    llvm::StringMap<llvm::StringRef> BuiltinFns;
 
    struct BreakContinueScope {
@@ -362,6 +368,9 @@ protected:
    llvm::SmallPtrSet<il::Value*, 8> temporaries;
    std::stack<llvm::SmallPtrSet<il::Value*, 8>> locals;
 
+   std::unordered_map<NamedDecl*, il::Value*> DeclMap;
+   std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;
+
    std::unordered_map<size_t, il::BasicBlock*> GlobalInitBBs;
 
    il::ILBuilder Builder;
@@ -380,6 +389,38 @@ protected:
    bool alreadyVisited(T *ptr)
    {
       return !VisitedDecls.insert((uintptr_t)ptr).second;
+   }
+
+   unsigned CTFEStack = 0;
+   il::Function *CTFEFunc = nullptr;
+   CallableDecl *circularlyDependentFunc = nullptr;
+   llvm::SmallPtrSet<CallableDecl*, 8> VisitedCTFEDecls;
+
+   struct CTFEScopeRAII {
+      explicit CTFEScopeRAII(ILGenPass &ILGen)
+         : ILGen(ILGen),
+           encounteredCTFECircularDependence(
+              ILGen.circularlyDependentFunc)
+      {
+         ++ILGen.CTFEStack;
+      }
+
+      ~CTFEScopeRAII()
+      {
+         assert(ILGen.CTFEStack && "mismatched ctfe stack");
+         --ILGen.CTFEStack;
+         ILGen.circularlyDependentFunc
+            = encounteredCTFECircularDependence;
+      }
+
+   private:
+      ILGenPass &ILGen;
+      CallableDecl *encounteredCTFECircularDependence;
+   };
+
+   bool inCTFE() const
+   {
+      return CTFEStack != 0;
    }
 };
 

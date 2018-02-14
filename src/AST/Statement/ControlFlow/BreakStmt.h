@@ -14,7 +14,7 @@ class BreakStmt : public Statement {
 public:
    BreakStmt() : Statement(BreakStmtID) {}
 
-   typedef std::shared_ptr<BreakStmt> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {

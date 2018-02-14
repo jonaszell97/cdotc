@@ -12,11 +12,11 @@ namespace ast {
 
 class TertiaryOperator : public Expression {
 public:
-   TertiaryOperator(std::shared_ptr<Expression> &&cond,
-                    std::shared_ptr<Expression> &&lhs,
-                    std::shared_ptr<Expression> &&rhs);
+   TertiaryOperator(Expression* cond,
+                    Expression* lhs,
+                    Expression* rhs);
 
-   typedef std::shared_ptr<TertiaryOperator> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -24,37 +24,37 @@ public:
    }
 
 protected:
-   std::shared_ptr<Expression> condition;
-   std::shared_ptr<Expression> lhs;
-   std::shared_ptr<Expression> rhs;
+   Expression* condition;
+   Expression* lhs;
+   Expression* rhs;
 
 public:
-   const std::shared_ptr<Expression> &getCondition() const
+   Expression* getCondition() const
    {
       return condition;
    }
 
-   const std::shared_ptr<Expression> &getLhs() const
+   Expression* getLhs() const
    {
       return lhs;
    }
 
-   const std::shared_ptr<Expression> &getRhs() const
+   Expression* getRhs() const
    {
       return rhs;
    }
 
-   std::shared_ptr<Expression> &getCondition()
+   Expression* &getCondition()
    {
       return condition;
    }
 
-   std::shared_ptr<Expression> &getLhs()
+   Expression* &getLhs()
    {
       return lhs;
    }
 
-   std::shared_ptr<Expression> &getRhs()
+   Expression* &getRhs()
    {
       return rhs;
    }

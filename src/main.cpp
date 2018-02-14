@@ -1,6 +1,7 @@
 
 #include <execinfo.h>
 #include <llvm/Support/raw_ostream.h>
+#include <Files/FileManager.h>
 
 #include "Compiler.h"
 
@@ -22,8 +23,8 @@ int main(int argc, char* argv[])
 {
    std::set_terminate(handler);
 
-   cdot::Compiler::init(argc, argv);
-   cdot::Compiler::compile();
+   cdot::CompilationUnit compilationUnit(argc, argv);
+   compilationUnit.compile();
 
    return 0;
 }

@@ -6,34 +6,35 @@
 #define CDOT_MANGLE_H
 
 #include <llvm/ADT/ArrayRef.h>
+#include "../Support/LLVM.h"
 
 namespace cdot {
 
-namespace ast {
-   class Function;
-} // namespace ast
+namespace sema {
+   class TemplateArgList;
+} // namespace sema
 
-namespace cl {
-   class Record;
-   struct Method;
-   class AssociatedType;
-} // namespace cl
+namespace ast {
+   class SemaPass;
+   class FunctionDecl;
+   class MethodDecl;
+   class RecordDecl;
+} // namespace ast
 
 class SymbolMangler {
 public:
-   SymbolMangler() = default;
-
    std::string mangleVariable(llvm::StringRef varName, size_t scope = 0) const;
 
-   std::string mangleFunction(ast::Function *F) const;
-   std::string mangleMethod(cl::Method *M) const;
+   std::string mangleFunction(ast::FunctionDecl *F) const;
+   std::string mangleMethod(ast::MethodDecl *M) const;
 
+   void mangleMethod(ast::SemaPass &SP,
+                     llvm::SmallString<128> &Buf,
+                     ast::MethodDecl *M,
+                     ast::RecordDecl *recordInst) const;
 
-   std::string mangleProtocolMethod(cl::Record *R,
-                                    cl::Method *M,
-                                    llvm::ArrayRef<cl::AssociatedType>
-                                                         associatedTypes) const;
-
+   std::string mangleProtocolMethod(ast::RecordDecl *R,
+                                    ast::MethodDecl *M) const;
 };
 
 } // namespace cdot

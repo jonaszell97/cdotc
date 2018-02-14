@@ -100,7 +100,11 @@ public:
 
    typedef llvm::SmallVector<CatchClause, 2> CatchClauseList;
 
-   explicit LandingPadInst(BasicBlock *parent);
+   explicit LandingPadInst(PointerType *Int8PtrTy, BasicBlock *parent)
+      : TerminatorInst(LandingPadInstID, parent)
+   {
+      type = Int8PtrTy;
+   }
 
    const CatchClauseList &getCatchClauses() const
    {

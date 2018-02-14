@@ -19,7 +19,7 @@ public:
        return T->getTypeID() == NullStmtID;
    }
 
-   typedef std::shared_ptr<NullStmt> SharedPtr;
+   friend class TransformImpl;
 };
 
 } // namespace ast

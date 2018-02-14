@@ -4,7 +4,6 @@
 
 #include "CGBinaryOperator.h"
 #include "../../../Variant/Type/Type.h"
-#include "../../../Variant/Type/IntegerType.h"
 
 llvm::Value* CGBinaryOperator::CreateAdd(Type* operand_type, llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>&
    Builder)

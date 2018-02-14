@@ -34,9 +34,9 @@ public:
 
 class StaticAssertStmt: public StaticStmt {
 public:
-   explicit StaticAssertStmt(std::shared_ptr<StaticExpr> &&expr,
+   explicit StaticAssertStmt(StaticExpr* expr,
                              std::string &&message)
-      : StaticStmt(StaticAssertStmtID), expr(move(expr)), message(move(message))
+      : StaticStmt(StaticAssertStmtID), expr(expr), message(move(message))
    {}
 
    static bool classof(AstNode const *T)
@@ -44,14 +44,16 @@ public:
       return T->getTypeID() == StaticAssertStmtID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<StaticExpr> expr;
+   StaticExpr* expr;
    std::string message;
 
    bool evaluated = false;
 
 public:
-   const std::shared_ptr<StaticExpr> &getExpr() const
+   StaticExpr* getExpr() const
    {
       return expr;
    }
@@ -74,8 +76,8 @@ public:
 
 class StaticPrintStmt: public StaticStmt {
 public:
-   explicit StaticPrintStmt(std::shared_ptr<StaticExpr> &&expr)
-      : StaticStmt(StaticPrintStmtID), expr(move(expr))
+   explicit StaticPrintStmt(StaticExpr* expr)
+      : StaticStmt(StaticPrintStmtID), expr(expr)
    {}
 
    static bool classof(AstNode const *T)
@@ -83,11 +85,13 @@ public:
       return T->getTypeID() == StaticPrintStmtID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<StaticExpr> expr;
+   StaticExpr* expr;
 
 public:
-   const std::shared_ptr<StaticExpr> &getExpr() const
+   StaticExpr* getExpr() const
    {
       return expr;
    }
@@ -95,11 +99,11 @@ public:
 
 class StaticIfStmt: public StaticStmt {
 public:
-   StaticIfStmt(std::shared_ptr<StaticExpr> &&condition,
-                std::shared_ptr<Statement> &&ifBranch,
-                std::shared_ptr<Statement> &&elseBranch)
-      : StaticStmt(StaticIfStmtID), condition(move(condition)),
-        ifBranch(move(ifBranch)), elseBranch(move(elseBranch))
+   StaticIfStmt(StaticExpr* condition,
+                Statement* ifBranch,
+                Statement* elseBranch)
+      : StaticStmt(StaticIfStmtID), condition(condition),
+        ifBranch(ifBranch), elseBranch(elseBranch)
    {}
 
    static bool classof(AstNode const *T)
@@ -107,25 +111,27 @@ public:
       return T->getTypeID() == StaticIfStmtID;
    }
 
+   friend class TransformImpl;
+
 private:
-   std::shared_ptr<StaticExpr> condition;
-   std::shared_ptr<Statement> ifBranch;
-   std::shared_ptr<Statement> elseBranch;
+   StaticExpr* condition;
+   Statement* ifBranch;
+   Statement* elseBranch;
 
    Variant evaluatedCondition;
 
 public:
-   const std::shared_ptr<StaticExpr> &getCondition() const
+   StaticExpr* getCondition() const
    {
       return condition;
    }
 
-   const std::shared_ptr<Statement> &getIfBranch() const
+   Statement* getIfBranch() const
    {
       return ifBranch;
    }
 
-   const std::shared_ptr<Statement> &getElseBranch() const
+   Statement* getElseBranch() const
    {
       return elseBranch;
    }
@@ -144,10 +150,10 @@ public:
 class StaticForStmt: public StaticStmt {
 public:
    StaticForStmt(std::string &&elementName,
-                 std::shared_ptr<StaticExpr> &&range,
-                 std::shared_ptr<Statement> &&body)
+                 StaticExpr* range,
+                 Statement* body)
       : StaticStmt(StaticForStmtID), elementName(move(elementName)),
-        range(move(range)), body(move(body))
+        range(range), body(body)
    {}
 
    static bool classof(AstNode const *T)
@@ -155,12 +161,14 @@ public:
       return T->getTypeID() == StaticForStmtID;
    }
 
+   friend class TransformImpl;
+
 private:
    std::string elementName;
-   std::shared_ptr<StaticExpr> range;
-   std::shared_ptr<Statement> body;
+   StaticExpr* range;
+   Statement* body;
 
-   std::vector<std::shared_ptr<Statement>> iterations;
+   std::vector<Statement* > iterations;
 
    Variant evaluatedRange;
    bool evaluated = false;
@@ -171,12 +179,12 @@ public:
       return elementName;
    }
 
-   const std::shared_ptr<StaticExpr> &getRange() const
+   StaticExpr* getRange() const
    {
       return range;
    }
 
-   const std::shared_ptr<Statement> &getBody() const
+   Statement* getBody() const
    {
       return body;
    }
@@ -191,14 +199,14 @@ public:
       StaticForStmt::evaluatedRange = evaluatedRange;
    }
 
-   const std::vector<std::shared_ptr<Statement>> &getIterations() const
+   const std::vector<Statement* > &getIterations() const
    {
       return iterations;
    }
 
-   void addIteration(std::shared_ptr<Statement> &&it)
+   void addIteration(Statement* it)
    {
-      iterations.push_back(move(it));
+      iterations.push_back(it);
    }
 
    bool isEvaluated() const

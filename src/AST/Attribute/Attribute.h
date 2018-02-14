@@ -8,11 +8,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "../../Variant/Variant.h"
 
-using std::unordered_map;
-using std::pair;
-using std::string;
+#include "../../Variant/Variant.h"
 
 namespace cdot {
 
@@ -35,11 +32,11 @@ enum class Attr : unsigned int {
    _align
 };
 
-extern unordered_map<string, Attr> AttributeMap;
+extern std::unordered_map<std::string, Attr> AttributeMap;
 
 struct Attribute {
    Attr kind;
-   string name;
+   std::string name;
    std::vector<Variant> args;
 };
 
@@ -55,7 +52,7 @@ public:
    Attribute &getAttribute(Attr kind);
 };
 
-string isValidAttribute(Attribute attr);
+std::string isValidAttribute(Attribute attr);
 
 } // namespace cdot
 

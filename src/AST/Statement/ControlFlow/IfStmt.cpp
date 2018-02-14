@@ -8,19 +8,19 @@
 namespace cdot {
 namespace ast {
 
-IfStmt::IfStmt(Expression::SharedPtr &&cond,
-               Statement::SharedPtr &&body)
-   : Statement(IfStmtID), condition(move(cond)), ifBranch(move(body)),
+IfStmt::IfStmt(Expression* cond,
+               Statement* body)
+   : Statement(IfStmtID), condition(cond), ifBranch(body),
      elseBranch{}
 {
 
 }
 
-IfStmt::IfStmt(Expression::SharedPtr &&cond,
-               Statement::SharedPtr &&body,
-               Statement::SharedPtr &&elseBody)
-   : Statement(IfStmtID), condition(move(cond)), ifBranch(move(body)),
-     elseBranch(move(elseBody))
+IfStmt::IfStmt(Expression* cond,
+               Statement* body,
+               Statement* elseBody)
+   : Statement(IfStmtID), condition(cond), ifBranch(body),
+     elseBranch(elseBody)
 {
 
 }

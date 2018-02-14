@@ -11,68 +11,40 @@
 
 #include "Literal/IntegerLiteral.h"
 #include "Literal/StringLiteral.h"
-#include "../../Variant/Type/TypeGroup.h"
+
+#include "../../Support/Casting.h"
+
+#include "../Statement/Declaration/NamedDecl.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-Expression::~Expression() = default;
-
-void Expression::setExprType(const QualType &exprType)
+void Expression::setIsLhsOfAssignment(bool isLhsOfAssign)
 {
-   if (exprType->isTypeGroup())
-      return;
-
-   Expression::exprType = exprType;
-   if (exprType->isGenericTy())
-      setIsTypeDependent(true);
-}
-
-void Expression::setIsLhsOfAssignment()
-{
-   lhs_of_assignment = true;
-   if (memberExpr != nullptr) {
-      memberExpr->setIsLhsOfAssignment();
+   for (auto curr = this; curr; curr = curr->getSubExpr()) {
+      if (auto MemExpr = dyn_cast<MemberRefExpr>(curr)) {
+         if (!MemExpr->getSubExpr()) {
+            MemExpr->setIsLhsOfAssignment(isLhsOfAssign);
+            return;
+         }
+      }
    }
 }
 
-void Expression::setMemberExpr(const Expression::SharedPtr &memberExpr)
+MethodDecl* Expression::getAccessorMethod()
 {
-   Expression::memberExpr = memberExpr;
-
-   if (memberExpr)
-      memberExpr->setParentExpr(this);
-}
-
-Type* Expression::getPlaceholderType() const
-{
-   if (auto Int = dyn_cast<IntegerLiteral>(this)) {
-      return Int->getType()->isUnsigned()
-               ? IntegerTypeGroup::getUnsigned()
-               : IntegerTypeGroup::getSigned();
-   }
-   else if (auto E = dyn_cast<EnumCaseExpr>(this)) {
-      return EnumTypeGroup::get(E->getIdent());
+   for (auto curr = this; curr; curr = curr->getSubExpr()) {
+      if (auto MemExpr = dyn_cast<MemberRefExpr>(curr)) {
+         if (!MemExpr->getSubExpr()
+             && MemExpr->getKind() == MemberKind::Accessor) {
+            return MemExpr->getAccessorMethod();
+         }
+      }
    }
 
-   switch (typeID) {
-      case FPLiteralID:
-         return FPTypeGroup::get();
-      case StringLiteralID:
-         return StringTypeGroup::get();
-      default:
-         return nullptr;
-   }
-}
-
-bool Expression::isTripleColon() const
-{
-   if (auto Ident = dyn_cast<IdentifierRefExpr>(this))
-      return Ident->getIdent() == "...";
-
-   return false;
+   return nullptr;
 }
 
 void Expression::setIsVariadicArgPackExpansion(bool variadicArgPackExpansion)
@@ -80,79 +52,22 @@ void Expression::setIsVariadicArgPackExpansion(bool variadicArgPackExpansion)
    Expression::variadicArgPackExpansion = variadicArgPackExpansion;
    if (auto Ident = dyn_cast<IdentifierRefExpr>(this)) {
       for (const auto &TA : Ident->getTemplateArgs())
-         if (TA.isTypeName())
-            TA.getType()
+         if (TA->isTypeName())
+            TA->getType()
               ->setAllowUnexpandedTemplateArgs(variadicArgPackExpansion);
    }
    else if (auto MemExpr = dyn_cast<MemberRefExpr>(this)) {
       for (const auto &TA : MemExpr->getTemplateArgs())
-         if (TA.isTypeName())
-            TA.getType()
+         if (TA->isTypeName())
+            TA->getType()
               ->setAllowUnexpandedTemplateArgs(variadicArgPackExpansion);
    }
    else if (auto Call = dyn_cast<CallExpr>(this)) {
       for (const auto &TA : Call->getTemplateArgs())
-         if (TA.isTypeName())
-            TA.getType()
+         if (TA->isTypeName())
+            TA->getType()
               ->setAllowUnexpandedTemplateArgs(variadicArgPackExpansion);
    }
-}
-
-cl::Method *Expression::getAccessorMethod() const
-{
-   return accessorMethod;
-}
-
-void Expression::setAccessorMethod(cl::Method *accessorMethod)
-{
-   Expression::accessorMethod = accessorMethod;
-}
-
-bool Expression::isGetterCall() const
-{
-   return getter_call;
-}
-
-void Expression::isGetterCall(bool getter_call)
-{
-   Expression::getter_call = getter_call;
-}
-
-const Expression::SharedPtr &Expression::getMemberExpr() const
-{
-   return memberExpr;
-}
-
-Expression *Expression::getParentExpr() const
-{
-   return parentExpr;
-}
-
-void Expression::setParentExpr(Expression *parentExpr)
-{
-   Expression::parentExpr = parentExpr;
-}
-
-bool Expression::getIsLhsOfAssigment() const
-{
-   return lhs_of_assignment;
-}
-
-void Expression::setIsLhsOfAssignment(bool lhsOfAssignment)
-{
-   lhs_of_assignment = lhsOfAssignment;
-   if (lhsOfAssignment)
-      this->setIsLhsOfAssignment();
-}
-
-bool Expression::isSetterCall() const
-{
-   return setter_call;
-}
-
-void Expression::isSetterCall(bool isSetterCall)
-{
-   Expression::setter_call = isSetterCall;
 }
 
 } // namespace ast

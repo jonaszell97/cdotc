@@ -8,18 +8,16 @@
 #include "../AstNode.h"
 
 namespace cdot {
-namespace ast {
 
-enum class ExternKind : unsigned char {
-   NONE,
-   C,
-   CPP,
-   Native
-};
+namespace module {
+   class Module;
+} // namespace module
+
+namespace ast {
 
 class Expression;
 
-class Statement : public AstNode {
+class Statement: public AstNode {
 public:
    enum Flags: uint32_t {
       TypeDependant     = 1,
@@ -29,34 +27,19 @@ public:
       CTFEDependant     = HadError          << 1,
    };
 
-   void isDeclaration(bool decl)
+   friend class TransformImpl;
+
+   bool isDependent() const
    {
-      is_declaration = decl;
+      return isTypeDependent() || isValueDependent();
    }
 
-   bool isDeclaration()
-   {
-      return is_declaration;
-   }
-
-   typedef std::shared_ptr<Statement> SharedPtr;
-
-   void setExternKind(ExternKind kind)
-   {
-      externKind = kind;
-   }
-
-   ExternKind getExternKind() const
-   {
-      return externKind;
-   }
-
-   bool isTypeDependant() const
+   bool isTypeDependent() const
    {
       return flagIsSet(TypeDependant);
    }
 
-   bool isValueDependant() const
+   bool isValueDependent() const
    {
       return flagIsSet(ValueDependant);
    }
@@ -103,7 +86,12 @@ public:
 
    static bool classof(AstNode const* T)
    {
-       switch (T->getTypeID()) {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(AstNode::NodeType kind)
+   {
+       switch (kind) {
 #      define CDOT_STMT(Name) \
           case Name##ID:
 #      include "../AstNode.def"
@@ -114,11 +102,9 @@ public:
    }
 
 protected:
-   explicit Statement(NodeType typeID);
-   ~Statement();
-
-   ExternKind externKind = ExternKind::NONE;
-   bool is_declaration = false;
+   explicit Statement(NodeType typeID)
+      : AstNode(typeID)
+   {}
 };
 
 } // namespace ast

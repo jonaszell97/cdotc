@@ -5,96 +5,63 @@
 #ifndef CDOT_TYPEDEFDECL_H
 #define CDOT_TYPEDEFDECL_H
 
-#include "../Statement.h"
-#include "../../../Variant/Type/Generic.h"
+#include "NamedDecl.h"
+#include "AST/Expression/StaticExpr.h"
 
 namespace cdot {
-
-struct Alias;
-struct Typedef;
-
 namespace ast {
 
 class ConstraintExpr;
 class TypeRef;
 
-class TypedefDecl : public Statement {
+class TypedefDecl : public NamedDecl {
 public:
-   TypedefDecl(
-      AccessModifier access,
-      string&& alias,
-      std::shared_ptr<TypeRef>&& origin,
-      std::vector<TemplateParameter>&& generics
-   );
-
-   Typedef *getTypedef() const
-   {
-      return td;
-   }
-
-   void setTypedef(Typedef *td)
-   {
-      TypedefDecl::td = td;
-   }
-
-   typedef std::shared_ptr<TypedefDecl> SharedPtr;
+   TypedefDecl(AccessModifier access,
+               std::string&& name,
+               TypeRef* origin)
+      : NamedDecl(TypedefDeclID, access, move(name), {}),
+        origin(origin)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == TypedefDeclID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   AccessModifier access;
-   string alias;
-   std::shared_ptr<TypeRef> origin;
-
-   std::vector<TemplateParameter> templateParams;
-
-   cdot::cl::Record *record = nullptr;
-   Typedef *td = nullptr;
+   TypeRef* origin;
+   std::vector<TemplateParamDecl*> templateParams;
 
 public:
-   AccessModifier getAccess() const
-   {
-      return access;
-   }
-
-   const string &getAlias() const
-   {
-      return alias;
-   }
-
-   const std::shared_ptr<TypeRef> &getOrigin() const
+   TypeRef* getOriginTy() const
    {
       return origin;
    }
 
-   std::vector<TemplateParameter> &getTemplateParams()
+   void setTemplateParams(std::vector<TemplateParamDecl *> &&templateParams)
+   {
+      TypedefDecl::templateParams = move(templateParams);
+   }
+
+   llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
    {
       return templateParams;
    }
-
-   cl::Record *getRecord() const
-   {
-      return record;
-   }
-
-   void setRecord(cl::Record *record)
-   {
-      TypedefDecl::record = record;
-   }
 };
 
-class AliasDecl: public Statement {
+class AliasDecl: public NamedDecl,
+                 public DeclContext,
+                 public llvm::FoldingSetNode {
 public:
-   AliasDecl(string &&name,
-             std::vector<TemplateParameter> &&templateParams,
-             std::vector<std::shared_ptr<StaticExpr>> &&constraints,
-             std::shared_ptr<StaticExpr> &&aliasExpr)
-      : Statement(AliasDeclID), name(move(name)),
-        templateParams(move(templateParams)),
-        constraints(move(constraints)), aliasExpr(move(aliasExpr))
+   AliasDecl(std::string &&name,
+             std::vector<StaticExpr* > &&constraints,
+             StaticExpr* aliasExpr)
+      : NamedDecl(AliasDeclID, (AccessModifier)0, move(name),
+                  move(constraints)),
+        DeclContext(AliasDeclID),
+        aliasExpr(aliasExpr)
    { }
 
    static bool classof(AstNode const* T)
@@ -102,58 +69,65 @@ public:
        return T->getTypeID() == AliasDeclID;
    }
 
-private:
-   std::string name;
-   std::vector<TemplateParameter> templateParams;
-   std::vector<std::shared_ptr<StaticExpr>> constraints;
+   void Profile(llvm::FoldingSetNodeID &ID)
+   {
+      Profile(ID, instantiationInfo->specializedTemplate,
+              instantiationInfo->templateArgs);
+   }
 
-   std::shared_ptr<StaticExpr> aliasExpr;
-   Alias *alias = nullptr;
+   static void Profile(llvm::FoldingSetNodeID &ID, AliasDecl *Template,
+                       sema::TemplateArgList &list) {
+      ID.AddPointer(Template);
+      list.Profile(ID);
+   }
+
+   friend class TransformImpl;
+
+private:
+   StaticExpr* aliasExpr;
+
+   std::vector<TemplateParamDecl*> templateParams;
+   InstantiationInfo<AliasDecl> *instantiationInfo = nullptr;
 
 public:
-   const string &getName() const
-   {
-      return name;
-   }
-
-   std::vector<TemplateParameter> &getTemplateParams()
-   {
-      return templateParams;
-   }
-
-   std::vector<std::shared_ptr<StaticExpr>> &getConstraints()
-   {
-      return constraints;
-   }
-
-   std::shared_ptr<StaticExpr> &getAliasExpr()
+   StaticExpr* getAliasExpr()
    {
       return aliasExpr;
    }
 
-   std::vector<TemplateParameter> const& getTemplateParams() const
+   void setAliasExpr(StaticExpr *aliasExpr)
    {
-      return templateParams;
+      AliasDecl::aliasExpr = aliasExpr;
    }
 
-   std::vector<std::shared_ptr<StaticExpr>> const& getConstraints() const
-   {
-      return constraints;
-   }
-
-   std::shared_ptr<StaticExpr> const& getAliasExpr() const
+   StaticExpr* const& getAliasExpr() const
    {
       return aliasExpr;
    }
 
-   Alias *getAlias() const
+   const Variant &getVal() const
    {
-      return alias;
+      return aliasExpr->getEvaluatedExpr();
    }
 
-   void setAlias(Alias *alias)
+   void setTemplateParams(std::vector<TemplateParamDecl *> &&templateParams)
    {
-      AliasDecl::alias = alias;
+      AliasDecl::templateParams = move(templateParams);
+   }
+
+   llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
+   {
+      return templateParams;
+   }
+
+   InstantiationInfo <AliasDecl> *getInstantiationInfo() const
+   {
+      return instantiationInfo;
+   }
+
+   void setInstantiationInfo(InstantiationInfo <AliasDecl> *instantiationInfo)
+   {
+      AliasDecl::instantiationInfo = instantiationInfo;
    }
 };
 

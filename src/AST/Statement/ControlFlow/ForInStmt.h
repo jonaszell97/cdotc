@@ -11,64 +11,65 @@
 namespace cdot {
 namespace ast {
 
+class CallableDecl;
 class LocalVarDecl;
 
 class ForInStmt: public Statement {
 public:
-   ForInStmt(std::shared_ptr<LocalVarDecl>&& decl,
-             std::shared_ptr<Expression>&& range,
-             std::shared_ptr<Statement>&& body);
-
-   typedef std::shared_ptr<ForInStmt> SharedPtr;
+   ForInStmt(LocalVarDecl* decl,
+             Expression* range,
+             Statement* body);
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == ForInStmtID;
    }
 
-protected:
-   std::shared_ptr<LocalVarDecl> decl;
-   std::shared_ptr<Expression> rangeExpr;
-   std::shared_ptr<Statement> body;
+   friend class TransformImpl;
 
-   Callable *getIteratorFn = {};
-   Callable *nextFn = {};
+protected:
+   LocalVarDecl* decl;
+   Expression* rangeExpr;
+   Statement* body;
+
+   CallableDecl *getIteratorFn = {};
+   CallableDecl *nextFn = {};
 
    QualType iteratedType;
    QualType rangeType;
 
 public:
-   const std::shared_ptr<LocalVarDecl> &getDecl() const
+   LocalVarDecl* getDecl() const
    {
       return decl;
    }
 
-   const std::shared_ptr<Expression> &getRangeExpr() const
+   Expression* getRangeExpr() const
    {
       return rangeExpr;
    }
 
-   const std::shared_ptr<Statement> &getBody() const
+   Statement* getBody() const
    {
       return body;
    }
 
-   Callable *getGetIteratorFn() const
+   CallableDecl *getGetIteratorFn() const
    {
       return getIteratorFn;
    }
 
-   void setGetIteratorFn(Callable *getIteratorMethod)
+   void setGetIteratorFn(CallableDecl *getIteratorMethod)
    {
       ForInStmt::getIteratorFn = getIteratorMethod;
    }
 
-   Callable *getNextFn() const
+   CallableDecl *getNextFn() const
    {
       return nextFn;
    }
 
-   void setNextFn(Callable *nextMethod)
+   void setNextFn(CallableDecl *nextMethod)
    {
       ForInStmt::nextFn = nextMethod;
    }

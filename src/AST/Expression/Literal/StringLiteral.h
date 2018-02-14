@@ -12,9 +12,12 @@ namespace ast {
 
 class StringLiteral : public Expression {
 public:
-   explicit StringLiteral(string &&str);
+   explicit StringLiteral(std::string &&str)
+      : Expression(StringLiteralID, true),
+        value(move(str))
+   {}
 
-   typedef std::shared_ptr<StringLiteral> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -22,28 +25,23 @@ public:
    }
 
 protected:
-   string value;
-   bool raw = false;
+   std::string value;
+   bool cstring = false;
 
 public:
-   const string &getValue() const
+   const std::string &getValue() const
    {
       return value;
    }
 
-   void setValue(const string &value)
+   bool isCString() const
    {
-      StringLiteral::value = value;
+      return cstring;
    }
 
-   bool isRaw() const
+   void setCString(bool raw)
    {
-      return raw;
-   }
-
-   void setRaw(bool raw)
-   {
-      StringLiteral::raw = raw;
+      StringLiteral::cstring = raw;
    }
 };
 

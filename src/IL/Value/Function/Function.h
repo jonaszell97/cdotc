@@ -5,7 +5,6 @@
 #ifndef CDOT_ILFUNCTION_H
 #define CDOT_ILFUNCTION_H
 
-#include "../../../Variant/Type/QualType.h"
 #include "../MetaData/MetaData.h"
 
 #include "../SymbolTableList.h"
@@ -17,21 +16,6 @@
 #include <llvm/ADT/ArrayRef.h>
 
 namespace cdot {
-
-class Callable;
-
-namespace cl {
-
-struct Method;
-
-} // namespace cl
-
-namespace ast {
-
-class Function;
-
-} // namespace cl
-
 namespace il {
 
 class BasicBlock;
@@ -46,10 +30,8 @@ public:
    using const_iterator = BasicBlockList::const_iterator;
 
    Function(const std::string &name,
-            QualType returnType,
-            llvm::ArrayRef<Argument *> args,
+            FunctionType *funcTy,
             Module *parent,
-            bool mightThrow,
             bool isExternC);
 
    Module *getParent() const { return parent; }
@@ -59,12 +41,25 @@ public:
    BasicBlockList& getBasicBlocks() { return BasicBlocks; };
 
    bool isDeclared() const;
-   QualType getReturnType() const { return returnType; }
+   void setIsDeclared(bool decl)
+   {
+      if (decl)
+         SubclassData |= Flag::Declared;
+      else
+         SubclassData &= ~Flag::Declared;
+   }
+
+   QualType getReturnType() const
+   {
+      return support::cast<FunctionType>(type)->getReturnType();
+   }
 
    bool mightThrow() const;
 
    bool isExternC() const;
    void setIsExternC(bool ext);
+
+   bool isCStyleVararg() const { return (SubclassData & Flag::Vararg) != 0; }
 
    bool isLambda() const;
 
@@ -83,8 +78,8 @@ public:
       Function::unmangledName = unmangledName;
    }
 
-   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
-   { return BasicBlocks.getSymTab(); }
+   ValueSymbolTable* getSymTab() const
+   { return BasicBlocks.getSymTab().get(); }
 
    BasicBlock const* getEntryBlock() const;
    BasicBlock* getEntryBlock();
@@ -103,7 +98,6 @@ public:
 
 protected:
    Module *parent;
-   QualType returnType;
    BasicBlockList BasicBlocks;
 
    llvm::StringRef unmangledName;
@@ -118,7 +112,8 @@ protected:
       BoxedOperator = 1 << 7,
       ConversionOp = 1 << 8,
       SRet = 1 << 9,
-      Virtual = SRet << 1
+      Virtual = SRet << 1,
+      Vararg = Virtual << 1,
    };
 
    Function(const Function &other);
@@ -126,10 +121,7 @@ protected:
    Function(TypeID id,
             FunctionType *Ty,
             const std::string &name,
-            QualType returnType,
-            llvm::ArrayRef<Argument *> args,
             Module *parent,
-            bool mightThrow,
             bool isExternC);
 
 public:
@@ -149,10 +141,8 @@ public:
 
 class Lambda: public Function {
 public:
-   Lambda(QualType returnType,
-          llvm::ArrayRef<Argument *> args,
-          Module *parent,
-          bool mightThrow);
+   Lambda(FunctionType *funcTy,
+          Module *parent);
 
    struct Capture {
       Capture(uintptr_t id, QualType type)

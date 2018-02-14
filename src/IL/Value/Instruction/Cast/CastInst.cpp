@@ -7,12 +7,9 @@
 #include "../../Function/BasicBlock.h"
 #include "../../Record/AggregateType.h"
 #include "../../Instruction/ControlFlow/ControlFlowInst.h"
-
-#include "../../../../AST/Passes/SemanticAnalysis/Record/Record.h"
-
-#include "../../../../Variant/Type/PointerType.h"
-#include "../../../../Variant/Type/IntegerType.h"
 #include "../../../../Basic/CastKind.h"
+
+#include "../../../../AST/Statement/Declaration/Class/RecordDecl.h"
 
 namespace cdot {
 namespace il {
@@ -73,7 +70,7 @@ UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
 ProtoCastInst::ProtoCastInst(Value *target, Type *toType, BasicBlock *parent)
    : CastInst(ProtoCastInstID, target, toType, parent)
 {
-   if (toType->isObjectTy() && toType->getRecord()->isProtocol()) {
+   if (toType->isObjectType() && toType->getRecord()->isProtocol()) {
       SubclassData |= Flag::Wrap;
    }
 }
@@ -92,7 +89,7 @@ ExceptionCastInst::ExceptionCastInst(Value *target, Type *toType,
                                      BasicBlock *parent)
    : CastInst(ExceptionCastInstID, target, toType, parent)
 {
-   *type = type->getPointerTo();
+
 }
 
 BitCastInst::BitCastInst(CastKind kind, Value *target, Type *toType,

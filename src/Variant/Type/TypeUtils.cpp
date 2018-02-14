@@ -3,15 +3,12 @@
 //
 
 #include "TypeUtils.h"
-
-#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
-
-#include "GenericType.h"
-#include "PointerType.h"
-#include "TupleType.h"
-#include "FunctionType.h"
+#include "../../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "Type.h"
+#include "../../Support/Casting.h"
 
 using namespace cdot::support;
+using namespace cdot::ast;
 
 namespace cdot {
 namespace util {
@@ -27,17 +24,17 @@ bool operator<=(const Type &ty, const Type &of)
       return false;
    }
 
-   if (ty.isAutoTy()) {
+   if (ty.isAutoType()) {
       return false;
    }
 
-   if (ty.isVoidTy()) {
+   if (ty.isVoidType()) {
       return true;
    }
 
    // an integer type is considered a sub type of another integer type iff
    // their sign is the same and the bitwidth is lower
-   if (ty.isIntegerTy()) {
+   if (ty.isIntegerType()) {
       return ty.isUnsigned() == of.isUnsigned()
              && ty.getBitwidth() <= of.getBitwidth();
    }
@@ -49,17 +46,17 @@ bool operator<=(const Type &ty, const Type &of)
 
    // a pointer type is a subtype of another iff their pointee types
    // are subtypes
-   if (ty.isPointerTy()) {
+   if (ty.isPointerType()) {
       return *static_cast<const PointerType*>(&ty)->getPointeeType()
              <= *static_cast<const PointerType*>(&of)->getPointeeType();
    }
 
    // a tuple type is a subtype of another tuple type if all elements are
    // subtypes
-   if (ty.isTupleTy()) {
-      auto &elementTys = static_cast<const TupleType*>(&ty)
+   if (ty.isTupleType()) {
+      auto elementTys = static_cast<const TupleType*>(&ty)
          ->getContainedTypes();
-      auto &otherElementTys = static_cast<const TupleType*>(&of)
+      auto otherElementTys = static_cast<const TupleType*>(&of)
          ->getContainedTypes();
 
       if (elementTys.size() != otherElementTys.size()) {
@@ -68,7 +65,7 @@ bool operator<=(const Type &ty, const Type &of)
 
       size_t i = 0;
       for (const auto &ty : elementTys) {
-         if (!(*ty.second <= *otherElementTys[i].second)) {
+         if (!(*ty <= *otherElementTys[i])) {
             return false;
          }
       }
@@ -78,7 +75,7 @@ bool operator<=(const Type &ty, const Type &of)
 
    // function type - same as tuple, but the return type also has to be
    // a subtype
-   if (ty.isFunctionTy()) {
+   if (ty.isFunctionType()) {
       auto ret = static_cast<const FunctionType*>(&ty)->getReturnType();
       auto otherRet = static_cast<const FunctionType*>(&of)->getReturnType();
 
@@ -86,8 +83,8 @@ bool operator<=(const Type &ty, const Type &of)
          return false;
       }
 
-      auto &argTys = static_cast<const FunctionType*>(&ty)->getArgTypes();
-      auto &otherArgTys = static_cast<const FunctionType*>(&of)->getArgTypes();
+      auto argTys = static_cast<const FunctionType*>(&ty)->getArgTypes();
+      auto otherArgTys = static_cast<const FunctionType*>(&of)->getArgTypes();
 
       if (argTys.size() != otherArgTys.size()) {
          return false;
@@ -95,7 +92,7 @@ bool operator<=(const Type &ty, const Type &of)
 
       size_t i = 0;
       for (const auto &ty : argTys) {
-         if (!(*ty.type <= *otherArgTys[i].type)) {
+         if (!(*ty <= *otherArgTys[i])) {
             return false;
          }
       }
@@ -103,7 +100,7 @@ bool operator<=(const Type &ty, const Type &of)
       return true;
    }
 
-   assert(ty.isObjectTy());
+   assert(ty.isObjectType());
 
    auto rec1 = ty.getRecord();
    auto rec2 = of.getRecord();
@@ -116,14 +113,14 @@ bool operator<=(const Type &ty, const Type &of)
       return false;
    }
 
-   auto cl2 = rec2->getAs<Class>();
-   if (isa<Class>(rec1) && !cl2->isBaseClassOf(cast<Class>(rec1))) {
+   auto cl2 = cast<ClassDecl>(rec2);
+   if (isa<ClassDecl>(rec1) && !cl2->isBaseClassOf(cast<ClassDecl>(rec1))) {
       return false;
    }
 
-   auto cl1 = rec1->getAs<Class>();
-   if (cl1->isTemplated()) {
-      if (!cl2->isTemplated()) {
+   auto cl1 = cast<ClassDecl>(rec1);
+   if (cl1->isTemplate()) {
+      if (!cl2->isTemplate()) {
          return false;
       }
    }

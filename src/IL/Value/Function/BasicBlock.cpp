@@ -7,9 +7,6 @@
 #include "Argument.h"
 #include "../Instruction/Terminator/TerminatorInst.h"
 
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/PointerType.h"
-
 #include <llvm/Support/ErrorHandling.h>
 
 using namespace cdot::support;
@@ -18,8 +15,8 @@ using std::string;
 namespace cdot {
 namespace il {
 
-BasicBlock::BasicBlock(Function *parent)
-   : Constant(BasicBlockID, PointerType::get(IntegerType::getCharTy())),
+BasicBlock::BasicBlock(PointerType *Int8PtrTy, Function *parent)
+   : Constant(BasicBlockID, Int8PtrTy),
      parent(parent),
      Instructions(parent && !parent->getBasicBlocks().empty()
                   ? std::move(InstList(this, parent->getBasicBlocks().front()

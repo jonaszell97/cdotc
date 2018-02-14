@@ -2,69 +2,63 @@
 // Created by Jonas Zell on 08.12.17.
 //
 
-#include <sstream>
 #include "StaticExprEvaluator.h"
 
-#include "../ILGen/ILGenPass.h"
+#include "AST/Passes/ILGen/ILGenPass.h"
+#include "AST/Passes/Declaration/DeclPass.h"
 
-#include "../SemanticAnalysis/Record/Record.h"
-#include "../SemanticAnalysis/Function.h"
-#include "../SemanticAnalysis/SemaPass.h"
-#include "../SemanticAnalysis/Template.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/Passes/SemanticAnalysis/Template.h"
+#include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+#include "AST/Passes/SemanticAnalysis/Builtin.h"
 
-#include "../../Statement/Declaration/CallableDecl.h"
+#include "AST/Statement/Declaration/CallableDecl.h"
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Statement/Declaration/Class/FieldDecl.h"
 
-#include "../../Expression/StaticExpr.h"
-#include "../../Expression/PatternExpr.h"
+#include "AST/Expression/StaticExpr.h"
+#include "AST/Expression/PatternExpr.h"
 
-#include "../../Expression/Literal/IntegerLiteral.h"
-#include "../../Expression/Literal/StringLiteral.h"
-#include "../../Expression/Literal/StringInterpolation.h"
-#include "../../Expression/Literal/TupleLiteral.h"
-#include "../../Expression/Literal/LambdaExpr.h"
-#include "../../Expression/Literal/NoneLiteral.h"
-#include "../../Expression/Literal/DictionaryLiteral.h"
+#include "AST/Expression/Literal/IntegerLiteral.h"
+#include "AST/Expression/Literal/StringLiteral.h"
+#include "AST/Expression/Literal/StringInterpolation.h"
+#include "AST/Expression/Literal/TupleLiteral.h"
+#include "AST/Expression/Literal/LambdaExpr.h"
+#include "AST/Expression/Literal/NoneLiteral.h"
+#include "AST/Expression/Literal/DictionaryLiteral.h"
 
-#include "../../Operator/Conversion/ImplicitCastExpr.h"
-#include "../../Operator/Conversion/LvalueToRvalue.h"
+#include "AST/Operator/Conversion/ImplicitCastExpr.h"
+#include "AST/Operator/Conversion/LvalueToRvalue.h"
 
-#include "../../Operator/UnaryOperator.h"
-#include "../../Operator/BinaryOperator.h"
-#include "../../Operator/TertiaryOperator.h"
-#include "../../Operator/ExprSequence.h"
+#include "AST/Operator/UnaryOperator.h"
+#include "AST/Operator/BinaryOperator.h"
+#include "AST/Operator/TertiaryOperator.h"
+#include "AST/Operator/ExprSequence.h"
 
-#include "../../Expression/RefExpr/IdentifierRefExpr.h"
-#include "../../Expression/RefExpr/CallExpr.h"
-#include "../../Expression/RefExpr/MemberRefExpr.h"
-#include "../../Expression/RefExpr/SubscriptExpr.h"
+#include "AST/Expression/RefExpr/IdentifierRefExpr.h"
+#include "AST/Expression/RefExpr/CallExpr.h"
+#include "AST/Expression/RefExpr/MemberRefExpr.h"
+#include "AST/Expression/RefExpr/SubscriptExpr.h"
 
-#include "../../Expression/TypeRef.h"
+#include "AST/Expression/TypeRef.h"
 
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/MetaType.h"
+#include "Message/Diagnostics.h"
 
-#include "../../../Message/Diagnostics.h"
+#include "CTFE/CTFEEngine.h"
+#include "Basic/DependencyGraph.h"
 
-#include "../Declaration/DeclPass.h"
-#include "../SemanticAnalysis/TemplateInstantiator.h"
-#include "../SemanticAnalysis/Builtin.h"
-
-#include "../../../CTFE/CTFEEngine.h"
-#include "../../../Basic/DependencyGraph.h"
+#include <sstream>
 
 using namespace cdot::support;
 using namespace cdot::diag;
 using namespace cdot::sema;
-using namespace cdot::cl;
 
 namespace cdot {
 namespace ast {
 
 class EvaluatorImpl: public DiagnosticIssuer {
 public:
-   explicit EvaluatorImpl(SemaPass &SP, Record *Ctx, Callable *FuncCtx,
+   explicit EvaluatorImpl(SemaPass &SP, RecordDecl *Ctx, CallableDecl *FuncCtx,
                           llvm::ArrayRef<size_t> importedNamespaces,
                           sema::TemplateArgList const* templateArgs)
       : SP(SP), RecordCtx(Ctx), FuncCtx(FuncCtx),
@@ -77,42 +71,25 @@ public:
    {
       auto SPres = SP.visitExpr(expr, expr->getExpr());
       if (SPres.hadError()) {
-         return StaticExprResult(expr->isTypeDependant(), true, {});
+         return StaticExprResult(expr->isTypeDependent(), true, {});
       }
-      if (expr->isValueDependant()) {
+      if (expr->isValueDependent()) {
          return StaticExprResult(true, false, {});
       }
 
-      auto res = visitStaticExpr(expr);
-      if (hadError()) {
-         if (requestedFrom)
-            diagnostics.push_back(diag::note(note_generic_note)
-                                     << "ctfe requested here"
-                                     << requestedFrom);
-
-         return StaticExprResult(expr->isTypeDependant(), true,
-                                 std::move(diagnostics));
-      }
-
-      return StaticExprResult(std::move(res));
-
-//      auto res = SP.ILGen->evaluateStaticExpr(expr);
-//      if (!res.Dependencies.empty()) {
-//         handleDependencies(expr, res);
-//         return visit(expr, requestedFrom);
-//      }
-//
-//      if (res.hadError) {
+//      auto res = visitStaticExpr(expr);
+//      if (hadError()) {
 //         if (requestedFrom)
-//            res.diagnostics.push_back(diag::note(note_generic_note)
-//                                      << "ctfe requested here"
-//                                      << requestedFrom);
+//            diagnostics.push_back(diag::note(note_generic_note)
+//                                     << "ctfe requested here"
+//                                     << requestedFrom);
 //
 //         return StaticExprResult(expr->isTypeDependant(), true,
-//                                 std::move(res.diagnostics));
+//                                 std::move(diagnostics));
 //      }
 //
-//      return StaticExprResult(std::move(res.val));
+//      return StaticExprResult(std::move(res));
+llvm_unreachable("I am deprecated");
    }
 
    struct ExprResult {
@@ -157,46 +134,22 @@ public:
 
          return ExprResult(true);
       }
-      if (expr->isTypeDependant()) {
+      if (expr->isTypeDependent()) {
          typeDependant = true;
          dependantStmt->setIsTypeDependent(true);
 
          return ExprResult(false, true);
       }
-      if (expr->isValueDependant()) {
+      if (expr->isValueDependent()) {
          dependantStmt->setIsValueDependent(true);
 
          return ExprResult(false, false, true);
       }
 
-      if (auto subExpr = expr->getMemberExpr())
+      if (auto subExpr = expr->getSubExpr())
          res = VisitSubExpr(expr, std::move(res));
 
       return ExprResult(std::move(res));
-   }
-
-   void handleDependencies(StaticExpr *expr,
-                           ctfe::CTFEResult &result) {
-//      DependencyGraph<Statement> DG;
-//      auto &deps = result.Dependencies;
-//      auto &vert = DG.getOrAddVertex(expr);
-//
-//      for (auto &F : deps) {
-//         auto decl = F->getDeclaration();
-//         if (!decl)
-//            continue;
-//
-//         auto &dep = DG.getOrAddVertex(decl);
-//         dep.addOutgoing(&vert);
-//      }
-//
-//      auto res = DG.constructOrderedList();
-//      assert(res.second);
-
-      for (auto F : result.Dependencies) {
-         SP.visit(F->getDeclaration());
-         SP.ILGen->visit(F->getDeclaration());
-      }
    }
 
    void reset()
@@ -228,8 +181,8 @@ public:
 
 private:
    SemaPass &SP;
-   Record *RecordCtx;
-   Callable *FuncCtx;
+   RecordDecl *RecordCtx;
+   CallableDecl *FuncCtx;
    llvm::ArrayRef<size_t> importedNamespaces;
    sema::TemplateArgList const* templateArgs;
 
@@ -262,17 +215,12 @@ private:
       return TAs->getNamedArg(name);
    }
 
-   TemplateParameter const* getTemplateParam(llvm::StringRef name)
-   {
+   TemplateParamDecl const* getTemplateParam(Statement *Stmt,
+                                             llvm::StringRef name) {
       return SP.hasTemplateParam(name);
    }
 
    Variant HandleBuiltinFn(CallExpr *node);
-
-   Variant visit(std::shared_ptr<Expression> const& expr)
-   {
-      return visit(expr.get());
-   }
 
    Variant visit(Expression* expr)
    {
@@ -308,9 +256,9 @@ private:
 
    Variant VisitSubExpr(Expression *node, Variant &&V)
    {
-      if (auto &SubExpr = node->getMemberExpr()) {
+      if (auto SubExpr = node->getSubExpr()) {
          push(std::move(V));
-         V = visit(SubExpr.get());
+         V = visit(SubExpr);
       }
 
       return V;
@@ -329,11 +277,17 @@ private:
 
 Variant EvaluatorImpl::visitStaticExpr(StaticExpr *node)
 {
-   auto val = visitExpr(node, node->getExpr().get());
+   auto val = visitExpr(node, node->getExpr());
    if (val.stopEvaluation())
       return {};
 
+   node->setExprType(node->getExpr()->getExprType());
    return val.getResult();
+}
+
+Variant EvaluatorImpl::visitTemplateArgExpr(ast::TemplateArgExpr *node)
+{
+   return {};
 }
 
 namespace {
@@ -394,8 +348,8 @@ Variant EvaluatorImpl::visitConstraintExpr(ConstraintExpr *node)
 
    switch (node->getKind()) {
       case ConstraintExpr::Type: {
-         auto ty = visitTypeRef(node->getTypeConstraint().get());
-         result = val.applyBinaryOp(ty, ":").getInt() != 0;
+         auto ty = visitTypeRef(node->getTypeConstraint());
+         result = val.applyBinaryOp(ty, ":").getSExtValue() != 0;
 
          break;
       }
@@ -403,25 +357,25 @@ Variant EvaluatorImpl::visitConstraintExpr(ConstraintExpr *node)
       case ConstraintExpr::Struct:
       case ConstraintExpr::Enum:
       case ConstraintExpr::Union: {
-         if (!val.getType()->isObjectTy()) {
+         if (!val.getMetaType()->isObjectType()) {
             result = false;
          }
          else {
-            auto rec = val.getType()->getRecord();
-            result = rec->getTypeID() == (Record::TypeID)node->getKind();
+            auto rec = val.getMetaType()->getRecord();
+            result = rec->getTypeID() == (AstNode::NodeType)node->getKind();
          }
 
          break;
       }
       case ConstraintExpr::DefaultConstructible:
-         result = val.getType()->hasDefaultValue();
+         result = SP.hasDefaultValue(val.getMetaType());
          break;
       case ConstraintExpr::Function:
-         result = isa<FunctionType>(val.getType());
+         result = val.getMetaType()->isFunctionType();
          break;
       case ConstraintExpr::Pointer:
-         result = isa<PointerType>(val.getType())
-                || val.getType()->isRawFunctionTy();
+         result = val.getMetaType()->isPointerType()
+                || val.getMetaType()->isRawFunctionTy();
          break;
       case ConstraintExpr::Reference:
          llvm_unreachable("Hmmm....");
@@ -429,7 +383,7 @@ Variant EvaluatorImpl::visitConstraintExpr(ConstraintExpr *node)
 
    if (!result)
       err(err_generic_error, false)
-         << stringifyConstraint(val.getType(), node) << node;
+         << stringifyConstraint(*val.getMetaType(), node) << node;
 
    return Variant(result);
 }
@@ -440,22 +394,22 @@ Variant EvaluatorImpl::visitTraitsExpr(TraitsExpr *node)
       return Variant(B->getValue());
 
    if (auto I = dyn_cast<IntegerLiteral>(node->getResultExpr()))
-      return I->getValue();
+      return llvm::APInt(I->getValue());
 
    if (auto FP = dyn_cast<FPLiteral>(node->getResultExpr()))
-      return FP->getValue();
+      return llvm::APFloat(FP->getValue());
 
    return {};
 }
 
 Variant EvaluatorImpl::visitIntegerLiteral(IntegerLiteral *node)
 {
-   return node->getValue();
+   return llvm::APInt(node->getValue());
 }
 
 Variant EvaluatorImpl::visitFPLiteral(FPLiteral *node)
 {
-   return node->getValue();
+   return llvm::APFloat(node->getValue());
 }
 
 Variant EvaluatorImpl::visitBoolLiteral(BoolLiteral *node)
@@ -477,7 +431,7 @@ Variant EvaluatorImpl::visitStringInterpolation(StringInterpolation *node)
 {
    string s;
    for (const auto &value : node->getStrings()) {
-      auto val = visit(value.get());
+      auto val = visit(value);
       if (val.isVoid())
          return {};
 
@@ -492,7 +446,7 @@ Variant EvaluatorImpl::visitNoneLiteral(NoneLiteral *node)
    llvm_unreachable("not yet");
 }
 
-Variant EvaluatorImpl::visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node)
+Variant EvaluatorImpl::visitBuiltinExpr(BuiltinExpr *node)
 {
    llvm_unreachable("not yet");
 }
@@ -536,79 +490,80 @@ Variant EvaluatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *node)
                vec.emplace_back(el.getValue());
             }
 
-         return Variant(move(vec));
+         return Variant(VariantType::Array, move(vec));
       }
       else if (TA->isType())
          return Variant(TA->getType());
       else
          return TA->getValue();
    }
-   else if (getTemplateParam(node->getIdent())) {
+   else if (getTemplateParam(node, node->getIdent())) {
       typeDependant = true;
       return {};
    }
 
    if (node->getExprType()->isMetaType()) {
-      return { cast<MetaType>(*node->getExprType())->getUnderlyingType() };
+      return { node->getExprType()->asMetaType()->getUnderlyingType() };
    }
-   else if (node->isNamespace()) {
-      return {};
-   }
+//   else if (node->isNamespace()) {
+//      return {};
+//   }
+//
+//   Variant V;
+//
+//   if (node->isAlias()) {
+//      V = node->getAliasVal();
+//   }
+//   else if (node->isSelf()) {
+//      // TODO
+//   }
+//   else if (node->isCaptured()) {
+//      // TODO
+//   }
+//   else if (node->isFunctionArg()) {
+//      // TODO
+//   }
+//   else if (node->isFunction()) {
+//      // TODO
+//   }
+//   else if (!node->getBuiltinValue().isVoid()) {
+//      V = node->getBuiltinValue();
+//   }
+//   else if (auto builtinTy = node->getBuiltinType()) {
+//      switch (node->getBuiltinKind()) {
+//         case BuiltinIdentifier::NULLPTR:
+//            // TODO
+//            break;
+//         case BuiltinIdentifier::DOUBLE_SNAN:
+//            V = { std::numeric_limits<double>::signaling_NaN() };
+//            break;
+//         case BuiltinIdentifier::DOUBLE_QNAN:
+//            V = { std::numeric_limits<double>::quiet_NaN() };
+//            break;
+//         case BuiltinIdentifier::FLOAT_SNAN:
+//            V = { std::numeric_limits<float>::signaling_NaN() };
+//            break;
+//         case BuiltinIdentifier::FLOAT_QNAN:
+//            V = { std::numeric_limits<float>::quiet_NaN() };
+//            break;
+//         case BuiltinIdentifier::__ctfe:
+//            V = Variant(true);
+//            break;
+//         default:
+//            llvm_unreachable("Unsupported builtin identifier");
+//      }
+//   }
+//   else if (RecordCtx) {
+//      if (auto AT = RecordCtx->getAssociatedType(node->getIdent()))
+//         return Variant(*AT->getActualType()->getType());
+//   }
+//
+//   if (V.isVoid())
+//      err(err_undeclared_identifer)
+//         << node->getIdent() << node;
 
-   Variant V;
-
-   if (node->isAlias()) {
-      V = node->getAliasVal();
-   }
-   else if (node->isSelf()) {
-      // TODO
-   }
-   else if (node->isCaptured()) {
-      // TODO
-   }
-   else if (node->isFunctionArg()) {
-      // TODO
-   }
-   else if (node->isFunction()) {
-      // TODO
-   }
-   else if (!node->getBuiltinValue().isVoid()) {
-      V = node->getBuiltinValue();
-   }
-   else if (auto builtinTy = node->getBuiltinType()) {
-      switch (node->getBuiltinKind()) {
-         case BuiltinIdentifier::NULLPTR:
-            // TODO
-            break;
-         case BuiltinIdentifier::DOUBLE_SNAN:
-            V = { std::numeric_limits<double>::signaling_NaN() };
-            break;
-         case BuiltinIdentifier::DOUBLE_QNAN:
-            V = { std::numeric_limits<double>::quiet_NaN() };
-            break;
-         case BuiltinIdentifier::FLOAT_SNAN:
-            V = { std::numeric_limits<float>::signaling_NaN() };
-            break;
-         case BuiltinIdentifier::FLOAT_QNAN:
-            V = { std::numeric_limits<float>::quiet_NaN() };
-            break;
-         case BuiltinIdentifier::__ctfe:
-            V = Variant(true);
-            break;
-         default:
-            llvm_unreachable("Unsupported builtin identifier");
-      }
-   }
-   else if (RecordCtx) {
-      if (auto AT = RecordCtx->getAssociatedType(node->getIdent()))
-         return Variant(*AT->getType());
-   }
-
-   if (V.isVoid())
-      err(err_undeclared_identifer)
-         << node->getIdent() << node;
-
-   return V;
+//   return V;
+   llvm_unreachable("wait for it");
 }
 
 Variant EvaluatorImpl::visitMemberRefExpr(MemberRefExpr *node)
@@ -637,8 +592,7 @@ Variant EvaluatorImpl::visitMemberRefExpr(MemberRefExpr *node)
       case MemberKind::Field:
          break;
       case MemberKind::AssociatedType:
-         V = Variant(cast<MetaType>(*node->getFieldType())
-                        ->getUnderlyingType());
+         V = Variant(node->getFieldType()->asMetaType()->getUnderlyingType());
 
          break;
    }
@@ -661,9 +615,9 @@ Variant EvaluatorImpl::HandleBuiltinFn(CallExpr *node)
    auto ty = node->getBuiltinArgType();
    switch (node->getBuiltinFnKind()) {
       case BuiltinFn::SIZEOF:
-         return Variant(ty->getSize());
+         return Variant(uint64_t(ty->getSize()));
       case BuiltinFn::ALIGNOF:
-         return Variant((size_t)ty->getAlignment());
+         return Variant(uint64_t(ty->getAlignment()));
       default:
          break;
    }
@@ -679,6 +633,13 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *node)
 {
    if (node->getBuiltinFnKind() != BuiltinFn::None)
       return HandleBuiltinFn(node);
+
+   switch (node->getKind()) {
+      case CallKind::PrimitiveInitializer:
+//         return visit(node->getArgs().front()).castTo(*node->getExprType());
+      default:
+         break;
+   }
 
    if (node->getIdent() == "decltype") {
       std::vector<Variant> vec;
@@ -699,7 +660,7 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *node)
          return vec.front();
       }
 
-      return Variant(move(vec));
+      return Variant(VariantType::Array, move(vec));
    }
 
    return {};
@@ -707,7 +668,7 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *node)
 
 Variant EvaluatorImpl::visitUnaryOperator(UnaryOperator *node)
 {
-   auto res = visitExpr(node, node->getTarget().get());
+   auto res = visitExpr(node, node->getTarget());
    if (res.stopEvaluation())
       return {};
 
@@ -715,9 +676,9 @@ Variant EvaluatorImpl::visitUnaryOperator(UnaryOperator *node)
    auto &op = node->getOp();
    auto val = expr.applyUnaryOp(op);
 
-   if (val.getKind() == VariantType::VOID)
+   if (val.getKind() == VariantType::Void)
       err(err_unary_op_not_applicable)
-         << op << 0 << Variant::typeToString(expr.getKind())
+         << op << 0 << "xx"
          << node;
 
    return val;
@@ -728,7 +689,7 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator *node)
    if (node->getOp() == ":") {
       auto result = node->getTypePredicateResult();
       if (!result) {
-         auto constraint = cast<ConstraintExpr>(node->getRhs().get());
+         auto constraint = cast<ConstraintExpr>(node->getRhs());
          err(err_generic_error, false)
             << stringifyConstraint(*node->getLhs()->getExprType(),
                                    constraint)
@@ -738,12 +699,12 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator *node)
       return Variant(result);
    }
 
-   auto lhsRes = visitExpr(node, node->getLhs().get());
+   auto lhsRes = visitExpr(node, node->getLhs());
    if (lhsRes.stopEvaluation())
       return {};
 
 
-   auto rhsRes = visitExpr(node, node->getRhs().get());
+   auto rhsRes = visitExpr(node, node->getRhs());
    if (rhsRes.stopEvaluation())
       return {};
 
@@ -751,29 +712,29 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator *node)
    auto &rhs = rhsRes.getResult();
 
    auto res = lhs.applyBinaryOp(rhs, node->getOp());
-   if (res.getKind() == VariantType::VOID)
+   if (res.getKind() == VariantType::Void)
       err(err_binop_not_applicable)
-         << node->getOp() << Variant::typeToString(lhs.getKind())
-         << Variant::typeToString(rhs.getKind()) << node;
+         << node->getOp() << "xx"
+         << "yy" << node;
 
    return res;
 }
 
 Variant EvaluatorImpl::visitTertiaryOperator(TertiaryOperator *node)
 {
-   auto condRes = visitExpr(node, node->getCondition().get());
+   auto condRes = visitExpr(node, node->getCondition());
    if (condRes.stopEvaluation())
       return {};
 
    auto &cond = condRes.getResult();
-   if (cond.getKind() != VariantType::INT)
+   if (cond.getKind() != VariantType::Int)
       err(err_cond_not_boolean)
          << 3 /*tertiary op*/ << node;
 
-   if (cond.getInt() != 0)
-      return visit(node->getLhs().get());
+   if (cond.getSExtValue() != 0)
+      return visit(node->getLhs());
 
-   return visit(node->getRhs().get());
+   return visit(node->getRhs());
 }
 
 Variant EvaluatorImpl::visitExprSequence(ExprSequence *node)
@@ -783,7 +744,7 @@ Variant EvaluatorImpl::visitExprSequence(ExprSequence *node)
 
 Variant EvaluatorImpl::visitTypeRef(TypeRef *node)
 {
-   return Variant(*node->getTypeRef());
+   return Variant(node->getType());
 }
 
 Variant EvaluatorImpl::visitTupleLiteral(TupleLiteral *node)
@@ -798,25 +759,24 @@ Variant EvaluatorImpl::visitLambdaExpr(LambdaExpr *node)
 
 Variant EvaluatorImpl::visitLvalueToRvalue(LvalueToRvalue *node)
 {
-   return visit(node->getTarget().get());
+   return visit(node->getTarget());
 }
 
 Variant EvaluatorImpl::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
-   return visit(node->getTarget().get());
+   return visit(node->getTarget());
 }
 
 StaticExprEvaluator::StaticExprEvaluator(SemaPass &S,
                                          sema::TemplateArgList const* TAList)
-   : pImpl(new EvaluatorImpl(S, S.currentClass(), S.currentScope()->function,
-                             S.importedNamespaces(), TAList))
+   : pImpl(new EvaluatorImpl(S, nullptr, nullptr, {}, TAList))
 {
 
 }
 
 StaticExprEvaluator::StaticExprEvaluator(SemaPass &S,
-                                         cl::Record *ClassContext,
-                                         Callable *FuncCtx,
+                                         RecordDecl *ClassContext,
+                                         CallableDecl *FuncCtx,
                                       llvm::ArrayRef<size_t> importedNamespaces,
                                          sema::TemplateArgList const* TAList)
    : pImpl(new EvaluatorImpl(S, ClassContext, FuncCtx,

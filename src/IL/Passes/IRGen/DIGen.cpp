@@ -4,25 +4,16 @@
 
 #include "IRGen.h"
 
-#include "../../../Variant/Type/IntegerType.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/ArrayType.h"
-#include "../../../Variant/Type/ObjectType.h"
-#include "../../../Variant/Type/GenericType.h"
-
-#include "../../../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../../../AST/Passes/SemanticAnalysis/Record/Enum.h"
-#include "../../../AST/Passes/SemanticAnalysis/Record/Union.h"
+#include "../../../Variant/Type/Type.h"
 
 #include "../../../Files/FileUtils.h"
 #include "../../../Files/FileManager.h"
 #include "../../../Compiler.h"
 
 #include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/Module.h>
 
+using std::string;
 using namespace cdot::fs;
 using namespace cdot::support;
 
@@ -31,15 +22,6 @@ namespace il {
 
 llvm::MDNode* IRGen::emitModuleDI()
 {
-   auto CU =  DI->createCompileUnit(
-      llvm::dwarf::DW_LANG_C,
-      File,
-      "cdotc v0.1",
-      false,
-      "",
-      0
-   );
-
    for (const auto& Sub : DIFuncMap) {
       Sub.second->replaceUnit(CU);
    }
@@ -60,6 +42,29 @@ llvm::DIFile* IRGen::getFileDI(size_t fileID, llvm::StringRef fileName,
    auto it = DIFileMap.find(ID);
    if (it != DIFileMap.end())
       return it->second;
+
+   auto File = DI->createFile(
+      fileName,
+      path
+   );
+
+   DIFileMap.try_emplace(ID, File);
+   return File;
+}
+
+llvm::DIFile* IRGen::getFileDI(SourceLocation loc)
+{
+   auto ID = loc.getSourceId();
+   auto it = DIFileMap.find(ID);
+   if (it != DIFileMap.end())
+      return it->second;
+
+   if (!ID)
+      return File;
+
+   auto fileNameAndPath = fs::FileManager::getFileName(ID).str();
+   auto path = fs::getPath(fileNameAndPath);
+   auto fileName = fs::getFileName(fileNameAndPath);
 
    auto File = DI->createFile(
       fileName,
@@ -117,7 +122,7 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
       }
       case TypeID::PointerTypeID: {
          MD = DI->createPointerType(
-            getTypeDI(*ty->asPointerTy()->getPointeeType()),
+            getTypeDI(*ty->asPointerType()->getPointeeType()),
             sizeof(void*) * 8,
             sizeof(void*)
          );
@@ -127,8 +132,8 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
       case TypeID::FunctionTypeID: {
          if (ty->isRawFunctionTy()) {
             std::vector<llvm::Metadata*> argTypes;
-            for (auto& argTy : ty->asFunctionTy()->getArgTypes()) {
-               argTypes.push_back(getTypeDI(*argTy.type));
+            for (auto& argTy : ty->asFunctionType()->getArgTypes()) {
+               argTypes.push_back(getTypeDI(*argTy));
             }
 
             MD = DI->createPointerType(
@@ -141,7 +146,7 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
          }
          else {
             MD = DI->createPointerType(
-               getTypeDI(IntegerType::get(8)),
+               nullptr,
                sizeof(void*) * 8,
                sizeof(void*)
             );
@@ -154,11 +159,10 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
          break;
       }
       case TypeID::MetaTypeID: {
-         MD = getRecordDI(ObjectType::get("cdot.TypeInfo"));
-         break;
+         llvm_unreachable("should not be possible here!");
       }
       case TypeID::TupleTypeID: {
-         auto tuple = ty->asTupleTy();
+         auto tuple = ty->asTupleType();
 
          auto flags = llvm::DINode::DIFlags::FlagZero;
          std::vector<llvm::Metadata *> containedTypes;
@@ -166,10 +170,10 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
          short align = 0;
 
          for (auto& cont : tuple->getContainedTypes()) {
-            containedTypes.push_back(getTypeDI(*cont.second));
-            size += cont.second->getSize();
+            containedTypes.push_back(getTypeDI(*cont));
+            size += cont->getSize();
 
-            auto _align = cont.second->getAlignment();
+            auto _align = cont->getAlignment();
             if (_align > align) {
                align = _align;
             }
@@ -190,11 +194,11 @@ llvm::DIType* IRGen::getTypeDI(Type *ty)
          break;
       }
       case TypeID::ArrayTypeID: {
-         auto ArrTy = cast<ArrayType>(ty);
+         ArrayType *ArrTy = ty->asArrayType();
          MD = DI->createArrayType(
             ArrTy->getNumElements(),
             ArrTy->getAlignment(),
-            getTypeDI(ArrTy->getElementType()),
+            getTypeDI(*ArrTy->getElementType()),
             DI->getOrCreateArray({})
          );
 
@@ -234,7 +238,7 @@ llvm::dwarf::Tag IRGen::getTagForRecord(AggregateType *Ty)
 
 llvm::DIType* IRGen::getRecordDI(Type *ty)
 {
-   assert(ty->isObjectTy());
+   assert(ty->isObjectType());
 
    llvm::DIType *MD;
    auto flags = llvm::DINode::DIFlags::FlagZero;
@@ -243,6 +247,8 @@ llvm::DIType* IRGen::getRecordDI(Type *ty)
    auto Ty = ILMod->getType(ty->getClassName());
 
    auto loc = Ty->getLocation();
+   auto File = getFileDI(Ty->getSourceLoc());
+
    llvm::DICompositeType *forwardDecl = DI->createReplaceableCompositeType(
       getTagForRecord(Ty),
       Ty->getName(),
@@ -281,8 +287,8 @@ llvm::DIType* IRGen::getRecordDI(Type *ty)
          S->getName(),
          File,
          (unsigned)loc->getLine(),
-         S->getSize() * 8,
-         S->getAlignment() * (unsigned short)8,
+         ty->getSize() * 8,
+         ty->getAlignment() * (unsigned short)8,
          0,
          flags,
          nullptr,
@@ -303,8 +309,8 @@ llvm::DIType* IRGen::getRecordDI(Type *ty)
          U->getName(),
          File,
          (unsigned)loc->getLine(),
-         U->getSize() * 8,
-         U->getAlignment() * (unsigned short)8,
+         ty->getSize() * 8,
+         ty->getAlignment() * (unsigned short)8,
          flags,
          contained
       );
@@ -329,7 +335,62 @@ llvm::DIType* IRGen::getRecordDI(Type *ty)
       );
    }
    else if (auto P = dyn_cast<ProtocolType>(Ty)) {
-      return getRecordDI(ObjectType::get("cdot.Protocol"));
+//      auto vtbl = DI->createMemberType(
+//         forwardDecl,
+//         "vtbl",
+//         File,
+//         (unsigned)loc->getLine(),
+//         sizeof(void*) * CHAR_BIT,
+//         alignof(void*) * CHAR_BIT,
+//         0,
+//         flags,
+//         getTypeDI(IntegerType::getCharTy()->getPointerTo())
+//      );
+//
+//      auto obj = DI->createMemberType(
+//         forwardDecl,
+//         "obj",
+//         File,
+//         (unsigned)loc->getLine(),
+//         sizeof(void*) * CHAR_BIT,
+//         alignof(void*) * CHAR_BIT,
+//         0,
+//         flags,
+//         getTypeDI(IntegerType::getCharTy()->getPointerTo())
+//      );
+//
+//      auto size = DI->createMemberType(
+//         forwardDecl,
+//         "size",
+//         File,
+//         (unsigned)loc->getLine(),
+//         sizeof(uint64_t) * CHAR_BIT,
+//         alignof(uint64_t) * CHAR_BIT,
+//         0,
+//         flags,
+//         getTypeDI(IntegerType::getUnsigned())
+//      );
+
+//      containedTypes.push_back(vtbl);
+//      containedTypes.push_back(obj);
+//      containedTypes.push_back(size);
+
+      auto contained = DI->getOrCreateArray(containedTypes);
+      MD = DI->createClassType(
+         ScopeStack.top(),
+         "cdot.Protocol",
+         File,
+         (unsigned)loc->getLine(),
+         ty->getSize() * 8,
+         ty->getAlignment() * (unsigned short)8,
+         0,
+         flags,
+         nullptr,
+         contained,
+         nullptr,
+         nullptr,
+         "cdot.Protocol"
+      );
    }
    else {
       llvm_unreachable("unknown record type");
@@ -355,7 +416,7 @@ void IRGen::endScope()
 void IRGen::beginLexicalScope(const SourceLocation &loc)
 {
    auto lineAndLoc = fs::FileManager::getLineAndCol(loc);
-   auto scope = DI->createLexicalBlock(ScopeStack.top(), File,
+   auto scope = DI->createLexicalBlock(ScopeStack.top(), getFileDI(loc),
                                        lineAndLoc.first, 1);
 
    beginScope(scope);
@@ -368,6 +429,8 @@ void IRGen::emitLocalVarDI(Instruction const &I, llvm::Value *inst)
       expr.push_back((uint64_t)llvm::dwarf::DW_OP_deref);
 
    auto loc = I.getLocation();
+   auto File = getFileDI(loc->getLocation());
+
    DI->insertDeclare(
       inst,
       DI->createAutoVariable(
@@ -386,6 +449,8 @@ void IRGen::emitLocalVarDI(Instruction const &I, llvm::Value *inst)
 llvm::MDNode* IRGen::emitGlobalVarDI(GlobalVariable const& G,
                                      llvm::GlobalVariable *var) {
    auto loc = G.getLocation();
+   auto File = getFileDI(loc->getLocation());
+
    auto MD = DI->createGlobalVariableExpression(
       ScopeStack.top(),
       G.getName(),
@@ -421,6 +486,7 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
 
    llvm::DISubprogram *MD;
 
+   auto File = getFileDI(F.getSourceLoc());
    if (auto M = dyn_cast<Method>(&F)) {
       MD = DI->createMethod(
          ScopeStack.top(),
@@ -434,7 +500,7 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
          M->isVirtual(),
          M->getVtableOffset(),
          1,
-         getTypeDI(ObjectType::get(M->getRecordType()->getName()))
+         nullptr //FIXME
       );
    }
    else {
@@ -471,6 +537,8 @@ void IRGen::emitArgumentDI(il::Function const &F, llvm::Function *func)
       ++i;
       ++arg_it;
    }
+
+   auto File = getFileDI(F.getSourceLoc());
 
    for (const auto &Arg : F.getEntryBlock()->getArgs()) {
       auto loc = F.getLocation();
@@ -510,7 +578,7 @@ void IRGen::emitArgumentDI(il::Function const &F, llvm::Function *func)
             (unsigned)loc->getLine(),
             getTypeDI(*Arg.getType())
          ),
-         Arg.getType()->isObjectTy() ? DI->createExpression(expr)
+         Arg.getType()->isObjectType() ? DI->createExpression(expr)
                                      : DI->createExpression(),
          dl,
          &func->getEntryBlock()

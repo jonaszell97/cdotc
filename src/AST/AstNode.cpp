@@ -2,11 +2,18 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
-#include "AstNode.h"
-#include "Attribute/Attribute.h"
-#include "../Variant/Type/Generic.h"
+#include "AST/Attribute/Attribute.h"
 
-#include "Passes/ASTIncludes.h"
+#include "AST/Expression/StaticExpr.h"
+
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Statement/Declaration/Class/MethodDecl.h"
+#include "AST/Statement/Declaration/CallableDecl.h"
+#include "AST/Statement/Declaration/TypedefDecl.h"
+#include "AST/Statement/Declaration/NamespaceDecl.h"
+#include "AST/Statement/Block/CompoundStmt.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
@@ -15,25 +22,42 @@ AstNode::AstNode(NodeType typeID) : typeID(typeID), SubclassData(0) { }
 
 AstNode::~AstNode()
 {
-   destroyValue();
+
 }
 
-void AstNode::destroyValue()
+DeclContext* AstNode::castToDeclContext(const AstNode *D)
 {
-   switch (typeID) {
-#  define CDOT_ASTNODE(Name)                                   \
-      case Name##ID:                                           \
-         static_cast<Name*>(this)->destroyValueImpl(); return;
+   switch (D->getTypeID()) {
+#  define CDOT_DECL_CONTEXT(Name)                               \
+      case Name##ID:                                            \
+         return static_cast<Name*>(const_cast<AstNode*>(D));
 #  include "AstNode.def"
 
       default:
-         llvm_unreachable("bad ASTNode kind");
+         llvm_unreachable("not a named decl");
    }
 }
 
-void AstNode::destroyValueImpl()
+AstNode* AstNode::castFromDeclContext(const DeclContext *Ctx)
 {
+   switch (Ctx->getDeclKind()) {
+#  define CDOT_DECL_CONTEXT(Name)                                   \
+      case Name##ID:                                   \
+         return static_cast<Name*>(const_cast<DeclContext*>(Ctx));
+#  include "AstNode.def"
 
+      default:
+         llvm_unreachable("not a named decl");
+   }
+}
+
+void AstNode::setContextualType(QualType ty)
+{
+   contextualType = ty;
+
+   if (auto S = dyn_cast<StaticExpr>(this)) {
+      S->getExpr()->setContextualType(ty);
+   }
 }
 
 void AstNode::setAttributes(std::vector<Attribute> &&attr)
@@ -65,42 +89,7 @@ Attribute& AstNode::getAttribute(Attr kind)
       }
    }
 
-   assert(false && "Call hasAttribute first");
-   llvm_unreachable("see above");
-}
-
-const SourceLocation &AstNode::getSourceLoc() const
-{
-   return loc;
-}
-
-void AstNode::setSourceLoc(const SourceLocation &loc)
-{
-   AstNode::loc = loc;
-}
-
-AstNode *AstNode::getParent() const
-{
-   return parent;
-}
-
-void AstNode::setParent(AstNode *parent)
-{
-   AstNode::parent = parent;
-}
-
-const QualType &AstNode::getContextualType() const
-{
-   return contextualType;
-}
-const string &AstNode::getBinding() const
-{
-   return binding;
-}
-
-void AstNode::setBinding(const string &binding)
-{
-   AstNode::binding = binding;
+   llvm_unreachable("Call hasAttribute first");
 }
 
 } // namespace ast

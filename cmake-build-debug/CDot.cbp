@@ -17,47 +17,11 @@
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
-			<Target title="gen_builtins">
-				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
+			<Target title="edit_cache">
 				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
-				<Option object_output="./"/>
-				<Option type="1"/>
-				<Option compiler="gcc"/>
-				<Compiler>
-					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
-					<Add directory="/usr/include"/>
-					<Add directory="/System/Library/Frameworks"/>
-					<Add directory="/Library/Frameworks"/>
-				</Compiler>
+				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins"/>
-					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-				</MakeCommands>
-			</Target>
-			<Target title="gen_builtins/fast">
-				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
-				<Option object_output="./"/>
-				<Option type="1"/>
-				<Option compiler="gcc"/>
-				<Compiler>
-					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
-					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
-					<Add directory="/usr/include"/>
-					<Add directory="/System/Library/Frameworks"/>
-					<Add directory="/Library/Frameworks"/>
-				</Compiler>
-				<MakeCommands>
-					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins/fast"/>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
 					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
 					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
@@ -73,11 +37,51 @@
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
-			<Target title="edit_cache">
+			<Target title="cdot-tblgen">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/cdot-tblgen" prefix_auto="0" extension_auto="0"/>
 				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
-				<Option type="4"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCDOT_SMALL_VARIANT=1"/>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 cdot-tblgen"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="cdot-tblgen/fast">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/cdot-tblgen" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCDOT_SMALL_VARIANT=1"/>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 cdot-tblgen/fast"/>
 					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
 					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
@@ -92,6 +96,7 @@
 				<Compiler>
 					<Add option="-DCDOT_LEXER_STANDALONE=1"/>
 					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
 					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
@@ -116,6 +121,7 @@
 				<Compiler>
 					<Add option="-DCDOT_LEXER_STANDALONE=1"/>
 					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
 					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
@@ -131,6 +137,102 @@
 					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
+			<Target title="gen_builtins">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gen_builtins/fast">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/gen_builtins" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 gen_builtins/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="cdotc-tblgens">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/libcdotc-tblgens.dylib" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 cdotc-tblgens"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="cdotc-tblgens/fast">
+				<Option output="/Users/Jonas/CDot/cmake-build-debug/libcdotc-tblgens.dylib" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
+					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 cdotc-tblgens/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/Jonas/CDot/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
 			<Target title="cdotc">
 				<Option output="/Users/Jonas/CDot/cmake-build-debug/cdotc" prefix_auto="0" extension_auto="0"/>
 				<Option working_dir="/Users/Jonas/CDot/cmake-build-debug"/>
@@ -139,6 +241,7 @@
 				<Option compiler="gcc"/>
 				<Compiler>
 					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
 					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
@@ -162,6 +265,7 @@
 				<Option compiler="gcc"/>
 				<Compiler>
 					<Add directory="/usr/local/Cellar/llvm/4.0.0_1/include"/>
+					<Add directory="/Users/Jonas/CDot/src"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"/>
 					<Add directory="/usr/local/include"/>
 					<Add directory="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.0.0/include"/>
@@ -178,6 +282,12 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ASTContext.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ASTContext.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/AstDeclarations.h">
 			<Option target="cdotc"/>
 		</Unit>
@@ -316,6 +426,18 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Operator/UnaryOperator.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ParentMap.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ParentMap.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/ASTDumper/ASTDumper.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/ASTDumper/ASTDumper.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AbstractPass.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -388,6 +510,9 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/ILGen/ILGenPass.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/NullASTVisitor.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Output/HeaderGen.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -398,9 +523,6 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/PrettyPrint/PrettyPrinter.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Builtin.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Builtin.h">
@@ -418,52 +540,16 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/ExpressionResolver.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Function.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Function.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/GlobalDependency.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/GlobalDependency.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/OverloadResolver.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Class.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Scope/Scope.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Class.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Enum.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Enum.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Protocol.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Protocol.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Record.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Record.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Union.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Record/Union.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Scope/Scope.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/SemaCall.cpp">
@@ -499,31 +585,10 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Variant/Variant.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/Serialize.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/SemanticAnalysis/Variant/Variant.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/BitstreamReader.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/BitstreamWriter.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleReader.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleReader.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleSerial.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleWriter.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/ModuleWriter.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/Serialization/Serialize.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/StaticExpr/StaticExprEvaluator.cpp">
@@ -613,25 +678,7 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/CallableDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ConstrDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/ConstrDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/DestrDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/DestrDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumCaseDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumCaseDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/FieldDecl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/FieldDecl.h">
@@ -643,9 +690,6 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/MethodDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/PropDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/PropDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
@@ -655,10 +699,10 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordSubDecl.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclContext.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordSubDecl.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclContext.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclareStmt.cpp">
@@ -667,16 +711,16 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclareStmt.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/FuncArgDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/FuncArgDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamedDecl.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamedDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.cpp">
@@ -685,19 +729,10 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/TypedefDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/TypedefDecl.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/ThrowStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/ThrowStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/TryStmt.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/TryStmt.h">
@@ -730,6 +765,18 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/SymbolTable.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Transform.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Transform.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Traverse.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Traverse.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/Builtin/BuiltinGen.h">
 			<Option target="gen_builtins"/>
 		</Unit>
@@ -746,6 +793,15 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/DependencyGraph.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/IdentifierInfo.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/IdentifierInfo.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/Mangle.cpp">
@@ -754,13 +810,24 @@
 		<Unit filename="/Users/Jonas/CDot/src/Basic/Mangle.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/Precedence.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/Precedence.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/CTFE/CTFEEngine.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/CTFE/CTFEEngine.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/StaticEvaluator.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/CTFE/StaticEvaluator.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/CTFE/Value.cpp">
@@ -775,24 +842,22 @@
 		<Unit filename="/Users/Jonas/CDot/src/Compiler.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Compiler/PassManager.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Compiler/PassManager.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Files/FileManager.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Files/FileManager.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Files/FileUtils.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Files/FileUtils.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/ILBuilder.cpp">
@@ -850,6 +915,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Passes/VerifierPass.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Serialize/Serialization.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Serialize/Serialization.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value/Constant/Constant.cpp">
@@ -1006,15 +1077,11 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Message/Diagnostics.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Message/Diagnostics.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Message/Exceptions.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Message/Exceptions.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Message/def/DiagnosticParser.cpp">
@@ -1028,13 +1095,42 @@
 		<Unit filename="/Users/Jonas/CDot/src/Message/main.cpp">
 			<Option target="parse_diagnostics"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/BitstreamReader.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/BitstreamWriter.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Casting.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/ConditionalIterator.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/ExtendedSerializerBase.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Format.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Format.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/LLVM.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/LiteralParser.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/LiteralParser.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/SerializerBase.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Various.h">
@@ -1043,46 +1139,68 @@
 		<Unit filename="/Users/Jonas/CDot/src/Support/WriterBase.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Template/Specilization.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Backend/EmitClassHierarchy.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Template/Specilization.h">
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Backend/PrintRecords.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Template/TokenStore.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Backend/TableGenBackends.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Template/TokenStore.h">
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Parser.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Parser.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Record.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Record.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/TableGen.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/TableGen.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Type.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Type.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Value.cpp">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/Value.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/TableGen/main.cpp">
+			<Option target="cdot-tblgen"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp">
+			<Option target="cdotc-tblgens"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Util.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Util.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/ArrayType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/ArrayType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/AutoType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/AutoType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/FPType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/FPType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/FunctionType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/FunctionType.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Generic.cpp">
@@ -1091,64 +1209,10 @@
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Generic.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/GenericType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/GenericType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/IntegerType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/IntegerType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/MetaType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/MetaType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/ObjectType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/ObjectType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/PointerType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/PointerType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/PrimitiveType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/PrimitiveType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/QualType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/QualType.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TupleType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TupleType.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Type.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Type.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TypeGroup.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TypeGroup.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TypeUtils.cpp">
@@ -1157,25 +1221,23 @@
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/TypeUtils.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/VoidType.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/VoidType.h">
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Variant.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Variant.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/Lexer.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/Lexer.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
@@ -1186,21 +1248,38 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/Preprocessor.cpp">
-			<Option target="parse_diagnostics"/>
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/lex/Preprocessor.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/SourceLocation.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/Token.cpp">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/lex/Token.h">
+			<Option target="cdot-tblgen"/>
 			<Option target="parse_diagnostics"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/lex/TokenKinds.h">
+			<Option target="cdot-tblgen"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/main.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/IdentifierTable.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/IdentifierTable.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/module/Module.cpp">
@@ -1215,6 +1294,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/module/ModuleManager.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleMap.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/ModuleMap.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/module/ModuleParser.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -1225,6 +1310,12 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/module/ModuleWriter.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/Serialization.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/module/Serialization.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/parse/DeclParser.cpp">

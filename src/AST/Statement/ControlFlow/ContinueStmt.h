@@ -14,7 +14,7 @@ class ContinueStmt : public Statement {
 public:
    ContinueStmt() : Statement(ContinueStmtID) {}
 
-   typedef std::shared_ptr<ContinueStmt> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {

@@ -9,89 +9,40 @@
 #include <vector>
 #include <stack>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/ArrayRef.h>
 
 #include "Token.h"
-
-#ifndef CDOT_LEXER_STANDALONE
-
-#define CDOT_DIAGNOSE(msg) diag::err(diag::err_generic_error) << msg \
-   << this << diag::term;
-
-#else
-
-#define CDOT_DIAGNOSE(msg) do{}while(0);
-
-#endif
+#include "../Message/Diagnostics.h"
 
 namespace llvm {
-
-class MemoryBuffer;
-
+   class MemoryBuffer;
 } // namespace llvm
 
 namespace cdot {
-
-class TemplateArg;
-
-namespace util {
-
-extern std::vector<string> assignmentOperators;
-string isAssignmentOperator(const string &);
-
-extern llvm::StringMap<int> op_precedence;
-
-extern std::vector<string> binary_operators;
-extern std::vector<string> PrefixUnaryOperators;
-extern std::vector<string> PostfixUnaryOperators;
-
-extern std::vector<char> operator_chars;
-extern std::vector<char> punctuators;
-
-extern string token_names[];
-extern std::vector<string> keywords;
-
-} // namespace util
-
+   struct Variant;
+   class IdentifierTable;
+   class PreprocessorImpl;
 } // namespace cdot
 
 namespace cdot {
 
 namespace parse {
-class Parser;
+   class Parser;
 } // namespace parse
 
 namespace diag {
-class DiagnosticBuilder;
+   class DiagnosticBuilder;
 } // namespace parse
 
 namespace module {
-struct ModuleLexerTraits;
+   struct ModuleLexerTraits;
 } // namespace module
 
 namespace lex {
 
-enum class BuiltinMacro : unsigned;
-extern llvm::StringMap<pair<BuiltinMacro, int>> BuiltinMacros;
-
-struct LispMacro;
-struct LexerTraits;
-
-struct ExpansionInfo {
-   SourceLocation expandedMacroLoc;
-   llvm::StringRef macroName;
-   std::vector<std::pair<std::string, std::string>> expansionArgs;
-};
-
-ExpansionInfo *getExpansionInfo(SourceLocation loc);
-
-template<class Traits = LexerTraits>
-class Lexer {
+class Lexer: public diag::DiagnosticIssuer {
 public:
-   enum TypeID {
-      LexerID,
-      MacroExpansionLexerID
-   };
-
 #ifdef NDEBUG
    using TokenVec   = llvm::SmallVector<Token, 256>;
    using PPTokenVec = llvm::SmallVector<Token, 64>;
@@ -100,49 +51,21 @@ public:
    using PPTokenVec = std::vector<Token>;
 #endif
 
-   explicit Lexer(TypeID id = LexerID);
-   Lexer(llvm::MemoryBuffer *buf,
-         unsigned sourceId);
-
-   explicit Lexer(std::vector<Token> &&tokens);
+   Lexer(IdentifierTable &Idents,
+         llvm::MemoryBuffer *buf,
+         unsigned sourceId,
+         const char InterpolationBegin = '$');
 
 #ifndef NDEBUG
    virtual
 #endif
    ~Lexer() = default;
 
-   enum Mode : unsigned char {
-      Normal,
-      ForInStmt, // enable contextual 'in' keyword
-      TemplateConstraints, // parse typename, value and any as keywords
-      TemplateArgMode, // parse >> as two seperate tokens
-      MemberAccess // parse e.g. x.0.0 as two member accesses, instead of a
-                   // '.' and a floating point literal
-   };
-
    void lex();
 
-   void setMode(Mode m)
-   {
-      mode = m;
-   }
+   llvm::StringRef getCurrentIdentifier() const;
 
    // RAII utility classes
-
-   class ModeScopeGuard {
-   public:
-      ModeScopeGuard(Mode m, Lexer *lex);
-      ~ModeScopeGuard();
-
-   protected:
-      Lexer *lex;
-      Mode prevMode;
-   };
-
-   ModeScopeGuard makeModeGuard(Mode m)
-   {
-      return ModeScopeGuard(m, this);
-   }
 
    class StateSaveGuard {
    public:
@@ -164,7 +87,7 @@ public:
    template<class ...Rest>
    void expect_impl(tok::TokenType ty, Rest... rest)
    {
-      if (currentTok()._type == ty) return;
+      if (currentTok().is(ty)) return;
       expect_impl(rest...);
    }
 
@@ -173,7 +96,7 @@ public:
    template <class ...Rest>
    bool advanceIf(tok::TokenType ty, Rest... rest)
    {
-      if (currentTok()._type == ty) {
+      if (currentTok().is(ty)) {
          advance();
          return true;
       }
@@ -184,7 +107,7 @@ public:
 
    bool advanceIf(tok::TokenType ty)
    {
-      if (currentTok()._type == ty) {
+      if (currentTok().is(ty)) {
          advance();
          return true;
       }
@@ -194,31 +117,27 @@ public:
 
    void advance(bool ignoreNewLine = true, bool significantWhitespace = false);
    Token lookahead(bool ignoreNewline = true, bool sw = false, size_t i = 0);
-   char get_next_char();
-   char char_lookahead();
-   void backtrack_c(int);
    void backtrack();
 
-   void reset(const char *src, size_t len);
+   bool isOperatorContinuationChar(char c);
 
    static char escape_char(char);
-   static string unescape_char(char);
-
-   string strVal();
-   string &strRef();
+   static std::string unescape_char(char);
 
    const char* getSrc()
    {
-      return begin;
+      return BufStart;
    }
 
    const char* getBuffer()
    {
-      return curr;
+      return CurPtr;
    }
 
-   size_t currentIndex = 0;
-   size_t currentLine = 1;
+   unsigned currentIndex() const
+   {
+      return unsigned(CurPtr - BufStart);
+   }
 
    Token const& currentTok() const
    {
@@ -227,53 +146,31 @@ public:
 
    SourceLocation getSourceLoc() const
    {
-      return SourceLocation(currentIndex, sourceId);
+      if (doneLexing) return currentTok().getSourceLoc();
+      return SourceLocation(currentIndex(), sourceId);
    }
 
-   void setIgnoreInterpolation(bool ignoreInterpolation)
+   struct SafePoint {
+      SafePoint(Lexer &lex, size_t idx)
+         : lex(lex), idx(idx)
+      {}
+
+      void reset()
+      {
+         lex.tokenIndex = idx;
+      }
+
+   private:
+      Lexer &lex;
+      size_t idx;
+   };
+
+   SafePoint makeSafePoint()
    {
-      Lexer::ignoreInterpolation = ignoreInterpolation;
+      return SafePoint(*this, tokenIndex);
    }
 
    void printTokensTo(llvm::raw_ostream &out);
-
-   friend class parse::Parser;
-   friend class ParseError;
-
-   typedef std::unique_ptr<Lexer> UniquePtr;
-
-   struct IgnoreScope {
-      IgnoreScope(Lexer *lex,
-                  bool ignoreValue = true,
-                  bool ignoreMacro = true,
-                  bool ignoreDirective = true)
-         : lex(lex), prevIgnoreVal(lex->ignoreValue),
-           prevIgnoreMacro(lex->ignoreMacro),
-           prevIgnoreDirective(lex->ignoreDirective)
-      {
-         lex->ignoreValue = ignoreValue;
-         lex->ignoreMacro = ignoreMacro;
-         lex->ignoreDirective = ignoreDirective;
-      }
-
-      ~IgnoreScope() {
-         lex->ignoreValue = prevIgnoreVal;
-         lex->ignoreMacro = prevIgnoreMacro;
-         lex->ignoreDirective = prevIgnoreDirective;
-      }
-
-      Lexer *lex = nullptr;
-      bool prevIgnoreVal;
-      bool prevIgnoreMacro;
-      bool prevIgnoreDirective;
-   };
-
-
-   static bool is_identifier_char(char);
-   static bool is_operator_char(char);
-   static bool is_number(char, bool);
-   static bool is_hex(char);
-   static bool is_punctuator(char);
 
    enum ParenKind {
       PAREN = '(',
@@ -289,216 +186,61 @@ public:
       return tokens;
    }
 
-   SourceLocation getSourceLoc();
-
-   unsigned int getMacroExpansionDepth() const { return macroExpansionDepth; }
-
    unsigned int getSourceId() const { return sourceId; }
 
-   TypeID getTypeID() const { return typeID; }
+   friend diag::DiagnosticBuilder& operator<<(diag::DiagnosticBuilder &builder,
+                                              Lexer* const& lex) {
+      builder.setLoc(lex->getSourceLoc());
+      return builder;
+   }
 
-   static bool classof(Lexer const *T) { return true; }
-
-   friend class cdot::diag::DiagnosticBuilder;
+   friend class parse::Parser;
 
 protected:
-   struct Macro {
-      std::vector<Token> tokens;
-      std::vector<string> args;
-   };
+   Token lexStringLiteral();
+   Token lexNumericLiteral();
+   Token lexCharLiteral();
 
-   bool skipCommentIfPresent(char c);
-   Token lexStringLiteral(unsigned startIndex, bool preprocessing);
+   bool isIdentifierContinuationChar(char c);
+   Token lexIdentifier(tok::TokenType = tok::ident);
 
-   TypeID typeID;
+   void lexOperator();
+   void lexPreprocessorExpr();
+   Token skipSingleLineComment();
+   Token skipMultiLineComment();
 
-   llvm::StringMap<Macro> Macros;
-   llvm::StringMap<Variant> Values;
+   tok::TokenType getBuiltinOperator(llvm::StringRef str);
+
+   template<class ...Args>
+   Token makeToken(Args&&... args)
+   {
+      SourceLocation loc(TokBegin - BufStart, sourceId);
+      return Token(args..., loc);
+   }
+
+   IdentifierTable &Idents;
 
    TokenVec tokens;
-   size_t srcLen = 0;
    unsigned sourceId = 0;
    size_t tokenIndex = 0;
 
-   const char *curr;
-   const char *begin;
+   const char *CurPtr;
+   const char *TokBegin;
 
-   Mode mode = Normal;
+   const char *BufStart;
+   const char *BufEnd;
 
-   bool ignoreMacro : 1;
-   bool ignoreDirective : 1;
-   bool ignoreValue : 1;
+   const char InterpolationBegin;
+
    bool doneLexing : 1;
-   bool ignoreInterpolation : 1;
+   bool isModuleLexer : 1;
 
-   Lexer *Outer = nullptr;
-   unsigned expandedFromMacro = 0;
    unsigned offset = 0;
 
-   Token makeToken(tok::TokenType ty, Variant &&val, size_t offset);
-
-   Token getNextToken(bool ignoreNewline = false);
-   Token getNextToken(const Token &tok, bool ignoreNewline = false);
-   Token lex_next_token(bool preprocessing = false);
-
-   void ignore_comment(const char *End);
-
-   bool hasMacro(llvm::StringRef name);
-   Macro &getMacro(llvm::StringRef name);
-
-   // pre processing
-
-   struct ForScope {
-      size_t idx;
-      string varName;
-      std::vector<Variant> vec;
-   };
-
-   bool maybeClosingTemplateBracket(const Token &next);
-   Token valueToToken(SourceLocation loc, Variant &&val);
-   Variant parseExpression(Variant lhs = {}, int minPrecedence = 0,
-                           bool allowUndeclaredIdentifiers = false);
-
-   Variant parseArray();
-   Variant currentTokenValue(bool allowUndeclaredIdentifiers = false);
-
-   unsigned openIfs = 0;
-   std::stack<ForScope> ForStack;
-
-   void tokenError();
-
-   void lexUntilClosingParen(unsigned beginAt = 1);
-   void lexUntilClosingBrace();
-   void lexUntil(tok::TokenType type);
-
-   Token& ppCurrentTok();
-
-   PPTokenVec preprocessingTokens;
-   size_t ppTokenIndex = 0;
-
-   Token pp_lookahead(bool ignoreNewline = true, unsigned offset = 0);
-   void pp_advance(bool ignoreNewline = true, bool sw = false);
-   void pp_backtrack();
-   void pp_finish();
-
-   void handle_directive(tok::TokenType kind);
-
-   void handle_if(bool condition);
-
-   void handle_rawif();
-   void handle_ifdef();
-   void handle_ifndef();
-
-   void skip_until_token(tok::TokenType kind);
-   void skip_until_endif();
-
-   void handle_define();
-   void handle_undef();
-
-   void handle_pragma();
-
-   void handle_print();
-   void handle_let();
-
-   void handle_for();
-   void handle_endfor();
-
-   void handle_using();
-   void handle_namespace();
-   void handle_endnamespace();
-
-   std::vector<std::string> currentNamespace;
-   std::vector<std::string> importedNamespaces;
-
-   void appendNamespacePrefix(llvm::SmallString<128> &str);
-
-   TokenVec handle_include();
-
-   unsigned macroExpansionDepth = 0;
-
-   typedef std::pair<std::vector<Macro>, std::vector<string>> MacroArgList;
-
-   MacroArgList getMacroArgs();
-
-   Token handlePreprocFunc(const string &macroName);
-
-   TokenVec expand_macro(const string &macroName);
-
-   static llvm::StringMap<LispMacro> LispMacros;
-
-   void getPotentiallyQualifiedName(llvm::SmallString<128> &initial);
-   size_t getCurrentIndent();
-
-   LispMacro *tryGetLispMacro(llvm::StringRef name, bool recurse = true);
-
-   void parse_lisp_macro();
-   TokenVec expand_lisp_macro(LispMacro *Ptr,
-                              SourceLocation beginLoc);
-};
-
-template<class Traits = LexerTraits>
-class MacroExpansionLexer: public Lexer<Traits> {
-   using Super        = Lexer<Traits>;
-   using Macro        = typename Super::Macro;
-   using MacroArgList = typename Super::MacroArgList;
-
-public:
-   MacroExpansionLexer(const Macro &M, Super *Outer,
-                       unsigned offset, MacroArgList &macroArgs);
-
-   MacroExpansionLexer(typename Super::TokenVec &&tokens, unsigned offset,
-                       Super *Outer);
-
    Token lex_next_token();
-
-   static bool classof(Super const *T)
-   {
-      return T->getTypeID() == Super::TypeID::MacroExpansionLexerID;
-   }
-
-   friend class Lexer<Traits>;
-
-private:
-   const std::vector<Token> &prelexedTokens;
-   size_t lexedIndex = 0;
 };
-
-struct LexerTraits {
-   static tok::TokenType getKeywordToken(const string &potentialKeyword);
-   static tok::TokenType getOperatorToken(const string &potentialOperator);
-   static tok::TokenType getPunctuatorToken(char potentialPunctuator);
-
-   static const char* CommentBegin;
-   static const char* CommentEnd;
-
-   static const char* MultiLineCommentBegin;
-   static const char* MultiLineCommentEnd;
-};
-
-extern template class Lexer<module::ModuleLexerTraits>;
-extern template class Lexer<LexerTraits>;
-
-extern template class MacroExpansionLexer<module::ModuleLexerTraits>;
-extern template class MacroExpansionLexer<LexerTraits>;
 
 } // namespace lex
-
-namespace module {
-
-struct ModuleLexerTraits {
-   static lex::tok::TokenType getKeywordToken(const string &potentialKeyword);
-   static lex::tok::TokenType getOperatorToken(const string &potentialOperator);
-   static lex::tok::TokenType getPunctuatorToken(char potentialPunctuator);
-
-   static const char* CommentBegin;
-   static const char* CommentEnd;
-
-   static const char* MultiLineCommentBegin;
-   static const char* MultiLineCommentEnd;
-};
-
-} // namespace module
-
 } // namespace cdot
 
 #endif //LEXER_H

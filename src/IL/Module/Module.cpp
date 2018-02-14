@@ -15,22 +15,16 @@
 #include "../Value/Instruction/Instruction.h"
 #include "../Value/GlobalVariable.h"
 #include "../Value/Constant/ConstantVal.h"
+
+#include "../Serialize/Serialization.h"
 #include "../Writer/ModuleWriter.h"
 
-#include "../../Variant/Type/PointerType.h"
 #include "../../Compiler.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
-
-Module::Module(Context &Ctx, CompilationUnit const& CU)
-   : Types(this), Functions(this), GlobalVariables(this), Ctx(Ctx),
-     fileID(CU.sourceId), fileName(CU.fileName), path(CU.path)
-{
-   Ctx.registerModule(this);
-}
 
 Module::Module(Context &Ctx, size_t fileID,
                llvm::StringRef fileName, llvm::StringRef path)
@@ -123,6 +117,11 @@ void Module::writeTo(llvm::raw_ostream &out) const
 {
    ModuleWriter Writer(this);
    Writer.WriteTo(out);
+}
+
+void Module::serializeTo(llvm::raw_ostream &out) const
+{
+   serializeModule(this, out);
 }
 
 } // namespace il

@@ -16,15 +16,20 @@ namespace ast {
 
 class FuncArgDecl;
 class TypeRef;
-class Function;
+class FunctionDecl;
 
 class LambdaExpr : public Expression {
 public:
-   LambdaExpr(std::shared_ptr<TypeRef> &&returnType,
-              std::vector<std::shared_ptr<FuncArgDecl>> &&args,
-              Statement::SharedPtr &&body);
+   LambdaExpr(TypeRef* returnType,
+              std::vector<FuncArgDecl* > &&args,
+              Statement* body)
+      : Expression(LambdaExprID, true), returnType(returnType),
+        args(move(args)), body(body)
+   {
 
-   typedef std::shared_ptr<LambdaExpr> SharedPtr;
+   }
+
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {
@@ -32,37 +37,28 @@ public:
    }
 
 protected:
-   std::shared_ptr<TypeRef> returnType;
-   std::vector<std::shared_ptr<FuncArgDecl>> args;
-   Statement::SharedPtr body;
+   TypeRef* returnType;
+   std::vector<FuncArgDecl* > args;
+   Statement* body;
 
    std::set<Statement*> captures;
 
-   ast::Function *func;
+   FunctionDecl *func;
 
 public:
-   const std::shared_ptr<TypeRef> &getReturnType() const {
+   TypeRef* getReturnType() const
+   {
       return returnType;
    }
 
-   void setReturnType(const std::shared_ptr<TypeRef> &returnType) {
-      LambdaExpr::returnType = returnType;
-   }
-
-   const std::vector<std::shared_ptr<FuncArgDecl>> &getArgs() const {
+   const std::vector<FuncArgDecl* > &getArgs() const
+   {
       return args;
    }
 
-   void setArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args) {
-      LambdaExpr::args = args;
-   }
-
-   const Statement::SharedPtr &getBody() const {
+   Statement* getBody() const
+   {
       return body;
-   }
-
-   void setBody(const Statement::SharedPtr &body) {
-      LambdaExpr::body = body;
    }
 
    std::set<Statement*> &getCaptures()
@@ -70,17 +66,12 @@ public:
       return captures;
    }
 
-   void setCaptures(std::set<Statement*> &&captures)
-   {
-      LambdaExpr::captures = captures;
-   }
-
-   Function *getFunc() const
+   FunctionDecl *getFunc() const
    {
       return func;
    }
 
-   void setFunc(Function *func)
+   void setFunc(FunctionDecl *func)
    {
       LambdaExpr::func = func;
    }

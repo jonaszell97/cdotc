@@ -2,62 +2,97 @@
 // Created by Jonas Zell on 08.11.17.
 //
 
+#include "OverloadResolver.h"
+
+#include "AST/Statement/Declaration/CallableDecl.h"
+#include "AST/Statement/Declaration/LocalVarDecl.h"
+#include "AST/Statement/Declaration/Class/EnumCaseDecl.h"
+
+#include "AST/Expression/StaticExpr.h"
+#include "AST/Expression/TypeRef.h"
+
+#include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/Passes/StaticExpr/StaticExprEvaluator.h"
+
+#include "Variant/Type/Type.h"
+
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/StringSet.h>
-
-#include "OverloadResolver.h"
-#include "TemplateInstantiator.h"
-
-#include "Function.h"
-#include "Record/Class.h"
-#include "Record/Enum.h"
-
-#include "../../Statement/Declaration/CallableDecl.h"
-#include "../../Expression/StaticExpr.h"
-#include "../StaticExpr/StaticExprEvaluator.h"
-
-#include "../../../Variant/Type/PointerType.h"
-#include "../../../Variant/Type/FunctionType.h"
-#include "../../../Variant/Type/FPType.h"
-#include "../../../Variant/Type/TupleType.h"
-#include "../../../Variant/Type/GenericType.h"
-#include "../../../Variant/Type/TypeGroup.h"
-#include "../../../Variant/Type/ArrayType.h"
-#include "../../../Variant/Type/IntegerType.h"
 
 using namespace cdot::support;
 using namespace cdot::sema;
 
 namespace cdot {
+namespace ast {
 
 OverloadResolver::OverloadResolver(
    SemaPass &SP,
-   const std::vector<Argument> &givenArgs,
-   const std::vector<TemplateArg> &givenTemplateArgs,
-   SourceLocation callerLoc)
+   llvm::ArrayRef<Expression*> givenArgs,
+   const std::vector<TemplateArgExpr*> &givenTemplateArgs,
+   Statement *Caller)
       : SP(SP), givenArgs(givenArgs), givenTemplateArgs(givenTemplateArgs),
-        callerLoc(callerLoc)
+        Caller(Caller)
 {
 
 }
 
-CallCompatability OverloadResolver::checkIfViable(Callable *callable)
+static bool resolveContextDependentArgs(SemaPass &SP,
+                                        llvm::ArrayRef<Expression*> args,
+                                        llvm::SmallVectorImpl<QualType> &result,
+                                        FunctionType *FuncTy,
+                                        CallCompatability &comp,
+                                        Statement *Caller) {
+   size_t i = 0;
+   std::vector<QualType> resolvedGivenArgs;
+   auto neededArgs = FuncTy->getArgTypes();
+
+   for (auto &arg : args) {
+      QualType needed;
+      if (i < neededArgs.size())
+         needed = neededArgs[i];
+
+      if (arg->isContextDependent()) {
+         SemaPass::DiagnosticScopeRAII diagnosticScopeRAII(SP);
+         arg->setContextualType(needed);
+
+         auto res = SP.visitExpr(Caller, arg);
+         if (res.hadError()) {
+            comp.incompatibleArg = i;
+            comp.failureReason = FailureReason::IncompatibleArgument;
+
+            return false;
+         }
+
+         result.push_back(res.getType());
+      }
+      else {
+         result.push_back(arg->getExprType());
+      }
+
+      ++i;
+   }
+
+   return true;
+}
+
+CallCompatability OverloadResolver::checkIfViable(CallableDecl *callable)
 {
    CallCompatability comp;
+   auto &neededArgs = callable->getArgs();
+   llvm::SmallVector<QualType, 8> resolvedGivenArgs;
 
-   auto &neededArgs = callable->getArguments();
-   auto resolvedGivenArgs = resolveContextual(givenArgs,
-                                              neededArgs);
+   if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
+                                    callable->getFunctionType(), comp,
+                                    Caller)) {
+      return comp;
+   }
 
-   // if the function is templated and no generics are given, try to infer
-   // the needed template parameters, then resolve the needed arguments with
-   // the given template type parameters
-   // if the type substitution would fail, no error is thrown but this
-   // overload will not be considered viable (like C++ SFINAE)
-   auto resolvedNeededArgs = neededArgs;
-   if (callable->isTemplate() || !givenTemplateArgs.empty()) {
+   FunctionType *FuncTy = callable->getFunctionType();
+
+   if (callable->isTemplate()) {
       TemplateArgList list(SP, callable, givenTemplateArgs);
-      list.inferFromArgList(resolvedGivenArgs, resolvedNeededArgs);
+      list.inferFromArgList(resolvedGivenArgs, neededArgs);
 
       comp.templateArgList = std::move(list);
 
@@ -66,54 +101,37 @@ CallCompatability OverloadResolver::checkIfViable(Callable *callable)
          return comp;
       }
 
-      resolveTemplateArgs(resolvedNeededArgs, comp.templateArgList);
+      auto resolvedNeededArgs = resolveTemplateArgs(neededArgs,
+                                                    comp.templateArgList);
+
+      FuncTy = SP.getContext().getFunctionType(callable->getFunctionType()
+                                                       ->getReturnType(),
+                                               resolvedNeededArgs,
+                                               callable->getFunctionType()
+                                                       ->getRawFlags());
    }
 
-   if (auto Decl = callable->getDeclaration()) {
-      StaticExprEvaluator Eval(SP, SP.currentClass(), callable,
-                               SP.importedNamespaces(), &comp.templateArgList);
+   comp.FuncTy = FuncTy;
 
+   if (!callable->getConstraints().empty()) {
       SemaPass::ScopeGuard guard(SP, callable);
       SemaPass::TemplateArgRAII taGuard(SP, comp.templateArgList);
 
-      for (const auto &Constraint : Decl->getConstraints()) {
-         auto Inst =
-            TemplateInstantiator::InstantiateStaticExpr(SP, {}, Constraint,
-                                                        comp.templateArgList);
-
-         Inst->setContextualType(IntegerType::getBoolTy());
-
-         auto res = Eval.evaluate(Inst.get(), callerLoc);
-         if (res.hadError) {
-            SP.issueDiagnostics(res);
+      for (const auto &Constraint : callable->getConstraints()) {
+         auto res = SP.evaluateAsBool(Constraint);
+         if (!res)
             continue;
-         }
 
-         auto ty = res.val.typeOf();
-         if (ty->isObjectTy() && ty->getClassName() == "Bool") {
-            res.val = res.val.getField(0);
-         }
-
-         if (!res.val.typeOf()->isIntegerTy()) {
-            diag::err(diag::err_generic_error)
-               << "constraint must be boolean"
-               << Inst.get() << diag::term;
-         }
-
-         if (res.val.intVal == 0) {
-            comp.diagnostics = std::move(res.diagnostics);
+         if (!res.getValue().getZExtValue()) {
             comp.failureReason = FailureReason::FailedConstraint;
-            comp.failedConstraint = Inst.get();
+            comp.failedConstraint = Constraint;
 
             return comp;
          }
       }
    }
 
-   isCallCompatible(comp, resolvedGivenArgs, resolvedNeededArgs);
-
-   comp.resolvedArgs = std::move(resolvedGivenArgs);
-   comp.resolvedNeededArgs = std::move(resolvedNeededArgs);
+   isCallCompatible(comp, resolvedGivenArgs, FuncTy);
 
    return comp;
 }
@@ -121,60 +139,42 @@ CallCompatability OverloadResolver::checkIfViable(Callable *callable)
 CallCompatability OverloadResolver::checkIfViable(FunctionType *funcTy)
 {
    CallCompatability comp;
+   llvm::SmallVector<QualType, 8> resolvedGivenArgs;
 
-   auto &neededArgs = funcTy->getArgTypes();
-   auto resolvedGivenArgs = resolveContextual(givenArgs,
-                                              neededArgs);
+   if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
+                                    funcTy, comp, Caller)) {
+      return comp;
+   }
 
-   isCallCompatible(comp, resolvedGivenArgs, neededArgs);
-
-   comp.resolvedArgs = std::move(resolvedGivenArgs);
-   comp.resolvedNeededArgs = std::vector<Argument>(neededArgs);
+   comp.FuncTy = funcTy;
+   isCallCompatible(comp, resolvedGivenArgs, funcTy);
 
    return comp;
-
 }
 
-CallCompatability OverloadResolver::checkIfViable(cl::EnumCase const &Case)
+CallCompatability OverloadResolver::checkIfViable(EnumCaseDecl *Case)
 {
    CallCompatability comp;
-   auto &neededArgs = Case.associatedValues;
+   llvm::SmallVector<QualType, 8> resolvedGivenArgs;
 
-   auto resolvedGivenArgs = resolveContextual(givenArgs,
-                                              neededArgs);
+   if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
+                                    Case->getFunctionType(), comp,
+                                    Caller)) {
+      return comp;
+   }
 
-   isCallCompatible(comp, resolvedGivenArgs, neededArgs);
-
-   comp.resolvedArgs = std::move(resolvedGivenArgs);
-   comp.resolvedNeededArgs = std::vector<Argument>(neededArgs);
+   comp.FuncTy = Case->getFunctionType();
+   isCallCompatible(comp, resolvedGivenArgs, Case->getFunctionType());
 
    return comp;
-}
-
-std::vector<QualType> OverloadResolver::resolveContextual(
-                                    const std::vector<Argument> &givenArgs,
-                                    const std::vector<Argument> &neededArgs) {
-   std::vector<QualType> res;
-   for (const auto &arg : givenArgs)
-      res.push_back(arg.type);
-
-   return res;
-}
-
-void
-OverloadResolver::isCallCompatible(CallCompatability &comp,
-                                   const std::vector<Argument> &givenArgs,
-                                   const std::vector<Argument> &neededArgs) {
-   return isCallCompatible(comp, resolveContextual(givenArgs, neededArgs),
-                           neededArgs);
 }
 
 namespace {
 
-size_t castPenalty(const QualType &from, const QualType &to)
+size_t castPenalty(SemaPass &SP, const QualType &from, const QualType &to)
 {
    size_t penalty = 0;
-   auto neededCast = getCastKind(*from, *to);
+   auto neededCast = getCastKind(SP, *from, *to);
 
    // only implicit casts should occur here
    for (const auto &C : neededCast.getNeededCasts()) {
@@ -217,53 +217,44 @@ size_t castPenalty(const QualType &from, const QualType &to)
 
 void
 OverloadResolver::isCallCompatible(CallCompatability &comp,
-                                   const std::vector<QualType> &givenArgs,
-                                   const std::vector<Argument> &neededArgs,
-                                   size_t checkUntil) {
+                                   llvm::ArrayRef<QualType> givenArgs,
+                                   FunctionType *FuncTy,
+                                   size_t firstDefaultArg) {
    comp.incompatibleArg = 0;
+   comp.perfectMatch = true;
 
+   auto neededArgs = FuncTy->getArgTypes();
    size_t numGivenArgs = givenArgs.size();
    size_t numNeededArgs = neededArgs.size();
    size_t i = 0;
-   bool perfect_match = true;
 
    if (numGivenArgs == 0 && numNeededArgs == 0) {
       comp.perfectMatch = true;
       return;
    }
 
-   if (!checkUntil) {
-      auto isVararg = numNeededArgs > 0 && neededArgs.back().isVararg;
-      if (numGivenArgs > numNeededArgs && !isVararg) {
-         comp.failureReason = FailureReason::IncompatibleArgCount;
-         return;
-      }
-
-      if (isVararg) {
-         return isVarargCallCompatible(comp, givenArgs, neededArgs);
-      }
+   auto isVararg = FuncTy->isCStyleVararg() || FuncTy->isVararg();
+   if (numGivenArgs > numNeededArgs && !isVararg) {
+      comp.failureReason = FailureReason::IncompatibleArgCount;
+      return;
    }
 
    for (auto &neededArg : neededArgs) {
-      if (checkUntil && i >= checkUntil) {
-         break;
-      }
-
       auto& needed = neededArg;
-      if (i < numGivenArgs && !givenArgs[i]->isAutoTy()) {
-         auto& givenTy = givenArgs.at(i);
+      if (i < numGivenArgs && !givenArgs[i].isNull()) {
+         auto givenTy = givenArgs[i];
 
-         if (!givenTy.implicitlyCastableTo(needed.type)) {
+         if (!SP.implicitlyCastableTo(givenTy, needed)) {
             comp.incompatibleArg = i;
             comp.failureReason = FailureReason::IncompatibleArgument;
             return;
          }
-         else if (givenTy != needed.type) {
-            perfect_match = false;
-            comp.castPenalty += castPenalty(givenTy, needed.type);
+         else if (givenTy != needed) {
+            comp.perfectMatch = false;
+            comp.castPenalty += castPenalty(SP, givenTy, needed);
          }
       }
-      else if (needed.defaultVal == nullptr) {
+      else if (i < firstDefaultArg) {
          comp.incompatibleArg = i;
          comp.failureReason = FailureReason::IncompatibleArgCount;
          return;
@@ -272,141 +263,70 @@ OverloadResolver::isCallCompatible(CallCompatability &comp,
       ++i;
    }
 
-   comp.perfectMatch = perfect_match;
+   if (isVararg)
+      isVarargCallCompatible(comp, givenArgs, FuncTy);
 }
 
 void
-OverloadResolver::isVarargCallCompatible(
-                                    CallCompatability &comp,
-                                    const std::vector<QualType> &givenArgs,
-                                    const std::vector<Argument> &neededArgs) {
-   comp.incompatibleArg = 0;
+OverloadResolver::isVarargCallCompatible(CallCompatability &comp,
+                                         llvm::ArrayRef<QualType> givenArgs,
+                                         FunctionType *FuncTy) {
+   assert(FuncTy->isCStyleVararg() || FuncTy->isVararg());
 
-   if (givenArgs.size() < neededArgs.size() - 1) {
+   // cstyle vararg accepts all types
+   if (FuncTy->isCStyleVararg()) {
       return;
    }
 
-   // check arguments up until vararg
-   size_t varargIndex = neededArgs.size() - 1;
-   CallCompatability withoutVararg;
-   isCallCompatible(withoutVararg, givenArgs, neededArgs, varargIndex);
+   auto neededArgs = FuncTy->getArgTypes();
+   auto vaTy = neededArgs.back();
 
-   if (!withoutVararg.isCompatible()) {
-      new (&comp) CallCompatability(std::move(withoutVararg));
-      return;
-   }
-
-   bool cstyle = neededArgs.back().cstyleVararg;
-   if (cstyle) {
-      return;
-   }
-
-   bool perfectMatch = withoutVararg.perfectMatch;
-   auto vaTy = neededArgs.back().type;
-   for (size_t i = 0; i < givenArgs.size(); ++i) {
+   // we only need to check the remaining arguments, others have been checked
+   // by isCallCompatible
+   for (size_t i = neededArgs.size() - 1; i < givenArgs.size(); ++i) {
       auto& given = givenArgs[i];
 
-      if (!given.implicitlyCastableTo(vaTy)) {
+      if (!SP.implicitlyCastableTo(given, vaTy)) {
          comp.incompatibleArg = i;
          comp.failureReason = FailureReason::IncompatibleArgument;
          return;
       }
-      else if (!vaTy->isAutoTy() && given != vaTy) {
-         comp.castPenalty += castPenalty(given, vaTy);
-         perfectMatch = false;
+      else if (!vaTy.isNull() && given != vaTy) {
+         comp.castPenalty += castPenalty(SP, given, vaTy);
+         comp.perfectMatch = false;
       }
    }
-
-   comp.perfectMatch = perfectMatch;
 }
 
-void OverloadResolver::resolveTemplateArgs(
-                                      std::vector<Argument> &resolvedNeededArgs,
+std::vector<QualType> OverloadResolver::resolveTemplateArgs(
+                                      llvm::ArrayRef<FuncArgDecl*> neededArgs,
                                       TemplateArgList const& templateArgs) {
-   for (auto &arg : resolvedNeededArgs) {
-      if (arg.isVariadic()) {
-         auto typeName = cast<GenericType>(*arg.getType())
+   std::vector<QualType> resolvedArgs;
+   for (auto &arg : neededArgs) {
+      if (arg->getArgType()->isVariadicArgPackExpansion()) {
+         auto typeName = arg->getArgType()->getType()->asGenericType()
             ->getGenericTypeName();
 
          auto TA = templateArgs.getNamedArg(typeName);
          assert(TA && "missing template argument");
 
-         auto back = std::move(resolvedNeededArgs.back());
-         resolvedNeededArgs.pop_back();
-
+         auto ty = arg->getArgType()->getType();
          for (auto &VA : TA->getVariadicArgs()) {
-            resolvedNeededArgs.emplace_back(arg.getLabel(),
-                                            QualType(VA.getType(),
-                                                     back.getType().isLvalue(),
-                                                     back.getType().isConst()));
+            resolvedArgs.emplace_back(VA.getType(), ty.isLvalue(),
+                                      ty.isConst());
          }
 
          break;
       }
 
-      *arg.type = SP.resolveDependencies(*arg.getType(), templateArgs);
+      auto ty = arg->getArgType()->getType();
+      resolvedArgs.emplace_back(SP.resolveDependencies(*ty, templateArgs),
+                                ty.isLvalue(),
+                                ty.isConst());
    }
+
+   return resolvedArgs;
 }
 
-OverloadResolver::ArgOrder
-OverloadResolver::reorderArgs(const std::vector<Argument> &givenArgs,
-                              const std::vector<Argument> &neededArgs) {
-   size_t i = 0;
-   ArgOrder order;
-   std::vector<pair<string, std::shared_ptr<Expression>>> orderedArgs;
-   orderedArgs.reserve(neededArgs.size());
-
-   // if no labels are supplied, just return the arguments in order
-   bool hasLabels = false;
-   auto firstLabelIndex = std::find_if(givenArgs.begin(), givenArgs.end(),
-                                       [](const Argument &given) {
-      return !given.label.empty();
-   });
-
-   if (firstLabelIndex == givenArgs.end()) {
-      hasLabels = false;
-   }
-
-   for (const auto& arg : neededArgs) {
-      auto labelIndex = std::find_if(givenArgs.begin(), givenArgs.end(),
-                                     [arg](const Argument &given) {
-         return given.label == arg.label;
-      });
-
-      // argument with this label was supplied
-      if (hasLabels && labelIndex != givenArgs.end()) {
-         auto distance = std::distance(givenArgs.begin(),labelIndex);
-         orderedArgs.emplace_back(arg.label, givenArgs[distance].defaultVal);
-
-         order.emplace_back(distance, false);
-      }
-         // no arg with label found
-      else if (hasLabels) {
-         return order;
-      }
-         // argument exists at position
-      else if (givenArgs.size() > i) {
-         orderedArgs.emplace_back(arg.label, givenArgs[i].defaultVal);
-         order.emplace_back(i, false);
-      }
-         // default arg exists
-      else if (arg.defaultVal != nullptr) {
-         orderedArgs.emplace_back(arg.label, arg.defaultVal);
-         order.emplace_back(i, true);
-      }
-         // incompatible
-      else {
-         return order;
-      }
-
-      ++i;
-   }
-
-   while (order.size() < givenArgs.size()) {
-      order.emplace_back(i++, false);
-   }
-
-   return order;
-}
-
+} // namespace ast
 } // namespace cdot

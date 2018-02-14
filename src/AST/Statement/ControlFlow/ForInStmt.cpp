@@ -9,11 +9,11 @@
 namespace cdot {
 namespace ast {
 
-ForInStmt::ForInStmt(std::shared_ptr<LocalVarDecl>&& decl,
-                     std::shared_ptr<Expression>&& range,
-                     std::shared_ptr<Statement>&& body)
-   : Statement(ForInStmtID), decl(move(decl)), rangeExpr(move(range)),
-     body(move(body))
+ForInStmt::ForInStmt(LocalVarDecl* decl,
+                     Expression* range,
+                     Statement* body)
+   : Statement(ForInStmtID), decl(decl), rangeExpr(range),
+     body(body)
 {
 
 }

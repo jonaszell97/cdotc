@@ -18,35 +18,47 @@ namespace ast {
 class TupleLiteral: public Expression {
 public:
    explicit TupleLiteral(
-      std::vector<pair<string, std::shared_ptr<Expression>>> &&elements);
+      std::vector<std::pair<string, Expression* >> &&elements)
+      : Expression(TupleLiteralID), elements(std::move(elements))
+   {
 
-   typedef std::shared_ptr<TupleLiteral> SharedPtr;
+   }
+
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == TupleLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::vector<pair<string, std::shared_ptr<Expression>>> elements;
+   std::vector<std::pair<string, Expression* >> elements;
 
    // codegen
    TupleType* tupleType;
    bool is_meta_ty = false;
 
 public:
-   const std::vector<pair<string, std::shared_ptr<Expression>>> &getElements()
+   const std::vector<std::pair<string, Expression* >> &getElements()
    const
    {
       return elements;
    }
 
-   std::vector<pair<string, std::shared_ptr<Expression>>> &getElements()
+   std::vector<std::pair<string, Expression* >> &getElements()
    {
       return elements;
    }
 
-   TupleType *getTupleType() const;
-   void setTupleType(TupleType *tupleType);
+   TupleType *getTupleType() const
+   {
+      return tupleType;
+   }
+
+   void setTupleType(TupleType *tupleType)
+   {
+      TupleLiteral::tupleType = tupleType;
+   }
 };
 
 } // namespace ast

@@ -7,7 +7,6 @@
 #include "../Statement/ControlFlow/ForInStmt.h"
 #include "../Statement/ControlFlow/WhileStmt.h"
 #include "../Statement/Declaration/CallableDecl.h"
-#include "../Statement/Declaration/FuncArgDecl.h"
 
 #include "../Expression/Expression.h"
 #include "../Expression/Literal/IntegerLiteral.h"
@@ -31,8 +30,6 @@
 #include "../Statement/ControlFlow/MatchStmt.h"
 #include "../Statement/ControlFlow/CaseStmt.h"
 #include "../Statement/Declaration/Class/RecordDecl.h"
-#include "../Statement/Declaration/Class/ConstrDecl.h"
-#include "../Statement/Declaration/Class/DestrDecl.h"
 #include "../Statement/Declaration/Class/FieldDecl.h"
 #include "../Statement/Declaration/Class/PropDecl.h"
 #include "../Statement/Declaration/Class/MethodDecl.h"

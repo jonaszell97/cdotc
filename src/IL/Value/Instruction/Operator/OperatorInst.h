@@ -23,8 +23,6 @@ enum class OpCode : unsigned short {
 
 extern const char* OpNames[];
 
-Type *getResultTypeFor(Value *lhs, Value *rhs, OpCode op);
-
 class OperatorInst: public Instruction {
 public:
    OpCode getOpCode() const
@@ -56,6 +54,16 @@ public:
 #     define CDOT_CAST_INST(Name) \
          case Name##ID:
 #     include "../../Instructions.def"
+         case TypeID::LoadInstID:
+         case TypeID::FieldRefInstID:
+         case TypeID::EnumExtractInstID:
+         case TypeID::EnumRawValueInstID:
+         case TypeID::CaptureExtractInstID:
+         case TypeID::PtrToLvalueInstID:
+         case TypeID::AddrOfInstID:
+         case TypeID::StoreInstID:
+         case TypeID::GEPInstID:
+         case TypeID::TupleExtractInstID:
             return true;
          default:
             return false;
@@ -110,6 +118,9 @@ public:
 #     define CDOT_BINARY_INST(Name) \
          case Name##ID:
 #     include "../../Instructions.def"
+         case TypeID::StoreInstID:
+         case TypeID::GEPInstID:
+         case TypeID::TupleExtractInstID:
             return true;
          default:
             return false;
@@ -166,6 +177,13 @@ public:
 
 #     include "../../Instructions.def"
 
+         case TypeID::LoadInstID:
+         case TypeID::FieldRefInstID:
+         case TypeID::EnumExtractInstID:
+         case TypeID::EnumRawValueInstID:
+         case TypeID::CaptureExtractInstID:
+         case TypeID::PtrToLvalueInstID:
+         case TypeID::AddrOfInstID:
             return true;
          default:return false;
       }
@@ -177,8 +195,21 @@ public:
    public:                                                                    \
       Name##Inst(Value *lhs, Value *rhs, BasicBlock *parent)                  \
          : BinaryInstruction(Name##InstID, lhs, rhs,                          \
-                             getResultTypeFor(lhs, rhs, OpCode::Name),        \
-                             parent)                                          \
+                             lhs->getType(), parent)                          \
+      {                                                                       \
+      }                                                                       \
+                                                                              \
+      static bool classof(Value const* T)                                     \
+      {                                                                       \
+         return T->getTypeID() == Name##InstID;                               \
+      }                                                                       \
+   };
+
+#define CDOT_COMP_OP(Name)                                                    \
+   class Name##Inst: public BinaryInstruction {                               \
+   public:                                                                    \
+      Name##Inst(Type *BoolTy, Value *lhs, Value *rhs, BasicBlock *parent)    \
+         : BinaryInstruction(Name##InstID, lhs, rhs, BoolTy, parent)          \
       {                                                                       \
       }                                                                       \
                                                                               \
@@ -229,17 +260,18 @@ CDOT_BIN_OP(AShr)
 CDOT_BIN_OP(LShr)
 CDOT_BIN_OP(Shl)
 
-CDOT_BIN_OP(CompEQ)
-CDOT_BIN_OP(CompNE)
-CDOT_BIN_OP(CompLT)
-CDOT_BIN_OP(CompGT)
-CDOT_BIN_OP(CompLE)
-CDOT_BIN_OP(CompGE)
+CDOT_COMP_OP(CompEQ)
+CDOT_COMP_OP(CompNE)
+CDOT_COMP_OP(CompLT)
+CDOT_COMP_OP(CompGT)
+CDOT_COMP_OP(CompLE)
+CDOT_COMP_OP(CompGE)
 
 CDOT_UN_OP(Min)
 CDOT_UN_OP(Neg)
 
 #undef CDOT_BIN_OP
+#undef CDOT_COMP_OP
 #undef CDOT_UN_OP
 
 } // namespace il

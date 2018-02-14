@@ -105,7 +105,7 @@
 ////   return res;
 ////}
 ////
-////llvm::Value* CodeGen::pop(AstNode::SharedPtr node)
+////llvm::Value* CodeGen::pop(AstNode* node)
 ////{
 ////   node->accept(this);
 ////   if (Results.empty()) {
@@ -219,10 +219,10 @@
 ////}
 ////
 ////void CodeGen::DeclareClasses(
-////   const std::vector<std::shared_ptr<Statement>>& statements)
+////   const std::vector<Statement* >& statements)
 ////{
 ////   std::vector<Record*> classDeclarations;
-////   std::vector<EnumDecl::SharedPtr> enumDecls;
+////   std::vector<EnumDecl*> enumDecls;
 ////
 ////   for (const auto& stmt : statements) {
 ////      switch (stmt->get_type()) {
@@ -247,7 +247,7 @@
 ////         }
 ////         case NodeType::FUNCTION_DECL: {
 ////            auto node = std::static_pointer_cast<FunctionDecl>(stmt);
-////            VisitFunctionDecl(node.get());
+////            VisitFunctionDecl(node);
 ////
 ////            break;
 ////         }
@@ -302,7 +302,7 @@
 ////   }
 ////
 ////   for (const auto &en : enumDecls) {
-////      DeclareEnum(en.get());
+////      DeclareEnum(en);
 ////   }
 ////}
 ////
@@ -1171,7 +1171,7 @@
 ////
 ////llvm::Function *CodeGen::DeclareFunction(
 ////   const string &bound_name,
-////   const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+////   const std::vector<FuncArgDecl* > &args,
 ////   QualType retType,
 ////   bool throws,
 ////   bool set_this_arg,
@@ -1210,7 +1210,7 @@
 ////
 ////llvm::Function* CodeGen::DeclareMethod(
 ////   const string &bound_name,
-////   const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+////   const std::vector<FuncArgDecl* > &args,
 ////   QualType return_type,
 ////   bool throws,
 ////   llvm::Type *selfTy,
@@ -1229,7 +1229,7 @@
 ////
 ////pair<std::vector<Argument>, std::vector<pair<string, string>>>
 ////CodeGen::getArgBindings(
-////   const std::vector<std::shared_ptr<FuncArgDecl>> &args)
+////   const std::vector<FuncArgDecl* > &args)
 ////{
 ////   pair<std::vector<Argument>, std::vector<pair<string, string>>> pair;
 ////
@@ -1249,7 +1249,7 @@
 ////
 ////void CodeGen::DefineFunction(
 ////   const string &bound_name,
-////   std::shared_ptr<Statement> body)
+////   Statement* body)
 ////{
 ////   DefineFunction(
 ////      llvm::cast<llvm::Function>(OwnFunctions[bound_name]),
@@ -1260,7 +1260,7 @@
 ////
 ////void CodeGen::DefineFunction(
 ////   llvm::Function* func,
-////   std::shared_ptr<Statement> body,
+////   Statement* body,
 ////   const string &bound_name)
 ////{
 ////   llvm::BasicBlock* allocBB = &func->getEntryBlock();
@@ -1604,7 +1604,7 @@
 ////}
 ////
 ////llvm::ReturnInst *CodeGen::DoRet(
-////   std::shared_ptr<Expression> retVal,
+////   Expression* retVal,
 ////   bool sret,
 ////   bool incRefCount)
 ////{
@@ -1649,7 +1649,7 @@
 ////}
 ////
 ////llvm::ReturnInst* CodeGen::CreateRet(
-////   Expression::SharedPtr retVal,
+////   Expression* retVal,
 ////   bool sret,
 ////   bool incRefCount)
 ////{
@@ -1693,12 +1693,12 @@
 ////}
 ////
 ////llvm::Value* CodeGen::getStaticVal(
-////   Expression::SharedPtr &expr,
+////   Expression* &expr,
 ////   Type *&ty,
 ////   bool global)
 ////{
 ////   auto val = getStaticVal(expr->staticVal, ty, global);
-////   ReturnMemberRef(expr.get(), val);
+////   ReturnMemberRef(expr, val);
 ////
 ////   return pop();
 ////}
@@ -1970,7 +1970,7 @@
 ////               declType->getDefaultVal(*this)));
 ////            if (val != nullptr) {
 ////               val->setGlobalVar(global);
-////               global_initializers.emplace_back(val.get(), *declType);
+////               global_initializers.emplace_back(val, *declType);
 ////            }
 ////         }
 ////
@@ -2214,7 +2214,7 @@
 ////
 ////llvm::Value* CodeGen::CreateCStyleArray(
 ////   Type* type,
-////   std::vector<std::shared_ptr<Expression>> &elements)
+////   std::vector<Expression* > &elements)
 ////{
 ////   bool isPrimitive = isa<PrimitiveType>(type);
 ////   auto llvmTy = type->getLlvmType();
@@ -2261,7 +2261,7 @@
 ////
 ////llvm::Value* CodeGen::CreateArray(
 ////   ObjectType *type,
-////   std::vector<std::shared_ptr<Expression>> &elements)
+////   std::vector<Expression* > &elements)
 ////{
 ////   auto elPtrTy = type->asObjTy()->getNamedTemplateArg("T");
 ////   auto carr = CreateCStyleArray(ObjectType::getAnyTy(), elements);

@@ -2,98 +2,49 @@
 // Created by Jonas Zell on 04.07.17.
 //
 
-#ifndef CDOT_TYPECHECKVISITOR_H
-#define CDOT_TYPECHECKVISITOR_H
+#ifndef CDOT_SEMA_H
+#define CDOT_SEMA_H
+
+#include "AST/Passes/SemanticAnalysis/Template.h"
+#include "AST/Passes/SemanticAnalysis/Scope/Scope.h"
+#include "AST/Passes/NullASTVisitor.h"
+
+#include "AST/ASTContext.h"
+#include "AST/Attribute/Attribute.h"
+
+#include "Basic/CastKind.h"
+#include "Basic/Precedence.h"
+
+#include "CTFE/StaticEvaluator.h"
+
+#include "Message/Diagnostics.h"
+#include "Support/Casting.h"
+
+#include "Compiler.h"
 
 #include <unordered_map>
 #include <stack>
 #include <llvm/ADT/DenseSet.h>
-
-#include "Template.h"
-
-#include "../AbstractPass.h"
-#include "../../Attribute/Attribute.h"
-#include "../../../Util.h"
-#include "../../../Variant/Type/ObjectType.h"
-
-#include "../../../Variant/Type/Generic.h"
-#include "../../../Basic/CastKind.h"
-#include "../../../Basic/Precedence.h"
-#include "../../../Message/Diagnostics.h"
-
-class SymbolTable;
+#include <cstdint>
+#include <llvm/ADT/SmallPtrSet.h>
 
 using std::string;
 using std::pair;
 
 namespace cdot {
 
-struct Namespace;
-struct Alias;
-
-class Type;
-class MetaType;
-struct Typedef;
-
-struct Variable;
-
-class Callable;
-struct FunctionTemplateInstantiation;
-
-namespace cl {
-
-struct Template;
-
-struct EnumCase;
-class Class;
-struct Method;
-class Struct;
-class Protocol;
-class Union;
-class Enum;
-struct Field;
-class Property;
-
-} // namespace cl
-
-struct Scope {
-   Scope()
-      : isLambdaRoot(false), returnable(false),
-        nonContinuableMatchStmt(false), isLastCase(false)
-   {}
-
-   size_t id;
-
-   union {
-      Callable *function = nullptr;
-      cl::Method *method;
-   };
-
-   bool isLambdaRoot : 1;
-   bool returnable   : 1;
-   bool nonContinuableMatchStmt : 1;
-   bool isLastCase : 1;
-
-   Scope* enclosingScope = nullptr;
-   std::set<ast::Statement*>* captures = nullptr;
-};
-
-} // namespace cdot
-
-
-namespace cdot {
-
 namespace sema {
-
-class ConformanceCheckerImpl;
-
+   class ConformanceCheckerImpl;
 } // namespace sema
 
 namespace ast {
 
 class ILGenPass;
 class DeclPass;
+class OverloadResolver;
+class LookupResult;
 
+enum class ImplicitConformanceKind : unsigned char;
 enum class FailureReason : unsigned char;
 
 class ExprResolverImpl;
@@ -103,42 +54,71 @@ struct CallResult;
 
 struct CallCompatability;
 
-class SemaPass: public AbstractPass<SemaPass, QualType>,
-                public diag::DiagnosticIssuer {
+class SemaPass: public diag::DiagnosticIssuer,
+                public NullASTVisitor<QualType> {
 public:
    using TemplateArgList = cdot::sema::TemplateArgList;
 
-   SemaPass();
+   explicit SemaPass(CompilationUnit &compilationUnit);
    ~SemaPass();
 
-   void run(std::vector<CompilationUnit> &CUs);
+   Type *getBuiltinType(llvm::StringRef typeName);
+   ObjectType *getObjectTy(llvm::StringRef name) const;
+   ObjectType *getObjectTy(Type::BoxedPrimitive kind) const;
+
+   CompilationUnit &getCompilationUnit() const
+   {
+      return *compilationUnit;
+   }
+
+   void updateCompilationUnit(CompilationUnit &CU)
+   {
+      compilationUnit = &CU;
+   }
+
+   ASTContext& getContext() const
+   {
+      return compilationUnit->getContext();
+   }
+
+   bool implicitlyCastableTo(QualType from, QualType to) const;
+
+   void doDeclarations();
+   bool doSema();
+   void doILGen();
 
    QualType visit(Expression *node);
-   void visit(Statement *node)
-   {
-      return AbstractPass::visit(node);
-   }
+   void visit(Statement *node);
 
-   template<class T>
-   auto visit(const std::shared_ptr<T> &node)
-      -> decltype(visit(node.get()))
-   {
-      return visit(node.get());
-   }
+   void visitScoped(Statement *node);
 
    DeclPass* getDeclPass() const
    {
       return declPass.get();
    }
 
-   std::vector<cl::Record*> const& getSelfStack() const;
+   ILGenPass &getILGen()
+   {
+      return *ILGen.get();
+   }
+
+   Statement *getParent(Statement *Child) const;
+   void updateParent(Statement *Child, Statement *Parent) const;
+   void createParentMap(Statement *Stmt) const;
+
+   void updateParentMapForTemplateInstantiation(Statement *Template,
+                                                Statement *Inst) const;
+
+   void addDeclToContext(DeclContext &Ctx, llvm::StringRef name,
+                         NamedDecl *Decl);
+   void addDeclToContext(DeclContext &Ctx, NamedDecl *Decl);
 
    struct ExprResult {
    public:
-      ExprResult(QualType type, bool had_error, bool type_dependant,
-                 bool value_dependant = false)
-         : type(type), had_error(had_error), type_dependant(type_dependant),
-           value_dependant(value_dependant)
+      ExprResult(QualType type, bool had_error, bool type_dependent,
+                 bool value_dependent = false)
+         : type(type), had_error(had_error), type_dependent(type_dependent),
+           value_dependent(value_dependent)
       { }
 
       QualType getType() const
@@ -148,7 +128,17 @@ public:
 
       bool hadError() const
       {
-         return (had_error | type_dependant) != 0;
+         return (had_error | type_dependent) != 0;
+      }
+
+      bool isTypeDependent() const
+      {
+         return type_dependent;
+      }
+
+      bool isValueDependent() const
+      {
+         return value_dependent;
       }
 
       operator bool() const
@@ -159,49 +149,40 @@ public:
    private:
       QualType type;
       bool had_error : 1;
-      bool type_dependant : 1;
-      bool value_dependant : 1;
+      bool type_dependent : 1;
+      bool value_dependent : 1;
    };
 
    ExprResult visitExpr(Statement *DependantStmt, Expression *E)
    {
       auto ty = visit(E);
       DependantStmt->setIsTypeDependent(
-         E->isTypeDependant() | DependantStmt->isTypeDependant());
+         E->isTypeDependent() | DependantStmt->isTypeDependent());
 
       DependantStmt->setIsValueDependent(
-         E->isValueDependant() | DependantStmt->isValueDependant());
+         E->isValueDependent() | DependantStmt->isValueDependent());
 
       DependantStmt->setHadError(
-         E->hadError() | DependantStmt->hadError());
+         E->hadError() | DependantStmt->hadError() | ty.isUnknownAny());
 
-      return ExprResult(ty, E->hadError(), E->isTypeDependant(),
-                        E->isValueDependant());
-   }
-
-   ExprResult visitExpr(Statement *DependantStmt,
-                        std::shared_ptr<Expression> const& E) {
-      return visitExpr(DependantStmt, E.get());
+      return ExprResult(ty, DependantStmt->hadError(),
+                        DependantStmt->isTypeDependent(),
+                        DependantStmt->isValueDependent());
    }
 
    bool visitStmt(Statement *DependantStmt, Statement *Stmt)
    {
       visit(Stmt);
       DependantStmt->setIsTypeDependent(
-         Stmt->isTypeDependant() | DependantStmt->isTypeDependant());
+         Stmt->isTypeDependent() | DependantStmt->isTypeDependent());
 
       DependantStmt->setIsValueDependent(
-         Stmt->isValueDependant() | DependantStmt->isValueDependant());
+         Stmt->isValueDependent() | DependantStmt->isValueDependent());
 
       DependantStmt->setHadError(
          Stmt->hadError() | DependantStmt->hadError());
 
       return !stopEvaluating(Stmt);
-   }
-
-   bool visitStmt(Statement *DependantStmt,
-                  std::shared_ptr<Statement> const& Stmt) {
-      return visitStmt(DependantStmt, Stmt.get());
    }
 
    void visitNamespaceDecl(NamespaceDecl *node);
@@ -212,14 +193,18 @@ public:
    void visitLocalVarDecl(LocalVarDecl *node);
    void visitGlobalVarDecl(GlobalVarDecl *node);
 
-   void visitFunctionDecl(FunctionDecl *node);
-   void visitCallableDecl(CallableDecl *node);
-   void visitDeclareStmt(DeclareStmt *node);
+   bool visitDestructuringDecl(DestructuringDecl *node);
+   void visitLocalDestructuringDecl(LocalDestructuringDecl *node);
+   void visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+
+   void visitFunctionDecl(FunctionDecl *F);
+   void visitCallableDecl(CallableDecl *CD);
 
    void visitRecordCommon(RecordDecl *node);
    void visitRecordDecl(RecordDecl *node);
 
-   void visitClassDecl(ClassDecl *node);
+   void visitClassDecl(ClassDecl *C);
+   void visitStructDecl(StructDecl *S);
    void visitExtensionDecl(ExtensionDecl *node);
    void visitEnumDecl(EnumDecl *node);
    void visitUnionDecl(UnionDecl *node);
@@ -230,11 +215,11 @@ public:
    void visitAssociatedTypeDecl(AssociatedTypeDecl *node);
 
    void visitMethodDecl(MethodDecl *node);
-   void visitConstrDecl(ConstrDecl *node);
-   void visitDestrDecl(DestrDecl *node);
+   void visitInitDecl(InitDecl *node);
+   void visitDeinitDecl(DeinitDecl *node);
 
    QualType visitIdentifierRefExpr(IdentifierRefExpr *node);
-   QualType visitNonTypeTemplateArgExpr(NonTypeTemplateArgExpr *node);
+   QualType visitBuiltinExpr(BuiltinExpr *node);
    QualType visitSubscriptExpr(SubscriptExpr *node, QualType ty = {});
    QualType visitCallExpr(CallExpr *node, QualType ty = {});
    QualType visitMemberRefExpr(MemberRefExpr *node, QualType ty = {});
@@ -279,13 +264,25 @@ public:
    void visitThrowStmt(ThrowStmt *node);
 
    void visitFuncArgDecl(FuncArgDecl *node);
-   QualType visitLambdaExpr(LambdaExpr *node);
+   QualType visitLambdaExpr(LambdaExpr *LE);
    QualType visitImplicitCastExpr(ImplicitCastExpr *node);
    QualType visitTypeRef(TypeRef *node);
 
+   QualType visitLvalueToRvalue(LvalueToRvalue *node) { return QualType(); }
+   QualType visitTemplateArgExpr(TemplateArgExpr *node) { return QualType(); }
+   QualType visitConstraintExpr(ConstraintExpr *expr) { return QualType(); }
+
+   void visitNullStmt(NullStmt *stmt) { }
+   void visitModuleStmt(ModuleStmt *stmt) { }
+   void visitImportStmt(ImportStmt *stmt) { }
+   void visitEnumCaseDecl(EnumCaseDecl *stmt) { }
+   void visitTypedefDecl(TypedefDecl *stmt) { }
+   void visitTemplateParamDecl(TemplateParamDecl *stmt) { }
+   void visitTranslationUnit(TranslationUnit *stmt) { }
+
    void visitDebugStmt(DebugStmt *node);
 
-   void visitAliasDecl(AliasDecl *node);
+   void visitAliasDecl(AliasDecl *Alias);
 
    void visitStaticIfStmt(StaticIfStmt *node);
    void visitStaticAssertStmt(StaticAssertStmt *node);
@@ -295,12 +292,49 @@ public:
    QualType visitStaticExpr(StaticExpr *node);
    QualType visitTraitsExpr(TraitsExpr *node);
 
-   Variant evalStaticExpr(StaticExpr *node,
-                          TemplateArgList const& templateArgs = {},
-                          bool useSavedResult = true);
+   struct StaticExprResult {
+      explicit StaticExprResult(Variant &&V)
+         : Value(std::move(V)), HadError(false)
+      {}
 
-   bool wouldBeValidIdentifier(llvm::StringRef maybeIdent);
-   Variable *getGlobalVariable(llvm::StringRef maybeGlobal);
+      StaticExprResult() : HadError(true)
+      {}
+
+      Variant &getValue()
+      {
+         assert(!hadError());
+         return Value;
+      }
+
+      bool hadError() const
+      {
+         return HadError;
+      }
+
+      operator bool() const { return !hadError(); }
+
+   private:
+      Variant Value;
+      bool HadError;
+   };
+
+   StaticExprResult evalStaticExpr(StaticExpr *expr);
+   StaticExprResult evalStaticExpr(StaticExpr *expr,
+                                   TemplateArgList const& templateArgs);
+
+   StaticExprResult evaluateAs(StaticExpr *expr, QualType Ty);
+   StaticExprResult evaluateAsBool(StaticExpr *expr);
+
+   void addImplicitConformance(RecordDecl *R, ImplicitConformanceKind kind);
+
+   IdentifierRefExpr *wouldBeValidIdentifier(llvm::StringRef maybeIdent);
+   GlobalVarDecl *getGlobalVariable(llvm::StringRef maybeGlobal);
+
+   template<class T, class ...Args>
+   T *makeStmt(Args&& ...args)
+   {
+      return new (getContext()) T(std::forward<Args&&>(args)...);
+   }
 
    PrecedenceGroup getPrecedence(QualType lhsType, OperatorKind op);
    PrecedenceGroup getPrecedence(QualType lhsType, llvm::StringRef op);
@@ -319,15 +353,18 @@ public:
                                                    OperatorKind op);
 
    Type* resolveDependencies(Type *Ty, TemplateArgList const& TAs);
-   Type* resolveDependencies(Type *Ty,
-                            llvm::ArrayRef<cl::AssociatedType> AssociatedTys);
+   Type* resolveDependencies(Type *Ty, RecordDecl *R);
 
    template<class ...Args>
    void diagnose(Statement *Stmt, diag::MessageKind msg, Args const&... args)
    {
-      Stmt->setHadError(diag::isError(msg));
+      if (diag::isError(msg)) {
+         Stmt->setHadError(true);
+         encounteredError = true;
 
-      encounteredError |= Stmt->hadError();
+         if (currentScope)
+            currentScope->setHadError(true);
+      }
 
       diagnostics.emplace_back(msg);
       addDiagnosticArgs(diagnostics.back(), Stmt->getSourceLoc(), args...);
@@ -347,12 +384,19 @@ public:
          diag << diag::cont;
    }
 
-   void declareRecordInstantiation(cl::Record *Inst);
+   void declareRecordInstantiation(RecordDecl *Inst);
 
-   void visitRecordInstantiation(cl::Record *R);
-   void visitFunctionInstantiation(Callable *C);
+   void visitRecordInstantiation(RecordDecl *R);
+   void visitFunctionInstantiation(CallableDecl *C);
 
-   void addDelayedInstantiation(cl::Record *R);
+   void registerDelayedInstantiation(RecordDecl *R);
+   void registerDelayedFunctionDecl(CallableDecl *C);
+
+   void visitDelayedDecls();
+   void visitDelayedDecl(NamedDecl *ND);
+
+   void diagnoseCircularlyDependentGlobalVariables(Expression *Expr,
+                                                   NamedDecl *globalVar);
 
    enum class Stage {
       Declaration = 0,
@@ -365,7 +409,81 @@ public:
       return stage;
    }
 
+   RecordDecl *getRecord(llvm::StringRef name) const;
+   StructDecl *getStruct(llvm::StringRef name) const;
+   ClassDecl *getClass(llvm::StringRef name) const;
+   EnumDecl *getEnum(llvm::StringRef name) const;
+   UnionDecl *getUnion(llvm::StringRef name) const;
+   ProtocolDecl *getProtocol(llvm::StringRef name) const;
+   NamespaceDecl *getNamespace(llvm::StringRef name) const;
+
+   FunctionDecl *getAnyFn(llvm::StringRef name) const;
+   TypedefDecl *getTypedef(llvm::StringRef name) const;
+
+   DeclContext *getNearestDeclContext(Statement *Stmt) const;
+   CallableDecl *getCurrentFun() const;
+
+   struct DiagnosticScopeRAII {
+      DiagnosticScopeRAII(SemaPass &SP)
+         : SP(SP), fatalError(SP.fatalError),
+           fatalErrorInScope(SP.fatalErrorInScope),
+           encounteredError(SP.encounteredError),
+           diagnostics(move(SP.diagnostics))
+      {
+         SP.fatalError = false;
+         SP.fatalErrorInScope = false;
+         SP.encounteredError = false;
+         SP.diagnostics.clear();
+      }
+
+      llvm::ArrayRef<diag::DiagnosticBuilder> getAddedDiagnostics() const
+      {
+         return SP.diagnostics;
+      }
+
+      ~DiagnosticScopeRAII()
+      {
+         SP.fatalError = fatalError;
+         SP.fatalErrorInScope = fatalErrorInScope;
+         SP.encounteredError = encounteredError;
+         SP.diagnostics = move(diagnostics);
+      }
+
+   private:
+      SemaPass &SP;
+      bool fatalError : 1;
+      bool fatalErrorInScope : 1;
+      bool encounteredError : 1;
+      llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
+   };
+
+   struct DiagnosticCounter {
+      DiagnosticCounter(SemaPass &SP)
+         : SP(SP), initialSize(SP.diagnostics.size())
+      {}
+
+      bool hadError() const
+      {
+         return SP.getDiagnostics().size() > initialSize;
+      }
+
+   private:
+      SemaPass &SP;
+      size_t initialSize;
+   };
+
+   QualType getBoxedType(QualType type) const;
+   QualType getUnboxedType(QualType type) const;
+   bool hasDefaultValue(QualType type) const;
+
+   void issueDiagnostics();
+
+   void registerBuiltinOp(QualType opTy,
+                          OperatorKind kind,
+                          OperatorInfo opInfo);
+
    friend class DeclPass;
+   friend class ILGenPass;
    friend class ExprResolverImpl;
    friend class StaticExprEvaluator;
    friend class EvaluatorImpl;
@@ -374,42 +492,29 @@ public:
    friend class sema::TemplateArgListImpl;
 
 protected:
+   CompilationUnit *compilationUnit; // can't be a reference because it's a
+                                     // movable type
+
+   ASTContext &Context;
    Stage stage = Stage::Declaration;
 
    std::unordered_map<string, LocalVarDecl*> declarations;
-   std::stack<Scope> Scopes;
+   Scope *currentScope = nullptr;
 
-   llvm::SmallPtrSet<cl::Record*, 16> DelayedInstantiations;
+   llvm::SmallPtrSet<NamedDecl*, 16> DelayedDecls;
    llvm::StringMap<GotoStmt*> UnresolvedGotos;
 
-   cl::Record *currentClass();
+   StaticEvaluator Evaluator;
 
-   Scope* currentScope()
-   {
-      return &Scopes.top();
-   }
+   RecordDecl *getCurrentRecord();
 
-   size_t lastScopeID = 0;
-
-   TemplateParameter const* hasTemplateParam(llvm::StringRef name);
-   cl::AssociatedType const* hasAssociatedType(llvm::StringRef name);
-
-   void pushScope();
-   void popScope();
-
-   void pushFunctionScope(Callable *func);
-   void pushMethodScope(cl::Method *m);
-
-   void popFunctionScope();
-
-   void pushLoopScope(bool continuable = true, bool breakable = true);
-   void popLoopScope(bool continuable = true, bool breakable = true);
-
-   void pushRecordScope(cl::Record *cl);
-   void popRecordScope();
+   TemplateParamDecl const* hasTemplateParam(llvm::StringRef name);
+   AssociatedTypeDecl const* hasAssociatedType(llvm::StringRef name);
 
    bool stopEvaluating(Statement *Stmt);
-   bool stopEvaluating(std::shared_ptr<Statement> const &Stmt);
+
+   void checkConformances();
+   void checkProtocolConformance(RecordDecl *R);
 
    template<class T, class ...Args>
    void addDiagnosticArgs(diag::DiagnosticBuilder &diag,
@@ -421,91 +526,117 @@ protected:
 
    void addDiagnosticArgs(diag::DiagnosticBuilder &diag) {}
 
-   void issueDiagnostics();
-
    struct ScopeGuard {
-      enum Kind {
-         Normal, Method, Function, Loop, Record
+      enum Status {
+         Enabled,
+         Disabled
       };
 
-      explicit ScopeGuard(SemaPass &S)
-         : S(S), kind(Normal), continuable(false), breakable(false)
+      explicit ScopeGuard(SemaPass &S, Status st = Enabled)
+         : S(S), enabled(st == Enabled)
       {
-         S.pushScope();
+         if (enabled)
+            S.currentScope = new (S.getContext()) BlockScope(S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, Callable *func)
-         : S(S), kind(Function), continuable(false), breakable(false)
+      ScopeGuard(SemaPass &S, CallableDecl *F)
+         : S(S)
       {
-         S.pushFunctionScope(func);
+         S.currentScope = new (S.getContext()) FunctionScope(F, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, cl::Method *m)
-         : S(S), kind(Function), continuable(false), breakable(false)
+      ScopeGuard(SemaPass &S, MethodDecl *M)
+         : S(S)
       {
-         S.pushMethodScope(m);
+         S.currentScope = new (S.getContext()) MethodScope(M, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, bool continuable, bool breakable)
-         : S(S), kind(Loop), continuable(continuable), breakable(breakable)
+      ScopeGuard(SemaPass &S, LambdaExpr *L)
+         : S(S)
       {
-         S.pushLoopScope(continuable, breakable);
+         S.currentScope = new (S.getContext()) LambdaScope(L, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, cl::Record *R)
-         : S(S), kind(Record), continuable(false), breakable(false)
+      ScopeGuard(SemaPass &S, RecordDecl *R)
+         : S(S)
       {
-         S.pushRecordScope(R);
+         S.currentScope = new (S.getContext()) RecordScope(R, S.currentScope);
       }
 
-      ~ScopeGuard() {
-         switch (kind) {
-            case Normal: S.popScope(); break;
-            case Function:
-            case Method:
-               S.popFunctionScope(); break;
-            case Loop:
-               S.popLoopScope(continuable, breakable); break;
-            case Record:S.popRecordScope(); break;
-         }
+      ScopeGuard(SemaPass &S, llvm::ArrayRef<TemplateParamDecl*> params)
+         : S(S)
+      {
+         S.currentScope = new (S.getContext()) TemplateScope(params,
+                                                             S.currentScope);
+      }
+
+      ScopeGuard(SemaPass &S, bool continuable, bool breakable,
+                 bool isLastCase = false, bool nextCaseHasArgs = false)
+         : S(S)
+      {
+         S.currentScope = new (S.getContext()) LoopScope(continuable, breakable,
+                                                         isLastCase,
+                                                         nextCaseHasArgs);
+      }
+
+      ~ScopeGuard()
+      {
+         if (enabled)
+            S.currentScope = S.currentScope->getEnclosingScope();
       }
 
    private:
       SemaPass &S;
-      Kind kind;
-      bool continuable : 1;
-      bool breakable : 1;
+      bool enabled = true;
    };
 
-   string declareVariable(const string &name,
-                          const QualType &type,
-                          bool isGlobal,
-                          bool typeDependant,
-                          const SourceLocation &loc);
+   template<class T>
+   T *getSpecificScope() const
+   {
+      for (auto S = currentScope; S; S = S->getEnclosingScope())
+         if (auto t = support::dyn_cast<T>(S))
+            return t;
 
-   cl::Record *getRecord(llvm::StringRef name,
-                         std::vector<TemplateArg> const& templateArgs,
-                         const SourceLocation &loc);
+      return nullptr;
+   }
 
-   struct VarResult {
-      Variable *V;
-      bool escapesLambdaScope;
-   };
+   FunctionScope *getFuncScope() const
+   {
+      return getSpecificScope<FunctionScope>();
+   }
 
-   bool isPrivateNamespaceAccessible(size_t id);
+   MethodScope *getMethodScope() const
+   {
+      return getSpecificScope<MethodScope>();
+   }
 
-   VarResult getVariable(llvm::StringRef name,
-                         AstNode *cause = nullptr);
+   LambdaScope *getLambdaScope() const
+   {
+      return getSpecificScope<LambdaScope>();
+   }
+
+   LoopScope *getLoopScope() const
+   {
+      return getSpecificScope<LoopScope>();
+   }
+
+   BlockScope *getBlockScope() const
+   {
+      return getSpecificScope<BlockScope>();
+   }
 
    class CallCandidate {
    public:
       CallCandidate(CallCompatability &Comp,
-                    Callable *C);
+                    llvm::ArrayRef<Expression*> resolvedArgs,
+                    CallableDecl *C);
 
       CallCandidate(CallCompatability &Comp,
-                    cl::EnumCase *Case);
+                    llvm::ArrayRef<Expression*> resolvedArgs,
+                    EnumCaseDecl *Case);
 
       CallCandidate(CallCompatability &Comp,
+                    llvm::ArrayRef<Expression*> resolvedArgs,
                     FunctionType *FTy,
                     SourceLocation declLoc);
 
@@ -529,14 +660,13 @@ protected:
       bool isCompatible() const { return compatible; }
       ~CallResult();
 
-      Function *getFunction() const;
-      cl::Method *getMethod() const;
-      Callable *getCallable() const;
+      FunctionDecl *getFunction() const;
+      MethodDecl *getMethod() const;
+      CallableDecl *getCallable() const;
 
       FunctionType *getFunctionType() const;
-      cl::EnumCase *getCase() const;
+      EnumCaseDecl *getCase() const;
       TemplateArgList& getTemplateArgs();
-      std::vector<QualType> const& getResolvedGivenArgs() const;
 
       std::vector<CallCandidate>& getFailedCandidates();
 
@@ -550,53 +680,48 @@ protected:
 
    class CompatibleCallResult: public CallResult {
    public:
-      CompatibleCallResult(Callable *C,
-                           std::vector<QualType> &&resolvedGivenArgs,
+      CompatibleCallResult(CallableDecl *C,
                            TemplateArgList &&list,
                            TemplateArgList &&initializerTemplateArgs = {})
-         : CallResult(true), C(C), resolvedGivenArgs(move(resolvedGivenArgs)),
+         : CallResult(true), C(C),
            templateArgs(std::move(list)),
            initializerTemplateArgs(std::move(initializerTemplateArgs))
       {}
 
-      explicit CompatibleCallResult(cl::EnumCase *Case,
-                                    std::vector<QualType> &&resolvedGivenArgs)
-         : CallResult(true), Case(Case),
-           resolvedGivenArgs(move(resolvedGivenArgs))
+      explicit CompatibleCallResult(EnumCaseDecl *Case)
+         : CallResult(true), Case(Case)
       {}
 
-      explicit CompatibleCallResult(FunctionType *FTy,
-                                    std::vector<QualType> &&resolvedGivenArgs)
-         : CallResult(true), functionType(FTy),
-           resolvedGivenArgs(move(resolvedGivenArgs))
+      explicit CompatibleCallResult(FunctionType *FTy)
+         : CallResult(true), functionType(FTy)
       {}
 
-      Callable *getCallable() const
+      CallableDecl *getCallable() const
       {
          return C;
       }
 
-      Function *getFunction() const
+      FunctionDecl *getFunction() const
       {
          return F;
       }
 
-      cl::Method *getMethod() const
+      MethodDecl *getMethod() const
       {
          return M;
       }
 
-      cl::EnumCase *getCase() const
+      EnumCaseDecl *getCase() const
       {
          return Case;
       }
 
-      void setFunction(Function *F)
+      void setFunction(FunctionDecl *F)
       {
          CompatibleCallResult::F = F;
       }
 
-      void setMethod(cl::Method *M)
+      void setMethod(MethodDecl *M)
       {
          CompatibleCallResult::M = M;
       }
@@ -621,23 +746,17 @@ protected:
          return initializerTemplateArgs;
       }
 
-      const std::vector<QualType> &getResolvedGivenArgs() const
-      {
-         return resolvedGivenArgs;
-      }
-
       friend class CallResult;
 
    private:
       union {
-         Callable *C;
-         Function *F;
-         cl::Method *M;
-         cl::EnumCase *Case;
+         CallableDecl *C;
+         FunctionDecl *F;
+         MethodDecl *M;
+         EnumCaseDecl *Case;
          FunctionType *functionType;
       };
 
-      std::vector<QualType> resolvedGivenArgs;
       TemplateArgList templateArgs;
       TemplateArgList initializerTemplateArgs;
 
@@ -666,22 +785,43 @@ protected:
 
    using FunctionResult = std::unique_ptr<CallResult>;
 
-   FunctionResult getUFCS(const string& funcName,
-                          std::vector<Argument>& args,
-                          std::vector<TemplateArg> const& templateArgs = {},
+   FunctionResult getUFCS(llvm::StringRef funcName,
+                          llvm::ArrayRef<Expression*> args,
+                          std::vector<TemplateArgExpr*> const& templateArgs = {},
                           Statement *caller = nullptr);
 
-   FunctionResult getFunction(const string& funcName,
-                              std::vector<Argument>& args,
-                              std::vector<TemplateArg> const& templateArgs = {},
+   FunctionResult getFunction(llvm::StringRef funcName,
+                              llvm::ArrayRef<Expression*> args,
+                              std::vector<TemplateArgExpr*> const& templateArgs = {},
                               Statement *caller = nullptr);
 
-   FunctionResult getMethod(cdot::cl::Record *rec,
-                            const string& methodName,
-                            const std::vector<Argument>& args = {},
-                            std::vector<TemplateArg> const& templateArgs = {},
+   FunctionResult getFunction(llvm::ArrayRef<FunctionDecl*> overloads,
+                              llvm::ArrayRef<Expression*> args,
+                              std::vector<TemplateArgExpr*> const& templateArgs = {},
+                              Statement *caller = nullptr);
+
+   FunctionResult getMethod(RecordDecl *rec,
+                            llvm::StringRef methodName,
+                            llvm::ArrayRef<Expression*> args = {},
+                            std::vector<TemplateArgExpr*> const& templateArgs = {},
                             Statement *caller = nullptr,
                             bool isStatic = false);
+
+   FunctionResult getMethod(RecordDecl *rec,
+                            LookupResult &lookupResult,
+                            llvm::ArrayRef<Expression*> args = {},
+                            std::vector<TemplateArgExpr*> const& templateArgs = {},
+                            Statement *caller = nullptr,
+                            bool isStatic = false);
+
+   FunctionResult getMethod(RecordDecl *rec,
+                            llvm::ArrayRef<MethodDecl*> overloads,
+                            llvm::ArrayRef<Expression*> args = {},
+                            std::vector<TemplateArgExpr*> const& templateArgs = {},
+                            Statement *caller = nullptr,
+                            bool isStatic = false);
+
+   void registerBuiltinOperators(OperatorKind opKind);
 
    struct ConstraintResult {
    public:
@@ -689,13 +829,13 @@ protected:
                        bool ctfeDependant,
                        llvm::SmallVector<diag::DiagnosticBuilder,
                           4> &&diagnostics)
-         : error(hadError), typeDependant(typeDependant),
-           ctfeDependant(ctfeDependant), satisfied(false),
+         : error(hadError), typeDependent(typeDependant),
+           satisfied(false),
            diagnostics(std::move(diagnostics))
       { }
 
       ConstraintResult()
-         : error(false), typeDependant(false), ctfeDependant(false),
+         : error(false), typeDependent(false),
            satisfied(true)
       {}
 
@@ -706,12 +846,7 @@ protected:
 
       bool isTypeDependant() const
       {
-         return typeDependant;
-      }
-
-      bool isCtfeDependant() const
-      {
-         return ctfeDependant;
+         return typeDependent;
       }
 
       bool isSatisfied() const
@@ -726,33 +861,30 @@ protected:
 
    private:
       bool error;
-      bool typeDependant;
-      bool ctfeDependant;
+      bool typeDependent;
 
       bool satisfied;
       llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
    };
 
-   ConstraintResult checkConstraint(
-                                 std::shared_ptr<StaticExpr> const& constraint,
-                                 TemplateArgList &TAs);
+   ConstraintResult checkConstraint(StaticExpr* const& constraint,
+                                    TemplateArgList &TAs);
 
    FunctionResult checkAnonymousCall(FunctionType *FTy,
-                                     const std::vector<Argument>& args,
-                                     SourceLocation const& loc);
+                                     llvm::ArrayRef<Expression*> args,
+                                     Statement *Caller = nullptr);
 
-   void maybeInstantiateMemberFunction(cl::Method *M,
+   void maybeInstantiateMemberFunction(MethodDecl *M,
                                        const SourceLocation &callerLoc);
 
-   cl::Record *InstantiateRecord(cl::Record *R,
+   RecordDecl* InstantiateRecord(RecordDecl *R,
                                  TemplateArgList &&TAs,
                                  SourceLocation loc = {});
 
-   FunctionResult getCase(cdot::cl::Enum *en,
+   FunctionResult getCase(EnumDecl *E,
                           const string &caseName,
-                          std::vector<Argument> const& args = {});
-
-   bool hasVariable(string name);
+                          llvm::ArrayRef<Expression*> args = {},
+                          Statement *Caller = nullptr);
 
    MetaType *getMetaType(Type *forType);
 
@@ -791,29 +923,24 @@ protected:
    }
 
 private:
-   bool implicitCastIfNecessary(std::shared_ptr<Expression> &target,
+   bool implicitCastIfNecessary(Expression* target,
                                 const QualType &originTy,
                                 const QualType &destTy,
                                 bool preCondition = true,
                                 bool ignoreError = false);
 
-   void forceCast(std::shared_ptr<Expression> &target,
+   void forceCast(Expression* target,
                   const QualType &originTy,
                   const QualType &destTy);
 
-   void lvalueToRvalue(std::shared_ptr<Expression>& target);
-   void toRvalueIfNecessary(QualType &ty, std::shared_ptr<Expression> &target,
+   void lvalueToRvalue(Expression* & target);
+   void toRvalueIfNecessary(QualType &ty, Expression* &target,
                             bool preCond = true);
-
-   void CopyScopeProps(
-      Scope* src,
-      Scope* dst
-   );
-
-   std::set<string> labels = {};
 
    QualType VisitSubExpr(Expression *, QualType);
 
+   llvm::StringSet<> labels;
+   llvm::SmallPtrSet<Statement*, 8> VisitedGlobalDecls;
    llvm::DenseSet<uintptr_t> VisitedDecls;
 
    bool alreadyVisited(Statement *stmt)
@@ -821,9 +948,7 @@ private:
       return !VisitedDecls.insert((uintptr_t)stmt).second;
    }
 
-   size_t BreakStack = 0;
-   size_t ContinueStack = 0;
-   std::stack<QualType> ReturnTypeStack;
+   size_t numGlobals = 0;
 
    std::unique_ptr<DeclPass> declPass;
    std::unique_ptr<ILGenPass> ILGen;
@@ -834,81 +959,155 @@ private:
    bool fatalErrorInScope : 1;
    bool encounteredError : 1;
 
-   void pushNamespace(const string &ns);
-   void popNamespace();
+   QualType UnknownAnyTy;
 
-   void clearCurrentNamespace();
+   struct BuiltinOperator {
+      BuiltinOperator(FunctionType *FuncTy, const OperatorInfo &operatorInfo)
+         : FuncTy(FuncTy), operatorInfo(operatorInfo)
+      { }
 
-   void importNamespace(const string &ns);
+      FunctionType *getFuncTy() const
+      {
+         return FuncTy;
+      }
 
-   void pushTemplateParams(std::vector<TemplateParameter>* params);
-   void popTemplateParams();
+      const OperatorInfo &getOperatorInfo() const
+      {
+         return operatorInfo;
+      }
 
-   llvm::ArrayRef<size_t> importedNamespaces();
+   private:
+      FunctionType *FuncTy;
+      OperatorInfo operatorInfo;
+   };
 
-   Callable *getCurrentFunction();
+   std::unordered_map<OperatorKind, BuiltinOperator> BuiltinBinaryOperators;
+   std::unordered_map<OperatorKind, BuiltinOperator> BuiltinUnaryOperators;
 
-   void visitTypeInferredGlobals();
-   void checkDeclTypeReturnType(Callable *C);
-
-   Type *getPlaceholderType(Expression *expr);
-
-   string ns_prefix();
-
-   bool tryDestructure(QualType givenTy, VarDecl *node);
+   void checkDeclTypeReturnType(CallableDecl *C);
 
    ExprResult unify(Statement *Stmt,
-                    std::vector<std::shared_ptr<Expression>> const&exprs);
+                    std::vector<Expression* > const&exprs);
 
-   Type *resolveNamespaceReference(IdentifierRefExpr *node);
+   bool checkPossibleTemplateArgList(
+                                 Expression *Expr,
+                                 std::vector<TemplateArgExpr*> &templateArgs);
 
    // IdentifierRef
 
    QualType HandleBuiltinIdentifier(IdentifierRefExpr *node);
-   QualType tryFunctionReference(IdentifierRefExpr *node);
-   QualType trySuper(IdentifierRefExpr *node);
-   QualType trySelf(IdentifierRefExpr *node, bool guaranteedSelf);
-   QualType tryFunctionArg(IdentifierRefExpr *node);
-   Variant tryAlias(llvm::StringRef ident,
-                    llvm::ArrayRef<TemplateArg> templateArgs,
-                    Expression *expr);
+   QualType checkFunctionReference(IdentifierRefExpr *node, CallableDecl *F);
+   QualType checkSuper(IdentifierRefExpr *node);
+   QualType checkSelf(IdentifierRefExpr *node);
+
+   struct AliasResult {
+      explicit AliasResult(AliasDecl *Alias)
+         : TypeDependent(false), ValueDependent(false), HadError(false),
+           Result(Alias)
+      {}
+
+      explicit AliasResult(std::vector<diag::DiagnosticBuilder> &&Candidates)
+         : TypeDependent(false), ValueDependent(false), HadError(true),
+           FailedCandidates(std::move(Candidates))
+      {}
+
+      AliasResult(bool typeDependent, bool valueDependent)
+         : TypeDependent(typeDependent), ValueDependent(valueDependent),
+           HadError(true)
+      {}
+
+      bool isTypeDependent() const
+      {
+         return TypeDependent;
+      }
+
+      bool isValueDependent() const
+      {
+         return ValueDependent;
+      }
+
+      bool hadError() const
+      {
+         return HadError;
+      }
+
+      AliasDecl *getAlias()
+      {
+         assert(!HadError && !TypeDependent && !ValueDependent);
+         return Result;
+      }
+
+      const std::vector<diag::DiagnosticBuilder> &getDiagnostics() const
+      {
+         assert(HadError);
+         return FailedCandidates;
+      }
+
+      operator bool() const
+      {
+         return !HadError && !TypeDependent && !ValueDependent;
+      }
+
+   private:
+      bool TypeDependent  : 1;
+      bool ValueDependent : 1;
+      bool HadError       : 1;
+
+      AliasDecl *Result;
+      std::vector<diag::DiagnosticBuilder> FailedCandidates;
+   };
+
+   AliasResult checkAlias(LookupResult &lookupResult,
+                          llvm::ArrayRef<TemplateArgExpr*> templateArgs,
+                          SourceLocation loc);
+
+   bool checkAlias(AliasDecl *alias,
+                   std::vector<diag::DiagnosticBuilder> &Diagnostics);
 
    // MemberRef
 
-   QualType HandleStaticMember(MemberRefExpr *node, cl::Record *R);
+   QualType HandleStaticMember(MemberRefExpr *node, RecordDecl *R);
    QualType HandleStaticTypeMember(MemberRefExpr *node, Type *Ty);
 
-   QualType HandleEnumCase(MemberRefExpr *node, cl::Enum *E);
+   QualType HandleEnumCase(MemberRefExpr *node, EnumDecl *E);
 
-   QualType HandleFieldAccess(MemberRefExpr *node, cl::Record *R,
-                              cl::Field *F = nullptr);
+   QualType HandleFieldAccess(MemberRefExpr *node, RecordDecl *R,
+                              FieldDecl *F = nullptr);
 
-   QualType HandlePropAccess(MemberRefExpr *node, cl::Record *rec,
-                             cl::Property *P = nullptr);
+   QualType HandlePropAccess(MemberRefExpr *node, RecordDecl *rec,
+                             PropDecl *P = nullptr);
 
-   QualType HandleEnumMember(MemberRefExpr *node, cl::Enum *E);
+   QualType HandleEnumMember(MemberRefExpr *node, EnumDecl *E);
    QualType HandleTupleMember(MemberRefExpr *node, TupleType *ty);
-   QualType HandleUnionMember(MemberRefExpr *node, cl::Union *U);
+   QualType HandleUnionMember(MemberRefExpr *node, UnionDecl *U);
 
    QualType HandleTypeMember(MemberRefExpr *node, Type *Ty);
-   QualType HandleNamespaceMember(MemberRefExpr *node, Namespace *NS);
+   QualType HandleNamespaceMember(MemberRefExpr *node, NamespaceDecl *NS);
 
-   QualType HandleMethodReference(MemberRefExpr *node, cl::Record *R);
+   QualType HandleMethodReference(MemberRefExpr *node, RecordDecl *R);
 
    // CallExpr
 
-   void HandleFunctionCall(CallExpr*, llvm::StringRef ident);
+   void HandleFunctionCall(CallExpr* node,
+                           llvm::ArrayRef<FunctionDecl*> overloads);
+   bool TryTypedef(CallExpr *node, TypedefDecl *td = nullptr);
+
    void HandleBuiltinCall(CallExpr*);
 
    void HandleMethodCall(CallExpr *node, QualType ty);
-   void HandleNamespaceMember(CallExpr *node, Namespace *NS);
+   void HandleDeclContextMember(CallExpr *node, DeclContext *Ctx);
 
    void HandleStaticTypeCall(CallExpr *node, Type *Ty);
    void HandleOtherTypeCall(CallExpr *node, Type *ty);
 
-   void HandleConstructorCall(CallExpr*, llvm::StringRef ident);
+   void HandleConstructorCall(CallExpr*, RecordDecl *R);
    void HandleCallOperator(CallExpr *node, QualType ty);
    void HandleAnonCall(CallExpr *node, QualType ty);
+
+   void diagnoseMemberNotFound(DeclContext *Ctx,
+                               Statement *Subject,
+                               llvm::StringRef memberName,
+                               llvm::StringRef hint = "");
 
    // BinaryOperator
 
@@ -926,21 +1125,19 @@ private:
    QualType tryBinaryOperatorMethod(QualType& lhs,
                                     QualType& rhs,
                                     BinaryOperator *node,
-                                    const string &opName,
-                                    bool isAssignment);
+                                    const string &opName);
 
    QualType tryFreeStandingBinaryOp(QualType& lhs, QualType& rhs,
                                     BinaryOperator *node,
-                                    const string &opName,
-                                    bool isAssignment);
+                                    const string &opName);
 
    QualType tryFreeStandingUnaryOp(QualType& lhs,
                                    UnaryOperator *node,
                                    const string &opName);
 
-   void checkClassAccessibility(cdot::cl::Record* cl, Expression* cause);
+   void checkClassAccessibility(RecordDecl* cl, Expression* cause);
 
-   void checkMemberAccessibility(cdot::cl::Record* record,
+   void checkMemberAccessibility(RecordDecl* record,
                                  const string& memberName,
                                  const AccessModifier& access,
                                  Expression* cause);
@@ -957,60 +1154,44 @@ private:
                                llvm::StringRef name,
                                CallExpr *expr);
 
-   void diagnoseAmbiguousCall(llvm::ArrayRef<Callable*> perfectMatches,
+   void diagnoseAmbiguousCall(llvm::ArrayRef<CallableDecl*> perfectMatches,
                               Statement *Caller);
 
-   void PrepareCallArgs(std::vector<std::shared_ptr<Expression>>& args,
-                        std::vector<Argument>& givenArgs,
-                        std::vector<Argument> const& declaredArgs);
+   void ApplyCasts(std::vector<Expression* > &args,
+                   FunctionType *FuncTy);
 
-   void ApplyCasts(std::vector<std::shared_ptr<Expression>> &args,
-                   std::vector<QualType> const& givenArgs,
-                   const std::vector<Argument> &declaredArgs);
+   void PrepareCallArgs(std::vector<Expression* >& args,
+                        FunctionType *FuncTy);
 
-   void CopyNodeProperties(Expression *src, Expression *dst);
-
-   cl::Method *setterMethod = nullptr;
-
-   cl::Record *getRecord(llvm::StringRef name);
-   cl::Struct *getStruct(llvm::StringRef name);
-   cl::Enum *getEnum(llvm::StringRef name);
-   cl::Union *getUnion(llvm::StringRef name);
-
-   Namespace *getNamespace(llvm::StringRef name);
-   llvm::ArrayRef<Alias*> getAliases(llvm::StringRef name);
-   Function *getAnyFn(llvm::StringRef name);
-   Typedef *getTypedef(llvm::StringRef name);
-   llvm::ArrayRef<Function*> getFunctionOverloads(llvm::StringRef name);
+   void PrepareCallArgs(std::vector<Expression* >& args,
+                        CallableDecl *C);
 
    void calculateRecordSizes();
 
-   struct DeclScopeRAII {
-      DeclScopeRAII(SemaPass &S, DeclPass &DP);
-      ~DeclScopeRAII();
+   bool checkFunctionCompatibility(
+                           NamedDecl *C,
+                           OverloadResolver &Resolver,
+                           std::unique_ptr<CompatibleCallResult> &Res,
+                           llvm::SmallVectorImpl<CallableDecl*> &perfectCalls,
+                           std::vector<CallCandidate> &failedCandidates,
+                           size_t &bestMatch,
+                           size_t &maxSatisfiedConstraints);
+
+   struct ScopeResetRAII {
+      explicit ScopeResetRAII(SemaPass &S)
+         : S(S), scope(S.currentScope)
+      {
+         S.currentScope = nullptr;
+      }
+
+      ~ScopeResetRAII()
+      {
+         S.currentScope = scope;
+      }
 
    private:
       SemaPass &S;
-      DeclPass *savedPass;
-      std::stack<Scope> Scopes;
-   };
-
-   struct ScopeStackRAII {
-      ScopeStackRAII(SemaPass &S)
-         : S(S), Scopes(std::move(S.Scopes))
-      {
-         new (&S.Scopes) std::stack<Scope>();
-         S.Scopes.push(Scope{});
-      }
-
-      ~ScopeStackRAII()
-      {
-         new (&S.Scopes) std::stack<Scope>(std::move(Scopes));
-      }
-
-   private:
-      SemaPass &S;
-      std::stack<Scope> Scopes;
+      Scope *scope;
    };
 };
 
@@ -1018,4 +1199,4 @@ private:
 } // namespace cdot
 
 
-#endif //CDOT_TYPECHECKVISITOR_H
+#endif //CDOT_SEMA_H

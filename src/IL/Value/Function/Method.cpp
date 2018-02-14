@@ -11,39 +11,13 @@
 
 #include "../Record/AggregateType.h"
 
-#include "../../../Variant/Type/VoidType.h"
-#include "../../../AST/Passes/SemanticAnalysis/Function.h"
-#include "../../../AST/Passes/SemanticAnalysis/Record/Record.h"
-#include "../../../Variant/Type/FunctionType.h"
-
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-namespace {
-
-FunctionType *makeMethodTy(AggregateType *SelfTy,
-                           QualType &returnType,
-                           llvm::ArrayRef<Argument*> args) {
-   std::vector<cdot::Argument> realArgs;
-
-   if (SelfTy)
-      realArgs.emplace_back("", QualType(ObjectType::get(SelfTy->getName())));
-
-   for (const auto &arg : args) {
-      realArgs.emplace_back(arg->getName(), arg->getType(),
-                            nullptr, false, arg->isVararg());
-   }
-
-   return FunctionType::get(returnType, realArgs, true);
-}
-
-} // anonymous namespace
-
 Method::Method(const std::string &name,
-               QualType returnType,
-               llvm::ArrayRef<Argument *> args,
+               FunctionType *FuncTy,
                AggregateType *forType,
                bool isStatic,
                bool isVirtual,
@@ -51,10 +25,8 @@ Method::Method(const std::string &name,
                bool isOperator,
                bool isConversionOp,
                Module *parent,
-               bool mightThrow)
-   : Function(MethodID, makeMethodTy(isStatic ? nullptr : forType,
-                                     returnType, args),
-              name, returnType, args, parent, mightThrow, false),
+               bool addSelfArg)
+   : Function(MethodID, FuncTy, name, parent, false),
      recordType(forType), Self(nullptr)
 {
    if (isStatic) {
@@ -127,12 +99,12 @@ void Method::checkIfPrimitiveOp()
 }
 
 Initializer::Initializer(const std::string &name,
-                         llvm::ArrayRef<Argument *> args,
+                         FunctionType *FuncTy,
                          AggregateType *forType,
                          Module *parent,
-                         bool mightThrow)
-   : Method(name, QualType(VoidType::get()), args, forType, false, false,
-            false, false, false, parent, mightThrow)
+                         bool addSelfArg)
+   : Method(name, FuncTy, forType, false, false,
+            false, false, false, parent, addSelfArg)
 {
    id = InitializerID;
 }

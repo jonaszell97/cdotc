@@ -14,34 +14,35 @@ class CallExpr;
 
 class SubscriptExpr : public Expression {
 public:
-   explicit SubscriptExpr(Expression::SharedPtr &&index);
-
-   typedef std::shared_ptr<SubscriptExpr> SharedPtr;
+   explicit SubscriptExpr(std::vector<Expression*> &&indices)
+      : Expression(SubscriptExprID), indices(move(indices))
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == SubscriptExprID;
    }
 
-protected:
-   std::shared_ptr<Expression> index;
+   friend class TransformImpl;
 
-   // codegen
-   std::shared_ptr<CallExpr> overridenCall;
+protected:
+   std::vector<Expression*> indices;
 
 public:
-   std::shared_ptr<Expression> const& getIndex() const
+   std::vector<Expression *> &getIndicesRef()
    {
-      return index;
+      return indices;
    }
 
-   std::shared_ptr<Expression> &getIndex()
+   std::vector<Expression *> const &getIndices() const
    {
-      return index;
+      return indices;
    }
 
-   const std::shared_ptr<CallExpr> &getOverridenCall() const;
-   void setOverridenCall(const std::shared_ptr<CallExpr> &overridenCall);
+   bool hasSingleIndex() const
+   {
+      return indices.size() == 1;
+   }
 };
 
 } // namespace ast

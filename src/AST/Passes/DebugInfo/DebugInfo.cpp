@@ -429,7 +429,7 @@
 //}
 //
 //void DebugInfo::emitParameterDI(
-//   const std::vector<std::shared_ptr<FuncArgDecl>> &args,
+//   const std::vector<FuncArgDecl* > &args,
 //   llvm::Function *func,
 //   unsigned int argBegin,
 //   bool emitSelf)

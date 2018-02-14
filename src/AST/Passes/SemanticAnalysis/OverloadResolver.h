@@ -6,25 +6,16 @@
 #define CDOT_OVERLOADRESOLVER_H
 
 #include <vector>
-#include "../../../Util.h"
-#include "../../../Message/Diagnostics.h"
-#include "Template.h"
+
+#include "Util.h"
+#include "Message/Diagnostics.h"
+
+#include "AST/Passes/SemanticAnalysis/Template.h"
 
 namespace cdot {
 
-class Callable;
-
-class TemplateArg;
-struct TemplateConstriant;
-struct Argument;
 class QualType;
 class FunctionType;
-
-namespace cl {
-
-struct EnumCase;
-
-} // namespace cl
 
 namespace ast {
 
@@ -32,6 +23,10 @@ class Expression;
 class TypeRef;
 class SemaPass;
 class StaticExpr;
+class CallableDecl;
+class EnumCaseDecl;
+class FuncArgDecl;
+class Statement;
 
 enum class FailureReason : unsigned char {
    None,
@@ -65,8 +60,7 @@ struct CallCompatability {
       StaticExpr *failedConstraint;
    };
 
-   std::vector<QualType> resolvedArgs;
-   std::vector<Argument> resolvedNeededArgs;
+   FunctionType* FuncTy;
    sema::TemplateArgList templateArgList;
    sema::TemplateArgList initializerTemplateArgList;
 
@@ -77,50 +71,38 @@ struct CallCompatability {
 class OverloadResolver {
 public:
    OverloadResolver(SemaPass &SP,
-                    const std::vector<Argument> &givenArgs,
-                    const std::vector<TemplateArg> &givenTemplateArgs,
-                    SourceLocation callerLoc = {});
+                    llvm::ArrayRef<Expression*> givenArgs,
+                    const std::vector<TemplateArgExpr*> &givenTemplateArgs,
+                    Statement *Caller = nullptr);
 
-   CallCompatability checkIfViable(Callable *callable);
+   CallCompatability checkIfViable(CallableDecl *callable);
+
    CallCompatability checkIfViable(FunctionType *funcTy);
-   CallCompatability checkIfViable(cl::EnumCase const &Case);
+   CallCompatability checkIfViable(EnumCaseDecl *Case);
 
-   typedef std::vector<pair<size_t, bool>> ArgOrder;
+   void isCallCompatible(CallCompatability &comp,
+                         llvm::ArrayRef<QualType> givenArgs,
+                         FunctionType *FuncTy,
+                         size_t firstDefaultArg = size_t(-1));
 
-   enum InferenceStatus {
-      Inf_Success,
-      Inf_CouldNotInfer,
-      Inf_SubstituationFailure
-   };
-
-   static void isCallCompatible(CallCompatability &comp,
-                                const std::vector<Argument> &givenArgs,
-                                const std::vector<Argument> &neededArgs);
-
-   static void isCallCompatible(CallCompatability &comp,
-                                const std::vector<QualType> &givenArgs,
-                                const std::vector<Argument> &neededArgs,
-                                size_t checkUntil = 0);
+   llvm::ArrayRef<Expression *> getGivenArgs()
+   {
+      return givenArgs;
+   }
 
 protected:
    SemaPass &SP;
-   const std::vector<Argument> &givenArgs;
-   const std::vector<TemplateArg> &givenTemplateArgs;
-   SourceLocation callerLoc;
+   llvm::ArrayRef<Expression*> givenArgs;
+   const std::vector<TemplateArgExpr*> &givenTemplateArgs;
+   Statement *Caller;
 
-   void resolveTemplateArgs(std::vector<Argument> &resolvedNeededArgs,
-                            sema::TemplateArgList const& templateArgs);
+   std::vector<QualType> resolveTemplateArgs(
+                                    llvm::ArrayRef<FuncArgDecl*> neededArgs,
+                                    sema::TemplateArgList const& templateArgs);
 
-   static std::vector<QualType> resolveContextual(
-                                          const std::vector<Argument>&given,
-                                          const std::vector<Argument> &needed);
-
-   static void isVarargCallCompatible(CallCompatability &comp,
-                                      const std::vector<QualType> &givenArgs,
-                                      const std::vector<Argument> &neededArgs);
-
-   ArgOrder reorderArgs(const std::vector<Argument>& givenArgs,
-                        const std::vector<Argument>& neededArgs);
+   void isVarargCallCompatible(CallCompatability &comp,
+                               llvm::ArrayRef<QualType> givenArgs,
+                               FunctionType *FuncTy);
 };
 
 } // namespace ast

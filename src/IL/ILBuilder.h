@@ -7,26 +7,24 @@
 
 #include <llvm/ADT/ArrayRef.h>
 #include "Value/Function/BasicBlock.h"
-#include "../Variant/Type/QualType.h"
+
+#include "../Variant/Type/Type.h"
 
 namespace cdot {
 
 enum class CastKind : unsigned char;
-struct CompilationUnit;
-struct Argument;
-class Callable;
-
-namespace cl {
-
-class Record;
-struct Method;
-
-} // namespace cl
+class CompilationUnit;
 
 namespace ast {
-
-class Function;
-
+   class FunctionDecl;
+   class CallableDecl;
+   class RecordDecl;
+   class StructDecl;
+   class ClassDecl;
+   class EnumDecl;
+   class UnionDecl;
+   class ProtocolDecl;
+   class ASTContext;
 } // namespace ast
 
 namespace il {
@@ -42,8 +40,8 @@ class ILBuilder {
 public:
    using iterator = BasicBlock::iterator;
 
-   explicit ILBuilder(Context &Ctx);
-   explicit ILBuilder(Module *M);
+   explicit ILBuilder(ast::ASTContext &ASTCtx, Context &Ctx);
+   explicit ILBuilder(ast::ASTContext &ASTCtx, Module *M);
    ~ILBuilder();
 
    void SetModule(Module *M)
@@ -154,7 +152,7 @@ public:
 
    ConstantArray *CreateConstantArray(llvm::SmallVector<Constant*, 4> &&Arr);
    ConstantArray *CreateConstantArray(llvm::ArrayRef<Constant*> Arr);
-   ConstantArray *CreateConstantArray(Type *ty, size_t numElements);
+   ConstantArray *CreateConstantArray(QualType ty, size_t numElements);
 
    Argument *CreateArgument(QualType type,
                             bool vararg,
@@ -162,26 +160,31 @@ public:
                             const std::string &name = "",
                             const SourceLocation &loc = {});
 
-   ClassType *DeclareClass(const std::string &name,
-                           llvm::StringRef parentClass,
+   ClassType *DeclareClass(ast::ClassDecl *C,
+                           const std::string &name,
                            const SourceLocation &loc = {});
 
-   StructType *DeclareStruct(const std::string &name,
+   StructType *DeclareStruct(ast::RecordDecl *S,
+                             const std::string &name,
                              const SourceLocation &loc = {});
 
-   EnumType *DeclareEnum(const std::string &name, Type *rawType,
+   EnumType *DeclareEnum(ast::EnumDecl *E,
+                         const std::string &name,
                          const SourceLocation &loc = {});
 
-   UnionType *DeclareUnion(const std::string &name,
+   UnionType *DeclareUnion(ast::UnionDecl *U,
+                           const std::string &name,
                            const SourceLocation &loc = {});
 
-   ProtocolType *DeclareProtocol(const std::string &name,
+   ProtocolType *DeclareProtocol(ast::ProtocolDecl *P,
+                                 const std::string &name,
                                  const SourceLocation &loc = {});
 
    Function *CreateFunction(const std::string &name,
                             QualType returnType,
                             llvm::ArrayRef<Argument *> args,
                             bool mightThrow,
+                            bool vararg,
                             bool isExternC = false,
                             const SourceLocation &loc = {});
 
@@ -200,13 +203,17 @@ public:
                         bool isOperator,
                         bool isConversionOp,
                         bool mightThrow,
-                        const SourceLocation &loc = {});
+                        bool vararg,
+                        const SourceLocation &loc = {},
+                        bool addSelfArg = true);
 
    Initializer *CreateInitializer(AggregateType *forType,
                                   const std::string &methodName,
                                   llvm::ArrayRef<Argument *> args,
                                   bool mightThrow,
-                                  const SourceLocation &loc = {});
+                                  bool vararg,
+                                  const SourceLocation &loc = {},
+                                  bool addSelfArg = true);
 
    GlobalVariable *CreateGlobalVariable(Type *type,
                                         bool isConst = false,
@@ -277,6 +284,7 @@ public:
                           const std::string &name = "");
 
    FieldRefInst *CreateFieldRef(Value *val,
+                                StructType *ty,
                                 llvm::StringRef fieldName,
                                 const std::string &name = "");
 
@@ -331,7 +339,8 @@ public:
                                 const std::string &name = "");
 
    LambdaInitInst *CreateLambdaInit(Function *Function,
-                                    llvm::SmallVector<Value *, 4> &&Captures,
+                                    QualType LambdaTy,
+                                    llvm::ArrayRef<Value*> Captures,
                                     const std::string &name = "");
 
    UnionCastInst *CreateUnionCast(Value *target,
@@ -355,7 +364,7 @@ public:
    UnreachableInst *CreateUnreachable(const std::string &name = "");
 
    BrInst *CreateBr(BasicBlock *target,
-                    llvm::SmallVector<Value*, 4> &&BlockArgs = {},
+                    llvm::ArrayRef<Value*> BlockArgs = {},
                     const std::string &name = "");
 
    BrInst *CreateUnresolvedBr(const std::string &name = "");
@@ -363,8 +372,8 @@ public:
    BrInst *CreateCondBr(Value *Condition,
                         BasicBlock *IfBranch,
                         BasicBlock *ElseBranch,
-                        llvm::SmallVector<Value*, 4> &&TargetArgs = {},
-                        llvm::SmallVector<Value*, 4> &&ElseArgs = {},
+                        llvm::ArrayRef<Value*> TargetArgs = {},
+                        llvm::ArrayRef<Value*> ElseArgs = {},
                         const std::string &name = "");
 
    SwitchInst *CreateSwitch(Value *SwitchVal,
@@ -459,6 +468,7 @@ public:
    }
 
 protected:
+   ast::ASTContext &ASTCtx;
    Context &Ctx;
    Module *M;
    SourceLocation currentSourceLoc;

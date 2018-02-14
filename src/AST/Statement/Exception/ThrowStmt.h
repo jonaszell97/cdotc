@@ -10,35 +10,52 @@
 namespace cdot {
 namespace ast {
 
+class MethodDecl;
+
 class ThrowStmt: public Statement {
 public:
-   ThrowStmt(std::shared_ptr<Expression>&& thrownVal);
-
-   typedef std::shared_ptr<ThrowStmt> SharedPtr;
+   explicit ThrowStmt(Expression* thrownVal)
+      : Statement(ThrowStmtID), thrownVal(thrownVal), thrownType(nullptr)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == ThrowStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<Expression> thrownVal;
+   Expression* thrownVal;
    Type *thrownType;
 
-   cl::Method *descFn = nullptr;
+   MethodDecl *descFn = nullptr;
 
 public:
-   const std::shared_ptr<Expression> &getThrownVal() const;
+   Expression *getThrownVal() const
+   {
+      return thrownVal;
+   }
 
-   void setThrownVal(const std::shared_ptr<Expression> &thrownVal);
+   Type *getThrownType() const
+   {
+      return thrownType;
+   }
 
-   Type *getThrownType() const;
+   MethodDecl *getDescFn() const
+   {
+      return descFn;
+   }
 
-   void setThrownType(Type *thrownType);
+   void setThrownType(Type *thrownType)
+   {
+      ThrowStmt::thrownType = thrownType;
+   }
 
-   cdot::cl::Method *getDescFn() const;
-
-   void setDescFn(cdot::cl::Method *descFn);
+   void setDescFn(MethodDecl *descFn)
+   {
+      ThrowStmt::descFn = descFn;
+   }
 };
 
 } // namespace ast

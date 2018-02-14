@@ -46,13 +46,9 @@ private:
 
 class GEPInst: public BinaryInstruction {
 public:
-   GEPInst(Value *val,
-           size_t idx,
-           BasicBlock *parent);
-
    GEPInst(AggregateType *AggrTy,
            Value *val,
-           size_t idx,
+           ConstantInt *idx,
            BasicBlock *parent);
 
    GEPInst(Value *val,
@@ -87,7 +83,7 @@ public:
 class TupleExtractInst: public GEPInst {
 public:
    TupleExtractInst(Value *val,
-                    size_t idx,
+                    ConstantInt *idx,
                     BasicBlock *parent);
 
    ConstantInt *getIdx() const;
@@ -116,7 +112,7 @@ class EnumExtractInst: public UnaryInstruction {
 public:
    EnumExtractInst(Value *Val,
                    llvm::StringRef caseName,
-                   size_t caseVal,
+                   ConstantInt *caseVal,
                    BasicBlock *parent);
 
    static bool classof(Value const* T)
@@ -147,7 +143,7 @@ private:
 
 class CaptureExtractInst: public UnaryInstruction {
 public:
-   CaptureExtractInst(size_t idx, BasicBlock *parent);
+   CaptureExtractInst(ConstantInt *idx, BasicBlock *parent);
    ConstantInt *getIdx() const;
 
    static bool classof(Value const* T)

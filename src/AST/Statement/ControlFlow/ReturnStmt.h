@@ -14,26 +14,31 @@ class Expression;
 
 class ReturnStmt : public Statement {
 public:
-   ReturnStmt();
-   explicit ReturnStmt(std::shared_ptr<Expression> &&val);
+   ReturnStmt()
+      : Statement(ReturnStmtID), returnValue(nullptr)
+   {}
 
-   typedef std::shared_ptr<ReturnStmt> SharedPtr;
+   explicit ReturnStmt(Expression* val)
+      : Statement(ReturnStmtID), returnValue(val)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == ReturnStmtID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::shared_ptr<Expression> returnValue;
+   Expression* returnValue;
 
 public:
-   const std::shared_ptr<Expression> &getReturnValue() const
+   Expression* getReturnValue() const
    {
       return returnValue;
    }
 
-   std::shared_ptr<Expression> &getReturnValue()
+   Expression* &getReturnValue()
    {
       return returnValue;
    }

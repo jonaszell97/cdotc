@@ -21,13 +21,6 @@ class Type;
 struct Argument;
 struct CompilationUnit;
 
-namespace cl {
-
-class Record;
-struct Method;
-
-} // namespace cl
-
 namespace ast {
 
 class CodeGen;
@@ -73,7 +66,7 @@ namespace codegen {
       llvm::MDNode *emitLambdaDI(ast::LambdaExpr *node, llvm::Function *func);
 
       void emitParameterDI(
-         const std::vector<std::shared_ptr<ast::FuncArgDecl>> &args,
+         const std::vector<ast::FuncArgDecl* > &args,
          llvm::Function *func,
          unsigned int argBegin = 0,
          bool emitSelf = false

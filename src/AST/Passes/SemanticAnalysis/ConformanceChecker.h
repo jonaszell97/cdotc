@@ -9,22 +9,13 @@
 
 namespace cdot {
 
-namespace cl {
-
-class Record;
-
-} // namespace cl
-
 namespace diag {
-
-class DiagnosticBuilder;
-
+   class DiagnosticBuilder;
 } // namespace diag
 
 namespace ast {
-
-class SemaPass;
-
+   class RecordDecl;
+   class SemaPass;
 } // namespace ast
 
 namespace sema {
@@ -33,7 +24,7 @@ class ConformanceCheckerImpl;
 
 class ConformanceChecker {
 public:
-   explicit ConformanceChecker(ast::SemaPass &SP, cl::Record *Rec);
+   explicit ConformanceChecker(ast::SemaPass &SP, ast::RecordDecl *Rec);
    ~ConformanceChecker();
 
    void checkConformance();

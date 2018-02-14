@@ -15,9 +15,7 @@ namespace il {
 
 class PrimitivePromoter: public InstructionVisitor<PrimitivePromoter, Value*> {
 public:
-   explicit PrimitivePromoter(Module *M)
-      : InstructionVisitor(PrimitivePromoterID), Builder(M)
-   {}
+   explicit PrimitivePromoter(Module *M);
 
    void visitModule(Module &M);
    void visitFunction(Function &F);

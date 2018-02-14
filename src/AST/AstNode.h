@@ -8,39 +8,31 @@
 #include <iostream>
 
 #include "Attribute/Attribute.h"
-#include "../Variant/Type/QualType.h"
+#include "../Variant/Type/Type.h"
 #include "../lex/SourceLocation.h"
+#include "../Support/Casting.h"
 
 namespace cdot {
 
 class Type;
 class GenericType;
+enum class AccessModifier : unsigned char;
 
-class Callable;
+using string = std::string;
 
-class TemplateArgListBuilder;
-struct TemplateParameter;
-
-enum class AccessModifier : unsigned int;
-
-namespace cl {
-
-struct Method;
-class Class;
-class Record;
-class Enum;
-class Union;
-
-} // namespace cl
+namespace diag {
+   class DiagnosticBuilder;
+} // namespace diag
 
 namespace ast {
 
-using cdot::Attribute;
-using namespace cdot;
+class DeclContext;
+class TransformImpl;
+class Statement;
 
 class AstNode {
 public:
-   typedef std::shared_ptr<AstNode> SharedPtr;
+   friend class TransformImpl;
 
    enum NodeType {
 #  define CDOT_ASTNODE(Name) \
@@ -49,10 +41,7 @@ public:
 #  include "AstNode.def"
    };
 
-   void destroyValue();
-   void destroyValueImpl();
-
-   string getNodeTypeAsString() const
+   std::string getNodeTypeAsString() const
    {
       switch (typeID) {
 #        define CDOT_ASTNODE(Name)  \
@@ -65,13 +54,13 @@ public:
    void setAttributes(std::vector<Attribute> &&attr);
    std::vector<Attribute>& getAttributes();
 
+   std::vector<Attribute> const& getAttributes() const
+   { return attributes; }
+
    bool hasAttribute(Attr kind) const;
    Attribute& getAttribute(Attr kind);
 
-   void setContextualType(const QualType& t)
-   {
-      contextualType = t;
-   }
+   void setContextualType(QualType ty);
 
    bool needsContextualInformation() const
    {
@@ -83,7 +72,11 @@ public:
       return typeID;
    }
 
-   static bool classof(AstNode const* T) { return true; }
+   static bool classof(AstNode const* T)     { return true; }
+   static bool classof(DeclContext const* T) { return false; }
+
+   static DeclContext *castToDeclContext(AstNode const *D);
+   static AstNode *castFromDeclContext(DeclContext const *Ctx);
 
 protected:
    explicit AstNode(NodeType typeID);
@@ -97,12 +90,8 @@ protected:
    uint32_t SubclassData;
 
    SourceLocation loc;
-   AstNode* parent = nullptr;
    std::vector<Attribute> attributes;
    QualType contextualType;
-
-   // codegen
-   string binding;
 
    void toggleFlag(uint32_t flag)
    {
@@ -129,16 +118,13 @@ public:
    }
 
 public:
-   const SourceLocation &getSourceLoc() const;
-   void setSourceLoc(const SourceLocation &loc);
+   const SourceLocation &getSourceLoc() const { return loc; }
+   void setSourceLoc(const SourceLocation &loc) { this->loc = loc; }
 
-   AstNode *getParent() const;
-   void setParent(AstNode *parent);
-
-   const QualType &getContextualType() const;
-
-   const string &getBinding() const;
-   void setBinding(const string &binding);
+   QualType getContextualType()
+   {
+      return contextualType;
+   }
 };
 
 } // namespace ast

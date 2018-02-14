@@ -5,59 +5,27 @@
 #ifndef CDOT_DIAGNOSTICS_H
 #define CDOT_DIAGNOSTICS_H
 
+#include "Variant/Variant.h"
+#include "lex/SourceLocation.h"
+
 #include <unordered_map>
 #include <string>
 #include <vector>
 #include <stack>
-#include "../lex/Token.h"
-
-using std::string;
-using std::unordered_map;
+#include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
-class Type;
 
-struct Variant;
+class Type;
 class QualType;
 struct SourceLocation;
-class Callable;
-
-class TemplateArg;
 
 namespace ast {
-
-class AstNode;
-
+   class AstNode;
 } // namespace ast
 
-namespace module {
-
-struct ModuleLexerTraits;
-
-} // namespace module
-
-
-namespace sema {
-
-class TemplateArgList;
-
-} // namespace sema
-
-namespace cl {
-
-struct Method;
-class Record;
-
-} // namespace cl
-
 namespace lex {
-
-struct LexerTraits;
-
-
-template<class Traits>
-class Lexer;
-
+   class Lexer;
 } // namespace lex
 
 namespace diag {
@@ -82,6 +50,7 @@ enum Option {
    show_wiggle,
    no_inst_ctx,
    no_expansion_info,
+   no_import_info,
    memberwise_init,
 };
 
@@ -109,26 +78,6 @@ inline bool isError(MessageKind msg)
    return msg > 2000;
 }
 
-struct InstantiationContext {
-   enum Kind {
-      Struct = 0, Class, Enum, Union, Protocol, Function, Method
-   };
-
-   InstantiationContext(Kind kind,
-                        llvm::StringRef name,
-                        const SourceLocation &loc,
-                        sema::TemplateArgList const* templateArgs = nullptr);
-
-   const SourceLocation &getLoc() const { return loc; }
-   string toString() const;
-
-private:
-   SourceLocation loc;
-   Kind kind;
-   llvm::StringRef name;
-   sema::TemplateArgList const* templateArgs;
-};
-
 class DiagnosticBuilder {
 public:
    DiagnosticBuilder();
@@ -136,7 +85,7 @@ public:
                               bool templateInstInfo = true);
 
    // non-terminating
-   DiagnosticBuilder& operator<<(string const& str);
+   DiagnosticBuilder& operator<<(std::string const& str);
    DiagnosticBuilder& operator<<(llvm::Twine const& str);
    DiagnosticBuilder& operator<<(llvm::StringRef const& str);
    DiagnosticBuilder& operator<<(const char* const& str);
@@ -144,32 +93,21 @@ public:
    DiagnosticBuilder& operator<<(size_t const& i);
 
    DiagnosticBuilder& operator<<(Variant const& str);
-   DiagnosticBuilder& operator<<(Type* const& ty);
-   DiagnosticBuilder& operator<<(QualType const& ty);
 
    DiagnosticBuilder& operator<<(SourceLocation const& loc);
-   DiagnosticBuilder& operator<<(ast::AstNode* node);
-   DiagnosticBuilder& operator<<(std::shared_ptr<ast::AstNode> const& node);
-
-   DiagnosticBuilder& operator<<(cl::Method const* M);
-
-   DiagnosticBuilder& operator<<(lex::Lexer<lex::LexerTraits>* const& lex);
-   DiagnosticBuilder& operator<<(
-      lex::Lexer<module::ModuleLexerTraits>* const&lex);
-
    DiagnosticBuilder& operator<<(Option const& opt);
 
+#ifndef CDOT_SMALL_VARIANT
+   DiagnosticBuilder& operator<<(Type *Ty);
+   DiagnosticBuilder& operator<<(QualType const& Ty);
+   DiagnosticBuilder& operator<<(ast::AstNode *node);
+#endif
+
    // terminating
-   [[noreturn]]
+   LLVM_ATTRIBUTE_NORETURN
    void operator<<(Terminator const& terminator);
 
    void operator<<(Continuator const& terminator);
-
-   static void pushInstantiationCtx(cl::Record *Rec);
-   static void pushInstantiationCtx(Callable *C);
-   static void pushInstantiationCtx(InstantiationContext &&Ctx);
-
-   static void popInstantiationCtx();
 
    bool isValid() const
    {
@@ -185,23 +123,29 @@ public:
 
    operator bool() const { return isValid(); }
 
-protected:
-   static std::vector<InstantiationContext> InstContexts;
+   void setLoc(SourceLocation loc) const
+   {
+      DiagnosticBuilder::loc = loc;
+   }
 
-   string prepareMessage();
+   void addArgument(Variant &&V) const
+   {
+      providedArgs.emplace_back(std::move(V));
+   }
+
+protected:
+   std::string prepareMessage();
    void writeDiagnostic();
 
-   void prepareInstantiationContextMsg();
+   std::string handleFunction(Variant& var, lex::Lexer& lex);
 
-   string handleFunction(Variant& var, lex::Lexer<lex::LexerTraits>& lex);
-
-   SourceLocation loc;
-   std::vector<Variant> providedArgs;
+   mutable SourceLocation loc;
+   mutable std::vector<Variant> providedArgs;
 
    const char* diag;
    DiagnosticKind kind;
 
-   string additionalNotes;
+   std::string additionalNotes;
 
    bool showWiggle : 1;
    bool showWholeLine : 1;
@@ -209,6 +153,7 @@ protected:
    bool noteMemberwiseInit : 1;
    bool valid : 1;
    bool noExpansionInfo : 1;
+   bool noImportInfo : 1;
 };
 
 DiagnosticBuilder warn(MessageKind warn);

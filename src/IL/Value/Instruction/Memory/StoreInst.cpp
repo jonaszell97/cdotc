@@ -3,15 +3,12 @@
 //
 
 #include "StoreInst.h"
-#include "../../../../Variant/Type/Type.h"
-#include "../../../../Variant/Type/VoidType.h"
-#include "../../../../Variant/Type/PointerType.h"
 
 namespace cdot {
 namespace il {
 
 StoreInst::StoreInst(Value *dst, Value *src, BasicBlock *parent)
-   : BinaryInstruction(StoreInstID, dst, src, VoidType::get(), parent)
+   : BinaryInstruction(StoreInstID, dst, src, nullptr, parent)
 {
 
 }
@@ -26,20 +23,21 @@ LoadInst::LoadInst(Value *target,
    : UnaryInstruction(LoadInstID, target, nullptr, parent)
 {
    if (target->isLvalue()) {
-      *type = *target->getType();
+      type = *target->getType();
    }
    else {
-      assert(target->getType()->isPointerTy());
-      *type = *target->getType()->asPointerTy()->getPointeeType();
+      assert(target->getType()->isPointerType());
+      type = *target->getType()->asPointerType()->getPointeeType();
    }
 }
 
 AddrOfInst::AddrOfInst(Value *target,
+                       PointerType *PtrTy,
                        BasicBlock *parent)
-   : UnaryInstruction(AddrOfInstID, target, target->getType()->getPointerTo(),
-                      parent)
+   : UnaryInstruction(AddrOfInstID, target, PtrTy, parent)
 {
    assert(target->isLvalue());
+   assert(PtrTy->getPointeeType() == target->getType());
 }
 
 PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)

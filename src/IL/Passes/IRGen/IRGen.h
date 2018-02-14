@@ -22,7 +22,9 @@ namespace il {
 
 class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
-   explicit IRGen(llvm::LLVMContext &Ctx);
+   explicit IRGen(llvm::LLVMContext &Ctx,
+                  llvm::Module *M,
+                  bool emitDebugInfo);
    ~IRGen();
 
    void visitCompilationUnit(CompilationUnit &CU);
@@ -30,8 +32,7 @@ public:
    void visitFunction(Function &F);
    void visitBasicBlock(BasicBlock &B);
 
-   static void linkAndEmit(llvm::LLVMContext &Ctx,
-                           std::vector<CompilationUnit> &CUs);
+   static void linkAndEmit(CompilationUnit &CU);
 
 #  define CDOT_INSTRUCTION(Name) \
    llvm::Value *visit##Name(Name const& I);
@@ -83,26 +84,31 @@ private:
 
    llvm::FunctionType *getLambdaType(FunctionType *FTy);
 
-   llvm::Function *getMallocFn();
-   llvm::Function *getFreeFn();
-   llvm::Function *getThrowFn();
-   llvm::Function *getAllocExcnFn();
-   llvm::Function *getReleaseFn();
-   llvm::Function *getRetainFn();
-   llvm::Function *getPrintfFn();
-   llvm::Function *getMemCmpFn();
-   llvm::Function *getIntPowFn();
+   llvm::Constant *getMallocFn();
+   llvm::Constant *getFreeFn();
+   llvm::Constant *getThrowFn();
+   llvm::Constant *getAllocExcnFn();
+   llvm::Constant *getReleaseFn();
+   llvm::Constant *getRetainFn();
+   llvm::Constant *getPrintfFn();
+   llvm::Constant *getMemCmpFn();
+   llvm::Constant *getIntPowFn();
 
    void debugPrint(const llvm::Twine &str);
 
    il::Module *ILMod;
 
+   bool emitDebugInfo : 1;
+
    llvm::DIBuilder *DI;
    llvm::DIFile *File;
+   llvm::DICompileUnit *CU;
    llvm::SmallDenseMap<size_t, llvm::DIFile*> DIFileMap;
    llvm::SmallDenseMap<uintptr_t, llvm::DIType*> DITypeMap;
    llvm::SmallDenseMap<uintptr_t, llvm::DISubprogram*> DIFuncMap;
    std::stack<llvm::DIScope*> ScopeStack;
+
+   llvm::SmallDenseMap<uintptr_t, llvm::StructType*> TypeMap;
 
    llvm::LLVMContext &Ctx;
    llvm::Module *M;
@@ -122,15 +128,15 @@ private:
 
    llvm::FunctionType *DeinitializerTy;
 
-   llvm::Function *MallocFn;
-   llvm::Function *FreeFn;
-   llvm::Function *ThrowFn;
-   llvm::Function *AllocExcFn;
-   llvm::Function *RetainFn;
-   llvm::Function *ReleaseFn;
-   llvm::Function *PrintfFn;
-   llvm::Function *MemCmpFn;
-   llvm::Function *IntPowFn;
+   llvm::Constant *MallocFn;
+   llvm::Constant *FreeFn;
+   llvm::Constant *ThrowFn;
+   llvm::Constant *AllocExcFn;
+   llvm::Constant *RetainFn;
+   llvm::Constant *ReleaseFn;
+   llvm::Constant *PrintfFn;
+   llvm::Constant *MemCmpFn;
+   llvm::Constant *IntPowFn;
 
    llvm::StringMap<llvm::Value*> ValueMap;
 
@@ -138,6 +144,8 @@ private:
 
    llvm::DIFile *getFileDI(size_t fileID, llvm::StringRef fileName,
                            llvm::StringRef path);
+
+   llvm::DIFile *getFileDI(SourceLocation loc);
 
    llvm::DIType *getTypeDI(Type *ty);
    llvm::DIType *getRecordDI(Type *ty);

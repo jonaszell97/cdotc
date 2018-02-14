@@ -8,10 +8,10 @@
 namespace cdot {
 namespace ast {
 
-WhileStmt::WhileStmt(std::shared_ptr<Expression> &&cond,
-                     std::shared_ptr<Statement> &&body,
+WhileStmt::WhileStmt(Expression* cond,
+                     Statement* body,
                      bool atLeastOnce)
-   : Statement(WhileStmtID), condition(move(cond)), body(move(body)),
+   : Statement(WhileStmtID), condition(cond), body(body),
      atLeastOnce(atLeastOnce)
 {
 

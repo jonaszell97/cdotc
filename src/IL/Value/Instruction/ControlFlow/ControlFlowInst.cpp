@@ -4,10 +4,6 @@
 
 #include "ControlFlowInst.h"
 #include "../../Function/BasicBlock.h"
-
-#include "../../../../Variant/Type/VoidType.h"
-#include "../../../../Variant/Type/PointerType.h"
-#include "../../../../Variant/Type/IntegerType.h"
 #include "../../Constant/ConstantVal.h"
 
 namespace cdot {
@@ -124,12 +120,6 @@ BasicBlock* SwitchInst::getDefault() const
          return C.second;
 
    return nullptr;
-}
-
-LandingPadInst::LandingPadInst(BasicBlock *parent)
-   : TerminatorInst(LandingPadInstID, parent)
-{
-   *type = IntegerType::get(8)->getPointerTo();
 }
 
 void LandingPadInst::addCatch(CatchClause &&Clause)

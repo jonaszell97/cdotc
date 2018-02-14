@@ -7,6 +7,7 @@
 
 #include "DiagnosticParser.h"
 #include "../../lex/Lexer.h"
+#include "../../Basic/IdentifierInfo.h"
 
 using namespace cdot::lex;
 
@@ -42,21 +43,22 @@ void DiagnosticParser::parseFile(std::ifstream &file, string& base)
       }
 
       auto Buf = llvm::MemoryBuffer::getMemBuffer(line);
-      Lexer<> lex(Buf.get(), 0);
-      lex.setIgnoreInterpolation(true);
+
+      IdentifierTable II(16);
+      Lexer lex(II, Buf.get(), 0, '\0');
       lex.lex();
 
       if (lex.currentTok().is(tok::eof)) {
          continue;
       }
 
-      string name = lex.strVal();
+      string name = lex.getCurrentIdentifier();
       lex.advance();
 
       assert(lex.currentTok().is(tok::smaller) && "expected <");
       lex.advance();
 
-      string type = lex.strVal();
+      string type = lex.getCurrentIdentifier();
       lex.advance();
 
       assert(lex.currentTok().is(tok::greater) && "expected >");
@@ -65,7 +67,7 @@ void DiagnosticParser::parseFile(std::ifstream &file, string& base)
       assert(lex.currentTok().is(tok::stringliteral) && "expected string "
          "literal");
 
-      string str = lex.strVal();
+      string str = lex.currentTok().getText();
 
       auto enumVal = type + '_' + name;
 

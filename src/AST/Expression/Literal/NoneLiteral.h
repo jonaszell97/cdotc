@@ -15,12 +15,12 @@ class NoneLiteral: public Expression {
 public:
    NoneLiteral() : Expression(NoneLiteralID) {}
 
-   typedef std::shared_ptr<NoneLiteral> SharedPtr;
-
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == NoneLiteralID;
    }
+
+   friend class TransformImpl;
 };
 
 } // namespace ast

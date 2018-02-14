@@ -81,7 +81,7 @@
 //   auto &options = Compiler::getOptions();
 //   for (size_t i = options.headerFiles.size(); i < CUs.size(); ++i) {
 //      auto &root = CUs[i].root;
-//      visit(root.get());
+//      visit(root);
 //      finalize(fileNames[i]);
 //   }
 //}
@@ -259,7 +259,7 @@
 //   write(">");
 //}
 //
-//void HeaderGen::writeGenerics(const std::vector<TemplateArg> &generics)
+//void HeaderGen::writeGenerics(const std::vector<TemplateArgExpr*> &generics)
 //{
 //   if (generics.empty()) {
 //      return;
@@ -300,7 +300,7 @@
 //}
 //
 //void HeaderGen::writeProtocols(
-//   const std::vector<std::shared_ptr<TypeRef>> &conformsTo)
+//   const std::vector<TypeRef* > &conformsTo)
 //{
 //   if (conformsTo.empty()) {
 //      return;
@@ -321,7 +321,7 @@
 //   addSpace();
 //}
 //
-//void HeaderGen::writeArgs(const std::vector<std::shared_ptr<FuncArgDecl>> &args)
+//void HeaderGen::writeArgs(const std::vector<FuncArgDecl* > &args)
 //{
 //   writec('(');
 //

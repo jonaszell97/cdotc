@@ -7,11 +7,11 @@
 namespace cdot {
 namespace ast {
 
-TertiaryOperator::TertiaryOperator(Expression::SharedPtr &&cond,
-                                   Expression::SharedPtr &&lhs,
-                                   Expression::SharedPtr &&rhs)
-   : Expression(TertiaryOperatorID), condition(move(cond)), lhs(move(lhs)),
-     rhs(move(rhs))
+TertiaryOperator::TertiaryOperator(Expression* cond,
+                                   Expression* lhs,
+                                   Expression* rhs)
+   : Expression(TertiaryOperatorID), condition(cond), lhs(lhs),
+     rhs(rhs)
 {
 
 }

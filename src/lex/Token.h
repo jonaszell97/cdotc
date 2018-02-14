@@ -2,68 +2,94 @@
 // Created by Jonas Zell on 13.06.17.
 //
 
-#ifndef TOKEN_H
-#define TOKEN_H
+#ifndef CDOT_TOKEN_H
+#define CDOT_TOKEN_H
 
-#include <string>
-#include <map>
+#include <llvm/ADT/StringRef.h>
 
-#include "../Variant/Variant.h"
 #include "SourceLocation.h"
+#include "TokenKinds.h"
+
+namespace llvm {
+   template<unsigned N>
+   class SmallString;
+
+   class APInt;
+} // namespace llvm
 
 namespace cdot {
+
+class IdentifierInfo;
+struct Variant;
+
 namespace lex {
 
-namespace tok {
-
-enum TokenType: unsigned short {
-   __initial = 0,
-
-#  define CDOT_TOKEN(Name, Spelling) \
-      Name,
-#  include "Tokens.def"
-};
-
-string tokenTypeToString(TokenType ty);
-
-} // namespace tok
-
 struct Token {
-   Token();
-   ~Token();
-   Token(tok::TokenType type, Variant &&val,
-         const SourceLocation &loc);
+   Token(tok::TokenType type = tok::sentinel,
+         SourceLocation loc = {})
+      : kind(type),
+        loc(loc), Data(0), Ptr(nullptr)
+   {}
 
-   tok::TokenType getKind() const { return _type; }
+   Token(IdentifierInfo *II,
+         SourceLocation loc,
+         tok::TokenType identifierKind = tok::ident)
+      : kind(identifierKind),
+        loc(loc), Data(0), Ptr(II)
+   {}
 
-   Variant &getValue() { return _value; }
-   Variant const& getValue() const { return _value; }
+   Token(IdentifierInfo *II,
+         tok::TokenType keywordKind,
+         SourceLocation loc)
+      : kind(keywordKind),
+        loc(loc), Data(0), Ptr(II)
+   {}
 
-   bool isContextualKeyword(const string &kw) const
+   Token(const char *begin, uint64_t length,
+         tok::TokenType literalKind,
+         SourceLocation loc)
+      : kind(literalKind),
+        loc(loc), Data(unsigned(length)), Ptr(const_cast<char*>(begin))
    {
-      return _type == tok::ident && _value.strVal == kw;
+      assert(length < 4294967296 && "not enough space for length");
    }
+
+   enum SpaceToken { Space };
+
+   Token(SpaceToken,
+         unsigned numSpaces,
+         SourceLocation loc)
+      : kind(tok::space), loc(loc), Data(numSpaces), Ptr(nullptr)
+   {}
+
+   Token(Variant *V, SourceLocation loc)
+      : kind(tok::preprocessor_value), loc(loc), Data(0), Ptr(V)
+   {}
+
+   bool isIdentifier(llvm::StringRef str) const;
+   bool isIdentifierStartingWith(llvm::StringRef str) const;
+   bool isIdentifierEndingWith(llvm::StringRef str) const;
 
    std::string toString() const;
    std::string rawRepr() const;
 
-   unsigned getOffset() const
-   {
-      return loc.getOffset();
-   }
+   template<unsigned N>
+   void toString(llvm::SmallString<N> &s) const;
 
-   const SourceLocation& getSourceLoc() const
-   {
-      return loc;
-   }
+   template<unsigned N>
+   void rawRepr(llvm::SmallString<N> &s) const;
 
-   bool is(tok::TokenType ty) const { return _type == ty; }
+   tok::TokenType getKind()      const { return kind; }
+   unsigned getOffset()          const { return loc.getOffset(); }
+   SourceLocation getSourceLoc() const { return loc; }
+
+   bool is(tok::TokenType ty) const { return kind == ty; }
    bool isNot(tok::TokenType ty) const { return !is(ty); }
 
    template<class ...Rest>
    bool oneOf(tok::TokenType ty, Rest... rest) const
    {
-      if (_type == ty) return true;
+      if (kind == ty) return true;
       return oneOf(rest...);
    }
 
@@ -72,20 +98,61 @@ struct Token {
    bool is_punctuator() const;
    bool is_keyword() const;
    bool is_operator() const;
-   bool is_identifier() const;
    bool is_literal() const;
-   bool is_separator() const;
-
    bool is_directive() const;
 
-   Variant _value;
+   bool is_identifier() const
+   {
+      return kind == tok::ident;
+   }
+
+   bool is_separator() const
+   {
+      return oneOf(tok::newline, tok::semicolon, tok::eof);
+   }
+
+   IdentifierInfo *getIdentifierInfo() const
+   {
+      assert(Ptr && !Data && "not an identifier token");
+      return (IdentifierInfo*)(Ptr);
+   }
+
+   llvm::StringRef getIdentifier() const;
+
+   llvm::StringRef getText() const
+   {
+      assert(oneOf(tok::charliteral, tok::stringliteral, tok::fpliteral,
+                   tok::integerliteral, tok::space) && "not a literal token");
+      return llvm::StringRef((const char*)Ptr, Data);
+   }
+
+   llvm::APInt getIntegerValue() const;
+
+   unsigned getNumSpaces() const
+   {
+      assert(kind == tok::space && "not a space token");
+      return Data;
+   }
+
+   Variant const& getPreprocessorValue() const
+   {
+      assert(kind == tok::preprocessor_value);
+      return *reinterpret_cast<Variant*>(Ptr);
+   }
+
+private:
+   tok::TokenType kind : 8;
    SourceLocation loc;
 
-   tok::TokenType _type;
-   static std::string TokensToString(const std::vector<Token> &tokens);
+   unsigned Data;
+   void *Ptr;
 };
+
+namespace tok {
+   std::string tokenTypeToString(TokenType ty);
+} // namespace tok
 
 } // namespace lex
 } // namespace cdot
 
-#endif //TOKEN_H
+#endif //CDOT_TOKEN_H

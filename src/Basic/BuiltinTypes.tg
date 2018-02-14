@@ -1,0 +1,21 @@
+
+class Type
+class IntTy <let bitwidth: u8, let unsigned: i1> : Type
+class FPTy  <let precision: u8> : Type
+class VoidTy : Type
+
+def i1  : IntTy<1, true>
+def i8  : IntTy<8, false>
+def u8  : IntTy<8, true>
+def i16 : IntTy<16, false>
+def u16 : IntTy<16, true>
+def i32 : IntTy<32, false>
+def u32 : IntTy<32, true>
+def i64 : IntTy<64, false>
+def u64 : IntTy<64, true>
+
+def f32 : FPTy<32>
+def f64 : FPTy<64>
+
+def Void : VoidTy
+

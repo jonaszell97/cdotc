@@ -17,8 +17,7 @@ public:
    friend class Function; // for copy init
 
    Method(const std::string &name,
-          QualType returnType,
-          llvm::ArrayRef<Argument *> args,
+          FunctionType *FuncTy,
           AggregateType *forType,
           bool isStatic,
           bool isVirtual,
@@ -26,7 +25,7 @@ public:
           bool isOperator,
           bool isConversionOp,
           Module *parent,
-          bool mightThrow);
+          bool addSelfArg = true);
 
    AggregateType *getRecordType() const;
 
@@ -118,10 +117,10 @@ public:
    friend class Function; // for copy init
 
    Initializer(const std::string &name,
-               llvm::ArrayRef<Argument *> args,
+               FunctionType *FuncTy,
                AggregateType *forType,
                Module *parent,
-               bool mightThrow);
+               bool addSelfArg = false);
 
 protected:
    Initializer(const Initializer &other);

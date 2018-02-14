@@ -4,212 +4,133 @@
 
 #include "Type.h"
 
-#include "AutoType.h"
-#include "VoidType.h"
-#include "MetaType.h"
-#include "TypeGroup.h"
-#include "ArrayType.h"
-#include "IntegerType.h"
-#include "PointerType.h"
-#include "FunctionType.h"
-#include "TupleType.h"
-#include "GenericType.h"
-#include "FPType.h"
-#include "ObjectType.h"
-#include "GenericType.h"
+#include "AST/ASTContext.h"
+#include "AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Statement/Declaration/Class/FieldDecl.h"
+#include "AST/Statement/Declaration/TypedefDecl.h"
+#include "AST/Statement/Declaration/NamespaceDecl.h"
+#include "AST/Expression/TypeRef.h"
 
-#include "../../AST/Passes/SemanticAnalysis/Record/Enum.h"
-#include "../../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../../AST/Passes/SemanticAnalysis/Record/Union.h"
+#include "Basic/CastKind.h"
+#include "Support/Casting.h"
+#include "Message/Diagnostics.h"
 
-#include "../../Basic/CastKind.h"
+#include <llvm/ADT/StringSwitch.h>
+#include <llvm/ADT/SmallString.h>
+#include <sstream>
 
 using std::string;
 using namespace cdot::support;
+using namespace cdot::ast;
 
 namespace cdot {
-
-llvm::StringMap<Type*> Type::Instances;
 
 Type::~Type()
 {
 
 }
 
-Type* Type::get(BoxedPrimitive bp)
-{
-   switch (bp) {
-      case Float:
-         return FPType::getFloatTy();
-      case Double:
-         return FPType::getDoubleTy();
-      case Bool:
-         return IntegerType::getBoolTy();
-      case Char:
-         return IntegerType::getCharTy();
-      default: {
-         unsigned bw = bp;
-         bool isUnsigned = false;
-         if (bw > 100) {
-            isUnsigned = true;
-            bw -= 100;
-         }
+/*
+   bool Type::isAutoType() const
+   {
+      if (id == TypeID::TypedefTypeID)
+         return asRealTypedefType()->getAliasedType()
+                                                     .isNull();
 
-         return IntegerType::get(bw, isUnsigned);
-      }
+      return AutoType::classof(this);
    }
+
+   const AutoType* Type::asAutoType() const
+   {
+      if (id == TypeID::TypedefTypeID)
+         return asRealTypedefType()->getAliasedType()
+                                                     ->asAutoType();
+
+      if (AutoType::classof(this))
+         return static_cast<AutoType const*>(this);
+
+      return nullptr;
+   }
+
+   AutoType* Type::asAutoType()
+   {
+      if (id == TypeID::TypedefTypeID)
+         return static_cast<TypedefType*>(this)->getAliasedType()
+                                               ->asAutoType();
+
+      if (AutoType::classof(this))
+         return static_cast<AutoType*>(this);
+
+      return nullptr;
+   }
+*/
+
+#define CDOT_TYPE(Name)                                              \
+bool Type::is##Name() const                                          \
+{                                                                    \
+   if (getTypeID() == TypeID::TypedefTypeID)                         \
+      return asRealTypedefType()->getAliasedType()->is##Name();      \
+                                                                     \
+   return Name::classof(this);                                       \
+}                                                                    \
+                                                                     \
+const Name* Type::as##Name() const                                   \
+{                                                                    \
+   if (getTypeID() == TypeID::TypedefTypeID)                         \
+      return asRealTypedefType()->getAliasedType()->as##Name();      \
+                                                                     \
+   if (Name::classof(this))                                          \
+      return static_cast<Name const*>(this);                         \
+                                                                     \
+   return nullptr;                                                   \
+}                                                                    \
+                                                                     \
+Name* Type::as##Name()                                               \
+{                                                                    \
+   if (getTypeID() == TypeID::TypedefTypeID)                         \
+      return static_cast<TypedefType*>(this)->getAliasedType()       \
+                                            ->as##Name();            \
+                                                                     \
+   if (Name::classof(this))                                          \
+      return static_cast<Name*>(this);                               \
+                                                                     \
+   return nullptr;                                                   \
 }
 
-void Type::TearDown()
-{
+#define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name)
+#include "Types.def"
 
-}
-
-const PointerType* Type::asPointerTy() const
+bool Type::isBoxedPrimitive(BoxedPrimitive primitive) const
 {
-   return cast<PointerType>(this);
-}
-
-const IntegerType* Type::asIntegerTy() const
-{
-   return cast<IntegerType>(this);
-}
-
-const FPType* Type::asFloatingTy() const
-{
-   return cast<FPType>(this);
-}
-
-const TupleType* Type::asTupleTy() const
-{
-   return cast<TupleType>(this);
-}
-
-const FunctionType* Type::asFunctionTy() const
-{
-   return cast<FunctionType>(this);
-}
-
-const ObjectType* Type::asObjTy() const
-{
-   return cast<ObjectType>(this);
-}
-
-const GenericType* Type::asGenericTy() const
-{
-   return cast<GenericType>(this);
-}
-
-PointerType* Type::getPointerTo()
-{
-   return PointerType::get(this);
-}
-
-PointerType* Type::asPointerTy()
-{
-   return cast<PointerType>(this);
-}
-
-IntegerType* Type::asIntegerTy()
-{
-   return cast<IntegerType>(this);
-}
-
-FPType* Type::asFloatingTy()
-{
-   return cast<FPType>(this);
-}
-
-TupleType* Type::asTupleTy()
-{
-   return cast<TupleType>(this);
-}
-
-FunctionType* Type::asFunctionTy()
-{
-   return cast<FunctionType>(this);
-}
-
-ObjectType* Type::asObjTy()
-{
-   return cast<ObjectType>(this);
-}
-
-GenericType* Type::asGenericTy()
-{
-   return cast<GenericType>(this);
-}
-
-bool Type::isAutoTy() const
-{
-   return isa<AutoType>(this);
-}
-
-bool Type::isVoidTy() const
-{
-   return isa<VoidType>(this);
-}
-
-bool Type::isTypeGroup() const
-{
-   return isa<TypeGroup>(this);
-}
-
-bool Type::isArrayTy() const
-{
-   return isa<ArrayType>(this);
-}
-
-bool Type::isMetaType() const
-{
-   return isa<MetaType>(this);
-}
-
-bool Type::isGenericTy() const
-{
-   return isa<GenericType>(this);
-}
-
-bool Type::isObjectTy() const
-{
-   return isa<ObjectType>(this);
-}
-
-bool Type::isTupleTy() const
-{
-   return isa<TupleType>(this);
-}
-
-bool Type::isFPType() const
-{
-   return isa<FPType>(this);
-}
-
-bool Type::isDummyObject() const
-{
-   return isa<InconcreteObjectType>(this);
-}
-
-bool Type::is(BoxedPrimitive primitive) const
-{
-   auto obj = dyn_cast<ObjectType>(this);
+   auto obj = this->asObjectType();
    return obj && obj->getPrimitiveKind() == primitive;
+}
+
+PointerType* Type::getPointerTo(cdot::ast::ASTContext &Ctx) const
+{
+   return Ctx.getPointerType(QualType(const_cast<Type*>(this)));
+}
+
+QualType QualType::getPointerTo(cdot::ast::ASTContext &Ctx) const
+{
+   return Ctx.getPointerType(*this);
 }
 
 Type::BoxedPrimitive Type::getPrimitiveKind() const
 {
-   if (auto Int = dyn_cast<IntegerType>(this)) {
+   if (auto Int = this->asIntegerType()) {
       if (Int->getBitwidth() == 1)
          return BoxedPrimitive::Bool;
 
       return (BoxedPrimitive)(Int->getBitwidth() + 100 * Int->isUnsigned());
    }
-   else if (auto FPTy = dyn_cast<FPType>(this)) {
+   else if (auto FPTy = this->asFPType()) {
       return (BoxedPrimitive)(200 + FPTy->getPrecision());
    }
-   else if (auto Obj = dyn_cast<ObjectType>(this)) {
+   else if (auto Obj = this->asObjectType()) {
       if (Obj->isRawEnum())
-         return cast<Enum>(Obj->getRecord())->getRawType()->getPrimitiveKind();
+         return cast<EnumDecl>(Obj->getRecord())->getRawType()->getType()
+                                                ->getPrimitiveKind();
 
       return Obj->getPrimitiveKind();
    }
@@ -219,7 +140,7 @@ Type::BoxedPrimitive Type::getPrimitiveKind() const
 
 bool Type::isFloatTy() const
 {
-   if (auto FP = dyn_cast<FPType>(this)) {
+   if (auto FP = this->asFPType()) {
       return FP->getPrecision() == sizeof(float) * 8;
    }
 
@@ -228,31 +149,16 @@ bool Type::isFloatTy() const
 
 bool Type::isDoubleTy() const
 {
-   if (auto FP = dyn_cast<FPType>(this)) {
+   if (auto FP = this->asFPType()) {
       return FP->getPrecision() == sizeof(double) * 8;
    }
 
    return false;
 }
 
-bool Type::isIntegerTy() const
-{
-   return (isa<IntegerType>(this));
-}
-
-bool Type::isPointerTy() const
-{
-   return isa<PointerType>(this);
-}
-
-bool Type::isFunctionTy() const
-{
-   return isa<FunctionType>(this);
-}
-
 bool Type::isRawFunctionTy() const
 {
-   if (auto fun = dyn_cast<FunctionType>(this)) {
+   if (auto fun = this->asFunctionType()) {
       return fun->isRawFunctionTy();
    }
 
@@ -266,7 +172,7 @@ bool Type::isStringRepresentable() const
 
 bool Type::isSelfComparable() const
 {
-   switch (id) {
+   switch (getTypeID()) {
       default:
          return true;
       case TypeID::ObjectTypeID:
@@ -279,45 +185,50 @@ bool Type::isHashable() const
    return true;
 }
 
-bool Type::isDependantType() const
+bool Type::isDependentType() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()->isDependentType();
       case TypeID::GenericTypeID:
          return true;
       case TypeID::AutoTypeID:
       case TypeID::VoidTypeID:
-      case TypeID::FPTypeGroupID:
-      case TypeID::StringTypeGroupID:
-      case TypeID::IntegerTypeGroupID:
       case TypeID::IntegerTypeID:
       case TypeID::FPTypeID:
-      case TypeID::EnumTypeGroupID:
-      case TypeID::LambdaTypeGroupID:
          return false;
       case TypeID::MetaTypeID:
-         return cast<MetaType>(this)->getUnderlyingType()->isDependantType();
+         return this->asMetaType()->getUnderlyingType()->isDependentType();
       case TypeID::PointerTypeID:
-         return cast<PointerType>(this)->getPointeeType()->isDependantType();
+         return this->asPointerType()->getPointeeType()->isDependentType();
       case TypeID::ArrayTypeID:
       case TypeID::InferredArrayTypeID:
-         return cast<ArrayType>(this)->getElementType()->isDependantType();
-      case TypeID::ObjectTypeID:
-         return getTemplateArgs().isStillDependant();
+         return this->asArrayType()->getElementType()->isDependentType();
+      case TypeID::ObjectTypeID: {
+         auto R = getRecord();
+         if (R->isTemplate())
+            return true;
+
+         if (!R->isInstantiation())
+            return false;
+
+         return R->getTemplateArgs().isStillDependent();
+      }
       case TypeID::InconcreteObjectTypeID:
          return true;
       case TypeID::FunctionTypeID: {
-         auto Func = cast<FunctionType>(this);
-         if (Func->getReturnType()->isDependantType())
+         auto Func = this->asFunctionType();
+         if (Func->getReturnType()->isDependentType())
             return true;
 
          for (const auto &Arg : Func->getArgTypes())
-            if (Arg.type->isDependantType()) return true;
+            if (Arg->isDependentType()) return true;
 
          return false;
       }
       case TypeID::TupleTypeID:
-         for (const auto &Ty : cast<TupleType>(this)->getContainedTypes())
-            if (Ty.second->isDependantType()) return true;
+         for (const auto &Ty : this->asTupleType()->getContainedTypes())
+            if (Ty->isDependentType()) return true;
 
          return false;
       default:
@@ -325,10 +236,45 @@ bool Type::isDependantType() const
    }
 }
 
+bool Type::isBoxedEquivOf(const Type *ty) const
+{
+   if (auto I = ty->asIntegerType()) {
+      unsigned val = I->getBitwidth();
+      auto PK = getPrimitiveKind();
+
+      switch (val) {
+         case 1:
+            if (PK == Bool)
+               return true;
+            goto _default;
+         case 8:
+            if (PK == Char)
+               return true;
+            LLVM_FALLTHROUGH;
+         default:
+         _default:
+            val += 100 * I->isUnsigned();
+            return getPrimitiveKind() == val;
+      }
+   }
+
+   if (auto FP = ty->asFPType()) {
+      unsigned val = 200 + FP->getPrecision();
+      return getPrimitiveKind() == val;
+   }
+
+   return false;
+}
+
+bool Type::isUnboxedEquivOf(const Type *ty) const
+{
+   return ty->isBoxedEquivOf(this);
+}
+
 QualType Type::getPointeeType() const
 {
-   assert(isa<PointerType>(this) && "not a pointer type");
-   return cast<PointerType>(this)->getPointeeType();
+   assert(this->isPointerType() && "not a pointer type");
+   return this->asPointerType()->getPointeeType();
 }
 
 Type::operator QualType()
@@ -336,32 +282,30 @@ Type::operator QualType()
    return QualType(this);
 }
 
-bool Type::needsCastTo(const Type *ty) const
-{
-   return this != ty;
-}
-
 bool Type::isBoxedPrimitive() const
 {
-   return isObjectTy() && !is(BP_None);
+   return isObjectType() && !isBoxedPrimitive(BP_None);
 }
 
 unsigned short Type::getAlignment() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()
+                                                     ->getAlignment();
       case TypeID::IntegerTypeID:
-         return cast<IntegerType>(this)->getAlignment();
+         return this->asIntegerType()->getAlignment();
       case TypeID::FPTypeID:
-         return cast<FPType>(this)->getAlignment();
+         return this->asFPType()->getAlignment();
       case TypeID::ObjectTypeID:
       case TypeID::InconcreteObjectTypeID:
-         return cast<ObjectType>(this)->getAlignment();
+         return this->asObjectType()->getAlignment();
       case TypeID::FunctionTypeID:
-         return cast<FunctionType>(this)->getAlignment();
+         return this->asFunctionType()->getAlignment();
       case TypeID::TupleTypeID:
-         return cast<TupleType>(this)->getAlignment();
+         return this->asTupleType()->getAlignment();
       case TypeID::ArrayTypeID:
-         return cast<ArrayType>(this)->getAlignment();
+         return this->asArrayType()->getAlignment();
       default:
          return sizeof(void*);
    }
@@ -369,51 +313,111 @@ unsigned short Type::getAlignment() const
 
 bool Type::isRawEnum() const
 {
-   return isObjectTy() && cast<ObjectType>(this)->isRawEnum();
+   return isObjectType() && this->asObjectType()->isRawEnum();
 }
 
 bool Type::isSelfTy() const
 {
-   if (auto Gen = dyn_cast<GenericType>(this))
+   if (auto Gen = this->asGenericType())
       return Gen->getGenericTypeName() == "Self";
 
    return false;
 }
 
-Type *Type::getGroupDefault() const
+bool Type::isRealTypedefType() const
 {
-   assert(isa<TypeGroup>(this) && "not a type group!");
-   return cast<TypeGroup>(this)->getGroupDefault();
+   return getTypeID() == TypeID::TypedefTypeID;
+}
+
+TypedefType* Type::asRealTypedefType()
+{
+   if (!isRealTypedefType())
+      return nullptr;
+
+   return static_cast<TypedefType*>(this);
+}
+
+TypedefType const* Type::asRealTypedefType() const
+{
+   if (!isRealTypedefType())
+      return nullptr;
+
+   return static_cast<TypedefType const*>(this);
+}
+
+Type* Type::getCanonicalType(ast::ASTContext &Ctx)
+{
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()->getCanonicalType(Ctx);
+      case TypeID::GenericTypeID: {
+         auto G = asGenericType();
+         return Ctx.getTemplateArgType(G->getActualType()->getCanonicalType(Ctx),
+                                       G->getGenericTypeName());
+
+      }
+      case TypeID::PointerTypeID:
+         return getPointeeType()->getCanonicalType(Ctx)->getPointerTo(Ctx);
+      case TypeID::TupleTypeID: {
+         std::vector<QualType> vec;
+         for (auto &el : asTupleType()->getContainedTypes())
+            vec.push_back(el.getCanonicalType(Ctx));
+
+         return Ctx.getTupleType(vec);
+      }
+      case TypeID::FunctionTypeID: {
+         auto fn = asFunctionType();
+         auto ret = fn->getReturnType().getCanonicalType(Ctx);
+
+         std::vector<QualType> args;
+         for (auto &arg : fn->getArgTypes())
+            args.push_back(arg.getCanonicalType(Ctx));
+
+         return Ctx.getFunctionType(ret, move(args), fn->getRawFlags());
+      }
+      case TypeID::ArrayTypeID: {
+         auto arr = asArrayType();
+         return Ctx.getArrayType(arr->getElementType()->getCanonicalType(Ctx),
+                                 arr->getNumElements());
+      }
+      default:
+         return this;
+   }
+}
+
+Type* Type::getCanonicalType(ast::ASTContext &Ctx) const
+{
+   return const_cast<Type*>(this)->getCanonicalType(Ctx);
 }
 
 sema::TemplateArgList const& Type::getTemplateArgs() const
 {
-   assert(isObjectTy() && "not an object");
-   if (auto Inconcrete = dyn_cast<InconcreteObjectType>(this))
+   assert(isObjectType() && "not an object");
+   if (auto Inconcrete = this->asInconcreteObjectType())
       return Inconcrete->getTemplateArgs();
 
-   return cast<ObjectType>(this)->getTemplateArgs();
+   return this->asObjectType()->getTemplateArgs();
 }
 
 bool Type::hasTemplateArgs() const
 {
-   if (!isObjectTy())
+   if (!isObjectType())
       return false;
 
-   if (auto Inconcrete = dyn_cast<InconcreteObjectType>(this))
+   if (auto Inconcrete = this->asInconcreteObjectType())
       return Inconcrete->hasTemplateArgs();
 
-   return cast<ObjectType>(this)->hasTemplateArgs();
+   return this->asObjectType()->hasTemplateArgs();
 }
 
-cl::Record* Type::getRecord() const
+ast::RecordDecl *Type::getRecord() const
 {
-   if (auto Gen = dyn_cast<GenericType>(this)) {
+   if (auto Gen = this->asGenericType()) {
       return Gen->getActualType()->getRecord();
    }
 
-   assert(isObjectTy() && "not an object");
-   return cast<ObjectType>(this)->getRecord();
+   assert(isObjectType() && "not an object");
+   return this->asObjectType()->getRecord();
 }
 
 llvm::StringRef Type::getClassName() const
@@ -421,97 +425,24 @@ llvm::StringRef Type::getClassName() const
    return getRecord()->getName();
 }
 
-bool Type::implicitlyCastableTo(Type const* to) const
-{
-   auto res = getCastKind(this, to);
-   return res.getStrength() == CastResult::Implicit;
-}
-
-bool Type::explicitlyCastableTo(Type const* to) const
-{
-   auto res = getCastKind(this, to);
-   return res.getStrength() != CastResult::Implicit
-          && res.isValid();
-}
-
-Type* Type::box() const
-{
-   if (auto Int = dyn_cast<IntegerType>(this)) {
-      return Int->box();
-   }
-   if (auto FP = dyn_cast<FPType>(this)) {
-      return FP->box();
-   }
-
-   llvm_unreachable("not a primitive type");
-}
-
-Type* Type::unbox() const
-{
-   if (auto Obj = dyn_cast<ObjectType>(this)) {
-      return Obj->unbox();
-   }
-
-   llvm_unreachable("not a boxed primitive type");
-}
-
-bool Type::hasDefaultValue() const
-{
-   switch (id) {
-      case TypeID::IntegerTypeID:
-      case TypeID::FPTypeID:
-      case TypeID::IntegerTypeGroupID:
-      case TypeID::FPTypeGroupID:
-      case TypeID::PointerTypeID:
-      case TypeID::ArrayTypeID:
-         return true;
-      case TypeID::ObjectTypeID:
-      case TypeID::InconcreteObjectTypeID: {
-         auto rec = getRecord();
-         if (auto S = dyn_cast<Struct>(rec)) {
-            return S->getParameterlessConstructor() != nullptr;
-         }
-         else if (auto U = dyn_cast<Union>(rec)) {
-            for (const auto &F : U->getFields())
-               if (F.second->hasDefaultValue())
-                  return true;
-
-            return false;
-         }
-
-         return false;
-      }
-      case TypeID::FunctionTypeID:
-         return false;
-      case TypeID::TupleTypeID: {
-         for (const auto &ty : cast<TupleType>(this)->getContainedTypes()) {
-            if (!ty.second->hasDefaultValue())
-               return false;
-         }
-
-         return true;
-      }
-      default:
-         return false;
-   }
-}
-
 size_t Type::getSize() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()->getSize();
       case TypeID::IntegerTypeID:
-         return cast<IntegerType>(this)->getSize();
+         return this->asIntegerType()->getSize();
       case TypeID::FPTypeID:
-         return cast<FPType>(this)->getSize();
+         return this->asFPType()->getSize();
       case TypeID::ObjectTypeID:
       case TypeID::InconcreteObjectTypeID:
-         return cast<ObjectType>(this)->getSize();
+         return this->asObjectType()->getSize();
       case TypeID::FunctionTypeID:
-         return cast<FunctionType>(this)->getSize();
+         return this->asFunctionType()->getSize();
       case TypeID::TupleTypeID:
-         return cast<TupleType>(this)->getSize();
+         return this->asTupleType()->getSize();
       case TypeID::ArrayTypeID:
-         return cast<ArrayType>(this)->getSize();
+         return this->asArrayType()->getSize();
       default:
          return size_t(getAlignment());
    }
@@ -519,7 +450,7 @@ size_t Type::getSize() const
 
 size_t Type::getMemberSize() const
 {
-   if (auto Obj = dyn_cast<ObjectType>(this)) {
+   if (auto Obj = this->asObjectType()) {
       if (getRecord()->isClass())
          return sizeof(void*);
 
@@ -531,7 +462,7 @@ size_t Type::getMemberSize() const
 
 unsigned short Type::getMemberAlignment() const
 {
-   if (auto Obj = dyn_cast<ObjectType>(this)) {
+   if (auto Obj = this->asObjectType()) {
       if (getRecord()->isClass())
          return sizeof(void*);
 
@@ -541,30 +472,22 @@ unsigned short Type::getMemberAlignment() const
    return getAlignment();
 }
 
-bool Type::isBoxedEquivOf(Type const *ty) const
-{
-   if (auto Obj = dyn_cast<ObjectType>(this)) {
-      return Obj->isBoxedEquivOf(ty);
-   }
-
-   return false;
-}
-
 bool Type::isUnsigned() const
 {
-   return isa<IntegerType>(this) && cast<IntegerType>(this)->isUnsigned();
+   return this->isIntegerType() && this->asIntegerType()->isUnsigned();
 }
 
 unsigned int Type::getBitwidth() const
 {
-   if (auto Int = dyn_cast<IntegerType>(this)) {
+   if (auto Int = this->asIntegerType()) {
       return Int->getBitwidth();
    }
-   if (auto FP = dyn_cast<FPType>(this)) {
+   if (auto FP = this->asFPType()) {
       return FP->getPrecision();
    }
    if (isRawEnum()) {
-      return cast<Enum>(getRecord())->getRawType()->getBitwidth();
+      return cast<EnumDecl>(getRecord())->getRawType()->getType()
+                                        ->getBitwidth();
    }
 
    llvm_unreachable("not a primitive type");
@@ -572,32 +495,32 @@ unsigned int Type::getBitwidth() const
 
 bool Type::isEnum() const
 {
-   return isObjectTy() && getRecord()->isEnum();
+   return isObjectType() && getRecord()->isEnum();
 }
 
 bool Type::isUnion() const
 {
-   return isObjectTy() && getRecord()->isUnion();
+   return isObjectType() && getRecord()->isUnion();
 }
 
 bool Type::isProtocol() const
 {
-   return isObjectTy() && getRecord()->isProtocol();
+   return isObjectType() && getRecord()->isProtocol();
 }
 
 bool Type::isClass() const
 {
-   return isObjectTy() && getRecord()->isClass();
+   return isObjectType() && getRecord()->isClass();
 }
 
 bool Type::isStruct() const
 {
-   return isObjectTy() && getRecord()->isStruct();
+   return isObjectType() && getRecord()->isStruct();
 }
 
 bool Type::isOptionTy() const
 {
-   if (!isObjectTy())
+   if (!isObjectType())
       return false;
 
    auto Rec = getRecord();
@@ -614,7 +537,9 @@ bool Type::isOptionOf(const string &) const
 
 bool Type::needsCleanup() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()->needsCleanup();
       case TypeID::ObjectTypeID:
       case TypeID::TupleTypeID:
       case TypeID::ArrayTypeID:
@@ -628,18 +553,22 @@ bool Type::needsCleanup() const
 
 bool Type::needsStructReturn() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasedType()->needsStructReturn();
       case TypeID::ObjectTypeID: {
          auto rec = getRecord();
          switch (rec->getTypeID()) {
-            case Record::EnumID:
-               return !cast<Enum>(rec)->isRawEnum();
-            case Record::StructID:
-            case Record::UnionID:
-            case Record::ProtocolID:
+            case AstNode::EnumDeclID:
+               return !cast<EnumDecl>(rec)->isRawEnum();
+            case AstNode::StructDeclID:
+            case AstNode::UnionDeclID:
+            case AstNode::ProtocolDeclID:
                return true;
-            case Record::ClassID:
+            case AstNode::ClassDeclID:
                return false;
+            default:
+               llvm_unreachable("bad record kind!");
          }
       }
       case TypeID::FunctionTypeID:
@@ -659,7 +588,9 @@ bool Type::needsMemCpy() const
 
 string Type::toString() const
 {
-   switch (id) {
+   switch (getTypeID()) {
+      case TypeID::TypedefTypeID:
+         return asRealTypedefType()->getAliasName();
       case TypeID::IntegerTypeID:
          return cast<IntegerType>(this)->toString();
       case TypeID::FPTypeID:
@@ -676,10 +607,18 @@ string Type::toString() const
          return cast<ArrayType>(this)->toString();
       case TypeID::AutoTypeID:
          return "<inferred>";
+      case TypeID::UnknownAnyTypeID:
+         return "<unknown_any>";
       case TypeID::VoidTypeID:
          return "void";
-      case TypeID::MetaTypeID:
-         return cast<MetaType>(this)->toString();
+      case TypeID::MetaTypeID: {
+         llvm::SmallString<64> str;
+         str += "MetaType[";
+         str += cast<MetaType>(this)->getUnderlyingType()->toString();
+         str += "]";
+
+         return str.str();
+      }
       case TypeID::GenericTypeID:
          return cast<GenericType>(this)->toString();
       case TypeID::PointerTypeID:
@@ -696,11 +635,178 @@ string Type::toString() const
 
 string Type::toUniqueString() const
 {
-   if (auto Gen = dyn_cast<GenericType>(this)) {
+   if (isRealTypedefType()) {
+      auto td = asRealTypedefType();
+      auto aliasedTy = td->getAliasedType()->toString();
+
+      llvm::SmallString<64> str;
+      str += td->getAliasName();
+      str += " (aka '";
+      str += aliasedTy;
+      str += "')";
+
+      return str.str();
+   }
+
+   if (auto Gen = this->asGenericType()) {
       return Gen->toUniqueString();
    }
 
+   if (auto Obj = asObjectType())
+      return Obj->getRecord()->getFullName();
+
+//   if (isRawEnum()) {
+//      auto E = cast<EnumDecl>(getRecord());
+//
+//      string str;
+//
+//      str += toString();
+//
+//      if (auto ty = E->getRawType()) {
+//         str += '(';
+//         str += ty->toString();
+//         str += ')';
+//      }
+//
+//      return str;
+//   }
+
    return toString();
+}
+
+string ArrayType::toString() const
+{
+   return "<dependent sized array>";
+}
+
+std::string FunctionType::toString() const
+{
+   std::ostringstream res;
+   res << "(";
+
+   size_t i = 0;
+   for (const auto& arg : argTypes) {
+      if (arg.isLvalue())
+         res << "ref ";
+
+      res << arg.toString();
+
+      if (i < argTypes.size() - 1) {
+         res << ", ";
+      }
+
+      ++i;
+   }
+
+   res << ") -> " << returnType->toString();
+   return res.str();
+}
+
+std::string TupleType::toString() const
+{
+   string str = "(";
+   size_t i = 0;
+
+   for (const auto& ty : containedTypes) {
+      str += ty.toString();
+      if (i < containedTypes.size() - 1) {
+         str += ", ";
+      }
+
+      ++i;
+   }
+
+   return str + ")";
+}
+
+const sema::TemplateArgList& ObjectType::getTemplateArgs() const
+{
+   return Rec->getTemplateArgs();
+}
+
+bool ObjectType::hasTemplateArgs() const
+{
+   return !getTemplateArgs().empty();
+}
+
+bool ObjectType::isRawEnum() const
+{
+   auto rec = getRecord();
+   return rec && rec->isRawEnum();
+}
+
+bool ObjectType::isBoxedEquivOf(Type const* other) const
+{
+   if (isBoxedPrimitive(BP_None))
+      return false;
+
+   auto primitiveType = RecordBits.primitiveType;
+
+   switch (other->getTypeID()) {
+      case TypeID::FPTypeID:
+         return primitiveType == (other->isFloatTy() ? Float : Double);
+      case TypeID::IntegerTypeID: {
+         if (other->getBitwidth() == 8 && primitiveType == Char)
+            return true;
+
+         if (other->getBitwidth() == 1 && primitiveType == Bool)
+            return true;
+
+         unsigned bw = primitiveType;
+         if (bw > 200)
+            return false;
+
+         bool isUnsigned = false;
+         if (bw > 100) {
+            isUnsigned = true;
+            bw -= 100;
+         }
+
+         return other->isIntNTy(bw, isUnsigned);
+      }
+      default:
+         return false;
+   }
+}
+
+unsigned short ObjectType::getAlignment() const
+{
+   return Rec->getAlignment();
+}
+
+size_t ObjectType::getSize() const
+{
+   return Rec->getSize();
+}
+
+string ObjectType::toString() const
+{
+   return Rec->getFullName();
+}
+
+void InconcreteObjectType::Profile(llvm::FoldingSetNodeID &ID,
+                                   cdot::ast::RecordDecl *R,
+                                   cdot::sema::TemplateArgList *templateArgs) {
+   ID.AddPointer(R);
+   ID.AddInteger(templateArgs->size());
+
+   for (auto &arg : *templateArgs)
+      arg.Profile(ID);
+}
+
+llvm::StringRef NamespaceType::getNamespaceName() const
+{
+   return NS->getName();
+}
+
+QualType TypedefType::getAliasedType() const
+{
+   return td->getOriginTy()->getType();
+}
+
+llvm::StringRef TypedefType::getAliasName() const
+{
+   return td->getName();
 }
 
 } // namespace cdot

@@ -3,130 +3,71 @@
 //
 
 #include "Variant.h"
-#include "../lex/Token.h"
 
-#include <cmath>
-#include <sstream>
-#include <iomanip>
+#include "lex/Token.h"
 
-#include "../AST/Passes/SemanticAnalysis/Record/Class.h"
-#include "../AST/Passes/SemanticAnalysis/Record/Protocol.h"
+#include "Support/Format.h"
+#include "Support/Casting.h"
 
-#include "Type/IntegerType.h"
-#include "Type/FPType.h"
-#include "Type/AutoType.h"
-#include "Type/VoidType.h"
-#include "Type/PointerType.h"
-#include "Type/ObjectType.h"
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/ADT/FoldingSet.h>
 
-#include "../Util.h"
-#include "../Support/Format.h"
-#include "Type/MetaType.h"
+#ifndef CDOT_SMALL_VARIANT
+#  include "AST/Statement/Declaration/Class/RecordDecl.h"
+#  include "Variant/Type/Type.h"
+   using namespace cdot::ast;
+#else
+   namespace cdot {
+      class QualType {
+      public:
+         std::string toString() { llvm_unreachable(""); }
+      };
+   }
+#endif
 
+using std::string;
 
 using namespace cdot::support;
 using namespace cdot::lex;
 
 namespace cdot {
 
-Variant::Variant()
-   : kind(VariantType::VOID),
-     type(VoidType::get())
-{
+#ifndef CDOT_SMALL_VARIANT
+   Variant::Variant(Type *Ty, bool isLvalue, bool isConst)
+      : kind(VariantType::MetaType), Data{}
+   {
+      static_assert(sizeof(Data) >= sizeof(QualType),
+                    "not enough space for QualType in Variant!");
+      new (Data.buffer) QualType(Ty, isLvalue, isConst);
+   }
 
-}
+   Variant::Variant(QualType const& ty)
+      : kind(VariantType::MetaType), Data{}
+   {
+      static_assert(sizeof(Data) >= sizeof(QualType),
+                    "not enough space for QualType in Variant!");
+      new (Data.buffer) QualType(ty);
+   }
+#else
+   Variant::Variant(Type *Ty, bool isLvalue, bool isConst)
+      : kind(VariantType::MetaType), Data{}
+   {
+      llvm_unreachable("extended variant constructor called in small variant");
+   }
 
-Variant::Variant(string &&s) :
-   kind(VariantType::STRING),
-   type(IntegerType::getCharTy()->getPointerTo()),
-   strVal(move(s))
-{
-}
+   Variant::Variant(QualType const& ty)
+      : kind(VariantType::MetaType), Data{}
+   {
+      llvm_unreachable("extended variant constructor called in small variant");
+   }
+#endif
 
-Variant::Variant(size_t l) :
-   kind(VariantType::INT),
-   type(IntegerType::get()),
-   intVal(l)
-{
-}
-
-Variant::Variant(Type *Ty) :
-   kind(VariantType::MetaType),
-   type(MetaType::get(Ty)),
-   typeVal(Ty)
-{
-}
-
-Variant::Variant(Type *ty, unsigned long long l) :
-   kind(VariantType::INT),
-   type(ty),
-   intVal(l)
-{
-}
-
-Variant::Variant(unsigned long long l) :
-   kind(VariantType::INT),
-   type(IntegerType::get()),
-   intVal(l)
-{}
-
-Variant::Variant(bool b) :
-   kind(VariantType::INT),
-   type(IntegerType::getBoolTy()),
-   intVal(size_t(b))
-{
-}
-
-Variant::Variant(char c) :
-   kind(VariantType::INT),
-   type(IntegerType::getCharTy()),
-   intVal(size_t(c))
-{
-}
-
-Variant::Variant(double d) :
-   kind(VariantType::FLOAT),
-   type(FPType::getDoubleTy()),
-   floatVal(d)
-{
-}
-
-Variant::Variant(float f) :
-   kind(VariantType::FLOAT),
-   type(FPType::getFloatTy()),
-   floatVal(f)
-{
-}
-
-Variant::Variant(tok::TokenType tokenType)
-   : kind(VariantType::TokenKind),
-     type(AutoType::get()),
-     tokenType(tokenType)
-{
-
-}
-
-Variant::Variant(std::vector<Variant> &&v, Type *ty)
-   : kind(VariantType::ARRAY),
-     type(ty ? ty : AutoType::get()),
-     vec(std::move(v))
-{
-}
-
-Variant::Variant(Type *ty, std::vector<Field> &&v)
-   : kind(VariantType::STRUCT),
-     type(ty),
-     fields(move(v))
-{
-
-}
-
-Variant::Variant(const Variant &var)
+Variant::Variant(const Variant &var) : Data{}
 {
    copyFrom(var);
 }
 
-Variant::Variant(Variant &&var) noexcept
+Variant::Variant(Variant &&var) noexcept : Data{}
 {
    copyFrom(std::move(var));
 }
@@ -146,29 +87,22 @@ Variant& Variant::operator=(const Variant &var)
 void Variant::copyFrom(Variant const &var)
 {
    kind = var.kind;
-   type = var.type;
-
    switch (kind) {
-      case VariantType::ARRAY:
-         new (&vec) std::vector<Variant>(var.vec);
+      case VariantType::Array:
+      case VariantType::Struct:
+         new (Data.buffer) std::vector<Variant>(var.getVec());
          break;
-      case VariantType::STRUCT:
-         new (&fields) std::vector<Field>(var.fields);
+      case VariantType::String:
+         new (Data.buffer) string(var.getString());
          break;
-      case VariantType::STRING:
-         new (&strVal) string(var.strVal);
+      case VariantType::Int:
+         new (Data.buffer) llvm::APSInt(var.getAPSInt());
          break;
-      case VariantType::INT:
-         intVal = var.intVal;
-         break;
-      case VariantType::FLOAT:
-         floatVal = var.floatVal;
+      case VariantType::Floating:
+         new (Data.buffer) llvm::APFloat(var.getAPFloat());
          break;
       case VariantType::MetaType:
-         typeVal = var.typeVal;
-         break;
-      case VariantType::TokenKind:
-         tokenType = var.tokenType;
+         new (Data.buffer) QualType(var.getMetaType());
          break;
       default:
          break;
@@ -190,29 +124,22 @@ Variant& Variant::operator=(Variant &&var)
 void Variant::copyFrom(Variant &&var)
 {
    kind = var.kind;
-   type = var.type;
-
    switch (kind) {
-      case VariantType::ARRAY:
-         new (&vec) std::vector<Variant>(move(var.vec));
+      case VariantType::Array:
+      case VariantType::Struct:
+         new (Data.buffer) std::vector<Variant>(move(var.getVecRef()));
          break;
-      case VariantType::STRUCT:
-         new (&fields) std::vector<Field>(std::move(var.fields));
+      case VariantType::String:
+         new (Data.buffer) string(move(var.getStringRef()));
          break;
-      case VariantType::STRING:
-         new (&strVal) string(move(var.strVal));
+      case VariantType::Int:
+         new (Data.buffer) llvm::APSInt(std::move(var.getAPSIntRef()));
          break;
-      case VariantType::INT:
-         intVal = var.intVal;
-         break;
-      case VariantType::FLOAT:
-         floatVal = var.floatVal;
+      case VariantType::Floating:
+         new (Data.buffer) llvm::APFloat(std::move(var.getAPFloatRef()));
          break;
       case VariantType::MetaType:
-         typeVal = var.typeVal;
-         break;
-      case VariantType::TokenKind:
-         tokenType = var.tokenType;
+         new (Data.buffer) QualType(var.getMetaType());
          break;
       default:
          break;
@@ -226,111 +153,66 @@ Variant::~Variant()
 
 void Variant::destroyValue()
 {
-   if (isArray()) {
-      vec.~vector();
+   switch (kind) {
+      case VariantType::Array:
+      case VariantType::Struct:
+         getVec().~vector();
+         break;
+      case VariantType::String:
+         getString().~string();
+         break;
+      case VariantType::Int:
+         getAPSInt().~APSInt();
+         break;
+      case VariantType::Floating:
+         getAPFloat().~APFloat();
+         break;
+      default:
+         break;
    }
-   else if (isStruct()) {
-      fields.~vector();
-   }
-   else if (isStr()) {
-      strVal.~string();
-   }
+
+   Data.~AlignedCharArrayUnion();
 }
 
-bool Variant::isVoid() const
+QualType Variant::getMetaType() const
 {
-   return kind == VariantType::VOID;
+   assert(isMetaType());
+   return *reinterpret_cast<QualType const*>(Data.buffer);
 }
 
-bool Variant::isArray() const
+void Variant::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   return kind == VariantType::ARRAY;
-}
-
-bool Variant::isStr() const
-{
-   return kind == VariantType::STRING;
-}
-
-bool Variant::isInt() const
-{
-   return kind == VariantType::INT;
-}
-
-bool Variant::isFloat() const
-{
-   return kind == VariantType::FLOAT;
-}
-
-unsigned Variant::getBitwidth() const
-{
-   return type->getBitwidth();
-}
-
-bool Variant::isUnsigned() const
-{
-   return type->isUnsigned();
-}
-
-VariantType Variant::getKind() const
-{
-   return kind;
-}
-
-bool Variant::isBoxed() const
-{
-   return type->isObjectTy();
-}
-
-bool Variant::isRawStr() const
-{
-   return type == IntegerType::getCharTy()->getPointerTo();
-}
-
-void Variant::push(Variant &&v)
-{
-   assert(isArray() && "cant push to non-array");
-   vec.push_back(std::move(v));
-}
-
-Variant Variant::pop()
-{
-   assert(isArray() && "cant pop from non-array");
-   auto res = std::move(vec.back());
-   vec.pop_back();
-
-   return res;
-}
-
-Variant& Variant::operator[](size_t index)
-{
-   assert(isArray() && "cant index non-array");
-   return vec.at(index);
-}
-
-string Variant::typeToString(VariantType type)
-{
-   switch (type) {
-      case VariantType::INT: return "Int";
-      case VariantType::STRING: return "String";
-      case VariantType::FLOAT: return "Double";
-      case VariantType::VOID: return "Void";
-      case VariantType::ARRAY: return "Array";
-      case VariantType::MetaType: return "MetaType";
-      case VariantType::TokenKind: return "TokenKind";
-      case VariantType::STRUCT: return "Struct";
+   ID.AddInteger((unsigned)kind);
+   switch (kind) {
+      case VariantType::Array:
+      case VariantType::Struct:
+         for (auto &V : *this)
+            V.Profile(ID);
+         break;
+      case VariantType::String:
+         ID.AddString(getString());
+         break;
+      case VariantType::Int:
+         getAPSInt().Profile(ID);
+         break;
+      case VariantType::Floating:
+         getAPFloat().Profile(ID);
+         break;
+      default:
+         break;
    }
 }
 
 string Variant::toString(unsigned char opts) const
 {
    switch (kind) {
-      case VariantType::INT: {
-         if (type->isPointerTy()) {
-            std::ostringstream s;
-            s << "0x" << std::setbase(16) << intVal;
+      case VariantType::Int: {
+         if ((opts & Opt_IntAsPtr) != 0) {
+            string s;
+            llvm::raw_string_ostream ss(s);
+            ss << "0x" << getAPSInt().toString(16);
 
-            return s.str();
+            return ss.str();
          }
 
          auto bitwidth = getBitwidth();
@@ -338,53 +220,60 @@ string Variant::toString(unsigned char opts) const
             if (opts & Opt_ShowQuotes) {
                string s;
                s += '\'';
-               s += string(1, (char)intVal);
+               s += string(1, getChar());
                s += '\'';
 
                return s;
             }
 
-            return string(1, (char)(intVal));
+            return string(1, getChar());
          }
 
          if (bitwidth == 1) {
-            return intVal ? "true" : "false";
+            return getSExtValue() ? "true" : "false";
          }
 
-         return std::to_string(intVal);
+         return getAPSInt().toString(10);
       }
-      case VariantType::MetaType: return typeVal->toString();
-      case VariantType::STRING: {
+      case VariantType::MetaType:
+         return getMetaType().toString();
+      case VariantType::String: {
          if (opts & Opt_ShowQuotes) {
             string s;
             s += '"';
-            s += strVal;
+            s += getString();
             s += '"';
 
             return s;
          }
 
-         return strVal;
+         return getString();
       }
-      case VariantType::FLOAT:
-         if (opts & Opt_ExactFP) {
-            return support::formatAsHexInteger(floatVal);
+      case VariantType::Floating: {
+         llvm::SmallString<128> str;
+         getAPFloat().toString(str);
+
+         return str.str();
+      }
+      case VariantType::Void: return "Void";
+      case VariantType::Array: {
+         size_t i = 0;
+         string s("[");
+         for (auto &V : getVec()) {
+            if (i++ != 0) s += ", ";
+            s += V.toString(opts);
          }
-         else {
-            return std::to_string(floatVal);
-         }
-      case VariantType::VOID: return "Void";
-      case VariantType::ARRAY:
-         return util::vectorToString<Variant, '[', ',', ']'>(vec);
-      case VariantType::STRUCT: {
+
+         s += "]";
+         return s;
+      }
+      case VariantType::Struct: {
          size_t i = 0;
          string s = "{ ";
 
-         for (auto &F : fields) {
+         for (auto &F : getVec()) {
             if (i != 0) s += ", ";
-            s += F.first;
-            s += ": ";
-            s += F.second.toString(opts);
+            s += F.toString(opts);
 
             ++i;
          }
@@ -392,26 +281,24 @@ string Variant::toString(unsigned char opts) const
          s += " }";
          return s;
       }
-      case VariantType::TokenKind:
-         return tok::tokenTypeToString(tokenType);
       default:
          llvm_unreachable("unknown case");
    }
 }
 
-#define BINARY_OPERATOR_INT(OP) \
-if(#OP == op) {\
-   return Variant(intVal OP rhs.intVal);\
+#define BINARY_OPERATOR_INT(OP)                       \
+if(#OP == op) {                                       \
+   return Variant(getAPSInt() OP rhs.getAPSInt());    \
 }
 
-#define BINARY_OPERATOR_FLOAT(OP) \
-if(#OP == op) {\
-   return Variant(floatVal OP rhs.floatVal);\
+#define BINARY_OPERATOR_FLOAT(OP)                     \
+if(#OP == op) {                                       \
+   return Variant(getAPFloat() OP rhs.getAPFloat());  \
 }
 
-#define BINARY_OPERATOR_STRING(OP) \
-if(#OP == op) {\
-   return Variant(strVal OP rhs.strVal);\
+#define BINARY_OPERATOR_STRING(OP)                    \
+if(#OP == op) {                                       \
+   return Variant(getString() OP rhs.getString());    \
 }
 
 Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
@@ -427,16 +314,16 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
          return {};
       }
 
-      size_t from;
-      size_t to;
+      uint64_t from;
+      uint64_t to;
 
       switch (kind) {
-         case VariantType::INT: {
-            from = intVal;
+         case VariantType::Int: {
+            from = getAPSInt().getZExtValue();
             break;
          }
-         case VariantType::FLOAT: {
-            from = (size_t)floatVal;
+         case VariantType::Floating: {
+            from = (size_t)getDouble();
             break;
          }
          default:
@@ -444,22 +331,22 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       }
 
       switch (rhs.kind) {
-         case VariantType::INT: {
-            to = rhs.intVal;
+         case VariantType::Int: {
+            to = rhs.getAPSInt().getZExtValue();
             break;
          }
-         case VariantType::FLOAT: {
-            to = (size_t)rhs.floatVal;
+         case VariantType::Floating: {
+            to = (size_t)rhs.getDouble();
             break;
          }
          default:
             llvm_unreachable("other types should not get here");
       }
 
-      auto arr = Variant(std::vector<Variant>());
+      auto arr = Variant(VariantType::Array, {});
       if (from == to) {
          if (!isNonInclusiveRange) {
-            arr.push({ from });
+            arr.push(Variant(from));
          }
 
          return arr;
@@ -486,20 +373,33 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
    }
 
    // integer ops
-   if (kind == VariantType::INT && rhs.kind == VariantType::INT) {
+   if (kind == VariantType::Int && rhs.kind == VariantType::Int) {
       BINARY_OPERATOR_INT(+);
       BINARY_OPERATOR_INT(-);
       BINARY_OPERATOR_INT(*);
       BINARY_OPERATOR_INT(/);
-      BINARY_OPERATOR_INT(&&);
-      BINARY_OPERATOR_INT(||);
       BINARY_OPERATOR_INT(%);
 
       BINARY_OPERATOR_INT(&);
       BINARY_OPERATOR_INT(|);
       BINARY_OPERATOR_INT(^);
-      BINARY_OPERATOR_INT(<<);
-      BINARY_OPERATOR_INT(>>);
+
+      if (op == "&&") {
+         return (getAPSInt() & rhs.getAPSInt()).getBoolValue();
+      }
+      if (op == "||") {
+         return (getAPSInt() | rhs.getAPSInt()).getBoolValue();
+      }
+
+      if (op == "<<") {
+         return getAPSInt().shl(rhs.getAPSInt());
+      }
+      if (op == ">>") {
+         return getAPSInt().ashr(rhs.getAPSInt());
+      }
+      if (op == ">>>") {
+         return getAPSInt().lshr(rhs.getAPSInt());
+      }
 
       BINARY_OPERATOR_INT(==);
       BINARY_OPERATOR_INT(!=);
@@ -507,33 +407,41 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       BINARY_OPERATOR_INT(>);
       BINARY_OPERATOR_INT(<=);
       BINARY_OPERATOR_INT(>=);
-
-      if (op == "**") {
-         return Variant((size_t)std::pow(intVal, rhs.intVal));
-      }
    }
-   else if (kind == VariantType::FLOAT || rhs.kind == VariantType::FLOAT) {
+   else if (kind == VariantType::Floating || rhs.kind == VariantType::Floating) {
       BINARY_OPERATOR_FLOAT(+);
       BINARY_OPERATOR_FLOAT(-);
       BINARY_OPERATOR_FLOAT(*);
       BINARY_OPERATOR_FLOAT(/);
 
-      BINARY_OPERATOR_FLOAT(==);
-      BINARY_OPERATOR_FLOAT(!=);
-      BINARY_OPERATOR_FLOAT(<);
-      BINARY_OPERATOR_FLOAT(>);
-      BINARY_OPERATOR_FLOAT(<=);
-      BINARY_OPERATOR_FLOAT(>=);
-
-      if (op == "**") {
-         auto leftOperand = kind == VariantType::FLOAT ? floatVal : intVal;
-         auto rightOperand = rhs.kind == VariantType::FLOAT ? rhs.floatVal
-                                                            : rhs.intVal;
-
-         return Variant(std::pow(leftOperand, rightOperand));
+      if (op == "==") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes == llvm::APFloat::cmpEqual;
+      }
+      if (op == "!=") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes != llvm::APFloat::cmpEqual;
+      }
+      if (op == "<") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes == llvm::APFloat::cmpLessThan;
+      }
+      if (op == ">") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes == llvm::APFloat::cmpGreaterThan;
+      }
+      if (op == ">=") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes == llvm::APFloat::cmpEqual
+                || compRes == llvm::APFloat::cmpGreaterThan;
+      }
+      if (op == "<=") {
+         auto compRes = getAPFloat().compare(rhs.getAPFloat());
+         return compRes == llvm::APFloat::cmpEqual
+                || compRes == llvm::APFloat::cmpLessThan;
       }
    }
-   else if (kind == VariantType::STRING && rhs.kind == VariantType::STRING) {
+   else if (kind == VariantType::String && rhs.kind == VariantType::String) {
       BINARY_OPERATOR_STRING(==);
       BINARY_OPERATOR_STRING(!=);
       BINARY_OPERATOR_STRING(<);
@@ -542,84 +450,102 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       BINARY_OPERATOR_STRING(>=);
       BINARY_OPERATOR_STRING(+);
    }
-   else if  (kind == VariantType::STRING) {
+   else if  (kind == VariantType::String) {
       if (op == "+") {
-         if (rhs.kind == VariantType::INT) {
-            return Variant(strVal + std::to_string(rhs.intVal));
+         llvm::SmallString<128> str;
+
+         if (rhs.kind == VariantType::Int) {
+            str += getString();
+            str += rhs.getAPSInt().toString(10);
          }
-         if (rhs.kind == VariantType::FLOAT) {
-            return Variant(strVal + std::to_string(rhs.floatVal));
+         if (rhs.kind == VariantType::Floating) {
+            str += getString();
+            rhs.getAPFloat().toString(str);
          }
+
+         return Variant(str.str());
       }
    }
-   else if  (rhs.kind == VariantType::STRING) {
+   else if  (rhs.kind == VariantType::String) {
       if (op == "+") {
-         if (kind == VariantType::INT) {
-            return Variant(std::to_string(intVal) + rhs.strVal);
+         llvm::SmallString<128> str;
+
+         if (rhs.kind == VariantType::Int) {
+            str += getAPSInt().toString(10);
+            str += rhs.getString();
          }
-         if (kind == VariantType::FLOAT) {
-            return Variant(std::to_string(floatVal) + rhs.strVal);
+         if (rhs.kind == VariantType::Floating) {
+            getAPFloat().toString(str);
+            str += rhs.getString();
          }
+
+         return Variant(str.str());
       }
    }
+#ifndef CDOT_SMALL_VARIANT
    else if (isMetaType() && rhs.isMetaType()) {
+      auto typeVal = *getMetaType();
+      auto rhsType = *rhs.getMetaType();
+      
       if (op == "==") {
-         return Variant(typeVal == rhs.typeVal);
+         return Variant(typeVal == rhsType);
       }
       else if (op == "!=") {
-         return Variant(typeVal == rhs.typeVal);
+         return Variant(typeVal == rhsType);
       }
       else if (op == "as" || op == "as!" || op == "as?") {
-         return castTo(rhs.typeVal);
+//         return castTo(rhsType);
+         llvm_unreachable("bad op");
       }
       else if (op == "isa" || op == "<:") {
-         if (typeVal == rhs.typeVal)
+         if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectTy() || !rhs.typeVal->isObjectTy())
+         if (!typeVal->isObjectType() || !rhsType->isObjectType())
             return { false };
 
          auto Self = typeVal->getRecord();
-         auto Other = rhs.typeVal->getRecord();
+         auto Other = rhsType->getRecord();
 
-         if (!isa<Class>(Self) || !isa<Class>(Other)) {
+         if (!isa<ClassDecl>(Self) || !isa<ClassDecl>(Other)) {
             return false;
          }
 
-         return cast<Class>(Other)->isBaseClassOf(cast<Class>(Self));
+         return cast<ClassDecl>(Other)->isBaseClassOf(cast<ClassDecl>(Self));
       }
       else if (op == ":>") {
-         if (typeVal == rhs.typeVal)
+         if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectTy() || !rhs.typeVal->isObjectTy())
+         if (!typeVal->isObjectType() || !rhsType->isObjectType())
             return { false };
 
          auto Self = typeVal->getRecord();
-         auto Other = rhs.typeVal->getRecord();
+         auto Other = rhsType->getRecord();
 
-         if (!isa<Class>(Self) || !isa<Class>(Other)) {
+         if (!isa<ClassDecl>(Self) || !isa<ClassDecl>(Other)) {
             return false;
          }
 
-         return cast<Class>(Self)->isBaseClassOf(cast<Class>(Other));
+         return cast<ClassDecl>(Self)->isBaseClassOf(cast<ClassDecl>(Other));
       }
       else if (op == ":") {
-         if (typeVal == rhs.typeVal)
+         if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectTy() || !rhs.typeVal->isObjectTy())
+         if (!typeVal->isObjectType() || !rhsType->isObjectType())
             return { false };
 
          auto Self = typeVal->getRecord();
-         auto Other = rhs.typeVal->getRecord();
+         auto Other = rhsType->getRecord();
 
-         if (!isa<Protocol>(Other))
+         if (!isa<ProtocolDecl>(Other))
             return { false };
 
-         return Self->conformsTo(Other->getName());
+         return Self->conformsTo(cast<ProtocolDecl>(Other));
       }
    }
+#endif
 
    return {};
 }
@@ -630,27 +556,37 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
 
 #define UNARY_OPERATOR_INT(OP) \
 if (op == #OP) {\
-   return Variant(OP intVal);\
+   return Variant(OP getAPSInt());\
 }
 
 #define UNARY_OPERATOR_FLOAT(OP) \
 if (op == #OP) {\
-   return Variant(OP floatVal);\
+   return Variant(OP getAPFloat());\
 }
 
 Variant Variant::applyUnaryOp(const string &op) const
 {
-   if (kind == VariantType::INT) {
-      UNARY_OPERATOR_INT(+);
+   if (kind == VariantType::Int) {
+      if (op == "+")
+         return *this;
+
       UNARY_OPERATOR_INT(-);
-      UNARY_OPERATOR_INT(!);
       UNARY_OPERATOR_INT(~);
+
+      if (op == "!")
+         return !getAPSInt().getBoolValue();
    }
 
-   if (kind == VariantType::FLOAT) {
-      UNARY_OPERATOR_FLOAT(+);
-      UNARY_OPERATOR_FLOAT(-);
-      UNARY_OPERATOR_FLOAT(!);
+   if (kind == VariantType::Floating) {
+      if (op == "+")
+         return *this;
+
+      if (op == "-") {
+         llvm::APFloat f(getAPFloat());
+         f.changeSign();
+
+         return f;
+      }
    }
 
    return {};
@@ -658,95 +594,5 @@ Variant Variant::applyUnaryOp(const string &op) const
 
 #undef UNARY_OPERATOR_INT
 #undef UNARY_OPERATOR_FLOAT
-
-Variant Variant::castTo(VariantType targetTy) const
-{
-   if (kind == targetTy)
-      return *this;
-
-   switch (kind) {
-      case VariantType::INT: {
-         switch (targetTy) {
-            case VariantType::FLOAT:
-               return Variant((double)intVal);
-            case VariantType::STRING:
-               return Variant(std::to_string(intVal));
-            default:
-               llvm_unreachable("bad kind");
-         }
-      }
-      case VariantType::FLOAT: {
-         switch (targetTy) {
-            case VariantType::INT:
-               return Variant((size_t)floatVal);
-            case VariantType::STRING:
-               return Variant(std::to_string(floatVal));
-            default:
-               llvm_unreachable("bad kind");
-         }
-      }
-      case VariantType::STRING: {
-         switch (targetTy) {
-            case VariantType::INT:
-               return Variant((size_t)std::atoll(strVal.c_str()));
-            case VariantType::FLOAT:
-               return Variant((double)std::atof(strVal.c_str()));
-            default:
-               llvm_unreachable("bad kind");
-         }
-      }
-      default:
-         llvm_unreachable("can't cast from type");
-   }
-}
-
-Variant Variant::castTo(Type *to) const
-{
-   switch (kind) {
-      case VariantType::INT:
-         switch (to->getTypeID()) {
-            case TypeID::IntegerTypeID: {
-               return Variant(to, intVal);
-            }
-            case TypeID::FPTypeID: return Variant((double)intVal);
-            case TypeID::ObjectTypeID:
-               if (to->getClassName()=="String") {
-                  return Variant(std::to_string(intVal));
-               }
-
-               return *this;
-            default:
-               llvm_unreachable("Should have returned before");
-         }
-      case VariantType::FLOAT:
-         switch (to->getTypeID()) {
-            case TypeID::IntegerTypeID: return Variant((size_t) floatVal);
-            case TypeID::FPTypeID: {
-               if (to->isFloatTy())
-                  return Variant((float)floatVal);
-               else
-                  return Variant(floatVal);
-            }
-            case TypeID::ObjectTypeID: return Variant(std::to_string(floatVal));
-            default:
-               llvm_unreachable("Should have returned before");
-         }
-      case VariantType::STRING:
-         switch (to->getTypeID()) {
-            case TypeID::IntegerTypeID: return Variant(to, std::stoull(strVal));
-            case TypeID::FPTypeID: return Variant(std::stod(strVal));
-            case TypeID::ObjectTypeID: return *this;
-            default:
-               llvm_unreachable("Should have returned before");
-         }
-      default:
-         return {};
-   }
-}
-
-Type* Variant::typeOf() const
-{
-   return type;
-}
 
 } // namespace cdot

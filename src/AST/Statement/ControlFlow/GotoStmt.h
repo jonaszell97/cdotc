@@ -14,7 +14,7 @@ class GotoStmt : public Statement {
 public:
    explicit GotoStmt(string &&label);
 
-   typedef std::shared_ptr<GotoStmt> SharedPtr;
+   friend class TransformImpl;
 
    static bool classof(AstNode const* T)
    {

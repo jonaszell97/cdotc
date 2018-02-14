@@ -5,63 +5,55 @@
 #ifndef CDOT_ENUMCASEDECL_H
 #define CDOT_ENUMCASEDECL_H
 
-#include "../../Statement.h"
-#include "../../../../Variant/Variant.h"
+#include "../CallableDecl.h"
 
 namespace cdot {
 namespace ast {
 
 class Expression;
 class TypeRef;
+class StaticExpr;
 
-class EnumCaseDecl: public Statement {
+class EnumCaseDecl: public CallableDecl {
 public:
-   typedef std::vector<pair<string, std::shared_ptr<TypeRef>>>
-      AssociatedTypeVec;
+   typedef std::vector<FuncArgDecl*> AssociatedTypeVec;
+   EnumCaseDecl(std::string&& name, StaticExpr* rawValue,
+                AssociatedTypeVec&& associatedTypes)
+      : CallableDecl(EnumCaseDeclID, (AccessModifier)0, move(name), nullptr,
+                     move(associatedTypes), {}, nullptr, OperatorInfo()),
+        rawValExpr(rawValue)
+   {}
 
-   EnumCaseDecl(string&& name, std::shared_ptr<Expression>&& rawValue,
-                AssociatedTypeVec&& associatedTypes);
-   EnumCaseDecl(string&& name, AssociatedTypeVec&& associatedTypes);
-
-   typedef std::shared_ptr<EnumCaseDecl> SharedPtr;
-   typedef std::unique_ptr<EnumCaseDecl> UniquePtr;
+   EnumCaseDecl(std::string&& name, AssociatedTypeVec&& associatedTypes)
+      : CallableDecl(EnumCaseDeclID, (AccessModifier)0, move(name), nullptr,
+                     move(associatedTypes), {}, nullptr, OperatorInfo()),
+        rawValExpr(nullptr)
+   {}
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == EnumCaseDeclID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   string caseName;
-   std::shared_ptr<Expression> rawVal = nullptr;
+   StaticExpr* rawValExpr;
 
-   long rawValue;
-   bool has_raw_value;
-
-   std::vector<pair<string, std::shared_ptr<TypeRef>>> associatedTypes;
+   long long rawValue = 0;
 
 public:
-   const string &getCaseName() const
+   StaticExpr* getRawValExpr() const
    {
-      return caseName;
+      return rawValExpr;
    }
 
-   void setCaseName(const string &caseName)
+   void setRawValExpr(StaticExpr *rawValExpr)
    {
-      EnumCaseDecl::caseName = caseName;
+      EnumCaseDecl::rawValExpr = rawValExpr;
    }
 
-   const std::shared_ptr<Expression> &getRawVal() const
-   {
-      return rawVal;
-   }
-
-   void setRawVal(const std::shared_ptr<Expression> &rawVal)
-   {
-      EnumCaseDecl::rawVal = rawVal;
-   }
-
-   long getRawValue() const
+   long long getRawValue() const
    {
       return rawValue;
    }
@@ -73,22 +65,7 @@ public:
 
    bool hasRawValue() const
    {
-      return has_raw_value;
-   }
-
-   void hasRawValue(bool has_raw_value)
-   {
-      EnumCaseDecl::has_raw_value = has_raw_value;
-   }
-
-   const AssociatedTypeVec& getAssociatedTypes() const
-   {
-      return associatedTypes;
-   }
-
-   void setAssociatedTypes(AssociatedTypeVec &associatedTypes)
-   {
-      EnumCaseDecl::associatedTypes = associatedTypes;
+      return rawValExpr != nullptr;
    }
 };
 

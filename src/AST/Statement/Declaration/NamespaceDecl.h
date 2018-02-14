@@ -5,66 +5,89 @@
 #ifndef CDOT_MODULEDECL_H
 #define CDOT_MODULEDECL_H
 
-#include "../Statement.h"
+#include "DeclContext.h"
+#include "NamedDecl.h"
 
 namespace cdot {
 namespace ast {
 
 class CompoundStmt;
 
-class NamespaceDecl : public Statement {
+class NamespaceDecl: public NamedDecl, public DeclContext {
 public:
    NamespaceDecl(string &&nsName,
-                 std::shared_ptr<CompoundStmt> &&body,
+                 CompoundStmt* body,
                  bool isAnonymous)
-      : Statement(NamespaceDeclID), nsName(move(nsName)), contents(move(body)),
-        isAnonymousNamespace_(isAnonymous)
+      : NamedDecl(NamespaceDeclID, (AccessModifier)0, move(nsName)),
+        DeclContext(NamespaceDeclID),
+        body(body), anonymousNamespace(isAnonymous)
    {
 
    }
-
-   typedef std::shared_ptr<NamespaceDecl> SharedPtr;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == NamespaceDeclID;
    }
 
-protected:
-   string nsName;
-   std::shared_ptr<CompoundStmt> contents;
+   static bool classof(DeclContext const* T) { return true; }
 
-   bool isAnonymousNamespace_ = false;
+   static DeclContext *castToDeclContext(NamespaceDecl const *D)
+   {
+      return static_cast<DeclContext*>(const_cast<NamespaceDecl*>(D));
+   }
+
+   static NamespaceDecl *castFromDeclContext(DeclContext const *Ctx)
+   {
+      return static_cast<NamespaceDecl*>(const_cast<DeclContext*>(Ctx));
+   }
+
+   friend class TransformImpl;
+
+protected:
+   CompoundStmt* body;
+
+   size_t namespaceId = size_t(-1);
+   bool anonymousNamespace = false;
+
+   NamespaceDecl *outerNamespace = nullptr;
 
 public:
-   const string &getNsName() const
+   CompoundStmt* getBody() const
    {
-      return nsName;
+      return body;
    }
 
-   void setNsName(const string &nsName)
+   void setBody(CompoundStmt *body)
    {
-      NamespaceDecl::nsName = nsName;
-   }
-
-   const std::shared_ptr<CompoundStmt> &getContents() const
-   {
-      return contents;
-   }
-
-   void setContents(const std::shared_ptr<CompoundStmt> &contents)
-   {
-      NamespaceDecl::contents = contents;
+      NamespaceDecl::body = body;
    }
 
    bool isAnonymousNamespace() const
    {
-      return isAnonymousNamespace_;
+      return anonymousNamespace;
    }
 
-   void isAnonymousNamespace(bool isAnonymousNamespace)
+   size_t getNamespaceId() const
    {
-      NamespaceDecl::isAnonymousNamespace_ = isAnonymousNamespace;
+      return namespaceId;
+   }
+
+   void setNamespaceId(size_t namespaceId)
+   {
+      NamespaceDecl::namespaceId = namespaceId;
+   }
+
+   NamespaceDecl *getOuterNamespace() const
+   {
+      return outerNamespace;
+   }
+
+   void setOuterNamespace(NamespaceDecl *outerNamespace)
+   {
+      this->outerNamespace = outerNamespace;
+      if (outerNamespace)
+         anonymousNamespace |= outerNamespace->isAnonymousNamespace();
    }
 };
 

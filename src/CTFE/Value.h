@@ -2,17 +2,17 @@
 #ifndef CDOT_CTFEVALUE_H
 #define CDOT_CTFEVALUE_H
 
-#include <llvm/ADT/StringMap.h>
 #include <string>
+#include <cstring>
+#include <cstdint>
+
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/Allocator.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallPtrSet.h>
 
-#include "../Support/Casting.h"
-
-#include "../Variant/Type/Type.h"
-#include "../Variant/Type/IntegerType.h"
-#include "../Variant/Type/PointerType.h"
-#include "../Variant/Type/FPType.h"
+#include "Support/Casting.h"
+#include "Variant/Type/Type.h"
 
 namespace cdot {
 
@@ -28,124 +28,87 @@ using namespace cdot::support;
 
 class Value {
 public:
+   using Allocator = llvm::BumpPtrAllocator;
+
    Value() : buffer(nullptr) {}
 
-   static Value getInt(Type *ty, uint64_t val)
+   static Value getInt(uint64_t val)
    {
-      return Value(ty, val);
+      return Value(val);
    }
 
    static Value getDouble(double d)
    {
-      return Value(FPType::getDoubleTy(), d);
+      return Value(d);
    }
 
    static Value getFloat(float f)
    {
-      return Value(FPType::getFloatTy(), f);
+      return Value(f);
    }
 
-   static Value getPtr(Type *ty, void *ptr)
+   static Value getPtr(void *ptr, Allocator &Alloc)
    {
-      auto buf = (void**)__managed_malloc(sizeof(void*));
+      auto buf = (void**)Alloc.Allocate(sizeof(void*), alignof(void*));
       *buf = ptr;
 
-      return Value(ty, buf);
+      return Value(buf);
    }
 
-   static Value getConstPtr(Type *ty, void *ptr)
+   static Value getConstPtr(void *ptr)
    {
-      return Value(ty, ptr);
+      return Value(ptr);
    }
 
-   static Value getStr(Type *ty, llvm::StringRef str)
+   static Value getStr(llvm::StringRef str, Allocator &Alloc)
    {
-      auto buffer = __managed_malloc(str.size() + 1);
+      auto buffer = Alloc.Allocate(str.size() + 1, alignof(char));
       memcpy(buffer, str.data(), str.size());
       reinterpret_cast<char*>(buffer)[str.size()] = '\0';
 
-      return Value(ty, buffer);
+      return Value(buffer);
    }
 
    static Value getFunc(il::Function const* F);
-   static Value getStruct(Type *ty, llvm::ArrayRef<Value> fieldValues);
-   static Value getArray(Type *ty, llvm::ArrayRef<Value> fieldValues);
-   static Value getTuple(Type *ty, llvm::ArrayRef<Value> fieldValues);
-   static Value getUnion(Type *ty, Type *initTy, Value Initializer);
+   static Value getStruct(Type *ty, llvm::ArrayRef<Value> fieldValues,
+                          Allocator &Alloc);
+   static Value getArray(Type *ty, llvm::ArrayRef<Value> fieldValues,
+                         Allocator &Alloc);
+   static Value getTuple(Type *ty, llvm::ArrayRef<Value> fieldValues,
+                         Allocator &Alloc);
+   static Value getUnion(Type *ty, Type *initTy, Value Initializer,
+                         Allocator &Alloc);
    static Value getEnum(Type *ty, llvm::StringRef caseName,
-                        llvm::ArrayRef<Value> fieldValues);
+                        llvm::ArrayRef<Value> fieldValues,
+                        Allocator &Alloc);
 
    static Value getLambda(il::Function const* F,
-                          llvm::ArrayRef<std::pair<Type*, Value>> captures);
+                          llvm::ArrayRef<std::pair<Type*, Value>> captures,
+                          Allocator &Alloc);
 
-   static Value getUntyped(size_t bufferSize)
+   static Value getUntyped(size_t bufferSize, Allocator &Alloc)
    {
-      return Value(IntegerType::getCharTy()->getPointerTo(),
-                   __managed_malloc(bufferSize));
+      return Value(Alloc.Allocate(bufferSize, 1));
    }
 
-   static Value getPreallocated(Type *ty, void *buffer)
+   static Value getPreallocated(void *buffer)
    {
-      return Value(ty, buffer);
+      return Value(buffer);
    }
 
-   static Value getNullValue(Type *ty);
+   static Value getNullValue(Type *ty, Allocator &Alloc);
 
    std::string toString(Type *type);
    Variant toVariant(Type *type);
 
    char *getBuffer() const { return buffer; }
-
    char *& operator *() { return buffer; }
 
-   static size_t getNumCreatedValues()
-   {
-      return allocations.size();
-   }
-
-   static void resize(size_t toSize)
-   {
-      size_t i = allocations.size() - 1;
-      while (i > toSize) {
-         free(allocations[i]);
-         --i;
-      }
-
-      allocations.resize(toSize);
-   }
-
-   struct ScopeGuard {
-   public:
-      ScopeGuard()
-         : size(getNumCreatedValues())
-      {
-
-      }
-
-      ~ScopeGuard()
-      {
-         resize(size);
-      }
-
-   private:
-      size_t size;
-   };
-
 private:
-   static llvm::SmallVector<void*, 128> allocations;
-
-   explicit Value(Type *type, void *buffer)
+   explicit Value(void *buffer)
       : buffer((char*)buffer)
    {
 
-   }
-
-   static void *__managed_malloc(size_t size)
-   {
-      auto ptr = malloc(size);
-      allocations.push_back(ptr);
-
-      return ptr;
    }
 
 #ifndef NDEBUG
@@ -184,7 +147,7 @@ private:
 
 public:
 #  define CDOT_VALUE_INIT(Field, Ty)        \
-   Value(Type *ty, Ty val) : Field(val) {}
+   Value(Ty val) : Field(val) {}
 
    CDOT_VALUE_INIT(u64, uint64_t)
    CDOT_VALUE_INIT(u32, uint32_t)

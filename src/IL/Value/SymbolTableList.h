@@ -8,9 +8,9 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ilist.h>
 #include <llvm/ADT/simple_ilist.h>
+#include <llvm/Support/Casting.h>
 
 #include "ValueSymbolTable.h"
-#include "../../Support/Casting.h"
 
 namespace cdot {
 namespace il {
@@ -87,7 +87,7 @@ public:
    OwnerType *getOwner() const
    { return Owner; }
 
-   const std::shared_ptr<ValueSymbolTable> &getSymTab() const
+   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
    {
       return SymTab;
    }
@@ -192,7 +192,7 @@ public:
    T* find(llvm::StringRef name) const
    {
       auto val = SymTab->lookup(name);
-      return val ? cdot::support::dyn_cast<T>(val) : nullptr;
+      return val ? llvm::dyn_cast<T>(val) : nullptr;
    }
 
    iterator begin() { return ilist.begin(); }

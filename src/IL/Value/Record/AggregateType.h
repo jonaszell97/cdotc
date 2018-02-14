@@ -24,11 +24,14 @@ namespace cdot {
 
 class QualType;
 
-namespace cl {
-
-class Enum;
-
-} // namespace cl
+namespace ast {
+   class RecordDecl;
+   class StructDecl;
+   class ClassDecl;
+   class EnumDecl;
+   class UnionDecl;
+   class ProtocolDecl;
+} // namespace ast
 
 namespace il {
 
@@ -43,32 +46,13 @@ class AggregateType: public GlobalObject,
                      public llvm::ilist_node_with_parent<AggregateType,
                         Module> {
 public:
-   typedef llvm::SmallVector<Method*, 4> MethodList;
-
-   struct Property {
-      llvm::StringRef name;
-      Method *Getter = nullptr;
-      Method *Setter = nullptr;
-   };
-
-   typedef llvm::StringMap<Property> PropertyMap;
-   typedef llvm::SmallVector<Initializer*, 4> InitializerList;
-
-   AggregateType(llvm::StringRef name,
+   AggregateType(ObjectType *Ty,
+                 llvm::StringRef name,
                  TypeID id,
                  Module *m);
 
    Module *getParent() const { return parent; }
    void setParent(Module *m) { parent = m; }
-
-   const MethodList &getMethods() const;
-
-   void addMethod(Method *M);
-   Method *getMethod(llvm::StringRef name);
-
-   void addProperty(Property &&P);
-   const Property &getProperty(llvm::StringRef name) const;
-   const PropertyMap &getProperties() const;
 
    ConstantStruct *getTypeInfo() const;
 
@@ -79,11 +63,6 @@ public:
 
    void addConformance(llvm::StringRef protocolName);
    const std::set<llvm::StringRef> &getConformances() const;
-
-   const InitializerList &getInitializers() const;
-
-   void addInitializer(Initializer *Init);
-   Initializer *getInitializer(llvm::StringRef name);
 
    llvm::StructType *getLlvmTy() const
    {
@@ -105,39 +84,24 @@ public:
       AggregateType::PTable = PTable;
    }
 
-   size_t getSize() const;
-   unsigned short getAlignment() const;
-
-   Method *getDeinitializer() const
+   bool isExternal() const
    {
-      return deinitializer;
-   }
-
-   void setDeinitializer(Method *deinitializer)
-   {
-      AggregateType::deinitializer = deinitializer;
+      return (SubclassData & External) != 0;
    }
 
 protected:
-   MethodList Methods;
-   PropertyMap Properties;
-   InitializerList Initializers;
-
-   mutable size_t size;
-   mutable unsigned short alignment;
-
    std::set<llvm::StringRef> Conformances;
 
    ConstantStruct *TypeInfo = nullptr;
    llvm::StringMap<ConstantArray*> ProtocolTables;
 
    il::GlobalVariable *PTable = nullptr;
-   il::Method *deinitializer = nullptr;
 
    mutable llvm::StructType *llvmTy;
 
    enum Flag {
       ForwardDeclared = 0x1,
+      External        = ForwardDeclared << 1,
    };
 
 public:
@@ -165,7 +129,8 @@ public:
 
    typedef llvm::SmallVector<Field, 4> FieldList;
 
-   StructType(llvm::StringRef name,
+   StructType(ObjectType *Ty,
+              llvm::StringRef name,
               Module *m);
 
    const FieldList &getFields() const;
@@ -175,19 +140,8 @@ public:
 
    unsigned getFieldOffset(llvm::StringRef fieldName) const;
 
-   Method *getDefaultInitializer() const
-   {
-      return defaultInitializer;
-   }
-
-   void setDefaultInitializer(Method *defaultInitializer)
-   {
-      StructType::defaultInitializer = defaultInitializer;
-   }
-
 protected:
    FieldList Fields;
-   Method *defaultInitializer;
 
 public:
    static bool classof(StructType const* T) { return true; }
@@ -205,13 +159,18 @@ public:
 
 class ClassType: public StructType {
 public:
-   ClassType(llvm::StringRef name,
-             llvm::StringRef parentClass,
+   ClassType(ObjectType *Ty,
+             llvm::StringRef name,
              Module *m);
 
-   llvm::StringRef getParentClass() const
+   ClassType *getParentClass() const
    {
       return ParentClass;
+   }
+
+   void setParentClass(ClassType *ParentClass)
+   {
+      ClassType::ParentClass = ParentClass;
    }
 
    GlobalVariable *getVTable() const
@@ -235,7 +194,7 @@ public:
    }
 
 protected:
-   llvm::StringRef ParentClass;
+   ClassType *ParentClass;
 
    llvm::SmallDenseSet<llvm::StringRef, 4> VirtualMethods;
    GlobalVariable *VTable = nullptr;
@@ -257,11 +216,17 @@ public:
 
    typedef llvm::SmallVector<Case, 4> CaseList;
 
-   EnumType(llvm::StringRef name,
-            Type *rawType,
+   EnumType(ObjectType *Ty,
+            llvm::StringRef name,
             Module *m);
 
    Type *getRawType() const;
+
+   void setRawType(Type *rawType)
+   {
+      EnumType::rawType = rawType;
+   }
+
    const CaseList &getCases() const;
 
    const Case &getCase(llvm::StringRef name) const;
@@ -283,7 +248,8 @@ public:
 
 class UnionType: public StructType {
 public:
-   UnionType(llvm::StringRef name,
+   UnionType(ObjectType *Ty,
+             llvm::StringRef name,
              Module *m);
 
    QualType getFieldType(llvm::StringRef fieldName) const;
@@ -296,7 +262,8 @@ public:
 
 class ProtocolType: public AggregateType {
 public:
-   ProtocolType(llvm::StringRef name,
+   ProtocolType(ObjectType *Ty,
+                llvm::StringRef name,
                 Module *m);
 
 public:

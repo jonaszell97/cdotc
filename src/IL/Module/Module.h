@@ -16,12 +16,13 @@
 #include "../Value/Record/AggregateType.h"
 
 namespace llvm {
-class raw_ostream;
-}
+   class raw_ostream;
+   class MemoryBuffer;
+} // namespace llvm
 
 namespace cdot {
 
-struct CompilationUnit;
+class CompilationUnit;
 
 namespace il {
 
@@ -44,7 +45,6 @@ public:
 
    using RefTypeList          = llvm::SmallPtrSet<AggregateType*, 4>;
 
-   explicit Module(Context &Ctx, CompilationUnit const& CU);
    explicit Module(Context &Ctx,
                    size_t fileID = 0,
                    llvm::StringRef fileName = {},
@@ -60,11 +60,11 @@ public:
 
    void insertType(AggregateType *Ty);
 
-   std::shared_ptr<ValueSymbolTable> const& getFunSymTab() const
-   { return Functions.getSymTab(); }
+   ValueSymbolTable* getFunSymTab() const
+   { return Functions.getSymTab().get(); }
 
-   std::shared_ptr<ValueSymbolTable> const& getGlobSymTab() const
-   { return GlobalVariables.getSymTab(); }
+   ValueSymbolTable* getGlobSymTab() const
+   { return GlobalVariables.getSymTab().get(); }
 
    AggregateType *getType(llvm::StringRef name);
    bool addTypeReference(AggregateType *ty);
@@ -83,6 +83,8 @@ public:
 
    void dump() const;
    void writeTo(llvm::raw_ostream &out) const;
+
+   void serializeTo(llvm::raw_ostream &out) const;
 
    func_iterator begin() { return Functions.begin(); }
    func_iterator end() { return Functions.end(); }

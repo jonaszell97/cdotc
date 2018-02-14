@@ -7,16 +7,36 @@
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/raw_ostream.h>
+#include "../lex/SourceLocation.h"
 
 namespace cdot {
+
+class CompilationUnit;
+struct CompilerOptions;
+
+namespace ast {
+   class CompoundStmt;
+   class ImportStmt;
+} // namespace ast
+
+namespace module {
+   class Module;
+} // namespace module
+
+namespace ast {
+   class SemaPass;
+} // namespace ast
+
 namespace module {
 
 class ModuleManager {
 public:
-   static bool isFileCached(llvm::StringRef pathToFile);
-   static void ParseDeclarations(llvm::StringRef pathToFile);
+   static void createModule(ast::SemaPass &SP);
+   static Module *importModule(ast::SemaPass &SP,
+                               ast::ImportStmt *stmt);
 
-   static void WriteModule(llvm::raw_ostream &out);
+   static Module *getModule(ast::SemaPass &SP,
+                            ast::ImportStmt *stmt);
 };
 
 } // namespace module

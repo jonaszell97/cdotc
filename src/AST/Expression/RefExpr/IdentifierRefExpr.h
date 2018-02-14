@@ -7,105 +7,106 @@
 
 #include "../Expression.h"
 
-
 namespace cdot {
+
 enum class BuiltinIdentifier {
    NULLPTR, FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN,
    FLOAT_SNAN, DOUBLE_SNAN, __ctfe
 };
 
-extern unordered_map<string, BuiltinIdentifier> builtinIdentifiers;
-
-class TemplateArgListBuilder;
-}
-
-namespace cdot {
-
-struct Alias;
+extern std::unordered_map<std::string, BuiltinIdentifier> builtinIdentifiers;
 
 namespace ast {
 
 class MemberRefExpr;
+class CallableDecl;
+class LocalVarDecl;
+class GlobalVarDecl;
+class AssociatedTypeDecl;
+class NamespaceDecl;
+class AliasDecl;
+class FuncArgDecl;
 
 class IdentifierRefExpr : public IdentifiedExpr {
 public:
-   explicit IdentifierRefExpr(string &&ident);
-   ~IdentifierRefExpr();
+   enum class IdentifierKind {
+      Unknown,
+      LocalVar,
+      GlobalVar,
+      FunctionArg,
+      Function,
+      TemplateArg,
+      TemplateParam,
+      AssociatedType,
+      Namespace,
+      MetaType,
+      Alias,
+      Self,
+      Super,
+      BuiltinValue,
+   };
 
-   typedef std::shared_ptr<IdentifierRefExpr> SharedPtr;
+   explicit IdentifierRefExpr(std::string &&ident)
+      : IdentifiedExpr(IdentifierRefExprID, move(ident)),
+        captured(false)
+   {}
+
+   IdentifierRefExpr(std::string &&ident,
+                     std::vector<TemplateArgExpr*> &&templateArgs)
+      : IdentifiedExpr(IdentifierRefExprID, move(ident)),
+        captured(false),
+        templateArgs(move(templateArgs))
+   {}
+
+   IdentifierRefExpr(IdentifierRefExpr &&expr) = default;
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == IdentifierRefExprID;
    }
 
+   friend class TransformImpl;
+
 protected:
+   IdentifierKind kind = IdentifierKind::Unknown;
+
    union {
       Type *builtinType = nullptr;
-      Type *metaType;
+      MetaType *metaType;
       Statement *capturedValue;
-      Callable *callable;
+      CallableDecl *callable;
+      LocalVarDecl *localVar;
+      GlobalVarDecl *globalVar;
+      FuncArgDecl *funcArg;
+      NamespaceDecl *namespaceDecl;
+      Variant *aliasVal;
    };
 
-   Variant builtinValue;
    BuiltinIdentifier builtinKind;
 
-   bool is_let_expr : 1;
-   bool is_var_expr : 1;
-   bool is_namespace : 1;
-   bool is_super : 1;
-   bool is_self : 1;
-   bool is_function : 1;
-   bool is_metatype : 1;
-   bool functionArg : 1;
-   bool is_capture : 1;
-   bool is_alias : 1;
-   
-   size_t argNo = 0;
-
-   std::vector<TemplateArg> templateArgs;
-
-   Variant aliasVal;
+   bool captured : 1;
+   std::vector<TemplateArgExpr*> templateArgs;
 
 public:
-   bool isLetExpr()
-   {
-      return is_let_expr;
-   }
-
-   void isLetExpr(bool letExpr)
-   {
-      is_let_expr = letExpr;
-   }
-
-   bool isVarExpr()
-   {
-      return is_var_expr;
-   }
-
-   void isVarExpr(bool varExpr)
-   {
-      is_var_expr = varExpr;
-   }
-
    bool isCaptured() const
    {
-      return is_capture;
+      return captured;
    }
 
    void setIsCaptured(bool captured_var)
    {
-      IdentifierRefExpr::is_capture = captured_var;
+      IdentifierRefExpr::captured = captured_var;
    }
 
    const Variant &getBuiltinValue() const
    {
-      return builtinValue;
+      assert(aliasVal && "not an alias");
+      return *aliasVal;
    }
 
-   void setBuiltinValue(const Variant &builtinValue)
+   void setBuiltinValue(Variant *builtinValue)
    {
-      IdentifierRefExpr::builtinValue = builtinValue;
+      IdentifierRefExpr::aliasVal = builtinValue;
    }
 
    Type *getBuiltinType() const
@@ -118,12 +119,12 @@ public:
       IdentifierRefExpr::builtinType = builtinType;
    }
 
-   Type *getMetaType() const
+   MetaType *getMetaType() const
    {
       return metaType;
    }
 
-   void setMetaType(Type *metaType)
+   void setMetaType(MetaType *metaType)
    {
       IdentifierRefExpr::metaType = metaType;
    }
@@ -138,90 +139,30 @@ public:
       IdentifierRefExpr::builtinKind = builtinKind;
    }
 
-   bool isNamespace() const
-   {
-      return is_namespace;
-   }
-
-   void isNamespace(bool is_namespace)
-   {
-      IdentifierRefExpr::is_namespace = is_namespace;
-   }
-
-   bool isSuper() const
-   {
-      return is_super;
-   }
-
-   void isSuper(bool is_super)
-   {
-      IdentifierRefExpr::is_super = is_super;
-   }
-
-   bool isFunction() const
-   {
-      return is_function;
-   }
-
-   void isFunction(bool is_function)
-   {
-      IdentifierRefExpr::is_function = is_function;
-   }
-
-   std::vector<TemplateArg> const& getTemplateArgs() const
+   std::vector<TemplateArgExpr*> const& getTemplateArgs() const
    {
       return templateArgs;
    }
 
-   bool isSelf() const
+   std::vector<TemplateArgExpr*> &getTemplateArgRef()
    {
-      return is_self;
+      return templateArgs;
    }
 
-   void setIsSelf(bool is_self)
-   {
-      IdentifierRefExpr::is_self = is_self;
-   }
-
-   bool isFunctionArg() const
-   {
-      return functionArg;
-   }
-
-   void setFunctionArg(bool functionArg)
-   {
-      IdentifierRefExpr::functionArg = functionArg;
-   }
-
-   size_t getArgNo() const
-   {
-      return argNo;
-   }
-
-   void setArgNo(size_t argNo)
-   {
-      IdentifierRefExpr::argNo = argNo;
-   }
-
-   void setTemplateArgs(std::vector<TemplateArg> &&templateArgs)
+   void setTemplateArgs(std::vector<TemplateArgExpr*> &&templateArgs)
    {
       IdentifierRefExpr::templateArgs = move(templateArgs);
    }
 
    const Variant &getAliasVal() const
    {
-      return aliasVal;
+      return *aliasVal;
    }
 
-   void setAliasVal(Variant &&aliasVal)
+   void setAliasVal(Variant *aliasVal)
    {
-      IdentifierRefExpr::aliasVal = std::move(aliasVal);
-      is_alias = true;
-   }
-
-   bool isAlias() const
-   {
-      return is_alias;
+      IdentifierRefExpr::aliasVal = aliasVal;
+      kind = IdentifierKind ::Alias;
    }
 
    Statement *getCapturedValue() const
@@ -234,37 +175,81 @@ public:
       IdentifierRefExpr::capturedValue = capturedValue;
    }
 
-   Callable *getCallable() const
+   CallableDecl *getCallable() const
    {
       return callable;
    }
 
-   void setCallable(Callable *callable)
+   void setCallable(CallableDecl *callable)
    {
       IdentifierRefExpr::callable = callable;
    }
+
+   IdentifierKind getKind() const
+   {
+      return kind;
+   }
+
+   void setKind(IdentifierKind kind)
+   {
+      IdentifierRefExpr::kind = kind;
+   }
+
+   LocalVarDecl *getLocalVar() const
+   {
+      return localVar;
+   }
+
+   void setLocalVar(LocalVarDecl *localVar)
+   {
+      IdentifierRefExpr::localVar = localVar;
+   }
+
+   GlobalVarDecl *getGlobalVar() const
+   {
+      return globalVar;
+   }
+
+   void setGlobalVar(GlobalVarDecl *globalVar)
+   {
+      IdentifierRefExpr::globalVar = globalVar;
+   }
+
+   FuncArgDecl *getFuncArg() const
+   {
+      return funcArg;
+   }
+
+   void setFuncArg(FuncArgDecl *funcArg)
+   {
+      IdentifierRefExpr::funcArg = funcArg;
+   }
+
+   NamespaceDecl *getNamespaceDecl() const
+   {
+      return namespaceDecl;
+   }
+
+   void setNamespaceDecl(NamespaceDecl *namespaceDecl)
+   {
+      IdentifierRefExpr::namespaceDecl = namespaceDecl;
+   }
 };
 
-class NonTypeTemplateArgExpr: public Expression {
+class BuiltinExpr: public Expression {
 public:
-   explicit NonTypeTemplateArgExpr(const TemplateParameter &Param);
-   ~NonTypeTemplateArgExpr();
-
-   typedef std::shared_ptr<NonTypeTemplateArgExpr> SharedPtr;
-
-private:
-   const TemplateParameter &Param;
-
-public:
-   const TemplateParameter &getParam() const
+   explicit BuiltinExpr(QualType type)
+      : Expression(BuiltinExprID)
    {
-      return Param;
+      exprType = type;
    }
 
    static bool classof(AstNode const* T)
    {
-      return T->getTypeID() == NonTypeTemplateArgExprID;
+      return T->getTypeID() == BuiltinExprID;
    }
+
+   friend class TransformImpl;
 };
 
 } // namespace ast

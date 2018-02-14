@@ -12,18 +12,24 @@ namespace ast {
 
 class ArrayLiteral : public Expression {
 public:
-   ArrayLiteral(std::vector<std::shared_ptr<Expression>> &&values);
+   explicit ArrayLiteral(std::vector<Expression* > &&values)
+      : Expression(ArrayLiteralID), values(move(values))
+   {
+
+   }
 
    static bool classof(AstNode const* T)
    {
       return T->getTypeID() == ArrayLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::vector<std::shared_ptr<Expression>> values;
+   std::vector<Expression* > values;
 
 public:
-   const std::vector<std::shared_ptr<Expression>> &getValues() const
+   const std::vector<Expression* > &getValues() const
    {
       return values;
    }
@@ -31,37 +37,42 @@ public:
 
 class DictionaryLiteral : public Expression {
 public:
-   DictionaryLiteral(std::vector<std::shared_ptr<Expression>> &&keys,
-                     std::vector<std::shared_ptr<Expression>> &&values);
+   DictionaryLiteral(std::vector<Expression* > &&keys,
+                     std::vector<Expression* > &&values)
+      : Expression(NodeType::DictionaryLiteralID),
+        keys(move(keys)), values(move(values))
+   {
 
-   typedef std::shared_ptr<DictionaryLiteral> SharedPtr;
+   }
 
    static bool classof(AstNode const* T)
    {
        return T->getTypeID() == DictionaryLiteralID;
    }
 
+   friend class TransformImpl;
+
 protected:
-   std::vector<std::shared_ptr<Expression>> keys;
-   std::vector<std::shared_ptr<Expression>> values;
+   std::vector<Expression* > keys;
+   std::vector<Expression* > values;
 
 public:
-   std::vector<std::shared_ptr<Expression>> &getKeys()
+   std::vector<Expression* > &getKeys()
    {
       return keys;
    }
 
-   std::vector<std::shared_ptr<Expression>> &getValues()
+   std::vector<Expression* > &getValues()
    {
       return values;
    }
 
-   std::vector<std::shared_ptr<Expression>> const& getKeys() const
+   std::vector<Expression* > const& getKeys() const
    {
       return keys;
    }
 
-   std::vector<std::shared_ptr<Expression>> const& getValues() const
+   std::vector<Expression* > const& getValues() const
    {
       return values;
    }

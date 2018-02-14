@@ -6,12 +6,16 @@
 #define CDOT_CTFEENGINE_H
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include "../Variant/Variant.h"
 #include "../Message/Diagnostics.h"
 
 namespace cdot {
 
-class Callable;
+namespace ast {
+   class SemaPass;
+   class CallableDecl;
+} // namespace ast
 
 namespace il {
    class Function;
@@ -24,33 +28,60 @@ class Value;
 
 struct CTFEResult {
    explicit CTFEResult(Variant &&Val)
-      : val(std::move(Val)), hadError(false)
+      : val(std::move(Val)), dependentDecl(nullptr)
    {}
 
-   explicit
-   CTFEResult(llvm::SmallVector<diag::DiagnosticBuilder, 4> &&diagnostics)
-      : hadError(true), diagnostics(std::move(diagnostics))
+   explicit CTFEResult(ast::CallableDecl *C) : dependentDecl(C)
    {}
 
-   explicit
-   CTFEResult(llvm::SmallPtrSet<Callable*, 8> &&Dependencies)
-      : hadError(false), Dependencies(std::move(Dependencies))
+   explicit CTFEResult(llvm::MutableArrayRef<diag::DiagnosticBuilder> diags)
+      : dependentDecl(nullptr),
+        diagnostics(std::make_move_iterator(diags.begin()),
+                    std::make_move_iterator(diags.end()))
    {}
 
+   bool hadError() const
+   {
+      return dependentDecl || !diagnostics.empty();
+   }
+
+   operator bool() const
+   {
+      return !hadError();
+   }
+
+   Variant &getVal()
+   {
+      return val;
+   }
+
+   ast::CallableDecl *getDependentDecl() const
+   {
+      return dependentDecl;
+   }
+
+   std::vector<diag::DiagnosticBuilder> &getDiagnostics()
+   {
+      return diagnostics;
+   }
+
+private:
    cdot::Variant val;
-   bool hadError;
-   llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
-   llvm::SmallPtrSet<Callable*, 8> Dependencies;
+   ast::CallableDecl *dependentDecl;
+
+   std::vector<diag::DiagnosticBuilder> diagnostics;
 };
 
 class CTFEEngine {
 public:
-   CTFEEngine();
+   explicit CTFEEngine(ast::SemaPass &SP);
    ~CTFEEngine();
 
    CTFEResult evaluateFunction(il::Function *F,
                                llvm::ArrayRef<Value> args,
                                SourceLocation loc = {});
+
+   Value CTFEValueFromVariant(Variant const &V, Type *Ty);
 
 private:
    EngineImpl *pImpl;

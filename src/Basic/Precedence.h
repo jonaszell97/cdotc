@@ -7,6 +7,12 @@
 
 namespace cdot {
 
+namespace lex {
+namespace tok {
+   enum TokenType : unsigned short;
+} // namespace lex
+} // namespace tok
+
 enum class FixKind : unsigned char {
    Infix = 1,
    Prefix = 1 << 1,
@@ -97,6 +103,33 @@ private:
    FixKind fix;
    bool implicit = false;
 };
+
+namespace prec {
+
+enum PrecedenceLevel {
+   Unknown         = 0,    // Not binary operator.
+   Comma           = 1,    // ,
+   Assignment      = 2,    // =, *=, /=, %=, +=, -=, <<=, >>=, &=, ^=, |=
+   Conditional     = 3,    // ?
+   LogicalOr       = 4,    // ||
+   LogicalAnd      = 5,    // &&
+   InclusiveOr     = 6,    // |
+   ExclusiveOr     = 7,    // ^
+   And             = 8,    // &
+   Equality        = 9,    // ==, !=
+   Relational      = 10,   //  >=, <=, >, <
+   Spaceship       = 11,   // <=>
+   Shift           = 12,   // <<, >>
+   Additive        = 13,   // -, +
+   Multiplicative  = 14,   // *, /, %
+   Exponentiation  = 15,   // **
+   Range           = 16,   // .., ..<
+   Cast            = 17    // as, as?, as!
+};
+
+} // namespace prec
+
+prec::PrecedenceLevel getOperatorPrecedence(lex::tok::TokenType kind);
 
 } // namespace cdot
 

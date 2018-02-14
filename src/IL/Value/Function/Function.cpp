@@ -12,10 +12,6 @@
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
 
-#include "../../../Variant/Type/Generic.h"
-#include "../../../Variant/Type/FunctionType.h"
-
-#include "../../../AST/Passes/SemanticAnalysis/Function.h"
 #include "../../../AST/Statement/Declaration/CallableDecl.h"
 
 #include "Method.h"
@@ -25,75 +21,48 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-namespace {
-
-FunctionType *makeFuncTy(QualType &returnType,
-                         llvm::ArrayRef<Argument*> args) {
-   std::vector<cdot::Argument> realArgs;
-   for (const auto &arg : args) {
-      realArgs.emplace_back(arg->getName(), arg->getType(),
-                            nullptr, false, arg->isVararg());
-   }
-
-   return FunctionType::get(returnType, realArgs, true);
-}
-
-} // anonymous namespace
-
 Function::Function(const std::string &name,
-                   QualType returnType,
-                   llvm::ArrayRef<Argument *> args,
+                   FunctionType *funcTy,
                    Module *parent,
-                   bool mightThrow,
                    bool isExternC)
-   : GlobalObject(FunctionID, makeFuncTy(returnType, args),
-                  parent, name),
-     returnType(returnType), BasicBlocks(this)
+   : GlobalObject(FunctionID, funcTy, parent, name),
+     BasicBlocks(this)
 {
-   auto EntryBlock = new BasicBlock(this);
-   EntryBlock->setName("entry");
-
-   for (const auto &arg : args) {
-      EntryBlock->getArgs().push_back(arg);
-   }
-
    setIsExternC(isExternC);
    SubclassData |= Flag::Declared;
 
-   if (mightThrow) {
+   if (!funcTy->isNoThrow())
       SubclassData |= Flag::Throws;
-   }
 
-   if (returnType->needsStructReturn())
+   if (funcTy->getReturnType()->needsStructReturn())
       SubclassData |= Flag::SRet;
+
+   if (funcTy->isCStyleVararg())
+      SubclassData |= Flag::Vararg;
 
    if (parent) {
       parent->insertFunction(this);
    }
 }
 
-Function::Function(TypeID id, FunctionType *Ty, const std::string &name,
-                   QualType returnType, llvm::ArrayRef<Argument *> args,
-                   Module *parent, bool mightThrow, bool isExternC)
+Function::Function(TypeID id, FunctionType *Ty,
+                   const std::string &name,
+                   Module *parent,
+                   bool isExternC)
    : GlobalObject(id, Ty, parent, name),
-     returnType(returnType), BasicBlocks(this)
+     BasicBlocks(this)
 {
-   auto EntryBlock = new BasicBlock(this);
-   EntryBlock->setName("entry");
-
-   for (const auto &arg : args) {
-      EntryBlock->getArgs().push_back(arg);
-   }
-
    setIsExternC(isExternC);
    SubclassData |= Flag::Declared;
 
-   if (mightThrow) {
+   if (!Ty->isNoThrow())
       SubclassData |= Flag::Throws;
-   }
 
-   if (returnType->needsStructReturn())
+   if (Ty->getReturnType()->needsStructReturn())
       SubclassData |= Flag::SRet;
+
+   if (Ty->isCStyleVararg())
+      SubclassData |= Flag::Vararg;
 
    if (parent) {
       parent->insertFunction(this);
@@ -102,17 +71,8 @@ Function::Function(TypeID id, FunctionType *Ty, const std::string &name,
 
 Function::Function(const Function &other)
    : GlobalObject(FunctionID, *other.getType(), nullptr, other.name),
-     returnType(other.returnType), BasicBlocks(this)
+     BasicBlocks(this)
 {
-   auto EntryBlock = new BasicBlock(this);
-   EntryBlock->setName("entry");
-
-   for (const auto &arg : other.getEntryBlock()->getArgs()) {
-      EntryBlock->getArgs().push_back(new Argument(arg.getType(),
-                                                   arg.isVararg(),
-                                                   EntryBlock));
-   }
-
    metaData = other.metaData;
    SubclassData = other.SubclassData | Flag::Declared;
 
@@ -172,10 +132,6 @@ bool Function::isGlobalInitFn() const
 
 void Function::addDefinition()
 {
-   if (!isDeclared()) {
-      return;
-   }
-
    SubclassData &= ~Flag::Declared;
 }
 
@@ -201,13 +157,9 @@ Function* Function::getDeclarationIn(Module *M)
    return f;
 }
 
-Lambda::Lambda(QualType returnType,
-               llvm::ArrayRef<Argument *> args,
-               Module *parent,
-               bool mightThrow)
-   : Function(LambdaID, makeFuncTy(returnType, args),
-              "__anonymous_lambda", returnType, args, parent,
-              mightThrow, false)
+Lambda::Lambda(FunctionType *funcTy,
+               Module *parent)
+   : Function(LambdaID, funcTy, "__anonymous_lambda", parent, false)
 {
 
 }

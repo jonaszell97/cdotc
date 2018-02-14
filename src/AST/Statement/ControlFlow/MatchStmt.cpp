@@ -9,15 +9,15 @@
 namespace cdot {
 namespace ast {
 
-MatchStmt::MatchStmt(Expression::SharedPtr &&switchVal)
-   : Statement(MatchStmtID), switchValue(move(switchVal))
+MatchStmt::MatchStmt(Expression* switchVal)
+   : Statement(MatchStmtID), switchValue(switchVal)
 {
 
 }
 
-MatchStmt::MatchStmt(std::shared_ptr<Expression> &&switchVal,
-                     std::vector<std::shared_ptr<CaseStmt>> &&cases)
-   : Statement(MatchStmtID), switchValue(move(switchVal)), cases(move(cases))
+MatchStmt::MatchStmt(Expression* switchVal,
+                     std::vector<CaseStmt* > &&cases)
+   : Statement(MatchStmtID), switchValue(switchVal), cases(move(cases))
 {
 
 }
@@ -27,14 +27,9 @@ Type *MatchStmt::getSwitchType() const
    return switchType;
 }
 
-const std::vector<std::shared_ptr<CaseStmt>> &MatchStmt::getCases() const
+const std::vector<CaseStmt* > &MatchStmt::getCases() const
 {
    return cases;
-}
-
-cl::Method *MatchStmt::getOperatorEquals() const
-{
-   return operatorEquals;
 }
 
 void MatchStmt::setSwitchType(Type *switchType)
@@ -42,14 +37,9 @@ void MatchStmt::setSwitchType(Type *switchType)
    MatchStmt::switchType = switchType;
 }
 
-void MatchStmt::setCases(const std::vector<std::shared_ptr<CaseStmt>> &cases)
+void MatchStmt::setCases(const std::vector<CaseStmt* > &cases)
 {
    MatchStmt::cases = cases;
-}
-
-void MatchStmt::setOperatorEquals(cl::Method *operatorEquals)
-{
-   MatchStmt::operatorEquals = operatorEquals;
 }
 
 bool MatchStmt::isHasDefault() const
