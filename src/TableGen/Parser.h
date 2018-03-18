@@ -7,7 +7,8 @@
 
 #include "lex/Lexer.h"
 #include "Basic/IdentifierInfo.h"
-#include "Message/Diagnostics.h"
+#include "Message/DiagnosticsEngine.h"
+#include "TableGen.h"
 
 #include <llvm/Support/Allocator.h>
 
@@ -44,8 +45,6 @@ private:
    std::unique_ptr<RecordKeeper> GlobalRK;
    RecordKeeper *RK;
 
-   bool encounteredError = false;
-
    llvm::StringMap<Value*> ForEachVals;
 
    void parseNextDecl();
@@ -59,6 +58,11 @@ private:
    void parseRecord();
    void parseBases(Record *R);
    void parseFieldDef(Record *R);
+
+   void finalizeRecord(Record &R);
+   void validateTemplateArgs(Class &C,
+                             llvm::SmallVectorImpl<SourceLocation> &locs,
+                             std::vector<Value*> &givenParams);
 
    void parseValue();
    void parseForEach();
@@ -137,16 +141,13 @@ private:
    void expect(Args ...kinds)
    {
       advance();
-      if (!currentTok().oneOf(kinds...))
-         diag::err(diag::err_generic_error)
+      if (!currentTok().oneOf(kinds...)) {
+         TG.Diags.Diag(diag::err_generic_error)
             << "unexpected token " + currentTok().toString()
-            << lex.getSourceLoc() << diag::term;
-   }
+            << lex.getSourceLoc();
 
-   diag::DiagnosticBuilder err(diag::MessageKind err)
-   {
-      encounteredError |= diag::isError(err);
-      return diag::DiagnosticBuilder(err);
+         exit(1);
+      }
    }
 };
 

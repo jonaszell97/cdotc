@@ -28,8 +28,15 @@ public:
    Method *getInit() const { return calledMethod; }
    StructType *getInitializedType() const { return InitializedType; }
 
+   bool canUseSRetValue() const { return (SubclassData & CanUseSRetVal) != 0; }
+   void setCanUseSRetValue() { SubclassData |= CanUseSRetVal; }
+
 protected:
    StructType *InitializedType;
+
+   enum Flags : unsigned short {
+      CanUseSRetVal = Instruction::Flags::Initializer << 1u,
+   };
 
 public:
    static bool classof(InitInst const* T) { return true; }

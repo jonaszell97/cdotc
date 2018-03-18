@@ -1,0 +1,37 @@
+
+class Decl
+class DerivedDecl<let Base: Decl> : Decl
+class DeclContext
+
+def StaticAssertStmt : Decl
+def StaticPrintStmt : Decl
+def StaticIfDecl : Decl
+def StaticForDecl : Decl
+def MixinDecl : Decl
+def NamedDecl : Decl
+    def NamespaceDecl : DerivedDecl<NamedDecl>, DeclContext
+    def TranslationUnit : DerivedDecl<NamedDecl>, DeclContext
+    def VarDecl : DerivedDecl<NamedDecl>
+        def LocalVarDecl : DerivedDecl<VarDecl>
+        def GlobalVarDecl : DerivedDecl<VarDecl>
+        def FuncArgDecl : DerivedDecl<VarDecl>
+    def CallableDecl : DerivedDecl<NamedDecl>, DeclContext
+        def FunctionDecl : DerivedDecl<CallableDecl>
+        def EnumCaseDecl : DerivedDecl<CallableDecl>
+        def MethodDecl : DerivedDecl<CallableDecl>
+            def DeinitDecl : DerivedDecl<MethodDecl>
+            def InitDecl : DerivedDecl<MethodDecl>
+    def RecordDecl : DerivedDecl<NamedDecl>
+        def StructDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ClassDecl : DerivedDecl<RecordDecl>, DeclContext
+        def EnumDecl : DerivedDecl<RecordDecl>, DeclContext
+        def UnionDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ProtocolDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ExtensionDecl : DerivedDecl<RecordDecl>, DeclContext
+    def FieldDecl : DerivedDecl<NamedDecl>
+    def AssociatedTypeDecl : DerivedDecl<NamedDecl>
+    def PropDecl : DerivedDecl<NamedDecl>
+    def TypedefDecl : DerivedDecl<NamedDecl>
+    def TemplateParamDecl : DerivedDecl<NamedDecl>
+    def CompoundDecl : Decl, DeclContext
+    def AliasDecl : DerivedDecl<NamedDecl>, DeclContext

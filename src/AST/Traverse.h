@@ -5,6 +5,7 @@
 #ifndef CDOT_TRAVERSE_H
 #define CDOT_TRAVERSE_H
 
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 
 namespace cdot {

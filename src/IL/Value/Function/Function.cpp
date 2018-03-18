@@ -3,18 +3,17 @@
 //
 
 #include "Function.h"
+#include "Method.h"
 #include "BasicBlock.h"
 #include "Argument.h"
 
-#include "../../Module/Module.h"
-#include "../Record/AggregateType.h"
+#include "IL/Module/Module.h"
+#include "IL/Value/Record/AggregateType.h"
+
+#include "AST/NamedDecl.h"
 
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
-
-#include "../../../AST/Statement/Declaration/CallableDecl.h"
-
-#include "Method.h"
 
 using namespace cdot::support;
 
@@ -70,14 +69,12 @@ Function::Function(TypeID id, FunctionType *Ty,
 }
 
 Function::Function(const Function &other)
-   : GlobalObject(FunctionID, *other.getType(), nullptr, other.name),
+   : GlobalObject(FunctionID, other.getType(), nullptr, other.name),
      BasicBlocks(this)
 {
    metaData = other.metaData;
    SubclassData = other.SubclassData | Flag::Declared;
-
-   if (auto Loc = other.getLocation())
-      addMetaData(Loc);
+   loc = other.loc;
 }
 
 bool Function::isLambda() const

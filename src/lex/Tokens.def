@@ -35,6 +35,16 @@
 
 #ifdef CDOT_KEYWORD_TOKEN
 #  define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
+
+   CDOT_KEYWORD_TOKEN(op_typeof, "typeof")
+   CDOT_KEYWORD_TOKEN(is, "is")
+   CDOT_KEYWORD_TOKEN(as, "as")
+   CDOT_KEYWORD_TOKEN(underscore, "_")
+
+   // semantically these are keywords as they can't appear in arbitrary
+   // expression context, even though they are lexed as operators
+   CDOT_KEYWORD_TOKEN(arrow_single, "->")
+   CDOT_KEYWORD_TOKEN(arrow_double, "=>")
 #endif
 
 #ifdef CDOT_KEYWORD
@@ -71,6 +81,7 @@
    CDOT_KEYWORD(enum)
    CDOT_KEYWORD(protocol)
    CDOT_KEYWORD(extend)
+   CDOT_KEYWORD(mixin)
    
    CDOT_KEYWORD(public)
    CDOT_KEYWORD(private)
@@ -169,13 +180,13 @@
    CDOT_PUNCTUATOR_TOKEN(single_quote, '\'')
    CDOT_PUNCTUATOR_TOKEN(double_quote, '"')
    CDOT_PUNCTUATOR_TOKEN(backtick, '`')
-   CDOT_PUNCTUATOR_TOKEN(colon, ':')
    CDOT_PUNCTUATOR_TOKEN(dollar, '$')
 #endif
 
 #ifdef CDOT_OPERATOR_TOKEN
    CDOT_OPERATOR_TOKEN(exclaim, "!")
    CDOT_OPERATOR_TOKEN(question, "?")
+   CDOT_OPERATOR_TOKEN(colon, ":")
 
    CDOT_OPERATOR_TOKEN(equals, "=")
    CDOT_OPERATOR_TOKEN(plus_equals, "+=")
@@ -221,14 +232,6 @@
    CDOT_OPERATOR_TOKEN(percent, "%")
    CDOT_OPERATOR_TOKEN(times_times, "**")
    CDOT_OPERATOR_TOKEN(triple_period, "...")
-   CDOT_OPERATOR_TOKEN(arrow_single, "->")
-   CDOT_OPERATOR_TOKEN(arrow_double, "=>")
-
-   CDOT_OPERATOR_TOKEN(op_typeof, "typeof")
-   CDOT_OPERATOR_TOKEN(isa, "isa")
-   CDOT_OPERATOR_TOKEN(as, "as")
-   CDOT_OPERATOR_TOKEN(as_exclaim, "as!")
-   CDOT_OPERATOR_TOKEN(as_question, "as?")
 #endif
 
 #undef CDOT_TOKEN

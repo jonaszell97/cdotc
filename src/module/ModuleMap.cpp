@@ -5,15 +5,15 @@
 #include "ModuleMap.h"
 #include "Module.h"
 
-#include "../lex/Lexer.h"
-#include "../Message/Diagnostics.h"
-#include "../Files/FileUtils.h"
+#include "lex/Lexer.h"
+#include "Message/DiagnosticsEngine.h"
+#include "Files/FileUtils.h"
 
-#include "../Support/Casting.h"
-#include "../Support/WriterBase.h"
-#include "../Support/SerializerBase.h"
-#include "../Files/FileManager.h"
-#include "../Basic/IdentifierInfo.h"
+#include "Support/Casting.h"
+#include "Support/WriterBase.h"
+#include "Support/SerializerBase.h"
+#include "Files/FileManager.h"
+#include "Basic/IdentifierInfo.h"
 
 #include <chrono>
 #include <llvm/Support/FileSystem.h>
@@ -128,8 +128,10 @@ public:
          return emplace(moduleMapFile, move(M));
       }
 
-      auto file = fs::FileManager::openFile(moduleMapFile, true);
-      return ModuleParser(*file.second, moduleMapFile, file.first)
+      fs::FileManager mgr;
+
+      auto file = mgr.openFile(moduleMapFile);
+      return ModuleParser(*file.Buf, moduleMapFile, file.SourceId)
          .DoParse();
    }
 
@@ -153,12 +155,14 @@ private:
 
    llvm::StringRef moduleMapFile;
    cdot::IdentifierTable Idents;
+   DiagnosticsEngine Diags;
    Lexer lexer;
 
    explicit ModuleParser(llvm::MemoryBuffer &Buf,
                          llvm::StringRef moduleMapFile,
                          size_t sourceId)
-      : moduleMapFile(moduleMapFile), Idents(16), lexer(Idents, &Buf, sourceId)
+      : moduleMapFile(moduleMapFile), Idents(16),
+        lexer(Idents, Diags, &Buf, sourceId)
    {
       lexer.lex();
    }
@@ -217,9 +221,10 @@ private:
                parseBuildOptions(M.get());
                break;
             default:
-               diag::err(err_generic_error)
-                  << "unexpected token " + currentTok().toString()
-                  << lexer.getSourceLoc() << diag::term;
+//               diag::err(err_generic_error)
+//                  << "unexpected token " + currentTok().toString()
+//                  << lexer.getSourceLoc() << diag::term;
+            ;
          }
 
          advance();
@@ -235,9 +240,9 @@ private:
 
       while (!currentTok().is(tok::close_square)) {
          if (!currentTok().is(tok::stringliteral)) {
-            diag::err(err_generic_error)
-               << "expected string literal"
-               << lexer.getSourceLoc() << diag::cont;
+//            diag::err(err_generic_error)
+//               << "expected string literal"
+//               << lexer.getSourceLoc() << diag::cont;
 
             return;
          }
@@ -268,9 +273,9 @@ private:
 
       while (!currentTok().is(tok::close_square)) {
          if (!currentTok().is(tok::stringliteral)) {
-            diag::err(err_generic_error)
-               << "expected string literal"
-               << lexer.getSourceLoc() << diag::cont;
+//            diag::err(err_generic_error)
+//               << "expected string literal"
+//               << lexer.getSourceLoc() << diag::cont;
 
             return;
          }

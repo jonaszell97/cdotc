@@ -27,7 +27,7 @@ public:
           llvm::ArrayRef<Value*> TargetArgs,
           BasicBlock *parent);
 
-   explicit BrInst(BasicBlock *parent);
+   BrInst(Context &Ctx, BasicBlock *parent);
 
    BasicBlock *getTargetBranch() const { return TargetBranch; }
    void setTargetBranch(BasicBlock *TargetBranch);
@@ -44,6 +44,17 @@ public:
    op_const_iterator op_end_impl() const { return Operands + numOperands; }
 
    unsigned getNumOperandsImpl() const { return numOperands; }
+
+   BasicBlock *getSuccessorAtImpl(size_t idx) const
+   {
+      if (idx == 0)
+         return TargetBranch;
+
+      assert(idx == 1 && ElseBranch && "invalid successor index");
+      return ElseBranch;
+   }
+
+   size_t getNumSuccessorsImpl() const { return Condition ? 2 : 1; }
 
 protected:
    Value *Condition;
@@ -64,14 +75,16 @@ public:
    typedef std::pair<ConstantInt*, BasicBlock*> CasePair;
 
    SwitchInst(Value *SwitchVal,
-              BasicBlock *parent);
+              BasicBlock *DefaultDst = nullptr,
+              BasicBlock *parent = nullptr);
 
    Value *getSwitchVal() const;
    const llvm::SmallVector<CasePair, 4> &getCases() const;
-   BasicBlock* getDefault() const;
+
+   BasicBlock* getDefault() const { return DefaultDst; }
+   void setDefault(BasicBlock *BB);
 
    void addCase(ConstantInt *val, BasicBlock *Dst);
-   void addDefaultCase(BasicBlock *dst);
 
    op_iterator op_begin_impl() { return &SwitchVal; }
    op_iterator op_end_impl() { return &SwitchVal + 1; }
@@ -80,8 +93,20 @@ public:
 
    unsigned getNumOperandsImpl() const { return 1; }
 
+   BasicBlock *getSuccessorAtImpl(size_t idx) const
+   {
+      if (!idx)
+         return DefaultDst;
+
+      return Cases[idx - 1].second;
+   }
+
+   size_t getNumSuccessorsImpl() const { return Cases.size() + 1; }
+
 protected:
    Value *SwitchVal;
+
+   BasicBlock *DefaultDst;
    llvm::SmallVector<CasePair, 4> Cases;
 
 public:
@@ -94,17 +119,13 @@ public:
 class LandingPadInst: public TerminatorInst {
 public:
    struct CatchClause {
-      Type *CaughtType;
+      QualType CaughtType;
       BasicBlock *TargetBB;
    };
 
    typedef llvm::SmallVector<CatchClause, 2> CatchClauseList;
 
-   explicit LandingPadInst(PointerType *Int8PtrTy, BasicBlock *parent)
-      : TerminatorInst(LandingPadInstID, parent)
-   {
-      type = Int8PtrTy;
-   }
+   LandingPadInst(Context &Ctx, BasicBlock *parent);
 
    const CatchClauseList &getCatchClauses() const
    {
@@ -112,6 +133,13 @@ public:
    }
 
    void addCatch(CatchClause &&Clause);
+
+   BasicBlock *getSuccessorAtImpl(size_t idx) const
+   {
+      return CatchClauses[idx].TargetBB;
+   }
+
+   size_t getNumSuccessorsImpl() const { return CatchClauses.size(); }
 
 protected:
    CatchClauseList CatchClauses;

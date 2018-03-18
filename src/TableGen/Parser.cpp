@@ -20,13 +20,19 @@ using namespace cdot::lex;
 using namespace cdot::diag;
 using namespace cdot::support;
 
+LLVM_ATTRIBUTE_NORETURN
+static void abortBP()
+{
+   abort();
+}
+
 namespace cdot {
 namespace tblgen {
 
 Parser::Parser(TableGen &TG,
                llvm::MemoryBuffer &Buf,
                unsigned sourceId)
-   : TG(TG), lex(TG.getIdents(), &Buf, sourceId),
+   : TG(TG), lex(TG.getIdents(), TG.Diags, &Buf, sourceId, 1, '\0'),
      GlobalRK(std::make_unique<RecordKeeper>(TG)),
      RK(GlobalRK.get())
 {
@@ -49,7 +55,7 @@ bool Parser::parse()
       advance();
    }
 
-   return !encounteredError;
+   return TG.Diags.getNumErrors() == 0;
 }
 
 void Parser::parseNextDecl()
@@ -73,10 +79,11 @@ void Parser::parseNextDecl()
       parsePrint();
    }
    else {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "unexpected token " + currentTok().toString()
-         << lex.getSourceLoc()
-         << diag::term;
+         << lex.getSourceLoc();
+
+      return;
    }
 }
 
@@ -87,16 +94,18 @@ void Parser::parseClass()
 
    auto name = tryParseIdentifier();
    if (auto prevLoc = RK->lookupAnyDecl(name)) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "redeclaration of " + name
-         << currentTok().getSourceLoc() << diag::cont;
+         << currentTok().getSourceLoc();
 
-      note(note_generic_note)
+      TG.Diags.Diag(note_generic_note)
          << "previous declaration here"
-         << prevLoc << diag::cont;
+         << prevLoc;
+
+      abortBP();
    }
 
-   auto C = RK->addClass(name, currentTok().getSourceLoc());
+   auto C = RK->CreateClass(name, currentTok().getSourceLoc());
    currentClass = C;
 
    llvm::SmallVector<size_t, 8> fieldParameters;
@@ -121,9 +130,11 @@ void Parser::parseClass()
             parseFieldDecl(C);
          }
          else {
-            err(err_generic_error)
+            TG.Diags.Diag(err_generic_error)
                << "expected in-class declaration"
-               << lex.getSourceLoc() << diag::term;
+               << lex.getSourceLoc();
+
+            abortBP();
          }
 
          advance();
@@ -136,15 +147,16 @@ void Parser::parseClass()
                                  P.getDeclLoc(), idx);
 
       if (!newDecl) {
-         err(err_generic_error)
+         TG.Diags.Diag(err_generic_error)
             << "duplicate declaration of field " + P.getName() + " for class "
                + C->getName()
-            << P.getDeclLoc() << diag::cont;
+            << P.getDeclLoc();
 
-         note(note_generic_note)
+         TG.Diags.Diag(note_generic_note)
             << "previous declaration here"
-            << C->getField(P.getName())->getDeclLoc()
-            << diag::cont;
+            << C->getField(P.getName())->getDeclLoc();
+
+         abortBP();
       }
    }
 
@@ -166,11 +178,13 @@ void Parser::parseTemplateParams(Class *C,
       auto name = tryParseIdentifier();
       advance();
 
-      if (!currentTok().is(tok::colon))
-         err(err_generic_error)
+      if (!currentTok().is(tok::colon)) {
+         TG.Diags.Diag(err_generic_error)
             << "expected parameter type"
-            << lex.getSourceLoc()
-            << diag::term;
+            << lex.getSourceLoc();
+
+         abortBP();
+      }
 
       advance();
       auto Ty = parseType();
@@ -185,15 +199,14 @@ void Parser::parseTemplateParams(Class *C,
 
       auto newDecl = C->addTemplateParam(name, Ty, defaultVal, loc);
       if (!newDecl) {
-         err(err_generic_error)
+         TG.Diags.Diag(err_generic_error)
             << "duplicate declaration of parameter " + name + " for class "
                + C->getName()
-            << loc << diag::cont;
+            << loc;
 
-         note(note_generic_note)
+         TG.Diags.Diag(err_generic_error)
             << "previous declaration here"
-            << C->getTemplateParameter(name)->getDeclLoc()
-            << diag::cont;
+            << C->getTemplateParameter(name)->getDeclLoc();
       }
 
       advance();
@@ -211,11 +224,13 @@ void Parser::parseBases(Class *C)
       auto name = tryParseIdentifier();
       auto Base = RK->lookupClass(name);
 
-      if (!Base)
-         err(err_generic_error)
+      if (!Base) {
+         TG.Diags.Diag(err_generic_error)
             << "class " + name + " does not exist"
-            << lex.getSourceLoc()
-            << diag::term;
+            << lex.getSourceLoc();
+
+         abortBP();
+      }
 
       llvm::SmallVector<SourceLocation, 8> locs;
       std::vector<Value *> templateArgs;
@@ -244,11 +259,13 @@ void Parser::parseFieldDecl(Class *C)
    auto name = tryParseIdentifier();
    advance();
 
-   if (!currentTok().is(tok::colon))
-      err(err_generic_error)
+   if (!currentTok().is(tok::colon)) {
+      TG.Diags.Diag(err_generic_error)
          << "expected field type"
-         << lex.getSourceLoc()
-         << diag::term;
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
 
    advance();
    auto Ty = parseType();
@@ -263,15 +280,14 @@ void Parser::parseFieldDecl(Class *C)
 
    auto newDecl = C->addField(name, Ty, defaultValue, loc);
    if (!newDecl) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "duplicate declaration of field " + name + " for class "
             + C->getName()
-         << loc << diag::cont;
+         << loc;
 
-      note(note_generic_note)
+      TG.Diags.Diag(note_generic_note)
          << "previous declaration here"
-         << C->getField(name)->getDeclLoc()
-         << diag::cont;
+         << C->getField(name)->getDeclLoc();
    }
 }
 
@@ -320,9 +336,9 @@ static bool typesCompatible(Type *given, Type *needed)
    return false;
 }
 
-static TemplateParamResult checkTemplateParams(
-                                          Class &C,
-                                          std::vector<Value*> &givenParams) {
+static TemplateParamResult checkTemplateParams(Class &C,
+                                               llvm::SmallVectorImpl<SourceLocation> &locs,
+                                               std::vector<Value*> &givenParams) {
    auto &neededParams = C.getParameters();
    if (givenParams.size() > neededParams.size())
       return { TP_TooManyParamsGiven };
@@ -332,9 +348,12 @@ static TemplateParamResult checkTemplateParams(
       if (givenParams.size() <= i) {
          if (!P.getDefaultValue())
             return { TP_TooFewParamsGiven };
-         else
+         else {
             givenParams.push_back(P.getDefaultValue());
+            locs.push_back(P.getDeclLoc());
+         }
 
+         ++i;
          continue;
       }
 
@@ -348,6 +367,48 @@ static TemplateParamResult checkTemplateParams(
    return { TP_Success };
 }
 
+void Parser::validateTemplateArgs(Class &Base,
+                                  llvm::SmallVectorImpl<SourceLocation> &locs,
+                                  std::vector<Value *> &templateArgs) {
+   auto checkResult = checkTemplateParams(Base, locs, templateArgs);
+   switch (checkResult.kind) {
+   case TP_Success:
+      break;
+   case TP_TooFewParamsGiven:
+      TG.Diags.Diag(err_generic_error)
+         << "expected at least "
+            + std::to_string(Base.getParameters().size())
+            + " parameters, " + std::to_string(templateArgs.size())
+            + " given"
+         << currentTok().getSourceLoc();
+
+      break;
+   case TP_TooManyParamsGiven:
+      TG.Diags.Diag(err_generic_error)
+         << "expected at most "
+            + std::to_string(Base.getParameters().size())
+            + " parameters, " + std::to_string(templateArgs.size())
+            + " given"
+         << currentTok().getSourceLoc();
+
+      break;
+   case TP_IncompatibleType: {
+      size_t idx = checkResult.incompatibleIndex;
+      llvm::SmallString<128> str;
+
+      str += Base.getParameters()[idx].getType()->toString();
+      str += " and ";
+      str += templateArgs[idx]->getType()->toString();
+
+      TG.Diags.Diag(err_generic_error)
+         << "incompatible types " + str.str()
+         << locs[checkResult.incompatibleIndex];
+
+      break;
+   }
+   }
+}
+
 void Parser::parseRecord()
 {
    assert(currentTok().is(tok::kw_def));
@@ -355,16 +416,16 @@ void Parser::parseRecord()
 
    auto name = tryParseIdentifier();
    if (auto prevLoc = RK->lookupAnyDecl(name)) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "redeclaration of " + name
-         << currentTok().getSourceLoc() << diag::cont;
+         << currentTok().getSourceLoc();
 
-      note(note_generic_note)
+      TG.Diags.Diag(err_generic_error)
          << "previous declaration here"
-         << prevLoc << diag::cont;
+         << prevLoc;
    }
 
-   auto R = RK->addRecord(name, currentTok().getSourceLoc());
+   auto R = RK->CreateRecord(name, currentTok().getSourceLoc());
 
    if (peek().is(tok::colon)) {
       advance();
@@ -380,32 +441,39 @@ void Parser::parseRecord()
             parseFieldDef(R);
          }
          else {
-            err(err_generic_error)
+            TG.Diags.Diag(err_generic_error)
                << "expected field definition"
-               << lex.getSourceLoc() << diag::term;
+               << lex.getSourceLoc();
+
+            abortBP();
          }
 
          advance();
       }
    }
 
-   auto result = TG.finalizeRecord(*R);
+   finalizeRecord(*R);
+}
+
+void Parser::finalizeRecord(Record &R)
+{
+   auto result = TG.finalizeRecord(R);
    switch (result.status) {
-      case TableGen::RFS_Success:
-         break;
-      case TableGen::RFS_MissingFieldValue:
-         err(err_generic_error)
-            << "record " + R->getName() + " is missing a definition for field "
-               + result.missingOrDuplicateFieldName
-            << R->getDeclLoc() << diag::cont;
+   case TableGen::RFS_Success:
+      break;
+   case TableGen::RFS_MissingFieldValue:
+      TG.Diags.Diag(err_generic_error)
+         << "record " + R.getName() + " is missing a definition for field "
+            + result.missingOrDuplicateFieldName
+         << R.getDeclLoc();
 
-         diag::note(note_generic_note)
-            << "field declared here"
-            << result.declLoc << diag::term;
+      TG.Diags.Diag(err_generic_error)
+         << "field declared here"
+         << result.declLoc;
 
-         break;
-      case TableGen::RFS_DuplicateField:
-         break;
+      abortBP();
+   case TableGen::RFS_DuplicateField:
+      break;
    }
 }
 
@@ -418,11 +486,13 @@ void Parser::parseBases(Record *R)
       auto name = tryParseIdentifier();
       auto Base = RK->lookupClass(name);
 
-      if (!Base)
-         err(err_generic_error)
+      if (!Base) {
+         TG.Diags.Diag(err_generic_error)
             << "class " + name + " does not exist"
-            << lex.getSourceLoc()
-            << diag::term;
+            << lex.getSourceLoc();
+
+         abortBP();
+      }
 
       llvm::SmallVector<SourceLocation, 8> locs;
       std::vector<Value *> templateArgs;
@@ -431,47 +501,7 @@ void Parser::parseBases(Record *R)
          parseTemplateArgs(templateArgs, locs, Base);
       }
 
-      auto checkResult = checkTemplateParams(*Base, templateArgs);
-      switch (checkResult.kind) {
-         case TP_Success:
-            break;
-         case TP_TooFewParamsGiven:
-            err(err_generic_error)
-               << "expected at least "
-                  + std::to_string(Base->getParameters().size())
-                  + " parameters, " + std::to_string(templateArgs.size())
-                  + " given"
-               << currentTok().getSourceLoc()
-               << diag::cont;
-
-            break;
-         case TP_TooManyParamsGiven:
-            err(err_generic_error)
-               << "expected at most "
-                  + std::to_string(Base->getParameters().size())
-                  + " parameters, " + std::to_string(templateArgs.size())
-                  + " given"
-               << currentTok().getSourceLoc()
-               << diag::cont;
-
-            break;
-         case TP_IncompatibleType: {
-            size_t idx = checkResult.incompatibleIndex;
-            llvm::SmallString<128> str;
-
-            str += Base->getParameters()[idx].getType()->toString();
-            str += " and ";
-            str += templateArgs[idx]->getType()->toString();
-            
-            err(err_generic_error)
-               << "incompatible types " + str.str()
-               << locs[checkResult.incompatibleIndex]
-               << diag::cont;
-
-            break;
-         }
-      }
-
+      validateTemplateArgs(*Base, locs, templateArgs);
       R->addBase(Base, move(templateArgs));
 
       if (peek().is(tok::comma)) {
@@ -491,26 +521,32 @@ void Parser::parseFieldDef(Record *R)
    auto name = currentTok().getIdentifierInfo()->getIdentifier();
    auto FTy = R->getFieldType(name);
 
-   if (!FTy)
-      err(err_generic_error)
+   if (!FTy) {
+      TG.Diags.Diag(err_generic_error)
          << "record " + R->getName() + " does not inherit a field named "
             + name + " from any of its bases"
-         << lex.getSourceLoc() << diag::term;
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
 
    advance();
-   if (!currentTok().is(tok::equals))
-      err(err_generic_error)
+   if (!currentTok().is(tok::equals)) {
+      TG.Diags.Diag(err_generic_error)
          << "record fields must have a definition"
-         << lex.getSourceLoc() << diag::term;
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
 
    advance();
 
    auto value = parseExpr(FTy);
    if (!typesCompatible(value->getType(), FTy)) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "incompatible types " + value->getType()->toString() + " and "
             + FTy->toString()
-         << loc << diag::term;
+         << loc;
    }
 
    R->addOwnField(loc, name, FTy, value);
@@ -529,30 +565,33 @@ llvm::StringRef Parser::tryParseIdentifier()
          auto ident = tryParseIdentifier();
          auto V = getForEachVal(ident);
 
-         if (!V)
-            err(err_generic_error)
+         if (!V) {
+            TG.Diags.Diag(err_generic_error)
                << "value " + ident + " not found"
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
 
          auto S = dyn_cast<StringLiteral>(V);
-         if (!S)
-            err(err_generic_error)
+         if (!S) {
+            TG.Diags.Diag(err_generic_error)
                << "cannot use non-string value as identifier"
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
 
          expect(tok::close_paren);
          return S->getVal();
       }
    }
 
-   err(err_generic_error)
+   TG.Diags.Diag(err_generic_error)
       << "expected identifier"
-      << currentTok().getSourceLoc()
-      << diag::term;
+      << currentTok().getSourceLoc();
 
-   return "";
+   abortBP();
 }
 
 void Parser::parseValue()
@@ -564,13 +603,13 @@ void Parser::parseValue()
    auto loc = currentTok().getSourceLoc();
 
    if (auto prevLoc = RK->lookupAnyDecl(name)) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "redeclaration of " + name
-         << loc << diag::cont;
+         << loc;
 
-      note(note_generic_note)
+      TG.Diags.Diag(note_generic_note)
          << "previous declaration here"
-         << prevLoc << diag::cont;
+         << prevLoc;
    }
 
    Type *Ty = nullptr;
@@ -586,10 +625,10 @@ void Parser::parseValue()
 
    auto Val = parseExpr(Ty);
    if (Ty && !typesCompatible(Val->getType(), Ty)) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "incompatible types " + Val->getType()->toString() + " and "
             + Ty->toString()
-         << loc << diag::term;
+         << loc;
    }
 
    RK->addValue(name, Val, loc);
@@ -609,10 +648,9 @@ void Parser::parsePrint()
       ss << E;
    }
 
-   note(note_generic_note)
+   TG.Diags.Diag(err_generic_error)
       << s.str()
-      << loc
-      << diag::cont;
+      << loc;
 }
 
 void Parser::parseForEach()
@@ -629,15 +667,15 @@ void Parser::parseForEach()
    auto Range = parseExpr();
 
    if (!isa<ListType>(Range->getType()) && !isa<DictType>(Range->getType())) {
-      err(err_generic_error)
+      TG.Diags.Diag(err_generic_error)
          << "expected list or dict value"
-         << loc << diag::term;
+         << loc;
    }
 
    expect(tok::open_brace);
    advance();
 
-   auto SafePoint = lex.makeSafePoint();
+   auto SafePoint = lex.makeSavePoint();
 
    if (auto L = dyn_cast<ListLiteral>(Range)) {
       for (auto &V : L->getValues()) {
@@ -736,10 +774,11 @@ Type* Parser::parseType()
    if (auto C = RK->lookupClass(ident))
       return TG.getClassType(C);
 
-   err(err_generic_error)
+   TG.Diags.Diag(err_generic_error)
       << "unknown type " + ident
-      << currentTok().getSourceLoc()
-      << diag::term;
+      << currentTok().getSourceLoc();
+
+   abortBP();
 }
 
 static Class *findCommonBase(Class *C1, Class *C2)
@@ -768,18 +807,7 @@ static Class *findCommonBase(Class *C1, Class *C2)
 
 Value* Parser::parseExpr(Type *contextualTy)
 {
-   bool isPreprocessorInt    = false;
-   bool isPreprocessorFloat  = false;
-   bool isPreprocessorString = false;
-
-   if (currentTok().is(tok::preprocessor_value)) {
-      auto &V = currentTok().getPreprocessorValue();
-      isPreprocessorInt = V.isInt();
-      isPreprocessorFloat = V.isFloat();
-      isPreprocessorString = V.isStr();
-   }
-
-   if (currentTok().is(tok::integerliteral) || isPreprocessorInt) {
+   if (currentTok().is(tok::integerliteral)) {
       unsigned bitwidth = 64;
       bool isSigned     = true;
 
@@ -788,31 +816,19 @@ Value* Parser::parseExpr(Type *contextualTy)
          isSigned = !IntTy->isUnsigned();
       }
 
-      llvm::APSInt APSInt(0);
-      if (isPreprocessorInt) {
-         APSInt = currentTok().getPreprocessorValue().getAPSInt();
-      }
-      else {
-         LiteralParser LParser(currentTok().getText());
-         auto Res = LParser.parseInteger(bitwidth, isSigned);
-         assert(!Res.wasTruncated && "value too large for type");
+      LiteralParser LParser(currentTok().getText());
 
-         APSInt = std::move(Res.APS);
-      }
+      auto Res = LParser.parseInteger(bitwidth, isSigned);
+      assert(!Res.wasTruncated && "value too large for type");
+
+      auto APSInt = std::move(Res.APS);
 
       return new(TG) IntegerLiteral(contextualTy, std::move(APSInt));
    }
 
-   if (currentTok().is(tok::fpliteral) || isPreprocessorFloat) {
-      llvm::APFloat APFloat(0.0);
-
-      if (isPreprocessorFloat) {
-         APFloat = currentTok().getPreprocessorValue().getAPFloat();
-      }
-      else {
-         LiteralParser LParser(currentTok().getText());
-         APFloat = std::move(LParser.parseFloating().APF);
-      }
+   if (currentTok().is(tok::fpliteral)) {
+      LiteralParser LParser(currentTok().getText());
+      auto APFloat = std::move(LParser.parseFloating().APF);
 
       if (!contextualTy || !isa<DoubleType>(contextualTy))
          contextualTy = TG.getDoubleTy();
@@ -823,11 +839,6 @@ Value* Parser::parseExpr(Type *contextualTy)
    if (currentTok().is(tok::stringliteral)) {
       return new(TG) StringLiteral(TG.getStringTy(), currentTok().getText());
    }
-
-   if (isPreprocessorString)
-      return new(TG) StringLiteral(TG.getStringTy(),
-                                   currentTok().getPreprocessorValue()
-                                               .getString());
 
    if (currentTok().oneOf(tok::kw_true, tok::kw_false)) {
       llvm::APInt APInt(1, (uint64_t)currentTok().is(tok::kw_true));
@@ -852,11 +863,13 @@ Value* Parser::parseExpr(Type *contextualTy)
          auto ident = tryParseIdentifier();
          auto V = getForEachVal(ident);
 
-         if (!V)
-            err(err_generic_error)
+         if (!V) {
+            TG.Diags.Diag(err_generic_error)
                << "undeclared value " + ident
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
 
          expect(tok::close_paren);
          return V;
@@ -882,10 +895,11 @@ Value* Parser::parseExpr(Type *contextualTy)
 
                break;
             case tok::eof:
-               err(err_generic_error)
+               TG.Diags.Diag(err_generic_error)
                   << "unexpected end of file, expecting '}'"
-                  << currentTok().getSourceLoc()
-                  << diag::term;
+                  << currentTok().getSourceLoc();
+
+               abortBP();
             default:
                break;
          }
@@ -908,14 +922,38 @@ Value* Parser::parseExpr(Type *contextualTy)
             auto field = currentTok().getIdentifierInfo()->getIdentifier();
             auto F = R->getFieldValue(field);
 
-            if (!F)
-               err(err_generic_error)
+            if (!F) {
+               TG.Diags.Diag(err_generic_error)
                   << "record " + R->getName() + " does not have a field named "
                      + field
-                  << currentTok().getSourceLoc() << diag::term;
+                  << currentTok().getSourceLoc();
+
+               abortBP();
+            }
 
             return F;
          }
+
+         return new(TG) RecordVal(TG.getRecordType(R), R);
+      }
+
+      // anonymous record
+      if (auto Base = RK->lookupClass(ident)) {
+         auto BeginLoc = currentTok().getSourceLoc();
+
+         llvm::SmallVector<SourceLocation, 8> locs;
+         std::vector<Value *> templateArgs;
+         if (peek().is(tok::smaller)) {
+            advance();
+            parseTemplateArgs(templateArgs, locs, Base);
+         }
+
+         validateTemplateArgs(*Base, locs, templateArgs);
+
+         auto R = RK->CreateAnonymousRecord(BeginLoc);
+         R->addBase(Base, move(templateArgs));
+
+         finalizeRecord(*R);
 
          return new(TG) RecordVal(TG.getRecordType(R), R);
       }
@@ -930,10 +968,13 @@ Value* Parser::parseExpr(Type *contextualTy)
             Ty = F->getType();
       }
 
-      if (!Ty)
-         err(err_generic_error)
+      if (!Ty) {
+         TG.Diags.Diag(err_generic_error)
             << "reference to undeclared identifier " + ident
-            << currentTok().getSourceLoc() << diag::term;
+            << currentTok().getSourceLoc();
+
+         abortBP();
+      }
 
       auto Id = new(TG) IdentifierVal(Ty, ident);
 
@@ -969,10 +1010,13 @@ Value* Parser::parseExpr(Type *contextualTy)
          auto expr = parseExpr(ElementTy);
          if (peek().is(tok::colon)) {
             auto S = dyn_cast<StringLiteral>(expr);
-            if (!S)
-               err(err_generic_error)
+            if (!S) {
+               TG.Diags.Diag(err_generic_error)
                   << "dictionary key must be a string"
-                  << currentTok().getSourceLoc() << diag::term;
+                  << currentTok().getSourceLoc();
+
+               abortBP();
+            }
 
             advance();
             advance();
@@ -991,9 +1035,11 @@ Value* Parser::parseExpr(Type *contextualTy)
             ElementTy = values.back()->getType();
          }
          else if (!typesCompatible(values.back()->getType(), ElementTy)) {
-            err(err_generic_error)
+            TG.Diags.Diag(err_generic_error)
                << "all values in a list literal must have the same type"
-               << currentTok().getSourceLoc() << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
          }
 
          advance();
@@ -1008,10 +1054,13 @@ Value* Parser::parseExpr(Type *contextualTy)
             contextualTy = TG.getListType(ElementTy);
       }
       else if (!contextualTy) {
-         if (values.empty())
-            err(err_generic_error)
+         if (values.empty()) {
+            TG.Diags.Diag(err_generic_error)
                << "could not infer type of list literal"
-               << currentTok().getSourceLoc() << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
       }
 
       if (isDict || isa<DictType>(contextualTy))
@@ -1020,26 +1069,28 @@ Value* Parser::parseExpr(Type *contextualTy)
       return new(TG) ListLiteral(contextualTy, move(values));
    }
 
-   err(err_generic_error)
+   TG.Diags.Diag(err_generic_error)
       << "expected expression, found " + currentTok().toString()
-      << lex.getSourceLoc() << diag::term;
+      << lex.getSourceLoc();
+
+   abortBP();
 }
 
 #define EXPECT_NUM_ARGS(ArgCnt)                                           \
-   if (args.size() != ArgCnt) err(err_generic_error)                      \
+   if (args.size() != ArgCnt) { TG.Diags.Diag(err_generic_error)          \
       << "function " + func + " expects " + std::to_string(ArgCnt)        \
-         + " arguments" << parenLoc << diag::term
+         + " arguments" << parenLoc; abortBP(); }
 
 #define EXPECT_AT_LEAST_ARGS(ArgCnt)                                      \
-   if (args.size() < ArgCnt) err(err_generic_error)                       \
+   if (args.size() < ArgCnt) { TG.Diags.Diag(err_generic_error)           \
       << "function " + func + " expects at least "                        \
          + std::to_string(ArgCnt)                                         \
-         + " arguments" << parenLoc << diag::term
+         + " arguments" << parenLoc; abortBP(); }
 
 #define EXPECT_ARG_VALUE(ArgNo, ValKind)                                \
-   if (!isa<ValKind>(args[ArgNo])) err(err_generic_error)               \
+   if (!isa<ValKind>(args[ArgNo])) { TG.Diags.Diag(err_generic_error)   \
       << "function " + func + " expects arg #" + std::to_string(ArgNo)  \
-         + " to be a " #ValKind << diag::term
+         + " to be a " #ValKind; abortBP(); }
 
 Value* Parser::parseFunction(Type *contextualTy)
 {
@@ -1059,7 +1110,7 @@ Value* Parser::parseFunction(Type *contextualTy)
       .Case("allof", AllOf)
       .Case("push", Push)
       .Case("pop", Pop)
-      .Case("first", First)
+      .Case("line", First)
       .Case("last", Last)
       .Case("concat", Concat)
       .Case("str_concat", StrConcat)
@@ -1084,10 +1135,11 @@ Value* Parser::parseFunction(Type *contextualTy)
 
    switch (kind) {
       case Unknown:
-         err(err_generic_error)
+         TG.Diags.Diag(err_generic_error)
             << "unknown function '" + func + "'"
-            << currentTok().getSourceLoc()
-            << diag::term;
+            << currentTok().getSourceLoc();
+
+         abortBP();
 
       case AllOf: {
          EXPECT_AT_LEAST_ARGS(1);
@@ -1101,22 +1153,27 @@ Value* Parser::parseFunction(Type *contextualTy)
 
             auto className = cast<StringLiteral>(arg)->getVal();
             auto C = RK->lookupClass(className);
-            if (!C)
-               err(err_generic_error)
+            if (!C) {
+               TG.Diags.Diag(err_generic_error)
                   << "class " + className + " does not exist"
-                  << argLocs[i]
-                  << diag::term;
+                  << argLocs[i];
+
+               abortBP();
+            }
 
             if (!CommonBase) {
                CommonBase = C;
             }
             else {
                CommonBase = findCommonBase(C, CommonBase);
-               if (!CommonBase)
-                  diag::err(err_generic_error)
+               if (!CommonBase) {
+                  TG.Diags.Diag(err_generic_error)
                      << "incompatible classes " + C->getName() + " and "
                         + CommonBase->getName()
-                     << argLocs[i] << diag::term;
+                     << argLocs[i];
+
+                  abortBP();
+               }
             }
 
             RK->getAllDefinitionsOf(C, Records);
@@ -1144,12 +1201,13 @@ Value* Parser::parseFunction(Type *contextualTy)
          if (!typesCompatible(args[1]->getType(),
                               cast<ListType>(list->getType())
                                  ->getElementType())) {
-            err(err_generic_error)
+            TG.Diags.Diag(err_generic_error)
                << "incompatible types " + args[1]->getType()->toString()
                 + " and " + cast<ListType>(list->getType())
                   ->getElementType()->toString()
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
          }
 
          std::vector<Value*> copy = list->getValues();
@@ -1164,10 +1222,13 @@ Value* Parser::parseFunction(Type *contextualTy)
          auto list = cast<ListLiteral>(args[0]);
          std::vector<Value*> copy = list->getValues();
 
-         if (copy.empty())
-            diag::err(err_generic_error)
+         if (copy.empty()) {
+            TG.Diags.Diag(err_generic_error)
                << "popping from empty list"
-               << parenLoc << diag::term;
+               << parenLoc;
+
+            abortBP();
+         }
 
          copy.pop_back();
          return new(TG) ListLiteral(list->getType(), move(copy));
@@ -1177,10 +1238,13 @@ Value* Parser::parseFunction(Type *contextualTy)
          EXPECT_ARG_VALUE(0, ListLiteral);
 
          auto list = cast<ListLiteral>(args[0]);
-         if (list->getValues().empty())
-            diag::err(err_generic_error)
+         if (list->getValues().empty()) {
+            TG.Diags.Diag(err_generic_error)
                << "list is empty"
-               << parenLoc << diag::term;
+               << parenLoc;
+
+            abortBP();
+         }
 
          return list->getValues().front();
       }
@@ -1189,10 +1253,13 @@ Value* Parser::parseFunction(Type *contextualTy)
          EXPECT_ARG_VALUE(0, ListLiteral);
 
          auto list = cast<ListLiteral>(args[0]);
-         if (list->getValues().empty())
-            diag::err(err_generic_error)
+         if (list->getValues().empty()) {
+            TG.Diags.Diag(err_generic_error)
                << "list is empty"
-               << parenLoc << diag::term;
+               << parenLoc;
+
+            abortBP();
+         }
 
          return list->getValues().back();
       }
@@ -1204,12 +1271,14 @@ Value* Parser::parseFunction(Type *contextualTy)
          auto l1 = cast<ListLiteral>(args[0]);
          auto l2 = cast<ListLiteral>(args[1]);
 
-         if (!typesCompatible(l2->getType(), l1->getType()))
-            err(err_generic_error)
+         if (!typesCompatible(l2->getType(), l1->getType())) {
+            TG.Diags.Diag(err_generic_error)
                << "incompatible types " + l1->getType()->toString()
                   + " and " + l2->getType()->toString()
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
 
          auto copy = l1->getValues();
          copy.insert(copy.end(),

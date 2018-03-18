@@ -5,40 +5,20 @@
 #ifndef CDOT_OPERATORINST_H
 #define CDOT_OPERATORINST_H
 
-#include "../Instruction.h"
-#include "../../../../Variant/Type/Type.h"
+#include "Basic/Precedence.h"
+#include "IL/Value/Instruction/Instruction.h"
+#include "Variant/Type/Type.h"
 
 namespace cdot {
 namespace il {
 
-static const unsigned short FirstOp = Value::AddInstID;
-
-enum class OpCode : unsigned short {
-   Add = FirstOp,
-   Sub, Mul, Div, Mod, Exp, And, Or, Xor,
-   LShr, AShr, Shl, CompEQ, CompNE, CompLT, CompGT, CompLE, CompGE,
-
-   Min, Neg
-};
-
-extern const char* OpNames[];
-
 class OperatorInst: public Instruction {
-public:
-   OpCode getOpCode() const
-   {
-      return (OpCode)id;
-   }
-
 protected:
-   OperatorInst(TypeID id, Type *resultType, BasicBlock *parent)
-      : Instruction(id, resultType, parent)
-   {
-
-   }
-
-   OperatorInst(TypeID id, QualType resultType, BasicBlock *parent)
-      : Instruction(id, resultType, parent)
+   OperatorInst(TypeID id,
+                Context &Ctx,
+                QualType resultType,
+                BasicBlock *parent)
+      : Instruction(id, ValueType(Ctx, resultType), parent)
    {
 
    }
@@ -47,13 +27,15 @@ public:
    static bool classof(OperatorInst const* T) { return true; }
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
-#     define CDOT_UNARY_INST(Name) \
+#     define CDOT_UNARY_INST(Name)  \
          case Name##ID:
 #     define CDOT_BINARY_INST(Name) \
          case Name##ID:
-#     define CDOT_CAST_INST(Name) \
+#     define CDOT_CAST_INST(Name)   \
          case Name##ID:
-#     include "../../Instructions.def"
+#     define CDOT_COMP_INST(Name)   \
+         case Name##ID:
+#     include "IL/Value/Instructions.def"
          case TypeID::LoadInstID:
          case TypeID::FieldRefInstID:
          case TypeID::EnumExtractInstID:
@@ -73,12 +55,6 @@ public:
 
 class BinaryInstruction: public OperatorInst {
 public:
-   BinaryInstruction(TypeID id,
-                     Value *lhs,
-                     Value *rhs,
-                     Type *resultType,
-                     BasicBlock *parent);
-
    BinaryInstruction(TypeID id,
                      Value *lhs,
                      Value *rhs,
@@ -115,26 +91,20 @@ public:
    static bool classof(Value const *T)
    {
       switch(T->getTypeID()) {
-#     define CDOT_BINARY_INST(Name) \
-         case Name##ID:
-#     include "../../Instructions.def"
-         case TypeID::StoreInstID:
-         case TypeID::GEPInstID:
-         case TypeID::TupleExtractInstID:
-            return true;
-         default:
-            return false;
+      case TypeID::BinaryOperatorInstID:
+      case TypeID::CompInstID:
+      case TypeID::StoreInstID:
+      case TypeID::GEPInstID:
+      case TypeID::TupleExtractInstID:
+         return true;
+      default:
+         return false;
       }
    }
 };
 
 class UnaryInstruction: public OperatorInst {
 public:
-   UnaryInstruction(TypeID id,
-                    Value *operand,
-                    Type *resultType,
-                    BasicBlock *parent);
-
    UnaryInstruction(TypeID id,
                     Value *operand,
                     QualType resultType,
@@ -171,108 +141,99 @@ public:
    {
       switch (T->getTypeID()) {
 #     define CDOT_UNARY_INST(Name) \
-         case Name##ID:
+      case Name##ID:
 #     define CDOT_CAST_INST(Name) \
-         case Name##ID:
+      case Name##ID:
 
-#     include "../../Instructions.def"
+#     include "IL/Value/Instructions.def"
 
-         case TypeID::LoadInstID:
-         case TypeID::FieldRefInstID:
-         case TypeID::EnumExtractInstID:
-         case TypeID::EnumRawValueInstID:
-         case TypeID::CaptureExtractInstID:
-         case TypeID::PtrToLvalueInstID:
-         case TypeID::AddrOfInstID:
-            return true;
-         default:return false;
+      case TypeID::LoadInstID:
+      case TypeID::FieldRefInstID:
+      case TypeID::EnumExtractInstID:
+      case TypeID::EnumRawValueInstID:
+      case TypeID::CaptureExtractInstID:
+      case TypeID::PtrToLvalueInstID:
+      case TypeID::AddrOfInstID:
+         return true;
+      default:
+         return false;
       }
    }
 };
 
-#define CDOT_BIN_OP(Name) \
-   class Name##Inst: public BinaryInstruction {                               \
-   public:                                                                    \
-      Name##Inst(Value *lhs, Value *rhs, BasicBlock *parent)                  \
-         : BinaryInstruction(Name##InstID, lhs, rhs,                          \
-                             lhs->getType(), parent)                          \
-      {                                                                       \
-      }                                                                       \
-                                                                              \
-      static bool classof(Value const* T)                                     \
-      {                                                                       \
-         return T->getTypeID() == Name##InstID;                               \
-      }                                                                       \
+class BinaryOperatorInst: public BinaryInstruction {
+public:
+   enum OpCode: unsigned char {
+#  define CDOT_BINARY_OP(Name, OP)               \
+      Name,
+#  include "IL/Value/Instructions.def"
    };
 
-#define CDOT_COMP_OP(Name)                                                    \
-   class Name##Inst: public BinaryInstruction {                               \
-   public:                                                                    \
-      Name##Inst(Type *BoolTy, Value *lhs, Value *rhs, BasicBlock *parent)    \
-         : BinaryInstruction(Name##InstID, lhs, rhs, BoolTy, parent)          \
-      {                                                                       \
-      }                                                                       \
-                                                                              \
-      static bool classof(Value const* T)                                     \
-      {                                                                       \
-         return T->getTypeID() == Name##InstID;                               \
-      }                                                                       \
+   BinaryOperatorInst(OpCode opCode,
+                      Value *lhs, Value *rhs,
+                      BasicBlock *parent);
+
+   OpCode getOpCode() const { return opCode; }
+   il::Value *getLhs() const { return getOperand(0); }
+   il::Value *getRhs() const { return getOperand(1); }
+
+   static bool classof(Value const *V)
+   {
+      return V->getTypeID() == BinaryOperatorInstID;
+   }
+
+private:
+   OpCode opCode;
+};
+
+class UnaryOperatorInst: public UnaryInstruction {
+public:
+   enum OpCode: unsigned char {
+#  define CDOT_UNARY_OP(Name, OP)               \
+      Name,
+#  include "IL/Value/Instructions.def"
    };
 
-/// Synopsis
-// class UnaryOpInst: public OperatorInst<1, OpCode::UnaryOpCode> {
-// public:
-//     UnaryOpInst(Value *target, BasicBlock *parent, const string &name = "",
-//                 const SourceLocation &loc = {})
-//         : OperatorInst(target->getType(), parent, name, loc)
-//     {
-//        setOperand(0, target);
-//        target->addUse();
-//     }
-//  };
+   UnaryOperatorInst(OpCode opCode,
+                     Value *target,
+                     BasicBlock *parent);
 
-#define CDOT_UN_OP(Name) \
-   class Name##Inst: public UnaryInstruction {                                \
-   public:                                                                    \
-      Name##Inst(Value *target, BasicBlock *parent)                           \
-         : UnaryInstruction(Name##InstID, target, *target->getType(), parent) \
-      {                                                                       \
-      }                                                                       \
-                                                                              \
-         static bool classof(Value const* T)                                  \
-         {                                                                    \
-            return T->getTypeID() == Name##InstID;                            \
-         }                                                                    \
+   OpCode getOpCode() const { return opCode; }
+   il::Value *getTarget() const { return getOperand(0); }
+
+   static bool classof(Value const *V)
+   {
+      return V->getTypeID() == UnaryOperatorInstID;
+   }
+
+private:
+   OpCode opCode;
+};
+
+class CompInst: public BinaryInstruction {
+public:
+   enum OpCode: unsigned char {
+#  define CDOT_COMP_OP(Name, OP)               \
+      Name,
+#  include "IL/Value/Instructions.def"
    };
 
-CDOT_BIN_OP(Add)
-CDOT_BIN_OP(Sub)
-CDOT_BIN_OP(Mul)
-CDOT_BIN_OP(Div)
-CDOT_BIN_OP(Mod)
-CDOT_BIN_OP(Exp)
+   CompInst(OpCode opCode,
+            Value *lhs, Value *rhs,
+            BasicBlock *parent);
 
-CDOT_BIN_OP(And)
-CDOT_BIN_OP(Or)
-CDOT_BIN_OP(Xor)
+   OpCode getOpCode() const { return opCode; }
+   il::Value *getLhs() const { return getOperand(0); }
+   il::Value *getRhs() const { return getOperand(1); }
 
-CDOT_BIN_OP(AShr)
-CDOT_BIN_OP(LShr)
-CDOT_BIN_OP(Shl)
+   static bool classof(Value const *V)
+   {
+      return V->getTypeID() == CompInstID;
+   }
 
-CDOT_COMP_OP(CompEQ)
-CDOT_COMP_OP(CompNE)
-CDOT_COMP_OP(CompLT)
-CDOT_COMP_OP(CompGT)
-CDOT_COMP_OP(CompLE)
-CDOT_COMP_OP(CompGE)
-
-CDOT_UN_OP(Min)
-CDOT_UN_OP(Neg)
-
-#undef CDOT_BIN_OP
-#undef CDOT_COMP_OP
-#undef CDOT_UN_OP
+private:
+   OpCode opCode;
+};
 
 } // namespace il
 } // namespace cdot

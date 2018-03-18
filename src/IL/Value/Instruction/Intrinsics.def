@@ -1,13 +1,21 @@
 
 #ifdef CDOT_INTRINSIC
-   CDOT_INTRINSIC(MemCpy, "__builtin_memcpy")
-   CDOT_INTRINSIC(MemSet, "__builtin_memset")
-   CDOT_INTRINSIC(MemCmp, "__builtin_memcmp")
-   CDOT_INTRINSIC(Retain, "__builtin_retain")
-   CDOT_INTRINSIC(Release, "__builtin_release")
-   CDOT_INTRINSIC(LifetimeBegin, "__builtin_lifetime_begin")
-   CDOT_INTRINSIC(LifetimeEnd, "__builtin_lifetime_end")
+   CDOT_INTRINSIC(memcpy, "__builtin_memcpy")
+   CDOT_INTRINSIC(memset, "__builtin_memset")
+   CDOT_INTRINSIC(memcmp, "__builtin_memcmp")
+   CDOT_INTRINSIC(retain, "__builtin_retain")
+   CDOT_INTRINSIC(release, "__builtin_release")
+   CDOT_INTRINSIC(lifetime_begin, "__builtin_lifetime_begin")
+   CDOT_INTRINSIC(lifetime_end, "__builtin_lifetime_end")
    CDOT_INTRINSIC(__ctfe_stacktrace, "__ctfe_stacktrace")
+
+   CDOT_INTRINSIC(get_lambda_env, "__get_lambda_env")
+   CDOT_INTRINSIC(get_lambda_funcptr, "__get_lambda_funcptr")
+
+   CDOT_INTRINSIC(strong_refcount, "__get_strong_refcount")
+   CDOT_INTRINSIC(weak_refcount, "__get_weak_refcount")
+   CDOT_INTRINSIC(vtable_ref, "__get_vtable_ref")
+   CDOT_INTRINSIC(typeinfo_ref, "__get_typeinfo")
 #endif
 
 #undef CDOT_INTRINSIC

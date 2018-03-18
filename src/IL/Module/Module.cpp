@@ -91,9 +91,6 @@ AggregateType *Module::getType(llvm::StringRef name)
 
 bool Module::addTypeReference(AggregateType *ty)
 {
-   if (isa<ClassType>(ty))
-      addTypeReference("cdot.ClassInfo");
-
    return ReferencedTypes.insert(ty).second;
 }
 

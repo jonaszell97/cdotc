@@ -41,7 +41,7 @@ namespace module {
 
 namespace lex {
 
-class Lexer: public diag::DiagnosticIssuer {
+class Lexer {
 public:
 #ifdef NDEBUG
    using TokenVec   = llvm::SmallVector<Token, 256>;
@@ -52,8 +52,10 @@ public:
 #endif
 
    Lexer(IdentifierTable &Idents,
+         DiagnosticsEngine &Diags,
          llvm::MemoryBuffer *buf,
          unsigned sourceId,
+         unsigned offset = 1,
          const char InterpolationBegin = '$');
 
 #ifndef NDEBUG
@@ -62,6 +64,7 @@ public:
    ~Lexer() = default;
 
    void lex();
+   void lexDiagnostic();
 
    llvm::StringRef getCurrentIdentifier() const;
 
@@ -147,11 +150,16 @@ public:
    SourceLocation getSourceLoc() const
    {
       if (doneLexing) return currentTok().getSourceLoc();
-      return SourceLocation(currentIndex(), sourceId);
+      return SourceLocation(currentIndex() + offset);
    }
 
-   struct SafePoint {
-      SafePoint(Lexer &lex, size_t idx)
+   IdentifierTable &getIdents() const
+   {
+      return Idents;
+   }
+
+   struct SavePoint {
+      SavePoint(Lexer &lex, size_t idx)
          : lex(lex), idx(idx)
       {}
 
@@ -165,9 +173,9 @@ public:
       size_t idx;
    };
 
-   SafePoint makeSafePoint()
+   SavePoint makeSavePoint()
    {
-      return SafePoint(*this, tokenIndex);
+      return SavePoint(*this, tokenIndex);
    }
 
    void printTokensTo(llvm::raw_ostream &out);
@@ -214,11 +222,14 @@ protected:
    template<class ...Args>
    Token makeToken(Args&&... args)
    {
-      SourceLocation loc(TokBegin - BufStart, sourceId);
+      SourceLocation loc(TokBegin - BufStart + offset);
       return Token(args..., loc);
    }
 
+   Token makeEOF();
+
    IdentifierTable &Idents;
+   DiagnosticsEngine &Diags;
 
    TokenVec tokens;
    unsigned sourceId = 0;

@@ -53,14 +53,6 @@ public:
       }
    }
 
-   void visitTemplateArgExpr(TemplateArgExpr *expr)
-   {
-      if (expr->isTypeName())
-         visit(expr->getType());
-      else
-         visit(expr->getExpr());
-   }
-
    void visitIdentifierRefExpr(IdentifierRefExpr *node) {}
    void visitBuiltinExpr(BuiltinExpr *node) {}
    void visitSubscriptExpr(SubscriptExpr *node) {}
@@ -138,13 +130,6 @@ public:
       visit(node->getRhs());
    }
 
-   void visitTertiaryOperator(TertiaryOperator *node)
-   {
-      visit(node->getCondition());
-      visit(node->getLhs());
-      visit(node->getRhs());
-   }
-
    void visitUnaryOperator(UnaryOperator *node)
    {
       visit(node->getTarget());
@@ -162,11 +147,6 @@ public:
    }
 
    void visitConstraintExpr(ConstraintExpr *node) {}
-
-   void visitLvalueToRvalue(LvalueToRvalue *node)
-   {
-      visit(node->getTarget());
-   }
 
    void visitTypeRef(TypeRef *node)
    {

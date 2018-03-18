@@ -4,9 +4,10 @@
 
 #include "IRGen.h"
 
-#include "../../../Compiler.h"
-#include "../../../Files/FileUtils.h"
-#include "../../../Message/Diagnostics.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "Compiler.h"
+#include "Files/FileUtils.h"
+#include "Message/Diagnostics.h"
 
 #include <sstream>
 
@@ -47,38 +48,19 @@ void IRGen::finalize(const CompilationUnit &CU)
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error.ll",
                               EC, llvm::sys::fs::F_RW);
 
-      M->print(fd, new llvm::AssemblyAnnotationWriter);
+      llvm::AssemblyAnnotationWriter AAW;
+
+      M->print(fd, &AAW);
       fd.flush();
 
-      exit(1);
+      llvm::report_fatal_error("invalid LLVM module");
    }
-}
-
-void IRGen::outputIR(const CompilationUnit &CU)
-{
-   auto &options = CU.getOptions();
-   auto outFile = options.getOutFile(OutputKind::LlvmIR).str();
-
-   if (outFile.empty()) {
-      M->dump();
-      return;
-   }
-
-   fs::createDirectories(fs::getPath(outFile));
-
-   std::error_code ec;
-   llvm::raw_fd_ostream outstream(outFile, ec,
-                                  llvm::sys::fs::OpenFlags::F_RW);
-
-   M->print(outstream, new llvm::AssemblyAnnotationWriter);
-   outstream.flush();
-   outstream.close();
 }
 
 void IRGen::linkAndEmit(CompilationUnit &CU)
 {
    auto Module = CU.getLLVMModule();
-   auto TargetTriple = llvm::sys::getDefaultTargetTriple();
+   auto &TargetTriple = CU.getContext().getTargetInfo().getTriple();
 
    llvm::InitializeAllTargetInfos();
    llvm::InitializeAllTargets();
@@ -87,11 +69,10 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
    llvm::InitializeAllAsmPrinters();
 
    std::string Error;
-   auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+   auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple.str(), Error);
 
    if (!Target) {
-      llvm::outs() << "invalid target\n";
-      exit(1);
+      llvm::report_fatal_error("invalid target", false);
    }
 
    auto CPU = "generic";
@@ -99,8 +80,8 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
 
    llvm::TargetOptions opt;
    auto RM = llvm::Optional<llvm::Reloc::Model>();
-   auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features,
-                                                    opt, RM);
+   auto TargetMachine = Target->createTargetMachine(TargetTriple.str(),
+                                                    CPU, Features, opt, RM);
 
    auto& options = CU.getOptions();
    auto outputAsm = options.hasOutputKind(OutputKind::Asm);
@@ -113,7 +94,7 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
    }
 
    Module->setDataLayout(TargetMachine->createDataLayout());
-   Module->setTargetTriple(TargetTriple);
+   Module->setTargetTriple(TargetTriple.str());
 
    if (outputAsm) {
       std::error_code EC;
@@ -124,8 +105,8 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
 
       auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
       if (TargetMachine->addPassesToEmitFile(pass, sstream, FileType)) {
-         llvm::outs() << "TargetMachine can't emit a file of this type\n";
-         exit(1);
+         llvm::report_fatal_error(
+            "TargetMachine can't emit a file of this type\n", false);
       }
 
       pass.run(*Module);
@@ -150,8 +131,8 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
 
       auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
       if (TargetMachine->addPassesToEmitFile(pass, objDest, FileType)) {
-         llvm::outs() << "TargetMachine can't emit a file of this type\n";
-         exit(1);
+         llvm::report_fatal_error(
+            "TargetMachine can't emit a file of this type\n", false);
       }
 
       pass.run(*Module);
@@ -160,8 +141,7 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
       if (outputExec || outputStaticLib) {
          auto clangPathOrError = llvm::sys::findProgramByName("clang");
          if (clangPathOrError.getError()) {
-            llvm::outs() << "clang executable not found\n";
-            std::terminate();
+            llvm::report_fatal_error("'clang' executable could not be found");
          }
 
          llvm::SmallString<128> ScratchBuf;
@@ -174,10 +154,10 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
             args.push_back(file);
          }
 
+         auto initialSize = args.size();
+
          if (options.emitDebugInfo())
             args.push_back("-g");
-
-         auto initialSize = args.size();
 
          if (outputExec) {
             args.push_back("-lc");
@@ -187,6 +167,16 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
             fs::executeCommand(clangPathOrError.get(), args);
 
             args.resize(initialSize);
+
+            auto DsymPath = llvm::sys::findProgramByName("dsymutil");
+            if (!DsymPath.getError()) {
+               string dsymArgs[] = {
+                  DsymPath.get(),
+                  options.getOutFile(OutputKind::Executable)
+               };
+
+               fs::executeCommand(DsymPath.get(), dsymArgs);
+            }
          }
 
          // create .a file if requested
@@ -195,9 +185,7 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
 
             auto arExec = llvm::sys::findProgramByName("ar");
             if (!arExec)
-               diag::err(err_generic_error)
-                  << "'ar' executable not found"
-                  << diag::term;
+               llvm::report_fatal_error("'ar' executable could not be found");
 
             args.push_back(arExec.get());
             args.push_back("-r");

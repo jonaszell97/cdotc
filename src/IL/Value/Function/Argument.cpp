@@ -3,24 +3,17 @@
 //
 
 #include "Argument.h"
+#include "BasicBlock.h"
 
 namespace cdot {
 namespace il {
 
-Argument::Argument(Type *type,
+Argument::Argument(ValueType type,
                    bool vararg,
                    BasicBlock *parent,
                    llvm::StringRef name)
-   : Value(ArgumentID, type), parent(parent), vararg(vararg)
-{
-   new (&this->name) std::string(name.data(), name.size());
-}
-
-Argument::Argument(QualType type,
-                   bool vararg,
-                   BasicBlock *parent,
-                   llvm::StringRef name)
-   : Value(ArgumentID, type), parent(parent), vararg(vararg)
+   : Value(ArgumentID, type),
+     parent(parent), vararg(vararg)
 {
    new (&this->name) std::string(name.data(), name.size());
 }

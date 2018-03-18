@@ -5,11 +5,13 @@
 #ifndef CDOT_IRGEN_H
 #define CDOT_IRGEN_H
 
+#include "Basic/TargetInfo.h"
+#include "IL/Passes/InstructionVisitor.h"
+
+#include <llvm/BinaryFormat/Dwarf.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/Support/Dwarf.h>
 #include <stack>
-#include "../InstructionVisitor.h"
 
 namespace llvm {
 
@@ -22,7 +24,8 @@ namespace il {
 
 class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
-   explicit IRGen(llvm::LLVMContext &Ctx,
+   explicit IRGen(CompilationUnit &CU,
+                  llvm::LLVMContext &Ctx,
                   llvm::Module *M,
                   bool emitDebugInfo);
    ~IRGen();
@@ -36,7 +39,7 @@ public:
 
 #  define CDOT_INSTRUCTION(Name) \
    llvm::Value *visit##Name(Name const& I);
-#  include "../../Value/Instructions.def"
+#  include "IL/Value/Instructions.def"
 
 private:
    void DeclareFunction(il::Function const* F);
@@ -55,7 +58,8 @@ private:
    llvm::StructType *getStructTy(AggregateType *Ty);
 
    llvm::Type *getLlvmType(QualType Ty);
-   llvm::Type *getFieldType(QualType Ty);
+   llvm::Type *getFieldType(ValueType Ty);
+
    llvm::Type *getLlvmType(Type *Ty);
 
    llvm::Value *getLlvmValue(il::Value const* V);
@@ -67,6 +71,7 @@ private:
    llvm::BasicBlock *getBasicBlock(BasicBlock *BB);
 
    llvm::Function *getFunction(il::Function *F);
+   llvm::Value *getCurrentSRetValue();
 
    llvm::ConstantInt *wordSizedInt(uint64_t val);
    llvm::Value *toInt8Ptr(llvm::Value *V);
@@ -75,7 +80,12 @@ private:
                            llvm::SmallVector<llvm::Value*, 8> &args);
 
    llvm::Value *CreateAlloca(llvm::Type *AllocatedType,
-                             size_t allocatedSize = 1);
+                             size_t allocatedSize = 1,
+                             unsigned alignment = 0);
+
+   llvm::Value *CreateAlloca(QualType AllocatedType,
+                             size_t allocatedSize = 1,
+                             unsigned alignment = 0);
 
    llvm::Value *AccessField(StructType *Ty,
                             Value *Val,
@@ -92,10 +102,12 @@ private:
    llvm::Constant *getRetainFn();
    llvm::Constant *getPrintfFn();
    llvm::Constant *getMemCmpFn();
-   llvm::Constant *getIntPowFn();
+   llvm::Constant *getIntPowFn(QualType IntTy);
 
    void debugPrint(const llvm::Twine &str);
 
+   CompilationUnit &CI;
+   const TargetInfo &TI;
    il::Module *ILMod;
 
    bool emitDebugInfo : 1;
@@ -104,7 +116,7 @@ private:
    llvm::DIFile *File;
    llvm::DICompileUnit *CU;
    llvm::SmallDenseMap<size_t, llvm::DIFile*> DIFileMap;
-   llvm::SmallDenseMap<uintptr_t, llvm::DIType*> DITypeMap;
+   llvm::SmallDenseMap<QualType, llvm::DIType*> DITypeMap;
    llvm::SmallDenseMap<uintptr_t, llvm::DISubprogram*> DIFuncMap;
    std::stack<llvm::DIScope*> ScopeStack;
 
@@ -138,7 +150,7 @@ private:
    llvm::Constant *MemCmpFn;
    llvm::Constant *IntPowFn;
 
-   llvm::StringMap<llvm::Value*> ValueMap;
+   llvm::DenseMap<il::Value const*, llvm::Value*> ValueMap;
 
    llvm::MDNode *emitModuleDI();
 
@@ -147,8 +159,8 @@ private:
 
    llvm::DIFile *getFileDI(SourceLocation loc);
 
-   llvm::DIType *getTypeDI(Type *ty);
-   llvm::DIType *getRecordDI(Type *ty);
+   llvm::DIType *getTypeDI(QualType ty);
+   llvm::DIType *getRecordDI(QualType ty);
 
    llvm::dwarf::Tag getTagForRecord(il::AggregateType *Ty);
 

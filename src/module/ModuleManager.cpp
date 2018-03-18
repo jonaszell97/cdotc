@@ -18,30 +18,21 @@
 #include "Serialization.h"
 #include "ModuleMap.h"
 
-#include "../AST/Passes/ILGen/ILGenPass.h"
-#include "../AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "../AST/Passes/Declaration/DeclPass.h"
+#include "AST/Passes/ILGen/ILGenPass.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
 
-#include "../Message/Diagnostics.h"
-#include "../Files/FileUtils.h"
-#include "../Compiler.h"
-#include "../AST/SymbolTable.h"
-#include "../lex/Lexer.h"
-#include "../parse/Parser.h"
-#include "../Files/FileManager.h"
-#include "../Support/BitstreamWriter.h"
-#include "../IL/Module/Module.h"
+#include "Message/Diagnostics.h"
+#include "Files/FileUtils.h"
+#include "Compiler.h"
+#include "lex/Lexer.h"
+#include "parse/Parser.h"
+#include "Files/FileManager.h"
+#include "Support/BitstreamWriter.h"
+#include "IL/Module/Module.h"
 
-#include "../AST/Statement/Declaration/Class/RecordDecl.h"
-#include "../AST/Statement/Declaration/NamespaceDecl.h"
-#include "../AST/Statement/Declaration/TypedefDecl.h"
-#include "../AST/Statement/Declaration/CallableDecl.h"
-#include "../AST/Statement/Block/CompoundStmt.h"
-#include "../AST/Statement/UsingStmt.h"
+#include "AST/NamedDecl.h"
 
-#include "../AST/Expression/TypeRef.h"
-
-#include "../IL/Serialize/Serialization.h"
+#include "IL/Serialize/Serialization.h"
 
 using std::string;
 
@@ -56,7 +47,7 @@ class Module;
 
 namespace {
 
-class ModuleManagerImpl: public DiagnosticIssuer {
+class ModuleManagerImpl {
 public:
    explicit ModuleManagerImpl(SemaPass &SP)
       : SP(SP)
@@ -80,54 +71,54 @@ public:
          auto Mod = compilationUnit.getCompiledModule();
          UnitMap.emplace(Mod, &compilationUnit);
 
-         size_t i = 0;
-         for (auto &translationUnit : compilationUnit.getGlobalDeclCtx()
-                                                     .getTranslationUnits()) {
-            auto &modFile = Mod->getContainedFiles()[i];
-            modFile.setSourceId(translationUnit->getSourceLoc().getSourceId());
-         }
+//         size_t i = 0;
+//         for (auto &translationUnit : compilationUnit.getGlobalDeclCtx()
+//                                                     .getTranslationUnits()) {
+//            auto &modFile = Mod->getContainedFiles()[i];
+//            modFile.setSourceId(translationUnit->getSourceLoc().getSourceId());
+//         }
       }
 
       for (auto &compilationUnit : Jobs) {
          // check for imports of M or its submodules
-         for (auto &translationUnit : compilationUnit.getGlobalDeclCtx()
-                                                     .getTranslationUnits()) {
-            for (auto &import : translationUnit->getImports()) {
-               auto I = ModuleManager::getModule(compilationUnit.getSema(),
-                                                 import);
-
-               if (I == compilationUnit.getCompiledModule()) {
-                  err(err_generic_error)
-                     << "module cannot be imported from one of its source "
-                        "files"
-                     << import->getSourceLoc() << diag::end;
-
-                  return true;
-               }
-               else if (I->getBaseModule() == M->getBaseModule()) {
-                  auto it = UnitMap.find(I);
-                  if (it == UnitMap.end())
-                     goto full_import;
-
-                  importModuleForwardDecls(compilationUnit.getSema(),
-                                           *it->second,
-                                          import->getSourceLoc().getSourceId());
-                  ImportMap[&compilationUnit].push_back(import);
-               }
-               else {
-                  full_import:
-                  importModuleFull(compilationUnit.getSema(), *I,
-                                   import->getSourceLoc());
-               }
-
-               import->setModule(I);
-            }
-         }
+//         for (auto &translationUnit : compilationUnit.getGlobalDeclCtx()
+//                                                     .getTranslationUnits()) {
+//            for (auto &import : translationUnit->getImports()) {
+//               auto I = ModuleManager::getModule(compilationUnit.getSema(),
+//                                                 import);
+//
+//               if (I == compilationUnit.getCompiledModule()) {
+//                  err(err_generic_error)
+//                     << "module cannot be imported from one of its source "
+//                        "files"
+//                     << import->getSourceLoc() << diag::end;
+//
+//                  return true;
+//               }
+//               else if (I->getBaseModule() == M->getBaseModule()) {
+//                  auto it = UnitMap.find(I);
+//                  if (it == UnitMap.end())
+//                     goto full_import;
+//
+//                  importModuleForwardDecls(compilationUnit.getSema(),
+//                                           *it->col,
+//                                          import->getSourceLoc().getSourceId());
+//                  ImportMap[&compilationUnit].push_back(import);
+//               }
+//               else {
+//                  full_import:
+//                  importModuleFull(compilationUnit.getSema(), *I,
+//                                   import->getSourceLoc());
+//               }
+//
+//               import->setModule(I);
+//            }
+//         }
 
          compilationUnit.doDeclarations();
       }
 
-      // do second forward decl import run. this imports template
+      // do col forward decl import run. this imports template
       // instantiations and resolves typedef types and aliases
       for (auto &compilationUnit : Jobs) {
          auto it = ImportMap.find(&compilationUnit);
@@ -139,9 +130,9 @@ public:
             auto CU = UnitMap.find(I->getModule());
             assert(CU != UnitMap.end());
 
-            doSecondForwardDeclImportRun(compilationUnit.getSema(),
-                                         *CU->second,
-                                         I->getSourceLoc().getSourceId());
+//            doSecondForwardDeclImportRun(compilationUnit.getSema(),
+//                                         *CU->second,
+//                                         I->getSourceLoc().getSourceId());
          }
       }
 
@@ -149,11 +140,11 @@ public:
       for (auto &compilationUnit : Jobs) {
          auto ec = createSerializedAST(compilationUnit);
          if (ec) {
-            err(err_generic_error)
-               << "error creating module "
-                  + compilationUnit.getCompiledModule()->getName()
-                  + ": " + ec.message()
-               << diag::end;
+//            err(err_generic_error)
+//               << "error creating module "
+//                  + compilationUnit.getCompiledModule()->getName()
+//                  + ": " + ec.message()
+//               << diag::end;
 
             return true;
          }
@@ -216,17 +207,17 @@ public:
       assert(M->isDeserialized());
 
       llvm::SmallString<128> filePrivateNamespace;
-      filePrivateNamespace += SP.getDeclPass()
-                                ->getPrivateFileNamespace(importLoc)
-                                ->getName();
-      filePrivateNamespace += '.';
+//      filePrivateNamespace += SP.getDeclPass()
+//                                ->getPrivateFileNamespace(importLoc)
+//                                ->getName();
+//      filePrivateNamespace += '.';
 
       auto initialSize = filePrivateNamespace.size();
       for (auto &declPair : M->getDeclarations()) {
          auto decl = declPair.getValue().getDecl();
          filePrivateNamespace += decl->getName();
 
-         switch (decl->getTypeID()) {
+         switch (decl->getKind()) {
 //            case AstNode::ClassDeclID:
 //            case AstNode::StructDeclID:
 //            case AstNode::EnumDeclID:
@@ -303,7 +294,7 @@ private:
 
    void createJobs(Module *M,
                    llvm::SmallVectorImpl<CompilationUnit> &Jobs) {
-      auto path = fs::getPath(M->getModuleMapFile());
+      string path = fs::getPath(M->getModuleMapFile());
       if (path.back() != fs::PathSeperator)
          path += fs::PathSeperator;
 
@@ -408,21 +399,21 @@ private:
       ScratchBuf += M.getBaseFile();
       ScratchBuf += ".cdotast";
 
-      if (!fs::fileExists(ScratchBuf.str()))
-         diag::err(err_generic_error)
-            << "error opening file " + ScratchBuf.str() + ": file not found"
-            << importedFrom << diag::term;
+//      if (!fs::fileExists(ScratchBuf.str()))
+//         diag::err(err_generic_error)
+//            << "error opening file " + ScratchBuf.str() + ": file not found"
+//            << importedFrom << diag::term;
 
       // try assigning source aliases
-      auto &compilationUnit = SP.getCompilationUnit();
-      for (auto &File : M.getContainedFiles()) {
-         if (fs::fileExists(File.getFileName())) {
-            auto aliasId =
-               fs::FileManager::assignModuleSourceId(File.getFileName(), &M);
-
-            compilationUnit.addSourceAlias(File.getOriginalSourceId(), aliasId);
-         }
-      }
+//      auto &compilationUnit = SP.getCompilationUnit();
+//      for (auto &File : M.getContainedFiles()) {
+//         if (fs::fileExists(File.getFileName())) {
+//            auto aliasId =
+////               fs::FileManager::assignModuleSourceId(File.getFileName(), &M);
+//
+////            compilationUnit.addSourceAlias(File.getOriginalSourceId(), aliasId);
+//         }
+//      }
 
       auto buf = llvm::MemoryBuffer::getFile(ScratchBuf.str());
       assert(buf && "file suddenly stopped existing");
@@ -434,7 +425,7 @@ private:
       M.setIdentifierTable(move(identifierTable));
 //      readModuleInterface(SP, *buf.get(), &M, skipForwardDecls, importedFrom);
 
-      compilationUnit.clearSourceAliases();
+//      compilationUnit.clearSourceAliases();
 
       for (auto &Sub : M.getSubModules())
          importASTFiles(ScratchBuf, SP, *Sub, importedFrom, skipForwardDecls);
@@ -512,21 +503,22 @@ private:
 //      }
 //
 //      return cpy;
+      llvm_unreachable("");
    }
 
    static void importModuleForwardDecls(ast::SemaPass &SP, CompilationUnit &CU,
                                         size_t importStmtSourceId) {
 //      auto &SrcSymTab = *CU.getSymTab();
 //      auto &DstSymTab = *SP.getCompilationUnit().getSymTab();
-      auto DstMod = SP.getCompilationUnit().getCompiledModule();
+//      auto DstMod = SP.getCompilationUnit().getCompiledModule();
+//
+//      llvm::SmallString<128> filePrivateName;
+//      filePrivateName += SP.getDeclPass()
+//                           ->getPrivateFileNamespace(importStmtSourceId)
+//                           ->getName();
+//      filePrivateName += ".";
 
-      llvm::SmallString<128> filePrivateName;
-      filePrivateName += SP.getDeclPass()
-                           ->getPrivateFileNamespace(importStmtSourceId)
-                           ->getName();
-      filePrivateName += ".";
-
-      auto initialSize = filePrivateName.size();
+//      auto initialSize = filePrivateName.size();
 
 //      for (auto &EntryPair : SrcSymTab.getEntries()) {
 //         auto &Entry = EntryPair.getValue();
@@ -632,16 +624,16 @@ private:
                                             size_t importStmtSourceId) {
 //      auto &SrcSymTab = *CU.getSymTab();
 //      auto &DstSymTab = *SP.getCompilationUnit().getSymTab();
-      auto DstMod = SP.getCompilationUnit().getCompiledModule();
-      auto SrcMod = CU.getCompiledModule();
-
-      llvm::SmallString<128> filePrivateName;
-      filePrivateName += SP.getDeclPass()
-                           ->getPrivateFileNamespace(importStmtSourceId)
-                           ->getName();
-      filePrivateName += ".";
-
-      auto initialSize = filePrivateName.size();
+//      auto DstMod = SP.getCompilationUnit().getCompiledModule();
+//      auto SrcMod = CU.getCompiledModule();
+//
+//      llvm::SmallString<128> filePrivateName;
+//      filePrivateName += SP.getDeclPass()
+//                           ->getPrivateFileNamespace(importStmtSourceId)
+//                           ->getName();
+//      filePrivateName += ".";
+//
+//      auto initialSize = filePrivateName.size();
 
 //      for (auto &EntryPair : SrcSymTab.getEntries()) {
 //         auto &Entry = EntryPair.getValue();
@@ -698,10 +690,10 @@ private:
    void createModuleLib(Module &M)
    {
       auto ar = llvm::sys::findProgramByName("ar");
-      if (auto err = ar.getError())
-         diag::err(err_generic_error)
-            << "could not create module: 'ar' executable not found"
-            << diag::term;
+//      if (auto err = ar.getError())
+//         diag::err(err_generic_error)
+//            << "could not create module: 'ar' executable not found"
+//            << diag::term;
 
       llvm::SmallVector<string, 8> args;
       args.push_back(ar.get());
@@ -719,9 +711,10 @@ private:
          case 0:
             break;
          default:
-            diag::err(err_generic_error)
-               << "could not create module: 'ar' command failed"
-               << diag::term;
+//            diag::err(err_generic_error)
+//               << "could not create module: 'ar' command failed"
+//               << diag::term; break;
+         break;
       }
    }
 
@@ -746,11 +739,11 @@ void ModuleManager::createModule(SemaPass &SP)
    auto inFiles = options.getInputFiles(InputKind::ModuleFile);
    assert(inFiles.size() == 1);
 
-   auto buf = fs::FileManager::openFile(inFiles.front(), true);
-   if (!buf.second) {
-      diag::err(err_generic_error)
-         << "error opening module file " + inFiles.front()
-         << diag::term;
+   auto buf = SP.getCompilationUnit().getFileMgr().openFile(inFiles.front());
+   if (!buf.Buf) {
+//      diag::err(err_generic_error)
+//         << "error opening module file " + inFiles.front()
+//         << diag::term;
    }
 
    llvm::SmallString<256> absolutePath;
@@ -764,14 +757,14 @@ void ModuleManager::createModule(SemaPass &SP)
    bool error = manager.compileModule(M);
 
    if (error) {
-      SP.issueDiagnostics(manager);
+//      SP.insertDiagnostics(manager);
    }
 }
 
 Module * ModuleManager::getModule(ast::SemaPass &SP,
                                   ImportStmt *stmt) {
    auto &ModuleName = stmt->getQualifiedModuleName();
-   auto loc = stmt->getSourceLoc();
+//   auto loc = stmt->getSourceLoc();
    auto &options = SP.getCompilationUnit().getOptions();
    assert(!ModuleName.empty());
 
@@ -782,19 +775,19 @@ Module * ModuleManager::getModule(ast::SemaPass &SP,
    auto file = fs::findFileInDirectories(ScratchBuf.str(),
                                          options.includePaths);
 
-   if (file.empty())
-      diag::err(err_generic_error)
-         << "error importing module: file " + ScratchBuf.str() + " not found in"
-            " include paths" << loc << diag::term;
+//   if (file.empty())
+//      diag::err(err_generic_error)
+//         << "error importing module: file " + ScratchBuf.str() + " not found in"
+//            " include paths" << loc << diag::term;
 
    auto M = tryParseModuleMap(file);
 
    for (size_t i = 1; i < ModuleName.size(); ++i) {
       auto Sub = M->getSubModule(ModuleName[i]);
       if (!Sub)
-         diag::err(err_generic_error)
-            << "module " + M->getName() + " does not have a submodule named "
-               + ModuleName[i] << loc << diag::term;
+//         diag::err(err_generic_error)
+//            << "module " + M->getName() + " does not have a submodule named "
+//               + ModuleName[i] << loc << diag::term;
 
       M = Sub;
    }

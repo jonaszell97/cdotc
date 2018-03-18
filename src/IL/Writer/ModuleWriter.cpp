@@ -2,22 +2,20 @@
 // Created by Jonas Zell on 17.11.17.
 //
 
-#include <llvm/ADT/Twine.h>
-
 #include "ModuleWriter.h"
 
-#include "../Module/Module.h"
-#include "../Module/Context.h"
-
-#include "../../Compiler.h"
-
-#include "../../Variant/Type/Type.h"
-#include "../../Support/Format.h"
+#include "Basic/CastKind.h"
+#include "Compiler.h"
+#include "IL/Module/Module.h"
+#include "IL/Module/Context.h"
+#include "IL/Utils/BlockIterator.h"
+#include "Support/Format.h"
+#include "Support/WriterBase.h"
 
 #define CDOT_VALUE_INCLUDE
-#include "../Value/ValueIncludes.def"
-#include "../../Basic/CastKind.h"
-#include "../../Support/WriterBase.h"
+#include "IL/Value/ValueIncludes.def"
+
+#include <llvm/ADT/Twine.h>
 
 using namespace cdot::support;
 
@@ -49,7 +47,7 @@ protected:
       Constant = '@',
       Type = '$',
       Value = '%',
-      Lvalue = '*'
+      Lvalue = '&'
    };
 
    void WriteComment(llvm::Twine const& comment)
@@ -63,13 +61,10 @@ protected:
       out << '\n';
    }
 
-   void WriteName(llvm::StringRef name,
-                  ValPrefix prefix, bool islvalue = false);
-
-   void WriteType(const Type *ty, bool islvalue = false);
+   void WriteName(llvm::StringRef name, ValPrefix prefix);
+   void WriteType(const Type *ty);
    void WriteQualType(QualType type);
-
-   void WriteCapture(Lambda::Capture const& C);
+   void WriteValueType(ValueType type) { WriteQualType(type); }
 
    void WriteField(const StructType::Field &F);
    void WriteStructTy(const StructType *Ty);
@@ -79,7 +74,7 @@ protected:
    void WriteCase(const EnumType::Case &C);
    void WriteEnumTy(const EnumType *Ty);
    void WriteUnionTy(const UnionType *Ty);
-   
+
    void WriteConstant(const Constant *C);
    void WriteValue(const Value *V);
 
@@ -87,13 +82,10 @@ protected:
    void WriteArgumentNoName(const Argument &Arg);
 };
 
-void ModuleWriterImpl::WriteName(llvm::StringRef name, ValPrefix prefix,
-                                 bool islvalue) {
+void ModuleWriterImpl::WriteName(llvm::StringRef name, ValPrefix prefix)
+{
    if (prefix != ValPrefix::None) {
       out << (unsigned char)prefix;
-   }
-   if (islvalue) {
-      out << (unsigned char)ValPrefix::Lvalue;
    }
 
    for (auto c : name) {
@@ -108,58 +100,39 @@ void ModuleWriterImpl::WriteName(llvm::StringRef name, ValPrefix prefix,
    out << name;
 }
 
-
-void ModuleWriterImpl::WriteType(const Type *ty, bool islvalue)
+void ModuleWriterImpl::WriteType(const Type *ty)
 {
    assert(!ty->isAutoType());
 
-   if (ty->isVoidType()) {
+   if (ty->isReferenceType()) {
+      out << (unsigned char)ValPrefix::Lvalue;
+      WriteQualType(ty->asReferenceType()->getReferencedType());
+   }
+   else if (ty->isVoidType()) {
       out << "void";
-      return;
    }
    else if (ty->isIntegerType()) {
-      if (islvalue) {
-         out << (unsigned char)ValPrefix::Lvalue;
-      }
-
       out << (ty->isUnsigned() ? 'u' : 'i');
       out << ty->getBitwidth();
-      return;
    }
    else if (ty->isFPType()) {
-      if (islvalue) {
-         out << (unsigned char)ValPrefix::Lvalue;
-      }
-
       out << (ty->isFloatTy() ? "float" : "double");
-      return;
    }
    else if (ty->isObjectType()) {
-      WriteName(ty->getClassName(), ValPrefix::Type, islvalue);
-      return;
+      WriteName(ty->getClassName(), ValPrefix::Type);
    }
    else if (ty->isPointerType()) {
-      if (islvalue) {
-         out << (unsigned char)ValPrefix::Lvalue;
-      }
-
       WriteQualType(ty->asPointerType()->getPointeeType());
       out << '*';
-
-      return;
    }
+   else if (ty->isFunctionType() ) {
+      if (ty->isLambdaType())
+         out << "lambda ";
 
-   out << (unsigned char)ValPrefix::Type;
-   if (islvalue) {
-      out << (unsigned char)ValPrefix::Lvalue;
-   }
+      WriteQualType(ty->asFunctionType()->getReturnType());
 
-   if (ty->isFunctionType() ) {
       auto Args = ty->asFunctionType()->getArgTypes();
       WriteList(Args, &ModuleWriterImpl::WriteQualType);
-
-      out << " -> ";
-      WriteQualType(ty->asFunctionType()->getReturnType());
    }
    else if (ty->isTupleType()) {
       auto Cont = ty->asTupleType()->getContainedTypes();
@@ -178,25 +151,24 @@ void ModuleWriterImpl::WriteType(const Type *ty, bool islvalue)
 
 void ModuleWriterImpl::WriteQualType(QualType type)
 {
-   WriteType(*type, type.isLvalue());
-}
-
-void ModuleWriterImpl::WriteCapture(Lambda::Capture const &C)
-{
-   WriteQualType(C.type);
+   WriteType(*type);
 }
 
 void ModuleWriterImpl::WriteField(const StructType::Field &F)
 {
    WriteName(F.name, ValPrefix::Value);
    out << ": ";
-   WriteQualType(F.type);
+   WriteValueType(F.type);
 }
 
 void ModuleWriterImpl::WriteStructTy(const StructType *Ty)
 {
-   auto &Fields = Ty->getFields();
-   WriteList(Fields, &ModuleWriterImpl::WriteField, "{ ", ", ", " }");
+   if (Ty->getFields().empty()) {
+      out << "{ }";
+      return;
+   }
+
+   WriteList(Ty->getFields(), &ModuleWriterImpl::WriteField, "{ ", ", ", " }");
 }
 
 void ModuleWriterImpl::WriteVTableFunction(const il::Constant *C)
@@ -206,7 +178,7 @@ void ModuleWriterImpl::WriteVTableFunction(const il::Constant *C)
 
    WriteName(cast<Method>(C)->getName(), ValPrefix::Constant);
    out << ": ";
-   WriteQualType(C->getType());
+   WriteValueType(C->getType());
 }
 
 void ModuleWriterImpl::WriteClassTy(const ClassType *Ty)
@@ -232,7 +204,7 @@ void ModuleWriterImpl::WriteEnumTy(const EnumType *Ty)
       auto Cases = Ty->getCases();
       std::sort(Cases.begin(), Cases.end(),
                 [](const EnumType::Case &C1, const EnumType::Case &C2) {
-                   return C1.caseVal->getU64() < C2.caseVal->getU64();
+                   return C1.caseVal->getZExtValue() < C2.caseVal->getZExtValue();
                 });
 
       WriteList(Cases,
@@ -293,7 +265,7 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       return;
    }
    if (auto Fun = dyn_cast<Function>(C)) {
-      WriteQualType(Fun->getType());
+      WriteValueType(Fun->getType());
       out << ' ';
       WriteName(Fun->getName(), ValPrefix::Constant);
       return;
@@ -304,7 +276,7 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       WriteType(TI->getForType());
    }
    else {
-      WriteQualType(C->getType());
+      WriteValueType(C->getType());
    }
 
    out << ' ';
@@ -316,13 +288,18 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       case Value::ConstantIntID: {
          auto Int = cast<ConstantInt>(C);
          if (Int->getType()->getBitwidth() == 1) {
-            out << (Int->getU1() ? "true" : "false");
-         }
-         else if (Int->getType()->isUnsigned()) {
-            out << Int->getU64();
+            out << (Int->getBoolValue() ? "true" : "false");
          }
          else {
-            out << (long long)Int->getU64();
+            if (Int->getValue().isAllOnesValue()) {
+               out << "-1";
+            }
+            else {
+               llvm::SmallString<64> str;
+               Int->getValue().toString(str, 10);
+
+               out << str.str();
+            }
          }
 
          break;
@@ -371,7 +348,7 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
          WriteConstant(cast<ConstantBitCastInst>(C)->getTarget());
 
          out << " to ";
-         WriteQualType(C->getType());
+         WriteValueType(C->getType());
 
          break;
       case Value::ConstantAddrOfInstID:
@@ -390,7 +367,7 @@ void ModuleWriterImpl::WriteValue(const il::Value *V)
       WriteConstant(cast<il::Constant>(V));
    }
    else {
-      WriteQualType(V->getType());
+      WriteValueType(V->getType());
       out << ' ';
       WriteName(V->getName(), ValPrefix::Value);
    }
@@ -404,7 +381,7 @@ void ModuleWriterImpl::WriteArgument(const Argument &Arg)
    else {
       WriteName(Arg.getName(), ValPrefix::Value);
       out << ": ";
-      WriteQualType(Arg.getType());
+      WriteValueType(Arg.getType());
    }
 }
 
@@ -414,7 +391,7 @@ void ModuleWriterImpl::WriteArgumentNoName(const Argument &Arg)
       out << "...";
    }
    else {
-      WriteQualType(Arg.getType());
+      WriteValueType(Arg.getType());
    }
 }
 
@@ -424,7 +401,7 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
    out << " = ";
 
    if (!G->hasInitializer()) {
-      WriteType(*G->getType());
+      WriteQualType(G->getType());
       out << " zeroinitializer";
    }
    else {
@@ -443,7 +420,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Alloca = dyn_cast<AllocaInst>(I)) {
       out << (Alloca->isHeapAlloca() ? "heap_alloc " : "stack_alloc ");
-      WriteType(*I->getType());
+      WriteQualType(I->getType()->getReferencedType());
 
       if (Alloca->getAllocSize() != 1) {
          out << ", " << Alloca->getAllocSize();
@@ -510,7 +487,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto FieldRef = dyn_cast<FieldRefInst>(I)) {
       out << "field_ref ";
-      WriteQualType(FieldRef->getType());
+      WriteValueType(FieldRef->getType());
 
       out << " ";
       WriteConstant(FieldRef->getAccessedType());
@@ -544,7 +521,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteValue(Init->getInitializedType());
 
       out << ", ";
-      WriteConstant(Init->getInit());
+      WriteName(Init->getInit()->getName(), ValPrefix::Constant);
 
       WriteList(Init->getArgs(), &ModuleWriterImpl::WriteValue);
       return;
@@ -611,7 +588,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    if (auto ICall = dyn_cast<IntrinsicCallInst>(I)) {
       out << "call intrinsic ";
 
-      WriteType(ICall->getType());
+      WriteQualType(ICall->getType());
       out << " " << ICall->getIntrinsicName() << " ";
       WriteList(ICall->getArgs(), &ModuleWriterImpl::WriteValue);
 
@@ -714,6 +691,10 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    if (auto Switch = dyn_cast<SwitchInst>(I)) {
       out << "switch ";
       WriteValue(Switch->getSwitchVal());
+
+      out << ", default ";
+      WriteValue(Switch->getDefault());
+
       out << " [\n";
 
       auto &Cases = Switch->getCases();
@@ -722,17 +703,11 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       for (const auto &Case : Cases) {
          ApplyTab();
 
-         if (!Case.first) {
-            out << "default, ";
-            WriteValue(Case.second);
-         }
-         else {
-            out << "case ";
-            WriteValue(Case.first);
+         out << "case ";
+         WriteValue(Case.first);
 
-            out << ", ";
-            WriteValue(Case.second);
-         }
+         out << ", ";
+         WriteValue(Case.second);
 
          NewLine();
       }
@@ -754,7 +729,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
          if (Catch.CaughtType) {
             out << "catch ";
-            WriteType(Catch.CaughtType);
+            WriteQualType(Catch.CaughtType);
             out << ", ";
          }
          else {
@@ -797,19 +772,50 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteValue(Cast->getOperand(0));
 
       out << " to ";
-      WriteQualType(Cast->getType());
+      WriteValueType(Cast->getType());
 
       return;
    }
 
-   if (auto Op = dyn_cast<OperatorInst>(I)) {
-      out << OpNames[(unsigned short)Op->getOpCode() - FirstOp] << ' ';
-      WriteValue(Op->getOperand(0));
-
-      if (Op->getNumOperands() == 2) {
-         out << ',' << ' ';
-         WriteValue(Op->getOperand(1));
+   if (auto BinOp = dyn_cast<BinaryOperatorInst>(I)) {
+      switch (BinOp->getOpCode()) {
+#     define CDOT_BINARY_OP(Name, Op)                                   \
+      case BinaryOperatorInst::Name: out << Op; break;
+#     include "IL/Value/Instructions.def"
       }
+
+      out << " ";
+      WriteValue(BinOp->getLhs());
+      out << ", ";
+      WriteValue(BinOp->getRhs());
+
+      return;
+   }
+
+   if (auto Comp = dyn_cast<CompInst>(I)) {
+      switch (Comp->getOpCode()) {
+#     define CDOT_COMP_OP(Name, Op)                                      \
+      case CompInst::Name: out << Op; break;
+#     include "IL/Value/Instructions.def"
+      }
+
+      out << " ";
+      WriteValue(Comp->getLhs());
+      out << ", ";
+      WriteValue(Comp->getRhs());
+
+      return;
+   }
+
+   if (auto UnOp = dyn_cast<UnaryOperatorInst>(I)) {
+      switch (UnOp->getOpCode()) {
+#     define CDOT_UNARY_OP(Name, Op)                                      \
+      case UnaryOperatorInst::Name: out << Op; break;
+#     include "IL/Value/Instructions.def"
+      }
+
+      out << " ";
+      WriteValue(UnOp->getTarget());
 
       return;
    }
@@ -825,12 +831,17 @@ void ModuleWriterImpl::WriteBasicBlock(const BasicBlock *BB, bool first,
 
    if (!first) {
       out << "; preds: ";
-      if (BB->getPredecessors().empty()) {
+
+      auto Preds = getPredecessors(BB);
+      if (Preds.begin() == Preds.end()) {
          out << "<no predecessors!>";
       }
       else {
-         WriteList(BB->getPredecessors(), &ModuleWriterImpl::WriteConstant,
-                   "", ", ", "");
+         size_t i = 0;
+         for (auto &Pred : Preds) {
+            if (i++ != 0) out << ", ";
+            WriteConstant(&Pred);
+         }
       }
       NewLine();
    }
@@ -881,7 +892,7 @@ void ModuleWriterImpl::WriteFunction(const Function *F, bool onlyDecl)
 
    if (auto L = dyn_cast<Lambda>(F)) {
       out << " captures";
-      WriteList(L->getCaptures(), &ModuleWriterImpl::WriteCapture);
+      WriteList(L->getCaptures(), &ModuleWriterImpl::WriteQualType);
    }
 
    out << " -> ";

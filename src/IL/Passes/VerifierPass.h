@@ -14,10 +14,9 @@ namespace il {
 class VerifierPass: public InstructionVisitor<VerifierPass, void>  {
 public:
    explicit VerifierPass()
-      : InstructionVisitor(VerifierPassID)
    {}
 
-   void visitModule(Module const& M);
+   void visitModule(Module& M) override;
    void visitFunction(Function const& F);
    void visitBasicBlock(BasicBlock const& B);
    void visitAggregateType(AggregateType const& Ty);
@@ -27,8 +26,10 @@ public:
    void visit##Name(Name const& I);
 #  include "../Value/Instructions.def"
 
+   bool isValid() const { return IsValid; }
+
 private:
-   bool isValid = true;
+   bool IsValid = true;
 
    void emitErrorMessage(llvm::StringRef msg);
    void emitError(Instruction const& I);
@@ -37,11 +38,7 @@ private:
    void emitError(AggregateType const& Ty);
    void emitError(BasicBlock const& B);
 
-   using BBPtrSet = llvm::SmallPtrSet<il::BasicBlock const*, 16>;
-
    void checkOperandAccessibility(il::Instruction const& I);
-   bool checkOperandAccessibility(il::BasicBlock const& B, il::Value const*V,
-                                  BBPtrSet &Visited);
 
    template<class T>
    void emitErrors(T const& val)
@@ -62,7 +59,7 @@ private:
    void errorIf(bool cond, llvm::StringRef msg, Ts const&... val)
    {
       if (cond) {
-         isValid = false;
+         IsValid = false;
 
          emitErrorMessage(msg);
          emitErrors(val...);

@@ -20,7 +20,6 @@ def Shift          : PrecedenceGroup<11, Left> // <<, >>, >>>
 def Additive       : PrecedenceGroup<12, Left> // +, -
 def Multiplicative : PrecedenceGroup<13, Left> // *, /, %
 def Exponentiation : PrecedenceGroup<14, Right> // **
-def Range          : PrecedenceGroup<15, Left> // .., ..<
 def Cast           : PrecedenceGroup<16, Left> // as, as!, as, : (type predicate)
 
 class FixKind {}
@@ -36,6 +35,8 @@ class BuiltinOperator <let opString: string,
 
 class BinaryOperator <opString: string, precedenceGroup: PrecedenceGroup>
     : BuiltinOperator<opString, precedenceGroup, Infix> {}
+
+def UnknownOp : BinaryOperator<"", Unknown>
 
 // Assignment Ops
 def Assign     : BinaryOperator<"=", Assignment>
@@ -85,10 +86,6 @@ def Spaceship : BinaryOperator<"<=>", Relational>
 def LAnd : BinaryOperator<"&&", LogicalAnd>
 def LOr  : BinaryOperator<"||", LogicalOr>
 
-// Range Ops
-def ExclusiveRange : BinaryOperator<"..<", Range>
-def InclusiveRange : BinaryOperator<"..", Range>
-
 // Cast Ops
 def As         : BinaryOperator<"as", Cast>
 def AsExclaim  : BinaryOperator<"as!", Cast>
@@ -105,7 +102,7 @@ class PostfixUnaryOp<opString: string> : BuiltinOperator<opString, Unknown, Post
 def UnaryPlus : PrefixUnaryOp<"+">
 def UnaryMin  : PrefixUnaryOp<"-">
 def UnaryNot  : PrefixUnaryOp<"~">
-def UnaryNeg  : PrefixUnaryOp<"!">
+def UnaryLNot  : PrefixUnaryOp<"!">
 
 def PreInc  : PrefixUnaryOp<"++">
 def PostInc : PostfixUnaryOp<"++">
@@ -119,8 +116,9 @@ def BlockAddrOf : PrefixUnaryOp<"&&">
 def TypeOf : PrefixUnaryOp<"typeof">
 
 // MetaType "operators"
-def UnaryPtr    : PostfixUnaryOp<"*">
-def UnaryOption : PostfixUnaryOp<"?">
+def UnaryPtr      : PostfixUnaryOp<"*">
+def UnaryOption   : PostfixUnaryOp<"?">
+def PackExpansion : PostfixUnaryOp<"...">
 
 // Define Builtin Ops with additional info
 #include "BuiltinTypes.tg"
@@ -128,36 +126,41 @@ def UnaryOption : PostfixUnaryOp<"?">
 // many operators return the same type as one of their operands
 def OperandTy : Type
 
-def LabelTy   : Type
-def MetaType  : Type
-def PointerTy : Type
-def LvalueTy  : Type
-def AnyTy     : Type
-def UnknownTy : Type
-def ClassTy   : Type
-
 class OperatorInfo <let builtinOp: BuiltinOperator,
                     let resultType: Type,
-                    let applicableTypes: list<Type> > {
+                    let applicableTypes: list<Type>,
+                    let lvalueOperand: i1 = false> {
 }
 
 let AllIntTys: list<Type> = !allof("IntTy")
-let IntAndPtrTys = !push(AllIntTys, PointerTy)
+let IntAndPtrTys = !push(AllIntTys, AnyPointer)
 
 let AllIntAndFPTys = !concat(AllIntTys, !allof("FPTy"))
-let IntFPAndPtrTys = !push(AllIntAndFPTys, PointerTy)
+let IntFPAndPtrTys = !push(AllIntAndFPTys, AnyPointer)
 
 let AllSignedTys: list<Type> = [f32, f64, i8, i16, i32, i64]
 
 namespace Binary {
     // Binary Arithmetic Ops
+    def None : OperatorInfo<UnknownOp, UnknownAny, []>
+
+    def `=` : OperatorInfo<Assign, Void, [Any]>
+
     def `+` : OperatorInfo<Add, OperandTy, IntFPAndPtrTys>
     def `-` : OperatorInfo<Sub, OperandTy, IntFPAndPtrTys>
     def `*` : OperatorInfo<Mul, OperandTy, IntFPAndPtrTys>
     def `/` : OperatorInfo<Div, OperandTy, AllIntAndFPTys>
 
+    def `+=` : OperatorInfo<AddAssign, Void, IntFPAndPtrTys>
+    def `-=` : OperatorInfo<SubAssign, Void, IntFPAndPtrTys>
+    def `*=` : OperatorInfo<MulAssign, Void, IntFPAndPtrTys>
+    def `/=` : OperatorInfo<DivAssign, Void, AllIntAndFPTys>
+
     def `%`  : OperatorInfo<Mod, OperandTy, AllIntTys>
     def `**` : OperatorInfo<Exp, OperandTy, AllIntAndFPTys>
+
+    def `%=`  : OperatorInfo<ModAssign, Void, AllIntTys>
+    def `**=` : OperatorInfo<ExpAssign, Void, AllIntAndFPTys>
 
     // Binary Bitwise Ops
     def `&`   : OperatorInfo<And, OperandTy, AllIntTys>
@@ -167,6 +170,13 @@ namespace Binary {
     def `>>`  : OperatorInfo<AShr, OperandTy, AllIntTys>
     def `>>>` : OperatorInfo<LShr, OperandTy, AllIntTys>
 
+    def `&=`   : OperatorInfo<AndAssign, Void, AllIntTys>
+    def `|=`   : OperatorInfo<OrAssign, Void, AllIntTys>
+    def `^=`   : OperatorInfo<XorAssign, Void, AllIntTys>
+    def `<<=`  : OperatorInfo<ShlAssign, Void, AllIntTys>
+    def `>>=`  : OperatorInfo<AShrAssign, Void, AllIntTys>
+    def `>>>=` : OperatorInfo<LShrAssign, Void, AllIntTys>
+
     // Comparison
     def `==`  : OperatorInfo<CompEQ, i1, IntFPAndPtrTys>
     def `!=`  : OperatorInfo<CompNE, i1, IntFPAndPtrTys>
@@ -174,22 +184,22 @@ namespace Binary {
     def `>=`  : OperatorInfo<CompGE, i1, IntFPAndPtrTys>
     def `<`   : OperatorInfo<CompLT, i1, IntFPAndPtrTys>
     def `>`   : OperatorInfo<CompGT, i1, IntFPAndPtrTys>
-    def `<=>` : OperatorInfo<Spaceship, i8, IntFPAndPtrTys>
+    def `<=>` : OperatorInfo<Spaceship, i64, IntFPAndPtrTys>
 
-    def `===` : OperatorInfo<CompRefEQ, i1, [PointerTy, ClassTy]>
-    def `!==` : OperatorInfo<CompRefNE, i1, [PointerTy, ClassTy]>
+    // def `===` : OperatorInfo<CompRefEQ, i1, [AnyPointer, AnyClass, AnyLvalue]>
+    // def `!==` : OperatorInfo<CompRefNE, i1, [AnyPointer, AnyClass, AnyLvalue]>
 
     // Short-Circuit Ops
     def `&&` : OperatorInfo<LAnd, i1, [i1]>
     def `||` : OperatorInfo<LOr, i1, [i1]>
 
     // Cast Ops
-    def `as`  : OperatorInfo<As, UnknownTy, [AnyTy]>
-    def `as?` : OperatorInfo<AsQuestion, UnknownTy, [AnyTy]>
-    def `as!` : OperatorInfo<AsExclaim, UnknownTy, [AnyTy]>
+    def `as`  : OperatorInfo<As, UnknownAny, [Any]>
+    def `as?` : OperatorInfo<AsQuestion, UnknownAny, [Any]>
+    def `as!` : OperatorInfo<AsExclaim, UnknownAny, [Any]>
 
     // Other Ops
-    def `:` : OperatorInfo<Colon, i1, [MetaType]>
+    def `:` : OperatorInfo<Colon, i1, [AnyMeta]>
 }
 
 namespace Unary {
@@ -197,23 +207,23 @@ namespace Unary {
         def `+` : OperatorInfo<UnaryPlus, OperandTy, AllIntAndFPTys>
         def `-` : OperatorInfo<UnaryMin, OperandTy, AllSignedTys>
         def `~` : OperatorInfo<UnaryNot, OperandTy, AllIntTys>
-        def `!` : OperatorInfo<UnaryNeg, i1, [i1]>
+        def `!` : OperatorInfo<UnaryLNot, i1, [i1]>
 
-        def `++` : OperatorInfo<PreInc, OperandTy, IntFPAndPtrTys>
-        def `--` : OperatorInfo<PreDec, OperandTy, IntFPAndPtrTys>
+        def `++` : OperatorInfo<PreInc, OperandTy, IntFPAndPtrTys, true>
+        def `--` : OperatorInfo<PreDec, OperandTy, IntFPAndPtrTys, true>
 
-        def `*`  : OperatorInfo<Deref, UnknownTy, [PointerTy]>
-        def `&`  : OperatorInfo<AddrOf, UnknownTy, [LvalueTy]>
-        def `&&` : OperatorInfo<BlockAddrOf, UnknownTy, [LabelTy]>
+        def `*`  : OperatorInfo<Deref, UnknownAny, [AnyPointer]>
+        def `&`  : OperatorInfo<AddrOf, UnknownAny, [AnyLvalue]>
+        def `&&` : OperatorInfo<BlockAddrOf, UnknownAny, [AnyLabel]>
 
-        def `typeof` : OperatorInfo<TypeOf, MetaType, [AnyTy]>
+        def `typeof` : OperatorInfo<TypeOf, AnyMeta, [Any]>
     }
 
     namespace Postfix {
-        def `++` : OperatorInfo<PostInc, OperandTy, IntFPAndPtrTys>
-        def `--` : OperatorInfo<PostDec, OperandTy, IntFPAndPtrTys>
+        def `++` : OperatorInfo<PostInc, OperandTy, IntFPAndPtrTys, true>
+        def `--` : OperatorInfo<PostDec, OperandTy, IntFPAndPtrTys, true>
 
-        def `*` : OperatorInfo<UnaryPtr, MetaType, [MetaType]>
-        def `?` : OperatorInfo<UnaryOption, MetaType, [MetaType]>
+        def `*` : OperatorInfo<UnaryPtr, AnyMeta, [AnyMeta]>
+        def `?` : OperatorInfo<UnaryOption, AnyMeta, [AnyMeta]>
     }
 }

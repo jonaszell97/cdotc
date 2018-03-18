@@ -166,8 +166,8 @@
 //   string getAttrNameFromKind(Attr kind)
 //   {
 //      for (const auto& attr : AttributeMap) {
-//         if (attr.second == kind) {
-//            return attr.first;
+//         if (attr.col == kind) {
+//            return attr.line;
 //         }
 //      }
 //
@@ -510,7 +510,7 @@
 //   }
 //
 //   writeAccess(node->am);
-//   if (node->is_abstract && !node->is_protocol) {
+//   if (node->IsAbstract && !node->is_protocol) {
 //      write("abstract");
 //   }
 //
@@ -724,12 +724,12 @@
 //      auto argc = node->associatedTypes.size();
 //      for (size_t i = 0; i < argc; ++i) {
 //         auto& arg = node->associatedTypes[i];
-//         if (!arg.first.empty()) {
-//            writeIdent(arg.first, false);
+//         if (!arg.line.empty()) {
+//            writeIdent(arg.line, false);
 //            write(":");
 //         }
 //
-//         arg.second->accept(this);
+//         arg.col->accept(this);
 //         if (i < argc - 1) {
 //            write(",");
 //         }
@@ -764,7 +764,7 @@
 //      write(" =");
 //
 //      auto loc = node->defaultVal->getSourceLoc();
-//      auto srcFile = fs::FileManager::openFile(loc);
+//      auto srcFile = fs::FileManager::getBuffer(loc);
 //
 //      auto *buf = srcFile->getBufferStart();
 //      auto size = srcFile->getBufferSize();

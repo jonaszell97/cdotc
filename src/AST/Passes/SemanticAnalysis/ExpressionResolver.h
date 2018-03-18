@@ -17,14 +17,8 @@ class ExprSequence;
 
 class ExpressionResolver {
 public:
-   struct ExprResult {
-      Expression* expr;
-      llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
-      bool hadError;
-   };
-
    explicit ExpressionResolver(SemaPass &SP) : SP(SP) {}
-   ExprResult resolve(ExprSequence *expr);
+   Expression *resolve(ExprSequence *expr, bool ignoreErrors = false);
 
 private:
    SemaPass &SP;

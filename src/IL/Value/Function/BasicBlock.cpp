@@ -5,7 +5,11 @@
 #include "BasicBlock.h"
 #include "Function.h"
 #include "Argument.h"
-#include "../Instruction/Terminator/TerminatorInst.h"
+
+#include "AST/ASTContext.h"
+#include "IL/Module/Context.h"
+#include "IL/Utils/BlockIterator.h"
+#include "IL/Value/Instruction/Terminator/TerminatorInst.h"
 
 #include <llvm/Support/ErrorHandling.h>
 
@@ -15,8 +19,9 @@ using std::string;
 namespace cdot {
 namespace il {
 
-BasicBlock::BasicBlock(PointerType *Int8PtrTy, Function *parent)
-   : Constant(BasicBlockID, Int8PtrTy),
+BasicBlock::BasicBlock(Function *parent)
+   : Constant(BasicBlockID, ValueType(parent->getCtx(),
+                                      parent->getASTCtx().getAnyLabelTy())),
      parent(parent),
      Instructions(parent && !parent->getBasicBlocks().empty()
                   ? std::move(InstList(this, parent->getBasicBlocks().front()
@@ -94,16 +99,6 @@ Argument* BasicBlock::getBlockArg(unsigned idx)
    return &Args[idx];
 }
 
-void BasicBlock::addPredecessor(BasicBlock *pred)
-{
-   Predecessors.insert(pred);
-}
-
-const BasicBlock::PredecessorList &BasicBlock::getPredecessors() const
-{
-   return Predecessors;
-}
-
 bool BasicBlock::isEntryBlock() const
 {
    return this == parent->getEntryBlock();
@@ -111,21 +106,15 @@ bool BasicBlock::isEntryBlock() const
 
 bool BasicBlock::hasNoPredecessors() const
 {
-   if (isEntryBlock()) return false;
-   return Predecessors.empty();
-}
+   if (this == parent->getEntryBlock())
+      return false;
 
-void BasicBlock::addBlockArg(Type *ty, llvm::StringRef name)
-{
-   Args.push_back(new Argument(ty, false, this));
-   if (!name.empty()) {
-      Args.back().setName(name);
-   }
+   return pred_begin(this) == pred_end(this);
 }
 
 void BasicBlock::addBlockArg(QualType ty, llvm::StringRef name)
 {
-   Args.push_back(new Argument(ty, false, this));
+   Args.push_back(new Argument(ValueType(getCtx(), ty), false, this));
    if (!name.empty()) {
       Args.back().setName(name);
    }

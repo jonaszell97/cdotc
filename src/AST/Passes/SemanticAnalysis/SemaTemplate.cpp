@@ -4,12 +4,9 @@
 
 #include "SemaPass.h"
 
+#include "AST/Passes/ILGen/ILGenPass.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
-
-#include "AST/Statement/Declaration/Class/RecordDecl.h"
-#include "AST/Statement/Declaration/Class/MethodDecl.h"
-#include "AST/Statement/Declaration/CallableDecl.h"
-#include "AST/Statement/Declaration/TypedefDecl.h"
+#include "AST/NamedDecl.h"
 
 using namespace cdot::support;
 using namespace cdot::sema;
@@ -17,13 +14,39 @@ using namespace cdot::sema;
 namespace cdot {
 namespace ast {
 
-RecordDecl* SemaPass::InstantiateRecord(RecordDecl *R,
-                                        TemplateArgList &&TAs,
-                                        SourceLocation loc) {
-   auto Inst = TemplateInstantiator::InstantiateRecord(*this, loc,
-                                                       R, std::move(TAs));
+void SemaPass::declareRecordInstantiation(Statement *DependentStmt,
+                                          RecordDecl *Inst) {
+   InstantiationRAII instRAII(*this, Inst->getDeclContext(), Inst);
+   (void)declareStmt(Inst);
 
-   return Inst;
+   checkProtocolConformance(Inst);
+   calculateRecordSize(Inst);
+
+   registerDelayedInstantiation(Inst, DependentStmt);
+}
+
+void SemaPass::visitRecordInstantiation(Statement *DependentStmt,
+                                        RecordDecl *Inst) {
+   InstantiationRAII instRAII(*this, Inst->getDeclContext(), Inst);
+   (void)visitStmt(DependentStmt, Inst);
+}
+
+void SemaPass::visitFunctionInstantiation(Statement *DependentStmt,
+                                          CallableDecl *Inst) {
+   InstantiationRAII raii(*this, Inst->getParentCtx(), Inst);
+   ScopeResetRAII scopeStack(*this);
+   DeclScopeRAII declScopeRAII(*this, Inst->getDeclContext());
+
+   if (auto F = dyn_cast<FunctionDecl>(Inst)) {
+      (void)visitStmt(DependentStmt, F);
+   }
+   else {
+      auto M = cast<MethodDecl>(Inst);
+      if (M->isTemplate())
+         ILGen->DeclareMethod(M);
+
+      (void)visitStmt(DependentStmt, M);
+   }
 }
 
 } // namespace ast

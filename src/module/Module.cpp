@@ -8,7 +8,7 @@
 #include "IdentifierTable.h"
 
 #include "../Files/FileUtils.h"
-#include "../AST/Statement/Declaration/NamedDecl.h"
+#include "AST/NamedDecl.h"
 
 namespace cdot {
 namespace module {

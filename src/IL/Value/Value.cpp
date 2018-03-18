@@ -3,10 +3,15 @@
 //
 
 #include "Value.h"
-#include "../Module/Module.h"
-#include "GlobalVariable.h"
 #include "Use.h"
+
+#include "AST/ASTContext.h"
+
+#include "IL/Module/Module.h"
+#include "IL/Module/Context.h"
+
 #include "MetaData/MetaData.h"
+
 #include "ValueSymbolTable.h"
 
 #define CDOT_VALUE_INCLUDE
@@ -17,25 +22,24 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-llvm::SmallVector<Value*, 256> Value::CreatedValues;
-
-void Value::cleanup()
+ValueType ValueType::getPointerTo() const
 {
-   for (auto &Val : CreatedValues)
-      Val->deleteValue();
-
-   CreatedValues.clear();
+   return ValueType(Ctx, Ctx.getASTCtx().getPointerType(Ty));
 }
 
-Value::Value(TypeID id, QualType ty)
+ValueType ValueType::getReferenceTo() const
+{
+   return ValueType(Ctx, Ctx.getASTCtx().getReferenceType(Ty));
+}
+
+void ValueType::makeReference()
+{
+   Ty = Ctx.getASTCtx().getReferenceType(Ty);
+}
+
+Value::Value(TypeID id, ValueType ty)
    : id(id), Flags(0), SubclassData(0), type(ty), uses(0), metaData(nullptr)
 {
-}
-
-Value::Value(TypeID id, Type *ty)
-   : Value(id, QualType(ty))
-{
-
 }
 
 Value::~Value()
@@ -55,16 +59,6 @@ void Value::deleteValue()
    }
 }
 
-Value::TypeID Value::getTypeID() const
-{
-   return id;
-}
-
-QualType Value::getType() const
-{
-   return type;
-}
-
 bool Value::getFlag(Flag f) const
 {
    return (Flags & f) != 0;
@@ -80,16 +74,6 @@ void Value::setFlag(Flag f, bool value)
    }
 }
 
-bool Value::isLvalue() const
-{
-   return type.isLvalue();
-}
-
-void Value::setIsLvalue(bool lvalue)
-{
-   type.isLvalue(lvalue);
-}
-
 bool Value::isSelf() const
 {
    if (auto Arg = dyn_cast<Argument>(this)) {
@@ -99,7 +83,30 @@ bool Value::isSelf() const
    return false;
 }
 
-void Value::removeFromParent()
+ast::ASTContext& Value::getASTCtx() const
+{
+   return getCtx().getASTCtx();
+}
+
+bool Value::isLvalue() const
+{
+   return type->isReferenceType();
+}
+
+void Value::setIsLvalue(bool ref)
+{
+   if (isLvalue() == ref)
+      return;
+
+   if (ref) {
+      type = getASTCtx().getReferenceType((QualType)type);
+   }
+   else {
+      type = type->asReferenceType()->getReferencedType();
+   }
+}
+
+void Value::detachFromParent()
 {
    if (auto Inst = dyn_cast<Instruction>(this)) {
       auto func = Inst->getParent();
@@ -139,6 +146,14 @@ void Value::removeFromParent()
    else {
       llvm_unreachable("cannot remove value!");
    }
+}
+
+void Value::detachAndErase()
+{
+   detachFromParent();
+   assert(!getNumUses() && "can't erase value with multiple users");
+
+   deleteValue();
 }
 
 void Value::addUse(Value *User)
@@ -204,7 +219,7 @@ bool Value::isUnused() const
 
 void Value::replaceAllUsesWith(Value *V)
 {
-   assert(*type == *V->getType() && "replacement value must be of same type");
+   assert(type == V->getType() && "replacement value must be of same type");
    if (uses) {
       for (auto *use : *uses) {
          cast<Instruction>(use->getUser())->replaceOperand(this, V);
@@ -269,30 +284,14 @@ bool Value::hasName() const
    return !name.empty();
 }
 
-MDLocation *Value::getLocation() const
+void Value::setLocation(SourceLocation location)
 {
-   auto MD = getMetaData(MDLocationID);
-   if (!MD)
-      return nullptr;
-
-   return cast<MDLocation>(MD);
-}
-
-void Value::setLocation(const SourceLocation &location)
-{
-   if (!metaData)
-      metaData = new MDSet;
-
-   metaData->setNode(MDLocation::get(location));
+   loc = location;
 }
 
 SourceLocation Value::getSourceLoc() const
 {
-   auto MD = getMetaData(MDLocationID);
-   if (!MD)
-      return {};
-
-   return cast<MDLocation>(MD)->getLocation();
+   return loc;
 }
 
 MDSet *Value::getMetaData() const

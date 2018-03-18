@@ -16,12 +16,7 @@ class BasicBlock;
 class Argument: public Value,
                 public llvm::ilist_node_with_parent<Argument, BasicBlock> {
 public:
-   Argument(Type *type,
-            bool vararg,
-            BasicBlock *parent,
-            llvm::StringRef name = "");
-
-   Argument(QualType type,
+   Argument(ValueType type,
             bool vararg,
             BasicBlock *parent,
             llvm::StringRef name = "");

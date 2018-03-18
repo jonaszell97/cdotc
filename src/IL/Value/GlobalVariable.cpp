@@ -8,7 +8,17 @@
 namespace cdot {
 namespace il {
 
-GlobalVariable::GlobalVariable(Type *ty,
+GlobalObject::GlobalObject(TypeID id,
+                           QualType ty,
+                           Module *module,
+                           llvm::StringRef name)
+   : Constant(id, ValueType(module->getContext(), ty)),
+     parent(module)
+{
+   this->name = name;
+}
+
+GlobalVariable::GlobalVariable(QualType ty,
                                bool isConstant,
                                llvm::StringRef name,
                                Module *module,
@@ -19,7 +29,6 @@ GlobalVariable::GlobalVariable(Type *ty,
    setIsLvalue(true);
 
    if (isConstant) {
-      type.isConst(true);
       SubclassData |= Flags::Const;
    }
 
@@ -28,13 +37,11 @@ GlobalVariable::GlobalVariable(Type *ty,
 }
 
 GlobalVariable::GlobalVariable(const GlobalVariable &var)
-   : GlobalObject(GlobalVariableID, *var.getType(), nullptr, var.name),
+   : GlobalObject(GlobalVariableID, var.getType(), nullptr, var.name),
      initializer(nullptr)
 {
    setIsLvalue(true);
-   if (auto L = var.getLocation())
-      addMetaData(L);
-
+   loc = var.loc;
    SubclassData |= Flags::Declared;
 }
 

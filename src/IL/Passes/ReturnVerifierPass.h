@@ -13,7 +13,7 @@ namespace il {
 
 class ReturnVerifierPass: public InstructionVisitor<ReturnVerifierPass, void> {
 public:
-   ReturnVerifierPass() : InstructionVisitor(ReturnVerifierPassID)
+   ReturnVerifierPass()
    {
 
    }

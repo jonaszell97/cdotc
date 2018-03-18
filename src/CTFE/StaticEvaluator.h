@@ -38,8 +38,8 @@ public:
            ValueDependent(ValueDependent)
       { }
 
-      StaticExprResult(llvm::ArrayRef<diag::DiagnosticBuilder> Diags)
-         : Diagnostics(Diags.begin(), Diags.end())
+      StaticExprResult()
+         : HadError(true)
       { }
 
       bool hadError() const
@@ -57,11 +57,6 @@ public:
          return ValueDependent;
       }
 
-      llvm::ArrayRef<diag::DiagnosticBuilder> getDiagnostics() const
-      {
-         return Diagnostics;
-      }
-
       Variant &getResult()
       {
          return Result;
@@ -77,7 +72,6 @@ public:
       bool TypeDependent  : 1;
       bool ValueDependent : 1;
 
-      llvm::SmallVector<diag::DiagnosticBuilder, 4> Diagnostics;
       Variant Result;
    };
 

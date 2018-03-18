@@ -43,56 +43,5 @@ void MDSet::removeIfPresent(MDKind kind)
       ContainedMD.erase(it);
 }
 
-MDFile::MDFile(const std::string &fileName, const std::string &path)
-   : MetaData(MDFileID), fileName(fileName), path(path)
-{
-
-}
-
-llvm::SmallDenseMap<size_t, MDFile*> MDFile::Instances;
-
-MDFile* MDFile::get(size_t sourceID)
-{
-   auto it = Instances.find(sourceID);
-   if (it != Instances.end()) {
-      return it->second;
-   }
-
-   auto fullName = fs::FileManager::getFileName(sourceID).str();
-   auto fileName = fs::getFileName(fullName);
-   auto path = fs::getPath(fullName);
-
-   auto file = new MDFile(fileName, path);
-   Instances.try_emplace(sourceID, file);
-
-   return file;
-}
-
-llvm::SmallDenseMap<uint64_t, MDLocation*> MDLocation::Instances;
-
-MDLocation* MDLocation::get(const SourceLocation &loc)
-{
-   auto key = *reinterpret_cast<uint64_t const*>(&loc);
-   auto it = Instances.find(key);
-   if (it != Instances.end())
-      return it->second;
-
-   auto newInst = new MDLocation(loc);
-   Instances.try_emplace(key, newInst);
-
-   return newInst;
-}
-
-MDLocation::MDLocation(const SourceLocation &loc)
-   : MetaData(MDLocationID), location(loc)
-{
-   if (!loc)
-      return;
-
-   auto lineAndCol = fs::FileManager::getLineAndCol(loc);
-   line = lineAndCol.first;
-   col = lineAndCol.second;
-}
-
 } // namespace il
 } // namespace cdot

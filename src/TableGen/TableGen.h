@@ -54,6 +54,9 @@ public:
 } // namespace llvm
 
 namespace cdot {
+
+class DiagnosticsEngine;
+
 namespace tblgen {
 
 class Record;
@@ -62,8 +65,8 @@ class RecordKeeper;
 
 class TableGen {
 public:
-   TableGen()
-      : Idents(1024),
+   TableGen(DiagnosticsEngine &Diags)
+      : Diags(Diags), Idents(1024),
         Int1Ty(1, false),
         Int8Ty(8, false),   UInt8Ty(8, true),
         Int16Ty(16, false), UInt16Ty(16, true),
@@ -107,6 +110,8 @@ public:
    };
 
    FinalizeResult finalizeRecord(Record &R);
+
+   DiagnosticsEngine &Diags;
 
 private:
    mutable IdentifierTable Idents;

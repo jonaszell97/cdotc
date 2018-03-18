@@ -5,13 +5,13 @@
 #include <string>
 #include "Serialization.h"
 
-#include "../../Support/ExtendedSerializerBase.h"
+#include "Support/ExtendedSerializerBase.h"
 
-#include "../Module/Module.h"
-#include "../Module/Context.h"
+#include "IL/Module/Module.h"
+#include "IL/Module/Context.h"
 
-#include "../../AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "../../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/NamedDecl.h"
 
 #define CDOT_VALUE_INCLUDE
 #include "../Value/ValueIncludes.def"
@@ -103,17 +103,10 @@ private:
       WriteQualType(Pair.second);
    }
 
-   void WriteCapture(Lambda::Capture const& C)
-   {
-      Writer.WriteULEB128(C.id);
-      WriteQualType(C.type);
-   }
-
    void WriteField(const StructType::Field &F)
    {
       WriteString(F.name);
       WriteQualType(F.type);
-      WriteBool(F.isStatic);
    }
 
    void WriteCase(const EnumType::Case &C)
@@ -162,7 +155,7 @@ public:
    ModuleDeserializer(ast::ASTContext &ASTCtx, il::Context &Ctx, SemaPass &SP,
                       llvm::MemoryBuffer &Buf)
       : ExtendedDeserializerBase(SP, &Buf),
-        ASTCtx(ASTCtx), Ctx(Ctx), SP(SP), Builder(ASTCtx, Ctx)
+        Ctx(Ctx), SP(SP), Builder(ASTCtx, Ctx)
    {}
 
    Module *deserialize()
@@ -202,7 +195,6 @@ public:
    }
 
 private:
-   ast::ASTContext &ASTCtx;
    il::Context &Ctx;
    SemaPass &SP;
    ILBuilder Builder;
@@ -327,22 +319,22 @@ AggregateType* ModuleDeserializer::ReadAggrDecl()
    auto R = SP.getRecord(name);
 
    if (typeID == Value::StructTypeID) {
-      return Builder.DeclareStruct(cast<StructDecl>(R), name);
+      return Builder.CreateStruct(cast<StructDecl>(R), name);
    }
    else if (typeID == Value::ClassTypeID) {
-      return Builder.DeclareClass(cast<ClassDecl>(R), name);
+      return Builder.CreateClass(cast<ClassDecl>(R), name);
    }
    else if (typeID == Value::UnionTypeID) {
-      return Builder.DeclareUnion(cast<UnionDecl>(R), name);
+      return Builder.CreateUnion(cast<UnionDecl>(R), name);
    }
    else if (typeID == Value::EnumTypeID) {
-      auto E = Builder.DeclareEnum(cast<EnumDecl>(R), name);
+      auto E = Builder.CreateEnum(cast<EnumDecl>(R), name);
       E->setRawType(ReadType());
 
       return E;
    }
    else {
-      return Builder.DeclareProtocol(cast<ProtocolDecl>(R), name);
+      return Builder.CreateProtocol(cast<ProtocolDecl>(R), name);
    }
 }
 
@@ -353,9 +345,8 @@ void ModuleDeserializer::ReadAggrDefinition(AggregateType *Ty)
       for (size_t i = 0; i < numFields; ++i) {
          auto fieldName = ReadString();
          auto type = ReadQualType();
-         bool isStatic = ReadBool();
 
-         S->addField({ move(fieldName), type, isStatic });
+         S->addField({ move(fieldName), ValueType(Ctx, type) });
       }
    }
    else if (auto E = dyn_cast<EnumType>(Ty)) {
@@ -419,7 +410,7 @@ void ModuleSerializer::WriteFunctionDecl(Function const &F)
                  M->isVirtual());
    }
    else if (auto L = dyn_cast<Lambda>(&F)) {
-      WriteList(L->getCaptures(), &ModuleSerializer::WriteCapture);
+      WriteList(L->getCaptures(), &ModuleSerializer::WriteQualType);
    }
 }
 
@@ -455,10 +446,8 @@ Function* ModuleDeserializer::ReadFunctionDecl()
       auto numCaptures = Reader.ReadULEB128();
 
       for (size_t i = 0; i < numCaptures; ++i) {
-         auto id = Reader.ReadULEB128();
          auto ty = ReadQualType();
-
-         L->addCapture(id, ty);
+         L->addCapture(ty);
       }
 
       F = L;
@@ -577,7 +566,7 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
    if (auto EnumExtract = dyn_cast<EnumExtractInst>(&I)) {
       WriteValue(*EnumExtract->getOperand(0));
       WriteString(EnumExtract->getCaseName());
-      Writer.WriteULEB128(EnumExtract->getCaseVal()->getU64());
+      Writer.WriteULEB128(EnumExtract->getCaseVal()->getZExtValue());
 
       return;
    }
@@ -709,20 +698,14 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
 
    if (auto Switch = dyn_cast<SwitchInst>(&I)) {
       WriteValue(*Switch->getSwitchVal());
+      WriteString(Switch->getDefault()->getName());
 
       auto &Cases = Switch->getCases();
-      WriteSize(Cases);
+      Writer.WriteULEB128(Cases.size());
 
       for (auto &C : Cases) {
-         if (!C.first) {
-            WriteBool(true);
-            WriteString(C.second->getName());
-         }
-         else {
-            WriteBool(false);
-            WriteString(C.second->getName());
-            WriteConstant(*C.first);
-         }
+         WriteString(C.second->getName());
+         WriteConstant(*C.first);
       }
 
       return;
@@ -734,13 +717,26 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
          WriteString(Catch.TargetBB->getName());
          if (Catch.CaughtType) {
             WriteBool(true);
-            WriteType(Catch.CaughtType);
+            WriteQualType(Catch.CaughtType);
          }
          else {
             WriteBool(false);
          }
       }
 
+      return;
+   }
+
+   if (auto Unary = dyn_cast<UnaryOperatorInst>(&I)) {
+      WriteByte(Unary->getOpCode());
+      WriteValue(*Unary->getOperand(0));
+      return;
+   }
+
+   if (auto Binary = dyn_cast<BinaryOperatorInst>(&I)) {
+      WriteByte(Binary->getOpCode());
+      WriteValue(*Binary->getOperand(0));
+      WriteValue(*Binary->getOperand(1));
       return;
    }
 
@@ -792,7 +788,7 @@ Instruction *ModuleDeserializer::ReadInstruction()
       auto val = ReadValue();
       auto idx = cast<ConstantInt>(ReadValue());
 
-      I = Builder.CreateTupleExtract(val, idx->getU64());
+      I = Builder.CreateTupleExtract(val, idx->getZExtValue());
    }
    else if (kind == Value::FieldRefInstID) {
       auto fieldName = ReadString();
@@ -814,7 +810,7 @@ Instruction *ModuleDeserializer::ReadInstruction()
    }
    else if (kind == Value::CaptureExtractInstID) {
       I = Builder.CreateCaptureExtract(cast<ConstantInt>(ReadValue())
-                                          ->getU64());
+                                          ->getZExtValue());
    }
    else if (kind == Value::AddrOfInstID) {
       I = Builder.CreateAddrOf(ReadValue());
@@ -869,19 +865,14 @@ Instruction *ModuleDeserializer::ReadInstruction()
    }
    else if (kind == Value::SwitchInstID) {
       auto SwitchVal = ReadValue();
-      auto Switch = Builder.CreateSwitch(SwitchVal);
+      auto DefaultBB = getBasicBlock(ReadString());
+
+      auto Switch = Builder.CreateSwitch(SwitchVal, DefaultBB);
 
       auto numCases = Reader.ReadULEB128();
       for (size_t i = 0; i < numCases; ++i) {
-         auto isDefault = ReadBool();
          auto BB = getBasicBlock(ReadString());
-
-         if (isDefault) {
-            Switch->addDefaultCase(BB);
-         }
-         else {
-            Switch->addCase(cast<ConstantInt>(ReadConstant()), BB);
-         }
+         Switch->addCase(cast<ConstantInt>(ReadConstant()), BB);
       }
 
       I = Switch;
@@ -994,48 +985,26 @@ Instruction *ModuleDeserializer::ReadInstruction()
 
       I = Builder.CreateLambdaInit(fn, SP.getObjectTy("cdot.Lambda"), args);
    }
+   else if (kind == Value::UnaryOperatorInstID) {
+      auto opc = ReadEnum<UnaryOperatorInst::OpCode>();
+      auto val = ReadValue();
 
-#  define CDOT_BINARY_INST(Name)           \
-   else if (kind == Value::Name##InstID) { \
-      auto lhs = ReadValue();              \
-      auto rhs = ReadValue();              \
-      I = Builder.Create##Name(lhs, rhs);  \
+      I = Builder.CreateUnaryOp(opc, val);
    }
+   else if (kind == Value::BinaryOperatorInstID) {
+      auto opc = ReadEnum<BinaryOperatorInst::OpCode>();
+      auto lhs = ReadValue();
+      auto rhs = ReadValue();
 
-#  define CDOT_UNARY_INST(Name)            \
-   else if (kind == Value::Name##InstID) { \
-      auto lhs = ReadValue();              \
-      I = Builder.Create##Name(lhs);       \
+      I = Builder.CreateBinOp(opc, lhs, rhs);
    }
+   else if (kind == Value::CompInstID) {
+      auto opc = ReadEnum<CompInst::OpCode>();
+      auto lhs = ReadValue();
+      auto rhs = ReadValue();
 
-   CDOT_BINARY_INST(Add)
-   CDOT_BINARY_INST(Sub)
-   CDOT_BINARY_INST(Mul)
-   CDOT_BINARY_INST(Div)
-   CDOT_BINARY_INST(Mod)
-   CDOT_BINARY_INST(Exp)
-
-   CDOT_BINARY_INST(And)
-   CDOT_BINARY_INST(Or)
-   CDOT_BINARY_INST(Xor)
-
-   CDOT_BINARY_INST(LShr)
-   CDOT_BINARY_INST(AShr)
-   CDOT_BINARY_INST(Shl)
-
-   CDOT_BINARY_INST(CompEQ)
-   CDOT_BINARY_INST(CompNE)
-   CDOT_BINARY_INST(CompLT)
-   CDOT_BINARY_INST(CompGT)
-   CDOT_BINARY_INST(CompLE)
-   CDOT_BINARY_INST(CompGE)
-
-   CDOT_UNARY_INST(Min)
-   CDOT_UNARY_INST(Neg)
-
-#  undef CDOT_BINARY_INST
-#  undef CDOT_UNARY_INST
-
+      I = Builder.CreateComp(opc, lhs, rhs);
+   }
    else if (kind == Value::BitCastInstID) {
       auto castKind = ReadEnum<CastKind>();
       I = Builder.CreateBitCast(castKind, ReadValue(), *type);
@@ -1089,7 +1058,7 @@ void ModuleSerializer::WriteConstant(const Constant &C)
 
    switch (C.getTypeID()) {
       case Value::ConstantIntID: {
-         Writer.WriteULEB128(cast<ConstantInt>(&C)->getU64());
+         Writer.WriteULEB128(cast<ConstantInt>(&C)->getZExtValue());
          break;
       }
       case Value::ConstantFloatID: {
@@ -1177,7 +1146,7 @@ Constant* ModuleDeserializer::ReadConstantWithKnownKind(Value::TypeID kind)
    auto type = ReadQualType();
    switch (kind) {
       case Value::ConstantIntID:
-         return ConstantInt::get(*type, Reader.ReadULEB128());
+         return Builder.GetConstantInt(type, Reader.ReadULEB128());
       case Value::ConstantFloatID: {
          union {
             double d;
@@ -1188,17 +1157,17 @@ Constant* ModuleDeserializer::ReadConstantWithKnownKind(Value::TypeID kind)
          u.s = Reader.ReadULEB128();
 
          if (type->isFloatTy())
-            return ConstantFloat::get(ASTCtx.getFloatTy(), u.f);
+            return Builder.GetConstantFloat(u.f);
 
-         return ConstantFloat::get(ASTCtx.getDoubleTy(), u.d);
+         return Builder.GetConstantDouble(u.d);
       }
       case Value::ConstantStringID:
-         return ConstantString::get(ASTCtx.getInt8PtrTy(), ReadString());
+         return ConstantString::get(Ctx, ReadString());
       case Value::ConstantPointerID:
-         return ConstantPointer::get(*type, Reader.ReadULEB128());
+         return Builder.GetConstantPtr(type, Reader.ReadULEB128());
       case Value::ConstantArrayID: {
          auto elements = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
-         return ConstantArray::get(cast<ArrayType>(*type), elements);
+         return ConstantArray::get(ValueType(Ctx, type), elements);
       }
       case Value::ConstantStructID: {
          auto elements = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
@@ -1217,10 +1186,10 @@ Constant* ModuleDeserializer::ReadConstantWithKnownKind(Value::TypeID kind)
                               Deinit, NumConf, Conformances);
       }
       case Value::ConstantBitCastInstID:
-         return ConstantExpr::getBitCast(ReadConstant(), *type);
+         return ConstantExpr::getBitCast(ReadConstant(), type);
       case Value::ConstantAddrOfInstID: {
          auto C = ReadConstant();
-         return ConstantExpr::getAddrOf(C, C->getType()->getPointerTo(ASTCtx));
+         return ConstantExpr::getAddrOf(C);
       }
       default:
          llvm_unreachable("bad constant kind");

@@ -10,95 +10,24 @@
 
 namespace cdot {
 
-class Type;
-
-namespace ast {
-   class MethodDecl;
-   class SemaPass;
-} // namespace ast
-
 enum class CastKind : unsigned char {
-   NoOp = 0, Invalid,
+   NoOp = 0, Invalid, LValueToRValue,
    IBox, IUnbox, IntToFP, FPToInt, Ext, Trunc, PtrToInt, IntToPtr, SignFlip,
 
    FPExt, FPTrunc, FPBox, FPUnbox,
    DynCast, UpCast, ConversionOp, BitCast, ProtoWrap, ProtoUnwrap,
 
-   TupleCast, FunctionCast, IntToEnum, EnumToInt
+   IntToEnum, EnumToInt
+};
+
+enum CastStrength : unsigned char {
+   Implicit = 0,
+   Normal,
+   Fallible,
+   Force
 };
 
 extern const char* CastNames[];
-
-class CastResult {
-public:
-   enum RequiredStrength : unsigned char {
-      Implicit,
-      Normal,
-      Fallible,
-      Force
-   };
-
-   CastResult(CastKind kind,
-              RequiredStrength strength,
-              Type const* Ty,
-              ast::MethodDecl *op = nullptr)
-      : neededCasts{ { kind, const_cast<Type*>(Ty) } }, strength(strength),
-        conversionOp(op)
-   {
-
-   }
-
-   void addCast(CastKind kind, Type const* intermediate)
-   {
-      neededCasts.emplace_back(kind, const_cast<Type*>(intermediate));
-   }
-
-   void addCastAtBegin(CastKind kind, Type const* intermediate)
-   {
-      neededCasts.insert(neededCasts.begin(),
-                         std::make_pair(kind, const_cast<Type*>(intermediate)));
-   }
-
-   CastResult()
-      : neededCasts{{ CastKind::Invalid, (Type*)nullptr }},
-        strength(Implicit)
-   {}
-
-   llvm::ArrayRef<std::pair<CastKind, Type*>> getNeededCasts() const
-   {
-      return neededCasts;
-   }
-
-   RequiredStrength getStrength() const { return strength; }
-   ast::MethodDecl *getConversionOp() const { return conversionOp; }
-
-   bool isValid() const
-   {
-      return neededCasts.empty() || neededCasts.front().first
-                                    != CastKind::Invalid;
-   }
-
-   bool isNoOp() const
-   {
-      if (neededCasts.empty())
-         return true;
-
-      for (auto C : neededCasts)
-         if (C.first != CastKind::NoOp)
-            return false;
-
-      return true;
-   }
-
-private:
-   llvm::SmallVector<std::pair<CastKind, Type*>, 4> neededCasts;
-   RequiredStrength strength;
-
-   ast::MethodDecl *conversionOp = nullptr;
-};
-
-CastResult getCastKind(ast::SemaPass const& SP, Type* from,
-                       Type* to);
 
 } // namespace cdot
 

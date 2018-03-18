@@ -4,31 +4,14 @@
 
 #include "SemaPass.h"
 
-#include "AST/Statement/Declaration/Class/RecordDecl.h"
-#include "AST/Statement/Declaration/Class/FieldDecl.h"
-#include "AST/Statement/Declaration/Class/PropDecl.h"
-#include "AST/Statement/Declaration/Class/MethodDecl.h"
-#include "AST/Statement/Declaration/Class/EnumCaseDecl.h"
-#include "AST/Statement/Declaration/LocalVarDecl.h"
-
-#include "AST/Statement/Block/CompoundStmt.h"
-#include "AST/Statement/Static/StaticStmt.h"
-
-#include "AST/Expression/TypeRef.h"
-#include "AST/Expression/StaticExpr.h"
-
+#include "AST/NamedDecl.h"
 #include "AST/ASTContext.h"
-
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
 #include "AST/Passes/SemanticAnalysis/ConformanceChecker.h"
-
-#include "AST/Passes/StaticExpr/StaticExprEvaluator.h"
-#include "AST/Passes/Declaration/DeclPass.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
-
-#include "Support/Casting.h"
-#include "Message/Diagnostics.h"
 #include "Basic/DependencyGraph.h"
+#include "Message/Diagnostics.h"
+#include "Support/Casting.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/Twine.h>
@@ -41,14 +24,19 @@ namespace ast {
 
 void SemaPass::checkConformances()
 {
-   for (auto &translationUnit : getCompilationUnit().getGlobalDeclCtx()
-                                                    .getTranslationUnits()) {
-      translationUnit->forEachRecursive<RecordDecl>([this](RecordDecl *R) {
-         if (isa<ProtocolDecl>(R))
-            return;
+   checkConformances(&getCompilationUnit().getGlobalDeclCtx());
+}
 
+void SemaPass::checkConformances(DeclContext *Ctx)
+{
+   for (auto &Decl : Ctx->getDecls()) {
+      if (auto R = dyn_cast<RecordDecl>(Decl)) {
          checkProtocolConformance(R);
-      });
+      }
+
+      if (auto InnerCtx = dyn_cast<DeclContext>(Decl)) {
+         checkConformances(InnerCtx);
+      }
    }
 }
 
@@ -56,168 +44,167 @@ void SemaPass::checkProtocolConformance(RecordDecl *R)
 {
    cdot::sema::ConformanceChecker CC(*this, R);
    CC.checkConformance();
-
-   issueDiagnostics(CC);
 }
 
-void SemaPass::visitRecordCommon(RecordDecl *R)
+DeclResult SemaPass::visitRecordCommon(RecordDecl *R)
 {
-   ScopeGuard guard(*this, R);
-
-   for (auto &decl : R->getDecls()) {
-      visit(decl);
+   if (!isDeclared(R)) {
+      auto declRes = declareStmt(R);
+      if (!declRes)
+         return R;
    }
 
-   for (const auto &Static : R->getStaticStatements()) {
-      visit(Static);
-   }
+   DeclContextRAII declContextRAII(*this, R);
+
+   for (auto &decl : R->getDecls())
+      visitStmt(R, decl);
+
+   return R;
 }
 
-void SemaPass::visitRecordDecl(RecordDecl *node)
+DeclResult SemaPass::visitRecordDecl(RecordDecl *R)
 {
-   switch (node->getTypeID()) {
-      case AstNode::ClassDeclID:
-         visitClassDecl(cast<ClassDecl>(node));
+   switch (R->getKind()) {
+      case Decl::ClassDeclID:
+         visitClassDecl(cast<ClassDecl>(R));
          break;
-      case AstNode::StructDeclID:
-         visitStructDecl(cast<StructDecl>(node));
+      case Decl::StructDeclID:
+         visitStructDecl(cast<StructDecl>(R));
          break;
-      case AstNode::EnumDeclID:
-         visitEnumDecl(cast<EnumDecl>(node));
+      case Decl::EnumDeclID:
+         visitEnumDecl(cast<EnumDecl>(R));
          break;
-      case AstNode::UnionDeclID:
-         visitUnionDecl(cast<UnionDecl>(node));
+      case Decl::UnionDeclID:
+         visitUnionDecl(cast<UnionDecl>(R));
          break;
-      case AstNode::ProtocolDeclID:
-         visitProtocolDecl(cast<ProtocolDecl>(node));
+      case Decl::ProtocolDeclID:
+         visitProtocolDecl(cast<ProtocolDecl>(R));
          break;
       default:
          llvm_unreachable("not a record decl");
    }
+
+   return R;
 }
 
-void SemaPass::visitFieldDecl(FieldDecl *node)
+DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
 {
-   if (alreadyVisited(node))
-      return;
+   if (alreadyVisited(FD))
+      return FD;
 
-   auto R = node->getRecord();
-   auto &fieldType = node->getType()->getTypeRef();
+   auto R = FD->getRecord();
+   auto &fieldType = FD->getType();
 
-   if (auto defaultVal = node->getDefaultVal()) {
+   if (auto defaultVal = FD->getDefaultVal()) {
       defaultVal->setContextualType(fieldType);
 
-      QualType givenType = visit(defaultVal);
-      toRvalueIfNecessary(givenType, defaultVal);
+      auto typeRes = getAsOrCast(FD, defaultVal, fieldType);
+      if (typeRes) {
+         auto givenType = typeRes.get()->getExprType();
+         if (fieldType->isAutoType()) {
+            fieldType.setResolvedType(givenType);
 
-      if (fieldType->isAutoType()) {
-         fieldType = givenType;
-         node->getType()->setType(givenType);
-         R->getField(node->getName())->getType()->setType(fieldType);
+            FD->getType().setResolvedType(givenType);
+            R->getField(FD->getName())->getType().setResolvedType(fieldType);
 
-         if (node->isStatic()) {
-            auto ty = fieldType;
-            ty.isLvalue(true);
-         }
-         else {
-            auto ty = fieldType;
-            if (node->hasGetter()) {
-               node->getGetterMethod()->getReturnType()->setType(ty);
-            }
-            if (node->hasSetter()) {
-               node->getSetterMethod()->getArgs().front()
-                   ->getArgType()->setType(ty);
+            if (!FD->isStatic()) {
+               auto ty = fieldType;
+               if (FD->hasGetter()) {
+                  FD->getGetterMethod()->getReturnType().setResolvedType(ty);
+               }
+               if (FD->hasSetter()) {
+                  FD->getSetterMethod()->getArgs().front()
+                      ->getArgType().setResolvedType(ty);
+               }
             }
          }
       }
-
-      implicitCastIfNecessary(defaultVal, givenType, fieldType);
    }
 
-   if (node->hasGetter() && node->getGetterBody() != nullptr) {
-      ScopeGuard scope(*this, node->getGetterMethod());
-      visit(node->getGetterBody());
+   if (FD->hasGetter() && FD->getGetterBody() != nullptr) {
+      ScopeGuard scope(*this, FD->getGetterMethod());
+
+      auto Res = visitStmt(FD, FD->getGetterBody());
+      if (Res)
+         FD->setGetterBody(cast<CompoundStmt>(Res.get()));
    }
 
-   if (node->hasSetter() && node->getSetterBody() != nullptr) {
-      ScopeGuard scope(*this, node->getSetterMethod());
+   if (FD->hasSetter() && FD->getSetterBody() != nullptr) {
+      ScopeGuard scope(*this, FD->getSetterMethod());
 
-      auto typeref = new (getContext()) TypeRef();
-      typeref->setResolved(true);
-      typeref->setType(fieldType);
-
-      node->setNewVal(new (getContext()) FuncArgDecl("newVal", typeref,
+      auto typeref = SourceType(fieldType);
+      FD->setNewVal(new (getContext()) FuncArgDecl("newVal", typeref,
                                                     nullptr, false, true));
 
 
-      (void)node->getSetterMethod()->addDecl(node->getNewVal());
-      visit(node->getSetterBody());
+      (void)FD->getSetterMethod()->addDecl(FD->getNewVal());
+
+      auto Res = visitStmt(FD, FD->getSetterBody());
+      if (Res)
+         FD->setSetterBody(cast<CompoundStmt>(Res.get()));
    }
+
+   return FD;
 }
 
-void SemaPass::visitPropDecl(PropDecl *node)
+DeclResult SemaPass::visitPropDecl(PropDecl *PD)
 {
-   if (alreadyVisited(node))
-      return;
+   if (alreadyVisited(PD))
+      return PD;
 
-   auto &propTy = node->getType()->getTypeRef();
-
-   if (propTy->isDependentType())
-      return node->setIsTypeDependent(true);
-
-   if (node->hasGetter() && node->getGetterBody() != nullptr) {
-      ScopeGuard scope(*this, node->getGetterMethod());
-      visit(node->getGetterBody());
+   auto &propTy = PD->getType();
+   if (propTy->isDependentType()) {
+      PD->setIsTypeDependent(true);
+      return PD;
    }
 
-   if (node->hasSetter() && node->getSetterBody() != nullptr) {
-      ScopeGuard scope(*this, node->getSetterMethod());
-
-      auto typeref = new (getContext()) TypeRef();
-      typeref->setResolved(true);
-      typeref->setType(propTy);
-
-      visit(node->getSetterBody());
+   if (PD->hasGetter()) {
+      visitCallableDecl(PD->getGetterMethod());
    }
+
+   if (PD->hasSetter()) {
+      visitCallableDecl(PD->getSetterMethod());
+   }
+
+   return PD;
 }
 
-void SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
+DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
 {
-   auto Rec = node->getRecord();
+   auto Rec = ATDecl->getRecord();
    if (!isa<ProtocolDecl>(Rec)) {
       AssociatedTypeDecl const* AT = nullptr;
       ProtocolDecl* Proto = nullptr;
 
-      if (!node->getProtocolSpecifier().empty()) {
-         auto proto = getRecord(node->getProtocolSpecifier());
-         if (!proto || !isa<ProtocolDecl>(proto))
-            diag::err(err_generic_error)
-               << node->getProtocolSpecifier() + " is not a protocol"
-               << node << diag::term;
+      if (!ATDecl->getProtocolSpecifier().empty()) {
+         auto proto = getRecord(ATDecl->getProtocolSpecifier());
+         if (!proto || !isa<ProtocolDecl>(proto)) {
+            diagnose(ATDecl, err_conforming_to_non_protocol,
+                     ATDecl->getProtocolSpecifier());
 
-         if (!Rec->conformsTo(node->getProto()))
-            diag::err(err_generic_error)
-               << Rec->getName() + " does not conform to " + proto->getName()
-               << node << diag::term;
+            return ATDecl;
+         }
+
+         if (!Rec->conformsTo(ATDecl->getProto())) {
+            diagnose(ATDecl, err_does_not_conform,
+                     Rec->getSpecifierForDiagnostic(), Rec->getName(),
+                     proto->getName());
+         }
 
          Proto = cast<ProtocolDecl>(proto);
-         AT = Proto->getAssociatedType(node->getName());
+         AT = Proto->getAssociatedType(ATDecl->getName());
       }
       else {
-         for (const auto &CF : Rec->getConformances()) {
-            auto MaybeAT = CF->getAssociatedType(node->getName());
+         for (ProtocolDecl *CF : Rec->getConformances()) {
+            auto MaybeAT = CF->getAssociatedType(ATDecl->getName());
             if (MaybeAT && AT) {
-               diag::err(err_generic_error)
-                  << "reference to associated type " + node->getName() + " is "
-                     "ambiguous" << node << diag::cont;
+               diagnose(ATDecl, err_associated_type_ambiguous,
+                        ATDecl->getName());
 
-               diag::note(note_generic_note)
-                  << "possible type is here"
-                  << AT->getSourceLoc() << diag::cont;
+               diagnose(ATDecl, note_candidate_here, AT->getSourceLoc());
+               diagnose(ATDecl, note_candidate_here, MaybeAT->getSourceLoc());
 
-               diag::note(note_generic_note)
-                  << "possible type is here"
-                  << MaybeAT->getSourceLoc() << diag::term;
+               break;
             }
 
             if (MaybeAT) {
@@ -227,209 +214,206 @@ void SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
          }
       }
 
-      if (!AT)
-         diag::err(err_generic_error)
-            << Rec->getName() + " does not conform to a protocol that defines"
-               " associated type " + node->getName() << node << diag::term;
+      if (!AT) {
+         diagnose(ATDecl, err_no_such_associated_type,
+                  Rec->getSpecifierForDiagnostic(), Rec->getName(),
+                  ATDecl->getName());
 
-      if (!node->getActualType()) {
-         if (!AT->getActualType()->getType())
-            diag::err(err_generic_error)
-               << "associated type " + node->getName() + " does not have a "
-                  "default type" << node << diag::term;
+         return ATDecl;
+      }
 
-         node->setActualType(new (getContext())
-                                TypeRef(AT->getActualType()->getType()));
+      if (!ATDecl->getActualType()) {
+         if (!AT->getActualType()) {
+            diagnose(ATDecl, err_associated_type_no_default,
+                     ATDecl->getName());
+
+            return ATDecl;
+         }
+
+         ATDecl->setActualType(AT->getActualType());
       }
 
       if (AT->getConstraints().empty())
-         return;
+         return ATDecl;
 
-      DeclPass::DeclScopeRAII guard(*declPass, Proto);
+      DeclScopeRAII guard(*this, Proto);
 
       for (const auto &C : AT->getConstraints()) {
          TemplateArgList list(*this);
-         list.insert(node->getName(), *node->getActualType()->getType());
+         list.insert(ATDecl->getName(), ATDecl->getActualType());
 
-         auto Inst =
-            TemplateInstantiator::InstantiateStaticExpr(*this,
-                                                        node->getSourceLoc(),
+         auto Inst = Instantiator.InstantiateStaticExpr(ATDecl->getSourceLoc(),
                                                         C, list);
 
-         StaticExprEvaluator Eval(*this, Rec, {},
-                                  declPass->getImportsForFile
-                                     (Proto->getSourceLoc().getSourceId()),
-                                  &list);
+         auto res = evaluateAsBool(Inst);
+         if (!res)
+            continue;
 
-         auto res = Eval.evaluate(Inst);
-
-         if (res.hadError) {
-            issueDiagnostics();
-
-            for (auto &diag : res.diagnostics)
-               diag << diag::cont;
-
-            std::terminate();
-         }
-
-         auto &expr = res.val;
-         if (!expr.isInt())
-            diag::err(err_generic_error)
-               << "constraint must be boolean"
-               << Inst << diag::term;
-
-         if (!expr.getZExtValue()) {
-            diag::err(err_generic_error)
-               << "associated type does not satisfy constraint "
-               << node->getSourceLoc() << diag::cont;
-
-            diag::note(note_generic_note)
-               << "constraint declared here"
-               << Inst << diag::term;
+         if (!res.getValue().getZExtValue()) {
+            diagnose(ATDecl, err_constraint_not_satisfied, 0, "");
+            diagnose(ATDecl, note_constraint_here, Inst->getSourceLoc());
          }
       }
    }
+
+   return ATDecl;
 }
 
-void SemaPass::visitExtensionDecl(ExtensionDecl *node)
+DeclResult SemaPass::visitExtensionDecl(ExtensionDecl *Ext)
 {
-   if (alreadyVisited(node))
-      return;
+   if (!alreadyVisited(Ext))
+      visitRecordCommon(Ext);
 
-   visitRecordCommon(node);
+   return Ext;
 }
 
-void SemaPass::visitInitDecl(InitDecl *node)
+DeclResult SemaPass::visitInitDecl(InitDecl *Init)
 {
-   if (node->isMemberwise() || !node->getBody())
-      return;
+   if (Init->isMemberwise() || !Init->getBody())
+      return Init;
 
-   if (alreadyVisited(node))
-      return;
+   if (alreadyVisited(Init))
+      return Init;
 
-   ScopeGuard scope(*this, node);
-
-   for (auto& arg : node->getArgs()) {
-      visit(arg);
-   }
-
-   visit(node->getBody());
+   return visitCallableDecl(Init);
 }
 
-void SemaPass::visitDeinitDecl(DeinitDecl *node)
+DeclResult SemaPass::visitDeinitDecl(DeinitDecl *Deinit)
 {
-   if (!node->getBody() || alreadyVisited(node))
-      return;
+   if (!Deinit->getBody() || alreadyVisited(Deinit))
+      return Deinit;
 
-   ScopeGuard scope(*this, node);
-   visit(node->getBody());
+   return visitCallableDecl(Deinit);
 }
 
-void SemaPass::visitClassDecl(ClassDecl *C)
+DeclResult SemaPass::visitMethodDecl(MethodDecl *M)
+{
+   if (!M->getBody())
+      return M;
+
+   if (alreadyVisited(M))
+      return M;
+
+   return visitCallableDecl(M);
+}
+
+DeclResult SemaPass::visitClassDecl(ClassDecl *C)
 {
    if (alreadyVisited(C))
-      return;
+      return C;
 
-   visitRecordCommon(C);
-   ILGen->DeclareRecord(C);
+   return visitRecordCommon(C);
 }
 
-void SemaPass::visitStructDecl(StructDecl *S)
+DeclResult SemaPass::visitStructDecl(StructDecl *S)
 {
    if (alreadyVisited(S))
-      return;
+      return S;
 
-   visitRecordCommon(S);
-   ILGen->DeclareRecord(S);
+   return visitRecordCommon(S);
 }
 
-void SemaPass::visitMethodDecl(MethodDecl *node)
+DeclResult SemaPass::visitEnumDecl(EnumDecl *E)
 {
-   if (!node->getBody())
+   if (alreadyVisited(E))
+      return E;
+
+   return visitRecordCommon(E);
+}
+
+DeclResult SemaPass::visitUnionDecl(UnionDecl *U)
+{
+   if (alreadyVisited(U))
+      return U;
+
+   return visitRecordCommon(U);
+}
+
+DeclResult SemaPass::visitProtocolDecl(ProtocolDecl *P)
+{
+   if (alreadyVisited(P))
+      return P;
+
+   return visitRecordCommon(P);
+}
+
+void SemaPass::calculateRecordSize(RecordDecl *R)
+{
+   if (R->isInvalid() || R->isTemplate())
       return;
 
-   if (alreadyVisited(node))
+   unsigned occupiedBytes = R->getSize();
+   unsigned short alignment = R->getAlignment();
+
+   if (occupiedBytes)
       return;
 
-   ScopeGuard scope(*this, node);
+   auto &TI = getContext().getTargetInfo();
 
-   if (auto Body = node->getBody()) {
-      for (const auto &arg : node->getArgs()) {
-         visit(arg);
+   if (auto S = dyn_cast<StructDecl>(R)) {
+      if (isa<ClassDecl>(R)) {
+         // strong & weak refcount, vtable
+         occupiedBytes += 3 * TI.getPointerSizeInBytes();
       }
 
-      visit(Body);
+      for (const auto &f : S->getFields()) {
+         auto &ty = f->getType();
+         occupiedBytes += TI.getSizeOfType(ty);
+
+         auto fieldAlign = TI.getAlignOfType(ty);
+         if (fieldAlign > alignment)
+            alignment = fieldAlign;
+      }
+
+      if (!occupiedBytes) {
+         occupiedBytes = TI.getPointerSizeInBytes();
+         alignment = TI.getPointerAlignInBytes();
+      }
    }
-}
+   else if (auto E = dyn_cast<EnumDecl>(R)) {
+      occupiedBytes += TI.getPointerSizeInBytes() * E->getMaxAssociatedTypes();
+      occupiedBytes += TI.getSizeOfType(E->getRawType());
+      alignment = TI.getPointerAlignInBytes();
+   }
+   else if (isa<UnionDecl>(R)) {
+      for (auto &decl : R->getDecls()) {
+         auto f = dyn_cast<FieldDecl>(decl);
+         if (!f || f->isStatic())
+            continue;
 
-void SemaPass::visitEnumDecl(EnumDecl *node)
-{
-   if (alreadyVisited(node))
-      return;
+         auto &ty = f->getType();
 
-   visitRecordCommon(node);
-   ILGen->DeclareRecord(node);
-}
+         auto fieldSize = TI.getSizeOfType(ty);
+         if (fieldSize > occupiedBytes)
+            occupiedBytes = fieldSize;
 
-void SemaPass::visitUnionDecl(UnionDecl *node)
-{
-   if (alreadyVisited(node))
-      return;
+         auto fieldAlign = TI.getAlignOfType(ty);
+         if (fieldAlign > alignment)
+            alignment = fieldAlign;
+      }
+   }
 
-   visitRecordCommon(node);
-   ILGen->DeclareRecord(node);
-}
+   R->setSize(occupiedBytes);
+   R->setAlignment(alignment);
 
-void SemaPass::visitProtocolDecl(ProtocolDecl *node)
-{
-   if (alreadyVisited(node))
-      return;
-
-   visitRecordCommon(node);
-   ILGen->DeclareRecord(node);
+   if (!R->isTemplate() && !R->isInvalid())
+      ILGen->GenerateTypeInfo(R);
 }
 
 void SemaPass::calculateRecordSizes()
 {
-   DependencyGraph<RecordDecl> DG;
-   for (auto &translationUnit : getCompilationUnit().getGlobalDeclCtx()
-                                                    .getTranslationUnits()) {
-      translationUnit->forEachRecursive<RecordDecl>([&](RecordDecl *R) {
-         if (R->getSize())
-            return;
-
-         auto &V = DG.getOrAddVertex(R);
-         for (auto &decl : R->getDecls()) {
-            if (auto F = dyn_cast<FieldDecl>(decl)) {
-               if (F->isStatic() || !F->getType()->getType()->isObjectType())
-                  continue;
-
-               auto DepRec = F->getType()->getType()->getRecord();
-               if (DepRec->getSize())
-                  continue;
-
-               auto &Dep = DG.getOrAddVertex(DepRec);
-               Dep.addOutgoing(&V);
-            }
-         }
-      });
-   }
-
-   auto Order = DG.constructOrderedList();
+   auto Order = LayoutDependency.constructOrderedList();
    if (!Order.second) {
-      auto pair = DG.getOffendingPair();
-      diag::err(err_generic_error)
-         << "circular reference between fields of records "
-            + pair.first->getName() + " and " + pair.second->getName()
-         << pair.first->getSourceLoc() << diag::cont;
+      auto pair = LayoutDependency.getOffendingPair();
+      diagnose(pair.first, err_circular_data_members, pair.first->getName(),
+               pair.second->getName());
+      diagnose(pair.second, note_other_field_here);
 
-      diag::note(note_generic_note)
-         << "other record declared here"
-         << pair.second->getSourceLoc() << diag::term;
+      return;
    }
 
    for (auto &R : Order.first) {
-      R->calculateSize();
+      calculateRecordSize(R);
    }
 }
 
@@ -442,7 +426,7 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          if (R->getToStringFn())
             return;
 
-         auto retTy = new (getContext()) TypeRef(String);
+         auto retTy = SourceType(String);
          std::vector<FuncArgDecl*> args;
 
          M = new (getContext())
@@ -460,8 +444,8 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          if (R->getOperatorEquals())
             return;
 
-         auto retTy = new (getContext()) TypeRef(getObjectTy("Bool"));
-         auto argTy = new (getContext()) TypeRef(Context.getRecordType(R));
+         auto retTy = SourceType(Context.getBoolTy());
+         auto argTy = SourceType(Context.getRecordType(R));
 
          std::vector<FuncArgDecl*> args;
          args.push_back(new (getContext()) FuncArgDecl("", argTy, nullptr,
@@ -483,7 +467,7 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          if (R->getHashCodeFn())
             return;
 
-         auto retTy = new (getContext()) TypeRef(getObjectTy(Type::UInt64));
+         auto retTy = SourceType(Context.getUInt64Ty());
          std::vector<FuncArgDecl*> args;
 
          M = new (getContext())

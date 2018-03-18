@@ -3,16 +3,16 @@
 //
 
 #include "Diagnostics.h"
+#include "DiagnosticsEngine.h"
 
-#include "Variant/Variant.h"
-
+#include "Basic/IdentifierInfo.h"
+#include "Files/FileManager.h"
+#include "Files/FileUtils.h"
 #include "lex/Token.h"
 #include "lex/Lexer.h"
-
-#include "Files/FileManager.h"
-
 #include "Support/Casting.h"
-#include "Basic/IdentifierInfo.h"
+#include "Support/Format.h"
+#include "Variant/Variant.h"
 
 #include <cstdlib>
 #include <cassert>
@@ -22,13 +22,12 @@
 #include <llvm/ADT/SmallString.h>
 
 #ifndef CDOT_SMALL_VARIANT
-#  include "AST/AstNode.h"
+#  include "AST/Expression.h"
 #  include "module/Module.h"
 #  include "Variant/Type/Type.h"
 #endif
 
 using namespace cdot::lex;
-using namespace cdot::parse;
 using namespace cdot::ast;
 using namespace cdot::support;
 
@@ -37,57 +36,50 @@ using std::string;
 namespace cdot {
 namespace diag {
 
-std::unordered_map<MessageKind, const char*> Messages = {
-#   include "def/parsed/warn_msg.def"
-#   include "def/parsed/errors_msg.def"
-#   include "def/parsed/note_msg.def"
-};
-
-DiagnosticBuilder warn(MessageKind warn)
+static llvm::StringRef getMessage(MessageKind msg)
 {
-   return DiagnosticBuilder(warn);
+   switch (msg) {
+#  define CDOT_MSG(Name, Msg)                   \
+      case Name: return #Msg;
+
+#  include "Message/def/Diagnostics.def"
+   }
+
+   llvm_unreachable("bad msg kind");
 }
 
-DiagnosticBuilder err(MessageKind err)
+DiagnosticBuilder::DiagnosticBuilder(DiagnosticsEngine &Engine)
+   : Engine(Engine), msg(_first_err), showWiggle(false), showWholeLine(false),
+     noInstCtx(false), noteMemberwiseInit(false), valid(false),
+     noExpansionInfo(false), noImportInfo(false), hasFakeSourceLoc(false),
+     ShowConst(false)
 {
-   return DiagnosticBuilder(err);
+   assert(!Engine.hasInFlightDiag() && "diagnostic issued while preparing "
+                                       "other diagnostic!");
 }
 
-DiagnosticBuilder note(MessageKind note)
+DiagnosticBuilder::DiagnosticBuilder(DiagnosticsEngine &Engine,
+                                     MessageKind msg)
+   : Engine(Engine), msg(msg), showWiggle(false), showWholeLine(false),
+     noInstCtx(false), noteMemberwiseInit(false), valid(true),
+     noExpansionInfo(false), noImportInfo(false), hasFakeSourceLoc(false),
+     ShowConst(false)
 {
-   return DiagnosticBuilder(note);
+   assert(!Engine.hasInFlightDiag() && "diagnostic issued while preparing "
+                                       "other diagnostic!");
 }
 
-#ifndef NDEBUG
-   static bool lexingDiagnosticMsg = false;
-#endif
-
-string DiagnosticBuilder::prepareMessage()
+string DiagnosticBuilder::prepareMessage(llvm::StringRef str)
 {
-#ifndef NDEBUG
-   assert(!lexingDiagnosticMsg && "error lexing diagnostic message!");
-#endif
-
-   string original(diag);
-   auto buf = llvm::MemoryBuffer::getMemBuffer(original);
+   auto buf = llvm::MemoryBuffer::getMemBuffer(str);
 
    IdentifierTable IT(16);
-   Lexer lex(IT, buf.get(), 0);
+   Lexer lex(IT, Engine, buf.get(), 0);
 
-#ifndef NDEBUG
-   lexingDiagnosticMsg = true;
-#endif
-
-   lex.lex();
-
-#ifndef NDEBUG
-   lexingDiagnosticMsg = false;
-#endif
-
-   assert(lex.getDiagnostics().empty() && "error parsing diagnostic message");
+   lex.lexDiagnostic();
 
    unsigned short substituted = 0;
-   string msg = "";
+   std::string msg = "";
    bool single = true;
 
    while (!lex.currentTok().is(tok::eof)) {
@@ -109,10 +101,9 @@ string DiagnosticBuilder::prepareMessage()
                    && "expected arg index");
 
             auto txt = lex.currentTok().getText();
-            auto val = std::stoull(txt);
+            auto val = std::stoul(txt);
 
-            auto& arg = providedArgs[val];
-            msg += arg.toString();
+            appendArgumentString(val, msg);
          }
          else {
             assert(lex.currentTok().is(tok::integerliteral)
@@ -120,16 +111,17 @@ string DiagnosticBuilder::prepareMessage()
 
             auto txt = lex.currentTok().getText();
             auto val = std::stoull(txt);
+            assert(Engine.NumArgs > val && "not enough args provided");
 
-            auto& arg = providedArgs[val];
             lex.advance();
             assert(lex.currentTok().is(tok::op_or) && "expected pipe");
 
             lex.advance();
-            msg += handleFunction(arg, lex);
+            handleFunction(val, lex, msg);
          }
 
-         lex.expect(tok::sentinel);
+         lex.advance();
+         assert(lex.currentTok().is(tok::sentinel));
       }
       else {
          msg += lex.currentTok().getText();
@@ -145,9 +137,32 @@ string DiagnosticBuilder::prepareMessage()
    return msg;
 }
 
-string DiagnosticBuilder::handleFunction(Variant &var, Lexer &lex)
+void DiagnosticBuilder::appendArgumentString(unsigned idx, std::string &str)
 {
-   string funcName;
+   auto kind = Engine.ArgKinds[idx];
+   switch (kind) {
+   case DiagnosticsEngine::ak_string:
+      str += Engine.StringArgs[idx];
+      break;
+   case DiagnosticsEngine::ak_integer:
+      str += std::to_string(Engine.OtherArgs[idx]);
+      break;
+#  ifndef CDOT_SMALL_VARIANT
+   case DiagnosticsEngine::ak_qualtype:
+      str += QualType::getFromOpaquePtr((void*)Engine.OtherArgs[idx])
+         .toString();
+      break;
+   case DiagnosticsEngine::ak_named_decl:
+      llvm_unreachable("TODO");
+#  endif
+   default:
+      llvm_unreachable("unhandled argument kind");
+   }
+}
+
+void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
+                                       std::string &msg) {
+   llvm::StringRef funcName;
    if (lex.currentTok().is_keyword()) {
       switch (lex.currentTok().getKind()) {
          case tok::kw_if:
@@ -169,166 +184,143 @@ string DiagnosticBuilder::handleFunction(Variant &var, Lexer &lex)
       lex.advance();
 
       while (!lex.currentTok().is(tok::close_paren)) {
-         auto beginOffset = lex.currentTok().getOffset();
-         while (!lex.currentTok().oneOf(tok::comma, tok::close_paren)) {
-            lex.advance();
-         }
+         assert(lex.currentTok().is(tok::stringliteral));
 
-         args.emplace_back(lex.getSrc() + beginOffset,
-                           lex.currentTok().getOffset() - beginOffset);
-         beginOffset = lex.currentTok().getOffset();
-
-         if (lex.currentTok().is(tok::comma)) {
-            lex.advance();
-         }
+         args.emplace_back(lex.currentTok().getText());
+         lex.advance();
       }
    }
 
    if (funcName == "select") {
-      assert(args.size() > var.getZExtValue() && "too few options for index");
-      return args[var.getZExtValue()];
+      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
+
+      auto val = Engine.OtherArgs[idx];
+      assert(args.size() > val && "too few options for index");
+
+      auto &str = args[val];
+      msg += prepareMessage(str);
    }
    else if (funcName == "ordinal") {
       assert(args.empty() && "ordinal takes no arguments");
-      assert(var.isInt() && "expected integer value");
+      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
 
-      auto mod = var.getZExtValue() % 10;
-      auto str = std::to_string(var.getZExtValue());
+      auto val = Engine.OtherArgs[idx];
+      auto mod = val % 10;
+      msg += std::to_string(val);
+
       switch (mod) {
-         case 1: return str + "st";
-         case 2: return str + "nd";
-         case 3: return str + "rd";
-         default: return str + "th";
+         case 1: msg += "st"; break;
+         case 2: msg += "nd"; break;
+         case 3: msg += "rd"; break;
+         default: msg += "th"; break;
       }
    }
    else if (funcName == "plural_s") {
       assert(args.size() == 1 && "plural_s takes 1 argument");
-      assert(var.isInt() && "expected integer value");
-      if (var.getZExtValue() != 1) {
-         return args.front() + "s";
+      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
+
+      auto val = Engine.OtherArgs[idx];
+      if (val != 1) {
+         msg += args.front() + "s";
       }
       else {
-         return args.front();
+         msg += args.front();
       }
    }
    else if (funcName == "plural") {
-      assert(var.isInt() && "expected integer value");
       assert(!args.empty() && "plural expects at least 1 argument");
+      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
 
-      if (var.getZExtValue() >= args.size()) {
-         return args.back();
+      auto val = Engine.OtherArgs[idx];
+      if (val >= args.size()) {
+         msg += args.back();
       }
-
-      return args[var.getZExtValue()];
+      else {
+         msg += args[val];
+      }
    }
    else if (funcName == "if") {
       assert(args.size() == 1 && "if expects 1 arg");
-      assert(var.isInt() && "expected integer value");
+      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
 
-      if (var.getZExtValue()) {
-         return args.front();
+      auto val = Engine.OtherArgs[idx];
+      if (val) {
+         msg += prepareMessage(args.front());
       }
-
-      return "";
-   }
-
-   llvm_unreachable("unsupported function");
-}
-
-DiagnosticBuilder::DiagnosticBuilder()
-   : showWiggle(false), showWholeLine(false), noInstCtx(false),
-     noteMemberwiseInit(false), valid(false), noExpansionInfo(false),
-     noImportInfo(false)
-{
-
-}
-
-DiagnosticBuilder::DiagnosticBuilder(MessageKind msg,
-                                     bool templateInstInfo)
-   : diag(Messages[msg]), kind(isError(msg) ? DiagnosticKind::ERROR
-                                            : (isWarning(msg)
-                                               ? DiagnosticKind::WARNING
-                                               : DiagnosticKind::NOTE)),
-     showWiggle(false), showWholeLine(false), noInstCtx(false),
-     noteMemberwiseInit(false), valid(true), noExpansionInfo(false),
-     noImportInfo(false)
-{
-
-}
-
-namespace {
-
-void unescape_char(llvm::SmallString<128> &str, char c)
-{
-   switch (c) {
-      case '\n':
-         str += "\\n";
-         break;
-      case '\a':
-         str += "\\a";
-         break;
-      case '\r':
-         str += "\\r";
-         break;
-      case '\v':
-         str += "\\v";
-         break;
-      case '\t':
-         str += "\\t";
-         break;
-      case '\b':
-         str += "\\b";
-         break;
-      case '\0':
-         str += "\\0";
-         break;
-      default:
-         str += c;
-         break;
    }
 }
 
-} // anonymous namespace
-
-void DiagnosticBuilder::writeDiagnostic()
+DiagnosticBuilder::~DiagnosticBuilder()
 {
-   writeDiagnosticTo(llvm::outs());
+   finalize();
 }
 
-void DiagnosticBuilder::writeDiagnosticTo(llvm::raw_ostream &out)
+static SeverityLevel getSeverity(MessageKind msg)
 {
-   std::ostringstream err;
-   switch (kind) {
-      case DiagnosticKind::ERROR:err << "\033[21;31merror:\033[0m ";
-         break;
-      case DiagnosticKind::WARNING:err << "\033[33mwarning:\033[0m ";
-         break;
-      case DiagnosticKind::NOTE:err << "\033[1;35mnote:\033[0m ";
-         break;
+   switch (msg) {
+#  define CDOT_WARN(Name, Msg)                                               \
+   case Name: return SeverityLevel::Warning;
+#  define CDOT_NOTE(Name, Msg)                                               \
+   case Name: return SeverityLevel::Note;
+#  define CDOT_ERROR(Name, Msg, IsFatal)                                     \
+   case Name: return IsFatal ? SeverityLevel::Fatal : SeverityLevel::Error;
+#  include "def/Diagnostics.def"
+   }
+}
+
+void DiagnosticBuilder::finalize()
+{
+   std::string str;
+   llvm::raw_string_ostream out(str);
+
+   auto severity = getSeverity(msg);
+   switch (severity) {
+   case SeverityLevel::Error: out << "\033[21;31merror:\033[0m ";
+      break;
+   case SeverityLevel::Fatal: out << "\033[21;31mfatal error:\033[0m ";
+      break;
+   case SeverityLevel::Warning: out << "\033[33mwarning:\033[0m ";
+      break;
+   case SeverityLevel::Note: out << "\033[1;35mnote:\033[0m ";
+      break;
    }
 
-   err << prepareMessage();
+   out << prepareMessage(getMessage(msg));
 
-   if (noteMemberwiseInit)
-      err << " (the implicit memberwise initializer)";
+   if (hasFakeSourceLoc) {
+      out << "\n" << Engine.StringArgs[Engine.NumArgs - 1] << "\n\n";
+      out.flush();
+      Engine.finalizeDiag(str, severity);
+
+      return;
+   }
 
    if (!loc) {
-      out << err.str() << "\n";
+      out << "\n";
+      out.flush();
+      Engine.finalizeDiag(str, severity);
+
       return;
+   }
+
+   SourceLocation loc = this->loc.getStart();
+   if (auto AliasLoc = Engine.FileMgr->getAliasLoc(loc)) {
+      loc = AliasLoc;
    }
 
    int index = 0;
 
-   string fileName = fs::FileManager::getFileName(loc.getSourceId()).str();
+   size_t ID = Engine.FileMgr->getSourceId(loc);
+   llvm::StringRef fileName = Engine.FileMgr->getFileName(ID).str();
 
-   auto file = fs::FileManager::openFile(fileName);
-   string src(file.second->getBufferStart(), file.second->getBufferSize());
-   auto srcLen = src.length();
+   llvm::MemoryBuffer *file = Engine.FileMgr->getBuffer(loc);
+   size_t srcLen = file->getBufferSize();
+   const char *src = file->getBufferStart();
 
-   auto lineAndCol = fs::FileManager::getLineAndCol(loc, file.second.get());
+   auto lineAndCol = Engine.FileMgr->getLineAndCol(loc, file);
 
-   auto col = lineAndCol.second;
-   auto errLineNo = lineAndCol.first;
+   unsigned col = lineAndCol.col;
+   unsigned errLineNo = lineAndCol.line;
 
    int currLine = 1;
    for (int i = 0; currLine < errLineNo; ++i) {
@@ -350,139 +342,144 @@ void DiagnosticBuilder::writeDiagnosticTo(llvm::raw_ostream &out)
    }
 
    string linePref = std::to_string(errLineNo) + " | ";
-   fileName = fileName.substr(fileName.rfind('/') + 1);
+   auto nameAndExt = fs::getFileNameAndExtension(fileName);
+   if (!nameAndExt.empty())
+      fileName = nameAndExt;
 
-   err << " (" << fileName << ":" << std::to_string(errLineNo)
-       << ":" << std::to_string(col) << ":[" << loc.getSourceId() << "]" ")\n";
-   err << linePref << errLine << "\n";
+   out << " (" << fileName << ":" << std::to_string(errLineNo)
+       << ":" << std::to_string(col - 1) << ":[" << ID << "]" ")\n";
+   out << linePref << errLine << "\n";
 
    if (!showWholeLine) {
       int i = 2;
       for (; i < col + linePref.length(); ++i) {
-         err << ' ';
+         out << ' ';
       }
 
-      err << '^';
+      out << '^';
    }
 
-   out << err.str() << "\033[0m\n";
+   out << "\n";
 
-   if (kind != DiagnosticKind::NOTE && !noInstCtx) {
-      llvm::outs() << additionalNotes;
-   }
-
-#ifndef CDOT_SMALL_VARIANT
-   if (!noImportInfo) {
-      if (auto M = fs::FileManager::getImportedModule(loc.getSourceId())) {
-         DiagnosticBuilder(note_generic_note)
-            << "imported from module " + M->getFullName()
-            << M->getSourceLoc() << diag::no_import_info << diag::cont;
-      }
-   }
-#endif
-
-   if (noExpansionInfo)
-      return;
-
-//   if (auto Info = lex::getExpansionInfo(loc)) {
-//      llvm::SmallString<128> argString;
-//      argString += "[";
-//
-//      size_t i = 0;
-//      for (const auto &arg : Info->expansionArgs) {
-//         if (i++ != 0) argString += ", ";
-//         argString += arg.first;
-//         argString += " = '";
-//
-//         for (auto c : arg.second) {
-//            unescape_char(argString, c);
-//         }
-//
-//         argString += "'";
-//      }
-
-//      argString += "]";
-//
-//      auto builder = DiagnosticBuilder(note_generic_note, false)
-//         << "in expansion of macro " + Info->macroName
-//            + " with arguments " + argString.str()
-//         << Info->expandedMacroLoc
-//         << no_expansion_info;
-//
-//      builder.writeDiagnosticTo(out);
-//   }
+   out.flush();
+   Engine.finalizeDiag(str, severity);
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(int const& i)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(int i)
 {
-   providedArgs.emplace_back((unsigned long long)i);
+   return *this << (size_t)i;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t i)
+{
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_integer;
+   Engine.OtherArgs[Engine.NumArgs] = i;
+   ++Engine.NumArgs;
+
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t const& i)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::APInt const &API)
 {
-   providedArgs.emplace_back(uint64_t(i));
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = API.toString(10, true);
+   ++Engine.NumArgs;
+
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(string const& str)
 {
-   providedArgs.emplace_back(string(str));
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = str;
+   ++Engine.NumArgs;
+
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::Twine const &str)
 {
-   providedArgs.emplace_back(str.str());
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = str.str();
+   ++Engine.NumArgs;
+
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::StringRef const &str)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::StringRef str)
 {
-   providedArgs.emplace_back(str.str());
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = str.str();
+   ++Engine.NumArgs;
+
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* const& str)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* str)
 {
-   providedArgs.emplace_back(string(str));
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = str;
+   ++Engine.NumArgs;
+
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Variant const& v)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation loc)
 {
-   providedArgs.push_back(v);
+   setLoc(loc);
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation const& loc)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(cdot::SourceRange loc)
 {
-   this->loc = loc;
+   setLoc(loc);
+   return *this;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(FakeSourceLocation const& loc)
+{
+   hasFakeSourceLoc = true;
+
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = move(loc.text);
+   ++Engine.NumArgs;
+
    return *this;
 }
 
 #ifndef CDOT_SMALL_VARIANT
 DiagnosticBuilder& DiagnosticBuilder::operator<<(Type *Ty)
 {
-   providedArgs.push_back(Ty->toString());
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = Ty->toString();
+   ++Engine.NumArgs;
+
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& Ty)
 {
-   providedArgs.push_back(Ty.toString());
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = Ty.toString();
+   ++Engine.NumArgs;
+
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(ast::AstNode *node)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(const SourceType &Ty)
 {
-   this->loc = node->getSourceLoc();
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
+   Engine.StringArgs[Engine.NumArgs] = Ty.getResolvedType().toString();
+   ++Engine.NumArgs;
+
    return *this;
 }
 #endif
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Option const &opt)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(opt::Option const &opt)
 {
+   using namespace opt;
+
    switch (opt) {
       case whole_line:
          showWholeLine = true;
@@ -502,23 +499,12 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(Option const &opt)
       case no_import_info:
          noImportInfo = true;
          break;
+      case show_constness:
+         ShowConst = true;
+         break;
    }
 
    return *this;
-}
-
-void DiagnosticBuilder::operator<<(Terminator const &terminator)
-{
-   writeDiagnostic();
-   std::terminate();
-}
-
-void DiagnosticBuilder::operator<<(Continuator const &terminator)
-{
-   if (terminator == end)
-      return;
-
-   writeDiagnostic();
 }
 
 } // namespace diag

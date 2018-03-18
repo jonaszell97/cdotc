@@ -20,20 +20,7 @@ class Instruction;
 
 class InstVisitorBase {
 public:
-   enum TypeID {
-#  define CDOT_ALL(Name) Name##ID,
-#  include "Passes.def"
-   };
-
-   TypeID getTypeID() const
-   {
-      return typeID;
-   }
-
-protected:
-   InstVisitorBase(TypeID id) : typeID(id) {}
-
-   TypeID typeID;
+   virtual void visitModule(il::Module &M) {}
 };
 
 template<class SubClass, typename RetType = void>
@@ -98,7 +85,7 @@ public:
    }
 
    // default fallbacks
-   void visitModule    (Module &M) {}
+   void visitModule    (Module &M) override {}
    void visitFunction  (Function &F) {}
    void visitBasicBlock(BasicBlock &BB) {}
 
@@ -111,7 +98,7 @@ public:
 #  include "../Value/Instructions.def"
 
 protected:
-   InstructionVisitor(TypeID id) : InstVisitorBase(id) {}
+   InstructionVisitor() = default;
 };
 
 } // namespace il

@@ -31,9 +31,7 @@ public:
    using arg_iterator       = ArgList::iterator;
    using const_arg_iterator = ArgList::const_iterator;
 
-   typedef llvm::SmallPtrSet<BasicBlock*, 4>   PredecessorList;
-
-   explicit BasicBlock(PointerType *Int8PtrTy, Function *parent);
+   explicit BasicBlock(Function *parent);
 
    BasicBlock(const BasicBlock&) = delete;
    const BasicBlock &operator=(const BasicBlock&) = delete;
@@ -66,12 +64,9 @@ public:
    TerminatorInst const* getTerminator() const;
    TerminatorInst* getTerminator();
 
-   void addPredecessor(BasicBlock *pred);
-   const PredecessorList &getPredecessors() const;
-   bool isEntryBlock() const;
    bool hasNoPredecessors() const;
+   bool isEntryBlock() const;
 
-   void addBlockArg(Type *ty, llvm::StringRef name = {});
    void addBlockArg(QualType ty, llvm::StringRef name = {});
 
    iterator begin() { return Instructions.begin(); }
@@ -99,8 +94,6 @@ protected:
 
    InstList Instructions;
    ArgList Args;
-
-   PredecessorList Predecessors;
 
 public:
    static bool classof(BasicBlock const* T) { return true; }

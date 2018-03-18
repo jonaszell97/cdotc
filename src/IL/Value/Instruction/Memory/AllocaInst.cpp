@@ -17,7 +17,7 @@ const unsigned Shift = 3;
 
 } // anonymous namespace
 
-AllocaInst::AllocaInst(Type *ty,
+AllocaInst::AllocaInst(ValueType ty,
                        BasicBlock *parent,
                        unsigned alignment,
                        bool heap)
@@ -31,7 +31,7 @@ AllocaInst::AllocaInst(Type *ty,
       SubclassData |= alignment << Shift;
 }
 
-AllocaInst::AllocaInst(Type *ty,
+AllocaInst::AllocaInst(ValueType ty,
                        BasicBlock *parent,
                        size_t allocSize,
                        unsigned alignment,

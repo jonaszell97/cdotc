@@ -54,6 +54,9 @@ public:
                ->visit##Name(static_cast<Name*>(node),                  \
                              std::forward<ParamTys>(params)...);
 #     include "AST/AstNode.def"
+
+      default:
+         llvm_unreachable("bad node kind!");
       }
    }
 };
@@ -62,28 +65,43 @@ public:
 template<class SubClass>
 class RecursiveASTVisitor {
 public:
+   bool visitChildren(Statement *Stmt)
+   {
+      llvm::SmallVector<Statement*, 8> Children;
+      collectDirectChildren(Children, Stmt);
+
+      for (auto &Child : Children) {
+         if (!static_cast<SubClass*>(this)->visit(Child))
+            return false;
+      }
+
+      return true;
+   }
+
 #  define CDOT_STMT(Name)                                                 \
-   void visit##Name(Name *stmt)                                           \
+   bool visit##Name(Name *stmt)                                           \
    {                                                                      \
-      visitDirectChildren(stmt, [&](Statement *Child) { visit(Child); }); \
+      return visitChildren(stmt);                                         \
    }
 
 #  define CDOT_EXPR(Name) CDOT_STMT(Name)
 #  include "AST/AstNode.def"
 
-   void visit(Statement *node)
+   bool visit(Statement *node)
    {
       switch (node->getTypeID()) {
 #     define CDOT_EXPR(Name)                                            \
          case AstNode::Name##ID:                                        \
-            static_cast<SubClass*>(this)                                \
-               ->visit##Name(static_cast<Name*>(node));                 \
-            return;
+            return static_cast<SubClass*>(this)                         \
+               ->visit##Name(static_cast<Name*>(node));
 #     define CDOT_STMT(Name)                                            \
          case AstNode::Name##ID:                                        \
             return static_cast<SubClass*>(this)                         \
                ->visit##Name(static_cast<Name*>(node));
 #     include "AST/AstNode.def"
+
+      default:
+         llvm_unreachable("bad node kind!");
       }
    }
 };

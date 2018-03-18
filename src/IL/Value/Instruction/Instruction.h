@@ -81,11 +81,7 @@ public:
 
 protected:
    Instruction(TypeID id,
-               Type *ty,
-               BasicBlock *parent);
-
-   Instruction(TypeID id,
-               QualType ty,
+               ValueType ty,
                BasicBlock *parent);
 
    BasicBlock *parent;

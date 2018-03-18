@@ -8,18 +8,11 @@
 #include <llvm/ADT/SmallString.h>
 #include "SerializerBase.h"
 
-#include "../AST/Passes/Serialization/Serialize.h"
-#include "../AST/Passes/SemanticAnalysis/SemaPass.h"
-
-#include "../AST/Statement/Declaration/NamedDecl.h"
-
-#include "../AST/Expression/StaticExpr.h"
-#include "../AST/Expression/TypeRef.h"
-
-#include "../AST/ASTContext.h"
-#include "../AST/SymbolTable.h"
-
-#include "../Variant/Type/Type.h"
+#include "AST/Passes/Serialization/Serialize.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/NamedDecl.h"
+#include "AST/ASTContext.h"
+#include "Variant/Type/Type.h"
 
 namespace cdot {
 namespace support {
@@ -51,7 +44,6 @@ protected:
 
    void WriteQualType(QualType Ty)
    {
-      this->WriteBools(Ty.isLvalue(), Ty.isConst());
       WriteType(*Ty);
    }
 
@@ -59,41 +51,44 @@ protected:
    {
       this->Writer.WriteByte((char) Ty->getTypeID());
       switch (Ty->getTypeID()) {
-         case TypeID::IntegerTypeID: {
-            auto bw = Ty->getBitwidth();
-            bw |= Ty->isUnsigned() << 10;
-
-            this->Writer.WriteULEB128(bw);
+         case TypeID::BuiltinTypeID:
+            this->Writer.WriteByte(Ty->asBuiltinType()->getKind());
             break;
-         }
-         case TypeID::FPTypeID:
-            this->WriteBool(Ty->isDoubleTy());
+         case TypeID::PointerTypeID:
+            WriteQualType(Ty->getPointeeType());
             break;
-         case TypeID::PointerTypeID:WriteQualType(Ty->getPointeeType());
+         case TypeID::ReferenceTypeID:
+            WriteQualType(Ty->asReferenceType()->getReferencedType());
+            break;
+         case TypeID::MovedTypeID:
+            WriteQualType(Ty->asMovedType()->getReferencedType());
             break;
          case TypeID::ArrayTypeID: {
-            auto ArrTy = Ty->asArrayType();
+            ArrayType *ArrTy = Ty->asArrayType();
             this->Writer.WriteULEB128(ArrTy->getNumElements());
             WriteQualType(ArrTy->getElementType());
 
             break;
          }
          case TypeID::InferredArrayTypeID: {
-            auto arr = dyn_cast<InferredArrayType>(Ty);
+            InferredArrayType *arr = Ty->asInferredArrayType();
             serializeStmt(arr->getDependentExpr());
             WriteQualType(arr->getElementType());
 
             break;
          }
          case TypeID::TupleTypeID: {
-            auto Tup = Ty->asTupleType();
+            TupleType *Tup = Ty->asTupleType();
             this->WriteList(Tup->getContainedTypes(),
                             &ExtendedSerializerBase::WriteQualType);
 
             break;
          }
-         case TypeID::FunctionTypeID: {
-            auto Fun = Ty->asFunctionType();
+         case TypeID::FunctionTypeID:
+         case TypeID::LambdaTypeID: {
+            FunctionType *Fun = Ty->asFunctionType();
+
+            this->WriteBool(Fun->isLambdaType());
             WriteQualType(Fun->getReturnType());
             this->WriteList(Fun->getArgTypes(),
                             &ExtendedSerializerBase::WriteQualType);
@@ -108,8 +103,8 @@ protected:
          }
          case TypeID::InconcreteObjectTypeID: {
             this->WriteString(Ty->getClassName());
-            WriteTemplateArgList(cast<InconcreteObjectType>(Ty)
-                                    ->getTemplateArgs());
+            WriteTemplateArgList(Ty->asInconcreteObjectType()
+                                   ->getTemplateArgs());
 
             break;
          }
@@ -128,13 +123,10 @@ protected:
             break;
          }
          case TypeID::MetaTypeID:
-            WriteQualType(cast<MetaType>(Ty)->getUnderlyingType());
+            WriteQualType(Ty->asMetaType()->getUnderlyingType());
             break;
          case TypeID::NamespaceTypeID:
-            this->WriteString(cast<NamespaceType>(Ty)->getNamespaceName());
-            break;
-         case TypeID::AutoTypeID:
-         case TypeID::VoidTypeID:
+            this->WriteString(Ty->asNamespaceType()->getNamespaceName());
             break;
       }
    }
@@ -142,8 +134,8 @@ protected:
    void WriteSourceLoc(SourceLocation loc)
    {
       this->Writer.WriteULEB128(loc.getOffset());
-      this->Writer.WriteULEB128(loc.getSourceId());
    }
+
    void WriteTemplateArgList(sema::TemplateArgList const &list)
    {
       this->WriteSize(list);
@@ -307,26 +299,23 @@ protected:
 
    QualType ReadQualType()
    {
-      char c = this->Reader.ReadByte();
-      return QualType(ReadType(), (c & 1) != 0, (c & 2) != 0);
+      return QualType(ReadType());
    }
 
    Type *ReadType()
    {
       auto typeID = (TypeID)this->Reader.ReadByte();
       switch (typeID) {
-         case TypeID::IntegerTypeID: {
-            unsigned bw = unsigned(this->Reader.ReadULEB128());
-            bool isUnsigned = (bw & (1 << 10)) != 0;
-            bw &= ~(1 << 10);
-
-            return SP.getContext().getIntegerTy(bw, isUnsigned);
+         case TypeID::BuiltinTypeID: {
+            auto kind = this->template ReadEnum<BuiltinType::Kind>();
+            return SP.getContext().getBuiltinType(kind);
          }
-         case TypeID::FPTypeID:
-            return this->ReadBool() ? SP.getContext().getDoubleTy()
-                                    : SP.getContext().getFloatTy();
          case TypeID::PointerTypeID:
             return SP.getContext().getPointerType(ReadQualType());
+         case TypeID::ReferenceTypeID:
+            return SP.getContext().getReferenceType(ReadQualType());
+         case TypeID::MovedTypeID:
+            return SP.getContext().getMovedType(ReadQualType());
          case TypeID::ArrayTypeID: {
             auto numElements = this->Reader.ReadULEB128();
             auto elementTy = ReadQualType();
@@ -338,13 +327,16 @@ protected:
                this->template ReadList<QualType>
                   (&ExtendedDeserializerBase::ReadQualType));
          }
-         case TypeID::FunctionTypeID: {
+         case TypeID::FunctionTypeID:
+         case TypeID::LambdaTypeID: {
+            bool lambda = this->ReadBool();
             auto ret = ReadQualType();
             auto args = this->template ReadList<QualType>(
                &ExtendedDeserializerBase::ReadQualType);
             unsigned flags = unsigned(this->Reader.ReadULEB128());
 
-            return SP.getContext().getFunctionType(ret, move(args), flags);
+            return SP.getContext().getFunctionType(ret, move(args), flags,
+                                                   lambda);
          }
          case TypeID::ObjectTypeID: {
             return SP.getObjectTy(this->ReadString());
@@ -355,10 +347,6 @@ protected:
 
             return SP.getContext().getTemplateArgType(cov, name);
          }
-         case TypeID::VoidTypeID:
-            return SP.getContext().getVoidType();
-         case TypeID::AutoTypeID:
-            return SP.getContext().getAutoType();
          case TypeID::MetaTypeID:
             return SP.getContext().getMetaType(ReadQualType());
          case TypeID::NamespaceTypeID:
@@ -406,9 +394,7 @@ protected:
    SourceLocation ReadSourceLoc()
    {
       auto offset = unsigned(this->Reader.ReadULEB128());
-      auto id = unsigned(this->Reader.ReadULEB128());
-
-      return SourceLocation(offset, id);
+      return SourceLocation(offset);
    }
 
    PrecedenceGroup ReadPrecedenceGroup()

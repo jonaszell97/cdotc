@@ -6,8 +6,8 @@
 #include "Module/Module.h"
 #include "Value/Record/AggregateType.h"
 
-#include "../AST/ASTContext.h"
-#include "../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/ASTContext.h"
+#include "AST/NamedDecl.h"
 
 #define CDOT_VALUE_INCLUDE
 #include "Value/ValueIncludes.def"
@@ -33,13 +33,13 @@ ILBuilder::ILBuilder(ast::ASTContext &ASTCtx, Module *M)
 
 ILBuilder::~ILBuilder()
 {
-   Value::cleanup();
+
 }
 
-void ILBuilder::importType(Type *Ty)
+void ILBuilder::importType(QualType Ty)
 {
    if (Ty->isPointerType())
-      importType(*Ty->asPointerType()->getPointeeType());
+      importType(Ty->asPointerType()->getPointeeType());
 
    if (!Ty->isObjectType())
       return;
@@ -71,7 +71,7 @@ void ILBuilder::SetInsertPoint(BasicBlock *bb)
 }
 
 void ILBuilder::insertInstruction(Instruction *inst,
-                                  const string &name) {
+                                  llvm::StringRef name) {
    auto BB = getInsertBlock();
 
    insertPoint = BB->getInstructions().insert(insertPoint, inst);
@@ -84,14 +84,14 @@ void ILBuilder::insertInstruction(Instruction *inst,
       inst->setLocation(debugLoc);
 
    if (!inst->getType())
-      inst->type = ASTCtx.getVoidType();
+      inst->type = ValueType(Ctx, ASTCtx.getVoidType());
 
-   importType(*inst->getType());
+   importType(inst->getType());
 }
 
-BasicBlock* ILBuilder::CreateBasicBlock(const string &name)
+BasicBlock* ILBuilder::CreateBasicBlock(llvm::StringRef name)
 {
-   auto BB = new BasicBlock(ASTCtx.getInt8PtrTy(), InsertBlock->getParent());
+   auto BB = new BasicBlock(InsertBlock->getParent());
 
    if (!name.empty())
       BB->setName(name);
@@ -101,8 +101,8 @@ BasicBlock* ILBuilder::CreateBasicBlock(const string &name)
 
 BasicBlock* ILBuilder::CreateBasicBlock(Function *func,
                                         bool setInsertPoint,
-                                        const std::string &name) {
-   auto BB = new BasicBlock(ASTCtx.getInt8PtrTy(), func);
+                                        llvm::StringRef name) {
+   auto BB = new BasicBlock(func);
    if (!name.empty())
       BB->setName(name);
 
@@ -112,81 +112,109 @@ BasicBlock* ILBuilder::CreateBasicBlock(Function *func,
    return BB;
 }
 
-ConstantInt* ILBuilder::CreateConstantInt(Type *ty, uint64_t value)
+ConstantInt* ILBuilder::GetConstantInt(QualType ty, uint64_t value)
 {
-   return ConstantInt::get(ty, value);
+   return ConstantInt::get(ValueType(Ctx, ty), value);
 }
 
-ConstantInt* ILBuilder::CreateTrue()
+ConstantInt* ILBuilder::GetConstantInt(QualType ty, llvm::APSInt &&Val)
 {
-   return ConstantInt::get(ASTCtx.getBoolTy(), 1);
+   return ConstantInt::get(ValueType(Ctx, ty), std::move(Val));
 }
 
-ConstantInt* ILBuilder::CreateFalse()
-{
-   return ConstantInt::get(ASTCtx.getBoolTy(), 0);
+ConstantInt* ILBuilder::GetConstantInt(QualType ty,
+                                       const llvm::APSInt &Val) {
+   return ConstantInt::get(ValueType(Ctx, ty), llvm::APSInt(Val));
 }
 
-ConstantInt* ILBuilder::CreateChar(char c)
+ConstantInt* ILBuilder::GetTrue()
 {
-   return ConstantInt::get(ASTCtx.getCharTy(), c);
+   return ConstantInt::getTrue(Ctx);
 }
 
-ConstantFloat* ILBuilder::CreateConstantFP(Type *ty, double d)
+ConstantInt* ILBuilder::GetFalse()
+{
+   return ConstantInt::getFalse(Ctx);
+}
+
+ConstantInt* ILBuilder::GetChar(char c)
+{
+   return ConstantInt::get(ValueType(Ctx, ASTCtx.getCharTy()), c);
+}
+
+ConstantFloat* ILBuilder::GetConstantFP(QualType ty, double d)
 {
    if (ty->isFloatTy())
-      return ConstantFloat::get(ASTCtx.getFloatTy(), (float)d);
+      return ConstantFloat::get(ValueType(Ctx, ASTCtx.getFloatTy()), (float)d);
 
    assert(ty->isDoubleTy());
-   return ConstantFloat::get(ASTCtx.getDoubleTy(), d);
+   return ConstantFloat::get(ValueType(Ctx, ASTCtx.getDoubleTy()), d);
 }
 
-ConstantFloat* ILBuilder::CreateConstantFloat(float f)
+ConstantFloat* ILBuilder::GetConstantFP(QualType ty, llvm::APFloat &&Val)
 {
-   return ConstantFloat::get(ASTCtx.getFloatTy(), f);
+   return ConstantFloat::get(ValueType(Ctx, ty), std::move(Val));
 }
 
-ConstantFloat* ILBuilder::CreateConstantDouble(double d)
+ConstantFloat* ILBuilder::GetConstantFP(QualType ty,
+                                        const llvm::APFloat &Val) {
+   return ConstantFloat::get(ValueType(Ctx, ty), llvm::APFloat(Val));
+}
+
+ConstantFloat* ILBuilder::GetConstantFloat(float f)
 {
-   return ConstantFloat::get(ASTCtx.getDoubleTy(), d);
+   return ConstantFloat::get(ValueType(Ctx, ASTCtx.getFloatTy()), f);
 }
 
-ConstantString* ILBuilder::CreateConstantString(const std::string &str)
+ConstantFloat* ILBuilder::GetConstantDouble(double d)
 {
-   return ConstantString::get(ASTCtx.getInt8PtrTy(), str);
+   return ConstantFloat::get(ValueType(Ctx, ASTCtx.getDoubleTy()), d);
 }
 
-ConstantStruct* ILBuilder::CreateConstantStruct(
+ConstantString* ILBuilder::GetConstantString(llvm::StringRef str)
+{
+   return ConstantString::get(Ctx, str);
+}
+
+ConstantStruct* ILBuilder::GetConstantStruct(
    AggregateType *ty, llvm::ArrayRef<Constant *> elements)
 {
    return ConstantStruct::get(ty, elements);
 }
 
-ConstantArray* ILBuilder::CreateConstantArray(llvm::ArrayRef<Constant *> Arr)
+ConstantArray* ILBuilder::GetConstantArray(llvm::ArrayRef<Constant *> Arr)
 {
    auto ty = ASTCtx.getArrayType(Arr.front()->getType(), Arr.size());
-   return ConstantArray::get(ty, Arr);
+   return ConstantArray::get(ValueType(Ctx, ty), Arr);
 }
 
-ConstantArray * ILBuilder::CreateConstantArray(
-   llvm::SmallVector<Constant*, 4> &&Arr)
+ConstantArray * ILBuilder::GetConstantArray(
+   llvm::SmallVector<Constant *, 4> &&Arr)
 {
    auto ty = ASTCtx.getArrayType(Arr.front()->getType(), Arr.size());
-   return ConstantArray::get(ty, std::move(Arr));
+   return ConstantArray::get(ValueType(Ctx, ty), std::move(Arr));
 }
 
-ConstantArray* ILBuilder::CreateConstantArray(QualType ty, size_t numElements)
+ConstantArray* ILBuilder::GetConstantArray(QualType ty, size_t numElements)
 {
    importType(*ty);
-   return ConstantArray::get(ASTCtx.getArrayType(ty, numElements));
+   return ConstantArray::get(ValueType(Ctx,
+                                       ASTCtx.getArrayType(ty, numElements)));
+}
+
+ConstantPointer* ILBuilder::GetConstantPtr(QualType ty, uintptr_t val)
+{
+   importType(*ty);
+   return ConstantPointer::get(ValueType(Ctx, ty), val);
 }
 
 Argument* ILBuilder::CreateArgument(QualType type, bool vararg,
                                     BasicBlock *parent,
-                                    const string &name,
+                                    llvm::StringRef name,
                                     const SourceLocation &loc) {
    importType(*type);
-   auto arg = new Argument(type, vararg, parent, name);
+   auto arg = new Argument(ValueType(Ctx, type),
+                           vararg, parent, name);
 
    if (loc)
       arg->setLocation(loc);
@@ -194,9 +222,9 @@ Argument* ILBuilder::CreateArgument(QualType type, bool vararg,
    return arg;
 }
 
-ClassType* ILBuilder::DeclareClass(ast::ClassDecl *C,
-                                   const std::string &name,
-                                   const SourceLocation &loc) {
+ClassType* ILBuilder::CreateClass(ast::ClassDecl *C,
+                                  llvm::StringRef name,
+                                  const SourceLocation &loc) {
    auto CT = new ClassType(ASTCtx.getRecordType(C), name, M);
 
    if (loc)
@@ -205,9 +233,9 @@ ClassType* ILBuilder::DeclareClass(ast::ClassDecl *C,
    return CT;
 }
 
-StructType* ILBuilder::DeclareStruct(ast::RecordDecl *S,
-                                     const std::string &name,
-                                     const SourceLocation &loc) {
+StructType* ILBuilder::CreateStruct(ast::RecordDecl *S,
+                                    llvm::StringRef name,
+                                    const SourceLocation &loc) {
    auto ST = new StructType(ASTCtx.getRecordType(S), name, M);
    if (loc)
       ST->setLocation(loc);
@@ -215,9 +243,9 @@ StructType* ILBuilder::DeclareStruct(ast::RecordDecl *S,
    return ST;
 }
 
-EnumType* ILBuilder::DeclareEnum(ast::EnumDecl *E,
-                                 const std::string &name,
-                                 const SourceLocation &loc) {
+EnumType* ILBuilder::CreateEnum(ast::EnumDecl *E,
+                                llvm::StringRef name,
+                                const SourceLocation &loc) {
    auto ET = new EnumType(ASTCtx.getRecordType(E), name, M);
    if (loc)
       ET->setLocation(loc);
@@ -225,9 +253,9 @@ EnumType* ILBuilder::DeclareEnum(ast::EnumDecl *E,
    return ET;
 }
 
-UnionType* ILBuilder::DeclareUnion(ast::UnionDecl *U,
-                                   const std::string &name,
-                                   const SourceLocation &loc) {
+UnionType* ILBuilder::CreateUnion(ast::UnionDecl *U,
+                                  llvm::StringRef name,
+                                  const SourceLocation &loc) {
    auto UT = new UnionType(ASTCtx.getRecordType(U), name, M);
    if (loc)
       UT->setLocation(loc);
@@ -235,9 +263,9 @@ UnionType* ILBuilder::DeclareUnion(ast::UnionDecl *U,
    return UT;
 }
 
-ProtocolType* ILBuilder::DeclareProtocol(ast::ProtocolDecl *P,
-                                         const std::string &name,
-                                         const SourceLocation &loc) {
+ProtocolType* ILBuilder::CreateProtocol(ast::ProtocolDecl *P,
+                                        llvm::StringRef name,
+                                        const SourceLocation &loc) {
    auto PT = new ProtocolType(ASTCtx.getRecordType(P), name, M);
    if (loc)
       PT->setLocation(loc);
@@ -245,7 +273,7 @@ ProtocolType* ILBuilder::DeclareProtocol(ast::ProtocolDecl *P,
    return PT;
 }
 
-Function* ILBuilder::CreateFunction(const std::string &name,
+Function* ILBuilder::CreateFunction(llvm::StringRef name,
                                     QualType returnType,
                                     llvm::ArrayRef<Argument*> args,
                                     bool mightThrow,
@@ -270,7 +298,7 @@ Function* ILBuilder::CreateFunction(const std::string &name,
    if (loc)
       F->setLocation(loc);
 
-   auto EntryBlock = new BasicBlock(ASTCtx.getInt8PtrTy(), F);
+   auto EntryBlock = new BasicBlock(F);
    EntryBlock->setName("entry");
 
    for (const auto &arg : args)
@@ -297,7 +325,7 @@ Lambda* ILBuilder::CreateLambda(QualType returnType,
    if (loc)
       L->setLocation(loc);
 
-   auto EntryBlock = new BasicBlock(ASTCtx.getInt8PtrTy(), L);
+   auto EntryBlock = new BasicBlock(L);
    EntryBlock->setName("entry");
 
    for (const auto &arg : args)
@@ -320,9 +348,6 @@ Method * ILBuilder::CreateMethod(AggregateType *forType,
                                  const SourceLocation &loc,
                                  bool addSelfArg) {
    llvm::SmallVector<QualType, 8> argTypes;
-   if (!isStatic)
-      argTypes.push_back(forType->getType());
-
    for (auto &arg : args)
       argTypes.push_back(arg->getType());
 
@@ -343,7 +368,7 @@ Method * ILBuilder::CreateMethod(AggregateType *forType,
    if (loc)
       Me->setLocation(loc);
 
-   auto EntryBlock = new BasicBlock(ASTCtx.getInt8PtrTy(), Me);
+   auto EntryBlock = new BasicBlock(Me);
    EntryBlock->setName("entry");
 
    for (const auto &arg : args)
@@ -359,7 +384,7 @@ Initializer* ILBuilder::CreateInitializer(AggregateType *forType,
                                           bool vararg,
                                           const SourceLocation &loc,
                                           bool addSelfArg) {
-   llvm::SmallVector<QualType, 8> argTypes{ forType->getType() };
+   llvm::SmallVector<QualType, 8> argTypes;
    for (auto &arg : args)
       argTypes.push_back(arg->getType());
 
@@ -377,7 +402,7 @@ Initializer* ILBuilder::CreateInitializer(AggregateType *forType,
    if (loc)
       I->setLocation(loc);
 
-   auto EntryBlock = new BasicBlock(ASTCtx.getInt8PtrTy(), I);
+   auto EntryBlock = new BasicBlock(I);
    EntryBlock->setName("entry");
 
    for (const auto &arg : args)
@@ -386,9 +411,9 @@ Initializer* ILBuilder::CreateInitializer(AggregateType *forType,
    return I;
 }
 
-GlobalVariable* ILBuilder::CreateGlobalVariable(Type *type, bool isConst,
+GlobalVariable* ILBuilder::CreateGlobalVariable(QualType type, bool isConst,
                                                 Constant *initializer,
-                                                const std::string &name,
+                                                llvm::StringRef name,
                                                 const SourceLocation &loc) {
    importType(type);
    auto G = new GlobalVariable(type, isConst, name, M, initializer);
@@ -400,10 +425,10 @@ GlobalVariable* ILBuilder::CreateGlobalVariable(Type *type, bool isConst,
 
 GlobalVariable* ILBuilder::CreateGlobalVariable(Constant *initializer,
                                                 bool isConst,
-                                                const string &name,
+                                                llvm::StringRef name,
                                                 const SourceLocation &loc) {
-   importType(*initializer->getType());
-   auto G = new GlobalVariable(*initializer->getType(), isConst, name, M,
+   importType(initializer->getType());
+   auto G = new GlobalVariable(initializer->getType(), isConst, name, M,
                                initializer);
 
    if (loc)
@@ -414,7 +439,7 @@ GlobalVariable* ILBuilder::CreateGlobalVariable(Constant *initializer,
 
 CallInst* ILBuilder::CreateCall(Function *F,
                                 llvm::ArrayRef<Value *> args,
-                                const string &name) {
+                                llvm::StringRef name) {
    CallInst *inst = new CallInst(F, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -423,7 +448,7 @@ CallInst* ILBuilder::CreateCall(Function *F,
 
 ProtocolCallInst* ILBuilder::CreateProtocolCall(Method *M,
                                                 llvm::ArrayRef<Value *> args,
-                                                const std::string &name) {
+                                                llvm::StringRef name) {
    auto inst = new ProtocolCallInst(M, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -432,7 +457,7 @@ ProtocolCallInst* ILBuilder::CreateProtocolCall(Method *M,
 
 VirtualCallInst* ILBuilder::CreateVirtualCall(Method *M,
                                               llvm::ArrayRef<Value *> args,
-                                              const std::string &name) {
+                                              llvm::StringRef name) {
    auto inst = new VirtualCallInst(M, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -441,19 +466,85 @@ VirtualCallInst* ILBuilder::CreateVirtualCall(Method *M,
 
 namespace {
 
+#ifndef NDEBUG
+
+bool isPointerLike(Value *V)
+{
+   return V->getType()->isObjectType() || V->getType()->isPointerType()
+          || V->getType()->isReferenceType();
+}
+
+void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
+{
+   switch (id) {
+   case Intrinsic::memcpy:
+      assert(args.size() == 3);
+      assert(isPointerLike(args[0]) && isPointerLike(args[1]));
+      assert(args[2]->getType()->isIntegerType());
+      break;
+   case Intrinsic::memset:
+      assert(args.size() == 3);
+      assert(isPointerLike(args[0]));
+      assert(args[1]->getType()->isInt8Ty()
+             || args[1]->getType()->isInt8Ty(true));
+      assert(args[2]->getType()->isIntegerType());
+      break;
+   case Intrinsic::memcmp:
+      assert(args.size() == 3);
+      assert(isPointerLike(args[0]) && isPointerLike(args[1]));
+      assert(args[2]->getType()->isIntegerType());
+      break;
+   case Intrinsic::__ctfe_stacktrace:
+      assert(args.empty());
+   case Intrinsic::get_lambda_env:
+   case Intrinsic::get_lambda_funcptr:
+      assert(args.size() == 1 && args.front()->getType()->isLambdaType());
+      break;
+   case Intrinsic::retain:
+   case Intrinsic::release:
+   case Intrinsic::strong_refcount:
+   case Intrinsic::weak_refcount:
+   case Intrinsic::vtable_ref:
+   case Intrinsic::typeinfo_ref:
+      assert(args.size() == 1 && args.front()->getType()->isClass());
+      break;
+   case Intrinsic::lifetime_begin:
+   case Intrinsic::lifetime_end:
+      assert(args.size() == 2);
+      assert(args[0]->getType()->isObjectType()
+             || args[0]->getType()->isPointerType());
+      assert(args[1]->getType()->isIntegerType());
+      break;
+   }
+}
+
+#endif
+
 QualType getIntrinsicReturnType(ast::ASTContext &Ctx, Intrinsic id)
 {
    switch (id) {
-      case Intrinsic::MemCpy:
-      case Intrinsic::MemSet:
-      case Intrinsic::LifetimeBegin:
-      case Intrinsic::LifetimeEnd:
-      case Intrinsic::Retain:
-      case Intrinsic::Release:
-      case Intrinsic::__ctfe_stacktrace:
-         return Ctx.getVoidType();
-      case Intrinsic::MemCmp:
-         return Ctx.getInt32Ty();
+   case Intrinsic::memcpy:
+   case Intrinsic::memset:
+   case Intrinsic::lifetime_begin:
+   case Intrinsic::lifetime_end:
+   case Intrinsic::retain:
+   case Intrinsic::release:
+   case Intrinsic::__ctfe_stacktrace:
+      return Ctx.getVoidType();
+   case Intrinsic::memcmp:
+      return Ctx.getInt32Ty();
+   case Intrinsic::get_lambda_env:
+      return Ctx.getInt8PtrTy()->getPointerTo(Ctx)->getPointerTo(Ctx);
+   case Intrinsic::get_lambda_funcptr:
+      return Ctx.getInt8PtrTy()->getPointerTo(Ctx);
+   case Intrinsic::strong_refcount:
+      return Ctx.getReferenceType(Ctx.getUIntTy());
+   case Intrinsic::weak_refcount:
+      return Ctx.getReferenceType(Ctx.getUIntTy());
+   case Intrinsic::vtable_ref:
+      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
+   case Intrinsic::typeinfo_ref:
+      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
    }
 }
 
@@ -461,17 +552,62 @@ QualType getIntrinsicReturnType(ast::ASTContext &Ctx, Intrinsic id)
 
 IntrinsicCallInst* ILBuilder::CreateIntrinsic(Intrinsic id,
                                               llvm::ArrayRef<Value *> args,
-                                              const string &name) {
-   auto inst = new IntrinsicCallInst(id, getIntrinsicReturnType(ASTCtx, id),
-                                     args, getInsertBlock());
-   insertInstruction(inst, name);
+                                              llvm::StringRef name) {
+#ifndef NDEBUG
+   checkIntrinsicArgs(id, args);
+#endif
 
+   auto inst = new IntrinsicCallInst(
+      id, ValueType(Ctx, getIntrinsicReturnType(ASTCtx, id)),
+      args, getInsertBlock());
+
+   insertInstruction(inst, name);
    return inst;
+}
+
+Instruction* ILBuilder::GetStrongRefcount(il::Value *V,
+                                          llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::strong_refcount, V, name);
+}
+
+Instruction* ILBuilder::GetWeakRefcount(il::Value *V,
+                                        llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::weak_refcount, V, name);
+}
+
+Instruction* ILBuilder::GetVTable(il::Value *V,
+                                  llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::vtable_ref, V, name);
+}
+
+Instruction* ILBuilder::GetTypeInfo(il::Value *V,
+                                    llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::typeinfo_ref, V, name);
+}
+
+Instruction* ILBuilder::CreateRetain(il::Value *V,
+                                     llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::retain, V, name);
+}
+
+Instruction* ILBuilder::CreateRelease(il::Value *V,
+                                      llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::release, V, name);
+}
+
+Instruction* ILBuilder::CreateLifetimeBegin(il::Value *V,
+                                            llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::lifetime_begin, V, name);
+}
+
+Instruction* ILBuilder::CreateLifetimeEnd(il::Value *V,
+                                          llvm::StringRef name) {
+   return CreateIntrinsic(Intrinsic::lifetime_end, V, name);
 }
 
 IndirectCallInst* ILBuilder::CreateIndirectCall(Value *Func,
                                                 llvm::ArrayRef<Value *> args,
-                                                const std::string &name) {
+                                                llvm::StringRef name) {
    auto inst = new IndirectCallInst(Func, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -480,7 +616,7 @@ IndirectCallInst* ILBuilder::CreateIndirectCall(Value *Func,
 
 LambdaCallInst* ILBuilder::CreateLambdaCall(Value *Func,
                                             llvm::ArrayRef<Value *> args,
-                                            const std::string &name) {
+                                            llvm::StringRef name) {
    auto inst = new LambdaCallInst(Func, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -489,7 +625,7 @@ LambdaCallInst* ILBuilder::CreateLambdaCall(Value *Func,
 
 InvokeInst* ILBuilder::CreateInvoke(Function *F, llvm::ArrayRef<Value *> args,
                                     BasicBlock *NormalCont,
-                                    BasicBlock *LandingPad, const string &name) {
+                                    BasicBlock *LandingPad, llvm::StringRef name) {
    auto inst = new InvokeInst(F, args, NormalCont, LandingPad,
                               getInsertBlock());
    insertInstruction(inst, name);
@@ -501,7 +637,7 @@ ProtocolInvokeInst* ILBuilder::CreateProtocolInvoke(Method *M,
                                                     llvm::ArrayRef<Value*> args,
                                                     BasicBlock *NormalCont,
                                                     BasicBlock *LandingPad,
-                                                    const std::string &name) {
+                                                    llvm::StringRef name) {
    auto inst = new ProtocolInvokeInst(M, args, NormalCont, LandingPad,
                                       getInsertBlock());
    insertInstruction(inst, name);
@@ -513,7 +649,7 @@ VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Method *M,
                                                   llvm::ArrayRef<Value *> args,
                                                   BasicBlock *NormalCont,
                                                   BasicBlock *LandingPad,
-                                                  const std::string &name) {
+                                                  llvm::StringRef name) {
    auto inst = new VirtualInvokeInst(M, args, NormalCont, LandingPad,
                                      getInsertBlock());
    insertInstruction(inst, name);
@@ -521,30 +657,50 @@ VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Method *M,
    return inst;
 }
 
-AllocaInst* ILBuilder::CreateAlloca(Type *ofType,
+AllocaInst* ILBuilder::CreateAlloca(QualType ofType,
                                     unsigned int align,
                                     bool heap,
-                                    const std::string &name) {
-   auto inst = new AllocaInst(ofType, getInsertBlock(), align, heap);
-   insertInstruction(inst, name);
+                                    llvm::StringRef name) {
+   auto inst = new AllocaInst(ValueType(Ctx, ofType),
+                              getInsertBlock(), align, heap);
 
+   insertInstruction(inst, name);
    return inst;
 }
 
-AllocaInst* ILBuilder::CreateAlloca(Type *ofType,
+AllocaInst* ILBuilder::CreateAlloca(QualType ofType,
                                     size_t size,
                                     unsigned int align,
                                     bool heap,
-                                    const std::string &name) {
-   auto inst = new AllocaInst(ofType, getInsertBlock(), size, align, heap);
-   insertInstruction(inst, name);
+                                    llvm::StringRef name) {
+   auto inst = new AllocaInst(ValueType(Ctx, ofType), getInsertBlock(), size,
+                              align, heap);
 
+   insertInstruction(inst, name);
    return inst;
+}
+
+Instruction* ILBuilder::AllocUninitialized(size_t size,
+                                           unsigned int align,
+                                           bool heap,
+                                           llvm::StringRef name) {
+   auto ArrTy = ASTCtx.getArrayType(ASTCtx.getUInt8Ty(), size);
+   auto alloca = new AllocaInst(ValueType(Ctx, ArrTy), getInsertBlock(),
+                                1, 0, heap);
+
+   insertInstruction(alloca, "");
+   return CreateBitCast(CastKind::BitCast, CreateLoad(alloca),
+                        ASTCtx.getInt8PtrTy());
 }
 
 StoreInst* ILBuilder::CreateStore(Value *val,
                                   Value *ptr,
-                                  const std::string &name) {
+                                  llvm::StringRef name) {
+   if (val->isLvalue()) {
+      val = CreateLoad(val); // FIXME this is ugly
+      assert(val->getType()->needsStructReturn() && "unloaded value");
+   }
+
    auto inst = new StoreInst(ptr, val, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -554,7 +710,7 @@ StoreInst* ILBuilder::CreateStore(Value *val,
 FieldRefInst* ILBuilder::CreateFieldRef(Value *val,
                                         StructType *ty,
                                         llvm::StringRef fieldName,
-                                        const std::string &name) {
+                                        llvm::StringRef name) {
    auto inst = new FieldRefInst(val, ty, fieldName,
                                 getInsertBlock());
    insertInstruction(inst, name);
@@ -562,9 +718,10 @@ FieldRefInst* ILBuilder::CreateFieldRef(Value *val,
    return inst;
 }
 
-GEPInst* ILBuilder::CreateGEP(Value *val, int idx,
-                              const std::string &name) {
-   auto CI = ConstantInt::get(ASTCtx.getUIntTy(), idx);
+GEPInst* ILBuilder::CreateGEP(Value *val,
+                              size_t idx,
+                              llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
    auto gep = new GEPInst(val, CI, getInsertBlock());
    insertInstruction(gep, name);
@@ -572,8 +729,14 @@ GEPInst* ILBuilder::CreateGEP(Value *val, int idx,
    return gep;
 }
 
+Instruction* ILBuilder::CreateExtractValue(Value *val,
+                                           size_t idx,
+                                           llvm::StringRef name) {
+   return CreateLoad(CreateGEP(val, idx, name));
+}
+
 GEPInst* ILBuilder::CreateGEP(Value *val, Value *idx,
-                              const std::string &name) {
+                              llvm::StringRef name) {
    auto gep = new GEPInst(val, idx, getInsertBlock());
    insertInstruction(gep, name);
 
@@ -582,8 +745,8 @@ GEPInst* ILBuilder::CreateGEP(Value *val, Value *idx,
 
 GEPInst* ILBuilder::CreateStructGEP(AggregateType *Ty,
                                     Value *val, size_t idx,
-                                    const std::string &name) {
-   auto CI = ConstantInt::get(ASTCtx.getUIntTy(), idx);
+                                    llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
    auto gep = new GEPInst(Ty, val, CI, getInsertBlock());
    insertInstruction(gep, name);
@@ -592,8 +755,8 @@ GEPInst* ILBuilder::CreateStructGEP(AggregateType *Ty,
 }
 
 CaptureExtractInst* ILBuilder::CreateCaptureExtract(size_t idx,
-                                                    const std::string &name) {
-   auto CI = ConstantInt::get(ASTCtx.getUIntTy(), idx);
+                                                    llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
    auto inst = new CaptureExtractInst(CI, getInsertBlock());
    insertInstruction(inst, name);
@@ -602,8 +765,8 @@ CaptureExtractInst* ILBuilder::CreateCaptureExtract(size_t idx,
 }
 
 TupleExtractInst* ILBuilder::CreateTupleExtract(Value *val, size_t idx,
-                                                const string &name) {
-   auto CI = ConstantInt::get(ASTCtx.getUIntTy(), idx);
+                                                llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
    auto gep = new TupleExtractInst(val, CI, getInsertBlock());
    insertInstruction(gep, name);
@@ -612,7 +775,7 @@ TupleExtractInst* ILBuilder::CreateTupleExtract(Value *val, size_t idx,
 }
 
 EnumRawValueInst* ILBuilder::CreateEnumRawValue(Value *Val,
-                                                const string &name) {
+                                                llvm::StringRef name) {
    auto inst = new EnumRawValueInst(Val, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -622,8 +785,8 @@ EnumRawValueInst* ILBuilder::CreateEnumRawValue(Value *Val,
 EnumExtractInst* ILBuilder::CreateEnumExtract(Value *Val,
                                               llvm::StringRef caseName,
                                               size_t caseVal,
-                                              const string &name) {
-   auto CI = ConstantInt::get(ASTCtx.getUIntTy(), caseVal);
+                                              llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), caseVal);
 
    auto inst = new EnumExtractInst(Val, caseName, CI, getInsertBlock());
    insertInstruction(inst, name);
@@ -631,7 +794,7 @@ EnumExtractInst* ILBuilder::CreateEnumExtract(Value *Val,
    return inst;
 }
 
-LoadInst* ILBuilder::CreateLoad(Value *val, const string &name) {
+LoadInst* ILBuilder::CreateLoad(Value *val, llvm::StringRef name) {
    auto inst = new LoadInst(val, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -639,16 +802,15 @@ LoadInst* ILBuilder::CreateLoad(Value *val, const string &name) {
 }
 
 AddrOfInst* ILBuilder::CreateAddrOf(Value *target,
-                                    const std::string &name) {
-   auto inst = new AddrOfInst(target, target->getType()->getPointerTo(ASTCtx),
-                              getInsertBlock());
+                                    llvm::StringRef name) {
+   auto inst = new AddrOfInst(target, getInsertBlock());
 
    insertInstruction(inst, name);
    return inst;
 }
 
 PtrToLvalueInst* ILBuilder::CreatePtrToLvalue(Value *target,
-                                              const std::string &name) {
+                                              llvm::StringRef name) {
    auto inst = new PtrToLvalueInst(target, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -658,7 +820,7 @@ PtrToLvalueInst* ILBuilder::CreatePtrToLvalue(Value *target,
 InitInst* ILBuilder::CreateInit(StructType *InitializedType,
                                 Method *Init,
                                 llvm::ArrayRef<Value *> args,
-                                const std::string &name) {
+                                llvm::StringRef name) {
    auto inst = new InitInst(InitializedType,Init, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -667,7 +829,7 @@ InitInst* ILBuilder::CreateInit(StructType *InitializedType,
 
 UnionInitInst* ILBuilder::CreateUnionInit(UnionType *UnionTy,
                                           Value *InitializerVal,
-                                          const string &name) {
+                                          llvm::StringRef name) {
    auto inst = new UnionInitInst(UnionTy, InitializerVal, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -677,7 +839,7 @@ UnionInitInst* ILBuilder::CreateUnionInit(UnionType *UnionTy,
 EnumInitInst* ILBuilder::CreateEnumInit(EnumType *EnumTy,
                                         std::string const& caseName,
                                         llvm::ArrayRef<Value *> args,
-                                        const string &name) {
+                                        llvm::StringRef name) {
    auto inst = new EnumInitInst(EnumTy, caseName, args, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -687,7 +849,7 @@ EnumInitInst* ILBuilder::CreateEnumInit(EnumType *EnumTy,
 LambdaInitInst* ILBuilder::CreateLambdaInit(Function *Function,
                                             QualType LambdaTy,
                                             llvm::ArrayRef<Value*> Captures,
-                                            const string &name) {
+                                            llvm::StringRef name) {
    auto inst = new LambdaInitInst(Function, LambdaTy,
                                   Captures, getInsertBlock());
    insertInstruction(inst, name);
@@ -697,7 +859,7 @@ LambdaInitInst* ILBuilder::CreateLambdaInit(Function *Function,
 
 UnionCastInst* ILBuilder::CreateUnionCast(Value *target, UnionType *UnionTy,
                                           std::string const& fieldName,
-                                          const std::string &name) {
+                                          llvm::StringRef name) {
    auto inst = new UnionCastInst(target, UnionTy, fieldName, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -705,8 +867,8 @@ UnionCastInst* ILBuilder::CreateUnionCast(Value *target, UnionType *UnionTy,
 }
 
 ExceptionCastInst* ILBuilder::CreateExceptionCast(Value *val,
-                                                  Type *toType,
-                                                  const string &name) {
+                                                  QualType toType,
+                                                  llvm::StringRef name) {
    auto inst = new ExceptionCastInst(val, toType, getInsertBlock());
 
    insertInstruction(inst, name);
@@ -714,30 +876,30 @@ ExceptionCastInst* ILBuilder::CreateExceptionCast(Value *val,
    return inst;
 }
 
-RetInst* ILBuilder::CreateRet(Value *Val, const string &name) {
+RetInst* ILBuilder::CreateRet(Value *Val, llvm::StringRef name) {
    auto inst = new RetInst(Val, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
 }
 
-RetInst* ILBuilder::CreateRetVoid(const string &name) {
-   auto inst = new RetInst(getInsertBlock());
+RetInst* ILBuilder::CreateRetVoid(llvm::StringRef name) {
+   auto inst = new RetInst(Ctx, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
 }
 
 ThrowInst* ILBuilder::CreateThrow(Value *thrownVal, GlobalVariable *typeInfo,
-                                  const string &name) {
+                                  llvm::StringRef name) {
    auto inst = new ThrowInst(thrownVal, typeInfo, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
 }
 
-UnreachableInst* ILBuilder::CreateUnreachable(const string &name) {
-   auto inst = new UnreachableInst(getInsertBlock());
+UnreachableInst* ILBuilder::CreateUnreachable(llvm::StringRef name) {
+   auto inst = new UnreachableInst(Ctx, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -745,16 +907,16 @@ UnreachableInst* ILBuilder::CreateUnreachable(const string &name) {
 
 BrInst* ILBuilder::CreateBr(BasicBlock *target,
                             llvm::ArrayRef<Value*> BlockArgs,
-                            const string &name) {
+                            llvm::StringRef name) {
    auto inst = new BrInst(target, BlockArgs, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
 }
 
-BrInst* ILBuilder::CreateUnresolvedBr(const string &name)
+BrInst* ILBuilder::CreateUnresolvedBr(llvm::StringRef name)
 {
-   auto inst = new BrInst(getInsertBlock());
+   auto inst = new BrInst(Ctx, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -765,7 +927,7 @@ BrInst* ILBuilder::CreateCondBr(Value *Condition,
                                 BasicBlock *ElseBranch,
                                 llvm::ArrayRef<Value*> TargetArgs,
                                 llvm::ArrayRef<Value*> ElseArgs,
-                                const string &name) {
+                                llvm::StringRef name) {
    auto inst = new BrInst(Condition, IfBranch, TargetArgs,
                           ElseBranch, ElseArgs, getInsertBlock());
    insertInstruction(inst, name);
@@ -774,95 +936,89 @@ BrInst* ILBuilder::CreateCondBr(Value *Condition,
 }
 
 SwitchInst* ILBuilder::CreateSwitch(Value *SwitchVal,
-                                    const string &name) {
-   auto inst = new SwitchInst(SwitchVal, getInsertBlock());
+                                    BasicBlock *DefaultDst,
+                                    llvm::StringRef name) {
+   auto inst = new SwitchInst(SwitchVal, DefaultDst, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
 }
 
-LandingPadInst* ILBuilder::CreateLandingPad(const string &name) {
-   auto lpad = new LandingPadInst(ASTCtx.getInt8PtrTy(), getInsertBlock());
+LandingPadInst* ILBuilder::CreateLandingPad(llvm::StringRef name) {
+   auto lpad = new LandingPadInst(Ctx, getInsertBlock());
    insertInstruction(lpad);
 
    return lpad;
 }
 
-#define CDOT_BUILDER_OP(Name)                                              \
-   Name##Inst *ILBuilder::Create##Name(Value *lhs, Value *rhs,             \
-                                       const std::string &name,            \
-                                       const SourceLocation &loc)          \
+BinaryOperatorInst* ILBuilder::CreateBinOp(BinaryOperatorInst::OpCode opc,
+                                           il::Value *lhs, il::Value *rhs,
+                                           llvm::StringRef name,
+                                           SourceLocation loc) {
+   auto inst = new BinaryOperatorInst(opc, lhs, rhs, getInsertBlock());
+   insertInstruction(inst, name);
+
+   return inst;
+}
+
+UnaryOperatorInst* ILBuilder::CreateUnaryOp(UnaryOperatorInst::OpCode opc,
+                                            il::Value *target,
+                                            llvm::StringRef name,
+                                            SourceLocation loc) {
+   auto inst = new UnaryOperatorInst(opc, target, getInsertBlock());
+   insertInstruction(inst, name);
+
+   return inst;
+}
+
+CompInst* ILBuilder::CreateComp(CompInst::OpCode opc,
+                                il::Value *lhs, il::Value *rhs,
+                                llvm::StringRef name,
+                                SourceLocation loc) {
+   auto inst = new CompInst(opc, lhs, rhs, getInsertBlock());
+   insertInstruction(inst, name);
+
+   return inst;
+}
+
+#define CDOT_BINARY_OP(Name, OP)                                           \
+   BinaryOperatorInst *ILBuilder::Create##Name(Value *lhs, Value *rhs,     \
+                                               llvm::StringRef name,       \
+                                               const SourceLocation &loc)  \
    {                                                                       \
-      auto inst = new Name##Inst(lhs, rhs, getInsertBlock());              \
+      auto inst = new BinaryOperatorInst(BinaryOperatorInst::Name, lhs,    \
+                                         rhs, getInsertBlock());           \
       insertInstruction(inst, name);                                       \
       return inst;                                                         \
    }
 
-#define CDOT_BUILDER_COMP(Name)                                            \
-   Name##Inst *ILBuilder::Create##Name(Value *lhs, Value *rhs,             \
-                                       const std::string &name,            \
-                                       const SourceLocation &loc)          \
+#define CDOT_COMP_OP(Name, OP)                                             \
+   CompInst *ILBuilder::Create##Name(Value *lhs, Value *rhs,               \
+                                     llvm::StringRef name,                 \
+                                     const SourceLocation &loc)            \
    {                                                                       \
-      auto inst = new Name##Inst(ASTCtx.getBoolTy(), lhs, rhs,             \
-                                 getInsertBlock());                        \
+      auto inst = new CompInst(CompInst::Name, lhs,                        \
+                               rhs, getInsertBlock());                     \
       insertInstruction(inst, name);                                       \
       return inst;                                                         \
    }
 
-CDOT_BUILDER_OP(Add)
-CDOT_BUILDER_OP(Sub)
-CDOT_BUILDER_OP(Mul)
-CDOT_BUILDER_OP(Div)
-CDOT_BUILDER_OP(Mod)
-CDOT_BUILDER_OP(Exp)
-
-CDOT_BUILDER_OP(And)
-CDOT_BUILDER_OP(Or)
-CDOT_BUILDER_OP(Xor)
-
-CDOT_BUILDER_OP(AShr)
-CDOT_BUILDER_OP(LShr)
-CDOT_BUILDER_OP(Shl)
-
-CDOT_BUILDER_COMP(CompEQ)
-CDOT_BUILDER_COMP(CompNE)
-CDOT_BUILDER_COMP(CompLT)
-CDOT_BUILDER_COMP(CompGT)
-CDOT_BUILDER_COMP(CompLE)
-CDOT_BUILDER_COMP(CompGE)
-
-#undef CDOT_BUILDER_OP
-#undef CDOT_BUILDER_COMP
-
-#define CDOT_BUILDER_OP(Name) \
-   Name##Inst *ILBuilder::Create##Name(Value *target,                      \
-                                       const std::string &name)            \
+#define CDOT_UNARY_OP(Name, OP)                                            \
+   UnaryOperatorInst *ILBuilder::Create##Name(Value *target,               \
+                                              llvm::StringRef name)        \
    {                                                                       \
-      auto inst = new Name##Inst(target, getInsertBlock());                \
+      auto inst = new UnaryOperatorInst(UnaryOperatorInst::Name, target,   \
+                                        getInsertBlock());                 \
       insertInstruction(inst, name);                                       \
                                                                            \
       return inst;                                                         \
    }
 
-CDOT_BUILDER_OP(Min)
-CDOT_BUILDER_OP(Neg)
-
-#undef CDOT_BUILDER_OP
-
-/// Cast Synopsis
-//   BitCastInst * ILBuilder::CreateBitCast(Value *val, Type *toType,
-//                                          const std::string &name,
-//                                          const SourceLocation &loc) {
-//      auto inst = new BitCastInst(val, toType, getInsertBlock());
-//      insertInstruction(inst, name);
-//
-//      return inst;
-//   }
+#include "IL/Value/Instructions.def"
 
 #define CDOT_BUILDER_CAST(Name)                                               \
    Name##Inst * ILBuilder::Create##Name(Value *val, Type *toType,             \
-                                        const std::string &name)              \
-   {                                                                          \
+                                        llvm::StringRef name) {               \
       auto inst = new Name##Inst(val, toType, getInsertBlock());              \
       insertInstruction(inst, name);                                          \
                                                                               \
@@ -874,18 +1030,9 @@ CDOT_BUILDER_CAST(ProtoCast)
 
 #undef CDOT_BUILDER_CAST
 
-IntegerCastInst* ILBuilder::CreateIntegerCast(CastKind kind,
-                                              Value *val, Type *toType,
-                                              const string &name) {
-   auto inst = new IntegerCastInst(kind, val, toType, getInsertBlock());
-   insertInstruction(inst, name);
-
-   return inst;
-}
-
 IntegerCastInst* ILBuilder::CreateIntegerCast(CastKind kind, Value *val,
                                               QualType toType,
-                                              const std::string &name) {
+                                              llvm::StringRef name) {
    auto inst = new IntegerCastInst(kind, val, toType, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -893,16 +1040,7 @@ IntegerCastInst* ILBuilder::CreateIntegerCast(CastKind kind, Value *val,
 }
 
 FPCastInst* ILBuilder::CreateFPCast(CastKind kind, Value *val,
-                                    Type *toType, const string &name)
-{
-   auto inst = new FPCastInst(kind, val, toType, getInsertBlock());
-   insertInstruction(inst, name);
-
-   return inst;
-}
-
-FPCastInst* ILBuilder::CreateFPCast(CastKind kind, Value *val,
-                                     QualType toType, const string &name) {
+                                     QualType toType, llvm::StringRef name) {
    auto inst = new FPCastInst(kind, val, toType, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -911,7 +1049,7 @@ FPCastInst* ILBuilder::CreateFPCast(CastKind kind, Value *val,
 
 
 BitCastInst* ILBuilder::CreateBitCast(CastKind kind, Value *val,
-                                      Type *toType, const string &name)
+                                      Type *toType, llvm::StringRef name)
 {
    auto inst = new BitCastInst(kind, val, toType, getInsertBlock());
    insertInstruction(inst, name);
@@ -920,7 +1058,7 @@ BitCastInst* ILBuilder::CreateBitCast(CastKind kind, Value *val,
 }
 
 IntToEnumInst* ILBuilder::CreateIntToEnum(Value *target, Type *toType,
-                                          const std::string &name) {
+                                          llvm::StringRef name) {
    auto inst = new IntToEnumInst(target, toType, getInsertBlock());
    insertInstruction(inst, name);
 
@@ -931,9 +1069,9 @@ Value* ILBuilder::CreateIsX(Value *V, uint64_t val)
 {
    il::Value *comp;
    if (V->getType()->isIntegerType())
-      comp = ConstantInt::get(*V->getType(), val);
+      comp = ConstantInt::get(V->getType(), val);
    else if (V->getType()->isPointerType())
-      comp = ConstantPointer::get(*V->getType(), val);
+      comp = ConstantPointer::get(V->getType(), val);
    else
       llvm_unreachable("can't comp given value");
 

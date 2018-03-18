@@ -24,6 +24,7 @@ public:
       : WriterBase(out), opts(opts)
    {
       CurrentTab = 0;
+      (void)this->opts;
    }
 
    ~DumperImpl()
@@ -31,7 +32,7 @@ public:
       out << "\n";
    }
 
-   void visit(Statement const* node)
+   void visit(Statement* node)
    {
       out << "\n";
       ApplyTab();
@@ -43,8 +44,8 @@ public:
       switch (node->getTypeID()) {
 #     define CDOT_STMT(Name)                                \
          case AstNode::Name##ID:                            \
-            writeChildren = visit##Name(static_cast<Name const*>(node)); break;
-#     include "../../AstNode.def"
+            writeChildren = visit##Name(static_cast<Name*>(node)); break;
+#     include "AST/AstNode.def"
 
          default:
             llvm_unreachable("not a stmt");
@@ -56,7 +57,7 @@ public:
          });
    }
 
-   void visit(Expression const* node)
+   void visit(Expression* node)
    {
       out << "\n";
       ApplyTab();
@@ -68,15 +69,12 @@ public:
       switch (node->getTypeID()) {
 #     define CDOT_EXPR(Name)                                \
          case AstNode::Name##ID:                            \
-            writeChildren = visit##Name(static_cast<Name const*>(node)); break;
-#     include "../../AstNode.def"
+            writeChildren = visit##Name(static_cast<Name*>(node)); break;
+#     include "AST/AstNode.def"
 
          default:
             llvm_unreachable("not an expr");
       }
-
-      if (auto expr = node->getSubExpr())
-         visit(expr);
 
       if (writeChildren)
          visitDirectChildren(node, [&](Statement *Child) {
@@ -93,23 +91,30 @@ public:
    {
       visit(stmt);
    }
+   
+   void visit(SourceType) {}
 
 #  define CDOT_STMT(Name)                                \
-   bool visit##Name(Name const* stmt);
+   bool visit##Name(Name* stmt);
 
 #  define CDOT_EXPR(Name)                                \
-   bool visit##Name(Name const* expr);
+   bool visit##Name(Name* expr);
 
-#  include "../../AstNode.def"
+#  include "AST/AstNode.def"
 
-   bool visitRecordDecl(RecordDecl const* stmt);
+#  define CDOT_DECL(Name)                                \
+   bool visit##Name(Name *decl);
+
+#  include "AST/Decl.def"
+
+   bool visitRecordDecl(RecordDecl* stmt);
 
 private:
    Options opts;
 
-   bool visitVarDecl(VarDecl const* node);
+   bool visitVarDecl(VarDecl* node);
 
-   void visitCasePatternArg(CasePattern::Argument const &A)
+   void visitCasePatternArg(CasePatternArgument &A)
    {
       if (A.isExpr()) {
          visitExpr(A.getExpr());
@@ -145,19 +150,19 @@ private:
       visitExpr(pair.second);
    }
 
-   void WriteStmtCommon(Statement const* Stmt)
+   void WriteStmtCommon(Statement* Stmt)
    {
       out << "<";
       WritePointer(Stmt);
       out << "> " << Stmt->getNodeTypeAsString();
    }
 
-   void WriteExprCommon(Expression const* Expr)
+   void WriteExprCommon(Expression* Expr)
    {
       WriteStmtCommon(Expr);
    }
 
-   void WriteNamedDeclCommon(NamedDecl const* ND)
+   void WriteNamedDeclCommon(NamedDecl* ND)
    {
       out << "[" << ND->getName() << ", ";
       printAccessModifier(ND->getAccess());
@@ -165,286 +170,331 @@ private:
    }
 };
 
-bool DumperImpl::visitCompoundStmt(CompoundStmt const* stmt)
+bool DumperImpl::visitDeclStmt(DeclStmt *stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitTranslationUnit(const TranslationUnit *stmt)
+bool DumperImpl::visitCompoundStmt(CompoundStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitTemplateParamDecl(const TemplateParamDecl *stmt)
+bool DumperImpl::visitTranslationUnit(TranslationUnit *stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitTemplateParamDecl(TemplateParamDecl *stmt)
 {
    out << "[" << stmt->getName() << "]";
    return true;
 }
 
-bool DumperImpl::visitTemplateArgExpr(const ast::TemplateArgExpr *expr)
+bool DumperImpl::visitBreakStmt(BreakStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitBreakStmt(BreakStmt const* stmt)
+bool DumperImpl::visitContinueStmt(ContinueStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitContinueStmt(ContinueStmt const* stmt)
-{
-   return true;
-}
-
-bool DumperImpl::visitLabelStmt(LabelStmt const* stmt)
+bool DumperImpl::visitLabelStmt(LabelStmt* stmt)
 {
    out << "[" << stmt->getLabelName() << "]";
    return true;
 }
 
-bool DumperImpl::visitGotoStmt(GotoStmt const* stmt)
+bool DumperImpl::visitGotoStmt(GotoStmt* stmt)
 {
    out << "[" << stmt->getLabelName() << "]";
    return true;
 }
 
-bool DumperImpl::visitForStmt(ForStmt const* stmt)
+bool DumperImpl::visitForStmt(ForStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitForInStmt(ForInStmt const* stmt)
+bool DumperImpl::visitForInStmt(ForInStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitIfStmt(IfStmt const* stmt)
+bool DumperImpl::visitIfStmt(IfStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitWhileStmt(WhileStmt const* stmt)
+bool DumperImpl::visitWhileStmt(WhileStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitMatchStmt(MatchStmt const* stmt)
+bool DumperImpl::visitMatchStmt(MatchStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitCaseStmt(CaseStmt const* stmt)
+bool DumperImpl::visitCaseStmt(CaseStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitVarDecl(VarDecl const* stmt)
+bool DumperImpl::visitVarDecl(VarDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitLocalVarDecl(LocalVarDecl const* stmt)
+bool DumperImpl::visitLocalVarDecl(LocalVarDecl* stmt)
 {
    return visitVarDecl(stmt);
 }
 
-bool DumperImpl::visitGlobalVarDecl(GlobalVarDecl const* stmt)
+bool DumperImpl::visitGlobalVarDecl(GlobalVarDecl* stmt)
 {
    return visitVarDecl(stmt);
 }
 
 bool DumperImpl::visitLocalDestructuringDecl(
-   const LocalDestructuringDecl *stmt)
+   LocalDestructuringDecl *stmt)
 {
    return true;
 }
 
 bool DumperImpl::visitGlobalDestructuringDecl(
-   const GlobalDestructuringDecl *stmt)
+   GlobalDestructuringDecl *stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitAliasDecl(AliasDecl const* stmt)
+bool DumperImpl::visitAliasDecl(AliasDecl* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitRecordDecl(RecordDecl const* stmt)
-{
-   WriteNamedDeclCommon(stmt);
-   return true;
-}
-
-bool DumperImpl::visitClassDecl(ClassDecl const* stmt)
+bool DumperImpl::visitRecordDecl(RecordDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitStructDecl(StructDecl const* stmt)
+bool DumperImpl::visitClassDecl(ClassDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitEnumDecl(EnumDecl const* stmt)
+bool DumperImpl::visitStructDecl(StructDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitEnumCaseDecl(EnumCaseDecl const* stmt)
+bool DumperImpl::visitEnumDecl(EnumDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitUnionDecl(UnionDecl const* stmt)
+bool DumperImpl::visitEnumCaseDecl(EnumCaseDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitProtocolDecl(ProtocolDecl const* stmt)
+bool DumperImpl::visitUnionDecl(UnionDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitMethodDecl(MethodDecl const* stmt)
+bool DumperImpl::visitProtocolDecl(ProtocolDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitFieldDecl(FieldDecl const* stmt)
+bool DumperImpl::visitMethodDecl(MethodDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitPropDecl(PropDecl const* stmt)
+bool DumperImpl::visitFieldDecl(FieldDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitInitDecl(InitDecl const* stmt)
+bool DumperImpl::visitPropDecl(PropDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitDeinitDecl(DeinitDecl const* stmt)
+bool DumperImpl::visitInitDecl(InitDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitAssociatedTypeDecl(AssociatedTypeDecl const* stmt)
+bool DumperImpl::visitDeinitDecl(DeinitDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitTypedefDecl(TypedefDecl const* stmt)
+bool DumperImpl::visitAttributedStmt(AttributedStmt *stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitAttributedExpr(AttributedExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitAssociatedTypeDecl(AssociatedTypeDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitExtensionDecl(ExtensionDecl const* stmt)
+bool DumperImpl::visitTypedefDecl(TypedefDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitFunctionDecl(FunctionDecl const* stmt)
+bool DumperImpl::visitExtensionDecl(ExtensionDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitFuncArgDecl(FuncArgDecl const* stmt)
+bool DumperImpl::visitFunctionDecl(FunctionDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitNamespaceDecl(NamespaceDecl const* stmt)
+bool DumperImpl::visitFuncArgDecl(FuncArgDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
    return true;
 }
 
-bool DumperImpl::visitUsingStmt(UsingStmt const* stmt)
+bool DumperImpl::visitNamespaceDecl(NamespaceDecl* stmt)
+{
+   WriteNamedDeclCommon(stmt);
+   return true;
+}
+
+bool DumperImpl::visitUsingStmt(UsingStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitModuleStmt(const ModuleStmt *stmt)
+bool DumperImpl::visitModuleStmt(ModuleStmt *stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitImportStmt(const ImportStmt *stmt)
+bool DumperImpl::visitImportStmt(ImportStmt *stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitDebugStmt(DebugStmt const* stmt)
+bool DumperImpl::visitDebugStmt(DebugStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitTryStmt(TryStmt const* stmt)
+bool DumperImpl::visitTryStmt(TryStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitThrowStmt(ThrowStmt const* stmt)
+bool DumperImpl::visitThrowStmt(ThrowStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitReturnStmt(ReturnStmt const* stmt)
+bool DumperImpl::visitReturnStmt(ReturnStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitNullStmt(NullStmt const* stmt)
+bool DumperImpl::visitNullStmt(NullStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticIfStmt(StaticIfStmt const* stmt)
+bool DumperImpl::visitStaticIfStmt(StaticIfStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticForStmt(StaticForStmt const* stmt)
+bool DumperImpl::visitStaticForStmt(StaticForStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticAssertStmt(StaticAssertStmt const* stmt)
+bool DumperImpl::visitStaticAssertStmt(StaticAssertStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticPrintStmt(StaticPrintStmt const* stmt)
+bool DumperImpl::visitStaticPrintStmt(StaticPrintStmt* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitTypeRef(TypeRef const* expr)
+bool DumperImpl::visitFunctionTypeExpr(FunctionTypeExpr *expr)
 {
    return true;
 }
 
-bool DumperImpl::visitIntegerLiteral(IntegerLiteral const* expr)
+bool DumperImpl::visitTupleTypeExpr(TupleTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitArrayTypeExpr(ArrayTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitDeclTypeExpr(DeclTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitReferenceTypeExpr(ReferenceTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitPointerTypeExpr(PointerTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitOptionTypeExpr(OptionTypeExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitParenExpr(ParenExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitIntegerLiteral(IntegerLiteral* expr)
 {
    out << "["
        << expr->getValue().toString(10, !expr->getType()->isUnsigned())
@@ -453,7 +503,7 @@ bool DumperImpl::visitIntegerLiteral(IntegerLiteral const* expr)
    return true;
 }
 
-bool DumperImpl::visitFPLiteral(FPLiteral const* expr)
+bool DumperImpl::visitFPLiteral(FPLiteral* expr)
 {
    llvm::SmallString<128> str;
    expr->getValue().toString(str);
@@ -462,13 +512,13 @@ bool DumperImpl::visitFPLiteral(FPLiteral const* expr)
    return true;
 }
 
-bool DumperImpl::visitBoolLiteral(BoolLiteral const* expr)
+bool DumperImpl::visitBoolLiteral(BoolLiteral* expr)
 {
    out << (expr->getValue() ? "[true]" : "[false]");
    return true;
 }
 
-bool DumperImpl::visitCharLiteral(CharLiteral const* expr)
+bool DumperImpl::visitCharLiteral(CharLiteral* expr)
 {
    auto c = support::unescape_char(expr->getNarrow());
    out << "['";
@@ -480,18 +530,18 @@ bool DumperImpl::visitCharLiteral(CharLiteral const* expr)
    return true;
 }
 
-bool DumperImpl::visitNoneLiteral(NoneLiteral const* expr)
+bool DumperImpl::visitNoneLiteral(NoneLiteral* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitStringLiteral(StringLiteral const* expr)
+bool DumperImpl::visitStringLiteral(StringLiteral* expr)
 {
    out << "[" << '"' << expr->getValue() << '"' << "]";
    return true;
 }
 
-bool DumperImpl::visitStringInterpolation(StringInterpolation const* expr)
+bool DumperImpl::visitStringInterpolation(StringInterpolation* expr)
 {
    out << "[" << '"';
 
@@ -510,113 +560,146 @@ bool DumperImpl::visitStringInterpolation(StringInterpolation const* expr)
    return true;
 }
 
-bool DumperImpl::visitLambdaExpr(LambdaExpr const* expr)
+bool DumperImpl::visitLambdaExpr(LambdaExpr* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitTupleLiteral(TupleLiteral const* expr)
+bool DumperImpl::visitTupleLiteral(TupleLiteral* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitArrayLiteral(ArrayLiteral const* expr)
+bool DumperImpl::visitArrayLiteral(ArrayLiteral* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitDictionaryLiteral(DictionaryLiteral const* expr)
+bool DumperImpl::visitDictionaryLiteral(DictionaryLiteral* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitIdentifierRefExpr(IdentifierRefExpr const* expr)
-{
-   out << "[" << expr->getIdent() << "]";
-   return true;
-}
-
-bool DumperImpl::visitMemberRefExpr(MemberRefExpr const* expr)
+bool DumperImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
 {
    out << "[" << expr->getIdent() << "]";
    return true;
 }
 
-bool DumperImpl::visitCallExpr(CallExpr const* expr)
+bool DumperImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitSelfExpr(SelfExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitSuperExpr(SuperExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitMemberRefExpr(MemberRefExpr* expr)
 {
    out << "[" << expr->getIdent() << "]";
    return true;
 }
 
-bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr const* expr)
+bool DumperImpl::visitTupleMemberExpr(TupleMemberExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitCallExpr(CallExpr* expr)
+{
+   out << "[" << expr->getIdent() << "]";
+   return true;
+}
+
+bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
 {
    out << "[." << expr->getIdent() << "]";
    return true;
 }
 
-bool DumperImpl::visitSubscriptExpr(SubscriptExpr const* expr)
+bool DumperImpl::visitSubscriptExpr(SubscriptExpr* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitBuiltinExpr(BuiltinExpr const* expr)
+bool DumperImpl::visitBuiltinExpr(BuiltinExpr* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitExpressionPattern(ExpressionPattern const* expr)
+bool DumperImpl::visitExpressionPattern(ExpressionPattern* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitCasePattern(CasePattern const* expr)
+bool DumperImpl::visitCasePattern(CasePattern* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitIsPattern(IsPattern const* expr)
+bool DumperImpl::visitIsPattern(IsPattern* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitUnaryOperator(UnaryOperator const* expr)
+bool DumperImpl::visitUnaryOperator(UnaryOperator* expr)
 {
-   out << "[" << expr->getOp() << "]";
+   out << "[" << op::toString(expr->getKind()) << "]";
    return true;
 }
 
-bool DumperImpl::visitBinaryOperator(BinaryOperator const* expr)
+bool DumperImpl::visitBinaryOperator(BinaryOperator* expr)
 {
-   out << "[" << expr->getOp() << "]";
+   out << "[" << op::toString(expr->getKind()) << "]";
    return true;
 }
 
-bool DumperImpl::visitTertiaryOperator(TertiaryOperator const* expr)
-{
-   return true;
-}
-
-bool DumperImpl::visitExprSequence(ExprSequence const* expr)
+bool DumperImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
 {
    return true;
 }
 
-bool DumperImpl::visitImplicitCastExpr(ImplicitCastExpr const* expr)
+bool DumperImpl::visitCastExpr(CastExpr *expr)
+{
+   switch (expr->getStrength()) {
+      case CastStrength::Normal: out << "[as]"; break;
+      case CastStrength::Force: out << "[as!]"; break;
+      case CastStrength::Fallible: out << "[as?]"; break;
+      default:
+         llvm_unreachable("not an explicit cast");
+   }
+
+   return true;
+}
+
+bool DumperImpl::visitExprSequence(ExprSequence* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitLvalueToRvalue(LvalueToRvalue const* expr)
+bool DumperImpl::visitImplicitCastExpr(ImplicitCastExpr* expr)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticExpr(StaticExpr const* expr)
+bool DumperImpl::visitIfExpr(IfExpr *expr)
 {
    return true;
 }
 
-bool DumperImpl::visitConstraintExpr(ConstraintExpr const* expr)
+bool DumperImpl::visitStaticExpr(StaticExpr* expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitConstraintExpr(ConstraintExpr* expr)
 {
    out << "[";
    switch (expr->getKind()) {
@@ -653,7 +736,7 @@ bool DumperImpl::visitConstraintExpr(ConstraintExpr const* expr)
    return true;
 }
 
-bool DumperImpl::visitTraitsExpr(TraitsExpr const* expr)
+bool DumperImpl::visitTraitsExpr(TraitsExpr* expr)
 {
    out << "[";
 
@@ -717,6 +800,21 @@ bool DumperImpl::visitTraitsExpr(TraitsExpr const* expr)
    return true;
 }
 
+bool DumperImpl::visitMixinExpr(MixinExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitMixinStmt(MixinStmt *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitMixinDecl(MixinDecl *stmt)
+{
+   return true;
+}
+
 } // anonymous namespace
 
 ASTDumper::ASTDumper(llvm::raw_ostream &out, Options opts)
@@ -730,12 +828,12 @@ ASTDumper::~ASTDumper()
    delete reinterpret_cast<DumperImpl*>(pImpl);
 }
 
-void ASTDumper::print(Expression const* expr)
+void ASTDumper::print(Expression* expr)
 {
    reinterpret_cast<DumperImpl*>(pImpl)->visit(expr);
 }
 
-void ASTDumper::print(Statement const* stmt)
+void ASTDumper::print(Statement* stmt)
 {
    reinterpret_cast<DumperImpl*>(pImpl)->visit(stmt);
 }

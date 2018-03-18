@@ -8,12 +8,14 @@
 #include <string>
 #include <vector>
 
-#include "../AST/Attribute/Attribute.h"
-#include "../AST/AstDeclarations.h"
-#include "../AST/Statement/Statement.h"
-#include "../AST/ASTContext.h"
+#include "AST/ASTContext.h"
+#include "AST/Attribute/Attribute.h"
+#include "AST/AstDeclarations.h"
+#include "AST/Passes/SemanticAnalysis/ActionResult.h"
+#include "AST/Statement.h"
 
-#include "../Message/Diagnostics.h"
+#include "lex/Token.h"
+#include "Message/Diagnostics.h"
 
 namespace llvm {
    class MemoryBuffer;
@@ -33,7 +35,6 @@ namespace lex {
 class Type;
 class ObjectType;
 class GenericType;
-struct Attribute;
 enum class AccessModifier : unsigned char;
 
 enum class FixKind : unsigned char;
@@ -54,16 +55,153 @@ namespace parse {
 
 using namespace cdot::ast;
 
-enum class ParenExprType {
-   LAMBDA,
-   FunctionType,
-   EXPR,
-   TUPLE
+struct ParseResult {
+   /*implicit*/ ParseResult(Decl *D)
+      : Value(D)
+   {}
+
+   /*implicit*/ ParseResult(Statement *Stmt)
+      : Value(Stmt)
+   {}
+
+   /*implicit*/ ParseResult(Expression *Expr)
+      : Value(Expr)
+   {}
+
+   ParseResult()
+      : Value((void*)nullptr)
+   {}
+
+   bool isValid() const
+   {
+      return !Value.is<void*>();
+   }
+
+   /*implicit*/ operator bool() const
+   {
+      return isValid();
+   }
+
+   bool holdsStatement() const
+   {
+      return Value.is<Statement*>() != 0;
+   }
+
+   bool holdsExpr() const
+   {
+      return Value.is<Statement*>() != 0
+         && support::isa<Expression>(getStatement());
+   }
+
+   bool holdsDecl() const
+   {
+      return Value.is<Decl*>() != 0;
+   }
+
+   Decl *getDecl() const
+   {
+      return Value.get<Decl*>();
+   }
+
+   template<class T>
+   T *getDecl() const
+   {
+      return support::cast<T>(Value.get<Decl*>());
+   }
+
+   Decl *tryGetDecl() const
+   {
+      return Value.dyn_cast<Decl*>();
+   }
+
+   template<class T>
+   T *tryGetDecl() const
+   {
+      return support::cast_or_null<T>(Value.dyn_cast<Decl*>());
+   }
+
+   Statement *getStatement() const
+   {
+      return Value.get<Statement*>();
+   }
+
+   template <class T>
+   T *getStatement() const
+   {
+      return support::cast<T>(Value.get<Statement*>());
+   }
+
+   Statement *tryGetStatement() const
+   {
+      return Value.dyn_cast<Statement*>();
+   }
+
+   template <class T>
+   T *tryGetStatement() const
+   {
+      return support::cast_or_null<T>(Value.dyn_cast<Statement*>());
+   }
+
+   Expression *getExpr() const
+   {
+      return support::cast<Expression>(Value.get<Statement*>());
+   }
+
+   template<class T>
+   T *getExpr() const
+   {
+      return support::cast<T>(Value.get<Statement*>());
+   }
+
+   Expression *tryGetExpr() const
+   {
+      return support::cast_or_null<Expression>(Value.dyn_cast<Statement*>());
+   }
+
+   template<class T>
+   T *tryGetExpr() const
+   {
+      return support::cast_or_null<T>(Value.dyn_cast<Statement*>());
+   }
+
+private:
+   llvm::PointerUnion3<Decl*, Statement*, void*> Value;
 };
 
-class Parser: public diag::DiagnosticIssuer {
+struct ParseTypeResult {
+   ParseTypeResult() = default;
+   /*implicit*/ ParseTypeResult(SourceType Ty) : Ty(Ty) {}
+
+   /*implicit*/ operator bool() const
+   {
+      return Ty.isValid();
+   }
+
+   SourceType get() const
+   {
+      assert(*this && "invalid type!");
+      return Ty;
+   }
+
+   SourceType tryGet() const
+   {
+      return Ty.isValid() ? Ty : SourceType();
+   }
+
+private:
+   SourceType Ty;
+};
+
+inline ParseResult ParseError()
+{
+   return ParseResult();
+}
+
+using AttrVec = std::vector<Attr*>;
+
+class Parser {
 public:
-   explicit Parser(ASTContext const& Context,
+   explicit Parser(ASTContext& Context,
                    lex::Lexer *lexer,
                    SemaPass &SP,
                    bool isModuleParser = false);
@@ -83,215 +221,298 @@ public:
       return source_id;
    }
 
-   void isTopLevel(bool top_level)
-   {
-      this->top_level = top_level;
-   }
-
    void parseImports(llvm::SmallVectorImpl<ImportStmt*> &stmts);
    void parse(llvm::SmallVectorImpl<Statement*> &stmts);
 
-   std::vector<Statement*> getImplicitMainStmts()
+   ParseResult parseFunctionDecl();
+
+   std::string parseOperatorName(OperatorInfo &Info,
+                                 bool &isCastOp,
+                                 SourceType &castType);
+
+   ParseResult parseMethodDecl(AccessModifier,
+                               bool isStatic,
+                               bool isMutating,
+                               bool isOperator);
+
+   void skipAttribute();
+   ParseResult skipUntilNextDecl();
+   ParseResult skipUntilProbableEndOfStmt();
+   ParseResult skipUntilProbableEndOfStmt(lex::tok::TokenType kind);
+   ParseResult skipUntilProbableEndOfExpr();
+   ParseResult skipUntilEven(lex::tok::TokenType openTok, unsigned open = 1);
+
+   bool findTokOnLine(lex::tok::TokenType kind);
+   bool findTokOnLine(IdentifierInfo *Id);
+
+   template<class ...Toks>
+   bool findTokOnLine(Toks ...toks)
    {
-      return implicit_main_stmts;
+      StateSaveRAII raii(*this);
+
+      while (!currentTok().oneOf(lex::tok::newline, lex::tok::eof)) {
+         if (currentTok().oneOf(toks...)) {
+            raii.disable();
+            return true;
+         }
+
+         advance(false);
+      }
+
+      return false;
    }
 
-   lex::Lexer *getLexer()
+   ParseResult ParseTypeError()
    {
-      return lexer;
+      skipUntilProbableEndOfExpr();
+      return ParseError();
    }
 
-   NamedDecl* parse_function_decl();
+   ParseResult ParseExprError()
+   {
+      skipUntilProbableEndOfExpr();
+      return ParseError();
+   }
 
-   std::string parse_operator_name(bool &isCastOp,
-                                   TypeRef* &castType);
+   ParseResult ParseStmtError()
+   {
+      skipUntilProbableEndOfStmt();
+      return ParseError();
+   }
 
-   NamedDecl* parse_method_decl(AccessModifier,
-                                bool isStatic,
-                                bool isMutating,
-                                bool isOperator);
+   template<class T, class ...Args>
+   T* makeExpr(SourceLocation loc, Args&& ...args)
+   {
+      auto ret = new (Context) T(std::forward<Args&&>(args)...);
+      ret->setSourceLoc(loc);
 
-   void skipUntilProbableEndOfStmt();
-   void skipUntilProbableEndOfStmt(lex::tok::TokenType kind);
+      return ret;
+   }
 
-   friend class module::ParserImpl;
+   ParseResult parseExprSequence(bool stopAtThen = false,
+                                 bool stopAtColon = false,
+                                 bool stopAtNewline = true);
 
-protected:
-   ASTContext const& Context;
+   void parseStmts(llvm::SmallVectorImpl<Statement*> &Stmts);
 
-   std::vector<Statement*> implicit_main_stmts;
+   const lex::Token &currentTok() const;
+
+private:
+   ASTContext& Context;
+
    unsigned source_id;
 
    bool isModuleParser;
-   bool top_level = true;
 
    lex::Lexer *lexer; // unowned
    SemaPass &SP;
 
    unsigned StaticExprStack = 0;
 
+   IdentifierTable &Idents;
+
+   IdentifierInfo *Ident_self;
+   IdentifierInfo *Ident_super;
+   IdentifierInfo *Ident_in;
+   IdentifierInfo *Ident_then;
+   IdentifierInfo *Ident_default;
+   IdentifierInfo *Ident_typename;
+   IdentifierInfo *Ident_value;
+   IdentifierInfo *Ident_sizeof;
+   IdentifierInfo *Ident_decltype;
+   IdentifierInfo *Ident___traits;
+   IdentifierInfo *Ident___nullptr;
+   IdentifierInfo *Ident___func__;
+   IdentifierInfo *Ident___mangled_func;
+   IdentifierInfo *Ident___ctfe;
+
+   struct StateSaveRAII {
+      explicit StateSaveRAII(Parser &P);
+      ~StateSaveRAII();
+
+      void disable() { enabled = false; }
+
+   private:
+      Parser &P;
+      unsigned idx : 31;
+      bool enabled : 1;
+   };
+
+   bool inGlobalDeclContext() const;
+
+   template<class ...Toks>
+   bool expect(lex::tok::TokenType kind, Toks ...toks)
+   {
+      if (lookahead().oneOf(kind, toks...)) {
+         advance();
+         return true;
+      }
+
+      errorUnexpectedToken(lookahead().getKind());
+      return findTokOnLine(kind, toks...);
+   }
+
+   ParseResult parseTopLevelDecl();
+   ParseResult parseRecordLevelDecl();
+
+   bool isAtRecordLevel() const;
+
+   void parseAttributes(llvm::SmallVectorImpl<Attr*> &Attrs);
+
+   ParseResult parseAttributedDecl();
+   ParseTypeResult parseAttributedType();
+   ParseResult parseAttributedStmt();
+   ParseResult parseAttributedExpr();
+
+   void checkAttrApplicability(ParseResult Result, Attr *A);
+
+   bool expectToken(lex::tok::TokenType expected);
+   void errorUnexpectedToken();
+   void errorUnexpectedToken(lex::tok::TokenType expected);
+
    AccessModifier tokenToAccessSpec(lex::tok::TokenType kind);
-   bool isValidOperatorChar(const lex::Token& next);
 
    lex::Token lookahead(bool ignoreNewline = true, bool sw = false);
    void advance(bool ignoreNewline = true, bool sw = false);
 
-   template<class T, class ...Args>
-   T* makeExpr(const SourceLocation &loc, Args&& ...args)
+   SourceLocation consumeToken(lex::tok::TokenType kind);
+   SourceLocation consumeToken()
    {
-      auto ret = new (Context) T(std::forward<Args&&>(args)...);
-      ret->setSourceLoc({ loc.getOffset(), loc.getSourceId() });
+      auto Loc = currentTok().getSourceLoc();
+      advance();
 
-      return ret;
+      return Loc;
    }
-
-   const lex::Token &currentTok() const;
 
    AccessModifier maybeParseAccessModifier();
 
-   Statement* parse_next_stmt();
+   ParseResult parseNextDecl();
+   ParseResult parseNextStmt();
 
-   NamespaceDecl* parse_namespace_decl();
+   ParseResult parseNamespaceDecl();
+   ParseResult parseUsingStmt();
+   ParseResult parseModuleStmt();
+   ParseResult parseImportStmt();
 
-   UsingStmt* parse_using_stmt();
-   ModuleStmt* parse_module_stmt();
-   ImportStmt* parse_import_stmt();
+   ParseResult parseVarDecl();
+   ParseResult parseDestructuringDecl(AccessModifier access, bool isLet);
 
-   Statement* parse_var_decl();
-   DestructuringDecl* parse_destructuring_decl(AccessModifier access,
-                                               bool isLet);
+   ParseResult parseKeyword();
 
-   Statement* parse_keyword();
+   ParseResult parseBlock(bool = false);
 
-   Expression* parse_expr_sequence(bool parenthesized = false,
-                                   bool ignoreColon = false);
+   ParseResult parseCollectionLiteral();
 
-   CompoundStmt* parse_block(bool = false);
-   void skip_block();
+   std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc);
 
-   TertiaryOperator* parse_tertiary_operator(Expression *condition);
+   ParseResult parseLambdaExpr();
+   ParseResult parseFunctionCall(bool allowLet = false,
+                                 Expression *ParentExpr = nullptr,
+                                 bool pointerAccess = false);
 
-   Expression* parse_collection_literal();
-
-   std::vector<std::pair<std::string, TypeRef*>> parse_tuple_type();
-   std::vector<FuncArgDecl*> parse_arg_list(SourceLocation &varargLoc);
-
-   LambdaExpr* parse_lambda_expr();
-
-   CallExpr* parse_function_call(bool allowLet = false);
-
-   EnumCaseExpr* parse_enum_case_expr();
+   ParseResult parseEnumCaseExpr();
 
    struct ArgumentList {
       std::vector<std::string> labels;
       std::vector<Expression*> args;
    };
 
-   ArgumentList parse_arguments(bool = false);
+   ArgumentList parseCallArguments();
 
-   Expression* parse_paren_expr();
-   ParenExprType get_paren_expr_type();
+   ParseResult parseParenExpr();
 
-   bool is_generic_call();
-   bool is_generic_member_access();
-   bool _is_generic_any(bool(const lex::Token &));
+   enum class ParenExprKind {
+      Error,
+      Lambda,
+      FunctionType,
+      Expr,
+      Tuple,
+   };
 
-   TupleLiteral* parse_tuple_literal();
+   ParenExprKind getParenExprKind();
+
+   ParseResult parseTupleLiteral();
 
    struct RecordHead {
+      RecordHead() : enumRawType() {}
+
       AccessModifier access;
       std::string recordName;
-      std::vector<TypeRef*> conformances;
+      std::vector<SourceType> conformances;
       std::vector<StaticExpr*> constraints;
       std::vector<TemplateParamDecl*> templateParams;
 
       union {
-         TypeRef *enumRawType = nullptr;
-         TypeRef *parentClass;
+         SourceType enumRawType;
+         SourceType parentClass;
       };
 
       bool isAbstract = false;
       bool hasDefinition = false;
    };
 
-   void parse_class_head(RecordHead &Head);
+   void parseClassHead(RecordHead &Head);
 
-   NamedDecl *parse_any_record(lex::tok::TokenType kind,
-                               RecordDecl *outer = nullptr);
+   ParseResult parseAnyRecord(lex::tok::TokenType kind,
+                              RecordDecl *outer = nullptr);
 
-   NamedDecl* parse_constr_decl(AccessModifier access);
+   ParseResult parseConstrDecl(AccessModifier access);
+   ParseResult parseDestrDecl();
 
-   DeinitDecl* parse_destr_decl();
+   ParseResult parsePropDecl(AccessModifier am, bool isStatic, bool isConst);
+   ParseResult parseFieldDecl(AccessModifier access, bool isStatic,
+                              bool isConst);
 
-   FieldDecl* parse_field_decl(AccessModifier access,
-                               bool isStatic,
-                               bool isConst);
+   ParseResult parseEnumCase();
+   ParseResult parseAssociatedType();
 
-   PropDecl* parse_prop_decl(AccessModifier am,
-                             bool isStatic,
-                             bool isConst);
+   ParseResult parsePattern();
 
-   EnumCaseDecl* parse_enum_case();
-   PatternExpr* parse_pattern();
+   std::vector<TemplateParamDecl*> tryParseTemplateParameters();
+   std::vector<Expression*> parse_unresolved_template_args();
 
-   void joinAdjacentOperators();
-   std::vector<TemplateParamDecl*> try_parse_template_parameters();
-   std::vector<TemplateArgExpr*> parse_unresolved_template_args();
+   void parseClassInner(RecordDecl *decl);
 
-   void parse_class_inner(RecordDecl *decl);
+   ParseTypeResult parseType(bool allowVariadic = false);
+   ParseTypeResult parse_type_impl();
 
-   AssociatedTypeDecl* parse_associated_type();
+   ParseResult parseTypedef(AccessModifier am = (AccessModifier) 0);
+   ParseResult parseAlias();
 
-   TypeRef* parse_type(bool allowVariadic = false);
-   TypeRef* parse_type_impl();
+   ParseResult parseIdentifierExpr(bool parsingType = false);
+   ParseResult maybeParseSubExpr(Expression *ParentExpr,
+                                 bool parsingType = false);
 
-   NamedDecl* parse_typedef(AccessModifier am = (AccessModifier)0,
-                            bool inRecord = false);
+   string prepareStringLiteral(lex::Token const& tok);
+   ParseResult parseUnaryExpr();
 
-   NamedDecl* parse_alias(bool inRecord = false);
+   void parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases);
 
-   Expression* parse_identifier();
-   Expression* try_parse_member_expr();
+   ParseResult parseIfStmt();
+   ParseResult parseWhileStmt(bool conditionBefore = true);
+   ParseResult parseForStmt();
+   ParseResult parseMatchStmt();
 
-   Expression* parse_unary_expr(UnaryOperator* = {},
-                                bool postfix = false);
+   ParseResult parseDeclareStmt();
 
-   Expression* parse_unary_expr_target();
+   ParseResult parseTryStmt();
+   ParseResult parseThrowStmt();
 
-   CaseStmt* parse_case_stmt(bool = false);
+   ParseResult parseReturnStmt();
 
-   IfStmt* parse_if_stmt();
-   WhileStmt* parse_while_stmt(bool conditionBefore = true);
-   Statement* parse_for_stmt();
-   MatchStmt* parse_match_stmt();
+   ParseResult parseStaticAssert();
+   ParseResult parseStaticPrint();
 
-   std::vector<Attribute> parse_attributes();
+   ParseResult parseStaticIf();
+   ParseResult parseStaticFor();
+   ParseResult parseStaticIfDecl();
+   ParseResult parseStaticForDecl();
 
-   Statement* parse_declare_stmt();
-
-   TryStmt* parse_try_stmt();
-   ThrowStmt* parse_throw_stmt();
-
-   ReturnStmt* parse_return_stmt();
-
-
-   StaticStmt* parse_static_stmt(bool inRecordDecl = false);
-
-   StaticAssertStmt* parse_static_assert();
-   StaticPrintStmt* parse_static_print();
-   StaticIfStmt* parse_static_if(bool inRecordDecl = false);
-   StaticForStmt* parse_static_for(bool inRecordDecl = false);
-
-   Expression* parse_static_expr(bool ignoreGreater = false,
-                                 bool ignoreColon = false,
-                                 Expression* lhs = nullptr,
-                                 int minPrecedence = 0);
-
-   ConstraintExpr* parse_constraint_expr();
-   TraitsExpr* parse_traits_expr();
+   ParseResult parseConstraintExpr();
+   ParseResult parseTraitsExpr();
 
    bool modifierFollows(char c);
-   Expression *parse_numeric_literal();
+   Expression *parseNumericLiteral();
 };
 
 } // namespace parse

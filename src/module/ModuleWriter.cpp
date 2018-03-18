@@ -66,7 +66,7 @@
 //
 //      if (auto tup = dyn_cast<TupleType>(ty)) {
 //         for (auto &cont : tup->getContainedTypes())
-//            addTypeReferences(*cont.second);
+//            addTypeReferences(*cont.col);
 //
 //         return;
 //      }
@@ -369,7 +369,7 @@
 //      prevWritten = true;
 //
 //      ApplyTab();
-//      WriteProp(P.second);
+//      WriteProp(P.col);
 //      NewLine();
 //   }
 //
@@ -392,22 +392,22 @@
 //   }
 //
 //   for (auto &M : R.getMethods()) {
-//      if (M.second.isTemplate()) {
-//         Templates.push_back(M.second.getDeclaration());
+//      if (M.col.isTemplate()) {
+//         Templates.push_back(M.col.getDeclaration());
 //         continue;
 //      }
 //
-//      if (M.second.getName() == "deinit" || M.second.isMemberwiseInitializer())
+//      if (M.col.getName() == "deinit" || M.col.isMemberwiseInitializer())
 //         continue;
 //
-//      if (M.second.getName().size() >= 2
-//          && M.second.getName().substr(0, 2) == "__")
+//      if (M.col.getName().size() >= 2
+//          && M.col.getName().substr(0, 2) == "__")
 //         continue;
 //
 //      prevWritten = true;
 //
 //      ApplyTab();
-//      WriteMethod(M.second);
+//      WriteMethod(M.col);
 //      NewLine();
 //   }
 //
@@ -421,7 +421,7 @@
 //         prevWritten = true;
 //
 //         ApplyTab();
-//         WriteCase(C.second);
+//         WriteCase(C.col);
 //         NewLine();
 //      }
 //   }
@@ -437,9 +437,9 @@
 //
 //         ApplyTab();
 //         out << (U->isConst() ? "let " : "var ")
-//             << C.first << ": ";
+//             << C.line << ": ";
 //
-//         WriteType(C.second);
+//         WriteType(C.col);
 //         NewLine();
 //      }
 //   }

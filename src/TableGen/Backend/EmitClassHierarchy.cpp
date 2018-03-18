@@ -79,48 +79,43 @@ void EmitClassHierarchy(llvm::raw_ostream &out, RecordKeeper const& RK)
 
    auto options = RK.lookupRecord("HierarchyOptions");
    if (!options) {
-      diag::err(err_generic_error)
-         << "no HierarchyOptions def provided"
-         << diag::term;
+      llvm::errs()
+         << "no HierarchyOptions def provided\n";
 
       return;
    }
 
    auto BaseVal = options->getFieldValue("BaseClass");
    if (!BaseVal || !isa<StringLiteral>(BaseVal)) {
-      diag::err(err_generic_error)
-         << "HierarchyOptions must have a field 'BaseClass' of type string"
-         << options->getDeclLoc()
-         << diag::term;
+      llvm::errs()
+         << "HierarchyOptions must have a field 'BaseClass' of type string\n";
 
       return;
    }
 
    BaseClass = RK.lookupClass(cast<StringLiteral>(BaseVal)->getVal());
    if (!BaseClass)  {
-      diag::err(err_generic_error)
-         << llvm::Twine("class ")
-            + cast<StringLiteral>(BaseVal)->getVal() + " not found"
-         << diag::term;
+      llvm::errs() << "class "
+                   << cast<StringLiteral>(BaseVal)->getVal()
+                   << " not found\n";
 
       return;
    }
 
    auto DerivedVal = options->getFieldValue("DerivedClass");
    if (!DerivedVal || !isa<StringLiteral>(DerivedVal)) {
-      diag::err(err_generic_error)
-         << "HierarchyOptions must have a field 'DerivedClass' of type string"
-         << diag::term;
+      llvm::errs()
+         << "HierarchyOptions must have a field 'DerivedClass' of type "
+            "string\n";
 
       return;
    }
 
    DerivedClass = RK.lookupClass(cast<StringLiteral>(DerivedVal)->getVal());
    if (!DerivedClass)  {
-      diag::err(err_generic_error)
+      llvm::errs()
          << llvm::Twine("class ")
-            + cast<StringLiteral>(DerivedVal)->getVal() + " not found"
-         << diag::term;
+            + cast<StringLiteral>(DerivedVal)->getVal() + " not found\n";
 
       return;
    }
@@ -169,7 +164,7 @@ void EmitClassHierarchy(llvm::raw_ostream &out, RecordKeeper const& RK)
    llvm::SmallVector<Record*, 8> DeclVec;
    RK.getAllDefinitionsOf(BaseClass, DeclVec);
 
-   DependencyGraph<Record> DG;
+   DependencyGraph<Record*> DG;
    for (auto &D : DeclVec) {
       auto &node = DG.getOrAddVertex(D);
       auto Base = D->getFieldValue("Base");

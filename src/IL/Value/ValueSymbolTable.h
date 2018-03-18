@@ -54,7 +54,6 @@ public:
 
 private:
    VMap vmap;
-   mutable size_t lastUnique = 0;
 };
 
 } // namespace il

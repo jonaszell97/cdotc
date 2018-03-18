@@ -18,13 +18,9 @@ class Module;
 class GlobalObject: public Constant {
 public:
    GlobalObject(TypeID id,
-                Type* ty,
+                QualType ty,
                 Module *module,
-                llvm::StringRef name)
-      : Constant(id, ty), parent(module)
-   {
-      this->name = name;
-   }
+                llvm::StringRef name);
 
    Module *getParent() const { return parent; }
    void setParent(Module *m) { parent = m; }
@@ -56,7 +52,7 @@ class GlobalVariable: public GlobalObject,
                       public llvm::ilist_node_with_parent<GlobalVariable,
                          Module> {
 public:
-   GlobalVariable(Type *ty,
+   GlobalVariable(QualType ty,
                   bool isConstant,
                   llvm::StringRef name,
                   Module *module,

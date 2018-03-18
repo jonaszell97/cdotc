@@ -5,7 +5,7 @@
 #include "ParentMap.h"
 
 #include "AST/Traverse.h"
-#include "AST/Statement/Statement.h"
+#include "Statement.h"
 
 #include <llvm/ADT/DenseMap.h>
 
@@ -52,7 +52,7 @@ ParentMap::ParentMap()
 
 ParentMap::~ParentMap()
 {
-   delete pImpl;
+   delete reinterpret_cast<ParentMapImpl*>(pImpl);
 }
 
 void ParentMap::updateParentMap(Statement *Stmt)

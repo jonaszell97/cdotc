@@ -221,7 +221,7 @@
 //      stmt = parseTemplate();
 //   }
 //   else {
-//      stmt = parser.parse_next_stmt();
+//      stmt = parser.parseNextStmt();
 //   }
 //
 //   switch (stmt->getTypeID()) {

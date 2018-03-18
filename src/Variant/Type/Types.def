@@ -1,7 +1,6 @@
 
 #ifdef CDOT_TYPE
 #  define CDOT_OBJ_TYPE(Name)       CDOT_TYPE(Name)
-#  define CDOT_PRIMITIVE_TYPE(Name) CDOT_TYPE(Name)
 #  define CDOT_OTHER_TYPE(Name)     CDOT_TYPE(Name)
 // intentionally leaving out CDOT_BASE_TYPE
 #endif
@@ -11,15 +10,10 @@
    CDOT_OBJ_TYPE(InconcreteObjectType)
 #endif
 
-#ifdef CDOT_PRIMITIVE_TYPE
-   CDOT_PRIMITIVE_TYPE(IntegerType)
-   CDOT_PRIMITIVE_TYPE(FPType)
-#endif
-
 #ifdef CDOT_OTHER_TYPE
-   CDOT_OTHER_TYPE(AutoType)
-   CDOT_OTHER_TYPE(VoidType)
+   CDOT_OTHER_TYPE(BuiltinType)
    CDOT_OTHER_TYPE(FunctionType)
+   CDOT_OTHER_TYPE(LambdaType)
    CDOT_OTHER_TYPE(GenericType)
    CDOT_OTHER_TYPE(PointerType)
    CDOT_OTHER_TYPE(TupleType)
@@ -29,16 +23,15 @@
    CDOT_OTHER_TYPE(MetaType)
    CDOT_OTHER_TYPE(TypedefType)
 
-   CDOT_OTHER_TYPE(UnknownAnyType)
+   CDOT_OTHER_TYPE(ReferenceType)
+   CDOT_OTHER_TYPE(MovedType)
 #endif
 
 #ifdef CDOT_BASE_TYPE
-   CDOT_BASE_TYPE(PrimitiveType)
    CDOT_BASE_TYPE(Type)
 #endif
 
 #undef CDOT_TYPE
 #undef CDOT_OBJ_TYPE
-#undef CDOT_PRIMITIVE_TYPE
 #undef CDOT_OTHER_TYPE
 #undef CDOT_BASE_TYPE

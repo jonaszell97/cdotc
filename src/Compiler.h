@@ -5,12 +5,14 @@
 #ifndef CDOT_COMPILER_H
 #define CDOT_COMPILER_H
 
+#include "Files/FileManager.h"
+#include "lex/SourceLocation.h"
+
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringSet.h>
-#include "lex/SourceLocation.h"
 
 namespace llvm {
    class Module;
@@ -172,14 +174,19 @@ public:
    CompilationUnit(CompilationUnit const &CU) = delete;
    CompilationUnit& operator=(CompilationUnit const &CU) = delete;
 
-   void compile();
+   int compile();
 
    void parse();
-   void doDeclarations();
+
+   bool doDeclarations();
    bool doSema();
-   void doILGen();
+   bool doILGen();
+
    void doIRGen();
    void outputFiles();
+
+   void reportInternalCompilerError();
+   void reportBackendFailure(llvm::StringRef msg);
 
    CompilerOptions &getOptions()
    {
@@ -256,13 +263,13 @@ public:
       sourceAliases.clear();
    }
 
-   ast::ASTContext& getContext() const
-   {
-      return *Context;
-   }
+   ast::ASTContext &getContext() const { return *Context; }
+   fs::FileManager &getFileMgr() const { return *FileMgr; }
 
 private:
    CompilerOptions options;
+
+   std::unique_ptr<fs::FileManager> FileMgr;
 
    std::unique_ptr<ast::ASTContext> Context;
    std::unique_ptr<ast::GlobalDeclContext> GlobalDeclCtx;

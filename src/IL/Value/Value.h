@@ -10,13 +10,17 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/SmallVector.h>
 
-#include "../../Variant/Type/Type.h"
-#include "../../lex/SourceLocation.h"
-#include "../../Support/Casting.h"
+#include "Variant/Type/Type.h"
+#include "lex/SourceLocation.h"
+#include "Support/Casting.h"
 
 #include "Use.h"
 
 namespace cdot {
+
+namespace ast {
+   class ASTContext;
+}
 
 class Type;
 
@@ -32,6 +36,82 @@ class ILBuilder;
 class CallSite;
 class ImmutableCallSite;
 
+class Context;
+
+class ValueType {
+public:
+   ValueType(Context &Ctx, Type *ty)
+      : Ty(ty), Ctx(Ctx)
+   {
+
+   }
+
+   ValueType(Context &Ctx, QualType ty, bool isReference = false)
+      : Ty(ty), Ctx(Ctx)
+   {
+
+   }
+
+   ValueType(ValueType const& that)
+      : Ty(that.Ty),
+        Ctx(that.Ctx)
+   {}
+
+   ValueType(ValueType &&that) noexcept
+      : Ty(that.Ty),
+        Ctx(that.Ctx)
+   {}
+
+   ValueType &operator=(ValueType const& that)
+   {
+      assert(&Ctx == &that.Ctx);
+      Ty = that.Ty;
+
+      return *this;
+   }
+
+   ValueType &operator=(ValueType &&that) noexcept
+   {
+      assert(&Ctx == &that.Ctx);
+      Ty = that.Ty;
+
+      return *this;
+   }
+
+   ValueType &operator=(QualType const& that)
+   {
+      Ty = that;
+      return *this;
+   }
+
+   Context &getCtx() const
+   {
+      return Ctx;
+   }
+
+   ValueType getPointerTo() const;
+
+   ValueType getReferenceTo() const;
+   void makeReference();
+
+   /*implicit*/ operator QualType() const { return Ty; }
+   /*implicit*/ operator bool()     const { return Ty; }
+
+   Type *operator->()  const { return *Ty; }
+
+   QualType get() const { return Ty; }
+
+   bool operator==(const QualType &other) const { return Ty == other; }
+   bool operator!=(const QualType &other) const { return !(*this == other); }
+
+   bool operator==(const ValueType &other) const { return Ty == other.Ty; }
+   bool operator!=(const ValueType &other) const { return !(*this == other); }
+
+private:
+   QualType Ty;
+   Context &Ctx;
+};
+
 class Value {
 public:
    enum TypeID : unsigned char {
@@ -43,8 +123,7 @@ public:
    friend class ILBuilder;
 
 protected:
-   Value(TypeID id, Type *ty);
-   Value(TypeID id, QualType ty);
+   Value(TypeID id, ValueType ty);
 
 #  ifndef NDEBUG
    virtual
@@ -55,7 +134,9 @@ protected:
    unsigned Flags : 24;
    unsigned SubclassData : 32;
 
-   QualType type;
+   SourceLocation loc;
+
+   ValueType type;
    std::string name;
 
    Use *uses;
@@ -66,44 +147,50 @@ protected:
    };
 
 private:
-   static llvm::SmallVector<Value*, 256> CreatedValues;
    void setNameNoCheck(llvm::StringRef name) { this->name = name.str(); }
 
 public:
    static bool classof(Value const* T) { return true; }
-   static void cleanup();
 
    void deleteValue();
    void checkIfStillInUse();
 
-   TypeID getTypeID() const;
-   QualType getType() const;
+   TypeID getTypeID() const { return id; }
+   ValueType getType() const { return type; }
 
    void setFlag(Flag f, bool value);
    bool getFlag(Flag f) const;
 
-   bool isLvalue() const;
-   void setIsLvalue(bool lvalue);
-
    bool isSelf() const;
 
-   Use const* getUses() const
-   {
-      return uses;
-   }
+   using use_iterator = llvm::iterator_range<Use::iterator>;
 
-   Use * getUses()
+   use_iterator getUses()
    {
-      return uses;
+      return use_iterator(use_begin(), use_end());
    }
 
    Use::iterator use_begin() { return uses ? uses->begin() : Use::iterator(); }
    Use::iterator use_end()   { return uses ? uses->end() : Use::iterator(); }
 
-//   Use::const_iterator use_begin() const { return uses->begin(); }
-//   Use::const_iterator use_end()   const { return uses->end(); }
+   Use::const_iterator use_begin() const
+   {
+      return uses ? uses->const_begin() : Use::const_iterator();
+   }
 
-   void removeFromParent();
+   Use::const_iterator use_end() const
+   {
+      return uses ? uses->const_end() : Use::const_iterator();
+   }
+
+   bool isLvalue() const;
+   void setIsLvalue(bool ref);
+
+   il::Context &getCtx() const { return type.getCtx(); }
+   ast::ASTContext &getASTCtx() const;
+
+   void detachFromParent();
+   void detachAndErase();
 
    void addUse(Value *User);
    void removeUser(Value *User);
@@ -117,8 +204,7 @@ public:
    void setName(llvm::StringRef name);
    bool hasName() const;
 
-   MDLocation *getLocation() const;
-   void setLocation(const SourceLocation &location);
+   void setLocation(SourceLocation location);
 
    SourceLocation getSourceLoc() const;
 

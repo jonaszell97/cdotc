@@ -13,7 +13,7 @@
 #include <llvm/ADT/FoldingSet.h>
 
 #ifndef CDOT_SMALL_VARIANT
-#  include "AST/Statement/Declaration/Class/RecordDecl.h"
+#  include "AST/NamedDecl.h"
 #  include "Variant/Type/Type.h"
    using namespace cdot::ast;
 #else
@@ -33,12 +33,12 @@ using namespace cdot::lex;
 namespace cdot {
 
 #ifndef CDOT_SMALL_VARIANT
-   Variant::Variant(Type *Ty, bool isLvalue, bool isConst)
+   Variant::Variant(Type *Ty, bool isConst)
       : kind(VariantType::MetaType), Data{}
    {
       static_assert(sizeof(Data) >= sizeof(QualType),
                     "not enough space for QualType in Variant!");
-      new (Data.buffer) QualType(Ty, isLvalue, isConst);
+      new (Data.buffer) QualType(Ty);
    }
 
    Variant::Variant(QualType const& ty)
@@ -49,7 +49,7 @@ namespace cdot {
       new (Data.buffer) QualType(ty);
    }
 #else
-   Variant::Variant(Type *Ty, bool isLvalue, bool isConst)
+   Variant::Variant(Type *Ty, bool isConst)
       : kind(VariantType::MetaType), Data{}
    {
       llvm_unreachable("extended variant constructor called in small variant");
@@ -594,5 +594,10 @@ Variant Variant::applyUnaryOp(const string &op) const
 
 #undef UNARY_OPERATOR_INT
 #undef UNARY_OPERATOR_FLOAT
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const Variant &V)
+{
+   return out << V.toString();
+}
 
 } // namespace cdot

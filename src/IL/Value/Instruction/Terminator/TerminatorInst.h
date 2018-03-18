@@ -16,13 +16,17 @@ class Function;
 class TerminatorInst: public Instruction {
 public:
    TerminatorInst(TypeID id,
+                  Context &Ctx,
                   BasicBlock *parent);
+
+   BasicBlock *getSuccessorAt(size_t idx) const;
+   size_t getNumSuccessors() const;
 
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
 #     define CDOT_TERM_INST(Name) \
          case Name##ID:
-#     include "../../Instructions.def"
+#     include "IL/Value/Instructions.def"
             return true;
          default:
             return false;
@@ -35,13 +39,27 @@ public:
    RetInst(Value *returnedValue,
            BasicBlock *parent);
 
-   explicit RetInst(BasicBlock *parent);
+   RetInst(Context &Ctx, BasicBlock *parent);
 
    Value *getReturnedValue() const;
    bool isVoidReturn() const;
 
+   bool canUseSRetValue() const { return (SubclassData & CanUseSRetVal) != 0; }
+   void setCanUseSRetValue() { SubclassData |= CanUseSRetVal; }
+
+   BasicBlock *getSuccessorAtImpl(size_t) const
+   {
+      llvm_unreachable("RetInst has no successors!");
+   }
+
+   size_t getNumSuccessorsImpl() const { return 0; }
+
 protected:
    Value *returnedValue;
+
+   enum Flags : unsigned short {
+      CanUseSRetVal = Instruction::Flags::Initializer << 1u,
+   };
 
 public:
    static bool classof(Value const* T)
@@ -76,6 +94,13 @@ public:
       ThrowInst::descFn = descFn;
    }
 
+   BasicBlock *getSuccessorAtImpl(size_t) const
+   {
+      llvm_unreachable("ThrowInst has no successors!");
+   }
+
+   size_t getNumSuccessorsImpl() const { return 0; }
+
 protected:
    Value *thrownValue;
    GlobalVariable *typeInfo;
@@ -91,7 +116,14 @@ public:
 
 class UnreachableInst: public TerminatorInst {
 public:
-   explicit UnreachableInst(BasicBlock *parent);
+   UnreachableInst(Context &Ctx, BasicBlock *parent);
+
+   BasicBlock *getSuccessorAtImpl(size_t) const
+   {
+      llvm_unreachable("UnreachableInst has no successors!");
+   }
+
+   size_t getNumSuccessorsImpl() const { return 0; }
 
 public:
    static bool classof(Value const* T)

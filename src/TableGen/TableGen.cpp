@@ -33,16 +33,16 @@ static Value *resolveValue(Value *V,
    else if (auto DA = dyn_cast<DictAccessExpr>(V)) {
       auto dict = resolveValue(DA->getDict(), PreviousBase,
                                ConcreteTemplateArgs, errorLoc);
-      if (!isa<DictLiteral>(dict))
-         diag::err(diag::err_generic_error)
-            << "value is not a dictionary"
-            << errorLoc << diag::term;
+//      if (!isa<DictLiteral>(dict))
+//         diag::err(diag::err_generic_error)
+//            << "value is not a dictionary"
+//            << errorLoc << diag::term;
 
       auto val = cast<DictLiteral>(dict)->getValue(DA->getKey());
-      if (!val)
-         diag::err(diag::err_generic_error)
-            << "key does not exist in dictionary"
-            << errorLoc << diag::term;
+//      if (!val)
+//         diag::err(diag::err_generic_error)
+//            << "key does not exist in dictionary"
+//            << errorLoc << diag::term;
 
       return val;
    }

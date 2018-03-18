@@ -3,9 +3,7 @@
 //
 
 #include "Scope.h"
-
-#include "AST/Statement/Declaration/Class/MethodDecl.h"
-#include "AST/Expression/Literal/LambdaExpr.h"
+#include "AST/NamedDecl.h"
 
 using namespace cdot::support;
 
@@ -13,8 +11,18 @@ namespace cdot {
 
 unsigned long long BlockScope::lastID = 0;
 
-MethodScope::MethodScope(ast::MethodDecl *M, Scope *enclosingScope)
-   : FunctionScope(MethodScopeID, M, enclosingScope)
+ast::CallableDecl* FunctionScope::getCallableDecl()
+{
+   if (auto L = dyn_cast<LambdaScope>(this))
+      return L->getLambdaExpr()->getFunc();
+
+   return CD;
+}
+
+MethodScope::MethodScope(ast::MethodDecl *M,
+                         bool InferrableReturnType,
+                         Scope *enclosingScope)
+   : FunctionScope(MethodScopeID, M, InferrableReturnType, enclosingScope)
 {
 
 }
@@ -25,8 +33,17 @@ ast::MethodDecl* MethodScope::getMethodDecl() const
 }
 
 LambdaScope::LambdaScope(ast::LambdaExpr *L, Scope *enclosingScope)
-   : FunctionScope(LambdaScopeID, L->getFunc(), enclosingScope),
+   : FunctionScope(LambdaScopeID, L->getFunc(), true, enclosingScope),
      L(L)
+{
+
+}
+
+StaticForScope::StaticForScope(llvm::StringRef elementName,
+                               QualType elementTy,
+                               Scope *enclosingScope)
+   : Scope(StaticForScopeID, enclosingScope),
+     elementName(elementName), elementTy(elementTy)
 {
 
 }

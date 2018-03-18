@@ -28,21 +28,15 @@ class Value;
 
 struct CTFEResult {
    explicit CTFEResult(Variant &&Val)
-      : val(std::move(Val)), dependentDecl(nullptr)
+      : val(std::move(Val)), HadError(false)
    {}
 
-   explicit CTFEResult(ast::CallableDecl *C) : dependentDecl(C)
-   {}
-
-   explicit CTFEResult(llvm::MutableArrayRef<diag::DiagnosticBuilder> diags)
-      : dependentDecl(nullptr),
-        diagnostics(std::make_move_iterator(diags.begin()),
-                    std::make_move_iterator(diags.end()))
+   CTFEResult() : HadError(true)
    {}
 
    bool hadError() const
    {
-      return dependentDecl || !diagnostics.empty();
+      return HadError;
    }
 
    operator bool() const
@@ -55,22 +49,12 @@ struct CTFEResult {
       return val;
    }
 
-   ast::CallableDecl *getDependentDecl() const
-   {
-      return dependentDecl;
-   }
-
-   std::vector<diag::DiagnosticBuilder> &getDiagnostics()
-   {
-      return diagnostics;
-   }
-
 private:
    cdot::Variant val;
-   ast::CallableDecl *dependentDecl;
-
-   std::vector<diag::DiagnosticBuilder> diagnostics;
+   bool HadError;
 };
+
+inline CTFEResult CTFEError() { return CTFEResult(); }
 
 class CTFEEngine {
 public:
@@ -81,7 +65,7 @@ public:
                                llvm::ArrayRef<Value> args,
                                SourceLocation loc = {});
 
-   Value CTFEValueFromVariant(Variant const &V, Type *Ty);
+   Value CTFEValueFromVariant(Variant const &V, const QualType &Ty);
 
 private:
    EngineImpl *pImpl;

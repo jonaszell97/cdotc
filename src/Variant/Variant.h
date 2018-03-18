@@ -44,7 +44,7 @@ struct Variant {
       new (Data.buffer) std::string(s.data(), s.size());
    }
 
-   Variant(Type *Ty, bool isLvalue = false, bool isConst = false);
+   Variant(Type *Ty, bool isConst = false);
    Variant(QualType const& ty);
 
    Variant(uint64_t l, unsigned numBits = 64, bool isUnsigned = false)
@@ -310,6 +310,8 @@ private:
       return *reinterpret_cast<llvm::APFloat*>(Data.buffer);
    }
 };
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const Variant &V);
 
 } // namespace cdot
 

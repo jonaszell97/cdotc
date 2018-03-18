@@ -2,10 +2,6 @@
 // Created by Jonas Zell on 30.01.18.
 //
 
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/SmallPtrSet.h>
-#include <llvm/ADT/StringSet.h>
-
 #include "Preprocessor.h"
 #include "Token.h"
 #include "Lexer.h"
@@ -17,7 +13,12 @@
 #include "Basic/IdentifierInfo.h"
 #include "Basic/Precedence.h"
 
-#include "Message/Diagnostics.h"
+#include "Message/DiagnosticsEngine.h"
+
+#include <llvm/ADT/StringSwitch.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/StringSet.h>
 
 using std::string;
 using namespace cdot::lex;
@@ -27,32 +28,28 @@ namespace cdot {
 namespace {
 
 enum class BuiltinMacro {
-   TOLOWER,
-   TOUPPER,
-   TOSTRING,
-   NUMFORMAT,
-   DEFINED,
-   REPEAT,
-   LINE,
+   None = 0,
+
+   // 0 args
+   LINE = 1,
    FILE,
+
+   // 1 arg
+   TOLOWER = 100,
+   TOUPPER,
    ParseInt,
    ParseFloat,
-};
+   TOSTRING,
+   DEFINED,
 
-llvm::StringMap<pair<BuiltinMacro, int>> BuiltinMacros = {
-   { "_ToLower",   { BuiltinMacro::TOLOWER,    1 }},
-   { "_ToUpper",   { BuiltinMacro::TOUPPER,    1 }},
-   { "_ParseInt",  { BuiltinMacro::ParseInt,   1 }},
-   { "_ParseFloat",{ BuiltinMacro::ParseFloat, 1 }},
-   { "_NumFormat", { BuiltinMacro::NUMFORMAT,  2 }},
-   { "_Repeat",    { BuiltinMacro::REPEAT,     2 }},
-   { "__LINE__",   { BuiltinMacro::LINE,       0 }},
-   { "__FILE__",   { BuiltinMacro::FILE,       0 }}
+   // 2 args
+   NUMFORMAT = 200,
+   REPEAT,
 };
 
 } // anonymous namespace
 
-class PreprocessorImpl: public DiagnosticIssuer {
+class PreprocessorImpl {
 public:
 #ifdef NDEBUG
    using TokenVec   = llvm::SmallVector<Token, 256>;
@@ -61,9 +58,10 @@ public:
 #endif
 
    PreprocessorImpl(TokenVec &dst, IdentifierTable &Idents,
+                    DiagnosticsEngine &Diags,
                     llvm::MutableArrayRef<Token> spelledTokens,
                     size_t sourceId)
-      : dst(dst), Idents(Idents), tokens(spelledTokens),
+      : dst(dst), Idents(Idents), Diags(Diags), tokens(spelledTokens),
         tokenIndex(0), sourceId(sourceId)
    {}
 
@@ -78,6 +76,7 @@ public:
 private:
    TokenVec &dst;
    IdentifierTable &Idents;
+   DiagnosticsEngine &Diags;
 
    llvm::MutableArrayRef<Token> tokens;
    size_t tokenIndex;
@@ -347,10 +346,9 @@ private:
                bool ignoreWhitespace = true) {
       advance(ignoreNewline, ignoreWhitespace);
       if (!currentTok().is(kind)) {
-         err(err_generic_error)
+         Diags.Diag(err_generic_error)
             << "unexpected token " + currentTok().toString()
-            << currentTok().getSourceLoc()
-            << diag::term;
+            << currentTok().getSourceLoc();
          
          return false;
       }
@@ -428,24 +426,23 @@ private:
             advance();
             assert(currentTok().is(tok::close_brace));
          }
-         else if (currentTok().is(tok::dollar_ident)) {
-            auto macroName = currentTok().getIdentifier().drop_front(1);
-            auto it = LispMacros.find(macroName);
-
-            if (it != LispMacros.end()) {
-               expand_lisp_macro(it->getValue(),
-                                 macroName,
-                                 currentTok().getSourceLoc());
-            }
-            else {
-               err(err_generic_error)
-                  << "macro " + currentTok().getIdentifierInfo()
-                                            ->getIdentifier().str()
-                     + " was not defined"
-                  << currentTok().getSourceLoc()
-                  << diag::cont;
-            }
-         }
+//         else if (currentTok().is(tok::dollar_ident)) {
+//            auto macroName = currentTok().getIdentifier().drop_front(1);
+//            auto it = LispMacros.find(macroName);
+//
+//            if (it != LispMacros.end()) {
+//               expand_lisp_macro(it->getValue(),
+//                                 macroName,
+//                                 currentTok().getSourceLoc());
+//            }
+//            else {
+//               Diags.Diag(err_generic_error)
+//                  << "macro " + currentTok().getIdentifierInfo()
+//                                            ->getIdentifier().str()
+//                     + " was not defined"
+//                  << currentTok().getSourceLoc();
+//            }
+//         }
          else {
             dst.emplace_back(tokens[tokenIndex]);
          }
@@ -454,12 +451,20 @@ private:
       }
    }
 
+   prec::PrecedenceLevel getOperatorPrecedence(Token const &tok)
+   {
+      if (tok.isIdentifier(".."))
+         return prec::Cast;
+
+      return ::cdot::getOperatorPrecedence(tok.getKind());
+   }
+
    Variant parseExpression(Variant lhs = {}, int minPrecedence = 0)
    {
       if (!lhs)
          lhs = parseUnaryExpr();
 
-      auto prec = getOperatorPrecedence(lookahead().getKind());
+      auto prec = getOperatorPrecedence(lookahead());
       while (prec != prec::Unknown && prec >= minPrecedence) {
          advance();
 
@@ -468,13 +473,13 @@ private:
 
          auto rhs = parseUnaryExpr();
          auto savedPrec = prec;
-         auto nextPrec = getOperatorPrecedence(lookahead().getKind());
+         auto nextPrec = getOperatorPrecedence(lookahead());
 
          while (nextPrec != prec::Unknown && nextPrec > savedPrec) {
             rhs = parseExpression(rhs, nextPrec);
 
             savedPrec = nextPrec;
-            nextPrec = getOperatorPrecedence(lookahead().getKind());
+            nextPrec = getOperatorPrecedence(lookahead());
          }
 
          lhs = lhs.applyBinaryOp(rhs, op);
@@ -544,28 +549,25 @@ private:
             if (it != Values.end())
                return it->getValue();
 
-            auto funcIt = BuiltinMacros.find(ident);
-            if (funcIt != BuiltinMacros.end()
-                                          && lookahead().is(tok::open_paren)) {
+            auto macro = getBuiltinMacro(ident);
+            if (macro != BuiltinMacro::None) {
                advance();
-               return handleBuiltinFn(funcIt->getValue().first);
+               return handleBuiltinFn(macro);
             }
 
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "reference to undeclared identifier " + ident
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
 
             return {};
          }
          case tok::open_square:
             return parseArray();
          default:
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "unexpected token in preprocessor expression: "
                   + currentTok().toString()
-               << currentTok().getSourceLoc()
-               << diag::term;
+               << currentTok().getSourceLoc();
 
             return {};
       }
@@ -588,20 +590,94 @@ private:
       return Variant(VariantType::Array, move(vec));
    }
 
+   llvm::StringRef variantTypeToString(Variant const& V)
+   {
+      switch (V.getKind()) {
+         case VariantType::Int: return "int";
+         case VariantType::Floating: return "float";
+         case VariantType::String: return "string";
+         case VariantType::Void: return "void";
+         case VariantType::Array: return "array";
+         default:
+            llvm_unreachable("should not be produced by preprocessor");
+      }
+   }
+
    Token VariantToToken(Variant &&V, SourceLocation loc)
    {
-      auto *Mem = Idents.getAllocator().Allocate<Variant>();
-      return Token(new (Mem) Variant(std::move(V)), loc);
+      switch (V.getKind()) {
+         default:
+            Diags.Diag(err_generic_error)
+               << "cannot paste value of type " + variantTypeToString(V)
+               << loc;
+
+            return {};
+         case VariantType::Int: {
+            auto bw = V.getAPSInt().getBitWidth();
+            if (bw == 1) {
+               if (V.getAPSInt().getBoolValue())
+                  return Token(tok::kw_true, loc);
+
+               return Token(tok::kw_false, loc);
+            }
+            else if (bw == 8) {
+               char *Mem = (char *)Idents.getAllocator().Allocate(1, 1);
+               *Mem = (char)V.getAPSInt().getZExtValue();
+
+               return Token(Mem, 1, tok::charliteral, loc);
+            }
+
+            llvm::SmallString<32> Str;
+            V.getAPSInt().toString(Str, 10);
+
+            void *Mem = Idents.getAllocator().Allocate(Str.size(), 1);
+            ::memcpy(Mem, Str.data(), Str.size());
+
+            return Token((const char*)Mem, Str.size(), tok::integerliteral,
+                         loc);
+         }
+         case VariantType::Floating: {
+            llvm::SmallString<32> Str;
+            V.getAPFloat().toString(Str);
+
+            void *Mem = Idents.getAllocator().Allocate(Str.size(), 1);
+            ::memcpy(Mem, Str.data(), Str.size());
+
+            return Token((const char*)Mem, Str.size(), tok::fpliteral, loc);
+         }
+         case VariantType::String: {
+            auto &Str = V.getString();
+            auto &II = Idents.get(Str);
+
+            return Token(&II, loc);
+         }
+      }
    }
 
    Token VariantToStringLiteral(Variant &&V, SourceLocation loc)
    {
-      auto *Mem = Idents.getAllocator().Allocate<Variant>();
-      if (V.isStr()) {
-         return Token(new (Mem) Variant(std::move(V)), loc);
-      }
+      auto str = V.toString();
+      char *Mem = (char*)Idents.getAllocator().Allocate(str.size(), 1);
+      ::memcpy(Mem, str.data(), str.size());
 
-      return Token(new (Mem) Variant(V.toString()), loc);
+      return Token(Mem, str.size(), tok::stringliteral, loc);
+   }
+
+   BuiltinMacro getBuiltinMacro(llvm::StringRef name)
+   {
+      return llvm::StringSwitch<BuiltinMacro>(name)
+         .Case("__LINE__", BuiltinMacro::LINE)
+         .Case("__FILE__", BuiltinMacro::FILE)
+
+         .Case("_ToLower", BuiltinMacro::TOLOWER)
+         .Case("_ToUpper", BuiltinMacro::TOUPPER)
+         .Case("_ParseInt", BuiltinMacro::ParseInt)
+         .Case("_ParseFloat", BuiltinMacro::ParseFloat)
+
+         .Case("_NumFormat", BuiltinMacro::NUMFORMAT)
+         .Case("_Repeat", BuiltinMacro::REPEAT)
+
+         .Default(BuiltinMacro::None);
    }
 
    void handle_directive()
@@ -616,7 +692,7 @@ private:
          case tok::pound_endif:
          case tok::pound_else:
          case tok::pound_elseif:
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << currentTok().toString() + " without preceding #if"
                << currentTok().getSourceLoc();
 
@@ -624,7 +700,7 @@ private:
          case tok::pound_pragma: return handle_pragma();
          case tok::pound_for: return handle_for();
          case tok::pound_endfor:
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "#endfor without preceding #for"
                << currentTok().getSourceLoc();
 
@@ -727,7 +803,7 @@ void PreprocessorImpl::handle_plain_if()
 
    bool cond = false;
    if (!V.isInt()) {
-      err(err_generic_error)
+      Diags.Diag(err_generic_error)
          << "condition must be integral"
          << currentTok().getSourceLoc();
    }
@@ -760,10 +836,9 @@ void PreprocessorImpl::handle_if_common(bool condition)
       processUntil(tok::pound_endif, tok::pound_else, tok::pound_elseif);
       switch (currentTok().getKind()) {
          case tok::eof:
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "unexpected end of file, expecting #endif"
-               << currentTok().getSourceLoc()
-               << diag::cont;
+               << currentTok().getSourceLoc();
 
             return;
          case tok::pound_else:
@@ -777,10 +852,9 @@ void PreprocessorImpl::handle_if_common(bool condition)
       discard_until(tok::pound_endif, tok::pound_else, tok::pound_elseif);
       switch (currentTok().getKind()) {
          case tok::eof:
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "unexpected end of file, expecting #endif"
-               << currentTok().getSourceLoc()
-               << diag::cont;
+               << currentTok().getSourceLoc();
 
             return;
          case tok::pound_else:
@@ -799,17 +873,18 @@ void PreprocessorImpl::handle_for()
       return skipToEndOfDirective();
 
    auto ident = currentTok().getIdentifierInfo()->getIdentifier();
-   if (!expect(tok::equals))
+
+   advance();
+   if (!currentTok().isIdentifier("in"))
       return skipToEndOfDirective();
 
    advance();
 
    auto arr = parseExpression();
    if (!arr.isArray()) {
-      err(err_generic_error)
+      Diags.Diag(err_generic_error)
          << "value is not an array"
-         << currentTok().getSourceLoc()
-         << diag::term;
+         << currentTok().getSourceLoc();
 
       return;
    }
@@ -827,7 +902,7 @@ void PreprocessorImpl::handle_for()
 
       processUntil(tok::pound_endfor);
       if (currentTok().is(tok::eof))
-         err(err_generic_error)
+         Diags.Diag(err_generic_error)
             << "unexpected end of file, expecting #endfor"
             << currentTok().getSourceLoc();
 
@@ -844,24 +919,24 @@ void PreprocessorImpl::handle_include()
       return skipToEndOfDirective();
 
    llvm::SmallVector<std::string, 4> includeDirs;
-   includeDirs.push_back(fs::getPath(
-      fs::FileManager::getFileName(sourceId).str()));
-   includeDirs.push_back("");
+   includeDirs.push_back(
+      fs::getPath(Diags.getFileMgr()->getFileName(sourceId).str()));
 
    auto fileName = currentTok().getText();
 
-   auto file = fs::findFileInDirectories(fileName, includeDirs);
-   if (file.empty()) {
-      err(err_generic_error)
+   auto realFile = fs::findFileInDirectories(fileName, includeDirs);
+   if (realFile.empty()) {
+      Diags.Diag(err_generic_error)
          << "file " + fileName + " not found"
-         << currentTok().getSourceLoc() << diag::cont;
+         << currentTok().getSourceLoc();
 
       return;
    }
 
-   auto BufAndId = fs::FileManager::openFile(file, true);
+   auto File = Diags.getFileMgr()->openFile(realFile);
+   Lexer lexer(Idents, Diags, File.Buf, File.SourceId,
+               File.BaseOffset);
 
-   Lexer lexer(Idents, BufAndId.second.get(), BufAndId.first);
    lexer.lex();
 
    dst.insert(dst.end(),
@@ -892,9 +967,9 @@ void PreprocessorImpl::parse_lisp_macro()
    while (!currentTok().is(tok::newline)) {
       if (currentTok().is(tok::percent_ident)) {
          if (lastWasVariable)
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "two macro variables may not directly follow each other"
-               << currentTok().getSourceLoc() << diag::cont;
+               << currentTok().getSourceLoc();
 
          lastWasVariable = true;
          pattern.emplace_back(currentTok().getIdentifierInfo()
@@ -903,9 +978,9 @@ void PreprocessorImpl::parse_lisp_macro()
          variables.insert(pattern.back().getVarName());
       }
       else if (currentTok().is(tok::percent_percent_ident)) {
-         err(err_generic_error)
+         Diags.Diag(err_generic_error)
             << "%% may not appear in macro pattern"
-            << currentTok().getSourceLoc() << diag::cont;
+            << currentTok().getSourceLoc();
       }
       else if (currentTok().is(tok::space)) {
          // ignore
@@ -919,9 +994,9 @@ void PreprocessorImpl::parse_lisp_macro()
    }
 
    if (!pattern.empty() && pattern.back().isVariable())
-      err(err_generic_error)
+      Diags.Diag(err_generic_error)
          << "variables may not appear last in a macro pattern"
-         << currentTok().getSourceLoc() << diag::cont;
+         << currentTok().getSourceLoc();
 
    TokenVec expansionTokens;
 
@@ -972,9 +1047,9 @@ void PreprocessorImpl::parse_lisp_macro()
          auto ident = currentTok().getIdentifierInfo()->getIdentifier();
          auto varIt = variables.find(ident);
          if (varIt == variables.end()) {
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "variable " + ident + " was not declared in macro pattern"
-               << currentTok().getSourceLoc() << diag::cont;
+               << currentTok().getSourceLoc();
          }
       }
 
@@ -1008,22 +1083,20 @@ void PreprocessorImpl::expand_lisp_macro(LispMacro &Macro,
       advance(true, first);
 
       if (currentTok().is(tok::eof)) {
-         err(err_generic_error)
+         Diags.Diag(err_generic_error)
             << "unexpected end of file in macro expansion: expecting "
                + SM.stringifyNextExpectedToken()
-            << SM.getNextExpectedTokenSourceLoc()
-            << diag::cont;
+            << SM.getNextExpectedTokenSourceLoc();
 
-         note(note_generic_note)
+         Diags.Diag(note_generic_note)
             << "expanding macro " + macroName + " here"
-            << beginLoc << diag::term;
+            << beginLoc;
       }
 
       if (!SM.moveNext(currentTok())) {
-         diag::err(err_generic_error)
+         Diags.Diag(err_generic_error)
             << "unexpected token in macro expansion"
-            << currentTok().getSourceLoc()
-            << diag::cont;
+            << currentTok().getSourceLoc();
 
          return;
       }
@@ -1068,7 +1141,7 @@ void PreprocessorImpl::expand_lisp_macro(LispMacro &Macro,
    // preprocessor expects last token to be EOF
    tokens.emplace_back(tok::eof);
 
-   PreprocessorImpl PP(dst, Idents, tokens, sourceId);
+   PreprocessorImpl PP(dst, Idents, Diags, tokens, sourceId);
    PP.doPreprocessing();
 
    assert(dst.back().is(tok::eof));
@@ -1077,15 +1150,15 @@ void PreprocessorImpl::expand_lisp_macro(LispMacro &Macro,
 
 #define EXPECT_NUM_ARGUMENTS(ArgNo)                                          \
    if (args.size() != ArgNo) {                                               \
-      err(err_generic_error) << "expected " #ArgNo " arguments, but found "  \
-         + std::to_string(args.size()) << loc << diag::cont;                 \
+      Diags.Diag(err_generic_error) << "expected " #ArgNo " arguments, but found "  \
+         + std::to_string(args.size()) << loc;                               \
       return {};                                                             \
    }
 
 #define EXPECT_ARG_TYPE(ArgNo, ArgTy)                                        \
    if (args[ArgNo].getKind() != VariantType::ArgTy) {                        \
-      err(err_generic_error) << "expected " #ArgTy " for argument "  #ArgNo  \
-         << loc << diag::cont;                                               \
+      Diags.Diag(err_generic_error) << "expected " #ArgTy " for argument "  #ArgNo  \
+         << loc;                                                             \
       return {};                                                             \
    }
 
@@ -1105,6 +1178,8 @@ Variant PreprocessorImpl::handleBuiltinFn(BuiltinMacro Fn)
    }
 
    switch (Fn) {
+      default:
+         llvm_unreachable("bad macro kind");
       case BuiltinMacro::TOLOWER:
       case BuiltinMacro::TOUPPER: {
          EXPECT_NUM_ARGUMENTS(1)
@@ -1175,12 +1250,13 @@ Variant PreprocessorImpl::handleBuiltinFn(BuiltinMacro Fn)
          return it != Macros.end();
       }
       case BuiltinMacro::FILE: {
-         return fs::FileManager::getFileName(currentTok().getSourceLoc()
-                                                         .getSourceId()).str();
+         auto &FileMgr = *Diags.getFileMgr();
+         return FileMgr.getFileName(currentTok().getSourceLoc()).str();
       }
       case BuiltinMacro::LINE: {
-         auto l = fs::FileManager::getLineAndCol(currentTok().getSourceLoc());
-         return uint64_t(l.first);
+         auto &FileMgr = *Diags.getFileMgr();
+         auto l = FileMgr.getLineAndCol(currentTok().getSourceLoc());
+         return uint64_t(l.line);
       }
    }
 
@@ -1192,9 +1268,10 @@ Variant PreprocessorImpl::handleBuiltinFn(BuiltinMacro Fn)
 
 Preprocessor::Preprocessor(cdot::Preprocessor::TokenVec &dst,
                            cdot::IdentifierTable &Idents,
+                           DiagnosticsEngine &Diag,
                            llvm::MutableArrayRef<Token> spelledTokens,
                            size_t sourceId)
-   : pImpl(new PreprocessorImpl(dst, Idents, spelledTokens, sourceId))
+   : pImpl(new PreprocessorImpl(dst, Idents, Diag, spelledTokens, sourceId))
 {
 
 }

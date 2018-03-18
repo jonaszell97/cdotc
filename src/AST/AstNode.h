@@ -5,17 +5,17 @@
 #ifndef ASTNODE_H
 #define ASTNODE_H
 
-#include <iostream>
+#include "lex/SourceLocation.h"
+#include "Support/Casting.h"
+#include "Variant/Type/Type.h"
 
-#include "Attribute/Attribute.h"
-#include "../Variant/Type/Type.h"
-#include "../lex/SourceLocation.h"
-#include "../Support/Casting.h"
+#include <llvm/Support/TrailingObjects.h>
 
 namespace cdot {
 
+class Attr;
 class Type;
-class GenericType;
+
 enum class AccessModifier : unsigned char;
 
 using string = std::string;
@@ -27,38 +27,53 @@ namespace diag {
 namespace ast {
 
 class DeclContext;
-class TransformImpl;
 class Statement;
 
 class AstNode {
 public:
-   friend class TransformImpl;
 
    enum NodeType {
-#  define CDOT_ASTNODE(Name) \
+#  define CDOT_ASTNODE(Name)              \
       Name##ID,
-#  define CDOT_INCLUDE_ALL
+#  define CDOT_ABSTRACT(Name)             \
+      Name##ID,
 #  include "AstNode.def"
    };
 
-   std::string getNodeTypeAsString() const
+   llvm::StringRef getNodeTypeAsString() const
    {
       switch (typeID) {
-#        define CDOT_ASTNODE(Name)  \
-         case Name##ID:             \
+#        define CDOT_ASTNODE(Name)        \
+         case Name##ID:                   \
             return #Name;
 #        include "AstNode.def"
+
+      default:
+         llvm_unreachable("bad node kind");
       }
    }
 
-   void setAttributes(std::vector<Attribute> &&attr);
-   std::vector<Attribute>& getAttributes();
+   llvm::ArrayRef<Attr*> getAttributes() const;
 
-   std::vector<Attribute> const& getAttributes() const
-   { return attributes; }
+   template<class T>
+   bool hasAttribute() const
+   {
+      for (auto &Attr : getAttributes())
+         if (support::isa<T>(Attr))
+            return true;
 
-   bool hasAttribute(Attr kind) const;
-   Attribute& getAttribute(Attr kind);
+      return false;
+   }
+
+   template<class T>
+   T *getAttribute()
+   {
+      for (auto &Attr : getAttributes())
+         if (auto A = support::dyn_cast<T>(Attr))
+            return A;
+
+      return nullptr;
+   }
 
    void setContextualType(QualType ty);
 
@@ -73,10 +88,6 @@ public:
    }
 
    static bool classof(AstNode const* T)     { return true; }
-   static bool classof(DeclContext const* T) { return false; }
-
-   static DeclContext *castToDeclContext(AstNode const *D);
-   static AstNode *castFromDeclContext(DeclContext const *Ctx);
 
 protected:
    explicit AstNode(NodeType typeID);
@@ -90,7 +101,6 @@ protected:
    uint32_t SubclassData;
 
    SourceLocation loc;
-   std::vector<Attribute> attributes;
    QualType contextualType;
 
    void toggleFlag(uint32_t flag)
@@ -118,9 +128,6 @@ public:
    }
 
 public:
-   const SourceLocation &getSourceLoc() const { return loc; }
-   void setSourceLoc(const SourceLocation &loc) { this->loc = loc; }
-
    QualType getContextualType()
    {
       return contextualType;

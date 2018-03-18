@@ -4,12 +4,13 @@
 
 #include "IRGen.h"
 
-#include "../../../Compiler.h"
-
-#include "../../../Variant/Type/Type.h"
-#include "../../../Files/FileUtils.h"
-#include "../../../Basic/CastKind.h"
-#include "../../../Files/FileManager.h"
+#include "AST/ASTContext.h"
+#include "Basic/CastKind.h"
+#include "Compiler.h"
+#include "Files/FileUtils.h"
+#include "Files/FileManager.h"
+#include "IL/Utils/BlockIterator.h"
+#include "Variant/Type/Type.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/DIBuilder.h>
@@ -20,10 +21,11 @@ using namespace cdot::fs;
 namespace cdot {
 namespace il {
 
-IRGen::IRGen(llvm::LLVMContext &Ctx,
+IRGen::IRGen(CompilationUnit &CI,
+             llvm::LLVMContext &Ctx,
              llvm::Module *M,
              bool emitDebugInfo)
-   : InstructionVisitor(IRGenID), emitDebugInfo(emitDebugInfo),
+   : CI(CI), TI(CI.getContext().getTargetInfo()), emitDebugInfo(emitDebugInfo),
      DI(nullptr), Ctx(Ctx), M(M), Builder(Ctx)
 {
    WordTy = llvm::IntegerType::get(Ctx, sizeof(void*) * 8);
@@ -82,7 +84,7 @@ void IRGen::visitCompilationUnit(CompilationUnit &CU)
    if (emitDebugInfo) {
       DI = new llvm::DIBuilder(*this->M);
       File = getFileDI(CU.getSourceLoc());
-      this->CU =  DI->createCompileUnit(
+      this->CU = DI->createCompileUnit(
          llvm::dwarf::DW_LANG_C,
          File,
          "cdotc v0.1",
@@ -137,7 +139,7 @@ void IRGen::visitModule(Module& ILMod)
 
          auto ctorStructTy =
             llvm::StructType::get(Builder.getInt32Ty(), FnTy,
-                                  Int8PtrTy, nullptr);
+                                  Int8PtrTy);
 
          auto ctorArrayTy = llvm::ArrayType::get(ctorStructTy, 1);
          auto ctors =
@@ -150,9 +152,7 @@ void IRGen::visitModule(Module& ILMod)
             llvm::ConstantStruct::get(ctorStructTy, Builder.getInt32(65535),
                                       M->getFunction(F.getName()),
                                       llvm::ConstantPointerNull::get(
-                                         Int8PtrTy),
-                                      nullptr))
-         );
+                                         Int8PtrTy))));
       }
    }
 
@@ -169,9 +169,8 @@ void IRGen::visitModule(Module& ILMod)
 llvm::Constant* IRGen::getMallocFn()
 {
    if (!MallocFn)
-      MallocFn = M->getOrInsertFunction("__cdot_malloc",
-                                        Int8PtrTy, WordTy,
-                                        nullptr);
+      MallocFn = M->getOrInsertFunction("malloc",
+                                        Int8PtrTy, WordTy);
 
    return MallocFn;
 }
@@ -179,9 +178,8 @@ llvm::Constant* IRGen::getMallocFn()
 llvm::Constant* IRGen::getFreeFn()
 {
    if (!FreeFn)
-      FreeFn = M->getOrInsertFunction("__cdot_free",
-                                      VoidTy, Int8PtrTy,
-                                      nullptr);
+      FreeFn = M->getOrInsertFunction("free",
+                                      VoidTy, Int8PtrTy);
 
    return FreeFn;
 }
@@ -190,8 +188,7 @@ llvm::Constant* IRGen::getThrowFn()
 {
    if (!ThrowFn)
       ThrowFn = M->getOrInsertFunction("__cdot_throw",
-                                       VoidTy, Int8PtrTy,
-                                       nullptr);
+                                       VoidTy, Int8PtrTy);
 
    return ThrowFn;
 }
@@ -201,7 +198,7 @@ llvm::Constant* IRGen::getAllocExcnFn()
    if (!AllocExcFn)
       AllocExcFn = M->getOrInsertFunction("__cdot_allocate_exception",
                                           Int8PtrTy, WordTy, Int8PtrTy,
-                                          Int8PtrTy, Int8PtrTy, nullptr);
+                                          Int8PtrTy, Int8PtrTy);
 
    return AllocExcFn;
 }
@@ -209,8 +206,7 @@ llvm::Constant* IRGen::getAllocExcnFn()
 llvm::Constant* IRGen::getRetainFn()
 {
    if (!RetainFn)
-      RetainFn = M->getOrInsertFunction("__cdot_retain", VoidTy, Int8PtrTy,
-                                        nullptr);
+      RetainFn = M->getOrInsertFunction("__cdot_retain", VoidTy, Int8PtrTy);
 
    return RetainFn;
 }
@@ -218,8 +214,7 @@ llvm::Constant* IRGen::getRetainFn()
 llvm::Constant* IRGen::getReleaseFn()
 {
    if (!ReleaseFn)
-      ReleaseFn = M->getOrInsertFunction("__cdot_release", VoidTy, Int8PtrTy,
-                                         nullptr);
+      ReleaseFn = M->getOrInsertFunction("__cdot_release", VoidTy, Int8PtrTy);
 
    return ReleaseFn;
 }
@@ -244,14 +239,21 @@ llvm::Constant* IRGen::getMemCmpFn()
    return MemCmpFn;
 }
 
-llvm::Constant* IRGen::getIntPowFn()
+llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
 {
-   if (!IntPowFn)
-      IntPowFn = M->getOrInsertFunction("__cdot_intpow",
-                                        llvm::FunctionType::get(
-                                           WordTy, { WordTy, WordTy }, false));
+   auto llvmTy = getLlvmType(IntTy);
+   llvm::StringRef funcName;
 
-   return IntPowFn;
+   if (IntTy->getBitwidth() == 128) {
+      funcName = "__cdot_intpow_u128";
+   }
+   else {
+      funcName = "__cdot_intpow";
+   }
+
+   return M->getOrInsertFunction(funcName,
+                                 llvm::FunctionType::get(
+                                    llvmTy, { llvmTy, llvmTy }, false));
 }
 
 llvm::StructType* IRGen::getStructTy(Type *Ty)
@@ -292,29 +294,47 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
    using TypeID = cdot::TypeID;
 
    switch (Ty->getTypeID()) {
-      case TypeID::VoidTypeID:
-         return VoidTy;
-      case TypeID::IntegerTypeID:
-         return Builder.getIntNTy(Ty->getBitwidth());
-      case TypeID::FPTypeID:
-         return Ty->isFloatTy() ? Builder.getFloatTy() : Builder.getDoubleTy();
+      case TypeID::BuiltinTypeID:
+         switch (Ty->asBuiltinType()->getKind()) {
+            case BuiltinType::Void: return VoidTy;
+#           define CDOT_BUILTIN_INT(Name, BW, isUnsigned)                     \
+            case BuiltinType::Name: return Builder.getIntNTy(BW);
+#           define CDOT_BUILTIN_FP(Name, Prec)                                \
+            case BuiltinType::Name: return Prec == 32 ? Builder.getFloatTy()  \
+                                                      : Builder.getDoubleTy();
+#           include "Basic/BuiltinTypes.def"
+
+            default:
+               llvm_unreachable("bad builtin type");
+         }
       case TypeID::PointerTypeID:
          return getLlvmType(Ty->getPointeeType())->getPointerTo();
+      case TypeID::ReferenceTypeID: {
+         QualType referenced = Ty->asReferenceType()->getReferencedType();
+         if (referenced->needsStructReturn())
+            return getLlvmType(referenced);
+
+         return getLlvmType(referenced)->getPointerTo();
+      }
       case TypeID::ArrayTypeID: {
          ArrayType *ArrTy = Ty->asArrayType();
          return llvm::ArrayType::get(getLlvmType(ArrTy->getElementType()),
                                      ArrTy->getNumElements());
       }
+      case TypeID::LambdaTypeID:
+         return LambdaTy;
       case TypeID::FunctionTypeID: {
-         if (!Ty->isRawFunctionTy())
-            return LambdaTy;
-
          FunctionType *FuncTy = Ty->asFunctionType();
          auto ret = getLlvmType(*FuncTy->getReturnType());
          llvm::SmallVector<llvm::Type*, 4> argTypes;
 
-         for (const auto &arg : FuncTy->getArgTypes())
-            argTypes.push_back(getLlvmType(arg));
+         for (const auto &arg : FuncTy->getArgTypes()) {
+            auto ty = getLlvmType(arg);
+            if (ty->isStructTy())
+               ty = ty->getPointerTo();
+
+            argTypes.push_back(ty);
+         }
 
          return llvm::FunctionType::get(ret, argTypes,
                                         FuncTy->isCStyleVararg())
@@ -347,20 +367,12 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
 
 llvm::Type* IRGen::getLlvmType(QualType Ty)
 {
-   auto llvmTy = getLlvmType(*Ty);
-   if (Ty.isLvalue() && !Ty->needsStructReturn())
-      llvmTy = llvmTy->getPointerTo();
-
-   return llvmTy;
+   return getLlvmType(*Ty);
 }
 
-llvm::Type* IRGen::getFieldType(QualType Ty)
+llvm::Type* IRGen::getFieldType(ValueType Ty)
 {
-   auto llvmTy = getLlvmType(*Ty);
-   if (Ty.isLvalue())
-      llvmTy = llvmTy->getPointerTo();
-
-   return llvmTy;
+   return getLlvmType(Ty);
 }
 
 void IRGen::DeclareFunction(il::Function const* F)
@@ -374,14 +386,20 @@ void IRGen::DeclareFunction(il::Function const* F)
    llvm::SmallVector<llvm::Type*, 8> argTypes;
    llvm::Type *retType;
 
-   if (F->isLambda())
+   bool sret = false;
+   unsigned sretIdx = 0;
+
+   if (F->isLambda()) {
       argTypes.push_back(Int8PtrTy->getPointerTo());
+      ++sretIdx;
+   }
 
    if (F->hasStructReturn()) {
       auto sretTy = getLlvmType(funcTy->getReturnType());
       if (sretTy->isStructTy() || sretTy->isArrayTy())
          sretTy = sretTy->getPointerTo();
 
+      sret = true;
       argTypes.push_back(sretTy);
       retType = VoidTy;
    }
@@ -405,8 +423,28 @@ void IRGen::DeclareFunction(il::Function const* F)
                                          funcTy->isCStyleVararg());
 
    auto fn = llvm::Function::Create(llvmTy, linkage, F->getName(), M);
+
+   if (sret) {
+      fn->addAttribute(sretIdx + 1, llvm::Attribute::StructRet);
+   }
+
    if (DI)
       emitFunctionDI(*F, fn);
+}
+
+llvm::Value* IRGen::getCurrentSRetValue()
+{
+   auto fn = Builder.GetInsertBlock()->getParent();
+   assert(!fn->arg_empty());
+
+   auto it = fn->arg_begin();
+
+   // lambda environment comes before sret value
+   if (!it->hasAttribute(llvm::Attribute::StructRet))
+      ++it;
+
+   assert(it->hasAttribute(llvm::Attribute::StructRet));
+   return &*it;
 }
 
 void IRGen::ForwardDeclareType(il::AggregateType const *Ty)
@@ -462,12 +500,15 @@ void IRGen::DeclareType(il::AggregateType const* Ty)
       ContainedTypes.push_back(Int8PtrTy);
    }
 
+   if (ContainedTypes.empty())
+      ContainedTypes.push_back(Int8PtrTy);
+
    Ty->getLlvmTy()->setBody(ContainedTypes);
 }
 
 void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
 {
-   auto globalTy = getLlvmType(*G->getType());
+   auto globalTy = getLlvmType(G->getType()->getReferencedType());
    new llvm::GlobalVariable(*M, globalTy,
                             G->isConstant() && !G->isLateInitialized(),
                             llvm::GlobalVariable::ExternalLinkage,
@@ -516,8 +557,8 @@ void IRGen::visitFunction(Function &F)
                val = val->getNextNode();
 
             auto phi = cast<llvm::PHINode>(val);
-            for (const auto &Pred : B.getPredecessors()) {
-               auto Term = Pred->getTerminator();
+            for (const auto &Pred : getPredecessors(B)) {
+               auto Term = Pred.getTerminator();
                assert(Term && "no terminator for basic block");
                Value *PassedVal;
 
@@ -531,7 +572,7 @@ void IRGen::visitFunction(Function &F)
                }
 
                phi->addIncoming(getLlvmValue(PassedVal),
-                                getBasicBlock(Pred->getName()));
+                                getBasicBlock(Pred.getName()));
             }
          }
       }
@@ -550,6 +591,7 @@ void IRGen::visitFunction(Function &F)
 
 void IRGen::visitBasicBlock(BasicBlock &B)
 {
+   Builder.SetCurrentDebugLocation(llvm::DebugLoc());
    Builder.SetInsertPoint(getBasicBlock(&B));
 
    if (!B.isEntryBlock() && !B.getArgs().empty()) {
@@ -558,25 +600,24 @@ void IRGen::visitBasicBlock(BasicBlock &B)
          if (ty->isStructTy())
             ty = ty->getPointerTo();
 
-         Builder.CreatePHI(ty,
-                           B.getPredecessors().size());
+         Builder.CreatePHI(ty, 0);
       }
    }
 
    for (auto const& I : B.getInstructions()) {
       if (DI) {
-         auto L = I.getLocation();
-         assert(L && "no debug location for instruction!");
+         auto Loc = I.getSourceLoc();
+         auto LineAndCol = CI.getFileMgr().getLineAndCol(Loc);
 
          Builder.SetCurrentDebugLocation(llvm::DebugLoc::get(
-            (unsigned int)L->getLine(),
-            (unsigned int)L->getCol(),
+            LineAndCol.line,
+            LineAndCol.col,
             ScopeStack.top()
          ));
       }
 
       auto val = visit(I);
-      auto res = ValueMap.try_emplace(I.getName(), val);
+      auto res = ValueMap.try_emplace(&I, val);
       assert(res.second && "duplicate name");
 
       if (DI && I.isInitializer())
@@ -644,18 +685,30 @@ llvm::Value* IRGen::CreateCall(il::Function *F,
    return Ret;
 }
 
+llvm::Value* IRGen::CreateAlloca(QualType AllocatedType,
+                                 size_t allocatedSize,
+                                 unsigned int alignment) {
+   if (!alignment)
+      alignment = TI.getAlignOfType(AllocatedType);
+
+   return CreateAlloca(getLlvmType(AllocatedType), allocatedSize, alignment);
+}
+
 llvm::Value* IRGen::CreateAlloca(llvm::Type *AllocatedType,
-                                 size_t allocatedSize) {
+                                 size_t allocatedSize,
+                                 unsigned alignment) {
    auto EB = &Builder.GetInsertBlock()->getParent()->getEntryBlock();
    auto IP = Builder.saveIP();
 
    Builder.SetInsertPoint(EB);
 
-   llvm::Value *alloca;
+   llvm::AllocaInst *alloca;
    if (allocatedSize > 1)
       alloca = Builder.CreateAlloca(AllocatedType, wordSizedInt(allocatedSize));
    else
       alloca = Builder.CreateAlloca(AllocatedType);
+
+   alloca->setAlignment(alignment);
 
    Builder.restoreIP(IP);
    return alloca;
@@ -689,7 +742,7 @@ llvm::Value* IRGen::getLlvmValue(il::Value const *V)
    if (auto A = dyn_cast<Argument>(V))
       return getBlockArg(A);
 
-   auto it = ValueMap.find(V->getName());
+   auto it = ValueMap.find(V);
    assert(it != ValueMap.end());
 
    return it->second;
@@ -702,11 +755,15 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
          return Builder.getFalse();
 
       return llvm::ConstantInt::get(getLlvmType(Int->getType()),
-                                    Int->getU64());
+                                    Int->getValue());
    }
 
    if (auto F = dyn_cast<ConstantFloat>(C)) {
-      return llvm::ConstantFP::get(getLlvmType(F->getType()),
+      if (F->getType()->isFloatTy())
+         return llvm::ConstantFP::get(Builder.getFloatTy(),
+                                      F->getFloatVal());
+
+      return llvm::ConstantFP::get(Builder.getDoubleTy(),
                                    F->getDoubleVal());
    }
 
@@ -809,19 +866,26 @@ llvm::Value* IRGen::getBlockArg(il::Argument const* A)
 
 llvm::Value *IRGen::visitAllocaInst(AllocaInst const& I)
 {
-   auto allocatedType = getLlvmType(*I.getType());
-   if (I.getType()->needsStructReturn() && allocatedType->isPointerTy())
-      allocatedType = allocatedType->getPointerElementType();
+   if (I.canUseSRetValue())
+      return getCurrentSRetValue();
+
+   unsigned alignment = I.getAlignment();
+   if (!alignment) {
+      alignment = TI.getAlignOfType(I.getType()->getReferencedType());
+   }
+
+   llvm::Type *allocatedType = getLlvmType(I.getType()->getReferencedType());
 
    llvm::Value *V;
    if (I.isHeapAlloca()) {
-      auto size = wordSizedInt(I.getType()->getSize() * I.getAllocSize());
+      auto TypeSize = TI.getAllocSizeOfType(I.getType()->getReferencedType());
+      auto size = wordSizedInt(TypeSize * I.getAllocSize());
       auto buff = Builder.CreateCall(getMallocFn(), { size });
 
       V = Builder.CreateBitCast(buff, allocatedType->getPointerTo());
    }
    else {
-      V = CreateAlloca(allocatedType, I.getAllocSize());
+      V = CreateAlloca(allocatedType, I.getAllocSize(), alignment);
    }
 
    return V;
@@ -850,7 +914,7 @@ llvm::Value *IRGen::visitLambdaInitInst(LambdaInitInst const& I)
       Builder.CreateStore(val, ptr);
    }
 
-   auto alloca = CreateAlloca(LambdaTy);
+   auto alloca = CreateAlloca(LambdaTy, 1, TI.getPointerAlignInBytes());
 
    auto funPtr = Builder.CreateStructGEP(LambdaTy, alloca, 0);
    Builder.CreateStore(toInt8Ptr(fun), funPtr);
@@ -867,10 +931,23 @@ llvm::Value * IRGen::visitStoreInst(StoreInst const& I)
    auto Src = getLlvmValue(I.getSrc());
    auto Ty = I.getSrc()->getType();
 
-   if (Ty->needsStructReturn() && Dst->getType() == Src->getType())
-      return Builder.CreateMemCpy(Dst, Src, Ty->getSize(), Ty->getAlignment());
+   unsigned alignment = 0;
+   if (auto Alloca = dyn_cast<llvm::AllocaInst>(Dst)) {
+      alignment = Alloca->getAlignment();
+   }
+   else {
+      alignment = TI.getAlignOfType(Ty);
+   }
 
-   return Builder.CreateStore(Src, Dst);
+   if (Ty->needsStructReturn()) {
+      return Builder.CreateMemCpy(Dst, Src, TI.getSizeOfType(Ty),
+                                  alignment);
+   }
+
+   auto Store = Builder.CreateStore(Src, Dst);
+   Store->setAlignment(alignment);
+
+   return Store;
 }
 
 llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
@@ -895,7 +972,7 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
 llvm::Value * IRGen::visitCaptureExtractInst(const CaptureExtractInst &I)
 {
    auto F = Builder.GetInsertBlock()->getParent();
-   auto env = &F->getArgumentList().front();
+   auto env = F->arg_begin();
 
    auto gep = Builder.CreateInBoundsGEP(env, { getLlvmValue(I.getIdx()) });
    auto ld = Builder.CreateLoad(gep);
@@ -932,8 +1009,8 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
    if (!llvmCaseTy->isPointerTy())
       llvmCaseTy = llvmCaseTy->getPointerTo();
 
-   if (caseTy->isPrimitiveType() || caseTy->isPointerType()
-         || caseTy->isRawEnum())
+   if (caseTy->isIntegerType() || caseTy->isPointerType()
+       || caseTy->isRawEnum())
       return Builder.CreateBitCast(gep, llvmCaseTy);
 
    if (caseTy->needsStructReturn())
@@ -961,7 +1038,19 @@ llvm::Value * IRGen::visitLoadInst(LoadInst const& I)
    if (pointee->isStructTy() || pointee->isArrayTy())
       return val;
 
-   return Builder.CreateLoad(val);
+   unsigned alignment = 0;
+   if (auto Alloca = dyn_cast<llvm::AllocaInst>(val)) {
+      alignment = Alloca->getAlignment();
+   }
+   else {
+      alignment = TI.getAlignOfType(I.getTarget()->getType()
+                                     ->getReferencedType());
+   }
+
+   auto Ld = Builder.CreateLoad(val);
+   Ld->setAlignment(alignment);
+
+   return Ld;
 }
 
 llvm::Value* IRGen::visitAddrOfInst(AddrOfInst const& I)
@@ -976,6 +1065,9 @@ llvm::Value * IRGen::visitPtrToLvalueInst(const PtrToLvalueInst &I)
 
 llvm::Value* IRGen::visitRetInst(RetInst const& I)
 {
+   if (I.canUseSRetValue())
+      return Builder.CreateRetVoid();
+
    if (auto V = I.getReturnedValue()) {
       auto retVal = getLlvmValue(V);
       if (retVal->getType()->isVoidTy())
@@ -988,8 +1080,9 @@ llvm::Value* IRGen::visitRetInst(RetInst const& I)
             ++argIt;
 
          auto sretVal = &*argIt;
-         Builder.CreateMemCpy(sretVal, retVal, V->getType()->getSize(),
-                              V->getType()->getAlignment());
+         Builder.CreateMemCpy(sretVal, retVal,
+                              TI.getSizeOfType(V->getType()),
+                              TI.getAlignOfType(V->getType()));
       }
       else {
          return Builder.CreateRet(retVal);
@@ -1012,7 +1105,7 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
    }
 
    auto exc = Builder.CreateCall(getAllocExcnFn(), {
-      wordSizedInt(I.getThrownValue()->getType()->getSize()),
+      wordSizedInt(TI.getSizeOfType(I.getThrownValue()->getType())),
       toInt8Ptr(thrownVal),
       toInt8Ptr(getLlvmValue(I.getTypeInfo())),
       descFn
@@ -1147,51 +1240,82 @@ llvm::Value* IRGen::visitLandingPadInst(LandingPadInst const& I)
 llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
 {
    switch (I.getCalledIntrinsic()) {
-      case Intrinsic::__ctfe_stacktrace:
-         return nullptr;
-      case Intrinsic::MemCpy:
-      case Intrinsic::MemSet:
-      case Intrinsic::MemCmp: {
-         llvm::Value *Args[] = {
-            getLlvmValue(I.getOperand(0)),
-            getLlvmValue(I.getOperand(1)),
-            getLlvmValue(I.getOperand(2))
-         };
+   case Intrinsic::__ctfe_stacktrace:
+      return nullptr;
+   case Intrinsic::memcpy:
+   case Intrinsic::memset:
+   case Intrinsic::memcmp: {
+      llvm::Value *Args[] = {
+         getLlvmValue(I.getOperand(0)),
+         getLlvmValue(I.getOperand(1)),
+         getLlvmValue(I.getOperand(2))
+      };
 
-         if (I.getCalledIntrinsic() == Intrinsic::MemCpy) {
-            return Builder.CreateMemCpy(Args[0], Args[1], Args[2], 1);
-         }
-         else if (I.getCalledIntrinsic() == Intrinsic::MemCmp) {
-            auto cmp = Builder.CreateCall(getMemCmpFn(), {
-               toInt8Ptr(Args[0]), toInt8Ptr(Args[1]), Args[2]
-            });
-            return Builder.CreateIsNull(cmp);
-         }
-         else {
-            return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
-         }
+      if (I.getCalledIntrinsic() == Intrinsic::memcpy) {
+         return Builder.CreateMemCpy(Args[0], Args[1], Args[2], 1);
       }
-      case Intrinsic::Release:
-         return Builder.CreateCall(getReleaseFn(), {
-            toInt8Ptr(getLlvmValue(I.getOperand(0)))
+      else if (I.getCalledIntrinsic() == Intrinsic::memcmp) {
+         auto cmp = Builder.CreateCall(getMemCmpFn(), {
+            toInt8Ptr(Args[0]), toInt8Ptr(Args[1]), Args[2]
          });
-      case Intrinsic::Retain:
-         return Builder.CreateCall(getRetainFn(), {
-            toInt8Ptr(getLlvmValue(I.getOperand(0)))
-         });
-      case Intrinsic::LifetimeBegin:
-         return Builder.CreateLifetimeStart(getLlvmValue(I.getArgs()[0]),
-                         cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
-      case Intrinsic::LifetimeEnd: {
-         auto Self = getLlvmValue(I.getArgs()[0]);
-         Builder.CreateLifetimeEnd(Self,
-                         cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
-
-         if (I.getArgs().front()->getType()->isClass())
-            Builder.CreateCall(getFreeFn(), toInt8Ptr(Self));
-
-         return nullptr;
+         return Builder.CreateIsNull(cmp);
       }
+      else {
+         return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
+      }
+   }
+   case Intrinsic::release:
+      return Builder.CreateCall(getReleaseFn(), {
+         toInt8Ptr(getLlvmValue(I.getOperand(0)))
+      });
+   case Intrinsic::retain:
+      return Builder.CreateCall(getRetainFn(), {
+         toInt8Ptr(getLlvmValue(I.getOperand(0)))
+      });
+   case Intrinsic::lifetime_begin:
+      return Builder.CreateLifetimeStart(getLlvmValue(I.getArgs()[0]),
+                      cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
+   case Intrinsic::lifetime_end: {
+      auto Self = getLlvmValue(I.getArgs()[0]);
+      Builder.CreateLifetimeEnd(Self,
+                      cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
+//
+//      if (I.getArgs().front()->getType()->isClass())
+//         Builder.CreateCall(getFreeFn(), toInt8Ptr(Self));
+
+      return nullptr;
+   }
+   case Intrinsic::get_lambda_env: {
+      auto lambda = getLlvmValue(I.getArgs()[0]);
+      return Builder.CreateStructGEP(LambdaTy, lambda, 1);
+   }
+   case Intrinsic::get_lambda_funcptr: {
+      auto lambda = getLlvmValue(I.getArgs()[0]);
+      return Builder.CreateStructGEP(LambdaTy, lambda, 0);
+   }
+   case Intrinsic::strong_refcount: {
+      auto val = getLlvmValue(I.getArgs()[0]);
+      return Builder.CreateStructGEP(val->getType()->getPointerElementType(),
+                                     val, 0);
+   }
+   case Intrinsic::weak_refcount: {
+      auto val = getLlvmValue(I.getArgs()[0]);
+      return Builder.CreateStructGEP(val->getType()->getPointerElementType(),
+                                     val, 1);
+   }
+   case Intrinsic::vtable_ref: {
+      auto val = getLlvmValue(I.getArgs()[0]);
+      return Builder.CreateStructGEP(val->getType()->getPointerElementType(),
+                                     val, 2);
+   }
+   case Intrinsic::typeinfo_ref: {
+      auto val = getLlvmValue(I.getArgs()[0]);
+      auto vtbl = Builder.CreateStructGEP(val->getType()
+                                             ->getPointerElementType(),
+                                          val, 2);
+
+      return Builder.CreateConstInBoundsGEP2_64(vtbl, 0, 0);
+   }
    }
 }
 
@@ -1307,7 +1431,7 @@ llvm::Value * IRGen::visitLambdaCallInst(LambdaCallInst const& I)
 
    bool sret = funTy->getReturnType()->needsStructReturn();
    if (sret) {
-      auto alloca = CreateAlloca(getLlvmType(*funTy->getReturnType()));
+      auto alloca = CreateAlloca(funTy->getReturnType());
       args.push_back(alloca);
    }
 
@@ -1323,18 +1447,21 @@ llvm::Value * IRGen::visitLambdaCallInst(LambdaCallInst const& I)
    return ret;
 }
 
-llvm::Value * IRGen::visitInitInst(InitInst const& I)
+llvm::Value* IRGen::visitInitInst(InitInst const& I)
 {
    llvm::Value *alloca;
-   if (I.getType()->isClass()) {
-      alloca = Builder.CreateCall(getMallocFn(),
-                                  wordSizedInt(I.getType()->getSize()));
+   if (I.canUseSRetValue()) {
+      alloca = getCurrentSRetValue();
+   }
+   else if (I.getType()->isClass()) {
+      alloca = Builder.CreateCall(
+         getMallocFn(), wordSizedInt(TI.getAllocSizeOfType(I.getType())));
 
       alloca = Builder.CreateBitCast(alloca, getStructTy(I.getInitializedType())
                                         ->getPointerTo());
    }
    else {
-      alloca = CreateAlloca(getStructTy(I.getInitializedType()));
+      alloca = CreateAlloca(I.getInitializedType()->getType());
    }
 
    llvm::SmallVector<llvm::Value*, 8> args { alloca };
@@ -1349,7 +1476,7 @@ llvm::Value * IRGen::visitInitInst(InitInst const& I)
 llvm::Value* IRGen::visitUnionInitInst(UnionInitInst const& I)
 {
    auto UnionTy = getStructTy(I.getUnionTy());
-   auto alloca = CreateAlloca(UnionTy);
+   auto alloca = CreateAlloca(I.getUnionTy()->getType());
    auto val = getLlvmValue(I.getInitializerVal());
 
    auto gep = Builder.CreateStructGEP(UnionTy, alloca, 0);
@@ -1367,16 +1494,16 @@ llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
 
    if (EnumTy->getMaxAssociatedValues() == 0) {
       auto rawTy = getLlvmType(EnumTy->getRawType());
-      auto alloca = Builder.CreateAlloca(rawTy);
+      auto alloca = CreateAlloca(EnumTy->getRawType());
       Builder.CreateStore(llvm::ConstantInt::get(rawTy,
-                                                 Case.caseVal->getU64()),
+                                                 Case.caseVal->getZExtValue()),
                           alloca);
 
       return alloca;
    }
 
    auto LlvmTy = getStructTy(EnumTy);
-   auto alloca = CreateAlloca(LlvmTy);
+   auto alloca = CreateAlloca(EnumTy->getType());
 
    auto CaseVal = getLlvmValue(Case.caseVal);
 
@@ -1388,18 +1515,18 @@ llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
       gep = Builder.CreateStructGEP(LlvmTy, alloca, i);
 
       auto val = getLlvmValue(AV);
-      if (AV->getType()->isPointerType() || AV->getType()->isPrimitiveType()
-                                            || AV->getType()->isRawEnum()) {
+      if (AV->getType()->isPointerType() || AV->getType()->isIntegerType()) {
          auto bc = Builder.CreateBitCast(gep, val->getType()->getPointerTo());
          Builder.CreateStore(val, bc);
       }
       else if (AV->getType()->needsStructReturn()) {
+         auto TypeSize =  TI.getAllocSizeOfType(AV->getType());
          auto ptr = Builder.CreateCall(getMallocFn(), {
-            llvm::ConstantInt::get(WordTy, AV->getType()->getSize())
+            llvm::ConstantInt::get(WordTy, TypeSize)
          });
 
-         Builder.CreateMemCpy(ptr, val, AV->getType()->getSize(),
-                              AV->getType()->getAlignment());
+         Builder.CreateMemCpy(ptr, val, TypeSize,
+                              TI.getAllocAlignOfType(AV->getType()));
 
          Builder.CreateStore(toInt8Ptr(val), gep);
       }
@@ -1413,235 +1540,164 @@ llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
    return alloca;
 }
 
-#define CDOT_BINARY_INST(Name)                       \
-llvm::Value* IRGen::visit##Name##Inst(Name##Inst const& I) \
-{                                                    \
-   auto lhs = getLlvmValue(I.getOperand(0));         \
-   auto rhs = getLlvmValue(I.getOperand(1));         \
-   return Builder.Create##Name(lhs, rhs);            \
-}
-
-CDOT_BINARY_INST(And)
-CDOT_BINARY_INST(Or)
-CDOT_BINARY_INST(Xor)
-CDOT_BINARY_INST(LShr)
-CDOT_BINARY_INST(AShr)
-CDOT_BINARY_INST(Shl)
-
-llvm::Value* IRGen::visitAddInst(AddInst const& I)
+llvm::Value* IRGen::visitBinaryOperatorInst(const BinaryOperatorInst &I)
 {
+   using OPC = BinaryOperatorInst::OpCode;
+
    auto ty = I.getType();
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
+   
+   switch (I.getOpCode()) {
+   case OPC::And:  return Builder.CreateAnd(lhs, rhs);
+   case OPC::Or:   return Builder.CreateOr(lhs, rhs);
+   case OPC::Xor:  return Builder.CreateXor(lhs, rhs);
+   case OPC::LShr: return Builder.CreateLShr(lhs, rhs);
+   case OPC::AShr: return Builder.CreateAShr(lhs, rhs);
+   case OPC::Shl:  return Builder.CreateShl(lhs, rhs);
+#  define INT_OR_FP_OP(Name)                                      \
+   case OPC::Name:                                                \
+      if (ty->isIntegerType()) {                                  \
+         if (ty->isUnsigned())                                    \
+            return Builder.CreateNUW##Name(lhs, rhs);             \
+                                                                  \
+         return Builder.CreateNSW##Name(lhs, rhs);                \
+      }                                                           \
+                                                                  \
+      return Builder.CreateF##Name(lhs, rhs);
+   INT_OR_FP_OP(Add)
+   INT_OR_FP_OP(Sub)
+   INT_OR_FP_OP(Mul)
 
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
-         return Builder.CreateNUWAdd(lhs, rhs);
+#  undef INT_OR_FP_OP
+   case OPC::Div:
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateUDiv(lhs, rhs);
 
-      return Builder.CreateNSWAdd(lhs, rhs);
+         return Builder.CreateSDiv(lhs, rhs);
+      }
+
+      return Builder.CreateFDiv(lhs, rhs);
+   case OPC::Mod:
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateURem(lhs, rhs);
+
+         return Builder.CreateSRem(lhs, rhs);
+      }
+
+      return Builder.CreateFRem(lhs, rhs);
+   case OPC::Exp: {
+      llvm::Constant *powFn;
+      if (lhs->getType()->isIntegerTy()) {
+         powFn = getIntPowFn(I.getOperand(0)->getType());
+      }
+      else if (rhs->getType()->isIntegerTy()) {
+         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::powi,
+                                                 { lhs->getType() });
+      }
+      else {
+         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::pow,
+                                                 { lhs->getType() });
+      }
+
+      return Builder.CreateCall(powFn, { lhs, rhs });
+   }
    }
 
-   return Builder.CreateFAdd(lhs, rhs);
+   llvm_unreachable("bad opcode");
 }
 
-llvm::Value* IRGen::visitSubInst(SubInst const& I)
+llvm::Value* IRGen::visitCompInst(const CompInst &I)
 {
-   auto ty = I.getType();
+   using OPC = CompInst::OpCode;
+
+   auto ty = I.getLhs()->getType();
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
 
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
-         return Builder.CreateNUWSub(lhs, rhs);
+   switch (I.getOpCode()) {
+   case OPC::CompEQ:
+      if (ty->isIntegerType() || ty->isPointerType()) {
+         return Builder.CreateICmpEQ(lhs, rhs);
+      }
 
-      return Builder.CreateNSWSub(lhs, rhs);
-   }
+      return Builder.CreateFCmpOEQ(lhs, rhs);
+   case OPC::CompNE:
+      if (ty->isIntegerType() || ty->isPointerType()) {
+         return Builder.CreateICmpNE(lhs, rhs);
+      }
 
-   return Builder.CreateFSub(lhs, rhs);
-}
-
-llvm::Value* IRGen::visitMulInst(MulInst const& I)
-{
-   auto ty = I.getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
-         return Builder.CreateNUWMul(lhs, rhs);
-
-      return Builder.CreateNSWMul(lhs, rhs);
-   }
-
-   return Builder.CreateFMul(lhs, rhs);
-}
-
-llvm::Value* IRGen::visitDivInst(DivInst const& I)
-{
-   auto ty = I.getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
-         return Builder.CreateUDiv(lhs, rhs);
-
-      return Builder.CreateSDiv(lhs, rhs);
-   }
-
-   return Builder.CreateFDiv(lhs, rhs);
-}
-
-llvm::Value* IRGen::visitModInst(ModInst const& I)
-{
-   auto ty = I.getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
-         return Builder.CreateURem(lhs, rhs);
-
-      return Builder.CreateSRem(lhs, rhs);
-   }
-
-   return Builder.CreateFRem(lhs, rhs);
-}
-
-llvm::Value* IRGen::visitExpInst(ExpInst const& I)
-{
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   llvm::Constant *powFn;
-   if (lhs->getType()->isIntegerTy()) {
-      powFn = getIntPowFn();
-   }
-   else if (rhs->getType()->isIntegerTy()) {
-      powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::powi,
-                                              { lhs->getType() });
-   }
-   else {
-      powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::pow,
-                                              { lhs->getType() });
-   }
-
-   return Builder.CreateCall(powFn, { lhs, rhs });
-}
-
-llvm::Value * IRGen::visitCompEQInst(CompEQInst const& I)
-{
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-   auto ty = lhs->getType();
-
-   if (ty->isIntegerTy() || ty->isPointerTy()) {
-      return Builder.CreateICmpEQ(lhs, rhs);
-   }
-
-   return Builder.CreateFCmpOEQ(lhs, rhs);
-}
-
-llvm::Value * IRGen::visitCompNEInst(CompNEInst const& I)
-{
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-   auto ty = lhs->getType();
-
-   if (ty->isIntegerTy() || ty->isPointerTy()) {
-      return Builder.CreateICmpNE(lhs, rhs);
-   }
-
-   return Builder.CreateFCmpONE(lhs, rhs);
-}
-
-llvm::Value * IRGen::visitCompGEInst(CompGEInst const& I)
-{
-   auto ty = I.getOperand(0)->getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isPointerType())
-      return Builder.CreateICmpUGE(lhs, rhs);
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
+      return Builder.CreateFCmpONE(lhs, rhs);
+   case OPC::CompGE:
+      if (ty->isPointerType())
          return Builder.CreateICmpUGE(lhs, rhs);
 
-      return Builder.CreateICmpSGE(lhs, rhs);
-   }
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateICmpUGE(lhs, rhs);
 
-   return Builder.CreateFCmpOGE(lhs, rhs);
-}
+         return Builder.CreateICmpSGE(lhs, rhs);
+      }
 
-llvm::Value * IRGen::visitCompLEInst(CompLEInst const& I)
-{
-   auto ty = I.getOperand(0)->getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isPointerType())
-      return Builder.CreateICmpULE(lhs, rhs);
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
+      return Builder.CreateFCmpOGE(lhs, rhs);
+   case OPC::CompLE:
+      if (ty->isPointerType())
          return Builder.CreateICmpULE(lhs, rhs);
 
-      return Builder.CreateICmpSLE(lhs, rhs);
-   }
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateICmpULE(lhs, rhs);
 
-   return Builder.CreateFCmpOLE(lhs, rhs);
-}
+         return Builder.CreateICmpSLE(lhs, rhs);
+      }
 
-llvm::Value * IRGen::visitCompGTInst(CompGTInst const& I)
-{
-   auto ty = I.getOperand(0)->getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isPointerType())
-      return Builder.CreateICmpUGT(lhs, rhs);
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
+      return Builder.CreateFCmpOLE(lhs, rhs);
+   case OPC::CompGT:
+      if (ty->isPointerType())
          return Builder.CreateICmpUGT(lhs, rhs);
 
-      return Builder.CreateICmpSGT(lhs, rhs);
-   }
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateICmpUGT(lhs, rhs);
 
-   return Builder.CreateFCmpOGT(lhs, rhs);
-}
+         return Builder.CreateICmpSGT(lhs, rhs);
+      }
 
-llvm::Value * IRGen::visitCompLTInst(CompLTInst const& I)
-{
-   auto ty = I.getOperand(0)->getType();
-   auto lhs = getLlvmValue(I.getOperand(0));
-   auto rhs = getLlvmValue(I.getOperand(1));
-
-   if (ty->isPointerType())
-      return Builder.CreateICmpULT(lhs, rhs);
-
-   if (ty->isIntegerType()) {
-      if (ty->isUnsigned())
+      return Builder.CreateFCmpOGT(lhs, rhs);
+   case OPC::CompLT:
+      if (ty->isPointerType())
          return Builder.CreateICmpULT(lhs, rhs);
 
-      return Builder.CreateICmpSLT(lhs, rhs);
+      if (ty->isIntegerType()) {
+         if (ty->isUnsigned())
+            return Builder.CreateICmpULT(lhs, rhs);
+
+         return Builder.CreateICmpSLT(lhs, rhs);
+      }
+
+      return Builder.CreateFCmpOLT(lhs, rhs);
+   }
+}
+
+llvm::Value* IRGen::visitUnaryOperatorInst(const UnaryOperatorInst &I)
+{
+   auto target = getLlvmValue(I.getOperand(0));
+
+   switch (I.getOpCode()) {
+   case UnaryOperatorInst::Neg: {
+      auto rhs = llvm::ConstantInt::getAllOnesValue(target->getType());
+      return Builder.CreateXor(target, rhs);
+   }
+   case UnaryOperatorInst::Min: {
+      return Builder.CreateNSWSub(
+         Builder.getIntN(target->getType()->getIntegerBitWidth(), 0),
+         target);
+   }
    }
 
-   return Builder.CreateFCmpOLT(lhs, rhs);
-}
-
-llvm::Value* IRGen::visitNegInst(NegInst const& I)
-{
-   return Builder.CreateXor(getLlvmValue(I.getOperand(0)), uint64_t(-1));
-}
-
-llvm::Value* IRGen::visitMinInst(MinInst const& I)
-{
-   auto rhs = getLlvmValue(I.getOperand(0));
-   return Builder.CreateNSWSub(Builder.getIntN(rhs->getType()
-                                                  ->getIntegerBitWidth(), 0),
-                               rhs);
+   llvm_unreachable("bad unary inst");
 }
 
 llvm::Value* IRGen::visitBitCastInst(BitCastInst const& I)
@@ -1677,18 +1733,6 @@ llvm::Value * IRGen::visitIntegerCastInst(IntegerCastInst const& I)
             return Builder.CreateZExtOrTrunc(val, toTy);
 
          return Builder.CreateSExtOrTrunc(val, toTy);
-      case CastKind::IBox: {
-         auto alloca = CreateAlloca(toTy);
-         auto gep = Builder.CreateStructGEP(toTy, alloca, 0);
-         Builder.CreateStore(val, gep);
-
-         return alloca;
-      }
-      case CastKind::IUnbox: {
-         auto from = getLlvmType(fromTy);
-         auto gep = Builder.CreateStructGEP(from, val, 0);
-         return I.isLvalue() ? gep : (llvm::Value*)Builder.CreateLoad(gep);
-      }
       case CastKind::SignFlip:
          return val;
       default:
@@ -1699,7 +1743,6 @@ llvm::Value * IRGen::visitIntegerCastInst(IntegerCastInst const& I)
 llvm::Value * IRGen::visitFPCastInst(FPCastInst const& I)
 {
    auto val = getLlvmValue(I.getOperand(0));
-   auto fromTy = I.getOperand(0)->getType();
    auto toTy = getLlvmType(I.getType());
 
    switch (I.getKind()) {
@@ -1707,19 +1750,6 @@ llvm::Value * IRGen::visitFPCastInst(FPCastInst const& I)
          return Builder.CreateFPTrunc(val, toTy);
       case CastKind::FPExt:
          return Builder.CreateFPExt(val, toTy);
-      case CastKind::FPBox: {
-         auto alloca = CreateAlloca(toTy);
-         auto gep = Builder.CreateStructGEP(toTy, alloca, 0);
-         Builder.CreateStore(val, gep);
-
-         return alloca;
-      }
-      case CastKind::FPUnbox: {
-         auto from = getLlvmType(fromTy);
-         auto gep = Builder.CreateStructGEP(from, val, 0);
-
-         return I.isLvalue() ? gep : (llvm::Value*)Builder.CreateLoad(gep);
-      }
       default:
          llvm_unreachable("not a fp cast");
    }
@@ -1743,7 +1773,7 @@ llvm::Value* IRGen::visitProtoCastInst(ProtoCastInst const& I)
    auto val = getLlvmValue(I.getOperand(0));
 
    if (I.isWrap()) {
-      auto alloca = CreateAlloca(ProtocolTy);
+      auto alloca = CreateAlloca(ProtocolTy, 1, TI.getPointerAlignInBytes());
       auto gep = Builder.CreateStructGEP(ProtocolTy, alloca, 0);
       Builder.CreateStore(toInt8Ptr(val), gep);
 
@@ -1763,7 +1793,7 @@ llvm::Value* IRGen::visitExceptionCastInst(ExceptionCastInst const& I)
    return Builder.CreateBitCast(Exc, toTy);
 }
 
-llvm::Value * IRGen::visitDynamicCastInst(const DynamicCastInst &I)
+llvm::Value* IRGen::visitDynamicCastInst(const DynamicCastInst &I)
 {
    llvm_unreachable("not yet");
 }

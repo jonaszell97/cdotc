@@ -96,7 +96,7 @@ public:
          if (negative)
             value |= -(static_cast<long long>(1) << (size - 7));
 
-         /* sign bit of byte is second high order bit (0x40) */
+         /* sign bit of byte is col high order bit (0x40) */
          if ((value == 0 && !(value & 0x40)) || (value == -1 && (value & 0x40))){
             more = false;
          }

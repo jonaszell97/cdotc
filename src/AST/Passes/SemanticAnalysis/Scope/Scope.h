@@ -5,7 +5,10 @@
 #ifndef CDOT_SCOPE_H
 #define CDOT_SCOPE_H
 
+#include "Variant/Type/Type.h"
+
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
 namespace ast {
@@ -46,12 +49,26 @@ public:
          enclosingScope->setHadError(true);
    }
 
+   bool hasUnresolvedStaticCond() const
+   {
+      if (!HasUnresolvedStaticCond && enclosingScope)
+         return enclosingScope->hasUnresolvedStaticCond();
+
+      return HasUnresolvedStaticCond;
+   }
+
+   void setHasUnresolvedStaticCond(bool HasUnresolvedStaticCond)
+   {
+      Scope::HasUnresolvedStaticCond = HasUnresolvedStaticCond;
+   }
+
    static bool classofKind(TypeID id) { return true; }
    static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }
 
 protected:
    explicit Scope(TypeID typeID, Scope *enclosingScope = nullptr)
-      : typeID(typeID), HadError(false), enclosingScope(enclosingScope)
+      : typeID(typeID), HadError(false), HasUnresolvedStaticCond(false),
+        enclosingScope(enclosingScope)
    {}
 
 #ifndef NDEBUG
@@ -59,8 +76,9 @@ protected:
 #endif
    ~Scope() = default;
 
-   TypeID typeID : 7;
-   bool HadError : 1;
+   TypeID typeID                : 4;
+   bool HadError                : 1;
+   bool HasUnresolvedStaticCond : 1;
 
    Scope *enclosingScope;
 };
@@ -103,14 +121,17 @@ protected:
 class FunctionScope: public BlockScope {
 public:
    explicit FunctionScope(ast::CallableDecl *CD,
+                          bool inferrableReturnType = false,
                           Scope *enclosingScope = nullptr)
       : BlockScope(FunctionScopeID, enclosingScope),
-        CD(CD)
+        CD(CD), InferrableReturnType(inferrableReturnType)
    {}
 
-   ast::CallableDecl *getCallableDecl() const
+   ast::CallableDecl *getCallableDecl();
+
+   bool hasInferrableReturnType() const
    {
-      return CD;
+      return InferrableReturnType;
    }
 
    static bool classofKind(TypeID id)
@@ -130,17 +151,21 @@ public:
 protected:
    FunctionScope(TypeID typeID,
                  ast::CallableDecl *CD,
+                 bool inferrableReturnType = false,
                  Scope *enclosingScope = nullptr)
       : BlockScope(typeID, enclosingScope),
-        CD(CD)
+        CD(CD), InferrableReturnType(inferrableReturnType)
    {}
 
    ast::CallableDecl *CD;
+   bool InferrableReturnType = false;
 };
 
 class MethodScope: public FunctionScope {
 public:
-   explicit MethodScope(ast::MethodDecl *M, Scope *enclosingScope = nullptr);
+   explicit MethodScope(ast::MethodDecl *M,
+                        bool InferrableReturnType = false,
+                        Scope *enclosingScope = nullptr);
    ast::MethodDecl *getMethodDecl() const;
 
    static bool classofKind(TypeID id) { return id == MethodScopeID; }
@@ -207,45 +232,21 @@ private:
    bool argsInNextCase  : 1;
 };
 
-class RecordScope: public Scope {
+class StaticForScope: public Scope {
 public:
-   explicit RecordScope(ast::RecordDecl *R, Scope *enclosingScope = nullptr)
-      : Scope(RecordScopeID, enclosingScope), R(R)
-   {
-   }
+   StaticForScope(llvm::StringRef elementName,
+                  QualType elementTy,
+                  Scope *enclosingScope = nullptr);
 
-   ast::RecordDecl *getRecordDecl() const
-   {
-      return R;
-   }
+   llvm::StringRef getElementName() const { return elementName; }
+   QualType getElementTy() const { return elementTy; }
 
-   static bool classofKind(TypeID id) { return id == RecordScopeID; }
+   static bool classofKind(TypeID id) { return id == StaticForScopeID; }
    static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }
 
 private:
-   ast::RecordDecl *R;
-};
-
-class TemplateScope: public Scope {
-public:
-   explicit
-   TemplateScope(llvm::ArrayRef<ast::TemplateParamDecl*> templateParams,
-                 Scope *enclosingScope = nullptr)
-      : Scope(TemplateScopeID, enclosingScope),
-        templateParams(templateParams)
-   {
-   }
-
-   const llvm::ArrayRef<ast::TemplateParamDecl *> &getTemplateParams() const
-   {
-      return templateParams;
-   }
-
-   static bool classofKind(TypeID id) { return id == TemplateScopeID; }
-   static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }
-
-private:
-   llvm::ArrayRef<ast::TemplateParamDecl*> templateParams;
+   llvm::StringRef elementName;
+   QualType elementTy;
 };
 
 } // namespace cdot

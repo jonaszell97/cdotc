@@ -3,12 +3,69 @@
 //
 
 #include "Traverse.h"
-#include "Passes/ASTIncludes.h"
+
+#include "AST/Passes/ASTVisitor.h"
+#include "AST/Passes/ASTIncludes.h"
+
+using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
 namespace {
+//
+//class ASTChildVisitor: ASTVisitor<> {
+//public:
+//   explicit ASTChildVisitor(llvm::function_ref<void(Statement*)> Callback)
+//      : Callback(Callback)
+//   {}
+//
+//   void visitAllChildren(Statement *Stmt)
+//   {
+//      auto CB = [&](Statement *Child) {
+//         Callback(Child);
+//         visitAllChildren(Child);
+//      };
+//
+//      ASTChildVisitor Visitor(CB);
+//      Visitor.visitDirectChildren(Stmt);
+//   }
+//
+//   void visitDirectChildren(Statement *Stmt)
+//   {
+//      switch (Stmt->getTypeID()) {
+//#     define CDOT_ASTNODE(Name)                        \
+//      case AstNode::Name##ID:                          \
+//         visit##Name(cast<Name>(Stmt));
+//         break;
+//#     include "AstNode.def"
+//
+//         default:
+//            llvm_unreachable("bad node type");
+//      }
+//   }
+//
+//#  define CDOT_ASTNODE(Name)                        \
+//      void visit##Name(Name *Stmt);
+//#  include "AstNode.def"
+//
+//private:
+//   llvm::function_ref<void(Statement*)> Callback;
+//
+//   template <class T>
+//   void insertStmts(T const &vec)
+//   {
+//      for (auto &stmt : vec)
+//         Callback(stmt);
+//   }
+//
+//   template<class T>
+//   void insertIfNotNull(T *t)
+//   {
+//      if (t)
+//         Callback(t);
+//   }
+//};
 
 template <class T>
 void insertStmts(llvm::SmallVectorImpl<Statement *> &children, T const &t)
@@ -26,13 +83,11 @@ void insertIfNotNull(llvm::SmallVectorImpl<Statement*> &children, T *t)
 void collectNamedDecl(llvm::SmallVectorImpl<Statement*> &children,
                       NamedDecl *ND) {
    insertStmts(children, ND->getConstraints());
-   insertStmts(children, ND->getTemplateParams());
 }
 
 void collectTranslationUnit(llvm::SmallVectorImpl<Statement*> &children,
                             TranslationUnit* stmt) {
    insertStmts(children, stmt->getImports());
-   insertStmts(children, stmt->getStatements());
 }
 
 void collectCompoundStmt(llvm::SmallVectorImpl<Statement*> &children,
@@ -135,13 +190,11 @@ void collectAliasDecl(llvm::SmallVectorImpl<Statement*> &children,
 void collectEnumCaseDecl(llvm::SmallVectorImpl<Statement*> &children,
                          EnumCaseDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertStmts(children, stmt->getArgs());
 }
 
 void collectInitDecl(llvm::SmallVectorImpl<Statement*> &children,
                      InitDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertStmts(children, stmt->getArgs());
    insertIfNotNull(children, stmt->getBody());
 }
 
@@ -154,8 +207,6 @@ void collectFieldDecl(llvm::SmallVectorImpl<Statement*> &children,
 void collectMethodDecl(llvm::SmallVectorImpl<Statement*> &children,
                        MethodDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertStmts(children, stmt->getArgs());
-   children.push_back(stmt->getReturnType());
    insertIfNotNull(children, stmt->getBody());
 }
 
@@ -163,7 +214,6 @@ void collectAssociatedTypeDecl(llvm::SmallVectorImpl<Statement*> &children,
                                AssociatedTypeDecl* stmt) {
    collectNamedDecl(children, stmt);
    insertStmts(children, stmt->getConstraints());
-   insertIfNotNull(children, stmt->getActualType());
 }
 
 void collectFuncArgDecl(llvm::SmallVectorImpl<Statement*> &children,
@@ -181,7 +231,6 @@ void collectDeinitDecl(llvm::SmallVectorImpl<Statement*> &children,
 void collectPropDecl(llvm::SmallVectorImpl<Statement*> &children,
                      PropDecl* stmt) {
    collectNamedDecl(children, stmt);
-   children.push_back(stmt->getType());
    insertIfNotNull(children, stmt->getGetterBody());
    insertIfNotNull(children, stmt->getSetterBody());
 }
@@ -189,25 +238,12 @@ void collectPropDecl(llvm::SmallVectorImpl<Statement*> &children,
 void collectTemplateParamDecl(llvm::SmallVectorImpl<Statement*> &children,
                               TemplateParamDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertIfNotNull(children, stmt->getCovariance());
-   insertIfNotNull(children, stmt->getContravariance());
    insertIfNotNull(children, stmt->getDefaultValue());
-}
-
-void collectTemplateArgExpr(llvm::SmallVectorImpl<Statement*> &children,
-                            TemplateArgExpr* stmt) {
-   if (stmt->isTypeName())
-      children.push_back(stmt->getType());
-   else
-      children.push_back(stmt->getExpr());
 }
 
 void collectRecordDecl(llvm::SmallVectorImpl<Statement*> &children,
                        RecordDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertStmts(children, stmt->getConformanceTypes());
-   insertStmts(children, stmt->getDecls());
-   insertStmts(children, stmt->getStaticStatements());
 }
 
 void collectExtensionDecl(llvm::SmallVectorImpl<Statement*> &children,
@@ -218,8 +254,6 @@ void collectExtensionDecl(llvm::SmallVectorImpl<Statement*> &children,
 void collectCallableDecl(llvm::SmallVectorImpl<Statement*> &children,
                          CallableDecl* stmt) {
    collectNamedDecl(children, stmt);
-   insertStmts(children, stmt->getArgs());
-   children.push_back(stmt->getReturnType());
    insertIfNotNull(children, stmt->getBody());
 }
 
@@ -230,13 +264,12 @@ void collectFunctionDecl(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectNamespaceDecl(llvm::SmallVectorImpl<Statement*> &children,
                           NamespaceDecl* stmt) {
-   children.push_back(stmt->getBody());
+
 }
 
 void collectTypedefDecl(llvm::SmallVectorImpl<Statement*> &children,
                         TypedefDecl* stmt) {
    collectNamedDecl(children, stmt);
-   children.push_back(stmt->getOriginTy());
 }
 
 void collectTryStmt(llvm::SmallVectorImpl<Statement*> &children,
@@ -244,7 +277,6 @@ void collectTryStmt(llvm::SmallVectorImpl<Statement*> &children,
    insertIfNotNull(children, stmt->getBody());
 
    for (auto &c : stmt->getCatchBlocks()) {
-      children.push_back(c.varDecl);
       children.push_back(c.body);
    }
 
@@ -297,7 +329,6 @@ void collectStaticPrintStmt(llvm::SmallVectorImpl<Statement*> &children,
 void collectClassDecl(llvm::SmallVectorImpl<Statement*> &children,
                       ClassDecl* stmt) {
    collectRecordDecl(children, stmt);
-   insertIfNotNull(children, stmt->getParentType());
 }
 
 void collectStructDecl(llvm::SmallVectorImpl<Statement*> &children,
@@ -320,38 +351,9 @@ void collectProtocolDecl(llvm::SmallVectorImpl<Statement*> &children,
    collectRecordDecl(children, stmt);
 }
 
-void collectTypeRef(llvm::SmallVectorImpl<Statement*> &children,
-                    TypeRef* stmt) {
-   switch (stmt->getKind()) {
-      case TypeRef::ObjectType:
-         for (auto &ns : stmt->getNamespaceQual())
-            insertStmts(children, ns.second);
-
-         break;
-      case TypeRef::FunctionType:
-         children.push_back(stmt->getReturnType());
-         LLVM_FALLTHROUGH;
-      case TypeRef::TupleType:
-         for (auto &ty : stmt->getContainedTypes())
-            children.push_back(ty.second);
-
-         break;
-      case TypeRef::DeclTypeExpr:
-         children.push_back(stmt->getDeclTypeExpr());
-         break;
-      case TypeRef::ArrayType:
-         children.push_back(stmt->getArraySize());
-         for (auto &ty : stmt->getContainedTypes())
-            children.push_back(ty.second);
-
-         break;
-      case TypeRef::Option:
-      case TypeRef::Pointer:
-         children.push_back(stmt->getSubject());
-         break;
-      default:
-         break;
-   }
+void collectParenExpr(llvm::SmallVectorImpl<Statement*> &children,
+                      ParenExpr* stmt) {
+   children.push_back(stmt->getParenthesizedExpr());
 }
 
 void collectIntegerLiteral(llvm::SmallVectorImpl<Statement*> &children,
@@ -379,8 +381,6 @@ void collectStringInterpolation(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectLambdaExpr(llvm::SmallVectorImpl<Statement*> &children,
                        LambdaExpr* stmt) {
-   insertStmts(children, stmt->getArgs());
-   insertIfNotNull(children, stmt->getReturnType());
    insertIfNotNull(children, stmt->getBody());
 }
 
@@ -397,24 +397,44 @@ void collectArrayLiteral(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectTupleLiteral(llvm::SmallVectorImpl<Statement*> &children,
                          TupleLiteral* stmt) {
-   for (auto &el : stmt->getElements())
-      children.push_back(el.second);
+   insertStmts(children, stmt->getElements());
 }
 
 void collectIdentifierRefExpr(llvm::SmallVectorImpl<Statement*> &children,
                               IdentifierRefExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
    insertStmts(children, stmt->getTemplateArgs());
-   insertIfNotNull(children, stmt->getSubExpr());
+}
+
+void collectBuiltinIdentExpr(llvm::SmallVectorImpl<Statement*> &children,
+                              BuiltinIdentExpr* stmt) {
+
+}
+
+void collectSelfExpr(llvm::SmallVectorImpl<Statement*> &children,
+                     SelfExpr* stmt) {
+
+}
+
+void collectSuperExpr(llvm::SmallVectorImpl<Statement*> &children,
+                      SuperExpr* stmt) {
+
 }
 
 void collectMemberRefExpr(llvm::SmallVectorImpl<Statement*> &children,
                           MemberRefExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
    insertStmts(children, stmt->getTemplateArgs());
-   insertIfNotNull(children, stmt->getSubExpr());
+}
+
+void collectTupleMemberExpr(llvm::SmallVectorImpl<Statement*> &children,
+                            TupleMemberExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
 }
 
 void collectCallExpr(llvm::SmallVectorImpl<Statement*> &children,
                      CallExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
    insertStmts(children, stmt->getTemplateArgs());
    insertStmts(children, stmt->getArgs());
 }
@@ -426,6 +446,7 @@ void collectEnumCaseExpr(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectSubscriptExpr(llvm::SmallVectorImpl<Statement*> &children,
                           SubscriptExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
    insertStmts(children, stmt->getIndices());
 }
 
@@ -446,7 +467,7 @@ void collectCasePattern(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectIsPattern(llvm::SmallVectorImpl<Statement*> &children,
                       IsPattern* stmt) {
-   children.push_back(stmt->getIsType());
+
 }
 
 void collectExprSequence(llvm::SmallVectorImpl<Statement*> &children,
@@ -467,11 +488,15 @@ void collectBinaryOperator(llvm::SmallVectorImpl<Statement*> &children,
    children.push_back(stmt->getRhs());
 }
 
-void collectTertiaryOperator(llvm::SmallVectorImpl<Statement*> &children,
-                             TertiaryOperator* stmt) {
-   children.push_back(stmt->getCondition());
-   children.push_back(stmt->getLhs());
-   children.push_back(stmt->getRhs());
+void collectTypePredicateExpr(llvm::SmallVectorImpl<Statement*> &children,
+                              TypePredicateExpr* stmt) {
+   children.push_back(stmt->getLHS());
+   children.push_back(stmt->getRHS());
+}
+
+void collectCastExpr(llvm::SmallVectorImpl<Statement*> &children,
+                     CastExpr* stmt) {
+   children.push_back(stmt->getTarget());
 }
 
 void collectImplicitCastExpr(llvm::SmallVectorImpl<Statement*> &children,
@@ -479,9 +504,16 @@ void collectImplicitCastExpr(llvm::SmallVectorImpl<Statement*> &children,
    children.push_back(stmt->getTarget());
 }
 
-void collectLvalueToRvalue(llvm::SmallVectorImpl<Statement*> &children,
-                           LvalueToRvalue* stmt) {
-   children.push_back(stmt->getTarget());
+void collectIfExpr(llvm::SmallVectorImpl<Statement*> &children,
+                   IfExpr* stmt) {
+   children.push_back(stmt->getCond());
+   children.push_back(stmt->getTrueVal());
+   children.push_back(stmt->getFalseVal());
+}
+
+void collectDeclStmt(llvm::SmallVectorImpl<Statement*> &children,
+                     DeclStmt* stmt) {
+
 }
 
 void collectStaticExpr(llvm::SmallVectorImpl<Statement*> &children,
@@ -491,7 +523,6 @@ void collectStaticExpr(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectConstraintExpr(llvm::SmallVectorImpl<Statement*> &children,
                            ConstraintExpr* stmt) {
-   insertIfNotNull(children, stmt->getTypeConstraint());
 }
 
 void collectTraitsExpr(llvm::SmallVectorImpl<Statement*> &children,
@@ -499,7 +530,6 @@ void collectTraitsExpr(llvm::SmallVectorImpl<Statement*> &children,
    for (auto &arg : stmt->getArgs()) {
       switch (arg.getKind()) {
          case TraitsExpr::TraitsArgument::Type:
-            children.push_back(arg.getType());
             break;
          case TraitsExpr::TraitsArgument::Stmt:
             children.push_back(arg.getStmt());
@@ -513,6 +543,65 @@ void collectTraitsExpr(llvm::SmallVectorImpl<Statement*> &children,
    }
 }
 
+void collectMixinExpr(llvm::SmallVectorImpl<Statement*> &children,
+                       MixinExpr* stmt) {
+   insertIfNotNull(children, stmt->getMixinExpr());
+}
+
+void collectMixinDecl(llvm::SmallVectorImpl<Statement*> &children,
+                      MixinDecl* stmt) {
+   insertIfNotNull(children, stmt->getMixinExpr());
+}
+
+void collectAttributedStmt(llvm::SmallVectorImpl<Statement*> &children,
+                      AttributedStmt* stmt) {
+
+}
+
+void collectAttributedExpr(llvm::SmallVectorImpl<Statement*> &children,
+                           AttributedExpr* expr) {
+
+}
+
+void collectFunctionTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             FunctionTypeExpr* expr) {
+
+}
+
+void collectTupleTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             TupleTypeExpr* expr) {
+
+}
+
+void collectArrayTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             ArrayTypeExpr* expr) {
+
+}
+
+void collectDeclTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             DeclTypeExpr* expr) {
+
+}
+
+void collectReferenceTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             ReferenceTypeExpr* expr) {
+
+}
+
+void collectPointerTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             PointerTypeExpr* expr) {
+
+}
+
+void collectOptionTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
+                             OptionTypeExpr* expr) {
+
+}
+
+void collectMixinStmt(llvm::SmallVectorImpl<Statement*> &children,
+                           MixinStmt* expr) {
+
+}
 
 } // anonymous namespace
 
@@ -520,18 +609,15 @@ void collectDirectChildren(llvm::SmallVectorImpl<Statement *> &children,
                            Statement const* constStmt) {
    auto stmt = const_cast<Statement*>(constStmt);
    switch (stmt->getTypeID()) {
-#  define CDOT_ASTNODE(Name)                        \
-      case AstNode::Name##ID:                       \
-         collect##Name(children, support::cast<Name>(stmt)); \
+#  define CDOT_ASTNODE(Name)                                   \
+      case AstNode::Name##ID:                                  \
+         collect##Name(children, support::cast<Name>(stmt));   \
          break;
 #  include "AstNode.def"
 
       default:
          llvm_unreachable("bad node type");
    }
-
-   if (auto E = support::dyn_cast<Expression>(stmt))
-      insertIfNotNull(children, E->getSubExpr());
 }
 
 } // namespace ast

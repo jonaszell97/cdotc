@@ -18,6 +18,7 @@ namespace lex {
 
 class IdentifierTable;
 class PreprocessorImpl;
+class DiagnosticsEngine;
 
 class Preprocessor {
 public:
@@ -31,6 +32,7 @@ public:
 #endif
 
    Preprocessor(TokenVec &dst, IdentifierTable &Idents,
+                DiagnosticsEngine &Diag,
                 llvm::MutableArrayRef<Token> spelledTokens,
                 size_t sourceId);
 

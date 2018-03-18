@@ -5,6 +5,8 @@
 #ifndef CDOT_PRECEDENCE_H
 #define CDOT_PRECEDENCE_H
 
+#include <llvm/ADT/StringRef.h>
+
 namespace cdot {
 
 namespace lex {
@@ -14,9 +16,9 @@ namespace tok {
 } // namespace tok
 
 enum class FixKind : unsigned char {
-   Infix = 1,
-   Prefix = 1 << 1,
-   Postfix = 1 << 2
+   Infix   = 1u,
+   Prefix  = Infix << 1u,
+   Postfix = Prefix << 1u
 };
 
 enum class Associativity : unsigned char {
@@ -98,6 +100,10 @@ public:
       OperatorInfo::implicit = implicit;
    }
 
+   bool isInfix() const { return fix == FixKind::Infix; }
+   bool isPrefix() const { return fix == FixKind::Prefix; }
+   bool isPostfix() const { return fix == FixKind::Postfix; }
+
 private:
    PrecedenceGroup precedenceGroup;
    FixKind fix;
@@ -106,29 +112,30 @@ private:
 
 namespace prec {
 
-enum PrecedenceLevel {
-   Unknown         = 0,    // Not binary operator.
-   Comma           = 1,    // ,
-   Assignment      = 2,    // =, *=, /=, %=, +=, -=, <<=, >>=, &=, ^=, |=
-   Conditional     = 3,    // ?
-   LogicalOr       = 4,    // ||
-   LogicalAnd      = 5,    // &&
-   InclusiveOr     = 6,    // |
-   ExclusiveOr     = 7,    // ^
-   And             = 8,    // &
-   Equality        = 9,    // ==, !=
-   Relational      = 10,   //  >=, <=, >, <
-   Spaceship       = 11,   // <=>
-   Shift           = 12,   // <<, >>
-   Additive        = 13,   // -, +
-   Multiplicative  = 14,   // *, /, %
-   Exponentiation  = 15,   // **
-   Range           = 16,   // .., ..<
-   Cast            = 17    // as, as?, as!
+enum PrecedenceLevel : unsigned char {
+#  define CDOT_PRECEDENCE_GROUP(Name, Prec, Assoc)    \
+   Name = Prec,
+#  include "BuiltinOperators.def"
 };
 
 } // namespace prec
 
+namespace op {
+
+enum OperatorKind : unsigned char {
+#  define CDOT_OPERATOR(Name, Symbol, PG, Fix)        \
+   Name,
+#  include "BuiltinOperators.def"
+};
+
+OperatorKind fromString(FixKind fix, llvm::StringRef str);
+OperatorKind fromString(llvm::StringRef str);
+OperatorKind fromToken(lex::tok::TokenType kind);
+llvm::StringRef toString(OperatorKind operatorKind);
+
+} // namespace op
+Associativity getAssociativity(op::OperatorKind kind);
+prec::PrecedenceLevel getOperatorPrecedence(op::OperatorKind kind);
 prec::PrecedenceLevel getOperatorPrecedence(lex::tok::TokenType kind);
 
 } // namespace cdot

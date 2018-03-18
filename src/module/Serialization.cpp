@@ -95,13 +95,13 @@
 //      auto beginSize = Writer.size();
 //
 //      for (auto &Entry : SymTab.getEntries()) {
-//         if (Entry.second.isRecord()) {
-//            auto R = Entry.second.getRecord();
+//         if (Entry.col.isRecord()) {
+//            auto R = Entry.col.getRecord();
 //            if (!R->isExternal() && !R->getOuterRecord())
 //               ForwardDecls.push_back(R);
 //         }
-//         else if (Entry.second.isTypedef()) {
-//            auto td = Entry.second.getTypedef();
+//         else if (Entry.col.isTypedef()) {
+//            auto td = Entry.col.getTypedef();
 //            if (!td->isExternal())
 //               ForwardDecls.push_back(td);
 //         }
@@ -115,7 +115,7 @@
 //         = Writer.size() - beginSize;
 //
 //      for (auto &EntryPair : SymTab.getEntries()) {
-//         auto &Entry = EntryPair.second;
+//         auto &Entry = EntryPair.col;
 //
 //         switch (Entry.getKind()) {
 //            case SymbolTableEntry::RecordID: {
@@ -303,8 +303,8 @@
 //
 //   void WriteStringTypePair(std::pair<std::string, QualType> const &P)
 //   {
-//      WriteString(P.first);
-//      WriteQualType(P.second);
+//      WriteString(P.line);
+//      WriteQualType(P.col);
 //   }
 //
 //   void WriteSourceLoc(SourceLocation loc)
@@ -716,8 +716,8 @@
 //         case VariantType::STRUCT: {
 //            WriteSize(V.getFields());
 //            for (auto &F : V.getFields()) {
-//               WriteString(F.first);
-//               WriteVariant(F.second);
+//               WriteString(F.line);
+//               WriteVariant(F.col);
 //            }
 //
 //            break;
@@ -1617,8 +1617,8 @@
 //                    Module &M,
 //                    llvm::StringRef file,
 //                    SourceLocation importedFrom) {
-//   auto Buf = fs::FileManager::openFile(file, true);
-//   (void)deserializeASTImpl(SP, M, *Buf.second, Buf.first, importedFrom);
+//   auto Buf = fs::FileManager::getBuffer(file, true);
+//   (void)deserializeASTImpl(SP, M, *Buf.col, Buf.line, importedFrom);
 //}
 //
 //void createModuleInterface(Module *M,

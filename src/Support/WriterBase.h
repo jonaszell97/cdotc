@@ -63,7 +63,7 @@ public:
 
    void WriteHex(uint64_t val)
    {
-      out << support::formatInteger<>(val);
+      out << support::formatInteger<support::Base16Traits>(val);
    }
 
    void WriteHex(double d)

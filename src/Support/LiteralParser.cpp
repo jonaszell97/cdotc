@@ -36,7 +36,6 @@ uint8_t LiteralParser::getIntegerRadix()
    }
 
    Str = Str.drop_front(1);
-
    return 8;
 }
 

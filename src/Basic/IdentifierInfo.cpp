@@ -10,8 +10,8 @@ namespace cdot {
 
 void IdentifierTable::addKeywords()
 {
-#  define CDOT_KEYWORD(Name)                 \
-   addKeyword(tok::kw_##Name, #Name);
+#  define CDOT_KEYWORD_TOKEN(Name, Pattern)  \
+   addKeyword(tok::Name, Pattern);
 #  define CDOT_POUND_KEYWORD(Name)           \
    addKeyword(tok::pound_##Name, "#" #Name);
 #  include "../lex/Tokens.def"

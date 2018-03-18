@@ -5,15 +5,16 @@
 namespace cdot {
 namespace ast {
 
-#define CDOT_INCLUDE_ALL
 #define CDOT_ASTNODE(Name) class Name;
-
 #include "AstNode.def"
 
+#define CDOT_DECL(Name) class Name;
+#include "Decl.def"
+
+class Decl;
 class RecordDecl;
 class NamedDecl;
 class CallableDecl;
-
 class DeclContext;
 
 class Statement;
@@ -24,11 +25,6 @@ class StaticStmt;
 class VarDecl;
 class DestructuringDecl;
 class PatternExpr;
-
-class InheritanceConstraint;
-class ConformanceConstraint;
-class ValueExprConstraint;
-class TokenEqualityConstraint;
 
 } // namespace ast
 } // namespace cdot

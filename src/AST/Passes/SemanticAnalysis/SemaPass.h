@@ -5,31 +5,33 @@
 #ifndef CDOT_SEMA_H
 #define CDOT_SEMA_H
 
-#include "AST/Passes/SemanticAnalysis/Template.h"
-#include "AST/Passes/SemanticAnalysis/Scope/Scope.h"
-#include "AST/Passes/NullASTVisitor.h"
+#include "ActionResult.h"
 
+#include "AST/Passes/SemanticAnalysis/Template.h"
+#include "AST/Passes/SemanticAnalysis/CandidateSet.h"
+#include "AST/Passes/SemanticAnalysis/Scope/Scope.h"
+#include "AST/Passes/SemanticAnalysis/ConversionSequence.h"
+#include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
+#include "AST/Passes/ASTVisitor.h"
 #include "AST/ASTContext.h"
 #include "AST/Attribute/Attribute.h"
 
 #include "Basic/CastKind.h"
+#include "Basic/DependencyGraph.h"
+#include "Basic/Mangle.h"
 #include "Basic/Precedence.h"
-
-#include "CTFE/StaticEvaluator.h"
-
-#include "Message/Diagnostics.h"
-#include "Support/Casting.h"
+#include "BuiltinCandidateBuilder.h"
 
 #include "Compiler.h"
+#include "CTFE/StaticEvaluator.h"
 
-#include <unordered_map>
-#include <stack>
-#include <llvm/ADT/DenseSet.h>
+#include "Message/DiagnosticsEngine.h"
+#include "Support/Casting.h"
+
 #include <cstdint>
-#include <llvm/ADT/SmallPtrSet.h>
 
-using std::string;
-using std::pair;
+#include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
 
@@ -40,24 +42,15 @@ namespace sema {
 namespace ast {
 
 class ILGenPass;
-class DeclPass;
 class OverloadResolver;
 class LookupResult;
-
-enum class ImplicitConformanceKind : unsigned char;
-enum class FailureReason : unsigned char;
-
 class ExprResolverImpl;
-enum class BinaryOperatorType : unsigned int;
-enum class OperatorKind : unsigned;
-struct CallResult;
+class SemaDiagConsumer;
 
-struct CallCompatability;
-
-class SemaPass: public diag::DiagnosticIssuer,
-                public NullASTVisitor<QualType> {
+class SemaPass: public ASTVisitor<ExprResult, StmtResult, DeclResult> {
 public:
    using TemplateArgList = cdot::sema::TemplateArgList;
+   using MultiLevelTemplateArgList = sema::MultiLevelTemplateArgList;
 
    explicit SemaPass(CompilationUnit &compilationUnit);
    ~SemaPass();
@@ -66,41 +59,36 @@ public:
    ObjectType *getObjectTy(llvm::StringRef name) const;
    ObjectType *getObjectTy(Type::BoxedPrimitive kind) const;
 
-   CompilationUnit &getCompilationUnit() const
-   {
-      return *compilationUnit;
-   }
+   DiagnosticsEngine &getDiags() { return Diags; }
 
-   void updateCompilationUnit(CompilationUnit &CU)
-   {
-      compilationUnit = &CU;
-   }
+   CompilationUnit &getCompilationUnit() const { return *compilationUnit; }
+   void setCompilationUnit(CompilationUnit &CU) { compilationUnit = &CU; }
 
-   ASTContext& getContext() const
-   {
-      return compilationUnit->getContext();
-   }
+   ASTContext& getContext() const { return compilationUnit->getContext(); }
+
+   DeclContext& getDeclContext() const { return *DeclCtx; }
+   void setDeclContext(DeclContext &Ctx) { DeclCtx = &Ctx; }
+
+   const SymbolMangler &getMangler() const { return mangle; }
+   TemplateInstantiator &getInstantiator() const { return Instantiator; }
+
+   module::Module *getModuleBeingCompiled();
+
+   void pushDeclContext(DeclContext *Ctx);
+   void popDeclContext();
 
    bool implicitlyCastableTo(QualType from, QualType to) const;
+   ConversionSequence getConversionSequence(QualType from, QualType to) const;
 
-   void doDeclarations();
+   bool doDeclarations();
    bool doSema();
-   void doILGen();
+   bool doILGen();
 
-   QualType visit(Expression *node);
-   void visit(Statement *node);
+   StmtResult visitScoped(Statement *Stmt);
+   DeclResult visitScoped(Decl *D);
+   DeclResult declareScoped(Decl *D);
 
-   void visitScoped(Statement *node);
-
-   DeclPass* getDeclPass() const
-   {
-      return declPass.get();
-   }
-
-   ILGenPass &getILGen()
-   {
-      return *ILGen.get();
-   }
+   ILGenPass &getILGen() { return *ILGen.get(); }
 
    Statement *getParent(Statement *Child) const;
    void updateParent(Statement *Child, Statement *Parent) const;
@@ -112,189 +100,411 @@ public:
    void addDeclToContext(DeclContext &Ctx, llvm::StringRef name,
                          NamedDecl *Decl);
    void addDeclToContext(DeclContext &Ctx, NamedDecl *Decl);
+   void addDeclToContext(DeclContext &Ctx, Decl *D);
 
-   struct ExprResult {
-   public:
-      ExprResult(QualType type, bool had_error, bool type_dependent,
-                 bool value_dependent = false)
-         : type(type), had_error(had_error), type_dependent(type_dependent),
-           value_dependent(value_dependent)
-      { }
-
-      QualType getType() const
-      {
-         return type;
-      }
-
-      bool hadError() const
-      {
-         return (had_error | type_dependent) != 0;
-      }
-
-      bool isTypeDependent() const
-      {
-         return type_dependent;
-      }
-
-      bool isValueDependent() const
-      {
-         return value_dependent;
-      }
-
-      operator bool() const
-      {
-         return hadError();
-      }
-
-   private:
-      QualType type;
-      bool had_error : 1;
-      bool type_dependent : 1;
-      bool value_dependent : 1;
-   };
-
-   ExprResult visitExpr(Statement *DependantStmt, Expression *E)
+   void copyStatusFlags(Expression *From, Statement *To)
    {
-      auto ty = visit(E);
-      DependantStmt->setIsTypeDependent(
-         E->isTypeDependent() | DependantStmt->isTypeDependent());
-
-      DependantStmt->setIsValueDependent(
-         E->isValueDependent() | DependantStmt->isValueDependent());
-
-      DependantStmt->setHadError(
-         E->hadError() | DependantStmt->hadError() | ty.isUnknownAny());
-
-      return ExprResult(ty, DependantStmt->hadError(),
-                        DependantStmt->isTypeDependent(),
-                        DependantStmt->isValueDependent());
+      To->copyStatusFlags(From);
+      if (From->isVariadicArgPackExpansion())
+         To->setContainsUnexpandedParameterPack(false);
    }
 
-   bool visitStmt(Statement *DependantStmt, Statement *Stmt)
+   [[nodiscard]]
+   ExprResult visitExpr(Statement *DependentStmt, Expression *E)
    {
-      visit(Stmt);
-      DependantStmt->setIsTypeDependent(
-         Stmt->isTypeDependent() | DependantStmt->isTypeDependent());
+      auto res = visit(E, true);
+      copyStatusFlags(E, DependentStmt);
 
-      DependantStmt->setIsValueDependent(
-         Stmt->isValueDependent() | DependantStmt->isValueDependent());
-
-      DependantStmt->setHadError(
-         Stmt->hadError() | DependantStmt->hadError());
-
-      return !stopEvaluating(Stmt);
+      return res;
    }
 
-   void visitNamespaceDecl(NamespaceDecl *node);
-   void visitUsingStmt(UsingStmt *node);
-   void visitCompoundStmt(CompoundStmt *node);
+   [[nodiscard]]
+   ExprResult visitExpr(Decl *DependentDecl, Expression *E)
+   {
+      auto res = visit(E, true);
+      DependentDecl->copyStatusFlags(E);
 
-   bool visitVarDecl(VarDecl *node);
-   void visitLocalVarDecl(LocalVarDecl *node);
-   void visitGlobalVarDecl(GlobalVarDecl *node);
+      return res;
+   }
+
+   [[nodiscard]]
+   ExprResult getRValue(Statement *DependentStmt, Expression *E)
+   {
+      auto res = visit(E, true);
+      copyStatusFlags(E, DependentStmt);
+
+      if (!res)
+         return ExprError();
+
+      auto Cast = castToRValue(res.get());
+      assert(Cast->getExprType() && "lvalue to rvalue cast introduced error");
+
+      return Cast;
+   }
+
+   [[nodiscard]]
+   ExprResult getRValue(Decl *DependentDecl, Expression *E)
+   {
+      auto res = visit(E, true);
+      DependentDecl->copyStatusFlags(E);
+
+      if (!res)
+         return ExprError();
+
+      auto Cast = castToRValue(res.get());
+      assert(Cast->getExprType() && "lvalue to rvalue cast introduced error");
+
+      return Cast;
+   }
+
+   [[nodiscard]]
+   ExprResult getAsOrCast(Statement *DependentStmt,
+                          Expression *E,
+                          QualType expectedType) {
+      E->setContextualType(expectedType);
+
+      auto res = visit(E, true);
+      copyStatusFlags(E, DependentStmt);
+
+      if (!res)
+         return ExprError();
+
+      // this will return a usable expression even if it fails
+      return implicitCastIfNecessary(res.get(), expectedType);
+   }
+
+   [[nodiscard]]
+   ExprResult getAsOrCast(Decl *DependentDecl,
+                          Expression *E,
+                          QualType expectedType) {
+      E->setContextualType(expectedType);
+
+      auto res = visit(E, true);
+      DependentDecl->copyStatusFlags(E);
+
+      if (!res)
+         return ExprError();
+
+      // this will return a usable expression even if it fails
+      return implicitCastIfNecessary(res.get(), expectedType);
+   }
+
+   [[nodiscard]]
+   ExprResult visitExpr(Statement *DependentStmt,
+                        Expression *E,
+                        QualType contextualType) {
+      E->setContextualType(contextualType);
+
+      auto res = visit(E, true);
+      copyStatusFlags(E, DependentStmt);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   StmtResult visitStmt(Statement *DependentStmt, Statement *Stmt)
+   {
+      auto res = visit(Stmt, true);
+      DependentStmt->copyStatusFlags(Stmt);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   DeclResult visitStmt(Statement *DependentStmt, Decl *D)
+   {
+      auto res = visit(D, true);
+      DependentStmt->copyStatusFlags(D);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   StmtResult visitStmt(Decl *DependentDecl, Statement *Stmt)
+   {
+      auto res = visit(Stmt, true);
+      DependentDecl->copyStatusFlags(Stmt);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   DeclResult visitStmt(Decl *DependentDecl, Decl *D)
+   {
+      auto res = visit(D, true);
+      DependentDecl->copyStatusFlags(D);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   DeclResult declareStmt(Statement *DependentStmt, Decl *Decl)
+   {
+      auto res = declare(Decl, true);
+      DependentStmt->copyStatusFlags(Decl);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   DeclResult declareStmt(Decl *DependentDecl, Decl *Decl)
+   {
+      auto res = declare(Decl, true);
+      DependentDecl->copyStatusFlags(Decl);
+
+      return res;
+   }
+
+   [[nodiscard]]
+   ExprResult visitExpr(Expression *E)
+   {
+      return visit(E, true);
+   }
+
+   [[nodiscard]]
+   StmtResult visitStmt(Statement *Stmt)
+   {
+      return visit(Stmt, true);
+   }
+
+   [[nodiscard]]
+   DeclResult visitDecl(Decl *D)
+   {
+      return visit(D, true);
+   }
+
+   [[nodiscard]]
+   DeclResult declareStmt(Decl *Decl)
+   {
+      return declare(Decl, true);
+   }
+
+   // Initial Declarations during parsing
+
+   void ActOnRecordDecl(RecordDecl* R);
+   void ActOnStructDecl(StructDecl *S);
+   void ActOnProtoDecl(ProtocolDecl *P);
+   void ActOnEnumDecl(EnumDecl *E);
+   void ActOnUnionDecl(UnionDecl *U);
+   void ActOnExtensionDecl(ExtensionDecl* Ext);
+
+   void ActOnFunctionDecl(FunctionDecl *F);
+   void ActOnTypedefDecl(TypedefDecl *TD);
+   void ActOnAliasDecl(AliasDecl *Alias);
+
+   void ActOnFieldDecl(FieldDecl *F);
+   
+   // Declaration pass
+
+   bool declareDeclContext(DeclContext *Ctx);
+   void transferDecls(DeclContext *From, DeclContext *To);
+
+   StmtResult declareImportStmt(ImportStmt *node);
+   DeclResult declareCompoundDecl(CompoundDecl *Compound);
+   DeclResult declareTranslationUnit(TranslationUnit *node);
+
+   DeclResult declareNamespaceDecl(NamespaceDecl *NS);
+   StmtResult declareUsingStmt(UsingStmt *Stmt);
+
+   DeclResult declareTemplateParamDecl(TemplateParamDecl *decl);
+
+   DeclResult declareCallableDecl(CallableDecl *C);
+   DeclResult declareFunctionDecl(FunctionDecl *F);
+   DeclResult declareFuncArgDecl(FuncArgDecl *Decl);
+
+   DeclResult declareLocalVarDecl(LocalVarDecl *Decl) { return {}; }
+
+   DeclResult declareGlobalVarDecl(GlobalVarDecl *Decl);
+   StmtResult declareGlobalDestructuringDecl(GlobalDestructuringDecl *Decl);
+
+   DeclResult declareRecordDecl(RecordDecl *node);
+
+   DeclResult declareStructDecl(StructDecl *node);
+   DeclResult declareClassDecl(ClassDecl *node);
+   DeclResult declareProtocolDecl(ProtocolDecl *node);
+   DeclResult declareExtensionDecl(ExtensionDecl *Ext);
+   DeclResult declareUnionDecl(UnionDecl *node);
+   DeclResult declareEnumDecl(EnumDecl *node);
+
+   DeclResult declareFieldDecl(FieldDecl *F);
+   DeclResult declarePropDecl(PropDecl *Decl);
+   DeclResult declareAssociatedTypeDecl(AssociatedTypeDecl *Decl);
+   DeclResult declareEnumCaseDecl(EnumCaseDecl *node);
+
+   DeclResult declareMethodDecl(MethodDecl *M);
+   DeclResult declareInitDecl(InitDecl *Init);
+   DeclResult declareDeinitDecl(DeinitDecl *Deinit);
+
+   DeclResult declareTypedefDecl(TypedefDecl *Decl);
+   DeclResult declareAliasDecl(AliasDecl *Decl);
+
+   StmtResult declareDebugStmt(DebugStmt *Stmt);
+
+   void checkDeclAttrs(Decl *D, Attr::VisitationPoint VP);
+
+#  define CDOT_DECL_ATTR(Name, Spelling)              \
+   void check##Name##Attr(Decl *D, Name##Attr *A);
+
+#  define CDOT_STMT_ATTR(Name, Spelling)              \
+   void check##Name##Attr(Statement *S, Name##Attr *A);
+
+#  define CDOT_EXPR_ATTR(Name, Spelling)              \
+   void check##Name##Attr(Expression *E, Name##Attr *A);
+
+#  define CDOT_TYPE_ATTR(Name, Spelling)              \
+   void check##Name##Attr(SourceType Ty, Name##Attr *A);
+
+#  include "AST/Attribute/Attributes.def"
+
+   DeclResult declareMixinDecl(MixinDecl *Decl);
+   void parseMixinExpr(Expression *E, llvm::StringRef Str,
+                       llvm::SmallVectorImpl<Statement*> &Stmts);
+
+   DeclResult declareStaticIfDecl(StaticIfDecl *Stmt);
+   DeclResult declareStaticAssertStmt(StaticAssertStmt *Stmt);
+   DeclResult declareStaticPrintStmt(StaticPrintStmt *Stmt);
+   DeclResult declareStaticForDecl(StaticForDecl *node);
+   
+   // Sema pass
+
+   DeclResult visitNamespaceDecl(NamespaceDecl *node);
+   StmtResult visitCompoundStmt(CompoundStmt *compound);
+
+   StmtResult visitAttributedStmt(AttributedStmt *Stmt);
+   ExprResult visitAttributedExpr(AttributedExpr *Expr);
+
+   StmtResult visitDeclStmt(DeclStmt *Stmt);
+
+   DeclResult visitCompoundDecl(CompoundDecl *D);
+
+   bool visitVarDecl(VarDecl *Decl);
+   DeclResult visitLocalVarDecl(LocalVarDecl *Decl);
+   DeclResult visitGlobalVarDecl(GlobalVarDecl *Decl);
 
    bool visitDestructuringDecl(DestructuringDecl *node);
-   void visitLocalDestructuringDecl(LocalDestructuringDecl *node);
-   void visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+   StmtResult visitLocalDestructuringDecl(LocalDestructuringDecl *node);
+   StmtResult visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
 
-   void visitFunctionDecl(FunctionDecl *F);
-   void visitCallableDecl(CallableDecl *CD);
+   DeclResult visitFunctionDecl(FunctionDecl *F);
+   DeclResult visitCallableDecl(CallableDecl *CD);
 
-   void visitRecordCommon(RecordDecl *node);
-   void visitRecordDecl(RecordDecl *node);
+   DeclResult visitRecordCommon(RecordDecl *node);
+   DeclResult visitRecordDecl(RecordDecl *R);
 
-   void visitClassDecl(ClassDecl *C);
-   void visitStructDecl(StructDecl *S);
-   void visitExtensionDecl(ExtensionDecl *node);
-   void visitEnumDecl(EnumDecl *node);
-   void visitUnionDecl(UnionDecl *node);
-   void visitProtocolDecl(ProtocolDecl *node);
+   DeclResult visitClassDecl(ClassDecl *C);
+   DeclResult visitStructDecl(StructDecl *S);
+   DeclResult visitExtensionDecl(ExtensionDecl *Ext);
+   DeclResult visitEnumDecl(EnumDecl *E);
+   DeclResult visitUnionDecl(UnionDecl *U);
+   DeclResult visitProtocolDecl(ProtocolDecl *P);
 
-   void visitFieldDecl(FieldDecl *node);
-   void visitPropDecl(PropDecl *node);
-   void visitAssociatedTypeDecl(AssociatedTypeDecl *node);
+   DeclResult visitFieldDecl(FieldDecl *FD);
+   DeclResult visitPropDecl(PropDecl *PD);
+   DeclResult visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl);
 
-   void visitMethodDecl(MethodDecl *node);
-   void visitInitDecl(InitDecl *node);
-   void visitDeinitDecl(DeinitDecl *node);
+   DeclResult visitMethodDecl(MethodDecl *M);
+   DeclResult visitInitDecl(InitDecl *Init);
+   DeclResult visitDeinitDecl(DeinitDecl *Deinit);
 
-   QualType visitIdentifierRefExpr(IdentifierRefExpr *node);
-   QualType visitBuiltinExpr(BuiltinExpr *node);
-   QualType visitSubscriptExpr(SubscriptExpr *node, QualType ty = {});
-   QualType visitCallExpr(CallExpr *node, QualType ty = {});
-   QualType visitMemberRefExpr(MemberRefExpr *node, QualType ty = {});
-   QualType visitEnumCaseExpr(EnumCaseExpr *node);
+   ExprResult visitIdentifierRefExpr(IdentifierRefExpr *Ident);
+   ExprResult visitParenExpr(ParenExpr *Expr);
+   ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr *node);
+   ExprResult visitSelfExpr(SelfExpr *Expr);
+   ExprResult visitSuperExpr(SuperExpr *Expr);
 
-   void visitForStmt(ForStmt *node);
-   void visitForInStmt(ForInStmt *node);
-   void visitWhileStmt(WhileStmt *node);
-   void visitIfStmt(IfStmt *node);
-   void visitLabelStmt(LabelStmt *node);
-   void visitGotoStmt(GotoStmt *node);
+   ExprResult visitBuiltinExpr(BuiltinExpr *node);
+   ExprResult visitSubscriptExpr(SubscriptExpr *Expr);
+   ExprResult visitCallExpr(CallExpr *Call);
+   ExprResult visitMemberRefExpr(MemberRefExpr *Expr);
+   ExprResult visitEnumCaseExpr(EnumCaseExpr *Expr);
 
-   void visitMatchStmt(MatchStmt *node);
-   void visitCaseStmt(CaseStmt *node);
-   QualType visitExpressionPattern(ExpressionPattern *node);
-   QualType visitCasePattern(CasePattern *node);
-   QualType visitIsPattern(IsPattern *node);
+   ExprResult visitTupleMemberExpr(TupleMemberExpr *Expr);
 
-   void visitReturnStmt(ReturnStmt *node);
-   void visitBreakStmt(BreakStmt *node);
-   void visitContinueStmt(ContinueStmt *node);
+   StmtResult visitForStmt(ForStmt *Stmt);
+   StmtResult visitForInStmt(ForInStmt *Stmt);
+   StmtResult visitWhileStmt(WhileStmt *Stmt);
+   StmtResult visitIfStmt(IfStmt *Stmt);
+   StmtResult visitLabelStmt(LabelStmt *Stmt);
+   StmtResult visitGotoStmt(GotoStmt *Stmt);
 
-   QualType visitIntegerLiteral(IntegerLiteral *node);
-   QualType visitFPLiteral(FPLiteral *node);
-   QualType visitBoolLiteral(BoolLiteral *node);
-   QualType visitCharLiteral(CharLiteral *node);
+   StmtResult visitMatchStmt(MatchStmt *Stmt);
+   StmtResult visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match = nullptr);
+   ExprResult visitExpressionPattern(ExpressionPattern *node);
+   ExprResult visitCasePattern(CasePattern *Expr);
+   ExprResult visitIsPattern(IsPattern *node);
 
-   QualType visitDictionaryLiteral(DictionaryLiteral *node);
-   QualType visitArrayLiteral(ArrayLiteral *node);
+   StmtResult visitReturnStmt(ReturnStmt *Stmt);
+   StmtResult visitBreakStmt(BreakStmt *Stmt);
+   StmtResult visitContinueStmt(ContinueStmt *Stmt);
 
-   QualType visitNoneLiteral(NoneLiteral *node);
-   QualType visitStringLiteral(StringLiteral *node);
-   QualType visitStringInterpolation(StringInterpolation *node);
-   QualType visitTupleLiteral(TupleLiteral *node);
+   ExprResult visitIntegerLiteral(IntegerLiteral *Expr);
+   ExprResult visitFPLiteral(FPLiteral *Expr);
+   ExprResult visitBoolLiteral(BoolLiteral *Expr);
+   ExprResult visitCharLiteral(CharLiteral *Expr);
 
-   QualType visitExprSequence(ExprSequence *node);
-   QualType visitBinaryOperator(BinaryOperator *node);
-   QualType visitTertiaryOperator(TertiaryOperator *node);
-   QualType visitUnaryOperator(UnaryOperator *node);
+   ExprResult visitDictionaryLiteral(DictionaryLiteral *Dict);
+   ExprResult visitArrayLiteral(ArrayLiteral *Expr);
 
-   void visitTryStmt(TryStmt *node);
-   void visitThrowStmt(ThrowStmt *node);
+   ExprResult visitNoneLiteral(NoneLiteral *Expr);
+   ExprResult visitStringLiteral(StringLiteral *Expr);
+   ExprResult visitStringInterpolation(StringInterpolation *Expr);
+   ExprResult visitTupleLiteral(TupleLiteral *Expr);
 
-   void visitFuncArgDecl(FuncArgDecl *node);
-   QualType visitLambdaExpr(LambdaExpr *LE);
-   QualType visitImplicitCastExpr(ImplicitCastExpr *node);
-   QualType visitTypeRef(TypeRef *node);
+   ExprResult visitExprSequence(ExprSequence *Expr);
+   ExprResult visitTypePredicateExpr(TypePredicateExpr *Pred);
+   ExprResult visitBinaryOperator(BinaryOperator *BinOp);
+   ExprResult visitUnaryOperator(UnaryOperator *node);
 
-   QualType visitLvalueToRvalue(LvalueToRvalue *node) { return QualType(); }
-   QualType visitTemplateArgExpr(TemplateArgExpr *node) { return QualType(); }
-   QualType visitConstraintExpr(ConstraintExpr *expr) { return QualType(); }
+   ExprResult visitCastExpr(CastExpr *Cast);
 
-   void visitNullStmt(NullStmt *stmt) { }
-   void visitModuleStmt(ModuleStmt *stmt) { }
-   void visitImportStmt(ImportStmt *stmt) { }
-   void visitEnumCaseDecl(EnumCaseDecl *stmt) { }
-   void visitTypedefDecl(TypedefDecl *stmt) { }
-   void visitTemplateParamDecl(TemplateParamDecl *stmt) { }
-   void visitTranslationUnit(TranslationUnit *stmt) { }
+   StmtResult visitTryStmt(TryStmt *Stmt);
+   StmtResult visitThrowStmt(ThrowStmt *Stmt);
 
-   void visitDebugStmt(DebugStmt *node);
+   DeclResult visitFuncArgDecl(FuncArgDecl *Decl);
 
-   void visitAliasDecl(AliasDecl *Alias);
+   ExprResult visitLambdaExpr(LambdaExpr *Expr);
+   ExprResult visitImplicitCastExpr(ImplicitCastExpr *node);
 
-   void visitStaticIfStmt(StaticIfStmt *node);
-   void visitStaticAssertStmt(StaticAssertStmt *node);
-   void visitStaticForStmt(StaticForStmt *node);
-   void visitStaticPrintStmt(StaticPrintStmt *node);
+   ExprResult visitFunctionTypeExpr(FunctionTypeExpr *Expr);
+   ExprResult visitTupleTypeExpr(TupleTypeExpr *Expr);
+   ExprResult visitArrayTypeExpr(ArrayTypeExpr *Expr);
+   ExprResult visitDeclTypeExpr(DeclTypeExpr *Expr);
+   ExprResult visitPointerTypeExpr(PointerTypeExpr *Expr);
+   ExprResult visitReferenceTypeExpr(ReferenceTypeExpr *Expr);
+   ExprResult visitOptionTypeExpr(OptionTypeExpr *Expr);
 
-   QualType visitStaticExpr(StaticExpr *node);
-   QualType visitTraitsExpr(TraitsExpr *node);
+   StmtResult visitNullStmt(NullStmt *stmt);
+   StmtResult visitModuleStmt(ModuleStmt *stmt);
+   StmtResult visitImportStmt(ImportStmt *stmt);
+   DeclResult visitEnumCaseDecl(EnumCaseDecl *stmt);
+   DeclResult visitTypedefDecl(TypedefDecl *stmt);
+   DeclResult visitTemplateParamDecl(TemplateParamDecl *stmt);
+   DeclResult visitTranslationUnit(TranslationUnit *stmt);
+
+   StmtResult visitDebugStmt(DebugStmt *Stmt);
+
+   DeclResult visitAliasDecl(AliasDecl *Alias);
+
+   StmtResult visitStaticIfStmt(StaticIfStmt *Stmt);
+   StmtResult visitStaticForStmt(StaticForStmt *Decl);
+
+   DeclResult visitStaticAssertStmt(StaticAssertStmt *Decl);
+   DeclResult visitStaticPrintStmt(StaticPrintStmt *Decl);
+
+   ExprResult visitStaticExpr(StaticExpr *Expr);
+   ExprResult visitTraitsExpr(TraitsExpr *Expr);
+
+   ExprResult visitMixinExpr(MixinExpr *Expr);
+   StmtResult visitMixinStmt(MixinStmt *Stmt);
+   DeclResult visitMixinDecl(MixinDecl *Decl);
+
+   TypeResult visitSourceType(Decl *D, const SourceType &Ty);
+   TypeResult visitSourceType(Statement *S, const SourceType &Ty);
+   TypeResult visitSourceType(const SourceType &Ty);
 
    struct StaticExprResult {
-      explicit StaticExprResult(Variant &&V)
-         : Value(std::move(V)), HadError(false)
+      explicit StaticExprResult(Expression *Expr, Variant &&V)
+         : Expr(Expr), Value(std::move(V)), HadError(false)
       {}
 
       StaticExprResult() : HadError(true)
@@ -306,6 +516,11 @@ public:
          return Value;
       }
 
+      Expression *getExpr() const
+      {
+         return Expr;
+      }
+
       bool hadError() const
       {
          return HadError;
@@ -314,21 +529,52 @@ public:
       operator bool() const { return !hadError(); }
 
    private:
+      Expression *Expr = nullptr;
       Variant Value;
       bool HadError;
    };
 
-   StaticExprResult evalStaticExpr(StaticExpr *expr);
-   StaticExprResult evalStaticExpr(StaticExpr *expr,
+   StaticExprResult evalStaticExpr(Expression *expr);
+   StaticExprResult evalStaticExpr(Statement *DependentStmt, Expression *expr);
+   StaticExprResult evalStaticExpr(Decl *DependentDecl, Expression *expr);
+
+   StaticExprResult evalStaticExpr(Expression *expr,
                                    TemplateArgList const& templateArgs);
 
-   StaticExprResult evaluateAs(StaticExpr *expr, QualType Ty);
-   StaticExprResult evaluateAsBool(StaticExpr *expr);
+   StaticExprResult evaluateAs(Expression *expr, QualType Ty);
+   StaticExprResult evaluateAsBool(Expression *expr);
+
+
+   // returns the index of the failed constraint, or -1 if all are successful
+   // or dependent
+   size_t checkConstraints(Statement *DependentStmt,
+                           NamedDecl *ConstrainedDecl,
+                           const sema::TemplateArgList &templateArgs);
+
+   size_t checkConstraints(Statement *DependentStmt,
+                           NamedDecl *ConstrainedDecl);
+
+   bool checkConstraint(Statement *DependentStmt,
+                        Expression *Constraint);
+
+   bool getStringValue(Expression *Expr,
+                       Variant const &V,
+                       llvm::StringRef &Str);
+
+   bool getBoolValue(Expression *Expr,
+                     Variant const &V,
+                     bool &Val);
+
+   void visitDelayedDeclsAfterParsing();
+   void visitDelayedDeclsAfterDeclaration();
+   void visitDelayedInstantiations();
 
    void addImplicitConformance(RecordDecl *R, ImplicitConformanceKind kind);
 
    IdentifierRefExpr *wouldBeValidIdentifier(llvm::StringRef maybeIdent);
    GlobalVarDecl *getGlobalVariable(llvm::StringRef maybeGlobal);
+
+   void noteConstantDecl(Expression *DeclRef);
 
    template<class T, class ...Args>
    T *makeStmt(Args&& ...args)
@@ -336,63 +582,81 @@ public:
       return new (getContext()) T(std::forward<Args&&>(args)...);
    }
 
-   PrecedenceGroup getPrecedence(QualType lhsType, OperatorKind op);
-   PrecedenceGroup getPrecedence(QualType lhsType, llvm::StringRef op);
+   QualType resolveDependencies(QualType Ty,
+                                MultiLevelTemplateArgList const& TAs,
+                                Statement *PointOfInstantiation);
 
-   struct BinaryOperatorResult {
-      Type *resultType = nullptr;
-      Type *castOperandsTo = nullptr;
-   };
+   QualType resolveDependencies(QualType Ty,
+                                MultiLevelTemplateArgList const& TAs,
+                                Statement *PointOfInstantiation,
+                                size_t variadicIx);
 
-   BinaryOperatorResult getBinaryOperatorResult(const QualType &lhs,
-                                                const QualType &rhs,
-                                                OperatorKind op);
-
-   BinaryOperatorResult getPointerArithmeticResult(const QualType &lhs,
-                                                   const QualType &rhs,
-                                                   OperatorKind op);
-
-   Type* resolveDependencies(Type *Ty, TemplateArgList const& TAs);
-   Type* resolveDependencies(Type *Ty, RecordDecl *R);
+   QualType resolveDependencies(QualType Ty, RecordDecl *R,
+                                Statement *PointOfInstantiation);
 
    template<class ...Args>
    void diagnose(Statement *Stmt, diag::MessageKind msg, Args const&... args)
    {
       if (diag::isError(msg)) {
          Stmt->setHadError(true);
-         encounteredError = true;
+      }
+
+      diagnose(Stmt->getSourceRange(), msg, std::forward<Args const&>(args)...);
+   }
+
+   template<class ...Args>
+   void diagnose(Decl *D, diag::MessageKind msg, Args const&... args)
+   {
+      if (diag::isError(msg)) {
+         D->setIsInvalid(true);
+      }
+
+      diagnose(D->getSourceRange(), msg, std::forward<Args const&>(args)...);
+   }
+
+   template<class ...Args>
+   void diagnose(SourceLocation loc, diag::MessageKind msg, Args const&...args)
+   {
+      return diagnose(SourceRange(loc), msg,
+                      std::forward<Args const&>(args)...);
+   }
+
+   template<class ...Args>
+   void diagnose(SourceRange range, diag::MessageKind msg, Args const&...args)
+   {
+      if (diag::isError(msg)) {
+         EncounteredError = true;
 
          if (currentScope)
             currentScope->setHadError(true);
       }
 
-      diagnostics.emplace_back(msg);
-      addDiagnosticArgs(diagnostics.back(), Stmt->getSourceLoc(), args...);
-   };
+      {
+         diag::DiagnosticBuilder Builder(Diags, msg);
+         addDiagnosticArgs(Builder, range, std::forward<Args const &>(args)...);
+      }
 
-   void issueDiagnostics(
-      llvm::MutableArrayRef<diag::DiagnosticBuilder> &diags) const
-   {
-      for (auto &diag : diags)
-         diag << diag::cont;
+      if (!diag::isNote(msg))
+         noteInstantiationContext();
    }
 
-   template <class T>
-   void issueDiagnostics(T &t)
-   {
-      for (auto &diag : t.getDiagnostics())
-         diag << diag::cont;
-   }
+   void noteInstantiationContext();
 
-   void declareRecordInstantiation(RecordDecl *Inst);
+   void diagnoseTemplateArgErrors(NamedDecl *Template,
+                                  Statement *ErrorStmt,
+                                  TemplateArgList &list,
+                                  sema::TemplateArgListResult &Cand);
 
-   void visitRecordInstantiation(RecordDecl *R);
-   void visitFunctionInstantiation(CallableDecl *C);
+   void visitRecordInstantiation(Statement *DependentStmt, RecordDecl *Inst);
+   void declareRecordInstantiation(Statement *DependentStmt, RecordDecl *Inst);
 
-   void registerDelayedInstantiation(RecordDecl *R);
+   void visitFunctionInstantiation(Statement *DependentStmt,
+                                   CallableDecl *Inst);
+
+   void registerDelayedInstantiation(NamedDecl *Inst, Statement *POI);
    void registerDelayedFunctionDecl(CallableDecl *C);
+   void registerTemplateParamWithDefaultVal(TemplateParamDecl *TD);
 
-   void visitDelayedDecls();
    void visitDelayedDecl(NamedDecl *ND);
 
    void diagnoseCircularlyDependentGlobalVariables(Expression *Expr,
@@ -409,6 +673,14 @@ public:
       return stage;
    }
 
+   template<class T>
+   T *lookup(llvm::StringRef name, unsigned lvl = 2) const
+   {
+      return support::dyn_cast_or_null<T>(lookup(name, lvl));
+   }
+
+   ast::NamedDecl *lookup(llvm::StringRef name, unsigned lvl = 2) const;
+
    RecordDecl *getRecord(llvm::StringRef name) const;
    StructDecl *getStruct(llvm::StringRef name) const;
    ClassDecl *getClass(llvm::StringRef name) const;
@@ -418,35 +690,37 @@ public:
    NamespaceDecl *getNamespace(llvm::StringRef name) const;
 
    FunctionDecl *getAnyFn(llvm::StringRef name) const;
+   GlobalVarDecl *getVariable(llvm::StringRef name) const;
    TypedefDecl *getTypedef(llvm::StringRef name) const;
+   AliasDecl* getAlias(llvm::StringRef name) const;
 
    DeclContext *getNearestDeclContext(Statement *Stmt) const;
    CallableDecl *getCurrentFun() const;
 
    struct DiagnosticScopeRAII {
-      DiagnosticScopeRAII(SemaPass &SP)
+      explicit DiagnosticScopeRAII(SemaPass &SP, bool Disabled = false)
          : SP(SP), fatalError(SP.fatalError),
            fatalErrorInScope(SP.fatalErrorInScope),
-           encounteredError(SP.encounteredError),
-           diagnostics(move(SP.diagnostics))
+           encounteredError(SP.EncounteredError),
+           Disabled(Disabled), State(SP.Diags.saveState()),
+           numDiags(SP.getNumDiags())
       {
          SP.fatalError = false;
          SP.fatalErrorInScope = false;
-         SP.encounteredError = false;
-         SP.diagnostics.clear();
+         SP.EncounteredError = false;
       }
 
-      llvm::ArrayRef<diag::DiagnosticBuilder> getAddedDiagnostics() const
-      {
-         return SP.diagnostics;
-      }
+      void disable() { Disabled = true; }
 
       ~DiagnosticScopeRAII()
       {
-         SP.fatalError = fatalError;
-         SP.fatalErrorInScope = fatalErrorInScope;
-         SP.encounteredError = encounteredError;
-         SP.diagnostics = move(diagnostics);
+         if (!Disabled) {
+            SP.fatalError = fatalError;
+            SP.fatalErrorInScope = fatalErrorInScope;
+            SP.EncounteredError = encounteredError;
+            SP.Diags.restoreState(State);
+            SP.resizeDiags(numDiags);
+         }
       }
 
    private:
@@ -454,68 +728,202 @@ public:
       bool fatalError : 1;
       bool fatalErrorInScope : 1;
       bool encounteredError : 1;
-      llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
+      bool Disabled : 1;
+
+      DiagnosticsEngine::DiagState State;
+      size_t numDiags;
    };
 
-   struct DiagnosticCounter {
-      DiagnosticCounter(SemaPass &SP)
-         : SP(SP), initialSize(SP.diagnostics.size())
-      {}
-
-      bool hadError() const
+   struct DeclScopeRAII {
+      DeclScopeRAII(SemaPass &SP, DeclContext *Ctx)
+         : SP(SP), declContext(SP.DeclCtx)
       {
-         return SP.getDiagnostics().size() > initialSize;
+         SP.DeclCtx = Ctx;
+      }
+
+      ~DeclScopeRAII()
+      {
+         SP.DeclCtx = declContext;
       }
 
    private:
       SemaPass &SP;
-      size_t initialSize;
+      DeclContext *declContext;
    };
 
-   QualType getBoxedType(QualType type) const;
-   QualType getUnboxedType(QualType type) const;
+   struct ScopeResetRAII {
+      explicit ScopeResetRAII(SemaPass &S)
+         : S(S), scope(S.currentScope)
+      {
+         S.currentScope = nullptr;
+      }
+
+      ~ScopeResetRAII()
+      {
+         S.currentScope = scope;
+      }
+
+   private:
+      SemaPass &S;
+      Scope *scope;
+   };
+
+   struct DeclContextRAII {
+      DeclContextRAII(SemaPass &SP, DeclContext *Ctx) : SP(SP)
+      {
+         Ctx->setParentCtx(SP.DeclCtx);
+         SP.pushDeclContext(Ctx);
+      }
+
+      ~DeclContextRAII()
+      {
+         SP.popDeclContext();
+      }
+
+   private:
+      SemaPass &SP;
+   };
+
+   struct InstantiationRAII {
+      InstantiationRAII(SemaPass &SP,
+                        DeclContext *Ctx,
+                        NamedDecl *Template)
+         : SP(SP), DeclRAII(SP, Ctx), ScopeRAII(SP)
+      {
+         SP.pushInstantiationContext(Template);
+      }
+
+      ~InstantiationRAII()
+      {
+         SP.popInstantiationContext();
+      }
+
+   private:
+      SemaPass &SP;
+      DeclScopeRAII DeclRAII;
+      ScopeResetRAII ScopeRAII;
+   };
+
+   struct EnterCtfeScope {
+      explicit EnterCtfeScope(SemaPass &SP) : SP(SP), previous(SP.InCTFE)
+      {
+         SP.InCTFE = true;
+      }
+
+      ~EnterCtfeScope()
+      {
+         SP.InCTFE = previous;
+      }
+
+   private:
+      SemaPass &SP;
+      bool previous;
+   };
+
+   Scope *getScope() const { return currentScope; }
+   bool inCTFE()     const { return InCTFE; }
+
    bool hasDefaultValue(QualType type) const;
 
    void issueDiagnostics();
 
-   void registerBuiltinOp(QualType opTy,
-                          OperatorKind kind,
-                          OperatorInfo opInfo);
+   size_t getNumDiags() const;
+   void resizeDiags(size_t toSize);
 
-   friend class DeclPass;
-   friend class ILGenPass;
-   friend class ExprResolverImpl;
-   friend class StaticExprEvaluator;
-   friend class EvaluatorImpl;
-   friend class OverloadResolver;
-   friend class GlobalDependencyImpl;
-   friend class sema::TemplateArgListImpl;
+   bool encounteredError() const { return EncounteredError; }
+   size_t getNumGlobals() const { return numGlobals; }
 
-protected:
+private:
    CompilationUnit *compilationUnit; // can't be a reference because it's a
                                      // movable type
 
+   std::unique_ptr<SemaDiagConsumer> DiagConsumer;
+   DiagnosticsEngine Diags;
+
    ASTContext &Context;
+   DeclContext *DeclCtx;
+
    Stage stage = Stage::Declaration;
 
-   std::unordered_map<string, LocalVarDecl*> declarations;
    Scope *currentScope = nullptr;
 
    llvm::SmallPtrSet<NamedDecl*, 16> DelayedDecls;
+   llvm::SmallVector<std::pair<Statement*, NamedDecl*>, 0>
+      DelayedInstantiations;
+
+   DependencyGraph<RecordDecl*> LayoutDependency;
    llvm::StringMap<GotoStmt*> UnresolvedGotos;
-
+   
+   SymbolMangler mangle;
    StaticEvaluator Evaluator;
+   BuiltinCandidateBuilder CandBuilder;
+   mutable TemplateInstantiator Instantiator;
 
-   RecordDecl *getCurrentRecord();
+   llvm::StringSet<> labels;
+   llvm::DenseSet<uintptr_t> DeclaredDecls;
+   llvm::DenseSet<uintptr_t> VisitedDecls;
 
-   TemplateParamDecl const* hasTemplateParam(llvm::StringRef name);
-   AssociatedTypeDecl const* hasAssociatedType(llvm::StringRef name);
+   std::vector<NamedDecl*> InstantiationStack;
 
+   llvm::SmallPtrSet<Decl*, 8> VisitedGlobalDecls;
+   size_t numGlobals = 0;
+
+   std::unique_ptr<ILGenPass> ILGen;
+
+   bool fatalError        : 1;
+   bool fatalErrorInScope : 1;
+   bool EncounteredError  : 1;
+   bool InCTFE            : 1;
+
+   QualType UnknownAnyTy;
+
+   RecordDecl *ArrayDecl      = nullptr;
+   RecordDecl *DictionaryDecl = nullptr;
+   RecordDecl *StringDecl     = nullptr;
+   RecordDecl *OptionDecl     = nullptr;
+
+public:
+   RecordDecl *getArrayDecl();
+   RecordDecl *getDictionaryDecl();
+   RecordDecl *getStringDecl();
+   RecordDecl *getOptionDecl();
+
+   ExprResult visit(Expression *Expr, bool);
+   StmtResult visit(Statement *node, bool);
+   DeclResult visit(Decl *D, bool);
+
+   DeclResult declare(Decl *Decl, bool);
+
+   RecordDecl *getCurrentRecordCtx();
+
+   void pushInstantiationContext(NamedDecl *Decl)
+   {
+      InstantiationStack.push_back(Decl);
+   }
+
+   void popInstantiationContext()
+   {
+      InstantiationStack.pop_back();
+   }
+
+   bool stopEvaluating(Expression *Expr);
    bool stopEvaluating(Statement *Stmt);
 
    void checkConformances();
+   void checkConformances(DeclContext *Ctx);
    void checkProtocolConformance(RecordDecl *R);
 
+   int inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy);
+
+   NamedDecl *getCurrentDecl() const;
+   QualType getStaticForValue(llvm::StringRef name) const;
+
+   bool ensureSizeKnown(QualType Ty, SourceLocation loc);
+   bool ensureSizeKnown(RecordDecl *R, SourceLocation loc);
+   bool ensureDeclared(Decl *D);
+   bool prepareFunctionForCtfe(CallableDecl *Fn);
+
+private:
    template<class T, class ...Args>
    void addDiagnosticArgs(diag::DiagnosticBuilder &diag,
                           T const &first,
@@ -526,6 +934,7 @@ protected:
 
    void addDiagnosticArgs(diag::DiagnosticBuilder &diag) {}
 
+public:
    struct ScopeGuard {
       enum Status {
          Enabled,
@@ -539,44 +948,40 @@ protected:
             S.currentScope = new (S.getContext()) BlockScope(S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, CallableDecl *F)
-         : S(S)
-      {
-         S.currentScope = new (S.getContext()) FunctionScope(F, S.currentScope);
+      ScopeGuard(SemaPass &S,
+                 CallableDecl *F,
+                 bool InferrableReturnType = false) : S(S) {
+         S.currentScope = new (S.getContext())
+            FunctionScope(F, InferrableReturnType, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, MethodDecl *M)
-         : S(S)
-      {
-         S.currentScope = new (S.getContext()) MethodScope(M, S.currentScope);
+      ScopeGuard(SemaPass &S,
+                 MethodDecl *M,
+                 bool InferrableReturnType = false) : S(S) {
+         S.currentScope = new (S.getContext())
+            MethodScope(M, InferrableReturnType, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, LambdaExpr *L)
-         : S(S)
+      ScopeGuard(SemaPass &S, LambdaExpr *L) : S(S)
       {
          S.currentScope = new (S.getContext()) LambdaScope(L, S.currentScope);
       }
 
-      ScopeGuard(SemaPass &S, RecordDecl *R)
-         : S(S)
-      {
-         S.currentScope = new (S.getContext()) RecordScope(R, S.currentScope);
-      }
-
-      ScopeGuard(SemaPass &S, llvm::ArrayRef<TemplateParamDecl*> params)
-         : S(S)
-      {
-         S.currentScope = new (S.getContext()) TemplateScope(params,
-                                                             S.currentScope);
+      ScopeGuard(SemaPass &S,
+                 llvm::StringRef elementName,
+                 QualType elementTy) : S(S) {
+         S.currentScope =
+            new (S.getContext()) StaticForScope(elementName, elementTy,
+                                                S.currentScope);
       }
 
       ScopeGuard(SemaPass &S, bool continuable, bool breakable,
-                 bool isLastCase = false, bool nextCaseHasArgs = false)
-         : S(S)
+                 bool isLastCase = false, bool nextCaseHasArgs = false) : S(S)
       {
          S.currentScope = new (S.getContext()) LoopScope(continuable, breakable,
                                                          isLastCase,
-                                                         nextCaseHasArgs);
+                                                         nextCaseHasArgs,
+                                                         S.currentScope);
       }
 
       ~ScopeGuard()
@@ -625,380 +1030,111 @@ protected:
       return getSpecificScope<BlockScope>();
    }
 
-   class CallCandidate {
-   public:
-      CallCandidate(CallCompatability &Comp,
-                    llvm::ArrayRef<Expression*> resolvedArgs,
-                    CallableDecl *C);
-
-      CallCandidate(CallCompatability &Comp,
-                    llvm::ArrayRef<Expression*> resolvedArgs,
-                    EnumCaseDecl *Case);
-
-      CallCandidate(CallCompatability &Comp,
-                    llvm::ArrayRef<Expression*> resolvedArgs,
-                    FunctionType *FTy,
-                    SourceLocation declLoc);
-
-      diag::DiagnosticBuilder &getDiagnostic()
-      {
-         return diagnostic;
-      }
-
-      const SourceLocation &getLoc() const
-      {
-         return loc;
-      }
-
-   private:
-      SourceLocation loc;
-      diag::DiagnosticBuilder diagnostic;
-   };
-
-   class CallResult {
-   public:
-      bool isCompatible() const { return compatible; }
-      ~CallResult();
-
-      FunctionDecl *getFunction() const;
-      MethodDecl *getMethod() const;
-      CallableDecl *getCallable() const;
-
-      FunctionType *getFunctionType() const;
-      EnumCaseDecl *getCase() const;
-      TemplateArgList& getTemplateArgs();
-
-      std::vector<CallCandidate>& getFailedCandidates();
-
-   protected:
-      bool compatible;
-
-      explicit CallResult(bool compatible)
-         : compatible(compatible)
-      {}
-   };
-
-   class CompatibleCallResult: public CallResult {
-   public:
-      CompatibleCallResult(CallableDecl *C,
-                           TemplateArgList &&list,
-                           TemplateArgList &&initializerTemplateArgs = {})
-         : CallResult(true), C(C),
-           templateArgs(std::move(list)),
-           initializerTemplateArgs(std::move(initializerTemplateArgs))
-      {}
-
-      explicit CompatibleCallResult(EnumCaseDecl *Case)
-         : CallResult(true), Case(Case)
-      {}
-
-      explicit CompatibleCallResult(FunctionType *FTy)
-         : CallResult(true), functionType(FTy)
-      {}
-
-      CallableDecl *getCallable() const
-      {
-         return C;
-      }
-
-      FunctionDecl *getFunction() const
-      {
-         return F;
-      }
-
-      MethodDecl *getMethod() const
-      {
-         return M;
-      }
-
-      EnumCaseDecl *getCase() const
-      {
-         return Case;
-      }
-
-      void setFunction(FunctionDecl *F)
-      {
-         CompatibleCallResult::F = F;
-      }
-
-      void setMethod(MethodDecl *M)
-      {
-         CompatibleCallResult::M = M;
-      }
-
-      FunctionType *getFunctionType() const
-      {
-         return functionType;
-      }
-
-      TemplateArgList& getTemplateArgs()
-      {
-         return templateArgs;
-      }
-
-      void setTemplateArgs(TemplateArgList &&list)
-      {
-         templateArgs = std::move(list);
-      }
-
-      TemplateArgList &getInitializerTemplateArgs()
-      {
-         return initializerTemplateArgs;
-      }
-
-      friend class CallResult;
-
-   private:
-      union {
-         CallableDecl *C;
-         FunctionDecl *F;
-         MethodDecl *M;
-         EnumCaseDecl *Case;
-         FunctionType *functionType;
-      };
-
-      TemplateArgList templateArgs;
-      TemplateArgList initializerTemplateArgs;
-
-      void destroyValue();
-   };
-
-   class IncompatibleCallResult: public CallResult {
-   public:
-      explicit IncompatibleCallResult(
-         std::vector<CallCandidate> &&failedCandidates = {})
-         : CallResult(false), failedCandidates(move(failedCandidates))
-      {}
-
-      std::vector<CallCandidate> &getFailedCandidates()
-      {
-         return failedCandidates;
-      }
-
-      friend class CallResult;
-
-   private:
-      std::vector<CallCandidate> failedCandidates;
-
-      void destroyValue();
-   };
-
-   using FunctionResult = std::unique_ptr<CallResult>;
-
-   FunctionResult getUFCS(llvm::StringRef funcName,
-                          llvm::ArrayRef<Expression*> args,
-                          std::vector<TemplateArgExpr*> const& templateArgs = {},
-                          Statement *caller = nullptr);
-
-   FunctionResult getFunction(llvm::StringRef funcName,
-                              llvm::ArrayRef<Expression*> args,
-                              std::vector<TemplateArgExpr*> const& templateArgs = {},
-                              Statement *caller = nullptr);
-
-   FunctionResult getFunction(llvm::ArrayRef<FunctionDecl*> overloads,
-                              llvm::ArrayRef<Expression*> args,
-                              std::vector<TemplateArgExpr*> const& templateArgs = {},
-                              Statement *caller = nullptr);
-
-   FunctionResult getMethod(RecordDecl *rec,
-                            llvm::StringRef methodName,
-                            llvm::ArrayRef<Expression*> args = {},
-                            std::vector<TemplateArgExpr*> const& templateArgs = {},
-                            Statement *caller = nullptr,
-                            bool isStatic = false);
-
-   FunctionResult getMethod(RecordDecl *rec,
-                            LookupResult &lookupResult,
-                            llvm::ArrayRef<Expression*> args = {},
-                            std::vector<TemplateArgExpr*> const& templateArgs = {},
-                            Statement *caller = nullptr,
-                            bool isStatic = false);
-
-   FunctionResult getMethod(RecordDecl *rec,
-                            llvm::ArrayRef<MethodDecl*> overloads,
-                            llvm::ArrayRef<Expression*> args = {},
-                            std::vector<TemplateArgExpr*> const& templateArgs = {},
-                            Statement *caller = nullptr,
-                            bool isStatic = false);
-
-   void registerBuiltinOperators(OperatorKind opKind);
-
-   struct ConstraintResult {
-   public:
-      ConstraintResult(bool hadError, bool typeDependant,
-                       bool ctfeDependant,
-                       llvm::SmallVector<diag::DiagnosticBuilder,
-                          4> &&diagnostics)
-         : error(hadError), typeDependent(typeDependant),
-           satisfied(false),
-           diagnostics(std::move(diagnostics))
-      { }
-
-      ConstraintResult()
-         : error(false), typeDependent(false),
-           satisfied(true)
-      {}
-
-      bool hadError() const
-      {
-         return error;
-      }
-
-      bool isTypeDependant() const
-      {
-         return typeDependent;
-      }
-
-      bool isSatisfied() const
-      {
-         return satisfied;
-      }
-
-      llvm::SmallVector<diag::DiagnosticBuilder, 4> &getDiagnostics()
-      {
-         return diagnostics;
-      }
-
-   private:
-      bool error;
-      bool typeDependent;
-
-      bool satisfied;
-      llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
-   };
-
-   ConstraintResult checkConstraint(StaticExpr* const& constraint,
-                                    TemplateArgList &TAs);
-
-   FunctionResult checkAnonymousCall(FunctionType *FTy,
-                                     llvm::ArrayRef<Expression*> args,
-                                     Statement *Caller = nullptr);
-
-   void maybeInstantiateMemberFunction(MethodDecl *M,
-                                       const SourceLocation &callerLoc);
-
-   RecordDecl* InstantiateRecord(RecordDecl *R,
-                                 TemplateArgList &&TAs,
-                                 SourceLocation loc = {});
-
-   FunctionResult getCase(EnumDecl *E,
-                          const string &caseName,
-                          llvm::ArrayRef<Expression*> args = {},
-                          Statement *Caller = nullptr);
-
-   MetaType *getMetaType(Type *forType);
-
-   void pushTemplateArgs(TemplateArgList const& list)
-   {
-      templateArgStack.push_back(&list);
-   }
-
-   void popTemplateArgs()
-   {
-      templateArgStack.pop_back();
-   }
-
-   struct TemplateArgRAII {
-      TemplateArgRAII(SemaPass &S, TemplateArgList const& list) : S(S)
-      {
-         S.pushTemplateArgs(list);
-      }
-
-      ~TemplateArgRAII()
-      {
-         S.popTemplateArgs();
-      }
-
-   private:
-      SemaPass &S;
-   };
-
-   sema::ResolvedTemplateArg const* getTemplateArg(llvm::StringRef name)
-   {
-      for (auto &list : templateArgStack)
-         if (auto TA = list->getNamedArg(name))
-            return TA;
-
-      return nullptr;
-   }
-
-private:
-   bool implicitCastIfNecessary(Expression* target,
-                                const QualType &originTy,
-                                const QualType &destTy,
-                                bool preCondition = true,
-                                bool ignoreError = false);
-
-   void forceCast(Expression* target,
-                  const QualType &originTy,
-                  const QualType &destTy);
-
-   void lvalueToRvalue(Expression* & target);
-   void toRvalueIfNecessary(QualType &ty, Expression* &target,
-                            bool preCond = true);
-
-   QualType VisitSubExpr(Expression *, QualType);
-
-   llvm::StringSet<> labels;
-   llvm::SmallPtrSet<Statement*, 8> VisitedGlobalDecls;
-   llvm::DenseSet<uintptr_t> VisitedDecls;
+   CandidateSet
+   lookupFunction(DeclContext *Ctx,
+                  llvm::StringRef name,
+                  llvm::ArrayRef<Expression*> args,
+                  llvm::ArrayRef<Expression*> templateArgs = {},
+                  Statement *Caller = nullptr,
+                  bool suppressDiags = false,
+                  bool includesSelf = false);
+
+   CandidateSet
+   lookupFunction(llvm::StringRef name,
+                  llvm::ArrayRef<Expression*> args,
+                  llvm::ArrayRef<Expression*> templateArgs = {},
+                  Statement *Caller = nullptr,
+                  bool suppressDiags = false,
+                  bool includesSelf = false);
+
+   CandidateSet
+   lookupMethod(llvm::StringRef name,
+                Expression *SelfExpr,
+                llvm::ArrayRef<Expression*> args,
+                llvm::ArrayRef<Expression*> templateArgs = {},
+                Statement *Caller = nullptr,
+                bool suppressDiags = false);
+
+   CandidateSet getCandidates(llvm::StringRef name,
+                              Expression *SelfExpr);
+
+   CandidateSet
+   lookupCase(llvm::StringRef name,
+              EnumDecl *E,
+              llvm::ArrayRef<Expression*> args,
+              llvm::ArrayRef<Expression*> templateArgs = {},
+              Statement *Caller = nullptr,
+              bool suppressDiags = false);
+
+   void lookupFunction(CandidateSet &CandSet,
+                       llvm::StringRef name,
+                       llvm::ArrayRef<Expression*> args,
+                       llvm::ArrayRef<Expression*> templateArgs = {},
+                       Statement *Caller = nullptr,
+                       bool suppressDiags = false);
+
+   CandidateSet checkAnonymousCall(FunctionType *FTy,
+                                   llvm::ArrayRef<Expression*> args,
+                                   Statement *Caller = nullptr);
+
+   void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
+   void maybeInstantiateMemberFunction(MethodDecl *M, Statement *Caller);
+
+   void declareMemberwiseInitializer(StructDecl *S);
+   void declareDefaultInitializer(StructDecl *S);
+   void declareDefaultDeinitializer(StructDecl *S);
+
+   TemplateParamDecl* getTemplateParam(llvm::StringRef name);
+   AssociatedTypeDecl* getAssociatedType(llvm::StringRef name);
+
+   bool inGlobalDeclContext() const;
+
+   void checkDuplicateFunctionDeclaration(CallableDecl *C,
+                                          llvm::StringRef fnKind);
 
    bool alreadyVisited(Statement *stmt)
    {
       return !VisitedDecls.insert((uintptr_t)stmt).second;
    }
 
-   size_t numGlobals = 0;
+   bool alreadyVisited(Decl *D)
+   {
+      return !VisitedDecls.insert((uintptr_t)D).second;
+   }
 
-   std::unique_ptr<DeclPass> declPass;
-   std::unique_ptr<ILGenPass> ILGen;
+   bool alreadyDeclared(Decl *D)
+   {
+      return !DeclaredDecls.insert((uintptr_t)D).second;
+   }
 
-   llvm::SmallVector<TemplateArgList const*, 2> templateArgStack;
+   bool isDeclared(Decl *D)
+   {
+      return DeclaredDecls.find((uintptr_t)D) != DeclaredDecls.end();
+   }
 
-   bool fatalError : 1;
-   bool fatalErrorInScope : 1;
-   bool encounteredError : 1;
+   bool isVisited(Decl *D)
+   {
+      return VisitedDecls.find((uintptr_t)D) != VisitedDecls.end();
+   }
 
-   QualType UnknownAnyTy;
+   Expression *implicitCastIfNecessary(Expression* Expr,
+                                       QualType destTy,
+                                       bool ignoreError = false,
+                                       diag::MessageKind msg
+                                                    = diag::err_type_mismatch);
 
-   struct BuiltinOperator {
-      BuiltinOperator(FunctionType *FuncTy, const OperatorInfo &operatorInfo)
-         : FuncTy(FuncTy), operatorInfo(operatorInfo)
-      { }
+   Expression* forceCast(Expression* Expr, QualType destTy);
 
-      FunctionType *getFuncTy() const
-      {
-         return FuncTy;
-      }
+   Expression *castToRValue(Expression *Expr);
+   void toRValue(Expression *Expr);
 
-      const OperatorInfo &getOperatorInfo() const
-      {
-         return operatorInfo;
-      }
-
-   private:
-      FunctionType *FuncTy;
-      OperatorInfo operatorInfo;
-   };
-
-   std::unordered_map<OperatorKind, BuiltinOperator> BuiltinBinaryOperators;
-   std::unordered_map<OperatorKind, BuiltinOperator> BuiltinUnaryOperators;
-
-   void checkDeclTypeReturnType(CallableDecl *C);
-
-   ExprResult unify(Statement *Stmt,
-                    std::vector<Expression* > const&exprs);
-
-   bool checkPossibleTemplateArgList(
-                                 Expression *Expr,
-                                 std::vector<TemplateArgExpr*> &templateArgs);
-
+private:
    // IdentifierRef
 
-   QualType HandleBuiltinIdentifier(IdentifierRefExpr *node);
-   QualType checkFunctionReference(IdentifierRefExpr *node, CallableDecl *F);
-   QualType checkSuper(IdentifierRefExpr *node);
-   QualType checkSelf(IdentifierRefExpr *node);
+   CallableDecl* checkFunctionReference(Expression *E,
+                                        DeclContext *Ctx,
+                                        llvm::StringRef funcName,
+                                       llvm::ArrayRef<Expression*>templateArgs);
 
    struct AliasResult {
       explicit AliasResult(AliasDecl *Alias)
@@ -1006,9 +1142,8 @@ private:
            Result(Alias)
       {}
 
-      explicit AliasResult(std::vector<diag::DiagnosticBuilder> &&Candidates)
-         : TypeDependent(false), ValueDependent(false), HadError(true),
-           FailedCandidates(std::move(Candidates))
+      AliasResult()
+         : TypeDependent(false), ValueDependent(false), HadError(true)
       {}
 
       AliasResult(bool typeDependent, bool valueDependent)
@@ -1026,21 +1161,10 @@ private:
          return ValueDependent;
       }
 
-      bool hadError() const
-      {
-         return HadError;
-      }
-
       AliasDecl *getAlias()
       {
          assert(!HadError && !TypeDependent && !ValueDependent);
          return Result;
-      }
-
-      const std::vector<diag::DiagnosticBuilder> &getDiagnostics() const
-      {
-         assert(HadError);
-         return FailedCandidates;
       }
 
       operator bool() const
@@ -1054,11 +1178,10 @@ private:
       bool HadError       : 1;
 
       AliasDecl *Result;
-      std::vector<diag::DiagnosticBuilder> FailedCandidates;
    };
 
    AliasResult checkAlias(LookupResult &lookupResult,
-                          llvm::ArrayRef<TemplateArgExpr*> templateArgs,
+                          llvm::ArrayRef<Expression*> templateArgs,
                           SourceLocation loc);
 
    bool checkAlias(AliasDecl *alias,
@@ -1066,74 +1189,35 @@ private:
 
    // MemberRef
 
-   QualType HandleStaticMember(MemberRefExpr *node, RecordDecl *R);
    QualType HandleStaticTypeMember(MemberRefExpr *node, Type *Ty);
 
-   QualType HandleEnumCase(MemberRefExpr *node, EnumDecl *E);
+   ExprResult HandleFieldAccess(IdentifierRefExpr *Ident, FieldDecl *F);
+   ExprResult HandlePropAccess(IdentifierRefExpr *Ident, PropDecl *P);
 
-   QualType HandleFieldAccess(MemberRefExpr *node, RecordDecl *R,
-                              FieldDecl *F = nullptr);
-
-   QualType HandlePropAccess(MemberRefExpr *node, RecordDecl *rec,
-                             PropDecl *P = nullptr);
-
-   QualType HandleEnumMember(MemberRefExpr *node, EnumDecl *E);
-   QualType HandleTupleMember(MemberRefExpr *node, TupleType *ty);
-   QualType HandleUnionMember(MemberRefExpr *node, UnionDecl *U);
-
-   QualType HandleTypeMember(MemberRefExpr *node, Type *Ty);
-   QualType HandleNamespaceMember(MemberRefExpr *node, NamespaceDecl *NS);
-
-   QualType HandleMethodReference(MemberRefExpr *node, RecordDecl *R);
+   ExprResult HandleEnumCase(IdentifierRefExpr *node, EnumDecl *E);
 
    // CallExpr
 
    void HandleFunctionCall(CallExpr* node,
-                           llvm::ArrayRef<FunctionDecl*> overloads);
-   bool TryTypedef(CallExpr *node, TypedefDecl *td = nullptr);
+                           DeclContext *Ctx,
+                           llvm::StringRef funcName);
 
    void HandleBuiltinCall(CallExpr*);
 
-   void HandleMethodCall(CallExpr *node, QualType ty);
-   void HandleDeclContextMember(CallExpr *node, DeclContext *Ctx);
-
+   ExprResult HandleMethodCall(CallExpr *Call, Expression *ParentExpr);
    void HandleStaticTypeCall(CallExpr *node, Type *Ty);
-   void HandleOtherTypeCall(CallExpr *node, Type *ty);
 
    void HandleConstructorCall(CallExpr*, RecordDecl *R);
-   void HandleCallOperator(CallExpr *node, QualType ty);
-   void HandleAnonCall(CallExpr *node, QualType ty);
+   void HandleCallOperator(CallExpr *node, Expression *ParentExpr);
+   void HandleAnonCall(CallExpr *node, Expression *ParentExpr);
 
    void diagnoseMemberNotFound(DeclContext *Ctx,
                                Statement *Subject,
                                llvm::StringRef memberName,
-                               llvm::StringRef hint = "");
+                               diag::MessageKind msg
+                                 = diag::err_undeclared_identifer);
 
    // BinaryOperator
-
-   QualType HandleBinaryOperator(QualType &lhs, QualType &rhs,
-                                 BinaryOperatorType kind,
-                                 BinaryOperator *node);
-
-   QualType HandleTypePredicate(QualType &lhs,
-                                BinaryOperator *node);
-
-   QualType HandleCastOp(QualType &lhs, QualType &rhs, BinaryOperator *node);
-   QualType HandleAssignmentOp(QualType &lhs, QualType &rhs,
-                               BinaryOperator *node);
-
-   QualType tryBinaryOperatorMethod(QualType& lhs,
-                                    QualType& rhs,
-                                    BinaryOperator *node,
-                                    const string &opName);
-
-   QualType tryFreeStandingBinaryOp(QualType& lhs, QualType& rhs,
-                                    BinaryOperator *node,
-                                    const string &opName);
-
-   QualType tryFreeStandingUnaryOp(QualType& lhs,
-                                   UnaryOperator *node,
-                                   const string &opName);
 
    void checkClassAccessibility(RecordDecl* cl, Expression* cause);
 
@@ -1142,23 +1226,8 @@ private:
                                  const AccessModifier& access,
                                  Expression* cause);
 
-   enum class NoMatchingCallKind : unsigned char {
-      Function,
-      Method,
-      Case,
-      AnonymousCall
-   };
-
-   void diagnoseNoMatchingCall(CallResult *Res,
-                               NoMatchingCallKind kind,
-                               llvm::StringRef name,
-                               CallExpr *expr);
-
-   void diagnoseAmbiguousCall(llvm::ArrayRef<CallableDecl*> perfectMatches,
-                              Statement *Caller);
-
    void ApplyCasts(std::vector<Expression* > &args,
-                   FunctionType *FuncTy);
+                   CandidateSet &CandSet);
 
    void PrepareCallArgs(std::vector<Expression* >& args,
                         FunctionType *FuncTy);
@@ -1166,33 +1235,8 @@ private:
    void PrepareCallArgs(std::vector<Expression* >& args,
                         CallableDecl *C);
 
+   void calculateRecordSize(RecordDecl *R);
    void calculateRecordSizes();
-
-   bool checkFunctionCompatibility(
-                           NamedDecl *C,
-                           OverloadResolver &Resolver,
-                           std::unique_ptr<CompatibleCallResult> &Res,
-                           llvm::SmallVectorImpl<CallableDecl*> &perfectCalls,
-                           std::vector<CallCandidate> &failedCandidates,
-                           size_t &bestMatch,
-                           size_t &maxSatisfiedConstraints);
-
-   struct ScopeResetRAII {
-      explicit ScopeResetRAII(SemaPass &S)
-         : S(S), scope(S.currentScope)
-      {
-         S.currentScope = nullptr;
-      }
-
-      ~ScopeResetRAII()
-      {
-         S.currentScope = scope;
-      }
-
-   private:
-      SemaPass &S;
-      Scope *scope;
-   };
 };
 
 } // namespace ast

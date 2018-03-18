@@ -4,14 +4,13 @@
 
 #include "GEPInst.h"
 
-#include "../../../Module/Module.h"
-#include "../../Record/AggregateType.h"
-#include "../../Function/Function.h"
-#include "../../Function/BasicBlock.h"
-#include "../../Constant/ConstantVal.h"
-
-#include "../../../../Variant/Type/Type.h"
-#include "../../../../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/NamedDecl.h"
+#include "IL/Module/Module.h"
+#include "IL/Value/Record/AggregateType.h"
+#include "IL/Value/Function/Function.h"
+#include "IL/Value/Function/BasicBlock.h"
+#include "IL/Value/Constant/ConstantVal.h"
+#include "Variant/Type/Type.h"
 
 using namespace cdot::support;
 using namespace cdot::ast;
@@ -37,10 +36,10 @@ GEPInst::GEPInst(AggregateType *AggrTy, Value *val, ConstantInt *idx,
 {
    val->addUse(this);
    if (isa<StructType>(AggrTy)) {
-      type = cast<StructType>(AggrTy)->getFields()[idx->getU64()].type;
+      type = cast<StructType>(AggrTy)->getFields()[idx->getZExtValue()].type;
    }
 
-   type.isLvalue(true);
+   type.makeReference();
 }
 
 GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
@@ -48,24 +47,31 @@ GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
      AggrTy(nullptr)
 {
    val->addUse(this);
-   auto valTy = val->getType();
+
+   QualType valTy = val->getType();
+   QualType resultTy;
+
+   if (valTy->isReferenceType()) {
+      valTy = valTy->getReferencedType();
+   }
 
    if (valTy->isPointerType()) {
-      type = *valTy->getPointeeType();
+      resultTy = valTy->getPointeeType();
    }
    else if (valTy->isTupleType()) {
       assert(isa<ConstantInt>(idx));
-      type = valTy->asTupleType()
-                  ->getContainedType(cast<ConstantInt>(idx)->getU64());
+      resultTy = valTy->asTupleType()
+                ->getContainedType(cast<ConstantInt>(idx)->getZExtValue());
    }
    else if (valTy->isArrayType()) {
-      type = valTy->asArrayType()->getElementType();
+      resultTy = valTy->asArrayType()->getElementType();
    }
    else {
-      type = valTy;
+      llvm_unreachable("cannot GEP on given type!");
    }
 
-   type.isLvalue(true);
+   type = ValueType(val->getCtx(), resultTy);
+   type.makeReference();
 }
 
 TupleExtractInst::TupleExtractInst(Value *val, ConstantInt *idx,
@@ -90,7 +96,7 @@ EnumRawValueInst::EnumRawValueInst(Value *Val,
    auto EnumTy = cast<EnumType>(getParent()->getParent()->getParent()
                                            ->getType(rec->getName()));
 
-   type = EnumTy->getRawType();
+   type = ValueType(Val->getCtx(), EnumTy->getRawType());
 }
 
 EnumExtractInst::EnumExtractInst(Value *Val, llvm::StringRef caseName,
@@ -106,10 +112,10 @@ EnumExtractInst::EnumExtractInst(Value *Val, llvm::StringRef caseName,
 
    auto &Case = EnumTy->getCase(caseName);
 
-   auto idx = caseVal->getU64();
+   auto idx = caseVal->getZExtValue();
    assert(Case.AssociatedTypes.size() > idx && "invalid case index");
 
-   type = Case.AssociatedTypes[idx];
+   type = ValueType(Val->getCtx(), Case.AssociatedTypes[idx]);
    this->caseName = Case.name;
 
    setIsLvalue(true);
@@ -120,9 +126,9 @@ CaptureExtractInst::CaptureExtractInst(ConstantInt *idx, BasicBlock *parent)
 {
    auto F = dyn_cast<Lambda>(parent->getParent());
    assert(F && "cannot extract capture in non-lambda func");
-   assert(F->getCaptures().size() > idx->getU64() && "invalid capture idx");
+   assert(F->getCaptures().size() > idx->getZExtValue() && "invalid capture idx");
 
-   type = F->getCaptures()[idx->getU64()].type;
+   type = ValueType(idx->getCtx(), F->getCaptures()[idx->getZExtValue()]);
 }
 
 ConstantInt* CaptureExtractInst::getIdx() const

@@ -4,11 +4,13 @@
 
 #include "CallInst.h"
 
-#include "../Function/Method.h"
-#include "../Function/BasicBlock.h"
-#include "../../Module/Module.h"
+#include "AST/ASTContext.h"
 
-#include "../Constant/ConstantVal.h"
+#include "IL/Value/Function/Method.h"
+#include "IL/Value/Function/BasicBlock.h"
+#include "IL/Value/Constant/ConstantVal.h"
+#include "IL/Module/Module.h"
+#include "IL/Module/Context.h"
 
 using namespace cdot::support;
 
@@ -17,7 +19,8 @@ namespace il {
 
 CallInst::CallInst(Function *func, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent)
-   : Instruction(CallInstID, func->getReturnType(), parent),
+   : Instruction(CallInstID, ValueType(func->getCtx(), func->getReturnType()),
+                 parent),
      MultiOperandInst(args),
      calledFunction(func)
 {
@@ -27,8 +30,11 @@ CallInst::CallInst(Function *func, llvm::ArrayRef<Value *> args,
    }
 }
 
-CallInst::CallInst(TypeID id, llvm::ArrayRef<Value *> args, BasicBlock *parent)
-   : Instruction(id, nullptr, parent), MultiOperandInst(args)
+CallInst::CallInst(TypeID id, Context &Ctx,
+                   llvm::ArrayRef<Value *> args,
+                   BasicBlock *parent)
+   : Instruction(id, ValueType(Ctx, Ctx.getASTCtx().getVoidType()), parent),
+     MultiOperandInst(args)
 {
    for (const auto &arg : args) {
       arg->addUse(this);
@@ -44,7 +50,9 @@ CallInst::CallInst(TypeID id, Function *func, llvm::ArrayRef<Value *> args,
 
 CallInst::CallInst(TypeID id, Value *func, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent)
-   : Instruction(id, func->getType()->asFunctionType()->getReturnType(),
+   : Instruction(id, ValueType(func->getCtx(),
+                               func->getType()->asFunctionType()
+                                   ->getReturnType()),
                  parent),
      MultiOperandInst(args),
      indirectFunction(func)
@@ -64,7 +72,8 @@ IndirectCallInst::IndirectCallInst(Value *Func, llvm::ArrayRef<Value *> args,
 
 }
 
-LambdaCallInst::LambdaCallInst(Value *lambda, llvm::ArrayRef<Value *> args,
+LambdaCallInst::LambdaCallInst(Value *lambda,
+                               llvm::ArrayRef<Value *> args,
                                BasicBlock *parent)
    : CallInst(LambdaCallInstID, lambda, args, parent)
 {
@@ -90,7 +99,7 @@ VirtualCallInst::VirtualCallInst(Method *M,
 InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
                        BasicBlock *NormalContinuation, BasicBlock *LandingPad,
                        BasicBlock *parent)
-   : TerminatorInst(InvokeInstID, parent),
+   : TerminatorInst(InvokeInstID, func->getCtx(), parent),
      MultiOperandInst(args),
      calledFunction(func), NormalContinuation(NormalContinuation),
      LandingPad(LandingPad)
@@ -99,8 +108,8 @@ InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
       SubclassData |= Flag::MethodCall;
    }
 
-   NormalContinuation->addPredecessor(parent);
-   LandingPad->addPredecessor(parent);
+   NormalContinuation->addUse(this);
+   LandingPad->addUse(this);
 
    func->addUse(this);
    for (const auto &arg : args) {
@@ -160,7 +169,7 @@ VirtualInvokeInst::VirtualInvokeInst(Method *M,
 }
 
 IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
-                                     QualType returnType,
+                                     ValueType returnType,
                                      llvm::ArrayRef<Value *> args,
                                      BasicBlock *parent)
    : Instruction(IntrinsicCallInstID, returnType, parent),

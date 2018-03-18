@@ -4,11 +4,10 @@
 
 #include "AggregateType.h"
 
-#include "../../Module/Context.h"
-#include "../../Module/Module.h"
-#include "../Function/Method.h"
-
-#include "../../../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/NamedDecl.h"
+#include "IL/Module/Context.h"
+#include "IL/Module/Module.h"
+#include "IL/Value/Function/Method.h"
 
 using namespace cdot::support;
 
@@ -92,7 +91,7 @@ const StructType::Field & StructType::getField(llvm::StringRef name) const
    llvm_unreachable("field does not exist");
 }
 
-const StructType::FieldList &StructType::getFields() const
+llvm::ArrayRef<StructType::Field> StructType::getFields() const
 {
    return Fields;
 }
@@ -125,11 +124,6 @@ void EnumType::addCase(Case &&C)
    }
 
    cases.push_back(std::move(C));
-}
-
-Type *EnumType::getRawType() const
-{
-   return rawType;
 }
 
 const EnumType::CaseList &EnumType::getCases() const

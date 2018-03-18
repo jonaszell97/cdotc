@@ -32,8 +32,9 @@ public:
    }
 
 protected:
-   Constant(TypeID id, Type *ty);
-   Constant(TypeID id, QualType ty);
+   Constant(TypeID id, ValueType ty)
+      : Value(id, ty)
+   {}
 
 private:
    void handleReplacement(Value *with);

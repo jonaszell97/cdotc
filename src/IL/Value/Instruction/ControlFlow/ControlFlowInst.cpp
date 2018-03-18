@@ -3,8 +3,13 @@
 //
 
 #include "ControlFlowInst.h"
-#include "../../Function/BasicBlock.h"
-#include "../../Constant/ConstantVal.h"
+
+#include "AST/ASTContext.h"
+
+#include "IL/Module/Context.h"
+
+#include "IL/Value/Function/BasicBlock.h"
+#include "IL/Value/Constant/ConstantVal.h"
 
 namespace cdot {
 namespace il {
@@ -15,7 +20,7 @@ BrInst::BrInst(Value *Condition,
                BasicBlock *ElseBranch,
                llvm::ArrayRef<Value*> ElseArgs,
                BasicBlock *parent)
-   : TerminatorInst(BrInstID, parent),
+   : TerminatorInst(BrInstID, Condition->getCtx(), parent),
      MultiOperandInst(unsigned(TargetArgs.size()) + unsigned(ElseArgs.size())),
      Condition(Condition),
      TargetBranch(IfBranch),
@@ -23,8 +28,8 @@ BrInst::BrInst(Value *Condition,
      numTargetArgs(TargetArgs.size())
 {
    Condition->addUse(this);
-   IfBranch->addPredecessor(parent);
-   ElseBranch->addPredecessor(parent);
+   IfBranch->addUse(this);
+   ElseBranch->addUse(this);
 
    size_t i = 0;
    for (const auto &arg : TargetArgs) {
@@ -42,21 +47,21 @@ BrInst::BrInst(Value *Condition,
 BrInst::BrInst(BasicBlock *TargetBranch,
                llvm::ArrayRef<Value*> BlockArgs,
                BasicBlock *parent)
-   : TerminatorInst(BrInstID, parent),
+   : TerminatorInst(BrInstID, TargetBranch->getCtx(), parent),
      MultiOperandInst(BlockArgs),
      Condition(nullptr),
      TargetBranch(TargetBranch),
      ElseBranch(nullptr),
      numTargetArgs(BlockArgs.size())
 {
-   TargetBranch->addPredecessor(parent);
+   TargetBranch->addUse(this);
    for (const auto &arg : BlockArgs) {
       arg->addUse(this);
    }
 }
 
-BrInst::BrInst(BasicBlock *parent)
-   : TerminatorInst(BrInstID, parent),
+BrInst::BrInst(Context &Ctx, BasicBlock *parent)
+   : TerminatorInst(BrInstID, Ctx, parent),
      MultiOperandInst(0),
      Condition(nullptr), TargetBranch(nullptr),
      ElseBranch(nullptr), numTargetArgs(0)
@@ -76,15 +81,24 @@ llvm::ArrayRef<Value*> BrInst::getElseArgs() const
 
 void BrInst::setTargetBranch(BasicBlock *TargetBranch)
 {
-   TargetBranch->addPredecessor(parent);
+   TargetBranch->addUse(this);
    BrInst::TargetBranch = TargetBranch;
 }
 
-SwitchInst::SwitchInst(Value *SwitchVal, BasicBlock *parent)
-   : TerminatorInst(SwitchInstID, parent),
-     SwitchVal(SwitchVal), Cases{}
+SwitchInst::SwitchInst(Value *SwitchVal,
+                       BasicBlock *DefaultDst,
+                       BasicBlock *parent)
+   : TerminatorInst(SwitchInstID, SwitchVal->getCtx(), parent),
+     SwitchVal(SwitchVal), DefaultDst(DefaultDst)
 {
+   if (DefaultDst)
+      DefaultDst->addUse(this);
+}
 
+void SwitchInst::setDefault(BasicBlock *BB)
+{
+   DefaultDst = BB;
+   BB->addUse(this);
 }
 
 void SwitchInst::addCase(ConstantInt *val, BasicBlock *Dst)
@@ -93,14 +107,8 @@ void SwitchInst::addCase(ConstantInt *val, BasicBlock *Dst)
       val->addUse(this);
    }
 
-   Dst->addPredecessor(parent);
+   Dst->addUse(this);
    Cases.emplace_back(val, Dst);
-}
-
-void SwitchInst::addDefaultCase(BasicBlock *Dst)
-{
-   Dst->addPredecessor(parent);
-   Cases.emplace_back(nullptr, Dst);
 }
 
 Value *SwitchInst::getSwitchVal() const
@@ -113,18 +121,15 @@ const llvm::SmallVector<SwitchInst::CasePair, 4> &SwitchInst::getCases() const
    return Cases;
 }
 
-BasicBlock* SwitchInst::getDefault() const
+LandingPadInst::LandingPadInst(Context &Ctx, BasicBlock *parent)
+   : TerminatorInst(LandingPadInstID, Ctx, parent)
 {
-   for (const auto &C : Cases)
-      if (!C.first)
-         return C.second;
-
-   return nullptr;
+   type = ValueType(Ctx, Ctx.getASTCtx().getInt8PtrTy());
 }
 
 void LandingPadInst::addCatch(CatchClause &&Clause)
 {
-   Clause.TargetBB->addPredecessor(parent);
+   Clause.TargetBB->addUse(this);
    CatchClauses.push_back(std::move(Clause));
 }
 

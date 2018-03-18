@@ -8,20 +8,10 @@
 #include "IdentifierTable.h"
 #include "Module.h"
 
-#include "../AST/Passes/ILGen/ILGenPass.h"
-#include "../AST/Passes/Declaration/DeclPass.h"
-#include "../Support/ExtendedSerializerBase.h"
+#include "AST/Passes/ILGen/ILGenPass.h"
+#include "Support/ExtendedSerializerBase.h"
 
-#include "../AST/Statement/Block/CompoundStmt.h"
-#include "../AST/Statement/Declaration/CallableDecl.h"
-#include "../AST/Statement/Declaration/Class/RecordDecl.h"
-#include "../AST/Statement/Declaration/Class/MethodDecl.h"
-#include "../AST/Statement/Declaration/Class/PropDecl.h"
-#include "../AST/Statement/Declaration/Class/FieldDecl.h"
-#include "../AST/Statement/Declaration/Class/EnumCaseDecl.h"
-#include "../AST/Statement/Declaration/TypedefDecl.h"
-#include "../AST/Statement/Declaration/NamespaceDecl.h"
-#include "../AST/Statement/Declaration/LocalVarDecl.h"
+#include "AST/NamedDecl.h"
 
 using namespace cdot::support;
 using namespace cdot::ast;
@@ -82,9 +72,9 @@ public:
                                 std::unique_ptr<llvm::MemoryBuffer> &&Buf,
                                 SourceLocation importLoc)
       : ExtendedDeserializerBase(SP, Buf.get()),
-        Buf(move(Buf)),
-        privateFileNamespace(SP.getDeclPass()
-                               ->getPrivateFileNamespace(importLoc))
+        Buf(move(Buf))
+//        privateFileNamespace(SP.getDeclPass()
+//                               ->getPrivateFileNamespace(importLoc))
    {
       readOffsetMap();
    }
@@ -147,9 +137,8 @@ private:
             defaultVal = deserializeStmt<Expression>();
       }
 
-      auto argTy = new (SP.getContext()) TypeRef(ty);
-      return new (SP.getContext()) FuncArgDecl(move(name), argTy, defaultVal,
-                                               isVariadic, isConst,
+      return new (SP.getContext()) FuncArgDecl(move(name), SourceType(ty),
+                                               defaultVal, isVariadic, isConst,
                                                isCstyleVararg);
    }
 
@@ -297,7 +286,7 @@ private:
    void writeArgDecl(FuncArgDecl *Arg, bool writeDefaultValue = false)
    {
       WriteString(Arg->getArgName());
-      WriteQualType(Arg->getArgType()->getType());
+      WriteQualType(Arg->getArgType());
       WriteBools(Arg->isConst(), Arg->isVararg(), Arg->isCstyleVararg(),
                  Arg->isVariadicArgPackExpansion());
 
@@ -339,22 +328,22 @@ private:
 
 void IdentifierTableWriterImpl::writeDecl(NamedDecl *decl)
 {
-   Writer.WriteULEB128(decl->getTypeID());
-   switch (decl->getTypeID()) {
-      case AstNode::ClassDeclID:
-      case AstNode::StructDeclID:
-      case AstNode::EnumDeclID:
-      case AstNode::UnionDeclID:
-      case AstNode::ProtocolDeclID:
+   Writer.WriteULEB128(decl->getKind());
+   switch (decl->getKind()) {
+      case Decl::ClassDeclID:
+      case Decl::StructDeclID:
+      case Decl::EnumDeclID:
+      case Decl::UnionDeclID:
+      case Decl::ProtocolDeclID:
          writeRecordDecl(cast<RecordDecl>(decl));
          break;
-      case AstNode::FunctionDeclID:
+      case Decl::FunctionDeclID:
          writeFunctionDecl(cast<FunctionDecl>(decl));
          break;
-      case AstNode::AliasDeclID:
+      case Decl::AliasDeclID:
          writeAliasDecl(cast<AliasDecl>(decl));
          break;
-      case AstNode::TypedefDeclID:
+      case Decl::TypedefDeclID:
          writeTypedefDecl(cast<TypedefDecl>(decl));
          break;
       default:
@@ -364,24 +353,24 @@ void IdentifierTableWriterImpl::writeDecl(NamedDecl *decl)
 
 NamedDecl* IdentifierTableImpl::deserializeDecl(TableEntry &Entry,
                                                 QueryLevel level) {
-   auto kind = ReadEnum<AstNode::NodeType>();
+   auto kind = ReadEnum<Decl::DeclKind>();
 
    NamedDecl *decl;
    switch (kind) {
-      case AstNode::ClassDeclID:
-      case AstNode::StructDeclID:
-      case AstNode::EnumDeclID:
-      case AstNode::UnionDeclID:
-      case AstNode::ProtocolDeclID:
+      case Decl::ClassDeclID:
+      case Decl::StructDeclID:
+      case Decl::EnumDeclID:
+      case Decl::UnionDeclID:
+      case Decl::ProtocolDeclID:
          decl = deserializeRecordDecl(Entry, level);
          break;
-      case AstNode::FunctionDeclID:
+      case Decl::FunctionDeclID:
          decl = deserializeFunctionDecl(Entry, level);
          break;
-      case AstNode::AliasDeclID:
+      case Decl::AliasDeclID:
          decl = deserializeAliasDecl(Entry, level);
          break;
-      case AstNode::TypedefDeclID:
+      case Decl::TypedefDeclID:
          decl = deserializeTypedefDecl(Entry, level);
          break;
       default:
@@ -438,14 +427,14 @@ NamespaceDecl* IdentifierTableImpl::readNamespaceDecl()
       if (name.empty())
          break;
 
-      NamespaceDecl *next;
+      NamespaceDecl *next = nullptr;
 
       auto it = NamespaceMap.find(name);
       if (it != NamespaceMap.end()) {
          next = it->getValue();
       }
       else {
-         next = new (SP.getContext()) NamespaceDecl(move(name), nullptr, false);
+//         next = new (SP.getContext()) NamespaceDecl(move(name), nullptr, false);
       }
 
       if (!first) {
@@ -482,7 +471,7 @@ void IdentifierTableWriterImpl::writeFunctionDecl(FunctionDecl *decl)
       WriteString(decl->getLinkageName());
       WriteList(decl->getArgs(), &IdentifierTableWriterImpl::writeArgDecl,
                 false);
-      WriteQualType(decl->getReturnType()->getType());
+      WriteQualType(decl->getReturnType());
 
       size_t i = 0;
       bool first = true;
@@ -530,7 +519,8 @@ FunctionDecl* IdentifierTableImpl::deserializeFunctionDecl(TableEntry &Entry,
       ReadBools(isExternC, isNoThrow, isNative, isConvOp, hasNS);
 
       func = new (SP.getContext()) FunctionDecl(prelude.access,
-                                                move(prelude.name), {}, {},
+                                                move(prelude.name),
+                                                {}, SourceType(),
                                                 move(prelude.constraints),
                                                 nullptr, op);
 
@@ -555,7 +545,7 @@ FunctionDecl* IdentifierTableImpl::deserializeFunctionDecl(TableEntry &Entry,
       auto args = ReadList<FuncArgDecl *>(&IdentifierTableImpl::readArgDecl,
                                           false);
       auto retTy = ReadQualType();
-      auto typeref = new(SP.getContext()) TypeRef(retTy);
+      auto typeref = SourceType(retTy);
 
       auto fstDefaultArg = Reader.ReadULEB128();
       for (size_t i = fstDefaultArg; i < args.size(); ++i) {
@@ -624,7 +614,7 @@ void IdentifierTableWriterImpl::writeTypedefDecl(TypedefDecl *decl)
 
    // level 2 - interface
    if (beginLevel < 2) {
-      WriteQualType(decl->getOriginTy()->getType());
+      WriteQualType(decl->getOriginTy());
    }
 
    // no level 3
@@ -638,7 +628,7 @@ TypedefDecl* IdentifierTableImpl::deserializeTypedefDecl(TableEntry &Entry,
       auto prelude = readDeclPrelude();
       td = new (SP.getContext()) TypedefDecl(prelude.access,
                                              move(prelude.name),
-                                             new (SP.getContext()) TypeRef);
+                                             SourceType());
 
       td->setFlags(prelude.flags);
 
@@ -653,7 +643,7 @@ TypedefDecl* IdentifierTableImpl::deserializeTypedefDecl(TableEntry &Entry,
 
    if (Entry.getLevel() < 2) {
       auto qualTy = ReadQualType();
-      td->getOriginTy()->setType(qualTy);
+      td->getOriginTy().setResolvedType(qualTy);
    }
 
    return td;
@@ -664,7 +654,7 @@ void IdentifierTableWriterImpl::writeRecordDecl(RecordDecl *decl)
    // level 1 - declaration
 
    if (beginLevel < 1) {
-      Writer.WriteULEB128(decl->getTypeID());
+      Writer.WriteULEB128(decl->getKind());
       writeDeclPrelude(decl);
       
       if (auto C = dyn_cast<ClassDecl>(decl))
@@ -686,37 +676,37 @@ void IdentifierTableWriterImpl::writeRecordDecl(RecordDecl *decl)
       }
    }
    else if (auto E = dyn_cast<EnumDecl>(decl)) {
-      WriteType(*E->getRawType()->getType());
+      WriteQualType(E->getRawType());
    }
 
    if (beginLevel < 2) {
       for (auto &nd : decl->getDecls()) {
-         switch (nd->getTypeID()) {
-            case AstNode::MethodDeclID:
-            case AstNode::InitDeclID:
-            case AstNode::DeinitDeclID:
+         switch (nd->getKind()) {
+            case Decl::MethodDeclID:
+            case Decl::InitDeclID:
+            case Decl::DeinitDeclID:
                writeMethodDecl(cast<MethodDecl>(nd));
                break;
-            case AstNode::FieldDeclID:
+            case Decl::FieldDeclID:
                writeFieldDecl(cast<FieldDecl>(nd));
                break;
-            case AstNode::PropDeclID:
+            case Decl::PropDeclID:
                writePropertyDecl(cast<PropDecl>(nd));
                break;
-            case AstNode::EnumCaseDeclID:
+            case Decl::EnumCaseDeclID:
                writeCaseDecl(cast<EnumCaseDecl>(nd));
                break;
-            case AstNode::AssociatedTypeDeclID:
+            case Decl::AssociatedTypeDeclID:
                writeAssociatedTypeDecl(cast<AssociatedTypeDecl>(nd));
                break;
-            case AstNode::TypedefDeclID:
+            case Decl::TypedefDeclID:
                writeTypedefDecl(cast<TypedefDecl>(nd), 0);
                break;
-            case AstNode::StructDeclID:
-            case AstNode::ClassDeclID:
-            case AstNode::EnumDeclID:
-            case AstNode::UnionDeclID:
-            case AstNode::ProtocolDeclID:
+            case Decl::StructDeclID:
+            case Decl::ClassDeclID:
+            case Decl::EnumDeclID:
+            case Decl::UnionDeclID:
+            case Decl::ProtocolDeclID:
                writeRecordDecl(cast<RecordDecl>(nd));
                break;
             default:
@@ -731,32 +721,32 @@ void IdentifierTableWriterImpl::writeRecordDecl(RecordDecl *decl)
       return;
 
    for (auto &nd : decl->getDecls()) {
-      switch (nd->getTypeID()) {
-         case AstNode::MethodDeclID:
-         case AstNode::InitDeclID:
-         case AstNode::DeinitDeclID:
+      switch (nd->getKind()) {
+         case Decl::MethodDeclID:
+         case Decl::InitDeclID:
+         case Decl::DeinitDeclID:
             writeMethodDef(cast<MethodDecl>(nd));
             break;
-         case AstNode::FieldDeclID:
+         case Decl::FieldDeclID:
             writeFieldDef(cast<FieldDecl>(nd));
             break;
-         case AstNode::PropDeclID:
+         case Decl::PropDeclID:
             writePropertyDef(cast<PropDecl>(nd));
             break;
-         case AstNode::EnumCaseDeclID:
+         case Decl::EnumCaseDeclID:
             writeCaseDef(cast<EnumCaseDecl>(nd));
             break;
-         case AstNode::AssociatedTypeDeclID:
+         case Decl::AssociatedTypeDeclID:
             writeAssociatedTypeDef(cast<AssociatedTypeDecl>(nd));
             break;
-         case AstNode::TypedefDeclID:
+         case Decl::TypedefDeclID:
             writeTypedefDef(cast<TypedefDecl>(nd), 0);
             break;
-         case AstNode::StructDeclID:
-         case AstNode::ClassDeclID:
-         case AstNode::EnumDeclID:
-         case AstNode::UnionDeclID:
-         case AstNode::ProtocolDeclID:
+         case Decl::StructDeclID:
+         case Decl::ClassDeclID:
+         case Decl::EnumDeclID:
+         case Decl::UnionDeclID:
+         case Decl::ProtocolDeclID:
             writeRecordDecl(cast<RecordDecl>(nd));
             break;
          default:
@@ -775,37 +765,37 @@ RecordDecl* IdentifierTableImpl::deserializeRecordDecl(TableEntry &Entry,
 
    // level 1 - declaration
    if (Entry.getLevel() < 1) {
-      auto kind = ReadEnum<AstNode::NodeType>();
+      auto kind = ReadEnum<Decl::DeclKind >();
       auto prelude = readDeclPrelude();
 
       switch (kind) {
-         case AstNode::StructDeclID:
+         case Decl::StructDeclID:
             R = new (SP.getContext()) StructDecl(prelude.access,
                                                  move(prelude.name), {},
                                                  move(prelude.constraints));
 
             break;
-         case AstNode::ClassDeclID:
+         case Decl::ClassDeclID:
             R = new (SP.getContext()) ClassDecl(prelude.access,
                                                 move(prelude.name), {},
                                                 move(prelude.constraints),
-                                                nullptr, ReadBool());
+                                                SourceType(), ReadBool());
 
             break;
-         case AstNode::EnumDeclID:
+         case Decl::EnumDeclID:
             R = new (SP.getContext()) EnumDecl(prelude.access,
                                                move(prelude.name), {},
                                                move(prelude.constraints),
-                                               nullptr);
+                                               SourceType());
 
             break;
-         case AstNode::UnionDeclID:
+         case Decl::UnionDeclID:
             R = new (SP.getContext()) UnionDecl(prelude.access,
                                                 move(prelude.name), {},
                                                 move(prelude.constraints));
 
             break;
-         case AstNode::ProtocolDeclID:
+         case Decl::ProtocolDeclID:
             R = new(SP.getContext()) ProtocolDecl(prelude.access,
                                                   move(prelude.name), {},
                                                   move(prelude.constraints));
@@ -829,37 +819,37 @@ RecordDecl* IdentifierTableImpl::deserializeRecordDecl(TableEntry &Entry,
    if (Entry.getLevel() < 2) {
       bool done = false;
       while (!done) {
-         auto kind = ReadEnum<AstNode::NodeType>();
+         auto kind = ReadEnum<Decl::DeclKind >();
          switch (kind) {
-            case AstNode::MethodDeclID:
-            case AstNode::InitDeclID:
-            case AstNode::DeinitDeclID: {
+            case Decl::MethodDeclID:
+            case Decl::InitDeclID:
+            case Decl::DeinitDeclID: {
                readMethodDecl(R);
                break;
             }
-            case AstNode::FieldDeclID:
+            case Decl::FieldDeclID:
                readFieldDecl(R);
                break;
-            case AstNode::PropDeclID:
+            case Decl::PropDeclID:
                readPropertyDecl(R);
                break;
-            case AstNode::EnumCaseDeclID:
+            case Decl::EnumCaseDeclID:
                readCaseDecl(R);
                break;
-            case AstNode::AssociatedTypeDeclID:
+            case Decl::AssociatedTypeDeclID:
                readAssociatedTypeDecl(R);
                break;
-            case AstNode::TypedefDeclID:
+            case Decl::TypedefDeclID:
                readTypedefDecl(R);
                break;
-            case AstNode::StructDeclID:
-            case AstNode::ClassDeclID:
-            case AstNode::EnumDeclID:
-            case AstNode::UnionDeclID:
-            case AstNode::ProtocolDeclID:
+            case Decl::StructDeclID:
+            case Decl::ClassDeclID:
+            case Decl::EnumDeclID:
+            case Decl::UnionDeclID:
+            case Decl::ProtocolDeclID:
                deserializeRecordDecl(Entry, level);
                break;
-            case AstNode::BreakStmtID:
+            case Decl::NotDecl:
                done = true;
                break;
             default:
@@ -875,37 +865,37 @@ RecordDecl* IdentifierTableImpl::deserializeRecordDecl(TableEntry &Entry,
 
    bool done = false;
    while (!done) {
-      auto kind = ReadEnum<AstNode::NodeType>();
+      auto kind = ReadEnum<Decl::DeclKind >();
       switch (kind) {
-         case AstNode::MethodDeclID:
-         case AstNode::InitDeclID:
-         case AstNode::DeinitDeclID: {
+         case Decl::MethodDeclID:
+         case Decl::InitDeclID:
+         case Decl::DeinitDeclID: {
             readMethodDefinition(R);
             break;
          }
-         case AstNode::FieldDeclID:
+         case Decl::FieldDeclID:
             readFieldDefinition(R);
             break;
-         case AstNode::PropDeclID:
+         case Decl::PropDeclID:
             readPropertyDefinition(R);
             break;
-         case AstNode::EnumCaseDeclID:
+         case Decl::EnumCaseDeclID:
             readCaseDefinition(R);
             break;
-         case AstNode::AssociatedTypeDeclID:
+         case Decl::AssociatedTypeDeclID:
             readAssociatedTypeDefinition(R);
             break;
-         case AstNode::TypedefDeclID:
+         case Decl::TypedefDeclID:
             readTypedefDefinition(R);
             break;
-         case AstNode::StructDeclID:
-         case AstNode::ClassDeclID:
-         case AstNode::EnumDeclID:
-         case AstNode::UnionDeclID:
-         case AstNode::ProtocolDeclID:
+         case Decl::StructDeclID:
+         case Decl::ClassDeclID:
+         case Decl::EnumDeclID:
+         case Decl::UnionDeclID:
+         case Decl::ProtocolDeclID:
             deserializeRecordDecl(Entry, level);
             break;
-         case AstNode::BreakStmtID:
+         case Decl::NotDecl:
             done = true;
             break;
          default:
@@ -918,7 +908,7 @@ RecordDecl* IdentifierTableImpl::deserializeRecordDecl(TableEntry &Entry,
 
 void IdentifierTableWriterImpl::writeMethodDecl(MethodDecl *decl)
 {
-   Writer.WriteULEB128(decl->getTypeID());
+   Writer.WriteULEB128(decl->getKind());
    writeDeclPrelude(decl);
 
    WriteString(decl->getLinkageName());
@@ -935,7 +925,7 @@ void IdentifierTableWriterImpl::writeMethodDecl(MethodDecl *decl)
       // nothing to do
    }
    else {
-      WriteQualType(decl->getReturnType()->getType());
+      WriteQualType(decl->getReturnType());
       WriteOperatorInfo(decl->getOperator());
       WriteBools(decl->isStatic(), decl->isProperty(),
                  decl->isProtocolDefaultImpl(), decl->isProtocolMethod(),
@@ -957,14 +947,14 @@ void IdentifierTableWriterImpl::writeMethodDef(MethodDecl *decl)
 
 void IdentifierTableImpl::readMethodDecl(RecordDecl *R)
 {
-   auto kind = ReadEnum<AstNode::NodeType>();
+   auto kind = ReadEnum<Decl::DeclKind>();
    auto prelude = readDeclPrelude();
    auto linkageName = ReadString();
 
    auto args = ReadList<FuncArgDecl*>(&IdentifierTableImpl::readArgDecl, true);
 
    MethodDecl *M;
-   if (kind == AstNode::InitDeclID) {
+   if (kind == Decl::InitDeclID) {
       bool memberwiseInit, ProtoDefaultImpl, ProtoMethod, NoThrow;
       ReadBools(memberwiseInit, ProtoDefaultImpl, ProtoMethod, NoThrow);
 
@@ -976,14 +966,14 @@ void IdentifierTableImpl::readMethodDecl(RecordDecl *R)
       M->setIsProtocolMethod(ProtoMethod);
       M->isNoThrow(NoThrow);
    }
-   else if (kind == AstNode::DeinitDeclID) {
+   else if (kind == Decl::DeinitDeclID) {
       M = new (SP.getContext()) DeinitDecl(nullptr);
    }
    else {
-      assert(kind == AstNode::MethodDeclID);
+      assert(kind == Decl::MethodDeclID);
 
       auto retTy = ReadQualType();
-      auto typeref = new (SP.getContext()) TypeRef(retTy);
+      auto typeref = SourceType(retTy);
 
       auto op = ReadOperatorInfo();
       bool isStatic, isProp, isProtoDefaultImpl, isProtoMethod,
@@ -1008,7 +998,7 @@ void IdentifierTableImpl::readMethodDecl(RecordDecl *R)
    M->setExternal(true);
    M->setFlags(prelude.flags);
 
-   R->addDecl(M);
+   SP.addDeclToContext(*R, M);
 }
 
 void IdentifierTableImpl::readMethodDefinition(RecordDecl *R)
@@ -1023,7 +1013,7 @@ void IdentifierTableImpl::readMethodDefinition(RecordDecl *R)
 void IdentifierTableWriterImpl::writeFieldDecl(FieldDecl *decl)
 {
    writeDeclPrelude(decl);
-   WriteQualType(decl->getType()->getType());
+   WriteQualType(decl->getType());
    WriteBool(decl->isConst());
 
    if (auto G = decl->getGetterMethod()) {
@@ -1054,7 +1044,7 @@ void IdentifierTableImpl::readFieldDecl(RecordDecl *R)
    auto prelude = readDeclPrelude();
    auto fieldTy = ReadQualType();
    auto isConst = ReadBool();
-   auto typeref = new (SP.getContext()) TypeRef(fieldTy);
+   auto typeref = SourceType(fieldTy);
 
    MethodDecl *Getter = nullptr;
    if (ReadBool()) {
@@ -1075,7 +1065,7 @@ void IdentifierTableImpl::readFieldDecl(RecordDecl *R)
    F->setFlags(prelude.flags);
    F->setExternal(true);
 
-   R->addDecl(F);
+   SP.addDeclToContext(*R, F);
 }
 
 void IdentifierTableImpl::readFieldDefinition(RecordDecl *R)
@@ -1090,7 +1080,7 @@ void IdentifierTableImpl::readFieldDefinition(RecordDecl *R)
 void IdentifierTableWriterImpl::writePropertyDecl(PropDecl *decl)
 {
    writeDeclPrelude(decl);
-   WriteQualType(decl->getType()->getType());
+   WriteQualType(decl->getType());
    WriteString(decl->getNewValName());
 
    if (auto G = decl->getGetterMethod()) {
@@ -1119,7 +1109,7 @@ void IdentifierTableImpl::readPropertyDecl(RecordDecl *R)
 {
    auto prelude = readDeclPrelude();
    auto propTy = ReadQualType();
-   auto typeref = new (SP.getContext()) TypeRef(propTy);
+   auto typeref = SourceType(propTy);
 
    auto newValName = ReadString();
 
@@ -1144,7 +1134,7 @@ void IdentifierTableImpl::readPropertyDecl(RecordDecl *R)
    P->setFlags(prelude.flags);
    P->setExternal(true);
 
-   R->addDecl(P);
+   SP.addDeclToContext(*R, P);
 }
 
 void IdentifierTableImpl::readPropertyDefinition(RecordDecl *R)
@@ -1159,7 +1149,7 @@ void IdentifierTableWriterImpl::writeAssociatedTypeDecl(
 
    if (auto ty = decl->getActualType()) {
       WriteBool(true);
-      WriteQualType(ty->getType());
+      WriteQualType(ty);
    }
    else {
       WriteBool(false);
@@ -1176,9 +1166,9 @@ void IdentifierTableImpl::readAssociatedTypeDecl(RecordDecl *R)
    auto prelude = readDeclPrelude();
    auto proto = ReadString();
 
-   TypeRef *actualType = nullptr;
+   SourceType actualType;
    if (ReadBool())
-      new (SP.getContext()) TypeRef(ReadQualType());
+      actualType = ReadQualType();
 
    auto AT = new (SP.getContext())
       AssociatedTypeDecl(move(proto), move(prelude.name),
@@ -1187,7 +1177,7 @@ void IdentifierTableImpl::readAssociatedTypeDecl(RecordDecl *R)
    AT->setFlags(prelude.flags);
    AT->setExternal(true);
 
-   R->addDecl(AT);
+   SP.addDeclToContext(*R, AT);
 }
 
 void IdentifierTableImpl::readAssociatedTypeDefinition(RecordDecl *R)
@@ -1220,7 +1210,7 @@ void IdentifierTableImpl::readCaseDecl(RecordDecl *R)
    C->setFlags(prelude.flags);
    C->setExternal(true);
 
-   R->addDecl(C);
+   SP.addDeclToContext(*R, C);
 }
 
 void IdentifierTableImpl::readCaseDefinition(RecordDecl *R)
@@ -1241,7 +1231,7 @@ void IdentifierTableWriterImpl::writeTypedefDecl(TypedefDecl *decl, int)
 void IdentifierTableWriterImpl::writeTypedefDef(TypedefDecl *decl, int)
 {
    WriteString(decl->getName());
-   WriteQualType(decl->getOriginTy()->getType());
+   WriteQualType(decl->getOriginTy());
 }
 
 void IdentifierTableImpl::readTypedefDecl(RecordDecl *R)
@@ -1249,12 +1239,12 @@ void IdentifierTableImpl::readTypedefDecl(RecordDecl *R)
    auto prelude = readDeclPrelude();
    auto td = new (SP.getContext()) TypedefDecl(prelude.access,
                                                move(prelude.name),
-                                               new (SP.getContext()) TypeRef);
+                                               SourceType());
 
    td->setFlags(prelude.flags);
    td->setExternal(true);
 
-   R->addDecl(td);
+   SP.addDeclToContext(*R, td);
 }
 
 void IdentifierTableImpl::readTypedefDefinition(RecordDecl *R)
@@ -1263,7 +1253,7 @@ void IdentifierTableImpl::readTypedefDefinition(RecordDecl *R)
    auto td = cast<TypedefDecl>(R->lookupSingle(name));
 
    auto qualTy = ReadQualType();
-   td->getOriginTy()->setType(qualTy);
+   td->getOriginTy().setResolvedType(qualTy);
 }
 
 IdentifierTable::IdentifierTable(cdot::ast::SemaPass &SP,

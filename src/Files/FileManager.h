@@ -5,19 +5,16 @@
 #ifndef CDOT_FILEMANAGER_H
 #define CDOT_FILEMANAGER_H
 
+#include "lex/SourceLocation.h"
+
+#include <vector>
 #include <unordered_map>
 
 #include <llvm/ADT/Twine.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/MemoryBuffer.h>
-
-#include "../lex/SourceLocation.h"
-
-using llvm::MemoryBuffer;
-using llvm::Twine;
-
-using std::unordered_map;
-using std::pair;
 
 namespace cdot {
 
@@ -27,62 +24,91 @@ namespace module {
 
 namespace fs {
 
+struct LineColPair {
+   unsigned line;
+   unsigned col;
+};
+
+struct OpenFile {
+   OpenFile(unsigned int SourceId = 0, unsigned int BaseOffset = 0,
+            llvm::MemoryBuffer *Buf = nullptr)
+      : SourceId(SourceId), BaseOffset(BaseOffset), Buf(Buf)
+   { }
+
+   unsigned SourceId;
+   unsigned BaseOffset;
+   llvm::MemoryBuffer *Buf;
+};
+
 class FileManager {
 public:
-   static pair<size_t, std::unique_ptr<MemoryBuffer>> openFile(
-      const Twine &fileName,
-      bool isNewSourceFile = false
-   );
+   FileManager();
 
-   static std::unique_ptr<MemoryBuffer> openFile(size_t sourceId);
-   static std::unique_ptr<MemoryBuffer> openFile(const SourceLocation &loc);
+   OpenFile openFile(const llvm::Twine &fileName);
+   OpenFile getBufferForString(llvm::StringRef Str);
 
-   static size_t assignSourceId(llvm::Twine const& fileName)
+   llvm::MemoryBuffer *getBuffer(size_t sourceId);
+   llvm::MemoryBuffer *getBuffer(SourceLocation loc)
    {
-      auto id = ++sourceFileCount;
-      openedFiles.emplace(id, fileName.str());
-
-      return id;
+      return getBuffer(getSourceId(loc));
    }
 
-   static size_t assignModuleSourceId(llvm::Twine const& fileName,
-                                      module::Module *M) {
-      auto id = ++sourceFileCount;
-      openedFiles.emplace(id, fileName.str());
-      ModuleFiles.emplace(id, M);
-
-      return id;
-   }
-
-   static module::Module *getImportedModule(size_t sourceId)
+   unsigned getBaseOffset(size_t sourceId)
    {
-      auto it = ModuleFiles.find(sourceId);
-      if (it == ModuleFiles.end())
-         return nullptr;
-
-      return it->second;
+      return sourceIdOffsets[sourceId - 1];
    }
 
-   static const Twine &getFileName(size_t sourceId);
+   unsigned getBaseOffset(SourceLocation loc)
+   {
+      return getBaseOffset(getSourceId(loc));
+   }
 
-   static std::pair<unsigned, unsigned>
-   getLineAndCol(const SourceLocation &loc);
+   size_t getSourceId(SourceLocation loc);
 
-   static std::pair<unsigned, unsigned>
-   getLineAndCol(const SourceLocation &loc, llvm::MemoryBuffer *Buf);
+   llvm::StringRef getFileName(SourceLocation loc)
+   {
+      return getFileName(getSourceId(loc));
+   }
 
-   static size_t createOrGetFileAlias(size_t aliasedSourceId);
+   llvm::StringRef getFileName(size_t sourceId);
+
+   LineColPair getLineAndCol(SourceLocation loc);
+   LineColPair getLineAndCol(SourceLocation loc, llvm::MemoryBuffer *Buf);
+
+   SourceLocation getAliasLoc(SourceLocation loc)
+   {
+      return getAliasLoc(getSourceId(loc));
+   }
+
+   SourceLocation getAliasLoc(size_t sourceId);
+
+   size_t createSourceLocAlias(SourceLocation aliasedLoc);
 
 private:
-   static size_t sourceFileCount;
-   static unordered_map<size_t, std::string> openedFiles;
-   static unordered_map<size_t, module::Module*> ModuleFiles;
+   std::vector<unsigned> sourceIdOffsets;
 
-   static unordered_map<size_t, std::vector<size_t>> LineOffsets;
+   struct CachedFile {
+      CachedFile(unsigned int SourceId, unsigned int BaseOffset,
+                 std::unique_ptr<llvm::MemoryBuffer> &&Buf)
+         : SourceId(SourceId), BaseOffset(BaseOffset), Buf(move(Buf)),
+           IsMacroExpansion(false), IsMixin(false)
+      { }
 
-   static std::vector<size_t> const& collectLineOffsetsForFile(
-                                                      size_t sourceId,
-                                                      llvm::MemoryBuffer *Buf);
+      unsigned SourceId;
+      unsigned BaseOffset;
+      std::unique_ptr<llvm::MemoryBuffer> Buf;
+
+      bool IsMacroExpansion : 1;
+      bool IsMixin          : 1;
+   };
+
+   llvm::StringMap<CachedFile> MemBufferCache;
+   llvm::DenseMap<size_t, llvm::StringMapEntry<CachedFile>*> IdFileMap;
+   std::unordered_map<size_t, SourceLocation> aliases;
+   std::unordered_map<size_t, std::vector<unsigned>> LineOffsets;
+
+   std::vector<unsigned> const& collectLineOffsetsForFile(size_t sourceId,
+                                                       llvm::MemoryBuffer *Buf);
 };
 
 } // namespace fs

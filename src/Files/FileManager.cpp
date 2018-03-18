@@ -2,107 +2,177 @@
 // Created by Jonas Zell on 14.10.17.
 //
 
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/FileSystem.h>
 #include "FileManager.h"
 
-#include "llvm/Support/ErrorOr.h"
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/ErrorOr.h>
 
 using std::string;
 
 namespace cdot {
 namespace fs {
-
-size_t FileManager::sourceFileCount = 0;
-unordered_map<size_t, string> FileManager::openedFiles;
-unordered_map<size_t, std::vector<size_t>> FileManager::LineOffsets;
-unordered_map<size_t, module::Module*> FileManager::ModuleFiles;
-
 namespace {
 
-unordered_map<size_t, size_t> FileAliases;
+std::unordered_map<size_t, size_t> FileAliases;
 
 } // anonymous namespace
 
-pair<size_t, std::unique_ptr<MemoryBuffer>>
-FileManager::openFile(const Twine &fileName, bool isNewSourceFile)
+FileManager::FileManager() : sourceIdOffsets{ 1 }
 {
-   auto file = llvm::MemoryBuffer::getFileAsStream(fileName);
-   if (!file) {
-      return std::make_pair(size_t(0), std::unique_ptr<MemoryBuffer>{});
-   }
 
-   auto id = ++sourceFileCount;
-   openedFiles.emplace(id, fileName.str());
-
-   return std::make_pair(id, std::move(file.get()));
 }
 
-std::unique_ptr<MemoryBuffer>
-FileManager::openFile(size_t sourceId)
+OpenFile FileManager::openFile(const llvm::Twine &fileName)
 {
-   auto index = openedFiles.find(sourceId);
-   if (index == openedFiles.end()) {
+   llvm::StringRef name = fileName.str();
+
+   auto it = MemBufferCache.find(name);
+   if (it != MemBufferCache.end()) {
+      auto &File = it->getValue();
+      return OpenFile(File.SourceId, File.BaseOffset, File.Buf.get());
+   }
+
+   auto Buf = llvm::MemoryBuffer::getFileAsStream(fileName);
+   if (!Buf) {
+      return OpenFile();
+   }
+
+   auto previous = sourceIdOffsets.back();
+   auto id = sourceIdOffsets.size();
+
+   auto ptr = Buf.get().get();
+   auto offset = unsigned(previous + ptr->getBufferSize());
+
+   auto Entry = MemBufferCache.try_emplace(name, id, offset, move(Buf.get()))
+                              .first;
+
+   IdFileMap.try_emplace(id, &*Entry);
+   sourceIdOffsets.push_back(offset);
+
+   return OpenFile(unsigned(id), previous, ptr);
+}
+
+OpenFile FileManager::getBufferForString(llvm::StringRef Str)
+{
+   auto Buf = llvm::MemoryBuffer::getMemBufferCopy(Str);
+   auto previous = sourceIdOffsets.back();
+   auto id = sourceIdOffsets.size();
+
+   auto ptr = Buf.get();
+   auto offset = unsigned(previous + ptr->getBufferSize());
+
+   std::string key = "__";
+   key += std::to_string(id);
+
+   auto Entry = MemBufferCache.try_emplace(key, id, offset, move(Buf)).first;
+   Entry->getValue().IsMixin = true;
+
+   IdFileMap.try_emplace(id, &*Entry);
+   sourceIdOffsets.push_back(offset);
+
+   return OpenFile((unsigned)id, previous, ptr);
+}
+
+llvm::MemoryBuffer *FileManager::getBuffer(size_t sourceId)
+{
+   auto index = IdFileMap.find(sourceId);
+   if (index == IdFileMap.end()) {
       auto aliasIt = FileAliases.find(sourceId);
       assert(aliasIt != FileAliases.end());
 
-      return openFile(aliasIt->second);
+      return getBuffer(aliasIt->second);
    }
 
-   return openFile(index->second).second;
+   return index->getSecond()->getValue().Buf.get();
 }
 
-std::unique_ptr<MemoryBuffer>
-FileManager::openFile(const SourceLocation &loc)
+size_t FileManager::getSourceId(SourceLocation loc)
 {
-   return openFile(loc.getSourceId());
+   if (loc.getOffset() == 0)
+      return 0;
+
+   if (sourceIdOffsets.size() == 1)
+      return 1;
+
+   unsigned needle = loc.getOffset();
+   unsigned L = 0;
+   unsigned R = (unsigned)sourceIdOffsets.size() - 1;
+   unsigned m;
+
+   while (true) {
+      m = (L + R) / 2u;
+      if (L > R || sourceIdOffsets[m] == needle)
+         break;
+
+      if (sourceIdOffsets[m] < needle)
+         L = m + 1;
+      else
+         R = m - 1;
+   }
+
+   return m + 1;
 }
 
-const Twine& FileManager::getFileName(size_t sourceId)
+llvm::StringRef FileManager::getFileName(size_t sourceId)
 {
-   auto index = openedFiles.find(sourceId);
-   if (index == openedFiles.end()) {
+   auto index = IdFileMap.find(sourceId);
+   if (index == IdFileMap.end()) {
       auto aliasIt = FileAliases.find(sourceId);
       assert(aliasIt != FileAliases.end());
 
       return getFileName(aliasIt->second);
    }
 
-   return index->second;
+   if (index->getSecond()->getValue().IsMixin)
+      return "<mixin expression>";
+
+   return index->getSecond()->getKey();
 }
 
-size_t FileManager::createOrGetFileAlias(size_t aliasedSourceId)
+size_t FileManager::createSourceLocAlias(SourceLocation aliasedLoc)
 {
-   auto id = ++sourceFileCount;
-   FileAliases.emplace(id, aliasedSourceId);
+   auto id = 69;
+   aliases.emplace(id, aliasedLoc);
 
    return id;
 }
 
-std::pair<unsigned, unsigned> FileManager::getLineAndCol(
-                                                    const SourceLocation &loc) {
-   auto file = openFile(loc.getSourceId());
-   return getLineAndCol(loc, file.get());
+SourceLocation FileManager::getAliasLoc(size_t sourceId)
+{
+   auto it = aliases.find(sourceId);
+   if (it == aliases.end())
+      return SourceLocation();
+
+   return it->second;
 }
 
-std::pair<unsigned, unsigned> FileManager::getLineAndCol(
-                                                      const SourceLocation &loc,
-                                                      llvm::MemoryBuffer *Buf) {
-   auto it = LineOffsets.find(loc.getSourceId());
+LineColPair FileManager::getLineAndCol(SourceLocation loc)
+{
+   if (!loc)
+      return { 0, 0 };
+
+   auto file = getBuffer(loc);
+   return getLineAndCol(loc, file);
+}
+
+LineColPair FileManager::getLineAndCol(SourceLocation loc,
+                                       llvm::MemoryBuffer *Buf) {
+   auto ID = getSourceId(loc);
+   auto it = LineOffsets.find(ID);
    auto const& offsets = it == LineOffsets.end()
-                         ? collectLineOffsetsForFile(loc.getSourceId(), Buf)
+                         ? collectLineOffsetsForFile(ID, Buf)
                          : it->second;
 
    assert(!offsets.empty());
 
-   auto needle = loc.getOffset();
-
-   size_t L = 0;
-   size_t R = offsets.size() - 1;
-   size_t m;
+   unsigned needle = loc.getOffset() - getBaseOffset(ID);
+   unsigned L = 0;
+   unsigned R = (unsigned)offsets.size() - 1;
+   unsigned m;
 
    while (true) {
-      m = (L + R) / 2llu;
+      m = (L + R) / 2u;
       if (L > R || offsets[m] == needle)
          break;
 
@@ -115,13 +185,17 @@ std::pair<unsigned, unsigned> FileManager::getLineAndCol(
    auto closestOffset = offsets[m];
    assert(closestOffset <= needle);
 
+   // special treatment for first line
+   if (!m)
+      ++needle;
+
    return { m + 1, needle - closestOffset + 1 };
 }
 
-std::vector<size_t> const& FileManager::collectLineOffsetsForFile(
-                                                      size_t sourceId,
-                                                      llvm::MemoryBuffer *Buf) {
-   std::vector<size_t> newLines{ 0 };
+const std::vector<unsigned>&
+FileManager::collectLineOffsetsForFile(size_t sourceId,
+                                       llvm::MemoryBuffer *Buf) {
+   std::vector<unsigned> newLines{ 0 };
 
    unsigned idx = 0;
    auto buf = Buf->getBufferStart();

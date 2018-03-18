@@ -8,20 +8,24 @@
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallVector.h>
 
+#ifndef NDEBUG
+#  include <llvm/Support/raw_ostream.h>
+#endif
+
 namespace cdot {
 
 template <class T>
 class DependencyGraph {
 public:
    struct Vertex {
-      explicit Vertex(T* Ptr)
-         : Ptr(Ptr) {}
+      explicit Vertex(T Ptr)
+         : Ptr(std::move(Ptr)) {}
 
       Vertex(Vertex const&) = delete;
       Vertex &operator=(Vertex const&) = delete;
 
       Vertex(Vertex &&vert) noexcept
-         : Ptr(vert.Ptr), Incoming(std::move(vert.Incoming)),
+         : Ptr(std::move(vert.Ptr)), Incoming(std::move(vert.Incoming)),
            Outgoing(std::move(vert.Outgoing))
       {
 
@@ -39,7 +43,19 @@ public:
          vert->Incoming.erase(this);
       }
 
-      T *getPtr() const
+      void addIncoming(Vertex *vert)
+      {
+         Incoming.insert(vert);
+         vert->Outgoing.insert(this);
+      }
+
+      void removeIncoming(Vertex *vert)
+      {
+         Incoming.erase(vert);
+         vert->Outgoing.erase(this);
+      }
+
+      T getPtr()
       {
          return Ptr;
       }
@@ -55,26 +71,39 @@ public:
       }
 
    private:
-      T* Ptr;
+      T Ptr;
       llvm::SmallPtrSet<Vertex*, 4> Incoming;
       llvm::SmallPtrSet<Vertex*, 4> Outgoing;
    };
 
    DependencyGraph() = default;
    DependencyGraph(const DependencyGraph &) = delete;
-   DependencyGraph(DependencyGraph &&) = delete;
+   
+   DependencyGraph(DependencyGraph &&that) : Vertices(std::move(that.Vertices))
+   {
+      that.Vertices.clear();
+   }
 
    ~DependencyGraph()
    {
-      for (const auto &vert : Vertices)
-         delete vert;
+      destroyVerts();
    }
 
    DependencyGraph &operator=(const DependencyGraph &) = delete;
-   DependencyGraph &operator=(DependencyGraph &&) = delete;
-
-   Vertex &getOrAddVertex(T *ptr)
+   DependencyGraph &operator=(DependencyGraph &&that) noexcept
    {
+      destroyVerts();
+      
+      Vertices = std::move(that.Vertices);
+      that.Vertices.clear();
+      
+      return *this;
+   }
+
+   Vertex &getOrAddVertex(T ptr)
+   {
+      accessed = true;
+
       for (auto &V : Vertices)
          if (V->getPtr() == ptr)
             return *V;
@@ -86,7 +115,7 @@ public:
    template <class Actor>
    bool actOnGraphInOrder(Actor const& act)
    {
-      llvm::SmallVector<T*, 8> Order;
+      llvm::SmallVector<T, 8> Order;
       if (!getEvaluationOrder(Order))
          return false;
 
@@ -96,15 +125,15 @@ public:
       return true;
    }
 
-   std::pair<llvm::SmallVector<T*, 8>, bool> constructOrderedList()
+   std::pair<llvm::SmallVector<T, 8>, bool> constructOrderedList()
    {
-      std::pair<llvm::SmallVector<T*, 8>, bool> res;
+      std::pair<llvm::SmallVector<T, 8>, bool> res;
       res.second = getEvaluationOrder(res.first);
 
       return res;
    }
 
-   std::pair<T*, T*> getOffendingPair()
+   std::pair<T, T> getOffendingPair()
    {
       for (auto &vert : Vertices)
          if (!vert->getOutgoing().empty())
@@ -119,8 +148,59 @@ public:
       return Vertices;
    }
 
+   void erase(T t)
+   {
+      auto it = Vertices.begin();
+      auto end_it = Vertices.end();
+
+      for (; it != end_it; ++it) {
+         auto &V = *it;
+         if (V->getPtr() == t) {
+            for (auto Out : V->getOutgoing())
+               Out->removeIncoming(V);
+
+            for (auto In : V->getIncoming())
+               In->removeOutgoing(V);
+
+            Vertices.erase(it);
+            delete V;
+            
+            break;
+         }
+      }
+   }
+
+   void clear()
+   {
+      destroyVerts();
+      Vertices.clear();
+   }
+
+   bool empty() const
+   {
+      return Vertices.empty();
+   }
+
+   bool wasAccessed() const { return accessed; }
+   void resetAccessed() { accessed = false; }
+
+#ifndef NDEBUG
+   template<class PrintFn>
+   void print(const PrintFn &Fn)
+   {
+      int i = 0;
+      for (auto &Vert : Vertices) {
+         if (i++ != 0) llvm::outs() << "\n\n";
+         llvm::outs() << Fn(Vert->getPtr());
+         for (auto Out : Vert->getOutgoing()) {
+            llvm::outs() << "\n    -> " << Fn(Out->getPtr());
+         }
+      }
+   }
+#endif
+
 private:
-   bool getEvaluationOrder(llvm::SmallVector<T*, 8> &Order)
+   bool getEvaluationOrder(llvm::SmallVector<T, 8> &Order)
    {
       llvm::SmallPtrSet<Vertex*, 4> VerticesWithoutIncomingEdges;
       for (auto &vert : Vertices)
@@ -147,8 +227,15 @@ private:
 
       return cnt == Vertices.size();
    }
+   
+   void destroyVerts()
+   {
+      for (const auto &vert : Vertices)
+         delete vert;
+   }
 
    llvm::SmallVector<Vertex*, 8> Vertices;
+   bool accessed = false;
 };
 
 } // namespace cdot

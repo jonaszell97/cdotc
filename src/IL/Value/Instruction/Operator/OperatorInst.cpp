@@ -4,50 +4,59 @@
 
 #include "OperatorInst.h"
 
-#include "../../../../Variant/Type/Type.h"
-#include "../MultiOperandInst.h"
-#include "../CallInst.h"
+#include "AST/ASTContext.h"
+#include "IL/Value/Instruction/MultiOperandInst.h"
+#include "IL/Value/Instruction/CallInst.h"
+#include "Variant/Type/Type.h"
 
 namespace cdot {
 namespace il {
 
-const char* OpNames[] = {
-   "add", "sub", "mul", "div", "mod", "exp", "and", "or", "xor", "lshr",
-   "ashr", "shl", "comp eq", "comp ne", "comp lt", "comp gt",
-   "comp le", "comp ge",
-
-   "min", "neg"
-};
-
-BinaryInstruction::BinaryInstruction(TypeID id, Value *lhs, Value *rhs,
-                                     Type *resultType, BasicBlock *parent)
-   : OperatorInst(id, resultType, parent), Operands{ lhs, rhs }
-{
-   lhs->addUse(this);
-   rhs->addUse(this);
-}
-
 BinaryInstruction::BinaryInstruction(TypeID id, Value *lhs, Value *rhs,
                                      QualType resultType, BasicBlock *parent)
-   : OperatorInst(id, resultType, parent), Operands{ lhs, rhs }
+   : OperatorInst(id, lhs->getCtx(), resultType, parent),
+     Operands{ lhs, rhs }
 {
    lhs->addUse(this);
    rhs->addUse(this);
 }
 
-
-UnaryInstruction::UnaryInstruction(TypeID id, Value *operand, Type *resultType,
+UnaryInstruction::UnaryInstruction(TypeID id,
+                                   Value *operand,
+                                   QualType resultType,
                                    BasicBlock *parent)
-   : OperatorInst(id, resultType, parent), Operand(operand)
+   : OperatorInst(id, operand->getCtx(), resultType, parent),
+     Operand(operand)
 {
    operand->addUse(this);
 }
 
-UnaryInstruction::UnaryInstruction(TypeID id, Value *operand,
-                                   QualType resultType, BasicBlock *parent)
-   : OperatorInst(id, resultType, parent), Operand(operand)
+BinaryOperatorInst::BinaryOperatorInst(OpCode opCode, Value *lhs,
+                                       Value *rhs, BasicBlock *parent)
+   : BinaryInstruction(BinaryOperatorInstID, lhs, rhs, lhs->getType(),
+                       parent),
+     opCode(opCode)
 {
-   operand->addUse(this);
+
+}
+
+UnaryOperatorInst::UnaryOperatorInst(OpCode opCode,
+                                     Value *target,
+                                     BasicBlock *parent)
+   : UnaryInstruction(UnaryOperatorInstID, target, target->getType(), parent),
+     opCode(opCode)
+{
+
+}
+
+CompInst::CompInst(OpCode opCode,
+                   Value *lhs, Value *rhs,
+                   BasicBlock *parent)
+   : BinaryInstruction(CompInstID, lhs, rhs, lhs->getASTCtx().getBoolTy(),
+                       parent),
+     opCode(opCode)
+{
+
 }
 
 } // namespace il

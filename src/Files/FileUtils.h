@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 #include <system_error>
-#include <llvm/ADT/Twine.h>
 #include <llvm/ADT/ArrayRef.h>
 
 namespace llvm {
@@ -25,26 +24,23 @@ namespace fs {
    static char PathSeperator = '/';
 #endif
 
-std::string getPath(const std::string& fullPath);
-std::string getFileName(const std::string& fullPath);
+llvm::StringRef getPath(llvm::StringRef fullPath);
+llvm::StringRef getFileName(llvm::StringRef fullPath);
 
-std::string getExtension(const std::string& fullPath);
-std::string withoutExtension(const std::string &fullPath);
-std::string swapExtension(const std::string& fileName,
-                          const std::string &newExt);
+llvm::StringRef getExtension(llvm::StringRef fullPath);
+llvm::StringRef withoutExtension(llvm::StringRef fullPath);
+std::string swapExtension(llvm::StringRef fileName,
+                          llvm::StringRef newExt);
 
-std::string getFileNameAndExtension(const std::string& fullPath);
-bool fileExists(const std::string& name);
+llvm::StringRef getFileNameAndExtension(llvm::StringRef fullPath);
+bool fileExists(llvm::StringRef name);
 
-void createDirectories(const std::string &fullPath);
+void createDirectories(llvm::StringRef fullPath);
 
-std::vector<std::string> getAllFilesInDirectory(std::string& dirName,
-                                           bool recursive = false);
+std::vector<std::string> getAllFilesInDirectory(llvm::StringRef dirName,
+                                                bool recursive = false);
 
-llvm::raw_fd_ostream* createFile(const std::string& fileName,
-                                 std::error_code ec, bool overwrite = false);
-
-std::string findFileInDirectories(llvm::Twine const &fileName,
+std::string findFileInDirectories(llvm::StringRef fileName,
                                   llvm::ArrayRef<std::string> directories);
 
 int executeCommand(llvm::StringRef Program, llvm::ArrayRef<std::string> args);

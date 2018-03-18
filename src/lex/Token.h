@@ -83,6 +83,7 @@ struct Token {
    unsigned getOffset()          const { return loc.getOffset(); }
    SourceLocation getSourceLoc() const { return loc; }
 
+   bool is(IdentifierInfo *II) const;
    bool is(tok::TokenType ty) const { return kind == ty; }
    bool isNot(tok::TokenType ty) const { return !is(ty); }
 
@@ -95,6 +96,15 @@ struct Token {
 
    bool oneOf(tok::TokenType ty) const { return is(ty); }
 
+   template<class ...Rest>
+   bool oneOf(IdentifierInfo *II, Rest... rest) const
+   {
+      if (is(II)) return true;
+      return oneOf(rest...);
+   }
+
+   bool oneOf(IdentifierInfo *II) const { return is(II); }
+
    bool is_punctuator() const;
    bool is_keyword() const;
    bool is_operator() const;
@@ -103,7 +113,7 @@ struct Token {
 
    bool is_identifier() const
    {
-      return kind == tok::ident;
+      return kind == tok::ident || kind == tok::op_ident;
    }
 
    bool is_separator() const
@@ -113,7 +123,7 @@ struct Token {
 
    IdentifierInfo *getIdentifierInfo() const
    {
-      assert(Ptr && !Data && "not an identifier token");
+      if (!Ptr || Data) return nullptr;
       return (IdentifierInfo*)(Ptr);
    }
 

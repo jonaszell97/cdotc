@@ -13,14 +13,8 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-Instruction::Instruction(TypeID id, Type *ty,
-                         BasicBlock *parent)
-   : Instruction(id, QualType(ty), parent)
-{
-
-}
-
-Instruction::Instruction(TypeID id, QualType ty,
+Instruction::Instruction(TypeID id,
+                         ValueType ty,
                          BasicBlock *parent)
    : Value(id, ty), parent(parent)
 {
@@ -65,7 +59,7 @@ void Instruction::handleReplacement(Value *with)
       Inst->setParent(parent);
    }
 
-   this->removeFromParent();
+   this->detachFromParent();
    parent = nullptr;
 }
 

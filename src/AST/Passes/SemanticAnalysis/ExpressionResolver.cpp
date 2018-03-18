@@ -4,22 +4,19 @@
 
 #include "ExpressionResolver.h"
 
-#include "AST/Operator/ExprSequence.h"
-#include "AST/Operator/BinaryOperator.h"
-#include "AST/Operator/TertiaryOperator.h"
-#include "AST/Operator/UnaryOperator.h"
-
-#include "AST/Expression/RefExpr/IdentifierRefExpr.h"
-#include "AST/Statement/Declaration/Class/RecordDecl.h"
-
+#include "AST/Expression.h"
+#include "AST/Statement/Declaration/Class/NamedDecl.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 
 #include "AST/Transform.h"
 #include "AST/ASTContext.h"
 
 #include "Support/Casting.h"
+#include "CandidateSet.h"
 
 #include <llvm/ADT/StringSwitch.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/Twine.h>
 
 using namespace cdot::support;
 using namespace cdot::diag;
@@ -27,34 +24,38 @@ using namespace cdot::diag;
 namespace cdot {
 namespace ast {
 
-using SequenceElement = ExprSequence::SequenceElement;
 using FragList = std::vector<SequenceElement>;
 
-class ExprResolverImpl: public DiagnosticIssuer {
+class ExprResolverImpl {
 public:
    ExprResolverImpl(SemaPass &SP, ExprSequence *Expr,
-                    QualType contextualType)
+                    QualType contextualType,
+                    bool ignoreErrors = false)
       : contextualType(contextualType),
-        SP(SP), Fragments(Expr->getFragments()), counter(0), ExprSeq(Expr)
+        SP(SP), Fragments(Expr->getFragments()), counter(0),
+        ignoreErrors(ignoreErrors), PlaceholderExpr({}), ExprSeq(Expr)
    {}
 
    ExprResolverImpl(SemaPass &SP, ExprSequence *Expr,
                     llvm::ArrayRef<SequenceElement> Fragments,
-                    QualType contextualType)
+                    QualType contextualType,
+                    bool ignoreErrors = false)
       : contextualType(contextualType),
-        SP(SP), Fragments(Fragments), counter(0), ExprSeq(Expr)
+        SP(SP), Fragments(Fragments), counter(0),
+        ignoreErrors(ignoreErrors), PlaceholderExpr({}), ExprSeq(Expr)
    {}
 
-   Expression* ParseExpression(bool isTertiary = false);
-
-   Expression* ParseExpressionImpl(QualType lhsTy = {},
-                                   bool parsingTernaryOp = false,
-                                   Expression* lhs = nullptr,
-                                   int minPrecedence = 0);
+   Expression* ParseExpression(Expression* lhs = nullptr,
+                               int minPrecedence = 0);
 
    bool hasNext(unsigned add = 1) const
    {
       return counter + add <= Fragments.size();
+   }
+
+   bool fragmentsLeft(unsigned num) const
+   {
+      return counter + num == Fragments.size();
    }
 
    SequenceElement const& lookahead() const
@@ -69,26 +70,9 @@ public:
       return Fragments[counter++];
    }
 
-   void backtrack()
-   {
-      assert(counter);
-      --counter;
-   }
-
    SequenceElement const& current()
    {
       return Fragments[counter - 1];
-   }
-
-   QualType visitExpr(Expression* const& expr)
-   {
-      auto result = SP.visitExpr(ExprSeq, expr);
-      if (result.hadError()) {
-         had_error = true;
-         return {};
-      }
-
-      return result.getType();
    }
 
    template<class T, class ...Args>
@@ -102,14 +86,6 @@ public:
       return ret;
    }
 
-   SequenceElement const* getUnusedElement()
-   {
-      if (counter == Fragments.size())
-         return nullptr;
-
-      return &Fragments[counter];
-   }
-
    void setContextualType(Expression* expr,
                           QualType ctxType) {
       if (ctxType->isAutoType())
@@ -118,680 +94,541 @@ public:
       expr->setContextualType(ctxType);
    }
 
-   bool hadError() const
-   {
-      return had_error;
-   }
+   bool hadError() const { return HadError; }
 
 private:
-   Expression* ParseUnaryExpression(bool lhsOfAssignment = false,
-                                    QualType lhsTy = {});
+   Expression* ParseUnaryExpression();
+   Expression* GetUnaryExpressionTarget();
 
-   Expression* GetUnaryExpressionTarget(QualType lhsTy);
+   struct PrecedenceResult {
+      PrecedenceResult() = default;
 
-   bool higherPrecedenceFollows(int &minPrecedence,
-                                QualType ty,
-                                bool higherOrEqual,
-                                string &opName,
-                                bool parsingTernaryOp = false);
+      PrecedenceResult(std::string &&opName, Expression *RHS = nullptr)
+         : RHS(RHS), opName(move(opName))
+      {}
 
-   Expression* ParseTertiaryOperator(Expression* cond);
+      PrecedenceResult(CandidateSet &&CandSet,
+                       Expression *RHS,
+                       std::string &&opName,
+                       SourceLocation opLoc,
+                       size_t rhsIdx)
+         : CandSet(std::move(CandSet)), RHS(RHS),
+           opLoc(opLoc), opName(move(opName)), rhsIdx(rhsIdx)
+      {}
 
-   // patterns
+      operator bool() const
+      {
+         return !!CandSet;
+      }
 
-   Expression* HandleOpThenMaybeOp(QualType lhsTy, Expression *Expr = nullptr);
-   Expression* HandleOpThenExpr(QualType lhsTy, Expression *Expr = nullptr);
-   Expression* HandleOpThenOp(QualType lhsTy); // never valid
+      int getPrecedence()
+      {
+         return CandSet.getBestMatch().getPrecedenceGroup().getPrecedence();
+      }
 
-   Expression* HandleExprThenOp(QualType lhsTy);
-   Expression* HandleExprThenMaybeOp(QualType lhsTy,
-                                     Expression *Expr = nullptr);
-   Expression* HandleExprThenExpr(QualType lhsTy); // never valid
+      CandidateSet CandSet;
+      Expression *RHS = nullptr;
 
-   Expression* HandleMaybeOpThenOp(QualType lhsTy);
-   Expression* HandleMaybeOpThenExpr(QualType lhsTy,
-                                     Expression *Expr = nullptr);
-   Expression* HandleMaybeOpThenMaybeOp(QualType lhsTy);
+      SourceLocation opLoc;
 
-   bool isPossibleOp(const SequenceElement &El, llvm::StringRef op) const
-   {
-      return El.getKind() == SequenceElement::EF_PossibleOperator
-             && op.equals(El.getOp());
-   }
-
-   bool isQuestion(const SequenceElement &El) const
-   {
-      return isPossibleOp(El, "?");
-   }
-
-   bool isColon(const SequenceElement &El) const
-   {
-      return isPossibleOp(El, ":");
-   }
-
-   struct OperatorResult {
-      bool isValid;
-      QualType returnType;
+      std::string opName;
+      size_t beginIdx = 0;
+      size_t rhsIdx   = 0;
    };
 
-   OperatorResult UnaryOpExistsOnIntegerType(QualType ty,
-                                             FixKind fix,
-                                             const string &op) const;
+   PrecedenceResult getBinOpImpl(Expression *lhs);
+   PrecedenceResult getBinOp(Expression *lhs);
+   Expression *buildBinaryOp(PrecedenceResult &Res, Expression *lhs);
 
-   OperatorResult UnaryOpExistsOnFPType(QualType ty,
-                                        FixKind fix,
-                                        const string &op) const;
+   struct UnaryOpResult {
+      UnaryOpResult()
+         : Expr(nullptr)
+      {}
 
-   OperatorResult UnaryOpExistsOnPtrType(QualType ty,
-                                         FixKind fix,
-                                         const string &op) const;
+      UnaryOpResult(CandidateSet &&CandSet,
+                    string &&Op,
+                    Expression *Expr = nullptr)
+         : CandSet(move(CandSet)), Expr(Expr),
+           Op(move(Op))
+      { }
 
-   OperatorResult UnaryOpExistsOnType(QualType ty,
-                                      FixKind fix,
-                                      const string &op) const;
+      operator bool() const
+      {
+         return (bool)CandSet;
+      }
 
-   DiagnosticBuilder &err(MessageKind msg)
+      bool holdsValue() const
+      {
+         return !Op.empty();
+      }
+
+      CandidateSet CandSet;
+      Expression *Expr;
+      string Op;
+   };
+
+   UnaryOpResult UnaryOpExistsOnType(Expression *Expr,
+                                     FixKind fix,
+                                     llvm::StringRef op,
+                                     SourceLocation loc);
+
+   void diagnoseUnexpectedExpr();
+   void diagnoseInvalidUnaryOp(UnaryOpResult &Res);
+   void diagnoseInvalidBinOpOrRHS(Expression *LHS, PrecedenceResult &PR);
+
+   template<class ...Args>
+   void diagnose(SourceLocation loc, MessageKind msg, Args&&... args)
    {
-      had_error = true;
-      return DiagnosticIssuer::err(msg);
+      if (ignoreErrors)
+         return;
+
+      SP.diagnose(loc, msg, std::forward<Args>(args)...);
    }
 
    QualType contextualType;
    SemaPass &SP;
    llvm::ArrayRef<SequenceElement> Fragments;
    size_t counter;
-   bool had_error = false;
 
+   std::unordered_map<size_t, std::pair<size_t, Expression*>> ExprSubstMap;
+
+   UnaryOpResult LastFailedUnaryOp;
+
+   bool ignoreErrors;
+   bool HadError = false;
+
+   BuiltinExpr PlaceholderExpr;
    ExprSequence *ExprSeq;
 };
 
-namespace {
-
-bool maybeMetaTypePredicateOperator(SequenceElement const& el)
+Expression* ExprResolverImpl::GetUnaryExpressionTarget()
 {
-   if (el.isOperator()) {
-      switch (el.getOperatorKind()) {
-         case OperatorKind::CompEQ:
-         case OperatorKind::CompNE:
-            return true;
-         default:
-            return false;
-      }
-   }
-
-   return el.isPossibleOperator() && el.getOp() == ":";
-}
-
-} // anonymous namespace
-
-Expression*
-ExprResolverImpl::GetUnaryExpressionTarget(QualType lhsTy)
-{
-   auto &Frag = Fragments[counter - 1];
-   Expression* res = nullptr;
-
+   auto &Frag = current();
    switch (Frag.getKind()) {
       case SequenceElement::EF_Expression:
-         res = Frag.getExpr();
-         break;
+         return Frag.getExpr();
       case SequenceElement::EF_Operator:
-         res = makeExpr<IdentifierRefExpr>(
-                                    Frag.getLoc(),
-                                    operatorToString(Frag.getOperatorKind()));
-         break;
+         return makeExpr<IdentifierRefExpr>(
+            Frag.getLoc(), op::toString(Frag.getOperatorKind()));
       case SequenceElement::EF_PossibleOperator:
-         res =  makeExpr<IdentifierRefExpr>(Frag.getLoc(),
+         return makeExpr<IdentifierRefExpr>(Frag.getLoc(),
                                             string(Frag.getOp()));
-         break;
    }
-
-   if (hasNext() && maybeMetaTypePredicateOperator(lookahead()))
-      res->setMetaTypeAllowed(true);
-
-   res->setContextualType(lhsTy);
-   return res;
 }
 
-Expression*
-ExprResolverImpl::HandleOpThenMaybeOp(QualType lhsTy, Expression *Expr)
+Expression* ExprResolverImpl::ParseUnaryExpression()
 {
-   using Kind = ExprSequence::SequenceElement::Kind;
+   auto SubstIt = ExprSubstMap.find(counter);
+   if (SubstIt != ExprSubstMap.end()) {
+      counter += SubstIt->second.first;
+      return SubstIt->second.second;
+   }
 
-   // the only option is a prefix unary operator and an expression
-   auto &Op = current();
+   if (!hasNext())
+      return GetUnaryExpressionTarget();
+
+   auto beginIdx = counter;
+
+   // get expression target
+   Expression *Target = nullptr;
+   size_t possibleIdentLoc = string::npos;
+
+   while (!Target) {
+      switch (current().getKind()) {
+         case SequenceElement::EF_Expression:
+            Target = GetUnaryExpressionTarget();
+            break;
+         case SequenceElement::EF_PossibleOperator:
+            if (auto I = SP.wouldBeValidIdentifier(current().getOp())) {
+               I->setSourceLoc(current().getLoc());
+               Target = I;
+            }
+            else if (possibleIdentLoc == string::npos) {
+               possibleIdentLoc = counter;
+            }
+
+            break;
+         case SequenceElement::EF_Operator:
+            break;
+      }
+
+      if (Target)
+         break;
+
+      if (!hasNext()) {
+         if (possibleIdentLoc != string::npos) {
+            counter = possibleIdentLoc;
+            Target = GetUnaryExpressionTarget();
+
+            break;
+         }
+         else {
+            SP.diagnose(ExprSeq, err_generic_error, "expected expression");
+            return nullptr;
+         }
+      }
+
+      advance();
+   }
+
+   assert(Target && "no target for unary expression!");
+
+   auto SemaRes = SP.visitExpr(ExprSeq, Target);
+   if (!SemaRes || SemaRes.get()->isTypeDependent()) {
+      return nullptr;
+   }
+
+   Target = SemaRes.get();
+   auto savedCtr = counter;
+
+   // if we had to skip ahead, all of the previous elements must be prefix
+   // operators, evaluate them right to left
+   while (counter != beginIdx) {
+      assert(counter > beginIdx && "moved backwards when parsing expression!");
+      --counter;
+
+      assert(!current().isExpression() && "skipped over expr!");
+
+      auto op = current().asString();
+      auto UnOp = UnaryOpExistsOnType(Target, FixKind::Prefix, op,
+                                      current().getLoc());
+
+      if (!UnOp) {
+         // probably meant to be a binary operator with an invalid left hand side
+         // e.g. ident -= 3
+         //      ~~~~~ ^
+         // where no 'ident' is in scope
+         if (possibleIdentLoc != string::npos) {
+            counter = possibleIdentLoc;
+            SP.diagnose(current().getLoc(), err_undeclared_identifer,
+                        current().getOp());
+
+            return nullptr;
+         }
+
+         diagnoseInvalidUnaryOp(UnOp);
+         return nullptr;
+      }
+
+      SemaRes = SP.visitExpr(ExprSeq, UnOp.Expr);
+      if (!SemaRes) {
+         return nullptr;
+      }
+
+      Target = SemaRes.get();
+   }
+
+   counter = savedCtr;
+
+   // check for postfix operators
+   bool done = false;
+   while (!done) {
+      if (!hasNext())
+         return Target;
+
+      auto &Next = lookahead();
+      switch (Next.getKind()) {
+         case SequenceElement::EF_Expression:
+            done = true;
+            break;
+         case SequenceElement::EF_PossibleOperator:
+         case SequenceElement::EF_Operator: {
+            auto op = Next.asString();
+            auto UnOp = UnaryOpExistsOnType(Target, FixKind::Postfix, op,
+                                            Next.getLoc());
+
+            if (UnOp) {
+               SemaRes = SP.visitExpr(ExprSeq, UnOp.Expr);
+               if (!SemaRes)
+                  return nullptr;
+
+               Target = SemaRes.get();
+               advance();
+            }
+            else {
+               LastFailedUnaryOp = move(UnOp);
+               done = true;
+            }
+
+            break;
+         }
+      }
+   }
+
+   return Target;
+}
+
+ExprResolverImpl::UnaryOpResult
+ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
+                                      FixKind fix,
+                                      llvm::StringRef op,
+                                      SourceLocation loc) {
+   llvm::SmallString<32> opName(fix == FixKind::Prefix ? "prefix" : "postfix");
+   opName += " ";
+   opName += op;
+
+   auto CandSet = SP.lookupMethod(opName.str(), Expr, {}, {}, ExprSeq,
+                                  /*suppressDiags=*/ true);
+
+   if (!CandSet) {
+      ExprSeq->copyStatusFlags(Expr);
+      return UnaryOpResult(move(CandSet), opName.str(), Expr);
+   }
+
+   auto &Cand = CandSet.getBestMatch();
+
+   Expression *UnOp;
+   auto ArgTypes = Cand.getFunctionType()->getArgTypes();
+   if (ArgTypes.size() == 1) {
+      Expr = SP.forceCast(Expr, ArgTypes[0]);
+   }
+   else if (!Cand.Func->hasMutableSelf()) {
+      Expr = SP.castToRValue(Expr);
+   }
+
+   if (!Cand.Func) {
+      UnOp = UnaryOperator::Create(SP.getContext(),
+                                   loc, Cand.BuiltinCandidate.OpKind,
+                                   Cand.BuiltinCandidate.FuncTy, Expr,
+                                   fix == FixKind::Prefix);
+   }
+   else {
+      UnOp = makeExpr<CallExpr>(loc, std::vector<Expression*>{ Expr },
+                                Cand.Func);
+   }
+
+   return UnaryOpResult(move(CandSet), opName.str(), UnOp);
+}
+
+ExprResolverImpl::PrecedenceResult
+ExprResolverImpl::getBinOp(Expression *lhs)
+{
+   auto beginIdx = counter;
+   auto PR = getBinOpImpl(lhs);
+
+   PR.beginIdx = beginIdx;
+   return PR;
+}
+
+ExprResolverImpl::PrecedenceResult
+ExprResolverImpl::getBinOpImpl(Expression *lhs)
+{
+   if (!hasNext(2))
+      return PrecedenceResult();
+
+   auto &Next = lookahead();
+   if (Next.isExpression())
+      return PrecedenceResult();
+
+   auto op = Next.asString();
+   auto opLoc = current().getLoc();
+   llvm::SmallString<32> funcName("infix ");
+   funcName += op;
+
+   auto CandSet = SP.getCandidates(funcName.str(), lhs);
+   if (CandSet.Candidates.empty())
+      return PrecedenceResult(funcName.str());
+
+   // skip over the operator
+   advance();
    advance();
 
-   if (!Expr)
-      Expr = GetUnaryExpressionTarget(lhsTy);
+   size_t rhsIdx = counter;
 
-   auto Ty = visitExpr(Expr);
+   auto rhs = ParseUnaryExpression();
+   if (!rhs)
+      return PrecedenceResult(funcName.str());
 
-   if (!Ty)
-      return nullptr;
-
-   // check here because this function is called by other patterns
-   auto OpStr = Op.getKind() == Kind::EF_Operator
-                   ? operatorToString(Op.getOperatorKind())
-                   : Op.getOp();
-
-   auto Res = UnaryOpExistsOnType(Ty, FixKind::Prefix, OpStr);
-
-   if (!Res.isValid) {
-      err(err_unary_op_not_applicable)
-         << OpStr << size_t(Ty.isLvalue()) << Ty << Op.getLoc();
-
-      return nullptr;
-   }
-
-   return makeExpr<UnaryOperator>(Op.getLoc(), move(OpStr), Expr,
-                                  /*prefix=*/true);
-}
-
-Expression* ExprResolverImpl::HandleOpThenExpr(QualType lhsTy, Expression *Expr)
-{
-   // same as op -> maybe op
-   return HandleOpThenMaybeOp(lhsTy, Expr);
-}
-
-Expression* ExprResolverImpl::HandleOpThenOp(QualType lhsTy)
-{
-   err(err_generic_error)
-      << "unexpected operator "
-         + operatorToString(lookahead().getOperatorKind())
-      << lookahead().getLoc();
-
-   return nullptr;
-}
-
-Expression*
-ExprResolverImpl::HandleExprThenMaybeOp(QualType lhsTy, Expression *Expr)
-{
-   if (!Expr)
-      Expr = GetUnaryExpressionTarget(lhsTy);
-
-   auto Ty = visitExpr(Expr);
-
-   if (!Ty)
-      return nullptr;
-
-   auto &Next = lookahead();
-
-   // option 1 - postfix operator
-   auto MaybePostfix = UnaryOpExistsOnType(Ty, FixKind::Postfix, Next.getOp());
-   if (MaybePostfix.isValid) {
-      advance();
-      return makeExpr<UnaryOperator>(Expr->getSourceLoc(), string(Next.getOp()),
-                                     Expr, /*prefix=*/false);
-   }
-
-   // option 2 - binary operator follows, no action here
-   return Expr;
-}
-
-Expression* ExprResolverImpl::HandleExprThenExpr(QualType lhsTy)
-{
-   err(err_generic_error)
-      << "unexpected expression"
-      << lookahead().getLoc();
-
-   return nullptr;
-}
-
-Expression* ExprResolverImpl::HandleExprThenOp(QualType lhsTy)
-{
-   auto Expr = GetUnaryExpressionTarget(lhsTy);
-
-   auto &Next = lookahead();
-
-   // option 1 - pack expansion
-   if (Next.getOperatorKind() == OperatorKind::PackExpansion) {
-      advance();
-
-      Expr->setIsVariadicArgPackExpansion(true);
-      if (Expr->isTypeDependent())
-         return nullptr;
-
-      return Expr;
-   }
-
-   auto Ty = visitExpr(Expr);
-   if (!Ty)
-      return nullptr;
-
-   // option 2 - postfix operator
-   auto OpStr = operatorToString(Next.getOperatorKind());
-   auto MaybePostfix = UnaryOpExistsOnType(Ty, FixKind::Postfix, OpStr);
-   if (MaybePostfix.isValid) {
-      advance();
-      return makeExpr<UnaryOperator>(Expr->getSourceLoc(), move(OpStr),
-                                     Expr, /*prefix=*/false);
-   }
-
-   // option 3 - binary operator follows, no action here
-   return Expr;
-}
-
-Expression*
-ExprResolverImpl::HandleMaybeOpThenMaybeOp(QualType lhsTy)
-{
-   auto &Current = current();
-   auto &Next = lookahead();
-
-   // option 1 - expression -> postfix unary op | binary op
-   if (auto I = SP.wouldBeValidIdentifier(Current.getOp())) {
-      return HandleExprThenMaybeOp(lhsTy, I);
-   }
-
-   // option 2 - prefix unary op -> expression
-   if (auto I = SP.wouldBeValidIdentifier(Next.getOp())) {
-      return HandleMaybeOpThenExpr(lhsTy, I);
-   }
-
-   err(err_generic_error)
-      << "unexpected identifier " + Next.getOp()
-      << Next.getLoc();
-
-   return nullptr;
-}
-
-Expression*
-ExprResolverImpl::HandleMaybeOpThenExpr(QualType lhsTy, Expression *Expr)
-{
-   // same as op -> expr
-   return HandleOpThenExpr(lhsTy, Expr);
-}
-
-Expression*
-ExprResolverImpl::HandleMaybeOpThenOp(QualType lhsTy)
-{
-   // maybe op must be an expr
-   return HandleExprThenOp(lhsTy);
-}
-
-Expression*
-ExprResolverImpl::ParseUnaryExpression(bool lhsOfAssignment,
-                                       QualType lhsTy) {
-   using Kind = ExprSequence::SequenceElement::Kind;
-
-   if (!hasNext())
-      return GetUnaryExpressionTarget(lhsTy);
-
-   auto CurrKind = current().getKind();
-   auto NextKind = lookahead().getKind();
-
-   switch (CurrKind) {
-      case Kind::EF_Operator:
-         if (current().getOperatorKind() == OperatorKind::PackExpansion) {
-            return makeExpr<IdentifierRefExpr>(current().getLoc(), "...");
-         }
-
-         switch (NextKind) {
-            case Kind::EF_Operator:
-               return HandleOpThenOp(lhsTy);
-            case Kind::EF_PossibleOperator:
-               return HandleOpThenMaybeOp(lhsTy);
-            case Kind::EF_Expression:
-               return HandleOpThenExpr(lhsTy);
-         }
-      case Kind::EF_PossibleOperator:
-         switch (NextKind) {
-            case Kind::EF_Operator:
-               return HandleMaybeOpThenOp(lhsTy);
-            case Kind::EF_PossibleOperator:
-               return HandleMaybeOpThenMaybeOp(lhsTy);
-            case Kind::EF_Expression:
-               return HandleMaybeOpThenExpr(lhsTy);
-         }
-      case Kind::EF_Expression:
-         switch (NextKind) {
-            case Kind::EF_Operator:
-               return HandleExprThenOp(lhsTy);
-            case Kind::EF_PossibleOperator:
-               return HandleExprThenMaybeOp(lhsTy);
-            case Kind::EF_Expression:
-               return HandleExprThenExpr(lhsTy);
-         }
-   }
-}
-
-ExprResolverImpl::OperatorResult
-ExprResolverImpl::UnaryOpExistsOnIntegerType(QualType ty,
-                                             FixKind fix,
-                                             const string &op) const {
-   if (fix == FixKind::Prefix)
-      return llvm::StringSwitch<OperatorResult>(op)
-         .Case("+",  { true, ty })
-         .Case("-",  { true, ty })
-         .Case("~",  { true, ty })
-         .Case("!",  { true, QualType(SP.getContext().getBoolTy()) })
-         .Case("++", { true, ty })
-         .Case("--", { true, ty })
-         .Default({ false });
-
-   return llvm::StringSwitch<OperatorResult>(op)
-      .Case("++", { true, ty })
-      .Case("--", { true, ty })
-      .Default({ false });
-}
-
-ExprResolverImpl::OperatorResult
-ExprResolverImpl::UnaryOpExistsOnFPType(QualType ty,
-                                        FixKind fix,
-                                        const string &op) const {
-   if (fix == FixKind::Prefix)
-      return llvm::StringSwitch<OperatorResult>(op)
-         .Case("+",  { true, ty })
-         .Case("-",  { true, ty })
-         .Case("++", { true, ty })
-         .Case("--", { true, ty })
-         .Default({ false });
-
-   return llvm::StringSwitch<OperatorResult>(op)
-      .Case("++", { true, ty })
-      .Case("--", { true, ty })
-      .Default({ false });
-}
-
-ExprResolverImpl::OperatorResult
-ExprResolverImpl::UnaryOpExistsOnPtrType(QualType ty,
-                                         FixKind fix,
-                                         const string &op) const {
-   if (fix == FixKind::Prefix)
-      return llvm::StringSwitch<OperatorResult>(op)
-         .Case("*",  { true, ty->asPointerType()->getPointeeType() })
-         .Case("+",  { true, ty })
-         .Case("!",  { true, QualType(SP.getContext().getBoolTy()) })
-         .Case("++", { true, ty })
-         .Case("--", { true, ty })
-         .Default({ false });
-
-   return llvm::StringSwitch<OperatorResult>(op)
-      .Case("++", { true, ty })
-      .Case("--", { true, ty })
-      .Default({ false });
-}
-
-ExprResolverImpl::OperatorResult
-ExprResolverImpl::UnaryOpExistsOnType(QualType ty,
-                                      FixKind fix,
-                                      const string &op) const {
-   if (fix == FixKind::Prefix && op == "typeof") {
-      return { true, QualType(SP.getObjectTy("cdot.TypeInfo")) };
-   }
-   if (fix == FixKind::Prefix && ty.isLvalue() && op == "&") {
-      return { true, QualType(ty->getPointerTo(SP.getContext())) };
-   }
-   else if (ty->isIntegerType()) {
-      return UnaryOpExistsOnIntegerType(ty, fix, op);
-   }
-   else if (ty->isFPType()) {
-      return UnaryOpExistsOnFPType(ty, fix, op);
-   }
-   else if (ty->isPointerType() && (op == "*" || op == "++" || op == "--")) {
-      return UnaryOpExistsOnPtrType(ty, fix, op);
-   }
-   else if (ty->isObjectType()) {
-      auto Record = ty->getRecord();
-      auto prec = Record->getOperatorPrecedence(fix, op);
-
-      if (prec) {
-         return { true, prec->getReturnType() };
+   if (!rhs->isContextDependent()) {
+      auto SemaRes = SP.visitExpr(ExprSeq, rhs, lhs->getExprType());
+      if (!SemaRes) {
+         HadError = true;
+         return PrecedenceResult(funcName.str(), rhs);
       }
-   }
-
-   return { false };
-}
-
-bool ExprResolverImpl::higherPrecedenceFollows(int &minPrecedence,
-                                               QualType ty,
-                                               bool higherOrEqual,
-                                               string &opName,
-                                               bool parsingTernaryOp) {
-   if (!hasNext())
-      return false;
-
-   auto &Next = lookahead();
-   if (Next.getKind() == SequenceElement::EF_Expression)
-      return false;
-
-
-   PrecedenceGroup PG;
-   if (Next.getKind() == SequenceElement::EF_Operator) {
-      opName = operatorToString(Next.getOperatorKind());
-      PG = SP.getPrecedence(ty, Next.getOperatorKind());
-   }
-   else {
-      if (Next.getOp() == "?" || (Next.getOp() == ":" && parsingTernaryOp)) {
-         minPrecedence = -1;
-         return false;
+      if (rhs->isTypeDependent()) {
+         HadError = true;
+         return PrecedenceResult(funcName.str(), rhs);
       }
 
-      opName = Next.getOp();
-      PG = SP.getPrecedence(ty, opName);
+      rhs = SemaRes.get();
    }
 
-   if (!PG.isValid()) {
-      return false;
-   }
+   SP.lookupFunction(CandSet, funcName.str(), { lhs, rhs }, {},
+                     ExprSeq, /*suppressDiags=*/ true);
 
-   bool result;
-   if (PG.getPrecedence() == minPrecedence) {
-      result = higherOrEqual;
-   }
-   else {
-      result = PG.getPrecedence() > minPrecedence;
-   }
-
-   minPrecedence = PG.getPrecedence();
-
-   return result;
+   return PrecedenceResult(move(CandSet), rhs, funcName.str(), opLoc, rhsIdx);
 }
 
-Expression* ExprResolverImpl::ParseExpressionImpl(QualType lhsTy,
-                                                  bool parsingTernaryOp,
-                                                  Expression* lhs,
-                                                  int minPrecedence) {
+Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
+                                            Expression *lhs) {
+   auto &Cand = Res.CandSet.getBestMatch();
+   if (Cand.isBuiltinCandidate()) {
+      if (lhs->getExprType()->isMetaType()) {
+         return TypePredicateExpr::Create(SP.getContext(),
+                                          Res.opLoc, lhs, Res.RHS,
+                                          Cand.BuiltinCandidate.OpKind);
+      }
+
+      return BinaryOperator::Create(SP.getContext(),Res.opLoc,
+                                    Cand.BuiltinCandidate.OpKind,
+                                    Cand.BuiltinCandidate.FuncTy,
+                                    lhs, Res.RHS);
+   }
+   else {
+      auto ArgTys = Cand.getFunctionType()->getArgTypes();
+
+      Expression *rhs;
+      if (ArgTys.size() == 2) {
+         lhs = SP.forceCast(lhs, ArgTys[0]);
+         rhs = Res.RHS = SP.forceCast(Res.RHS, ArgTys[1]);
+      }
+      else {
+         if (!Cand.Func->hasMutableSelf())
+            lhs = SP.castToRValue(lhs);
+
+         rhs = Res.RHS = SP.forceCast(Res.RHS, ArgTys[0]);
+      }
+
+      return new(SP.getContext()) CallExpr(Res.opLoc, { Res.opLoc },
+                                           std::vector<Expression*>{ lhs, rhs },
+                                           Cand.Func);
+   }
+}
+
+Expression* ExprResolverImpl::ParseExpression(Expression* lhs,
+                                              int minPrecedence) {
    if (!lhs) {
       advance();
 
-      bool isLhsOfAssignment = false;
-      if (hasNext()) {
-         isLhsOfAssignment = lookahead().isAssignmentOperator();
-      }
-
-      lhs = ParseUnaryExpression(isLhsOfAssignment, contextualType);
+      lhs = ParseUnaryExpression();
       if (!lhs)
          return nullptr;
-
-      replaceExpressionWith(SP, ExprSeq, lhs);
    }
 
-   lhsTy = visitExpr(lhs);
-   if (!lhsTy || lhsTy.isUnknownAny())
+   auto exprResult = SP.visitExpr(lhs);
+   if (!exprResult)
       return nullptr;
 
-   if (!hasNext()) {
-      return lhs;
-   }
+   lhs = exprResult.get();
 
-   string opName;
-   int savedPrecedence = minPrecedence;
+   while (true) {
+      if (!hasNext())
+         return lhs;
 
-   while (higherPrecedenceFollows(minPrecedence, lhsTy, true, opName,
-                                  parsingTernaryOp)) {
-      advance();
-
-      if (!hasNext()) {
-        err(err_unary_op_not_applicable)
-           << opName << 0 << lhsTy << current().getLoc();
+      // can only be meant to be a postfix unary operator, but was not parsed as
+      // one (i.e. is invalid)
+      if (fragmentsLeft(1)) {
+         if (LastFailedUnaryOp.holdsValue()) {
+            diagnoseInvalidUnaryOp(LastFailedUnaryOp);
+         }
+         else {
+            diagnoseUnexpectedExpr();
+         }
 
          return nullptr;
       }
 
-      auto operatorLoc = current().getLoc();
-      advance();
-
-      // type constraint expression
-      Expression *rhs;
-      if (lhsTy->isMetaType() && opName == ":") {
-         llvm_unreachable("not yet");
-      }
-      else {
-         rhs = ParseUnaryExpression(opName == "=", lhsTy);
-      }
-
-
-      lhsTy = visitExpr(rhs);
-      if (!lhsTy || lhsTy.isUnknownAny())
-         return nullptr;
-
-      string next;
-      int savedInnerPrecedence = minPrecedence;
-
-      while (higherPrecedenceFollows(minPrecedence, lhsTy, false, next,
-                                     parsingTernaryOp)) {
-         rhs = ParseExpressionImpl(lhsTy, parsingTernaryOp, rhs,
-                                   minPrecedence);
-
-         minPrecedence = savedInnerPrecedence;
-         if (!rhs)
+      auto BinOpResult = getBinOp(lhs);
+      if (!BinOpResult) {
+         if (HadError)
             return nullptr;
+
+         counter = BinOpResult.beginIdx;
+         if (LastFailedUnaryOp.holdsValue()) {
+            diagnoseInvalidUnaryOp(LastFailedUnaryOp);
+         }
+         else {
+            diagnoseInvalidBinOpOrRHS(lhs, BinOpResult);
+         }
+
+         return nullptr;
       }
 
-      auto binOp = makeExpr<BinaryOperator>(operatorLoc, move(opName),
-                                            lhs, rhs);
+      if (BinOpResult.getPrecedence() < minPrecedence) {
+         counter = BinOpResult.beginIdx;
+         break;
+      }
 
-      replaceExpressionWith(SP, lhs, binOp);
-      binOp->setContextualType(lhsTy);
+      auto InnerMinPrec = BinOpResult.getPrecedence();
+      while (auto InnerResult = getBinOp(BinOpResult.RHS)) {
+         counter = InnerResult.beginIdx;
+
+         if (InnerResult.getPrecedence() <= InnerMinPrec) {
+            break;
+         }
+
+         BinOpResult.RHS = ParseExpression(BinOpResult.RHS, InnerMinPrec);
+         if (!BinOpResult.RHS)
+            return nullptr;
+
+         InnerMinPrec = InnerResult.getPrecedence();
+      }
+
+      auto binOp = buildBinaryOp(BinOpResult, lhs);
+      binOp->setContextualType(lhs->getExprType());
 
       SP.updateParent(lhs, binOp);
-      SP.updateParent(rhs, binOp);
+      SP.updateParent(BinOpResult.RHS, binOp);
 
-      lhsTy = visitExpr(binOp);
-      if (!lhsTy || lhsTy.isUnknownAny())
+      exprResult = SP.visitExpr(ExprSeq, binOp);
+      if (!exprResult)
          return nullptr;
 
-      lhs = binOp;
-      minPrecedence = savedPrecedence;
+      lhs = exprResult.get();
+      LastFailedUnaryOp = UnaryOpResult();
    }
 
-   if (hasNext()) {
-      if (isQuestion(lookahead())) {
-         advance();
-         return ParseTertiaryOperator(lhs);
-      }
-      if (isColon(lookahead())) {
-         advance();
-      }
-   }
+   if (HadError)
+      return nullptr;
 
    return lhs;
 }
 
-Expression*
-ExprResolverImpl::ParseTertiaryOperator(Expression* cond)
+LLVM_ATTRIBUTE_UNUSED
+static llvm::StringRef dropPrefix(llvm::StringRef op)
 {
-   assert(isQuestion(current()));
+   if (op.startswith("infix ")) return op.substr(6);
+   if (op.startswith("prefix ")) return op.substr(7);
+   if (op.startswith("postfix ")) return op.substr(8);
 
-   ExprResolverImpl LhsParser(SP, ExprSeq,
-                              { Fragments.begin() + counter,
-                                Fragments.size() - counter },
-                              contextualType);
-
-   auto lhs = LhsParser.ParseExpression(true);
-   if (!lhs)
-      return nullptr;
-
-   if (!isColon(LhsParser.current())) {
-      err(err_generic_error)
-         << "expected ':' to match '?' in tertiary operator"
-         << current().getLoc();
-
-      return nullptr;
-   }
-
-   auto lhsTy = visitExpr(lhs);
-   if (!lhsTy)
-      return nullptr;
-
-   ExprResolverImpl RhsParser(SP, ExprSeq,
-                              { Fragments.begin() + LhsParser.counter + counter,
-                               Fragments.size() - LhsParser.counter - counter },
-                              lhsTy);
-
-   auto rhs = RhsParser.ParseExpression();
-   if (!rhs)
-      return nullptr;
-
-   auto expr = makeExpr<TertiaryOperator>(cond->getSourceLoc(), cond,
-                                          lhs, rhs);
-
-   expr->setContextualType(contextualType);
-   counter += LhsParser.counter + RhsParser.counter;
-
-   return expr;
+   return op;
 }
 
-namespace {
+void ExprResolverImpl::diagnoseInvalidBinOpOrRHS(Expression *LHS,
+                                                 PrecedenceResult &PR) {
+   assert(hasNext(2) && "don't call this otherwise!");
+   advance();
+   advance();
 
-string sequenceElementToString(const SequenceElement &El)
-{
-   string s;
-   switch (El.getKind()) {
-      case SequenceElement::EF_Operator:
-         s += "operator ";
-         s += operatorToString(El.getOperatorKind());
-         break;
-      case SequenceElement::EF_PossibleOperator:
-         s += "identifier ";
-         s += El.getOp();
-         break;
-      case SequenceElement::EF_Expression:
-         s += "expression";
-         break;
-   }
+   if (!PR.RHS)
+      PR.RHS = GetUnaryExpressionTarget();
 
-   return s;
+   auto RHSResult = SP.visitExpr(ExprSeq, PR.RHS);
+
+   // ok, don't issue a diagnostic about the operator, Sema will have
+   // complained about a malformed RHS
+   if (!RHSResult)
+      return;
+
+   PR.RHS = RHSResult.get();
+
+   PR.CandSet.diagnose(SP, PR.opName, { LHS, PR.RHS }, {}, ExprSeq, true);
 }
 
-} // anonymous namespace
-
-Expression* ExprResolverImpl::ParseExpression(bool isTertiary)
+void ExprResolverImpl::diagnoseInvalidUnaryOp(UnaryOpResult &Res)
 {
-   auto res = ParseExpressionImpl({}, isTertiary);
-   if (!isTertiary && res && hasNext()) {
-      auto ty = SP.visit(res);
-      auto &next = lookahead();
-      advance();
-
-      if (next.isOperator() || next.isPossibleOperator()) {
-         err(err_unary_op_not_applicable)
-            << (next.isOperator() ? operatorToString(next.getOperatorKind())
-                                  : next.getOp())
-            << 0 << ty << next.getLoc();
-      }
-      else {
-         err(err_generic_error)
-            << "unexpected " + sequenceElementToString(Fragments[counter])
-            << Fragments[counter].getLoc();
-      }
-
-      had_error = true;
-      return nullptr;
-   }
-   if (!res)
-      had_error = true;
-
-   return res;
+   Res.CandSet.diagnose(SP, Res.Op, { Res.Expr }, {}, ExprSeq, true);
 }
 
-ExpressionResolver::ExprResult ExpressionResolver::resolve(ExprSequence *expr)
+void ExprResolverImpl::diagnoseUnexpectedExpr()
 {
-   ExprResolverImpl Resolver(SP, expr, expr->getContextualType());
-   auto res = Resolver.ParseExpression();
+   SP.diagnose(ExprSeq, err_unexpected_expression, lookahead().getLoc());
+}
 
-   return { res, std::move(Resolver.getDiagnostics()),
-      Resolver.hadError() };
+Expression *ExpressionResolver::resolve(ExprSequence *expr, bool ignoreErrors)
+{
+   ExprResolverImpl Resolver(SP, expr, expr->getContextualType(), ignoreErrors);
+   return Resolver.ParseExpression();
 }
 
 } // namespace ast

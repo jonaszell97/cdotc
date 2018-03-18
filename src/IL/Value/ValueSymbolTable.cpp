@@ -69,6 +69,8 @@ llvm::StringMapEntry<Value*>*
 ValueSymbolTable::CreateUniqueName(Value *V,
                                    llvm::SmallString<256> &UniqueName) {
    auto base = UniqueName.size();
+   size_t lastUnique = 0;
+
    for (;;) {
       UniqueName.resize(base);
       llvm::raw_svector_ostream S(UniqueName);

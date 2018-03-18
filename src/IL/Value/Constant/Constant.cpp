@@ -7,18 +7,6 @@
 namespace cdot {
 namespace il {
 
-Constant::Constant(TypeID id, Type *ty)
-   : Constant(id, QualType(ty))
-{
-
-}
-
-Constant::Constant(TypeID id, QualType ty)
-   : Value(id, ty)
-{
-
-}
-
 void Constant::handleReplacement(Value *with)
 {
 

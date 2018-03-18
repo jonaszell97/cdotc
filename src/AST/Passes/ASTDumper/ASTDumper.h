@@ -25,8 +25,8 @@ public:
    ASTDumper(llvm::raw_ostream &out, Options opts = None);
    ~ASTDumper();
 
-   void print(ast::Expression const* expr);
-   void print(ast::Statement const* stmt);
+   void print(ast::Expression* expr);
+   void print(ast::Statement* stmt);
 
 private:
    void *pImpl;

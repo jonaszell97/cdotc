@@ -21,19 +21,12 @@
 #include "IL/Value/Instruction/Memory/StoreInst.h"
 #include "IL/Value/Instruction/ControlFlow/ControlFlowInst.h"
 #include "IL/Value/Instruction/CallInst.h"
+#include "IL/Value/Instruction/Cast/CastInst.h"
 
 #include "IL/Value/Constant/ConstantVal.h"
 #include "IL/Value/Constant/ConstantExpr.h"
 
-#include "AST/Statement/Declaration/Class/RecordDecl.h"
-#include "AST/Statement/Declaration/Class/MethodDecl.h"
-#include "AST/Statement/Declaration/Class/FieldDecl.h"
-#include "AST/Statement/Declaration/Class/PropDecl.h"
-#include "AST/Statement/Declaration/Class/EnumCaseDecl.h"
-#include "AST/Statement/Declaration/LocalVarDecl.h"
-#include "AST/Statement/Block/CompoundStmt.h"
-
-#include "AST/Expression/TypeRef.h"
+#include "AST/NamedDecl.h"
 
 using namespace cdot::il;
 using namespace cdot::support;
@@ -49,24 +42,33 @@ void ILGenPass::ForwardDeclareRecord(RecordDecl *R)
    AggregateType *AggrTy;
 
    if (auto Cl = dyn_cast<ClassDecl>(R)) {
-      AggrTy = Builder.DeclareClass(Cl, Cl->getFullName(),
-                                    Cl->getSourceLoc());
+      auto ClassTy = Builder.CreateClass(Cl, Cl->getFullName(),
+                                         Cl->getSourceLoc());
+
+      auto Int8PtrTy  = ValueType(Builder.getContext(),
+                                  SP.getContext().getInt8PtrTy());
+
+      ClassTy->addField({ "__strong_refcnt", UWordZero->getType() });
+      ClassTy->addField({ "__weak_refcnt", UWordZero->getType() });
+      ClassTy->addField({ "__vtable_ptr", Int8PtrTy });
+
+      AggrTy = ClassTy;
    }
    else if (auto S = dyn_cast<StructDecl>(R)) {
-      AggrTy = Builder.DeclareStruct(S, S->getFullName(), S->getSourceLoc());
+      AggrTy = Builder.CreateStruct(S, S->getFullName(), S->getSourceLoc());
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
-      AggrTy = Builder.DeclareEnum(E, E->getFullName(), E->getSourceLoc());;
+      AggrTy = Builder.CreateEnum(E, E->getFullName(), E->getSourceLoc());;
    }
    else if (auto U = dyn_cast<UnionDecl>(R)) {
-      AggrTy = Builder.DeclareUnion(U, U->getFullName(), U->getSourceLoc());;
+      AggrTy = Builder.CreateUnion(U, U->getFullName(), U->getSourceLoc());;
    }
    else {
-      AggrTy = Builder.DeclareProtocol(cast<ProtocolDecl>(R), R->getFullName(),
-                                       R->getSourceLoc());
+      AggrTy = Builder.CreateProtocol(cast<ProtocolDecl>(R), R->getFullName(),
+                                      R->getSourceLoc());
    }
 
-   DeclMap.emplace(R, AggrTy);
+   addDeclValuePair(R, AggrTy);
    Builder.getContext().registerType(AggrTy);
 }
 
@@ -79,26 +81,23 @@ void ILGenPass::DeclareClassOrStruct(StructDecl *S)
          cast<ClassType>(AggrTy)->setParentClass(cast<ClassType>(getType(P)));
    }
 
-   if (S->getFields().empty())
-      AggrTy->addField({ "__padding", Int8PtrTy, false });
-
    DeclareRecord(S, AggrTy);
 }
 
 void ILGenPass::DeclareEnum(EnumDecl *E)
 {
    auto EnumTy = cast<EnumType>(getType(E));
-   EnumTy->setRawType(*E->getRawType()->getType());
+   EnumTy->setRawType(E->getRawType());
 
    for (auto &Case : E->getCases()) {
       std::vector<QualType> associatedTypes;
       for (const auto &arg : Case->getArgs())
-         associatedTypes.push_back(arg->getArgType()->getType());
+         associatedTypes.push_back(arg->getArgType());
 
       EnumTy->addCase(
          { Case->getName(), move(associatedTypes),
-            Builder.CreateConstantInt(*E->getRawType()->getType(),
-                                      uint64_t(Case->getRawValue())) });
+            Builder.GetConstantInt(E->getRawType(),
+                                   uint64_t(Case->getRawValue())) });
    }
 
    DeclareRecord(E, EnumTy);
@@ -109,8 +108,8 @@ void ILGenPass::DeclareUnion(UnionDecl *U)
    auto UnionTy = cast<UnionType>(getType(U));
    for (auto &decl : U->getDecls()) {
       if (auto field = dyn_cast<FieldDecl>(decl)) {
-         UnionTy->addField({ field->getName(), field->getType()->getType(),
-                              false });
+         UnionTy->addField({ field->getName(),
+                              makeValueType(field->getType()) });
       }
    }
 
@@ -149,7 +148,11 @@ void ILGenPass::DeclareRecord(RecordDecl *R, il::AggregateType *Ty)
       Ty->addConformance(P->getName());
    }
 
-   for (auto &decl : R->getDecls()) {
+   size_t i = 0;
+   llvm::SmallVector<Decl*, 16> Decls(R->decl_begin(), R->decl_end());
+
+   while (i < Decls.size()) {
+      auto decl = Decls[i];
       if (auto M = dyn_cast<MethodDecl>(decl)) {
          DeclareMethod(M, Ty);
       }
@@ -159,7 +162,17 @@ void ILGenPass::DeclareRecord(RecordDecl *R, il::AggregateType *Ty)
       else if (auto F = dyn_cast<FieldDecl>(decl)) {
          DeclareField(F, Ty);
       }
+      else if (auto C = dyn_cast<CompoundDecl>(decl)) {
+         Decls.append(C->decl_begin(), C->decl_end());
+      }
+
+      ++i;
    }
+
+   // getter & setter methods must be declared line
+   for (auto &D : Decls)
+      if (auto F = dyn_cast<FieldDecl>(D))
+         SynthesizeGetterAndSetter(F);
 
    if (auto ClassTy = dyn_cast<il::ClassType>(Ty)) {
       FindVirtualMethods(ClassTy, cast<ClassDecl>(R));
@@ -179,15 +192,15 @@ void ILGenPass::declareRecordInstantiation(RecordDecl *Inst)
       declareRecordInstantiation(Inner);
 }
 
-void ILGenPass::DeclareMethod(MethodDecl *method)
+il::Function* ILGenPass::DeclareMethod(MethodDecl *method)
 {
    return DeclareMethod(method, getType(method->getRecord()));
 }
 
-void ILGenPass::DeclareMethod(MethodDecl *method, il::AggregateType *Ty)
-{
+il::Function* ILGenPass::DeclareMethod(MethodDecl *method,
+                                       il::AggregateType *Ty) {
    if (method->isTemplate())
-      return;
+      return nullptr;
 
    QualType retTy;
    if (auto I = dyn_cast<InitDecl>(method)) {
@@ -197,76 +210,82 @@ void ILGenPass::DeclareMethod(MethodDecl *method, il::AggregateType *Ty)
       retTy = SP.getContext().getVoidType();
    }
    else {
-      retTy = method->getReturnType()->getType();
+      retTy = method->getReturnType();
       maybeImportType(*retTy);
    }
 
-   for (const auto &arg : method->getArgs())
-      maybeImportType(*arg->getArgType()->getType());
+   il::Argument *Self = nullptr;
+   llvm::SmallVector<il::Argument*, 4> args;
+
+   if (!method->isStatic() || isa<InitDecl>(method) || isa<DeinitDecl>(method)){
+      QualType SelfType = Ty->getType();
+      if (method->hasMutableSelf()) {
+         SelfType = SP.getContext().getReferenceType(SelfType);
+      }
+
+      Self = Builder.CreateArgument(SelfType, false);
+      args.push_back(Self);
+
+      Self->setSelf(true);
+      Self->setLocation(method->getSourceLoc());
+   }
+
+   for (auto &arg : method->getArgs()) {
+      args.push_back(Builder.CreateArgument(arg->getArgType(), false));
+
+      maybeImportType(arg->getArgType());
+   }
 
    il::Method *func;
    if (isa<InitDecl>(method)) {
-      auto I = Builder.CreateInitializer(Ty,
-                                         method->getLinkageName(),
-                                         makeArgVec(method->getFunctionType()
-                                                          ->getArgTypes()),
-                                         method->throws(),
-                                         method->isCstyleVararg(),
-                                         method->getSourceLoc());
-
-      func = I;
+      func = Builder.CreateInitializer(Ty,
+                                       method->getLinkageName(),
+                                       args,
+                                       method->throws(),
+                                       method->isCstyleVararg(),
+                                       method->getSourceLoc());
    }
    else {
-      auto M = Builder.CreateMethod(Ty,
-                                    method->getLinkageName(),
-                                    method->getFunctionType()->getReturnType(),
-                                    makeArgVec(method->getFunctionType()
-                                                     ->getArgTypes()),
-                                    method->isStatic(),
-                                    method->isVirtual(),
-                                    method->isProperty(),
-                                    method->isOperator(),
-                                    method->isConversionOp(),
-                                    method->throws(),
-                                    method->isCstyleVararg(),
-                                    method->getSourceLoc());
+      func = Builder.CreateMethod(Ty,
+                                  method->getLinkageName(),
+                                  method->getFunctionType()->getReturnType(),
+                                  args,
+                                  method->isStatic(),
+                                  method->isVirtual(),
+                                  method->isProperty(),
+                                  method->isOperator(),
+                                  method->isConversionOp(),
+                                  method->throws(),
+                                  method->isCstyleVararg(),
+                                  method->getSourceLoc());
+   }
 
-      func = M;
+   if (Self) {
+      Self->setName("self");
    }
 
    setUnmangledName(func);
 
-   if (method->hasAttribute(Attr::_builtin)) {
-      auto &attr = method->getAttribute(Attr::_builtin);
-      BuiltinFns.try_emplace(attr.args.front().getString(),
-                             func->getName());
-   }
+//   if (method->hasAttribute(Attr::_builtin)) {
+//      auto &attr = method->getAttribute(Attr::_builtin);
+//      BuiltinFns.try_emplace(attr.args.front().getString(),
+//                             func->getName());
+//   }
 
-   auto &args = func->getEntryBlock()->getArgs();
-
-   if (!method->isStatic()) {
-      auto Self = Builder.CreateArgument(QualType(*Ty->getType(),
-                                                  method->hasMutableSelf()),
-                                         false, func->getEntryBlock());
-
-      args.insert(args.begin(), Self);
-      Self->setName("self");
-      Self->setSelf(true);
-
-      if (emitDI)
-         Self->addMetaData(func->getLocation());
-   }
+   auto &blockArgs = func->getEntryBlock()->getArgs();
 
    size_t i = 1;
    for (auto &arg : method->getArgs()) {
-      DeclMap.emplace(arg, &args[i++]);
+      DeclMap.emplace(arg, &blockArgs[i++]);
    }
 
    DeclMap.emplace(method, func);
    ReverseDeclMap.emplace(func, method);
+
+   return func;
 }
 
-void ILGenPass::DefineDefaultInitializer(StructDecl *S, InitDecl *Init)
+void ILGenPass::DefineDefaultInitializer(StructDecl *S)
 {
    auto Ty = getType(S);
    if (Ty->isExternal())
@@ -278,39 +297,39 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S, InitDecl *Init)
    fn->addDefinition();
 
    auto Self = &*fn->getEntryBlock()->arg_begin();
+   InsertPointRAII insertPointRAII(*this, fn->getEntryBlock());
 
-   InsertPointRAII insertPointRAII(*this);
-   Builder.SetInsertPoint(fn->getEntryBlock());
+   auto TypeSize = SP.getContext().getTargetInfo()
+                     .getAllocSizeOfType(SP.getContext().getRecordType(S));
 
-   auto size = Builder.CreateConstantInt(SP.getContext().getIntTy(),
-                                         S->getSize());
-   Builder.CreateIntrinsic(Intrinsic::LifetimeBegin, { Self, size });
+   assert(TypeSize && "uncalculated record size");
+   auto size = Builder.GetConstantInt(SP.getContext().getIntTy(),
+                                      TypeSize);
 
-   Builder.CreateIntrinsic(Intrinsic::MemSet, { Self,
-      ConstantInt::get(SP.getContext().getCharTy(), 0), size });
+   Builder.CreateIntrinsic(Intrinsic::lifetime_begin, { Self, size });
+
+   Builder.CreateIntrinsic(Intrinsic::memset, { Self,
+      Builder.GetConstantInt(SP.getContext().getCharTy(), 0), size });
 
    if (auto C = dyn_cast<ClassType>(Ty)) {
-      auto ClassInfo = getRValue(CreateFieldRef(Self, "__classInfo"));
-
       if (auto VT = C->getVTable()) {
-         auto vtbl = CreateFieldRef(ClassInfo, "vtbl");
+         auto vtbl = Builder.GetVTable(Self);
          Builder.CreateStore(
             ConstantExpr::getBitCast(VT,
                                      UInt8PtrTy->getPointerTo(SP.getContext())),
             vtbl);
       }
 
-      auto refcnt = CreateFieldRef(ClassInfo, "refcnt");
-      Builder.CreateStore(ConstantInt::get(SP.getContext().getIntTy(), 1),
-                          refcnt);
+      auto strongRefcnt = Builder.GetStrongRefcount(Self);
+      Builder.CreateStore(UWordOne, strongRefcnt);
 
-      auto typeInfo = CreateFieldRef(ClassInfo, "typeInfo");
+      auto weakRefcnt = Builder.GetWeakRefcount(Self);
+      Builder.CreateStore(UWordZero, weakRefcnt);
 
-      auto TI = GetTypeInfo(SP.getContext().getRecordType(S));
-      Builder.CreateStore(
-         ConstantExpr::getAddrOf(TI,
-                                 TI->getType()->getPointerTo(SP.getContext())),
-         typeInfo);
+//      auto typeInfo = CreateFieldRef(ClassInfo, "typeInfo");
+//
+//      auto TI = GetTypeInfo(SP.getContext().getRecordType(S));
+//      Builder.CreateStore(ConstantExpr::getAddrOf(TI), typeInfo);
    }
 
    for (auto &F : S->getFields()) {
@@ -318,7 +337,7 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S, InitDecl *Init)
          continue;
 
       auto gep = CreateFieldRef(Self, F->getName());
-      auto defaultVal = getRValue(visit(F->getDefaultVal()));
+      auto defaultVal = visit(F->getDefaultVal());
 
       CreateStore(defaultVal, gep);
    }
@@ -330,13 +349,38 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S, InitDecl *Init)
 
 void ILGenPass::deinitializeValue(il::Value *Val)
 {
-   auto ty = *Val->getType();
-   if (auto Obj = ty->asObjectType()) {
+   auto ty = Val->getType();
+   auto RVal = Val;
+
+   // if this value was captured, we need to allocate space for it and copy
+   // it to the lambda object
+   auto lambdaIt = CaptureMap.find(Val);
+   if (lambdaIt != CaptureMap.end()) {
+      auto &lambda = lambdaIt->getSecond();
+
+      // just don't decrease the refcount instead of copying
+      if (RVal->getType()->isRefcounted())
+         return;
+
+      auto Alloc = Builder.CreateAlloca(RVal->getType(),
+                                        RVal->getType()->getAlignment(), true);
+
+      Builder.CreateStore(RVal, Alloc);
+
+      auto ptr = Builder.CreateBitCast(CastKind::BitCast, Alloc, Int8PtrTy);
+      auto env = Builder.CreateIntrinsic(Intrinsic::get_lambda_env,
+                                         lambda.first);
+
+      auto gep = Builder.CreateExtractValue(env, lambda.second);
+      Builder.CreateStore(ptr, gep);
+   }
+
+   if (ObjectType *Obj = ty->asObjectType()) {
       if (Obj->isRawEnum())
          return;
 
       if (Obj->isRefcounted()) {
-         Builder.CreateIntrinsic(Intrinsic::Release, { Val });
+         Builder.CreateIntrinsic(Intrinsic::release, { RVal });
       }
       else {
          auto deinit = ty->getRecord()->getDeinitializer();
@@ -347,16 +391,13 @@ void ILGenPass::deinitializeValue(il::Value *Val)
          if (!fn)
             return;
 
-         Builder.CreateCall(fn, { getRValue(Val) });
+         Builder.CreateCall(fn, { RVal });
       }
    }
-   else if (auto Fn = ty->asFunctionType()) {
-      if (Fn->isRawFunctionTy())
-         return;
-
+   else if (LambdaType *Fn = ty->asLambdaType()) {
 
    }
-   else if (auto Tup = ty->asTupleType()) {
+   else if (TupleType *Tup = ty->asTupleType()) {
       size_t i = 0;
       size_t numTys = Tup->getContainedTypes().size();
 
@@ -374,31 +415,32 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M,
    if (M->isDeclared())
       M->addDefinition();
 
-   Builder.SetInsertPoint(M->getEntryBlock());
+   InsertPointRAII insertPointRAII(*this, M->getEntryBlock());
 
    auto T = Builder.GetInsertBlock()->getTerminator();
    if (T)
-      T->removeFromParent();
+      T->detachFromParent();
 
    if (emitDI) {
-      auto MDLoc = Ty->getLocation();
-      assert(MDLoc);
-
-      Builder.setDebugLoc(MDLoc->getLocation());
+      Builder.setDebugLoc(Ty->getSourceLoc());
    }
 
    auto Self = M->getEntryBlock()->getBlockArg(0);
 
    if (auto S = dyn_cast<StructType>(Ty)) {
-      for (const auto &F : S->getFields()) {
-         auto gep = getRValue(CreateFieldRef(Self, F.name));
+      auto Fields = S->getFields();
+      if (isa<ClassType>(S))
+         Fields = Fields.drop_front(3);
+
+      for (const auto &F : Fields) {
+         auto gep = CreateFieldRef(Self, F.name);
          deinitializeValue(gep);
       }
    }
    else if (auto E = dyn_cast<EnumType>(Ty)) {
       auto MergeBB = Builder.CreateBasicBlock("merge");
       auto RawVal = Builder.CreateEnumRawValue(Self);
-      auto Switch = Builder.CreateSwitch(RawVal);
+      auto Switch = Builder.CreateSwitch(RawVal, makeUnreachableBB());
 
       for (const auto &C : E->getCases()) {
          auto nextBB = Builder.CreateBasicBlock("case." + C.name);
@@ -410,7 +452,7 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M,
          for (const auto &V : C.AssociatedTypes) {
             (void)V;
 
-            auto val = getRValue(Builder.CreateEnumExtract(Self, C.name, i));
+            auto val = Builder.CreateEnumExtract(Self, C.name, i);
             deinitializeValue(val);
 
             ++i;
@@ -422,10 +464,10 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M,
       Builder.SetInsertPoint(MergeBB);
    }
 
-   auto size = Builder.CreateConstantInt(SP.getContext().getIntTy(),
-                                         Ty->getType()->getSize());
+   auto size = Builder.GetConstantInt(SP.getContext().getIntTy(),
+                                      Ty->getType()->getSize());
 
-   Builder.CreateIntrinsic(Intrinsic::LifetimeEnd, { Self, size });
+   Builder.CreateIntrinsic(Intrinsic::lifetime_end, { Self, size });
 
    if (T) {
       Builder.GetInsertBlock()->getInstructions().push_back(T);
@@ -438,7 +480,7 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M,
 void ILGenPass::DeclareField(FieldDecl *field, il::AggregateType *Ty)
 {
    if (field->isStatic()) {
-      auto glob = Builder.CreateGlobalVariable(*field->getType()->getType(),
+      auto glob = Builder.CreateGlobalVariable(field->getType(),
                                                field->isConst(),
                                                nullptr,
                                                field->getLinkageName(),
@@ -446,13 +488,12 @@ void ILGenPass::DeclareField(FieldDecl *field, il::AggregateType *Ty)
 
       DeclMap.emplace(field, glob);
 
-      return DeclareValue(glob);
+      return;
    }
 
-   assert(isa<il::StructType>(Ty));
    auto StructTy = cast<il::StructType>(Ty);
-   StructTy->addField({ field->getName(), field->getType()->getType(),
-                        field->isStatic() });
+   StructTy->addField({ field->getName(),
+                         makeValueType(field->getType()) });
 }
 
 void ILGenPass::DeclareProperty(PropDecl *P, il::AggregateType *Ty)
@@ -463,11 +504,11 @@ void ILGenPass::DeclareProperty(PropDecl *P, il::AggregateType *Ty)
 void ILGenPass::DefineProperty(PropDecl *P, il::AggregateType *Ty)
 {
    if (P->hasGetter() && P->getGetterBody()) {
-      DefineFunction(getFunc(P->getGetterMethod()), P->getGetterBody());
+      DefineFunction(getFunc(P->getGetterMethod()), P->getGetterMethod());
    }
 
    if (P->hasSetter() && P->getSetterBody()) {
-      DefineFunction(getFunc(P->getSetterMethod()), P->getSetterBody());
+      DefineFunction(getFunc(P->getSetterMethod()), P->getSetterMethod());
    }
 }
 
@@ -498,9 +539,6 @@ void ILGenPass::visitRecordDecl(RecordDecl *node)
 
 void ILGenPass::visitRecordCommon(RecordDecl *R)
 {
-   auto AggrTy = getType(R);
-   ModuleRAII guard(*this, AggrTy->getParent());
-
    for (auto &decl : R->getDecls())
       visit(decl);
 
@@ -548,13 +586,13 @@ void ILGenPass::FindVirtualMethods(il::ClassType *Ty, ClassDecl *cl)
 //
 //   while (offsetFromTop < distanceToTop) {
 //      for (const auto &M : base->getMethods()) {
-//         if (M.second.isStatic() || M.second.isInitializer()) {
+//         if (M.col.isStatic() || M.col.isInitializer()) {
 //            continue;
 //         }
 //
 //         auto current = cl;
 //
-//         auto &mangledName = M.second.getLinkageName();
+//         auto &mangledName = M.col.getLinkageName();
 //         auto method = current->getOwnMethod(mangledName);
 //
 //         while (!method && current != base) {
@@ -664,52 +702,22 @@ void ILGenPass::GeneratePTable(AggregateType *Ty)
 
 void ILGenPass::visitMethodDecl(MethodDecl *node)
 {
-   if (alreadyVisited(node) || node->isTemplate() || !node->getBody())
-      return;
-
-   auto M = getModule()->getFunction(node->getLinkageName());
-   DefineFunction(M, node->getBody());
+   visitCallableDecl(node);
 }
 
 void ILGenPass::visitFieldDecl(FieldDecl *node)
 {
    auto field = node->getRecord()->getField(node->getName());
-   maybeImportType(*field->getType()->getType());
+   maybeImportType(field->getType());
 
-   if (auto B = node->getGetterBody()) {
+   if (node->getGetterBody()) {
       auto Getter = getFunc(field->getGetterMethod());
-      DefineFunction(Getter, B);
-   }
-   else if (field->hasGetter() && node->getRecord()->hasDefinition()) {
-      InsertPointRAII insertPointRAII(*this);
-
-      auto Getter = getFunc(field->getGetterMethod());
-      Getter->addDefinition();
-
-      Builder.SetInsertPoint(Getter->getEntryBlock());
-      auto F = CreateFieldRef(Getter->getEntryBlock()->getBlockArg(0),
-                                      field->getName());
-
-      Builder.CreateRet(Builder.CreateLoad(F));
+      DefineFunction(Getter, field->getGetterMethod());
    }
 
-   if (auto B = node->getSetterBody()) {
+   if (node->getSetterBody()) {
       auto Setter = getFunc(field->getSetterMethod());
-      DefineFunction(Setter, B);
-   }
-   else if (field->hasSetter() && node->getRecord()->hasDefinition()) {
-      InsertPointRAII insertPointRAII(*this);
-
-      auto Setter = getFunc(field->getSetterMethod());
-      Setter->addDefinition();
-
-      Builder.SetInsertPoint(Setter->getEntryBlock());
-      auto F = CreateFieldRef(Setter->getEntryBlock()->getBlockArg(0),
-                                      field->getName());
-
-      CreateStore(Setter->getEntryBlock()->getBlockArg(1), F);
-
-      Builder.CreateRetVoid();
+      DefineFunction(Setter, field->getSetterMethod());
    }
 
    if (!node->getDefaultVal() || !node->isStatic())
@@ -719,48 +727,67 @@ void ILGenPass::visitFieldDecl(FieldDecl *node)
    DefineGlobal(glob, node->getDefaultVal(), node->getGlobalOrdering());
 }
 
+void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
+{
+   if (!F->getGetterBody() && F->hasGetter()
+         && F->getRecord()->hasDefinition()) {
+      InsertPointRAII insertPointRAII(*this);
+
+      auto Getter = getFunc(F->getGetterMethod());
+      Getter->addDefinition();
+
+      Builder.SetInsertPoint(Getter->getEntryBlock());
+      auto FieldRef = CreateFieldRef(Getter->getEntryBlock()->getBlockArg(0),
+                                     F->getName());
+
+      Builder.CreateRet(Builder.CreateLoad(FieldRef));
+   }
+
+   if (!F->getSetterBody() && F->hasSetter()
+         && F->getRecord()->hasDefinition()) {
+      InsertPointRAII insertPointRAII(*this);
+
+      auto Setter = getFunc(F->getSetterMethod());
+      Setter->addDefinition();
+
+      Builder.SetInsertPoint(Setter->getEntryBlock());
+      auto FieldRef = CreateFieldRef(Setter->getEntryBlock()->getBlockArg(0),
+                                     F->getName());
+
+      CreateStore(Setter->getEntryBlock()->getBlockArg(1), FieldRef);
+      Builder.CreateRetVoid();
+   }
+}
+
 void ILGenPass::visitInitDecl(InitDecl *node)
 {
-   if (alreadyVisited(node) || node->isTemplate())
-      return;
-
    if (node->isMemberwiseInitializer())
       return DefineMemberwiseInitializer(
          cast<StructDecl>(node->getRecord()),
          cast<StructType>(getType(node->getRecord())));
 
    if (node->isDefaultInitializer())
-      return DefineDefaultInitializer(cast<StructDecl>(node->getRecord()),
-                                      node);
-
-   if (!node->getBody())
       return;
 
-   auto M = getModule()->getFunction(node->getLinkageName());
-   DefineFunction(M, node->getBody());
+   visitCallableDecl(node);
 }
 
 void ILGenPass::visitDeinitDecl(DeinitDecl *node)
 {
-   if (alreadyVisited(node) || node->getRecord()->isExternal())
-      return;
+   visitCallableDecl(node);
 
    InsertPointRAII insertPointRAII(*this);
 
    auto fn = getFunc(node);
-   fn->addDefinition();
-
-   if (node->getBody()) {
-      Builder.SetInsertPoint(fn->getEntryBlock());
-      visit(node->getBody());
-   }
+   if (fn->isDeclared())
+      fn->addDefinition();
 
    AppendDefaultDeinitializer(fn, getType(node->getRecord()));
 }
 
 void ILGenPass::visitPropDecl(PropDecl *node)
 {
-   DefineProperty(node, getType(node->getRecord()));
+
 }
 
 void ILGenPass::visitExtensionDecl(ExtensionDecl *node)
@@ -794,27 +821,23 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, il::StructType *Ty)
       return;
 
    if (emitDI) {
-      auto MDLoc = Ty->getLocation();
-      assert(MDLoc);
-
-      Builder.setDebugLoc(MDLoc->getLocation());
+      Builder.setDebugLoc(Ty->getSourceLoc());
    }
 
    auto Fn = getModule()->getFunction(Init->getLinkageName());
    if (!Fn->isDeclared())
       return;
 
-   InsertPointRAII insertPointRAII(*this);
-
    Fn->addDefinition();
 
    auto EntryBB = Fn->getEntryBlock();
-   Builder.SetInsertPoint(EntryBB);
+   InsertPointRAII insertPointRAII(*this, EntryBB);
 
    auto arg_it = EntryBB->arg_begin();
    auto Self = &*arg_it;
 
-   Builder.CreateCall(getFunc(S->getDefaultInitializer()), getRValue(Self));
+   auto Call = Builder.CreateCall(getFunc(S->getDefaultInitializer()), Self);
+   Call->setLocation(Init->getSourceLoc());
 
    ++arg_it;
 
@@ -824,6 +847,8 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, il::StructType *Ty)
          ++i;
          continue;
       }
+
+      assert(arg_it != EntryBB->arg_end());
 
       auto arg = &*arg_it;
       auto gep = Builder.CreateStructGEP(Ty, Self, i);
@@ -892,10 +917,10 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
       auto MergeBB = Builder.CreateBasicBlock("tuplecmp.merge");
 
       Builder.SetInsertPoint(EqBB);
-      Builder.CreateBr(MergeBB, { Builder.CreateTrue() });
+      Builder.CreateBr(MergeBB, { Builder.GetTrue() });
 
       Builder.SetInsertPoint(CompBlocks.back());
-      Builder.CreateBr(MergeBB, { Builder.CreateFalse() });
+      Builder.CreateBr(MergeBB, { Builder.GetFalse() });
 
       Builder.SetInsertPoint(MergeBB);
       res = MergeBB->getBlockArg(0);
@@ -914,7 +939,7 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
    auto gep = CreateFieldRef(alloca, "val");
 
    Builder.CreateStore(res, gep);
-   Builder.CreateRet(getRValue(alloca));
+   Builder.CreateRet(alloca);
 }
 
 void ILGenPass::DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R)
@@ -950,7 +975,7 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
       size_t i = 0;
 
       for (const auto &F : StructTy->getFields()) {
-         auto fieldRef = getRValue(CreateFieldRef(Self, F.name));
+         auto fieldRef = CreateFieldRef(Self, F.name);
          auto nameStr = getString(F.name + " = ");
          auto valStr = stringify(fieldRef);
 
@@ -968,12 +993,9 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
    }
    else if (auto EnumTy = dyn_cast<EnumType>(AggrTy)) {
       auto RawVal = Builder.CreateEnumRawValue(Self);
-      auto UnreachableBB = Builder.CreateBasicBlock("switch.unreachable");
-
       auto Separator = getString(", ");
 
-      auto Switch = Builder.CreateSwitch(RawVal);
-      Switch->addDefaultCase(UnreachableBB);
+      auto Switch = Builder.CreateSwitch(RawVal, makeUnreachableBB());
 
       for (const auto &C : EnumTy->getCases()) {
          auto nextBB = Builder.CreateBasicBlock("switch.case");
@@ -989,9 +1011,7 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
          for (const auto &Val : C.AssociatedTypes) {
             (void)Val;
 
-            auto caseVal = getRValue(Builder.CreateEnumExtract(Self, C.name,
-                                                               i));
-
+            auto caseVal = Builder.CreateEnumExtract(Self, C.name, i);
             auto valStr = stringify(caseVal);
 
             Builder.CreateCall(PlusEquals, { Str, valStr });
@@ -1006,16 +1026,13 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
 
          Builder.CreateRet(Str);
       }
-
-      Builder.SetInsertPoint(UnreachableBB);
-      Builder.CreateUnreachable();
    }
    else {
       Builder.CreateRet(getString(AggrTy->getName()));
    }
 }
 
-il::GlobalVariable* ILGenPass::GetTypeInfo(Type *ty)
+il::GlobalVariable* ILGenPass::GetTypeInfo(QualType ty)
 {
    auto it = TypeInfoMap.find(ty);
    if (it != TypeInfoMap.end())
@@ -1037,7 +1054,7 @@ il::GlobalVariable* ILGenPass::GetTypeInfo(Type *ty)
    return GetTypeInfo(ty);
 }
 
-void ILGenPass::CreateTypeInfo(Type *ty)
+void ILGenPass::CreateTypeInfo(QualType ty)
 {
    GlobalVariable *glob;
    auto typeInfoTy = SP.getObjectTy("cdot.TypeInfo");
@@ -1064,38 +1081,37 @@ void ILGenPass::CreateTypeInfo(Type *ty)
       if (auto C = dyn_cast<ClassDecl>(R)) {
          if (auto P = C->getParentClass()) {
             auto TI = GetTypeInfo(SP.getContext().getRecordType(P));
-            Data[0] = ConstantExpr::getAddrOf(
-               TI, TI->getType()->getPointerTo(SP.getContext()));
+            Data[0] = ConstantExpr::getAddrOf(TI);
          }
       }
 
       if (!Data[0])
-         Data[0] = ConstantPointer::getNull(
+         Data[0] = Builder.GetConstantNull(
             typeInfoTy->getPointerTo(SP.getContext()));
 
-      Data[1] = ConstantInt::get(SP.getContext().getIntTy(),
-                                 R->getRecordID());
-      Data[2] = ConstantString::get(SP.getContext().getInt8PtrTy(),
+      Data[1] = Builder.GetConstantInt(SP.getContext().getIntTy(),
+                                       R->getRecordID());
+
+      Data[2] = ConstantString::get(Builder.getContext(),
                                     R->getName());
 
       if (auto Deinit = R->getDeinitializer())
          Data[3] = ConstantExpr::getBitCast(getFunc(Deinit), DeinitializerTy);
       else
-         Data[3] = ConstantPointer::getNull(Int8PtrTy);
+         Data[3] = Builder.GetConstantNull(Int8PtrTy);
 
-      Data[4] = ConstantInt::get(SP.getContext().getUIntTy(),
-                                 R->getConformances().size());
+      Data[4] = Builder.GetConstantInt(SP.getContext().getUIntTy(),
+                                       R->getConformances().size());
 
       llvm::SmallVector<il::Constant*, 4> Conformances;
       for (const auto &P : R->getConformances()) {
          auto TI = GetTypeInfo(SP.getContext()
                                  .getRecordType(P));
-         Conformances.push_back(ConstantExpr::getAddrOf(
-            TI, TI->getType()->getPointerTo(SP.getContext())));
+         Conformances.push_back(ConstantExpr::getAddrOf(TI));
       }
 
       auto ConformanceArray =
-         Builder.CreateConstantArray(std::move(Conformances));
+         Builder.GetConstantArray(std::move(Conformances));
       auto GV = Builder.CreateGlobalVariable(ConformanceArray, true,
                                              ty->toString() + ".conformances");
 
@@ -1105,16 +1121,16 @@ void ILGenPass::CreateTypeInfo(Type *ty)
                                             ->getPointerTo(SP.getContext()));
    }
    else {
-      Data[0] = ConstantPointer::getNull(typeInfoTy
-                                            ->getPointerTo(SP.getContext()));
+      Data[0] = Builder.GetConstantNull(
+         typeInfoTy->getPointerTo(SP.getContext()));
 
-      Data[1] = ConstantInt::get(SP.getContext().getIntTy(), 0);
-      Data[2] = ConstantString::get(Int8PtrTy, ty->toString());
-      Data[3] = ConstantPointer::getNull(Int8PtrTy);
-      Data[4] = ConstantInt::get(SP.getContext().getIntTy(), 0);
-      Data[5] = ConstantPointer::getNull(typeInfoTy
-                                            ->getPointerTo(SP.getContext())
-                                            ->getPointerTo(SP.getContext()));
+      Data[1] = Builder.GetConstantInt(SP.getContext().getIntTy(), 0);
+      Data[2] = ConstantString::get(Builder.getContext(), ty->toString());
+      Data[3] = Builder.GetConstantNull(Int8PtrTy);
+      Data[4] = Builder.GetConstantInt(SP.getContext().getIntTy(), 0);
+      Data[5] = Builder.GetConstantNull(typeInfoTy
+                                           ->getPointerTo(SP.getContext())
+                                           ->getPointerTo(SP.getContext()));
    }
 
    glob->setInitializer(TypeInfo::get(

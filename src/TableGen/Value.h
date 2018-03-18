@@ -45,9 +45,13 @@ public:
    }
 
 protected:
-public:
    explicit Value(TypeID typeID, Type *Ty) : typeID(typeID), type(Ty)
    { }
+
+#  ifndef NDEBUG
+   virtual
+#  endif
+   ~Value();
 
 protected:
    TypeID typeID;

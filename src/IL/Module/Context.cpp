@@ -5,18 +5,26 @@
 #include "Context.h"
 #include "Module.h"
 
-#include "../Value/ValueSymbolTable.h"
-#include "../Value/Function/Method.h"
-#include "../Value/Record/AggregateType.h"
+#include "IL/Value/Constant/ConstantVal.h"
+#include "IL/Value/ValueSymbolTable.h"
+#include "IL/Value/Function/Method.h"
+#include "IL/Value/Record/AggregateType.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-Context::Context()
+Context::Context(ast::ASTContext &ASTCtx) : ASTCtx(ASTCtx)
 {
 
+}
+
+Context::~Context()
+{
+   delete TrueVal;
+   delete FalseVal;
+   delete NullVal;
 }
 
 void Context::registerType(AggregateType *Type)

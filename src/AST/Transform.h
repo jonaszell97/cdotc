@@ -13,8 +13,8 @@ class Expression;
 class Statement;
 class SemaPass;
 
-void replaceExpressionWith(SemaPass &SP, Expression *expr, Expression *rep);
-void replaceStatementWith(SemaPass &SP, Statement *stmt, Statement *rep);
+//void replaceExpressionWith(SemaPass &SP, Expression *expr, Expression *rep);
+//void replaceStatementWith(SemaPass &SP, Statement *stmt, Statement *rep);
 
 } // namespace ast
 } // namespace cdot

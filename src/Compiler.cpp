@@ -2,43 +2,32 @@
 // Created by Jonas Zell on 03.09.17.
 //
 
-#include <llvm/Support/FileSystem.h>
+#include "Compiler.h"
+
+#include "AST/Passes/ASTDumper/ASTDumper.h"
+#include "AST/Passes/PrettyPrint/PrettyPrinter.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/Passes/Serialization/Serialize.h"
+#include "Files/FileUtils.h"
+#include "Files/FileManager.h"
+#include "IL/Module/Context.h"
+#include "IL/Module/Module.h"
+#include "IL/Passes/IRGen/IRGen.h"
+#include "Support/BitstreamWriter.h"
+#include "lex/Lexer.h"
+#include "Message/Diagnostics.h"
+#include "module/ModuleManager.h"
+#include "module/Module.h"
+#include "module/Serialization.h"
+#include "parse/Parser.h"
+
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
-#include <AST/Passes/PrettyPrint/PrettyPrinter.h>
-
-#include "Compiler.h"
-#include "parse/Parser.h"
-#include "AST/SymbolTable.h"
-
-#include "Files/FileUtils.h"
-#include "Files/FileManager.h"
-
-#include "Support/BitstreamWriter.h"
-
-#include "module/ModuleManager.h"
-
-#include "IL/Module/Context.h"
-#include "IL/Module/Module.h"
-#include "IL/Passes/IRGen/IRGen.h"
-
-#include "Message/Diagnostics.h"
-
-#include "AST/Statement/Block/CompoundStmt.h"
-
-#include "lex/Lexer.h"
-
-#include "AST/Statement/UsingStmt.h"
-#include "AST/Passes/Declaration/DeclPass.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/Passes/Serialization/Serialize.h"
-
-#include "module/Module.h"
-#include "module/Serialization.h"
-
-#include "AST/Passes/ASTDumper/ASTDumper.h"
+#include <llvm/Support/CrashRecoveryContext.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/PrettyStackTrace.h>
 
 using namespace cdot::fs;
 using namespace cdot::parse;
@@ -50,14 +39,16 @@ using std::string;
 namespace cdot {
 
 CompilationUnit::CompilationUnit(CompilationUnit &&CU) noexcept
-   : options(std::move(CU.options)), Context(move(CU.Context)),
+   : options(std::move(CU.options)),
+     FileMgr(move(CU.FileMgr)),
+     Context(move(CU.Context)),
      GlobalDeclCtx(std::move(CU.GlobalDeclCtx)),
      compiledModule(CU.compiledModule), imports(move(CU.imports)),
      IRGen(std::move(CU.IRGen)), LLVMCtx(std::move(CU.LLVMCtx)),
      LLVMModule(std::move(CU.LLVMModule)), ILCtx(move(CU.ILCtx)),
      ILModule(move(CU.ILModule)), Sema(move(CU.Sema))
 {
-   Sema->updateCompilationUnit(*this);
+   Sema->setCompilationUnit(*this);
 }
 
 CompilationUnit& CompilationUnit::operator=(CompilationUnit &&CU) noexcept
@@ -122,24 +113,26 @@ void CompilerOptions::setFlag(llvm::StringRef opt)
 
 CompilationUnit::CompilationUnit(CompilerOptions &&options)
    : options(std::move(options)),
+     FileMgr(std::make_unique<fs::FileManager>()),
      Context(std::make_unique<ASTContext>()),
      GlobalDeclCtx(std::make_unique<ast::GlobalDeclContext>()),
      IRGen(nullptr),
      LLVMCtx(std::make_unique<llvm::LLVMContext>()),
      LLVMModule(nullptr),
-     ILCtx(std::make_unique<il::Context>()),
+     ILCtx(std::make_unique<il::Context>(getContext())),
      Sema(std::make_unique<SemaPass>(*this))
 {
 
 }
 
 CompilationUnit::CompilationUnit(int argc, char **argv)
-   : Context(std::make_unique<ASTContext>()),
+   : FileMgr(std::make_unique<fs::FileManager>()),
+     Context(std::make_unique<ASTContext>()),
      GlobalDeclCtx(std::make_unique<ast::GlobalDeclContext>()),
      IRGen(nullptr),
      LLVMCtx(std::make_unique<llvm::LLVMContext>()),
      LLVMModule(nullptr),
-     ILCtx(std::make_unique<il::Context>()),
+     ILCtx(std::make_unique<il::Context>(getContext())),
      Sema(std::make_unique<SemaPass>(*this))
 {
    options.compilerLocation = string(argv[0]);
@@ -160,17 +153,16 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
       }
       else if (arg.length() == 3 && arg[0] == '-' && arg[1] == 'O') {
          if (arg[2] < '0' || arg[2] > '3') {
-            throw std::runtime_error("Optimization levels higher than "
-                                        "3 are unsupported");
+            Sema->diagnose(SourceLocation(), err_invalid_opt_level, 3);
          }
-
-         options.optimizationLevel = size_t(arg[2] - '0');
+         else {
+            options.optimizationLevel = size_t(arg[2] - '0');
+         }
       }
       else if (arg == "-o") {
          if (argc <= i) {
-            diag::err(err_generic_error)
-               << "expected filename after -o"
-               << diag::term;
+            Sema->diagnose(SourceLocation(), err_expected_filename_after, "-o");
+            break;
          }
 
          options.addOutput(string(argv[++i]));
@@ -199,29 +191,25 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
          }
       }
       else {
-         diag::err(err_generic_error)
-            << "unsupported argument " + arg
-            << diag::term;
+         Sema->diagnose(SourceLocation(), err_unsupported_argument, arg);
       }
    }
 
    if (options.inFiles.empty()) {
-      diag::err(err_generic_error)
-         << "no source file specified"
-         << diag::term;
+      Sema->diagnose(SourceLocation(), err_no_source_file);
    }
 
    if (options.hasInputKind(InputKind::ModuleFile)) {
-      if (options.inFiles.size() > 1)
-         diag::err(err_generic_error)
-            << "source files cannot be included when creating a module"
-            << diag::term;
+//      if (options.inFiles.size() > 1)
+//         diag::err(err_generic_error)
+//            << "source files cannot be included when creating a module"
+//            << diag::term;
 
       auto moduleFile = options.getInputFiles(InputKind::ModuleFile);
       if (moduleFile.size() > 1)
-         diag::err(err_generic_error)
-            << "only one module definition file can be included"
-            << diag::term;
+//         diag::err(err_generic_error)
+//            << "only one module definition file can be included"
+//            << diag::term;
 
       module::ModuleManager::createModule(*Sema);
    }
@@ -266,37 +254,59 @@ void importBuiltinModules(ASTContext &Ctx,
          continue;
 
       ImportStmt *import = new (Ctx) ImportStmt({ "std", M });
-      import->setSourceLoc({ 0, unsigned(sourceId) });
+      import->setSourceLoc(SourceLocation());
 
       importStmts.push_back(import);
       str.resize(4); // "std."
    }
 }
 
+class PrettyParserStackTraceEntry: public llvm::PrettyStackTraceEntry {
+public:
+   PrettyParserStackTraceEntry(Parser &P) : P(P)
+   {}
+
+   void print(llvm::raw_ostream &OS) const override;
+
+private:
+   Parser &P;
+};
+
 } // anonymous namespace
 
-void CompilationUnit::compile()
+void PrettyParserStackTraceEntry::print(llvm::raw_ostream &OS) const
 {
+   OS << "while parsing token: " << P.currentTok().toString() << "\n";
+}
+
+int CompilationUnit::compile()
+{
+   llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
+
    if (options.hasInputKind(InputKind::ModuleFile)) {
-      return;
+      return 0;
    }
 
    parse();
-   if (!Sema->getDiagnostics().empty()) {
-      Sema->issueDiagnostics();
-      return;
-   }
+   if (Sema->encounteredError())
+      return 1;
 
-   doDeclarations();
+   bool HadError = doDeclarations();
+   if (HadError)
+      return 1;
 
-   bool hadError = doSema();
-   if (hadError)
-      return;
+   HadError = doSema();
+   if (HadError)
+      return 1;
 
-   doILGen();
+   HadError = doILGen();
+   if (HadError)
+      return 1;
+
    doIRGen();
-
    outputFiles();
+
+   return 0;
 }
 
 void CompilationUnit::parse()
@@ -304,65 +314,48 @@ void CompilationUnit::parse()
    llvm::SmallVector<TranslationUnit*, 8> units;
    Context->getIdentifiers().addKeywords();
 
+   Sema->setDeclContext(*GlobalDeclCtx);
+
    for (auto& fileName : options.getInputFiles(InputKind::SourceFile)) {
-      auto buf = FileManager::openFile(fileName, true);
-      if (!buf.second) {
-         diag::err(err_generic_error)
-            << "error opening file " + fileName
-            << diag::term;
+      auto File = FileMgr->openFile(fileName);
+      if (!File.Buf) {
+         Sema->diagnose(SourceLocation(), err_generic_error,
+                        "error opening file " + fileName);
+
+         continue;
       }
 
-      auto translationUnit = new (*Context) TranslationUnit(string(fileName),
-                                                            buf.first);
+      lex::Lexer lex(Context->getIdentifiers(), Sema->getDiags(),
+                     File.Buf, File.SourceId, File.BaseOffset);
 
-      translationUnit->setParentCtx(GlobalDeclCtx.get());
-
-      DeclPass::DeclContextRAII declContextRAII(*Sema->getDeclPass(),
-                                                translationUnit);
-
-      lex::Lexer lex(Context->getIdentifiers(), buf.second.get(), buf.first);
       Parser parser(*Context, &lex, *Sema);
+
+      PrettyParserStackTraceEntry PST(parser);
 
       llvm::SmallVector<ImportStmt*, 4> importStmts;
       llvm::SmallVector<Statement*, 32> statements;
 
       if (!options.noBasicLib())
-         importBuiltinModules(*Context, buf.first, importStmts,
+         importBuiltinModules(*Context, File.SourceId, importStmts,
                               compiledModule);
 
       parser.parseImports(importStmts);
+
+      auto translationUnit = TranslationUnit::Create(*Context, fileName,
+                                                     File.SourceId,
+                                                     importStmts);
+
+      translationUnit->setSourceLoc(SourceLocation(1 + File.BaseOffset));
+      (void)GlobalDeclCtx->addDecl(translationUnit);
+
+      SemaPass::DeclContextRAII declContextRAII(*Sema, translationUnit);
       parser.parse(statements);
-
-      ImportStmt **importAlloc =
-         new (*Context) ImportStmt*[importStmts.size()];
-
-      Statement **stmtAlloc =
-         new (*Context) Statement*[statements.size()];
-
-      for (size_t i = 0; i < importStmts.size(); ++i)
-         importAlloc[i] = importStmts[i];
-
-      for (size_t i = 0; i < statements.size(); ++i)
-         stmtAlloc[i] = statements[i];
-
-      translationUnit->setImportStmts(importStmts.size(), importAlloc);
-      translationUnit->setStatements(statements.size(), stmtAlloc);
-
-      Context->getParentMap().updateParentMap(translationUnit);
-
-      units.push_back(translationUnit);
    }
-
-   auto translationUnits = new (*Context) TranslationUnit*[units.size()];
-   for (size_t i = 0; i < units.size(); ++i)
-      translationUnits[i] = units[i];
-
-   GlobalDeclCtx->setTranslationUnits(translationUnits, units.size());
 }
 
-void CompilationUnit::doDeclarations()
+bool CompilationUnit::doDeclarations()
 {
-   Sema->doDeclarations();
+   return Sema->doDeclarations();
 }
 
 bool CompilationUnit::doSema()
@@ -370,18 +363,24 @@ bool CompilationUnit::doSema()
    return Sema->doSema();
 }
 
-void CompilationUnit::doILGen()
+bool CompilationUnit::doILGen()
 {
-   Sema->doILGen();
+   return Sema->doILGen();
 }
 
 void CompilationUnit::doIRGen()
 {
    LLVMModule = std::make_unique<llvm::Module>("main", *LLVMCtx);
-   IRGen = std::make_unique<il::IRGen>(*LLVMCtx, LLVMModule.get(),
+   IRGen = std::make_unique<il::IRGen>(*this, *LLVMCtx, LLVMModule.get(),
                                        options.emitDebugInfo());
 
    IRGen->visitCompilationUnit(*this);
+}
+
+static void writeLLVMModuleToStream(llvm::Module *M, llvm::raw_ostream &s)
+{
+   auto Writer = std::make_unique<llvm::AssemblyAnnotationWriter>();
+   M->print(s, Writer.get());
 }
 
 void CompilationUnit::outputFiles()
@@ -402,19 +401,15 @@ void CompilationUnit::outputFiles()
       auto outFile = options.getOutFile(OutputKind::LlvmIR).str();
 
       if (outFile.empty()) {
-         LLVMModule->dump();
-         return;
+         writeLLVMModuleToStream(LLVMModule.get(), llvm::errs());
       }
+      else {
+         std::error_code ec;
+         llvm::raw_fd_ostream outstream(outFile, ec,
+                                        llvm::sys::fs::OpenFlags::F_RW);
 
-      std::error_code ec;
-      llvm::raw_fd_ostream outstream(outFile, ec,
-                                     llvm::sys::fs::OpenFlags::F_RW);
-
-      auto Writer = std::make_unique<llvm::AssemblyAnnotationWriter>();
-
-      LLVMModule->print(outstream, Writer.get());
-      outstream.flush();
-      outstream.close();
+         writeLLVMModuleToStream(LLVMModule.get(), outstream);
+      }
    }
 
    if (options.hasOutputKind(OutputKind::SerializedIL)) {
@@ -444,7 +439,18 @@ void CompilationUnit::setILModule(std::unique_ptr<il::Module> &&ILModule)
 
 SourceLocation CompilationUnit::getSourceLoc() const
 {
-   return (*GlobalDeclCtx->getTranslationUnits().begin())->getSourceLoc();
+   return GlobalDeclCtx->getDecls().begin()->getSourceLoc();
+}
+
+void CompilationUnit::reportInternalCompilerError()
+{
+   llvm::errs()
+      << "\033[21;31merror:\033[0m an internal compiler error occurred\n";
+}
+
+void CompilationUnit::reportBackendFailure(llvm::StringRef msg)
+{
+   Sema->diagnose(SourceLocation(), err_llvm_backend, msg);
 }
 
 } // namespace cdot

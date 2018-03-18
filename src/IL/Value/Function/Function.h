@@ -5,17 +5,20 @@
 #ifndef CDOT_ILFUNCTION_H
 #define CDOT_ILFUNCTION_H
 
-#include "../MetaData/MetaData.h"
-
-#include "../SymbolTableList.h"
-#include "../GlobalVariable.h"
-#include "BasicBlock.h"
 #include "Argument.h"
+#include "BasicBlock.h"
+
+#include "IL/Value/MetaData/MetaData.h"
+#include "IL/Value/SymbolTableList.h"
+#include "IL/Value/GlobalVariable.h"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/ArrayRef.h>
 
 namespace cdot {
+
+enum class KnownFunction: unsigned char;
+
 namespace il {
 
 class BasicBlock;
@@ -51,7 +54,7 @@ public:
 
    QualType getReturnType() const
    {
-      return support::cast<FunctionType>(type)->getReturnType();
+      return type->asFunctionType()->getReturnType();
    }
 
    bool mightThrow() const;
@@ -91,6 +94,16 @@ public:
 
    bool isGlobalInitFn() const;
 
+   KnownFunction getKnownFnKind() const
+   {
+      return knownFnKind;
+   }
+
+   void setKnownFnKind(KnownFunction knownFnKind)
+   {
+      Function::knownFnKind = knownFnKind;
+   }
+
    static BasicBlockList Function::*getSublistAccess(BasicBlock*)
    {
       return &Function::BasicBlocks;
@@ -101,6 +114,7 @@ protected:
    BasicBlockList BasicBlocks;
 
    llvm::StringRef unmangledName;
+   KnownFunction knownFnKind = KnownFunction(0);
 
    enum Flag : unsigned short {
       Throws = 0x1,
@@ -144,23 +158,14 @@ public:
    Lambda(FunctionType *funcTy,
           Module *parent);
 
-   struct Capture {
-      Capture(uintptr_t id, QualType type)
-         : id(id), type(type)
-      { }
-
-      uintptr_t id;
-      QualType type;
-   };
-
-   llvm::ArrayRef<Capture> getCaptures() const
+   llvm::ArrayRef<QualType> getCaptures() const
    {
       return captures;
    }
 
-   void addCapture(uintptr_t id, QualType type)
+   void addCapture(QualType type)
    {
-      captures.emplace_back(id, type);
+      captures.push_back(type);
    }
 
    static inline bool classof(Value const* T)
@@ -169,7 +174,7 @@ public:
    }
 
 private:
-   std::vector<Capture> captures;
+   std::vector<QualType> captures;
 };
 
 } // namespace il

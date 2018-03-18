@@ -59,7 +59,6 @@ public:
 class AddrOfInst: public UnaryInstruction {
 public:
    AddrOfInst(Value *target,
-              PointerType *PtrTy,
               BasicBlock *parent);
 
    static bool classof(Value const* T)

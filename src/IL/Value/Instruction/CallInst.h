@@ -45,6 +45,7 @@ public:
 
 protected:
    CallInst(TypeID id,
+            Context &Ctx,
             llvm::ArrayRef<Value*> args,
             BasicBlock *parent);
 
@@ -158,6 +159,17 @@ public:
    CallSite getAsCallSite();
    ImmutableCallSite getAsImmutableCallSite() const;
 
+   BasicBlock *getSuccessorAtImpl(size_t idx) const
+   {
+      if (!idx)
+         return NormalContinuation;
+
+      assert(idx == 1 && "invalid idx");
+      return LandingPad;
+   }
+
+   size_t getNumSuccessorsImpl() const { return 2; }
+
 protected:
    InvokeInst(TypeID id,
               Function *F,
@@ -223,7 +235,7 @@ enum class Intrinsic : unsigned char {
 class IntrinsicCallInst: public Instruction, public MultiOperandInst {
 public:
    IntrinsicCallInst(Intrinsic id,
-                     QualType returnType,
+                     ValueType returnType,
                      llvm::ArrayRef<Value*> args,
                      BasicBlock *parent);
 

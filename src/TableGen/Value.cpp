@@ -16,6 +16,11 @@ using namespace cdot::support;
 namespace cdot {
 namespace tblgen {
 
+Value::~Value()
+{
+
+}
+
 llvm::raw_ostream &operator<<(llvm::raw_ostream &str, Value const* V)
 {
    if (auto I = dyn_cast<IntegerLiteral>(V)) {
@@ -65,7 +70,26 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &str, Value const* V)
       str << "]";
    }
    else if (auto R = dyn_cast<RecordVal>(V)) {
-      str << R->getRecord()->getName();
+      auto Rec = R->getRecord();
+      if (Rec->isAnonymous()) {
+         auto &Base = Rec->getBases().front();
+         str << Base.getBase()->getName();
+
+         if (!Base.getTemplateArgs().empty()) {
+            str << "<";
+
+            size_t i = 0;
+            for (auto &TA : Base.getTemplateArgs()) {
+               if (i++ != 0) str << ", ";
+               str << TA;
+            }
+
+            str << ">";
+         }
+      }
+      else {
+         str << R->getRecord()->getName();
+      }
    }
    else if (auto DA = dyn_cast<DictAccessExpr>(V)) {
       str << DA->getDict() << "[\"" << DA->getKey() << "\"]";

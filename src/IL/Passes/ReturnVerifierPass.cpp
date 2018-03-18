@@ -2,15 +2,14 @@
 // Created by Jonas Zell on 22.11.17.
 //
 
-#include "../../Variant/Variant.h"
-
 #include "ReturnVerifierPass.h"
-#include "../../Message/Diagnostics.h"
+#include "Message/Diagnostics.h"
 
-#include "../Value/Function/BasicBlock.h"
-#include "../Value/Instruction/CallInst.h"
-#include "../Value/Instruction/Terminator/TerminatorInst.h"
-#include "../Value/Instruction/ControlFlow/ControlFlowInst.h"
+#include "IL/Utils/BlockIterator.h"
+#include "IL/Value/Function/BasicBlock.h"
+#include "IL/Value/Instruction/CallInst.h"
+#include "IL/Value/Instruction/Terminator/TerminatorInst.h"
+#include "IL/Value/Instruction/ControlFlow/ControlFlowInst.h"
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -20,8 +19,8 @@ namespace il {
 
 void ReturnVerifierPass::visitModule(Module &M)
 {
-   for (auto it = M.begin(); it != M.end(); ++it)
-      visitFunction(*it);
+   for (auto &fn : M)
+      visitFunction(fn);
 }
 
 void ReturnVerifierPass::visitFunction(Function &F)
@@ -37,14 +36,11 @@ void ReturnVerifierPass::visitFunction(Function &F)
 
 void ReturnVerifierPass::visitBasicBlock(BasicBlock &B)
 {
-   if (B.hasNoPredecessors()) {
+   if (pred_begin(&B) == pred_end(&B))
       return;
-   }
-   if (VisitedBasicBlocks.find(&B) != VisitedBasicBlocks.end()) {
-      return;
-   }
 
-   VisitedBasicBlocks.insert(&B);
+   if (!VisitedBasicBlocks.insert(&B).second)
+      return;
 
    if (!B.getTerminator() || B.getInstructions().empty()) {
       diagnoseError(*B.getParent());
@@ -83,8 +79,7 @@ void ReturnVerifierPass::visitBasicBlock(BasicBlock &B)
 
 void ReturnVerifierPass::diagnoseError(Function const &F)
 {
-   diag::err(err_not_all_code_paths_return)
-      << F.getLocation()->getLocation() << diag::term;
+
 }
 
 } // namespace il

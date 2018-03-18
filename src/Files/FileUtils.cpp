@@ -16,7 +16,7 @@ using std::string;
 namespace cdot {
 namespace fs {
 
-string getPath(const string& fullPath)
+llvm::StringRef getPath(llvm::StringRef fullPath)
 {
    auto period = fullPath.rfind('.');
    auto slash = fullPath.rfind(PathSeperator);
@@ -30,7 +30,7 @@ string getPath(const string& fullPath)
    return fullPath.substr(0, slash + 1);
 }
 
-string getFileName(const string& fullPath)
+llvm::StringRef getFileName(llvm::StringRef fullPath)
 {
    auto period = fullPath.rfind('.');
    auto slash = fullPath.rfind(PathSeperator);
@@ -44,7 +44,7 @@ string getFileName(const string& fullPath)
    return fullPath.substr(slash + 1, period - slash - 1);
 }
 
-string getExtension(const string& fullPath)
+llvm::StringRef getExtension(llvm::StringRef fullPath)
 {
    auto period = fullPath.rfind('.');
    auto slash = fullPath.rfind(PathSeperator);
@@ -58,7 +58,7 @@ string getExtension(const string& fullPath)
    return "";
 }
 
-string swapExtension(const string& fullPath, const string &newExt)
+std::string swapExtension(llvm::StringRef fullPath, llvm::StringRef newExt)
 {
    llvm::SmallString<128> ScratchBuf;
 
@@ -83,7 +83,7 @@ string swapExtension(const string& fullPath, const string &newExt)
    return ScratchBuf.str();
 }
 
-string getFileNameAndExtension(const string& fullPath)
+llvm::StringRef getFileNameAndExtension(llvm::StringRef fullPath)
 {
    auto period = fullPath.rfind('.');
    auto slash = fullPath.rfind(PathSeperator);
@@ -92,7 +92,7 @@ string getFileNameAndExtension(const string& fullPath)
       return "";
 
    if (slash == string::npos)
-      return fullPath.substr();
+      return fullPath;
 
    if (period > slash)
       return fullPath.substr(slash + 1);
@@ -100,12 +100,12 @@ string getFileNameAndExtension(const string& fullPath)
    return "";
 }
 
-bool fileExists(const string& name)
+bool fileExists(llvm::StringRef name)
 {
    return llvm::sys::fs::is_regular_file(name);
 }
 
-void createDirectories(const string &fullPath)
+void createDirectories(llvm::StringRef fullPath)
 {
    llvm::sys::fs::create_directories(fullPath);
 }
@@ -123,8 +123,13 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
    iterator it(dirName, ec);
    while (!ec) {
       auto &entry = *it;
-      llvm::sys::fs::file_status st;
 
+//      auto errOrStatus = entry.status();
+//      if (!errOrStatus)
+//         break;
+//
+//      auto &st = errOrStatus.get();
+      llvm::sys::fs::file_status st;
       auto err = entry.status(st);
       if (err)
          break;
@@ -147,7 +152,7 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
 
 } // anonymous namespace
 
-std::vector<string> getAllFilesInDirectory(string& dirName,
+std::vector<string> getAllFilesInDirectory(llvm::StringRef dirName,
                                            bool recursive) {
    using llvm::sys::fs::recursive_directory_iterator;
    using llvm::sys::fs::directory_iterator;
@@ -158,9 +163,15 @@ std::vector<string> getAllFilesInDirectory(string& dirName,
    return getAllFilesInDirectoryImpl<directory_iterator>(dirName);
 }
 
-string
-findFileInDirectories(llvm::Twine const &fileName,
-                      llvm::ArrayRef<std::string> directories) {
+string findFileInDirectories(llvm::StringRef fileName,
+                             llvm::ArrayRef<std::string> directories) {
+   if (fileName.startswith("/")) {
+      if (fileExists(fileName))
+         return fileName;
+      
+      return "";
+   }
+
    using iterator = llvm::sys::fs::recursive_directory_iterator;
    using Kind = llvm::sys::fs::file_type;
 
@@ -172,8 +183,15 @@ findFileInDirectories(llvm::Twine const &fileName,
 
       while (it != end_it) {
          auto &entry = *it;
-         llvm::sys::fs::file_status st;
 
+         // FIXME LLVM 7.0
+//         auto errOrStatus = entry.status();
+//         if (!errOrStatus)
+//            break;
+//
+//         auto &st = errOrStatus.get();
+
+         llvm::sys::fs::file_status st;
          auto err = entry.status(st);
          if (err)
             break;
@@ -238,8 +256,13 @@ void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
 
    while (it != end_it) {
       auto &entry = *it;
-      llvm::sys::fs::file_status st;
 
+//      auto errOrStatus = entry.status();
+//      if (!errOrStatus)
+//         break;
+//
+//      auto &st = errOrStatus.get();
+      llvm::sys::fs::file_status st;
       auto err = entry.status(st);
       if (err)
          break;

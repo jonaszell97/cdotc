@@ -14,6 +14,11 @@
 #include "Support/Casting.h"
 #include "Variant/Type/Type.h"
 
+namespace llvm {
+   class APFloat;
+   class APSInt;
+} // namespace llvm
+
 namespace cdot {
 
 struct Variant;
@@ -32,9 +37,26 @@ public:
 
    Value() : buffer(nullptr) {}
 
-   static Value getInt(uint64_t val)
+#  define INT_INIT(Ty)                                   \
+   static Value getInt(Ty val) { return Value(val); }
+
+   INT_INIT(size_t)
+   INT_INIT(uint64_t)
+   INT_INIT(uint32_t)
+   INT_INIT(uint16_t)
+   INT_INIT(uint8_t)
+   INT_INIT(bool)
+   INT_INIT(char)
+   INT_INIT(int64_t)
+   INT_INIT(int32_t)
+   INT_INIT(int16_t)
+   INT_INIT(int8_t)
+
+#  undef INT_INIT
+
+   static Value getBool(bool val)
    {
-      return Value(val);
+      return Value(uint64_t(val));
    }
 
    static Value getDouble(double d)
@@ -49,10 +71,7 @@ public:
 
    static Value getPtr(void *ptr, Allocator &Alloc)
    {
-      auto buf = (void**)Alloc.Allocate(sizeof(void*), alignof(void*));
-      *buf = ptr;
-
-      return Value(buf);
+      return Value(ptr);
    }
 
    static Value getConstPtr(void *ptr)
@@ -63,28 +82,16 @@ public:
    static Value getStr(llvm::StringRef str, Allocator &Alloc)
    {
       auto buffer = Alloc.Allocate(str.size() + 1, alignof(char));
-      memcpy(buffer, str.data(), str.size());
+      ::memcpy(buffer, str.data(), str.size());
       reinterpret_cast<char*>(buffer)[str.size()] = '\0';
 
       return Value(buffer);
    }
 
-   static Value getFunc(il::Function const* F);
-   static Value getStruct(Type *ty, llvm::ArrayRef<Value> fieldValues,
-                          Allocator &Alloc);
-   static Value getArray(Type *ty, llvm::ArrayRef<Value> fieldValues,
-                         Allocator &Alloc);
-   static Value getTuple(Type *ty, llvm::ArrayRef<Value> fieldValues,
-                         Allocator &Alloc);
-   static Value getUnion(Type *ty, Type *initTy, Value Initializer,
-                         Allocator &Alloc);
-   static Value getEnum(Type *ty, llvm::StringRef caseName,
-                        llvm::ArrayRef<Value> fieldValues,
-                        Allocator &Alloc);
-
-   static Value getLambda(il::Function const* F,
-                          llvm::ArrayRef<std::pair<Type*, Value>> captures,
-                          Allocator &Alloc);
+   static Value getFunc(il::Function const* F)
+   {
+      return Value((void*)const_cast<il::Function*>(F));
+   }
 
    static Value getUntyped(size_t bufferSize, Allocator &Alloc)
    {
@@ -96,21 +103,20 @@ public:
       return Value(buffer);
    }
 
-   static Value getNullValue(Type *ty, Allocator &Alloc);
-
-   std::string toString(Type *type);
-   Variant toVariant(Type *type);
-
    char *getBuffer() const { return buffer; }
    char *& operator *() { return buffer; }
 
-private:
-   explicit Value(void *buffer)
-      : buffer((char*)buffer)
+   /*implicit*/ Value(void *buffer) : buffer((char*)buffer)
    {
-
+      (void)Arr;
+      (void)APF;
+      (void)APS;
    }
 
+   /*implicit*/ operator char*() const { return buffer; }
+   /*implicit*/ operator void*() const { return (void*) buffer; }
+
+private:
 #ifndef NDEBUG
    union {
       char *buffer;
@@ -136,8 +142,12 @@ private:
       double d;
       float f;
 
+      Value **Arr;
       Value* V;
       il::Function const* F;
+
+      llvm::APSInt *APS;
+      llvm::APFloat *APF;
    };
 #else
    char *buffer;
@@ -147,8 +157,9 @@ private:
 
 public:
 #  define CDOT_VALUE_INIT(Field, Ty)        \
-   Value(Ty val) : Field(val) {}
+   Value(Ty val) { u64 = 0; Field = val; }
 
+   CDOT_VALUE_INIT(u64, size_t)
    CDOT_VALUE_INIT(u64, uint64_t)
    CDOT_VALUE_INIT(u32, uint32_t)
    CDOT_VALUE_INIT(u16, uint16_t)
@@ -200,25 +211,14 @@ public:
    char *getUntypedPtr()       { return buffer; }
    char *getUntypedPtr() const { return buffer; }
 
+   Value load(QualType Ty) const
+   {
+      return Ty->needsStructReturn() ? *this
+                                     : Value(getValuePtr()->getBuffer());
+   }
+
    Value *getValuePtr()  { return reinterpret_cast<Value*>(buffer); }
-
-   Value getStructElement(Type *ty, llvm::StringRef fieldName);
-   Value getStructElement(Type *ty, size_t idx);
-
-   Value getArrayElement(Type *ty, size_t idx);
-   Value getTupleElement(Type *ty, size_t idx);
-
-   Value getElementPtr(Type *ty, size_t idx);
-
-   Value getLambdaEnvironment();
-   il::Function *getLambdaFuncPtr();
-
-   Value getEnumRawValue(Type *type);
-   Value getEnumCaseValue(Type *ty, llvm::StringRef caseName, size_t idx);
-
    std::string getString() const;
-
-   void doStore(Type *ty, Value dst) const;
 };
 
 } // namespace ctfe

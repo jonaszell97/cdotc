@@ -20,6 +20,12 @@ const char Base8Traits::Digits[] = {
    '0', '1', '2', '3', '4', '5', '6', '7'
 };
 
+const char *Base10Traits::Prefix = "";
+const uint64_t Base10Traits::Base = 10;
+const char Base10Traits::Digits[] = {
+   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+};
+
 const char *Base16Traits::Prefix = "0x";
 const uint64_t Base16Traits::Base = 16;
 const char Base16Traits::Digits[] = {

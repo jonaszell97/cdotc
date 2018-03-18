@@ -24,7 +24,7 @@ class CastInst: public UnaryInstruction {
 public:
    CastInst(TypeID id,
             Value *target,
-            Type *toType,
+            QualType toType,
             BasicBlock *parent)
       : UnaryInstruction(id, target, toType, parent)
    {
@@ -49,11 +49,6 @@ class IntegerCastInst: public CastInst {
 public:
    IntegerCastInst(CastKind kind,
                    Value *target,
-                   Type *toType,
-                   BasicBlock *parent);
-
-   IntegerCastInst(CastKind kind,
-                   Value *target,
                    QualType toType,
                    BasicBlock *parent);
 
@@ -72,7 +67,7 @@ public:
 class IntToEnumInst: public CastInst {
 public:
    IntToEnumInst(Value *target,
-                 Type *toType,
+                 QualType toType,
                  BasicBlock *parent)
       : CastInst(IntToEnumInstID, target, toType, parent)
    {}
@@ -85,11 +80,6 @@ public:
 
 class FPCastInst: public CastInst {
 public:
-   FPCastInst(CastKind kind,
-              Value *target,
-              Type *toType,
-              BasicBlock *parent);
-
    FPCastInst(CastKind kind,
               Value *target,
               QualType toType,
@@ -131,7 +121,7 @@ public:
 class ProtoCastInst: public CastInst {
 public:
    ProtoCastInst(Value *target,
-                 Type *toType,
+                 QualType toType,
                  BasicBlock *parent);
 
    bool isWrap() const;
@@ -152,7 +142,7 @@ public:
 class ExceptionCastInst: public CastInst {
 public:
    ExceptionCastInst(Value *target,
-                     Type *toType,
+                     QualType toType,
                      BasicBlock *parent);
 
 public:
@@ -166,7 +156,7 @@ class BitCastInst: public CastInst {
 public:
    BitCastInst(CastKind kind,
                Value *target,
-               Type *toType,
+               QualType toType,
                BasicBlock *parent);
 
    CastKind getKind() const { return kind; }
@@ -184,7 +174,7 @@ public:
 class DynamicCastInst: public CastInst {
 public:
    DynamicCastInst(Value *target,
-                   Type *toType,
+                   QualType toType,
                    BasicBlock *parent);
 
 public:

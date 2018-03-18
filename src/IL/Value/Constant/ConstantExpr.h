@@ -15,11 +15,11 @@ class ConstantAddrOfInst;
 
 class ConstantExpr: public Constant {
 public:
-   static ConstantBitCastInst *getBitCast(Constant *Val, Type *toType);
-   static ConstantAddrOfInst *getAddrOf(Constant *Val, PointerType *PtrTy);
+   static ConstantBitCastInst *getBitCast(Constant *Val, QualType toType);
+   static ConstantAddrOfInst *getAddrOf(Constant *Val);
 
 protected:
-   ConstantExpr(TypeID id, Type *ty)
+   ConstantExpr(TypeID id, ValueType ty)
       : Constant(id, ty)
    {
 
@@ -41,7 +41,7 @@ class ConstantBitCastInst: public ConstantExpr {
 private:
    Constant *target;
 
-   ConstantBitCastInst(Constant *Val, Type *toType)
+   ConstantBitCastInst(Constant *Val, ValueType toType)
       : ConstantExpr(ConstantBitCastInstID, toType),
         target(Val)
    {
@@ -66,7 +66,7 @@ class ConstantAddrOfInst: public ConstantExpr {
 private:
    Constant *target;
 
-   ConstantAddrOfInst(Constant *Val, PointerType *PtrTy)
+   ConstantAddrOfInst(Constant *Val, ValueType PtrTy)
       : ConstantExpr(ConstantAddrOfInstID, PtrTy),
         target(Val)
    {
@@ -89,13 +89,15 @@ public:
 };
 
 inline ConstantBitCastInst* ConstantExpr::getBitCast(Constant *Val,
-                                                     Type *toType) {
-   return new ConstantBitCastInst(Val, toType);
+                                                     QualType toType) {
+   return new ConstantBitCastInst(Val, ValueType(Val->getType().getCtx(),
+                                                 toType));
 }
 
-inline ConstantAddrOfInst* ConstantExpr::getAddrOf(Constant *Val,
-                                                   PointerType *PtrTy) {
-   return new ConstantAddrOfInst(Val, PtrTy);
+inline ConstantAddrOfInst* ConstantExpr::getAddrOf(Constant *Val)
+{
+   assert(Val->isLvalue());
+   return new ConstantAddrOfInst(Val, Val->getType().getPointerTo());
 }
 
 } // namespace il

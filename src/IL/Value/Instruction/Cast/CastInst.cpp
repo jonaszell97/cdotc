@@ -4,12 +4,12 @@
 
 #include "CastInst.h"
 
-#include "../../Function/BasicBlock.h"
-#include "../../Record/AggregateType.h"
-#include "../../Instruction/ControlFlow/ControlFlowInst.h"
-#include "../../../../Basic/CastKind.h"
+#include "Basic/CastKind.h"
+#include "IL/Value/Function/BasicBlock.h"
+#include "IL/Value/Record/AggregateType.h"
+#include "IL/Value/Instruction/ControlFlow/ControlFlowInst.h"
 
-#include "../../../../AST/Statement/Declaration/Class/RecordDecl.h"
+#include "AST/NamedDecl.h"
 
 namespace cdot {
 namespace il {
@@ -26,35 +26,20 @@ const char* CastNames[] = {
 
 IntegerCastInst::IntegerCastInst(CastKind kind,
                                  Value *target,
-                                 Type *toType,
+                                 QualType toType,
                                  BasicBlock *parent)
    : CastInst(IntegerCastInstID, target, toType, parent), kind(kind)
 {
 
 }
 
-IntegerCastInst::IntegerCastInst(CastKind kind, Value *target,
-                                 QualType toType,
-                                 BasicBlock *parent)
-   : CastInst(IntegerCastInstID, target, *toType, parent), kind(kind)
-{
-   if (kind == CastKind::IUnbox)
-      setIsLvalue(toType.isLvalue());
-}
-
-FPCastInst::FPCastInst(CastKind kind,Value *target, Type *toType,
-                       BasicBlock *parent)
-   : CastInst(FPCastInstID, target, toType, parent), kind(kind)
-{
-
-}
-
-FPCastInst::FPCastInst(CastKind kind, Value *target, QualType toType,
+FPCastInst::FPCastInst(CastKind kind,
+                       Value *target,
+                       QualType toType,
                        BasicBlock *parent)
    : CastInst(FPCastInstID, target, *toType, parent), kind(kind)
 {
-   if (kind == CastKind::FPUnbox)
-      setIsLvalue(toType.isLvalue());
+
 }
 
 UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
@@ -64,10 +49,10 @@ UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
               parent),
      UnionTy(UnionTy), fieldName(fieldName)
 {
-   type.isLvalue(true);
+   type.makeReference();
 }
 
-ProtoCastInst::ProtoCastInst(Value *target, Type *toType, BasicBlock *parent)
+ProtoCastInst::ProtoCastInst(Value *target, QualType toType, BasicBlock *parent)
    : CastInst(ProtoCastInstID, target, toType, parent)
 {
    if (toType->isObjectType() && toType->getRecord()->isProtocol()) {
@@ -85,21 +70,21 @@ bool ProtoCastInst::isUnwrap() const
    return !isWrap();
 }
 
-ExceptionCastInst::ExceptionCastInst(Value *target, Type *toType,
+ExceptionCastInst::ExceptionCastInst(Value *target, QualType toType,
                                      BasicBlock *parent)
    : CastInst(ExceptionCastInstID, target, toType, parent)
 {
 
 }
 
-BitCastInst::BitCastInst(CastKind kind, Value *target, Type *toType,
+BitCastInst::BitCastInst(CastKind kind, Value *target, QualType toType,
                          BasicBlock *parent)
    : CastInst(BitCastInstID, target, toType, parent), kind(kind)
 {
 
 }
 
-DynamicCastInst::DynamicCastInst(Value *target, Type *toType,
+DynamicCastInst::DynamicCastInst(Value *target, QualType toType,
                                  BasicBlock *parent)
    : CastInst(DynamicCastInstID, target, toType, parent)
 {

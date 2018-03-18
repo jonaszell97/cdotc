@@ -205,6 +205,8 @@ public:
       return false;
    }
 
+   RecordKeeper &getRecordKeeper() const { return RK; }
+
    void dump();
    void printTo(llvm::raw_ostream &out);
 
@@ -329,6 +331,9 @@ public:
       return false;
    }
 
+   RecordKeeper &getRecordKeeper() const { return RK; }
+   bool isAnonymous() const { return IsAnonymous; }
+
    void dump();
    void dumpAllValues();
 
@@ -339,7 +344,13 @@ public:
 private:
    Record(RecordKeeper &RK, llvm::StringRef name, SourceLocation declLoc)
       : RK(RK), name(name), declLoc(declLoc)
-   {}
+   {
+   }
+
+   Record(RecordKeeper &RK, SourceLocation declLoc)
+      : RK(RK), declLoc(declLoc), IsAnonymous(true)
+   {
+   }
 
    RecordKeeper &RK;
 
@@ -350,6 +361,8 @@ private:
    std::vector<RecordField> ownFields;
 
    llvm::StringMap<Value*> fieldValues;
+
+   bool IsAnonymous = false;
 };
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &str, Record &R)
@@ -393,8 +406,11 @@ public:
                       llvm::DenseMap<llvm::StringRef, unsigned>,
                       std::vector<MapVectorPair<llvm::StringRef, Record*>>>;
 
-   Record *addRecord(llvm::StringRef name, SourceLocation loc);
-   Class *addClass(llvm::StringRef name, SourceLocation loc);
+   Record *CreateRecord(llvm::StringRef name, SourceLocation loc);
+   Class *CreateClass(llvm::StringRef name, SourceLocation loc);
+
+   [[nodiscard]]
+   Record *CreateAnonymousRecord(SourceLocation loc);
 
    struct ValueDecl {
       ValueDecl(Value *Val, SourceLocation loc) : Val(Val), loc(loc)

@@ -156,7 +156,7 @@ public:
       return ilist.getPrevNode(const_cast<T&>(ptr));
    }
 
-   size_t size() const { return ilist.size(); }
+   size_t size() const { return empty() ? 0 : ilist.size(); }
    bool empty() const { return ilist.empty(); }
 
    const T& operator[](size_t idx) const

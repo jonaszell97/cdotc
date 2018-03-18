@@ -1,0 +1,47 @@
+
+#include "DeclNodes.tg"
+
+class Arg<let name: string, let optional: i1>
+class IntArg<name: string, optional: i1 = false, let defaultVal: u64 = 0> : Arg<name, optional>
+class FloatArg<name: string,optional: i1 = false, let defaultVal: f64 = 0> : Arg<name, optional>
+class StringArg<name: string, optional: i1 = false, let defaultVal: string = ""> : Arg<name, optional>
+class TypeArg<name: string, optional: i1 = false> : Arg<name, optional>
+class ExprArg<name: string, optional: i1 = false> : Arg<name, optional>
+class EnumArg<name: string, let cases: list<string>, optional: i1 = false, let defaultVal: string = ""> : Arg<name, optional>
+
+class VisitationPoint
+    def BeforeDeclaration : VisitationPoint
+    def AfterDeclaration  : VisitationPoint
+    def BeforeSema        : VisitationPoint
+    def AfterSema         : VisitationPoint
+
+class Attr<let name: string> {
+    let Args: list<Arg> = []
+    let Visit: VisitationPoint = AfterDeclaration
+}
+
+class DeclAttr<name: string, let Decls: list<Decl> > : Attr<name>
+class TypeAttr<name: string> : Attr<name>
+class ExprAttr<name: string> : Attr<name>
+class StmtAttr<name: string> : Attr<name>
+
+def Extern : DeclAttr<"extern", [CallableDecl, GlobalVarDecl]> {
+    Args = [EnumArg<"lang", ["C", "CXX", "CPP"]>]
+    Visit = BeforeDeclaration
+}
+
+def Inline : DeclAttr<"inline", [CallableDecl]> {
+    Args = [EnumArg<"level", ["always", "never", "hint"], true, "hint">]
+}
+
+def Implicit : DeclAttr<"implicit", [CallableDecl]>
+def Thin : TypeAttr<"thin"> {
+    Visit = BeforeDeclaration
+}
+
+def Opaque : DeclAttr<"_opaque", [RecordDecl]>
+
+def Align : DeclAttr<"align", [RecordDecl, VarDecl]> {
+    Args = [ExprArg<"alignment">]
+    Visit = AfterSema
+}

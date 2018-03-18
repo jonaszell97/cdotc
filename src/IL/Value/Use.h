@@ -56,10 +56,17 @@ public:
 
       iterator_impl() : current() {}
 
-      bool operator==(const iterator_impl &x) { return x.current == current; }
-      bool operator!=(const iterator_impl &x) { return !operator==(x); }
+      bool operator==(const iterator_impl &x) const
+      { return x.current == current; }
 
-      UseT *operator*()
+      bool operator!=(const iterator_impl &x) const { return !operator==(x); }
+
+      UseT *operator*() const
+      {
+         return current;
+      }
+
+      UseT *operator->() const
       {
          return current;
       }
@@ -92,6 +99,11 @@ public:
          return tmp;
       }
 
+      bool atEnd() const
+      {
+         return !current;
+      }
+
    protected:
       UseT *current;
    };
@@ -121,7 +133,7 @@ public:
       return { first };
    }
 
-   const_iterator begin() const
+   const_iterator const_begin() const
    {
       auto first = this;
       while (first->Prev) {
@@ -132,7 +144,7 @@ public:
    }
 
    iterator end() { return {}; }
-   const_iterator end() const { return {}; }
+   const_iterator const_end() const { return {}; }
 
    Value *getUser()
    {

@@ -5,85 +5,87 @@
 #ifndef CDOT_TEMPLATEINSTANTIATOR_H
 #define CDOT_TEMPLATEINSTANTIATOR_H
 
-#include <vector>
-#include <llvm/ADT/ArrayRef.h>
-
 #include "lex/SourceLocation.h"
+#include "Variant/Type/Type.h"
+
+#include <llvm/ADT/ArrayRef.h>
 
 namespace cdot {
 
+struct Variant;
 struct SourceLocation;
 
 namespace ast {
+   class Expression;
+   class NamedDecl;
    class FunctionDecl;
    class RecordDecl;
    class MethodDecl;
-   class DeclPass;
    class Statement;
    class StaticExpr;
    class SemaPass;
    class AliasDecl;
 } // namespace ast
 
-class TemplateArg;
-
 namespace sema {
    class TemplateArgList;
+   class MultiLevelTemplateArgList;
 } // namespace sema
 
 class TemplateInstantiator {
 public:
-   static ast::RecordDecl *
-   InstantiateRecord(ast::SemaPass &SP,
-                     SourceLocation instantiatedFrom,
-                     ast::RecordDecl *rec,
-                     sema::TemplateArgList&& templateArgs,
-                     bool *isNew = nullptr);
+   using TemplateArgs = sema::TemplateArgList;
 
-   static ast::FunctionDecl *
-   InstantiateFunction(ast::SemaPass &SP,
-                       SourceLocation instantiatedFrom,
-                       ast::FunctionDecl *F,
-                       sema::TemplateArgList&& templateArgs,
-                       bool *isNew = nullptr);
+   explicit TemplateInstantiator(ast::SemaPass &SP)
+      : SP(SP)
+   {
 
-   static ast::MethodDecl *
-   InstantiateMethod(ast::SemaPass &SP,
-                     SourceLocation instantiatedFrom,
-                     ast::MethodDecl *M,
-                     sema::TemplateArgList &&templateArgs,
-                     bool *isNew = nullptr,
-                     ast::RecordDecl *R = nullptr);
+   }
 
-   static ast::MethodDecl *
-   InstantiateProtocolDefaultImpl(ast::SemaPass &SP,
-                                  SourceLocation instantiatedFrom,
+   ast::RecordDecl* InstantiateRecord(ast::Statement *POI,
+                                      ast::RecordDecl *rec,
+                                      TemplateArgs&& templateArgs,
+                                      bool *isNew = nullptr);
+
+   ast::FunctionDecl* InstantiateFunction(ast::Statement *POI,
+                                          ast::FunctionDecl *F,
+                                          TemplateArgs&& templateArgs,
+                                          bool *isNew = nullptr);
+
+   ast::MethodDecl *InstantiateMethod(ast::Statement *POI,
+                                      ast::MethodDecl *M,
+                                      TemplateArgs&& templateArgs,
+                                      bool *isNew = nullptr);
+
+   ast::MethodDecl*
+   InstantiateProtocolDefaultImpl(SourceLocation instantiatedFrom,
                                   ast::RecordDecl *Rec,
                                   ast::MethodDecl *M);
 
-   static ast::Statement*
-   InstantiateStatement(ast::SemaPass &SP,
-                        SourceLocation instantiatedFrom,
-                        ast::Statement* stmt,
-                        sema::TemplateArgList const& templateArgs);
+   ast::Statement* InstantiateStatement(SourceLocation instantiatedFrom,
+                                        ast::Statement* stmt,
+                                        TemplateArgs const& templateArgs);
 
-   static ast::Statement*
-   InstantiateMethodBody(ast::SemaPass &SP,
-                         SourceLocation instantiatedFrom,
-                         ast::MethodDecl const* baseMethod,
-                         ast::MethodDecl *newMethod);
+   ast::Statement* InstantiateStatement(ast::Statement *POI,
+                                        ast::Statement* stmt,
+                                        llvm::StringRef SubstName,
+                                        QualType SubstTy,
+                                        const Variant &SubstVal);
 
-   static ast::StaticExpr*
-   InstantiateStaticExpr(ast::SemaPass &SP,
-                         SourceLocation instantiatedFrom,
-                         ast::StaticExpr* stmt,
-                         sema::TemplateArgList const& templateArgs);
+   ast::Statement *InstantiateMethodBody(ast::Statement *POI,
+                                         ast::MethodDecl *Method);
 
-   static ast::AliasDecl*
-   InstantiateAlias(ast::SemaPass &SP,
-                    ast::AliasDecl *alias,
-                    SourceLocation instantiatedFrom,
-                    sema::TemplateArgList&& templateArgs);
+   ast::Expression*
+   InstantiateStaticExpr(SourceLocation instantiatedFrom,
+                         ast::Expression* stmt,
+                         TemplateArgs const& templateArgs);
+
+   ast::AliasDecl* InstantiateAlias(ast::AliasDecl *alias,
+                                    SourceLocation instantiatedFrom,
+                                    TemplateArgs&& templateArgs);
+
+private:
+   ast::SemaPass &SP;
 };
 
 } // namespace cdot

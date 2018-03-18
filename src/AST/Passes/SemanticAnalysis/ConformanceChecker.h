@@ -28,7 +28,6 @@ public:
    ~ConformanceChecker();
 
    void checkConformance();
-   llvm::SmallVector<diag::DiagnosticBuilder, 4> &getDiagnostics();
 
 private:
    ConformanceCheckerImpl *pImpl;

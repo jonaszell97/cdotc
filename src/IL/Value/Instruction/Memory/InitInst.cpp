@@ -25,7 +25,7 @@ InitInst::InitInst(StructType *InitializedType,
 UnionInitInst::UnionInitInst(UnionType *UnionTy,
                              Value *InitializerVal,
                              BasicBlock *parent)
-   : CallInst(UnionInitInstID, { InitializerVal }, parent),
+   : CallInst(UnionInitInstID, UnionTy->getCtx(), { InitializerVal }, parent),
      UnionTy(UnionTy)
 {
    type = UnionTy->getType();
@@ -36,7 +36,7 @@ EnumInitInst::EnumInitInst(EnumType *EnumTy,
                            std::string const& caseName,
                            llvm::ArrayRef<Value *> args,
                            BasicBlock *parent)
-   : CallInst(EnumInitInstID, args, parent),
+   : CallInst(EnumInitInstID, EnumTy->getCtx(), args, parent),
      EnumTy(EnumTy), caseName(caseName)
 {
    type = EnumTy->getType();
@@ -47,7 +47,7 @@ LambdaInitInst::LambdaInitInst(il::Function *F,
                                QualType LambdaTy,
                                llvm::ArrayRef<Value*> Captures,
                                BasicBlock *parent)
-   : Instruction(LambdaInitInstID, LambdaTy, parent),
+   : Instruction(LambdaInitInstID, ValueType(F->getCtx(), LambdaTy), parent),
      MultiOperandInst(Captures),
      F(F)
 {

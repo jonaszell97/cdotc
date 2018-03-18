@@ -28,29 +28,34 @@ struct Base8Traits {
    static const uint64_t Base;
 };
 
+struct Base10Traits {
+   static const char Digits[];
+   static const char* Prefix;
+   static const uint64_t Base;
+};
+
 struct Base16Traits {
    static const char Digits[];
    static const char* Prefix;
    static const uint64_t Base;
 };
 
-template<class FormatTraits = Base16Traits>
-std::string formatInteger(uint64_t val)
+template<class FormatTraits = Base10Traits, unsigned N>
+void formatInteger(uint64_t val, llvm::SmallString<N> &res)
 {
-   llvm::SmallString<128> res;
    res += FormatTraits::Prefix;
 
    if (val == 0) {
-      res += std::to_string(0);
-      return res.str().str();
+      res += "0";
+      return;
    }
 
-   auto neededDigits = uint64_t(std::ceil(std::log(val)
-                                        / std::log(FormatTraits::Base)));
+   auto neededDigits = uint64_t(
+      std::floor(std::log(val) / std::log(FormatTraits::Base))) + 1;
 
    if (neededDigits == 0) {
       res += FormatTraits::Digits[val];
-      return res.str().str();
+      return;
    }
 
    uint64_t power = neededDigits - 1;
@@ -69,8 +74,15 @@ std::string formatInteger(uint64_t val)
       --power;
       val -= fits * pow;
    }
+}
 
-   return res.str().str();
+template<class FormatTraits = Base10Traits>
+std::string formatInteger(uint64_t val)
+{
+   llvm::SmallString<128> res;
+   formatInteger<FormatTraits>(val, res);
+
+   return res.str();
 }
 
 template<class T>

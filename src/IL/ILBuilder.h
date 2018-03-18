@@ -6,9 +6,16 @@
 #define CDOT_BUILDER_H
 
 #include <llvm/ADT/ArrayRef.h>
+#include <Basic/CastKind.h>
+#include <IL/Value/Instruction/Operator/OperatorInst.h>
 #include "Value/Function/BasicBlock.h"
 
 #include "../Variant/Type/Type.h"
+
+namespace llvm {
+   class APSInt;
+   class APFloat;
+}
 
 namespace cdot {
 
@@ -132,55 +139,69 @@ public:
       insertPoint = IP.insertPoint;
    }
 
-   BasicBlock *CreateBasicBlock(const std::string &name = "");
+   BasicBlock *CreateBasicBlock(llvm::StringRef name = "");
 
    BasicBlock *CreateBasicBlock(Function *func = nullptr,
                                 bool setInsertPoint = false,
-                                const std::string &name = "");
+                                llvm::StringRef name = "");
 
-   ConstantInt *CreateConstantInt(Type *ty, uint64_t value);
-   ConstantInt *CreateTrue();
-   ConstantInt *CreateFalse();
-   ConstantInt *CreateChar(char c);
+   ConstantInt *GetConstantInt(QualType ty, uint64_t value);
+   ConstantInt *GetConstantInt(QualType ty, const llvm::APSInt &Val);
+   ConstantInt *GetConstantInt(QualType ty, llvm::APSInt &&Val);
 
-   ConstantFloat *CreateConstantFP(Type *ty, double d);
-   ConstantFloat *CreateConstantFloat(float f);
-   ConstantFloat *CreateConstantDouble(double d);
-   ConstantString *CreateConstantString(const std::string &str);
-   ConstantStruct *CreateConstantStruct(AggregateType *ty,
-                                        llvm::ArrayRef<Constant*> elements);
+   ConstantInt *GetTrue();
+   ConstantInt *GetFalse();
+   ConstantInt *GetChar(char c);
 
-   ConstantArray *CreateConstantArray(llvm::SmallVector<Constant*, 4> &&Arr);
-   ConstantArray *CreateConstantArray(llvm::ArrayRef<Constant*> Arr);
-   ConstantArray *CreateConstantArray(QualType ty, size_t numElements);
+   ConstantFloat *GetConstantFP(QualType ty, double d);
+   ConstantFloat *GetConstantFP(QualType ty, const llvm::APFloat &Val);
+   ConstantFloat *GetConstantFP(QualType ty, llvm::APFloat &&Val);
+
+   ConstantFloat *GetConstantFloat(float f);
+   ConstantFloat *GetConstantDouble(double d);
+
+   ConstantString *GetConstantString(llvm::StringRef str);
+
+   ConstantStruct *GetConstantStruct(AggregateType *ty,
+                                     llvm::ArrayRef<Constant *> elements);
+
+   ConstantArray *GetConstantArray(llvm::SmallVector<Constant *, 4> &&Arr);
+   ConstantArray *GetConstantArray(llvm::ArrayRef<Constant *> Arr);
+   ConstantArray *GetConstantArray(QualType ty, size_t numElements);
+
+   ConstantPointer *GetConstantPtr(QualType ty, uintptr_t val);
+   ConstantPointer *GetConstantNull(QualType ty)
+   {
+      return GetConstantPtr(ty, 0);
+   }
 
    Argument *CreateArgument(QualType type,
                             bool vararg,
                             BasicBlock *parent = nullptr,
-                            const std::string &name = "",
+                            llvm::StringRef name = "",
                             const SourceLocation &loc = {});
 
-   ClassType *DeclareClass(ast::ClassDecl *C,
-                           const std::string &name,
-                           const SourceLocation &loc = {});
+   ClassType *CreateClass(ast::ClassDecl *C,
+                          llvm::StringRef name,
+                          const SourceLocation &loc = { });
 
-   StructType *DeclareStruct(ast::RecordDecl *S,
-                             const std::string &name,
-                             const SourceLocation &loc = {});
+   StructType *CreateStruct(ast::RecordDecl *S,
+                            llvm::StringRef name,
+                            const SourceLocation &loc = { });
 
-   EnumType *DeclareEnum(ast::EnumDecl *E,
-                         const std::string &name,
-                         const SourceLocation &loc = {});
+   EnumType *CreateEnum(ast::EnumDecl *E,
+                        llvm::StringRef name,
+                        const SourceLocation &loc = { });
 
-   UnionType *DeclareUnion(ast::UnionDecl *U,
-                           const std::string &name,
-                           const SourceLocation &loc = {});
+   UnionType *CreateUnion(ast::UnionDecl *U,
+                          llvm::StringRef name,
+                          const SourceLocation &loc = { });
 
-   ProtocolType *DeclareProtocol(ast::ProtocolDecl *P,
-                                 const std::string &name,
-                                 const SourceLocation &loc = {});
+   ProtocolType *CreateProtocol(ast::ProtocolDecl *P,
+                                llvm::StringRef name,
+                                const SourceLocation &loc = { });
 
-   Function *CreateFunction(const std::string &name,
+   Function *CreateFunction(llvm::StringRef name,
                             QualType returnType,
                             llvm::ArrayRef<Argument *> args,
                             bool mightThrow,
@@ -215,212 +236,232 @@ public:
                                   const SourceLocation &loc = {},
                                   bool addSelfArg = true);
 
-   GlobalVariable *CreateGlobalVariable(Type *type,
+   GlobalVariable *CreateGlobalVariable(QualType type,
                                         bool isConst = false,
                                         Constant *initializer = nullptr,
-                                        const std::string &name = "",
+                                        llvm::StringRef name = "",
                                         const SourceLocation &loc = {});
 
    GlobalVariable *CreateGlobalVariable(Constant *initializer,
                                         bool isConst = false,
-                                        const std::string &name = "",
+                                        llvm::StringRef name = "",
                                         const SourceLocation &loc = {});
 
    CallInst *CreateCall(Function *F,
                         llvm::ArrayRef<Value*> args,
-                        const std::string &name = "");
+                        llvm::StringRef name = "");
 
    ProtocolCallInst *CreateProtocolCall(Method *M,
                                        llvm::ArrayRef<Value*> args,
-                                       const std::string &name = "");
+                                       llvm::StringRef name = "");
 
    VirtualCallInst *CreateVirtualCall(Method *M,
                                       llvm::ArrayRef<Value*> args,
-                                      const std::string &name = "");
+                                      llvm::StringRef name = "");
 
    IntrinsicCallInst *CreateIntrinsic(Intrinsic id,
                                       llvm::ArrayRef<Value*> args,
-                                      const std::string &name = "");
+                                      llvm::StringRef name = "");
+
+   Instruction *GetStrongRefcount(Value *V, llvm::StringRef name = "");
+   Instruction *GetWeakRefcount(Value *V, llvm::StringRef name = "");
+   Instruction *GetVTable(Value *V, llvm::StringRef name = "");
+   Instruction *GetTypeInfo(Value *V, llvm::StringRef name = "");
+
+   Instruction *CreateRetain(Value *V, llvm::StringRef name = "");
+   Instruction *CreateRelease(Value *V, llvm::StringRef name = "");
+   Instruction *CreateLifetimeBegin(Value *V, llvm::StringRef name = "");
+   Instruction *CreateLifetimeEnd(Value *V, llvm::StringRef name = "");
 
    IndirectCallInst *CreateIndirectCall(Value *Func,
                                         llvm::ArrayRef<Value*> args,
-                                        const std::string &name = "");
+                                        llvm::StringRef name = "");
 
    LambdaCallInst *CreateLambdaCall(Value *Func,
                                     llvm::ArrayRef<Value*> args,
-                                    const std::string &name = "");
+                                    llvm::StringRef name = "");
 
    InvokeInst *CreateInvoke(Function *F,
                             llvm::ArrayRef<Value*> args,
                             BasicBlock *NormalCont,
                             BasicBlock *LandingPad,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
    ProtocolInvokeInst *CreateProtocolInvoke(Method *M,
                                             llvm::ArrayRef<Value*> args,
                                             BasicBlock *NormalCont,
                                             BasicBlock *LandingPad,
-                                            const std::string &name = "");
+                                            llvm::StringRef name = "");
 
    VirtualInvokeInst *CreateVirtualInvoke(Method *M,
                                           llvm::ArrayRef<Value*> args,
                                           BasicBlock *NormalCont,
                                           BasicBlock *LandingPad,
-                                          const std::string &name = "");
+                                          llvm::StringRef name = "");
 
-   AllocaInst *CreateAlloca(Type *ofType,
+   AllocaInst *CreateAlloca(QualType ofType,
                             unsigned align = 0,
                             bool heap = false,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
-   AllocaInst *CreateAlloca(Type *ofType,
+   AllocaInst *CreateAlloca(QualType ofType,
                             size_t size,
                             unsigned align = 0,
                             bool heap = false,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
+
+   Instruction *AllocUninitialized(size_t size,
+                                   unsigned align = 0,
+                                   bool heap = false,
+                                   llvm::StringRef name = "");
 
    StoreInst *CreateStore(Value *val,
                           Value *ptr,
-                          const std::string &name = "");
+                          llvm::StringRef name = "");
 
    FieldRefInst *CreateFieldRef(Value *val,
                                 StructType *ty,
                                 llvm::StringRef fieldName,
-                                const std::string &name = "");
+                                llvm::StringRef name = "");
+
+   GEPInst *CreateGEP(Value *val,
+                      size_t idx,
+                      llvm::StringRef name = "");
 
    GEPInst *CreateGEP(Value *val,
                       int idx,
-                      const std::string &name = "");
+                      llvm::StringRef name = "") {
+      return CreateGEP(val, size_t(idx), name);
+   }
+
+   Instruction *CreateExtractValue(Value *val,
+                                   size_t idx,
+                                   llvm::StringRef name = "");
 
    GEPInst *CreateGEP(Value *val,
                       Value *idx,
-                      const std::string &name = "");
+                      llvm::StringRef name = "");
 
    GEPInst *CreateStructGEP(AggregateType *Ty,
                             Value *val,
                             size_t idx,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
    CaptureExtractInst *CreateCaptureExtract(size_t idx,
-                                            const std::string &name = "");
+                                            llvm::StringRef name = "");
 
    TupleExtractInst *CreateTupleExtract(Value *val, size_t idx,
-                                        const std::string &name = "");
+                                        llvm::StringRef name = "");
 
    EnumRawValueInst *CreateEnumRawValue(Value *Val,
-                                        const std::string &name = "");
+                                        llvm::StringRef name = "");
 
    EnumExtractInst *CreateEnumExtract(Value *Val,
                                       llvm::StringRef caseName,
                                       size_t caseVal,
-                                      const std::string &name = "");
+                                      llvm::StringRef name = "");
 
    LoadInst *CreateLoad(Value *val,
-                        const std::string &name = "");
+                        llvm::StringRef name = "");
 
    AddrOfInst *CreateAddrOf(Value *target,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
    PtrToLvalueInst *CreatePtrToLvalue(Value *target,
-                                      const std::string &name = "");
+                                      llvm::StringRef name = "");
 
    InitInst *CreateInit(StructType *InitializedType,
                         Method *Init,
                         llvm::ArrayRef<Value *> args,
-                        const std::string &name = "");
+                        llvm::StringRef name = "");
 
    UnionInitInst *CreateUnionInit(UnionType *UnionTy,
                                   Value *InitializerVal,
-                                  const std::string &name = "");
+                                  llvm::StringRef name = "");
 
    EnumInitInst *CreateEnumInit(EnumType *EnumTy,
                                 std::string const& caseName,
                                 llvm::ArrayRef<Value *> args,
-                                const std::string &name = "");
+                                llvm::StringRef name = "");
 
    LambdaInitInst *CreateLambdaInit(Function *Function,
                                     QualType LambdaTy,
                                     llvm::ArrayRef<Value*> Captures,
-                                    const std::string &name = "");
+                                    llvm::StringRef name = "");
 
    UnionCastInst *CreateUnionCast(Value *target,
                                   UnionType *UnionTy,
                                   std::string const& fieldName,
-                                  const std::string &name = "");
+                                  llvm::StringRef name = "");
 
    ExceptionCastInst *CreateExceptionCast(Value *Lpad,
-                                          Type *toType,
-                                          const std::string &name = "");
+                                          QualType toType,
+                                          llvm::StringRef name = "");
 
    RetInst *CreateRet(Value *Val,
-                      const std::string &name = "");
+                      llvm::StringRef name = "");
 
-   RetInst *CreateRetVoid(const std::string &name = "");
+   RetInst *CreateRetVoid(llvm::StringRef name = "");
 
    ThrowInst *CreateThrow(Value *thrownVal,
                           GlobalVariable *typeInfo,
-                          const std::string &name = "");
+                          llvm::StringRef name = "");
 
-   UnreachableInst *CreateUnreachable(const std::string &name = "");
+   UnreachableInst *CreateUnreachable(llvm::StringRef name = "");
 
    BrInst *CreateBr(BasicBlock *target,
                     llvm::ArrayRef<Value*> BlockArgs = {},
-                    const std::string &name = "");
+                    llvm::StringRef name = "");
 
-   BrInst *CreateUnresolvedBr(const std::string &name = "");
+   BrInst *CreateUnresolvedBr(llvm::StringRef name = "");
 
    BrInst *CreateCondBr(Value *Condition,
                         BasicBlock *IfBranch,
                         BasicBlock *ElseBranch,
                         llvm::ArrayRef<Value*> TargetArgs = {},
                         llvm::ArrayRef<Value*> ElseArgs = {},
-                        const std::string &name = "");
+                        llvm::StringRef name = "");
 
    SwitchInst *CreateSwitch(Value *SwitchVal,
-                            const std::string &name = "");
+                            BasicBlock *DefaultDst = nullptr,
+                            llvm::StringRef name = "");
 
-   LandingPadInst *CreateLandingPad(const std::string &name = "");
+   LandingPadInst *CreateLandingPad(llvm::StringRef name = "");
 
-#define CDOT_BUILDER_OP(Name) \
-   Name##Inst *Create##Name(Value *lhs, Value *rhs, \
-                            const std::string &name = "", \
-                            const SourceLocation &loc = {});
+   BinaryOperatorInst *CreateBinOp(BinaryOperatorInst::OpCode opc,
+                                   Value *lhs, Value *rhs,
+                                   llvm::StringRef name = "",
+                                   SourceLocation loc = {});
 
-   CDOT_BUILDER_OP(Add)
-   CDOT_BUILDER_OP(Sub)
-   CDOT_BUILDER_OP(Mul)
-   CDOT_BUILDER_OP(Div)
-   CDOT_BUILDER_OP(Mod)
-   CDOT_BUILDER_OP(Exp)
+   UnaryOperatorInst *CreateUnaryOp(UnaryOperatorInst::OpCode opc,
+                                    Value *target,
+                                    llvm::StringRef name = "",
+                                    SourceLocation loc = {});
 
-   CDOT_BUILDER_OP(And)
-   CDOT_BUILDER_OP(Or)
-   CDOT_BUILDER_OP(Xor)
+   CompInst *CreateComp(CompInst::OpCode opc,
+                        Value *lhs, Value *rhs,
+                        llvm::StringRef name = "",
+                        SourceLocation loc = {});
 
-   CDOT_BUILDER_OP(AShr)
-   CDOT_BUILDER_OP(LShr)
-   CDOT_BUILDER_OP(Shl)
+#  define CDOT_BINARY_OP(Name, OP)                                      \
+   BinaryOperatorInst *Create##Name(Value *lhs, Value *rhs,             \
+                                    llvm::StringRef name = "",          \
+                                    const SourceLocation &loc = {});
 
-   CDOT_BUILDER_OP(CompEQ)
-   CDOT_BUILDER_OP(CompNE)
-   CDOT_BUILDER_OP(CompLT)
-   CDOT_BUILDER_OP(CompGT)
-   CDOT_BUILDER_OP(CompLE)
-   CDOT_BUILDER_OP(CompGE)
+#  define CDOT_COMP_OP(Name, OP)                                     \
+   CompInst *Create##Name(Value *lhs, Value *rhs,                    \
+                          llvm::StringRef name = "",                 \
+                          const SourceLocation &loc = {});
 
-#undef CDOT_BUILDER_OP
-#define CDOT_BUILDER_OP(name) \
-   name##Inst *Create##name(Value *target, \
-                            const std::string &name = "");
+#  define CDOT_UNARY_OP(name, OP)                                    \
+   UnaryOperatorInst *Create##name(Value *target,                    \
+                                   llvm::StringRef name = "");
 
-   CDOT_BUILDER_OP(Min)
-   CDOT_BUILDER_OP(Neg)
-
-#undef CDOT_BUILDER_OP
+#  include "IL/Value/Instructions.def"
 
 #define CDOT_BUILDER_CAST(name) \
    name##Inst *Create##name(Value *val, Type *toType, \
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
    CDOT_BUILDER_CAST(DynamicCast)
    CDOT_BUILDER_CAST(ProtoCast)
@@ -428,28 +469,50 @@ public:
 #undef CDOT_BUILDER_CAST
 
    IntegerCastInst *CreateIntegerCast(CastKind kind, Value *val,
-                                      Type *toType,
-                                      const std::string &name = "");
-
-   IntegerCastInst *CreateIntegerCast(CastKind kind, Value *val,
                                       QualType toType,
-                                      const std::string &name = "");
+                                      llvm::StringRef name = "");
 
-   FPCastInst *CreateFPCast(CastKind kind, Value *val,
-                            Type *toType,
-                            const std::string &name = "");
+#  define CDOT_INT_CAST(Kind)                                        \
+   IntegerCastInst *Create##Kind(Value *val,                         \
+                                 QualType toType,                    \
+                                 llvm::StringRef name = "") {        \
+      return CreateIntegerCast(CastKind::Kind, val, toType, name);   \
+   }
+
+   CDOT_INT_CAST(IntToPtr)
+   CDOT_INT_CAST(PtrToInt)
+   CDOT_INT_CAST(Ext)
+   CDOT_INT_CAST(Trunc)
+   CDOT_INT_CAST(SignFlip)
+   CDOT_INT_CAST(FPToInt)
+   CDOT_INT_CAST(IntToFP)
+   CDOT_INT_CAST(IntToEnum)
+   CDOT_INT_CAST(EnumToInt)
+
+#  define CDOT_FP_CAST(Kind)                                    \
+   FPCastInst *Create##Kind(Value *val,                         \
+                            QualType toType,                    \
+                            llvm::StringRef name = "") {        \
+      return CreateFPCast(CastKind::Kind, val, toType, name);   \
+   }
+
+   CDOT_FP_CAST(FPExt)
+   CDOT_FP_CAST(FPTrunc)
+
+#  undef CDOT_INT_CAST
+#  undef CDOT_FP_CAST
 
    FPCastInst *CreateFPCast(CastKind kind, Value *val,
                             QualType toType,
-                            const std::string &name = "");
+                            llvm::StringRef name = "");
 
    BitCastInst *CreateBitCast(CastKind kind, Value *val,
                               Type *toType,
-                              const std::string &name = "");
+                              llvm::StringRef name = "");
 
    IntToEnumInst *CreateIntToEnum(Value *target,
                                   Type *toType,
-                                  const std::string &name = "");
+                                  llvm::StringRef name = "");
 
    Value *CreateIsX(Value *V, uint64_t val);
    Value *CreateIsZero(Value *V);
@@ -479,10 +542,10 @@ protected:
    iterator insertPoint;
 
    void insertInstruction(Instruction *inst,
-                          const std::string &name = "");
+                          llvm::StringRef name = "");
    BasicBlock *getInsertBlock();
 
-   void importType(Type *Ty);
+   void importType(QualType Ty);
 };
 
 } // namespace il

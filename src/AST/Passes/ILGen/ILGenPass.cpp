@@ -6,10 +6,13 @@
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
+#include <IL/Passes/UseBeforeInit.h>
+#include <llvm/Support/PrettyStackTrace.h>
 
 #include "AST/Passes/ASTIncludes.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "AST/Passes/SemanticAnalysis/Builtin.h"
+#include "AST/Passes/PrettyPrint/PrettyPrinter.h"
 
 #include "IL/Module/Context.h"
 #include "IL/Module/Module.h"
@@ -35,6 +38,7 @@
 #include "CTFE/CTFEEngine.h"
 
 using namespace cdot::il;
+using namespace cdot::diag;
 using namespace cdot::support;
 
 namespace cdot {
@@ -47,11 +51,19 @@ ILGenPass::ILGenPass(il::Context &Ctx, SemaPass &SP)
      UInt8PtrTy(SP.getContext().getPointerType(SP.getContext().getUInt8Ty())),
      BoolTy(SP.getContext().getBoolTy()),
      DeinitializerTy(SP.getContext().getFunctionType(VoidTy, { Int8PtrTy })),
+     WordTy(SP.getContext().getIntTy()),
+     USizeTy(SP.getContext().getUIntTy()),
      Builder(SP.getContext(), Ctx),
      emitDI(SP.getCompilationUnit().getOptions().emitDebugInfo())
 {
    SP.getCompilationUnit().setILModule(std::make_unique<il::Module>(Ctx));
    Builder.SetModule(SP.getCompilationUnit().getILModule());
+
+   WordZero = Builder.GetConstantInt(SP.getContext().getIntTy(), 0);
+   WordOne = Builder.GetConstantInt(SP.getContext().getIntTy(), 1);
+
+   UWordZero = Builder.GetConstantInt(SP.getContext().getUIntTy(), 0);
+   UWordOne = Builder.GetConstantInt(SP.getContext().getUIntTy(), 1);
 }
 
 ILGenPass::ModuleRAII::ModuleRAII(ILGenPass &ILGen, RecordDecl *R)
@@ -79,36 +91,69 @@ ILGenPass::ModuleRAII::~ModuleRAII()
    ILGen.Builder.SetModule(savedModule);
 }
 
+const TargetInfo& ILGenPass::getTargetInfo() const
+{
+   return SP.getContext().getTargetInfo();
+}
+
 il::Value* ILGenPass::visit(Expression *expr)
 {
+   il::Value *V;
    switch (expr->getTypeID()) {
 #     define CDOT_EXPR(Name)                                            \
          case AstNode::Name##ID:                                        \
-            return visit##Name(cast<Name>(expr));
+            V = visit##Name(cast<Name>(expr)); break;
 #     include "AST/AstNode.def"
 
       default:
          llvm_unreachable("not an expr");
    }
+
+   if (V)
+      V->setLocation(expr->getSourceLoc());
+
+   return V;
 }
 
 void ILGenPass::visit(Statement *stmt)
 {
+   Value *V = nullptr;
    switch (stmt->getTypeID()) {
-#     define CDOT_EXPR(Name)                                            \
-         case AstNode::Name##ID:                                        \
-            visit##Name(cast<Name>(stmt));                              \
-            return;
-#     define CDOT_STMT(Name)                                            \
-         case AstNode::Name##ID:                                        \
-            return visit##Name(cast<Name>(stmt));
-#     include "AST/AstNode.def"
+#  define CDOT_EXPR(Name)                                         \
+   case AstNode::Name##ID:                                        \
+      V = visit##Name(cast<Name>(stmt)); break;
+#  define CDOT_STMT(Name)                                         \
+   case AstNode::Name##ID:                                        \
+      return visit##Name(cast<Name>(stmt));
+#  include "AST/AstNode.def"
+
+   default:
+      llvm_unreachable("bad node kind!");
+   }
+
+   if (V)
+      V->setLocation(stmt->getSourceLoc());
+}
+
+void ILGenPass::visit(Decl *decl)
+{
+   switch (decl->getKind()) {
+#  define CDOT_DECL(Name)                                \
+   case Decl::Name##ID:                                  \
+      return visit##Name(cast<Name>(decl));
+#  include "AST/Decl.def"
+   default:
+      llvm_unreachable("can't declare statement");
    }
 }
 
 void ILGenPass::GenerateTypeInfo(RecordDecl *R, bool innerDecls)
 {
-   GenerateTypeInfo(getType(R));
+   DeclareRecord(R);
+
+   if (auto S = dyn_cast<StructDecl>(R))
+      DefineDefaultInitializer(S);
+
    if (innerDecls)
       for (auto Inner : R->getInnerRecords())
          GenerateTypeInfo(Inner, true);
@@ -123,31 +168,32 @@ void ILGenPass::GenerateTypeInfo(AggregateType *R)
       GeneratePTable(R);
    }
 
-   if (SP.getRecord("cdot.TypeInfo"))
-      CreateTypeInfo(*R->getType());
+//   if (SP.getRecord("cdot.TypeInfo"))
+//      CreateTypeInfo(*R->getType());
 }
 
-void ILGenPass::GenerateTypeInfo()
+void ILGenPass::DoDeclarations()
 {
    auto type_end = getContext().type_end();
    for (auto it = getContext().type_begin(); it != type_end; ++it) {
-      GenerateTypeInfo(it->getValue());
+      auto Rec = cast<RecordDecl>(ReverseDeclMap[it->getValue()]);
+
+      // templates are declared immediately following their instantiation
+      if (!Rec->isInstantiation()) {
+         GenerateTypeInfo(Rec);
+      }
    }
 }
 
-void ILGenPass::run()
+bool ILGenPass::run()
 {
-   GenerateTypeInfo();
-
-   std::string s;
-   llvm::raw_string_ostream sstream(s);
-
    auto translationUnits = SP.getCompilationUnit().getGlobalDeclCtx()
-                             .getTranslationUnits();
+                             .getDecls();
 
-   for (auto &translationUnit : translationUnits) {
-      for (auto &stmt : translationUnit->getStatements())
-         visit(stmt);
+   for (auto &decl : translationUnits) {
+      auto translationUnit = cast<TranslationUnit>(decl);
+      for (auto &D : translationUnit->getDecls())
+         visit(D);
    }
 
    visitTemplateInstantiations();
@@ -155,21 +201,33 @@ void ILGenPass::run()
 
    il::PassManager Manager(Builder.getModule());
    Manager.addPass(new il::VerifierPass);
-   Manager.addPass(new il::ReturnVerifierPass);
+   Manager.addPass(new il::UseBeforeInit(*this));
    Manager.runPasses();
+
+   if (SP.encounteredError()) {
+      std::error_code EC;
+      llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
+                                 ".cdotil",
+                              EC, llvm::sys::fs::F_RW);
+
+      Builder.getModule()->writeTo(fd);
+      fd.flush();
+   }
+
+   return SP.encounteredError();
 }
 
 void ILGenPass::visitTemplateInstantiations()
 {
-   auto &Ctx = SP.getContext();
-   for (auto &Inst : Ctx.FunctionTemplateInstatiations)
-      visit(&Inst);
+//   auto &Ctx = SP.getContext();
+//   for (auto &Inst : Ctx.FunctionTemplateInstatiations)
+//      visit(&Inst);
+//
+//   for (auto &Inst : Ctx.RecordTemplateInstatiations)
+//      visit(&Inst);
 
-   for (auto &Inst : Ctx.RecordTemplateInstatiations)
-      visit(&Inst);
-
-   for (auto &Inst : Ctx.AliasTemplateInstatiations)
-      visit(&Inst);
+//   for (auto &Inst : Ctx.AliasTemplateInstatiations)
+//      visit(&Inst);
 }
 
 void ILGenPass::outputIL()
@@ -220,7 +278,7 @@ void ILGenPass::FinalizeGlobalInitFn()
 
    Builder.SetInsertPoint(fn->getEntryBlock());
 
-   auto numGlobalVariables = SP.numGlobals;
+   auto numGlobalVariables = SP.getNumGlobals();
    auto next = getNextGlobalBB(GlobalInitBBs, numGlobalVariables, 0);
    if (!next) {
       Builder.CreateRetVoid();
@@ -242,46 +300,6 @@ void ILGenPass::FinalizeGlobalInitFn()
          Builder.CreateBr(next);
       }
    }
-}
-
-il::Value* ILGenPass::pop()
-{
-   if (ValueStack.empty()) {
-      return nullptr;
-   }
-
-   auto top = ValueStack.top();
-   ValueStack.pop();
-
-   return top;
-}
-
-void ILGenPass::push(il::Value *val)
-{
-   ValueStack.push(val);
-}
-
-il::Value* ILGenPass::getRValue(il::Value *V)
-{
-   return V->isLvalue() ? (il::Value*)Builder.CreateLoad(V) : V;
-}
-
-il::Value* ILGenPass::unboxIfNecessary(il::Value *V, bool load)
-{
-   if (V->getType()->isBoxedPrimitive())
-      return unbox(V, load);
-
-   return V;
-}
-
-il::Value *ILGenPass::VisitSubExpr(Expression *node, il::Value *Val)
-{
-   if (node->getSubExpr()) {
-      push(Val);
-      Val = visit(node->getSubExpr());
-   }
-
-   return Val;
 }
 
 il::Context& ILGenPass::getContext()
@@ -319,7 +337,7 @@ il::AggregateType* ILGenPass::getType(QualType ty)
 
 il::AggregateType* ILGenPass::getType(il::Value *val)
 {
-   return getType(*val->getType());
+   return getType(val->getType());
 }
 
 il::AggregateType* ILGenPass::getType(RecordDecl *R)
@@ -334,12 +352,22 @@ il::AggregateType* ILGenPass::getType(RecordDecl *R)
    return Ty;
 }
 
-il::Function* ILGenPass::getFunc(CallableDecl *C)
+bool ILGenPass::hasFunctionDefinition(CallableDecl *C) const
 {
-   return dyn_cast_or_null<il::Function>(DeclMap[C]);
+   auto fn = getFunc(C);
+   return fn && !fn->isDeclared();
 }
 
-il::Method* ILGenPass::getFunc(MethodDecl *M)
+il::Function* ILGenPass::getFunc(CallableDecl *C) const
+{
+   auto it = DeclMap.find(C);
+   if (it == DeclMap.end())
+      return nullptr;
+
+   return dyn_cast<il::Function>(it->second);
+}
+
+il::Method* ILGenPass::getFunc(MethodDecl *M) const
 {
    return cast<il::Method>(getFunc((CallableDecl*)M));
 }
@@ -350,53 +378,16 @@ CallableDecl* ILGenPass::getCallableDecl(il::Function const* F)
       ReverseDeclMap[const_cast<il::Function*>(F)]);
 }
 
-il::Value* ILGenPass::getBoxedInt(uint64_t value, const string &className)
-{
-   cdot::Type *Ty;
-   if (className.empty()) {
-      Ty = SP.getObjectTy("Int" + std::to_string(sizeof(int*)*8));
-   }
-   else {
-      Ty = SP.getObjectTy(className);
-   }
-
-   auto Val = Builder.CreateConstantInt(*SP.getUnboxedType(Ty), value);
-   auto StructTy = getContext().getType(Ty->getClassName(), getModule());
-   auto Init = getFunc(cast<StructDecl>(Ty->getRecord())
-                          ->getMemberwiseInitializer());
-
-   return Builder.CreateInit(cast<il::StructType>(StructTy),
-                             cast<il::Method>(Init), { Val });
-}
-
-il::Value* ILGenPass::BoxPrimitive(il::Value *V,
-                                   const string &className) {
-   cdot::Type *Ty;
-   if (className.empty()) {
-      Ty = SP.getObjectTy("Int" + std::to_string(sizeof(int*)*8));
-   }
-   else {
-      Ty = SP.getObjectTy(className);
-   }
-
-   auto StructTy = getContext().getType(Ty->getClassName(), getModule());
-   auto Init = getFunc(cast<StructDecl>(Ty->getRecord())
-                          ->getMemberwiseInitializer());
-
-   return Builder.CreateInit(cast<il::StructType>(StructTy),
-                             Init, { V });
-}
-
-il::Value* ILGenPass::getDefaultValue(cdot::Type *Ty)
+il::Value* ILGenPass::getDefaultValue(QualType Ty)
 {
    if (Ty->isIntegerType()) {
-      return Builder.CreateConstantInt(Ty, 0);
+      return Builder.GetConstantInt(Ty, 0);
    }
    if (Ty->isFPType()) {
-      return Builder.CreateConstantFloat(0.0);
+      return Builder.GetConstantFloat(0.0);
    }
    if (Ty->isPointerType()) {
-      return ConstantPointer::getNull(Ty);
+      return ConstantPointer::getNull(ValueType(Builder.getContext(), Ty));
    }
    if (Ty->isObjectType()) {
       auto Rec = Ty->getRecord();
@@ -408,7 +399,7 @@ il::Value* ILGenPass::getDefaultValue(cdot::Type *Ty)
             if (!F)
                continue;
 
-            if (auto def = getDefaultValue(*F->getType()->getType()))
+            if (auto def = getDefaultValue(F->getType()))
                return Builder.CreateUnionInit(cast<UnionType>(AggrTy), def);
          }
 
@@ -419,15 +410,14 @@ il::Value* ILGenPass::getDefaultValue(cdot::Type *Ty)
          assert(Def && "no default initializer");
 
          Value *Alloca = Builder.CreateAlloca(Ty);
-         Alloca = Ty->isClass() ? getRValue(Alloca) : Alloca;
+         Alloca = Ty->isClass() ? Alloca : Alloca;
 
          Builder.CreateCall(getFunc(Def), { Alloca });
 
          return Alloca;
       }
-
-      return nullptr;
    }
+
    if (Ty->isTupleType()) {
       llvm::SmallVector<Value*, 4> Vals;
       for (const auto &ty : Ty->asTupleType()->getContainedTypes()) {
@@ -436,14 +426,38 @@ il::Value* ILGenPass::getDefaultValue(cdot::Type *Ty)
 
       return getTuple(Ty->asTupleType(), Vals);
    }
+
    if (Ty->isArrayType()) {
-      auto ArrTy = Ty->asArrayType();
-      auto def = getDefaultValue(*ArrTy->getElementType());
+      ArrayType *ArrTy = Ty->asArrayType();
+      QualType ElementTy = ArrTy->getElementType();
       auto alloca = Builder.CreateAlloca(Ty);
 
-      for (int i = 0; i < ArrTy->getNumElements(); ++i) {
-         auto gep = Builder.CreateGEP(alloca, i);
-         Builder.CreateStore(def, gep);
+      unsigned factor = 1;
+      while (auto SubArrTy = ElementTy->asArrayType()) {
+         factor *= SubArrTy->getNumElements();
+         ElementTy = SubArrTy->getElementType();
+      }
+
+      if (ElementTy->isIntegerType() || ElementTy->isFPType()
+          || ElementTy->isPointerType()) {
+         auto Ptr = Builder.CreateBitCast(CastKind::BitCast, alloca, Int8PtrTy);
+         auto ElSize = getTargetInfo().getSizeOfType(ElementTy);
+
+         Builder.CreateIntrinsic(
+            Intrinsic::memset,
+            { Ptr, Builder.GetConstantInt(SP.getContext().getInt8Ty(), 0),
+               Builder.GetConstantInt(
+                  USizeTy, ArrTy->getNumElements() * factor * ElSize) });
+      }
+      else {
+         if (factor != 1)
+            ElementTy = ArrTy->getElementType();
+
+         auto def = getDefaultValue(ElementTy);
+         for (int i = 0; i < ArrTy->getNumElements(); ++i) {
+            auto gep = Builder.CreateGEP(alloca, i);
+            Builder.CreateStore(def, gep);
+         }
       }
 
       return alloca;
@@ -469,10 +483,11 @@ il::Value* ILGenPass::getTuple(TupleType *Ty, llvm::ArrayRef<il::Value *> Vals)
 il::Value* ILGenPass::getString(const llvm::Twine &twine)
 {
    auto str = twine.str();
-   auto StringTy = getContext().getType("String", getModule());
-   auto Len = getRValue(getBoxedInt(str.length(), "UInt64"));
-   auto Init = getBuiltin("StringInit");
-   auto globalStr = Builder.CreateConstantString(str);
+   auto StringTy = getModule()->getType("String");
+   auto Len = Builder.GetConstantInt(USizeTy, str.size());
+
+   auto Init = getModule()->getFunction("_M11String.init3u8*3u64");
+   auto globalStr = Builder.GetConstantString(str);
 
    return Builder.CreateInit(cast<il::StructType>(StringTy),
                              cast<il::Method>(Init), { globalStr, Len });
@@ -480,7 +495,7 @@ il::Value* ILGenPass::getString(const llvm::Twine &twine)
 
 il::Value* ILGenPass::stringify(il::Value *Val)
 {
-   cdot::Type *ty = *Val->getType();
+   QualType ty = Val->getType();
    if (ty->isPointerType() && !ty->getPointeeType()->isInt8Ty()) {
       ty = SP.getContext().getIntTy();
       Val = Builder.CreateIntegerCast(CastKind::PtrToInt, Val, ty);
@@ -492,13 +507,14 @@ il::Value* ILGenPass::stringify(il::Value *Val)
          cast<StructType>(getModule()->getType("String")),
          cast<il::Method>(StringInit), { Val });
    }
-   else if (ty->isPrimitiveType()) {
-      auto boxed = getRValue(box(Val));
-      auto asString = boxed->getType()->getRecord()
-                           ->getConversionOperator(SP.getObjectTy("String"));
-
-      auto asStringMethod = getFunc(asString);
-      return Builder.CreateCall(asStringMethod, { boxed });
+   else if (ty->isIntegerType() || ty->isFPType()) {
+      llvm_unreachable("FIXME");
+//      auto boxed = box(Val);
+//      auto asString = boxed->getType()->getRecord()
+//                           ->getConversionOperator(SP.getObjectTy("String"));
+//
+//      auto asStringMethod = getFunc(asString);
+//      return Builder.CreateCall(asStringMethod, { boxed });
    }
    else if (auto Obj = ty->asObjectType()) {
       if (Obj->getClassName() == "String")
@@ -524,7 +540,7 @@ il::Value* ILGenPass::stringify(il::Value *Val)
       auto PlusEquals = getBuiltin("StringPlusEqualsString");
 
       for (size_t i = 0; i < numElements; ++i) {
-         auto gep = getRValue(Builder.CreateTupleExtract(Val, i));
+         auto gep = Builder.CreateTupleExtract(Val, i);
          Builder.CreateCall(PlusEquals, { Str, stringify(gep) });
 
          if (i < numElements - 1)
@@ -539,21 +555,15 @@ il::Value* ILGenPass::stringify(il::Value *Val)
    return getString(ty->toString());
 }
 
-il::Constant* ILGenPass::getConstantVal(cdot::Type *Ty, const cdot::Variant &V)
+il::Constant* ILGenPass::getConstantVal(QualType Ty, const cdot::Variant &V)
 {
    switch (V.getKind()) {
-      case VariantType::Int: {
-         auto APSInt = V.getAPSInt();
-         return Builder.CreateConstantInt(Ty, V.getZExtValue());
-      }
+      case VariantType::Int:
+         return Builder.GetConstantInt(Ty, V.getAPSInt());
       case VariantType::Floating:
-         if (Ty->isFloatTy()) {
-            return Builder.CreateConstantFloat(V.getAPFloat().convertToFloat());
-         }
-
-         return Builder.CreateConstantDouble(V.getAPFloat().convertToDouble());
+         return Builder.GetConstantFP(Ty, V.getAPFloat());
       case VariantType::String:
-         return Builder.CreateConstantString(V.getString());
+         return Builder.GetConstantString(V.getString());
       case VariantType::Struct: {
          auto &fields = V.getFields();
          auto S = cast<StructDecl>(Ty->getRecord());
@@ -561,11 +571,9 @@ il::Constant* ILGenPass::getConstantVal(cdot::Type *Ty, const cdot::Variant &V)
 
          llvm::SmallVector<il::Constant*, 4> fieldVals;
          for (auto &F : fields)
-         fieldVals.push_back(getConstantVal(*S->getFields()[i]->getType()
-                                                              ->getType(),
-                                            F));
+         fieldVals.push_back(getConstantVal(S->getFields()[i]->getType(), F));
 
-         return Builder.CreateConstantStruct(getType(Ty), fieldVals);
+         return Builder.GetConstantStruct(getType(Ty), fieldVals);
       }
       case VariantType::Array: {
          ConstantArray::ArrayTy elements;
@@ -574,7 +582,7 @@ il::Constant* ILGenPass::getConstantVal(cdot::Type *Ty, const cdot::Variant &V)
          for (auto &el : V)
             elements.push_back(getConstantVal(*elementTy, el));
 
-         return Builder.CreateConstantArray(elements);
+         return Builder.GetConstantArray(elements);
       }
       case VariantType::Void:
          // Sema should have made sure the value is never used
@@ -585,15 +593,25 @@ il::Constant* ILGenPass::getConstantVal(cdot::Type *Ty, const cdot::Variant &V)
 }
 
 il::Value* ILGenPass::getCStyleArray(cdot::Type *Ty,
-                                     llvm::ArrayRef<il::Value *> elements) {
+                                     llvm::ArrayRef<il::Value *> elements,
+                                     size_t minCapacity,
+                                     bool onHeap) {
+   if (minCapacity < elements.size())
+      minCapacity = elements.size();
+
    assert(Ty->isArrayType());
    auto ArrTy = Ty->asArrayType();
 
    assert(ArrTy->getNumElements() == elements.size());
+   ArrTy = SP.getContext().getArrayType(ArrTy->getElementType(), minCapacity);
 
-   auto alloc = Builder.CreateAlloca(ArrTy);
-   for (size_t i = 0; i < ArrTy->getNumElements(); ++i) {
-      auto gep = Builder.CreateGEP(alloc, i);
+   auto alloc = Builder.CreateAlloca(ArrTy, 0, onHeap);
+   auto numElements = elements.size();
+
+   auto load = Builder.CreateLoad(alloc);
+
+   for (size_t i = 0; i < numElements; ++i) {
+      auto gep = Builder.CreateGEP(load, i);
       Builder.CreateStore(elements[i], gep);
    }
 
@@ -619,35 +637,10 @@ ILGenPass::makeArgVec(llvm::ArrayRef<cdot::QualType> from)
 {
    llvm::SmallVector<il::Argument*, 4> vec;
    for (auto &arg : from) {
-      QualType argTy(*arg, arg.isLvalue() && !arg.isConst());
-      vec.push_back(Builder.CreateArgument(argTy, false));
-      vec.back()->setIsReference(arg.isLvalue());
+      vec.push_back(Builder.CreateArgument(arg, false));
    }
 
    return vec;
-}
-
-il::Value* ILGenPass::box(il::Value *val)
-{
-   cdot::Type *ty = *val->getType();
-   assert(ty->isIntegerType() || ty->isFPType());
-
-   auto boxedTy = SP.getBoxedType(ty);
-   auto R = boxedTy->getRecord();
-
-   auto InitFn = getFunc(cast<StructDecl>(R)->getMemberwiseInitializer());
-
-   return Builder.CreateInit(
-      cast<StructType>(getModule()->getType(R->getName())), InitFn, { val });
-}
-
-il::Value* ILGenPass::unbox(il::Value *val, bool load)
-{
-   Value *unboxedVal = CreateFieldRef(val, "val");
-   if (load)
-      unboxedVal = Builder.CreateLoad(unboxedVal);
-
-   return unboxedVal;
 }
 
 il::Function* ILGenPass::getBuiltin(llvm::StringRef name)
@@ -655,25 +648,25 @@ il::Function* ILGenPass::getBuiltin(llvm::StringRef name)
    return getModule()->getFunction(BuiltinFns[name]);
 }
 
-void ILGenPass::maybeImportType(cdot::Type *ty)
+void ILGenPass::maybeImportType(QualType ty)
 {
    if (auto Ptr = ty->asPointerType())
-      return maybeImportType(*Ptr->getPointeeType());
+      return maybeImportType(Ptr->getPointeeType());
 
    if (auto Arr = ty->asArrayType())
       return maybeImportType(Arr->getElementType());
 
    if (auto Tup = ty->asTupleType()) {
       for (const auto &cont : Tup->getContainedTypes())
-         maybeImportType(*cont);
+         maybeImportType(cont);
 
       return;
    }
 
    if (auto Fun = ty->asFunctionType()) {
-      maybeImportType(*Fun->getReturnType());
+      maybeImportType(Fun->getReturnType());
       for (const auto &arg : Fun->getArgTypes())
-         maybeImportType(*arg);
+         maybeImportType(arg);
 
       return;
    }
@@ -688,15 +681,12 @@ void ILGenPass::maybeImportType(cdot::Type *ty)
    auto rec = ty->getRecord();
    if (auto S = dyn_cast<StructDecl>(rec))
       for (auto &F : S->getFields())
-         maybeImportType(*F->getType()->getType());
-
-   if (auto C = dyn_cast<ClassDecl>(rec))
-      M->addTypeReference("cdot.ClassInfo");
+         maybeImportType(F->getType());
 }
 
 void ILGenPass::DeclareGlobalVariable(GlobalVarDecl *decl)
 {
-   auto G = Builder.CreateGlobalVariable(*decl->getTypeRef()->getType(),
+   auto G = Builder.CreateGlobalVariable(decl->getTypeRef(),
                                          decl->isConst(), nullptr,
                                          decl->getName(),
                                          decl->getSourceLoc());
@@ -709,6 +699,11 @@ void ILGenPass::DeclareGlobalVariable(cdot::ast::GlobalDestructuringDecl *decl)
    for (auto Val : decl->getDecls()) {
       DeclareGlobalVariable(cast<GlobalVarDecl>(Val));
    }
+}
+
+il::ValueType ILGenPass::makeValueType(QualType ty)
+{
+   return ValueType(Builder.getContext(), ty);
 }
 
 void ILGenPass::setUnmangledName(il::Function *F)
@@ -727,17 +722,17 @@ void ILGenPass::setUnmangledName(il::Function *F)
    F->setUnmangledName(llvm::StringRef(ptr, std::stoull(lengthStr.c_str())));
 }
 
-void ILGenPass::DeclareFunction(FunctionDecl *C)
+il::Function* ILGenPass::DeclareFunction(FunctionDecl *C)
 {
    if (C->isNative())
-      return;
+      return nullptr;
 
-   maybeImportType(*C->getReturnType()->getType());
+   maybeImportType(C->getReturnType());
    for (const auto &arg : C->getArgs())
-      maybeImportType(*arg->getArgType()->getType());
+      maybeImportType(arg->getArgType());
 
    auto func = Builder.CreateFunction(C->getLinkageName(),
-                                      C->getReturnType()->getType(),
+                                      C->getReturnType(),
                                       makeArgVec(C->getFunctionType()
                                                   ->getArgTypes()),
                                       C->throws(),
@@ -745,66 +740,89 @@ void ILGenPass::DeclareFunction(FunctionDecl *C)
                                       C->isExternC(),
                                       C->getSourceLoc());
 
+   func->setKnownFnKind(C->getKnownFnKind());
    setUnmangledName(func);
 
    size_t i = 0;
-   for (auto &arg : func->getEntryBlock()->getArgs()) {
-      DeclMap.emplace(C->getArgs()[i++], &arg);
-   }
+   for (auto &arg : func->getEntryBlock()->getArgs())
+      addDeclValuePair(C->getArgs()[i++], &arg);
 
-   if (C->hasAttribute(Attr::_builtin)) {
-      auto &attr = C->getAttribute(Attr::_builtin);
-      BuiltinFns.try_emplace(attr.args.front().getString(),
-                             func->getName());
-   }
+//   if (C->hasAttribute(Attr::_builtin)) {
+//      auto &attr = C->getAttribute(Attr::_builtin);
+//      BuiltinFns.try_emplace(attr.args.front().getString(),
+//                             func->getName());
+//   }
 
-   DeclMap.emplace(C, func);
-   ReverseDeclMap.emplace(func, C);
+   addDeclValuePair(C, func);
+   return func;
 }
 
-void ILGenPass::DefineFunction(il::Function *func, Statement *body)
+namespace {
+
+class ILGenFuncPrettyStackTrace: public llvm::PrettyStackTraceEntry {
+   il::Function *F;
+
+public:
+   ILGenFuncPrettyStackTrace(il::Function *F) : F(F)
+   {
+
+   }
+
+   void print(llvm::raw_ostream &OS) const override
+   {
+      OS << "while generating IL for function '" << F->getName() << "'\n";
+   }
+};
+
+} // anonymous namespace
+
+void ILGenPass::DefineFunction(il::Function *func, CallableDecl* CD)
 {
+   assert(!CD->isInvalid() && !CD->isDependent());
+
+   ILGenFuncPrettyStackTrace PST(func);
+
    func->addDefinition();
 
-   auto IP = Builder.saveIP();
-   Builder.SetInsertPoint(func->getEntryBlock());
+   InsertPointRAII insertPointRAII(*this, func->getEntryBlock());
    UnresolvedGotos.emplace();
 
    if (emitDI)
-      Builder.setDebugLoc(body->getSourceLoc());
+      Builder.setDebugLoc(CD->getBody()->getSourceLoc());
 
    if (auto M = dyn_cast<il::Initializer>(func)) {
       if (auto S = dyn_cast<il::StructType>(M->getRecordType())) {
-         auto Self = getRValue(func->getEntryBlock()->getBlockArg(0));
-         Builder.CreateCall(getFunc(cast<StructDecl>(M->getType()->getRecord())
-                                       ->getDefaultInitializer()),
-                            { Self });
+         auto Self = func->getEntryBlock()->getBlockArg(0);
+         auto Call =
+            Builder.CreateCall(getFunc(cast<StructDecl>(CD->getRecord())
+                                       ->getDefaultInitializer()), { Self });
+
+         Call->setLocation(CD->getSourceLoc());
       }
    }
 
-   llvm::SmallVector<il::Value*, 8> FuncArgs;
+   size_t i = 0;
    auto arg_it = func->getEntryBlock()->arg_begin();
    auto arg_end = func->getEntryBlock()->arg_end();
 
    while (arg_it != arg_end) {
-      auto &val = *arg_it;
-      if (!val.getType().isConst() && !val.isSelf()
-          && !val.getType().isLvalue() && !val.isReference()) {
-         auto alloca = Builder.CreateAlloca(*val.getType());
+      auto &val = *arg_it++;
+
+      if (val.isSelf()) {
+         continue;
+      }
+      else if (!val.isLvalue()) {
+         auto alloca = Builder.CreateAlloca(val.getType());
          Builder.CreateStore(&val, alloca);
 
-         FuncArgs.push_back(alloca);
-      }
-      else {
-         FuncArgs.push_back(&val);
+         addDeclValuePair(CD->getArgs()[i], alloca);
       }
 
-      ++arg_it;
+      ++i;
    }
 
-   CurrentFuncArgs = FuncArgs;
-
-   visit(body);
+   assert(CD->getBody() && "can't define function with no body");
+   visit(CD->getBody());
 
    for (const auto &Goto : UnresolvedGotos.top()) {
       Goto.Inst->setTargetBranch(Labels.find(Goto.labelName)->second);
@@ -812,49 +830,94 @@ void ILGenPass::DefineFunction(il::Function *func, Statement *body)
 
    UnresolvedGotos.pop();
 
-   if (!Builder.GetInsertBlock()->getTerminator()) {
-      if (func->getName() == "main") {
-         Builder.CreateRet(Builder.CreateConstantInt(SP.getContext().getIntTy(),
-                                                     EXIT_SUCCESS));
+   if (Builder.GetInsertBlock()->hasNoPredecessors()) {
+      Builder.GetInsertBlock()->detachAndErase();
+   }
+   else if (!Builder.GetInsertBlock()->getTerminator()) {
+      if (CD->isMain()) {
+         Builder.CreateRet(Builder.GetConstantInt(SP.getContext().getIntTy(),
+                                                  EXIT_SUCCESS));
       }
       else if (func->getReturnType()->isVoidType()) {
          Builder.CreateRetVoid();
       }
       else {
+         SP.diagnose(CD, diag::err_not_all_code_paths_return);
          Builder.CreateUnreachable();
       }
    }
-
-   Builder.restoreIP(IP);
 }
 
-void ILGenPass::DeclareValue(const string &name, Value *Val)
-{
-   assert(Values.find(name) == Values.end());
-   Values.try_emplace(name, Val);
-}
+void ILGenPass::registerCalledFunction(CallableDecl *C, il::Function *F,
+                                       Expression *Caller) {
+   if (!inCTFE() || (F && !F->isDeclared()) || C->isKnownFunction())
+      return;
 
-void ILGenPass::DeclareValue(Value *Val)
-{
-   assert(Values.find(Val->getName()) == Values.end());
-   Values.try_emplace(Val->getName(), Val);
+   auto prepareCallChain = [&]() {
+      // don't use a SmallString here because this function is most
+      // likely called often and deep in the stack
+      std::string dependencyChain;
+      size_t i = 0;
+
+      for (auto &S : CtfeScopeStack) {
+         if (!S.CurrentFn)
+            continue;
+
+         if (i++ != 0) dependencyChain += " -> ";
+         dependencyChain += S.CurrentFn->getName();
+      }
+
+      if (!i)
+         return dependencyChain;
+
+      dependencyChain += " -> ";
+      dependencyChain += C->getName();
+
+      return dependencyChain;
+   };
+
+   if (!C->willHaveDefinition()) {
+      SP.diagnose(C, err_no_definition, C->getName());
+
+      auto s = prepareCallChain();
+      if (s.empty()) {
+         SP.diagnose(Caller, note_called_here);
+      }
+      else {
+         SP.diagnose(Caller, note_call_chain, prepareCallChain());
+      }
+
+      CtfeScopeStack.back().HadError = true;
+      return;
+   }
+
+   // if we're doing CTFE, we need the definition of this function, not
+   // only a declaration
+   for (auto &Scope : CtfeScopeStack) {
+      // circular dependence
+      if (Scope.CurrentFn == C) {
+         SP.diagnose(Caller, err_ctfe_circular_dependence, C->getName(),
+                     CtfeScopeStack.back().CurrentFn->getName());
+
+         SP.diagnose(C, note_dependency_chain, prepareCallChain());
+
+         CtfeScopeStack.back().HadError = true;
+         return;
+      }
+   }
+
+   CtfeScopeStack.back().HadError |= !prepareFunctionForCtfe(C);
 }
 
 il::Instruction* ILGenPass::CreateCall(CallableDecl *C,
-                                       llvm::ArrayRef<il::Value *> args) {
+                                       llvm::ArrayRef<il::Value *> args,
+                                       Expression *Caller) {
    auto F = getFunc(C);
-   assert(F && "function not declared");
 
-   if (inCTFE() && F->isDeclared()) {
-      // if we're doing CTFE, we need the definition of this function, not
-      // only a declaration
+   assert((F || inCTFE()) && "function not declared");
+   registerCalledFunction(C, F, Caller);
 
-      // check for circular dependencies
-      if (!VisitedCTFEDecls.insert(C).second)
-         circularlyDependentFunc = C;
-      else
-         SP.visitScoped(C);
-   }
+   F = getFunc(C);
 
    bool isVirtual = false;
    bool isProtocolMethod = false;
@@ -890,8 +953,7 @@ il::Instruction* ILGenPass::CreateCall(CallableDecl *C,
       invoke = Builder.CreateProtocolInvoke(cast<il::Method>(F), args, contBB,
                                             lpad->getParent());
    else
-      invoke = Builder.CreateInvoke(F, args, contBB,
-                                    lpad->getParent());
+      invoke = Builder.CreateInvoke(F, args, contBB, lpad->getParent());
 
    Builder.SetInsertPoint(contBB);
 
@@ -906,7 +968,7 @@ void ILGenPass::retainIfNecessary(il::Value *V)
    if (!V->getType()->isRefcounted())
       return;
 
-   Builder.CreateIntrinsic(Intrinsic::Retain, { V });
+   Builder.CreateIntrinsic(Intrinsic::retain, { V });
 }
 
 void ILGenPass::releaseIfNecessary(il::Value *V)
@@ -914,7 +976,7 @@ void ILGenPass::releaseIfNecessary(il::Value *V)
    if (!V->getType()->isRefcounted())
       return;
 
-   Builder.CreateIntrinsic(Intrinsic::Release, { V });
+   Builder.CreateIntrinsic(Intrinsic::release, { V });
 }
 
 il::StoreInst *ILGenPass::CreateStore(il::Value *src, il::Value *dst)
@@ -926,48 +988,108 @@ il::StoreInst *ILGenPass::CreateStore(il::Value *src, il::Value *dst)
 
    for (auto &decl : src->getType()->getRecord()->getDecls()) {
       if (auto F = dyn_cast<FieldDecl>(decl)) {
-         if (F->isStatic() || !F->getType()->getType()->isRefcounted())
+         if (F->isStatic() || !F->getType()->isRefcounted())
             continue;
 
-         retainIfNecessary(getRValue(CreateFieldRef(dst, F->getName())));
+         retainIfNecessary(CreateFieldRef(dst, F->getName()));
       }
    }
 
    return Inst;
 }
 
-il::Function* ILGenPass::getCTFEFunc()
+bool ILGenPass::prepareFunctionForCtfe(CallableDecl *C)
 {
-   if (!CTFEFunc) {
-      CTFEFunc = Builder.CreateFunction("__ctfe_fn",
-                                        SP.getContext().getVoidType(),
-                                        { }, false, false);
+   assert(!C->isTemplate() && "attempting to evaluate template!");
+   if (!SP.prepareFunctionForCtfe(C))
+      return false;
 
-      CTFEFunc->addDefinition();
+   auto fn = getFunc(C);
+   if (!fn) {
+      if (auto M = dyn_cast<MethodDecl>(C)) {
+         DeclareMethod(M);
+      }
+      else {
+         DeclareFunction(cast<FunctionDecl>(C));
+      }
+
+      fn = getFunc(C);
+      assert(fn && "function declaration failed");
    }
+   else if (!fn->isDeclared())
+      return true;
 
-   return CTFEFunc;
+   EnterCtfeScope CtfeScope(*this, C);
+   visit(C);
+
+   return !CtfeScopeStack.back().HadError;
 }
 
-ctfe::CTFEResult ILGenPass::evaluateStaticExpr(StaticExpr *expr)
-{
-   CTFEScopeRAII ctfeScopeRAII(*this);
+namespace {
 
+struct FnDeleterRAII {
+   FnDeleterRAII(il::Function *Fn)
+      : Fn(Fn)
+   { }
+
+   ~FnDeleterRAII()
+   {
+      Fn->detachAndErase();
+   }
+
+private:
+   il::Function *Fn;
+};
+
+class CTFEPrettyStackTrace: public llvm::PrettyStackTraceEntry {
+   Expression *CTFEExpr;
+
+public:
+   CTFEPrettyStackTrace(Expression *E) : CTFEExpr(E) {}
+
+   void print(llvm::raw_ostream &OS) const override
+   {
+      OS << "while ct-evaluating expression '";
+      ast::PrettyPrinter(OS).print(CTFEExpr);
+      OS << "'\n";
+   }
+};
+
+} // anonymous namespace
+
+ctfe::CTFEResult ILGenPass::evaluateStaticExpr(Expression *expr)
+{
    auto fn = Builder.CreateFunction("__ctfe_fn",
-                                    expr->getExpr()->getExprType(),
+                                    expr->getExprType(),
                                     {}, false, false);
 
    fn->addDefinition();
 
+   FnDeleterRAII deleter((fn));
    InsertPointRAII insertPointRAII(*this, fn->getEntryBlock());
-   Builder.CreateRet(getRValue(visit(expr->getExpr())));
+   EnterCtfeScope CtfeScope(*this, SP.getCurrentFun());
 
-   if (circularlyDependentFunc)
-      return ctfe::CTFEResult(circularlyDependentFunc);
+   auto RetVal = visit(expr);
 
-//   ModuleWriter writer(fn);
-//   writer.WriteTo(llvm::outs());
-//   llvm::outs() << "\n\n";
+   temporaries.erase(RetVal);
+   deinitializeTemporaries();
+
+   if (!expr->getExprType()->isVoidType())
+      Builder.CreateRet(RetVal);
+   else
+      Builder.CreateRetVoid();
+
+   if (CtfeScopeStack.back().HadError) {
+      return ctfe::CTFEError();
+   }
+
+#  ifndef NDEBUG
+   VerifierPass VP;
+   VP.visitFunction(*fn);
+   assert(VP.isValid() && "invalid ctfe function");
+#  endif
+
+   CTFEPrettyStackTrace PST(expr);
 
    ctfe::CTFEEngine engine(SP);
    return engine.evaluateFunction(fn, {}, expr->getSourceLoc());
@@ -981,7 +1103,7 @@ il::Instruction* ILGenPass::CreateFieldRef(cdot::il::Value *V,
 void ILGenPass::visitCompoundStmt(CompoundStmt *node)
 {
    auto Stmts = node->getStatements();
-   auto numStmts = Stmts.size();
+   auto numStmts = node->size();
    size_t i = 0;
 
    locals.emplace();
@@ -994,7 +1116,7 @@ void ILGenPass::visitCompoundStmt(CompoundStmt *node)
 
       if (!temporaries.empty() && Builder.GetInsertBlock()) {
          if (auto T = Builder.GetInsertBlock()->getTerminator()) {
-            T->removeFromParent();
+            T->detachFromParent();
             deinitializeTemporaries();
 
             Builder.GetInsertBlock()->getInstructions().push_back(T);
@@ -1016,7 +1138,7 @@ void ILGenPass::visitCompoundStmt(CompoundStmt *node)
 
    if (!locals.top().empty() && Builder.GetInsertBlock()) {
       if (auto T = Builder.GetInsertBlock()->getTerminator()) {
-         T->removeFromParent();
+         T->detachFromParent();
          deinitializeLocals();
 
          Builder.GetInsertBlock()->getInstructions().push_back(T);
@@ -1031,7 +1153,8 @@ void ILGenPass::visitCompoundStmt(CompoundStmt *node)
 
 void ILGenPass::visitNamespaceDecl(NamespaceDecl *node)
 {
-   visit(node->getBody());
+   for (auto &D : node->getDecls())
+      visit(D);
 }
 
 void ILGenPass::DefineGlobal(il::GlobalVariable *glob,
@@ -1062,7 +1185,7 @@ void ILGenPass::DefineGlobal(il::GlobalVariable *glob,
       GlobalInitBBs.emplace(ordering, nextBB);
    }
    else {
-      nextBB->removeFromParent();
+      nextBB->detachFromParent();
       GlobalInitBBs.emplace(ordering, nullptr);
    }
 }
@@ -1070,7 +1193,7 @@ void ILGenPass::DefineGlobal(il::GlobalVariable *glob,
 void ILGenPass::deinitializeTemporaries()
 {
    for (auto T : temporaries)
-      deinitializeValue(getRValue(T));
+      deinitializeValue(T);
 
    temporaries.clear();
 }
@@ -1078,61 +1201,94 @@ void ILGenPass::deinitializeTemporaries()
 void ILGenPass::deinitializeLocals()
 {
    for (auto L : locals.top())
-      deinitializeValue(getRValue(L));
+      deinitializeValue(L);
 }
 
 void ILGenPass::declareLocal(il::Value *V)
 {
    locals.top().insert(V);
    if (V->getType()->isRefcounted())
-      Builder.CreateIntrinsic(Intrinsic::Retain, { getRValue(V) });
+      Builder.CreateIntrinsic(Intrinsic::retain, { V });
 }
 
-void ILGenPass::visitLocalVarDecl(LocalVarDecl *node)
+void ILGenPass::visitDeclStmt(DeclStmt *Stmt)
 {
-   auto &ident = node->getName();
-   auto FirstTy = node->getTypeRef()->getType();
+   visit(Stmt->getDecl());
+}
 
-   if (!node->getValue()) {
-      auto val = getDefaultValue(*FirstTy);
-      if (val->isLvalue()) {
-         val->setName(ident);
+void ILGenPass::visitCompoundDecl(CompoundDecl *D)
+{
+   for (auto &decl : D->getDecls())
+      visit(decl);
+}
 
-         declareLocal(val);
-         DeclMap.emplace(node, val);
+void ILGenPass::visitLocalVarDecl(LocalVarDecl *Decl)
+{
+   auto ident = Decl->getName();
+   auto FirstTy = Decl->getTypeRef();
 
-         return;
-      }
+   unsigned Alignment = 0;
+   if (auto AlignA = Decl->getAttribute<AlignAttr>()) {
+      Alignment = (unsigned)AlignA->getAlignment()->getEvaluatedExpr()
+                                  .getZExtValue();
+   }
 
-      auto Alloca = Builder.CreateAlloca(*FirstTy, 0,
-                                         node->isCaptured(),
-                                         ident);
+   if (!Decl->getValue()) {
+//      auto val = getDefaultValue(*FirstTy);
+//      if (val->isLvalue()) {
+//         val->setName(ident);
+//
+//         declareLocal(val);
+//         DeclMap.emplace(Decl, val);
+//
+//         return;
+//      }
 
-      CreateStore(val, Alloca);
+      auto Alloca = Builder.CreateAlloca(FirstTy, Alignment, false, ident);
+      Alloca->setLocation(Decl->getSourceLoc());
+
+//      CreateStore(val, Alloca);
       declareLocal(Alloca);
-
-      DeclMap.emplace(node, Alloca);
+      addDeclValuePair(Decl, Alloca);
 
       return;
    }
 
-   auto val = visit(node->getValue());
-   if (!node->getTypeRef()->isReference()) {
-      val = getRValue(val);
-
-      auto Alloca = Builder.CreateAlloca(*val->getType(), 0,
-                                         node->isCaptured(),
+   auto val = visit(Decl->getValue());
+   if (!Decl->canElideCopy()) {
+      auto Alloca = Builder.CreateAlloca(val->getType(), Alignment, false,
                                          ident);
 
-      Alloca->setIsInitializer(true);
-      CreateStore(val, Alloca);
+      if (Decl->isNRVOCandidate())
+         Alloca->setCanUseSRetValue();
+      else
+         declareLocal(Alloca);
 
-      declareLocal(Alloca);
-      DeclMap.emplace(node, Alloca);
+      Alloca->setLocation(Decl->getSourceLoc());
+      Alloca->setIsInitializer(true);
+
+      auto Store = CreateStore(val, Alloca);
+      Store->setLocation(Decl->getSourceLoc());
+
+      addDeclValuePair(Decl, Alloca);
    }
    else {
-      val = Builder.CreatePtrToLvalue(Builder.CreateAddrOf(val));
-      DeclMap.emplace(node, val);
+      temporaries.erase(val);
+
+      if (Decl->isNRVOCandidate()) {
+         if (auto Init = dyn_cast<InitInst>(val))
+            Init->setCanUseSRetValue();
+         else if (auto Alloca = dyn_cast<AllocaInst>(val))
+            Alloca->setCanUseSRetValue();
+         else
+            declareLocal(val);
+      }
+      else {
+         declareLocal(val);
+      }
+
+      val->setLocation(Decl->getSourceLoc());
+      addDeclValuePair(Decl, val);
    }
 }
 
@@ -1154,7 +1310,7 @@ void ILGenPass::visitGlobalDestructuringDecl(GlobalDestructuringDecl *node)
 
 void ILGenPass::doDestructure(DestructuringDecl *node)
 {
-   auto val = getRValue(visit(node->getValue()));
+   auto val = visit(node->getValue());
    llvm::SmallVector<il::Value*, 8> destructuredValues;
 
    if (auto Fn = node->getDestructuringFn()) {
@@ -1167,9 +1323,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
          if ((*it)->getName() == "_")
             continue;
 
-         destructuredValues.push_back(getRValue(
-            Builder.CreateTupleExtract(res, i)
-         ));
+         destructuredValues.push_back(Builder.CreateTupleExtract(res, i));
       }
    }
    else if (val->getType()->isStruct()) {
@@ -1181,7 +1335,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
             continue;
 
          auto &fieldName = S->getFields()[i].name;
-         destructuredValues.push_back(getRValue(CreateFieldRef(val,fieldName)));
+         destructuredValues.push_back(CreateFieldRef(val,fieldName));
       }
    }
    else {
@@ -1192,9 +1346,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
          if ((*it)->getName() == "_")
             continue;
 
-         destructuredValues.push_back(getRValue(
-            Builder.CreateTupleExtract(val, i)
-         ));
+         destructuredValues.push_back(Builder.CreateTupleExtract(val, i));
       }
    }
 
@@ -1206,7 +1358,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
             continue;
 
          auto Val = destructuredValues[i];
-         auto Alloca = Builder.CreateAlloca(*V->getTypeRef()->getType(),
+         auto Alloca = Builder.CreateAlloca(V->getTypeRef(),
                                             0, false, V->getName());
 
          Alloca->setIsInitializer(true);
@@ -1224,6 +1376,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
             continue;
 
          auto Val = destructuredValues[i];
+         (void)Val;
          llvm_unreachable("todo");
 
          ++i;
@@ -1233,99 +1386,71 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
 
 void ILGenPass::visitFunctionDecl(FunctionDecl *node)
 {
-   if (alreadyVisited(node))
-      return;
-
-   if (node->isTemplate())
-      return;
-
-   if (!node->getBody() || node->isNative())
-      return;
-
-   auto func = Builder.getModule()->getFunction(node->getLinkageName());
-   assert(func && "func should be declared");
-
-   DefineFunction(func, node->getBody());
+   visitCallableDecl(node);
 }
 
 void ILGenPass::visitCallableDecl(CallableDecl *node)
 {
-   if (auto F = dyn_cast<FunctionDecl>(node))
-      return visitFunctionDecl(F);
-   else if (auto M = dyn_cast<MethodDecl>(node))
-      return visitMethodDecl(M);
-   else if (auto C = dyn_cast<InitDecl>(node))
-      return visitInitDecl(C);
-   else if (auto D = dyn_cast<DeinitDecl>(node))
-      return visitDeinitDecl(D);
+   if (node->isCtfeDependent() || !node->getBody())
+      return;
 
-   llvm_unreachable("bad decl kind");
+   if (alreadyVisited(node))
+      return;
+
+   if (node->isNative() || node->isTemplate())
+      return;
+
+   auto func = getFunc(node);
+   assert(func && "func should be declared");
+
+   DefineFunction(func, node);
 }
 
-il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *node)
+il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
 {
-   using IK = IdentifierRefExpr::IdentifierKind;
-
    Value *V;
-   switch (node->getKind()) {
-      case IK::Unknown:
+
+   switch (Expr->getKind()) {
+      case IdentifierKind::Unknown:
       default:
          llvm_unreachable("bad identifier kind");
-      case IK::MetaType:
-      case IK::Namespace:
-         return visit(node->getSubExpr());
-      case IK::LocalVar: {
-         if (node->getLocalVar()->isCaptured()) {
-            auto L = cast<Lambda>(getCurrentFn());
-            size_t idx = 0;
+      case IdentifierKind::MetaType:
+      case IdentifierKind::Namespace:
+         llvm_unreachable("undiagnosed namespace reference");
+      case IdentifierKind::LocalVar: {
+         auto it = DeclMap.find(Expr->getLocalVar());
+         assert(it != DeclMap.end());
 
-            for (const auto &Cap : L->getCaptures()) {
-               if (Cap.id == (uintptr_t)node->getCapturedValue())
-                  break;
-
-               ++idx;
-            }
-
-            assert(idx < L->getCaptures().size()
-                   && "value not actually captured");
-
-            V = Builder.CreateCaptureExtract(idx);
-         }
-         else {
-            auto it = DeclMap.find(node->getLocalVar());
-            assert(it != DeclMap.end());
-
-            V = it->second;
-         }
+         V = it->second;
 
          break;
       }
-      case IK::GlobalVar: {
-         auto it = DeclMap.find(node->getGlobalVar());
+      case IdentifierKind::CapturedLocalVar:
+      case IdentifierKind::CapturedFunctionArg:
+         V = Builder.CreateCaptureExtract(Expr->getCaptureIndex());
+         break;
+      case IdentifierKind::GlobalVar: {
+         auto it = DeclMap.find(Expr->getGlobalVar());
          assert(it != DeclMap.end());
 
          V = it->second;
          break;
       }
-      case IK::FunctionArg: {
-         auto it = DeclMap.find(node->getFuncArg());
+      case IdentifierKind::FunctionArg: {
+         auto it = DeclMap.find(Expr->getFuncArg());
          assert(it != DeclMap.end());
 
          V = it->second;
          break;
       }
-      case IK::Alias:
-         V = getConstantVal(node->getExprType(), node->getAliasVal());
+      case IdentifierKind::Alias:
+         V = getConstantVal(Expr->getExprType(), Expr->getAliasVal());
          break;
-      case IK::Self:
-         V = &getCurrentFn()->getEntryBlock()->getArgs().front();
-         break;
-      case IK::Function: {
-         auto Fun = getFunc(node->getCallable());
-         if (!node->getExprType()->isRawFunctionTy()) {
+      case IdentifierKind::Function: {
+         auto Fun = getFunc(Expr->getCallable());
+         if (!Expr->getExprType()->isRawFunctionTy()) {
             V = Builder.CreateLambdaInit(wrapNonLambdaFunction(Fun),
-                                         SP.getObjectTy("cdot.Lambda"),
-                                         { });
+                                         Expr->getExprType(), {});
          }
          else {
             V = Fun;
@@ -1333,43 +1458,54 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *node)
 
          break;
       }
-      case IK::BuiltinValue: {
-         switch (node->getBuiltinKind()) {
-            case BuiltinIdentifier::NULLPTR:
-               V = ConstantPointer::getNull(node->getBuiltinType());
-               break;
-            case BuiltinIdentifier::DOUBLE_SNAN:
-               V = Builder.CreateConstantDouble(
-                  std::numeric_limits<double>::signaling_NaN());
+      case IdentifierKind::Accessor: {
+         auto target = visit(Expr->getParentExpr());
+         if (Expr->isPointerAccess())
+            target = Builder.CreateLoad(target);
 
-               break;
-            case BuiltinIdentifier::DOUBLE_QNAN:
-               V = Builder.CreateConstantDouble(
-                  std::numeric_limits<double>::quiet_NaN());
 
-               break;
-            case BuiltinIdentifier::FLOAT_SNAN:
-               V = Builder.CreateConstantFloat(
-                  std::numeric_limits<float>::signaling_NaN());
+         V = CreateCall(Expr->getAccessorMethod(), { target }, Expr);
 
-               break;
-            case BuiltinIdentifier::FLOAT_QNAN:
-               V = Builder.CreateConstantFloat(
-                  std::numeric_limits<float>::quiet_NaN());
+         break;
+      }
+      case IdentifierKind::EnumRawValue:
+         V = Builder.CreateEnumRawValue(visit(Expr->getParentExpr()));
+         break;
+      case IdentifierKind::UnionAccess: {
+         auto val = visit(Expr->getParentExpr());
+         auto UnionTy = cast<il::UnionType>(getType(val->getType()));
+         V = Builder.CreateUnionCast(val, UnionTy, Expr->getIdent());
 
-               break;
-            case BuiltinIdentifier::__ctfe:
-               V = ConstantInt::getCTFE(SP.getContext().getBoolTy());
-               break;
-            default:
-               llvm_unreachable("Unsupported builtin identifier");
-         }
+         break;
+      }
+      case IdentifierKind::StaticField:
+         V = DeclMap[Expr->getStaticFieldDecl()];
+         break;
+      case IdentifierKind::Type:
+         V = GetTypeInfo(Expr->getMetaType());
+         break;
+      case IdentifierKind::Field:
+         V = visit(Expr->getParentExpr());
+         if (Expr->isPointerAccess())
+            V = Builder.CreateLoad(V);
+
+         V = CreateFieldRef(V, Expr->getIdent());
+         break;
+      case IdentifierKind::PartiallyAppliedMethod: {
+         auto Self = visit(Expr->getParentExpr());
+         auto fn = getPartiallyAppliedLambda(
+            getFunc(Expr->getPartiallyAppliedMethod()), Self);
+
+         auto lambdaTy = SP.getContext().getLambdaType(fn->getType()
+                                                         ->asFunctionType());
+
+         V = Builder.CreateLambdaInit(fn, lambdaTy, { Self });
 
          break;
       }
    }
 
-   return VisitSubExpr(node, V);
+   return V;
 }
 
 il::Function* ILGenPass::wrapNonLambdaFunction(il::Function *F)
@@ -1400,107 +1536,185 @@ il::Function* ILGenPass::wrapNonLambdaFunction(il::Function *F)
    return wrappedFn;
 }
 
+il::Function* ILGenPass::getPartiallyAppliedLambda(il::Method *M,
+                                                   il::Value *Self) {
+   llvm::SmallVector<il::Argument*, 8> args;
+   bool first = true;
+
+   for (auto &A : M->getEntryBlock()->getArgs()) {
+      if (first) {
+         first = false;
+         continue;
+      }
+
+      args.push_back(Builder.CreateArgument(A.getType(), A.isVararg(), nullptr,
+                                            A.getName(), A.getSourceLoc()));
+   }
+
+   auto wrappedFn = Builder.CreateLambda(M->getReturnType(), args,
+                                         M->mightThrow());
+
+   wrappedFn->addDefinition();
+   wrappedFn->addCapture(Self->getType());
+
+   InsertPointRAII insertPointRAII(*this, wrappedFn->getEntryBlock());
+
+   llvm::SmallVector<il::Value*, 8> givenArgs;
+   givenArgs.push_back(Builder.CreateCaptureExtract(0));
+
+   auto begin_it = wrappedFn->getEntryBlock()->arg_begin();
+   auto end_it = wrappedFn->getEntryBlock()->arg_end();
+   while (begin_it != end_it)
+      givenArgs.push_back(&*begin_it++);
+
+   Builder.CreateRet(Builder.CreateCall(M, givenArgs));
+
+   return wrappedFn;
+}
+
+il::Value* ILGenPass::visitBuiltinIdentExpr(BuiltinIdentExpr *node)
+{
+   switch (node->getIdentifierKind()) {
+      case BuiltinIdentifier::NULLPTR:
+         return ConstantPointer::getNull(ValueType(Builder.getContext(),
+                                                   node->getExprType()));
+      case BuiltinIdentifier::DOUBLE_SNAN:
+         return Builder.GetConstantDouble(
+            std::numeric_limits<double>::signaling_NaN());
+
+      case BuiltinIdentifier::DOUBLE_QNAN:
+         return Builder.GetConstantDouble(
+            std::numeric_limits<double>::quiet_NaN());
+      case BuiltinIdentifier::FLOAT_SNAN:
+         return Builder.GetConstantFloat(
+            std::numeric_limits<float>::signaling_NaN());
+      case BuiltinIdentifier::FLOAT_QNAN:
+         return Builder.GetConstantFloat(
+            std::numeric_limits<float>::quiet_NaN());
+      case BuiltinIdentifier::__ctfe:
+         return ConstantInt::getCTFE(ValueType(Builder.getContext(),
+                                               SP.getContext().getBoolTy()));
+      default:
+         llvm_unreachable("Unsupported builtin identifier");
+   }
+}
+
+il::Value* ILGenPass::visitSelfExpr(SelfExpr *Expr)
+{
+   return &getCurrentFn()->getEntryBlock()->getArgs().front();
+}
+
+il::Value* ILGenPass::visitSuperExpr(SuperExpr *Expr)
+{
+   return Builder.CreateBitCast(CastKind::UpCast,
+                                &getCurrentFn()->getEntryBlock()
+                                               ->getArgs().front(),
+                                Expr->getExprType());
+}
+
+il::Value* ILGenPass::visitParenExpr(ParenExpr *Expr)
+{
+   return visit(Expr->getParenthesizedExpr());
+}
+
 il::Value *ILGenPass::visitSubscriptExpr(SubscriptExpr *node)
 {
    assert(node->hasSingleIndex() && "should have been replaced by a call!");
 
-   auto val = getRValue(pop());
+   Value *Self = nullptr;
+   if (auto P = node->getParentExpr())
+      Self = visit(P);
+
    auto idx = visit(node->getIndices().front());
    Value *Res = nullptr;
 
-   if (val->getType()->isPointerType() || val->getType()->isArrayType()) {
-      Res = Builder.CreateGEP(val, idx);
+   if (Self->getType()->isPointerType() || Self->getType()->isArrayType()) {
+      Res = Builder.CreateGEP(Self, idx);
    }
 
    assert(Res);
-   return VisitSubExpr(node, Res);
+   return Res;
 }
 
-il::Value *ILGenPass::visitCallExpr(CallExpr *node)
+il::Value *ILGenPass::visitCallExpr(CallExpr *Expr)
 {
    Value *V;
 
-   if (node->getKind() == CallKind::Builtin) {
-      V = HandleIntrinsic(node);
-      V->setLocation(node->getSourceLoc());
+   if (Expr->getKind() == CallKind::Builtin) {
+      V = HandleIntrinsic(Expr);
+      V->setLocation(Expr->getSourceLoc());
 
-      return VisitSubExpr(node, V);
+      return V;
    }
 
    size_t i = 0;
    llvm::SmallVector<Value*, 8> args;
 
-   auto Self = pop();
-
-   for (const auto &arg : node->getArgs()) {
-      auto val = visit(arg);
-      bool lvalue = arg->getExprType().isLvalue()
-                    && !arg->getExprType().isConst();
-
-      args.push_back(lvalue ? val : getRValue(val));
+   for (const auto &arg : Expr->getArgs()) {
+      args.push_back(visit(arg));
       ++i;
    }
 
-   switch (node->getKind()) {
+   switch (Expr->getKind()) {
       case CallKind::Unknown:
       default:
          llvm_unreachable("bad call kind!");
       case CallKind::PrimitiveInitializer:
-         if (node->getReturnType()->isVoidType())
+         if (Expr->getReturnType()->isVoidType())
             // Sema should have made sure that the value is never used
             V = nullptr;
          else
             V = args.front();
          break;
       case CallKind::UnsafeTupleGet: {
-         assert(Self && args.size() == 1);
-
-         auto tup = getRValue(Self);
-         auto idx = getRValue(args.front());
+         auto tup = visit(Expr->getParentExpr());
+         auto idx = args.front();
 
          V = HandleUnsafeTupleGet(tup, idx,
-                                  node->getReturnType()->asTupleType());
+                                  Expr->getReturnType()->asTupleType());
 
          break;
       }
       case CallKind::CallOperator: {
-         auto identExpr = node->getIdentExpr();
+         auto identExpr = Expr->getIdentExpr();
 
-         auto val = identExpr ? visitIdentifierRefExpr(identExpr) : Self;
-         auto m = getFunc(node->getMethod());
+         auto val = identExpr ? visitIdentifierRefExpr(identExpr)
+                              : visit(Expr->getParentExpr());
 
-         args.insert(args.begin(), getRValue(val));
-         V = Builder.CreateCall(m, args);
+         args.insert(args.begin(), val);
+         V = CreateCall(Expr->getFunc(), args, Expr);
 
          break;
       }
       case CallKind::AnonymousCall: {
-         auto funcTy = node->getFunctionType();
-         auto identExpr = node->getIdentExpr();
+         auto funcTy = Expr->getFunctionType();
+         auto identExpr = Expr->getIdentExpr();
          auto func = identExpr ? visitIdentifierRefExpr(identExpr)
-                               : getRValue(Self);
+                               : visit(Expr->getParentExpr());
 
          if (funcTy->isRawFunctionTy()) {
-            V = Builder.CreateIndirectCall(getRValue(func), args);
+            V = Builder.CreateIndirectCall(func, args);
          }
          else {
-            V = Builder.CreateLambdaCall(getRValue(func), args);
+            V = Builder.CreateLambdaCall(func, args);
          }
 
          break;
       }
-      case CallKind::NamedFunctionCall:
-         V = CreateCall(node->getFunc(), args);
-         break;
-      case CallKind::StaticMethodCall:
-         V = CreateCall(node->getMethod(), args);
-         break;
       case CallKind::InitializerCall: {
-         auto method = node->getMethod();
+         auto method = cast<InitDecl>(Expr->getFunc());
          auto AggrTy = getType(method->getRecord());
+
+         {
+            auto F = getFunc((CallableDecl *) method);
+            assert((F || inCTFE()) && "function not declared");
+            registerCalledFunction(method, F, Expr);
+         }
 
          auto Init = getFunc(method);
          assert(isa<il::Method>(Init));
+
+         registerCalledFunction(method, Init, Expr);
 
          V = Builder.CreateInit(cast<il::StructType>(AggrTy),
                                 cast<il::Method>(Init), args);
@@ -1510,7 +1724,7 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *node)
          break;
       }
       case CallKind::UnionInitializer: {
-         auto AggrTy = getType(node->getUnion());
+         auto AggrTy = getType(Expr->getUnion());
          assert(args.size() == 1);
 
          V = Builder.CreateUnionInit(cast<il::UnionType>(AggrTy),
@@ -1520,28 +1734,28 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *node)
 
          break;
       }
-      case CallKind::MethodCall: {
-         auto target = Self;
-         if (!target)
-            target = getCurrentFn()->getEntryBlock()->getBlockArg(0);
+      case CallKind::MethodCall:
+      case CallKind::NamedFunctionCall:
+      case CallKind::StaticMethodCall: {
+         auto Func = Expr->getFunc();
+         if (Expr->getParentExpr() && !Expr->getParentExpr()->getExprType()
+                                           ->isMetaType()) {
+            auto Self = visit(Expr->getParentExpr());
+            if (Expr->isPointerAccess())
+               Self = Builder.CreateLoad(Self);
 
-         if (node->isPointerAccess())
-            target = Builder.CreateLoad(target);
+            args.insert(args.begin(), Self);
+         }
 
-         if (target->isLvalue() && !node->getMethod()->hasMutableSelf())
-            target = Builder.CreateLoad(target);
-
-         args.insert(args.begin(), target);
-
-         V = CreateCall(node->getMethod(), args);
+         V = CreateCall(Func, args, Expr);
          break;
       }
    }
 
    if (V)
-      V->setLocation(node->getSourceLoc());
+      V->setLocation(Expr->getSourceLoc());
 
-   return VisitSubExpr(node, V);
+   return V;
 }
 
 il::Value* ILGenPass::HandleUnsafeTupleGet(il::Value *tup,
@@ -1552,41 +1766,41 @@ il::Value* ILGenPass::HandleUnsafeTupleGet(il::Value *tup,
    auto tupTy = tup->getType()->asTupleType();
 
    if (auto CI = dyn_cast<ConstantInt>(idx)) {
-      if (CI->getU64() >= tupTy->getArity()) {
-         TypeInfo = ConstantPointer::getNull(*Ty->getContainedType(0));
-         Ptr = ConstantPointer::getNull(*Ty->getContainedType(1));
+      if (CI->getZExtValue() >= tupTy->getArity()) {
+         TypeInfo = ConstantPointer::getNull(
+            ValueType(Builder.getContext(), Ty->getContainedType(0)));
+         Ptr = ConstantPointer::getNull(ValueType(Builder.getContext(),
+                                                  Ty->getContainedType(1)));
       }
       else {
-         auto val = getRValue(Builder.CreateTupleExtract(tup, CI->getU64()));
+         auto val = Builder.CreateTupleExtract(tup, CI->getZExtValue());
 
          TypeInfo = Builder.CreateAddrOf(
-            GetTypeInfo(*tupTy->getContainedType(CI->getU64())));
+            GetTypeInfo(*tupTy->getContainedType(CI->getZExtValue())));
          Ptr = Builder.CreateBitCast(CastKind::BitCast, val, Int8PtrTy);
       }
    }
    else {
-      auto Switch = Builder.CreateSwitch(idx);
       auto InvalidBB = Builder.CreateBasicBlock("tup.invalid");
-      auto MergeBB = Builder.CreateBasicBlock("tup.merge");
+      auto Switch = Builder.CreateSwitch(idx, InvalidBB);
 
+      auto MergeBB = Builder.CreateBasicBlock("tup.merge");
       MergeBB->addBlockArg(Ty->getContainedType(0), "typeInfo");
       MergeBB->addBlockArg(Ty->getContainedType(1), "res");
 
-      Switch->addDefaultCase(InvalidBB);
-
       Builder.SetInsertPoint(InvalidBB);
       Builder.CreateBr(MergeBB, {
-         ConstantPointer::getNull(*Ty->getContainedType(0)),
-         ConstantPointer::getNull(*Ty->getContainedType(1))
+         Builder.GetConstantNull(Ty->getContainedType(0)),
+         Builder.GetConstantNull(Ty->getContainedType(1))
       });
 
       for (size_t i = 0; i < tupTy->getArity(); ++i) {
          auto BB = Builder.CreateBasicBlock("tup.val");
-         Switch->addCase(ConstantInt::get(*idx->getType(), i), BB);
+         Switch->addCase(ConstantInt::get(idx->getType(), i), BB);
 
          Builder.SetInsertPoint(BB);
 
-         auto val = getRValue(Builder.CreateTupleExtract(tup, i));
+         auto val = Builder.CreateTupleExtract(tup, i);
          Builder.CreateBr(MergeBB, {
             Builder.CreateAddrOf(GetTypeInfo(*tupTy->getContainedType(i))),
             Builder.CreateBitCast(CastKind::BitCast, val, Int8PtrTy)
@@ -1634,23 +1848,27 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
 
    if (evaluateArgs)
       for (const auto &arg : node->getArgs())
-         args.push_back(getRValue(visit(arg)));
+         args.push_back(visit(arg));
 
    switch (kind) {
       case BuiltinFn::CtfePrintStackTrace:
          return Builder.CreateIntrinsic(Intrinsic::__ctfe_stacktrace, {});
       case BuiltinFn::SIZEOF:
       case BuiltinFn::ALIGNOF: {
-         return getBoxedInt(kind == BuiltinFn::SIZEOF
-                            ? GenericTy->getSize()
-                            : GenericTy->getAlignment(), "UInt64");
+         auto &TI = SP.getContext().getTargetInfo();
+         auto Bits = TI.getDefaultIntType()->getBitwidth();
+         auto Val = TI.getSizeOfType(GenericTy);
+
+         llvm::APSInt I(llvm::APInt(Bits, (uint64_t)Val, false), true);
+
+         return Builder.GetConstantInt(USizeTy, move(I));
       }
       case BuiltinFn::MEMCPY: {
-         return Builder.CreateIntrinsic(Intrinsic::MemCpy,
+         return Builder.CreateIntrinsic(Intrinsic::memcpy,
                                         { args[0], args[1], args[2], args[3] });
       }
       case BuiltinFn::MEMSET: {
-         return Builder.CreateIntrinsic(Intrinsic::MemSet,
+         return Builder.CreateIntrinsic(Intrinsic::memset,
                                         { args[0], args[1], args[2], args[3] });
       }
       case BuiltinFn::ISNULL: {
@@ -1663,10 +1881,10 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
          auto size = dyn_cast<ConstantInt>(args[1]);
          assert(size && "non-constantint passed to stackalloc");
 
-         return Builder.CreateAlloca(GenericTy, size_t(size->getU64()));
+         return Builder.CreateAlloca(GenericTy, size_t(size->getZExtValue()));
       }
       case BuiltinFn::NULLPTR: {
-         return ConstantPointer::getNull(*node->getReturnType());
+         return Builder.GetConstantNull(node->getReturnType());
       }
       case BuiltinFn::DefaultVal: {
          return getDefaultValue(*node->getReturnType());
@@ -1676,14 +1894,11 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
          if (!ptrTy->isClass())
             ptrTy = ptrTy->getPointerTo(SP.getContext());
 
-         auto null = ConstantPointer::getNull(*ptrTy);
+         auto null = Builder.GetConstantNull(ptrTy);
          auto gep = Builder.CreateAddrOf(Builder.CreateGEP(null, 1));
 
-         auto i = Builder.CreateIntegerCast(CastKind::PtrToInt, gep,
-                                            SP.getContext().getUIntTy());
-
-         return Builder.CreateIntegerCast(CastKind::IBox, i,
-                                          SP.getBoxedType(*i->getType()));
+         return Builder.CreateIntegerCast(CastKind::PtrToInt, gep,
+                                          SP.getContext().getUIntTy());
       }
       case BuiltinFn::BITCAST: {
          return Builder.CreateBitCast(CastKind::BitCast, args[0],
@@ -1694,32 +1909,31 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
    }
 }
 
-il::Value *ILGenPass::visitMemberRefExpr(MemberRefExpr *node)
+il::Value *ILGenPass::visitMemberRefExpr(MemberRefExpr *Expr)
 {
    Value *V = nullptr;
 
-   switch (node->getKind()) {
+   switch (Expr->getKind()) {
       default:
          llvm_unreachable("bad member kind!");
       case MemberKind::Alias:
-         V = getConstantVal(node->getExprType(), node->getAliasVal());
+         V = getConstantVal(Expr->getExprType(), Expr->getAliasVal());
          break;
       case MemberKind::Accessor: {
-         auto M = getFunc(node->getAccessorMethod());
-         auto target = getRValue(pop());
-         if (node->isPointerAccess())
+         auto target = visit(Expr->getParentExpr());
+         if (Expr->isPointerAccess())
             target = Builder.CreateLoad(target);
 
 
-         V = Builder.CreateCall(M, { target });
+         V = CreateCall(Expr->getAccessorMethod(), { target }, Expr);
 
          break;
       }
       case MemberKind::Function: {
-         auto Fun = getFunc(node->getCallable());
-         if (!node->getExprType()->isRawFunctionTy()) {
+         auto Fun = getFunc(Expr->getCallable());
+         if (!Expr->getExprType()->isRawFunctionTy()) {
             V = Builder.CreateLambdaInit(wrapNonLambdaFunction(Fun),
-                                         SP.getObjectTy("cdot.Lambda"), { });
+                                         Expr->getExprType(), {});
          }
          else {
             V = Fun;
@@ -1728,41 +1942,45 @@ il::Value *ILGenPass::visitMemberRefExpr(MemberRefExpr *node)
          break;
       }
       case MemberKind::EnumRawValue:
-         V = Builder.CreateEnumRawValue(getRValue(pop()));
-         break;
-      case MemberKind::TupleAccess:
-         V = Builder.CreateTupleExtract(getRValue(pop()),
-                                        node->getTupleIndex());
-
+         V = Builder.CreateEnumRawValue(visit(Expr->getParentExpr()));
          break;
       case MemberKind::UnionAccess: {
-         auto UnionTy = cast<il::UnionType>(getType(node->getRecord()));
-         V = Builder.CreateUnionCast(getRValue(pop()), UnionTy,
-                                     node->getIdent());
+         auto UnionTy = cast<il::UnionType>(getType(Expr->getRecord()));
+         V = Builder.CreateUnionCast(visit(Expr->getParentExpr()), UnionTy,
+                                     Expr->getIdent());
 
          break;
       }
       case MemberKind::Namespace:
          break;
       case MemberKind::GlobalVariable:
-         V = DeclMap[node->getGlobalVar()];
+         V = DeclMap[Expr->getGlobalVar()];
          break;
       case MemberKind::StaticField:
-         V = DeclMap[node->getStaticFieldDecl()];
+         V = DeclMap[Expr->getStaticFieldDecl()];
          break;
       case MemberKind::Type:
-         V = GetTypeInfo(node->getMetaType());
+         V = GetTypeInfo(Expr->getMetaType());
          break;
       case MemberKind::Field:
-         V = getRValue(pop());
-         if (node->isPointerAccess())
+         V = visit(Expr->getParentExpr());
+         if (Expr->isPointerAccess())
             V = Builder.CreateLoad(V);
 
-         V = CreateFieldRef(V, node->getIdent());
+         V = CreateFieldRef(V, Expr->getIdent());
          break;
    }
 
-   return VisitSubExpr(node, V);
+   return V;
+}
+
+il::Value* ILGenPass::visitTupleMemberExpr(TupleMemberExpr *node)
+{
+   auto tup = visit(node->getParentExpr());
+   if (node->isPointerAccess())
+      tup = Builder.CreateLoad(tup);
+
+   return Builder.CreateTupleExtract(tup, node->getIndex());
 }
 
 il::Value* ILGenPass::visitEnumCaseExpr(EnumCaseExpr *node)
@@ -1772,13 +1990,13 @@ il::Value* ILGenPass::visitEnumCaseExpr(EnumCaseExpr *node)
 
    llvm::SmallVector<Value*, 8> args;
    for (const auto &arg : node->getArgs()) {
-      args.push_back(getRValue(visit(arg)));
+      args.push_back(visit(arg));
    }
 
    Value *V = Builder.CreateEnumInit(cast<il::EnumType>(EnumTy),
                                      node->getIdent(), args);
 
-   return VisitSubExpr(node, V);
+   return V;
 }
 
 void ILGenPass::visitForStmt(ForStmt *node)
@@ -1790,15 +2008,16 @@ void ILGenPass::visitForStmt(ForStmt *node)
 
    auto CondBB = Builder.CreateBasicBlock("for.cond");
    auto BodyBB = Builder.CreateBasicBlock("for.body");
+   auto IncBB = Builder.CreateBasicBlock("for.inc");
    auto MergeBB = Builder.CreateBasicBlock("for.merge");
 
-   BreakContinueStack.push({ MergeBB, CondBB });
+   BreakContinueStack.push({ MergeBB, IncBB });
 
    Builder.CreateBr(CondBB);
    Builder.SetInsertPoint(CondBB);
 
    if (node->getTermination()) {
-      auto val = unboxIfNecessary(getRValue(visit(node->getTermination())));
+      auto val = visit(node->getTermination());
       deinitializeTemporaries();
       Builder.CreateCondBr(val, BodyBB, MergeBB);
    }
@@ -1809,28 +2028,30 @@ void ILGenPass::visitForStmt(ForStmt *node)
    Builder.SetInsertPoint(BodyBB);
    if (auto Body = node->getBody()) {
       visit(Body);
+
+      if (!Builder.GetInsertBlock()->getTerminator())
+         Builder.CreateBr(IncBB);
    }
 
-   if (!Builder.GetInsertBlock()->getTerminator()) {
-      if (auto Inc = node->getIncrement()) {
-         visit(Inc);
-         deinitializeTemporaries();
-      }
-
-      Builder.CreateBr(CondBB);
+   Builder.SetInsertPoint(IncBB);
+   if (auto Inc = node->getIncrement()) {
+      visit(Inc);
+      deinitializeTemporaries();
    }
+
+   Builder.CreateBr(CondBB);
 
    BreakContinueStack.pop();
    Builder.SetInsertPoint(MergeBB);
 }
 
-void ILGenPass::visitForInStmt(ForInStmt *node)
+void ILGenPass::visitForInStmt(ForInStmt *Stmt)
 {
-   auto Range = getRValue(visit(node->getRangeExpr()));
+   auto Range = visit(Stmt->getRangeExpr());
    temporaries.erase(Range);
 
-   auto GetItFn = getFunc(node->getGetIteratorFn());
-   auto Iterator = getRValue(Builder.CreateCall(GetItFn, { Range }));
+   auto Iterator = CreateCall(Stmt->getGetIteratorFn(), { Range },
+                              Stmt->getRangeExpr());
 
    auto NextBB = Builder.CreateBasicBlock("forin.next");
    auto BodyBB = Builder.CreateBasicBlock("forin.body");
@@ -1839,22 +2060,21 @@ void ILGenPass::visitForInStmt(ForInStmt *node)
    Builder.CreateBr(NextBB);
    Builder.SetInsertPoint(NextBB);
 
-   auto NextFn = getFunc(node->getNextFn());
+   auto Next = CreateCall(Stmt->getNextFn(), { Iterator },
+                          Stmt->getRangeExpr());
 
-   auto Next = getRValue(Builder.CreateCall(NextFn, { Iterator }));
    auto OptVal = Builder.CreateEnumRawValue(Next);
 
-   BodyBB->addBlockArg(*Next->getType());
+   BodyBB->addBlockArg(Next->getType());
 
    auto IsZero = Builder.CreateIsZero(OptVal);
    Builder.CreateCondBr(IsZero, MergeBB, BodyBB, {}, { Next });
 
    Builder.SetInsertPoint(BodyBB);
-   auto Val = getRValue(Builder.CreateEnumExtract(BodyBB->getBlockArg(0),
-                                                  "Some", 0));
+   auto Val = Builder.CreateEnumExtract(BodyBB->getBlockArg(0), "Some", 0);
 
-   DeclMap.emplace(node->getDecl(), Val);
-   visit(node->getBody());
+   DeclMap.emplace(Stmt->getDecl(), Val);
+   visit(Stmt->getBody());
 
    if (!Builder.GetInsertBlock()->getTerminator())
       Builder.CreateBr(NextBB);
@@ -1870,7 +2090,7 @@ void ILGenPass::visitWhileStmt(WhileStmt *node)
    Builder.CreateBr(CondBB);
    Builder.SetInsertPoint(CondBB);
 
-   auto Condition = unboxIfNecessary(getRValue(visit(node->getCondition())));
+   auto Condition = visit(node->getCondition());
    deinitializeTemporaries();
 
    auto BodyBB = Builder.CreateBasicBlock("while.body");
@@ -1895,9 +2115,7 @@ void ILGenPass::visitWhileStmt(WhileStmt *node)
 
 void ILGenPass::visitIfStmt(IfStmt *node)
 {
-   auto Condition = getRValue(visit(node->getCondition()));
-   Condition = unboxIfNecessary(Condition);
-
+   auto Condition = visit(node->getCondition());
    deinitializeTemporaries();
 
    auto IfBranch = Builder.CreateBasicBlock("if.body");
@@ -1995,7 +2213,7 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
       Builder.SetInsertPoint(CompBlocks[i]);
 
-      auto val = getRValue(visit(C->getPattern()));
+      auto val = visit(C->getPattern());
       if (!isa<ConstantInt>(val))
          isIntegralSwitch = false;
 
@@ -2007,15 +2225,15 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
    if (isIntegralSwitch) {
       for (const auto &BB : CompBlocks)
-         if (BB) BB->removeFromParent();
+         if (BB) BB->detachFromParent();
 
       for (const auto &BB : CaseBlocks)
-         if (BB) BB->removeFromParent();
+         if (BB) BB->detachFromParent();
 
       return HandleIntegralSwitch(node, CaseVals);
    }
 
-   auto SwitchVal = getRValue(visit(node->getSwitchValue()));
+   auto SwitchVal = visit(node->getSwitchValue());
    auto MergeBB = Builder.CreateBasicBlock("switch.merge");
 
    if (!defaultBB)
@@ -2045,9 +2263,8 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
          Value *isEqual;
          if (C->getComparisonOp()) {
-            isEqual = unboxIfNecessary(Builder.CreateCall(
-               getModule()->getFunction(C->getComparisonOp()->getLinkageName()),
-               { SwitchVal, val }));
+            isEqual = CreateCall(C->getComparisonOp(), { SwitchVal, val },
+                                 C->getPattern());
          }
          else {
             isEqual = CreateEqualityComp(SwitchVal, val);
@@ -2055,6 +2272,9 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
          auto nextComp = i >= CompBlocks.size() ? defaultBB
                                                 : CompBlocks[i + 1];
+
+         if (!nextComp)
+            nextComp = defaultBB;
 
          Builder.CreateCondBr(isEqual, BodyBB, nextComp);
       }
@@ -2087,14 +2307,13 @@ void ILGenPass::HandleIntegralSwitch(
    MatchStmt *node,
    const llvm::SmallVector<il::Value *, 8> &values) {
 
-   auto SwitchVal = getRValue(visit(node->getSwitchValue()));
+   auto SwitchVal = visit(node->getSwitchValue());
    if (!SwitchVal->getType()->isIntegerType()) {
       assert(SwitchVal->getType()->isRawEnum());
       SwitchVal = Builder.CreateEnumRawValue(SwitchVal);
    }
 
-   auto Switch = Builder.CreateSwitch(SwitchVal);
-   auto MergeBB = Builder.CreateBasicBlock("switch.merge");
+   il::BasicBlock *DefaultBB = nullptr;
 
    llvm::SmallVector<il::BasicBlock*, 4> Cases;
    for (const auto &C : node->getCases()) {
@@ -2103,11 +2322,18 @@ void ILGenPass::HandleIntegralSwitch(
       }
       else if (C->isDefault()) {
          Cases.push_back(Builder.CreateBasicBlock("switch.default"));
+         DefaultBB = Cases.back();
       }
       else {
          Cases.push_back(Builder.CreateBasicBlock("switch.case"));
       }
    }
+
+   if (!DefaultBB)
+      DefaultBB = makeUnreachableBB();
+
+   auto Switch = Builder.CreateSwitch(SwitchVal, DefaultBB);
+   auto MergeBB = Builder.CreateBasicBlock("switch.merge");
 
    size_t i = 0;
    for (const auto &C : node->getCases()) {
@@ -2119,10 +2345,7 @@ void ILGenPass::HandleIntegralSwitch(
          ++j;
       }
 
-      if (!values[i]) {
-         Switch->addDefaultCase(Cases[i]);
-      }
-      else {
+      if (values[i]) {
          Switch->addCase(cast<ConstantInt>(values[i]), Cases[i]);
       }
 
@@ -2150,9 +2373,19 @@ void ILGenPass::HandleIntegralSwitch(
    Builder.SetInsertPoint(MergeBB);
 }
 
+il::BasicBlock* ILGenPass::makeUnreachableBB()
+{
+   auto BB = Builder.CreateBasicBlock("unreachable");
+
+   InsertPointRAII raii(*this, BB);
+   Builder.CreateUnreachable();
+
+   return BB;
+}
+
 void ILGenPass::HandlePatternSwitch(MatchStmt *node)
 {
-   auto EnumVal = getRValue(visit(node->getSwitchValue()));
+   auto EnumVal = visit(node->getSwitchValue());
    auto E = cast<EnumType>(getModule()->getType(
       EnumVal->getType()->getRecord()->getName()));
 
@@ -2178,8 +2411,10 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
       else
          BodyBBs.push_back(Builder.CreateBasicBlock("match.body"));
 
-      if (C->isDefault())
+      if (C->isDefault()) {
+         DefaultBB = BodyBBs.back();
          continue;
+      }
 
       size_t i = 0;
       auto CP = cast<CasePattern>(C->getPattern());
@@ -2188,7 +2423,8 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
 
       for (auto &arg : CP->getArgs()) {
          if (!arg.isExpr()) {
-            bodyBB->addBlockArg(QualType(*Case.AssociatedTypes[i], true));
+            bodyBB->addBlockArg(
+               SP.getContext().getReferenceType(*Case.AssociatedTypes[i]));
          }
 
          ++i;
@@ -2221,33 +2457,33 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
             Builder.CreateBr(BodyBB);
          }
          else for (auto &Arg : CP->getArgs()) {
-               Value* val = Builder.CreateEnumExtract(EnumVal, CP->getCaseName(),
-                                                      k);
+            Value* val = Builder.CreateEnumExtract(EnumVal,
+                                                   CP->getCaseName(), k);
 
-               if (Arg.isExpr()) {
-                  auto expr = visit(Arg.getExpr());
-                  auto cmp = CreateEqualityComp(getRValue(val), getRValue(expr));
+            if (Arg.isExpr()) {
+               auto expr = visit(Arg.getExpr());
+               auto cmp = CreateEqualityComp(Builder.CreateLoad(val), expr);
 
-                  if (k == CP->getArgs().size() - 1) {
-                     Builder.CreateCondBr(cmp, BodyBB, nextMergeBB,
-                                          std::move(BlockArgs));
-                  }
-                  else {
-                     auto nextCmp = Builder.CreateBasicBlock("match.cmp.next");
-
-                     Builder.CreateCondBr(cmp, nextCmp, nextMergeBB);
-                     Builder.SetInsertPoint(nextCmp);
-                  }
+               if (k == CP->getArgs().size() - 1) {
+                  Builder.CreateCondBr(cmp, BodyBB, nextMergeBB,
+                                       BlockArgs);
                }
                else {
-                  BlockArgs.push_back(val);
-                  if (k == CP->getArgs().size() - 1) {
-                     Builder.CreateBr(BodyBB, std::move(BlockArgs));
-                  }
-               }
+                  auto nextCmp = Builder.CreateBasicBlock("match.cmp.next");
 
-               ++k;
+                  Builder.CreateCondBr(cmp, nextCmp, nextMergeBB);
+                  Builder.SetInsertPoint(nextCmp);
+               }
             }
+            else {
+               BlockArgs.push_back(val);
+               if (k == CP->getArgs().size() - 1) {
+                  Builder.CreateBr(BodyBB, BlockArgs);
+               }
+            }
+
+            ++k;
+         }
 
          compBB = nextMergeBB;
       }
@@ -2264,11 +2500,7 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
                   continue;
 
                auto argVal = BodyBB->getBlockArg(k);
-               auto val = Builder.CreateAlloca(*argVal->getType());
-
-               Builder.CreateStore(getRValue(argVal), val);
-
-               DeclMap.emplace(*it++, val);
+               DeclMap.emplace(*it++, argVal);
                ++k;
             }
          }
@@ -2298,6 +2530,7 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
       }
    }
 
+   Switch->setDefault(DefaultBB);
    Builder.SetInsertPoint(MergeBB);
 }
 
@@ -2353,28 +2586,21 @@ void ILGenPass::visitGotoStmt(GotoStmt *node)
    }
 }
 
-void ILGenPass::visitReturnStmt(ReturnStmt *node)
+void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
 {
-   if (node->getReturnValue()) {
-      auto Val = visit(node->getReturnValue());
+   RetInst *Ret;
+   if (Stmt->getReturnValue()) {
+      auto Val = visit(Stmt->getReturnValue());
+      temporaries.erase(Val);
 
-      if (Val->isLvalue() || isa<il::Argument>(Val)) {
-         auto rval = getRValue(Val);
-         retainIfNecessary(rval);
-
-         if (!getCurrentFn()->getReturnType().isLvalue())
-            Val = rval;
-      }
-      else {
-         temporaries.erase(Val);
-      }
-
-      Val = castTo(Val, getCurrentFn()->getReturnType());
-      Builder.CreateRet(Val);
+      Ret = Builder.CreateRet(Val);
    }
    else {
-      Builder.CreateRetVoid();
+      Ret = Builder.CreateRetVoid();
    }
+
+   if (Stmt->getNRVOCand() && Stmt->getNRVOCand()->isNRVOCandidate())
+      Ret->setCanUseSRetValue();
 }
 
 void ILGenPass::visitBreakStmt(BreakStmt *node)
@@ -2386,7 +2612,7 @@ void ILGenPass::visitBreakStmt(BreakStmt *node)
    Builder.CreateBr(top.BreakTarget);
 }
 
-void ILGenPass::visitContinueStmt(ContinueStmt *node)
+void ILGenPass::visitContinueStmt(ContinueStmt*)
 {
    assert(!BreakContinueStack.empty() && "no target for continue");
    auto &top = BreakContinueStack.top();
@@ -2395,182 +2621,141 @@ void ILGenPass::visitContinueStmt(ContinueStmt *node)
    Builder.CreateBr(top.ContinueTarget);
 }
 
-il::Value *ILGenPass::visitDictionaryLiteral(DictionaryLiteral *node)
+il::Value *ILGenPass::visitDictionaryLiteral(DictionaryLiteral *Expr)
 {
-   auto R = cast<ClassDecl>(node->getExprType()->getRecord());
-   auto DictTy = cast<StructType>(getType(node->getExprType()));
+   auto R = cast<ClassDecl>(Expr->getExprType()->getRecord());
+   auto DictTy = cast<StructType>(getType(Expr->getExprType()));
    auto Init = getFunc(R->getParameterlessConstructor());
-   auto Put = getFunc(R->getMethod("put"));
+   auto PutFn = R->getMethod("put");
 
    auto Dict = Builder.CreateInit(DictTy, Init, {});
 
    size_t i = 0;
-   for (auto &K : node->getKeys()) {
-      auto &V = node->getValues()[i];
+   auto vals = Expr->getValues();
 
-      auto key = getRValue(visit(K));
-      auto val = getRValue(visit(V));
+   for (auto &K : Expr->getKeys()) {
+      auto &V = vals[i];
 
-      Builder.CreateCall(Put, { Dict, key, val });
+      auto key = visit(K);
+      auto val = visit(V);
+
+      CreateCall(PutFn, { Dict, key, val }, Expr);
    }
 
    return Dict;
 }
 
-il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral *node)
+static size_t getNeededCapacity(size_t numElements)
 {
+   // get the closest power of 2
+   return size_t(std::pow(2, std::ceil(std::log2(numElements))));
+}
+
+il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral *Arr)
+{
+   if (Arr->getExprType()->isMetaType()) {
+      return nullptr;
+   }
+
    llvm::SmallVector<il::Value*, 8> elements;
-   for (const auto &val : node->getValues())
+   for (const auto &val : Arr->getValues())
       elements.push_back(visit(val));
 
    ArrayType *ArrTy;
-   auto resultTy = *node->getExprType();
+   auto resultTy = Arr->getExprType();
+   bool cstyle = false;
 
    if (resultTy->isObjectType()) {
       ArrTy = SP.getContext().getArrayType(
          resultTy->getRecord()->getTemplateArg("T")->getType(),
-         node->getValues().size());
+         Arr->getValues().size());
    }
    else {
       ArrTy = resultTy->asArrayType();
+      cstyle = true;
    }
 
-   auto carray = getCStyleArray(ArrTy, elements);
+   size_t capacity = ArrTy->getNumElements();
+   if (!cstyle)
+      capacity = getNeededCapacity(capacity);
+
+   auto carray = getCStyleArray(ArrTy, elements, capacity,
+                                !resultTy->isArrayType());
+
    if (resultTy->isArrayType())
       return carray;
 
    auto Array = resultTy->getRecord();
    auto ArrayTy = cast<StructType>(getModule()->getType(Array->getName()));
 
-   if (elements.empty()) {
-      //FIXME
-      il::Method* Init = nullptr;
-      //getModule()->getFunction(ArrayTy->getInitializers
-      //()[2]->getName());
+   auto Uninit = Builder.AllocUninitialized(6 * 8, 8, true);
+   auto Alloca = Builder.CreateBitCast(CastKind::BitCast, Uninit, resultTy);
 
-      return Builder.CreateInit(ArrayTy, cast<il::Method>(Init), {});
+   auto beginPtr = Builder.CreateBitCast(CastKind::BitCast,
+                                         Builder.CreateLoad(carray),
+                                         ArrTy->getElementType()
+                                              ->getPointerTo(SP.getContext()));
+
+   auto &TI = SP.getContext().getTargetInfo();
+   auto ArrSize = TI.getSizeOfType(ArrTy);
+
+   auto beginPtrInt = Builder.CreatePtrToInt(beginPtr, USizeTy);
+   auto offset = Builder.CreateAdd(
+      beginPtrInt, Builder.GetConstantInt(USizeTy, ArrSize));
+
+   auto endPtr = Builder.CreateIntToPtr(offset, beginPtr->getType());
+
+   auto strongRefcGEP = Builder.CreateStructGEP(ArrayTy, Alloca, 0);
+   CreateStore(UWordZero, strongRefcGEP);
+
+   auto weakRefcGEP = Builder.CreateStructGEP(ArrayTy, Alloca, 1);
+   CreateStore(UWordZero, weakRefcGEP);
+
+   auto vtblPtr = Builder.CreateStructGEP(ArrayTy, Alloca, 2);
+   CreateStore(Builder.CreateIntToPtr(UWordZero, Int8PtrTy),
+               vtblPtr);
+
+   auto beginPtrGEP = Builder.CreateStructGEP(ArrayTy, Alloca, 3);
+   CreateStore(beginPtr, beginPtrGEP);
+
+   auto endPtrGEP = Builder.CreateStructGEP(ArrayTy, Alloca, 4);
+   CreateStore(endPtr, endPtrGEP);
+
+   if (capacity != ArrTy->getNumElements()) {
+      offset = Builder.CreateAdd(offset,
+                                 Builder.GetConstantInt(USizeTy,
+                                                        capacity
+                                                        - ArrTy->getNumElements()));
+
+      endPtr = Builder.CreateIntToPtr(offset, beginPtr->getType());
    }
 
-   auto len = getRValue(getBoxedInt(node->getValues().size(), "UInt64"));
+   auto capPtrGEP = Builder.CreateStructGEP(ArrayTy, Alloca, 5);
+   CreateStore(endPtr, capPtrGEP);
 
-   // FIXME
-   il::Method* Init = nullptr;
-   // getModule()->getFunction(ArrayTy->getInitializers()
-   //    .front()->getName());
-
-   il::Value *elementPtr = Builder.CreateAddrOf(Builder.CreateGEP(carray, 0));
-   return Builder.CreateInit(ArrayTy, cast<il::Method>(Init),
-                             { elementPtr, len });
+   return Alloca;
 }
 
 il::Value *ILGenPass::visitIntegerLiteral(IntegerLiteral *node)
 {
-   auto ty = node->getType();
-   il::Value *val = nullptr;
-   il::Constant *IntVal;
-
-   if (ty->isIntegerType()) {
-      val = Builder.CreateConstantInt(ty, node->getValue().getZExtValue());
-   }
-   else {
-      IntVal = Builder.CreateConstantInt(SP.getUnboxedType(ty),
-                                         node->getValue().getZExtValue());
-
-      auto S = SP.getStruct(node->getType()->getClassName());
-      auto Ty = cast<StructType>(getModule()->getType(S->getName()));
-
-      if (node->isGlobalInitializer()) {
-         val = Builder.CreateConstantStruct(Ty, { IntVal });
-      }
-      else {
-         auto Init =
-            cast<il::Method>(getModule()->getFunction(
-               S->getMemberwiseInitializer()->getLinkageName()));
-
-         val = Builder.CreateInit(Ty, Init, { IntVal });
-      }
-   }
-
-   return VisitSubExpr(node, val);
+   return Builder.GetConstantInt(node->getType(), node->getValue());;
 }
 
 il::Value *ILGenPass::visitFPLiteral(FPLiteral *node)
 {
-   auto ty = node->getType();
-   il::Value *val = nullptr;
-   il::Constant *FloatVal;
-
-   if (ty->isFPType()) {
-      val = Builder.CreateConstantFP(ty, node->getValue().convertToDouble());
-   }
-   else {
-      FloatVal = Builder.CreateConstantDouble(node->getValue()
-                                                  .convertToDouble());
-
-      auto S = SP.getStruct(ty->getClassName());
-      auto Ty = cast<StructType>(getModule()->getType(S->getName()));
-
-      if (node->isGlobalInitializer()) {
-         val = Builder.CreateConstantStruct(Ty, { FloatVal });
-      }
-      else {
-         auto Init = cast<il::Method>(getModule()->getFunction(
-            S->getMemberwiseInitializer()->getLinkageName()));
-
-         val = Builder.CreateInit(Ty, Init, { FloatVal });
-      }
-   }
-
-   return VisitSubExpr(node, val);
+   return Builder.GetConstantFP(node->getType(), node->getValue());
 }
 
 il::Value *ILGenPass::visitBoolLiteral(BoolLiteral *node)
 {
-   Constant* Val = node->getValue() ? Builder.CreateTrue()
-                                    : Builder.CreateFalse();
-
-   Value *Res = Val;
-   if (!node->getType()->isIntegerType()) {
-      auto Ty = cast<StructType>(getModule()->getType("Bool"));
-      auto S = SP.getStruct("Bool");
-
-      if (node->isGlobalInitializer()) {
-         Res = Builder.CreateConstantStruct(Ty, { Val });
-      }
-      else {
-         auto Init = cast<il::Method>(getModule()->getFunction(
-            S->getMemberwiseInitializer()->getLinkageName()));
-
-         Res = Builder.CreateInit(Ty, Init, { Val });
-      }
-   }
-
-   return VisitSubExpr(node, Res);
+   return node->getValue() ? Builder.GetTrue()
+                           : Builder.GetFalse();
 }
 
 il::Value *ILGenPass::visitCharLiteral(CharLiteral *node)
 {
-   Constant* Val = Builder.CreateConstantInt(SP.getContext().getCharTy(),
-                                             (uint64_t)node->getNarrow());
-
-   Value *Res = Val;
-
-   if (!node->getType()->isIntegerType()) {
-      auto Ty = cast<StructType>(getModule()->getType("Char"));
-      auto S = SP.getStruct("Char");
-
-      if (node->isGlobalInitializer()) {
-         Res = Builder.CreateConstantStruct(Ty, { Val });
-      }
-      else {
-         auto Init = cast<il::Method>(getModule()->getFunction(
-            S->getMemberwiseInitializer()->getLinkageName()));
-
-         Res = Builder.CreateInit(Ty, Init, { Val });
-      }
-   }
-
-   return VisitSubExpr(node, Res);
+   return Builder.GetConstantInt(node->getType(),
+                                 (uint64_t) node->getNarrow());
 }
 
 il::Value *ILGenPass::visitNoneLiteral(NoneLiteral *node)
@@ -2581,21 +2766,33 @@ il::Value *ILGenPass::visitNoneLiteral(NoneLiteral *node)
    auto E = Builder.CreateEnumInit(EnumTy, "None", {});
    temporaries.insert(E);
 
-   return VisitSubExpr(node, E);
+   return E;
 }
 
 il::Value *ILGenPass::visitStringLiteral(StringLiteral *node)
 {
    Value *Str;
    if (!node->isCString()) {
-      Str = getString(node->getValue());
+      auto &str = node->getValue();
+      auto StringTy = getModule()->getType("String");
+      auto Len = Builder.GetConstantInt(USizeTy, str.size());
+
+      auto Init = getModule()->getFunction("_M11String.init3u8*3u64");
+      registerCalledFunction(cast<CallableDecl>(ReverseDeclMap[Init]), Init,
+                             node);
+
+      auto globalStr = Builder.GetConstantString(str);
+
+      Str = Builder.CreateInit(cast<il::StructType>(StringTy),
+                               cast<il::Method>(Init), { globalStr, Len });
+
       temporaries.insert(Str);
    }
    else {
-      Str = Builder.CreateConstantString(node->getValue());
+      Str = Builder.GetConstantString(node->getValue());
    }
 
-   return VisitSubExpr(node, Str);
+   return Str;
 }
 
 il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
@@ -2613,11 +2810,11 @@ il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
             continue;
       }
 
-      auto val = stringify(getRValue(visit(Strings[i])));
+      auto val = stringify(visit(Strings[i]));
       Builder.CreateCall(PlusEquals, { Str, val });
    }
 
-   return VisitSubExpr(node, Str);
+   return Str;
 }
 
 il::Value *ILGenPass::visitTupleLiteral(TupleLiteral *node)
@@ -2625,231 +2822,261 @@ il::Value *ILGenPass::visitTupleLiteral(TupleLiteral *node)
    auto Alloc = Builder.CreateAlloca(node->getTupleType());
    size_t i = 0;
 
+   auto Tup = Builder.CreateLoad(Alloc);
+
    for (const auto &El : node->getElements()) {
-      auto val = getRValue(visit(El.second));
-      auto gep = Builder.CreateTupleExtract(Alloc, i);
+      auto val = visit(El);
+      auto gep = Builder.CreateTupleExtract(Tup, i);
 
       CreateStore(val, gep);
       ++i;
    }
 
-   return VisitSubExpr(node, Alloc);
+   return Alloc;
 }
 
-#define CDOT_UNARY_OP(Name, Op)                                              \
-   if (op == Op) {                                                           \
-      Res = Builder.Create##Name(getRValue(val));                            \
-   }
-
-il::Value *ILGenPass::visitUnaryOperator(UnaryOperator *node)
+il::Value *ILGenPass::visitUnaryOperator(UnaryOperator *UnOp)
 {
-   auto val = visit(node->getTarget());
-   auto &op = node->getOp();
+   auto val = visit(UnOp->getTarget());
    Value *Res = nullptr;
 
-   CDOT_UNARY_OP(Min, "-")
-   CDOT_UNARY_OP(Neg, "~")
-   CDOT_UNARY_OP(Neg, "!")
+   bool sub = true;
+   switch (UnOp->getKind()) {
+      case op::UnaryPlus:
+         // always a no-op
+         Res = val;
+         break;
+      case op::UnaryLNot:
+      case op::UnaryNot:
+         Res = Builder.CreateNeg(val);
+         break;
+      case op::UnaryMin:
+         Res = Builder.CreateMin(val);
+         break;
+      case op::Deref:
+         assert(val->getType()->isPointerType()
+                && "dereferencing non-pointer ty");
+         Res = Builder.CreatePtrToLvalue(val);
+         break;
+      case op::AddrOf:
+         assert(val->isLvalue() && "taking address of rvalue!");
+         Res = Builder.CreateAddrOf(val);
+         break;
+      case op::PreInc:
+      case op::PostInc:
+         sub = false;
+         LLVM_FALLTHROUGH;
+      case op::PostDec:
+      case op::PreDec: {
+         Value *ld = Builder.CreateLoad(val);
 
-   if (op == "*") {
-      assert(val->getType()->isPointerType() && "dereferencing non-pointer ty");
-      Res = Builder.CreatePtrToLvalue(getRValue(val));
-   }
-   else if (op == "&") {
-      assert(val->isLvalue() && "taking address of rvalue!");
-      Res = Builder.CreateAddrOf(val);
-   }
-   else if (op == "++" || op == "--") {
-      auto addVal = op == "++" ? 1 : -1;
-      Value *ld = Builder.CreateLoad(val);
+         if (ld->getType()->isPointerType()) {
+            PointerType *ptrTy = ld->getType()->asPointerType();
+            auto step = getTargetInfo().getSizeOfType(ptrTy->getPointeeType());
+            auto ptrToInt = Builder.CreateIntegerCast(CastKind::PtrToInt, ld,
+                                                      SP.getContext().getIntTy());
 
-      if (ld->getType()->isPointerType()) {
-         auto ptrTy = ld->getType()->asPointerType();
-         auto step = ptrTy->getPointeeType()->getSize();
-         auto ptrToInt = Builder.CreateIntegerCast(CastKind::PtrToInt, ld,
-                                                   SP.getContext().getIntTy());
+            il::Value *newVal;
+            if (sub) {
+               newVal = Builder.CreateSub(ptrToInt,
+                                          ConstantInt::get(ptrToInt->getType(),
+                                                           step));
+            }
+            else {
+               newVal = Builder.CreateAdd(ptrToInt,
+                                          ConstantInt::get(ptrToInt->getType(),
+                                                           step));
+            }
 
-         auto inc = Builder.CreateAdd(ptrToInt,
-                                      ConstantInt::get(*ptrToInt->getType(),
-                                                       step * addVal));
+            Res = Builder.CreateIntegerCast(CastKind::IntToPtr, newVal, ptrTy);
+            Builder.CreateStore(Res, val);
 
-         Res = Builder.CreateIntegerCast(CastKind::IntToPtr, inc, ptrTy);
-         Builder.CreateStore(Res, val);
+            if (!UnOp->isPrefix())
+               Res = ld;
+         }
+         else if (ld->getType()->isIntegerType()) {
+            il::Value *newVal;
+            if (sub) {
+               newVal = Builder.CreateSub(ld, ConstantInt::get(ld->getType(),
+                                                               1));
+            }
+            else {
+               newVal = Builder.CreateAdd(ld, ConstantInt::get(ld->getType(),
+                                                               1));
+            }
 
-         if (!node->isPrefix())
-            Res = ld;
+            Builder.CreateStore(newVal, val);
+
+            if (UnOp->isPrefix())
+               Res = newVal;
+            else
+               Res = ld;
+         }
+         else {
+            assert(ld->getType()->isFPType());
+            il::Value *newVal;
+            if (sub) {
+               newVal = Builder.CreateSub(ld, ConstantFloat::get(ld->getType(),
+                                                                 1.0f));
+            }
+            else {
+               newVal = Builder.CreateAdd(ld, ConstantFloat::get(ld->getType(),
+                                                                 1.0));
+            }
+
+            Builder.CreateStore(newVal, val);
+
+            if (UnOp->isPrefix())
+               Res = newVal;
+            else
+               Res = ld;
+         }
+
+         break;
       }
-      else if (ld->getType()->isIntegerType()) {
-         auto inc = Builder.CreateAdd(ld, ConstantInt::get(*ld->getType(),
-                                                           addVal));
+      case op::TypeOf:
+         if (val->getType()->isClass()) {
+            auto classInfo = CreateFieldRef(val, "__classInfo");
+            Res = Builder.CreateLoad(CreateFieldRef(classInfo, "typeInfo"));
+         }
+         else {
+            Res = GetTypeInfo(val->getType());
+         }
 
-         Builder.CreateStore(inc, val);
-
-         if (node->isPrefix())
-            Res = inc;
-         else
-            Res = ld;
-      }
-      else {
-         assert(ld->getType()->isFPType());
-         auto inc =Builder.CreateAdd(ld, Builder.CreateConstantFP(ld->getType(),
-                                                                  addVal));
-
-         Builder.CreateStore(inc, val);
-
-         if (node->isPrefix())
-            Res = inc;
-         else
-            Res = ld;
-      }
-   }
-   else if (op == "typeof") {
-      val = getRValue(val);
-
-      if (val->getType()->isClass()) {
-         auto classInfo = getRValue(CreateFieldRef(val, "__classInfo"));
-         Res = Builder.CreateLoad(
-            getRValue(CreateFieldRef(classInfo, "typeInfo")));
-      }
-      else {
-         Res = GetTypeInfo(*val->getType());
-      }
+         break;
+      default:
+         llvm_unreachable("not a unary operator!");
    }
 
    assert(Res && "bad unary op kind");
-   return VisitSubExpr(node, Res);
+   return Res;
 }
 
-#undef CDOT_UNARY_OP
+#define CDOT_BINARY_OP(Op)                                                    \
+   case op::Op: Res = Builder.Create##Op(lhs, visit(BinOp->getRhs())); break;
 
-#define CDOT_BINARY_OP(Name, Op)                                        \
-   else if (op == Op) {                                                 \
-      Res = Builder.Create##Name(lhs, rhs);                             \
-   }
-
-il::Value *ILGenPass::visitBinaryOperator(BinaryOperator *node)
+il::Value *ILGenPass::visitBinaryOperator(BinaryOperator *BinOp)
 {
-   if (auto Acc = node->getAccessorMethod()) {
-      auto M = getFunc(Acc);
-
-      llvm::SmallVector<Value*, 2> args;
-      if (!Acc->isStatic())
-         args.push_back(pop());
-
-      args.push_back(getRValue(visit(node->getRhs())));
-      auto Val = Builder.CreateCall(M, args);
-
-      return VisitSubExpr(node, Val);
-   }
-
-   if (node->isTypePredicate()) {
-      auto val = node->getTypePredicateResult();
-      if (node->getExprType()->isIntegerType())
-         return VisitSubExpr(node, val ? Builder.CreateTrue()
-                                       : Builder.CreateFalse());
-
-      return VisitSubExpr(node, getBoxedInt(val, "Bool"));
-   }
-
-   auto &op = node->getOp();
-
-   auto lhs = visit(node->getLhs());
-
+   auto lhs = visit(BinOp->getLhs());
    Value *Res = nullptr;
-   bool isAssignment = op == "=";
 
-   if (!isAssignment)
-      lhs = getRValue(lhs);
-
-   if (op == "as" || op == "as?" || op == "as!") {
-      auto &rhsType = cast<TypeRef>(node->getRhs())->getTypeRef();
-      Res = HandleCast(node->getRequiredCast(), rhsType, lhs);
-
-      return VisitSubExpr(node, Res);
+   if (lhs->getType()->isPointerType()) {
+      Res = DoPointerArith(BinOp->getKind(), lhs, visit(BinOp->getRhs()));
    }
+   else switch (BinOp->getKind()) {
+      case op::Assign: {
+         auto rhs = visit(BinOp->getRhs());
 
-   if (!isAssignment) {
-      if (lhs->getType()->isRawEnum())
-         lhs = Builder.CreateEnumRawValue(lhs);
-      else
-         lhs = unboxIfNecessary(lhs);
-   }
+         retainIfNecessary(rhs);
+         releaseIfNecessary(lhs);
 
-   if (isAssignment) {
-      auto rhs = getRValue(visit(node->getRhs()));
-
-      retainIfNecessary(rhs);
-      releaseIfNecessary(getRValue(lhs));
-
-      Res = CreateStore(rhs, lhs);
-   }
-   else if (op == "&&") {
-      Res = CreateLogicalAnd(lhs, node->getRhs());
-   }
-   else if (op == "||") {
-      Res = CreateLogicalOr(lhs, node->getRhs());
-   }
-   else {
-      auto rhs = unboxIfNecessary(getRValue(visit(node->getRhs())));
-      if (rhs->getType() != lhs->getType())
-         rhs = castTo(rhs, lhs->getType());
-
-      QualType castResultTo;
-      if (op == "**") {
-         if (lhs->getType()->isIntegerType() && rhs->getType()->isIntegerType()) {
-            lhs = castTo(lhs, SP.getContext().getIntTy());
-            rhs = castTo(rhs, SP.getContext().getIntTy());
-
-            castResultTo = lhs->getType();
-         }
-         else {
-            if (rhs->getType()->isIntegerType())
-               rhs = castTo(rhs, SP.getContext().getInt32Ty());
-            else
-               rhs = castTo(rhs, SP.getContext().getDoubleTy());
-         }
-
+         Res = CreateStore(rhs, lhs);
+         break;
       }
-      else {
-         castResultTo = node->getExprType();
-      }
+      case op::LAnd:
+         Res = CreateLogicalAnd(lhs, BinOp->getRhs());
+         break;
+      case op::LOr:
+         Res = CreateLogicalOr(lhs, BinOp->getRhs());
+         break;
 
-      if (op == "+") {
-         Res = Builder.CreateAdd(lhs, rhs, "", node->getSourceLoc());
-      }
+      CDOT_BINARY_OP(Add)
+      CDOT_BINARY_OP(Sub)
+      CDOT_BINARY_OP(Mul)
+      CDOT_BINARY_OP(Div)
+      CDOT_BINARY_OP(Mod)
+      CDOT_BINARY_OP(Exp)
 
-      CDOT_BINARY_OP(Sub, "-")
-      CDOT_BINARY_OP(Mul, "*")
-      CDOT_BINARY_OP(Div, "/")
-      CDOT_BINARY_OP(Mod, "%")
-      CDOT_BINARY_OP(Exp, "**")
+      CDOT_BINARY_OP(And)
+      CDOT_BINARY_OP(Or)
+      CDOT_BINARY_OP(Xor)
+      CDOT_BINARY_OP(AShr)
+      CDOT_BINARY_OP(LShr)
+      CDOT_BINARY_OP(Shl)
 
-      CDOT_BINARY_OP(And, "&")
-      CDOT_BINARY_OP(Or, "|")
-      CDOT_BINARY_OP(Xor, "^")
-      CDOT_BINARY_OP(AShr, ">>")
-      CDOT_BINARY_OP(LShr, ">>>")
-      CDOT_BINARY_OP(Shl, "<<")
+      case op::CompRefEQ:
+      CDOT_BINARY_OP(CompEQ)
 
-      CDOT_BINARY_OP(CompEQ, "==")
-      CDOT_BINARY_OP(CompEQ, "===")
-      CDOT_BINARY_OP(CompNE, "!=")
-      CDOT_BINARY_OP(CompNE, "!==")
-      CDOT_BINARY_OP(CompLE, "<=")
-      CDOT_BINARY_OP(CompLT, "<")
-      CDOT_BINARY_OP(CompGE, ">=")
-      CDOT_BINARY_OP(CompGT, ">")
+      case op::CompRefNE:
+      CDOT_BINARY_OP(CompNE)
 
-      if (castResultTo)
-         Res = castTo(Res, castResultTo);
+      CDOT_BINARY_OP(CompLE)
+      CDOT_BINARY_OP(CompLT)
+      CDOT_BINARY_OP(CompGE)
+      CDOT_BINARY_OP(CompGT)
+
+      case op::Spaceship:
+         Res = Builder.CreateSub(visit(BinOp->getRhs()), lhs);
+         break;
+
+      default:
+         llvm_unreachable("bad binary operator");
    }
 
    assert(Res && "bad binary op kind");
 
-   if (node->getExprType()->isObjectType() != Res->getType()->isObjectType())
-      Res = box(Res);
+   return Res;
+}
 
-   return VisitSubExpr(node, Res);
+#undef CDOT_BINARY_OP
+
+il::Value* ILGenPass::DoPointerArith(op::OperatorKind op,
+                                     il::Value *lhs, il::Value *rhs) {
+   auto Size = Builder.GetConstantInt(USizeTy,
+                                      getTargetInfo().getSizeOfType(
+                                         lhs->getType()->getPointeeType()));
+
+   if (rhs->getType()->isIntegerType()) {
+      auto PtrAsInt = Builder.CreateIntegerCast(CastKind::PtrToInt, lhs,
+                                                rhs->getType());
+      auto MulSize = Builder.CreateMul(Size, rhs);
+
+      il::Value *Res;
+      switch (op) {
+      case op::Add:
+         Res = Builder.CreateAdd(PtrAsInt, MulSize);
+         break;
+      case op::Sub:
+         Res = Builder.CreateSub(PtrAsInt, MulSize);
+         break;
+      default:
+         llvm_unreachable("invalid pointer arithmetic op!");
+      }
+
+      return Builder.CreateIntegerCast(CastKind::IntToPtr, Res, lhs->getType());
+   }
+
+   assert(rhs->getType()->isPointerType()
+          && "invalid pointer arithmetic operand");
+
+   switch (op) {
+   case op::Sub: {
+      auto LhsInt = Builder.CreateIntegerCast(CastKind::PtrToInt, lhs, USizeTy);
+      auto RhsInt = Builder.CreateIntegerCast(CastKind::PtrToInt, rhs, USizeTy);
+      auto Diff = Builder.CreateSub(LhsInt, RhsInt);
+
+      return Builder.CreateDiv(Diff, Size);
+   }
+   case op::CompEQ:
+      return Builder.CreateCompEQ(lhs, rhs);
+   case op::CompNE:
+      return Builder.CreateCompNE(lhs, rhs);
+   case op::CompGE:
+      return Builder.CreateCompGE(lhs, rhs);
+   case op::CompGT:
+      return Builder.CreateCompGT(lhs, rhs);
+   case op::CompLE:
+      return Builder.CreateCompLE(lhs, rhs);
+   case op::CompLT:
+      return Builder.CreateCompLT(lhs, rhs);
+   case op::Spaceship:
+      return Builder.CreateIntegerCast(CastKind::PtrToInt,
+                                       Builder.CreateSub(rhs, lhs),
+                                       WordTy);
+   default:
+      llvm_unreachable("invalid pointer arithmetic op");
+   }
+
 }
 
 il::Value* ILGenPass::CreateLogicalAnd(il::Value *lhs, Expression *rhsNode)
@@ -2861,10 +3088,10 @@ il::Value* ILGenPass::CreateLogicalAnd(il::Value *lhs, Expression *rhsNode)
 
    auto EvalRhsBB = Builder.CreateBasicBlock("land.rhs");
    Builder.CreateCondBr(lhs, EvalRhsBB, MergeBB,
-                        {}, { Builder.CreateFalse() });
+                        {}, { Builder.GetFalse() });
 
    Builder.SetInsertPoint(EvalRhsBB);
-   auto rhs = unboxIfNecessary(getRValue(visit(rhsNode)));
+   auto rhs = visit(rhsNode);
 
    deinitializeTemporaries();
 
@@ -2883,10 +3110,10 @@ il::Value* ILGenPass::CreateLogicalOr(il::Value *lhs, Expression *rhsNode)
 
    auto EvalRhsBB = Builder.CreateBasicBlock("lor.rhs");
    Builder.CreateCondBr(lhs, MergeBB, EvalRhsBB,
-                        { Builder.CreateTrue() }, {});
+                        { Builder.GetTrue() }, {});
 
    Builder.SetInsertPoint(EvalRhsBB);
-   auto rhs = unboxIfNecessary(getRValue(visit(rhsNode)));
+   auto rhs = visit(rhsNode);
 
    deinitializeTemporaries();
 
@@ -2896,11 +3123,11 @@ il::Value* ILGenPass::CreateLogicalOr(il::Value *lhs, Expression *rhsNode)
    return MergeBB->getBlockArg(0);
 }
 
-il::Value *ILGenPass::visitTertiaryOperator(TertiaryOperator *node)
+il::Value *ILGenPass::visitIfExpr(IfExpr *node)
 {
    auto MergeBB = Builder.CreateBasicBlock("tertiary.merge");
 
-   auto Condition = unboxIfNecessary(getRValue(visit(node->getCondition())));
+   auto Condition = visit(node->getCond());
    deinitializeTemporaries();
 
    auto TrueBB = Builder.CreateBasicBlock("tertiary.lhs");
@@ -2909,15 +3136,15 @@ il::Value *ILGenPass::visitTertiaryOperator(TertiaryOperator *node)
    Builder.CreateCondBr(Condition, TrueBB, FalseBB);
 
    Builder.SetInsertPoint(TrueBB);
-   auto lhs = getRValue(visit(node->getLhs()));
-   MergeBB->addBlockArg(*lhs->getType(), "res");
+   auto lhs = visit(node->getTrueVal());
+   MergeBB->addBlockArg(lhs->getType(), "res");
 
    deinitializeTemporaries();
 
    Builder.CreateBr(MergeBB, { lhs });
    Builder.SetInsertPoint(FalseBB);
 
-   auto rhs = getRValue(visit(node->getRhs()));
+   auto rhs = visit(node->getFalseVal());
 
    deinitializeTemporaries();
 
@@ -2931,16 +3158,6 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
 {
    auto lhsTy = lhs->getType();
    auto rhsTy = rhs->getType();
-
-   if (lhsTy->isBoxedPrimitive()) {
-      lhs = unbox(lhs);
-      lhsTy = lhs->getType();
-   }
-
-   if (rhsTy->isBoxedPrimitive()) {
-      rhs = unbox(rhs);
-      rhsTy = rhs->getType();
-   }
 
    if (lhsTy->isTupleType()) {
       assert(rhsTy->isTupleType() && "comparing tuple to non-tuple!");
@@ -2958,7 +3175,7 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
          return Builder.CreateCompEQ(lhs, rhs);
       }
    }
-   else if ((*lhsTy)->isPointerType()) {
+   else if (lhsTy->isPointerType()) {
       if (rhsTy->isPointerType()) {
          return Builder.CreateCompEQ(lhs, rhs);
       }
@@ -2983,30 +3200,31 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
 
       auto LhsRecord = lhsTy->getRecord();
 
-      if (auto Comp = LhsRecord->getComparisonOperator(*rhsTy)) {
+      if (auto Comp = LhsRecord->getComparisonOperator(rhsTy)) {
          Value *res = Builder.CreateCall(
             getModule()->getFunction(Comp->getLinkageName()),
             { lhs, rhs });
 
          if (res->getType()->isObjectType())
-            res = getRValue(CreateFieldRef(res, "val"));
+            res = CreateFieldRef(res, "val");
 
          return res;
       }
    }
 
-   assert(*lhs->getType() == *rhs->getType());
+   assert(lhs->getType() == rhs->getType());
 
-   auto size = ConstantInt::get(SP.getContext().getUIntTy(), lhs->getType()
-                                                                ->getSize());
+   auto size = Builder.GetConstantInt(
+      SP.getContext().getUIntTy(),
+      getTargetInfo().getSizeOfType(lhs->getType()));
 
-   return Builder.CreateIntrinsic(Intrinsic::MemCmp, { lhs, rhs, size });
+   return Builder.CreateIntrinsic(Intrinsic::memcmp, { lhs, rhs, size });
 }
 
 il::Value* ILGenPass::CreateTupleComp(il::Value *lhs, il::Value *rhs)
 {
-   auto tupleTy = lhs->getType()->asTupleType();
-   auto numContainedTypes = tupleTy->getContainedTypes().size();
+   TupleType *tupleTy = lhs->getType()->asTupleType();
+   size_t numContainedTypes = tupleTy->getContainedTypes().size();
    size_t i = 0;
 
    llvm::SmallVector<BasicBlock*, 8> CompBlocks;
@@ -3034,10 +3252,10 @@ il::Value* ILGenPass::CreateTupleComp(il::Value *lhs, il::Value *rhs)
    auto MergeBB = Builder.CreateBasicBlock("tuplecmp.merge");
 
    Builder.SetInsertPoint(EqBB);
-   Builder.CreateBr(MergeBB, { Builder.CreateTrue() });
+   Builder.CreateBr(MergeBB, { Builder.GetTrue() });
 
    Builder.SetInsertPoint(CompBlocks.back());
-   Builder.CreateBr(MergeBB, { Builder.CreateFalse() });
+   Builder.CreateBr(MergeBB, { Builder.GetFalse() });
 
    Builder.SetInsertPoint(MergeBB);
    return MergeBB->getBlockArg(0);
@@ -3053,10 +3271,9 @@ il::Value* ILGenPass::CreateEnumComp(il::Value *lhs, il::Value *rhs)
 
    auto EqBB = Builder.CreateBasicBlock("enumcmp.eq");
    auto NeqBB = Builder.CreateBasicBlock("enumcmp.neq");
+
    auto MergeBB = Builder.CreateBasicBlock("enumcmp.merge");
    MergeBB->addBlockArg(SP.getContext().getBoolTy(), "enumcmp_res");
-
-   auto InvalidBB = Builder.CreateBasicBlock("enumcp.invalid");
 
    size_t i = 0;
    llvm::SmallVector<BasicBlock*, 8> CaseBlocks;
@@ -3076,7 +3293,8 @@ il::Value* ILGenPass::CreateEnumComp(il::Value *lhs, il::Value *rhs)
    Builder.CreateCondBr(caseIsEq, SwitchBB, NeqBB, { rawVal1 });
 
    Builder.SetInsertPoint(SwitchBB);
-   auto Switch = Builder.CreateSwitch(SwitchBB->getBlockArg(0));
+   auto Switch = Builder.CreateSwitch(SwitchBB->getBlockArg(0),
+                                      makeUnreachableBB());
 
    for (const auto &C : EnumTy->getCases()) {
       if (C.AssociatedTypes.empty()) {
@@ -3086,8 +3304,6 @@ il::Value* ILGenPass::CreateEnumComp(il::Value *lhs, il::Value *rhs)
          Switch->addCase(C.caseVal, CaseBlocks[i++]);
       }
    }
-
-   Switch->addDefaultCase(InvalidBB);
 
    i = 0;
    for (const auto &C : EnumTy->getCases()) {
@@ -3113,8 +3329,8 @@ il::Value* ILGenPass::CreateEnumComp(il::Value *lhs, il::Value *rhs)
       while (j < numCaseValues) {
          Builder.SetInsertPoint(CompBlocks[j]);
 
-         auto val1 = getRValue(Builder.CreateEnumExtract(lhs, C.name, j));
-         auto val2 = getRValue(Builder.CreateEnumExtract(rhs, C.name, j));
+         auto val1 = Builder.CreateEnumExtract(lhs, C.name, j);
+         auto val2 = Builder.CreateEnumExtract(rhs, C.name, j);
          auto eq = CreateEqualityComp(val1, val2);
 
          Builder.CreateCondBr(eq, CompBlocks[j + 1], NeqBB);
@@ -3125,23 +3341,31 @@ il::Value* ILGenPass::CreateEnumComp(il::Value *lhs, il::Value *rhs)
       ++i;
    }
 
-   Builder.SetInsertPoint(InvalidBB);
-   Builder.CreateUnreachable();
-
    Builder.SetInsertPoint(EqBB);
-   Builder.CreateBr(MergeBB, { Builder.CreateTrue() });
+   Builder.CreateBr(MergeBB, { Builder.GetTrue() });
 
    Builder.SetInsertPoint(NeqBB);
-   Builder.CreateBr(MergeBB, { Builder.CreateFalse() });
+   Builder.CreateBr(MergeBB, { Builder.GetFalse() });
 
    Builder.SetInsertPoint(MergeBB);
    return MergeBB->getBlockArg(0);
 }
 
-il::Value *ILGenPass::visitExprSequence(ExprSequence *node)
+il::Value *ILGenPass::visitExprSequence(ExprSequence*)
 {
-   assert(node->getResolvedExpression() && "unresolved expr sequence");
-   return VisitSubExpr(node, visit(node->getResolvedExpression()));
+   llvm_unreachable("should not make it here!");
+}
+
+il::Value* ILGenPass::visitCastExpr(CastExpr *Cast)
+{
+   auto target = visit(Cast->getTarget());
+   return HandleCast(Cast->getConvSeq(), target);
+}
+
+il::Value* ILGenPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
+{
+   return Pred->getResult() ? Builder.GetTrue()
+                            : Builder.GetFalse();
 }
 
 void ILGenPass::visitFuncArgDecl(FuncArgDecl *node) {}
@@ -3151,7 +3375,7 @@ il::Value *ILGenPass::visitLambdaExpr(LambdaExpr *node)
    auto IP = Builder.saveIP();
    auto C = node->getFunc();
 
-   auto func = Builder.CreateLambda(C->getReturnType()->getType(),
+   auto func = Builder.CreateLambda(C->getReturnType(),
                                     makeArgVec(C->getFunctionType()
                                                 ->getArgTypes()),
                                     C->throws(), node->getSourceLoc());
@@ -3159,65 +3383,29 @@ il::Value *ILGenPass::visitLambdaExpr(LambdaExpr *node)
    setUnmangledName(func);
 
    llvm::SmallVector<Value*, 4> Captures;
-   for (const auto &capt : node->getCaptures()) {
-      il::Value *val;
+   for (auto capt : node->getCaptures()) {
+      il::Value *val = DeclMap[capt];
 
-      if (auto Var = dyn_cast<LocalVarDecl>(capt)) {
-         val = DeclMap[Var];
-      }
-      else if (auto Arg = dyn_cast<FuncArgDecl>(capt)) {
-         auto fun = getCurrentFn();
-         size_t idx = 0;
-         for (auto &arg : fun->getEntryBlock()->getArgs()) {
-            if (arg.getName().equals(Arg->getArgName()))
-               break;
-
-            ++idx;
-         }
-
-         val = CurrentFuncArgs[idx];
-      }
-      else {
-         llvm_unreachable("bad capture kind");
-      }
-
-      func->addCapture((uintptr_t)capt, val->getType());
+      func->addCapture(val->getType());
       Captures.push_back(val);
    }
 
-   DefineFunction(func, node->getBody());
+   DefineFunction(func, node->getFunc());
 
    Builder.restoreIP(IP);
-   auto val = Builder.CreateLambdaInit(func, SP.getObjectTy("cdot.Lambda"),
-                                       std::move(Captures));
+   auto val = Builder.CreateLambdaInit(func, node->getExprType(), Captures);
 
-   return VisitSubExpr(node, val);
+   size_t i = 0;
+   for (auto capt : Captures)
+      CaptureMap.try_emplace(capt, val, i++);
+
+   return val;
 }
 
 il::Value *ILGenPass::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
-   auto Val = visit(node->getTarget());
-   auto from = node->getFrom();
-   auto to = node->getTo();
-
-   if (!to.isLvalue())
-      Val = getRValue(Val);
-
-   to.isLvalue(from.isLvalue());
-   Value *Res = HandleCast(node->getRequiredCast(), to, Val);
-
-   return VisitSubExpr(node, Res);
-}
-
-il::Value *ILGenPass::visitTypeRef(TypeRef *node)
-{
-   maybeImportType(*node->getTypeRef());
-   return nullptr;
-}
-
-il::Value *ILGenPass::visitLvalueToRvalue(LvalueToRvalue *node)
-{
-   return visit(node->getTarget());
+   Value *Val = visit(node->getTarget());
+   return HandleCast(node->getConvSeq(), Val);
 }
 
 void ILGenPass::visitDebugStmt(DebugStmt *node)
@@ -3250,15 +3438,16 @@ void ILGenPass::visitTryStmt(TryStmt *node)
    for (const auto &Catch : node->getCatchBlocks()) {
       auto BB = Builder.CreateBasicBlock("try.catch");
       BB->addBlockArg(Int8PtrTy);
-      LPad->addCatch({ *Catch.varDecl->getTypeRef()->getType(), BB });
+      LPad->addCatch({ Catch.varDecl->getTypeRef(), BB });
 
       Builder.SetInsertPoint(BB);
       auto Cast = Builder.CreateExceptionCast(BB->getBlockArg(0),
-                                              *Catch.varDecl->getTypeRef()
-                                                    ->getType(),
+                                              Catch.varDecl->getTypeRef(),
                                               Catch.varDecl->getName());
 
-      DeclareValue(Cast);
+      (void)Cast;
+      llvm_unreachable("FIXME!");
+
       visit(Catch.body);
 
       if (!Builder.GetInsertBlock()->getTerminator()) {
@@ -3279,31 +3468,12 @@ void ILGenPass::visitTryStmt(TryStmt *node)
 
 void ILGenPass::visitThrowStmt(ThrowStmt *node)
 {
-   auto thrownVal = getRValue(visit(node->getThrownVal()));
+   auto thrownVal = visit(node->getThrownVal());
    auto Throw = Builder.CreateThrow(thrownVal,
-                                    GetTypeInfo(*thrownVal->getType()));
+                                    GetTypeInfo(thrownVal->getType()));
 
    if (auto M = node->getDescFn())
       Throw->setDescFn(getFunc(M));
-}
-
-void ILGenPass::visitStaticAssertStmt(StaticAssertStmt *node)
-{
-
-}
-
-void ILGenPass::visitStaticIfStmt(StaticIfStmt *node)
-{
-   if (node->getEvaluatedCondition().getZExtValue())
-      visit(node->getIfBranch());
-   else
-      visit(node->getElseBranch());
-}
-
-void ILGenPass::visitStaticForStmt(StaticForStmt *node)
-{
-   for (const auto &It : node->getIterations())
-      visit(It);
 }
 
 il::Value* ILGenPass::visitStaticExpr(StaticExpr *node)
@@ -3314,8 +3484,7 @@ il::Value* ILGenPass::visitStaticExpr(StaticExpr *node)
 
 il::Value* ILGenPass::visitTraitsExpr(TraitsExpr *node)
 {
-   assert(node->getResultExpr());
-   return VisitSubExpr(node, visit(node->getResultExpr()));
+   llvm_unreachable("should not make it here!");
 }
 
 } // namespace ast

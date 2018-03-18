@@ -6,7 +6,7 @@
 #include "Preprocessor.h"
 
 #include "Basic/IdentifierInfo.h"
-#include "Message/Diagnostics.h"
+#include "Message/DiagnosticsEngine.h"
 
 #include <cassert>
 #include <regex>
@@ -22,19 +22,27 @@ namespace cdot {
 namespace lex {
 
 Lexer::Lexer(IdentifierTable &Idents,
+             DiagnosticsEngine &Diags,
              llvm::MemoryBuffer *buf,
              unsigned sourceId,
+             unsigned offset,
              const char InterpolationBegin)
-   : Idents(Idents),
+   : Idents(Idents), Diags(Diags),
      sourceId(sourceId),
      CurPtr(buf->getBufferStart()),
      BufStart(buf->getBufferStart()),
      BufEnd(buf->getBufferEnd()),
      InterpolationBegin(InterpolationBegin),
      doneLexing(false),
-     isModuleLexer(false)
+     isModuleLexer(false),
+     offset(offset)
 {
 
+}
+
+Token Lexer::makeEOF()
+{
+   return Token(tok::eof, SourceLocation((BufEnd - BufStart) - 1 + offset));
 }
 
 llvm::StringRef Lexer::getCurrentIdentifier() const
@@ -53,7 +61,7 @@ void Lexer::lex()
    while (!tokens.back().is(tok::eof));
 
    TokenVec finalTokenVec;
-   Preprocessor PP(finalTokenVec, Idents, tokens, sourceId);
+   Preprocessor PP(finalTokenVec, Idents, Diags, tokens, sourceId);
    PP.doPreprocessing();
 
    tokens     = std::move(finalTokenVec);
@@ -147,216 +155,206 @@ Token Lexer::lex_next_token()
    tok::TokenType kind;
 
    switch (*TokBegin) {
-      case '\0': {
-         if (CurPtr >= BufEnd)
-            return makeToken(tok::eof);
+   case '\0': {
+      if (CurPtr >= BufEnd)
+         return makeEOF();
 
-         // ignore embedded nul characters
-         return lex_next_token();
-      }
-      // whitespace
-      case ' ': {
-         while (*CurPtr == ' ')
-            ++CurPtr;
+      // ignore embedded nul characters
+      return lex_next_token();
+   }
+   // whitespace
+   case ' ': {
+      while (*CurPtr == ' ')
+         ++CurPtr;
 
-         return makeToken(TokBegin, CurPtr - TokBegin, tok::space);
+      return makeToken(TokBegin, CurPtr - TokBegin, tok::space);
+   }
+   // carriage return / newline
+   case '\r':
+      if (*CurPtr == '\n')
+         ++CurPtr;
+      LLVM_FALLTHROUGH;
+   case '\n':
+      kind = tok::newline;
+      break;
+   // character literal
+   case '\'':
+      return lexCharLiteral();
+   // string literal
+   case '"':
+      return lexStringLiteral();
+   // numeric literals
+   case '0': case '1': case '2': case '3': case '4':
+   case '5': case '6': case '7': case '8': case '9':
+      return lexNumericLiteral();
+   // preprocessing related tokens
+   case '#': {
+      if (*CurPtr == '{') {
+         tokens.push_back(makeToken(tok::expr_begin));
+         lexPreprocessorExpr();
+
+         return makeToken(tok::close_brace);
       }
-      // carriage return / newline
-      case '\r':
-         if (*CurPtr == '\n')
-            ++CurPtr;
-         LLVM_FALLTHROUGH;
-      case '\n':
-         kind = tok::newline;
-         break;
-      // character literal
-      case '\'':
-         return lexCharLiteral();
-      // string literal
-      case '"':
-         return lexStringLiteral();
-      // numeric literals
-      case '0': case '1': case '2': case '3': case '4':
-      case '5': case '6': case '7': case '8': case '9':
-         return lexNumericLiteral();
-      // preprocessing related tokens
-      case '#': {
+      // stringify operator
+      else if (*CurPtr == '#') {
+         ++CurPtr;
+
          if (*CurPtr == '{') {
-            tokens.push_back(makeToken(tok::expr_begin));
+            tokens.push_back(makeToken(tok::stringify_begin));
             lexPreprocessorExpr();
 
             return makeToken(tok::close_brace);
          }
-         // stringify operator
-         else if (*CurPtr == '#') {
-            ++CurPtr;
-
-            if (*CurPtr == '{') {
-               tokens.push_back(makeToken(tok::stringify_begin));
-               lexPreprocessorExpr();
-
-               return makeToken(tok::close_brace);
-            }
-            else {
-               diag::err(err_generic_error)
-                  << "unexpected character after '##', expecting '{'"
-                  << SourceLocation(TokBegin - BufStart, sourceId)
-                  << diag::cont;
-            }
-         }
-         // directive
          else {
-            while (*CurPtr >= 'a' && *CurPtr <= 'z')
-               ++CurPtr;
-
-            auto &II = Idents.get(llvm::StringRef(TokBegin,
-                                                  CurPtr - TokBegin));
-
-            if (II.getKeywordTokenKind() == tok::sentinel)
-               err(err_generic_error)
-                  << "unknown directive " + II.getIdentifier()
-                  << SourceLocation(TokBegin - BufStart, sourceId)
-                  << diag::term;
-
-            return Token(&II, SourceLocation(TokBegin - BufStart, sourceId),
-                         II.getKeywordTokenKind());
+            Diags.Diag(err_generic_error)
+               << "unexpected character after '##', expecting '{'"
+               << SourceLocation(TokBegin - BufStart + offset);
          }
-
-         break;
       }
-      // dollar identifier
-      case '$': {
-         kind = tok::dollar_ident;
-
-         if (*CurPtr == '$') {
+      // directive
+      else {
+         while (*CurPtr >= 'a' && *CurPtr <= 'z')
             ++CurPtr;
-            kind = tok::dollar_dollar_ident;
-         }
-         else if (!isIdentifierContinuationChar(*CurPtr))
-            return makeToken(tok::dollar);
 
-         return lexIdentifier(kind);
+         auto &II = Idents.get(llvm::StringRef(TokBegin,
+                                               CurPtr - TokBegin));
+
+         if (II.getKeywordTokenKind() == tok::sentinel) {
+            Diags.Diag(err_generic_error)
+               << "unknown directive " + II.getIdentifier()
+               << SourceLocation(TokBegin - BufStart + offset);
+         }
+
+         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+                      II.getKeywordTokenKind());
       }
-      // percent identifier
-      case '%': {
-         kind = tok::percent_ident;
 
-         if (*CurPtr == '%') {
-            ++CurPtr;
-            kind = tok::percent_percent_ident;
-         }
-         else if (!isIdentifierContinuationChar(*CurPtr))
-            return makeToken(tok::percent);
+      break;
+   }
+   // dollar identifier
+   case '$': {
+      kind = tok::dollar_ident;
 
-         return lexIdentifier(kind);
-      }
-      // punctuators
-      case ',': kind = tok::comma; break;
-      case '(': kind = tok::open_paren; break;
-      case ')': kind = tok::close_paren; break;
-      case ';': kind = tok::semicolon; break;
-      case '[': kind = tok::open_square; break;
-      case ']': kind = tok::close_square; break;
-      case '{': kind = tok::open_brace; break;
-      case '}': kind = tok::close_brace; break;
-      case '\\': kind = tok::backslash; break;
-      case '@': kind = tok::at; break;
-      case ':': kind = tok::colon; break;
-      case '?': kind = tok::question; break;
-      // possible comment
-      case '/':
-         if (*CurPtr == '/')
-            return skipSingleLineComment();
-
-         if (*CurPtr == '*')
-            return skipMultiLineComment();
-
-         LLVM_FALLTHROUGH;
-      // operators
-      case '.':
-         // periods have to appear in sequences of two or more
-         if (*CurPtr != '.')
-            return makeToken(tok::period);
-
-         if (*(CurPtr + 1) == '.') {
-            CurPtr += 2;
-            return makeToken(tok::triple_period);
-         }
-
-         LLVM_FALLTHROUGH;
-      case '+':
-      case '-':
-      case '=':
-      case '&':
-      case '|':
-      case '!':
-      case '*':
-      case '~':
-      case '^':
-      case '<':
-      case '>':{
-         lexOperator();
-
-         auto op = llvm::StringRef(TokBegin, CurPtr - TokBegin);
-         kind = getBuiltinOperator(op);
-
-         if (kind == tok::sentinel) {
-            auto &II = Idents.get(op);
-            return Token(&II, SourceLocation(TokBegin - BufStart, sourceId),
-                         tok::op_ident);
-         }
-
-         break;
-      }
-      case '`': {
+      if (*CurPtr == '$') {
          ++TokBegin;
-         while (*CurPtr != '`' && *CurPtr != '\0')
-            ++CurPtr;
-
-         if (CurPtr == BufEnd) {
-            err(err_generic_error)
-               << "unexpected end of file, expecting '`'"
-               << SourceLocation(currentIndex(), sourceId)
-               << diag::cont;
-
-            note(note_generic_note)
-               << "to match this"
-               << SourceLocation(TokBegin - BufStart, sourceId)
-               << diag::term;
-         }
-
          ++CurPtr;
-
-         auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin - 1) });
-         return Token(&II, SourceLocation(TokBegin - BufStart, sourceId),
-                      tok::ident);
+         kind = tok::dollar_dollar_ident;
       }
-      // as, as?, as!
-      case 'a': {
-         auto ptr = CurPtr;
-         if (*ptr++ == 's') {
-            if (*ptr == '!') {
-               CurPtr += 2;
-               kind = tok::as_exclaim;
-               break;
+      else if (!isIdentifierContinuationChar(*CurPtr)) {
+         return makeToken(tok::dollar);
+      }
+
+      ++TokBegin;
+      return lexIdentifier(kind);
+   }
+   // punctuators
+   case ',': kind = tok::comma; break;
+   case '(': kind = tok::open_paren; break;
+   case ')': kind = tok::close_paren; break;
+   case ';': kind = tok::semicolon; break;
+   case '[': kind = tok::open_square; break;
+   case ']': kind = tok::close_square; break;
+   case '{': kind = tok::open_brace; break;
+   case '}': kind = tok::close_brace; break;
+   case '\\': kind = tok::backslash; break;
+   case '@': kind = tok::at; break;
+   // possible comment
+   case '/':
+      if (*CurPtr == '/')
+         return skipSingleLineComment();
+
+      if (*CurPtr == '*')
+         return skipMultiLineComment();
+
+      goto case_operator;
+   // operators
+   case '.':
+      // periods have to appear in sequences of two or more
+      if (*CurPtr != '.')
+         return makeToken(tok::period);
+
+      if (*(CurPtr + 1) == '.') {
+         CurPtr += 2;
+         return makeToken(tok::triple_period);
+      }
+
+      goto case_operator;
+   case_operator:
+   case '+':
+   case '-':
+   case '=':
+   case '&':
+   case '|':
+   case '!':
+   case '?':
+   case ':':
+   case '*':
+   case '~':
+   case '^':
+   case '<':
+   case '>':
+   case '%': {
+      lexOperator();
+
+      auto op = llvm::StringRef(TokBegin, CurPtr - TokBegin);
+      kind = getBuiltinOperator(op);
+
+      if (kind == tok::sentinel) {
+         auto &II = Idents.get(op);
+         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+                      tok::op_ident);
+      }
+
+      break;
+   }
+   case '`': {
+      ++TokBegin;
+
+      bool done = false;
+      while (!done) {
+         switch (*CurPtr++) {
+         case '`':
+            done = true;
+            break;
+         case '\0':
+            if (CurPtr >= BufEnd) {
+               auto Tok = makeEOF();
+               Diags.Diag(err_generic_error)
+                  << "unexpected end of file, expecting '`'"
+                  << Tok.getSourceLoc();
+
+               Diags.Diag(note_generic_note)
+                  << "to match this"
+                  << SourceLocation(TokBegin - 1 - BufStart + offset);
+
+               return Tok;
             }
-            else if (*ptr == '?') {
-               CurPtr += 2;
-               kind = tok::as_question;
-               break;
-            }
-            //FIXME find better way to identify 'as'
-            else if (*ptr == ' ') {
-               ++CurPtr;
-               kind = tok::as;
-               break;
-            }
+
+            break;
+         case '\n': {
+            auto Loc = SourceLocation(currentIndex() + offset - 1);
+            Diags.Diag(err_generic_error)
+               << "unexpected newline, expecting '`'"
+               << Loc;
+
+            Diags.Diag(note_generic_note)
+               << "to match this"
+               << SourceLocation(TokBegin - 1 - BufStart + offset);
+
+            done = true;
+            break;
          }
-
-         LLVM_FALLTHROUGH;
+         default:
+            break;
+         }
       }
-      default:
-         return lexIdentifier();
+
+      auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin - 1) });
+      return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+                   tok::ident);
+   }
+   default:
+      return lexIdentifier();
    }
 
    return makeToken(kind);
@@ -385,6 +383,8 @@ tok::TokenType Lexer::getBuiltinOperator(llvm::StringRef str)
             case '~': kind = tok::tilde; break;
             case '^': kind = tok::caret; break;
             case '.': kind = tok::period; break;
+            case ':': kind = tok::colon; break;
+            case '?': kind = tok::question; break;
             default: break;
          }
          
@@ -547,12 +547,11 @@ Token Lexer::lexStringLiteral()
          break;
       else if (*CurPtr == '\0') {
          if (CurPtr >= BufEnd) {
-            err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "unexpected end of file, expecting '\"'"
-               << SourceLocation(currentIndex(), sourceId)
-               << diag::term;
+               << SourceLocation(currentIndex() + offset);
 
-            break;
+            return makeToken(CurPtr - 1, 0, tok::eof);
          }
       }
       else if (*CurPtr == '\\') {
@@ -566,9 +565,14 @@ Token Lexer::lexStringLiteral()
          }
       }
       else if (*CurPtr == InterpolationBegin) {
+         if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
+            ++CurPtr;
+            continue;
+         }
+
          tokens.emplace_back(TokBegin, CurPtr - TokBegin,
                              tok::stringliteral,
-                             SourceLocation(CurPtr - BufStart, sourceId));
+                             SourceLocation(CurPtr - BufStart + offset));
 
          tokens.emplace_back(tok::sentinel);
 
@@ -615,6 +619,156 @@ Token Lexer::lexStringLiteral()
    return makeToken(TokBegin, CurPtr - TokBegin - 1, tok::stringliteral);
 }
 
+void Lexer::lexDiagnostic()
+{
+   TokBegin = CurPtr++;
+   if (*TokBegin == '"') {
+      ++TokBegin;
+   }
+
+   while (1) {
+      if (*CurPtr == '"')
+         break;
+      else if (*CurPtr == '\0') {
+         if (CurPtr >= BufEnd)
+            break;
+      }
+      else if (*CurPtr == '\\') {
+         if (!isModuleLexer) {
+            // normal escape, e.g. "\n"
+            ++CurPtr;
+         }
+         else {
+            // hex escape, e.g. "\0A"
+            CurPtr += 2;
+         }
+      }
+      else if (*CurPtr == InterpolationBegin) {
+         tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
+                             SourceLocation(CurPtr - BufStart + offset));
+
+         tokens.emplace_back(tok::sentinel);
+
+         ++CurPtr;
+         if (*CurPtr == '{') {
+            ++CurPtr;
+
+            // diagnostic functions are of the form
+            //  ${ <integer_literal> | <fn_name>(<args>,...) }
+            // where <args> should be parsed as comma seperated string literals
+
+            unsigned openBraces = 1;
+            unsigned closeBraces = 0;
+
+            while (1) {
+               auto tok = lex_next_token();
+               switch (tok.getKind()) {
+               case tok::open_brace:
+                  ++openBraces;
+                  break;
+               case tok::close_brace:
+                  ++closeBraces;
+                  break;
+               // begin of the argument list
+               case tok::open_paren: {
+                  tokens.push_back(tok);
+
+                  unsigned openParens = 1;
+                  unsigned closedParens = 0;
+
+                  auto StrBegin = CurPtr;
+                  while (openParens != closedParens) {
+                     switch (*CurPtr++) {
+                     // ignore quoted strings
+                     case '\'':
+                     case '"': {
+                        auto endChar = CurPtr[-1];
+                        while (*CurPtr++ != endChar) {
+                           assert(CurPtr != BufEnd && "unclosed string in "
+                                                      "diagnostic message");
+                        }
+
+                        break;
+                     }
+                     case '(':
+                        ++openParens;
+                        break;
+                     case ')':
+                        if (++closedParens != openParens) {
+                           break;
+                        }
+
+                        LLVM_FALLTHROUGH;
+                     case ',': {
+                        // allow one comma to begin the argument
+                        if (CurPtr - 1 == StrBegin)
+                           break;
+
+                        if (CurPtr - StrBegin - 1 != 0) {
+                           auto Str = makeToken(StrBegin, CurPtr - StrBegin - 1,
+                                                tok::stringliteral);
+
+                           tokens.push_back(Str);
+                        }
+
+                        // skip at most one whitespace after the comma
+                        if (*CurPtr == ' ') {
+                           ++CurPtr;
+                        }
+
+                        StrBegin = CurPtr;
+                        break;
+                     }
+                     case '\\': {
+                        CurPtr++;
+                        break;
+                     }
+                     case '\0':
+                        llvm_unreachable("unexpected end of file or nul "
+                                         "character!");
+                     default:
+                        break;
+                     }
+                  }
+
+                  tok = makeToken(tok::close_paren);
+                  break;
+               }
+               default:
+                  break;
+               }
+
+               if (openBraces == closeBraces)
+                  break;
+
+               tokens.push_back(tok);
+            }
+         }
+         else {
+            tokens.push_back(lex_next_token());
+         }
+
+         tokens.emplace_back(tok::sentinel);
+         TokBegin = CurPtr;
+
+         continue;
+      }
+
+      ++CurPtr;
+   }
+
+   auto diff = CurPtr - TokBegin;
+   if (*TokBegin == '"') {
+      ++TokBegin;
+   }
+
+   tokens.push_back(makeToken(TokBegin, diff, tok::stringliteral));
+   tokens.push_back(makeEOF());
+
+   tokenIndex = 1;
+   doneLexing = true;
+}
+
 Token Lexer::lexCharLiteral()
 {
    assert(*TokBegin == '\'');
@@ -629,10 +783,11 @@ Token Lexer::lexCharLiteral()
    }
 
    if (*CurPtr != '\'')
-      err(err_generic_error)
+      Diags.Diag(err_generic_error)
          << "expected \"'\" after character literal"
-         << SourceLocation(currentIndex(), sourceId)
-         << diag::end;
+         << SourceLocation(currentIndex() + offset);
+
+   ++CurPtr;
 
    return makeToken(TokBegin + 1, CurPtr - TokBegin - 2, tok::charliteral);
 }
@@ -671,13 +826,26 @@ Token Lexer::lexNumericLiteral()
    }
 
    bool foundDecimalPoint = false;
+   bool lastWasDecimal = false;
+
    while (1) {
-      if (*CurPtr == '.' && !foundDecimalPoint)
+      if (*CurPtr == '.' && !foundDecimalPoint) {
          foundDecimalPoint = true;
-      else if (!::isdigit(*CurPtr))
+         lastWasDecimal = true;
+      }
+      else if (!::isdigit(*CurPtr)) {
          break;
+      }
+      else {
+         lastWasDecimal = false;
+      }
 
       ++CurPtr;
+   }
+
+   if (lastWasDecimal) {
+      --CurPtr;
+      foundDecimalPoint = false;
    }
 
    return makeToken(TokBegin, CurPtr - TokBegin,
@@ -735,7 +903,7 @@ Token Lexer::lexIdentifier(cdot::lex::tok::TokenType identifierKind)
    if (II.getKeywordTokenKind() != tok::sentinel)
       identifierKind = II.getKeywordTokenKind();
 
-   return Token(&II, SourceLocation(TokBegin - BufStart, sourceId),
+   return Token(&II, SourceLocation(TokBegin - BufStart + offset),
                 identifierKind);
 }
 
@@ -756,9 +924,10 @@ void Lexer::lexOperator()
          case '*':
          case '/':
          case '~':
-         case '?':
          case '^':
          case '>':
+         case '?':
+         case ':':
             break;
          case '.':
             // periods must occur in sequences of two or more
@@ -796,10 +965,11 @@ void Lexer::lexPreprocessorExpr()
 
             break;
          case tok::eof:
-            diag::err(err_generic_error)
+            Diags.Diag(err_generic_error)
                << "unexpected end of file, expecting '{'"
-               << tok.getSourceLoc()
-               << diag::term;
+               << tok.getSourceLoc();
+
+            return;
          default:
             break;
       }
@@ -843,10 +1013,9 @@ Token Lexer::skipMultiLineComment()
 void Lexer::expect_impl(tok::TokenType ty)
 {
    if (!currentTok().is(ty)) {
-      err(err_generic_error)
+      Diags.Diag(err_generic_error)
          << "unexpected token " + currentTok().toString()
-         << currentTok().getSourceLoc()
-         << diag::term;
+         << currentTok().getSourceLoc();
    }
 }
 

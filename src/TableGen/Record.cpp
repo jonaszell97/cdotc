@@ -11,7 +11,7 @@
 namespace cdot {
 namespace tblgen {
 
-Class *RecordKeeper::addClass(llvm::StringRef name, SourceLocation loc)
+Class *RecordKeeper::CreateClass(llvm::StringRef name, SourceLocation loc)
 {
    auto C = new (TG) Class(*this, name, loc);
    Classes.try_emplace(name, C);
@@ -134,12 +134,17 @@ void Record::printTo(llvm::raw_ostream &out)
    }
 }
 
-Record* RecordKeeper::addRecord(llvm::StringRef name, SourceLocation loc)
+Record* RecordKeeper::CreateRecord(llvm::StringRef name, SourceLocation loc)
 {
    auto R = new (TG) Record(*this, name, loc);
    Records.insert(std::make_pair(name, R));
 
    return R;
+}
+
+Record* RecordKeeper::CreateAnonymousRecord(cdot::SourceLocation loc)
+{
+   return new(TG) Record(*this, loc);
 }
 
 void RecordKeeper::dump()

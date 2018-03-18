@@ -16,6 +16,7 @@ namespace sema {
 
 namespace ast {
    class SemaPass;
+   class CallableDecl;
    class FunctionDecl;
    class MethodDecl;
    class RecordDecl;
@@ -25,6 +26,7 @@ class SymbolMangler {
 public:
    std::string mangleVariable(llvm::StringRef varName, size_t scope = 0) const;
 
+   std::string mangleAnyFunction(ast::CallableDecl *C) const;
    std::string mangleFunction(ast::FunctionDecl *F) const;
    std::string mangleMethod(ast::MethodDecl *M) const;
 

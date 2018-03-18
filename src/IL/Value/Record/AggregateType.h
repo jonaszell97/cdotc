@@ -123,8 +123,7 @@ class StructType: public AggregateType {
 public:
    struct Field {
       std::string name;
-      QualType type;
-      bool isStatic;
+      ValueType type;
    };
 
    typedef llvm::SmallVector<Field, 4> FieldList;
@@ -133,7 +132,7 @@ public:
               llvm::StringRef name,
               Module *m);
 
-   const FieldList &getFields() const;
+   llvm::ArrayRef<Field> getFields() const;
 
    void addField(Field &&F);
    const Field &getField(llvm::StringRef name) const;
@@ -220,12 +219,8 @@ public:
             llvm::StringRef name,
             Module *m);
 
-   Type *getRawType() const;
-
-   void setRawType(Type *rawType)
-   {
-      EnumType::rawType = rawType;
-   }
+   QualType getRawType() const { return rawType; }
+   void setRawType(QualType ty) { rawType = ty; }
 
    const CaseList &getCases() const;
 
@@ -235,7 +230,7 @@ public:
    size_t getMaxAssociatedValues() const;
 
 protected:
-   Type *rawType;
+   QualType rawType;
    CaseList cases;
    size_t maxAssociatedValues = 0;
 

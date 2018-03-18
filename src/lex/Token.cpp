@@ -18,16 +18,31 @@ namespace lex {
 
 namespace tok {
 
-string tokenTypeToString(TokenType ty)
+string tokenTypeToString(TokenType kind)
 {
-   switch (ty) {
-#  define CDOT_TOKEN(Name, Spelling) \
-      case Name:                     \
-         return #Name;
-
-#  include "Tokens.def"
-      default:
-         llvm_unreachable("bad token kind");
+   switch (kind) {
+   case tok::ident:
+      return "identifier";
+   case tok::op_ident:
+      return "operator";
+   case tok::dollar_ident:
+      return "$-identifier";
+   case tok::dollar_dollar_ident:
+      return "$$-identifier";
+   case tok::percent_ident:
+      return "%-identifier";
+   case tok::percent_percent_ident:
+      return "%%-identifier";
+   case tok::charliteral:
+      return "character literal";
+   case tok::stringliteral:
+      return "string literal";
+   case tok::fpliteral:
+      return "floating point literal";
+   case tok::integerliteral:
+      return "integer literal";
+   default:
+      return Token(kind).toString();
    }
 }
 
@@ -132,6 +147,14 @@ template void Token::rawRepr(llvm::SmallString<128>&) const;
 template void Token::rawRepr(llvm::SmallString<256>&) const;
 template void Token::rawRepr(llvm::SmallString<512>&) const;
 
+bool Token::is(cdot::IdentifierInfo *II) const
+{
+   if (!is_identifier())
+      return false;
+
+   return getIdentifierInfo() == II;
+}
+
 bool Token::isIdentifier(llvm::StringRef str) const
 {
    if (!is_identifier())
@@ -163,9 +186,6 @@ llvm::StringRef Token::getIdentifier() const
 
 llvm::APInt Token::getIntegerValue() const
 {
-   if (kind == tok::preprocessor_value)
-      return getPreprocessorValue().getAPSInt();
-
    assert(kind == tok::integerliteral);
 
    auto txt = getText();
@@ -174,18 +194,18 @@ llvm::APInt Token::getIntegerValue() const
 
    if (txt[0] == '0') {
       if (txt.size() > 1) {
-         if (txt[1] == 'x' || txt[1] == 'X')
+         if (txt[1] == 'x' || txt[1] == 'X') {
+            offset = 2;
             base = 16;
-         else if (txt[1] == 'b' || txt[1] == 'B')
+         }
+         else if (txt[1] == 'b' || txt[1] == 'B') {
+            offset = 2;
             base = 2;
-         else
-            llvm_unreachable("bad literal kind");
-
-         offset = 2;
-      }
-      else {
-         base = 8;
-         offset = 1;
+         }
+         else {
+            offset = 1;
+            base = 8;
+         }
       }
    }
 

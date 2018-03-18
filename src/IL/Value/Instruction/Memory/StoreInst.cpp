@@ -3,6 +3,7 @@
 //
 
 #include "StoreInst.h"
+#include "AST/ASTContext.h"
 
 namespace cdot {
 namespace il {
@@ -23,26 +24,31 @@ LoadInst::LoadInst(Value *target,
    : UnaryInstruction(LoadInstID, target, nullptr, parent)
 {
    if (target->isLvalue()) {
-      type = *target->getType();
+      type = target->getType();
    }
    else {
       assert(target->getType()->isPointerType());
-      type = *target->getType()->asPointerType()->getPointeeType();
+      type = ValueType(target->getCtx(),
+                       target->getType()->getPointeeType());
    }
+
+   setIsLvalue(false);
 }
 
 AddrOfInst::AddrOfInst(Value *target,
-                       PointerType *PtrTy,
                        BasicBlock *parent)
-   : UnaryInstruction(AddrOfInstID, target, PtrTy, parent)
+   : UnaryInstruction(AddrOfInstID, target,
+                      target->getASTCtx().getPointerType(
+                         target->getType()->getReferencedType()),
+                      parent)
 {
-   assert(target->isLvalue());
-   assert(PtrTy->getPointeeType() == target->getType());
+
 }
 
 PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)
    : UnaryInstruction(PtrToLvalueInstID, target,
-                      QualType(*target->getType()->getPointeeType(), true),
+                      target->getASTCtx().getReferenceType(
+                         target->getType()->getPointeeType()),
                       parent)
 {
 

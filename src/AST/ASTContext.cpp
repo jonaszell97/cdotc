@@ -3,31 +3,39 @@
 //
 
 #include "ASTContext.h"
-#include "../Support/Casting.h"
+#include "Support/Casting.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-ASTContext::ASTContext()
-   : Allocator(),
-     AutoTy(new (*this, TypeAlignment) AutoType),
-     VoidTy(new (*this, TypeAlignment) VoidType),
-     Int1Ty(new (*this, TypeAlignment) IntegerType(1)),
-     Int8Ty(new (*this, TypeAlignment) IntegerType(8)),
-     UInt8Ty(new (*this, TypeAlignment) IntegerType(8, true)),
-     Int16Ty(new (*this, TypeAlignment) IntegerType(16)),
-     UInt16Ty(new (*this, TypeAlignment) IntegerType(16, true)),
-     Int32Ty(new (*this, TypeAlignment) IntegerType(32)),
-     UInt32Ty(new (*this, TypeAlignment) IntegerType(32, true)),
-     Int64Ty(new (*this, TypeAlignment) IntegerType(64)),
-     UInt64Ty(new (*this, TypeAlignment) IntegerType(64, true)),
-     Int8PtrTy(getPointerType(Int8Ty)),
-     FloatTy(new (*this, TypeAlignment) FPType(32)),
-     DoubleTy(new (*this, TypeAlignment) FPType(64))
+llvm::ArrayRef<Attr*> ASTContext::getAttributes(const Decl *D) const
 {
+   auto it = AttributeMap.find(D);
+   if (it == AttributeMap.end() || !it->getSecond())
+      return {};
 
+   return *it->getSecond();
+}
+
+void ASTContext::setAttributes(const Decl *D,
+                               llvm::ArrayRef<Attr*> attrs) const {
+   AttributeMap[D] = new(*this) AttrVec(attrs.begin(), attrs.end());
+}
+
+void ASTContext::addAttribute(const Decl *D, Attr *attr) const
+{
+   auto it = AttributeMap.find(D);
+   if (it != AttributeMap.end()) {
+      it->getSecond()->push_back(attr);
+   }
+   else {
+      auto Vec = new(*this) AttrVec;
+      Vec->push_back(attr);
+
+      AttributeMap[D] = Vec;
+   }
 }
 
 PointerType* ASTContext::getPointerType(QualType pointeeType) const
@@ -39,26 +47,135 @@ PointerType* ASTContext::getPointerType(QualType pointeeType) const
    if (PointerType *Ptr = PointerTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) PointerType(pointeeType);
-   PointerTypes.InsertNode(New, insertPos);
+   Type *CanonicalTy = nullptr;
+   if (!pointeeType.isCanonical())
+      CanonicalTy = getPointerType(pointeeType.getCanonicalType());
 
+   auto New = new (*this, TypeAlignment) PointerType(pointeeType, CanonicalTy);
+
+   PointerTypes.InsertNode(New, insertPos);
+   return New;
+}
+
+ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
+{
+   llvm::FoldingSetNodeID ID;
+   ReferenceType::Profile(ID, referencedType);
+
+   void *insertPos = nullptr;
+   if (ReferenceType *Ptr = ReferenceTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!referencedType.isCanonical())
+      CanonicalTy = getReferenceType(referencedType.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment) ReferenceType(referencedType,
+                                                       CanonicalTy);
+
+   ReferenceTypes.InsertNode(New, insertPos);
+   return New;
+}
+
+MovedType* ASTContext::getMovedType(QualType referencedType) const
+{
+   llvm::FoldingSetNodeID ID;
+   MovedType::Profile(ID, referencedType);
+
+   void *insertPos = nullptr;
+   if (MovedType *Ptr = MovedTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!referencedType.isCanonical())
+      CanonicalTy = getMovedType(referencedType.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment) MovedType(referencedType,
+                                                   CanonicalTy);
+
+   MovedTypes.InsertNode(New, insertPos);
    return New;
 }
 
 FunctionType* ASTContext::getFunctionType(QualType returnType,
                                           llvm::ArrayRef<QualType> argTypes,
-                                          unsigned flags) const {
+                                          unsigned flags,
+                                          bool lambda) const {
+   if (lambda)
+      return getLambdaType(returnType, argTypes, flags);
+
    llvm::FoldingSetNodeID ID;
-   FunctionType::Profile(ID, returnType, argTypes, flags);
+   FunctionType::Profile(ID, returnType, argTypes, flags, false);
 
    void *insertPos = nullptr;
    if (FunctionType *Ptr = FunctionTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
+   bool Dependent = returnType->isDependentType();
+   bool Canonical = returnType.isCanonical();
+
+   for (auto &arg : argTypes) {
+      Canonical &= arg.isCanonical();
+      Dependent |= arg->isDependentType();
+   }
+
+   Type *CanonicalType = nullptr;
+   if (!Canonical) {
+      std::vector<QualType> canonicalArgs;
+      for (auto &arg : argTypes)
+         canonicalArgs.push_back(arg.getCanonicalType());
+
+      CanonicalType = getFunctionType(returnType.getCanonicalType(),
+                                      canonicalArgs, flags, lambda);
+   }
+
    auto New = new (*this, TypeAlignment)
-      FunctionType(returnType, argTypes, (FunctionType::ExtFlags)flags);
+      FunctionType(returnType, argTypes, (FunctionType::ExtFlags)flags,
+                   CanonicalType, Dependent);
 
    FunctionTypes.InsertNode(New, insertPos);
+   return New;
+}
+
+LambdaType* ASTContext::getLambdaType(FunctionType *FnTy)
+{
+   return getLambdaType(FnTy->getReturnType(), FnTy->getArgTypes(),
+                        FnTy->getRawFlags());
+}
+
+LambdaType* ASTContext::getLambdaType(QualType returnType,
+                                      llvm::ArrayRef<QualType> argTypes,
+                                      unsigned int flags) const {
+   llvm::FoldingSetNodeID ID;
+   FunctionType::Profile(ID, returnType, argTypes, flags, true);
+
+   void *insertPos = nullptr;
+   if (LambdaType *Ptr = LambdaTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   bool Dependent = returnType->isDependentType();
+   bool Canonical = returnType.isCanonical();
+
+   for (auto &arg : argTypes) {
+      Canonical &= arg.isCanonical();
+      Dependent |= arg->isDependentType();
+   }
+
+   Type *CanonicalType = nullptr;
+   if (!Canonical) {
+      std::vector<QualType> canonicalArgs;
+      for (auto &arg : argTypes)
+         canonicalArgs.push_back(arg.getCanonicalType());
+
+      CanonicalType = getLambdaType(returnType.getCanonicalType(),
+                                    canonicalArgs, flags);
+   }
+
+   auto New = new (*this, TypeAlignment)
+      LambdaType(returnType, argTypes, (FunctionType::ExtFlags)flags,
+                 CanonicalType, Dependent);
+
+   LambdaTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -71,15 +188,20 @@ ArrayType* ASTContext::getArrayType(QualType elementType,
    if (ArrayType *Ptr = ArrayTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) ArrayType(elementType, numElements);
-   ArrayTypes.InsertNode(New, insertPos);
+   Type *CanonicalTy = nullptr;
+   if (!elementType.isCanonical())
+      CanonicalTy = getArrayType(elementType.getCanonicalType(), numElements);
 
+   auto New = new (*this, TypeAlignment) ArrayType(elementType, numElements,
+                                                   CanonicalTy);
+
+   ArrayTypes.InsertNode(New, insertPos);
    return New;
 }
 
-InferredArrayType* ASTContext::getValueDependentSizedArrayType(
-                                               QualType elementType,
-                                               Expression *DependentExpr)const {
+InferredArrayType*
+ASTContext::getValueDependentSizedArrayType(QualType elementType,
+                                            Expression *DependentExpr) const {
    llvm::FoldingSetNodeID ID;
    InferredArrayType::Profile(ID, elementType, DependentExpr);
 
@@ -87,15 +209,21 @@ InferredArrayType* ASTContext::getValueDependentSizedArrayType(
    if (auto *Ptr = ValueDependentArrayTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) InferredArrayType(elementType,
-                                                           DependentExpr);
-   ValueDependentArrayTypes.InsertNode(New, insertPos);
+   Type *CanonicalTy = nullptr;
+   if (!elementType.isCanonical())
+      CanonicalTy = getValueDependentSizedArrayType(
+         elementType.getCanonicalType(), DependentExpr);
 
+   auto New = new (*this, TypeAlignment) InferredArrayType(elementType,
+                                                           DependentExpr,
+                                                           CanonicalTy);
+
+   ValueDependentArrayTypes.InsertNode(New, insertPos);
    return New;
 }
 
-TupleType* ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes)
-const
+TupleType*
+ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes) const
 {
    llvm::FoldingSetNodeID ID;
    TupleType::Profile(ID, containedTypes);
@@ -104,9 +232,28 @@ const
    if (TupleType *Ptr = TupleTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) TupleType(containedTypes);
-   TupleTypes.InsertNode(New, insertPos);
+   bool Dependent = false;
+   bool Canonical = true;
 
+   for (auto &arg : containedTypes) {
+      Canonical &= arg.isCanonical();
+      Dependent |= arg->isDependentType();
+   }
+
+   Type *CanonicalType = nullptr;
+   if (!Canonical) {
+      std::vector<QualType> canonicalElements;
+      for (auto &arg : containedTypes)
+         canonicalElements.push_back(arg.getCanonicalType());
+
+      CanonicalType = getTupleType(canonicalElements);
+   }
+
+   auto New = new (*this, TypeAlignment) TupleType(containedTypes,
+                                                   CanonicalType,
+                                                   Dependent);
+
+   TupleTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -126,19 +273,20 @@ const
    return New;
 }
 
-InconcreteObjectType* ASTContext::getDependentRecordType(
-                                             RecordDecl *R,
-                                             sema::TemplateArgList *args)const {
+InconcreteObjectType*
+ASTContext::getDependentRecordType(RecordDecl *R,
+                                   sema::TemplateArgList &&args) const {
    llvm::FoldingSetNodeID ID;
-   InconcreteObjectType::Profile(ID, R, args);
+   InconcreteObjectType::Profile(ID, R, &args);
 
    void *insertPos = nullptr;
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) InconcreteObjectType(R, args);
-   DependentRecordTypes.InsertNode(New, insertPos);
+   auto New = new(*this, TypeAlignment)
+      InconcreteObjectType(R, new(*this) sema::TemplateArgList(std::move(args)));
 
+   DependentRecordTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -181,7 +329,11 @@ MetaType* ASTContext::getMetaType(QualType forType) const
    if (auto *Ptr = MetaTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) MetaType(forType);
+   Type *CanonicalTy = nullptr;
+   if (!forType.isCanonical())
+      CanonicalTy = getMetaType(forType.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment) MetaType(forType, CanonicalTy);
    MetaTypes.InsertNode(New, insertPos);
 
    return New;
@@ -230,6 +382,16 @@ ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
    AliasDecl::Profile(ID, Template, argList);
 
    return AliasTemplateInstatiations.FindNodeOrInsertPos(ID, insertPos);
+}
+
+ASTContext::ASTContext()
+   : TI(*this, llvm::Triple(llvm::sys::getDefaultTargetTriple())), Allocator(),
+#  define CDOT_BUILTIN_TYPE(Name)            \
+     Name##Ty(BuiltinType::Name),
+#  include "Basic/BuiltinTypes.def"
+   PointerTypes{}
+{
+
 }
 
 } // namespace ast

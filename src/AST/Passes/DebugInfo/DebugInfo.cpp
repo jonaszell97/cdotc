@@ -63,7 +63,7 @@
 //   );
 //
 //   for (const auto& Sub : Subprograms) {
-//      Sub.second->replaceUnit(CU);
+//      Sub.col->replaceUnit(CU);
 //   }
 //
 //   DI.finalize();
@@ -80,8 +80,8 @@
 //
 //   auto lineAndLoc = fs::FileManager::getLineAndCol(loc);
 //   Builder.SetCurrentDebugLocation(llvm::DebugLoc::get(
-//      lineAndLoc.first,
-//      lineAndLoc.second,
+//      lineAndLoc.line,
+//      lineAndLoc.col,
 //      getCurrentScope()
 //   ));
 //}
@@ -92,7 +92,7 @@
 //   auto index = FileNodes.find(sourceID);
 //
 //   if (index != FileNodes.end()) {
-//      return (*index).second;
+//      return (*index).col;
 //   }
 //
 //   string fileName = fs::FileManager::getFileName(sourceID).str();
@@ -108,7 +108,7 @@
 //{
 //   auto index = TypeNodes.find((uintptr_t)ty);
 //   if (index != TypeNodes.end()) {
-//      return (*index).second;
+//      return (*index).col;
 //   }
 //
 //   llvm::DIType *MD;
@@ -199,10 +199,10 @@
 //         short align = 0;
 //
 //         for (auto& cont : tuple->getContainedTypes()) {
-//            containedTypes.push_back(getTypeDI(*cont.second));
-//            size += cont.second->getSize();
+//            containedTypes.push_back(getTypeDI(*cont.col));
+//            size += cont.col->getSize();
 //
-//            auto _align = cont.second->getAlignment();
+//            auto _align = cont.col->getAlignment();
 //            if (_align > align) {
 //               align = _align;
 //            }
@@ -257,7 +257,7 @@
 //
 //   auto index = StructTypes.find(ty->getClassName());
 //   if (index != StructTypes.end()) {
-//      return (*index).second;
+//      return (*index).col;
 //   }
 //
 //   llvm::DIType *MD;
@@ -273,7 +273,7 @@
 //      rec->getName(),
 //      ScopeStack.top(),
 //      fileDI,
-//      lineAndLoc.first
+//      lineAndLoc.line
 //   );
 //
 //   StructTypes[ty->getClassName()] = forwardDecl;
@@ -292,7 +292,7 @@
 //            forwardDecl,
 //            field.fieldName,
 //            fileDI,
-//            lineAndLoc.first,
+//            lineAndLoc.line,
 //            size,
 //            field.fieldType->getAlignment() * 8,
 //            offset,
@@ -310,7 +310,7 @@
 //         ScopeStack.top(),
 //         cl->getName(),
 //         fileDI,
-//         lineAndLoc.first,
+//         lineAndLoc.line,
 //         cl->getSize() * 8,
 //         cl->getAlignment() * 8,
 //         CodeGen::ClassInfoSize * 8,
@@ -329,7 +329,7 @@
 //      auto un = rec->getAs<Union>();
 //
 //      for (const auto &field : un->getFields()) {
-//         containedTypes.push_back(getTypeDI(field.second));
+//         containedTypes.push_back(getTypeDI(field.col));
 //      }
 //
 //      auto lineAndLoc = fs::FileManager::getLineAndCol(un->getSourceLoc());
@@ -338,7 +338,7 @@
 //         ScopeStack.top(),
 //         un->getName(),
 //         fileDI,
-//         lineAndLoc.first,
+//         lineAndLoc.line,
 //         un->getSize() * 8,
 //         un->getAlignment() * 8,
 //         flags,
@@ -349,8 +349,8 @@
 //      auto en = rec->getAs<Enum>();
 //      for (const auto &Case : en->getCases()) {
 //         containedTypes.push_back(DI.createEnumerator(
-//            Case.second.name,
-//            Case.second.rawValue
+//            Case.col.name,
+//            Case.col.rawValue
 //         ));
 //      }
 //
@@ -359,7 +359,7 @@
 //         ScopeStack.top(),
 //         en->getName(),
 //         fileDI,
-//         lineAndLoc.first,
+//         lineAndLoc.line,
 //         en->getRawType()->getSize() * 8,
 //         en->getRawType()->getAlignment() * 8,
 //         DI.getOrCreateArray(containedTypes),
@@ -393,7 +393,7 @@
 //         getCurrentScope(),
 //         node->getIdentifiers().front(),
 //         getFileDI(node->getSourceLoc()),
-//         lineAndLoc.first,
+//         lineAndLoc.line,
 //         getTypeDI(*node->getType()->getType())
 //      ),
 //      DI.createExpression(expr),
@@ -419,7 +419,7 @@
 //      node->getIdentifiers().front(),
 //      var->getName(),
 //      File,
-//      lineAndLoc.first,
+//      lineAndLoc.line,
 //      getTypeDI(*node->getType()->getType()),
 //      node->getAccess() != AccessModifier::PUBLIC
 //   );
@@ -499,7 +499,7 @@
 //      node->getName(),
 //      func->getName(),
 //      getFileDI(node->getSourceLoc()),
-//      lineAndLoc.first,
+//      lineAndLoc.line,
 //      funcTy,
 //      false,
 //      node->hasDefinition(),
@@ -544,7 +544,7 @@
 //      method->getName(),
 //      method->getLinkageName(),
 //      getFileDI(method->getSourceLoc()),
-//      lineAndLoc.first,
+//      lineAndLoc.line,
 //      funcTy,
 //      false,
 //      method->hasDefinition,
@@ -578,7 +578,7 @@
 //         "self",
 //         1,
 //         File,
-//         lineAndLoc.first,
+//         lineAndLoc.line,
 //         getTypeDI(ObjectType::get(method->owningRecord->getName()))
 //      );
 //
@@ -586,7 +586,7 @@
 //         &*func->arg_begin(),
 //         param,
 //         DI.createExpression(),
-//         llvm::DebugLoc::get(lineAndLoc.first, lineAndLoc.second,
+//         llvm::DebugLoc::get(lineAndLoc.line, lineAndLoc.col,
 //                             func->getSubprogram()),
 //         func->getEntryBlock().getNextNode()
 //      );
@@ -613,13 +613,13 @@
 //   );
 //
 //   auto lineAndLoc = fs::FileManager::getLineAndCol(node->getSourceLoc());
-//   auto scopeStart = lineAndLoc.first;
+//   auto scopeStart = lineAndLoc.line;
 //   auto MD = DI.createFunction(
 //      ScopeStack.top(),
 //      func->getName(),
 //      func->getName(),
 //      getFileDI(node->getSourceLoc()),
-//      lineAndLoc.first,
+//      lineAndLoc.line,
 //      funcTy,
 //      false,
 //      true,
@@ -654,7 +654,7 @@
 //{
 //   auto lineAndLoc = fs::FileManager::getLineAndCol(loc);
 //   auto scope = DI.createLexicalBlock(getCurrentScope(), File,
-//                                      lineAndLoc.first, 1);
+//                                      lineAndLoc.line, 1);
 //   beginScope(scope);
 //}
 //

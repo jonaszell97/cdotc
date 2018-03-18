@@ -7,9 +7,7 @@
 
 #include <vector>
 
-#include "Util.h"
-#include "Message/Diagnostics.h"
-
+#include "AST/Passes/SemanticAnalysis/CandidateSet.h"
 #include "AST/Passes/SemanticAnalysis/Template.h"
 
 namespace cdot {
@@ -20,7 +18,6 @@ class FunctionType;
 namespace ast {
 
 class Expression;
-class TypeRef;
 class SemaPass;
 class StaticExpr;
 class CallableDecl;
@@ -28,61 +25,22 @@ class EnumCaseDecl;
 class FuncArgDecl;
 class Statement;
 
-enum class FailureReason : unsigned char {
-   None,
-   IncompatibleArgCount,
-   IncompatibleArgument,
-   IncompatibleTemplateArg,
-   CouldNotInferTemplateArg,
-   FailedConstraint
-};
-
-struct CallCompatability {
-   bool isCompatible() const
-   {
-      return failureReason == FailureReason::None;
-   }
-
-   bool isPerfectMatch()   const { return perfectMatch; }
-   size_t getCastPenalty() const { return castPenalty; }
-
-   FailureReason getFailureReason() const
-   {
-      return failureReason;
-   }
-
-   FailureReason failureReason = FailureReason::None;
-
-   bool perfectMatch = false;
-
-   union {
-      size_t castPenalty = 0;
-      StaticExpr *failedConstraint;
-   };
-
-   FunctionType* FuncTy;
-   sema::TemplateArgList templateArgList;
-   sema::TemplateArgList initializerTemplateArgList;
-
-   size_t incompatibleArg;
-   llvm::SmallVector<diag::DiagnosticBuilder, 4> diagnostics;
-};
-
 class OverloadResolver {
 public:
    OverloadResolver(SemaPass &SP,
                     llvm::ArrayRef<Expression*> givenArgs,
-                    const std::vector<TemplateArgExpr*> &givenTemplateArgs,
+                    llvm::ArrayRef<Expression*> givenTemplateArgs,
                     Statement *Caller = nullptr);
 
-   CallCompatability checkIfViable(CallableDecl *callable);
+   void resolve(CandidateSet &CandSet);
+   void resolve(CandidateSet::Candidate &Cand,
+                llvm::ArrayRef<Expression*> givenArgs,
+                llvm::SmallVectorImpl<ConversionSequence> &Conversions);
 
-   CallCompatability checkIfViable(FunctionType *funcTy);
-   CallCompatability checkIfViable(EnumCaseDecl *Case);
-
-   void isCallCompatible(CallCompatability &comp,
+   void isCallCompatible(CandidateSet::Candidate &comp,
                          llvm::ArrayRef<QualType> givenArgs,
                          FunctionType *FuncTy,
+                         llvm::SmallVectorImpl<ConversionSequence> &Conversions,
                          size_t firstDefaultArg = size_t(-1));
 
    llvm::ArrayRef<Expression *> getGivenArgs()
@@ -93,14 +51,14 @@ public:
 protected:
    SemaPass &SP;
    llvm::ArrayRef<Expression*> givenArgs;
-   const std::vector<TemplateArgExpr*> &givenTemplateArgs;
+   llvm::ArrayRef<Expression*> givenTemplateArgs;
    Statement *Caller;
 
-   std::vector<QualType> resolveTemplateArgs(
-                                    llvm::ArrayRef<FuncArgDecl*> neededArgs,
-                                    sema::TemplateArgList const& templateArgs);
+   void resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
+                            llvm::ArrayRef<FuncArgDecl*> neededArgs,
+                            sema::TemplateArgList const& templateArgs);
 
-   void isVarargCallCompatible(CallCompatability &comp,
+   void isVarargCallCompatible(CandidateSet::Candidate &comp,
                                llvm::ArrayRef<QualType> givenArgs,
                                FunctionType *FuncTy);
 };
