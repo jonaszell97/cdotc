@@ -16,141 +16,66 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="aad26536-412b-4c49-9f69-684b62c48a55" name="Default" comment="- added TblGen&#10;- reworked CTFE&#10;- added ASTContext&#10;- added AST PrettyPrinter and Dumper&#10;- added AST Traverse / Transform&#10;- replaced Record with RecordDecl&#10;- replaced shared_ptr's with raw pointers allocated in BumpPtrAllocator&#10;- added NamedDecl, DeclContext">
-      <change afterPath="$PROJECT_DIR$/src/AST/Attribute/Attr.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Attribute/Attr.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Expression.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Expression.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/NamedDecl.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/NamedDecl.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/ASTVisitor.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ActionResult.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ContinuationPoint.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ContinuationPoint.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConversionSequence.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConversionSequence.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCast.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/SourceType.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Statement.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/AST/Statement.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Basic/Attributes.tg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Basic/Reflection.tg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Basic/TargetInfo.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/IL/Utils/BlockIterator.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/IL/Utils/BlockIterator.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.h" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Tools/TableGenBackends/AttributesBackend.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Tools/TableGenBackends/BuiltinTypesBackend.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Tools/TableGenBackends/DiagnosticsBackend.cpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/parse/ParseAttr.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+    <list default="true" id="aad26536-412b-4c49-9f69-684b62c48a55" name="Default" comment="">
+      <change afterPath="$PROJECT_DIR$/src/Basic/DeclarationName.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Basic/DeclarationName.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/CDot.cbp" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CDot.cbp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeCache.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeCache.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeDirectoryInformation.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeDirectoryInformation.cmake" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeOutput.log" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeOutput.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile2" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile2" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/TargetDirectories.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/TargetDirectories.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-environment.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-environment.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/feature_tests.bin" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/feature_tests.bin" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/cmake-build-debug/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmake-build-debug/cmake_install.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/cmake_install.cmake" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/ASTContext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ASTContext.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/ASTContext.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ASTContext.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/AstDeclarations.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/AstDeclarations.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/AstNode.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/AstNode.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/AstNode.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/AstNode.def" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/AstNode.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/AstNode.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Attribute/Attribute.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attribute.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Attribute/Attribute.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attribute.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Expression.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Expression.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/DictionaryLiteral.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attr.inc" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/DictionaryLiteral.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/IntegerLiteral.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attributes.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/IntegerLiteral.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Decl.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/LambdaExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/NoneLiteral.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/BuiltinOperators.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/NoneLiteral.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/StringInterpolation.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/StringInterpolation.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/StringLiteral.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/DeclNodes.tg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/StringLiteral.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/TupleLiteral.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/Literal/TupleLiteral.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/PatternExpr.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/PatternExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/CallExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/IdentifierRefExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/MemberRefExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/SubscriptExpr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.tg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/RefExpr/SubscriptExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/StaticExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/TypeRef.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Expression/TypeRef.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/BinaryOperator.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/Conversion/ImplicitCastExpr.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/Conversion/ImplicitCastExpr.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/Conversion/LvalueToRvalue.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/Conversion/LvalueToRvalue.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/ExprSequence.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/ExprSequence.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/Operators.def" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/TertiaryOperator.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Operator/UnaryOperator.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/ParentMap.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ParentMap.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Attribute/Attr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attr.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Attribute/Attr.inc" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attr.inc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Attribute/Attributes.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Attribute/Attributes.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Decl.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Decl.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Expression.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Expression.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Expression.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Expression.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/NamedDecl.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/NamedDecl.h" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/ASTDumper/ASTDumper.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ASTDumper/ASTDumper.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/ASTDumper/ASTDumper.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ASTDumper/ASTDumper.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/ASTIncludes.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ASTIncludes.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/ASTIncludes.h" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/AbstractPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/AbstractPass.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/AggregateVisitor.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/AggregateVisitor.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGBinaryOperator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGBinaryOperator.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/AggregateVisitor.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/AggregateVisitor.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGCast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGCast.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGClass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGClass.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGException.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CGException.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CodeGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CodeGen.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CodeGen.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/CodeGen/CodeGen.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/DebugInfo/DebugInfo.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/DebugInfo/DebugInfo.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/Declaration/DeclPass.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/Declaration/DeclPass.h" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenCast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenCast.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenClass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenClass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/NullASTVisitor.h" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/Output/HeaderGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/Output/HeaderGen.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/Passes.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/Output/HeaderGen.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/Output/HeaderGen.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/PrettyPrint/PrettyPrinter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/PrettyPrint/PrettyPrinter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/PrettyPrint/PrettyPrinter.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/PrettyPrint/PrettyPrinter.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Builtin.def" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Builtin.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Builtin.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ActionResult.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ActionResult.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ContinuationPoint.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ContinuationPoint.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConversionSequence.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConversionSequence.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scopes.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scopes.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCast.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaClass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaClass.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp" afterDir="false" />
@@ -161,201 +86,66 @@
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Passes/Serialization/Serialize.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Passes/Serialization/Serialize.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/StaticExpr/StaticAstNode.def" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/StaticExpr/StaticExprEvaluator.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Passes/StaticExpr/StaticExprEvaluator.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Block/CompoundStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/BreakStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/CaseStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ContinueStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForInStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForInStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ForStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/GotoStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/IfStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/LabelStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/MatchStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/MatchStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/ReturnStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/ControlFlow/WhileStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/DebugStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/CallableDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/CallableDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/EnumCaseDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/PropDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclContext.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclContext.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclareStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/DeclareStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/LocalVarDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/LocalVarDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamedDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamedDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Exception/ThrowStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Exception/TryStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/NullStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Statement.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Statement.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Static/StaticStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/Static/StaticStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/UsingStmt.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Statement/UsingStmt.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/SymbolTable.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/SymbolTable.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/SourceType.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/SourceType.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Statement.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Statement.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/Statement.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Statement.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Transform.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Transform.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Transform.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Transform.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Traverse.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Traverse.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/Traverse.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Traverse.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Builtin/Builtin.def" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Builtin/BuiltinGen.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Builtin/main.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/BuiltinOperators.tg" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/BuiltinOperators.tg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/BuiltinTypes.tg" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/BuiltinTypes.tg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/CastKind.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/CastKind.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/CastKind.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/CastKind.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/DependencyGraph.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/DependencyGraph.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Basic/Attributes.tg" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Attributes.tg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Basic/IdentifierInfo.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/IdentifierInfo.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Basic/IdentifierInfo.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/IdentifierInfo.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Basic/Mangle.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Mangle.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Basic/Mangle.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Mangle.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Precedence.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Precedence.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Precedence.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Precedence.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Basic/TargetInfo.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/TargetInfo.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CTFE/CTFEEngine.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/CTFEEngine.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/CTFE/StaticEvaluator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/StaticEvaluator.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CTFE/StaticEvaluator.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/StaticEvaluator.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CTFE/Value.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/Value.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/CTFE/Value.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/Value.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Compiler.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Compiler.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Compiler.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Compiler.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Files/FileManager.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Files/FileManager.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Files/FileManager.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Files/FileManager.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Files/FileUtils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Files/FileUtils.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Files/FileUtils.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Files/FileUtils.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/ILBuilder.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/ILBuilder.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/ILBuilder.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/ILBuilder.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Module/Context.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Module/Context.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Module/Context.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Module/Context.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Module/Module.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Module/Module.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Passes/IRGen/DIGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/IRGen/DIGen.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGen.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGen.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGen.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGenModule.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/IRGen/IRGenModule.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/InstructionVisitor.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/InstructionVisitor.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/PassManager.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/PassManager.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/ReturnVerifierPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/ReturnVerifierPass.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/ReturnVerifierPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/ReturnVerifierPass.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Serialize/Serialization.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Serialize/Serialization.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Constant/Constant.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Constant/Constant.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Constant/Constant.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Constant/Constant.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantExpr.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantExpr.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantVal.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantVal.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantVal.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Constant/ConstantVal.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/Argument.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/Argument.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/Argument.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/Argument.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/BasicBlock.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/BasicBlock.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/BasicBlock.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/BasicBlock.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/Function.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/Function.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Function/Function.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Function/Function.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/GlobalVariable.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/GlobalVariable.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/GlobalVariable.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/GlobalVariable.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/CallInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/CallInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/CallInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/CallInst.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Instruction.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Instruction.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Instruction.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Instruction.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Intrinsics.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Intrinsics.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/AllocaInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/AllocaInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/AllocaInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/AllocaInst.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/GEPInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/GEPInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/InitInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/InitInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/InitInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/InitInst.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/StoreInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/StoreInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/StoreInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/StoreInst.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Operator/OperatorInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Operator/OperatorInst.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Operator/OperatorInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Operator/OperatorInst.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Terminator/TerminatorInst.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Terminator/TerminatorInst.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instruction/Terminator/TerminatorInst.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instruction/Terminator/TerminatorInst.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Instructions.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Instructions.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/MetaData/MD.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/MetaData/MD.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/MetaData/MetaData.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/MetaData/MetaData.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/MetaData/MetaData.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/MetaData/MetaData.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Record/AggregateType.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Record/AggregateType.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Record/AggregateType.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Record/AggregateType.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/SymbolTableList.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/SymbolTableList.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Use.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Use.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/Value.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Value.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Value/Value.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/Value.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/ValueSymbolTable.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/ValueSymbolTable.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value/ValueSymbolTable.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value/ValueSymbolTable.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Message/Diagnostics.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/Diagnostics.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Message/Diagnostics.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/Diagnostics.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Message/def/DiagnosticParser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/DiagnosticParser.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Support/BitstreamWriter.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/BitstreamWriter.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/DiagnosticsEngine.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Message/def/Diagnostics.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Message/def/Diagnostics.tg" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.tg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Support/ExtendedSerializerBase.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/ExtendedSerializerBase.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Support/Format.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/Format.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Support/Format.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/Format.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Support/LiteralParser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/LiteralParser.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Support/WriterBase.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Support/WriterBase.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Backend/EmitClassHierarchy.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Backend/EmitClassHierarchy.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Parser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Parser.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Parser.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Parser.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Record.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Record.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Record.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Record.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/TableGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/TableGen.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/TableGen.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/TableGen.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Value.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Value.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/Value.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/Value.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/TableGen/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/TableGen/main.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Generic.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Generic.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Type.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Variant/Type/Type.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Type.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Variant/Type/Type.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/TypeUtils.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/TypeUtils.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Types.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/Variant/Type/Types.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Tools/TableGenBackends/AttributesBackend.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Tools/TableGenBackends/AttributesBackend.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Util.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Util.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Type.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Type.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Variant/Type/Types.def" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Variant/Variant.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Variant/Variant.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Variant/Variant.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Variant/Variant.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lex/Lexer.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Lexer.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lex/Lexer.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Lexer.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lex/Preprocessor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Preprocessor.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lex/Preprocessor.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Preprocessor.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lex/SourceLocation.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/SourceLocation.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lex/Token.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Token.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lex/Token.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Token.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lex/Tokens.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/lex/Tokens.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/module/IdentifierTable.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/IdentifierTable.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/module/IdentifierTable.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/IdentifierTable.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/module/Module.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/Module.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/module/ModuleManager.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/ModuleManager.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/module/ModuleMap.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/ModuleMap.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/module/ModuleParser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/ModuleParser.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/module/ModuleWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/ModuleWriter.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/module/Serialization.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/module/Serialization.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parse/ParseAttr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/parse/ParseAttr.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parse/ParseRecord.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/parse/ParseRecord.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parse/Parser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/parse/Parser.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parse/Parser.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/parse/Parser.h" afterDir="false" />
@@ -373,80 +163,23 @@
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="ParseRecord.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/parse/ParseRecord.cpp">
+      <file leaf-file-name="SemaPass.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="75">
-              <caret line="5" selection-start-line="5" selection-end-line="5" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Variant.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Variant/Variant.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-97">
-              <caret line="15" column="27" selection-start-line="15" selection-start-column="27" selection-end-line="15" selection-end-column="27" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Type.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Variant/Type/Type.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="98">
-              <caret line="10" column="28" selection-start-line="10" selection-start-column="28" selection-end-line="10" selection-end-column="28" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Function.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/IL/Value/Function/Function.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="180">
-              <caret line="12" column="26" selection-start-line="12" selection-start-column="26" selection-end-line="12" selection-end-column="26" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="NamedDecl.h" pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/src/AST/NamedDecl.h">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="285">
-              <caret line="19" column="19" lean-forward="true" selection-start-line="19" selection-start-column="19" selection-end-line="19" selection-end-column="19" />
+            <state relative-caret-position="147">
+              <caret line="2422" selection-start-line="2422" selection-end-line="2422" />
               <folding>
-                <element signature="e#96#127#0" expanded="true" />
+                <element signature="e#45#66#0" expanded="true" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="UseBeforeInit.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp">
+      <file leaf-file-name="ExpressionResolver.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="90">
-              <caret line="6" column="23" selection-start-line="6" selection-start-column="23" selection-end-line="6" selection-end-column="23" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="ParseAttr.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/parse/ParseAttr.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="225">
-              <caret line="15" lean-forward="true" selection-start-line="15" selection-end-line="15" />
-              <folding>
-                <element signature="e#45#64#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="IdentifierTable.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/module/IdentifierTable.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="192">
-              <caret line="13" column="26" selection-start-line="13" selection-start-column="26" selection-end-line="13" selection-end-column="26" />
+            <state relative-caret-position="264">
+              <caret line="447" column="53" selection-start-line="447" selection-start-column="53" selection-end-line="447" selection-end-column="53" />
               <folding>
                 <element signature="e#45#76#0" expanded="true" />
               </folding>
@@ -454,11 +187,88 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="ModuleManager.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/module/ModuleManager.cpp">
+      <file leaf-file-name="Type.h" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="245">
-              <caret line="32" column="25" selection-start-line="32" selection-start-column="25" selection-end-line="32" selection-end-column="25" />
+            <state relative-caret-position="-158">
+              <caret line="871" column="6" selection-start-line="871" selection-start-column="6" selection-end-line="871" selection-end-column="6" />
+              <folding>
+                <element signature="e#102#119#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="Traverse.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Traverse.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="306">
+              <caret line="622" selection-start-line="622" selection-end-line="622" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="lldbDataFormatters.py" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/utils/lldbDataFormatters.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="375">
+              <caret line="25" lean-forward="true" selection-start-line="25" selection-end-line="25" />
+              <folding>
+                <element signature="e#264#432#0" expanded="true" />
+                <element signature="e#461#628#0" expanded="true" />
+                <element signature="e#657#815#0" expanded="true" />
+                <element signature="e#844#1002#0" expanded="true" />
+                <element signature="e#1036#1194#0" expanded="true" />
+                <element signature="e#1239#1395#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="Compiler.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Compiler.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="119">
+              <caret line="339" selection-start-line="339" selection-end-line="339" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="ASTContext.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="175">
+              <caret line="177" column="44" lean-forward="true" selection-start-line="177" selection-start-column="44" selection-end-line="177" selection-end-column="44" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="main.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/main.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="298">
+              <caret line="138" selection-start-line="138" selection-end-line="138" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="AstNode.def" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/AstNode.def">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="138">
+              <caret line="92" selection-start-line="92" selection-end-line="92" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="SemaPass.h" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="139">
+              <caret line="264" selection-start-line="264" selection-end-line="264" />
+              <folding>
+                <element signature="e#86#111#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -467,52 +277,38 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>SelfExpr</find>
-      <find>BuiltinIdent</find>
-      <find>makeExpr&lt;.*&gt;\(</find>
-      <find>BuiltinIdentExpr</find>
-      <find>Identifier</find>
-      <find>BuiltinExpr</find>
-      <find>MemberRefExpr</find>
-      <find>EnumCaseExpr</find>
-      <find>CallExpr</find>
-      <find>SubscriptExpr</find>
-      <find>ConstraintE</find>
-      <find>Lambda</find>
-      <find>StringInter</find>
-      <find>NamedDecl</find>
-      <find>StringIn</find>
-      <find>LambdaEx</find>
-      <find>Expression.h</find>
-      <find>ImportStmt</find>
-      <find>LocalVarDecl</find>
-      <find>IdentifierInfo</find>
-      <find>Module</find>
-      <find>Import</find>
-      <find>Break</find>
-      <find>consumeToken</find>
-      <find>Null</find>
-      <find>Goto</find>
-      <find>DeclStmt</find>
-      <find>OperatorIf</find>
-      <find>../../</find>
-      <find>../</find>
+      <find>VerifierPass</find>
+      <find>GlobalInit</find>
+      <find>visitGlobal</find>
+      <find>getNumGlobals</find>
+      <find>print</find>
+      <find>llvm::raw</find>
+      <find>access_mem</find>
+      <find>HandleStaticTypeMember</find>
+      <find>InferredArrayType</find>
+      <find>InconcreteObjectType</find>
+      <find>ObjectType</find>
+      <find>RecordType</find>
+      <find>DependentSize</find>
+      <find>ArrayS</find>
+      <find>parseType\([^\)]</find>
+      <find>isBoxed</find>
+      <find>VarDecl</find>
+      <find>visitArray</find>
+      <find>GlobalVarD</find>
+      <find>InferredS</find>
+      <find>FunctionType::</find>
+      <find>visitArrayLi</find>
+      <find>WriteGlobal</find>
+      <find>getCStyleArray</find>
+      <find>getSourceRange</find>
+      <find>diagnose</find>
+      <find>DebugS</find>
+      <find>ArrayL</find>
+      <find>ParseUnaryExpression</find>
+      <find>SmallVector</find>
     </findStrings>
     <replaceStrings>
-      <replace>class PointerLikeTypeTraits</replace>
-      <replace>, &quot;$1&quot;,</replace>
-      <replace>llvm::StringRef</replace>
-      <replace>, 0)</replace>
-      <replace>Name, Spelling</replace>
-      <replace>C</replace>
-      <replace>Expr</replace>
-      <replace>CasePatternArgument</replace>
-      <replace>Tuple</replace>
-      <replace>Array</replace>
-      <replace>Decl</replace>
-      <replace>Reference</replace>
-      <replace>Pointer</replace>
-      <replace>Option</replace>
       <replace>bool Dumper</replace>
       <replace>QualType</replace>
       <replace>StaticExpr::Create(Context,</replace>
@@ -529,6 +325,20 @@
       <replace>Continue</replace>
       <replace>Label</replace>
       <replace>IL/Value/</replace>
+      <replace>Decl.h</replace>
+      <replace>1u</replace>
+      <replace>SourceRange(Loc)</replace>
+      <replace>advance()</replace>
+      <replace>cdot</replace>
+      <replace>Postfix</replace>
+      <replace>$1::Create(Context, Loc,</replace>
+      <replace>$1::Create(Context, head.access, Loc,</replace>
+      <replace>head.recordName</replace>
+      <replace>SP.diagnose($2, $1,</replace>
+      <replace>DependentSizeArrayType</replace>
+      <replace>DependentRecordType</replace>
+      <replace>RecordType</replace>
+      <replace>SP.diagnose($2, $1)</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$PROJECT_DIR$/src/AST</dir>
@@ -540,57 +350,57 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/TypedefDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/LocalVarDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/CallableDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/CallableDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/PropDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/Class/EnumCaseDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/NamedDecl.h" />
-        <option value="$PROJECT_DIR$/src/AST/ASTContext.h" />
-        <option value="$PROJECT_DIR$/src/AST/AstNode.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Expression.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/ASTIncludes.h" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenCast.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenClass.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCast.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaClass.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Template.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Statement/Declaration/NamedDecl.cpp" />
-        <option value="$PROJECT_DIR$/src/Basic/Mangle.cpp" />
-        <option value="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" />
+        <option value="$PROJECT_DIR$/src/Files/FileManager.cpp" />
         <option value="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/ILBuilder.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Serialize/Serialization.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Value/Instruction/Memory/GEPInst.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Value/Record/AggregateType.cpp" />
-        <option value="$PROJECT_DIR$/src/module/IdentifierTable.cpp" />
-        <option value="$PROJECT_DIR$/src/module/ModuleManager.cpp" />
-        <option value="$PROJECT_DIR$/src/parse/ParseRecord.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp" />
+        <option value="$PROJECT_DIR$/src/Tools/TableGenBackends/AttributesBackend.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp" />
+        <option value="$PROJECT_DIR$/src/lex/Lexer.cpp" />
+        <option value="$PROJECT_DIR$/CMakeLists.txt" />
+        <option value="$PROJECT_DIR$/src/Basic/IdentifierInfo.h" />
+        <option value="$PROJECT_DIR$/src/Basic/DeclarationName.h" />
+        <option value="$PROJECT_DIR$/src/Variant/Variant.h" />
         <option value="$PROJECT_DIR$/src/Variant/Variant.cpp" />
-        <option value="$PROJECT_DIR$/src/Variant/Type/Type.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Value/Function/Function.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp" />
+        <option value="$PROJECT_DIR$/src/Message/Diagnostics.h" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.h" />
+        <option value="$PROJECT_DIR$/src/lex/Preprocessor.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.h" />
+        <option value="$PROJECT_DIR$/src/Basic/IdentifierInfo.cpp" />
+        <option value="$PROJECT_DIR$/src/Basic/DeclarationName.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp" />
+        <option value="$PROJECT_DIR$/src/lex/SourceLocation.h" />
+        <option value="$PROJECT_DIR$/src/AST/Expression.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Decl.h" />
         <option value="$PROJECT_DIR$/src/parse/ParseAttr.cpp" />
+        <option value="$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Decl.cpp" />
+        <option value="$PROJECT_DIR$/src/Compiler.cpp" />
+        <option value="$PROJECT_DIR$/src/IL/Passes/VerifierPass.h" />
+        <option value="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" />
+        <option value="$PROJECT_DIR$/src/Message/Diagnostics.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.h" />
+        <option value="$PROJECT_DIR$/src/AST/Expression.h" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Types.def" />
+        <option value="$PROJECT_DIR$/src/AST/ASTContext.h" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp" />
+        <option value="$PROJECT_DIR$/src/parse/ParseRecord.cpp" />
+        <option value="$PROJECT_DIR$/src/parse/Parser.h" />
+        <option value="$PROJECT_DIR$/src/parse/Parser.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Type.h" />
+        <option value="$PROJECT_DIR$/src/AST/Type.cpp" />
+        <option value="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.h" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Statement.h" />
+        <option value="$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp" />
+        <option value="$PROJECT_DIR$/src/main.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/ASTContext.cpp" />
+        <option value="$PROJECT_DIR$/utils/lldbDataFormatters.py" />
       </list>
     </option>
   </component>
@@ -613,6 +423,7 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
+      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -761,6 +572,12 @@
               <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
               <item name="CDot" type="462c0819:PsiDirectoryNode" />
               <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="TableGen" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
               <item name="Tools" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
@@ -783,11 +600,15 @@
               <item name="Variant" type="462c0819:PsiDirectoryNode" />
               <item name="Type" type="462c0819:PsiDirectoryNode" />
             </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="utils" type="462c0819:PsiDirectoryNode" />
+            </path>
           </expand>
           <select />
         </subPane>
       </pane>
-      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -796,7 +617,7 @@
     <property name="com.intellij.ide.scratch.LRUPopupBuilder$2/Languages" value="ObjectiveC" />
     <property name="http.client.ignore.private.env.files.were.configured" value="true" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
-    <property name="settings.editor.selected.configurable" value="editor.preferences.completion" />
+    <property name="settings.editor.selected.configurable" value="configurable.group.language" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
@@ -909,7 +730,9 @@
       <workItem from="1520867643560" duration="48660000" />
       <workItem from="1521030776615" duration="16000" />
       <workItem from="1521032660812" duration="20042000" />
-      <workItem from="1521101721757" duration="150734000" />
+      <workItem from="1521101721757" duration="212049000" />
+      <workItem from="1521960333871" duration="23676000" />
+      <workItem from="1522065747308" duration="5887000" />
     </task>
     <task id="LOCAL-00001" summary="- reworked AST to use llvm-style RTTI&#10;- reworked Passes to not rely on virtual inheritance">
       <created>1511341652198</created>
@@ -939,11 +762,18 @@
       <option name="project" value="LOCAL" />
       <updated>1518641634073</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="- AST rework&#10;- Mixins, Static If, Static Else, improved CTFE&#10;- Parse Error Recovery&#10;- DiagnosticEngine&#10;- Driver improvements&#10;- Attribute TblGen">
+      <created>1521406741820</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1521406741821</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="2959854000" />
+    <option name="totallyTimeSpent" value="3050732000" />
   </component>
   <component name="TodoView">
     <todo-panel id="selected-file">
@@ -958,21 +788,21 @@
     <frame x="0" y="0" width="1280" height="800" extended-state="0" />
     <editor active="true" />
     <layout>
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.7137014" visible="true" weight="0.2494043" />
       <window_info anchor="bottom" id="TODO" order="7" weight="0.32784638" />
-      <window_info anchor="bottom" id="Messages" order="2" sideWeight="0.49563146" weight="0.31774417" />
+      <window_info anchor="bottom" id="Messages" order="2" sideWeight="0.49563146" weight="0.31724137" />
       <window_info anchor="bottom" id="CMake" order="12" weight="0.32551724" />
-      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.5059571" weight="0.32462174" />
+      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.5059571" side_tool="true" weight="0.32462174" />
+      <window_info anchor="bottom" id="Find" order="1" sideWeight="0.4940429" weight="0.32413793" />
+      <window_info anchor="bottom" id="Run" order="3" sideWeight="0.49007148" weight="0.29517242" />
       <window_info anchor="bottom" id="Version Control" order="9" weight="0.32921812" />
-      <window_info anchor="bottom" id="Run" order="3" sideWeight="0.49007148" weight="0.2957359" />
-      <window_info anchor="bottom" id="Terminal" order="10" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.7137014" visible="true" weight="0.2494043" />
-      <window_info anchor="bottom" id="Inspection Results" order="11" weight="0.32737276" />
-      <window_info anchor="bottom" id="Find" order="1" sideWeight="0.4940429" weight="0.32462174" />
       <window_info id="Structure" order="1" sideWeight="0.28629857" side_tool="true" weight="0.2494043" />
+      <window_info anchor="bottom" id="Terminal" order="10" />
+      <window_info anchor="bottom" id="Debug" order="4" sideWeight="0.4892772" weight="0.32551724" />
       <window_info id="Favorites" order="2" side_tool="true" />
-      <window_info anchor="bottom" id="Debug" order="4" sideWeight="0.4892772" weight="0.32599726" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="6" weight="0.4" />
+      <window_info anchor="bottom" id="Inspection Results" order="11" weight="0.32737276" />
       <window_info anchor="right" id="Commander" order="0" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" id="Data View" order="3" />
@@ -993,30 +823,26 @@
     <MESSAGE value="- added Use class&#10;- added Operand and Use iteration for IL Values" />
     <MESSAGE value="- aliases&#10;- ctfe&#10;- ast pretty print" />
     <MESSAGE value="- added TblGen&#10;- reworked CTFE&#10;- added ASTContext&#10;- added AST PrettyPrinter and Dumper&#10;- added AST Traverse / Transform&#10;- replaced Record with RecordDecl&#10;- replaced shared_ptr's with raw pointers allocated in BumpPtrAllocator&#10;- added NamedDecl, DeclContext" />
-    <option name="LAST_COMMIT_MESSAGE" value="- added TblGen&#10;- reworked CTFE&#10;- added ASTContext&#10;- added AST PrettyPrinter and Dumper&#10;- added AST Traverse / Transform&#10;- replaced Record with RecordDecl&#10;- replaced shared_ptr's with raw pointers allocated in BumpPtrAllocator&#10;- added NamedDecl, DeclContext" />
+    <MESSAGE value="- AST rework&#10;- Mixins, Static If, Static Else, improved CTFE&#10;- Parse Error Recovery&#10;- DiagnosticEngine&#10;- Driver improvements&#10;- Attribute TblGen" />
+    <option name="LAST_COMMIT_MESSAGE" value="- AST rework&#10;- Mixins, Static If, Static Else, improved CTFE&#10;- Parse Error Recovery&#10;- DiagnosticEngine&#10;- Driver improvements&#10;- Attribute TblGen" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp</url>
-          <line>2334</line>
+          <line>2383</line>
           <option name="timeStamp" value="4439" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp</url>
-          <line>280</line>
+          <line>266</line>
           <option name="timeStamp" value="4895" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp</url>
-          <line>888</line>
+          <line>917</line>
           <option name="timeStamp" value="5077" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp</url>
-          <line>902</line>
-          <option name="timeStamp" value="5080" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/TableGen/Parser.cpp</url>
@@ -1030,11 +856,15 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp</url>
-          <line>2757</line>
+          <line>2813</line>
           <option name="timeStamp" value="5109" />
         </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/TemplateInstantiator.cpp</url>
+          <option name="timeStamp" value="5137" />
+        </line-breakpoint>
       </breakpoints>
-      <option name="time" value="5117" />
+      <option name="time" value="5222" />
     </breakpoint-manager>
   </component>
   <component name="debuggerHistoryManager">
@@ -1109,335 +939,409 @@
     </expressions>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/EnumCaseDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/FieldDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/MethodDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/PropDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/Class/RecordDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.h">
+    <entry file="file://$PROJECT_DIR$/src/Variant/Variant.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="95">
-          <caret line="7" column="26" selection-start-line="7" selection-start-column="26" selection-end-line="7" selection-end-column="26" />
+        <state relative-caret-position="130">
+          <caret line="82" column="3" selection-start-line="82" selection-start-column="3" selection-end-line="82" selection-end-column="3" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Variant/Variant.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="30">
-          <caret line="3" selection-start-line="3" selection-end-line="3" />
-          <folding>
-            <element signature="e#44#66#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="352">
+          <caret line="368" column="29" selection-start-line="368" selection-start-column="29" selection-end-line="368" selection-end-column="29" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Message/Diagnostics.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="119">
+          <caret line="105" column="31" selection-start-line="105" selection-start-column="31" selection-end-line="105" selection-end-column="31" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.h">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="105">
-          <caret line="7" column="48" selection-start-line="7" selection-start-column="48" selection-end-line="7" selection-end-column="48" />
+          <caret line="7" column="31" selection-start-line="7" selection-start-column="31" selection-end-line="7" selection-end-column="31" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/ASTIncludes.h">
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/BuiltinCandidateBuilder.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="23" selection-start-column="23" selection-end-column="23" />
+        <state relative-caret-position="120">
+          <caret line="8" column="34" selection-start-line="8" selection-start-column="34" selection-end-line="8" selection-end-column="34" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenCast.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Basic/IdentifierInfo.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="47" selection-start-line="6" selection-start-column="47" selection-end-line="6" selection-end-column="47" />
+        <state relative-caret-position="-197">
+          <caret line="4" column="27" selection-start-line="4" selection-start-column="27" selection-end-line="4" selection-end-column="27" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenClass.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Basic/DeclarationName.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="243">
-          <caret line="29" selection-start-line="29" selection-end-line="29" />
-          <folding>
-            <element signature="e#45#82#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/CandidateSet.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="27" lean-forward="true" selection-start-line="6" selection-start-column="27" selection-end-line="6" selection-end-column="27" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ConformanceChecker.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-184">
-          <caret line="7" lean-forward="true" selection-start-line="7" selection-end-line="7" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/OverloadResolver.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="48" selection-start-line="6" selection-start-column="48" selection-end-line="6" selection-end-column="48" />
+        <state relative-caret-position="120">
+          <caret line="8" column="32" selection-start-line="8" selection-start-column="32" selection-end-line="8" selection-end-column="32" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaAttr.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="60">
-          <caret line="4" column="21" selection-start-line="4" selection-start-column="21" selection-end-line="4" selection-end-column="21" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="195">
-          <caret line="14" selection-start-line="14" selection-end-line="14" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCast.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="75">
-          <caret line="5" column="47" selection-start-line="5" selection-start-column="47" selection-end-line="5" selection-end-column="47" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaClass.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" column="39" selection-start-line="10" selection-start-column="39" selection-end-line="10" selection-end-column="39" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCTFE.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="60">
-          <caret line="4" column="21" selection-start-line="4" selection-start-column="21" selection-end-line="4" selection-end-column="21" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="221">
-          <caret line="19" selection-start-line="19" selection-end-line="19" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" column="48" selection-start-line="9" selection-start-column="48" selection-end-line="9" selection-end-column="48" />
+        <state relative-caret-position="714">
+          <caret line="145" lean-forward="true" selection-start-line="145" selection-end-line="145" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaOperator.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="120">
-          <caret line="8" column="27" selection-start-line="8" selection-start-column="27" selection-end-line="8" selection-end-column="27" />
+        <state relative-caret-position="283">
+          <caret line="262" column="21" selection-start-line="262" selection-start-column="3" selection-end-line="262" selection-end-column="21" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaTemplate.cpp">
+    <entry file="file://$PROJECT_DIR$/src/lex/SourceLocation.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="120">
-          <caret line="8" column="47" selection-start-line="8" selection-start-column="47" selection-end-line="8" selection-end-column="47" />
+        <state relative-caret-position="115">
+          <caret line="63" column="42" selection-start-line="63" selection-start-column="42" selection-end-line="63" selection-end-column="42" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Template.cpp">
+    <entry file="file://$PROJECT_DIR$/src/lex/Preprocessor.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="105">
-          <caret line="7" column="48" selection-start-line="7" selection-start-column="48" selection-end-line="7" selection-end-column="48" />
+        <state relative-caret-position="134">
+          <caret line="1257" column="25" selection-start-line="1257" selection-start-column="18" selection-end-line="1257" selection-end-column="25" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/Scope/Scope.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="105">
-          <caret line="7" column="30" lean-forward="true" selection-start-line="7" selection-start-column="30" selection-end-line="7" selection-end-column="30" />
+        <state relative-caret-position="357">
+          <caret line="32" selection-start-line="32" selection-end-line="32" />
           <folding>
-            <element signature="e#45#63#0" expanded="true" />
+            <element signature="e#45#68#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/NamedDecl.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaCall.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="27" selection-start-line="6" selection-start-column="27" selection-end-line="6" selection-end-column="27" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Basic/Mangle.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="158">
-          <caret line="12" lean-forward="true" selection-start-line="12" selection-end-line="12" />
+        <state relative-caret-position="106">
+          <caret line="704" selection-start-line="704" selection-end-line="704" />
           <folding>
-            <element signature="e#45#64#0" expanded="true" />
+            <element signature="e#45#66#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/Basic/TargetInfo.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Decl.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="75">
-          <caret line="5" lean-forward="true" selection-start-line="5" selection-end-line="5" />
+        <state relative-caret-position="249">
+          <caret line="217" column="12" lean-forward="true" selection-start-line="217" selection-start-column="12" selection-end-line="217" selection-end-column="12" />
+          <folding>
+            <element signature="e#96#127#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp">
+    <entry file="file://$PROJECT_DIR$/src/parse/ParseAttr.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-58">
-          <caret line="8" column="47" selection-start-line="8" selection-start-column="47" selection-end-line="8" selection-end-column="47" />
+        <state relative-caret-position="-552">
+          <caret line="40" column="25" lean-forward="true" selection-start-line="40" selection-start-column="25" selection-end-line="40" selection-end-column="25" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="23">
+          <caret line="205" column="38" selection-start-line="205" selection-start-column="38" selection-end-line="205" selection-end-column="38" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Decl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-346">
+          <caret line="711" lean-forward="true" selection-start-line="711" selection-end-line="711" />
+          <folding>
+            <element signature="e#45#62#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/5.0.1/include/llvm/ADT/StringRef.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="154">
+          <caret line="95" selection-start-line="95" selection-end-line="95" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/InstructionVisitor.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="47">
+          <caret line="22" column="16" selection-start-line="22" selection-start-column="16" selection-end-line="22" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/PassManager.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="135">
+          <caret line="15" column="23" selection-start-line="15" selection-start-column="23" selection-end-line="15" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/PassManager.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="193">
+          <caret line="28" column="8" selection-start-line="28" selection-start-column="8" selection-end-line="28" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="359">
+          <caret line="82" column="4" selection-start-line="82" selection-start-column="4" selection-end-line="82" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/VerifierPass.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="149">
+          <caret line="18" column="11" selection-start-line="18" selection-start-column="11" selection-end-line="18" selection-end-column="11" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Message/Diagnostics.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="296">
+          <caret line="395" column="45" selection-start-line="395" selection-start-column="45" selection-end-line="395" selection-end-column="45" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaMemberExpr.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="162">
+          <caret line="842" selection-start-line="842" selection-end-line="842" />
+          <folding>
+            <element signature="e#45#66#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="251">
+          <caret line="1486" column="12" selection-start-line="1486" selection-start-column="12" selection-end-line="1486" selection-end-column="12" />
+          <folding>
+            <element signature="e#88#147#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Types.def">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="105">
+          <caret line="7" column="20" selection-start-line="7" selection-start-column="20" selection-end-line="7" selection-end-column="20" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1218">
+          <caret line="92" column="50" selection-start-line="92" selection-start-column="50" selection-end-line="92" selection-end-column="50" />
+          <folding>
+            <element signature="e#98#120#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/parse/Parser.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="27570">
+          <caret line="1838" selection-start-line="1838" selection-end-line="1838" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/5.0.1/include/llvm/Support/Casting.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="154">
+          <caret line="105" selection-start-line="105" selection-end-line="105" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/parse/ParseRecord.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="6885">
+          <caret line="459" selection-start-line="459" selection-end-line="459" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/parse/Parser.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="7215">
+          <caret line="481" column="23" selection-start-line="481" selection-start-column="23" selection-end-line="481" selection-end-column="23" />
+          <folding>
+            <element signature="e#90#117#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/5.0.1/include/llvm/Support/TrailingObjects.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="289">
+          <caret line="234" selection-start-line="234" selection-end-line="234" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Type.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="197">
+          <caret line="807" column="1" selection-start-line="807" selection-start-column="1" selection-end-line="807" selection-end-column="1" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaDecl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="299">
+          <caret line="1465" selection-start-line="1465" selection-end-line="1465" />
+          <folding>
+            <element signature="e#45#66#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="244">
+          <caret line="403" column="53" selection-start-line="403" selection-start-column="53" selection-end-line="403" selection-end-column="53" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="293">
+          <caret line="343" column="45" lean-forward="true" selection-start-line="343" selection-start-column="45" selection-end-line="343" selection-end-column="45" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/IL/ILBuilder.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" column="47" selection-start-line="9" selection-start-column="47" selection-end-line="9" selection-end-column="47" />
+        <state relative-caret-position="325">
+          <caret line="197" column="26" selection-start-line="197" selection-start-column="26" selection-end-line="197" selection-end-column="26" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Serialize/Serialization.cpp">
+    <entry file="file:///usr/local/Cellar/llvm/5.0.1/include/llvm/ADT/ArrayRef.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="195">
-          <caret line="13" column="47" selection-start-line="13" selection-start-column="47" selection-end-line="13" selection-end-column="47" />
+        <state relative-caret-position="156">
+          <caret line="145" column="13" selection-start-line="145" selection-start-column="13" selection-end-line="145" selection-end-column="13" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Value/Instruction/Cast/CastInst.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/ILGen/ILGenPass.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="150">
-          <caret line="10" selection-start-line="10" selection-end-line="10" />
+        <state relative-caret-position="225">
+          <caret line="609" column="24" selection-start-line="609" selection-start-column="24" selection-end-line="609" selection-end-column="24" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Value/Instruction/Memory/GEPInst.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Statement.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="165">
-          <caret line="11" column="42" selection-start-line="11" selection-start-column="42" selection-end-line="11" selection-end-column="42" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Value/Record/AggregateType.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" column="37" selection-start-line="9" selection-start-column="37" selection-end-line="9" selection-end-column="37" />
+        <state relative-caret-position="384">
+          <caret line="221" column="54" selection-start-line="221" selection-start-column="54" selection-end-line="221" selection-end-column="54" />
           <folding>
-            <element signature="e#45#71#0" expanded="true" />
+            <element signature="e#86#110#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/module/IdentifierTable.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="192">
-          <caret line="13" column="26" selection-start-line="13" selection-start-column="26" selection-end-line="13" selection-end-column="26" />
+        <state relative-caret-position="139">
+          <caret line="264" selection-start-line="264" selection-end-line="264" />
+          <folding>
+            <element signature="e#86#111#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/ExpressionResolver.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="264">
+          <caret line="447" column="53" selection-start-line="447" selection-start-column="53" selection-end-line="447" selection-end-column="53" />
           <folding>
             <element signature="e#45#76#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/module/ModuleManager.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.def">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="245">
-          <caret line="32" column="25" selection-start-line="32" selection-start-column="25" selection-end-line="32" selection-end-column="25" />
+        <state relative-caret-position="138">
+          <caret line="92" selection-start-line="92" selection-end-line="92" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/parse/ParseRecord.cpp">
+    <entry file="file://$PROJECT_DIR$/src/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="75">
-          <caret line="5" selection-start-line="5" selection-end-line="5" />
+        <state relative-caret-position="298">
+          <caret line="138" selection-start-line="138" selection-end-line="138" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/Variant/Variant.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Traverse.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-97">
-          <caret line="15" column="27" selection-start-line="15" selection-start-column="27" selection-end-line="15" selection-end-column="27" />
+        <state relative-caret-position="306">
+          <caret line="622" selection-start-line="622" selection-end-line="622" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/Variant/Type/Type.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Compiler.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="98">
-          <caret line="10" column="28" selection-start-line="10" selection-start-column="28" selection-end-line="10" selection-end-column="28" />
+        <state relative-caret-position="119">
+          <caret line="339" selection-start-line="339" selection-end-line="339" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/CallableDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Value/Function/Function.cpp">
+    <entry file="file://$PROJECT_DIR$/src/AST/Passes/SemanticAnalysis/SemaPass.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="180">
-          <caret line="12" column="26" selection-start-line="12" selection-start-column="26" selection-end-line="12" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/LocalVarDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/LocalVarDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Passes/UseBeforeInit.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="23" selection-start-line="6" selection-start-column="23" selection-end-line="6" selection-end-column="23" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.h">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement/Declaration/NamespaceDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/parse/ParseAttr.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="225">
-          <caret line="15" lean-forward="true" selection-start-line="15" selection-end-line="15" />
+        <state relative-caret-position="147">
+          <caret line="2422" selection-start-line="2422" selection-end-line="2422" />
           <folding>
-            <element signature="e#45#64#0" expanded="true" />
+            <element signature="e#45#66#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/NamedDecl.h">
+    <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="285">
-          <caret line="19" column="19" lean-forward="true" selection-start-line="19" selection-start-column="19" selection-end-line="19" selection-end-column="19" />
+        <state relative-caret-position="175">
+          <caret line="177" column="44" lean-forward="true" selection-start-line="177" selection-start-column="44" selection-end-line="177" selection-end-column="44" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-158">
+          <caret line="871" column="6" selection-start-line="871" selection-start-column="6" selection-end-line="871" selection-end-column="6" />
           <folding>
-            <element signature="e#96#127#0" expanded="true" />
+            <element signature="e#102#119#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/lldbDataFormatters.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="375">
+          <caret line="25" lean-forward="true" selection-start-line="25" selection-end-line="25" />
+          <folding>
+            <element signature="e#264#432#0" expanded="true" />
+            <element signature="e#461#628#0" expanded="true" />
+            <element signature="e#657#815#0" expanded="true" />
+            <element signature="e#844#1002#0" expanded="true" />
+            <element signature="e#1036#1194#0" expanded="true" />
+            <element signature="e#1239#1395#0" expanded="true" />
           </folding>
         </state>
       </provider>

@@ -340,7 +340,8 @@ public:
    il::Value *getCStyleArray(Type *Ty,
                              llvm::ArrayRef<il::Value*> elements,
                              size_t minCapacity = 0,
-                             bool onHeap = false);
+                             bool onHeap = false,
+                             bool allConstant = false);
 
    il::Function *getGlobalInitFn();
 

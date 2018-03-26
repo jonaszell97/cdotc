@@ -7,7 +7,7 @@
 #include "SemaPass.h"
 
 #include "AST/ASTContext.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "Message/Diagnostics.h"
 
 using namespace cdot::support;
@@ -117,13 +117,13 @@ void ConformanceCheckerImpl::checkRecordCommon(ProtocolDecl *Proto)
 {
    for (auto &decl : Proto->getDecls()) {
       if (auto AT = dyn_cast<AssociatedTypeDecl>(decl)) {
-         if (!Rec->getAssociatedType(AT->getName(), Proto)) {
+         if (!Rec->getAssociatedType(AT->getDeclName(), Proto)) {
             if (AT->getActualType()) {
-               auto ATDecl = new (SP.getContext())
-                  AssociatedTypeDecl(string(Proto->getName()),
-                                     string(AT->getName()),
-                                     {},
-                                     AT->getActualType());
+               auto ATDecl =
+                  AssociatedTypeDecl::Create(SP.getContext(),
+                                             AT->getSourceLoc(), nullptr,
+                                             AT->getIdentifierInfo(),
+                                             AT->getActualType());
 
                SP.addDeclToContext(*Rec, ATDecl);
                continue;
@@ -135,7 +135,7 @@ void ConformanceCheckerImpl::checkRecordCommon(ProtocolDecl *Proto)
          }
       }
       else if (auto Prop = dyn_cast<PropDecl>(decl)) {
-         auto FoundProp = Rec->getProperty(Prop->getName());
+         auto FoundProp = Rec->getProperty(Prop->getDeclName());
          if (!FoundProp) {
             genericError(Proto);
             SP.diagnose(Prop, note_incorrect_protocol_impl_prop,
@@ -177,7 +177,7 @@ void ConformanceCheckerImpl::checkRecordCommon(ProtocolDecl *Proto)
          //TODO
       }
       else if (auto Method = dyn_cast<MethodDecl>(decl)) {
-         if (!Rec->hasMethodWithName(Method->getName())) {
+         if (!Rec->hasMethodWithName(Method->getDeclName())) {
             if (checkIfImplicitConformance(Proto, *Method)) {
                continue;
             }
@@ -194,7 +194,8 @@ void ConformanceCheckerImpl::checkRecordCommon(ProtocolDecl *Proto)
 
          auto mangledName = SP.getMangler().mangleProtocolMethod(Rec, Method);
 
-         auto M = Rec->getMethod(mangledName);
+         auto *II = &SP.getContext().getIdentifiers().get(mangledName);
+         auto M = Rec->getMethod(II);
          if (!M) {
             if (checkIfImplicitConformance(Proto, *Method)) {
                continue;

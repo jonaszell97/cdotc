@@ -44,10 +44,10 @@ struct Variant {
       new (Data.buffer) std::string(s.data(), s.size());
    }
 
-   Variant(Type *Ty, bool isConst = false);
-   Variant(QualType const& ty);
+   explicit Variant(Type *Ty, bool isConst = false);
+   explicit Variant(QualType const& ty);
 
-   Variant(uint64_t l, unsigned numBits = 64, bool isUnsigned = false)
+   explicit Variant(uint64_t l, unsigned numBits = 64, bool isUnsigned = false)
       : kind(VariantType::Int), Data{}
    {
       new (Data.buffer) llvm::APInt(numBits, (uint64_t)l, !isUnsigned);

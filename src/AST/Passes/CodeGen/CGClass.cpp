@@ -180,7 +180,7 @@
 ////   if (emitDI) {
 ////      DI->beginGeneratedFunctionScope(
 ////         bound_name,
-////         { ObjectType::get(cl->getName()) }
+////         { RecordType::get(cl->getName()) }
 ////      );
 ////      DI->setDebugLoc(SourceLocation());
 ////   }
@@ -275,7 +275,7 @@
 ////   if (emitDI) {
 ////      DI->beginGeneratedFunctionScope(
 ////         destr->getName(),
-////         { ObjectType::get(cl->getName()) }
+////         { RecordType::get(cl->getName()) }
 ////      );
 ////
 ////      if (body) {
@@ -1279,7 +1279,7 @@
 ////
 ////   declaredMethod->setLlvmFunc(DeclareMethod(
 ////      declaredMethod->getMangledName(),
-////      {Argument("", QualType(ObjectType::get(cl->getName())))},
+////      {Argument("", QualType(RecordType::get(cl->getName())))},
 ////      {{"", ""}},
 ////      declaredMethod->getReturnType(),
 ////      declaredMethod->throws(),

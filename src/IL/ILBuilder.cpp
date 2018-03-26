@@ -7,7 +7,7 @@
 #include "Value/Record/AggregateType.h"
 
 #include "AST/ASTContext.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #define CDOT_VALUE_INCLUDE
 #include "Value/ValueIncludes.def"
@@ -41,7 +41,7 @@ void ILBuilder::importType(QualType Ty)
    if (Ty->isPointerType())
       importType(Ty->asPointerType()->getPointeeType());
 
-   if (!Ty->isObjectType())
+   if (!Ty->isRecordType())
       return;
 
    auto &Ctx = M->getContext();
@@ -470,7 +470,7 @@ namespace {
 
 bool isPointerLike(Value *V)
 {
-   return V->getType()->isObjectType() || V->getType()->isPointerType()
+   return V->getType()->isRecordType() || V->getType()->isPointerType()
           || V->getType()->isReferenceType();
 }
 
@@ -511,7 +511,7 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end:
       assert(args.size() == 2);
-      assert(args[0]->getType()->isObjectType()
+      assert(args[0]->getType()->isRecordType()
              || args[0]->getType()->isPointerType());
       assert(args[1]->getType()->isIntegerType());
       break;

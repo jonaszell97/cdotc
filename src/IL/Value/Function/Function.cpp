@@ -10,7 +10,7 @@
 #include "IL/Module/Module.h"
 #include "IL/Value/Record/AggregateType.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>

@@ -5,11 +5,11 @@
 #ifndef CDOT_ASTCONTEXT_H
 #define CDOT_ASTCONTEXT_H
 
-#include "AST/ParentMap.h"
-#include "Basic/IdentifierInfo.h"
-#include "Basic/TargetInfo.h"
+#include "ParentMap.h"
+#include "Type.h"
 
-#include "Variant/Type/Type.h"
+#include "Basic/DeclarationName.h"
+#include "Basic/TargetInfo.h"
 
 #include <llvm/Support/Allocator.h>
 #include <llvm/ADT/FoldingSet.h>
@@ -21,11 +21,14 @@ namespace sema {
    class TemplateArgList;
 } // namespace sema
 
+class Attr;
+
 namespace ast {
 
 class Expression;
+class StaticExpr;
 class Statement;
-
+class Decl;
 class CallableDecl;
 class RecordDecl;
 class AliasDecl;
@@ -53,6 +56,11 @@ public:
       return Identifiers;
    }
 
+   DeclarationNameTable &getDeclNameTable() const
+   {
+      return DeclNames;
+   }
+
    ParentMap &getParentMap()
    {
       return parentMap;
@@ -60,14 +68,18 @@ public:
 
    const TargetInfo &getTargetInfo() const { return TI; }
 
-   using AttrVec = llvm::SmallVector<Attr*, 0>;
+   using AttrVec       = llvm::SmallVector<Attr*, 0>;
+   using ConstraintVec = llvm::SmallVector<StaticExpr*, 0>;
 
 private:
+   mutable llvm::BumpPtrAllocator Allocator;
    mutable ParentMap parentMap;
    mutable IdentifierTable Identifiers;
+   mutable DeclarationNameTable DeclNames;
    mutable TargetInfo TI;
-   mutable llvm::BumpPtrAllocator Allocator;
+
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
+   mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
 
 #  define CDOT_BUILTIN_TYPE(Name)                              \
    alignas(TypeAlignment) mutable BuiltinType Name##Ty;
@@ -79,14 +91,14 @@ private:
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
-   mutable llvm::FoldingSet<InferredArrayType> ValueDependentArrayTypes;
+   mutable llvm::FoldingSet<InferredSizeArrayType> InferredSizeArrayTypes;
    mutable llvm::FoldingSet<TupleType> TupleTypes;
    mutable llvm::FoldingSet<GenericType> GenericTypes;
-   mutable llvm::FoldingSet<InconcreteObjectType> DependentRecordTypes;
+   mutable llvm::FoldingSet<DependentRecordType> DependentRecordTypes;
    mutable llvm::FoldingSet<MetaType> MetaTypes;
    mutable llvm::FoldingSet<NamespaceType> NamespaceTypes;
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
-   mutable llvm::FoldingSet<ObjectType> RecordTypes;
+   mutable llvm::FoldingSet<RecordType> RecordTypes;
 
 public:
    BuiltinType *getAutoType() const { return &AutoTy; }
@@ -188,17 +200,16 @@ public:
                              unsigned flags = 0) const;
 
    ArrayType *getArrayType(QualType elementType, size_t numElements) const;
-   InferredArrayType *getValueDependentSizedArrayType(
+   DependentSizeArrayType *getValueDependentSizedArrayType(
                                              QualType elementType,
-                                             Expression*DependentExpr) const;
+                                             Expression* DependentExpr) const;
+   InferredSizeArrayType *getInferredSizeArrayType(QualType elTy) const;
 
    TupleType *getTupleType(llvm::ArrayRef<QualType> containedTypes) const;
 
-   ObjectType *getRecordType(
-            RecordDecl *R,
-            Type::BoxedPrimitive kind = Type::BoxedPrimitive::BP_None) const;
+   RecordType *getRecordType(RecordDecl *R) const;
 
-   InconcreteObjectType *getDependentRecordType(
+   DependentRecordType* getDependentRecordType(
                                           RecordDecl *R,
                                           sema::TemplateArgList &&args) const;
 
@@ -227,23 +238,22 @@ public:
                                             void *&insertPos);
 
    void insertFunctionTemplateInstantiation(CallableDecl *Inst,
-                                            void *insertPos) {
-      FunctionTemplateInstatiations.InsertNode(Inst, insertPos);
-   }
+                                            void *insertPos);
 
    void insertRecordTemplateInstantiation(RecordDecl *Inst,
-                                          void *insertPos) {
-      RecordTemplateInstatiations.InsertNode(Inst, insertPos);
-   }
+                                          void *insertPos);
 
    void insertAliasTemplateInstantiation(AliasDecl *Inst,
-                                         void *insertPos) {
-      AliasTemplateInstatiations.InsertNode(Inst, insertPos);
-   }
+                                         void *insertPos);
 
    llvm::ArrayRef<Attr*> getAttributes(const Decl *D) const;
    void setAttributes(const Decl *D, llvm::ArrayRef<Attr*> attrs) const;
    void addAttribute(const Decl *D, Attr* attr) const;
+   void addAttributes(const Decl *D,  llvm::ArrayRef<Attr*> attrs) const;
+
+   llvm::ArrayRef<StaticExpr*> getConstraints(const Decl *D) const;
+   void setConstraints(const Decl *D, llvm::ArrayRef<StaticExpr*> cvec) const;
+   void addConstraint(const Decl *D, StaticExpr* C) const;
 };
 
 } // namespace ast

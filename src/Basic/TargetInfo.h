@@ -5,7 +5,7 @@
 #ifndef CDOT_TARGETINFO_H
 #define CDOT_TARGETINFO_H
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Triple.h>
 

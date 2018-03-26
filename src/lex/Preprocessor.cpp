@@ -1217,7 +1217,7 @@ Variant PreprocessorImpl::handleBuiltinFn(BuiltinMacro Fn)
             base = unsigned(args[1].getZExtValue());
          }
 
-         return std::stoull(args[0].getString(), nullptr, base);
+         return Variant(std::stoull(args[0].getString(), nullptr, base));
       }
       case BuiltinMacro::ParseFloat: {
          EXPECT_NUM_ARGUMENTS(1)
@@ -1256,7 +1256,7 @@ Variant PreprocessorImpl::handleBuiltinFn(BuiltinMacro Fn)
       case BuiltinMacro::LINE: {
          auto &FileMgr = *Diags.getFileMgr();
          auto l = FileMgr.getLineAndCol(currentTok().getSourceLoc());
-         return uint64_t(l.line);
+         return Variant(uint64_t(l.line));
       }
    }
 

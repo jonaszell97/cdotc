@@ -4,36 +4,29 @@
 
 #include "Compiler.h"
 
-#include "Message/Diagnostics.h"
-
-#include "AST/ASTContext.h"
+#include "AST/Decl.h"
 #include "AST/Transform.h"
-
-#include "AST/Passes/ASTIncludes.h"
 #include "AST/Passes/SemanticAnalysis/Builtin.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
 #include "AST/Passes/SemanticAnalysis/Template.h"
-
 #include "AST/Passes/ILGen/ILGenPass.h"
-#include "AST/NamedDecl.h"
-
+#include "Files/FileManager.h"
 #include "lex/Lexer.h"
-
+#include "Message/Diagnostics.h"
 #include "module/Module.h"
 #include "module/ModuleManager.h"
-
 #include "parse/Parser.h"
 #include "Support/Casting.h"
 #include "Util.h"
-#include "Variant/Type/Type.h"
 
-#include <cstdlib>
 #include <cassert>
+#include <cstdlib>
+#include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <Files/FileManager.h>
 #include <llvm/Support/PrettyStackTrace.h>
 
 using namespace cdot::support;
@@ -44,6 +37,43 @@ using namespace cdot::module;
 
 namespace cdot {
 namespace ast {
+
+namespace {
+
+class DeclPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
+   NamedDecl *D;
+
+public:
+   DeclPrettyStackTraceEntry(NamedDecl *D)
+      : D(D)
+   {}
+
+   void print(llvm::raw_ostream &OS) const override
+   {
+      OS << "while declaring " << D->getDeclName() << "\n";
+   }
+};
+
+} // anonymous namespace
+
+Type *SemaPass::getBuiltinType(DeclarationName typeName)
+{
+   if (!typeName.isSimpleIdentifier())
+      return nullptr;
+
+   return llvm::StringSwitch<Type*>(typeName.getIdentifierInfo()
+                                            ->getIdentifier())
+      .Case("Void", Context.getVoidType())
+      .Case("void", Context.getVoidType())
+#     define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
+      .Case(#Name, Context.get##Name##Ty())
+#     define CDOT_BUILTIN_FP(Name, Precision)               \
+      .Case(#Name, Context.get##Name##Ty())
+#     include "Basic/BuiltinTypes.def"
+      .Case("size", Context.getIntTy())
+      .Case("usize", Context.getUIntTy())
+      .Default(nullptr);
+}
 
 void SemaPass::visitDelayedDeclsAfterParsing()
 {
@@ -99,15 +129,15 @@ void SemaPass::noteInstantiationContext()
       // instantiations of method bodies might not be actual templates, but
       // come from a templated record
       if (D->getSpecializedTemplate()->isTemplate()) {
-         diagnose(D->getInstantiatedFrom(), note_instantiation_of,
+         diagnose(note_instantiation_of, D->getInstantiatedFrom(),
                   D->getSpecializedTemplate()->getSpecifierForDiagnostic(),
-                  D->getSpecializedTemplate()->getName(), true,
+                  D->getSpecializedTemplate()->getDeclName(), true,
                   D->getTemplateArgs().toString('\0', '\0', true));
       }
       else {
-         diagnose(D->getInstantiatedFrom(), note_instantiation_of,
+         diagnose(note_instantiation_of, D->getInstantiatedFrom(),
                   D->getSpecializedTemplate()->getSpecifierForDiagnostic(),
-                  D->getSpecializedTemplate()->getName(), false);
+                  D->getSpecializedTemplate()->getDeclName(), false);
       }
 
       if (auto M = dyn_cast<MethodDecl>(D)) {
@@ -115,9 +145,9 @@ void SemaPass::noteInstantiationContext()
          if (D->getRecord()->isInstantiation()
              && !D->getInstantiatedWithin()->isInstantiation()) {
             auto Record = M->getRecord();
-            diagnose(Record->getInstantiatedFrom(), note_instantiation_of,
+            diagnose(note_instantiation_of, Record->getInstantiatedFrom(),
                      Record->getSpecifierForDiagnostic(),
-                     Record->getSpecializedTemplate()->getName(), true,
+                     Record->getSpecializedTemplate()->getDeclName(), true,
                      Record->getTemplateArgs().toString('\0', '\0', true));
          }
       }
@@ -140,11 +170,11 @@ ast::NamedDecl* SemaPass::lookup(llvm::StringRef name, unsigned lvl) const
 {
    assert(lvl > 0 && lvl <= 3 && "invalid lookup level");
 
-   auto res = getDeclContext().lookup(name);
-   if (res) {
-      assert(res.size() == 1);
-      return res.front();
-   }
+//   auto res = getDeclContext().lookup(name);
+//   if (res) {
+//      assert(res.size() == 1);
+//      return res.front();
+//   }
 
 //   for (auto M : getImportedModules()) {
 //      auto &IT = M->getIdentifierTable();
@@ -318,7 +348,7 @@ void SemaPass::popDeclContext()
    DeclCtx = DeclCtx->getParentCtx();
 }
 
-TemplateParamDecl* SemaPass::getTemplateParam(llvm::StringRef name)
+TemplateParamDecl* SemaPass::getTemplateParam(DeclarationName name)
 {
    for (auto ctx = &getDeclContext(); ctx; ctx = ctx->getParentCtx()) {
       if (auto P = ctx->lookupSingle<TemplateParamDecl>(name))
@@ -328,7 +358,7 @@ TemplateParamDecl* SemaPass::getTemplateParam(llvm::StringRef name)
    return nullptr;
 }
 
-AssociatedTypeDecl* SemaPass::getAssociatedType(llvm::StringRef name)
+AssociatedTypeDecl* SemaPass::getAssociatedType(DeclarationName name)
 {
    for (auto ctx = &getDeclContext(); ctx; ctx = ctx->getParentCtx()) {
       if (auto AT = ctx->lookupSingle<AssociatedTypeDecl>(name))
@@ -426,11 +456,12 @@ void SemaPass::transferDecls(DeclContext *From, DeclContext *To)
 
 StmtResult SemaPass::declareImportStmt(ImportStmt *node)
 {
-   auto M = ModuleManager::importModule(*this, node);
-   node->setModule(M);
-
-   return node;
+//   auto M = ModuleManager::importModule(*this, node);
+//   node->setModule(M);
+//
+//   return node;
 //   ModuleImportsByFile[node->getSourceLoc().getSourceId()].push_back(M);
+   llvm_unreachable("TODO!");
 }
 
 //StmtResult SemaPass::declareModule(module::Module &M)
@@ -474,13 +505,14 @@ StmtResult SemaPass::declareUsingStmt(UsingStmt *Stmt)
       auto subDecl = declContext->lookup(ctx);
       if (!subDecl) {
          diagnose(Stmt, err_generic_error,
-                  " does not have a member named " + ctx);
+                  " does not have a member named " + ctx->getIdentifier());
 
          return Stmt;
       }
       if (subDecl.size() != 1) {
          diagnose(Stmt, err_generic_error,
-                  "reference to member " + ctx + " is ambiguous");
+                  "reference to member " + ctx->getIdentifier()
+                  + " is ambiguous");
 
          return Stmt;
       }
@@ -488,7 +520,7 @@ StmtResult SemaPass::declareUsingStmt(UsingStmt *Stmt)
       declContext = dyn_cast<DeclContext>(subDecl.front());
       if (!declContext) {
          diagnose(Stmt, err_generic_error,
-                  ctx + " is not a valid declaration context");
+                  ctx->getIdentifier() + " is not a valid declaration context");
 
          return Stmt;
       }
@@ -503,13 +535,14 @@ StmtResult SemaPass::declareUsingStmt(UsingStmt *Stmt)
       auto decl = declContext->lookup(item);
       if (!decl) {
          diagnose(Stmt, err_generic_error,
-                  " does not have a member named " + item);
+                  " does not have a member named " + item->getIdentifier());
 
          return Stmt;
       }
       if (decl.size() != 1) {
          diagnose(Stmt, err_generic_error,
-                  "reference to member " + item + " is ambiguous");
+                  "reference to member " + item->getIdentifier()
+                  + " is ambiguous");
 
          return Stmt;
       }
@@ -522,7 +555,8 @@ StmtResult SemaPass::declareUsingStmt(UsingStmt *Stmt)
 
 void SemaPass::ActOnFunctionDecl(FunctionDecl *node)
 {
-   bool isMain = node->getName() == "main"
+   bool isMain = node->getDeclName().isSimpleIdentifier()
+                 && node->getDeclName().getIdentifierInfo()->isStr("main")
                  && isa<TranslationUnit>(getDeclContext());
 
    if (isMain) {
@@ -568,6 +602,8 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
       else if (retTy->isAutoType()) {
          Ret.setResolvedType(Context.getVoidType());
       }
+
+      F->setIsNoReturn(retTy->isUnpopulatedType());
    }
 
    F->createFunctionType(*this);
@@ -628,7 +664,7 @@ bool templateParamsEffectivelyEqual(llvm::ArrayRef<TemplateParamDecl*> P1,
 
 void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
                                                  llvm::StringRef fnKind) {
-   for (auto &decl : C->getDeclContext()->lookup(C->getName())) {
+   for (auto &decl : C->getDeclContext()->lookup(C->getDeclName())) {
       auto Fn = dyn_cast<CallableDecl>(decl);
       if (Fn == C || !Fn)
          continue;
@@ -652,7 +688,7 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
 
       for (auto &arg : FstArgs) {
          auto &other = SndArgs[i++];
-         if (arg->getArgType() != other->getArgType()) {
+         if (arg->getType() != other->getType()) {
             duplicate = false;
             break;
          }
@@ -668,7 +704,7 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
 
 DeclResult SemaPass::declareFuncArgDecl(FuncArgDecl *Decl)
 {
-   auto res = visitSourceType(Decl, Decl->getArgType());
+   auto res = visitSourceType(Decl, Decl->getType());
    if (!res)
       return DeclError();
 
@@ -697,9 +733,9 @@ DeclResult SemaPass::declareTemplateParamDecl(TemplateParamDecl *P)
    if (P->getDefaultValue())
       registerTemplateParamWithDefaultVal(P);
 
-   if (auto Param = getTemplateParam(P->getName())) {
+   if (auto Param = getTemplateParam(P->getDeclName())) {
       diagnose(P, err_template_param_shadow, P->getName());
-      diagnose(Param->getSourceLoc(), note_template_parameter_here);
+      diagnose(Param, note_template_parameter_here);
 
       return DeclError();
    }
@@ -714,7 +750,7 @@ DeclResult SemaPass::declareGlobalVarDecl(GlobalVarDecl *Decl)
    if (alreadyDeclared(Decl))
       return Decl;
 
-   if (auto ty = Decl->getTypeRef()) {
+   if (auto ty = Decl->getType()) {
       auto res = visitSourceType(Decl, ty);
       if (!res)
          return Decl;
@@ -768,6 +804,8 @@ SemaPass::declareGlobalDestructuringDecl(GlobalDestructuringDecl *Decl)
 
 DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 {
+   DeclPrettyStackTraceEntry STE(Rec);
+
    Rec->setOpaque(Rec->hasAttribute<OpaqueAttr>());
 
    if (Rec->getName() != "Any") {
@@ -874,8 +912,12 @@ void SemaPass::declareMemberwiseInitializer(StructDecl *S)
          if (!res) return;
 
          argName += i - '1';
-         auto arg = new (Context) FuncArgDecl(argName.str(), F->getType(),
-                                              nullptr, false, true, false);
+
+         auto Name = &Context.getIdentifiers().get(argName);
+         auto arg = FuncArgDecl::Create(Context, S->getSourceLoc(),
+                                        S->getSourceLoc(),
+                                        Name, F->getType(),
+                                        nullptr, false, true, false);
 
          ++i;
          argName.pop_back();
@@ -883,41 +925,42 @@ void SemaPass::declareMemberwiseInitializer(StructDecl *S)
       }
    }
 
-   auto MDecl = new (Context) InitDecl(move(args), AccessModifier::PUBLIC, {});
+   auto MDecl = InitDecl::Create(Context, S->getAccess(), S->getSourceLoc(),
+                                 move(args), {}, nullptr);
 
    addDeclToContext(*S, MDecl);
    S->setMemberwiseInitializer(MDecl);
 
    MDecl->setSynthesized(true);
    MDecl->setMemberwiseInitializer(true);
-   MDecl->setSourceLoc(S->getSourceLoc());
 
    declareInitDecl(MDecl);
 }
 
 void SemaPass::declareDefaultInitializer(StructDecl *S)
 {
-   auto Decl = new (Context) InitDecl({}, AccessModifier::PRIVATE,
-                                      nullptr, "__default_init");
+   SourceType RetTy(Context.getVoidType());
+   auto Name = &Context.getIdentifiers().get("__default_init");
+   auto Decl = MethodDecl::Create(Context, AccessModifier::PRIVATE,
+                                  S->getSourceLoc(), Name, RetTy, {},
+                                  {}, nullptr, false);
 
    addDeclToContext(*S, Decl);
    S->setDefaultInitializer(Decl);
 
    Decl->setSynthesized(true);
    Decl->setDefaultInitializer(true);
-   Decl->setSourceLoc(S->getSourceLoc());
 
-   declareInitDecl(Decl);
+   declareMethodDecl(Decl);
 }
 
 void SemaPass::declareDefaultDeinitializer(StructDecl *S)
 {
-   auto DDecl = new (Context) DeinitDecl();
+   auto DDecl = DeinitDecl::Create(Context, S->getSourceLoc(), nullptr);
    addDeclToContext(*S, DDecl);
 
    DDecl->setSynthesized(true);
    DDecl->setReturnType(SourceType(Context.getVoidType()));
-   DDecl->setSourceLoc(S->getSourceLoc());
 
    declareDeinitDecl(DDecl);
 }
@@ -985,7 +1028,7 @@ DeclResult SemaPass::declareEnumDecl(EnumDecl *E)
       inheritInitTemplateParams(*this, Case);
 
       for (const auto &assoc : Case->getArgs()) {
-         auto res = visitSourceType(assoc, assoc->getArgType());
+         auto res = visitSourceType(assoc, assoc->getType());
          if (!res)
             return E;
       }
@@ -1022,7 +1065,7 @@ DeclResult SemaPass::declareEnumDecl(EnumDecl *E)
       if (it != caseVals.end()) {
          diagnose(Case, err_generic_error,
                   "duplicate case value " + std::to_string(last));
-         diagnose(it->second->getSourceLoc(), note_duplicate_case);
+         diagnose(it->second, note_duplicate_case);
       }
 
       Case->setRawValue(last);
@@ -1108,10 +1151,12 @@ DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
       string getterName = "__";
       getterName += util::generate_getter_name(F->getName());
 
+      auto Name = &Context.getIdentifiers().get(getterName);
       auto ty = SourceType(fieldTy);
-      auto Getter = new (Context) MethodDecl(move(getterName), ty,
-                                             {}, {}, F->getGetterBody(),
-                                             AccessModifier::PUBLIC);
+      auto Getter = MethodDecl::Create(Context, F->getAccess(),
+                                       F->getSourceLoc(), Name, ty, {},
+                                       {}, F->getGetterBody(),
+                                       F->isStatic());
 
       addDeclToContext(*R, Getter);
       F->setGetterMethod(Getter);
@@ -1121,16 +1166,20 @@ DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
 
    if (F->hasSetter()) {
       auto argType = SourceType(fieldTy);
-      auto arg = new (Context) FuncArgDecl(string(F->getName()),
-                                           argType, nullptr, false, true);
+      auto arg = FuncArgDecl::Create(Context, F->getSourceLoc(),
+                                     F->getSourceLoc(),
+                                     F->getIdentifierInfo(), argType,
+                                     nullptr, false, true);
 
       string setterName = "__";
       setterName += util::generate_setter_name(F->getName());
 
+      auto Name = &Context.getIdentifiers().get(setterName);
       auto retTy = SourceType(Context.getVoidType());
-      auto Setter = new (Context) MethodDecl(move(setterName), retTy,
-                                             { arg }, {}, F->getSetterBody(),
-                                             AccessModifier::PUBLIC);
+      auto Setter = MethodDecl::Create(Context, F->getAccess(),
+                                       F->getSourceLoc(), Name, retTy,
+                                       { arg }, {}, F->getSetterBody(),
+                                       F->isStatic());
 
       addDeclToContext(*R, Setter);
       F->setSetterMethod(Setter);
@@ -1138,7 +1187,7 @@ DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
       declareMethodDecl(Setter);
    }
 
-   if (!F->getType()->isObjectType())
+   if (!F->getType()->isRecordType())
       return F;
 
    auto Rec = F->getType()->getRecord();
@@ -1178,18 +1227,15 @@ DeclResult SemaPass::declarePropDecl(PropDecl *Decl)
       string getterName = "__";
       getterName += util::generate_getter_name(Decl->getName());
 
+      auto Name = &Context.getIdentifiers().get(getterName);
       auto ty = SourceType(propType);
-      auto Getter = new (Context) MethodDecl(move(getterName), ty,
-                                             {}, {}, Decl->getGetterBody(),
-                                             AccessModifier::PUBLIC);
+      auto Getter = MethodDecl::Create(Context, Decl->getAccess(),
+                                       Decl->getSourceLoc(), Name, ty, {},
+                                       {}, Decl->getGetterBody(),
+                                       Decl->isStatic());
 
       Getter->setSynthesized(true);
       Getter->setProperty(true);
-
-      if (auto Body = Getter->getBody())
-         Getter->setSourceLoc(Body->getSourceLoc());
-      else
-         Getter->setSourceLoc(Decl->getSourceLoc());
 
       if (auto Template = Decl->getPropTemplate())
          Getter->setBodyTemplate(Template->getGetterBody());
@@ -1202,24 +1248,23 @@ DeclResult SemaPass::declarePropDecl(PropDecl *Decl)
 
    if (Decl->hasSetter()) {
       auto argType = SourceType(propType);
-      auto arg = new (Context) FuncArgDecl(string(Decl->getName()),
-                                           argType, nullptr, false, true);
+      auto arg = FuncArgDecl::Create(Context, Decl->getSourceLoc(),
+                                     Decl->getSourceLoc(),
+                                     Decl->getIdentifierInfo(), argType,
+                                     nullptr, false, true);
 
       string setterName = "__";
       setterName += util::generate_setter_name(Decl->getName());
 
+      auto Name = &Context.getIdentifiers().get(setterName);
       auto retTy = SourceType(Context.getVoidType());
-      auto Setter = new (Context) MethodDecl(move(setterName), retTy,
-                                             { arg }, {}, Decl->getSetterBody(),
-                                             AccessModifier::PUBLIC);
+      auto Setter = MethodDecl::Create(Context, Decl->getAccess(),
+                                       Decl->getSourceLoc(), Name, retTy,
+                                       { arg }, {}, Decl->getSetterBody(),
+                                       Decl->isStatic());
 
       Setter->setSynthesized(true);
       Setter->setProperty(true);
-
-      if (auto Body = Setter->getBody())
-         Setter->setSourceLoc(Body->getSourceLoc());
-      else
-         Setter->setSourceLoc(Decl->getSourceLoc());
 
       if (auto Template = Decl->getPropTemplate())
          Setter->setBodyTemplate(Template->getSetterBody());
@@ -1263,6 +1308,14 @@ DeclResult SemaPass::declareInitDecl(InitDecl *Init)
    if (alreadyDeclared(Init))
       return Init;
 
+   QualType RecordTy = Context.getRecordType(Init->getRecord());
+   Init->setReturnType(SourceType(RecordTy));
+
+   auto DeclName = Context.getDeclNameTable().getConstructorName(RecordTy);
+
+   Init->setName(DeclName);
+   Init->getRecord()->makeDeclAvailable(DeclName, Init);
+
    auto R = Init->getRecord();
    if (Init->isMemberwise()) {
       if (auto Str = dyn_cast<StructDecl>(R)) {
@@ -1289,6 +1342,14 @@ DeclResult SemaPass::declareDeinitDecl(DeinitDecl *Deinit)
 {
    if (alreadyDeclared(Deinit))
       return Deinit;
+
+   Deinit->setReturnType(SourceType(Context.getVoidType()));
+
+   QualType RecordTy = Context.getRecordType(Deinit->getRecord());
+   auto DeclName = Context.getDeclNameTable().getDestructorName(RecordTy);
+
+   Deinit->setName(DeclName);
+   Deinit->getRecord()->makeDeclAvailable(DeclName, Deinit);
 
    return declareCallableDecl(Deinit);
 }
@@ -1340,8 +1401,10 @@ TypeResult SemaPass::visitSourceType(Statement *S, const SourceType &Ty)
 
 TypeResult SemaPass::visitSourceType(const SourceType &Ty)
 {
-   if (!Ty.getTypeExpr())
+   if (!Ty.getTypeExpr()) {
+      assert(Ty.getResolvedType() && "source ty with no expr or resolved type");
       return Ty.getResolvedType();
+   }
 
    auto Result = visitExpr(Ty.getTypeExpr());
    if (!Result)
@@ -1399,10 +1462,14 @@ ExprResult SemaPass::visitArrayTypeExpr(ArrayTypeExpr *Expr)
                                         : UnknownAnyTy;
 
    QualType ResultTy;
-
    auto SizeExpr = Expr->getSizeExpr();
-   if (auto Ident = dyn_cast<IdentifierRefExpr>(SizeExpr->getExpr())) {
-      if (getTemplateParam(Ident->getIdent())) {
+
+   // inferred array size
+   if (!SizeExpr) {
+      ResultTy = Context.getInferredSizeArrayType(ElementTy);
+   }
+   else if (auto Ident = dyn_cast<IdentifierRefExpr>(SizeExpr->getExpr())) {
+      if (getTemplateParam(Ident->getIdentInfo())) {
          ResultTy = Context.getValueDependentSizedArrayType(ElementTy, Ident);
       }
    }

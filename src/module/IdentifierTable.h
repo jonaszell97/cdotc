@@ -44,7 +44,7 @@ public:
                    std::unique_ptr<llvm::MemoryBuffer> &&Buf,
                    SourceLocation importLoc);
 
-   ~IdentifierTable();
+   ~IdentifierTable() {}
 
    Decl *lookup(llvm::StringRef name,
                 QueryLevel required = QL_Interface);

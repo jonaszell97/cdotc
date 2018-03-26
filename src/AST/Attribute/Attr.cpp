@@ -5,6 +5,7 @@
 #include "Attr.h"
 
 #include "AST/ASTContext.h"
+#include "AST/Expression.h"
 #include "Support/Casting.h"
 #include "Variant/Variant.h"
 

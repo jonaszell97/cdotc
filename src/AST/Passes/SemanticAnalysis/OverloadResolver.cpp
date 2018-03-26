@@ -4,16 +4,15 @@
 
 #include "OverloadResolver.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 #include "CandidateSet.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/StringSet.h>
-#include <AST/Passes/ASTIncludes.h>
 
 using namespace cdot::support;
 using namespace cdot::sema;
@@ -50,7 +49,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
          needed = neededArgs[i];
 
          auto &argDecl = declaredArgs[i];
-         if (argDecl->getArgType().getTypeExpr()->isVariadicArgPackExpansion()){
+         if (argDecl->getType().getTypeExpr()->isVariadicArgPackExpansion()){
             foundVariadic = true;
          }
       }
@@ -100,7 +99,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                                         Statement *Caller) {
    size_t i = 0;
    std::vector<QualType> resolvedGivenArgs;
-   auto neededArgs = FuncTy->getArgTypes();
+   auto neededArgs = FuncTy->getParamTypes();
 
    for (auto &arg : args) {
       QualType needed;
@@ -159,7 +158,7 @@ static bool incompatibleSelf(SemaPass &SP,
          if (givenSelf->isReferenceType())
             givenSelf = givenSelf->getReferencedType();
 
-         if (!givenSelf->isObjectType()
+         if (!givenSelf->isRecordType()
                || givenSelf->getRecord() != M->getRecord()) {
             Cand.setHasIncompatibleSelfArgument(
                SP.getContext().getRecordType(M->getRecord()), givenSelf);
@@ -178,6 +177,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
    bool ambiguous  = false;
 
    for (auto &Cand : CandSet.Candidates) {
+      assert(Cand.isBuiltinCandidate() || Cand.Func->isTemplate()
+             || Cand.Func->getFunctionType()
+                && "function without function type");
+
       if (Cand.Func) {
          if (!SP.ensureDeclared(Cand.Func)) {
             Cand.setIsInvalid();
@@ -255,7 +258,7 @@ void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
       Cand.TemplateArgs = TemplateArgList(SP, Cand.Func, givenTemplateArgs,
                                           listLoc);
 
-      std::vector<QualType> resolvedNeededArgs = FuncTy->getArgTypes();
+      std::vector<QualType> resolvedNeededArgs = FuncTy->getParamTypes();
       if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
                                        resolvedNeededArgs, Cand, Caller)) {
          return;
@@ -373,7 +376,7 @@ void OverloadResolver::isCallCompatible(CandidateSet::Candidate &Cand,
                                         llvm::SmallVectorImpl<ConversionSequence>
                                                                    &Conversions,
                                         size_t firstDefaultArg) {
-   auto neededArgs = FuncTy->getArgTypes();
+   auto neededArgs = FuncTy->getParamTypes();
    size_t numGivenArgs = givenArgs.size();
    size_t numNeededArgs = neededArgs.size();
 
@@ -419,7 +422,7 @@ OverloadResolver::isVarargCallCompatible(CandidateSet::Candidate &Cand,
    if (FuncTy->isCStyleVararg())
       return;
 
-   auto neededArgs = FuncTy->getArgTypes();
+   auto neededArgs = FuncTy->getParamTypes();
    auto vaTy = neededArgs.back();
 
    // we only need to check the remaining arguments, others have been checked
@@ -443,8 +446,8 @@ OverloadResolver::resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
                                       TemplateArgList const& templateArgs) {
    size_t i = 0;
    for (auto &arg : neededArgs) {
-      if (arg->getArgType().getTypeExpr()->isVariadicArgPackExpansion()) {
-         auto typeName = arg->getArgType()->uncheckedAsGenericType()
+      if (arg->getType().getTypeExpr()->isVariadicArgPackExpansion()) {
+         auto typeName = arg->getType()->uncheckedAsGenericType()
                             ->getGenericTypeName();
 
          assert(resolvedArgs.back()->isDependentType()
@@ -462,7 +465,7 @@ OverloadResolver::resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
          break;
       }
 
-      auto ty = arg->getArgType().getResolvedType();
+      auto ty = arg->getType().getResolvedType();
       resolvedArgs[i] = QualType(SP.resolveDependencies(ty, templateArgs,
                                                         Caller));
 

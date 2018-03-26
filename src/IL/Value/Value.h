@@ -10,7 +10,7 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/SmallVector.h>
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 #include "lex/SourceLocation.h"
 #include "Support/Casting.h"
 

@@ -39,6 +39,8 @@ def err_expected_default_value : Error<"expecting default value">
 
 def err_covar_convar_already_specified : Error<"${ 0 | select(covariance, contravariance) } already specified">
 
+def err_inferred_arr_size_not_allowed : Error<"array type with inferred size is only allowed with variable declarations">
+
 def err_mutating_non_method : Error<"expected method declaration after 'mutating'">
 def err_cannot_be_static : Error<"$0 cannot be static">
 def err_duplicate_decl_kind : Error<"unexpected declaration keyword">
@@ -136,6 +138,8 @@ def err_could_not_infer_arr_element_type : Error<"could not infer array literal 
 
 def err_no_builtin_decl : Error<"${ 0 | select(none, optional type, array literal, dictionary literal, string literal) } cannot be used because the declaration for '${ 0 | select(Option, Option, Array, Dictionary, String) }' was not found">
 
+def warn_expr_result_unused : Warning<"expression result unused">
+
 // (Re-)Declaration
 def err_redeclared_symbol : Error<"redeclaration of '$0'${ 1 | if(  as a different kind of symbol) }">
 def note_previous_decl : Note<"previous declaration here">
@@ -213,6 +217,7 @@ def err_maximum_branch_depth : Error<"maximum branching depth of $0 exceeded whi
 def err_no_definition : Error<"declared function '$0' cannot be evaluated at compile time">
 def note_call_chain : Note<"call chain: $0">
 def err_fn_called_during_ctfe : Error<"'$0' ${ 1 | select(was called, cannot be called) } during compile time function evaluation">
+def err_unreachable_during_ctfe : Error<"'unreachable' instruction encountered during compile time function evaluation">
 
 def note_printf_ctfe : Note<"'printf' encountered during ctfe: $0">
 
@@ -352,6 +357,8 @@ def warn_main_return_type : Warning<"return type of 'main' will always be set to
 def err_main_invalid_signature : Error<"invalid signature for 'main'">
 def err_returning_incomp_type : Error<"returning value of type $0 from function with declared return type $1">
 def err_not_all_code_paths_return : Error<"not all code paths return a value">
+def err_return_in_noreturn_func : Error<"function that returns an unpopulated type may not return normally">
+def err_control_reaches_end_noreturn : Error<"control reaches the end of a noreturn function">
 def err_func_redeclaration : Error<"redeclaration of ${ 0 | select(function,method) } $1 with the same signature as a previous declaration">
 def note_func_redeclaration_memberwise_init : Note<"previous declaration is the memberwise initializer">
 def note_func_redeclaration : Note<"previous declaration is here">

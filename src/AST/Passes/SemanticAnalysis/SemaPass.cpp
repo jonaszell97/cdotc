@@ -4,28 +4,23 @@
 
 #include "SemaPass.h"
 
+#include "AST/Passes/SemanticAnalysis/ConformanceChecker.h"
 #include "AST/Passes/SemanticAnalysis/OverloadResolver.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
-#include "AST/Passes/SemanticAnalysis/ConformanceChecker.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
-#include "AST/Passes/ASTIncludes.h"
-
 #include "AST/Passes/AbstractPass.h"
-#include "AST/ASTContext.h"
 #include "AST/Traverse.h"
-
+#include "AST/Type.h"
 #include "Message/Diagnostics.h"
 #include "module/ModuleManager.h"
-
 #include "Support/Casting.h"
 #include "Support/Format.h"
 
-#include "Variant/Type/Type.h"
-
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -33,6 +28,23 @@ using namespace cdot::sema;
 
 namespace cdot {
 namespace ast {
+namespace {
+
+class DeclPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
+   NamedDecl *D;
+
+public:
+   DeclPrettyStackTraceEntry(NamedDecl *D)
+      : D(D)
+   {}
+
+   void print(llvm::raw_ostream &OS) const override
+   {
+      OS << "while visiting '" << D->getFullName() << "'\n";
+   }
+};
+
+} // anonymous namespace
 
 class SemaDiagConsumer: public DiagnosticConsumer {
 public:
@@ -59,7 +71,7 @@ public:
                       << " emitted.\n";
       }
       else if (NumWarn) {
-         llvm::outs() << NumErrs << " warning" << (NumWarn > 1 ? "s": "")
+         llvm::outs() << NumWarn << " warning" << (NumWarn > 1 ? "s": "")
                       << " emitted.\n";
       }
       else if (NumErrs) {
@@ -78,7 +90,7 @@ SemaPass::SemaPass(CompilationUnit &compilationUnit)
    : compilationUnit(&compilationUnit),
      DiagConsumer(std::make_unique<SemaDiagConsumer>()),
      Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
-     Context(compilationUnit.getContext()),
+     Context(compilationUnit.getContext()), mangle(*this),
      Evaluator(*this), CandBuilder(*this), Instantiator(*this),
      ILGen(std::make_unique<ILGenPass>(compilationUnit.getILCtx(), *this)),
      fatalError(false), fatalErrorInScope(false), EncounteredError(false),
@@ -92,35 +104,9 @@ SemaPass::~SemaPass()
    issueDiagnostics();
 }
 
-ObjectType* SemaPass::getObjectTy(llvm::StringRef name) const
+RecordType* SemaPass::getObjectTy(llvm::StringRef name) const
 {
    return Context.getRecordType(getRecord(name));
-}
-
-ObjectType* SemaPass::getObjectTy(Type::BoxedPrimitive kind) const
-{
-   switch (kind) {
-#  define CDOT_PRIMITIVE(Name, BW, Unsigned) \
-      case Type::Name: return Context.getRecordType(getRecord(#Name));
-#  include "Variant/Type/Primitive.def"
-      default:
-         llvm_unreachable("not a primitive!");
-   }
-}
-
-cdot::Type *SemaPass::getBuiltinType(llvm::StringRef typeName)
-{
-   return llvm::StringSwitch<cdot::Type*>(typeName)
-      .Case("Void", Context.getVoidType())
-      .Case("void", Context.getVoidType())
-#     define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
-      .Case(#Name, Context.get##Name##Ty())
-#     define CDOT_BUILTIN_FP(Name, Precision)               \
-      .Case(#Name, Context.get##Name##Ty())
-#     include "Basic/BuiltinTypes.def"
-      .Case("size", Context.getIntTy())
-      .Case("usize", Context.getUIntTy())
-      .Default(nullptr);
 }
 
 bool SemaPass::doDeclarations()
@@ -208,7 +194,7 @@ void SemaPass::updateParentMapForTemplateInstantiation(Statement *Template,
 }
 
 void SemaPass::addDeclToContext(DeclContext &Ctx,
-                                llvm::StringRef declName,
+                                DeclarationName declName,
                                 NamedDecl *Decl) {
    auto res = isa<RecordDecl>(&Ctx)
                 ? cast<RecordDecl>(&Ctx)->addDecl(Decl)
@@ -218,24 +204,24 @@ void SemaPass::addDeclToContext(DeclContext &Ctx,
       case DeclContext::ADR_Success:
          break;
       case DeclContext::ADR_Duplicate: {
-         auto prev = Ctx.lookup(Decl->getName());
+         auto prev = Ctx.lookup(Decl->getDeclName());
          assert(!prev.empty());
 
          diagnose(Decl, err_redeclared_symbol,
-                  Decl->getName(), false, Decl->getSourceLoc());
+                  Decl->getDeclName(), false, Decl->getSourceLoc());
 
-         diagnose(Decl, note_previous_decl, prev.front()->getSourceLoc());
+         diagnose(note_previous_decl, prev.front()->getSourceLoc());
 
          break;
       }
       case DeclContext::ADR_DuplicateDifferentKind: {
-         auto prev = Ctx.lookup(Decl->getName());
+         auto prev = Ctx.lookup(Decl->getDeclName());
          assert(!prev.empty());
 
          diagnose(Decl, err_redeclared_symbol,
-                  Decl->getName(), true, Decl->getSourceLoc());
+                  Decl->getDeclName(), true, Decl->getSourceLoc());
 
-         diagnose(Decl, note_previous_decl, prev.front()->getSourceLoc());
+         diagnose(note_previous_decl, prev.front()->getSourceLoc());
 
          break;
       }
@@ -244,7 +230,7 @@ void SemaPass::addDeclToContext(DeclContext &Ctx,
 
 void SemaPass::addDeclToContext(DeclContext &Ctx, NamedDecl *Decl)
 {
-   addDeclToContext(Ctx, Decl->getName(), Decl);
+   addDeclToContext(Ctx, Decl->getDeclName(), Decl);
 }
 
 void SemaPass::addDeclToContext(DeclContext &Ctx, Decl *D)
@@ -363,12 +349,12 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
 
    if (Expr->isVariadicArgPackExpansion()) {
       if (!Expr->containsUnexpandedParameterPack()) {
-         diagnose(Expr, err_invalid_pack_expansion);
+         diagnose(Expr, err_invalid_pack_expansion, Expr->getSourceRange());
          Expr->setIsVariadicArgPackExpansion(false);
       }
    }
    else if (Expr->containsUnexpandedParameterPack()) {
-      diagnose(Expr, err_unexpanded_pack);
+      diagnose(Expr, err_unexpanded_pack, Expr->getSourceRange());
    }
 
    if (Expr->getExprType()->isDependentType())
@@ -386,7 +372,8 @@ StmtResult SemaPass::visit(Statement *stmt, bool)
             Result = visit##Name(cast<Name>(stmt)); break;
 #     define CDOT_EXPR(Name)                                            \
          case AstNode::Name##ID: {                                      \
-            auto res = visit##Name(cast<Name>(stmt));                   \
+            auto E = cast<Name>(stmt);                                  \
+            auto res = visit##Name(E);                                  \
             Result = res ? StmtResult(res.get()) : StmtError(); break;  \
          }
 #     include "AST/AstNode.def"
@@ -397,6 +384,11 @@ StmtResult SemaPass::visit(Statement *stmt, bool)
 
    if (!Result) {
       return Result;
+   }
+
+   if (auto E = dyn_cast<Expression>(Result.get())) {
+      if (E->warnOnUnusedResult())
+         diagnose(warn_expr_result_unused, E->getSourceRange());
    }
 
    Result.get()->setSemanticallyChecked(true);
@@ -510,7 +502,7 @@ bool SemaPass::hasDefaultValue(QualType type) const
          return true;
       case TypeID::ArrayTypeID:
          return hasDefaultValue(type->asArrayType()->getElementType());
-      case TypeID::ObjectTypeID: {
+      case TypeID::RecordTypeID: {
          auto S = dyn_cast<StructDecl>(type->getRecord());
          return S && S->getParameterlessConstructor() != nullptr;
       }
@@ -565,11 +557,11 @@ SemaPass::resolveDependencies(QualType Ty,
                              PointOfInstantiation),
          ArrTy->getNumElements());
    }
-   case TypeID::InferredArrayTypeID: {
+   case TypeID::DependentSizeArrayTypeID: {
       llvm_unreachable("not yet");
    }
-   case TypeID::InconcreteObjectTypeID:
-   case TypeID::ObjectTypeID: {
+   case TypeID::DependentRecordTypeID:
+   case TypeID::RecordTypeID: {
       if (!Ty->getRecord()->isTemplate())
          return Ty;
 
@@ -607,7 +599,7 @@ SemaPass::resolveDependencies(QualType Ty,
       auto ret = Func->getReturnType();
       ret = resolveDependencies(*ret, templateArgs, PointOfInstantiation);
 
-      auto args = Func->getArgTypes();
+      auto args = Func->getParamTypes();
       llvm::SmallVector<QualType, 8> copy(args.begin(), args.end());
       for (auto &arg : copy)
          arg = resolveDependencies(*arg, templateArgs, PointOfInstantiation);
@@ -701,15 +693,15 @@ QualType SemaPass::resolveDependencies(QualType Ty, RecordDecl *R,
             resolveDependencies(*Ty->asPointerType()->getPointeeType(), R,
                                 PointOfInstantiation));
       case TypeID::ArrayTypeID:
-      case TypeID::InferredArrayTypeID:{
+      case TypeID::DependentSizeArrayTypeID:{
          auto ArrTy = Ty->asArrayType();
          return Context.getArrayType(
             resolveDependencies(*ArrTy->getElementType(), R,
                                 PointOfInstantiation),
             ArrTy->getNumElements());
       }
-      case TypeID::InconcreteObjectTypeID:
-      case TypeID::ObjectTypeID: {
+      case TypeID::DependentRecordTypeID:
+      case TypeID::RecordTypeID: {
          if (!Ty->getRecord()->isTemplate())
             return Ty;
 
@@ -750,7 +742,7 @@ QualType SemaPass::resolveDependencies(QualType Ty, RecordDecl *R,
          auto ret = Func->getReturnType();
          ret = resolveDependencies(*ret, R, PointOfInstantiation);
 
-         auto args = Func->getArgTypes();
+         auto args = Func->getParamTypes();
          llvm::SmallVector<QualType, 8> copy(args.begin(), args.end());
          for (auto &arg : copy)
             arg = resolveDependencies(*arg, R, PointOfInstantiation);
@@ -784,7 +776,8 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
    auto ConvSeq = getConversionSequence(originTy, destTy);
    if (!ConvSeq.isValid()) {
       if (!ignoreError)
-         diagnose(Expr, msg, diag::opt::show_constness, originTy, destTy);
+         diagnose(Expr, msg, diag::opt::show_constness, originTy, destTy,
+                  Expr->getSourceRange());
 
       Expr->setExprType(destTy);
       return Expr;
@@ -796,7 +789,8 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
    if (ConvSeq.getStrength() != CastStrength ::Implicit) {
       if (!ignoreError)
          diagnose(Expr, err_cast_requires_op, diag::opt::show_constness,
-                  destTy, originTy, (int)ConvSeq.getStrength() - 1);
+                  destTy, originTy, (int)ConvSeq.getStrength() - 1,
+                  Expr->getSourceRange());
 
       Expr->setExprType(destTy);
       return Expr;
@@ -806,8 +800,6 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
       if (Step.getKind() == CastKind::ConversionOp)
          if (auto M = dyn_cast<MethodDecl>(Step.getConversionOp()))
          maybeInstantiateMemberFunction(M, Expr);
-
-   auto loc = Expr->getSourceLoc();
 
    return ImplicitCastExpr::Create(Context, Expr, std::move(ConvSeq));
 }
@@ -898,6 +890,7 @@ DeclResult SemaPass::visitCallableDecl(CallableDecl *CD)
    if (CD->isInvalid())
       return CD;
 
+   DeclPrettyStackTraceEntry STE(CD);
    DeclContextRAII raii(*this, CD);
    ScopeGuard scope(*this, CD);
 
@@ -922,7 +915,8 @@ DeclResult SemaPass::visitCallableDecl(CallableDecl *CD)
 
       if (!UnresolvedGotos.empty()) {
          diagnose(UnresolvedGotos.begin()->second, err_label_not_found,
-                  UnresolvedGotos.begin()->first().str());
+                  UnresolvedGotos.begin()->first().str(),
+                  UnresolvedGotos.begin()->second->getSourceLoc());
 
          UnresolvedGotos.clear();
       }
@@ -956,13 +950,15 @@ DeclResult SemaPass::visitCompoundDecl(CompoundDecl *D)
 
 bool SemaPass::visitVarDecl(VarDecl *Decl)
 {
-   auto typeResult = visitSourceType(Decl, Decl->getTypeRef());
+   auto typeResult = visitSourceType(Decl, Decl->getType());
    if (!typeResult)
       return false;
 
    auto declaredType = typeResult.get();
    if (declaredType->isAutoType() && !Decl->getValue()) {
-      diagnose(Decl, err_decl_requires_init, isa<GlobalVarDecl>(Decl));
+      diagnose(Decl, err_decl_requires_init, isa<GlobalVarDecl>(Decl),
+         Decl->getSourceRange());
+
       return false;
    }
 
@@ -983,21 +979,33 @@ bool SemaPass::visitVarDecl(VarDecl *Decl)
 
       QualType givenType = result.get()->getExprType();
       if (givenType->isVoidType())
-         diagnose(Decl, err_cannot_assign_void);
+         diagnose(Decl, err_cannot_assign_void, val->getSourceRange(),
+                  Decl->getSourceLoc());
 
       if (!val->isLValue() && givenType->needsStructReturn())
          Decl->setCanElideCopy(true);
 
+      if (declaredType->isInferredSizeArrayType()) {
+         if (givenType->isArrayType()) {
+            declaredType = Context.getArrayType(declaredType->asArrayType()
+                                                         ->getElementType(),
+                                                givenType->asArrayType()
+                                                         ->getNumElements());
+
+            Decl->getType().setResolvedType(declaredType);
+         }
+      }
+
       if (!declaredType || declaredType->isAutoType()) {
          if (!givenType->isDependentType())
-            Decl->getTypeRef().setResolvedType(givenType);
+            Decl->getType().setResolvedType(givenType);
       }
       else {
          implicitCastIfNecessary(val, givenType, declaredType);
       }
    }
    else if (!hasDefaultValue(declaredType)) {
-      diagnose(Decl, err_not_initialized);
+      diagnose(Decl, err_not_initialized, Decl->getSourceRange());
    }
 
    return true;
@@ -1006,17 +1014,18 @@ bool SemaPass::visitVarDecl(VarDecl *Decl)
 DeclResult SemaPass::visitLocalVarDecl(LocalVarDecl *Decl)
 {
    auto valid = visitVarDecl(Decl);
-   if (Decl->isCtfeDependent())
-      return DeclError();
-
    if (!valid)
-      Decl->getTypeRef().setResolvedType(UnknownAnyTy);
+      Decl->getType().setResolvedType(UnknownAnyTy);
 
    llvm::SmallString<128> scopedName;
    scopedName += Decl->getName();
    support::formatInteger(getBlockScope()->getScopeID(), scopedName);
 
-   getDeclContext().makeDeclAvailable(scopedName.str(), Decl);
+   DeclarationName DeclName =
+      Context.getDeclNameTable().getNormalIdentifier(
+         Context.getIdentifiers().get(scopedName.str()));
+
+   getDeclContext().makeDeclAvailable(DeclName, Decl);
    return Decl;
 }
 
@@ -1028,11 +1037,13 @@ DeclResult SemaPass::visitGlobalVarDecl(GlobalVarDecl *Decl)
    auto valid = visitVarDecl(Decl);
    if (!valid) {
       Decl->setIsInvalid(true);
-      Decl->getTypeRef().setResolvedType(Context.getUnknownAnyTy());
+      Decl->getType().setResolvedType(Context.getUnknownAnyTy());
    }
    else {
       ILGen->DeclareGlobalVariable(Decl);
    }
+
+   Decl->setGlobalOrdering(numGlobals++);
 
    return Decl;
 }
@@ -1066,7 +1077,7 @@ bool SemaPass::visitDestructuringDecl(DestructuringDecl *node)
          goto fail;
    }
 
-   if (givenTy->isObjectType()) {
+   if (givenTy->isRecordType()) {
       auto R = givenTy->getRecord();
 
       auto &allOverloads = R->getDestructuringOperators();
@@ -1084,10 +1095,10 @@ bool SemaPass::visitDestructuringDecl(DestructuringDecl *node)
             return true;
          }
          else if (dist > 1) {
-            diagnose(node, err_ambiguous_destructure);
+            diagnose(node, err_ambiguous_destructure, node->getSourceRange());
 
             while (viableOverloads.first != viableOverloads.second) {
-               diagnose(node, note_candidate_here,
+               diagnose(note_candidate_here,
                         viableOverloads.first->second->getSourceLoc());
 
                ++viableOverloads.first;
@@ -1102,9 +1113,10 @@ bool SemaPass::visitDestructuringDecl(DestructuringDecl *node)
             auto &overload = viableOverloads.first->second;
             if (implicitlyCastableTo(overload->getReturnType(), declTy)) {
                if (destructuringOp) {
-                  diagnose(node, err_ambiguous_destructure);
-                  diagnose(node, note_candidate_here, overload->getSourceLoc());
-                  diagnose(node, note_candidate_here,
+                  diagnose(node, err_ambiguous_destructure,
+                           node->getSourceRange());
+                  diagnose(note_candidate_here, overload->getSourceLoc());
+                  diagnose(note_candidate_here,
                            destructuringOp->getSourceLoc());
 
                   return false;
@@ -1174,10 +1186,12 @@ bool SemaPass::visitDestructuringDecl(DestructuringDecl *node)
 
    fail:
    if (declTy) {
-      diagnose(node, err_bad_destructure_type, givenTy, declTy);
+      diagnose(node, err_bad_destructure_type, givenTy, declTy,
+               node->getType().getTypeExpr()->getSourceRange());
    }
    else {
-      diagnose(node, err_bad_destructure_count, givenTy, numDecls);
+      diagnose(node, err_bad_destructure_count, givenTy, numDecls,
+               node->getValue()->getSourceRange());
    }
 
    return false;
@@ -1247,7 +1261,8 @@ static TypeResult checkForInStmt(SemaPass &SP, ForInStmt *Stmt)
 
    Stmt->setRangeExpr(RangeResult.get());
 
-   auto GetIteratorResult = SP.lookupFunction("getIterator",
+   auto *II = &SP.getContext().getIdentifiers().get("getIterator");
+   auto GetIteratorResult = SP.lookupFunction(II,
                                               { Stmt->getRangeExpr() },
                                               {}, Stmt);
 
@@ -1262,10 +1277,10 @@ static TypeResult checkForInStmt(SemaPass &SP, ForInStmt *Stmt)
 
    Stmt->setGetIteratorFn(GetIteratorFn);
 
+   II = &SP.getContext().getIdentifiers().get("next");
    auto Iterator = GetIteratorFn->getReturnType();
-   auto NextRes = SP.lookupFunction("next",
-                                    { BuiltinExpr::Create(SP.getContext(),
-                                                          Iterator) },
+   auto NextRes = SP.lookupFunction(II, { BuiltinExpr::Create(SP.getContext(),
+                                                              Iterator) },
                                     {}, Stmt);
 
    if (!NextRes)
@@ -1288,27 +1303,20 @@ static TypeResult checkForInStmt(SemaPass &SP, ForInStmt *Stmt)
    }
 
    if (!valid) {
-      SP.diagnose(Stmt, err_iterator_must_return_option);
+      SP.diagnose(Stmt, err_iterator_must_return_option,
+                  Stmt->getSourceRange());
 
       return TypeError();
    }
 
-   return TypeResult(QualType(Option->getTemplateArg("T")->getType(),
-                              Stmt->getDecl()->isConst()));
+   return Option->getTemplateArg("T")->getType();
 }
 
 StmtResult SemaPass::visitForInStmt(ForInStmt *Stmt)
 {
    ScopeGuard scope(*this);
 
-   auto typeResult = checkForInStmt(*this, Stmt);
-   if (typeResult) {
-      Stmt->setIteratedType(typeResult.get());
-   }
-   else {
-      Stmt->setIteratedType(UnknownAnyTy);
-   }
-
+   (void)checkForInStmt(*this, Stmt);
    if (auto Body = Stmt->getBody()) {
       ScopeGuard loopScope(*this, true, true);
 
@@ -1363,7 +1371,8 @@ RecordDecl* SemaPass::getDictionaryDecl()
 {
    if (!DictionaryDecl) {
       auto TU = getDeclContext().getTranslationUnit();
-      DictionaryDecl = TU->lookupSingle<RecordDecl>("Dictionary");
+      static auto *II = &Context.getIdentifiers().get("Dictionary");
+      DictionaryDecl = TU->lookupSingle<RecordDecl>(II);
    }
 
    return DictionaryDecl;
@@ -1375,7 +1384,7 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral *Dict)
    QualType valueTy;
 
    if (auto Ctx = Dict->getContextualType()) {
-      if (!Ctx->isObjectType())
+      if (!Ctx->isRecordType())
          goto no_contextual;
 
       auto DictRec = dyn_cast<ClassDecl>(Ctx->getRecord());
@@ -1417,7 +1426,9 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral *Dict)
 
    auto Dictionary = getDictionaryDecl();
    if (!Dictionary) {
-      diagnose(Dict, err_no_builtin_decl, /*Dictionary*/ 3);
+      diagnose(Dict, err_no_builtin_decl, Dict->getSourceLoc(),
+               /*Dictionary*/ 3);
+
       return ExprError();
    }
 
@@ -1429,7 +1440,9 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral *Dict)
    auto Inst = Instantiator.InstantiateRecord(Dict, Dictionary,
                                               std::move(list));
 
-   auto put = Inst->getMethod("put");
+   static auto *PutII = &Context.getIdentifiers().get("put");
+
+   auto put = Inst->getMethod(PutII);
    maybeInstantiateMemberFunction(put, Dict);
 
    Dict->setExprType(Context.getRecordType(Inst));
@@ -1440,7 +1453,8 @@ RecordDecl* SemaPass::getArrayDecl()
 {
    if (!ArrayDecl) {
       auto TU = getDeclContext().getTranslationUnit();
-      ArrayDecl = TU->lookupSingle<RecordDecl>("Array");
+      static auto *II = &Context.getIdentifiers().get("Array");
+      ArrayDecl = TU->lookupSingle<RecordDecl>(II);
    }
 
    return ArrayDecl;
@@ -1454,16 +1468,14 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
 
    if (auto Ctx = Expr->getContextualType()) {
       if ((ArrTy = Ctx->asArrayType())) {
-         if (Expr->size() != ArrTy->getNumElements())
-            goto no_contextual;
-
          elementTy = ArrTy->getElementType();
       }
-      else if (ObjectType *Obj = Ctx->asObjectType()) {
+      else if (RecordType *Obj = Ctx->asRecordType()) {
          auto R = Obj->getRecord();
          auto ArrayDecl = getArrayDecl();
          if (!ArrayDecl) {
-            diagnose(Expr, err_no_builtin_decl, /*Array*/ 2);
+            diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
+                     /*Array*/ 2);
             return ExprError();
          }
 
@@ -1486,7 +1498,8 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
       no_contextual:
       auto res = unify(*this, Expr, Expr->getValues());
       if (!res || !res.get()) {
-         diagnose(Expr, err_could_not_infer_arr_element_type);
+         diagnose(Expr, err_could_not_infer_arr_element_type,
+                  Expr->getSourceRange());
 
          return ExprError();
       }
@@ -1496,13 +1509,18 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
    }
 
    if (ArrTy) {
+      if (ArrTy->isInferredSizeArrayType()) {
+         ArrTy = Context.getArrayType(ArrTy->getElementType(), Expr->size());
+      }
+
       Expr->setExprType(ArrTy);
       return Expr;
    }
 
    auto Array = getArrayDecl();
    if (!Array) {
-      diagnose(Expr, err_no_builtin_decl, /*Array*/ 2);
+      diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
+               /*Array*/ 2);
       return ExprError();
    }
 
@@ -1631,7 +1649,8 @@ RecordDecl* SemaPass::getOptionDecl()
 {
    if (!OptionDecl) {
       auto TU = getDeclContext().getTranslationUnit();
-      OptionDecl = TU->lookupSingle<RecordDecl>("Option");
+      auto *II = &Context.getIdentifiers().get("Option");
+      OptionDecl = TU->lookupSingle<RecordDecl>(II);
    }
 
    return OptionDecl;
@@ -1641,16 +1660,22 @@ ExprResult SemaPass::visitNoneLiteral(NoneLiteral *Expr)
 {
    auto Opt = getOptionDecl();
    if (!Opt) {
-      diagnose(Expr, err_no_builtin_decl, /*none*/ 0);
+      diagnose(Expr, err_no_builtin_decl, Expr->getSourceRange(),
+               /*none*/ 0);
+
       return ExprError();
    }
 
    if (Expr->getContextualType().isNull()) {
-      diagnose(Expr, err_requires_contextual_type, "'none'");
+      diagnose(Expr, err_requires_contextual_type, Expr->getSourceRange(),
+               "'none'");
+
       return {};
    }
    if (!Expr->getContextualType()->isOptionTy()) {
-      diagnose(Expr, err_type_mismatch, Expr->getContextualType(), "Option");
+      diagnose(Expr, err_type_mismatch, Expr->getSourceRange(),
+               Expr->getContextualType(), "Option");
+
       return {};
    }
 
@@ -1662,7 +1687,8 @@ RecordDecl* SemaPass::getStringDecl()
 {
    if (!StringDecl) {
       auto TU = getDeclContext().getTranslationUnit();
-      StringDecl = TU->lookupSingle<RecordDecl>("String");
+      auto *II = &Context.getIdentifiers().get("String");
+      StringDecl = TU->lookupSingle<RecordDecl>(II);
    }
 
    return StringDecl;
@@ -1682,7 +1708,9 @@ ExprResult SemaPass::visitStringLiteral(StringLiteral *Expr)
 
    auto Str = getStringDecl();
    if (!Str) {
-      diagnose(Expr, err_no_builtin_decl, /*String*/ 4);
+      diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
+               /*String*/ 4);
+
       return ExprError();
    }
 
@@ -1703,7 +1731,8 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation *Expr)
 
    auto Str = getStringDecl();
    if (!Str) {
-      diagnose(Expr, err_no_builtin_decl, /*String*/ 4);
+      diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
+               /*String*/ 4);
       return ExprError();
    }
 
@@ -1715,7 +1744,8 @@ StmtResult SemaPass::visitBreakStmt(BreakStmt *Stmt)
 {
    auto LS = getLoopScope();
    if (!LS || !LS->isBreakable())
-      diagnose(Stmt, err_loop_keyword_outside_loop, /*break*/ 1);
+      diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
+               /*break*/ 1);
 
    return Stmt;
 }
@@ -1724,12 +1754,15 @@ StmtResult SemaPass::visitContinueStmt(ContinueStmt *Stmt)
 {
    auto LS = getLoopScope();
    if (!LS || !LS->isContinuable()) {
-      diagnose(Stmt, err_loop_keyword_outside_loop, /*continue*/ 0);
+      diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
+               /*continue*/ 0);
    }
    else if (LS->isLastCaseInMatch())
-      diagnose(Stmt, err_continue_from_last_case);
+      diagnose(Stmt, err_continue_from_last_case,
+               Stmt->getSourceRange());
    else if (LS->nextCaseHasArguments())
-      diagnose(Stmt, err_continue_case_with_bound_vals);
+      diagnose(Stmt, err_continue_case_with_bound_vals,
+               Stmt->getSourceRange());
 
    return Stmt;
 }
@@ -1861,7 +1894,7 @@ static bool checkIfExhaustive(MatchStmt *node,
       return true;
 
    // FIXME numeric values can still technically be exhausted
-   if (!MatchedVal->isObjectType())
+   if (!MatchedVal->isRecordType())
       return false;
 
    auto R = MatchedVal->getRecord();
@@ -1957,7 +1990,8 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt *Stmt)
          if (!ContainsExpressions) {
             auto It = FullyCoveredCases.try_emplace(CP->getCaseDecl(), CP);
             if (!It.second) {
-               diagnose(Stmt, err_duplicate_case, CP->getCaseDecl()->getName());
+               diagnose(Stmt, err_duplicate_case, CP->getCaseDecl()->getName(),
+                        Stmt->getSourceLoc());
                diagnose(Stmt, note_duplicate_case,
                         It.first->getSecond()->getSourceLoc());
             }
@@ -1972,7 +2006,7 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt *Stmt)
 
    llvm::SmallPtrSet<EnumCaseDecl*, 8> neededCases;
    if (!checkIfExhaustive(Stmt, switchType, neededCases)) {
-      diagnose(Stmt, err_match_not_exhaustive);
+      diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
 
       if (!neededCases.empty()) {
          for (auto C : neededCases) {
@@ -2011,27 +2045,35 @@ StmtResult SemaPass::visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match)
       auto given = caseVal->getRecord();
 
       if (given != needed)
-         diagnose(Stmt, err_invalid_match, needed->getFullName(),
-                  given->getFullName());
+         diagnose(Stmt, err_invalid_match, Stmt->getSourceRange(),
+                  needed->getFullName(), given->getFullName());
 
       return Stmt;
    }
 
-   auto matchOp = lookupMethod("infix ~=", matchExpr, { pattern },
+   auto *II = &Context.getIdentifiers().get("~=");
+   auto DeclName = Context.getDeclNameTable().getInfixOperatorName(*II);
+   auto matchOp = lookupMethod(DeclName, matchExpr, { pattern },
                                {}, Stmt, true);
+
    if (matchOp) {
       Stmt->setComparisonOp(matchOp.getBestMatch().Func);
       return Stmt;
    }
 
-   auto compOp = lookupMethod("infix ==", matchExpr, { pattern },
+   II = &Context.getIdentifiers().get("==");
+   DeclName = Context.getDeclNameTable().getInfixOperatorName(*II);
+   auto compOp = lookupMethod(DeclName, matchExpr, { pattern },
                               {}, Stmt, true);
+
    if (compOp) {
       Stmt->setComparisonOp(compOp.getBestMatch().Func);
       return Stmt;
    }
 
-   diagnose(Stmt, err_invalid_match, matchType, caseVal);
+   diagnose(Stmt, err_invalid_match, Stmt->getSourceRange(),
+            matchType, caseVal);
+
    return Stmt;
 }
 
@@ -2065,10 +2107,10 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
       return Expr;
    }
 
-   auto Case = E->hasCase(Expr->getCaseName());
+   auto Case = E->hasCase(Expr->getCaseNameIdent());
    if (!Case) {
-      diagnose(Expr, err_enum_case_not_found, E->getName(),
-               Expr->getCaseName(), false);
+      diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
+               E->getName(), Expr->getCaseName(), false);
 
       return ExprError();
    }
@@ -2076,8 +2118,8 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
    Expr->setCaseDecl(Case);
 
    if (Expr->getArgs().size() != Case->getArgs().size()) {
-      diagnose(Expr, err_enum_case_wrong_no_args, Case->getName(),
-               Case->getArgs().size(), Expr->getArgs().size());
+      diagnose(Expr, err_enum_case_wrong_no_args, Expr->getSourceRange(),
+               Case->getName(), Case->getArgs().size(), Expr->getArgs().size());
 
       return ExprError();
    }
@@ -2097,15 +2139,15 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
          args.push_back(arg.getExpr());
       }
       else {
-         auto ty = Case->getArgs()[i]->getArgType();
+         auto ty = Case->getArgs()[i]->getType();
          args.push_back(BuiltinExpr::Create(Context, ty));
 
          auto typeref = SourceType(ty);
          varDecls.push_back(
-            new (getContext()) LocalVarDecl(AccessModifier::PUBLIC,
-                                            arg.isConst(),
-                                            string(arg.getIdentifier()),
-                                            typeref, nullptr));
+            LocalVarDecl::Create(Context, AccessModifier::PUBLIC,
+                                 Case->getSourceLoc(), Case->getSourceLoc(),
+                                 arg.isConst(), arg.getIdentifier(), typeref,
+                                 nullptr));
 
          addDeclToContext(getDeclContext(), varDecls.back());
       }
@@ -2115,10 +2157,10 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
 
    Expr->setVarDecls(move(varDecls));
 
-   auto res = lookupCase(Expr->getCaseName(), E, args, {}, Expr);
+   auto res = lookupCase(Expr->getCaseNameIdent(), E, args, {}, Expr);
    if (!res)
-      diagnose(Expr, err_enum_case_not_found, E->getName(),
-               Expr->getCaseName(), !args.empty());
+      diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
+               E->getName(), Expr->getCaseName(), !args.empty());
 
    Expr->setExprType(Context.getRecordType(E));
    return Expr;
@@ -2128,8 +2170,8 @@ StmtResult SemaPass::visitLabelStmt(LabelStmt *Stmt)
 {
    auto labelIt = labels.find(Stmt->getLabelName());
    if (labelIt != labels.end()) {
-      diagnose(Stmt, err_duplicate_label, Stmt->getLabelName());
-//      diagnose(Stmt, note_duplicate_label, it->fi)
+      diagnose(Stmt, err_duplicate_label, Stmt->getSourceRange(),
+               Stmt->getLabelName());
 
       return Stmt;
    }
@@ -2153,13 +2195,13 @@ StmtResult SemaPass::visitGotoStmt(GotoStmt *Stmt)
 
 DeclResult SemaPass::visitFuncArgDecl(FuncArgDecl *Decl)
 {
-   if (!Decl->getArgType().isResolved()) {
-      auto typeResult = visitSourceType(Decl, Decl->getArgType());
+   if (!Decl->getType().isResolved()) {
+      auto typeResult = visitSourceType(Decl, Decl->getType());
       if (!typeResult)
          return Decl;
    }
 
-   auto &declaredType = Decl->getArgType();
+   auto &declaredType = Decl->getType();
    if (auto defaultVal = Decl->getDefaultVal())
       Decl->setDefaultVal(getAsOrCast(Decl, defaultVal, declaredType).get());
 
@@ -2170,7 +2212,12 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt *Stmt)
 {
    auto fn = getFuncScope();
    if (!fn) {
-      diagnose(Stmt, err_return_outside_func);
+      diagnose(Stmt, err_return_outside_func, Stmt->getSourceLoc());
+      return Stmt;
+   }
+
+   if (fn->getCallableDecl()->isNoReturn()) {
+      diagnose(Stmt, err_return_in_noreturn_func, Stmt->getSourceLoc());
       return Stmt;
    }
 
@@ -2218,8 +2265,8 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt *Stmt)
       }
    }
    else if (declaredReturnType && !declaredReturnType->isVoidType())
-      diagnose(Stmt, err_type_mismatch, Context.getVoidType(),
-               declaredReturnType);
+      diagnose(Stmt, err_type_mismatch, Stmt->getSourceLoc(),
+               Context.getVoidType(), declaredReturnType);
 
    return Stmt;
 }
@@ -2230,7 +2277,7 @@ int SemaPass::inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy)
    int firstInferred = -1;
 
    for (auto &arg : LE->getArgs()) {
-      if (arg->getTypeRef()->isAutoType()) {
+      if (arg->getType()->isAutoType()) {
          firstInferred = i;
          break;
       }
@@ -2245,12 +2292,12 @@ int SemaPass::inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy)
    if (!fn)
       return firstInferred;
 
-   if (fn->getArgTypes().size() != LE->getArgs().size())
+   if (fn->getParamTypes().size() != LE->getArgs().size())
       return firstInferred;
 
    i = 0;
-   for (auto &arg : fn->getArgTypes()) {
-      auto &typeSrc = LE->getArgs()[i]->getArgType();
+   for (auto &arg : fn->getParamTypes()) {
+      auto &typeSrc = LE->getArgs()[i]->getType();
       auto res = visitSourceType(LE, typeSrc);
       if (!res)
          return -1; // we want to get this diagnostic
@@ -2278,16 +2325,18 @@ ExprResult SemaPass::visitLambdaExpr(LambdaExpr *Expr)
                                                  Expr->getContextualType());
 
    if (couldNotInfer != -1) {
-      diagnose(Expr, err_lambda_could_not_infer_type, couldNotInfer);
+      diagnose(Expr, err_lambda_could_not_infer_type, Expr->getSourceLoc(),
+               couldNotInfer);
+
       return ExprError();
    }
 
-   auto Fun = new (getContext())
-      FunctionDecl(AccessModifier::PRIVATE,
-                   "__anonymous_lambda",
-                   std::vector<FuncArgDecl*>(Expr->getArgs()),
-                   Expr->getReturnType(), {}, Expr->getBody(),
-                   OperatorInfo());
+   IdentifierInfo *II = &Context.getIdentifiers().get("__anonymous_lambda");
+   auto Fun = FunctionDecl::Create(Context, AccessModifier::PRIVATE,
+                                   Expr->getSourceLoc(), II,
+                                   std::vector<FuncArgDecl*>(Expr->getArgs()),
+                                   Expr->getReturnType(), Expr->getBody(),
+                                   OperatorInfo(), {});
 
    Fun->setExternC(true);
    Fun->setLinkageName(string(Fun->getName()));
@@ -2295,12 +2344,12 @@ ExprResult SemaPass::visitLambdaExpr(LambdaExpr *Expr)
    Expr->setFunc(Fun);
 
    for (const auto& arg : Expr->getArgs()) {
-      if (!arg->getArgType().isResolved())
+      if (!arg->getType().isResolved())
          (void)visitStmt(Expr, arg);
 
-      if (arg->getArgType().getResolvedType().isNull())
+      if (arg->getType().getResolvedType().isNull())
          diagnose(Expr, err_lambda_could_not_infer_type_name,
-                  arg->getArgName());
+                  Expr->getSourceLoc(), arg->getName());
    }
 
    auto BodyRes = visitStmt(Expr, Expr->getBody());
@@ -2335,7 +2384,8 @@ StmtResult SemaPass::visitDebugStmt(DebugStmt* Stmt)
       int i = 3;
       (void)i;
 
-      diagnose(Stmt, note_generic_note, "__debug statement here");
+      diagnose(Stmt, note_generic_note, "__debug statement here",
+               Stmt->getSourceRange());
    }
 
    return Stmt;
@@ -2370,9 +2420,7 @@ ExprResult SemaPass::visitTupleLiteral(TupleLiteral* Expr)
       ++i;
    }
 
-   Expr->setTupleType(Context.getTupleType(containedTypes));
-   Expr->setExprType(Expr->getTupleType());
-
+   Expr->setExprType(Context.getTupleType(containedTypes));
    return Expr;
 }
 
@@ -2385,9 +2433,9 @@ StmtResult SemaPass::visitTryStmt(TryStmt *Stmt)
    for (auto& catchBlock : Stmt->getCatchBlocks()) {
       ScopeGuard guard(*this);
 
-      auto TypeRes = visitSourceType(Stmt, catchBlock.varDecl->getTypeRef());
+      auto TypeRes = visitSourceType(Stmt, catchBlock.varDecl->getType());
       if (TypeRes)
-         catchBlock.varDecl->getTypeRef().setResolvedType(TypeRes.get());
+         catchBlock.varDecl->getType().setResolvedType(TypeRes.get());
 
       auto BodyRes = visitStmt(Stmt, catchBlock.body);
       if (BodyRes)
@@ -2414,9 +2462,11 @@ StmtResult SemaPass::visitThrowStmt(ThrowStmt *Stmt)
    Stmt->setThrownVal(result.get());
 
    auto thrownTy = result.get()->getExprType();
-   if (thrownTy->isObjectType()) {
+   if (thrownTy->isRecordType()) {
       auto rec = thrownTy->getRecord();
-      if (auto P = rec->getProperty("description")) {
+
+      static auto *DescII = &Context.getIdentifiers().get("description");
+      if (auto P = rec->getProperty(DescII)) {
          Stmt->setDescFn(P->getGetterMethod());
       }
    }
@@ -2521,7 +2571,9 @@ SemaPass::StaticExprResult SemaPass::evaluateAs(Expression *expr,
       return Res;
 
    if (!implicitlyCastableTo(expr->getExprType(), Ty)) {
-      diagnose(expr, err_type_mismatch, expr->getExprType(), Ty);
+      diagnose(expr, err_type_mismatch, expr->getSourceLoc(),
+               expr->getExprType(), Ty);
+
       return StaticExprResult();
    }
 
@@ -2543,6 +2595,9 @@ size_t SemaPass::checkConstraints(Statement *DependentStmt,
    for (auto C : ConstrainedDecl->getConstraints()) {
       Expression *ConstraintExpr = C->getExpr();
       if (ConstraintExpr->isDependent()) {
+         if (templateArgs.isStillDependent())
+            continue;
+
          ConstraintExpr =
             Instantiator.InstantiateStaticExpr(DependentStmt->getSourceLoc(),
                                                C, templateArgs);
@@ -2611,7 +2666,7 @@ bool SemaPass::getStringValue(Expression *Expr,
          return true;
       }
    }
-   else if (Expr->getExprType()->isObjectType()) {
+   else if (Expr->getExprType()->isRecordType()) {
       auto R = Expr->getExprType()->getRecord();
       if (R->getName() != "String")
          return false;
@@ -2633,7 +2688,7 @@ bool SemaPass::getBoolValue(Expression *Expr,
          return true;
       }
    }
-   else if (Expr->getExprType()->isObjectType()) {
+   else if (Expr->getExprType()->isRecordType()) {
       auto R = Expr->getExprType()->getRecord();
       if (R->getName() != "Bool")
          return false;
@@ -2659,11 +2714,11 @@ DeclResult SemaPass::visitStaticAssertStmt(StaticAssertStmt *Stmt)
       return Stmt;
 
    if (!res.getValue().getZExtValue()) {
-      auto &msg = Stmt->getMessage();
-      diagnose(Stmt, err_static_assert_failed, !msg.empty(), msg);
+      auto msg = Stmt->getMessage();
+      diagnose(Stmt, err_static_assert_failed, Stmt->getSourceLoc(),
+               !msg.empty(), msg);
    }
 
-   Stmt->setEvaluated(true);
    return Stmt;
 }
 
@@ -2692,7 +2747,7 @@ StmtResult SemaPass::visitStaticIfStmt(StaticIfStmt *Stmt)
 
 static bool isStdArray(SemaPass &SP, QualType Ty)
 {
-   if (!Ty->isObjectType())
+   if (!Ty->isRecordType())
       return false;
 
    auto R = Ty->getRecord();
@@ -2702,7 +2757,7 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
 
 static bool isStdString(SemaPass &SP, QualType Ty)
 {
-   return Ty->isObjectType() && Ty->getRecord() == SP.getStringDecl();
+   return Ty->isRecordType() && Ty->getRecord() == SP.getStringDecl();
 }
 
 StmtResult SemaPass::visitStaticForStmt(StaticForStmt *Decl)
@@ -2735,6 +2790,7 @@ StmtResult SemaPass::visitStaticForStmt(StaticForStmt *Decl)
    }
    else {
       diagnose(Decl->getRange(), err_cant_print_expr,
+               Decl->getRange()->getSourceRange(),
                Decl->getRange()->getExprType());
 
       return Decl;
@@ -2785,6 +2841,7 @@ DeclResult SemaPass::visitStaticPrintStmt(StaticPrintStmt *Stmt)
    auto &val = res.getValue();
    if (val.isVoid()) {
       diagnose(Stmt->getExpr(), err_cant_print_expr,
+               Stmt->getExpr()->getSourceRange(),
                Stmt->getExpr()->getExprType());
 
       return Stmt;
@@ -2792,10 +2849,12 @@ DeclResult SemaPass::visitStaticPrintStmt(StaticPrintStmt *Stmt)
 
    auto Ty = Stmt->getExpr()->getExprType();
    if (isStdString(*this, Ty)) {
-      diagnose(Stmt, note_static_print, val.getString());
+      diagnose(Stmt, note_static_print, Stmt->getSourceLoc(),
+               val.getString());
    }
    else {
-      diagnose(Stmt, note_static_print, val.toString());
+      diagnose(Stmt, note_static_print, Stmt->getSourceLoc(),
+               val.toString());
    }
 
    return Stmt;
@@ -2803,9 +2862,9 @@ DeclResult SemaPass::visitStaticPrintStmt(StaticPrintStmt *Stmt)
 
 namespace {
 
-TupleLiteral* makeTuple(ASTContext const& Context,
+TupleLiteral* makeTuple(ASTContext& Context,
                         std::vector<Expression* > &&exprs) {
-   return new (Context) TupleLiteral(move(exprs));
+   return TupleLiteral::Create(Context, SourceRange(), move(exprs));
 }
 
 } // anonymous namespace
@@ -2835,7 +2894,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          break;
    }
 
-   auto &args = Expr->getArgs();
+   Expression *ResultExpr = nullptr;
+
+   auto args = Expr->getArgs();
    if (type == Bool) {
       bool result = false;
 
@@ -2870,8 +2931,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto F = ty->getRecord()->getField(member);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto F = ty->getRecord()->getField(II);
             result = F && !F->isStatic();
          }
          else {
@@ -2886,8 +2948,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto F = ty->getRecord()->getField(member);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto F = ty->getRecord()->getField(II);
             result = F && F->isStatic();
          }
          else {
@@ -2902,8 +2965,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto F = ty->getRecord()->getProperty(member);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto F = ty->getRecord()->getProperty(II);
             result = F && !F->isStatic();
          }
          else {
@@ -2918,8 +2982,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto F = ty->getRecord()->getProperty(member);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto F = ty->getRecord()->getProperty(II);
             result = F && F->isStatic();
          }
          else {
@@ -2934,8 +2999,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto M = ty->getRecord()->getMethod(member, true);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto M = ty->getRecord()->getMethod(II, true);
             result = M && !M->isStatic();
          }
          else {
@@ -2950,8 +3016,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          auto ty = res.get();
          auto &member = args[1].getStr();
 
-         if (ty->isObjectType()) {
-            auto M = ty->getRecord()->getMethod(member, true);
+         if (ty->isRecordType()) {
+            auto *II = &Context.getIdentifiers().get(member);
+            auto M = ty->getRecord()->getMethod(II, true);
             result = M && M->isStatic();
          }
          else {
@@ -2959,7 +3026,8 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          }
       }
       else if (Expr->getKind() == TraitsExpr::ValidIdentifier) {
-         result = wouldBeValidIdentifier(args.front().getStr()) != nullptr;
+         auto *II = &Context.getIdentifiers().get(args.front().getStr());
+         result = wouldBeValidIdentifier(SourceLocation(), II) != nullptr;
       }
       else if (Expr->getKind() == TraitsExpr::ValidFunction) {
          result = getAnyFn(args.front().getStr()) != nullptr;
@@ -2992,8 +3060,8 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          llvm_unreachable("bad trait!");
       }
 
-      Expr->setResultExpr(new (getContext()) BoolLiteral(Context.getBoolTy(),
-                                                         result));
+      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
+                                       Context.getBoolTy(), result);
    }
    else if (type == Tuple) {
       std::vector<Expression* > elements;
@@ -3022,7 +3090,7 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          llvm_unreachable("bad trait!");
       }
 
-      Expr->setResultExpr(makeTuple(getContext(), move(elements)));
+      ResultExpr = makeTuple(getContext(), move(elements));
    }
    else if (type == UInt) {
       size_t val = 0;
@@ -3032,7 +3100,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
          if (!result)
             val = 0;
          else if (!result.get()->getExprType()->isTupleType())
-            diagnose(Expr, err_traits_expects_tuple, /*arity*/ 0);
+            diagnose(Expr, err_traits_expects_tuple, Expr->getSourceLoc(),
+                     args.front().getExpr()->getSourceRange(),
+                     /*arity*/ 0);
          else
             val = result.get()->getExprType()->asTupleType()->getArity();
       }
@@ -3043,7 +3113,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
 
          auto ty = res.get();
          if (!ty->isIntegerType())
-            diagnose(Expr, err_traits_expects_int, /*bitwidth_of*/ 0);
+            diagnose(Expr, err_traits_expects_int, Expr->getSourceLoc(),
+                     args.front().getType().getTypeExpr()->getSourceRange(),
+                     /*bitwidth_of*/ 0);
          else
             val = ty->getBitwidth();
       }
@@ -3054,7 +3126,9 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
 
          auto ty = res.get();
          if (!ty->isFPType())
-            diagnose(Expr, err_traits_expects_fp, /*fp_precision*/ 0);
+            diagnose(Expr, err_traits_expects_fp, Expr->getSourceLoc(),
+                     args.front().getExpr()->getSourceRange(),
+                     /*fp_precision*/ 0);
          else
             val = ty->getPrecision();
       }
@@ -3063,19 +3137,19 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
       }
 
       llvm::APSInt APInt(llvm::APInt(sizeof(size_t) * 8, val), true);
-      Expr->setResultExpr(new (getContext()) IntegerLiteral(Context.getUIntTy(),
-                                                            std::move(APInt)));
+      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
+                                          Context.getUIntTy(),
+                                          std::move(APInt));
    }
 
-   if (!Expr->getResultExpr())
+   if (!ResultExpr)
       return ExprError();
 
-   auto Res = visitExpr(Expr->getResultExpr());
+   auto Res = visitExpr(Expr, ResultExpr);
 
    (void)Res;
    assert(Res && "invalid traits result");
 
-   Expr->setResultExpr(Res.get());
    return Res.get();
 }
 

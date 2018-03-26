@@ -5,7 +5,7 @@
 #include "TargetInfo.h"
 
 #include "AST/ASTContext.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 namespace cdot {
 
@@ -23,7 +23,7 @@ unsigned TargetInfo::getSizeOfType(QualType Ty) const
    Ty = Ty->getCanonicalType();
 
    switch (Ty->getTypeID()) {
-   case TypeID::ObjectTypeID: {
+   case TypeID::RecordTypeID: {
       auto R = Ty->getRecord();
       if (R->isClass()) {
          return PointerSizeInBytes;
@@ -41,7 +41,7 @@ unsigned short TargetInfo::getAlignOfType(QualType Ty) const
    Ty = Ty->getCanonicalType();
 
    switch (Ty->getTypeID()) {
-   case TypeID::ObjectTypeID: {
+   case TypeID::RecordTypeID: {
       auto R = Ty->getRecord();
       if (R->isClass()) {
          return PointerAlignInBytes;
@@ -120,7 +120,7 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
       return PointerSizeInBytes;
    case TypeID::LambdaTypeID:
       return 2 * PointerSizeInBytes;
-   case TypeID::ObjectTypeID: {
+   case TypeID::RecordTypeID: {
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->getSize();
    }
@@ -153,7 +153,7 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
 
       return align;
    }
-   case TypeID::ObjectTypeID: {
+   case TypeID::RecordTypeID: {
       assert(Ty->getRecord()->getSize() && "alignment not calculated!");
       return Ty->getRecord()->getAlignment();
    }

@@ -5,7 +5,7 @@
 #include "CandidateSet.h"
 
 #include "AST/Expression.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "Support/Casting.h"
 
@@ -17,6 +17,30 @@ using namespace cdot::diag;
 using namespace cdot::support;
 
 namespace cdot {
+
+std::string getNameWithFix(DeclarationName Name)
+{
+   std::string s;
+   switch (Name.getDeclarationKind()) {
+   case DeclarationName::InfixOperatorName:
+      s += "infix ";
+      s += Name.getInfixOperatorName()->getIdentifier();
+      break;
+   case DeclarationName::PrefixOperatorName:
+      s += "prefix ";
+      s += Name.getPrefixOperatorName()->getIdentifier();
+      break;
+   case DeclarationName::PostfixOperatorName:
+      s += "postfix ";
+      s += Name.getPostfixOperatorName()->getIdentifier();
+      break;
+   default:
+      s += Name.getIdentifierInfo()->getIdentifier();
+      break;
+   }
+
+   return s;
+}
 
 FunctionType* CandidateSet::Candidate::getFunctionType() const
 {
@@ -56,73 +80,61 @@ static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
 }
 
 static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
-                                            llvm::StringRef funcName,
+                                            DeclarationName funcName,
                                             CandidateSet::Candidate &Cand) {
    assert(Cand.isBuiltinCandidate() && "not a builtin candidate!");
 
    auto FuncTy = Cand.getFunctionType();
    llvm::SmallString<128> str;
+   llvm::raw_svector_ostream OS(str);
 
-   str += "def ";
-   str += funcName;
-   str += "(";
+   OS << "def " << funcName << "(";
 
    size_t i = 0;
-   for (auto &arg : FuncTy->getArgTypes()) {
-      if (i++ != 0) str += ", ";
-      str += arg.toString();
+   for (auto &arg : FuncTy->getParamTypes()) {
+      if (i++ != 0) OS << ", ";
+      OS << arg;
    }
 
-   str += ") -> ";
-   str += FuncTy->getReturnType().toString();
+   OS << ") -> " << FuncTy->getReturnType();
 
    return FakeSourceLocation{ str.str() };
 }
 
-static FixKind dropFix(llvm::StringRef &op)
-{
-   if (op.startswith("infix ")) {
-      op = op.drop_front(6);
-      return FixKind::Infix;
-   }
-   else if (op.startswith("prefix ")) {
-      op = op.drop_front(7);
-      return FixKind::Prefix;
-   }
-   else if (op.startswith("postfix ")) {
-      op = op.drop_front(8);
-      return FixKind::Postfix;
-   }
-   else {
-      llvm_unreachable("not an operator!");
-   }
-}
-
 void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
-                                            llvm::StringRef funcName,
-                                            llvm::ArrayRef<ast::Expression *> args,
-                                            llvm::ArrayRef<ast::Expression *> templateArgs,
+                                            DeclarationName funcName,
+                                            llvm::ArrayRef<ast::Expression*> args,
+                                            llvm::ArrayRef<ast::Expression*> templateArgs,
                                             ast::Statement *Caller,
-                                            bool OperatorLookup) {
+                                            bool OperatorLookup,
+                                            SourceLocation OpLoc) {
    if (Candidates.size() == 1 && Candidates.front().FR == IsInvalid) {
       return;
    }
 
    if (OperatorLookup) {
-      llvm::StringRef op = funcName;
-      auto fix = dropFix(op);
-
-      if (fix == FixKind::Infix) {
+      auto Kind = funcName.getDeclarationKind();
+      if (Kind == DeclarationName::InfixOperatorName) {
          SP.diagnose(Caller, err_binop_not_applicable,
-                     op, args[0]->getExprType(), args[1]->getExprType());
+                     funcName.getInfixOperatorName()->getIdentifier(),
+                     args[0]->getExprType(), args[1]->getExprType(),
+                     OpLoc ? OpLoc : Caller->getSourceLoc(),
+                     args[0]->getSourceRange(), args[1]->getSourceRange());
       }
       else {
-         SP.diagnose(Caller, err_unary_op_not_applicable,
-                     fix == FixKind::Postfix, op, 0, args[0]->getExprType());
+         bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
+         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
+                     (IsPostfix
+                      ? funcName.getPostfixOperatorName()
+                      : funcName.getPrefixOperatorName())->getIdentifier(),
+                     0, args[0]->getExprType(),
+                     OpLoc ? OpLoc : Caller->getSourceLoc(),
+                     args[0]->getSourceRange());
       }
    }
    else {
-      SP.diagnose(Caller, err_no_matching_call, 0, funcName);
+      SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
+                  0, funcName);
    }
 
    for (auto &Cand : Candidates) {
@@ -169,7 +181,7 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          break;
       case IncompatibleArgument: {
          auto FTy = Cand.getFunctionType();
-         auto neededTy = FTy->getArgTypes()[Cand.Data1];
+         auto neededTy = FTy->getParamTypes()[Cand.Data1];
          auto givenTy = IncludesSelfArgument
                            && dyn_cast_or_null<MethodDecl>(Cand.Func)
                         ? args[Cand.Data1 + 1]->getExprType()
@@ -350,7 +362,7 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
 }
 
 void CandidateSet::diagnoseAnonymous(SemaPass &SP,
-                                     llvm::StringRef funcName,
+                                     DeclarationName funcName,
                                      llvm::ArrayRef<ast::Expression *> args,
                                      Statement *Caller) {
    assert(Candidates.size() == 1 && "not an anonymous call!");
@@ -364,7 +376,7 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
                                              : err_too_many_args_for_call;
 
       SP.diagnose(Caller, diag,
-                  Cand.BuiltinCandidate.FuncTy->getArgTypes().size(),
+                  Cand.BuiltinCandidate.FuncTy->getParamTypes().size(),
                   args.size());
 
       break;
@@ -372,7 +384,7 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
    case IncompatibleArgument: {
       auto idx = Cand.Data1;
       auto givenTy = args[idx]->getExprType();
-      auto neededTy = Cand.BuiltinCandidate.FuncTy->getArgTypes()[idx];
+      auto neededTy = Cand.BuiltinCandidate.FuncTy->getParamTypes()[idx];
 
       SP.diagnose(Caller, err_no_implicit_conv, givenTy, neededTy);
       break;
@@ -382,19 +394,19 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
 void
 CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP,
-                                          llvm::StringRef funcName,
+                                          DeclarationName funcName,
                                           llvm::ArrayRef<Expression*> args,
                                           llvm::ArrayRef<Expression*> templateArgs,
                                           Statement *Caller,
-                                          bool OperatorLookup) {
+                                          bool OperatorLookup,
+                                          SourceLocation OpLoc) {
    SP.diagnose(Caller, err_ambiguous_call, 0, funcName);
    for (auto &Cand : Candidates) {
       if (!Cand || Cand.ConversionPenalty != BestConversionPenalty)
          continue;
 
       if (Cand.isBuiltinCandidate()) {
-         SP.diagnose(SourceLocation(), note_builtin_candidate,
-                     /*operator*/ true,
+         SP.diagnose(note_builtin_candidate, /*operator*/ true,
                      makeFakeSourceLoc(*this, funcName, Cand));
       }
       else {

@@ -25,13 +25,43 @@ struct SourceLocation {
 
    bool isValid() const { return offset > 0; }
    operator bool() const { return isValid(); }
+
+   friend bool operator==(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset == RHS.offset;
+   }
+
+   friend bool operator!=(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset != RHS.offset;
+   }
+
+   friend bool operator<(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset < RHS.offset;
+   }
+
+   friend bool operator<=(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset <= RHS.offset;
+   }
+
+   friend bool operator>(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset > RHS.offset;
+   }
+
+   friend bool operator>=(const SourceLocation &LHS, const SourceLocation &RHS)
+   {
+      return LHS.offset >= RHS.offset;
+   }
 };
 
 struct SourceRange {
    SourceRange() = default;
 
    explicit SourceRange(SourceLocation start)
-      : start(start), end(start)
+      : start(start), end(SourceLocation())
    {}
 
    SourceRange(SourceLocation start, SourceLocation end)
@@ -49,6 +79,16 @@ struct SourceRange {
    }
 
    operator bool() const { return start.isValid() && end.isValid(); }
+
+   friend bool operator==(const SourceRange &LHS, const SourceRange &RHS)
+   {
+      return LHS.start == RHS.start && LHS.end == RHS.end;
+   }
+
+   friend bool operator!=(const SourceRange &LHS, const SourceRange &RHS)
+   {
+      return !(LHS == RHS);
+   }
 
 private:
    SourceLocation start;

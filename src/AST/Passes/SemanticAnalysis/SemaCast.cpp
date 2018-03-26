@@ -3,7 +3,6 @@
 //
 
 #include "SemaPass.h"
-#include "AST/NamedDecl.h"
 
 using namespace cdot::support;
 
@@ -97,8 +96,8 @@ bool SemaPass::implicitlyCastableTo(QualType fromTy, QualType toTy) const
       }
    }
 
-   if (from->isObjectType()) {
-      if (!to->isObjectType())
+   if (from->isRecordType()) {
+      if (!to->isRecordType())
          return false;
 
       auto fromRecord = from->getRecord();
@@ -213,7 +212,7 @@ static void FromReference(QualType from, QualType to, ConversionSequence &Seq)
 static void FromRecord(const SemaPass &SP, QualType from, QualType to,
                        ConversionSequence &Seq) {
    auto FromRec = from->getRecord();
-   if (!to->isObjectType()) {
+   if (!to->isRecordType()) {
       if (FromRec->isClass() && to->isPointerType())
          return Seq.addStep(CastKind::BitCast, to, CastStrength::Force);
 
@@ -359,7 +358,7 @@ static void getConversionSequence(const SemaPass &SP,
    case TypeID::ReferenceTypeID:
       FromReference(from, to, Seq);
       break;
-   case TypeID::ObjectTypeID:
+   case TypeID::RecordTypeID:
       FromRecord(SP, from, to, Seq);
       break;
    case TypeID::TupleTypeID:

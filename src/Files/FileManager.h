@@ -30,11 +30,14 @@ struct LineColPair {
 };
 
 struct OpenFile {
-   OpenFile(unsigned int SourceId = 0, unsigned int BaseOffset = 0,
+   OpenFile(llvm::StringRef FileName = "",
+            unsigned int SourceId = 0,
+            unsigned int BaseOffset = 0,
             llvm::MemoryBuffer *Buf = nullptr)
-      : SourceId(SourceId), BaseOffset(BaseOffset), Buf(Buf)
+      : FileName(FileName), SourceId(SourceId), BaseOffset(BaseOffset), Buf(Buf)
    { }
 
+   llvm::StringRef FileName;
    unsigned SourceId;
    unsigned BaseOffset;
    llvm::MemoryBuffer *Buf;
@@ -47,11 +50,13 @@ public:
    OpenFile openFile(const llvm::Twine &fileName);
    OpenFile getBufferForString(llvm::StringRef Str);
 
+   OpenFile getOpenedFile(size_t sourceId);
+   OpenFile getOpenedFile(SourceLocation loc)
+   { return getOpenedFile(getSourceId(loc)); }
+
    llvm::MemoryBuffer *getBuffer(size_t sourceId);
    llvm::MemoryBuffer *getBuffer(SourceLocation loc)
-   {
-      return getBuffer(getSourceId(loc));
-   }
+   { return getBuffer(getSourceId(loc)); }
 
    unsigned getBaseOffset(size_t sourceId)
    {
@@ -74,6 +79,7 @@ public:
 
    LineColPair getLineAndCol(SourceLocation loc);
    LineColPair getLineAndCol(SourceLocation loc, llvm::MemoryBuffer *Buf);
+   llvm::ArrayRef<unsigned> getLineOffsets(size_t sourceID);
 
    SourceLocation getAliasLoc(SourceLocation loc)
    {
@@ -88,12 +94,14 @@ private:
    std::vector<unsigned> sourceIdOffsets;
 
    struct CachedFile {
-      CachedFile(unsigned int SourceId, unsigned int BaseOffset,
+      CachedFile(std::string &&FN, unsigned int SourceId,
+                 unsigned int BaseOffset,
                  std::unique_ptr<llvm::MemoryBuffer> &&Buf)
-         : SourceId(SourceId), BaseOffset(BaseOffset), Buf(move(Buf)),
-           IsMacroExpansion(false), IsMixin(false)
+         : FileName(move(FN)), SourceId(SourceId), BaseOffset(BaseOffset),
+           Buf(move(Buf)), IsMacroExpansion(false), IsMixin(false)
       { }
 
+      std::string FileName;
       unsigned SourceId;
       unsigned BaseOffset;
       std::unique_ptr<llvm::MemoryBuffer> Buf;

@@ -4,13 +4,13 @@
 
 #include "GEPInst.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "IL/Module/Module.h"
 #include "IL/Value/Record/AggregateType.h"
 #include "IL/Value/Function/Function.h"
 #include "IL/Value/Function/BasicBlock.h"
 #include "IL/Value/Constant/ConstantVal.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 using namespace cdot::support;
 using namespace cdot::ast;

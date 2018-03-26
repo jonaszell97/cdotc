@@ -4,7 +4,9 @@
 
 #include "ASTDumper.h"
 
-#include "AST/Passes/ASTIncludes.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 #include "AST/Traverse.h"
 
 #include "Support/Format.h"
@@ -603,7 +605,7 @@ bool DumperImpl::visitSuperExpr(SuperExpr *expr)
 
 bool DumperImpl::visitMemberRefExpr(MemberRefExpr* expr)
 {
-   out << "[" << expr->getIdent() << "]";
+   out << "[" << DeclarationName(expr->getIdentInfo()) << "]";
    return true;
 }
 
@@ -614,13 +616,13 @@ bool DumperImpl::visitTupleMemberExpr(TupleMemberExpr *expr)
 
 bool DumperImpl::visitCallExpr(CallExpr* expr)
 {
-   out << "[" << expr->getIdent() << "]";
+   out << "[" << expr->getDeclName() << "]";
    return true;
 }
 
 bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
 {
-   out << "[." << expr->getIdent() << "]";
+   out << "[." << DeclarationName(expr->getIdentInfo()) << "]";
    return true;
 }
 

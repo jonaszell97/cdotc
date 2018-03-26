@@ -23,7 +23,7 @@
 //#include "../Variant/Type/ArrayType.h"
 //#include "../Variant/Type/TupleType.h"
 //#include "../Variant/Type/FunctionType.h"
-//#include "../Variant/Type/ObjectType.h"
+//#include "../Variant/Type/RecordType.h"
 //
 //using namespace cdot::support;
 //
@@ -73,13 +73,13 @@
 //
 //      if (auto fn = dyn_cast<FunctionType>(ty)) {
 //         addTypeReferences(*fn->getReturnType());
-//         for (auto &arg : fn->getArgTypes())
+//         for (auto &arg : fn->getParamTypes())
 //            addTypeReferences(*arg.getType());
 //
 //         return;
 //      }
 //
-//      if (auto obj = dyn_cast<ObjectType>(ty)) {
+//      if (auto obj = dyn_cast<RecordType>(ty)) {
 //         for (auto &TA : obj->getTemplateArgs()) {
 //            if (TA.isType())
 //               addTypeReferences(TA.getType());

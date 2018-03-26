@@ -2,11 +2,8 @@
 // Created by Jonas Zell on 19.06.17.
 //
 
+#include "Expression.h"
 #include "Statement.h"
-
-#include "AST/Attribute/Attr.h"
-#include "AST/AstNode.h"
-#include "NamedDecl.h"
 
 using namespace cdot::support;
 

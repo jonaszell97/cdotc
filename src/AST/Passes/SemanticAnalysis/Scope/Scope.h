@@ -5,7 +5,7 @@
 #ifndef CDOT_SCOPE_H
 #define CDOT_SCOPE_H
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallPtrSet.h>

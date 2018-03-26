@@ -4,7 +4,9 @@
 
 #include "PrettyPrinter.h"
 
-#include "AST/Passes/ASTIncludes.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 
 #include "Support/Format.h"
 #include "Support/WriterBase.h"
@@ -265,7 +267,7 @@ void PrettyPrinterImpl::visitVarDecl(VarDecl* stmt)
    out << stmt->getName();
 
    out << ": ";
-   visit(stmt->getTypeRef().getTypeExpr());
+   visit(stmt->getType().getTypeExpr());
 
    if (auto V = stmt->getValue()) {
       out << " = ";
@@ -635,7 +637,7 @@ void PrettyPrinterImpl::visitDictionaryLiteral(DictionaryLiteral* expr)
 
 void PrettyPrinterImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
 {
-   out << expr->getIdent();
+   out << DeclarationName(expr->getIdentInfo());
    WriteList(expr->getTemplateArgs(), &PrettyPrinterImpl::visitExpr,
              "[", ", ", "]", true);
 }
@@ -657,7 +659,9 @@ void PrettyPrinterImpl::visitSuperExpr(SuperExpr *expr)
 
 void PrettyPrinterImpl::visitMemberRefExpr(MemberRefExpr* expr)
 {
-   out << (expr->isPointerAccess() ? "->" : ".") << expr->getIdent();
+   out << (expr->isPointerAccess() ? "->" : ".")
+       << DeclarationName(expr->getIdentInfo());
+
    WriteList(expr->getTemplateArgs(), &PrettyPrinterImpl::visitExpr,
              "[", ", ", "]", true);
 }
@@ -731,21 +735,17 @@ void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
 
 void PrettyPrinterImpl::visitExprSequence(ExprSequence* expr)
 {
-   if (auto E = expr->getResolvedExpression())
-      visitExpr(E);
-   else {
-      size_t i = 0;
-      for (auto &frag : expr->getFragments()) {
-         if (i++ != 0) out << " ";
-         if (frag.isExpression()) {
-            visitExpr(frag.getExpr());
-         }
-         else if (frag.isOperator()) {
-            out << op::toString(frag.getOperatorKind());
-         }
-         else {
-            out << frag.getOp();
-         }
+   size_t i = 0;
+   for (auto &frag : expr->getFragments()) {
+      if (i++ != 0) out << " ";
+      if (frag.isExpression()) {
+         visitExpr(frag.getExpr());
+      }
+      else if (frag.isOperator()) {
+         out << op::toString(frag.getOperatorKind());
+      }
+      else {
+         out << frag.getOp();
       }
    }
 }

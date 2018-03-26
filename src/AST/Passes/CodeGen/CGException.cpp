@@ -7,7 +7,7 @@
 //
 //#include "llvm/IR/Module.h"
 //
-//#include "../../../Variant/Type/ObjectType.h"
+//#include "../../../Variant/Type/RecordType.h"
 //#include "../../Statement/Exception/ThrowStmt.h"
 //#include "../../Statement/Exception/TryStmt.h"
 //#include "../../Expression/Expression.h"

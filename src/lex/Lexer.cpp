@@ -825,6 +825,7 @@ Token Lexer::lexNumericLiteral()
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
 
+   bool foundExponent = false;
    bool foundDecimalPoint = false;
    bool lastWasDecimal = false;
 
@@ -832,6 +833,14 @@ Token Lexer::lexNumericLiteral()
       if (*CurPtr == '.' && !foundDecimalPoint) {
          foundDecimalPoint = true;
          lastWasDecimal = true;
+      }
+      else if ((*CurPtr == 'e' || *CurPtr == 'E') && !foundExponent) {
+         foundExponent = true;
+         foundDecimalPoint = true; // no decimal point allowed after exponent
+         ++CurPtr;
+
+         if (CurPtr[0] == '+' || CurPtr[0] == '-')
+            ++CurPtr;
       }
       else if (!::isdigit(*CurPtr)) {
          break;

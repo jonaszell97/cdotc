@@ -369,7 +369,7 @@ bool compatibleArgCount(BasicBlock::ArgList const &Needed,
 bool compatibleArgCount(FunctionType const* FuncTy,
                         llvm::ArrayRef<il::Value *> Given) {
    bool vararg = FuncTy->isCStyleVararg();
-   auto neededCnt = FuncTy->getArgTypes().size();
+   auto neededCnt = FuncTy->getParamTypes().size();
    auto givenCnt = Given.size();
 
    if (vararg) {
@@ -486,7 +486,7 @@ void  VerifierPass::visitIndirectCallInst(IndirectCallInst const& I)
    errorIf(!(F->getType()->isFunctionType()), "called value is not a "
       "function", I);
 
-   auto NeededArgs = F->getType()->asFunctionType()->getArgTypes();
+   auto NeededArgs = F->getType()->asFunctionType()->getParamTypes();
    auto GivenArgs = I.getArgs();
 
    if (!compatibleArgCount(F->getType()->asFunctionType(), GivenArgs)) {
@@ -630,7 +630,7 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
       break;
    case CastKind::PtrToInt:
       errorIf(!to->isIntegerType(), "ptrtoint result type must be integral", I);
-      errorIf(!from->isPointerType() && !from->isObjectType(),
+      errorIf(!from->isPointerType() && !from->isRecordType(),
               "ptrtoint operand must be pointer", I);
       break;
    case CastKind::IntToFP:

@@ -5,7 +5,7 @@
 #ifndef CDOT_SOURCETYPE_H
 #define CDOT_SOURCETYPE_H
 
-#include "Variant/Type/Type.h"
+#include "Type.h"
 
 namespace cdot {
 namespace ast {

@@ -24,19 +24,20 @@ namespace ast {
 
 class SymbolMangler {
 public:
+   explicit SymbolMangler(ast::SemaPass &SP) : SP(SP)
+   {}
+
    std::string mangleVariable(llvm::StringRef varName, size_t scope = 0) const;
 
    std::string mangleAnyFunction(ast::CallableDecl *C) const;
    std::string mangleFunction(ast::FunctionDecl *F) const;
    std::string mangleMethod(ast::MethodDecl *M) const;
 
-   void mangleMethod(ast::SemaPass &SP,
-                     llvm::SmallString<128> &Buf,
-                     ast::MethodDecl *M,
-                     ast::RecordDecl *recordInst) const;
-
    std::string mangleProtocolMethod(ast::RecordDecl *R,
                                     ast::MethodDecl *M) const;
+
+private:
+   ast::SemaPass &SP;
 };
 
 } // namespace cdot

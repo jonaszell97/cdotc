@@ -7,7 +7,7 @@
 
 #include "AST/AstNode.h"
 #include "AST/SourceType.h"
-#include "Basic/IdentifierInfo.h"
+#include "Basic/DeclarationName.h"
 
 #include <llvm/Support/TrailingObjects.h>
 
@@ -119,13 +119,10 @@ public:
    void copyStatusFlags(Statement *Stmt);
 
    SourceRange getSourceRange() const;
-
    SourceLocation getSourceLoc() const
    {
       return getSourceRange().getStart();
    }
-
-   void setSourceLoc(const SourceLocation &loc) { this->loc = loc; }
 
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return true; }
@@ -204,19 +201,26 @@ public:
 
 class DebugStmt : public Statement {
 public:
-   explicit DebugStmt(bool unreachable = false)
-      : Statement(DebugStmtID), unreachable(unreachable) {
+   explicit DebugStmt(SourceLocation Loc, bool unreachable = false)
+      : Statement(DebugStmtID), Loc(Loc), unreachable(unreachable) {
 
    }
 
    bool isUnreachable() const { return unreachable; }
 
 private:
+   SourceLocation Loc;
    bool unreachable;
 
 public:
    static bool classofKind(NodeType kind) { return kind == DebugStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   SourceRange getSourceRange() const
+   {
+      unsigned EndOffset = Loc.getOffset() + (unreachable ? 13 : 7);
+      return SourceRange(Loc, SourceLocation(EndOffset));
+   }
 };
 
 class NullStmt: public Statement {
@@ -230,7 +234,7 @@ public:
 
    static NullStmt *Create(ASTContext &C, SourceLocation Loc);
 
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
 };
 
 class UsingStmt final: public Statement,
@@ -356,6 +360,11 @@ public:
    bool preservesScope() const { return preserveScope; }
    void setPreserveScope(bool preserve) { preserveScope = preserve; }
 
+   SourceRange getSourceRange() const
+   {
+      return SourceRange(LBraceLoc, RBraceLoc);
+   }
+
    SourceLocation getLBraceLoc() const { return LBraceLoc; }
    SourceLocation getRBraceLoc() const { return RBraceLoc; }
 
@@ -392,7 +401,7 @@ public:
 
    static BreakStmt *Create(ASTContext &C, SourceLocation Loc);
 
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
 };
 
 class ContinueStmt : public Statement {
@@ -406,7 +415,7 @@ public:
 
    static ContinueStmt *Create(ASTContext &C, SourceLocation Loc);
 
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
 };
 
 class GotoStmt: public Statement {
@@ -422,7 +431,7 @@ public:
    static GotoStmt *Create(ASTContext &C, SourceLocation Loc,
                            IdentifierInfo *label);
 
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
    IdentifierInfo *getLabel() const { return label; }
    llvm::StringRef getLabelName() const { return label->getIdentifier(); }
 };
@@ -440,7 +449,7 @@ public:
    static LabelStmt *Create(ASTContext &C, SourceLocation Loc,
                             IdentifierInfo *label);
 
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
    IdentifierInfo *getLabel() const { return label; }
    llvm::StringRef getLabelName() const { return label->getIdentifier(); }
 };
@@ -611,7 +620,7 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static CaseStmt *Create(ASTContext &C, SourceLocation CaseLoc,
-                           PatternExpr* pattern, Statement* body);
+                           PatternExpr* pattern, Statement* body = nullptr);
 
    SourceRange getSourceRange() const
    {
@@ -770,6 +779,26 @@ public:
 };
 
 class DestructuringDecl: public Statement {
+protected:
+   DestructuringDecl(NodeType typeID,
+                     SourceRange SR,
+                     unsigned NumDecls,
+                     AccessModifier access,
+                     bool isConst,
+                     SourceType type,
+                     Expression *value);
+
+   SourceRange SR;
+   AccessModifier access;
+   bool IsConst;
+
+   unsigned NumDecls;
+
+   SourceType type;
+   Expression *value;
+
+   CallableDecl *destructuringFn = nullptr;
+
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
@@ -783,29 +812,8 @@ public:
       }
    }
 
-protected:
-   DestructuringDecl(NodeType typeID,
-                     unsigned NumDecls,
-                     AccessModifier access,
-                     bool isConst,
-                     SourceType type,
-                     Expression *value)
-      : Statement(typeID),
-        access(access), IsConst(isConst), NumDecls(NumDecls),
-        type(type), value(value)
-   {}
+   SourceRange getSourceRange() const { return SR; }
 
-   AccessModifier access;
-   bool IsConst;
-
-   unsigned NumDecls;
-
-   SourceType type;
-   Expression *value;
-
-   CallableDecl *destructuringFn = nullptr;
-
-public:
    AccessModifier getAccess() const { return access; }
    void setAccess(AccessModifier A) { access = A; }
 
@@ -828,7 +836,8 @@ class LocalDestructuringDecl final:
    public DestructuringDecl,
    llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
 private:
-   LocalDestructuringDecl(AccessModifier access,
+   LocalDestructuringDecl(SourceRange SR,
+                          AccessModifier access,
                           bool isConst,
                           llvm::ArrayRef<VarDecl*> Decls,
                           SourceType type,
@@ -838,17 +847,14 @@ public:
    friend TrailingObjects;
 
    static LocalDestructuringDecl *Create(ASTContext &C,
+                                         SourceRange SR,
                                          AccessModifier access,
                                          bool isConst,
                                          llvm::ArrayRef<VarDecl*> Decls,
                                          SourceType type,
                                          Expression *value);
 
-   static bool classof(AstNode const* T)
-   {
-      return classofKind(T->getTypeID());
-   }
-
+   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == LocalDestructuringDeclID;
@@ -864,7 +870,8 @@ class GlobalDestructuringDecl:
    public DestructuringDecl,
    llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
 private:
-   GlobalDestructuringDecl(AccessModifier access,
+   GlobalDestructuringDecl(SourceRange SR,
+                           AccessModifier access,
                            bool isConst,
                            llvm::ArrayRef<VarDecl*> Decls,
                            SourceType type,
@@ -876,6 +883,7 @@ public:
    friend TrailingObjects;
 
    static GlobalDestructuringDecl *Create(ASTContext &C,
+                                          SourceRange SR,
                                           AccessModifier access,
                                           bool isConst,
                                           llvm::ArrayRef<VarDecl*> Decls,

@@ -11,13 +11,13 @@
 #include "IL/Module/Context.h"
 
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #define CDOT_VALUE_INCLUDE
 #include "../Value/ValueIncludes.def"
 #include "../../Basic/CastKind.h"
 
-#include "../../Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include "../ILBuilder.h"
 

@@ -7,7 +7,7 @@
 #include "AST/ASTContext.h"
 #include "IL/Value/Instruction/MultiOperandInst.h"
 #include "IL/Value/Instruction/CallInst.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace cdot {
 namespace il {

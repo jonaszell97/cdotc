@@ -8,7 +8,7 @@
 #include "Compiler.h"
 #include "Files/FileUtils.h"
 #include "Files/FileManager.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/Module.h>
@@ -55,12 +55,12 @@ llvm::DIFile* IRGen::getFileDI(size_t fileID, llvm::StringRef fileName,
 llvm::DIFile* IRGen::getFileDI(SourceLocation loc)
 {
    auto ID = CI.getFileMgr().getSourceId(loc);
+   if (!ID)
+      return nullptr;
+
    auto it = DIFileMap.find(ID);
    if (it != DIFileMap.end())
       return it->second;
-
-   if (!ID)
-      return File;
 
    auto &FileMgr = CI.getFileMgr();
    auto fileNameAndPath = FileMgr.getFileName(ID).str();
@@ -150,7 +150,7 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
    }
    case TypeID::FunctionTypeID: {
       std::vector<llvm::Metadata*> argTypes;
-      for (auto& argTy : ty->asFunctionType()->getArgTypes()) {
+      for (auto& argTy : ty->asFunctionType()->getParamTypes()) {
          argTypes.push_back(getTypeDI(*argTy));
       }
 
@@ -165,7 +165,7 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
    }
    case TypeID::LambdaTypeID:
       llvm_unreachable("TODO!");
-   case TypeID::ObjectTypeID: {
+   case TypeID::RecordTypeID: {
       MD = getRecordDI(ty);
       break;
    }
@@ -241,7 +241,7 @@ llvm::dwarf::Tag IRGen::getTagForRecord(AggregateType *Ty)
 
 llvm::DIType* IRGen::getRecordDI(QualType ty)
 {
-   assert(ty->isObjectType());
+   assert(ty->isRecordType());
 
    llvm::DIType *MD;
    auto flags = llvm::DINode::DIFlags::FlagZero;
@@ -600,7 +600,7 @@ void IRGen::emitArgumentDI(il::Function const &F, llvm::Function *func)
             LineAndCol.line,
             getTypeDI(Arg.getType())
          ),
-         Arg.getType()->isObjectType() ? DI->createExpression(expr)
+         Arg.getType()->isRecordType() ? DI->createExpression(expr)
                                      : DI->createExpression(),
          dl,
          &func->getEntryBlock()

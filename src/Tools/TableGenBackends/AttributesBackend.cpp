@@ -756,7 +756,7 @@ void AttrParseEmitter::emit()
       // if we land in the default case, we have too many arguments
       Switch << R"__(
          default:
-            SP.diagnose(currentTok().getSourceLoc(), err_attribute_arg_count,
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
@@ -783,7 +783,7 @@ void AttrParseEmitter::emit()
 
             advance();
             if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
-               SP.diagnose(currentTok().getSourceLoc(), err_unexpected_token,
+               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                            currentTok().toString(), true, "')'");
 
                if (!findTokOnLine(tok::comma, tok::close_paren)) {
@@ -796,7 +796,7 @@ void AttrParseEmitter::emit()
       }
 
       if (ArgNo != NumNeededArgs) {
-         SP.diagnose(AttrLoc, err_attribute_arg_count, Ident, /*at least*/ 0,
+         SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                      NumNeededArgs, ArgNo);
          break;
       }
@@ -841,8 +841,8 @@ void AttrParseEmitter::emit()
                               << ">(Decl)) break;\n";
       }
 
-      Switch << "SP.diagnose(A->getSourceRange(), "
-             "err_attribute_not_valid_here, \""
+      Switch << "SP.diagnose(err_attribute_not_valid_here,"
+                "            A->getSourceRange(), \""
           << cast<StringLiteral>(Attr->getFieldValue("name"))->getVal()
           << "\");\n";
 
@@ -862,7 +862,7 @@ void AttrParseEmitter::parseIntArg(llvm::raw_ostream &out,
                                    CurrentArgInfo &ArgInfo) {
    out << R"__(
    if (!currentTok().is(tok::integerliteral)) {
-      SP.diagnose(currentTok().getSourceLoc(), err_attribute_bad_arg,
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__(", 0 /*integer literal */,
                   )__" << ArgInfo.ArgNo << R"__();
 
@@ -901,7 +901,7 @@ void AttrParseEmitter::parseFloatArg(llvm::raw_ostream &out,
                                      AttrParseEmitter::CurrentArgInfo &ArgInfo){
    out << R"__(
    if (!currentTok().is(tok::fpliteral)) {
-      SP.diagnose(currentTok().getSourceLoc(), err_attribute_bad_arg,
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__(", 1 /*float literal */,
                   )__" << ArgInfo.ArgNo << R"__();
 
@@ -917,7 +917,7 @@ void AttrParseEmitter::parseFloatArg(llvm::raw_ostream &out,
       default:
          break;
       case llvm::APFloat::opInexact:
-         SP.diagnose(currentTok().getSourceLoc(), warn_inexact_fp);
+         SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
          break;
    }
 )__";
@@ -929,7 +929,7 @@ void AttrParseEmitter::parseStringArg(llvm::raw_ostream &out,
                                       AttrParseEmitter::CurrentArgInfo &ArgInfo){
    out << R"__(
    if (!currentTok().is(tok::stringliteral)) {
-      SP.diagnose(currentTok().getSourceLoc(), err_attribute_bad_arg,
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__(", 2 /*string literal */,
                   )__" << ArgInfo.ArgNo << R"__();
 
@@ -975,7 +975,7 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
 
    out << R"__(
    if (!currentTok().is(tok::ident)) {
-      SP.diagnose(currentTok().getSourceLoc(), err_attribute_bad_arg,
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__( ", 5 /*one of */,
                   )__" << ArgInfo.ArgNo << ", \"" << DiagStr << R"__(");
 
@@ -997,7 +997,7 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
 
    out << R"__(
    else {
-      SP.diagnose(currentTok().getSourceLoc(), err_attribute_bad_arg,
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__(", 5 /*one of */,
                   )__" << ArgInfo.ArgNo << ", \"" << DiagStr << R"__(");
 

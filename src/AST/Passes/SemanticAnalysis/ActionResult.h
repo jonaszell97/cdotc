@@ -5,7 +5,7 @@
 #ifndef CDOT_ACTIONRESULT_H
 #define CDOT_ACTIONRESULT_H
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/ADT/PointerIntPair.h>
 

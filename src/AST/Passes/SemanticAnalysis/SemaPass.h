@@ -7,13 +7,18 @@
 
 #include "ActionResult.h"
 
+#include "AST/ASTContext.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
+#include "AST/Attribute/Attr.h"
+
 #include "AST/Passes/SemanticAnalysis/Template.h"
 #include "AST/Passes/SemanticAnalysis/CandidateSet.h"
 #include "AST/Passes/SemanticAnalysis/Scope/Scope.h"
 #include "AST/Passes/SemanticAnalysis/ConversionSequence.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
 #include "AST/Passes/ASTVisitor.h"
-#include "AST/ASTContext.h"
 #include "AST/Attribute/Attribute.h"
 
 #include "Basic/CastKind.h"
@@ -55,9 +60,8 @@ public:
    explicit SemaPass(CompilationUnit &compilationUnit);
    ~SemaPass();
 
-   Type *getBuiltinType(llvm::StringRef typeName);
-   ObjectType *getObjectTy(llvm::StringRef name) const;
-   ObjectType *getObjectTy(Type::BoxedPrimitive kind) const;
+   Type *getBuiltinType(DeclarationName typeName);
+   RecordType *getObjectTy(llvm::StringRef name) const;
 
    DiagnosticsEngine &getDiags() { return Diags; }
 
@@ -97,7 +101,7 @@ public:
    void updateParentMapForTemplateInstantiation(Statement *Template,
                                                 Statement *Inst) const;
 
-   void addDeclToContext(DeclContext &Ctx, llvm::StringRef name,
+   void addDeclToContext(DeclContext &Ctx, DeclarationName Name,
                          NamedDecl *Decl);
    void addDeclToContext(DeclContext &Ctx, NamedDecl *Decl);
    void addDeclToContext(DeclContext &Ctx, Decl *D);
@@ -571,7 +575,8 @@ public:
 
    void addImplicitConformance(RecordDecl *R, ImplicitConformanceKind kind);
 
-   IdentifierRefExpr *wouldBeValidIdentifier(llvm::StringRef maybeIdent);
+   IdentifierRefExpr *wouldBeValidIdentifier(SourceLocation Loc,
+                                             IdentifierInfo *maybeIdent);
    GlobalVarDecl *getGlobalVariable(llvm::StringRef maybeGlobal);
 
    void noteConstantDecl(Expression *DeclRef);
@@ -601,7 +606,7 @@ public:
          Stmt->setHadError(true);
       }
 
-      diagnose(Stmt->getSourceRange(), msg, std::forward<Args const&>(args)...);
+      diagnose(msg, std::forward<Args const&>(args)...);
    }
 
    template<class ...Args>
@@ -611,18 +616,11 @@ public:
          D->setIsInvalid(true);
       }
 
-      diagnose(D->getSourceRange(), msg, std::forward<Args const&>(args)...);
+      diagnose(msg, std::forward<Args const&>(args)...);
    }
 
    template<class ...Args>
-   void diagnose(SourceLocation loc, diag::MessageKind msg, Args const&...args)
-   {
-      return diagnose(SourceRange(loc), msg,
-                      std::forward<Args const&>(args)...);
-   }
-
-   template<class ...Args>
-   void diagnose(SourceRange range, diag::MessageKind msg, Args const&...args)
+   void diagnose(diag::MessageKind msg, Args const&...args)
    {
       if (diag::isError(msg)) {
          EncounteredError = true;
@@ -633,7 +631,7 @@ public:
 
       {
          diag::DiagnosticBuilder Builder(Diags, msg);
-         addDiagnosticArgs(Builder, range, std::forward<Args const &>(args)...);
+         addDiagnosticArgs(Builder, std::forward<Args const &>(args)...);
       }
 
       if (!diag::isNote(msg))
@@ -1032,7 +1030,7 @@ public:
 
    CandidateSet
    lookupFunction(DeclContext *Ctx,
-                  llvm::StringRef name,
+                  DeclarationName name,
                   llvm::ArrayRef<Expression*> args,
                   llvm::ArrayRef<Expression*> templateArgs = {},
                   Statement *Caller = nullptr,
@@ -1040,7 +1038,7 @@ public:
                   bool includesSelf = false);
 
    CandidateSet
-   lookupFunction(llvm::StringRef name,
+   lookupFunction(DeclarationName name,
                   llvm::ArrayRef<Expression*> args,
                   llvm::ArrayRef<Expression*> templateArgs = {},
                   Statement *Caller = nullptr,
@@ -1048,18 +1046,18 @@ public:
                   bool includesSelf = false);
 
    CandidateSet
-   lookupMethod(llvm::StringRef name,
+   lookupMethod(DeclarationName name,
                 Expression *SelfExpr,
                 llvm::ArrayRef<Expression*> args,
                 llvm::ArrayRef<Expression*> templateArgs = {},
                 Statement *Caller = nullptr,
                 bool suppressDiags = false);
 
-   CandidateSet getCandidates(llvm::StringRef name,
+   CandidateSet getCandidates(DeclarationName name,
                               Expression *SelfExpr);
 
    CandidateSet
-   lookupCase(llvm::StringRef name,
+   lookupCase(DeclarationName name,
               EnumDecl *E,
               llvm::ArrayRef<Expression*> args,
               llvm::ArrayRef<Expression*> templateArgs = {},
@@ -1067,7 +1065,7 @@ public:
               bool suppressDiags = false);
 
    void lookupFunction(CandidateSet &CandSet,
-                       llvm::StringRef name,
+                       DeclarationName name,
                        llvm::ArrayRef<Expression*> args,
                        llvm::ArrayRef<Expression*> templateArgs = {},
                        Statement *Caller = nullptr,
@@ -1084,8 +1082,8 @@ public:
    void declareDefaultInitializer(StructDecl *S);
    void declareDefaultDeinitializer(StructDecl *S);
 
-   TemplateParamDecl* getTemplateParam(llvm::StringRef name);
-   AssociatedTypeDecl* getAssociatedType(llvm::StringRef name);
+   TemplateParamDecl* getTemplateParam(DeclarationName name);
+   AssociatedTypeDecl* getAssociatedType(DeclarationName name);
 
    bool inGlobalDeclContext() const;
 
@@ -1133,7 +1131,7 @@ private:
 
    CallableDecl* checkFunctionReference(Expression *E,
                                         DeclContext *Ctx,
-                                        llvm::StringRef funcName,
+                                        DeclarationName funcName,
                                        llvm::ArrayRef<Expression*>templateArgs);
 
    struct AliasResult {
@@ -1189,7 +1187,8 @@ private:
 
    // MemberRef
 
-   QualType HandleStaticTypeMember(MemberRefExpr *node, Type *Ty);
+   ExprResult HandleBuiltinTypeMember(MemberRefExpr *Expr, QualType Ty);
+   QualType HandleStaticTypeMember(MemberRefExpr *Expr, QualType Ty);
 
    ExprResult HandleFieldAccess(IdentifierRefExpr *Ident, FieldDecl *F);
    ExprResult HandlePropAccess(IdentifierRefExpr *Ident, PropDecl *P);
@@ -1200,7 +1199,7 @@ private:
 
    void HandleFunctionCall(CallExpr* node,
                            DeclContext *Ctx,
-                           llvm::StringRef funcName);
+                           DeclarationName funcName);
 
    void HandleBuiltinCall(CallExpr*);
 

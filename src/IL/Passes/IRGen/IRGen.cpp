@@ -10,7 +10,7 @@
 #include "Files/FileUtils.h"
 #include "Files/FileManager.h"
 #include "IL/Utils/BlockIterator.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/DIBuilder.h>
@@ -82,6 +82,9 @@ IRGen::~IRGen()
 void IRGen::visitCompilationUnit(CompilationUnit &CU)
 {
    if (emitDebugInfo) {
+      assert(CU.getSourceLoc()
+             && "translation unit with invalid source location");
+
       DI = new llvm::DIBuilder(*this->M);
       File = getFileDI(CU.getSourceLoc());
       this->CU = DI->createCompileUnit(
@@ -328,7 +331,7 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
          auto ret = getLlvmType(*FuncTy->getReturnType());
          llvm::SmallVector<llvm::Type*, 4> argTypes;
 
-         for (const auto &arg : FuncTy->getArgTypes()) {
+         for (const auto &arg : FuncTy->getParamTypes()) {
             auto ty = getLlvmType(arg);
             if (ty->isStructTy())
                ty = ty->getPointerTo();
@@ -349,7 +352,7 @@ llvm::Type* IRGen::getLlvmType(Type *Ty)
 
          return llvm::StructType::get(Ctx, argTypes);
       }
-      case TypeID::ObjectTypeID: {
+      case TypeID::RecordTypeID: {
          if (Ty->isRefcounted())
             return getStructTy(Ty)->getPointerTo();
 
@@ -407,7 +410,7 @@ void IRGen::DeclareFunction(il::Function const* F)
       retType = getLlvmType(funcTy->getReturnType());
    }
 
-   for (const auto &arg : funcTy->getArgTypes()) {
+   for (const auto &arg : funcTy->getParamTypes()) {
       auto argTy = getLlvmType(arg);
       if (argTy->isStructTy() || argTy->isArrayTy())
          argTy = argTy->getPointerTo();
@@ -1405,7 +1408,7 @@ llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
       retType = getLlvmType(FTy->getReturnType());
    }
 
-   for (const auto &arg : FTy->getArgTypes()) {
+   for (const auto &arg : FTy->getParamTypes()) {
       auto argTy = getLlvmType(arg);
       if (argTy->isStructTy())
          argTy = argTy->getPointerTo();

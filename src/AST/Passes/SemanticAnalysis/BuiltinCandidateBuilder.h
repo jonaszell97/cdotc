@@ -5,8 +5,9 @@
 #ifndef CDOT_BUILTINCANDIDATEBUILDER_H
 #define CDOT_BUILTINCANDIDATEBUILDER_H
 
+#include "AST/Type.h"
+#include "Basic/DeclarationName.h"
 #include "Basic/Precedence.h"
-#include "Variant/Type/Type.h"
 
 #include <unordered_map>
 #include <llvm/ADT/ArrayRef.h>
@@ -28,11 +29,11 @@ public:
    }
 
    void addBuiltinCandidates(CandidateSet &CandSet,
-                             llvm::StringRef op,
+                             DeclarationName opName,
                              llvm::ArrayRef<Expression*> args);
 
    void addBuiltinCandidates(CandidateSet &CandSet,
-                             llvm::StringRef op,
+                             DeclarationName opName,
                              QualType lhsType);
 
    struct CachedOp {
@@ -57,7 +58,7 @@ private:
                                       QualType ty,
                                       op::OperatorKind opKind);
 
-   void getOpKindAndFix(llvm::StringRef op,
+   void getOpKindAndFix(DeclarationName opName,
                         op::OperatorKind &opKind,
                         FixKind &fix);
 };

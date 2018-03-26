@@ -268,11 +268,12 @@ public:
 
 private:
    CompilerOptions options;
+   SourceLocation MainFileLoc;
 
    std::unique_ptr<fs::FileManager> FileMgr;
 
    std::unique_ptr<ast::ASTContext> Context;
-   std::unique_ptr<ast::GlobalDeclContext> GlobalDeclCtx;
+   ast::GlobalDeclContext* GlobalDeclCtx;
 
    module::Module *compiledModule = nullptr;
    std::vector<module::Module*> imports;

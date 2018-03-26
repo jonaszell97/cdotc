@@ -15,7 +15,7 @@
 //
 //#include "../../../Variant/Type/FunctionType.h"
 //#include "../../../Variant/Type/TupleType.h"
-//#include "../../../Variant/Type/ObjectType.h"
+//#include "../../../Variant/Type/RecordType.h"
 //#include "../../../Variant/Type/GenericType.h"
 //#include "../../../Variant/Type/QualType.h"
 //
@@ -160,7 +160,7 @@
 //      case TypeID::FunctionTypeID: {
 //         if (ty->isRawFunctionTy()) {
 //            std::vector<llvm::Metadata*> argTypes;
-//            for (auto& argTy : ty->asFunctionTy()->getArgTypes()) {
+//            for (auto& argTy : ty->asFunctionTy()->getParamTypes()) {
 //               argTypes.push_back(getTypeDI(*argTy.type));
 //            }
 //
@@ -182,12 +182,12 @@
 //
 //         break;
 //      }
-//      case TypeID::ObjectTypeID: {
+//      case TypeID::RecordTypeID: {
 //         MD = getRecordDI(ty);
 //         break;
 //      }
 //      case TypeID::MetaTypeID: {
-//         MD = getRecordDI(ObjectType::get("cdot.TypeInfo"));
+//         MD = getRecordDI(RecordType::get("cdot.TypeInfo"));
 //         break;
 //      }
 //      case TypeID::TupleTypeID: {
@@ -323,7 +323,7 @@
 //      );
 //   }
 //   else if (rec->isProtocol()) {
-//      MD = getRecordDI(ObjectType::get("cdot.Protocol"));
+//      MD = getRecordDI(RecordType::get("cdot.Protocol"));
 //   }
 //   else if (rec->isUnion()) {
 //      auto un = rec->getAs<Union>();
@@ -579,7 +579,7 @@
 //         1,
 //         File,
 //         lineAndLoc.line,
-//         getTypeDI(ObjectType::get(method->owningRecord->getName()))
+//         getTypeDI(RecordType::get(method->owningRecord->getName()))
 //      );
 //
 //      DI.insertDeclare(

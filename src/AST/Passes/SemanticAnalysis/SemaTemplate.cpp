@@ -6,7 +6,6 @@
 
 #include "AST/Passes/ILGen/ILGenPass.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
-#include "AST/NamedDecl.h"
 
 using namespace cdot::support;
 using namespace cdot::sema;

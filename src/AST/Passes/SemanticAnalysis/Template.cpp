@@ -5,7 +5,7 @@
 #include "Template.h"
 
 #include "AST/Expression.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "Message/Diagnostics.h"
 #include "Variant/Variant.h"
@@ -476,11 +476,24 @@ private:
 
    size_t inferFromRecordContext(RecordDecl *R)
    {
-      if (!R->getOuterRecord())
+      RecordDecl *Outer = nullptr;
+      auto Ctx = R->getDeclContext();
+      while (Ctx) {
+         if (auto RD = dyn_cast<RecordDecl>(Ctx)) {
+            Outer = RD;
+            break;
+         }
+         if (isa<TranslationUnit>(Ctx))
+            break;
+
+         Ctx = Ctx->getParentCtx();
+      }
+
+      if (!Outer)
          return 0;
 
       size_t addedFromOuterRecords = 0;
-      for (const auto &TP : R->getOuterRecord()->getTemplateParams()) {
+      for (const auto &TP : Outer->getTemplateParams()) {
          if (TP->isVariadic()) {
             emplace(TP, TP->isTypeName(),
                     std::vector<ResolvedTemplateArg>(),
@@ -526,7 +539,7 @@ TemplateArgListImpl::inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
          auto &neededArg = neededArgs.size() > i ? neededArgs[i]
                                                  : neededArgs.back();
 
-         auto success = inferTemplateArg(arg, neededArg->getArgType());
+         auto success = inferTemplateArg(arg, neededArg->getType());
          if (!success)
             return;
 
@@ -567,7 +580,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       auto givenFunc = given->asFunctionType();
       auto neededFunc = needed->asFunctionType();
 
-      if (givenFunc->getArgTypes().size() != neededFunc->getArgTypes().size()) {
+      if (givenFunc->getParamTypes().size() != neededFunc->getParamTypes().size()) {
          return false;
       }
 
@@ -578,8 +591,8 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
          return false;
 
       size_t i = 0;
-      auto neededArgs = neededFunc->getArgTypes();
-      for (auto &givenArg : givenFunc->getArgTypes()) {
+      auto neededArgs = neededFunc->getParamTypes();
+      for (auto &givenArg : givenFunc->getParamTypes()) {
          auto neededTy = neededArgs.size() > i ? neededArgs[i]
                                                : neededArgs.back();
 
@@ -616,8 +629,8 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       return true;
    }
 
-   if (needed->isObjectType()) {
-      if (!given->isObjectType()) {
+   if (needed->isRecordType()) {
+      if (!given->isRecordType()) {
          return false;
       }
 
@@ -664,7 +677,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
                             neededArr->getElementType()))
          return false;
 
-//      if (auto Inf = dyn_cast<InferredArrayType>(neededArr)) {
+//      if (auto Inf = dyn_cast<DependentSizeArrayType>(neededArr)) {
 //         size_t i = 0;
 //         for (const auto &P : getParameters()) {
 //            if (Inf->getParam().equals(P->getName())) {
@@ -863,7 +876,7 @@ TemplateArgList::TemplateArgList(SemaPass &S,
    : pImpl(new TemplateArgListImpl(S, RecordTy->getRecord(), templateArguments,
                                    loc))
 {
-   if (auto Dep = RecordTy->asInconcreteObjectType()) {
+   if (auto Dep = RecordTy->asDependentRecordType()) {
       pImpl->copyFromList(Dep->getTemplateArgs());
    }
 }
@@ -998,26 +1011,34 @@ bool TemplateArgList::insert(llvm::StringRef name, ResolvedTemplateArg &&arg)
 std::string TemplateArgList::toString(char beginC, char endC,
                                       bool showNames) const {
    string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      print(OS, beginC, endC, showNames);
+   }
+
+   return s;
+}
+
+void TemplateArgList::print(llvm::raw_ostream &OS,
+                            char beginC, char endC, bool showNames) const {
    if (beginC)
-      s += beginC;
+      OS << beginC;
 
    size_t i = 0;
    auto end_it = end();
 
    for (auto it = begin(); it != end_it; ++it, ++i) {
-      if (i != 0) { s += ", "; }
+      if (i != 0) OS << ", ";
       if (showNames) {
-         s += it.getParam()->getName();
-         s += " = ";
+         OS << it.getParam()->getName();
+         OS << " = ";
       }
 
-      s += it->toString();
+      OS << it->toString();
    }
 
    if (endC)
-      s += endC;
-
-   return s;
+      OS << endC;
 }
 
 TemplateArgList::arg_iterator::arg_iterator(TemplateArgList const &list)
@@ -1043,6 +1064,23 @@ void TemplateArgList::arg_iterator::operator++()
    }
 
    arg = list->getNamedArg((*it)->getName());
+}
+
+void MultiLevelTemplateArgList::print(llvm::raw_ostream &OS) const
+{
+   OS << "[";
+
+   size_t i = 0;
+   for (auto &list : *this) {
+      auto end_it = list->end();
+      for (auto it = list->begin(); it != end_it; ++it, ++i) {
+         if (i != 0) OS << ", ";
+         OS << it.getParam()->getName()
+            << " = " << it->toString();
+      }
+   }
+
+   OS << "]";
 }
 
 } // namespace sema

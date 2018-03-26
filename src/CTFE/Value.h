@@ -12,7 +12,7 @@
 #include <llvm/ADT/SmallPtrSet.h>
 
 #include "Support/Casting.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace llvm {
    class APFloat;

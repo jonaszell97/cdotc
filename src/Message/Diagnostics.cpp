@@ -23,8 +23,8 @@
 
 #ifndef CDOT_SMALL_VARIANT
 #  include "AST/Expression.h"
+#  include "AST/Type.h"
 #  include "module/Module.h"
-#  include "Variant/Type/Type.h"
 #endif
 
 using namespace cdot::lex;
@@ -268,6 +268,16 @@ static SeverityLevel getSeverity(MessageKind msg)
    }
 }
 
+static bool isNewline(const char *str)
+{
+   switch (str[0]) {
+   case '\n': case '\r':
+      return true;
+   default:
+      return false;
+   }
+}
+
 void DiagnosticBuilder::finalize()
 {
    std::string str;
@@ -295,7 +305,7 @@ void DiagnosticBuilder::finalize()
       return;
    }
 
-   if (!loc) {
+   if (!Engine.NumSourceRanges) {
       out << "\n";
       out.flush();
       Engine.finalizeDiag(str, severity);
@@ -303,63 +313,98 @@ void DiagnosticBuilder::finalize()
       return;
    }
 
-   SourceLocation loc = this->loc.getStart();
+   // source id of all given source ranges should be the same
+   SourceLocation loc = Engine.SourceRanges[0].getStart();
    if (auto AliasLoc = Engine.FileMgr->getAliasLoc(loc)) {
       loc = AliasLoc;
    }
 
-   int index = 0;
-
    size_t ID = Engine.FileMgr->getSourceId(loc);
-   llvm::StringRef fileName = Engine.FileMgr->getFileName(ID).str();
+   auto File = Engine.FileMgr->getOpenedFile(ID);
 
-   llvm::MemoryBuffer *file = Engine.FileMgr->getBuffer(loc);
-   size_t srcLen = file->getBufferSize();
-   const char *src = file->getBufferStart();
+   llvm::MemoryBuffer *Buf = File.Buf;
+   size_t srcLen = Buf->getBufferSize();
+   const char *src = Buf->getBufferStart();
 
-   auto lineAndCol = Engine.FileMgr->getLineAndCol(loc, file);
+   // show file name, line number and column
+   auto lineAndCol = Engine.FileMgr->getLineAndCol(loc, Buf);
+   out << " (" << fs::getFileNameAndExtension(File.FileName)
+       << ":" << lineAndCol.line << ":" << lineAndCol.col << ")\n";
 
-   unsigned col = lineAndCol.col;
    unsigned errLineNo = lineAndCol.line;
 
-   int currLine = 1;
-   for (int i = 0; currLine < errLineNo; ++i) {
-      assert(i < srcLen);
-      if (src[i] == '\n') {
-         ++currLine;
-         index = i;
+   // only source ranges that are on the same line as the "main index" are shown
+   unsigned errIndex     = loc.getOffset() - File.BaseOffset;
+   unsigned newlineIndex = errIndex;
+
+   // find offset of first newline before the error index
+   for (; newlineIndex > 0; --newlineIndex) {
+      if (isNewline(src + newlineIndex))
+         break;
+   }
+
+   // find offset of first newline after error index
+   unsigned lineEndIndex = errIndex;
+   for (; lineEndIndex < srcLen; ++lineEndIndex) {
+      if (isNewline(src + lineEndIndex))
+         break;
+   }
+
+   llvm::StringRef ErrLine(Buf->getBufferStart() + newlineIndex + 1,
+                           lineEndIndex - newlineIndex - 1);
+
+   // show carets for any given single source location, and tildes for source
+   // ranges (but only on the error line)
+   std::string Markers;
+
+   Markers.resize(ErrLine.size());
+   std::fill(Markers.begin(), Markers.end(), ' ');
+
+   for (unsigned i = 0; i < Engine.NumSourceRanges; ++i) {
+      auto &SR = Engine.SourceRanges[i];
+      assert(SR.getStart() && "invalid source range for diagnostic");
+
+      // single source location, show caret
+      if (!SR.getEnd()) {
+         unsigned offset = SR.getStart().getOffset() - File.BaseOffset;
+         assert(lineEndIndex > offset && "source loc not on error line!");
+
+         unsigned offsetOnLine = offset - newlineIndex - 1;
+         Markers[offsetOnLine] = '^';
+      }
+      else {
+         auto BeginOffset = SR.getStart().getOffset() - File.BaseOffset;
+         auto EndOffset   = SR.getEnd().getOffset() - File.BaseOffset;
+
+         unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
+         unsigned EndOffsetOnLine   = std::min(EndOffset - newlineIndex - 1,
+                                               lineEndIndex);
+
+         assert(EndOffsetOnLine >= BeginOffsetOnLine
+                && EndOffsetOnLine <= lineEndIndex
+                && "invalid source range!");
+
+         while (1) {
+            Markers[EndOffsetOnLine] = '~';
+            if (EndOffsetOnLine-- == BeginOffsetOnLine)
+               break;
+         }
+
+         // If there's only one location and it's a range, show a caret
+         // instead of the first tilde
+         if (Engine.NumSourceRanges == 1) {
+            Markers[BeginOffsetOnLine] = '^';
+         }
       }
    }
 
-   if (errLineNo > 1) {
-      ++index;
-   }
+   // display line number to the left of the source
+   size_t LinePrefixSize = out.GetNumBytesInBuffer();
+   out << errLineNo << " | ";
 
-   string errLine;
-   while (src[index] != '\n' && index < srcLen) {
-      errLine += src[index];
-      ++index;
-   }
-
-   string linePref = std::to_string(errLineNo) + " | ";
-   auto nameAndExt = fs::getFileNameAndExtension(fileName);
-   if (!nameAndExt.empty())
-      fileName = nameAndExt;
-
-   out << " (" << fileName << ":" << std::to_string(errLineNo)
-       << ":" << std::to_string(col - 1) << ":[" << ID << "]" ")\n";
-   out << linePref << errLine << "\n";
-
-   if (!showWholeLine) {
-      int i = 2;
-      for (; i < col + linePref.length(); ++i) {
-         out << ' ';
-      }
-
-      out << '^';
-   }
-
-   out << "\n";
+   LinePrefixSize = out.GetNumBytesInBuffer() - LinePrefixSize;
+   out << ErrLine << "\n"
+       << std::string(LinePrefixSize, ' ') << Markers << "\n";
 
    out.flush();
    Engine.finalizeDiag(str, severity);
@@ -426,13 +471,13 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* str)
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation loc)
 {
-   setLoc(loc);
+   Engine.SourceRanges[Engine.NumSourceRanges++] = SourceRange(loc);
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(cdot::SourceRange loc)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceRange loc)
 {
-   setLoc(loc);
+   Engine.SourceRanges[Engine.NumSourceRanges++] = loc;
    return *this;
 }
 
@@ -448,10 +493,10 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(FakeSourceLocation const& loc)
 }
 
 #ifndef CDOT_SMALL_VARIANT
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Type *Ty)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(const SourceType &Ty)
 {
    Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
-   Engine.StringArgs[Engine.NumArgs] = Ty->toString();
+   Engine.StringArgs[Engine.NumArgs] = Ty.getResolvedType().toString();
    ++Engine.NumArgs;
 
    return *this;
@@ -466,13 +511,9 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& Ty)
    return *this;
 }
 
-DiagnosticBuilder& DiagnosticBuilder::operator<<(const SourceType &Ty)
+DiagnosticBuilder& DiagnosticBuilder::operator<<(Type *const& Ty)
 {
-   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
-   Engine.StringArgs[Engine.NumArgs] = Ty.getResolvedType().toString();
-   ++Engine.NumArgs;
-
-   return *this;
+   return *this << QualType(Ty);
 }
 #endif
 

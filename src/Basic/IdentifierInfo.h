@@ -5,13 +5,22 @@
 #ifndef CDOT_IDENTIFIERINFO_H
 #define CDOT_IDENTIFIERINFO_H
 
-#include <llvm/ADT/StringMap.h>
+#include "lex/TokenKinds.h"
+
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseMapInfo.h>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Allocator.h>
 
-#include "../lex/TokenKinds.h"
-
 namespace cdot {
+
+namespace ast {
+   class ASTContext;
+}
+
+namespace diag {
+   class DiagnosticBuilder;
+}
 
 class IdentifierTable;
 
@@ -21,8 +30,7 @@ public:
 
    llvm::StringRef getIdentifier() const
    {
-      assert(EntryPtr && "no entry for identifier");
-      return EntryPtr->getKey();
+      return Ident;
    }
 
    lex::tok::TokenType getKeywordTokenKind() const
@@ -39,27 +47,27 @@ public:
 
    unsigned getLength() const
    {
-      return EntryPtr->getKeyLength();
+      return (unsigned)Ident.size();
    }
 
    const char *getNameStart() const
    {
-      return EntryPtr->getKeyData();
+      return Ident.data();
    }
 
 private:
    IdentifierInfo()
-      : EntryPtr(nullptr), keywordTokenKind(lex::tok::sentinel)
+      : keywordTokenKind(lex::tok::sentinel)
    {}
 
-   llvm::StringMapEntry<IdentifierInfo*> *EntryPtr;
+   llvm::StringRef Ident;
    lex::tok::TokenType keywordTokenKind;
 };
 
 class IdentifierTable {
 public:
    using AllocatorTy = llvm::BumpPtrAllocator;
-   using MapTy = llvm::StringMap<IdentifierInfo*, AllocatorTy>;
+   using MapTy       = llvm::StringMap<IdentifierInfo*, AllocatorTy>;
 
    IdentifierTable(unsigned initialSize = 8192)
       : IdentMap(initialSize)
@@ -75,7 +83,7 @@ public:
       auto *Mem = getAllocator().Allocate<IdentifierInfo>();
       Info = new (Mem) IdentifierInfo;
 
-      Info->EntryPtr = &Entry;
+      Info->Ident = Entry.getKey();
 
       return *Info;
    }

@@ -7,7 +7,7 @@
 #include "AST/ASTContext.h"
 #include "IL/Module/Module.h"
 #include "IL/Module/Context.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 using std::string;
 

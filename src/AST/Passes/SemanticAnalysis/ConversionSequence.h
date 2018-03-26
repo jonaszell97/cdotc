@@ -6,7 +6,7 @@
 #define CDOT_CONVERSIONSEQUENCE_H
 
 #include "Basic/CastKind.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace cdot {
 namespace ast {

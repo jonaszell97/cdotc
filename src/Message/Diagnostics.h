@@ -105,9 +105,10 @@ public:
 
    DiagnosticBuilder& operator<<(opt::Option const& opt);
 
-#ifndef CDOT_SMALL_VARIANT
-   DiagnosticBuilder& operator<<(Type *Ty);
    DiagnosticBuilder& operator<<(QualType const& Ty);
+   DiagnosticBuilder& operator<<(Type *const& Ty);
+
+#ifndef CDOT_SMALL_VARIANT
    DiagnosticBuilder& operator<<(ast::SourceType const& Ty);
 #endif
 

@@ -7,7 +7,7 @@
 
 #include "lex/SourceLocation.h"
 #include "Support/Casting.h"
-#include "Variant/Type/Type.h"
+#include "Type.h"
 
 #include <llvm/Support/TrailingObjects.h>
 
@@ -100,7 +100,6 @@ protected:
    NodeType typeID;
    uint32_t SubclassData;
 
-   SourceLocation loc;
    QualType contextualType;
 
    void toggleFlag(uint32_t flag)

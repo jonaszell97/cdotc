@@ -5,10 +5,9 @@
 #ifndef EXPRESSION_H
 #define EXPRESSION_H
 
-#include "SourceType.h"
-
-#include "Statement.h"
 #include "AST/Passes/SemanticAnalysis/ConversionSequence.h"
+#include "AST/SourceType.h"
+#include "AST/Statement.h"
 #include "Basic/Precedence.h"
 #include "Variant/Variant.h"
 
@@ -109,6 +108,8 @@ public:
    inline Expression *ignoreParens();
    Expression *maybeGetParentExpr() const;
 
+   bool warnOnUnusedResult() const;
+
 protected:
    explicit Expression(NodeType typeID, bool contextDependent = false)
       : Statement(typeID),
@@ -138,26 +139,16 @@ public:
 
 class IdentifiedExpr: public Expression {
 public:
-   IdentifiedExpr(NodeType typeID, std::string &&ident,
+   IdentifiedExpr(NodeType typeID, IdentifierInfo *ident,
                   bool contextDependent = false)
       : Expression(typeID, contextDependent),
-        ident(move(ident))
+        ident(ident)
    {}
 
-   const std::string &getIdent() const
-   {
-      return ident;
-   }
+   IdentifierInfo *getIdentInfo() const { return ident; }
+   llvm::StringRef getIdent() const { return ident->getIdentifier(); }
 
-   std::string &stealIdent()
-   {
-      return ident;
-   }
-
-   void setIdent(std::string &&ident)
-   {
-      IdentifiedExpr::ident = move(ident);
-   }
+   void setIdent(IdentifierInfo *ident) { this->ident = ident; }
 
    static bool classofKind(NodeType kind)
    {
@@ -170,7 +161,7 @@ public:
    }
 
 protected:
-   std::string ident;
+   IdentifierInfo *ident;
 };
 
 class ParenExpr: public Expression {
@@ -429,13 +420,11 @@ public:
 
 class SequenceElement {
 public:
-   SequenceElement(Expression* expr);
-   SequenceElement(std::string &&possibleOp,
+   explicit SequenceElement(Expression* expr);
+   SequenceElement(IdentifierInfo *possibleOp,
                    SourceLocation loc);
    SequenceElement(op::OperatorKind opKind,
                    SourceLocation loc);
-
-   ~SequenceElement();
 
    SequenceElement(const SequenceElement&) = delete;
    SequenceElement &operator=(const SequenceElement&) = delete;
@@ -467,8 +456,7 @@ public:
    Expression* getExpr() const { return expr; }
    op::OperatorKind getOperatorKind() const { return operatorKind; }
 
-   string &getOp() { return op; }
-   string const& getOp() const { return op; }
+   IdentifierInfo *getOp() const { return op; }
 
    Kind getKind() const { return kind; }
    const SourceLocation &getLoc() const { return loc; }
@@ -477,14 +465,14 @@ public:
    {
       assert(!isExpression() && "cannot stringify expression");
       return isOperator() ? op::toString(operatorKind)
-                          : llvm::StringRef(op);
+                          : op->getIdentifier();
    }
 
 protected:
    union {
       Expression* expr;
       op::OperatorKind operatorKind;
-      std::string op;
+      IdentifierInfo *op;
    };
 
    Kind kind;
@@ -639,7 +627,7 @@ class CastExpr: public Expression {
    ConversionSequence ConvSeq;
 
 public:
-   static bool classofKind(NodeType kind){ return kind == CallExprID; }
+   static bool classofKind(NodeType kind){ return kind == CastExprID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static CastExpr *Create(ASTContext &C,
@@ -710,7 +698,7 @@ public:
    }
 
    SourceLocation getColonLoc() const { return ColonLoc; }
-   SourceRange getSourceRange() const { return { ColonLoc }; }
+   SourceRange getSourceRange() const { return SourceRange(ColonLoc); }
 
 protected:
    explicit PatternExpr(NodeType type, SourceLocation ColonLoc)
@@ -745,18 +733,13 @@ struct CasePatternArgument {
         IsExpr(true), IsConst(false)
    {}
 
-   CasePatternArgument(std::string &&ident, bool isConst, SourceLocation loc)
-      : identifier(move(ident)), sourceLoc(loc), IsExpr(false),
+   CasePatternArgument(IdentifierInfo *II, bool isConst, SourceLocation loc)
+      : identifier(II), sourceLoc(loc), IsExpr(false),
         IsConst(isConst)
    {}
 
-   CasePatternArgument(CasePatternArgument &&arg) noexcept;
-   CasePatternArgument &operator=(CasePatternArgument &&arg) noexcept;
-
-   ~CasePatternArgument();
-
    Expression* getExpr() const { return expr; }
-   const string &getIdentifier() const { return identifier; }
+   IdentifierInfo *getIdentifier() const { return identifier; }
    bool isExpr() const { return IsExpr; }
    bool isConst() const { return IsConst; }
    const SourceLocation &getSourceLoc() const { return sourceLoc; }
@@ -768,11 +751,9 @@ struct CasePatternArgument {
    }
 
 private:
-   void destroyValue();
-
    union {
       mutable Expression* expr = nullptr;
-      std::string identifier;
+      IdentifierInfo *identifier;
    };
 
    SourceLocation sourceLoc;
@@ -786,12 +767,12 @@ class CasePattern final:
    llvm::TrailingObjects<CasePattern, CasePatternArgument> {
 private:
    CasePattern(SourceRange SR,
-               string &&caseName,
+               IdentifierInfo *caseName,
                llvm::MutableArrayRef<CasePatternArgument> args);
 
    SourceLocation PeriodLoc;
 
-   std::string caseName;
+   IdentifierInfo *caseName;
    unsigned NumArgs;
 
    bool HasBinding : 1;
@@ -806,13 +787,11 @@ public:
 
    static CasePattern *Create(ASTContext &C,
                               SourceRange SR,
-                              string &&caseName,
+                              IdentifierInfo *caseName,
                               llvm::MutableArrayRef<CasePatternArgument> args);
 
-   llvm::StringRef getCaseName() const
-   {
-      return caseName;
-   }
+   llvm::StringRef getCaseName() const { return caseName->getIdentifier(); }
+   IdentifierInfo *getCaseNameIdent() const { return caseName; }
 
    llvm::ArrayRef<CasePatternArgument> getArgs() const
    {
@@ -862,12 +841,12 @@ public:
    };
 
 private:
-   IntegerLiteral(SourceLocation Loc,
+   IntegerLiteral(SourceRange Loc,
                   Type *type,
                   llvm::APSInt &&value,
                   Suffix suffix);
 
-   SourceLocation Loc;
+   SourceRange Loc;
    llvm::APSInt value;
    Type* type = nullptr;
    Suffix suffix;
@@ -877,13 +856,12 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static IntegerLiteral *Create(ASTContext &C,
-                                 SourceLocation Loc,
+                                 SourceRange Loc,
                                  Type *type,
                                  llvm::APSInt &&value,
                                  Suffix suffix = Suffix::None);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return Loc; }
 
    const llvm::APSInt &getValue() const { return value; }
    void setValue(llvm::APSInt &&Val) { value = std::move(Val); }
@@ -901,11 +879,11 @@ public:
    };
 
 private:
-   FPLiteral(SourceLocation Loc, Type *type,
+   FPLiteral(SourceRange Loc, Type *type,
              llvm::APFloat &&value,
              Suffix suffix);
 
-   SourceLocation Loc;
+   SourceRange Loc;
    llvm::APFloat value;
    Type *type;
    Suffix suffix;
@@ -915,12 +893,11 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static FPLiteral *Create(ASTContext &C,
-                            SourceLocation Loc, Type *type,
+                            SourceRange Loc, Type *type,
                             llvm::APFloat &&value,
                             Suffix suffix = Suffix::None);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return Loc; }
 
    const llvm::APFloat &getValue() const { return value; }
 
@@ -944,8 +921,11 @@ public:
    static BoolLiteral *Create(ASTContext &C, SourceLocation Loc,
                               Type *type, bool value);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const
+   {
+      SourceLocation EndLoc(Loc.getOffset() + (value ? 3 : 4));
+      return SourceRange(Loc, EndLoc);
+   }
 
    bool getValue() const { return value; }
    Type *getType() const { return type; }
@@ -954,15 +934,16 @@ public:
 
 class CharLiteral: public Expression {
 private:
-   CharLiteral(SourceLocation Loc, Type *type, char value);
-   CharLiteral(SourceLocation Loc, Type *type, uint32_t value);
+   CharLiteral(SourceRange Loc, Type *type, char value);
+   CharLiteral(SourceRange Loc, Type *type, uint32_t value);
+
+   SourceRange Loc;
 
    union {
       char narrow;
       uint32_t wide;
    };
 
-   SourceLocation Loc;
    bool IsWide;
    Type *type;
 
@@ -970,13 +951,12 @@ public:
    static bool classofKind(NodeType kind){ return kind == CharLiteralID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   static CharLiteral *Create(ASTContext &C, SourceLocation Loc,
+   static CharLiteral *Create(ASTContext &C, SourceRange Loc,
                               Type *type, char value);
-   static CharLiteral *Create(ASTContext &C, SourceLocation Loc,
+   static CharLiteral *Create(ASTContext &C, SourceRange Loc,
                               Type *type, uint32_t value);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return Loc; }
 
    char getNarrow() const { return narrow; }
 
@@ -998,7 +978,6 @@ public:
 
    static NoneLiteral *Create(ASTContext &C, SourceLocation Loc);
 
-   SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const
    {
       return SourceRange(Loc, SourceLocation(Loc.getOffset() + 4));
@@ -1006,9 +985,9 @@ public:
 };
 
 class StringLiteral: public Expression {
-   StringLiteral( SourceLocation Loc, std::string &&str);
+   StringLiteral(SourceRange Loc, std::string &&str);
 
-   SourceLocation Loc;
+   SourceRange Loc;
    std::string value;
    bool cstring = false;
 
@@ -1016,24 +995,23 @@ public:
    static bool classofKind(NodeType kind){ return kind == StringLiteralID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   static StringLiteral *Create(ASTContext &C,  SourceLocation Loc,
+   static StringLiteral *Create(ASTContext &C,  SourceRange Loc,
                                 std::string &&str);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return Loc; }
 
    llvm::StringRef getValue() const { return value; }
    bool isCString() const { return cstring; }
    void setCString(bool raw) { cstring = raw; }
 };
 
-class StringInterpolation: public Expression,
-                           llvm::TrailingObjects<StringInterpolation,
-                                                 Expression*> {
-   StringInterpolation(SourceLocation Loc,
+class StringInterpolation final: public Expression,
+                                 llvm::TrailingObjects<StringInterpolation,
+                                                       Expression*> {
+   StringInterpolation(SourceRange Loc,
                        llvm::ArrayRef<Expression*> strings);
 
-   SourceLocation Loc;
+   SourceRange Loc;
    unsigned NumStrings;
 
 public:
@@ -1044,11 +1022,10 @@ public:
    }
 
    static StringInterpolation *Create(ASTContext &C,
-                                      SourceLocation Loc,
+                                      SourceRange Loc,
                                       llvm::ArrayRef<Expression*> strings);
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return Loc; }
 
    llvm::ArrayRef<Expression*> getStrings() const
    {
@@ -1310,7 +1287,7 @@ public:
    static bool classofKind(NodeType kind){ return kind == IdentifierRefExprID; }
 
    explicit IdentifierRefExpr(SourceLocation Loc,
-                              std::string &&ident,
+                              IdentifierInfo *ident,
                               std::vector<Expression*> &&templateArgs = {},
                               DeclContext *DeclCtx = nullptr,
                               bool InTypePos = false);
@@ -1324,7 +1301,11 @@ public:
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const
    {
-      return SourceRange(Loc, SourceLocation(Loc.getOffset() + ident.size()));
+      if (!ident)
+         return SourceRange(Loc);
+
+      return SourceRange(Loc, SourceLocation(Loc.getOffset()
+                                             + getIdent().size() - 1));
    }
 
    Expression *getParentExpr() const { return ParentExpr; }
@@ -1440,7 +1421,7 @@ public:
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const
    {
-      return SourceRange(Loc, SourceLocation(Loc.getOffset() + 4));
+      return SourceRange(Loc, SourceLocation(Loc.getOffset() + 3));
    }
 };
 
@@ -1458,7 +1439,7 @@ public:
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const
    {
-      return SourceRange(Loc, SourceLocation(Loc.getOffset() + 5));
+      return SourceRange(Loc, SourceLocation(Loc.getOffset() + 4));
    }
 };
 
@@ -1476,7 +1457,7 @@ public:
                                    BuiltinIdentifier identifier);
 
    SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
    BuiltinIdentifier getIdentifierKind() const { return identifierKind; }
 };
 
@@ -1488,6 +1469,7 @@ public:
    static bool classofKind(NodeType kind) { return kind == BuiltinExprID; }
 
    static BuiltinExpr *Create(ASTContext &C, QualType Ty);
+   SourceRange getSourceRange() const { return SourceRange(); }
 };
 
 enum class MemberKind : unsigned {
@@ -1516,7 +1498,6 @@ class MemberRefExpr: public IdentifiedExpr {
    QualType fieldType;
 
    bool pointerAccess : 1;
-   bool tupleAccess : 1;
 
    union {
       Type *metaType = nullptr;
@@ -1533,18 +1514,19 @@ public:
    static bool classofKind(NodeType kind) { return kind == MemberRefExprID; }
 
    MemberRefExpr(SourceLocation Loc,
-                 string &&ident,
+                 IdentifierInfo *ident,
                  bool pointerAccess = false);
 
    MemberRefExpr(SourceLocation Loc,
                  Expression *ParentExpr,
-                 string &&ident,
+                 IdentifierInfo *ident,
                  bool pointerAccess = false);
 
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const
    {
-      return SourceRange(Loc, SourceLocation(Loc.getOffset() + ident.size()));
+      return SourceRange(Loc, SourceLocation(Loc.getOffset()
+                                             + getIdent().size() - 1));
    }
 
    Expression *getParentExpr() const { return ParentExpr; }
@@ -1629,7 +1611,7 @@ public:
                    bool PointerAccess = false);
 
    SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
 
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *Expr) { ParentExpr = Expr; }
@@ -1648,14 +1630,15 @@ public:
    static bool classofKind(NodeType kind) { return kind == EnumCaseExprID; }
 
    EnumCaseExpr(SourceLocation PeriodLoc,
-                std::string &&caseName,
+                IdentifierInfo *ident,
                 std::vector<Expression*> &&args = {});
 
    SourceLocation getSourceLoc() const { return PeriodLoc; }
    SourceRange getSourceRange() const
    {
       return SourceRange(PeriodLoc,
-                         SourceLocation(PeriodLoc.getOffset() + ident.size()));
+                         SourceLocation(PeriodLoc.getOffset()
+                                        + getIdent().size()));
    }
 
    std::vector<Expression*> &getArgs() { return args; }
@@ -1682,9 +1665,11 @@ enum class CallKind: unsigned {
    LocalVariableCall,
 };
 
-class CallExpr: public IdentifiedExpr {
+class CallExpr: public Expression {
    SourceLocation IdentLoc;
    SourceRange ParenRange;
+
+   DeclarationName ident;
 
    CallKind kind = CallKind::Unknown;
    Expression *ParentExpr = nullptr;
@@ -1718,12 +1703,12 @@ public:
 
    CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
             std::vector<Expression* > &&args,
-            string &&name = "");
+            DeclarationName Name = DeclarationName());
 
    CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
             Expression *ParentExpr,
             std::vector<Expression* > &&args,
-            string &&name = "");
+            DeclarationName Name = DeclarationName());
 
    CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
             std::vector<Expression* > &&args, CallableDecl *C);
@@ -1739,6 +1724,11 @@ public:
 
       return ParenRange;
    }
+
+   DeclarationName getDeclName() const { return ident; }
+   void setIdent(DeclarationName ident) { this->ident = ident; }
+
+   bool isNamedCall() const { return ident.isSimpleIdentifier(); }
 
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *E) { ParentExpr = E; }
@@ -1800,8 +1790,8 @@ public:
    bool isKnownFunctionCall();
 };
 
-class SubscriptExpr: public Expression,
-                     llvm::TrailingObjects<SubscriptExpr, Expression*> {
+class SubscriptExpr final: public Expression,
+                           llvm::TrailingObjects<SubscriptExpr, Expression*> {
    SubscriptExpr(SourceRange SquareRange,
                  Expression *ParentExpr,
                  llvm::ArrayRef<Expression*> indices);
@@ -1814,9 +1804,13 @@ public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == SubscriptExprID; }
 
+   friend TrailingObjects;
+
    static SubscriptExpr *Create(ASTContext &C, SourceRange SquareRange,
                                 Expression *ParentExpr,
                                 llvm::ArrayRef<Expression*> indices);
+
+   SourceRange getSourceRange() const { return SquareRange; }
 
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *PE) { ParentExpr = PE; }
@@ -1872,7 +1866,7 @@ public:
    SourceType getTypeConstraint() const { return typeConstraint; }
 
    SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return { Loc }; }
+   SourceRange getSourceRange() const { return SourceRange(Loc); }
 
 private:
    ConstraintExpr(SourceLocation Loc, Kind kind);
@@ -2003,8 +1997,8 @@ private:
    }
 };
 
-class TraitsExpr: public Expression,
-                  llvm::TrailingObjects<TraitsExpr, TraitsArgument> {
+class TraitsExpr final: public Expression,
+                        llvm::TrailingObjects<TraitsExpr, TraitsArgument> {
 public:
    enum Kind : unsigned {
       Compiles = 0,

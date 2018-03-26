@@ -6,7 +6,7 @@
 #include "Value.h"
 
 #include "AST/ASTContext.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "AST/Passes/SemanticAnalysis/Builtin.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
@@ -82,6 +82,7 @@ public:
    }
 
    void printStackTrace(bool includeFirst = false);
+   void printCallChain(SourceLocation Loc);
 
    llvm::BumpPtrAllocator &getAllocator()
    {
@@ -142,7 +143,7 @@ private:
    ctfe::Value getArray(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getUnion(QualType ty, QualType initTy, Value Initializer);
-   ctfe::Value getEnum(QualType ty, llvm::StringRef caseName,
+   ctfe::Value getEnum(QualType ty, IdentifierInfo *caseName,
                        llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getLambda(il::Function const* F,
                          llvm::ArrayRef<std::pair<QualType, Value>> captures);
@@ -165,17 +166,16 @@ private:
 
    ctfe::Value getEnumRawValue(ctfe::Value &Val, QualType type);
    ctfe::Value getEnumCaseValue(ctfe::Value &Val, QualType ty,
-                                llvm::StringRef caseName, size_t idx);
+                                IdentifierInfo *caseName, size_t idx);
 
    void storeValue(ctfe::Value dst, ctfe::Value src, QualType Ty);
 
    std::string toString(ctfe::Value Val, QualType Ty);
    Variant toVariant(ctfe::Value Val, QualType Ty);
 
-   std::pair<bool, ctfe::Value>
-   checkBuiltinCall(il::Function const& F,
-                    llvm::ArrayRef<ctfe::Value> args,
-                    SourceLocation callerLoc);
+   std::pair<bool, Value> checkBuiltinCall(il::Function const& F,
+                                           llvm::ArrayRef<ctfe::Value> args,
+                                           SourceLocation callerLoc);
 
    string simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
                          SourceLocation loc = {});
@@ -213,10 +213,9 @@ private:
 
    void diagnoseNoDefinition(il::GlobalVariable const *G)
    {
-      HadError = true;
-      SP.diagnose(G->getSourceLoc(), err_generic_error,
-            "global variable with no definition cannot be evaluated at compile "
-            "time");
+      err(err_generic_error, G->getSourceLoc(),
+          "global variable with no definition cannot be evaluated at compile "
+          "time");
    }
 
    il::Function const* getFunctionDefinition(il::Function const& F)
@@ -283,6 +282,13 @@ private:
    private:
       EngineImpl &E;
    };
+
+   template<class ...Args>
+   void err(Args&&... args)
+   {
+      HadError = true;
+      SP.diagnose(std::forward<Args&&>(args)...);
+   }
 };
 
 } // namespace ctfe
@@ -324,10 +330,35 @@ void EngineImpl::printStackTrace(bool includeFirst)
 
       s += CS.first->getName().str();
 
-      SP.diagnose(CS.second, note_generic_note, s);
+      SP.diagnose(note_generic_note, CS.second, s);
 
       ++i;
    }
+}
+
+void EngineImpl::printCallChain(SourceLocation Loc)
+{
+   std::string s;
+
+   size_t i = 0;
+   for (auto it = CallStack.rbegin(); it != CallStack.rend(); ++it) {
+      if (i++ == 0) {
+         continue;
+      }
+      else {
+         s += " -> ";
+      }
+
+      auto &CS = *it;
+      auto CD = SP.getILGen().getCallableDecl(CS.first);
+      if (!CD)
+         continue;
+
+      s += CD->getName().str();
+   }
+
+   if (i > 2)
+      SP.diagnose(note_call_chain, Loc, s);
 }
 
 ctfe::Value EngineImpl::visitFunction(il::Function const &F,
@@ -335,8 +366,8 @@ ctfe::Value EngineImpl::visitFunction(il::Function const &F,
                                       SourceLocation callerLoc) {
    if (recursionDepth > 256) {
       HadError = true;
-      SP.diagnose(F.getSourceLoc(), err_maximum_recursion_depth, 256,
-                  SP.getILGen().getCallableDecl(&F)->getName());
+      err(err_maximum_recursion_depth, F.getSourceLoc(), 256,
+          SP.getILGen().getCallableDecl(&F)->getName());
 
       return {};
    }
@@ -356,8 +387,8 @@ ctfe::Value EngineImpl::visitBasicBlock(BasicBlock const &B,
                                         bool skipBranches) {
    if (branchStack.top()++ > 1024) {
       HadError = true;
-      SP.diagnose(B.getParent()->getSourceLoc(), err_maximum_branch_depth, 1024,
-                  SP.getILGen().getCallableDecl(B.getParent())->getName());
+      err(err_maximum_branch_depth, 1024, B.getParent()->getSourceLoc(),
+          SP.getILGen().getCallableDecl(B.getParent())->getName());
 
       return {};
    }
@@ -562,7 +593,7 @@ Value EngineImpl::getNullValue(QualType ty)
 
       return Value::getPreallocated(Allocator.Allocate(size, 1));
    }
-   else if (auto Obj = ty->asObjectType()) {
+   else if (auto Obj = ty->asRecordType()) {
       auto R = Obj->getRecord();
 
       if (auto S = dyn_cast<StructDecl>(R)) {
@@ -639,7 +670,7 @@ Value EngineImpl::getUnion(QualType unionTy, QualType initTy, Value Initializer)
    return V;
 }
 
-Value EngineImpl::getEnum(QualType ty, llvm::StringRef caseName,
+Value EngineImpl::getEnum(QualType ty, IdentifierInfo *caseName,
                           llvm::ArrayRef<Value> fieldValues) {
    auto E = cast<EnumDecl>(ty->getRecord());
    auto C = E->hasCase(caseName);
@@ -652,7 +683,7 @@ Value EngineImpl::getEnum(QualType ty, llvm::StringRef caseName,
 
    void **ptr = (void**)buf;
    for (auto &V : C->getArgs()) {
-      auto argTy = V->getArgType();
+      auto argTy = V->getType();
       auto alloc = (char*)Allocator.Allocate(TI.getSizeOfType(argTy),
                                              TI.getAlignOfType(argTy));
 
@@ -819,7 +850,7 @@ Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
 }
 
 Value EngineImpl::getEnumCaseValue(ctfe::Value &Val, QualType type,
-                                   llvm::StringRef caseName, size_t idx) {
+                                   IdentifierInfo *caseName, size_t idx) {
    auto E = cast<EnumDecl>(type->getRecord());
    auto C = E->hasCase(caseName);
 
@@ -929,7 +960,7 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
       s += ")";
       return s;
    }
-   else if (auto Obj = type->asObjectType()) {
+   else if (auto Obj = type->asRecordType()) {
       auto R = Obj->getRecord();
       if (auto S = dyn_cast<StructDecl>(R)) {
          string s = "{ ";
@@ -988,9 +1019,11 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
                   s += "(";
 
                   for (auto &V : C->getArgs()) {
-                     auto val = getEnumCaseValue(Val, type, C->getName(), i);
-                     s += toString(val.load(V->getArgType()),
-                                   V->getArgType());
+                     auto val = getEnumCaseValue(
+                        Val, type, C->getDeclName().getIdentifierInfo(), i);
+
+                     s += toString(val.load(V->getType()),
+                                   V->getType());
 
                      i++;
                   }
@@ -1014,7 +1047,7 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
 
 static bool isStdArray(SemaPass &SP, QualType Ty)
 {
-   if (!Ty->isObjectType())
+   if (!Ty->isRecordType())
       return false;
 
    auto R = Ty->getRecord();
@@ -1024,7 +1057,7 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
 
 static bool isStdString(SemaPass &SP, QualType Ty)
 {
-   return Ty->isObjectType() && Ty->getRecord() == SP.getStringDecl();
+   return Ty->isRecordType() && Ty->getRecord() == SP.getStringDecl();
 }
 
 Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
@@ -1140,7 +1173,7 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
       return Variant(VariantType::Array, move(vec));
    }
 
-   if (auto Obj = type->asObjectType()) {
+   if (auto Obj = type->asRecordType()) {
       auto R = Obj->getRecord();
       if (auto S = dyn_cast<StructDecl>(R)) {
          std::vector<Variant> vec;
@@ -1186,9 +1219,10 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
             if (!C->getArgs().empty()) {
                size_t i = 0;
                for (auto &V : C->getArgs()) {
-                  auto val = getEnumCaseValue(Val, type, C->getName(), i);
-                  vec.push_back(toVariant(val.load(V->getArgType()),
-                                          V->getArgType()));
+                  auto val = getEnumCaseValue(
+                     Val, type, C->getDeclName().getIdentifierInfo(), i);
+                  vec.push_back(toVariant(val.load(V->getType()),
+                                          V->getType()));
 
                   i++;
                }
@@ -1240,9 +1274,8 @@ void EngineImpl::storeValue(ctfe::Value dst, ctfe::Value src,
 
 ctfe::Value EngineImpl::tryCatchException()
 {
-   SP.diagnose(thrownException.thrownFrom, err_generic_error,
-               "uncaught exception of type "
-               + thrownException.thrownType->toString());
+   err(err_generic_error, thrownException.thrownFrom,
+       "uncaught exception of type " + thrownException.thrownType->toString());
 
    resetException();
 
@@ -1280,7 +1313,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       }
 
       if (args.size() <= consumedArgs) {
-         SP.diagnose(loc, note_generic_note, "too few arguments for printf");
+         SP.diagnose(note_generic_note, loc, "too few arguments for printf");
          continue;
       }
 
@@ -1469,7 +1502,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
 
       switch (kind) {
          case Invalid:
-            SP.diagnose(loc, note_generic_note,
+            SP.diagnose(note_generic_note, loc,
                         "invalid printf format specifier " + string(1, next));
 
             resultString << next;
@@ -1588,20 +1621,20 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
    }
    case KnownFunction::Printf: {
       auto str = simulatePrintf(args, callerLoc);
-      SP.diagnose(callerLoc, note_printf_ctfe, str);
+      SP.diagnose(note_printf_ctfe, callerLoc, str);
       V = Value::getInt(str.length());
       break;
    }
    case KnownFunction::Exit: {
-      SP.diagnose(callerLoc, err_fn_called_during_ctfe, "exit", 0);
+      err(err_fn_called_during_ctfe, callerLoc, "exit", 0);
       return { true, {} };
    }
    case KnownFunction::Abort: {
-      SP.diagnose(callerLoc, err_fn_called_during_ctfe, "abort", 0);
+      err(err_fn_called_during_ctfe, callerLoc, "abort", 0);
       return { true, {} };
    }
    case KnownFunction::System: {
-      SP.diagnose(callerLoc, err_fn_called_during_ctfe, "system", 1);
+      err(err_fn_called_during_ctfe, callerLoc, "system", 1);
       return { true, {} };
    }
    case KnownFunction::Srand: {
@@ -1760,7 +1793,7 @@ ctfe::Value EngineImpl::visitGEPInst(GEPInst const& I)
    auto val = getCtfeValue(I.getOperand(0));
    auto idx = getCtfeValue(I.getIndex()).getU64();
 
-   if (ty->isObjectType()) {
+   if (ty->isRecordType()) {
       return getStructElement(val, I.getOperand(0)->getType(), idx);
    }
    else if (ty->isPointerType()) {
@@ -1800,8 +1833,8 @@ ctfe::Value EngineImpl::visitEnumExtractInst(const EnumExtractInst &I)
    auto val = getCtfeValue(I.getOperand(0));
    auto idx = getCtfeValue(I.getCaseVal()).getU64();
 
-   return getEnumCaseValue(val, I.getOperand(0)->getType(),
-                           I.getCaseName(), idx);
+   auto *II = &SP.getContext().getIdentifiers().get(I.getCaseName());
+   return getEnumCaseValue(val, I.getOperand(0)->getType(), II, idx);
 }
 
 ctfe::Value EngineImpl::visitEnumRawValueInst(EnumRawValueInst const& I)
@@ -1846,10 +1879,8 @@ ctfe::Value EngineImpl::visitThrowInst(ThrowInst const& I)
 
 ctfe::Value EngineImpl::visitUnreachableInst(UnreachableInst const& I)
 {
-   SP.diagnose(I.getSourceLoc(), err_generic_error,
-               "unreachable executed during CTFE");
-
-   printStackTrace();
+   err(err_unreachable_during_ctfe, I.getSourceLoc());
+   printCallChain(I.getSourceLoc());
 
    return {};
 }
@@ -2063,7 +2094,8 @@ ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
    for (auto &arg : I.getArgs())
       values.push_back(getCtfeValue(arg));
 
-   return getEnum(I.getType(), I.getCaseName(), values);
+   auto *II = &SP.getContext().getIdentifiers().get(I.getCaseName());
+   return getEnum(I.getType(), II, values);
 }
 
 namespace {
@@ -2908,7 +2940,6 @@ CTFEResult CTFEEngine::evaluateFunction(il::Function *F,
                                         llvm::ArrayRef<Value> args,
                                         SourceLocation loc) {
    auto val = pImpl->visitFunction(*F, args, loc);
-
    if (pImpl->hadError()) {
       return CTFEError();
    }
@@ -2956,7 +2987,7 @@ Value CTFEEngine::CTFEValueFromVariant(Variant const &V, const QualType &Ty)
 
          return pImpl->getArray(ArrTy, vals);
       }
-      case TypeID::ObjectTypeID: {
+      case TypeID::RecordTypeID: {
          if (Ty->getRecord()->isStruct()) {
             ast::StructDecl *S = cast<ast::StructDecl>(Ty->getRecord());
             auto Fields = S->getFields();

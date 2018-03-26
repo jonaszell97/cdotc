@@ -10,7 +10,7 @@
 #include <IL/Value/Instruction/Operator/OperatorInst.h>
 #include "Value/Function/BasicBlock.h"
 
-#include "../Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace llvm {
    class APSInt;

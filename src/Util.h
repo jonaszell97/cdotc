@@ -11,7 +11,7 @@
 namespace cdot {
 
 class Type;
-class ObjectType;
+class RecordType;
 class GenericType;
 
 enum class BuiltinFn : unsigned char;

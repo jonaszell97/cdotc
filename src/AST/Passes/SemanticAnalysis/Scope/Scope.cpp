@@ -3,7 +3,8 @@
 //
 
 #include "Scope.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
 
 using namespace cdot::support;
 

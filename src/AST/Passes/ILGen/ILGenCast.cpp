@@ -4,7 +4,7 @@
 
 #include "ILGenPass.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/SemanticAnalysis/ConversionSequence.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 
@@ -14,7 +14,7 @@
 #include "IL/Value/Instruction/Memory/GEPInst.h"
 #include "IL/Value/Instruction/Memory/AllocaInst.h"
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 using namespace cdot::il;
 

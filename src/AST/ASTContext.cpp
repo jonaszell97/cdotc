@@ -3,6 +3,7 @@
 //
 
 #include "ASTContext.h"
+#include "Decl.h"
 #include "Support/Casting.h"
 
 using namespace cdot::support;
@@ -24,6 +25,18 @@ void ASTContext::setAttributes(const Decl *D,
    AttributeMap[D] = new(*this) AttrVec(attrs.begin(), attrs.end());
 }
 
+void ASTContext::addAttributes(const Decl *D,
+                               llvm::ArrayRef<Attr *> attrs) const {
+   auto it = AttributeMap.find(D);
+   if (it != AttributeMap.end()) {
+      it->getSecond()->append(attrs.begin(), attrs.end());
+   }
+   else {
+      auto Vec = new(*this) AttrVec(attrs.begin(), attrs.end());
+      AttributeMap[D] = Vec;
+   }
+}
+
 void ASTContext::addAttribute(const Decl *D, Attr *attr) const
 {
    auto it = AttributeMap.find(D);
@@ -35,6 +48,34 @@ void ASTContext::addAttribute(const Decl *D, Attr *attr) const
       Vec->push_back(attr);
 
       AttributeMap[D] = Vec;
+   }
+}
+
+llvm::ArrayRef<StaticExpr*> ASTContext::getConstraints(const Decl *D) const
+{
+   auto it = ConstraintMap.find(D);
+   if (it == ConstraintMap.end() || !it->getSecond())
+      return {};
+
+   return *it->getSecond();
+}
+
+void ASTContext::setConstraints(const Decl *D,
+                                llvm::ArrayRef<StaticExpr *> cvec) const {
+   ConstraintMap[D] = new(*this) ConstraintVec(cvec.begin(), cvec.end());
+}
+
+void ASTContext::addConstraint(const Decl *D,
+                               StaticExpr *C) const {
+   auto it = ConstraintMap.find(D);
+   if (it != ConstraintMap.end()) {
+      it->getSecond()->push_back(C);
+   }
+   else {
+      auto Vec = new(*this) ConstraintVec;
+      Vec->push_back(C);
+
+      ConstraintMap[D] = Vec;
    }
 }
 
@@ -129,17 +170,21 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
                                       canonicalArgs, flags, lambda);
    }
 
-   auto New = new (*this, TypeAlignment)
-      FunctionType(returnType, argTypes, (FunctionType::ExtFlags)flags,
-                   CanonicalType, Dependent);
+   size_t SizeToAlloc = sizeof(FunctionType)
+                        + sizeof(QualType) * argTypes.size();
 
-   FunctionTypes.InsertNode(New, insertPos);
-   return New;
+   void *Mem = Allocate(SizeToAlloc, TypeAlignment);
+   auto FnTy = new(Mem) FunctionType(returnType, argTypes,
+                                     (FunctionType::ExtFlags)flags,
+                                     CanonicalType, Dependent);
+
+   FunctionTypes.InsertNode(FnTy, insertPos);
+   return FnTy;
 }
 
 LambdaType* ASTContext::getLambdaType(FunctionType *FnTy)
 {
-   return getLambdaType(FnTy->getReturnType(), FnTy->getArgTypes(),
+   return getLambdaType(FnTy->getReturnType(), FnTy->getParamTypes(),
                         FnTy->getRawFlags());
 }
 
@@ -171,9 +216,13 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
                                     canonicalArgs, flags);
    }
 
-   auto New = new (*this, TypeAlignment)
-      LambdaType(returnType, argTypes, (FunctionType::ExtFlags)flags,
-                 CanonicalType, Dependent);
+   size_t SizeToAlloc = sizeof(LambdaType)
+                        + sizeof(QualType) * argTypes.size();
+
+   void *Mem = Allocate(SizeToAlloc, TypeAlignment);
+   auto New = new(Mem) LambdaType(returnType, argTypes,
+                                  (FunctionType::ExtFlags)flags,
+                                  CanonicalType, Dependent);
 
    LambdaTypes.InsertNode(New, insertPos);
    return New;
@@ -199,26 +248,37 @@ ArrayType* ASTContext::getArrayType(QualType elementType,
    return New;
 }
 
-InferredArrayType*
+DependentSizeArrayType*
 ASTContext::getValueDependentSizedArrayType(QualType elementType,
                                             Expression *DependentExpr) const {
-   llvm::FoldingSetNodeID ID;
-   InferredArrayType::Profile(ID, elementType, DependentExpr);
-
-   void *insertPos = nullptr;
-   if (auto *Ptr = ValueDependentArrayTypes.FindNodeOrInsertPos(ID, insertPos))
-      return Ptr;
-
    Type *CanonicalTy = nullptr;
    if (!elementType.isCanonical())
       CanonicalTy = getValueDependentSizedArrayType(
          elementType.getCanonicalType(), DependentExpr);
 
-   auto New = new (*this, TypeAlignment) InferredArrayType(elementType,
-                                                           DependentExpr,
-                                                           CanonicalTy);
+   // these aren't uniqued, because the size expressions aren't either
+   return new (*this, TypeAlignment) DependentSizeArrayType(elementType,
+                                                            DependentExpr,
+                                                            CanonicalTy);
+}
 
-   ValueDependentArrayTypes.InsertNode(New, insertPos);
+InferredSizeArrayType* ASTContext::getInferredSizeArrayType(QualType elTy) const
+{
+   llvm::FoldingSetNodeID ID;
+   InferredSizeArrayType::Profile(ID, elTy);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = InferredSizeArrayTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!elTy.isCanonical())
+      CanonicalTy = getInferredSizeArrayType(elTy.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment) InferredSizeArrayType(elTy,
+                                                               CanonicalTy);
+
+   InferredSizeArrayTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -249,42 +309,44 @@ ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes) const
       CanonicalType = getTupleType(canonicalElements);
    }
 
-   auto New = new (*this, TypeAlignment) TupleType(containedTypes,
-                                                   CanonicalType,
-                                                   Dependent);
+   size_t SizeToAlloc = sizeof(TupleType)
+                        + sizeof(QualType) * containedTypes.size();
 
-   TupleTypes.InsertNode(New, insertPos);
-   return New;
+   void *Mem = Allocate(SizeToAlloc, TypeAlignment);
+   auto TupTy = new(Mem) TupleType(containedTypes, CanonicalType,
+                                   Dependent);
+
+   TupleTypes.InsertNode(TupTy, insertPos);
+   return TupTy;
 }
 
-ObjectType* ASTContext::getRecordType(RecordDecl *R, Type::BoxedPrimitive kind)
-const
+RecordType* ASTContext::getRecordType(RecordDecl *R) const
 {
    llvm::FoldingSetNodeID ID;
-   ObjectType::Profile(ID, R);
+   RecordType::Profile(ID, R);
 
    void *insertPos = nullptr;
    if (auto *Ptr = RecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) ObjectType(R, kind);
+   auto New = new (*this, TypeAlignment) RecordType(R);
    RecordTypes.InsertNode(New, insertPos);
 
    return New;
 }
 
-InconcreteObjectType*
+DependentRecordType*
 ASTContext::getDependentRecordType(RecordDecl *R,
                                    sema::TemplateArgList &&args) const {
    llvm::FoldingSetNodeID ID;
-   InconcreteObjectType::Profile(ID, R, &args);
+   DependentRecordType::Profile(ID, R, &args);
 
    void *insertPos = nullptr;
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
    auto New = new(*this, TypeAlignment)
-      InconcreteObjectType(R, new(*this) sema::TemplateArgList(std::move(args)));
+      DependentRecordType(R, new(*this) sema::TemplateArgList(std::move(args)));
 
    DependentRecordTypes.InsertNode(New, insertPos);
    return New;
@@ -384,8 +446,24 @@ ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
    return AliasTemplateInstatiations.FindNodeOrInsertPos(ID, insertPos);
 }
 
+void ASTContext::insertFunctionTemplateInstantiation(CallableDecl *Inst,
+                                                     void *insertPos) {
+   FunctionTemplateInstatiations.InsertNode(Inst, insertPos);
+}
+
+void ASTContext::insertRecordTemplateInstantiation(RecordDecl *Inst,
+                                                   void *insertPos) {
+   RecordTemplateInstatiations.InsertNode(Inst, insertPos);
+}
+
+void ASTContext::insertAliasTemplateInstantiation(AliasDecl *Inst,
+                                                  void *insertPos) {
+   AliasTemplateInstatiations.InsertNode(Inst, insertPos);
+}
+
 ASTContext::ASTContext()
-   : TI(*this, llvm::Triple(llvm::sys::getDefaultTargetTriple())), Allocator(),
+   : Allocator(), DeclNames(*this),
+     TI(*this, llvm::Triple(llvm::sys::getDefaultTargetTriple())),
 #  define CDOT_BUILTIN_TYPE(Name)            \
      Name##Ty(BuiltinType::Name),
 #  include "Basic/BuiltinTypes.def"

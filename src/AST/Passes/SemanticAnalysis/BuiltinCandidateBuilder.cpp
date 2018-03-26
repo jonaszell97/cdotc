@@ -12,12 +12,12 @@ namespace ast {
 
 void
 BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
-                                              llvm::StringRef op,
+                                              DeclarationName opName,
                                               llvm::ArrayRef<Expression*> args){
    if (args.empty())
       return;
 
-   return addBuiltinCandidates(CandSet, op, args.front()->getExprType());
+   return addBuiltinCandidates(CandSet, opName, args.front()->getExprType());
 }
 
 static bool isIntFPOrPointerType(QualType ty, bool allowPtr = true)
@@ -47,7 +47,7 @@ static bool isIntOrFPType(QualType ty)
 }
 
 void BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
-                                                   llvm::StringRef op,
+                                                   DeclarationName op,
                                                    QualType lhsType) {
    op::OperatorKind opKind;
    FixKind fix;
@@ -445,24 +445,33 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
    return Map.emplace(opKind, move(Vec)).first;
 }
 
-void BuiltinCandidateBuilder::getOpKindAndFix(llvm::StringRef op,
+void BuiltinCandidateBuilder::getOpKindAndFix(DeclarationName op,
                                               op::OperatorKind &opKind,
                                               FixKind &fix) {
-   if (op.startswith("infix ")) {
-      opKind = op::fromString(FixKind::Infix, op.drop_front(6));
+   auto Kind = op.getDeclarationKind();
+   switch (Kind) {
+   case DeclarationName::InfixOperatorName:
+      opKind = op::fromString(FixKind::Infix, op.getInfixOperatorName()
+                                                ->getIdentifier());
+
       fix = FixKind::Infix;
-   }
-   else if (op.startswith("prefix ")) {
-      opKind = op::fromString(FixKind::Prefix, op.drop_front(7));
+      break;
+   case DeclarationName::PrefixOperatorName:
+      opKind = op::fromString(FixKind::Prefix, op.getPrefixOperatorName()
+                                                 ->getIdentifier());
+
       fix = FixKind::Prefix;
-   }
-   else if (op.startswith("postfix ")) {
-      opKind = op::fromString(FixKind::Postfix, op.drop_front(8));
+      break;
+   case DeclarationName::PostfixOperatorName:
+      opKind = op::fromString(FixKind::Postfix, op.getPostfixOperatorName()
+                                                  ->getIdentifier());
+
       fix = FixKind::Postfix;
-   }
-   else {
+      break;
+   default:
       opKind = op::UnknownOp;
       fix = FixKind::Infix;
+      break;
    }
 }
 

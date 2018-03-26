@@ -5,14 +5,8 @@
 #include "SemaPass.h"
 
 #include "AST/Passes/SemanticAnalysis/ExpressionResolver.h"
-
-#include "AST/Expression.h"
-#include "AST/NamedDecl.h"
-
-#include "AST/ASTContext.h"
 #include "AST/Transform.h"
-
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/StringSwitch.h>
@@ -79,7 +73,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          case ConstraintExpr::Type: {
             if (lhsTy == rhsTy)
                result = true;
-            else if (!lhsTy->isObjectType() || !rhsTy->isObjectType())
+            else if (!lhsTy->isRecordType() || !rhsTy->isRecordType())
                result = false;
             else {
                auto Self = lhsTy->getRecord();
@@ -97,7 +91,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          case ConstraintExpr::Struct:
          case ConstraintExpr::Enum:
          case ConstraintExpr::Union: {
-            if (!lhsTy->isObjectType()) {
+            if (!lhsTy->isRecordType()) {
                result = false;
             }
             else {
@@ -313,16 +307,16 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    }
    else {
       BinOp->setLhs(
-         forceCast(lhs, *BinOp->getFunctionType()->getArgTypes()[0]));
+         forceCast(lhs, *BinOp->getFunctionType()->getParamTypes()[0]));
       BinOp->setRhs(
-         forceCast(rhs, *BinOp->getFunctionType()->getArgTypes()[1]));
+         forceCast(rhs, *BinOp->getFunctionType()->getParamTypes()[1]));
    }
 
    if (preAssignOp != op::UnknownOp) {
       auto operandTy = lhs->getExprType()->getReferencedType();
       auto FnTy = Context.getFunctionType(operandTy, { operandTy, operandTy });
-      auto PreOp = new (Context) BinaryOperator(preAssignOp,
-                                                FnTy, lhs, rhs);
+      auto PreOp = BinaryOperator::Create(Context, BinOp->getSourceLoc(),
+                                          preAssignOp, FnTy, lhs, rhs);
 
       auto Res = visitExpr(BinOp, PreOp);
 
@@ -365,7 +359,7 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
    }
 
    auto target = UnOp->getTarget();
-   UnOp->setTarget(forceCast(target, UnOp->getFunctionType()->getArgTypes()
+   UnOp->setTarget(forceCast(target, UnOp->getFunctionType()->getParamTypes()
                                          .front()));
 
    UnOp->setExprType(UnOp->getFunctionType()->getReturnType());

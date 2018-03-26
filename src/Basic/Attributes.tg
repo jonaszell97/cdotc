@@ -45,3 +45,5 @@ def Align : DeclAttr<"align", [RecordDecl, VarDecl]> {
     Args = [ExprArg<"alignment">]
     Visit = AfterSema
 }
+
+def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]>

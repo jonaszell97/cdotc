@@ -278,7 +278,7 @@
 //   writec('>');
 //}
 //
-//void HeaderGen::writeProtocols(const std::vector<ObjectType *> &conformsTo)
+//void HeaderGen::writeProtocols(const std::vector<RecordType *> &conformsTo)
 //{
 //   if (conformsTo.empty()) {
 //      return;
@@ -310,7 +310,7 @@
 //   auto protc = conformsTo.size();
 //   for (size_t i = 0; i < protc; ++i) {
 //      const auto& gen = conformsTo[i];
-//      writeIdent(gen->getTypeRef()->toString(), false);
+//      writeIdent(gen->getType()->toString(), false);
 //      writeGenerics(gen->type->getTemplateArgs());
 //
 //      if (i < protc - 1) {

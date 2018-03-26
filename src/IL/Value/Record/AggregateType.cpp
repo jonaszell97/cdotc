@@ -4,7 +4,7 @@
 
 #include "AggregateType.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "IL/Module/Context.h"
 #include "IL/Module/Module.h"
 #include "IL/Value/Function/Method.h"
@@ -14,7 +14,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-AggregateType::AggregateType(ObjectType *Ty,
+AggregateType::AggregateType(RecordType *Ty,
                              llvm::StringRef name,
                              TypeID id,
                              Module *m)
@@ -61,7 +61,7 @@ void AggregateType::setTypeInfo(ConstantStruct *TypeInfo)
    AggregateType::TypeInfo = TypeInfo;
 }
 
-ClassType::ClassType(ObjectType *Ty,
+ClassType::ClassType(RecordType *Ty,
                      llvm::StringRef name,
                      Module *m)
    : StructType(Ty, name, m), ParentClass(nullptr)
@@ -69,7 +69,7 @@ ClassType::ClassType(ObjectType *Ty,
    id = ClassTypeID;
 }
 
-StructType::StructType(ObjectType *Ty, llvm::StringRef name, Module *m)
+StructType::StructType(RecordType *Ty, llvm::StringRef name, Module *m)
    : AggregateType(Ty, name, StructTypeID, m)
 {
 
@@ -109,7 +109,7 @@ unsigned StructType::getFieldOffset(llvm::StringRef fieldName) const
    llvm_unreachable("field does not exist");
 }
 
-EnumType::EnumType(ObjectType *Ty,
+EnumType::EnumType(RecordType *Ty,
                    llvm::StringRef name,
                    Module *m)
    : AggregateType(Ty, name, EnumTypeID, m), rawType(nullptr)
@@ -145,7 +145,7 @@ size_t EnumType::getMaxAssociatedValues() const
    return maxAssociatedValues;
 }
 
-UnionType::UnionType(ObjectType *Ty, llvm::StringRef name, Module *m)
+UnionType::UnionType(RecordType *Ty, llvm::StringRef name, Module *m)
    : StructType(Ty, name, m)
 {
    id = UnionTypeID;
@@ -162,7 +162,7 @@ QualType UnionType::getFieldType(llvm::StringRef fieldName) const
    return nullptr;
 }
 
-ProtocolType::ProtocolType(ObjectType *Ty,
+ProtocolType::ProtocolType(RecordType *Ty,
                            llvm::StringRef name,
                            Module *m)
    : AggregateType(Ty, name, ProtocolTypeID, m)

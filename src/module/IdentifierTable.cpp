@@ -2,6 +2,8 @@
 // Created by Jonas Zell on 25.01.18.
 //
 
+#if 0
+
 #include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/DenseMap.h>
 
@@ -11,7 +13,7 @@
 #include "AST/Passes/ILGen/ILGenPass.h"
 #include "Support/ExtendedSerializerBase.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 using namespace cdot::support;
 using namespace cdot::ast;
@@ -285,8 +287,8 @@ private:
 
    void writeArgDecl(FuncArgDecl *Arg, bool writeDefaultValue = false)
    {
-      WriteString(Arg->getArgName());
-      WriteQualType(Arg->getArgType());
+      WriteString(Arg->getName());
+      WriteQualType(Arg->getType());
       WriteBools(Arg->isConst(), Arg->isVararg(), Arg->isCstyleVararg(),
                  Arg->isVariadicArgPackExpansion());
 
@@ -407,13 +409,6 @@ IdentifierTableImpl::DeclPrelude IdentifierTableImpl::readDeclPrelude()
 
 void IdentifierTableWriterImpl::writeNamespaceDecl(NamespaceDecl *decl)
 {
-   while (decl) {
-      assert(!decl->isAnonymousNamespace());
-      WriteString(decl->getName());
-
-      decl = decl->getOuterNamespace();
-   }
-
    Writer.WriteULEB128(0);
 }
 
@@ -439,10 +434,6 @@ NamespaceDecl* IdentifierTableImpl::readNamespaceDecl()
 
       if (!first) {
          first = next;
-      }
-
-      if (current) {
-         current->setOuterNamespace(next);
       }
 
       current = next;
@@ -1074,7 +1065,7 @@ void IdentifierTableImpl::readFieldDefinition(RecordDecl *R)
    auto F = R->getField(name);
 
    auto defaultVal = maybeDeserializeStmt<Expression>();
-   F->setDefault(defaultVal);
+   F->setDefaultVal(defaultVal);
 }
 
 void IdentifierTableWriterImpl::writePropertyDecl(PropDecl *decl)
@@ -1281,3 +1272,5 @@ void serializeModuleInterface(module::Module *M,
 
 } // namespace module
 } // namespace cdot
+
+#endif

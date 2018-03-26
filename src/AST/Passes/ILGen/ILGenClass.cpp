@@ -26,7 +26,7 @@
 #include "IL/Value/Constant/ConstantVal.h"
 #include "IL/Value/Constant/ConstantExpr.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 using namespace cdot::il;
 using namespace cdot::support;
@@ -92,7 +92,7 @@ void ILGenPass::DeclareEnum(EnumDecl *E)
    for (auto &Case : E->getCases()) {
       std::vector<QualType> associatedTypes;
       for (const auto &arg : Case->getArgs())
-         associatedTypes.push_back(arg->getArgType());
+         associatedTypes.push_back(arg->getType());
 
       EnumTy->addCase(
          { Case->getName(), move(associatedTypes),
@@ -230,10 +230,14 @@ il::Function* ILGenPass::DeclareMethod(MethodDecl *method,
       Self->setLocation(method->getSourceLoc());
    }
 
-   for (auto &arg : method->getArgs()) {
-      args.push_back(Builder.CreateArgument(arg->getArgType(), false));
+   for (const auto &arg : method->getArgs()) {
+      maybeImportType(arg->getType());
 
-      maybeImportType(arg->getArgType());
+      auto A = Builder.CreateArgument(arg->getType(), /*vararg=*/ false);
+      A->setLocation(arg->getSourceLoc());
+
+      args.push_back(A);
+      addDeclValuePair(arg, A);
    }
 
    il::Method *func;
@@ -264,7 +268,8 @@ il::Function* ILGenPass::DeclareMethod(MethodDecl *method,
       Self->setName("self");
    }
 
-   setUnmangledName(func);
+   if (!isa<InitDecl>(method) && !isa<DeinitDecl>(method))
+      setUnmangledName(func);
 
 //   if (method->hasAttribute(Attr::_builtin)) {
 //      auto &attr = method->getAttribute(Attr::_builtin);
@@ -295,6 +300,9 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S)
    assert(fn->isDeclared() && "duplicate definition of default initializer");
 
    fn->addDefinition();
+
+   assert(!fn->getEntryBlock()->getArgs().empty()
+          && "no self argument for __default_init");
 
    auto Self = &*fn->getEntryBlock()->arg_begin();
    InsertPointRAII insertPointRAII(*this, fn->getEntryBlock());
@@ -375,7 +383,7 @@ void ILGenPass::deinitializeValue(il::Value *Val)
       Builder.CreateStore(ptr, gep);
    }
 
-   if (ObjectType *Obj = ty->asObjectType()) {
+   if (RecordType *Obj = ty->asRecordType()) {
       if (Obj->isRawEnum())
          return;
 
@@ -707,7 +715,7 @@ void ILGenPass::visitMethodDecl(MethodDecl *node)
 
 void ILGenPass::visitFieldDecl(FieldDecl *node)
 {
-   auto field = node->getRecord()->getField(node->getName());
+   auto field = node->getRecord()->getField(node->getDeclName());
    maybeImportType(field->getType());
 
    if (node->getGetterBody()) {
@@ -1041,7 +1049,7 @@ il::GlobalVariable* ILGenPass::GetTypeInfo(QualType ty)
    auto typeInfoTy = SP.getObjectTy("cdot.TypeInfo");
    GlobalVariable *TI;
 
-   if (ty->isObjectType()) {
+   if (ty->isRecordType()) {
       TI = Builder.CreateGlobalVariable(typeInfoTy, true, nullptr,
                                         ty->toString() + ".typeInfo");
    }
@@ -1072,7 +1080,7 @@ void ILGenPass::CreateTypeInfo(QualType ty)
 
    il::Constant *Data[6]{ 0, 0, 0, 0, 0, 0 };
 
-   if (auto Obj = ty->asObjectType()) {
+   if (auto Obj = ty->asRecordType()) {
       auto R = Obj->getRecord();
 
       if (R->isExternal())

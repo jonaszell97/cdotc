@@ -9,7 +9,7 @@
 #include "IL/Value/Record/AggregateType.h"
 #include "IL/Value/Instruction/ControlFlow/ControlFlowInst.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 namespace cdot {
 namespace il {
@@ -55,7 +55,7 @@ UnionCastInst::UnionCastInst(Value *target, UnionType *UnionTy,
 ProtoCastInst::ProtoCastInst(Value *target, QualType toType, BasicBlock *parent)
    : CastInst(ProtoCastInstID, target, toType, parent)
 {
-   if (toType->isObjectType() && toType->getRecord()->isProtocol()) {
+   if (toType->isRecordType() && toType->getRecord()->isProtocol()) {
       SubclassData |= Flag::Wrap;
    }
 }

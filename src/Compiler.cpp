@@ -42,7 +42,7 @@ CompilationUnit::CompilationUnit(CompilationUnit &&CU) noexcept
    : options(std::move(CU.options)),
      FileMgr(move(CU.FileMgr)),
      Context(move(CU.Context)),
-     GlobalDeclCtx(std::move(CU.GlobalDeclCtx)),
+     GlobalDeclCtx(CU.GlobalDeclCtx),
      compiledModule(CU.compiledModule), imports(move(CU.imports)),
      IRGen(std::move(CU.IRGen)), LLVMCtx(std::move(CU.LLVMCtx)),
      LLVMModule(std::move(CU.LLVMModule)), ILCtx(move(CU.ILCtx)),
@@ -115,7 +115,7 @@ CompilationUnit::CompilationUnit(CompilerOptions &&options)
    : options(std::move(options)),
      FileMgr(std::make_unique<fs::FileManager>()),
      Context(std::make_unique<ASTContext>()),
-     GlobalDeclCtx(std::make_unique<ast::GlobalDeclContext>()),
+     GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context)),
      IRGen(nullptr),
      LLVMCtx(std::make_unique<llvm::LLVMContext>()),
      LLVMModule(nullptr),
@@ -128,7 +128,7 @@ CompilationUnit::CompilationUnit(CompilerOptions &&options)
 CompilationUnit::CompilationUnit(int argc, char **argv)
    : FileMgr(std::make_unique<fs::FileManager>()),
      Context(std::make_unique<ASTContext>()),
-     GlobalDeclCtx(std::make_unique<ast::GlobalDeclContext>()),
+     GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context)),
      IRGen(nullptr),
      LLVMCtx(std::make_unique<llvm::LLVMContext>()),
      LLVMModule(nullptr),
@@ -153,7 +153,7 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
       }
       else if (arg.length() == 3 && arg[0] == '-' && arg[1] == 'O') {
          if (arg[2] < '0' || arg[2] > '3') {
-            Sema->diagnose(SourceLocation(), err_invalid_opt_level, 3);
+            Sema->diagnose(err_invalid_opt_level, 3);
          }
          else {
             options.optimizationLevel = size_t(arg[2] - '0');
@@ -161,7 +161,7 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
       }
       else if (arg == "-o") {
          if (argc <= i) {
-            Sema->diagnose(SourceLocation(), err_expected_filename_after, "-o");
+            Sema->diagnose(err_expected_filename_after, "-o");
             break;
          }
 
@@ -191,12 +191,12 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
          }
       }
       else {
-         Sema->diagnose(SourceLocation(), err_unsupported_argument, arg);
+         Sema->diagnose(err_unsupported_argument, arg);
       }
    }
 
    if (options.inFiles.empty()) {
-      Sema->diagnose(SourceLocation(), err_no_source_file);
+      Sema->diagnose(err_no_source_file);
    }
 
    if (options.hasInputKind(InputKind::ModuleFile)) {
@@ -207,11 +207,12 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
 
       auto moduleFile = options.getInputFiles(InputKind::ModuleFile);
       if (moduleFile.size() > 1)
+         ;
 //         diag::err(err_generic_error)
 //            << "only one module definition file can be included"
 //            << diag::term;
 
-      module::ModuleManager::createModule(*Sema);
+//      module::ModuleManager::createModule(*Sema);
    }
 
    for (auto &output : options.outFiles) {
@@ -237,28 +238,28 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
 
 namespace {
 
-const char *stdModules[] = {
-   "basic", "libc", "int", "fp", "bool", "char",
-   "string", "array", "dictionary", "option", "except"
-};
+//const char *stdModules[] = {
+//   "basic", "libc", "int", "fp", "bool", "char",
+//   "string", "array", "dictionary", "option", "except"
+//};
 
 void importBuiltinModules(ASTContext &Ctx,
                           size_t sourceId,
                           llvm::SmallVectorImpl<ImportStmt*> &importStmts,
                           Module *compiledModule) {
-   llvm::SmallString<32> str("std.");
-
-   for (auto &M : stdModules) {
-      str += M;
-      if (compiledModule && str.str().equals(compiledModule->getFullName()))
-         continue;
-
-      ImportStmt *import = new (Ctx) ImportStmt({ "std", M });
-      import->setSourceLoc(SourceLocation());
-
-      importStmts.push_back(import);
-      str.resize(4); // "std."
-   }
+//   llvm::SmallString<32> str("std.");
+//
+//   for (auto &M : stdModules) {
+//      str += M;
+//      if (compiledModule && str.str().equals(compiledModule->getFullName()))
+//         continue;
+//
+//      ImportStmt *import = ImportStmt::C({ "std", M });
+//      import->setSourceLoc(SourceLocation());
+//
+//      importStmts.push_back(import);
+//      str.resize(4); // "std."
+//   }
 }
 
 class PrettyParserStackTraceEntry: public llvm::PrettyStackTraceEntry {
@@ -319,10 +320,14 @@ void CompilationUnit::parse()
    for (auto& fileName : options.getInputFiles(InputKind::SourceFile)) {
       auto File = FileMgr->openFile(fileName);
       if (!File.Buf) {
-         Sema->diagnose(SourceLocation(), err_generic_error,
+         Sema->diagnose(err_generic_error,
                         "error opening file " + fileName);
 
          continue;
+      }
+
+      if (!MainFileLoc) {
+         MainFileLoc = SourceLocation(File.BaseOffset);
       }
 
       lex::Lexer lex(Context->getIdentifiers(), Sema->getDiags(),
@@ -341,11 +346,11 @@ void CompilationUnit::parse()
 
       parser.parseImports(importStmts);
 
-      auto translationUnit = TranslationUnit::Create(*Context, fileName,
+      auto *II = &Context->getIdentifiers().get(fileName);
+      auto translationUnit = TranslationUnit::Create(*Context, II,
                                                      File.SourceId,
                                                      importStmts);
 
-      translationUnit->setSourceLoc(SourceLocation(1 + File.BaseOffset));
       (void)GlobalDeclCtx->addDecl(translationUnit);
 
       SemaPass::DeclContextRAII declContextRAII(*Sema, translationUnit);
@@ -439,7 +444,7 @@ void CompilationUnit::setILModule(std::unique_ptr<il::Module> &&ILModule)
 
 SourceLocation CompilationUnit::getSourceLoc() const
 {
-   return GlobalDeclCtx->getDecls().begin()->getSourceLoc();
+   return MainFileLoc;
 }
 
 void CompilationUnit::reportInternalCompilerError()
@@ -450,7 +455,8 @@ void CompilationUnit::reportInternalCompilerError()
 
 void CompilationUnit::reportBackendFailure(llvm::StringRef msg)
 {
-   Sema->diagnose(SourceLocation(), err_llvm_backend, msg);
+   Sema->diagnose(err_llvm_backend, msg);
+   Sema->issueDiagnostics();
 }
 
 } // namespace cdot

@@ -237,7 +237,7 @@ Variant EvaluatorImpl::visitStringLiteral(StringLiteral* expr)
    if (expr->isCString())
       return Variant(move(Str));
 
-   Variant Size = Variant(uint64_t(expr->getValue().length()));
+   Variant Size = Variant(uint64_t(expr->getValue().size()));
    return makeStruct({ move(Str), move(Size) });
 }
 
@@ -570,7 +570,7 @@ Variant EvaluatorImpl::visitStaticExpr(StaticExpr* expr)
 
 Variant EvaluatorImpl::visitTraitsExpr(TraitsExpr* expr)
 {
-   return visit(expr->getResultExpr());
+   llvm_unreachable("should not appear here!");
 }
 
 StaticEvaluator::StaticEvaluator(SemaPass &SP)

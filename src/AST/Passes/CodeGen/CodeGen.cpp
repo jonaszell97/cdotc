@@ -489,7 +489,7 @@
 ////   llvm::Value *opt,
 ////   QualType &destTy)
 ////{
-////   QualType from(ObjectType::get("Any"));
+////   QualType from(RecordType::get("Any"));
 ////   auto val = Cast->applyCast(
 ////      from,
 ////      destTy,
@@ -563,7 +563,7 @@
 ////
 ////         llvm::Value *wrappedSelf = args[0];
 ////         if (method->owningClass->getName() != protoTy->getClassName()) {
-////            QualType to(ObjectType::get(method->owningClass->getName()));
+////            QualType to(RecordType::get(method->owningClass->getName()));
 ////            wrappedSelf = Builder.CreateBitCast(
 ////               Cast->applyCast(protoTy, to, wrappedSelf),
 ////               args[0]->getType()
@@ -607,7 +607,7 @@
 ////            args[index] = phi;
 ////         }
 ////
-////         QualType ty(ObjectType::get(method->owningClass->getName()));
+////         QualType ty(RecordType::get(method->owningClass->getName()));
 ////         llvm::Value* res = DispatchProtocolCall(
 ////            ty,
 ////            args,
@@ -642,7 +642,7 @@
 ////   auto& cl = method->owningClass;
 ////   llvm::Type* llvmProtoTy = getStructTy(cl->getName())->getPointerTo();
 ////   if (method->owningClass->getName() != protoTy->getClassName()) {
-////      QualType to(ObjectType::get(method->owningClass->getName()));
+////      QualType to(RecordType::get(method->owningClass->getName()));
 ////      args[0] = Cast->applyCast(protoTy, to, args[0]);
 ////   }
 ////
@@ -766,7 +766,7 @@
 ////   string &originTy,
 ////   llvm::Value *val)
 ////{
-////   assert(isa<ObjectType>(baseTy)  && "Invalid protocol type");
+////   assert(isa<RecordType>(baseTy)  && "Invalid protocol type");
 ////
 ////   auto& baseClassName = baseTy->getClassName();
 ////   auto originStruct = getStructTy(originTy);
@@ -2260,11 +2260,11 @@
 ////}
 ////
 ////llvm::Value* CodeGen::CreateArray(
-////   ObjectType *type,
+////   RecordType *type,
 ////   std::vector<Expression* > &elements)
 ////{
 ////   auto elPtrTy = type->asObjTy()->getNamedTemplateArg("T");
-////   auto carr = CreateCStyleArray(ObjectType::getAnyTy(), elements);
+////   auto carr = CreateCStyleArray(RecordType::getAnyTy(), elements);
 ////
 ////   auto ArrayType = getStructTy("Array");
 ////   auto arr_alloc = Mem->CreateAlloca(ArrayType, true);
@@ -2306,7 +2306,7 @@
 ////
 ////   if (node->isMetaTy()) {
 ////      return returnResult(getTypeInfo(
-////         ObjectType::get("Array<"
+////         RecordType::get("Array<"
 ////                         + cast<MetaType>(*node->getType()->getTypeRef())
 ////                            ->getUnderlyingType()->toString() + ">")));
 ////   }
@@ -2323,7 +2323,7 @@
 ////      arr = CreateCStyleArray(*elTy, node->values);
 ////   }
 ////   else {
-////      arr = CreateArray(cast<ObjectType>(*elTy), node->values);
+////      arr = CreateArray(cast<RecordType>(*elTy), node->values);
 ////   }
 ////
 ////   return ReturnMemberRef(node, arr);

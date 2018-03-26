@@ -6,7 +6,7 @@
 
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "AST/Passes/PrettyPrint/PrettyPrinter.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
@@ -48,7 +48,7 @@ std::string SymbolMangler::mangleFunction(ast::FunctionDecl *F) const
    out << "_F" << name.size() << name;
 
    for (auto &arg : F->getArgs()) {
-      auto str = arg->getArgType().getResolvedType().toString();
+      auto str = arg->getType().getResolvedType().toString();
       out << str.length() << str;
    }
 
@@ -76,12 +76,11 @@ std::string SymbolMangler::mangleMethod(ast::MethodDecl *M) const
    llvm::raw_string_ostream out(s);
 
    auto name = M->getFullName();
-   auto &args = M->getArgs();
-
    out << "_M" << name.size() << name;
 
+   auto &args = M->getArgs();
    for (const auto &arg : args) {
-      auto str = arg->getArgType().getResolvedType().toString();
+      auto str = arg->getType().getResolvedType().toString();
       out << str.length() << str;
    }
 
@@ -115,10 +114,12 @@ std::string SymbolMangler::mangleProtocolMethod(ast::RecordDecl *R,
    out << "_M" <<  name.size() + 1LLU << name;
 
    for (const auto &arg : args) {
-      auto argType = arg->getArgType().getResolvedType();
+      auto argType = arg->getType().getResolvedType();
 
       if (auto Gen = argType->asGenericType()) {
-         auto AT = R->getAssociatedType(Gen->getGenericTypeName());
+         auto *II = &SP.getContext().getIdentifiers().get
+            (Gen->getGenericTypeName());
+         auto AT = R->getAssociatedType(II);
          if (AT) {
             auto str = AT->getActualType().getResolvedType().toString();
             out << str.length() << str;

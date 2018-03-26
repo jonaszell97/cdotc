@@ -21,6 +21,7 @@ DiagnosticsEngine::DiagnosticsEngine(DiagnosticConsumer *Consumer,
 void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg,
                                      SeverityLevel Sev) {
    NumArgs = 0;
+   NumSourceRanges = 0;
 
    switch (Sev) {
    case SeverityLevel::Warning: ++NumWarnings; break;

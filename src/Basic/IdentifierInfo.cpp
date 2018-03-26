@@ -14,7 +14,7 @@ void IdentifierTable::addKeywords()
    addKeyword(tok::Name, Pattern);
 #  define CDOT_POUND_KEYWORD(Name)           \
    addKeyword(tok::pound_##Name, "#" #Name);
-#  include "../lex/Tokens.def"
+#  include "lex/Tokens.def"
 }
 
 void IdentifierTable::addTblGenKeywords()
@@ -31,7 +31,7 @@ void IdentifierTable::addTblGenKeywords()
 
 #  define CDOT_POUND_KEYWORD(Name)           \
    addKeyword(tok::pound_##Name, "#" #Name);
-#  include "../lex/Tokens.def"
+#  include "lex/Tokens.def"
 }
 
 void IdentifierTable::addKeyword(cdot::lex::tok::TokenType kind,

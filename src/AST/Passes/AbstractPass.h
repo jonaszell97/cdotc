@@ -5,7 +5,9 @@
 #ifndef CDOT_ASTVISITOR_H
 #define CDOT_ASTVISITOR_H
 
-#include "AST/Passes/ASTIncludes.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 #include "AST/Traverse.h"
 
 namespace cdot {

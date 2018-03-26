@@ -1,9 +1,11 @@
 
 #include "Statement.h"
-#include "NamedDecl.h"
+#include "Decl.h"
 
 #include "AST/ASTContext.h"
-#include "AST/Passes/ASTIncludes.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 
 namespace cdot {
 namespace ast {
@@ -22,7 +24,7 @@ void Statement::copyStatusFlags(Statement *Stmt)
 
 void Statement::copyStatusFlags(Decl *D)
 {
-   static uint32_t mask = Decl::StatusFlags | Decl::DF_CtfeDependent;
+   static uint32_t mask = Decl::StatusFlags;
    SubclassData |= (D->getFlags() & mask);
 
    if ((D->getFlags() & Decl::DF_SemanticallyChecked) == 0)
@@ -40,10 +42,9 @@ SourceRange Statement::getSourceRange() const
    switch (typeID) {
 #  define CDOT_ASTNODE(SubClass)                                              \
    case SubClass##ID:                                                         \
-      if constexpr (&Statement::getSourceRange == &SubClass::getSourceRange)  \
-         return SourceRange(loc);                                             \
-      else                                                                    \
-         return support::cast<SubClass>(this)->getSourceRange();
+      static_assert(&Statement::getSourceRange != &SubClass::getSourceRange,  \
+                    "getSourceRange not implemented by " #SubClass);          \
+      return support::cast<SubClass>(this)->getSourceRange();
 #  include "AST/AstNode.def"
 
    default:
@@ -69,7 +70,6 @@ AttributedStmt::AttributedStmt(Statement *Stmt,
                                llvm::ArrayRef<Attr *> Attrs)
    : Statement(AttributedStmtID), Stmt(Stmt)
 {
-   loc = Stmt->getSourceLoc();
    std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attr*>());
 }
 
@@ -404,12 +404,25 @@ llvm::ArrayRef<VarDecl*> DestructuringDecl::getDecls() const
    return support::cast<GlobalDestructuringDecl>(this)->getDecls();
 }
 
-LocalDestructuringDecl::LocalDestructuringDecl(AccessModifier access,
+DestructuringDecl::DestructuringDecl(NodeType typeID,
+                                     SourceRange SR,
+                                     unsigned NumDecls,
+                                     AccessModifier access,
+                                     bool isConst,
+                                     SourceType type,
+                                     Expression *value)
+   : Statement(typeID),
+     SR(SR), access(access), IsConst(isConst), NumDecls(NumDecls),
+     type(type), value(value)
+{}
+
+LocalDestructuringDecl::LocalDestructuringDecl(SourceRange SR,
+                                               AccessModifier access,
                                                bool isConst,
                                                llvm::ArrayRef<VarDecl*> Decls,
                                                SourceType type,
                                                Expression *value)
-   : DestructuringDecl(LocalDestructuringDeclID, (unsigned)Decls.size(),
+   : DestructuringDecl(LocalDestructuringDeclID, SR, (unsigned)Decls.size(),
                        access, isConst, type, value)
 {
    std::copy(Decls.begin(), Decls.end(), getTrailingObjects<VarDecl*>());
@@ -417,6 +430,7 @@ LocalDestructuringDecl::LocalDestructuringDecl(AccessModifier access,
 
 LocalDestructuringDecl*
 LocalDestructuringDecl::Create(ASTContext &C,
+                               SourceRange SR,
                                AccessModifier access,
                                bool isConst,
                                llvm::ArrayRef<VarDecl *> Decls,
@@ -425,15 +439,17 @@ LocalDestructuringDecl::Create(ASTContext &C,
    void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(Decls.size()),
                           alignof(LocalDestructuringDecl));
 
-   return new(Mem) LocalDestructuringDecl(access, isConst, Decls, type, value);
+   return new(Mem) LocalDestructuringDecl(SR, access, isConst, Decls, type,
+                                          value);
 }
 
-GlobalDestructuringDecl::GlobalDestructuringDecl(AccessModifier access,
+GlobalDestructuringDecl::GlobalDestructuringDecl(SourceRange SR,
+                                                 AccessModifier access,
                                                  bool isConst,
                                                  llvm::ArrayRef<VarDecl*> Decls,
                                                  SourceType type,
                                                  Expression *value)
-   : DestructuringDecl(GlobalDestructuringDeclID, (unsigned)Decls.size(),
+   : DestructuringDecl(GlobalDestructuringDeclID, SR, (unsigned)Decls.size(),
                        access, isConst, type, value)
 {
    std::copy(Decls.begin(), Decls.end(), getTrailingObjects<VarDecl*>());
@@ -441,6 +457,7 @@ GlobalDestructuringDecl::GlobalDestructuringDecl(AccessModifier access,
 
 GlobalDestructuringDecl*
 GlobalDestructuringDecl::Create(ASTContext &C,
+                                SourceRange SR,
                                 AccessModifier access,
                                 bool isConst,
                                 llvm::ArrayRef<VarDecl*> Decls,
@@ -449,7 +466,8 @@ GlobalDestructuringDecl::Create(ASTContext &C,
    void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(Decls.size()),
                           alignof(GlobalDestructuringDecl));
 
-   return new(Mem) GlobalDestructuringDecl(access, isConst, Decls, type, value);
+   return new(Mem) GlobalDestructuringDecl(SR, access, isConst, Decls, type,
+                                           value);
 }
 
 StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,

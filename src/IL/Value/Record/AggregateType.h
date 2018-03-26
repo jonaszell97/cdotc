@@ -46,7 +46,7 @@ class AggregateType: public GlobalObject,
                      public llvm::ilist_node_with_parent<AggregateType,
                         Module> {
 public:
-   AggregateType(ObjectType *Ty,
+   AggregateType(RecordType *Ty,
                  llvm::StringRef name,
                  TypeID id,
                  Module *m);
@@ -128,7 +128,7 @@ public:
 
    typedef llvm::SmallVector<Field, 4> FieldList;
 
-   StructType(ObjectType *Ty,
+   StructType(RecordType *Ty,
               llvm::StringRef name,
               Module *m);
 
@@ -158,7 +158,7 @@ public:
 
 class ClassType: public StructType {
 public:
-   ClassType(ObjectType *Ty,
+   ClassType(RecordType *Ty,
              llvm::StringRef name,
              Module *m);
 
@@ -215,7 +215,7 @@ public:
 
    typedef llvm::SmallVector<Case, 4> CaseList;
 
-   EnumType(ObjectType *Ty,
+   EnumType(RecordType *Ty,
             llvm::StringRef name,
             Module *m);
 
@@ -243,7 +243,7 @@ public:
 
 class UnionType: public StructType {
 public:
-   UnionType(ObjectType *Ty,
+   UnionType(RecordType *Ty,
              llvm::StringRef name,
              Module *m);
 
@@ -257,7 +257,7 @@ public:
 
 class ProtocolType: public AggregateType {
 public:
-   ProtocolType(ObjectType *Ty,
+   ProtocolType(RecordType *Ty,
                 llvm::StringRef name,
                 Module *m);
 

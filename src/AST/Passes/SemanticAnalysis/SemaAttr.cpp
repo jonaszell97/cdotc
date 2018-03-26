@@ -3,7 +3,6 @@
 //
 
 #include "SemaPass.h"
-#include "AST/NamedDecl.h"
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -113,7 +112,7 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
    unsigned short NaturalAlignment;
    if (auto VD = cast<VarDecl>(D)) {
       NaturalAlignment = Context.getTargetInfo()
-                                .getAlignOfType(VD->getTypeRef());
+                                .getAlignOfType(VD->getType());
    }
    else {
       NaturalAlignment = cast<RecordDecl>(D)->getAlignment();
@@ -142,6 +141,11 @@ void SemaPass::checkOpaqueAttr(Decl *D, OpaqueAttr *A)
 
 void SemaPass::checkThinAttr(SourceType Ty, ThinAttr *A)
 {
+
+}
+
+void SemaPass::checkDiscardableResultAttr(Decl *D,
+                                          DiscardableResultAttr *A) {
 
 }
 

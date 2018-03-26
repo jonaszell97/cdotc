@@ -10,9 +10,9 @@
 
 #include "AST/Passes/Serialization/Serialize.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/ASTContext.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace cdot {
 namespace support {
@@ -70,8 +70,8 @@ protected:
 
             break;
          }
-         case TypeID::InferredArrayTypeID: {
-            InferredArrayType *arr = Ty->asInferredArrayType();
+         case TypeID::DependentSizeArrayTypeID: {
+            DependentSizeArrayType *arr = Ty->asDependentSizeArrayType();
             serializeStmt(arr->getDependentExpr());
             WriteQualType(arr->getElementType());
 
@@ -90,20 +90,20 @@ protected:
 
             this->WriteBool(Fun->isLambdaType());
             WriteQualType(Fun->getReturnType());
-            this->WriteList(Fun->getArgTypes(),
+            this->WriteList(Fun->getParamTypes(),
                             &ExtendedSerializerBase::WriteQualType);
             this->Writer.WriteULEB128(Fun->getRawFlags());
 
             break;
 
          }
-         case TypeID::ObjectTypeID: {
+         case TypeID::RecordTypeID: {
             this->WriteString(Ty->getClassName());
             break;
          }
-         case TypeID::InconcreteObjectTypeID: {
+         case TypeID::DependentRecordTypeID: {
             this->WriteString(Ty->getClassName());
-            WriteTemplateArgList(Ty->asInconcreteObjectType()
+            WriteTemplateArgList(Ty->asDependentRecordType()
                                    ->getTemplateArgs());
 
             break;
@@ -338,7 +338,7 @@ protected:
             return SP.getContext().getFunctionType(ret, move(args), flags,
                                                    lambda);
          }
-         case TypeID::ObjectTypeID: {
+         case TypeID::RecordTypeID: {
             return SP.getObjectTy(this->ReadString());
          }
          case TypeID::GenericTypeID: {

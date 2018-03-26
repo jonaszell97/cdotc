@@ -4,24 +4,15 @@
 
 #include "ILGenPass.h"
 
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/FileSystem.h>
-#include <IL/Passes/UseBeforeInit.h>
-#include <llvm/Support/PrettyStackTrace.h>
-
-#include "AST/Passes/ASTIncludes.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "AST/Passes/SemanticAnalysis/Builtin.h"
 #include "AST/Passes/PrettyPrint/PrettyPrinter.h"
-
+#include "Files/FileUtils.h"
 #include "IL/Module/Context.h"
 #include "IL/Module/Module.h"
 #include "IL/Value/Record/AggregateType.h"
-
 #include "Variant/Variant.h"
-#include "Variant/Type/Type.h"
 
-#include "Files/FileUtils.h"
 
 #define CDOT_VALUE_INCLUDE
 #include "IL/Value/ValueIncludes.def"
@@ -36,6 +27,11 @@
 
 #include "CTFE/Value.h"
 #include "CTFE/CTFEEngine.h"
+
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FileSystem.h>
+#include <IL/Passes/UseBeforeInit.h>
+#include <llvm/Support/PrettyStackTrace.h>
 
 using namespace cdot::il;
 using namespace cdot::diag;
@@ -199,10 +195,17 @@ bool ILGenPass::run()
    visitTemplateInstantiations();
    FinalizeGlobalInitFn();
 
-   il::PassManager Manager(Builder.getModule());
-   Manager.addPass(new il::VerifierPass);
-   Manager.addPass(new il::UseBeforeInit(*this));
-   Manager.runPasses();
+   {
+      VerifierPass VP;
+      UseBeforeInit UBI(*this);
+
+      VP.visitModule(*Builder.getModule());
+      if (!VP.isValid()) {
+         return true;
+      }
+
+      UBI.visitModule(*Builder.getModule());
+   }
 
    if (SP.encounteredError()) {
       std::error_code EC;
@@ -389,7 +392,7 @@ il::Value* ILGenPass::getDefaultValue(QualType Ty)
    if (Ty->isPointerType()) {
       return ConstantPointer::getNull(ValueType(Builder.getContext(), Ty));
    }
-   if (Ty->isObjectType()) {
+   if (Ty->isRecordType()) {
       auto Rec = Ty->getRecord();
       auto AggrTy = getModule()->getType(Rec->getName());
 
@@ -516,7 +519,7 @@ il::Value* ILGenPass::stringify(il::Value *Val)
 //      auto asStringMethod = getFunc(asString);
 //      return Builder.CreateCall(asStringMethod, { boxed });
    }
-   else if (auto Obj = ty->asObjectType()) {
+   else if (auto Obj = ty->asRecordType()) {
       if (Obj->getClassName() == "String")
          return Val;
 
@@ -593,9 +596,10 @@ il::Constant* ILGenPass::getConstantVal(QualType Ty, const cdot::Variant &V)
 }
 
 il::Value* ILGenPass::getCStyleArray(cdot::Type *Ty,
-                                     llvm::ArrayRef<il::Value *> elements,
+                                     llvm::ArrayRef<il::Value*> elements,
                                      size_t minCapacity,
-                                     bool onHeap) {
+                                     bool onHeap,
+                                     bool allConstant) {
    if (minCapacity < elements.size())
       minCapacity = elements.size();
 
@@ -605,17 +609,29 @@ il::Value* ILGenPass::getCStyleArray(cdot::Type *Ty,
    assert(ArrTy->getNumElements() == elements.size());
    ArrTy = SP.getContext().getArrayType(ArrTy->getElementType(), minCapacity);
 
-   auto alloc = Builder.CreateAlloca(ArrTy, 0, onHeap);
-   auto numElements = elements.size();
+   il::Value *Val;
+   if (allConstant) {
+      llvm::ArrayRef<il::Constant*> Constants(
+         reinterpret_cast<il::Constant* const*>(elements.data()),
+         elements.size());
 
-   auto load = Builder.CreateLoad(alloc);
+      Val = Builder.GetConstantArray(Constants);
+   }
+   else {
+      auto alloc = Builder.CreateAlloca(ArrTy, 0, onHeap);
+      auto numElements = elements.size();
 
-   for (size_t i = 0; i < numElements; ++i) {
-      auto gep = Builder.CreateGEP(load, i);
-      Builder.CreateStore(elements[i], gep);
+      auto load = Builder.CreateLoad(alloc);
+
+      for (size_t i = 0; i < numElements; ++i) {
+         auto gep = Builder.CreateGEP(load, i);
+         Builder.CreateStore(elements[i], gep);
+      }
+
+      Val = alloc;
    }
 
-   return alloc;
+   return Val;
 }
 
 il::Function* ILGenPass::getGlobalInitFn()
@@ -665,13 +681,13 @@ void ILGenPass::maybeImportType(QualType ty)
 
    if (auto Fun = ty->asFunctionType()) {
       maybeImportType(Fun->getReturnType());
-      for (const auto &arg : Fun->getArgTypes())
+      for (const auto &arg : Fun->getParamTypes())
          maybeImportType(arg);
 
       return;
    }
 
-   if (!ty->isObjectType())
+   if (!ty->isRecordType())
       return;
 
    auto M = getModule();
@@ -686,7 +702,7 @@ void ILGenPass::maybeImportType(QualType ty)
 
 void ILGenPass::DeclareGlobalVariable(GlobalVarDecl *decl)
 {
-   auto G = Builder.CreateGlobalVariable(decl->getTypeRef(),
+   auto G = Builder.CreateGlobalVariable(decl->getType(),
                                          decl->isConst(), nullptr,
                                          decl->getName(),
                                          decl->getSourceLoc());
@@ -728,13 +744,21 @@ il::Function* ILGenPass::DeclareFunction(FunctionDecl *C)
       return nullptr;
 
    maybeImportType(C->getReturnType());
-   for (const auto &arg : C->getArgs())
-      maybeImportType(arg->getArgType());
+
+   llvm::SmallVector<il::Argument*, 4> Args;
+   for (const auto &arg : C->getArgs()) {
+      maybeImportType(arg->getType());
+
+      auto A = Builder.CreateArgument(arg->getType(), /*vararg=*/ false);
+      A->setLocation(arg->getSourceLoc());
+
+      Args.push_back(A);
+      addDeclValuePair(arg, A);
+   }
 
    auto func = Builder.CreateFunction(C->getLinkageName(),
                                       C->getReturnType(),
-                                      makeArgVec(C->getFunctionType()
-                                                  ->getArgTypes()),
+                                      Args,
                                       C->throws(),
                                       C->isCstyleVararg(),
                                       C->isExternC(),
@@ -742,10 +766,6 @@ il::Function* ILGenPass::DeclareFunction(FunctionDecl *C)
 
    func->setKnownFnKind(C->getKnownFnKind());
    setUnmangledName(func);
-
-   size_t i = 0;
-   for (auto &arg : func->getEntryBlock()->getArgs())
-      addDeclValuePair(C->getArgs()[i++], &arg);
 
 //   if (C->hasAttribute(Attr::_builtin)) {
 //      auto &attr = C->getAttribute(Attr::_builtin);
@@ -813,8 +833,9 @@ void ILGenPass::DefineFunction(il::Function *func, CallableDecl* CD)
       }
       else if (!val.isLvalue()) {
          auto alloca = Builder.CreateAlloca(val.getType());
-         Builder.CreateStore(&val, alloca);
+         alloca->setLocation(val.getSourceLoc());
 
+         Builder.CreateStore(&val, alloca);
          addDeclValuePair(CD->getArgs()[i], alloca);
       }
 
@@ -838,11 +859,19 @@ void ILGenPass::DefineFunction(il::Function *func, CallableDecl* CD)
          Builder.CreateRet(Builder.GetConstantInt(SP.getContext().getIntTy(),
                                                   EXIT_SUCCESS));
       }
+      else if (CD->isNoReturn()) {
+         SP.diagnose(CD, err_control_reaches_end_noreturn,
+                     CD->getSourceLoc());
+
+         Builder.CreateUnreachable();
+      }
       else if (func->getReturnType()->isVoidType()) {
          Builder.CreateRetVoid();
       }
       else {
-         SP.diagnose(CD, diag::err_not_all_code_paths_return);
+         SP.diagnose(CD, diag::err_not_all_code_paths_return,
+                     CD->getSourceLoc());
+
          Builder.CreateUnreachable();
       }
    }
@@ -909,6 +938,39 @@ void ILGenPass::registerCalledFunction(CallableDecl *C, il::Function *F,
    CtfeScopeStack.back().HadError |= !prepareFunctionForCtfe(C);
 }
 
+namespace {
+
+struct NoReturnRAII {
+   NoReturnRAII(ILBuilder &Builder, bool Enabled)
+      : Builder(Builder), Enabled(Enabled)
+   {}
+
+   ~NoReturnRAII()
+   {
+      if (!Enabled)
+         return;
+
+      if (auto Term = Builder.GetInsertBlock()->getTerminator()) {
+         assert(isa<InvokeInst>(Term) && "bad terminator after call");
+         auto IP = Builder.saveIP();
+         Builder.SetInsertPoint(
+            cast<InvokeInst>(Term)->getNormalContinuation());
+
+         Builder.CreateUnreachable();
+         Builder.restoreIP(IP);
+      }
+      else {
+         Builder.CreateUnreachable();
+      }
+   }
+
+private:
+   ILBuilder &Builder;
+   bool Enabled;
+};
+
+} // anonymous namespace
+
 il::Instruction* ILGenPass::CreateCall(CallableDecl *C,
                                        llvm::ArrayRef<il::Value *> args,
                                        Expression *Caller) {
@@ -918,6 +980,8 @@ il::Instruction* ILGenPass::CreateCall(CallableDecl *C,
    registerCalledFunction(C, F, Caller);
 
    F = getFunc(C);
+
+   NoReturnRAII noReturnRAII(Builder, C->isNoReturn());
 
    bool isVirtual = false;
    bool isProtocolMethod = false;
@@ -981,7 +1045,7 @@ void ILGenPass::releaseIfNecessary(il::Value *V)
 
 il::StoreInst *ILGenPass::CreateStore(il::Value *src, il::Value *dst)
 {
-   if (!(src->getType()->needsStructReturn() && src->getType()->isObjectType()))
+   if (!(src->getType()->needsStructReturn() && src->getType()->isRecordType()))
       return Builder.CreateStore(src, dst);
 
    auto Inst = Builder.CreateStore(src, dst);
@@ -1074,10 +1138,12 @@ ctfe::CTFEResult ILGenPass::evaluateStaticExpr(Expression *expr)
    temporaries.erase(RetVal);
    deinitializeTemporaries();
 
-   if (!expr->getExprType()->isVoidType())
-      Builder.CreateRet(RetVal);
-   else
-      Builder.CreateRetVoid();
+   if (!Builder.GetInsertBlock()->getTerminator()) {
+      if (!expr->getExprType()->isVoidType())
+         Builder.CreateRet(RetVal);
+      else
+         Builder.CreateRetVoid();
+   }
 
    if (CtfeScopeStack.back().HadError) {
       return ctfe::CTFEError();
@@ -1225,7 +1291,7 @@ void ILGenPass::visitCompoundDecl(CompoundDecl *D)
 void ILGenPass::visitLocalVarDecl(LocalVarDecl *Decl)
 {
    auto ident = Decl->getName();
-   auto FirstTy = Decl->getTypeRef();
+   auto FirstTy = Decl->getType();
 
    unsigned Alignment = 0;
    if (auto AlignA = Decl->getAttribute<AlignAttr>()) {
@@ -1358,7 +1424,7 @@ void ILGenPass::doDestructure(DestructuringDecl *node)
             continue;
 
          auto Val = destructuredValues[i];
-         auto Alloca = Builder.CreateAlloca(V->getTypeRef(),
+         auto Alloca = Builder.CreateAlloca(V->getType(),
                                             0, false, V->getName());
 
          Alloca->setIsInitializer(true);
@@ -1391,7 +1457,7 @@ void ILGenPass::visitFunctionDecl(FunctionDecl *node)
 
 void ILGenPass::visitCallableDecl(CallableDecl *node)
 {
-   if (node->isCtfeDependent() || !node->getBody())
+   if (!node->getBody())
       return;
 
    if (alreadyVisited(node))
@@ -1738,6 +1804,7 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr)
       case CallKind::NamedFunctionCall:
       case CallKind::StaticMethodCall: {
          auto Func = Expr->getFunc();
+
          if (Expr->getParentExpr() && !Expr->getParentExpr()->getExprType()
                                            ->isMetaType()) {
             auto Self = visit(Expr->getParentExpr());
@@ -2626,7 +2693,9 @@ il::Value *ILGenPass::visitDictionaryLiteral(DictionaryLiteral *Expr)
    auto R = cast<ClassDecl>(Expr->getExprType()->getRecord());
    auto DictTy = cast<StructType>(getType(Expr->getExprType()));
    auto Init = getFunc(R->getParameterlessConstructor());
-   auto PutFn = R->getMethod("put");
+
+   static auto *II = &SP.getContext().getIdentifiers().get("put");
+   auto PutFn = R->getMethod(II);
 
    auto Dict = Builder.CreateInit(DictTy, Init, {});
 
@@ -2657,15 +2726,19 @@ il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral *Arr)
       return nullptr;
    }
 
+   bool allConstant = true;
+
    llvm::SmallVector<il::Value*, 8> elements;
-   for (const auto &val : Arr->getValues())
+   for (const auto &val : Arr->getValues()) {
       elements.push_back(visit(val));
+      allConstant &= isa<il::Constant>(elements.back());
+   }
 
    ArrayType *ArrTy;
    auto resultTy = Arr->getExprType();
    bool cstyle = false;
 
-   if (resultTy->isObjectType()) {
+   if (resultTy->isRecordType()) {
       ArrTy = SP.getContext().getArrayType(
          resultTy->getRecord()->getTemplateArg("T")->getType(),
          Arr->getValues().size());
@@ -2680,7 +2753,7 @@ il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral *Arr)
       capacity = getNeededCapacity(capacity);
 
    auto carray = getCStyleArray(ArrTy, elements, capacity,
-                                !resultTy->isArrayType());
+                                !resultTy->isArrayType(), allConstant);
 
    if (resultTy->isArrayType())
       return carray;
@@ -2773,7 +2846,7 @@ il::Value *ILGenPass::visitStringLiteral(StringLiteral *node)
 {
    Value *Str;
    if (!node->isCString()) {
-      auto &str = node->getValue();
+      auto str = node->getValue();
       auto StringTy = getModule()->getType("String");
       auto Len = Builder.GetConstantInt(USizeTy, str.size());
 
@@ -2797,7 +2870,7 @@ il::Value *ILGenPass::visitStringLiteral(StringLiteral *node)
 
 il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
 {
-   auto &Strings = node->getStrings();
+   auto Strings = node->getStrings();
    assert(!Strings.empty() && "empty string interpolation");
 
    auto PlusEquals = getBuiltin("StringPlusEqualsString");
@@ -2819,7 +2892,7 @@ il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
 
 il::Value *ILGenPass::visitTupleLiteral(TupleLiteral *node)
 {
-   auto Alloc = Builder.CreateAlloca(node->getTupleType());
+   auto Alloc = Builder.CreateAlloca(node->getExprType());
    size_t i = 0;
 
    auto Tup = Builder.CreateLoad(Alloc);
@@ -3196,7 +3269,7 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
       return Builder.CreateCompEQ(lhs, rhs);
    }
    else {
-      assert(lhsTy->isObjectType() && rhsTy->isObjectType());
+      assert(lhsTy->isRecordType() && rhsTy->isRecordType());
 
       auto LhsRecord = lhsTy->getRecord();
 
@@ -3205,7 +3278,7 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
             getModule()->getFunction(Comp->getLinkageName()),
             { lhs, rhs });
 
-         if (res->getType()->isObjectType())
+         if (res->getType()->isRecordType())
             res = CreateFieldRef(res, "val");
 
          return res;
@@ -3377,7 +3450,7 @@ il::Value *ILGenPass::visitLambdaExpr(LambdaExpr *node)
 
    auto func = Builder.CreateLambda(C->getReturnType(),
                                     makeArgVec(C->getFunctionType()
-                                                ->getArgTypes()),
+                                                ->getParamTypes()),
                                     C->throws(), node->getSourceLoc());
 
    setUnmangledName(func);
@@ -3438,11 +3511,11 @@ void ILGenPass::visitTryStmt(TryStmt *node)
    for (const auto &Catch : node->getCatchBlocks()) {
       auto BB = Builder.CreateBasicBlock("try.catch");
       BB->addBlockArg(Int8PtrTy);
-      LPad->addCatch({ Catch.varDecl->getTypeRef(), BB });
+      LPad->addCatch({ Catch.varDecl->getType(), BB });
 
       Builder.SetInsertPoint(BB);
       auto Cast = Builder.CreateExceptionCast(BB->getBlockArg(0),
-                                              Catch.varDecl->getTypeRef(),
+                                              Catch.varDecl->getType(),
                                               Catch.varDecl->getName());
 
       (void)Cast;

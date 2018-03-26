@@ -238,8 +238,8 @@
 //
 //            break;
 //         }
-//         case TypeID::InferredArrayTypeID: {
-//            auto arr = dyn_cast<InferredArrayType>(Ty);
+//         case TypeID::DependentSizeArrayTypeID: {
+//            auto arr = dyn_cast<DependentSizeArrayType>(Ty);
 //            WriteString(arr->getParam());
 //            WriteQualType(arr->getElementType());
 //
@@ -255,20 +255,20 @@
 //         case TypeID::FunctionTypeID: {
 //            auto Fun = Ty->asFunctionType();
 //            WriteQualType(Fun->getReturnType());
-//            WriteList(Fun->getArgTypes(),
+//            WriteList(Fun->getParamTypes(),
 //                      &ModuleInterfaceSerializer::WriteArgument);
 //            WriteBool(Fun->isRawFunctionTy());
 //
 //            break;
 //
 //         }
-//         case TypeID::ObjectTypeID: {
+//         case TypeID::RecordTypeID: {
 //            WriteString(Ty->getClassName());
 //            break;
 //         }
-//         case TypeID::InconcreteObjectTypeID: {
+//         case TypeID::DependentRecordTypeID: {
 //            WriteString(Ty->getClassName());
-//            WriteTemplateArgList(cast<InconcreteObjectType>(Ty)
+//            WriteTemplateArgList(cast<DependentRecordType>(Ty)
 //                                    ->getTemplateArgs());
 //
 //            break;
@@ -932,11 +932,11 @@
 //
 //            return ArrayType::get(*elementTy, numElements);
 //         }
-//         case TypeID::InferredArrayTypeID: {
+//         case TypeID::DependentSizeArrayTypeID: {
 //            auto param = ReadString();
 //            auto elementTy = ReadQualType();
 //
-//            return InferredArrayType::get(*elementTy, param);
+//            return DependentSizeArrayType::get(*elementTy, param);
 //         }
 //         case TypeID::TupleTypeID: {
 //            std::vector<std::pair<string, QualType>> types;
@@ -958,14 +958,14 @@
 //
 //            return FunctionType::get(ret, move(args), ReadBool());
 //         }
-//         case TypeID::ObjectTypeID: {
+//         case TypeID::RecordTypeID: {
 //            return SP.getObjectTy(ReadString());
 //         }
-//         case TypeID::InconcreteObjectTypeID: {
+//         case TypeID::DependentRecordTypeID: {
 //            auto R = SP.getRecord(ReadString());
 //            auto args = ReadTemplateArgList();
 //
-//            return InconcreteObjectType::get(R, move(args));
+//            return DependentRecordType::get(R, move(args));
 //         }
 //         case TypeID::GenericTypeID: {
 //            auto name = ReadString();

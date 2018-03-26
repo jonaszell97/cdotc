@@ -6,7 +6,7 @@
 #define CDOT_TEMPLATEINSTANTIATOR_H
 
 #include "lex/SourceLocation.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 #include <llvm/ADT/ArrayRef.h>
 

@@ -22,6 +22,14 @@ public:
    virtual void HandleDiagnostic(const Diagnostic &Diag) = 0;
 };
 
+class VoidDiagnosticConsumer: public DiagnosticConsumer {
+public:
+   VoidDiagnosticConsumer() = default;
+
+   void HandleDiagnostic(const Diagnostic &) override
+   { }
+};
+
 struct Diagnostic {
    Diagnostic(llvm::StringRef Msg, diag::SeverityLevel Severity);
 
@@ -84,16 +92,18 @@ public:
    friend class diag::DiagnosticBuilder;
 
 private:
-   enum { MaximumArgs = 10 };
+   enum { MaximumArgs = 10, MaxSourceRanges = 3 };
    enum ArgKind : unsigned char {
       ak_string, ak_integer, ak_qualtype, ak_named_decl
    };
 
-   unsigned NumArgs = 0;
+   unsigned NumArgs         = 0;
+   unsigned NumSourceRanges = 0;
 
    ArgKind     ArgKinds[MaximumArgs];
    std::string StringArgs[MaximumArgs];
    uintptr_t   OtherArgs[MaximumArgs];
+   SourceRange SourceRanges[MaxSourceRanges];
 
    bool EncounteredFatalError = false;
    unsigned NumWarnings = 0;

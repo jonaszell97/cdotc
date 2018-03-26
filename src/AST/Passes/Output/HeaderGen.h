@@ -13,7 +13,7 @@
 //namespace cdot {
 //
 //struct Attribute;
-//class ObjectType;
+//class RecordType;
 //class Type;
 //class GenericType;
 //class Callable;
@@ -91,7 +91,7 @@
 //   void writeGenerics(const std::vector<TemplateConstraint>& generics);
 //   void writeGenerics(const std::vector<TemplateArgExpr*>& generics);
 //
-//   void writeProtocols(const std::vector<ObjectType*>& conformsTo);
+//   void writeProtocols(const std::vector<RecordType*>& conformsTo);
 //   void writeProtocols(const std::vector<TypeRef* >& conformsTo);
 //
 //   void writeArgs(const std::vector<FuncArgDecl* >& args);

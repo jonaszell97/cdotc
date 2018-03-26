@@ -13,8 +13,8 @@
 #include <llvm/ADT/FoldingSet.h>
 
 #ifndef CDOT_SMALL_VARIANT
-#  include "AST/NamedDecl.h"
-#  include "Variant/Type/Type.h"
+#  include "AST/Decl.h"
+#  include "AST/Type.h"
    using namespace cdot::ast;
 #else
    namespace cdot {
@@ -354,19 +354,19 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
 
       if (from < to) {
          while (from < to) {
-            arr.push({ from });
+            arr.push(Variant(from));
             ++from;
          }
       }
       else {
          while (from > to) {
-            arr.push({ from });
+            arr.push(Variant(from));
             --from;
          }
       }
 
       if (!isNonInclusiveRange) {
-         arr.push({ to });
+         arr.push(Variant(to));
       }
 
       return arr;
@@ -501,7 +501,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
          if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectType() || !rhsType->isObjectType())
+         if (!typeVal->isRecordType() || !rhsType->isRecordType())
             return { false };
 
          auto Self = typeVal->getRecord();
@@ -517,7 +517,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
          if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectType() || !rhsType->isObjectType())
+         if (!typeVal->isRecordType() || !rhsType->isRecordType())
             return { false };
 
          auto Self = typeVal->getRecord();
@@ -533,7 +533,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
          if (typeVal == rhsType)
             return { true };
 
-         if (!typeVal->isObjectType() || !rhsType->isObjectType())
+         if (!typeVal->isRecordType() || !rhsType->isRecordType())
             return { false };
 
          auto Self = typeVal->getRecord();

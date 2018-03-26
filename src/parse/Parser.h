@@ -5,17 +5,20 @@
 #ifndef CDOT_PARSER_H
 #define CDOT_PARSER_H
 
-#include <string>
-#include <vector>
-
 #include "AST/ASTContext.h"
 #include "AST/Attribute/Attribute.h"
-#include "AST/AstDeclarations.h"
-#include "AST/Passes/SemanticAnalysis/ActionResult.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
 #include "AST/Statement.h"
+#include "AST/Passes/SemanticAnalysis/ActionResult.h"
+#include "Basic/Precedence.h"
 
 #include "lex/Token.h"
 #include "Message/Diagnostics.h"
+
+#include <string>
+#include <vector>
+#include <llvm/ADT/PointerUnion.h>
 
 namespace llvm {
    class MemoryBuffer;
@@ -33,7 +36,7 @@ namespace lex {
 } // namespace lex
 
 class Type;
-class ObjectType;
+class RecordType;
 class GenericType;
 enum class AccessModifier : unsigned char;
 
@@ -214,6 +217,10 @@ public:
 
    private:
       Parser &P;
+      void *StackTraceEntry[3]; // don't want to pull in PrettyStackTrace.h
+                                // here, these are actually a
+                                // PrettyStackTraceEntry base (with a next
+                                // pointer) and a Decl*
    };
 
    size_t getSourceID()
@@ -226,9 +233,9 @@ public:
 
    ParseResult parseFunctionDecl();
 
-   std::string parseOperatorName(OperatorInfo &Info,
-                                 bool &isCastOp,
-                                 SourceType &castType);
+   DeclarationName parseOperatorName(OperatorInfo &Info,
+                                     bool &isCastOp,
+                                     SourceType &castType);
 
    ParseResult parseMethodDecl(AccessModifier,
                                bool isStatic,
@@ -437,7 +444,7 @@ private:
       RecordHead() : enumRawType() {}
 
       AccessModifier access;
-      std::string recordName;
+      IdentifierInfo *recordName;
       std::vector<SourceType> conformances;
       std::vector<StaticExpr*> constraints;
       std::vector<TemplateParamDecl*> templateParams;
@@ -469,12 +476,11 @@ private:
    ParseResult parsePattern();
 
    std::vector<TemplateParamDecl*> tryParseTemplateParameters();
-   std::vector<Expression*> parse_unresolved_template_args();
 
    void parseClassInner(RecordDecl *decl);
 
-   ParseTypeResult parseType(bool allowVariadic = false);
-   ParseTypeResult parse_type_impl();
+   ParseTypeResult parseType(bool allowInferredArraySize = false);
+   ParseTypeResult parseTypeImpl(bool allowInferredArraySize);
 
    ParseResult parseTypedef(AccessModifier am = (AccessModifier) 0);
    ParseResult parseAlias();
@@ -513,6 +519,9 @@ private:
 
    bool modifierFollows(char c);
    Expression *parseNumericLiteral();
+   Expression *parseFloatingPointLiteral();
+   Expression *parseIntegerLiteral();
+   Expression *parseCharacterLiteral();
 };
 
 } // namespace parse

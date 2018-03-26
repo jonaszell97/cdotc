@@ -5,7 +5,7 @@
 #include "Parser.h"
 #include "AST/Attribute/Attr.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #include <llvm/ADT/StringSwitch.h>
 
@@ -38,7 +38,7 @@ ParseResult Parser::parseAttributedDecl()
       checkAttrApplicability(Decl, A);
 
    if (Decl)
-      Decl.getDecl()->setAttributes(Attrs);
+      Decl.getDecl()->addAttributes(Attrs);
 
    return Decl;
 }
@@ -57,7 +57,7 @@ ParseResult Parser::parseAttributedStmt()
    if (Decl && Decl.holdsExpr())
       return AttributedStmt::Create(Context, Decl.getExpr(), Attrs);
    if (Decl && Decl.holdsDecl())
-      Decl.getDecl()->setAttributes(Attrs);
+      Decl.getDecl()->addAttributes(Attrs);
 
    return Decl;
 }
@@ -97,7 +97,7 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr *> &Attrs)
    while (currentTok().is(tok::at)) {
       advance();
       if (!currentTok().is(tok::ident)) {
-         SP.diagnose(currentTok().getSourceLoc(), err_unexpected_token,
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "attribute");
 
          if (!findTokOnLine(tok::ident)) {
@@ -115,7 +115,7 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr *> &Attrs)
          .Default(AttrKind::_notAttr);
 
       if (Kind == AttrKind::_notAttr) {
-         SP.diagnose(AttrLoc, err_generic_error,
+         SP.diagnose(err_generic_error, AttrLoc,
                      std::string("unknown attribute @") + Ident);
 
          if (lookahead().is(tok::open_paren)) {
@@ -150,7 +150,7 @@ void Parser::checkAttrApplicability(ParseResult Result, Attr *A)
 
    if (Result.holdsDecl()) {
       if (!isa<DeclAttr>(A)) {
-         SP.diagnose(A->getSourceLoc(), err_attribute_applicability,
+         SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                      A->getSpelling(), 0 /*declarations*/);
       }
       else {
@@ -161,16 +161,16 @@ void Parser::checkAttrApplicability(ParseResult Result, Attr *A)
    else if (Result.holdsExpr()) {
       auto E = Result.getExpr();
       if (isa<TypeExpr>(E) && !isa<TypeAttr>(A)) {
-         SP.diagnose(A->getSourceLoc(), err_attribute_applicability,
+         SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                      A->getSpelling(), 3 /*types*/);
       }
       else if (!isa<ExprAttr>(A)) {
-         SP.diagnose(A->getSourceLoc(), err_attribute_applicability,
+         SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                      A->getSpelling(), 2 /*expressions*/);
       }
    }
    else if (Result.holdsStatement() && !isa<StmtAttr>(A)) {
-      SP.diagnose(A->getSourceLoc(), err_attribute_applicability,
+      SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                   A->getSpelling(), 1 /*statements*/);
    }
 }

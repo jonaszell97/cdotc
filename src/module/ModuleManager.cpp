@@ -2,6 +2,8 @@
 // Created by Jonas Zell on 27.11.17.
 //
 
+#if 0
+
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringExtras.h>
@@ -30,7 +32,7 @@
 #include "Support/BitstreamWriter.h"
 #include "IL/Module/Module.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #include "IL/Serialize/Serialization.h"
 
@@ -127,8 +129,8 @@ public:
 
          auto &imports = it->second;
          for (auto &I : imports) {
-            auto CU = UnitMap.find(I->getModule());
-            assert(CU != UnitMap.end());
+//            auto CU = UnitMap.find(I->getModule());
+//            assert(CU != UnitMap.end());
 
 //            doSecondForwardDeclImportRun(compilationUnit.getSema(),
 //                                         *CU->second,
@@ -819,3 +821,5 @@ Module *ModuleManager::importModule(SemaPass &SP,
 
 } // namespace module
 } // namespace cdot
+
+#endif

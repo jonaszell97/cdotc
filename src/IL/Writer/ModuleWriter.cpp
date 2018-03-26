@@ -118,7 +118,7 @@ void ModuleWriterImpl::WriteType(const Type *ty)
    else if (ty->isFPType()) {
       out << (ty->isFloatTy() ? "float" : "double");
    }
-   else if (ty->isObjectType()) {
+   else if (ty->isRecordType()) {
       WriteName(ty->getClassName(), ValPrefix::Type);
    }
    else if (ty->isPointerType()) {
@@ -131,7 +131,7 @@ void ModuleWriterImpl::WriteType(const Type *ty)
 
       WriteQualType(ty->asFunctionType()->getReturnType());
 
-      auto Args = ty->asFunctionType()->getArgTypes();
+      auto Args = ty->asFunctionType()->getParamTypes();
       WriteList(Args, &ModuleWriterImpl::WriteQualType);
    }
    else if (ty->isTupleType()) {
@@ -401,7 +401,7 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
    out << " = ";
 
    if (!G->hasInitializer()) {
-      WriteQualType(G->getType());
+      WriteQualType(G->getType()->getReferencedType());
       out << " zeroinitializer";
    }
    else {

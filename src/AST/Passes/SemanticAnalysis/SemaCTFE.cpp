@@ -3,7 +3,6 @@
 //
 
 #include "SemaPass.h"
-#include "AST/NamedDecl.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
 
 namespace cdot {
@@ -53,7 +52,7 @@ bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
 
 bool SemaPass::ensureSizeKnown(QualType Ty,
                                SourceLocation loc) {
-   if (Ty->isObjectType())
+   if (Ty->isRecordType())
       return ensureSizeKnown(Ty->getRecord(), loc);
 
    return true;
@@ -62,7 +61,7 @@ bool SemaPass::ensureSizeKnown(QualType Ty,
 bool SemaPass::ensureSizeKnown(RecordDecl *R, SourceLocation loc)
 {
    if (R->getSize() == 0) {
-      diagnose(loc, diag::err_size_not_known,
+      diagnose(diag::err_size_not_known, loc,
                R->getSpecifierForDiagnostic(), R->getName());
 
       return false;

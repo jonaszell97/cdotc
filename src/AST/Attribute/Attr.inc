@@ -133,6 +133,25 @@ public:
       : DeclAttr(AttrKind::Align, SR), alignment(alignment)
    {}
 };
+
+class DiscardableResultAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::DiscardableResult; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   DiscardableResultAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit DiscardableResultAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::DiscardableResult, SR)
+   {}
+};
 #endif
 #undef CDOT_ATTR_DECL
 
@@ -146,6 +165,7 @@ public:
    case AttrKind::Inline:
    case AttrKind::Implicit:
    case AttrKind::Opaque:
+   case AttrKind::DiscardableResult:
       return AfterDeclaration;
    case AttrKind::Extern:
    case AttrKind::Thin:
@@ -236,6 +256,18 @@ out << '(' << alignment->getEvaluatedExpr() << ')';
 
 AlignAttr *AlignAttr::clone(ast::ASTContext &Ctx) const {
    return new(Ctx) AlignAttr(alignment, SourceLoc);
+}
+
+
+
+void DiscardableResultAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+DiscardableResultAttr *DiscardableResultAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) DiscardableResultAttr(SourceLoc);
 }
 
 

@@ -7,7 +7,7 @@
 
 #include "Basic/Precedence.h"
 #include "IL/Value/Instruction/Instruction.h"
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 
 namespace cdot {
 namespace il {

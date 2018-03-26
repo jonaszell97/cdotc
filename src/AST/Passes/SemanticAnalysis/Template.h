@@ -8,7 +8,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <string>
 
-#include "Variant/Type/Type.h"
+#include "AST/Type.h"
 #include "lex/SourceLocation.h"
 
 namespace llvm {
@@ -320,6 +320,8 @@ public:
       llvm::ArrayRef<TemplateParamDecl*>::iterator it;
    };
 
+   void print(llvm::raw_ostream &OS,
+              char begin = '[', char end = ']', bool showNames = false) const;
    std::string toString(char begin = '[', char end = ']',
                         bool showNames = false) const;
 
@@ -405,9 +407,21 @@ public:
    VecTy::const_iterator begin() const { return ArgLists.begin(); }
    VecTy::const_iterator end()   const { return ArgLists.begin(); }
 
+   void print(llvm::raw_ostream &OS) const;
+
 private:
    VecTy ArgLists;
 };
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     const TemplateArgList &list) {
+   list.print(OS); return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     const MultiLevelTemplateArgList &list) {
+   list.print(OS); return OS;
+}
 
 } // namespace sema
 } // namespace cdot

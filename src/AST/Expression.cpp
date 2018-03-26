@@ -5,7 +5,7 @@
 #include "Expression.h"
 
 #include "AST/ASTContext.h"
-#include "NamedDecl.h"
+#include "Decl.h"
 #include "AST/Passes/SemanticAnalysis/Builtin.h"
 #include "Support/Casting.h"
 
@@ -72,9 +72,6 @@ bool Expression::isConst() const
             break;
          }
 
-         if (loc)
-            break;
-
          DeclRef = Ident->getParentExpr();
          continue;
       }
@@ -95,6 +92,49 @@ bool Expression::isConst() const
    }
 
    return false;
+}
+
+bool Expression::warnOnUnusedResult() const
+{
+   switch (typeID) {
+   case NodeType::ParenExprID:
+      return cast<ParenExpr>(this)->getParenthesizedExpr()
+                                  ->warnOnUnusedResult();
+   case NodeType::BinaryOperatorID:
+      switch (cast<BinaryOperator>(this)->getKind()) {
+      case op::Assign: case op::AddAssign:
+      case op::SubAssign: case op::MulAssign: case op::DivAssign:
+      case op::ModAssign: case op::ExpAssign: case op::AndAssign:
+      case op::OrAssign: case op::XorAssign: case op::ShlAssign:
+      case op::AShrAssign: case op::LShrAssign:
+         return false;
+      default:
+         return true;
+      }
+   case NodeType::UnaryOperatorID:
+      switch (cast<UnaryOperator>(this)->getKind()) {
+      case op::PreInc: case op::PreDec: case op::PostInc: case op::PostDec:
+         return false;
+      default:
+         return true;
+      }
+   case NodeType::CallExprID: {
+      auto Call = cast<CallExpr>(this);
+      switch (Call->getKind()) {
+      case CallKind::NamedFunctionCall:
+      case CallKind::StaticMethodCall:
+      case CallKind::MethodCall:
+      case CallKind::InitializerCall:
+         return !Call->getFunc()->getReturnType()->isVoidType()
+                && !Call->getFunc()->getReturnType()->isUnpopulatedType()
+                && !Call->getFunc()->hasAttribute<DiscardableResultAttr>();
+      default:
+         return true;
+      }
+   }
+   default:
+      return true;
+   }
 }
 
 ParenExpr::ParenExpr(SourceRange Parens,
@@ -233,7 +273,6 @@ AttributedExpr::AttributedExpr(Expression *Expr,
                                llvm::ArrayRef<Attr *> Attrs)
    : Expression(AttributedExprID), Expr(Expr)
 {
-   loc = Expr->getSourceLoc();
    std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attr*>());
 }
 
@@ -290,9 +329,9 @@ SequenceElement::SequenceElement(op::OperatorKind opKind,
 
 }
 
-SequenceElement::SequenceElement(std::string &&possibleOp,
+SequenceElement::SequenceElement(IdentifierInfo *possibleOp,
                                  SourceLocation loc)
-   : op(move(possibleOp)), kind(EF_PossibleOperator), loc(loc)
+   : op(possibleOp), kind(EF_PossibleOperator), loc(loc)
 {
 
 }
@@ -310,7 +349,7 @@ SequenceElement::SequenceElement(SequenceElement &&other) noexcept
    loc = other.loc;
 
    if (kind == EF_PossibleOperator) {
-      new (&op) std::string(move(other.op));
+      op = other.op;
    }
    else if (kind == EF_Expression) {
       expr = other.expr;
@@ -322,15 +361,11 @@ SequenceElement::SequenceElement(SequenceElement &&other) noexcept
 
 SequenceElement& SequenceElement::operator=(SequenceElement &&other) noexcept
 {
-   if (kind == EF_PossibleOperator) {
-      op.~string();
-   }
-
    kind = other.kind;
    loc = other.loc;
 
    if (kind == EF_PossibleOperator) {
-      new (&op) std::string(move(other.op));
+      op = other.op;
    }
    else if (kind == EF_Expression) {
       expr = other.expr;
@@ -342,19 +377,15 @@ SequenceElement& SequenceElement::operator=(SequenceElement &&other) noexcept
    return *this;
 }
 
-SequenceElement::~SequenceElement()
-{
-   if (kind == EF_PossibleOperator) {
-      op.~string();
-   }
-}
-
 ExprSequence::ExprSequence(llvm::MutableArrayRef<SequenceElement> fragments)
    : Expression(ExprSequenceID),
      NumFragments((unsigned)fragments.size())
 {
-   std::move(fragments.begin(), fragments.end(),
-             getTrailingObjects<SequenceElement>());
+   auto ptr = getTrailingObjects<SequenceElement>();
+   for (auto &F : fragments) {
+      new (ptr) SequenceElement(std::move(F));
+      ++ptr;
+   }
 }
 
 ExprSequence*
@@ -405,7 +436,7 @@ BinaryOperator* BinaryOperator::Create(ASTContext &C,
 TypePredicateExpr::TypePredicateExpr(SourceLocation operatorLoc,
                                      Expression *LHS,
                                      Expression *RHS,
-                                     op::OperatorKind kind = op::Colon)
+                                     op::OperatorKind kind)
    : Expression(TypePredicateExprID),
      operatorLoc(operatorLoc), kind(kind), LHS(LHS), RHS(RHS)
 { }
@@ -459,10 +490,10 @@ ExpressionPattern* ExpressionPattern::Create(ASTContext &C,
 }
 
 CasePattern::CasePattern(SourceRange SR,
-                         string &&caseName,
+                         IdentifierInfo *caseName,
                          llvm::MutableArrayRef<CasePatternArgument> args)
    : PatternExpr(CasePatternID, SR.getEnd()),
-     PeriodLoc(SR.getStart()), caseName(move(caseName)),
+     PeriodLoc(SR.getStart()), caseName(caseName),
      NumArgs((unsigned)args.size()), HasBinding(false), HasExpr(false)
 {
    auto ptr = getTrailingObjects<CasePatternArgument>();
@@ -478,49 +509,12 @@ CasePattern::CasePattern(SourceRange SR,
 CasePattern*
 CasePattern::Create(ASTContext &C,
                     SourceRange SR,
-                    string &&caseName,
+                    IdentifierInfo *caseName,
                     llvm::MutableArrayRef<CasePatternArgument> args) {
    void *Mem = C.Allocate(totalSizeToAlloc<CasePatternArgument>(args.size()),
                           alignof(CasePattern));
 
-   return new(Mem) CasePattern(SR, move(caseName), args);
-}
-
-CasePatternArgument::CasePatternArgument(CasePatternArgument &&arg) noexcept
-   : sourceLoc(arg.sourceLoc), IsExpr(arg.IsExpr), IsConst(arg.IsConst)
-{
-   if (IsExpr)
-      expr = arg.expr;
-   else
-      new(&identifier) std::string(move(arg.identifier));
-}
-
-CasePatternArgument& CasePatternArgument::operator=(CasePatternArgument &&arg)
-noexcept
-{
-   destroyValue();
-
-   sourceLoc = arg.sourceLoc;
-   IsExpr = arg.IsExpr;
-   IsConst = arg.IsConst;
-
-   if (IsExpr)
-      expr = arg.expr;
-   else
-      new(&identifier) std::string(move(arg.identifier));
-
-   return *this;
-}
-
-void CasePatternArgument::destroyValue()
-{
-   if (!IsExpr)
-      identifier.~string();
-}
-
-CasePatternArgument::~CasePatternArgument()
-{
-   destroyValue();
+   return new(Mem) CasePattern(SR, caseName, args);
 }
 
 IsPattern::IsPattern(SourceRange SR, SourceType isType)
@@ -534,7 +528,7 @@ IsPattern* IsPattern::Create(ASTContext &C,
    return new(C) IsPattern(SR, isType);
 }
 
-IntegerLiteral::IntegerLiteral(SourceLocation Loc,
+IntegerLiteral::IntegerLiteral(SourceRange Loc,
                                Type *type,
                                llvm::APSInt &&value,
                                Suffix suffix)
@@ -543,21 +537,21 @@ IntegerLiteral::IntegerLiteral(SourceLocation Loc,
 {}
 
 IntegerLiteral *IntegerLiteral::Create(ASTContext &C,
-                                       SourceLocation Loc,
+                                       SourceRange Loc,
                                        Type *type,
                                        llvm::APSInt &&value,
                                        Suffix suffix) {
    return new(C) IntegerLiteral(Loc, type, std::move(value), suffix);
 }
 
-FPLiteral::FPLiteral(SourceLocation Loc, Type *type,
+FPLiteral::FPLiteral(SourceRange Loc, Type *type,
                      llvm::APFloat &&value,
                      Suffix suffix = Suffix::None)
    :  Expression(FPLiteralID, true),
       Loc(Loc), value(std::move(value)), type(type), suffix(suffix)
 {}
 
-FPLiteral* FPLiteral::Create(ASTContext &C, SourceLocation Loc,
+FPLiteral* FPLiteral::Create(ASTContext &C, SourceRange Loc,
                              Type *type, llvm::APFloat &&value,
                              Suffix suffix) {
    return new(C) FPLiteral(Loc, type, std::move(value), suffix);
@@ -576,14 +570,14 @@ BoolLiteral* BoolLiteral::Create(ASTContext &C,
    return new(C) BoolLiteral(Loc, type, value);
 }
 
-CharLiteral::CharLiteral(SourceLocation Loc, Type *type, char value)
+CharLiteral::CharLiteral(SourceRange Loc, Type *type, char value)
    : Expression(CharLiteralID),
      Loc(Loc), narrow(value), IsWide(false), type(type)
 {
 
 }
 
-CharLiteral::CharLiteral(SourceLocation Loc, Type *type, uint32_t value)
+CharLiteral::CharLiteral(SourceRange Loc, Type *type, uint32_t value)
    : Expression(CharLiteralID),
      Loc(Loc), wide(value), IsWide(true), type(type)
 {
@@ -591,13 +585,13 @@ CharLiteral::CharLiteral(SourceLocation Loc, Type *type, uint32_t value)
 }
 
 CharLiteral* CharLiteral::Create(ASTContext &C,
-                                 SourceLocation Loc, Type *type,
+                                 SourceRange Loc, Type *type,
                                  char value) {
    return new(C) CharLiteral(Loc, type, value);
 }
 
 CharLiteral* CharLiteral::Create(ASTContext &C,
-                                 SourceLocation Loc, Type *type,
+                                 SourceRange Loc, Type *type,
                                  uint32_t value) {
    return new(C) CharLiteral(Loc, type, value);
 }
@@ -612,18 +606,18 @@ NoneLiteral* NoneLiteral::Create(ASTContext &C,
    return new(C) NoneLiteral(Loc);
 }
 
-StringLiteral::StringLiteral( SourceLocation Loc, std::string &&str)
+StringLiteral::StringLiteral(SourceRange Loc, std::string &&str)
    : Expression(StringLiteralID, true),
      Loc(Loc), value(move(str))
 {}
 
 StringLiteral* StringLiteral::Create(ASTContext &C,
-                                     SourceLocation Loc,
+                                     SourceRange Loc,
                                      std::string &&str) {
    return new(C) StringLiteral(Loc, move(str));
 }
 
-StringInterpolation::StringInterpolation(SourceLocation Loc,
+StringInterpolation::StringInterpolation(SourceRange Loc,
                                          llvm::ArrayRef<Expression *> strings)
    : Expression(StringInterpolationID),
      Loc(Loc), NumStrings((unsigned)strings.size())
@@ -633,7 +627,7 @@ StringInterpolation::StringInterpolation(SourceLocation Loc,
 
 StringInterpolation*
 StringInterpolation::Create(ASTContext &C,
-                            SourceLocation Loc,
+                            SourceRange Loc,
                             llvm::ArrayRef<Expression *> strings) {
    void *Mem = C.Allocate(totalSizeToAlloc<Expression*>(strings.size()),
                           alignof(StringInterpolation));
@@ -739,11 +733,11 @@ DictionaryLiteral* DictionaryLiteral::Create(ASTContext &ASTCtx,
 }
 
 IdentifierRefExpr::IdentifierRefExpr(SourceLocation Loc,
-                                     std::string &&ident,
+                                     IdentifierInfo *ident,
                                      std::vector<Expression*> &&templateArgs,
                                      DeclContext *DeclCtx,
                                      bool InTypePos)
-   : IdentifiedExpr(IdentifierRefExprID, move(ident)),
+   : IdentifiedExpr(IdentifierRefExprID, ident),
      Loc(Loc), DeclCtx(DeclCtx), staticLookup(false),
      pointerAccess(false), FoundResult(false), InTypePosition(InTypePos),
      templateArgs(move(templateArgs))
@@ -751,7 +745,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceLocation Loc,
 
 IdentifierRefExpr::IdentifierRefExpr(SourceLocation Loc, IdentifierKind kind,
                                      QualType exprType)
-   : IdentifiedExpr(IdentifierRefExprID, ""),
+   : IdentifiedExpr(IdentifierRefExprID, nullptr),
      Loc(Loc), kind(kind), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false)
 {
@@ -801,21 +795,21 @@ BuiltinExpr* BuiltinExpr::Create(ASTContext &C, QualType Ty)
 }
 
 MemberRefExpr::MemberRefExpr(SourceLocation Loc,
-                             string &&ident,
+                             IdentifierInfo *ident,
                              bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, move(ident)),
-     Loc(Loc), pointerAccess(pointerAccess), tupleAccess(false)
+   : IdentifiedExpr(MemberRefExprID, ident),
+     Loc(Loc), pointerAccess(pointerAccess)
 {
 
 }
 
 MemberRefExpr::MemberRefExpr(SourceLocation Loc,
                              Expression *ParentExpr,
-                             string &&ident,
+                             IdentifierInfo *ident,
                              bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, move(ident)),
+   : IdentifiedExpr(MemberRefExprID, ident),
      Loc(Loc), ParentExpr(ParentExpr),
-     pointerAccess(pointerAccess), tupleAccess(false)
+     pointerAccess(pointerAccess)
 {
 
 }
@@ -832,17 +826,18 @@ TupleMemberExpr::TupleMemberExpr(SourceLocation Loc,
 }
 
 EnumCaseExpr::EnumCaseExpr(SourceLocation PeriodLoc,
-                           std::string &&caseName,
+                           IdentifierInfo *caseName,
                            std::vector<Expression*> &&args)
-   : IdentifiedExpr(EnumCaseExprID, move(caseName), true),
+   : IdentifiedExpr(EnumCaseExprID, caseName, true),
      PeriodLoc(PeriodLoc), args(move(args)), en(nullptr)
 {}
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    std::vector<Expression* > &&args,
-                   string &&ident)
-   : IdentifiedExpr(CallExprID, move(ident)), args(move(args)),
+                   DeclarationName Name)
+   : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
+     ident(Name), args(move(args)),
      PointerAccess(false), IsUFCS(false),
      builtinFnKind(BuiltinFn::None)
 {
@@ -851,10 +846,11 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    Expression *ParentExpr,
-                   std::vector<Expression *> &&args, cdot::string &&name)
-   : IdentifiedExpr(CallExprID, move(name)),
+                   std::vector<Expression *> &&args,
+                   DeclarationName Name)
+   : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     ParentExpr(ParentExpr), args(move(args)),
+     ident(Name), ParentExpr(ParentExpr), args(move(args)),
      PointerAccess(false), IsUFCS(false),
      builtinFnKind(BuiltinFn::None)
 {
@@ -863,7 +859,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    std::vector<Expression *> &&args, CallableDecl *C)
-   : IdentifiedExpr(CallExprID, ""),
+   : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
      args(move(args)),
      PointerAccess(false), IsUFCS(false),
@@ -944,7 +940,11 @@ TraitsExpr::TraitsExpr(SourceLocation TraitsLoc, SourceRange Parens,
      TraitsLoc(TraitsLoc), Parens(Parens), kind(kind),
      NumArgs((unsigned)args.size())
 {
-   std::move(args.begin(), args.end(), getTrailingObjects<TraitsArgument>());
+   auto ptr = getTrailingObjects<TraitsArgument>();
+   for (auto &Arg : args) {
+      new (ptr) TraitsArgument(std::move(Arg));
+      ++ptr;
+   }
 }
 
 TraitsExpr* TraitsExpr::Create(ASTContext &C,

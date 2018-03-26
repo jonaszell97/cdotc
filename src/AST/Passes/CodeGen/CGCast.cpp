@@ -213,7 +213,7 @@
 //            }
 //
 //            return Builder.CreateSIToFP(val, toType);
-//         case TypeID::ObjectTypeID: {
+//         case TypeID::RecordTypeID: {
 //            auto other = SymbolTable::getClass(to->getClassName());
 //
 //            if (other->isProtocol()) {
@@ -265,7 +265,7 @@
 //         }
 //         case TypeID::FPTypeID:
 //            return Builder.CreateFPCast(val, toType);
-//         case TypeID::ObjectTypeID: {
+//         case TypeID::RecordTypeID: {
 //            auto other = SymbolTable::getClass(to->getClassName());
 //
 //            if (other->isProtocol()) {
@@ -690,7 +690,7 @@
 //      size_t sRetPos = 1;
 //      auto argValIt = wrapperFunc->arg_begin();
 //      std::vector<llvm::Value*> castArgs;
-//      auto& toArgs = to->asFunctionTy()->getArgTypes();
+//      auto& toArgs = to->asFunctionTy()->getParamTypes();
 //
 //      if (isLambda) {
 //         // env param
@@ -708,7 +708,7 @@
 //         ++argValIt;
 //      }
 //
-//      for (auto& arg : from->asFunctionTy()->getArgTypes()) {
+//      for (auto& arg : from->asFunctionTy()->getParamTypes()) {
 //         if (i > toArgs.size() || argValIt == wrapperFunc->arg_end()) {
 //            break;
 //         }

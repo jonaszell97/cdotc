@@ -5,16 +5,17 @@
 #include <llvm/ADT/SmallString.h>
 #include "Serialize.h"
 
-#include "../../../Support/ExtendedSerializerBase.h"
-#include "../../../Support/Casting.h"
+#include "Support/ExtendedSerializerBase.h"
+#include "Support/Casting.h"
 
-#include "../ASTIncludes.h"
-#include "../../ASTContext.h"
+#include "AST/ASTContext.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
+#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "AST/Passes/SemanticAnalysis/Template.h"
 
-#include "../../../Variant/Type/Type.h"
-
-#include "../SemanticAnalysis/SemaPass.h"
-#include "../SemanticAnalysis/Template.h"
+#include "AST/Type.h"
 
 using namespace cdot::ast;
 using namespace cdot::support;
@@ -538,7 +539,7 @@ namespace serial {
 //
 //            return Context.getFunctionType(ret, move(args), flags);
 //         }
-//         case TypeID::ObjectTypeID: {
+//         case TypeID::RecordTypeID: {
 //            return SP.getObjectTy(ReadString());
 //         }
 //         case TypeID::GenericTypeID: {
@@ -820,7 +821,7 @@ namespace serial {
 //   WriteByte(stmt->getAccess());
 //   WriteBool(stmt->isConst());
 //   WriteString(stmt->getName());
-//   visitExpr(stmt->getTypeRef());
+//   visitExpr(stmt->getType());
 //
 //   MaybeWriteExpr(stmt->getValue());
 //}
@@ -841,7 +842,7 @@ namespace serial {
 //   WriteByte(stmt->getAccess());
 //   WriteBool(stmt->isConst());
 //   WriteString(stmt->getName());
-//   visitExpr(stmt->getTypeRef());
+//   visitExpr(stmt->getType());
 //
 //   MaybeWriteExpr(stmt->getValue());
 //}
@@ -1672,7 +1673,7 @@ namespace serial {
 //         case TypeID::BuiltinTypeID:
 //            WriteBool(true);
 //            return WriteQualType(expr->getType());
-//         case TypeID::ObjectTypeID:
+//         case TypeID::RecordTypeID:
 //            substituteClassName = true;
 //            break;
 //         default:
@@ -1704,7 +1705,7 @@ namespace serial {
 //         }
 //
 //         break;
-//      case TypeRef::ObjectType:
+//      case TypeRef::RecordType:
 //         if (substituteClassName) {
 //            Writer.WriteULEB128(1);
 //            WriteString(expr->getType()->getClassName());
@@ -1786,7 +1787,7 @@ namespace serial {
 //         typeref = new (Context) TypeRef(move(cont));
 //         break;
 //      }
-//      case TypeRef::ObjectType: {
+//      case TypeRef::RecordType: {
 //         TypeRef::NamespaceVec vec;
 //         auto size = Reader.ReadULEB128();
 //

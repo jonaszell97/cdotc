@@ -589,7 +589,7 @@
 //
 //   // collections
 //   llvm::Value* CreateCStyleArray(Type* type, std::vector<Expression* >& elements);
-//   llvm::Value* CreateArray(ObjectType* type, std::vector<Expression* >& elements);
+//   llvm::Value* CreateArray(RecordType* type, std::vector<Expression* >& elements);
 //
 //   // binary operators
 //   llvm::Value* HandleBinaryOperator(llvm::Value *lhs, llvm::Value *rhs, BinaryOperatorType, BinaryOperator* node);

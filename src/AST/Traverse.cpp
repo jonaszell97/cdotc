@@ -5,7 +5,9 @@
 #include "Traverse.h"
 
 #include "AST/Passes/ASTVisitor.h"
-#include "AST/Passes/ASTIncludes.h"
+#include "AST/Decl.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 
 using namespace cdot::support;
 
@@ -473,7 +475,7 @@ void collectIsPattern(llvm::SmallVectorImpl<Statement*> &children,
 void collectExprSequence(llvm::SmallVectorImpl<Statement*> &children,
                          ExprSequence* stmt) {
    for (auto &el : stmt->getFragments())
-      if (el.getKind() == ExprSequence::SequenceElement::EF_Expression)
+      if (el.getKind() == SequenceElement::EF_Expression)
          children.push_back(el.getExpr());
 }
 
@@ -529,12 +531,12 @@ void collectTraitsExpr(llvm::SmallVectorImpl<Statement*> &children,
                        TraitsExpr* stmt) {
    for (auto &arg : stmt->getArgs()) {
       switch (arg.getKind()) {
-         case TraitsExpr::TraitsArgument::Type:
+         case TraitsArgument::Type:
             break;
-         case TraitsExpr::TraitsArgument::Stmt:
+         case TraitsArgument::Stmt:
             children.push_back(arg.getStmt());
             break;
-         case TraitsExpr::TraitsArgument::Expr:
+         case TraitsArgument::Expr:
             children.push_back(arg.getExpr());
             break;
          default:

@@ -4,7 +4,7 @@
 
 #include "UseBeforeInit.h"
 
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
 #include "AST/Passes/SemanticAnalysis/SemaPass.h"
 #include "IL/Utils/BlockIterator.h"
@@ -64,6 +64,9 @@ static void analyseFunction(Function &F,
    // Calculate Gen and Kill sets for each BB
    // Kill always empty since a variable can't be "deinitialized"
    for (auto &B : F) {
+      if (B.hasNoPredecessors())
+         continue;
+
       auto &Gen = GenMap[&B];
       Gen.resize(AllocaMap.size());
 
@@ -97,7 +100,7 @@ static void analyseFunction(Function &F,
       auto BB = *WorkList.begin();
       WorkList.erase(BB);
 
-      if (BB == F.getEntryBlock())
+      if (BB == F.getEntryBlock() || BB->hasNoPredecessors())
          continue;
 
       auto &In = InMap[BB];
@@ -144,6 +147,9 @@ void UseBeforeInit::visitFunction(Function &F)
    // walk through all blocks again, this time checking any loads to see if
    // the value is initialized at that point
    for (auto &B : F) {
+      if (B.hasNoPredecessors())
+         continue;
+
       // this time track Gen on a per-instruction basis
       BitVector Gen;
       Gen.resize(AllocaMap.size());
@@ -184,6 +190,9 @@ void UseBeforeInit::visitFunction(Function &F)
    analyseFunction(F, AllocaMap, GenMap, InMap, &BitVector::operator|=);
 
    for (auto &B : F) {
+      if (B.hasNoPredecessors())
+         continue;
+
       // this time track Gen on a per-instruction basis
       BitVector Gen;
       Gen.resize(AllocaMap.size());
@@ -191,7 +200,12 @@ void UseBeforeInit::visitFunction(Function &F)
       Gen |= InMap[&B];
 
       for (auto &I : B) {
-         if (auto Store = dyn_cast<StoreInst>(&I)) {
+         if (auto Alloc = dyn_cast<AllocaInst>(&I)) {
+            // an alloca kills a store again, this allows declaring and
+            // initializing a variable in a loop
+            Gen[AllocaMap[Alloc]] = 0;
+         }
+         else if (auto Store = dyn_cast<StoreInst>(&I)) {
             auto Alloca = dyn_cast<AllocaInst>(Store->getDst());
             if (!Alloca)
                continue;
@@ -207,7 +221,19 @@ void UseBeforeInit::visitFunction(Function &F)
                SP.diagnose(Decl, err_initialized_more_than_once,
                            Decl->getName(), Store->getSourceLoc());
 
-               SP.diagnose(Decl, note_previous_init_here, StoreMap[Decl]);
+               SourceLocation Loc;
+
+               // the same store might be in a loop and thus called multiple
+               // times
+               auto it = StoreMap.find(Decl);
+               if (it == StoreMap.end()) {
+                  Loc = Decl->getSourceLoc();
+               }
+               else {
+                  Loc = StoreMap[Decl];
+               }
+
+               SP.diagnose(Decl, note_previous_init_here, Loc);
             }
 
             StoreMap[Decl] = Store->getSourceLoc();

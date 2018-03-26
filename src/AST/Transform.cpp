@@ -417,7 +417,7 @@
 //   bool replaceFromTypeRef(TypeRef *stmt)
 //   {
 //      switch (stmt->getKind()) {
-//         case TypeRef::ObjectType:
+//         case TypeRef::RecordType:
 //            return false;
 //         case TypeRef::FunctionType:
 //            REPLACE_OTHER(returnType, TypeRef)

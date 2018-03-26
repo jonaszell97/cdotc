@@ -4,8 +4,6 @@
 
 #include "SemaPass.h"
 
-#include "AST/NamedDecl.h"
-#include "AST/ASTContext.h"
 #include "AST/Passes/SemanticAnalysis/TemplateInstantiator.h"
 #include "AST/Passes/SemanticAnalysis/ConformanceChecker.h"
 #include "AST/Passes/ILGen/ILGenPass.h"
@@ -105,7 +103,8 @@ DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
             fieldType.setResolvedType(givenType);
 
             FD->getType().setResolvedType(givenType);
-            R->getField(FD->getName())->getType().setResolvedType(fieldType);
+            R->getField(FD->getDeclName())
+             ->getType().setResolvedType(fieldType);
 
             if (!FD->isStatic()) {
                auto ty = fieldType;
@@ -114,7 +113,7 @@ DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
                }
                if (FD->hasSetter()) {
                   FD->getSetterMethod()->getArgs().front()
-                      ->getArgType().setResolvedType(ty);
+                    ->getType().setResolvedType(ty);
                }
             }
          }
@@ -132,9 +131,12 @@ DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
    if (FD->hasSetter() && FD->getSetterBody() != nullptr) {
       ScopeGuard scope(*this, FD->getSetterMethod());
 
+      auto *Name = &Context.getIdentifiers().get("newVal");
       auto typeref = SourceType(fieldType);
-      FD->setNewVal(new (getContext()) FuncArgDecl("newVal", typeref,
-                                                    nullptr, false, true));
+
+      FD->setNewVal(FuncArgDecl::Create(Context, FD->getSourceLoc(),
+                                        FD->getSourceLoc(), Name, typeref,
+                                        nullptr, false, true));
 
 
       (void)FD->getSetterMethod()->addDecl(FD->getNewVal());
@@ -192,11 +194,11 @@ DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
          }
 
          Proto = cast<ProtocolDecl>(proto);
-         AT = Proto->getAssociatedType(ATDecl->getName());
+         AT = Proto->getAssociatedType(ATDecl->getDeclName());
       }
       else {
          for (ProtocolDecl *CF : Rec->getConformances()) {
-            auto MaybeAT = CF->getAssociatedType(ATDecl->getName());
+            auto MaybeAT = CF->getAssociatedType(ATDecl->getDeclName());
             if (MaybeAT && AT) {
                diagnose(ATDecl, err_associated_type_ambiguous,
                         ATDecl->getName());
@@ -429,11 +431,13 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          auto retTy = SourceType(String);
          std::vector<FuncArgDecl*> args;
 
-         M = new (getContext())
-            MethodDecl("as String", retTy, move(args), {}, nullptr,
-                       OperatorInfo(PrecedenceGroup(12, Associativity::Left),
-                                    FixKind::Infix), true,
-                       AccessModifier::PUBLIC, false);
+         auto stringTy = Context.getRecordType(getStringDecl());
+         M = MethodDecl::CreateConversionOp(Context, AccessModifier::PUBLIC,
+                                            R->getSourceLoc(), retTy,
+                                            move(args), {}, nullptr);
+
+         M->setName(Context.getDeclNameTable()
+                           .getConversionOperatorName(stringTy));
 
          R->setImplicitlyStringRepresentable(true);
          R->setToStringFn(M);
@@ -448,14 +452,22 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          auto argTy = SourceType(Context.getRecordType(R));
 
          std::vector<FuncArgDecl*> args;
-         args.push_back(new (getContext()) FuncArgDecl("", argTy, nullptr,
-                                                       false, true));
 
-         M = new (getContext())
-            MethodDecl("==", retTy, move(args), {}, nullptr,
-                       OperatorInfo(PrecedenceGroup(5, Associativity::Left),
-                                    FixKind::Infix),
-                       false, AccessModifier::PUBLIC, false);
+         auto *Name = &Context.getIdentifiers().get("that");
+         args.push_back(FuncArgDecl::Create(Context, R->getSourceLoc(),
+                                            R->getSourceLoc(), Name, argTy,
+                                            nullptr, false, true));
+
+         OperatorInfo OpInfo;
+         OpInfo.setFix(FixKind::Infix);
+         OpInfo.setPrecedenceGroup(PrecedenceGroup(prec::Equality,
+                                                   Associativity::Right));
+
+
+         auto *OpName = &Context.getIdentifiers().get("==");
+         M = MethodDecl::CreateOperator(Context, AccessModifier::PUBLIC,
+                                        R->getSourceLoc(), OpName,  retTy,
+                                        move(args), {}, nullptr, OpInfo, false);
 
 
          R->setImplicitlyEquatable(true);
@@ -470,10 +482,9 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
          auto retTy = SourceType(Context.getUInt64Ty());
          std::vector<FuncArgDecl*> args;
 
-         M = new (getContext())
-            MethodDecl("hashCode", retTy, move(args),
-                       {}, nullptr,
-                       AccessModifier::PUBLIC, false);
+         auto *Name = &Context.getIdentifiers().get("hashCode");
+         M = MethodDecl::Create(Context, R->getAccess(), R->getSourceLoc(),
+                                Name, retTy, move(args), {}, nullptr, false);
 
          R->setImplicitlyHashable(true);
          R->setHashCodeFn(M);
@@ -482,7 +493,6 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
       }
    }
 
-   M->setSourceLoc(R->getSourceLoc());
    addDeclToContext(*R, M);
 }
 

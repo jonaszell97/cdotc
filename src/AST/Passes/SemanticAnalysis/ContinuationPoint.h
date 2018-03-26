@@ -6,7 +6,7 @@
 #define CDOT_CONTINUATIONPOINT_H
 
 #include "AST/Statement.h"
-#include "AST/NamedDecl.h"
+#include "AST/Decl.h"
 
 #include <llvm/ADT/PointerUnion.h>
 

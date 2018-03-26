@@ -211,6 +211,12 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Attribute/Attribute.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Decl.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Decl.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Expression.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -236,12 +242,6 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AbstractPass.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AggregateVisitor.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/AggregateVisitor.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Passes/CodeGen/CGBinaryOperator.cpp">
@@ -418,166 +418,10 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/SourceType.h">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Block/CompoundStmt.cpp">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement.cpp">
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Block/CompoundStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/BreakStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/BreakStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/CaseStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/CaseStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ContinueStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ContinueStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ForInStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ForInStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ForStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ForStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/GotoStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/GotoStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/IfStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/IfStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/LabelStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/LabelStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/MatchStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/MatchStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ReturnStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/ReturnStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/WhileStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/ControlFlow/WhileStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/DebugStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/CallableDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/CallableDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/EnumCaseDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/FieldDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/MethodDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/MethodDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/PropDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/Class/RecordDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclContext.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclContext.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclareStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/DeclareStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/LocalVarDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamedDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamedDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/NamespaceDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Declaration/TypedefDecl.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/ThrowStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Exception/TryStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/NullStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Statement.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Statement.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Static/StaticStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/Static/StaticStmt.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/UsingStmt.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Statement/UsingStmt.h">
+		<Unit filename="/Users/Jonas/CDot/src/AST/Statement.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Transform.cpp">
@@ -592,10 +436,22 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Traverse.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Type.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/Type.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/CastKind.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/CastKind.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/DeclarationName.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/DeclarationName.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/DependencyGraph.cpp">
@@ -1038,12 +894,6 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Util.h">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Type.cpp">
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/Variant/Type/Type.h">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Variant/Variant.cpp">

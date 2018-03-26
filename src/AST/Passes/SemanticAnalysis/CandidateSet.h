@@ -5,6 +5,7 @@
 #ifndef CDOT_CANDIDATESET_H
 #define CDOT_CANDIDATESET_H
 
+#include "Basic/DeclarationName.h"
 #include "Basic/Precedence.h"
 #include "ConversionSequence.h"
 #include "Template.h"
@@ -252,38 +253,41 @@ struct CandidateSet {
    }
 
    void diagnose(ast::SemaPass &SP,
-                 llvm::StringRef funcName,
+                 DeclarationName funcName,
                  llvm::ArrayRef<ast::Expression *> args,
                  llvm::ArrayRef<ast::Expression *> templateArgs,
                  ast::Statement *Caller,
-                 bool OperatorLookup = false) {
+                 bool OperatorLookup = false,
+                 SourceLocation OpLoc = {}) {
       if (Status == NoMatch)
          return diagnoseFailedCandidates(SP, funcName, args, templateArgs,
-                                         Caller, OperatorLookup);
+                                         Caller, OperatorLookup, OpLoc);
 
       assert(Status == Ambiguous && "not a failed CandSet");
       return diagnoseAmbiguousCandidates(SP, funcName, args, templateArgs,
-                                         Caller, OperatorLookup);
+                                         Caller, OperatorLookup, OpLoc);
    }
 
    void diagnoseFailedCandidates(ast::SemaPass &SP,
-                                 llvm::StringRef funcName,
+                                 DeclarationName funcName,
                                  llvm::ArrayRef<ast::Expression *> args,
                                  llvm::ArrayRef<ast::Expression *> templateArgs,
                                  ast::Statement *Caller,
-                                 bool OperatorLookup = false);
+                                 bool OperatorLookup = false,
+                                 SourceLocation OpLoc = {});
 
    void diagnoseAnonymous(ast::SemaPass &SP,
-                          llvm::StringRef funcName,
+                          DeclarationName funcName,
                           llvm::ArrayRef<ast::Expression *> args,
                           ast::Statement *Caller);
 
    void diagnoseAmbiguousCandidates(ast::SemaPass &SP,
-                                    llvm::StringRef funcName,
+                                    DeclarationName funcName,
                                     llvm::ArrayRef<ast::Expression *> args,
                                     llvm::ArrayRef<ast::Expression *> templateArgs,
                                     ast::Statement *Caller,
-                                    bool OperatorLookup = false);
+                                    bool OperatorLookup = false,
+                                    SourceLocation OpLoc = {});
 
    Candidate &getBestMatch()
    {
