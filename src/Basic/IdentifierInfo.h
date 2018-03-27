@@ -5,7 +5,7 @@
 #ifndef CDOT_IDENTIFIERINFO_H
 #define CDOT_IDENTIFIERINFO_H
 
-#include "lex/TokenKinds.h"
+#include "Lex/TokenKinds.h"
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMapInfo.h>

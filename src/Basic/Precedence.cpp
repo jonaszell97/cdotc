@@ -3,7 +3,7 @@
 //
 
 #include "Precedence.h"
-#include "lex/TokenKinds.h"
+#include "Lex/TokenKinds.h"
 
 #include <llvm/ADT/StringSwitch.h>
 

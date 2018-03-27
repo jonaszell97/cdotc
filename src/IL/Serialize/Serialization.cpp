@@ -10,7 +10,7 @@
 #include "IL/Module/Module.h"
 #include "IL/Module/Context.h"
 
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "Sema/SemaPass.h"
 #include "AST/Decl.h"
 
 #define CDOT_VALUE_INCLUDE
@@ -429,7 +429,7 @@ Function* ModuleDeserializer::ReadFunctionDecl()
 {
    auto typeID = ReadEnum<Value::TypeID>();
    auto name = ReadString();
-   auto FuncTy = cast<FunctionType>(ReadType());
+   auto FuncTy = ReadType()->asFunctionType();
 
    bool mightThrow, cstyleVararg, isExternC, isDeclared, hasSRet;
    ReadBools(mightThrow, cstyleVararg, isExternC, isDeclared, hasSRet);

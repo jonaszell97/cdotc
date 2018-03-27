@@ -5,7 +5,7 @@
 #ifndef TABLEGEN_RECORD_H
 #define TABLEGEN_RECORD_H
 
-#include "lex/SourceLocation.h"
+#include "Lex/SourceLocation.h"
 
 #include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/StringMap.h>

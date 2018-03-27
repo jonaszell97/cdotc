@@ -4,8 +4,8 @@
 
 #include "Mangle.h"
 
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/Passes/PrettyPrint/PrettyPrinter.h"
+#include "Sema/SemaPass.h"
+#include "AST/PrettyPrinter.h"
 #include "AST/Decl.h"
 
 #include <llvm/Support/raw_ostream.h>

@@ -5,9 +5,9 @@
 #ifndef CDOT_NAMEDDECL_H
 #define CDOT_NAMEDDECL_H
 
-#include "AST/Attribute/Attr.h"
+#include "Attr.h"
 #include "AST/SourceType.h"
-#include "AST/Passes/SemanticAnalysis/Template.h"
+#include "Sema/Template.h"
 #include "Basic/DeclarationName.h"
 #include "Basic/Precedence.h"
 #include "Support/Casting.h"

@@ -5,8 +5,6 @@
 #include "PassManager.h"
 
 #include "InstructionVisitor.h"
-#include "ReturnVerifierPass.h"
-#include "PrimitivePromoter.h"
 #include "VerifierPass.h"
 #include "IRGen/IRGen.h"
 

@@ -4,7 +4,7 @@
 
 #include "Traverse.h"
 
-#include "AST/Passes/ASTVisitor.h"
+#include "ASTVisitor.h"
 #include "AST/Decl.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"

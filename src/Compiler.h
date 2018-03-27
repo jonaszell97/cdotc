@@ -5,8 +5,8 @@
 #ifndef CDOT_COMPILER_H
 #define CDOT_COMPILER_H
 
-#include "Files/FileManager.h"
-#include "lex/SourceLocation.h"
+#include "Basic/FileManager.h"
+#include "Lex/SourceLocation.h"
 
 #include <string>
 #include <vector>

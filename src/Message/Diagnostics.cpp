@@ -6,13 +6,13 @@
 #include "DiagnosticsEngine.h"
 
 #include "Basic/IdentifierInfo.h"
-#include "Files/FileManager.h"
-#include "Files/FileUtils.h"
-#include "lex/Token.h"
-#include "lex/Lexer.h"
+#include "Basic/FileManager.h"
+#include "Basic/FileUtils.h"
+#include "Lex/Token.h"
+#include "Lex/Lexer.h"
 #include "Support/Casting.h"
 #include "Support/Format.h"
-#include "Variant/Variant.h"
+#include "Basic/Variant.h"
 
 #include <cstdlib>
 #include <cassert>
@@ -24,7 +24,7 @@
 #ifndef CDOT_SMALL_VARIANT
 #  include "AST/Expression.h"
 #  include "AST/Type.h"
-#  include "module/Module.h"
+#  include "Module/Module.h"
 #endif
 
 using namespace cdot::lex;

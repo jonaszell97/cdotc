@@ -5,7 +5,7 @@
 //#include "Transform.h"
 //
 //#include "AST/Passes/ASTIncludes.h"
-//#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+//#include "Sema/SemaPass.h"
 //
 //using namespace cdot::support;
 //

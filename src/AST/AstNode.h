@@ -5,7 +5,7 @@
 #ifndef ASTNODE_H
 #define ASTNODE_H
 
-#include "lex/SourceLocation.h"
+#include "Lex/SourceLocation.h"
 #include "Support/Casting.h"
 #include "Type.h"
 

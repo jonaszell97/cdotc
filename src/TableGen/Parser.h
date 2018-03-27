@@ -5,7 +5,7 @@
 #ifndef TABLEGEN_PARSER_H
 #define TABLEGEN_PARSER_H
 
-#include "lex/Lexer.h"
+#include "Lex/Lexer.h"
 #include "Basic/IdentifierInfo.h"
 #include "Message/DiagnosticsEngine.h"
 #include "TableGen.h"

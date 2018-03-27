@@ -6,7 +6,7 @@
 
 #include "AST/ASTContext.h"
 #include "Decl.h"
-#include "AST/Passes/SemanticAnalysis/Builtin.h"
+#include "Sema/Builtin.h"
 #include "Support/Casting.h"
 
 using namespace cdot::support;

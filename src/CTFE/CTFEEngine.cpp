@@ -7,12 +7,12 @@
 
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/Passes/SemanticAnalysis/Builtin.h"
-#include "AST/Passes/ILGen/ILGenPass.h"
+#include "Sema/SemaPass.h"
+#include "Sema/Builtin.h"
+#include "ILGen/ILGenPass.h"
 
 #include "Basic/CastKind.h"
-#include "Files/FileManager.h"
+#include "Basic/FileManager.h"
 
 #include "IL/Module/Module.h"
 #include "IL/Module/Context.h"
@@ -1340,7 +1340,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       int  prec        = -1;
       bool precAsArg   = false;
 
-      // parse flags
+      // Parse flags
       while (1) {
          switch (next) {
             case '-':
@@ -1370,7 +1370,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
          break;
       }
 
-      // parse (optional) width
+      // Parse (optional) width
       auto begin = i;
       while (isdigit(next)) {
          next = formatString[++i];
@@ -1384,7 +1384,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
          widthAsArg = true;
       }
 
-      // parse (optional) precision
+      // Parse (optional) precision
       if (next == '.') {
          next = formatString[++i];
          begin = i;
@@ -1402,7 +1402,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
          }
       }
 
-      // parse (optional) length
+      // Parse (optional) length
       while (1) {
          switch (next) {
             case 'l':
@@ -1416,7 +1416,7 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
          break;
       }
 
-      // parse modifier
+      // Parse modifier
       while (1) {
          switch (next) {
             case 'f':

@@ -5,7 +5,7 @@
 #ifndef CDOT_STATICEVALUATOR_H
 #define CDOT_STATICEVALUATOR_H
 
-#include "Variant/Variant.h"
+#include "Basic/Variant.h"
 #include "Message/Diagnostics.h"
 
 #include <llvm/ADT/SmallVector.h>

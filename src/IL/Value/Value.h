@@ -11,7 +11,7 @@
 #include <llvm/ADT/SmallVector.h>
 
 #include "AST/Type.h"
-#include "lex/SourceLocation.h"
+#include "Lex/SourceLocation.h"
 #include "Support/Casting.h"
 
 #include "Use.h"

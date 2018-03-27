@@ -5,8 +5,8 @@
 #include "UseBeforeInit.h"
 
 #include "AST/Decl.h"
-#include "AST/Passes/ILGen/ILGenPass.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "ILGen/ILGenPass.h"
+#include "Sema/SemaPass.h"
 #include "IL/Utils/BlockIterator.h"
 #include "Message/Diagnostics.h"
 

@@ -7,8 +7,8 @@
 #include "AST/ASTContext.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"
-#include "AST/Passes/SemanticAnalysis/Builtin.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
+#include "Sema/Builtin.h"
+#include "Sema/SemaPass.h"
 
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>

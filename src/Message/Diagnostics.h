@@ -5,8 +5,8 @@
 #ifndef CDOT_DIAGNOSTICS_H
 #define CDOT_DIAGNOSTICS_H
 
-#include "Variant/Variant.h"
-#include "lex/SourceLocation.h"
+#include "Basic/Variant.h"
+#include "Lex/SourceLocation.h"
 
 #include <unordered_map>
 #include <string>

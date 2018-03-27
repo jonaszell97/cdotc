@@ -8,7 +8,7 @@
 #include "Record.h"
 
 #include "Backend/TableGenBackends.h"
-#include "Files/FileManager.h"
+#include "Basic/FileManager.h"
 
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/DynamicLibrary.h>

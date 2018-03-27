@@ -5,14 +5,15 @@
 #ifndef CDOT_EXTENDEDSERIALIZERBASE_H
 #define CDOT_EXTENDEDSERIALIZERBASE_H
 
-#include <llvm/ADT/SmallString.h>
 #include "SerializerBase.h"
 
-#include "AST/Passes/Serialization/Serialize.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/Decl.h"
 #include "AST/ASTContext.h"
+#include "AST/Decl.h"
 #include "AST/Type.h"
+#include "Sema/SemaPass.h"
+#include "Serialization/ASTSerialize.h"
+
+#include <llvm/ADT/SmallString.h>
 
 namespace cdot {
 namespace support {

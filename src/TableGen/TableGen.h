@@ -7,7 +7,7 @@
 
 #include "Type.h"
 #include "Basic/IdentifierInfo.h"
-#include "lex/SourceLocation.h"
+#include "Lex/SourceLocation.h"
 
 #include <llvm/Support/Allocator.h>
 #include <llvm/ADT/DenseMap.h>

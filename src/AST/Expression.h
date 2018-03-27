@@ -5,11 +5,11 @@
 #ifndef EXPRESSION_H
 #define EXPRESSION_H
 
-#include "AST/Passes/SemanticAnalysis/ConversionSequence.h"
+#include "Sema/ConversionSequence.h"
 #include "AST/SourceType.h"
 #include "AST/Statement.h"
 #include "Basic/Precedence.h"
-#include "Variant/Variant.h"
+#include "Basic/Variant.h"
 
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/APFloat.h>

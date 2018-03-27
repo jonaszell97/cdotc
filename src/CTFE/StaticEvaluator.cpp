@@ -4,10 +4,10 @@
 
 #include "StaticEvaluator.h"
 
-#include "AST/Passes/AbstractPass.h"
-#include "AST/Passes/SemanticAnalysis/SemaPass.h"
-#include "AST/Passes/SemanticAnalysis/Builtin.h"
-#include "AST/Passes/ILGen/ILGenPass.h"
+#include "AST/AbstractPass.h"
+#include "Sema/SemaPass.h"
+#include "Sema/Builtin.h"
+#include "ILGen/ILGenPass.h"
 
 #include "CTFE/CTFEEngine.h"
 #include "CTFE/Value.h"

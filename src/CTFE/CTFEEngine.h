@@ -7,7 +7,7 @@
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallPtrSet.h>
-#include "../Variant/Variant.h"
+#include "Basic/Variant.h"
 #include "../Message/Diagnostics.h"
 
 namespace cdot {
