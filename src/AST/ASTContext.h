@@ -126,7 +126,7 @@ public:
    BuiltinType *get##Name##Ty() const { return &Name##Ty; }
 #  include "Basic/BuiltinTypes.def"
 
-   BuiltinType *getBuiltinType(BuiltinType::Kind kind) const
+   BuiltinType *getBuiltinType(Type::BuiltinKind kind) const
    {
       switch (kind) {
 #     define CDOT_BUILTIN_TYPE(Name)                           \

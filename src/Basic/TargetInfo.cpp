@@ -88,7 +88,7 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
 
    switch (Ty->getTypeID()) {
    case TypeID::BuiltinTypeID: {
-      using BK = BuiltinType::Kind;
+      using BK = Type::BuiltinKind;
       switch (Ty->asBuiltinType()->getKind()) {
       case BK::i1: case BK::i8: case BK::u8: return 1;
       case BK::u16: case BK::i16: return 2;

@@ -445,12 +445,14 @@ ExprResolverImpl::getBinOpImpl(Expression *lhs)
 
    size_t rhsIdx = counter;
 
-   auto rhs = ParseUnaryExpression(lhs->getExprType());
+   auto rhs = ParseUnaryExpression(lhs->getExprType()->stripReference());
    if (!rhs)
       return PrecedenceResult(DeclName, opLoc);
 
    if (!rhs->isContextDependent()) {
-      auto SemaRes = SP.visitExpr(ExprSeq, rhs, lhs->getExprType());
+      auto SemaRes = SP.visitExpr(ExprSeq, rhs, lhs->getExprType()
+                                                   ->stripReference());
+
       if (!SemaRes) {
          HadError = true;
          return PrecedenceResult(DeclName, opLoc, rhs);

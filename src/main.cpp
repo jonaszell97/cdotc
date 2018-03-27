@@ -11,6 +11,8 @@
 
 #ifdef CLANG_HAVE_RLIMITS
 #include <sys/resource.h>
+#include <Basic/DeclarationName.h>
+
 #endif
 
 using namespace cdot;

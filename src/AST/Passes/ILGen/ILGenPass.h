@@ -38,6 +38,8 @@ public:
    void outputIL();
 
    il::Value *visit(Expression *expr);
+   il::Value *evaluateAsConstant(Expression *expr);
+
    void visit(Statement *node);
    void visit(Decl *D);
 

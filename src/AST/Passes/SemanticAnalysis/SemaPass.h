@@ -1121,6 +1121,11 @@ public:
                                        diag::MessageKind msg
                                                     = diag::err_type_mismatch);
 
+   // don't allow accidentally passing two QualTypes
+   Expression *implicitCastIfNecessary(Expression*, QualType, QualType,
+                                       diag::MessageKind
+                                          = diag::err_type_mismatch) = delete;
+
    Expression* forceCast(Expression* Expr, QualType destTy);
 
    Expression *castToRValue(Expression *Expr);

@@ -512,10 +512,13 @@ void IRGen::DeclareType(il::AggregateType const* Ty)
 void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
 {
    auto globalTy = getLlvmType(G->getType()->getReferencedType());
-   new llvm::GlobalVariable(*M, globalTy,
+   auto GV = new llvm::GlobalVariable(*M, globalTy,
                             G->isConstant() && !G->isLateInitialized(),
-                            llvm::GlobalVariable::ExternalLinkage,
+                            (llvm::GlobalVariable::LinkageTypes)G->getLinkage(),
                             nullptr, G->getName());
+
+   GV->setUnnamedAddr((llvm::GlobalVariable::UnnamedAddr)G->getUnnamedAddr());
+   GV->setVisibility((llvm::GlobalVariable::VisibilityTypes)G->getVisibility());
 }
 
 void IRGen::DeclareGlobal(il::GlobalVariable const *G)

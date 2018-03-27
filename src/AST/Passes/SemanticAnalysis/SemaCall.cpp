@@ -847,8 +847,7 @@ void SemaPass::HandleConstructorCall(CallExpr *node, RecordDecl *record)
       }
 
       castToRValue(node->getArgs().front());
-      implicitCastIfNecessary(node->getArgs().front(), ty,
-                              QualType(neededTy));
+      implicitCastIfNecessary(node->getArgs().front(), neededTy);
 
       node->setReturnType(Context.getRecordType(U));
       node->setKind(CallKind::UnionInitializer);

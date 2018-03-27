@@ -94,30 +94,39 @@ const TargetInfo& ILGenPass::getTargetInfo() const
 
 il::Value* ILGenPass::visit(Expression *expr)
 {
-   il::Value *V;
-   switch (expr->getTypeID()) {
-#     define CDOT_EXPR(Name)                                            \
-         case AstNode::Name##ID:                                        \
-            V = visit##Name(cast<Name>(expr)); break;
-#     include "AST/AstNode.def"
+   il::Value *V = evaluateAsConstant(expr);
+   if (expr->getExprType()->needsStructReturn() && isa<Constant>(V)) {
+      auto GV = Builder.CreateGlobalVariable(cast<Constant>(V), true);
+      GV->setLinkage(GlobalVariable::PrivateLinkage);
+      GV->setUnnamedAddr(GlobalVariable::UnnamedAddr::Global);
 
-      default:
-         llvm_unreachable("not an expr");
+      V = GV;
    }
-
-   if (V)
-      V->setLocation(expr->getSourceLoc());
 
    return V;
 }
 
+il::Value* ILGenPass::evaluateAsConstant(Expression *expr)
+{
+   switch (expr->getTypeID()) {
+#     define CDOT_EXPR(Name)                                            \
+         case AstNode::Name##ID:                                        \
+            return visit##Name(cast<Name>(expr)); break;
+#     include "AST/AstNode.def"
+
+   default:
+      llvm_unreachable("not an expr");
+   }
+}
+
 void ILGenPass::visit(Statement *stmt)
 {
-   Value *V = nullptr;
+   Builder.SetDebugLoc(stmt->getSourceLoc());
+
    switch (stmt->getTypeID()) {
 #  define CDOT_EXPR(Name)                                         \
    case AstNode::Name##ID:                                        \
-      V = visit##Name(cast<Name>(stmt)); break;
+      visit##Name(cast<Name>(stmt)); return;
 #  define CDOT_STMT(Name)                                         \
    case AstNode::Name##ID:                                        \
       return visit##Name(cast<Name>(stmt));
@@ -126,9 +135,6 @@ void ILGenPass::visit(Statement *stmt)
    default:
       llvm_unreachable("bad node kind!");
    }
-
-   if (V)
-      V->setLocation(stmt->getSourceLoc());
 }
 
 void ILGenPass::visit(Decl *decl)
@@ -808,7 +814,7 @@ void ILGenPass::DefineFunction(il::Function *func, CallableDecl* CD)
    UnresolvedGotos.emplace();
 
    if (emitDI)
-      Builder.setDebugLoc(CD->getBody()->getSourceLoc());
+      Builder.SetDebugLoc(CD->getBody()->getSourceLoc());
 
    if (auto M = dyn_cast<il::Initializer>(func)) {
       if (auto S = dyn_cast<il::StructType>(M->getRecordType())) {
@@ -1176,7 +1182,7 @@ void ILGenPass::visitCompoundStmt(CompoundStmt *node)
 
    for (const auto &stmt : Stmts) {
       if (emitDI)
-         Builder.setDebugLoc(stmt->getSourceLoc());
+         Builder.SetDebugLoc(stmt->getSourceLoc());
 
       visit(stmt);
 
@@ -1236,7 +1242,7 @@ void ILGenPass::DefineGlobal(il::GlobalVariable *glob,
    Builder.SetInsertPoint(nextBB);
    defaultVal->setIsGlobalInitializer(true);
 
-   auto val = visit(defaultVal);
+   auto val = evaluateAsConstant(defaultVal);
    if (auto G = dyn_cast<il::GlobalVariable>(val)) {
       glob->setInitializer(G->getInitializer());
    }
@@ -2764,8 +2770,8 @@ il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral *Arr)
    auto Uninit = Builder.AllocUninitialized(6 * 8, 8, true);
    auto Alloca = Builder.CreateBitCast(CastKind::BitCast, Uninit, resultTy);
 
-   auto beginPtr = Builder.CreateBitCast(CastKind::BitCast,
-                                         Builder.CreateLoad(carray),
+   auto FirstEl = Builder.CreateGEP(carray, 0);
+   auto beginPtr = Builder.CreateBitCast(CastKind::BitCast, FirstEl,
                                          ArrTy->getElementType()
                                               ->getPointerTo(SP.getContext()));
 

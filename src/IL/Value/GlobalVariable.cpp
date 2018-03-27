@@ -8,6 +8,32 @@
 namespace cdot {
 namespace il {
 
+const char *LinkageTypeNames[] = {
+   "external",
+   "available_externally",
+   "linkonce",
+   "linkonce_odr",
+   "weak",
+   "weak_odr",
+   "appending",
+   "internal",
+   "private",
+   "extern_weak",
+   "common"
+};
+
+const char *VisibilityTypeNames[] = {
+   "default",
+   "hidden",
+   "protected"
+};
+
+const char *UnnamedAddrNames[] = {
+   "",
+   "local_unnamed_addr",
+   "unnamed_addr"
+};
+
 GlobalObject::GlobalObject(TypeID id,
                            QualType ty,
                            Module *module,
@@ -16,6 +42,9 @@ GlobalObject::GlobalObject(TypeID id,
      parent(module)
 {
    this->name = name;
+   Linkage = 0;
+   Visibility = 0;
+   UnnamedAddrVal = 0;
 }
 
 GlobalVariable::GlobalVariable(QualType ty,

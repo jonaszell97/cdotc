@@ -31,15 +31,12 @@ public:
    DeclarationName(const IdentifierInfo &Info) : Val((uintptr_t)&Info)
    {
       assert(!(Val & PtrMask) && "pointer not sufficiently aligned!");
+      (void)K;
    }
 
    DeclarationName(const IdentifierInfo *Info) : Val((uintptr_t)Info)
    {
       assert(!(Val & PtrMask) && "pointer not sufficiently aligned!");
-#     ifndef NDEBUG
-      (void)II;
-      (void)Info;
-#     endif
    }
 
    bool isSimpleIdentifier() const
@@ -158,16 +155,10 @@ private:
       return reinterpret_cast<DeclarationNameInfo*>(Val & ~PtrMask);
    }
 
-#  ifndef NDEBUG
    union {
       uintptr_t Val;
-      IdentifierInfo *II;
-      DeclarationNameInfo *Info;
-      QualType Ty;
+      StoredKind K;
    };
-#  else
-   uintptr_t Val;
-#  endif
 };
 
 inline int operator>(const DeclarationName &LHS,

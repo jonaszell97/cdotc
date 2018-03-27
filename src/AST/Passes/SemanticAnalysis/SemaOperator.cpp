@@ -281,6 +281,9 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
          lhs->setExprType(Context.getReferenceType(lhs->getExprType()));
       }
 
+      assert(lhs->getExprType()->isReferenceType()
+             && "assigning to non-reference");
+
 //         if (lhs->isConst()) {
 //            diagnose(BinOp, err_reassign_constant, lhs->getSourceLoc());
 //            noteConstantDecl(lhs);

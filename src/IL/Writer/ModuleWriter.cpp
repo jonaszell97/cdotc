@@ -208,10 +208,10 @@ void ModuleWriterImpl::WriteEnumTy(const EnumType *Ty)
                 });
 
       WriteList(Cases,
-                &ModuleWriterImpl::WriteCase, ", ", ", ", " ");
+                &ModuleWriterImpl::WriteCase, ", ", ", ", "");
    }
 
-   out << '}';
+   out << " }";
 }
 
 void ModuleWriterImpl::WriteUnionTy(const UnionType *Ty)
@@ -399,6 +399,14 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
 {
    WriteName(G->getName(), ValPrefix::Constant);
    out << " = ";
+
+   out << LinkageTypeNames[G->getLinkage()] << " ";
+   if (G->getUnnamedAddr() != GlobalVariable::UnnamedAddr::None) {
+      out << UnnamedAddrNames[(int)G->getUnnamedAddr()] << " ";
+   }
+
+   if (G->isConstant())
+      out << "constant ";
 
    if (!G->hasInitializer()) {
       WriteQualType(G->getType()->getReferencedType());

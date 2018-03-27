@@ -148,6 +148,17 @@ void ILGenPass::DeclareRecord(RecordDecl *R, il::AggregateType *Ty)
       Ty->addConformance(P->getName());
    }
 
+   // inherit base class fields
+   if (auto C = dyn_cast<ClassDecl>(R)) {
+      auto StructTy = cast<ClassType>(Ty);
+
+      if (auto Base = C->getParentClass()) {
+         for (auto &F : Base->getFields()) {
+            StructTy->addField({ F->getName(), makeValueType(F->getType()) });
+         }
+      }
+   }
+
    size_t i = 0;
    llvm::SmallVector<Decl*, 16> Decls(R->decl_begin(), R->decl_end());
 
@@ -169,7 +180,7 @@ void ILGenPass::DeclareRecord(RecordDecl *R, il::AggregateType *Ty)
       ++i;
    }
 
-   // getter & setter methods must be declared line
+   // getter & setter methods must be defined last
    for (auto &D : Decls)
       if (auto F = dyn_cast<FieldDecl>(D))
          SynthesizeGetterAndSetter(F);
@@ -430,7 +441,7 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M,
       T->detachFromParent();
 
    if (emitDI) {
-      Builder.setDebugLoc(Ty->getSourceLoc());
+      Builder.SetDebugLoc(Ty->getSourceLoc());
    }
 
    auto Self = M->getEntryBlock()->getBlockArg(0);
@@ -829,7 +840,7 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, il::StructType *Ty)
       return;
 
    if (emitDI) {
-      Builder.setDebugLoc(Ty->getSourceLoc());
+      Builder.SetDebugLoc(Ty->getSourceLoc());
    }
 
    auto Fn = getModule()->getFunction(Init->getLinkageName());
@@ -891,7 +902,7 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
    il::Value *res;
 
    if (emitDI) {
-      Builder.setDebugLoc(M->getSourceLoc());
+      Builder.SetDebugLoc(M->getSourceLoc());
    }
 
    Builder.SetInsertPoint(fun->getEntryBlock());
@@ -966,7 +977,7 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
    fun->addDefinition();
 
    if (emitDI) {
-      Builder.setDebugLoc(M->getSourceLoc());
+      Builder.SetDebugLoc(M->getSourceLoc());
    }
 
    auto AggrTy = getModule()->getType(R->getName());

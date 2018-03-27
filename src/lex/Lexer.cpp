@@ -42,7 +42,7 @@ Lexer::Lexer(IdentifierTable &Idents,
 
 Token Lexer::makeEOF()
 {
-   return Token(tok::eof, SourceLocation((BufEnd - BufStart) - 1 + offset));
+   return Token(tok::eof, SourceLocation((BufEnd - BufStart) + offset));
 }
 
 llvm::StringRef Lexer::getCurrentIdentifier() const

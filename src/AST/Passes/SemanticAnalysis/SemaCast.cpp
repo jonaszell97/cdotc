@@ -275,6 +275,19 @@ static void FromTuple(const SemaPass &SP,
    }
 }
 
+static void FromArray(const SemaPass &SP,
+                      ArrayType *from, QualType to,
+                      ConversionSequence &Seq) {
+   if (to->isPointerType()) {
+      if (to->getPointeeType() == from->getElementType()) {
+         Seq.addStep(CastKind::BitCast, to, CastStrength::Force);
+         return;
+      }
+   }
+
+   return Seq.invalidate();
+}
+
 static void getConversionSequence(const SemaPass &SP,
                                   QualType fromTy,
                                   QualType toTy,
@@ -372,6 +385,9 @@ static void getConversionSequence(const SemaPass &SP,
          Seq.invalidate();
       }
 
+      break;
+   case TypeID::ArrayTypeID:
+      FromArray(SP, from->uncheckedAsArrayType(), to, Seq);
       break;
    default:
       llvm_unreachable("unhandled type");

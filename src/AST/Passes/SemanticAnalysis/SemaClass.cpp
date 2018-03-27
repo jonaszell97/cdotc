@@ -351,11 +351,23 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
       return;
 
    auto &TI = getContext().getTargetInfo();
-
    if (auto S = dyn_cast<StructDecl>(R)) {
-      if (isa<ClassDecl>(R)) {
-         // strong & weak refcount, vtable
-         occupiedBytes += 3 * TI.getPointerSizeInBytes();
+      for (auto &F : S->getFields()) {
+         auto FieldRes = visitStmt(R, F);
+         if (!FieldRes)
+            return;
+      }
+
+      if (auto C = dyn_cast<ClassDecl>(R)) {
+         if (auto Parent = C->getParentClass()) {
+            assert(Parent->getSize() && "size of parent class not calculated");
+            occupiedBytes += Parent->getSize();
+            alignment = Parent->getAlignment();
+         }
+         else {
+            // strong & weak refcount, vtable
+            occupiedBytes += 3 * TI.getPointerSizeInBytes();
+         }
       }
 
       for (const auto &f : S->getFields()) {

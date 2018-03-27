@@ -868,19 +868,20 @@ DeclResult SemaPass::declareClassDecl(ClassDecl *C)
          return DeclError();
 
       auto parentTy = parent.getResolvedType();
-      if (parentTy) {
-         C->setIsTypeDependent(true);
-      }
-      else {
-         auto ParentClass = parentTy->getRecord();
-         if (!ParentClass->isTemplate()) {
-            if (!isa<ClassDecl>(ParentClass)) {
-               diagnose(parent.getTypeExpr(), err_generic_error,
-                        "cannot extend non-class " + ParentClass->getName());
-            }
-            else {
-               C->setParentClass(cast<ClassDecl>(ParentClass));
-            }
+      auto ParentClass = parentTy->getRecord();
+      if (!ParentClass->isTemplate()) {
+         if (!isa<ClassDecl>(ParentClass)) {
+            diagnose(parent.getTypeExpr(), err_generic_error,
+                     "cannot extend non-class " + ParentClass->getName());
+         }
+         else {
+            C->setParentClass(cast<ClassDecl>(ParentClass));
+
+            // base class size needs to be calculated before sub classes
+            auto &Vert = LayoutDependency.getOrAddVertex(C);
+            auto &BaseVert = LayoutDependency.getOrAddVertex(ParentClass);
+
+            BaseVert.addOutgoing(&Vert);
          }
       }
    }

@@ -18,30 +18,6 @@ using namespace cdot::support;
 
 namespace cdot {
 
-std::string getNameWithFix(DeclarationName Name)
-{
-   std::string s;
-   switch (Name.getDeclarationKind()) {
-   case DeclarationName::InfixOperatorName:
-      s += "infix ";
-      s += Name.getInfixOperatorName()->getIdentifier();
-      break;
-   case DeclarationName::PrefixOperatorName:
-      s += "prefix ";
-      s += Name.getPrefixOperatorName()->getIdentifier();
-      break;
-   case DeclarationName::PostfixOperatorName:
-      s += "postfix ";
-      s += Name.getPostfixOperatorName()->getIdentifier();
-      break;
-   default:
-      s += Name.getIdentifierInfo()->getIdentifier();
-      break;
-   }
-
-   return s;
-}
-
 FunctionType* CandidateSet::Candidate::getFunctionType() const
 {
    if (auto fn = BuiltinCandidate.FuncTy)
@@ -115,11 +91,21 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
    if (OperatorLookup) {
       auto Kind = funcName.getDeclarationKind();
       if (Kind == DeclarationName::InfixOperatorName) {
-         SP.diagnose(Caller, err_binop_not_applicable,
-                     funcName.getInfixOperatorName()->getIdentifier(),
-                     args[0]->getExprType(), args[1]->getExprType(),
-                     OpLoc ? OpLoc : Caller->getSourceLoc(),
-                     args[0]->getSourceRange(), args[1]->getSourceRange());
+         // diagnose '=' specially
+         if (funcName.getInfixOperatorName()->isStr("=")) {
+            SP.diagnose(Caller, err_assign_type_mismatch,
+                        args[1]->getExprType(),
+                        args[0]->getExprType()->stripReference(),
+                        OpLoc ? OpLoc : Caller->getSourceLoc(),
+                        args[0]->getSourceRange(), args[1]->getSourceRange());
+         }
+         else {
+            SP.diagnose(Caller, err_binop_not_applicable,
+                        funcName.getInfixOperatorName()->getIdentifier(),
+                        args[0]->getExprType(), args[1]->getExprType(),
+                        OpLoc ? OpLoc : Caller->getSourceLoc(),
+                        args[0]->getSourceRange(), args[1]->getSourceRange());
+         }
       }
       else {
          bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;

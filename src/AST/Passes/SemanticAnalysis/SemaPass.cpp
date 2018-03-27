@@ -1001,7 +1001,7 @@ bool SemaPass::visitVarDecl(VarDecl *Decl)
             Decl->getType().setResolvedType(givenType);
       }
       else {
-         implicitCastIfNecessary(val, givenType, declaredType);
+         implicitCastIfNecessary(val, declaredType);
       }
    }
    else if (!hasDefaultValue(declaredType)) {
@@ -1509,11 +1509,7 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
    }
 
    if (ArrTy) {
-      if (ArrTy->isInferredSizeArrayType()) {
-         ArrTy = Context.getArrayType(ArrTy->getElementType(), Expr->size());
-      }
-
-      Expr->setExprType(ArrTy);
+      Expr->setExprType(Context.getArrayType(elementTy, Expr->size()));
       return Expr;
    }
 

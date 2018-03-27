@@ -525,7 +525,7 @@ public:
       return debugLoc;
    }
 
-   void setDebugLoc(const SourceLocation &debugLoc)
+   void SetDebugLoc(const SourceLocation &debugLoc)
    {
       ILBuilder::debugLoc = debugLoc;
    }
