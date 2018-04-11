@@ -14,6 +14,20 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
+Expression::Expression(NodeType typeID, bool contextDependent)
+   : Statement(typeID),
+     contextDependent(contextDependent),
+     IsLHSOfAssignment(false)
+{}
+
+SourceRange Expression::getEllipsisRange() const
+{
+   if (!EllipsisLoc)
+      return SourceRange();
+
+   return SourceRange(EllipsisLoc, SourceLocation(EllipsisLoc.getOffset() + 3));
+}
+
 Expression* Expression::maybeGetParentExpr() const
 {
    switch (typeID) {
@@ -25,11 +39,33 @@ Expression* Expression::maybeGetParentExpr() const
       return cast<SubscriptExpr>(this)->getParentExpr();
    case TupleMemberExprID:
       return cast<TupleMemberExpr>(this)->getParentExpr();
+   case CallExprID:
+      return cast<CallExpr>(this)->getParentExpr();
    default:
       break;
    }
 
    return nullptr;
+}
+
+void Expression::setParentExpr(Expression *E)
+{
+   switch (typeID) {
+   case IdentifierRefExprID:
+      return cast<IdentifierRefExpr>(this)->setParentExpr(E);
+   case MemberRefExprID:
+      return cast<MemberRefExpr>(this)->setParentExpr(E);
+   case SubscriptExprID:
+      return cast<SubscriptExpr>(this)->setParentExpr(E);
+   case TupleMemberExprID:
+      return cast<TupleMemberExpr>(this)->setParentExpr(E);
+   case CallExprID:
+      return cast<CallExpr>(this)->setParentExpr(E);
+   default:
+      break;
+   }
+
+   llvm_unreachable("cannot set parent expression!");
 }
 
 bool Expression::isConst() const
@@ -84,7 +120,7 @@ bool Expression::isConst() const
          continue;
       }
       else if (auto Self = dyn_cast<SelfExpr>(DeclRef)) {
-         llvm_unreachable("TODO!");
+         return false;
       }
 
 
@@ -96,6 +132,9 @@ bool Expression::isConst() const
 
 bool Expression::warnOnUnusedResult() const
 {
+   if (isDependent() || isInvalid())
+      return false;
+
    switch (typeID) {
    case NodeType::ParenExprID:
       return cast<ParenExpr>(this)->getParenthesizedExpr()
@@ -111,6 +150,9 @@ bool Expression::warnOnUnusedResult() const
       default:
          return true;
       }
+   case NodeType::ExprSequenceID:
+      // we can't tell what an unresolved expr sequence will end up being
+      return false;
    case NodeType::UnaryOperatorID:
       switch (cast<UnaryOperator>(this)->getKind()) {
       case op::PreInc: case op::PreDec: case op::PostInc: case op::PostDec:
@@ -129,13 +171,19 @@ bool Expression::warnOnUnusedResult() const
                 && !Call->getFunc()->getReturnType()->isUnpopulatedType()
                 && !Call->getFunc()->hasAttribute<DiscardableResultAttr>();
       default:
-         return true;
+         return !Call->getExprType()->isVoidType();
       }
    }
    default:
       return true;
    }
 }
+
+IdentifiedExpr::IdentifiedExpr(NodeType typeID, DeclarationName Name,
+                               bool contextDependent)
+   : Expression(typeID, contextDependent),
+     DeclName(Name)
+{}
 
 ParenExpr::ParenExpr(SourceRange Parens,
                      Expression *Expr)
@@ -155,6 +203,7 @@ ImplicitCastExpr::ImplicitCastExpr(Expression* target,
    : Expression(ImplicitCastExprID),
      target(target), ConvSeq(std::move(ConvSeq))
 {
+
    assert(this->ConvSeq.isValid() && "invalid conversion sequence");
    exprType = this->ConvSeq.getSteps().back().getResultType();
    copyStatusFlags(target);
@@ -168,25 +217,28 @@ ImplicitCastExpr* ImplicitCastExpr::Create(ASTContext &C,
 }
 
 TupleTypeExpr::TupleTypeExpr(SourceRange SR,
-                             llvm::ArrayRef<SourceType> Tys)
-   : TypeExpr(TupleTypeExprID, SR), NumTys((unsigned)Tys.size())
+                             llvm::ArrayRef<SourceType> Tys,
+                             bool IsMeta)
+   : TypeExpr(TupleTypeExprID, SR, IsMeta), NumTys((unsigned)Tys.size())
 {
    std::copy(Tys.begin(), Tys.end(), getTrailingObjects<SourceType>());
 }
 
 TupleTypeExpr* TupleTypeExpr::Create(ASTContext &C,
                                      SourceRange SR,
-                                     llvm::ArrayRef<SourceType> Tys) {
+                                     llvm::ArrayRef<SourceType> Tys,
+                                     bool IsMeta) {
    void *Mem = C.Allocate(totalSizeToAlloc<SourceType>(Tys.size()),
                           alignof(TupleTypeExpr));
 
-   return new(Mem) TupleTypeExpr(SR, Tys);
+   return new(Mem) TupleTypeExpr(SR, Tys, IsMeta);
 }
 
 FunctionTypeExpr::FunctionTypeExpr(SourceRange SR,
                                    SourceType RetTy,
-                                   llvm::ArrayRef<SourceType> Tys)
-   : TypeExpr(FunctionTypeExprID, SR), RetTy(RetTy),
+                                   llvm::ArrayRef<SourceType> Tys,
+                                   bool IsMeta)
+   : TypeExpr(FunctionTypeExprID, SR, IsMeta), RetTy(RetTy),
      NumArgs((unsigned)Tys.size())
 {
    std::copy(Tys.begin(), Tys.end(), getTrailingObjects<SourceType>());
@@ -195,83 +247,97 @@ FunctionTypeExpr::FunctionTypeExpr(SourceRange SR,
 FunctionTypeExpr* FunctionTypeExpr::Create(ASTContext &C,
                                            SourceRange SR,
                                            SourceType RetTy,
-                                           llvm::ArrayRef<SourceType> Tys) {
+                                           llvm::ArrayRef<SourceType> Tys,
+                                           bool IsMeta) {
    void *Mem = C.Allocate(totalSizeToAlloc<SourceType>(Tys.size()),
                           alignof(FunctionTypeExpr));
 
-   return new(Mem) FunctionTypeExpr(SR, RetTy, Tys);
+   return new(Mem) FunctionTypeExpr(SR, RetTy, Tys, IsMeta);
 }
 
 ArrayTypeExpr::ArrayTypeExpr(SourceRange SR,
                              SourceType ElementTy,
-                             StaticExpr *SizeExpr)
-   : TypeExpr(ArrayTypeExprID, SR), ElementTy(ElementTy), SizeExpr(SizeExpr)
+                             StaticExpr *SizeExpr,
+                             bool IsMeta)
+   : TypeExpr(ArrayTypeExprID, SR, IsMeta),
+     ElementTy(ElementTy), SizeExpr(SizeExpr)
 {
 
 }
 
-DeclTypeExpr::DeclTypeExpr(SourceRange SR, Expression *TyExpr)
-   : TypeExpr(DeclTypeExprID, SR), TyExpr(TyExpr)
+DeclTypeExpr::DeclTypeExpr(SourceRange SR, Expression *TyExpr, bool IsMeta)
+   : TypeExpr(DeclTypeExprID, SR, IsMeta), TyExpr(TyExpr)
 {
 
 }
 
 DeclTypeExpr* DeclTypeExpr::Create(ASTContext &C,
                                    SourceRange SR,
-                                   Expression *TyExpr) {
-   return new(C) DeclTypeExpr(SR, TyExpr);
+                                   Expression *TyExpr,
+                                   bool IsMeta) {
+   return new(C) DeclTypeExpr(SR, TyExpr, IsMeta);
 }
 
 ArrayTypeExpr* ArrayTypeExpr::Create(ASTContext &C,
                                      SourceRange SR,
                                      SourceType ElementTy,
-                                     StaticExpr *SizeExpr) {
-   return new(C) ArrayTypeExpr(SR, ElementTy, SizeExpr);
+                                     StaticExpr *SizeExpr,
+                                     bool IsMeta) {
+   return new(C) ArrayTypeExpr(SR, ElementTy, SizeExpr, IsMeta);
 }
 
 PointerTypeExpr::PointerTypeExpr(SourceRange SR,
-                                 SourceType SubType)
-   : TypeExpr(PointerTypeExprID, SR), SubType(SubType)
+                                 SourceType SubType,
+                                 bool IsMeta)
+   : TypeExpr(PointerTypeExprID, SR, IsMeta), SubType(SubType)
 {
 
 }
 
 PointerTypeExpr* PointerTypeExpr::Create(ASTContext &C,
                                          SourceRange SR,
-                                         SourceType SubType) {
-   return new(C) PointerTypeExpr(SR, SubType);
+                                         SourceType SubType,
+                                         bool IsMeta) {
+   return new(C) PointerTypeExpr(SR, SubType, IsMeta);
 }
 
 ReferenceTypeExpr::ReferenceTypeExpr(SourceRange SR,
-                                     SourceType SubType)
-   : TypeExpr(ReferenceTypeExprID, SR), SubType(SubType)
+                                     SourceType SubType,
+                                     bool IsMeta)
+   : TypeExpr(ReferenceTypeExprID, SR, IsMeta),
+     SubType(SubType)
 {
 
 }
 
 ReferenceTypeExpr* ReferenceTypeExpr::Create(ASTContext &C,
                                              SourceRange SR,
-                                             SourceType SubType) {
-   return new(C) ReferenceTypeExpr(SR, SubType);
+                                             SourceType SubType,
+                                             bool IsMeta) {
+   return new(C) ReferenceTypeExpr(SR, SubType, IsMeta);
 }
 
 OptionTypeExpr::OptionTypeExpr(SourceRange SR,
-                               SourceType SubType)
-   : TypeExpr(OptionTypeExprID, SR), SubType(SubType)
+                               SourceType SubType,
+                               bool IsMeta)
+   : TypeExpr(OptionTypeExprID, SR, IsMeta),
+     SubType(SubType)
 {
 
 }
 
 OptionTypeExpr* OptionTypeExpr::Create(ASTContext &C,
                                        SourceRange SR,
-                                       SourceType SubType) {
-   return new(C) OptionTypeExpr(SR, SubType);
+                                       SourceType SubType,
+                                       bool IsMeta) {
+   return new(C) OptionTypeExpr(SR, SubType, IsMeta);
 }
 
 
 AttributedExpr::AttributedExpr(Expression *Expr,
                                llvm::ArrayRef<Attr *> Attrs)
-   : Expression(AttributedExprID), Expr(Expr)
+   : Expression(AttributedExprID),
+     Expr(Expr), NumAttrs((unsigned)Attrs.size())
 {
    std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attr*>());
 }
@@ -415,6 +481,11 @@ UnaryOperator* UnaryOperator::Create(ASTContext &C,
    return new (C) UnaryOperator(operatorLoc, opKind, FuncTy, target, prefix);
 }
 
+SourceRange UnaryOperator::getSourceRange() const
+{
+   return SourceRange(operatorLoc, target->getSourceRange().getEnd());
+}
+
 BinaryOperator::BinaryOperator(SourceLocation operatorLoc,
                                op::OperatorKind operatorKind,
                                FunctionType *FuncTy,
@@ -433,19 +504,26 @@ BinaryOperator* BinaryOperator::Create(ASTContext &C,
    return new(C) BinaryOperator(operatorLoc, operatorKind, FuncTy, lhs, rhs);
 }
 
-TypePredicateExpr::TypePredicateExpr(SourceLocation operatorLoc,
+SourceRange BinaryOperator::getSourceRange() const
+{
+   return SourceRange(lhs->getSourceLoc(), rhs->getSourceRange().getEnd());
+}
+
+TypePredicateExpr::TypePredicateExpr(SourceLocation IsLoc,
+                                     SourceRange SR,
                                      Expression *LHS,
-                                     Expression *RHS,
-                                     op::OperatorKind kind)
+                                     ConstraintExpr *RHS)
    : Expression(TypePredicateExprID),
-     operatorLoc(operatorLoc), kind(kind), LHS(LHS), RHS(RHS)
+     IsLoc(IsLoc), SR(SR), LHS(LHS), RHS(RHS),
+     Result(false), CompileTimeCheck(false)
 { }
 
 TypePredicateExpr* TypePredicateExpr::Create(ASTContext &C,
-                                             SourceLocation operatorLoc,
-                                             Expression *LHS, Expression *RHS,
-                                             op::OperatorKind kind) {
-   return new(C) TypePredicateExpr(operatorLoc, LHS, RHS, kind);
+                                             SourceLocation IsLoc,
+                                             SourceRange SR,
+                                             Expression *LHS,
+                                             ConstraintExpr *RHS) {
+   return new(C) TypePredicateExpr(IsLoc, SR, LHS, RHS);
 }
 
 CastExpr::CastExpr(SourceLocation AsLoc,
@@ -462,6 +540,21 @@ CastExpr *CastExpr::Create(ASTContext &C,
                            Expression *target,
                            SourceType targetType) {
    return new(C) CastExpr(AsLoc, strength, target, targetType);
+}
+
+SourceRange CastExpr::getSourceRange() const
+{
+   SourceLocation Start = target->getSourceLoc();
+   SourceLocation End;
+
+   if (auto E = targetType.getTypeExpr()) {
+      E->getSourceRange().getEnd();
+   }
+   else {
+      End = Start;
+   }
+
+   return SourceRange(Start, End);
 }
 
 IfExpr::IfExpr(SourceLocation IfLoc,
@@ -493,7 +586,7 @@ CasePattern::CasePattern(SourceRange SR,
                          IdentifierInfo *caseName,
                          llvm::MutableArrayRef<CasePatternArgument> args)
    : PatternExpr(CasePatternID, SR.getEnd()),
-     PeriodLoc(SR.getStart()), caseName(caseName),
+     SR(SR), caseName(caseName),
      NumArgs((unsigned)args.size()), HasBinding(false), HasExpr(false)
 {
    auto ptr = getTrailingObjects<CasePatternArgument>();
@@ -529,7 +622,7 @@ IsPattern* IsPattern::Create(ASTContext &C,
 }
 
 IntegerLiteral::IntegerLiteral(SourceRange Loc,
-                               Type *type,
+                               QualType type,
                                llvm::APSInt &&value,
                                Suffix suffix)
    :  Expression(IntegerLiteralID, true),
@@ -538,13 +631,13 @@ IntegerLiteral::IntegerLiteral(SourceRange Loc,
 
 IntegerLiteral *IntegerLiteral::Create(ASTContext &C,
                                        SourceRange Loc,
-                                       Type *type,
+                                       QualType type,
                                        llvm::APSInt &&value,
                                        Suffix suffix) {
    return new(C) IntegerLiteral(Loc, type, std::move(value), suffix);
 }
 
-FPLiteral::FPLiteral(SourceRange Loc, Type *type,
+FPLiteral::FPLiteral(SourceRange Loc, QualType type,
                      llvm::APFloat &&value,
                      Suffix suffix = Suffix::None)
    :  Expression(FPLiteralID, true),
@@ -552,12 +645,12 @@ FPLiteral::FPLiteral(SourceRange Loc, Type *type,
 {}
 
 FPLiteral* FPLiteral::Create(ASTContext &C, SourceRange Loc,
-                             Type *type, llvm::APFloat &&value,
+                             QualType type, llvm::APFloat &&value,
                              Suffix suffix) {
    return new(C) FPLiteral(Loc, type, std::move(value), suffix);
 }
 
-BoolLiteral::BoolLiteral(SourceLocation Loc, Type *type, bool value)
+BoolLiteral::BoolLiteral(SourceLocation Loc, QualType type, bool value)
    : Expression(BoolLiteralID),
      Loc(Loc), value(value), type(type)
 {
@@ -566,18 +659,18 @@ BoolLiteral::BoolLiteral(SourceLocation Loc, Type *type, bool value)
 
 BoolLiteral* BoolLiteral::Create(ASTContext &C,
                                  SourceLocation Loc,
-                                 Type *type, bool value) {
+                                 QualType type, bool value) {
    return new(C) BoolLiteral(Loc, type, value);
 }
 
-CharLiteral::CharLiteral(SourceRange Loc, Type *type, char value)
+CharLiteral::CharLiteral(SourceRange Loc, QualType type, char value)
    : Expression(CharLiteralID),
      Loc(Loc), narrow(value), IsWide(false), type(type)
 {
 
 }
 
-CharLiteral::CharLiteral(SourceRange Loc, Type *type, uint32_t value)
+CharLiteral::CharLiteral(SourceRange Loc, QualType type, uint32_t value)
    : Expression(CharLiteralID),
      Loc(Loc), wide(value), IsWide(true), type(type)
 {
@@ -585,13 +678,13 @@ CharLiteral::CharLiteral(SourceRange Loc, Type *type, uint32_t value)
 }
 
 CharLiteral* CharLiteral::Create(ASTContext &C,
-                                 SourceRange Loc, Type *type,
+                                 SourceRange Loc, QualType type,
                                  char value) {
    return new(C) CharLiteral(Loc, type, value);
 }
 
 CharLiteral* CharLiteral::Create(ASTContext &C,
-                                 SourceRange Loc, Type *type,
+                                 SourceRange Loc, QualType type,
                                  uint32_t value) {
    return new(C) CharLiteral(Loc, type, value);
 }
@@ -641,7 +734,7 @@ LambdaExpr::LambdaExpr(SourceRange Parens,
                        llvm::ArrayRef<FuncArgDecl* > args,
                        Statement* body)
    : Expression(LambdaExprID, true),
-     Parens(Parens), ArrowLoc(ArrowLoc),
+     Parens(Parens), ArrowLoc(ArrowLoc), NumArgs((unsigned)args.size()),
      returnType(returnType), body(body)
 {
    std::copy(args.begin(), args.end(), getTrailingObjects<FuncArgDecl*>());
@@ -732,22 +825,39 @@ DictionaryLiteral* DictionaryLiteral::Create(ASTContext &ASTCtx,
    return new(Mem) DictionaryLiteral(SquareRange, keys, vals);
 }
 
-IdentifierRefExpr::IdentifierRefExpr(SourceLocation Loc,
-                                     IdentifierInfo *ident,
+IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
+                                     DeclarationName Name,
                                      std::vector<Expression*> &&templateArgs,
                                      DeclContext *DeclCtx,
                                      bool InTypePos)
-   : IdentifiedExpr(IdentifierRefExprID, ident),
+   : IdentifiedExpr(IdentifierRefExprID, Name),
      Loc(Loc), DeclCtx(DeclCtx), staticLookup(false),
      pointerAccess(false), FoundResult(false), InTypePosition(InTypePos),
+     IsSynthesized(false), IsCapture(false),
+     AllowIncompleteTemplateArgs(false),
      templateArgs(move(templateArgs))
-{}
+{
+   IdentifierInfo *II = nullptr;
+   if (Name.isSimpleIdentifier())
+      II = Name.getIdentifierInfo();
+   else if (Name.getDeclarationKind() == DeclarationName::LocalVarName)
+      II = Name.getLocalVarName().getIdentifierInfo();
+   else if (Name.getDeclarationKind() == DeclarationName::PackExpansionName)
+      II = Name.getPackExpansionName().getIdentifierInfo();
 
-IdentifierRefExpr::IdentifierRefExpr(SourceLocation Loc, IdentifierKind kind,
+   if (II && !Loc.getEnd())
+      this->Loc = SourceRange(Loc.getStart(),
+                              SourceLocation(Loc.getStart().getOffset()
+                                             + II->getIdentifier().size() - 1));
+}
+
+IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc, IdentifierKind kind,
                                      QualType exprType)
    : IdentifiedExpr(IdentifierRefExprID, nullptr),
      Loc(Loc), kind(kind), staticLookup(false),
-     pointerAccess(false), FoundResult(true), InTypePosition(false)
+     pointerAccess(false), FoundResult(true), InTypePosition(false),
+     IsSynthesized(false), IsCapture(false),
+     AllowIncompleteTemplateArgs(false)
 {
    setSemanticallyChecked(true);
    this->exprType = exprType;
@@ -794,10 +904,16 @@ BuiltinExpr* BuiltinExpr::Create(ASTContext &C, QualType Ty)
    return new(C) BuiltinExpr(Ty);
 }
 
+BuiltinExpr BuiltinExpr::CreateTemp(QualType Ty)
+{
+   alignas(alignof(BuiltinExpr)) BuiltinExpr Expr(Ty);
+   return Expr;
+}
+
 MemberRefExpr::MemberRefExpr(SourceLocation Loc,
-                             IdentifierInfo *ident,
+                             DeclarationName Name,
                              bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, ident),
+   : IdentifiedExpr(MemberRefExprID, Name),
      Loc(Loc), pointerAccess(pointerAccess)
 {
 
@@ -805,9 +921,9 @@ MemberRefExpr::MemberRefExpr(SourceLocation Loc,
 
 MemberRefExpr::MemberRefExpr(SourceLocation Loc,
                              Expression *ParentExpr,
-                             IdentifierInfo *ident,
+                             DeclarationName Name,
                              bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, ident),
+   : IdentifiedExpr(MemberRefExprID, Name),
      Loc(Loc), ParentExpr(ParentExpr),
      pointerAccess(pointerAccess)
 {

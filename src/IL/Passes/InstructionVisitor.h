@@ -5,13 +5,10 @@
 #ifndef CDOT_PASSBASE_H
 #define CDOT_PASSBASE_H
 
-#include "../Module/Module.h"
-#include "../Value/Function/Function.h"
-#include "../Value/Function/BasicBlock.h"
-#include "../Value/Instruction/Instruction.h"
-
-#define CDOT_VALUE_INCLUDE
-#include "../Value/ValueIncludes.def"
+#include "IL/BasicBlock.h"
+#include "IL/Function.h"
+#include "IL/Instructions.h"
+#include "IL/Module.h"
 
 namespace cdot {
 namespace il {
@@ -57,9 +54,9 @@ public:
             return static_cast<SubClass*>(this)                                \
                       ->visit##Name(static_cast<Name&>(I));
 
-#     include "../Value/Instructions.def"
+#     include "IL/Instructions.def"
 
-         default:
+      default:
             llvm_unreachable("bad instruction kind");
       }
    }
@@ -77,9 +74,9 @@ public:
             return static_cast<SubClass*>(this)                                \
                       ->visit##Name(static_cast<Name const&>(I));
 
-#     include "../Value/Instructions.def"
+#     include "IL/Instructions.def"
 
-         default:
+      default:
             llvm_unreachable("bad instruction kind");
       }
    }
@@ -91,11 +88,11 @@ public:
 
 #  define CDOT_INSTRUCTION(Name) \
    RetType visit##Name(Name& I) {}
-#  include "../Value/Instructions.def"
+#  include "IL/Instructions.def"
 
 #  define CDOT_INSTRUCTION(Name) \
    RetType visit##Name(Name const& I) {}
-#  include "../Value/Instructions.def"
+#  include "IL/Instructions.def"
 
 protected:
    InstructionVisitor() = default;

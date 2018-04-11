@@ -42,7 +42,8 @@ Lexer::Lexer(IdentifierTable &Idents,
 
 Token Lexer::makeEOF()
 {
-   return Token(tok::eof, SourceLocation((BufEnd - BufStart) + offset));
+   auto Offset = std::max<unsigned long>(1, BufEnd - BufStart + offset - 1);
+   return Token(tok::eof, SourceLocation(Offset));
 }
 
 llvm::StringRef Lexer::getCurrentIdentifier() const
@@ -704,6 +705,10 @@ void Lexer::lexDiagnostic()
                         if (CurPtr - 1 == StrBegin)
                            break;
 
+                        // allow commas in nested parentheses
+                        if (closedParens < openParens - 1)
+                           break;
+
                         if (CurPtr - StrBegin - 1 != 0) {
                            auto Str = makeToken(StrBegin, CurPtr - StrBegin - 1,
                                                 tok::stringliteral);
@@ -802,7 +807,7 @@ Token Lexer::lexNumericLiteral()
    // hexadecimal literal
    if (first == '0' && (next == 'x' || next == 'X')) {
       ++CurPtr;
-      while (::ishexnumber(*CurPtr))
+      while (::ishexnumber(*CurPtr) || *CurPtr == '_')
          ++CurPtr;
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
@@ -811,15 +816,15 @@ Token Lexer::lexNumericLiteral()
    // binary literal
    if (first == '0' && (next == 'b' || next == 'B')) {
       ++CurPtr;
-      while (*CurPtr == '0' || *CurPtr == '1')
+      while ((*CurPtr == '0' || *CurPtr == '1') || *CurPtr == '_')
          ++CurPtr;
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
 
    // octal literal
-   if (first == '0') {
-      while (*CurPtr >= '0' && *CurPtr <= '7')
+   if (first == '0' && next != '.') {
+      while ((*CurPtr >= '0' && *CurPtr <= '7') || *CurPtr == '_')
          ++CurPtr;
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
@@ -842,7 +847,7 @@ Token Lexer::lexNumericLiteral()
          if (CurPtr[0] == '+' || CurPtr[0] == '-')
             ++CurPtr;
       }
-      else if (!::isdigit(*CurPtr)) {
+      else if (!::isdigit(*CurPtr) && *CurPtr != '_') {
          break;
       }
       else {

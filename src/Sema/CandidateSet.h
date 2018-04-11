@@ -26,13 +26,13 @@ namespace ast {
 class FunctionType;
 
 struct CandidateSet {
-   enum CandStatus {
+   enum CandStatus: unsigned char {
       Success,
       Ambiguous,
       NoMatch,
    };
 
-   enum FailureReason {
+   enum FailureReason: unsigned char {
       None,
 
       TooFewArguments,
@@ -52,6 +52,7 @@ struct CandidateSet {
       MutatingOnConstSelf,
       MutatingOnRValueSelf,
 
+      IsDependent,
       IsInvalid, // invalid declaration, don't emit any extra diagnostics
    };
 
@@ -68,8 +69,16 @@ struct CandidateSet {
          : BuiltinCandidate{ FuncTy, PG, OpKind }
       {}
 
-      ast::CallableDecl *Func = nullptr;
-      sema::TemplateArgList TemplateArgs;
+      explicit Candidate(ast::AliasDecl *Alias)
+         : Alias(Alias)
+      {}
+
+      union {
+         ast::CallableDecl *Func = nullptr;
+         ast::AliasDecl *Alias;
+      };
+
+      sema::TemplateArgList InnerTemplateArgs;
 
       struct {
          FunctionType *FuncTy = nullptr;
@@ -106,7 +115,7 @@ struct CandidateSet {
 
       bool isBuiltinCandidate() const
       {
-         return BuiltinCandidate.OpKind != op::UnknownOp;
+         return Func == nullptr;
       }
 
       void setHasTooFewArguments(uintptr_t givenCount,
@@ -202,9 +211,16 @@ struct CandidateSet {
       {
          FR = IsInvalid;
       }
+
+      void setIsDependent()
+      {
+         FR = IsDependent;
+      }
    };
 
-   CandidateSet() = default;
+   CandidateSet()
+      : Status(NoMatch), IncludesSelfArgument(false), InvalidCand(false)
+   {}
 
    CandidateSet(const CandidateSet&) = delete;
    CandidateSet(CandidateSet&&)      = default;
@@ -221,6 +237,12 @@ struct CandidateSet {
    Candidate &addCandidate(ast::CallableDecl *CD)
    {
       Candidates.emplace_back(CD);
+      return Candidates.back();
+   }
+
+   Candidate &addCandidate(ast::AliasDecl *Alias)
+   {
+      Candidates.emplace_back(Alias);
       return Candidates.back();
    }
 
@@ -268,6 +290,10 @@ struct CandidateSet {
                                          Caller, OperatorLookup, OpLoc);
    }
 
+   void diagnoseAlias(ast::SemaPass &SP, DeclarationName AliasName,
+                      llvm::ArrayRef<ast::Expression *> templateArgs,
+                      ast::Statement *Caller);
+
    void diagnoseFailedCandidates(ast::SemaPass &SP,
                                  DeclarationName funcName,
                                  llvm::ArrayRef<ast::Expression *> args,
@@ -277,7 +303,6 @@ struct CandidateSet {
                                  SourceLocation OpLoc = {});
 
    void diagnoseAnonymous(ast::SemaPass &SP,
-                          DeclarationName funcName,
                           llvm::ArrayRef<ast::Expression *> args,
                           ast::Statement *Caller);
 
@@ -298,9 +323,18 @@ struct CandidateSet {
       llvm_unreachable("no match found!");
    }
 
-   bool IncludesSelfArgument = false;
+   bool isDependent() const
+   {
+      for (auto &Cand : Candidates)
+         if (Cand.FR == IsDependent)
+            return true;
 
-   CandStatus Status = NoMatch;
+      return false;
+   }
+
+   CandStatus Status         : 8;
+   bool IncludesSelfArgument : 1;
+   bool InvalidCand          : 1;
 
    uintptr_t BestConversionPenalty = uintptr_t(-1);
    std::vector<ConversionSequence> Conversions;

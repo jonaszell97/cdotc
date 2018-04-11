@@ -2,24 +2,19 @@
 // Created by Jonas Zell on 13.01.18.
 //
 
-#include <string>
+#include "AST/Decl.h"
+#include "AST/Type.h"
+#include "Basic/CastKind.h"
+#include "IL/Context.h"
+#include "IL/Constants.h"
+#include "IL/Instructions.h"
+#include "IL/ILBuilder.h"
+#include "IL/Module.h"
+#include "Sema/SemaPass.h"
 #include "Serialization.h"
-
 #include "Support/ExtendedSerializerBase.h"
 
-#include "IL/Module/Module.h"
-#include "IL/Module/Context.h"
-
-#include "Sema/SemaPass.h"
-#include "AST/Decl.h"
-
-#define CDOT_VALUE_INCLUDE
-#include "../Value/ValueIncludes.def"
-#include "../../Basic/CastKind.h"
-
-#include "AST/Type.h"
-
-#include "../ILBuilder.h"
+#include <string>
 
 using namespace cdot::support;
 using namespace cdot::serial;
@@ -57,10 +52,6 @@ private:
    {
       WriteModuleMetadata(M);
 
-      WriteSize(M.getTypeList());
-      for (auto &Ty : M.getTypeList())
-         WriteAggregateDecl(Ty);
-
       WriteSize(M.getGlobalList());
       for (auto &G : M.getGlobalList())
          WriteGlobalDecl(G);
@@ -68,9 +59,6 @@ private:
       WriteSize(M.getFuncList());
       for (auto &F : M.getFuncList())
          WriteFunctionDecl(F);
-
-      for (auto &Ty : M.getTypeList())
-         WriteAggregateDefinition(Ty);
 
       for (auto &G : M.getGlobalList())
          WriteGlobalDefinition(G);
@@ -85,9 +73,6 @@ private:
    void WriteFunctionDecl(Function const &F);
    void WriteFunctionDefinition(const Function &F);
 
-   void WriteAggregateDecl(AggregateType const& ty);
-   void WriteAggregateDefinition(const AggregateType &ty);
-
    void WriteInstruction(const Instruction &I);
    void WriteBasicBlock(const BasicBlock &BB);
 
@@ -95,25 +80,6 @@ private:
    {
       WriteString(M.getFileName());
       WriteString(M.getPath());
-   }
-
-   void WriteStringTypePair(const std::pair<string, QualType> &Pair)
-   {
-      WriteString(Pair.first);
-      WriteQualType(Pair.second);
-   }
-
-   void WriteField(const StructType::Field &F)
-   {
-      WriteString(F.name);
-      WriteQualType(F.type);
-   }
-
-   void WriteCase(const EnumType::Case &C)
-   {
-      WriteString(C.name);
-      WriteList(C.AssociatedTypes, &ModuleSerializer::WriteQualType);
-      WriteConstant(*C.caseVal);
    }
 
    void WriteConstant(const Constant &C);
@@ -155,7 +121,8 @@ public:
    ModuleDeserializer(ast::ASTContext &ASTCtx, il::Context &Ctx, SemaPass &SP,
                       llvm::MemoryBuffer &Buf)
       : ExtendedDeserializerBase(SP, &Buf),
-        Ctx(Ctx), SP(SP), Builder(ASTCtx, Ctx)
+        Ctx(Ctx), SP(SP), Builder(ASTCtx, Ctx,
+                                  SP.getCompilationUnit().getFileMgr())
    {}
 
    Module *deserialize()
@@ -166,13 +133,8 @@ public:
       M = new Module(Ctx, 0, fileName, path);
       Builder.SetModule(M);
 
-      llvm::SmallVector<AggregateType*, 8> Types;
       llvm::SmallVector<GlobalVariable*, 8> Globals;
       llvm::SmallVector<Function*, 8> Functions;
-
-      auto numTys = Reader.ReadULEB128();
-      for (size_t i = 0; i < numTys; ++i)
-        Types.push_back(ReadAggrDecl());
 
       auto numGlobals = Reader.ReadULEB128();
       for (size_t i = 0; i < numGlobals; ++i)
@@ -181,9 +143,6 @@ public:
       auto numFns = Reader.ReadULEB128();
       for (size_t i = 0; i < numFns; ++i)
          Functions.push_back(ReadFunctionDecl());
-
-      for (size_t i = 0; i < numTys; ++i)
-         ReadAggrDefinition(Types[i]);
 
       for (size_t i = 0; i < numGlobals; ++i)
          ReadGlobalDefinition(Globals[i]);
@@ -202,13 +161,9 @@ private:
    llvm::StringMap<Value*> ValueMap;
    Module *M;
 
-   AggregateType *getType(llvm::StringRef name)
-   {
-      return M->getType(name);
-   }
-
    GlobalVariable *getGlobal(llvm::StringRef name)
    {
+      (void)SP;
       return M->getGlobal(name);
    }
 
@@ -233,9 +188,6 @@ private:
 
    Function *ReadFunctionDecl();
    void ReadFunctionDefinition(Function *F);
-
-   AggregateType *ReadAggrDecl();
-   void ReadAggrDefinition(AggregateType *Ty);
 
    Instruction *ReadInstruction();
    void ReadBasicBlock(Function &F);
@@ -263,9 +215,9 @@ private:
          case Value::Name##ID:   \
             return ReadConstantWithKnownKind(kind);
 
-#     include "../Value/Instructions.def"
+#     include "IL/Instructions.def"
 
-         default:
+      default:
             break;
       }
 
@@ -290,79 +242,6 @@ private:
       return Builder.CreateArgument(type, vararg, nullptr, name);
    }
 };
-
-void ModuleSerializer::WriteAggregateDecl(AggregateType const &ty)
-{
-   WriteByte(ty.getTypeID());
-   WriteString(ty.getName());
-
-   if (auto E = dyn_cast<EnumType>(&ty)) {
-      WriteType(E->getRawType());
-   }
-}
-
-void ModuleSerializer::WriteAggregateDefinition(const AggregateType &ty)
-{
-   if (auto S = dyn_cast<StructType>(&ty)) {
-      WriteList(S->getFields(), &ModuleSerializer::WriteField);
-   }
-   else if (auto E = dyn_cast<EnumType>(&ty)) {
-      WriteList(E->getCases(), &ModuleSerializer::WriteCase);
-   }
-}
-
-AggregateType* ModuleDeserializer::ReadAggrDecl()
-{
-   auto typeID = ReadEnum<Value::TypeID>();
-   auto name = ReadString();
-
-   auto R = SP.getRecord(name);
-
-   if (typeID == Value::StructTypeID) {
-      return Builder.CreateStruct(cast<StructDecl>(R), name);
-   }
-   else if (typeID == Value::ClassTypeID) {
-      return Builder.CreateClass(cast<ClassDecl>(R), name);
-   }
-   else if (typeID == Value::UnionTypeID) {
-      return Builder.CreateUnion(cast<UnionDecl>(R), name);
-   }
-   else if (typeID == Value::EnumTypeID) {
-      auto E = Builder.CreateEnum(cast<EnumDecl>(R), name);
-      E->setRawType(ReadType());
-
-      return E;
-   }
-   else {
-      return Builder.CreateProtocol(cast<ProtocolDecl>(R), name);
-   }
-}
-
-void ModuleDeserializer::ReadAggrDefinition(AggregateType *Ty)
-{
-   if (auto S = dyn_cast<StructType>(Ty)) {
-      auto numFields = Reader.ReadULEB128();
-      for (size_t i = 0; i < numFields; ++i) {
-         auto fieldName = ReadString();
-         auto type = ReadQualType();
-
-         S->addField({ move(fieldName), ValueType(Ctx, type) });
-      }
-   }
-   else if (auto E = dyn_cast<EnumType>(Ty)) {
-      auto numCases = Reader.ReadULEB128();
-
-      for (size_t i = 0; i < numCases; ++i) {
-         auto caseName = ReadString();
-         auto associatedTypes =
-            ReadList<QualType>(&ModuleDeserializer::ReadQualType);
-
-         auto caseVal = cast<ConstantInt>(ReadConstant());
-
-         E->addCase({ move(caseName), move(associatedTypes), caseVal });
-      }
-   }
-}
 
 void ModuleSerializer::WriteGlobalDecl(GlobalVariable const &G)
 {
@@ -399,15 +278,14 @@ void ModuleSerializer::WriteFunctionDecl(Function const &F)
    WriteString(F.getName());
    WriteQualType(F.getReturnType());
 
-   WriteBools(F.mightThrow(), F.isCStyleVararg(), F.isExternC(),
+   WriteBools(F.mightThrow(), F.isCStyleVararg(),
               F.isDeclared(), F.hasStructReturn());
 
    WriteList(F.getEntryBlock()->getArgs(), &ModuleSerializer::WriteArgument);
 
    if (auto M = dyn_cast<Method>(&F)) {
       WriteString(M->getRecordType()->getName());
-      WriteBools(M->isProperty(), M->isStatic(), M->isOperator(),
-                 M->isVirtual());
+      WriteBools(M->isStatic(), M->isVirtual());
    }
    else if (auto L = dyn_cast<Lambda>(&F)) {
       WriteList(L->getCaptures(), &ModuleSerializer::WriteQualType);
@@ -431,15 +309,15 @@ Function* ModuleDeserializer::ReadFunctionDecl()
    auto name = ReadString();
    auto FuncTy = ReadType()->asFunctionType();
 
-   bool mightThrow, cstyleVararg, isExternC, isDeclared, hasSRet;
-   ReadBools(mightThrow, cstyleVararg, isExternC, isDeclared, hasSRet);
+   bool mightThrow, cstyleVararg, isDeclared, hasSRet;
+   ReadBools(mightThrow, cstyleVararg, isDeclared, hasSRet);
 
    auto args = ReadList<Argument*>(&ModuleDeserializer::ReadArgument);
 
    il::Function *F;
    if (typeID == Value::FunctionID) {
       F = Builder.CreateFunction(name, FuncTy, args, mightThrow,
-                                 cstyleVararg, isExternC);
+                                 cstyleVararg);
    }
    else if (typeID == Value::LambdaID) {
       auto L = Builder.CreateLambda(FuncTy, args, mightThrow);
@@ -453,17 +331,15 @@ Function* ModuleDeserializer::ReadFunctionDecl()
       F = L;
    }
    else {
-      AggregateType *ty = getType(ReadString());
-      bool isProp, isStatic, isOp, isVirtual;
-      ReadBools(isProp, isStatic, isOp, isVirtual);
+      bool isStatic, isVirtual;
+      ReadBools(isStatic, isVirtual);
 
       if (typeID == Value::MethodID) {
-         F = Builder.CreateMethod(ty, name, FuncTy, args, isStatic, isVirtual,
-                                  isProp, isOp, false, mightThrow, cstyleVararg,
-                                  {});
+         F = Builder.CreateMethod(name, FuncTy, args, isStatic, isVirtual,
+                                  mightThrow, cstyleVararg, {});
       }
       else {
-         F = Builder.CreateInitializer(ty, name, args, mightThrow, cstyleVararg,
+         F = Builder.CreateInitializer(name, args, mightThrow, cstyleVararg,
                                        {});
       }
    }
@@ -549,6 +425,12 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
       else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
          WriteBool(ProtoCast->isWrap());
       }
+      else if (auto UnCast = dyn_cast<UnionCastInst>(Cast)) {
+         WriteString(UnCast->getUnionTy()->getName());
+      }
+      else if (auto DynCast = dyn_cast<DynamicCastInst>(Cast)) {
+         WriteString(DynCast->getTargetType()->getName());
+      }
 
       WriteValue(*Cast->getOperand(0));
 
@@ -572,7 +454,8 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
    }
 
    if (auto FieldRef = dyn_cast<FieldRefInst>(&I)) {
-      WriteString(FieldRef->getFieldName());
+      // FIXME
+//      WriteString(FieldRef->getFieldName());
       WriteValue(*FieldRef->getOperand(0));
 
       return;
@@ -794,16 +677,18 @@ Instruction *ModuleDeserializer::ReadInstruction()
       auto fieldName = ReadString();
       auto val = ReadValue();
 
+      // FIXME
       I = Builder.CreateFieldRef(val,
-                                 nullptr,
+                                 DeclarationName(),
                                  fieldName);
    }
    else if (kind == Value::EnumExtractInstID) {
       auto val = ReadValue();
-      auto caseName = ReadString();
+//      auto caseName = ReadString();
       auto idx = Reader.ReadULEB128();
 
-      I = Builder.CreateEnumExtract(val, caseName, idx);
+      //FIXME
+      I = Builder.CreateEnumExtract(val, nullptr, idx);
    }
    else if (kind == Value::EnumRawValueInstID) {
       I = Builder.CreateEnumRawValue(ReadValue());
@@ -961,29 +846,28 @@ Instruction *ModuleDeserializer::ReadInstruction()
       I = Builder.CreateVirtualCall(cast<Method>(fn), args);
    }
    else if (kind == Value::InitInstID) {
-      auto Ty = cast<StructType>(getType(ReadString()));
       auto Init = cast<Method>(getFunc(ReadString()));
       auto args = ReadList<Value*>(&ModuleDeserializer::ReadValue);
 
-      I = Builder.CreateInit(Ty, Init, args);
+      // FIXME
+      I = Builder.CreateInit(nullptr, Init, args);
    }
    else if (kind == Value::UnionInitInstID) {
-      auto Ty = cast<UnionType>(getType(ReadString()));
-
-      I = Builder.CreateUnionInit(Ty, ReadValue());
+      //FIXME
+      I = Builder.CreateUnionInit(nullptr, ReadValue());
    }
    else if (kind == Value::EnumInitInstID) {
-      auto Ty = cast<EnumType>(getType(ReadString()));
       auto caseName = ReadString();
       auto args = ReadList<Value*>(&ModuleDeserializer::ReadValue);
-
-      I = Builder.CreateEnumInit(Ty, caseName, args);
+      //FIXME
+      I = Builder.CreateEnumInit(nullptr, nullptr, args);
    }
    else if (kind == Value::LambdaInitInstID) {
       auto fn = getFunc(ReadString());
       auto args = ReadList<Value*>(&ModuleDeserializer::ReadValue);
 
-      I = Builder.CreateLambdaInit(fn, SP.getObjectTy("cdot.Lambda"), args);
+      //FIXME
+      I = Builder.CreateLambdaInit(fn, nullptr, args);
    }
    else if (kind == Value::UnaryOperatorInstID) {
       auto opc = ReadEnum<UnaryOperatorInst::OpCode>();
@@ -1007,34 +891,36 @@ Instruction *ModuleDeserializer::ReadInstruction()
    }
    else if (kind == Value::BitCastInstID) {
       auto castKind = ReadEnum<CastKind>();
-      I = Builder.CreateBitCast(castKind, ReadValue(), *type);
+      I = Builder.CreateBitCast(castKind, ReadValue(), type);
    }
    else if (kind == Value::IntegerCastInstID) {
       auto castKind = ReadEnum<CastKind>();
-      I = Builder.CreateIntegerCast(castKind, ReadValue(), *type);
+      I = Builder.CreateIntegerCast(castKind, ReadValue(), type);
    }
    else if (kind == Value::FPCastInstID) {
       auto castKind = ReadEnum<CastKind>();
-      I = Builder.CreateFPCast(castKind, ReadValue(), *type);
+      I = Builder.CreateFPCast(castKind, ReadValue(), type);
    }
    else if (kind == Value::IntToEnumInstID) {
-      I = Builder.CreateIntToEnum(ReadValue(), *type);
+      I = Builder.CreateIntToEnum(ReadValue(), type);
    }
    else if (kind == Value::UnionCastInstID) {
       auto target = ReadValue();
-      auto ty = cast<UnionType>(getType(ReadString()));
       auto field = ReadString();
 
-      I = Builder.CreateUnionCast(target, ty, field);
+      // FIXME
+      I = Builder.CreateUnionCast(target, nullptr, nullptr);
    }
    else if (kind == Value::DynamicCastInstID) {
-      I = Builder.CreateDynamicCast(ReadValue(), *type);
+      auto Val = ReadValue();
+      // FIXME
+      I = Builder.CreateDynamicCast(Val, nullptr, type);
    }
    else if (kind == Value::ProtoCastInstID) {
-      I = Builder.CreateProtoCast(ReadValue(), *type);
+      I = Builder.CreateProtoCast(ReadValue(), type);
    }
    else if (kind == Value::ExceptionCastInstID) {
-      I = Builder.CreateExceptionCast(ReadValue(), *type);
+      I = Builder.CreateExceptionCast(ReadValue(), type);
    }
    else {
       llvm_unreachable("bad inst kind!");
@@ -1048,8 +934,7 @@ void ModuleSerializer::WriteConstant(const Constant &C)
 {
    WriteByte(C.getTypeID());
 
-   if (isa<BasicBlock>(C) || isa<AggregateType>(C) || isa<Function>(C)
-         || isa<GlobalVariable>(C)) {
+   if (isa<BasicBlock>(C) || isa<Function>(C) || isa<GlobalVariable>(C)) {
       WriteString(C.getName());
       return;
    }
@@ -1082,13 +967,13 @@ void ModuleSerializer::WriteConstant(const Constant &C)
          WriteString(cast<ConstantString>(&C)->getValue());
          break;
       case Value::ConstantArrayID:{
-         auto &Elements = cast<ConstantArray>(&C)->getVec();
+         auto Elements = cast<ConstantArray>(&C)->getVec();
          WriteList(Elements, &ModuleSerializer::WriteConstantPtr);
          break;
       }
       case Value::ConstantStructID: {
          auto Struct = cast<ConstantStruct>(&C);
-         auto &Elements = Struct->getElements();
+         auto Elements = Struct->getElements();
 
          WriteList(Elements, &ModuleSerializer::WriteConstantPtr);
          break;
@@ -1097,18 +982,11 @@ void ModuleSerializer::WriteConstant(const Constant &C)
          auto TI = cast<TypeInfo>(&C);
 
          WriteType(TI->getForType());
-         WriteConstant(*TI->getParentClass());
-         WriteConstant(*TI->getTypeID());
-         WriteConstant(*TI->getTypeName());
-         WriteConstant(*TI->getDeinitializer());
-         WriteConstant(*TI->getNumConformances());
-         WriteConstant(*TI->getConformances());
+         WriteList(TI->getValues(), &ModuleSerializer::WriteConstantPtr);
 
          break;
       }
       case Value::ConstantPointerID: {
-         auto Ptr = cast<ConstantPointer>(C);
-         Writer.WriteULEB128(Ptr.getValue());
          break;
       }
       case Value::ConstantBitCastInstID:
@@ -1125,12 +1003,6 @@ void ModuleSerializer::WriteConstant(const Constant &C)
 Constant* ModuleDeserializer::ReadConstantWithKnownKind(Value::TypeID kind)
 {
    switch (kind) {
-      case Value::StructTypeID:
-      case Value::ClassTypeID:
-      case Value::EnumTypeID:
-      case Value::UnionTypeID:
-      case Value::ProtocolTypeID:
-         return getType(ReadString());
       case Value::FunctionID:
       case Value::MethodID:
       case Value::InitializerID:
@@ -1164,26 +1036,21 @@ Constant* ModuleDeserializer::ReadConstantWithKnownKind(Value::TypeID kind)
       case Value::ConstantStringID:
          return ConstantString::get(Ctx, ReadString());
       case Value::ConstantPointerID:
-         return Builder.GetConstantPtr(type, Reader.ReadULEB128());
+         return Builder.GetConstantNull(type);
       case Value::ConstantArrayID: {
          auto elements = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
          return ConstantArray::get(ValueType(Ctx, type), elements);
       }
       case Value::ConstantStructID: {
-         auto elements = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
-         return ConstantStruct::get(getType(type->getClassName()), elements);
+         llvm_unreachable("TODO!");
+//         auto elements = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
+//         return ConstantStruct::get(getType(type->getClassName()), elements);
       }
       case Value::TypeInfoID: {
          auto forType = ReadType();
-         auto ParentClass = ReadConstant();
-         auto TypeID = ReadConstant();
-         auto TypeName = ReadConstant();
-         auto Deinit = ReadConstant();
-         auto NumConf = ReadConstant();
-         auto Conformances = ReadConstant();
+         auto Vals = ReadList<Constant*>(&ModuleDeserializer::ReadConstant);
 
-         return TypeInfo::get(M, forType, ParentClass, TypeID, TypeName,
-                              Deinit, NumConf, Conformances);
+         return TypeInfo::get(M, forType, Vals);
       }
       case Value::ConstantBitCastInstID:
          return ConstantExpr::getBitCast(ReadConstant(), type);

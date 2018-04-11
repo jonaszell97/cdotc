@@ -8,13 +8,16 @@
 #include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
+namespace ast {
+   class RecordDecl;
+}
+
 namespace il {
 
 class Module;
 class Function;
 class GlobalVariable;
 class Instruction;
-class AggregateType;
 class BasicBlock;
 
 class ModuleWriter {
@@ -36,12 +39,12 @@ public:
       : kind(Kind::Function), F(F)
    {}
 
-   explicit ModuleWriter(GlobalVariable const* G)
-      : kind(Kind::GlobalVariable), G(G)
+   explicit ModuleWriter(ast::RecordDecl *R)
+      : kind(Kind::Type), R(R)
    {}
 
-   explicit ModuleWriter(AggregateType const* Ty)
-      : kind(Kind::Type), Ty(Ty)
+   explicit ModuleWriter(GlobalVariable const* G)
+      : kind(Kind::GlobalVariable), G(G)
    {}
 
    explicit ModuleWriter(Instruction const* I)
@@ -63,9 +66,9 @@ protected:
    union {
       Module const* M;
       Function const* F;
+      ast::RecordDecl *R;
       GlobalVariable const* G;
       Instruction const* I;
-      AggregateType const* Ty;
       BasicBlock const *BB;
    };
 };

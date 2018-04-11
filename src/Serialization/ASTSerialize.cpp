@@ -829,7 +829,7 @@ namespace serial {
 //LocalVarDecl* ASTDeserializerImpl::readLocalVarDecl()
 //{
 //   return new (Context) LocalVarDecl(
-//      (AccessModifier)Reader.ReadByte(),
+//      (AccessSpecifier)Reader.ReadByte(),
 //      ReadBool(),
 //      ReadString(),
 //      readSpecific<TypeRef>(),
@@ -850,7 +850,7 @@ namespace serial {
 //GlobalVarDecl* ASTDeserializerImpl::readGlobalVarDecl()
 //{
 //   return new (Context) GlobalVarDecl(
-//      (AccessModifier)Reader.ReadByte(),
+//      (AccessSpecifier)Reader.ReadByte(),
 //      ReadBool(),
 //      ReadString(),
 //      readSpecific<TypeRef>(),
@@ -950,7 +950,7 @@ namespace serial {
 //
 //RecordDecl *ASTDeserializerImpl::readRecordDecl(AstNode::NodeType kind)
 //{
-//   auto access = (AccessModifier)Reader.ReadByte();
+//   auto access = (AccessSpecifier)Reader.ReadByte();
 //   auto recordName = ReadString();
 //   auto conformances = ReadASTVec<TypeRef>();
 //   auto constraints = ReadASTVec<StaticExpr>();
@@ -1158,7 +1158,7 @@ namespace serial {
 //      }
 //
 //      auto Op = ReadOperatorInfo();
-//      AccessModifier am = (AccessModifier)Reader.ReadByte();
+//      AccessSpecifier am = (AccessSpecifier)Reader.ReadByte();
 //
 //      char c = Reader.ReadByte();
 //      auto isCastOp = (c & 1)        != 0;
@@ -1202,7 +1202,7 @@ namespace serial {
 //{
 //   auto name = ReadString();
 //   auto ty = readSpecific<TypeRef>();
-//   auto am = (AccessModifier)Reader.ReadByte();
+//   auto am = (AccessSpecifier)Reader.ReadByte();
 //
 //   char c = Reader.ReadByte();
 //   bool isStatic = (c & 1)        != 0;
@@ -1256,7 +1256,7 @@ namespace serial {
 //{
 //   auto name = ReadString();
 //   auto ty = readSpecific<TypeRef>();
-//   auto am = (AccessModifier)Reader.ReadByte();
+//   auto am = (AccessSpecifier)Reader.ReadByte();
 //
 //   char c = Reader.ReadByte();
 //   bool isStatic  = (c & 1)        != 0;
@@ -1317,7 +1317,7 @@ namespace serial {
 //   }
 //   else {
 //      auto args = ReadASTVec<FuncArgDecl>();
-//      auto am = (AccessModifier)Reader.ReadByte();
+//      auto am = (AccessSpecifier)Reader.ReadByte();
 //
 //      auto body = MaybeRead<CompoundStmt>();
 //      return new (Context) InitDecl(move(args), am, move(body));
@@ -1376,7 +1376,7 @@ namespace serial {
 //
 //TypedefDecl* ASTDeserializerImpl::readTypedefDecl()
 //{
-//   auto am = (AccessModifier)Reader.ReadByte();
+//   auto am = (AccessSpecifier)Reader.ReadByte();
 //   auto name = ReadString();
 //   auto ty = readSpecific<TypeRef>();
 //
@@ -1450,7 +1450,7 @@ namespace serial {
 //
 //FunctionDecl* ASTDeserializerImpl::readFunctionDecl()
 //{
-//   auto am = (AccessModifier)Reader.ReadByte();
+//   auto am = (AccessSpecifier)Reader.ReadByte();
 //   auto name = ReadString();
 //   auto ret = readSpecific<TypeRef>();
 //   auto args = ReadASTVec<FuncArgDecl>();
@@ -1510,42 +1510,42 @@ namespace serial {
 //   return new (Context) NamespaceDecl(move(name), move(body), isAnon);
 //}
 //
-//void ASTSerializerImpl::visitUsingStmt(UsingStmt const* stmt)
+//void ASTSerializerImpl::visitUsingDecl(UsingDecl const* stmt)
 //{
 //   WriteList(stmt->getDeclContextSpecifier(), &ASTSerializerImpl::WriteString);
 //   WriteList(stmt->getImportedItems(), &ASTSerializerImpl::WriteString);
 //   WriteBool(stmt->isWildCardImport());
 //}
 //
-//UsingStmt* ASTDeserializerImpl::readUsingStmt()
+//UsingDecl* ASTDeserializerImpl::readUsingDecl()
 //{
 //   auto declCtx = ReadList<string>(&ASTDeserializerImpl::ReadString);
 //   auto items = ReadList<string>(&ASTDeserializerImpl::ReadString);
 //   auto wildcard = ReadBool();
 //
-//   return new (Context) UsingStmt(move(declCtx), move(items), wildcard);
+//   return new (Context) UsingDecl(move(declCtx), move(items), wildcard);
 //}
 //
-//void ASTSerializerImpl::visitModuleStmt(const ModuleStmt *stmt)
+//void ASTSerializerImpl::visitModuleDecl(const ModuleDecl *stmt)
 //{
 //   WriteList(stmt->getQualifiedModuleName(), &ASTSerializerImpl::WriteString);
 //}
 //
-//ModuleStmt* ASTDeserializerImpl::readModuleStmt()
+//ModuleDecl* ASTDeserializerImpl::readModuleDecl()
 //{
-//   return new (Context) ModuleStmt(
+//   return new (Context) ModuleDecl(
 //      ReadList<string>(&ASTDeserializerImpl::ReadString)
 //   );
 //}
 //
-//void ASTSerializerImpl::visitImportStmt(const ImportStmt *stmt)
+//void ASTSerializerImpl::visitImportDecl(const ImportDecl *stmt)
 //{
 //   WriteList(stmt->getQualifiedModuleName(), &ASTSerializerImpl::WriteString);
 //}
 //
-//ImportStmt* ASTDeserializerImpl::readImportStmt()
+//ImportDecl* ASTDeserializerImpl::readImportDecl()
 //{
-//   return new (Context) ImportStmt(
+//   return new (Context) ImportDecl(
 //      ReadList<string>(&ASTDeserializerImpl::ReadString)
 //   );
 //}

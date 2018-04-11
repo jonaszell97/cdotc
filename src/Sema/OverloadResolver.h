@@ -5,15 +5,18 @@
 #ifndef CDOT_OVERLOADRESOLVER_H
 #define CDOT_OVERLOADRESOLVER_H
 
-#include <vector>
-
 #include "Sema/CandidateSet.h"
-#include "Template.h"
+
+#include <vector>
 
 namespace cdot {
 
 class QualType;
 class FunctionType;
+
+namespace sema {
+   class MultiLevelTemplateArgList;
+} // namespace sema
 
 namespace ast {
 
@@ -33,14 +36,17 @@ public:
                     Statement *Caller = nullptr);
 
    void resolve(CandidateSet &CandSet);
-   void resolve(CandidateSet::Candidate &Cand,
+   void resolve(CandidateSet &CandSet,
+                CandidateSet::Candidate &Cand,
                 llvm::ArrayRef<Expression*> givenArgs,
                 llvm::SmallVectorImpl<ConversionSequence> &Conversions);
+
+   using ConvSeqVec = llvm::SmallVectorImpl<ConversionSequence>;
 
    void isCallCompatible(CandidateSet::Candidate &comp,
                          llvm::ArrayRef<QualType> givenArgs,
                          FunctionType *FuncTy,
-                         llvm::SmallVectorImpl<ConversionSequence> &Conversions,
+                         ConvSeqVec &Conversions,
                          size_t firstDefaultArg = size_t(-1));
 
    llvm::ArrayRef<Expression *> getGivenArgs()
@@ -56,11 +62,12 @@ protected:
 
    void resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
                             llvm::ArrayRef<FuncArgDecl*> neededArgs,
-                            sema::TemplateArgList const& templateArgs);
+                            const sema::MultiLevelTemplateArgList&templateArgs);
 
    void isVarargCallCompatible(CandidateSet::Candidate &comp,
                                llvm::ArrayRef<QualType> givenArgs,
-                               FunctionType *FuncTy);
+                               FunctionType *FuncTy,
+                               ConvSeqVec &Conversions);
 };
 
 } // namespace ast

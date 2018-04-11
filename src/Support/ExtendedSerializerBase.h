@@ -52,45 +52,42 @@ protected:
    {
       this->Writer.WriteByte((char) Ty->getTypeID());
       switch (Ty->getTypeID()) {
-      case TypeID::BuiltinTypeID:
+      case Type::BuiltinTypeID:
          this->Writer.WriteByte(Ty->asBuiltinType()->getKind());
          break;
-      case TypeID::PointerTypeID:
+      case Type::PointerTypeID:
          WriteQualType(Ty->getPointeeType());
          break;
-      case TypeID::ReferenceTypeID:
+      case Type::ReferenceTypeID:
          WriteQualType(Ty->asReferenceType()->getReferencedType());
          break;
-      case TypeID::MovedTypeID:
-         WriteQualType(Ty->asMovedType()->getReferencedType());
-         break;
-      case TypeID::ArrayTypeID: {
+      case Type::ArrayTypeID: {
          ArrayType *ArrTy = Ty->asArrayType();
          this->Writer.WriteULEB128(ArrTy->getNumElements());
          WriteQualType(ArrTy->getElementType());
 
          break;
       }
-      case TypeID::DependentSizeArrayTypeID: {
+      case Type::DependentSizeArrayTypeID: {
          DependentSizeArrayType *arr = Ty->asDependentSizeArrayType();
-         serializeStmt(arr->getDependentExpr());
+         serializeStmt(arr->getSizeExpr());
          WriteQualType(arr->getElementType());
 
          break;
       }
-      case TypeID::InferredSizeArrayTypeID: {
+      case Type::InferredSizeArrayTypeID: {
          WriteQualType(Ty->uncheckedAsArrayType()->getElementType());
          break;
       }
-      case TypeID::TupleTypeID: {
+      case Type::TupleTypeID: {
          TupleType *Tup = Ty->asTupleType();
          this->WriteList(Tup->getContainedTypes(),
                          &ExtendedSerializerBase::WriteQualType);
 
          break;
       }
-      case TypeID::FunctionTypeID:
-      case TypeID::LambdaTypeID: {
+      case Type::FunctionTypeID:
+      case Type::LambdaTypeID: {
          FunctionType *Fun = Ty->asFunctionType();
 
          this->WriteBool(Fun->isLambdaType());
@@ -102,52 +99,42 @@ protected:
          break;
 
       }
-      case TypeID::RecordTypeID: {
-         this->WriteString(Ty->getClassName());
-         break;
+      case Type::RecordTypeID: {
+         llvm_unreachable("TODO!");
+//         this->WriteString(Ty->getClassName());
+//         break;
       }
-      case TypeID::DependentRecordTypeID: {
-         this->WriteString(Ty->getClassName());
-         WriteTemplateArgList(Ty->asDependentRecordType()
-                                ->getTemplateArgs());
-
-         break;
+      case Type::DependentRecordTypeID: {
+         llvm_unreachable("TODO!");
+//         this->WriteString(Ty->getClassName());
+//         WriteTemplateArgList(Ty->asDependentRecordType()
+//                                ->getTemplateArgs());
+//
+//         break;
       }
-      case TypeID::GenericTypeID: {
-         auto Gen = Ty->asGenericType();
+      case Type::GenericTypeID: {
+         auto Gen = cast<GenericType>(Ty);
          this->WriteString(Gen->getGenericTypeName());
-         WriteQualType(Gen->getActualType());
-
          break;
       }
-      case TypeID::TypedefTypeID: {
+      case Type::TypedefTypeID: {
          auto td = Ty->asRealTypedefType();
          this->WriteString(td->getAliasName());
          WriteQualType(td->getAliasedType());
 
          break;
       }
-      case TypeID::MetaTypeID:
+      case Type::MetaTypeID:
          WriteQualType(Ty->asMetaType()->getUnderlyingType());
          break;
-      case TypeID::NamespaceTypeID:
-         this->WriteString(Ty->asNamespaceType()->getNamespaceName());
-         break;
+      default:
+         llvm_unreachable("unimplemented!");
       }
    }
 
    void WriteSourceLoc(SourceLocation loc)
    {
       this->Writer.WriteULEB128(loc.getOffset());
-   }
-
-   void WriteTemplateArgList(sema::TemplateArgList const &list)
-   {
-      this->WriteSize(list);
-      for (auto it = list.begin(); it != list.end(); ++it) {
-         this->WriteString(it.getParam()->getName());
-         WriteResolvedTemplateArg(*it);
-      }
    }
 
    void WriteResolvedTemplateArg(sema::ResolvedTemplateArg const& arg)
@@ -309,41 +296,39 @@ protected:
 
    Type *ReadType()
    {
-      auto typeID = (TypeID)this->Reader.ReadByte();
+      auto typeID = (Type::TypeID)this->Reader.ReadByte();
       switch (typeID) {
-      case TypeID::BuiltinTypeID: {
+      case Type::BuiltinTypeID: {
          auto kind = this->template ReadEnum<Type::BuiltinKind>();
          return SP.getContext().getBuiltinType(kind);
       }
-      case TypeID::PointerTypeID:
+      case Type::PointerTypeID:
          return SP.getContext().getPointerType(ReadQualType());
-      case TypeID::ReferenceTypeID:
+      case Type::ReferenceTypeID:
          return SP.getContext().getReferenceType(ReadQualType());
-      case TypeID::MovedTypeID:
-         return SP.getContext().getMovedType(ReadQualType());
-      case TypeID::ArrayTypeID: {
+      case Type::ArrayTypeID: {
          auto numElements = this->Reader.ReadULEB128();
          auto elementTy = ReadQualType();
 
          return SP.getContext().getArrayType(elementTy, numElements);
       }
-      case TypeID::DependentSizeArrayTypeID: {
-         auto expr = deserializeStmt<ast::Expression>();
+      case Type::DependentSizeArrayTypeID: {
+         auto expr = deserializeStmt<ast::StaticExpr>();
          auto elTy = ReadQualType();
 
          return SP.getContext().getValueDependentSizedArrayType(elTy, expr);
       }
-      case TypeID::InferredSizeArrayTypeID: {
+      case Type::InferredSizeArrayTypeID: {
          auto elTy = ReadQualType();
          return SP.getContext().getInferredSizeArrayType(elTy);
       }
-      case TypeID::TupleTypeID: {
+      case Type::TupleTypeID: {
          return SP.getContext().getTupleType(
             this->template ReadList<QualType>
                (&ExtendedDeserializerBase::ReadQualType));
       }
-      case TypeID::FunctionTypeID:
-      case TypeID::LambdaTypeID: {
+      case Type::FunctionTypeID:
+      case Type::LambdaTypeID: {
          bool lambda = this->ReadBool();
          auto ret = ReadQualType();
          auto args = this->template ReadList<QualType>(
@@ -353,29 +338,30 @@ protected:
          return SP.getContext().getFunctionType(ret, move(args), flags,
                                                 lambda);
       }
-      case TypeID::RecordTypeID: {
-         return SP.getObjectTy(this->ReadString());
+      case Type::RecordTypeID: {
+//         return SP.getObjectTy(this->ReadString());
       }
-      case TypeID::DependentRecordTypeID: {
-         auto R = SP.getRecord(this->ReadString());
-         auto TAs = ReadTemplateArgList();
-
-         return SP.getContext().getDependentRecordType(R, move(TAs));
+      case Type::DependentRecordTypeID: {
+//         auto R = SP.getRecord(this->ReadString());
+//         auto TAs = ReadTemplateArgList();
+//
+//         return SP.getContext().getDependentRecordType(R, move(TAs));
+         llvm_unreachable("unimplemented");
       }
-      case TypeID::GenericTypeID: {
+      case Type::GenericTypeID: {
          auto name = this->ReadString();
-         auto cov = ReadQualType();
-
-         return SP.getContext().getTemplateArgType(cov, name);
+         return SP.getContext().getTemplateArgType(nullptr); // FIXME
       }
-      case TypeID::MetaTypeID:
+      case Type::MetaTypeID:
          return SP.getContext().getMetaType(ReadQualType());
-      case TypeID::NamespaceTypeID:
-         return SP.getContext().getNamespaceType(
-            SP.getNamespace(this->ReadString()));
-      case TypeID::TypedefTypeID:
-         return SP.getContext().getTypedefType(
-            SP.getTypedef(this->ReadString()));
+//      case Type::NamespaceTypeID:
+//         return SP.getContext().getNamespaceType(
+//            SP.getNamespace(this->ReadString()));
+//      case Type::TypedefTypeID:
+//         return SP.getContext().getTypedefType(
+//            SP.getTypedef(this->ReadString()));
+      default:
+         llvm_unreachable("unimplemented type");
       }
    }
 
@@ -396,21 +382,7 @@ protected:
 
    sema::ResolvedTemplateArg ReadResolvedTemplateArg()
    {
-      bool isTypeName, isVariadic;
-      this->ReadBools(isTypeName, isVariadic);
-
-      if (isVariadic) {
-         auto variadicArgs = this->template ReadList<sema::ResolvedTemplateArg>(
-            &ExtendedDeserializerBase::ReadResolvedTemplateArg);
-
-         return sema::ResolvedTemplateArg(isTypeName, move(variadicArgs));
-      }
-      else if (!isTypeName) {
-         return sema::ResolvedTemplateArg(ReadVariant());
-      }
-      else {
-         return sema::ResolvedTemplateArg(ReadType());
-      }
+      llvm_unreachable("TODO!");
    }
 
    SourceLocation ReadSourceLoc()

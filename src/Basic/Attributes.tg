@@ -7,17 +7,21 @@ class FloatArg<name: string,optional: i1 = false, let defaultVal: f64 = 0> : Arg
 class StringArg<name: string, optional: i1 = false, let defaultVal: string = ""> : Arg<name, optional>
 class TypeArg<name: string, optional: i1 = false> : Arg<name, optional>
 class ExprArg<name: string, optional: i1 = false> : Arg<name, optional>
-class EnumArg<name: string, let cases: list<string>, optional: i1 = false, let defaultVal: string = ""> : Arg<name, optional>
+
+class EnumArgAlias<let alias: string, let aliasee: string>
+class EnumArg<name: string, let cases: list<string>, optional: i1 = false, let defaultVal: string = "", let aliases: list<EnumArgAlias> = []> : Arg<name, optional>
 
 class VisitationPoint
     def BeforeDeclaration : VisitationPoint
     def AfterDeclaration  : VisitationPoint
     def BeforeSema        : VisitationPoint
     def AfterSema         : VisitationPoint
+    def Never             : VisitationPoint
 
 class Attr<let name: string> {
     let Args: list<Arg> = []
     let Visit: VisitationPoint = AfterDeclaration
+    let IgnoreFollowingParens: i1 = false
 }
 
 class DeclAttr<name: string, let Decls: list<Decl> > : Attr<name>
@@ -26,7 +30,8 @@ class ExprAttr<name: string> : Attr<name>
 class StmtAttr<name: string> : Attr<name>
 
 def Extern : DeclAttr<"extern", [CallableDecl, GlobalVarDecl]> {
-    Args = [EnumArg<"lang", ["C", "CXX", "CPP"]>]
+    Args = [EnumArg<"lang", ["C", "CXX"], false, "", [EnumArgAlias<"CPP", "CXX">,
+                                                      EnumArgAlias<"C++", "CXX">]>]
     Visit = BeforeDeclaration
 }
 
@@ -37,13 +42,23 @@ def Inline : DeclAttr<"inline", [CallableDecl]> {
 def Implicit : DeclAttr<"implicit", [CallableDecl]>
 def Thin : TypeAttr<"thin"> {
     Visit = BeforeDeclaration
+    IgnoreFollowingParens = true
 }
 
-def Opaque : DeclAttr<"_opaque", [RecordDecl]>
+def Opaque : DeclAttr<"opaque", [RecordDecl]> {
+    Visit = Never
+}
 
 def Align : DeclAttr<"align", [RecordDecl, VarDecl]> {
     Args = [ExprArg<"alignment">]
     Visit = AfterSema
 }
 
-def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]>
+def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]> {
+    Visit = Never
+}
+
+// hidden attributes
+def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
+    Visit = Never
+}

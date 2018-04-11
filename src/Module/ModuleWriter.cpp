@@ -101,16 +101,16 @@
 //      out << ty->toString();
 //   }
 //
-//   void WriteAccess(AccessModifier AM)
+//   void WriteAccess(AccessSpecifier AM)
 //   {
 //      switch (AM) {
-//         case AccessModifier::PUBLIC:
+//         case AccessSpecifier::PUBLIC:
 //            out << "public "; break;
-//         case AccessModifier::PRIVATE:
+//         case AccessSpecifier::PRIVATE:
 //            out << "private "; break;
-//         case AccessModifier::PROTECTED:
+//         case AccessSpecifier::PROTECTED:
 //            out << "protected "; break;
-//         case AccessModifier::DEFAULT:
+//         case AccessSpecifier::DEFAULT:
 //            break;
 //      }
 //   }

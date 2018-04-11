@@ -79,6 +79,30 @@ void ASTContext::addConstraint(const Decl *D,
    }
 }
 
+llvm::ArrayRef<ExtensionDecl*>
+ASTContext::getExtensions(const RecordDecl *R) const
+{
+   auto it = ExtensionMap.find(R);
+   if (it == ExtensionMap.end() || !it->getSecond())
+      return {};
+
+   return *it->getSecond();
+}
+
+void ASTContext::addExtension(const RecordDecl *R,
+                              ExtensionDecl *E) const {
+   auto it = ExtensionMap.find(R);
+   if (it != ExtensionMap.end()) {
+      it->getSecond()->push_back(E);
+   }
+   else {
+      auto Vec = new(*this) ExtensionVec;
+      Vec->push_back(E);
+
+      ExtensionMap[R] = Vec;
+   }
+}
+
 PointerType* ASTContext::getPointerType(QualType pointeeType) const
 {
    llvm::FoldingSetNodeID ID;
@@ -100,6 +124,8 @@ PointerType* ASTContext::getPointerType(QualType pointeeType) const
 
 ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
 {
+   assert(!referencedType->isReferenceType() && "reference to reference type!");
+
    llvm::FoldingSetNodeID ID;
    ReferenceType::Profile(ID, referencedType);
 
@@ -115,26 +141,6 @@ ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
                                                        CanonicalTy);
 
    ReferenceTypes.InsertNode(New, insertPos);
-   return New;
-}
-
-MovedType* ASTContext::getMovedType(QualType referencedType) const
-{
-   llvm::FoldingSetNodeID ID;
-   MovedType::Profile(ID, referencedType);
-
-   void *insertPos = nullptr;
-   if (MovedType *Ptr = MovedTypes.FindNodeOrInsertPos(ID, insertPos))
-      return Ptr;
-
-   Type *CanonicalTy = nullptr;
-   if (!referencedType.isCanonical())
-      CanonicalTy = getMovedType(referencedType.getCanonicalType());
-
-   auto New = new (*this, TypeAlignment) MovedType(referencedType,
-                                                   CanonicalTy);
-
-   MovedTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -250,7 +256,7 @@ ArrayType* ASTContext::getArrayType(QualType elementType,
 
 DependentSizeArrayType*
 ASTContext::getValueDependentSizedArrayType(QualType elementType,
-                                            Expression *DependentExpr) const {
+                                            StaticExpr *DependentExpr) const {
    Type *CanonicalTy = nullptr;
    if (!elementType.isCanonical())
       CanonicalTy = getValueDependentSizedArrayType(
@@ -320,6 +326,28 @@ ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes) const
    return TupTy;
 }
 
+static void addArg(const sema::ResolvedTemplateArg &arg,
+                   std::vector<QualType> &vec) {
+   if (arg.isVariadic()) {
+      for (auto &VA : arg.getVariadicArgs())
+         addArg(VA, vec);
+   }
+   else if (arg.isType()) {
+      vec.push_back(arg.getType());
+   }
+}
+
+static std::vector<QualType> getTypeTemplateParams(
+   const sema::TemplateArgList &list)
+{
+   std::vector<QualType> vec;
+   for (auto &arg : list) {
+      addArg(arg, vec);
+   }
+
+   return vec;
+}
+
 RecordType* ASTContext::getRecordType(RecordDecl *R) const
 {
    llvm::FoldingSetNodeID ID;
@@ -329,7 +357,20 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
    if (auto *Ptr = RecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) RecordType(R);
+   RecordType *New;
+   if (R->isInstantiation()) {
+      auto typeParams = getTypeTemplateParams(R->getTemplateArgs());
+
+      void *Mem = Allocate(sizeof(RecordType)
+                           + typeParams.size() * sizeof(QualType),
+                           TypeAlignment);
+
+      New = new(Mem) RecordType(R, typeParams);
+   }
+   else {
+      New = new(*this, TypeAlignment) RecordType(R, {});
+   }
+
    RecordTypes.InsertNode(New, insertPos);
 
    return New;
@@ -345,39 +386,45 @@ ASTContext::getDependentRecordType(RecordDecl *R,
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new(*this, TypeAlignment)
-      DependentRecordType(R, new(*this) sema::TemplateArgList(std::move(args)));
+   auto typeParams = getTypeTemplateParams(args);
+   auto *newArgs = new(*this) sema::TemplateArgList(std::move(args));
+
+   void *Mem = Allocate(sizeof(DependentRecordType)
+                        + typeParams.size() * sizeof(QualType),
+                        TypeAlignment);
+
+   auto New = new(Mem) DependentRecordType(R, newArgs, typeParams);
 
    DependentRecordTypes.InsertNode(New, insertPos);
    return New;
 }
 
-GenericType* ASTContext::getTemplateArgType(QualType covariance,
-                                            llvm::StringRef typeName) const {
+GenericType* ASTContext::getTemplateArgType(TemplateParamDecl *Param) const
+{
    llvm::FoldingSetNodeID ID;
-   GenericType::Profile(ID, covariance, typeName);
+   GenericType::Profile(ID, Param);
 
    void *insertPos = nullptr;
    if (auto *Ptr = GenericTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) GenericType(covariance, typeName);
+   auto New = new (*this, TypeAlignment) GenericType(Param);
    GenericTypes.InsertNode(New, insertPos);
 
    return New;
 }
 
-NamespaceType* ASTContext::getNamespaceType(NamespaceDecl *NS) const
+AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl *AT) const
 {
    llvm::FoldingSetNodeID ID;
-   NamespaceType::Profile(ID, NS);
+   AssociatedType::Profile(ID, AT);
 
    void *insertPos = nullptr;
-   if (auto *Ptr = NamespaceTypes.FindNodeOrInsertPos(ID, insertPos))
+   if (auto *Ptr = AssociatedTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) NamespaceType(NS);
-   NamespaceTypes.InsertNode(New, insertPos);
+   auto New = new (*this, TypeAlignment) AssociatedType(AT);
+   AssociatedTypes.InsertNode(New, insertPos);
 
    return New;
 }

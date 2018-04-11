@@ -9,7 +9,7 @@ namespace cdot {
 
 enum class BuiltinFn : unsigned char {
    None = 0,
-   TYPEOF,
+   DeclType,
    MEMCPY,
    MEMSET,
    MemCmp,

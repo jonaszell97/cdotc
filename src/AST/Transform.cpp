@@ -65,7 +65,7 @@
 //   {
 //      for (auto &import : stmt->getImports()) {
 //         if (import == orig) {
-//            import = cast<ImportStmt>(rep);
+//            import = cast<ImportDecl>(rep);
 //            return true;
 //         }
 //      }
@@ -328,10 +328,10 @@
 //   bool replaceFromDebugStmt(DebugStmt *stmt) { return false; }
 //   bool replaceFromNullStmt(NullStmt *stmt) { return false; }
 //
-//   bool replaceFromUsingStmt(UsingStmt *stmt) { return false; }
+//   bool replaceFromUsingDecl(UsingDecl *stmt) { return false; }
 //
-//   bool replaceFromModuleStmt(ModuleStmt *stmt) { return false; }
-//   bool replaceFromImportStmt(ImportStmt *stmt) { return false; }
+//   bool replaceFromModuleDecl(ModuleDecl *stmt) { return false; }
+//   bool replaceFromImportDecl(ImportDecl *stmt) { return false; }
 //
 //   bool replaceFromStaticIfStmt(StaticIfStmt *stmt)
 //   {

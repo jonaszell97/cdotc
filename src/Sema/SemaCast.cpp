@@ -22,23 +22,6 @@ bool SemaPass::implicitlyCastableTo(QualType fromTy, QualType toTy) const
    if (from->isDependentType() || to->isDependentType())
       return true;
 
-   if (to->isBuiltinType()) {
-      switch (to->asBuiltinType()->getKind()) {
-         case BuiltinType::Any:
-            return true;
-         case BuiltinType::AnyPointer:
-            return from->isPointerType();
-         case BuiltinType::AnyLvalue:
-            return from->isReferenceType();
-         case BuiltinType::AnyMeta:
-            return from->isMetaType();
-         case BuiltinType::AnyClass:
-            return from->isClass();
-         default:
-            break;
-      }
-   }
-
    if (from->isReferenceType() && !to->isReferenceType())
       from = from->asReferenceType()->getReferencedType();
 
@@ -73,26 +56,6 @@ bool SemaPass::implicitlyCastableTo(QualType fromTy, QualType toTy) const
             return to->isVoidType();
          default:
             llvm_unreachable("should not be possible as src type!");
-      }
-   }
-
-   if (to->isBuiltinType()) {
-      switch (to->asBuiltinType()->getKind()) {
-         default:
-            break;
-         case BuiltinType::Any:
-            return true;
-         case BuiltinType::AnyPointer:
-            return from->isPointerType();
-         case BuiltinType::AnyLvalue:
-            return from->isReferenceType();
-         case BuiltinType::AnyLabel:
-//            return from->isLabelType();
-            llvm_unreachable("FIXME");
-         case BuiltinType::AnyClass:
-            return from->isClass();
-         case BuiltinType::AnyMeta:
-            return from->isMetaType();
       }
    }
 
@@ -179,12 +142,21 @@ static void FromFP(QualType from, QualType to, ConversionSequence &Seq)
    Seq.invalidate();
 }
 
-static void FromPtr(QualType, QualType to, ConversionSequence &Seq)
+static void FromPtr(QualType from, QualType to, ConversionSequence &Seq)
 {
-   if (to->isPointerType() || to->isClass()) {
+   // allow u8* -> void* implicit conversion as a special case for c++ interop
+   if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
+      auto fromPointee = from->getPointeeType();
+      if (fromPointee->isBuiltinType()
+          && fromPointee->asBuiltinType()->isu8Ty())
+         return Seq.addStep(CastKind::BitCast, to, CastStrength::Implicit);
+   }
+
+   if (to->isPointerType() || to->isClass() || to->isThinFunctionTy()) {
       return Seq.addStep(CastKind::BitCast, to, CastStrength::Force);
    }
-   else if (to->isIntegerType()) {
+
+   if (to->isIntegerType()) {
       return Seq.addStep(CastKind::PtrToInt, to, CastStrength::Force);
    }
 
@@ -237,7 +209,7 @@ static void FromRecord(const SemaPass &SP, QualType from, QualType to,
          return Seq.invalidate();
 
       if (ToClass->isBaseClassOf(FromClass))
-         return Seq.addStep(CastKind::NoOp, to, CastStrength::Implicit);
+         return Seq.addStep(CastKind::UpCast, to, CastStrength::Implicit);
 
       if (FromClass->isBaseClassOf(ToClass))
          return Seq.addStep(CastKind::DynCast, to, CastStrength::Fallible);
@@ -295,36 +267,6 @@ static void getConversionSequence(const SemaPass &SP,
    QualType from = fromTy.getCanonicalType();
    QualType to = toTy.getCanonicalType();
 
-   if (to->isBuiltinType()) {
-      switch (to->asBuiltinType()->getKind()) {
-      case BuiltinType::Any:
-         Seq.addStep(CastKind::NoOp, to);
-         return;
-      case BuiltinType::AnyPointer:
-         if (from->isPointerType())
-            Seq.addStep(CastKind::NoOp, to);
-
-         return;
-      case BuiltinType::AnyLvalue:
-         if (from->isReferenceType())
-            Seq.addStep(CastKind::NoOp, to);
-
-         return;
-      case BuiltinType::AnyMeta:
-         if (from->isMetaType())
-            Seq.addStep(CastKind::NoOp, to);
-
-         return;
-      case BuiltinType::AnyClass:
-         if (from->isClass())
-            Seq.addStep(CastKind::NoOp, to);
-
-         return;
-      default:
-         break;
-      }
-   }
-
    if (from->isReferenceType() && !to->isReferenceType()) {
       from = from->asReferenceType()->getReferencedType();
       Seq.addStep(CastKind::LValueToRValue, from);
@@ -336,7 +278,7 @@ static void getConversionSequence(const SemaPass &SP,
    }
 
    switch (from->getTypeID()) {
-   case TypeID::BuiltinTypeID:
+   case Type::BuiltinTypeID:
       switch (from->asBuiltinType()->getKind()) {
          case BuiltinType::i1:
          case BuiltinType::i8: case BuiltinType::u8:
@@ -365,20 +307,20 @@ static void getConversionSequence(const SemaPass &SP,
       }
 
       break;
-   case TypeID::PointerTypeID:
+   case Type::PointerTypeID:
       FromPtr(from, to, Seq);
       break;
-   case TypeID::ReferenceTypeID:
+   case Type::ReferenceTypeID:
       FromReference(from, to, Seq);
       break;
-   case TypeID::RecordTypeID:
+   case Type::RecordTypeID:
       FromRecord(SP, from, to, Seq);
       break;
-   case TypeID::TupleTypeID:
+   case Type::TupleTypeID:
       FromTuple(SP, from->uncheckedAsTupleType(), to, Seq);
       break;
-   case TypeID::MetaTypeID:
-      if (to->isMetaType()) {
+   case Type::MetaTypeID:
+      if (from == to) {
          Seq.addStep(CastKind::NoOp, to);
       }
       else {
@@ -386,8 +328,14 @@ static void getConversionSequence(const SemaPass &SP,
       }
 
       break;
-   case TypeID::ArrayTypeID:
+   case Type::ArrayTypeID:
       FromArray(SP, from->uncheckedAsArrayType(), to, Seq);
+      break;
+   case Type::FunctionTypeID:
+      FromPtr(from, to, Seq);
+      break;
+   case Type::LambdaTypeID:
+      Seq.invalidate();
       break;
    default:
       llvm_unreachable("unhandled type");
@@ -400,6 +348,31 @@ ConversionSequence SemaPass::getConversionSequence(QualType fromTy,
    ast::getConversionSequence(*this, fromTy, toTy, Seq);
 
    return Seq;
+}
+
+int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
+{
+   auto Args1 = C1->getArgs();
+   auto Args2 = C2->getArgs();
+
+   if (Args1.size() != Args2.size())
+      return 0; // incompatible signature
+
+   if (C1->getReturnType() != C2->getReturnType())
+      return 1; // incompatible return type
+
+   size_t i = 0;
+   for (auto &Arg : Args1) {
+      auto &Other = Args2[i++];
+      if (Arg->getType() != Other->getType())
+         return 0; // incompatible signature
+   }
+
+   if (C1->throws())
+      if (!C2->throws())
+         return 2; // incompatible 'throws'
+
+   return -1; // valid
 }
 
 } // namespace ast

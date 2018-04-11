@@ -827,7 +827,7 @@
 //      auto kind = ReadEnum<AstNode::NodeType>();
 //
 //      if (RecordDecl::classofKind(kind)) {
-//         auto access = ReadEnum<AccessModifier>();
+//         auto access = ReadEnum<AccessSpecifier>();
 //
 //         auto name = ReadString();
 //         filePrivateNamespace += name;
@@ -876,7 +876,7 @@
 //         return R;
 //      }
 //      else if (kind == AstNode::TypedefDeclID) {
-//         auto access = ReadEnum<AccessModifier>();
+//         auto access = ReadEnum<AccessSpecifier>();
 //         auto name = ReadString();
 //         auto params = ReadList<TemplateParameter>(
 //            &ModuleInterfaceDeserializer::ReadTemplateParameter);
@@ -1092,7 +1092,7 @@
 //   void ReadVariable()
 //   {
 //      auto name = ReadString();
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //      auto ty = ReadQualType();
 //
 //      bool isTypeDependent, isGlobal, hasNS;
@@ -1131,7 +1131,7 @@
 //      auto linkageName = ReadString();
 //
 //      auto ret = ReadQualType();
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //
 //      auto args = ReadList<FuncArgDecl*>
 //         (&ModuleInterfaceDeserializer::ReadArgDecl);
@@ -1219,7 +1219,7 @@
 //
 //   void ReadTypedef(RecordDecl *R)
 //   {
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //      auto name = ReadString();
 //      auto qualTy = ReadQualType();
 //      auto params = ReadList<TemplateParameter>(
@@ -1330,7 +1330,7 @@
 //      auto name = ReadString();
 //      auto linkageName = ReadString();
 //      auto type = ReadQualType();
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //
 //      bool isConst, isStatic, hasGetter, hasSetter;
 //      ReadBools(isConst, isStatic, hasGetter, hasSetter);
@@ -1361,7 +1361,7 @@
 //      auto name = ReadString();
 //      auto linkageName = ReadString();
 //
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //
 //      auto args = ReadList<FuncArgDecl*>
 //         (&ModuleInterfaceDeserializer::ReadArgDecl);
@@ -1428,7 +1428,7 @@
 //      auto linkageName = ReadString();
 //
 //      auto ret = ReadQualType();
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //
 //      auto args = ReadList<FuncArgDecl*>
 //         (&ModuleInterfaceDeserializer::ReadArgDecl);
@@ -1482,7 +1482,7 @@
 //
 //   void ReadProperty(RecordDecl *R)
 //   {
-//      auto access = ReadEnum<AccessModifier>();
+//      auto access = ReadEnum<AccessSpecifier>();
 //      auto name = ReadString();
 //      auto ty = ReadQualType();
 //

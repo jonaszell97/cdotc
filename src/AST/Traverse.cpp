@@ -89,7 +89,7 @@ void collectNamedDecl(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectTranslationUnit(llvm::SmallVectorImpl<Statement*> &children,
                             TranslationUnit* stmt) {
-   insertStmts(children, stmt->getImports());
+
 }
 
 void collectCompoundStmt(llvm::SmallVectorImpl<Statement*> &children,
@@ -250,7 +250,7 @@ void collectRecordDecl(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectExtensionDecl(llvm::SmallVectorImpl<Statement*> &children,
                           ExtensionDecl* stmt) {
-   collectRecordDecl(children, stmt);
+
 }
 
 void collectCallableDecl(llvm::SmallVectorImpl<Statement*> &children,
@@ -296,14 +296,14 @@ void collectDebugStmt(llvm::SmallVectorImpl<Statement*> &children,
 void collectNullStmt(llvm::SmallVectorImpl<Statement*> &children,
                      NullStmt* stmt) {}
 
-void collectUsingStmt(llvm::SmallVectorImpl<Statement*> &children,
-                      UsingStmt* stmt) {}
+void collectUsingDecl(llvm::SmallVectorImpl<Statement*> &children,
+                      UsingDecl* stmt) {}
 
-void collectModuleStmt(llvm::SmallVectorImpl<Statement*> &children,
-                       ModuleStmt* stmt) {}
+void collectModuleDecl(llvm::SmallVectorImpl<Statement*> &children,
+                       ModuleDecl* stmt) {}
 
-void collectImportStmt(llvm::SmallVectorImpl<Statement*> &children,
-                       ImportStmt* stmt) {}
+void collectImportDecl(llvm::SmallVectorImpl<Statement*> &children,
+                       ImportDecl* stmt) {}
 
 void collectStaticIfStmt(llvm::SmallVectorImpl<Statement*> &children,
                          StaticIfStmt* stmt) {

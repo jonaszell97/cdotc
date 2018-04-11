@@ -11,8 +11,7 @@ public:
 
    enum LangKind {
       C,
-      CXX,
-      CPP
+      CXX
    };
 
 private:
@@ -152,6 +151,25 @@ public:
       : DeclAttr(AttrKind::DiscardableResult, SR)
    {}
 };
+
+class _BuiltinAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::_Builtin; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   _BuiltinAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit _BuiltinAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::_Builtin, SR)
+   {}
+};
 #endif
 #undef CDOT_ATTR_DECL
 
@@ -162,10 +180,12 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
-   case AttrKind::Inline:
-   case AttrKind::Implicit:
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
+   case AttrKind::_Builtin:
+      return Never;
+   case AttrKind::Inline:
+   case AttrKind::Implicit:
       return AfterDeclaration;
    case AttrKind::Extern:
    case AttrKind::Thin:
@@ -178,7 +198,6 @@ llvm::StringRef langStr;
 switch (lang) {
    case C: langStr = "C"; break;
    case CXX: langStr = "CXX"; break;
-   case CPP: langStr = "CPP"; break;
 
 }
    out << "@" << getSpelling();
@@ -271,6 +290,28 @@ DiscardableResultAttr *DiscardableResultAttr::clone(ast::ASTContext &Ctx) const 
 }
 
 
+
+void _BuiltinAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+_BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) _BuiltinAttr(SourceLoc);
+}
+
+
 #endif
 #undef CDOT_ATTR_IMPL
+
+
+#ifdef CDOT_ATTR_SEMA
+
+void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
+void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
+void SemaPass::check_BuiltinAttr(Decl*, _BuiltinAttr*) {}
+
+#endif
+#undef CDOT_ATTR_SEMA
 

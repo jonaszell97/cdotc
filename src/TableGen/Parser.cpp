@@ -194,7 +194,7 @@ void Parser::parseTemplateParams(Class *C,
          advance();
          advance();
 
-         defaultVal = parseExpr();
+         defaultVal = parseExpr(Ty);
       }
 
       auto newDecl = C->addTemplateParam(name, Ty, defaultVal, loc);

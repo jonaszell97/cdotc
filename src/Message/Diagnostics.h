@@ -97,20 +97,12 @@ public:
    }
 
    DiagnosticBuilder& operator<<(llvm::APInt const& API);
-   DiagnosticBuilder& operator<<(Variant const& str);
 
    DiagnosticBuilder& operator<<(SourceLocation loc);
    DiagnosticBuilder& operator<<(SourceRange loc);
    DiagnosticBuilder& operator<<(FakeSourceLocation const& loc);
 
    DiagnosticBuilder& operator<<(opt::Option const& opt);
-
-   DiagnosticBuilder& operator<<(QualType const& Ty);
-   DiagnosticBuilder& operator<<(Type *const& Ty);
-
-#ifndef CDOT_SMALL_VARIANT
-   DiagnosticBuilder& operator<<(ast::SourceType const& Ty);
-#endif
 
    bool isValid() const { return valid; }
    MessageKind getMessageKind() const { return msg; }
@@ -126,6 +118,8 @@ public:
    {
       DiagnosticBuilder::loc = loc;
    }
+
+   void disable() { Disabled = true; }
 
 protected:
    void finalize();
@@ -149,6 +143,7 @@ protected:
    bool noImportInfo : 1;
    bool hasFakeSourceLoc : 1;
    bool ShowConst : 1;
+   bool Disabled : 1;
 };
 
 } // namespace diag

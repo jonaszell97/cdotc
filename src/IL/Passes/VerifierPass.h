@@ -19,12 +19,11 @@ public:
    void visitModule(Module& M) override;
    void visitFunction(Function const& F);
    void visitBasicBlock(BasicBlock const& B);
-   void visitAggregateType(AggregateType const& Ty);
    void visitGlobalVariable(GlobalVariable const &G);
 
 #  define CDOT_INSTRUCTION(Name) \
    void visit##Name(Name const& I);
-#  include "../Value/Instructions.def"
+#  include "IL/Instructions.def"
 
    bool isValid() const { return IsValid; }
 
@@ -35,7 +34,6 @@ private:
    void emitError(Instruction const& I);
    void emitError(Function const& F);
    void emitError(GlobalVariable const& G);
-   void emitError(AggregateType const& Ty);
    void emitError(BasicBlock const& B);
 
    void checkOperandAccessibility(il::Instruction const& I);

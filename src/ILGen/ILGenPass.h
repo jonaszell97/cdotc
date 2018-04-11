@@ -29,6 +29,7 @@ namespace ast {
 class SemaPass;
 class VarDecl;
 class Decl;
+class TypeExpr;
 
 class ILGenPass: public ASTVisitor<il::Value*, void> {
 public:
@@ -47,9 +48,7 @@ public:
    ctfe::CTFEResult evaluateStaticExpr(Expression *expr);
 
    void ForwardDeclareRecord(RecordDecl* R);
-   void DoDeclarations();
    void GenerateTypeInfo(RecordDecl *R, bool innerDecls = false);
-   void GenerateTypeInfo(il::AggregateType *R);
 
    void visitCompoundStmt(CompoundStmt *node);
    void visitNamespaceDecl(NamespaceDecl *node);
@@ -83,6 +82,9 @@ public:
 
    void visitFuncArgDecl(FuncArgDecl *node);
 
+   void visitAttributedStmt(AttributedStmt *Stmt);
+   il::Value *visitAttributedExpr(AttributedExpr *Expr);
+
    il::Value *visitIdentifierRefExpr(IdentifierRefExpr *Expr);
    il::Value *visitBuiltinIdentExpr(BuiltinIdentExpr *node);
    il::Value *visitSelfExpr(SelfExpr *Expr);
@@ -107,7 +109,7 @@ public:
    void HandleSwitch(MatchStmt *node);
    void HandleEqualitySwitch(MatchStmt *node);
    void HandleIntegralSwitch(MatchStmt *node,
-                             const llvm::SmallVector<il::Value*, 8> &values);
+                             llvm::SmallVectorImpl<il::Value*> &values);
 
    void HandlePatternSwitch(MatchStmt *node);
 
@@ -130,7 +132,7 @@ public:
    il::Value *visitArrayLiteral(ArrayLiteral *Arr);
 
    il::Value *visitNoneLiteral(NoneLiteral *node);
-   il::Value *visitStringLiteral(StringLiteral *node);
+   il::Value *visitStringLiteral(StringLiteral *S);
    il::Value *visitStringInterpolation(StringInterpolation *node);
    il::Value *visitTupleLiteral(TupleLiteral *node);
 
@@ -142,10 +144,19 @@ public:
    il::Value *visitCastExpr(CastExpr *Cast);
    il::Value *visitTypePredicateExpr(TypePredicateExpr *Pred);
 
+   il::Value *visitTypeExpr(TypeExpr *Expr);
+   il::Value *visitFunctionTypeExpr(FunctionTypeExpr *Expr);
+   il::Value *visitTupleTypeExpr(TupleTypeExpr *Expr);
+   il::Value *visitArrayTypeExpr(ArrayTypeExpr *Expr);
+   il::Value *visitDeclTypeExpr(DeclTypeExpr *Expr);
+   il::Value *visitPointerTypeExpr(PointerTypeExpr *Expr);
+   il::Value *visitReferenceTypeExpr(ReferenceTypeExpr *Expr);
+   il::Value *visitOptionTypeExpr(OptionTypeExpr *Expr);
+
    void visitTryStmt(TryStmt *node);
    void visitThrowStmt(ThrowStmt *node);
 
-   il::Value *visitLambdaExpr(LambdaExpr *node);
+   il::Value *visitLambdaExpr(LambdaExpr *Expr);
    il::Value *visitImplicitCastExpr(ImplicitCastExpr *node);
 
    void visitDebugStmt(DebugStmt *node);
@@ -153,9 +164,9 @@ public:
    il::Value* visitStaticExpr(StaticExpr *node);
    il::Value *visitTraitsExpr(TraitsExpr *node);
 
-   il::Function* DeclareFunction(FunctionDecl *func);
-   il::Function* DeclareMethod(MethodDecl *method);
+   il::Function* DeclareFunction(CallableDecl *C);
 
+   void DeclareDeclContext(DeclContext *Ctx);
    void DeclareRecord(RecordDecl *R);
    void declareRecordInstantiation(RecordDecl *Inst);
 
@@ -163,7 +174,6 @@ public:
    void DeclareGlobalVariable(GlobalDestructuringDecl *decl);
 
    struct ModuleRAII {
-      ModuleRAII(ILGenPass &ILGen, RecordDecl *R);
       ModuleRAII(ILGenPass &ILGen, CallableDecl *C);
       ModuleRAII(ILGenPass &ILGen, il::Module *M);
 
@@ -241,7 +251,16 @@ public:
       ILGenPass &ILGen;
       il::ILBuilder::InsertPoint IP;
       llvm::SmallPtrSet<il::Value*, 8> temporaries;
-      std::stack<llvm::SmallPtrSet<il::Value*, 8>> locals;
+      std::stack<std::vector<il::Value*>> locals;
+   };
+
+   struct TerminatorRAII {
+      TerminatorRAII(ILGenPass &ILGen);
+      ~TerminatorRAII();
+
+   private:
+      il::ILBuilder &Builder;
+      il::TerminatorInst *Term;
    };
 
    bool hasFunctionDefinition(CallableDecl *C) const;
@@ -259,19 +278,16 @@ protected:
    SemaPass &SP;
 
    il::ValueType makeValueType(QualType ty);
-   void setUnmangledName(il::Function *F);
 
    void DeclareClassOrStruct(StructDecl *S);
    void DeclareEnum(EnumDecl *E);
    void DeclareUnion(UnionDecl *U);
    void DeclareProtocol(ProtocolDecl *cl);
-   void DeclareRecord(RecordDecl *R, il::AggregateType *Ty);
 
-   void DeclareField(FieldDecl *field, il::AggregateType *Ty);
-   il::Function* DeclareMethod(MethodDecl *method, il::AggregateType *Ty);
+   void DeclareField(FieldDecl *field);
 
-   void DeclareProperty(PropDecl *P, il::AggregateType *Ty);
-   void DefineProperty(PropDecl *P, il::AggregateType *Ty);
+   void DeclareProperty(PropDecl *P);
+   void DefineProperty(PropDecl *P);
 
    void DefineFunction(il::Function *F,
                        CallableDecl* CD);
@@ -285,11 +301,6 @@ protected:
    void doDestructure(DestructuringDecl *node);
 
 public:
-   il::AggregateType *getType(il::Value *val);
-   il::AggregateType *getType(QualType ty);
-   il::AggregateType *getType(Type *ty);
-   il::AggregateType *getType(RecordDecl *R);
-
    il::Context &getContext();
    il::Module *getModule();
    il::Function *getCurrentFn();
@@ -302,17 +313,14 @@ public:
    il::Value *getDefaultValue(QualType Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);
 
-   il::Instruction *CreateFieldRef(il::Value *V, llvm::StringRef fieldName);
-
    llvm::SmallVector<il::Argument*, 4> makeArgVec(
       llvm::ArrayRef<QualType> from);
-
-   void maybeImportType(QualType ty);
 
 public:
    il::Value *castTo(il::Value *V, QualType to);
    il::Value *HandleCast(const ConversionSequence &res,
-                         il::Value *Val);
+                         il::Value *Val,
+                         bool forced = false);
 
    il::Value *DoPointerArith(op::OperatorKind op,
                              il::Value *lhs, il::Value *rhs);
@@ -323,6 +331,8 @@ public:
                                llvm::ArrayRef<il::Value*> args,
                                Expression *Caller = nullptr);
 
+   il::Instruction *CreateAllocBox(QualType Ty);
+
    il::BasicBlock *makeUnreachableBB();
 
    il::Value *HandleIntrinsic(CallExpr *node);
@@ -330,10 +340,8 @@ public:
    void retainIfNecessary(il::Value *V);
    void releaseIfNecessary(il::Value *V);
 
-   void GenerateVTable(il::ClassType *Ty);
-   void GeneratePTable(il::AggregateType *Ty);
-
-   void FindVirtualMethods(il::ClassType *Ty, ClassDecl *cl);
+   void GenerateVTable(ClassDecl *C);
+   void GeneratePTable(RecordDecl *R);
 
    il::Value *stringify(il::Value *Val);
    il::Value *getString(const llvm::Twine &str);
@@ -353,9 +361,9 @@ public:
 
    void deinitializeValue(il::Value *Val);
 
-   void AppendDefaultDeinitializer(il::Method *M, il::AggregateType *Ty);
+   void AppendDefaultDeinitializer(il::Method *M);
    void DefineDefaultInitializer(StructDecl *S);
-   void DefineMemberwiseInitializer(StructDecl *S, il::StructType *Ty);
+   void DefineMemberwiseInitializer(StructDecl *S);
    void DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitStringRepresentableConformance(MethodDecl *M,
@@ -370,16 +378,19 @@ public:
 
    il::Function *getBuiltin(llvm::StringRef name);
 
-   void CreateTypeInfo(QualType ty);
+   il::TypeInfo *CreateTypeInfo(QualType ty);
    il::GlobalVariable *GetTypeInfo(QualType ty);
 
    void deinitializeTemporaries();
    void deinitializeLocals();
    void declareLocal(il::Value *V);
 
-   il::StoreInst *CreateStore(il::Value *src, il::Value *dst);
+   il::StoreInst *CreateStore(il::Value *src, il::Value *dst,
+                              bool IsInitialization = false);
 
    const TargetInfo &getTargetInfo() const;
+
+   void setEmitDebugInfo(bool Emit) { emitDI = Emit; }
 
 private:
    llvm::SmallDenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
@@ -399,6 +410,8 @@ private:
    il::Constant *WordZero;
    il::Constant *WordOne;
 
+   const IdentifierInfo *SelfII;
+
    llvm::StringMap<llvm::StringRef> BuiltinFns;
 
    struct BreakContinueScope {
@@ -417,7 +430,7 @@ private:
    llvm::StringMap<il::BasicBlock*> Labels;
 
    llvm::SmallPtrSet<il::Value*, 8> temporaries;
-   std::stack<llvm::SmallPtrSet<il::Value*, 8>> locals;
+   std::stack<std::vector<il::Value*>> locals;
 
    std::unordered_map<NamedDecl*, il::Value*> DeclMap;
    std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;

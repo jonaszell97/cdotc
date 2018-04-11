@@ -60,7 +60,7 @@ struct SourceLocation {
 struct SourceRange {
    SourceRange() = default;
 
-   explicit SourceRange(SourceLocation start)
+   /*implicit*/ SourceRange(SourceLocation start)
       : start(start), end(SourceLocation())
    {}
 

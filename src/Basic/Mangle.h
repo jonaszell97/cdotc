@@ -5,10 +5,13 @@
 #ifndef CDOT_MANGLE_H
 #define CDOT_MANGLE_H
 
+#include "Support/LLVM.h"
+
 #include <llvm/ADT/ArrayRef.h>
-#include "../Support/LLVM.h"
 
 namespace cdot {
+
+class QualType;
 
 namespace sema {
    class TemplateArgList;
@@ -20,6 +23,7 @@ namespace ast {
    class FunctionDecl;
    class MethodDecl;
    class RecordDecl;
+   class NamedDecl;
 } // namespace ast
 
 class SymbolMangler {
@@ -27,14 +31,10 @@ public:
    explicit SymbolMangler(ast::SemaPass &SP) : SP(SP)
    {}
 
-   std::string mangleVariable(llvm::StringRef varName, size_t scope = 0) const;
-
-   std::string mangleAnyFunction(ast::CallableDecl *C) const;
-   std::string mangleFunction(ast::FunctionDecl *F) const;
-   std::string mangleMethod(ast::MethodDecl *M) const;
-
-   std::string mangleProtocolMethod(ast::RecordDecl *R,
-                                    ast::MethodDecl *M) const;
+   void mangle(const ast::NamedDecl *ND, llvm::raw_ostream &OS) const;
+   void mangleVTable(const ast::RecordDecl *R, llvm::raw_ostream &OS) const;
+   void mangleTypeInfo(const QualType &T, llvm::raw_ostream &OS) const;
+   void mangleTypeName(const QualType &T, llvm::raw_ostream &OS) const;
 
 private:
    ast::SemaPass &SP;

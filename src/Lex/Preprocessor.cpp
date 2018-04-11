@@ -529,47 +529,49 @@ private:
    Variant currentTokenValue()
    {
       switch (currentTok().getKind()) {
-         case tok::charliteral:
-            return Variant(currentTok().getText().front());
-         case tok::stringliteral:
-            return Variant(currentTok().getText());
-         case tok::integerliteral:
-            return currentTok().getIntegerValue();
-         case tok::fpliteral: {
-            llvm::APFloat APFloat(0.0);
-            APFloat.convertFromString(currentTok().getText(),
-                                      llvm::APFloat::rmNearestTiesToEven);
+      case tok::kw_true: case tok::kw_false:
+         return Variant(uint64_t(currentTok().getKind() == tok::kw_true));
+      case tok::charliteral:
+         return Variant(currentTok().getText().front());
+      case tok::stringliteral:
+         return Variant(currentTok().getText());
+      case tok::integerliteral:
+         return currentTok().getIntegerValue();
+      case tok::fpliteral: {
+         llvm::APFloat APFloat(0.0);
+         APFloat.convertFromString(currentTok().getText(),
+                                   llvm::APFloat::rmNearestTiesToEven);
 
-            return Variant(std::move(APFloat));
+         return Variant(std::move(APFloat));
+      }
+      case tok::ident: {
+         auto ident = currentTok().getIdentifierInfo()->getIdentifier();
+
+         auto it = Values.find(ident);
+         if (it != Values.end())
+            return it->getValue();
+
+         auto macro = getBuiltinMacro(ident);
+         if (macro != BuiltinMacro::None) {
+            advance();
+            return handleBuiltinFn(macro);
          }
-         case tok::ident: {
-            auto ident = currentTok().getIdentifierInfo()->getIdentifier();
 
-            auto it = Values.find(ident);
-            if (it != Values.end())
-               return it->getValue();
+         Diags.Diag(err_generic_error)
+            << "reference to undeclared identifier " + ident
+            << currentTok().getSourceLoc();
 
-            auto macro = getBuiltinMacro(ident);
-            if (macro != BuiltinMacro::None) {
-               advance();
-               return handleBuiltinFn(macro);
-            }
+         return {};
+      }
+      case tok::open_square:
+         return parseArray();
+      default:
+         Diags.Diag(err_generic_error)
+            << "unexpected token in preprocessor expression: "
+               + currentTok().toString()
+            << currentTok().getSourceLoc();
 
-            Diags.Diag(err_generic_error)
-               << "reference to undeclared identifier " + ident
-               << currentTok().getSourceLoc();
-
-            return {};
-         }
-         case tok::open_square:
-            return parseArray();
-         default:
-            Diags.Diag(err_generic_error)
-               << "unexpected token in preprocessor expression: "
-                  + currentTok().toString()
-               << currentTok().getSourceLoc();
-
-            return {};
+         return {};
       }
    }
 
@@ -858,6 +860,7 @@ void PreprocessorImpl::handle_if_common(bool condition)
 
             return;
          case tok::pound_else:
+         case tok::pound_endif:
             return;
          case tok::pound_elseif:
             return handle_plain_if();
@@ -934,14 +937,19 @@ void PreprocessorImpl::handle_include()
    }
 
    auto File = Diags.getFileMgr()->openFile(realFile);
+   Diags.getFileMgr()->addFileInclude(sourceId, File.SourceId);
+
    Lexer lexer(Idents, Diags, File.Buf, File.SourceId,
                File.BaseOffset);
 
    lexer.lex();
+   assert(lexer.getTokens().back().is(tok::eof) && "no EOF token!");
+
+   lexer.getTokens().pop_back();
 
    dst.insert(dst.end(),
               std::make_move_iterator(lexer.getTokens().begin()),
-              std::make_move_iterator(lexer.getTokens().end() - 1));
+              std::make_move_iterator(lexer.getTokens().end()));
 }
 
 void PreprocessorImpl::parse_lisp_macro()

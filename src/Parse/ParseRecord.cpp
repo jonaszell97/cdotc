@@ -5,11 +5,11 @@
 #include "Parser.h"
 
 #include "AST/Decl.h"
-#include "Sema/SemaPass.h"
 #include "Basic/IdentifierInfo.h"
 #include "Lex/Lexer.h"
 #include "Module/Module.h"
 #include "Message/Diagnostics.h"
+#include "Sema/SemaPass.h"
 #include "Support/Casting.h"
 
 #include <llvm/ADT/SmallString.h>
@@ -20,29 +20,6 @@ using namespace cdot::lex;
 
 namespace cdot {
 namespace parse {
-
-bool Parser::isAtRecordLevel() const
-{
-   auto *Ctx = &SP.getDeclContext();
-   while (Ctx) {
-      switch (Ctx->getDeclKind()) {
-      case Decl::StructDeclID: case Decl::ClassDeclID: case Decl::EnumDeclID:
-      case Decl::UnionDeclID: case Decl::ProtocolDeclID:
-      case Decl::ExtensionDeclID:
-         return true;
-      case Decl::CompoundDeclID:
-      case Decl::StaticIfDeclID:
-      case Decl::StaticForDeclID:
-         break;
-      default:
-         return false;
-      }
-
-      Ctx = Ctx->getParentCtx();
-   }
-
-   llvm_unreachable("bad decl context");
-}
 
 ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind,
                                    RecordDecl *outer) {
@@ -90,35 +67,105 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind,
                                      move(head.conformances),
                                      move(head.templateParams));
          break;
-      case tok::kw_extend:
-         decl = ExtensionDecl::Create(Context, head.access, Loc, 
-                                      head.recordName,
-                                      move(head.conformances),
-                                      move(head.templateParams));
-         break;
       default:
          llvm_unreachable("not a record decl!");
    }
 
    Context.setConstraints(decl, head.constraints);
 
+   decl->setAccessLoc(head.AccessLoc);
    decl->setHasDefinition(head.hasDefinition);
 
    if (head.hasDefinition) {
       DeclContextRAII declContextRAII(*this, decl);
-      parseClassInner(decl);
+      parseClassInner();
    }
 
    SP.ActOnRecordDecl(decl);
    return decl;
 }
 
-void Parser::parseClassInner(RecordDecl *)
+ParseResult Parser::parseExtension()
+{
+   AccessSpecifier AccessSpec;
+   SourceLocation AccessLoc;
+   maybeParseAccessModifier(AccessSpec, AccessLoc);
+
+   auto Loc = consumeToken(tok::kw_extend);
+   auto ExtendedType = parseType(false, true, true).tryGet();
+
+   if (!ExtendedType) {
+      if (!findTokOnLine(tok::open_brace)) {
+         skipUntilNextDecl();
+         return ParseError();
+      }
+   }
+
+   llvm::SmallVector<SourceType, 4> conformances;
+   llvm::SmallVector<StaticExpr*, 4> constraints;
+
+   auto next = lookahead();
+   while (!next.is(tok::open_brace)) {
+      if (next.is(tok::kw_with)) {
+         advance();
+         advance();
+
+         while (true) {
+            auto proto = parseType().tryGet();
+            conformances.push_back(proto);
+
+            if (lookahead().is(tok::comma)) {
+               advance();
+               advance();
+            }
+            else {
+               break;
+            }
+         }
+      }
+      else if (next.is(tok::kw_where)) {
+         advance();
+         advance();
+
+         constraints.push_back(
+            StaticExpr::Create(Context, parseExprSequence().tryGetExpr()));
+      }
+      else {
+         break;
+      }
+
+      next = lookahead();
+   }
+
+   ExtensionDecl *decl = ExtensionDecl::Create(Context, AccessSpec, Loc,
+                                               ExtendedType, conformances);
+
+   Context.setConstraints(decl, constraints);
+   decl->setAccessLoc(AccessLoc);
+
+   if (!expect(tok::open_brace)) {
+      skipUntilNextDecl();
+      return decl;
+   }
+
+   {
+      DeclContextRAII declContextRAII(*this, decl);
+      parseClassInner();
+   }
+
+   SP.ActOnExtensionDecl(decl);
+   return decl;
+}
+
+void Parser::parseClassInner()
 {
    advance();
 
    while (!currentTok().is(tok::close_brace)) {
-      parseRecordLevelDecl();
+      if (!parseRecordLevelDecl()) {
+         if (!skipUntilNextDeclOrClosingBrace())
+            break;
+      }
 
       advance();
       while (currentTok().is(tok::semicolon)) {
@@ -129,286 +176,266 @@ void Parser::parseClassInner(RecordDecl *)
 
 ParseResult Parser::parseRecordLevelDecl()
 {
-   enum class DeclKind {
-      NONE,
-      FIELD,
-      PROP,
-      METHOD,
-      CONSTR,
-      DESTR,
-      OPERATOR,
-      TYPEDEF,
-      Alias,
-      CASE,
-      AssociatedType,
-      InnerRecord,
+   if (currentTok().is(tok::at))
+      return parseAttributedDecl();
 
-      StaticIf, StaticFor, StaticAssert, StaticPrint,
-   };
-
-   auto start = currentTok().getSourceLoc();
-   AccessModifier access = AccessModifier::DEFAULT;
-   bool am_set = false;
-   bool isStatic = false;
-   auto declKind = DeclKind::NONE;
-   bool memberwiseInit = false;
-   bool isConstField = false;
-   bool isMutating = false;
-   bool isOperator = false;
-   tok::TokenType innerRecordKind = tok::sentinel;
+   AccessSpecifier accessSpec = AccessSpecifier::Default;
+   SourceLocation AccessLoc;
+   SourceLocation StaticLoc;
 
    bool done = false;
-   while (currentTok().is_keyword() && !done) {
+   while (currentTok().is_keyword()) {
       auto kind = currentTok().getKind();
       switch (kind) {
       case tok::kw_public:
+         accessSpec = AccessSpecifier::Public;
+         goto case_access_spec;
       case tok::kw_protected:
+         accessSpec = AccessSpecifier::Protected;
+         goto case_access_spec;
       case tok::kw_private:
-         if (am_set) {
-            SP.diagnose(err_duplicate_access_spec, currentTok().getSourceLoc());
+         accessSpec = AccessSpecifier::Private;
+         goto case_access_spec;
+      case tok::kw_fileprivate:
+         accessSpec = AccessSpecifier::FilePrivate;
+         goto case_access_spec;
+      case tok::kw_internal:
+         accessSpec = AccessSpecifier::Internal;
+         goto case_access_spec;
+      case_access_spec: {
+         if (AccessLoc || lookahead().is(tok::open_brace)) {
+            done = true;
+            break;
          }
 
-         break;
-      case tok::kw_static:
-         if (isStatic) {
-            SP.diagnose(err_expected_declaration,
-                        currentTok().getSourceLoc(), "static");
-         }
-
-         break;
-      case tok::kw_var:
-      case tok::kw_let:
-      case tok::kw_prop:
-      case tok::kw_def:
-      case tok::kw_init:
-      case tok::kw_deinit:
-      case tok::kw_typedef:
-      case tok::kw_alias:
-         if (declKind != DeclKind::NONE) {
-            SP.diagnose(err_duplicate_decl_kind, currentTok().getSourceLoc());
-         }
-
-         break;
-      default:
+         AccessLoc = currentTok().getSourceLoc();
          break;
       }
-
-      switch (kind) {
-      case tok::kw_public:
-         access = AccessModifier ::PUBLIC;
-         break;
-      case tok::kw_protected:
-         access = AccessModifier ::PROTECTED;
-         break;
-      case tok::kw_private:
-         access = AccessModifier ::PRIVATE;
-         break;
       case tok::kw_static:
          switch (lookahead().getKind()) {
          case tok::kw_if:
-            lexer->backtrack();
-            declKind = DeclKind::StaticIf;
             done = true;
             break;
          case tok::kw_for:
-            lexer->backtrack();
-            declKind = DeclKind::StaticFor;
             done = true;
             break;
          default:
-            isStatic = true;
+            if (StaticLoc) {
+               done = true;
+               break;
+            }
+
+            StaticLoc = currentTok().getSourceLoc();
             break;
          }
 
          break;
-      case tok::kw_static_assert:
-         lexer->backtrack();
-         done = true;
-         declKind = DeclKind::StaticAssert;
-         break;
-      case tok::kw_static_print:
-         lexer->backtrack();
-         done = true;
-         declKind = DeclKind::StaticPrint;
-         break;
-      case tok::kw_typedef:
-         declKind = DeclKind::TYPEDEF;
-         break;
-      case tok::kw_alias:
-         declKind = DeclKind::Alias;
-         break;
-      case tok::kw_let:
-         isConstField = true;
-         LLVM_FALLTHROUGH;
-      case tok::kw_var:
-         declKind = DeclKind::FIELD;
-         break;
-      case tok::kw_prop:
-         declKind = DeclKind::PROP;
-         break;
-      case tok::kw_def:
-         declKind = DeclKind::METHOD;
-         break;
-      case tok::kw_mutating:
-         isMutating = true;
-         break;
-      case tok::kw_memberwise:
-         advance();
-         if (!currentTok().is(tok::kw_init)) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                        currentTok().toString(), true, "'init'");
-         }
-
-         memberwiseInit = true;
-         LLVM_FALLTHROUGH;
-      case tok::kw_init:
-         declKind = DeclKind::CONSTR;
-         break;
-      case tok::kw_deinit:
-         declKind = DeclKind::DESTR;
-         break;
-      case tok::kw_case:
-         declKind = DeclKind::CASE;
-         break;
-      case tok::kw_class:
-      case tok::kw_enum:
-      case tok::kw_struct:
-      case tok::kw_union:
-      case tok::kw_protocol:
-         declKind = DeclKind::InnerRecord;
-         innerRecordKind = kind;
-         break;
-      case tok::kw_associatedType:
-         declKind = DeclKind::AssociatedType;
-         break;
-      case tok::kw_infix:
-      case tok::kw_prefix:
-      case tok::kw_postfix:
-         isOperator = true;
-         break;
       default:
-         SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(), 
-                     currentTok().toString(), /*not top level*/ false);
-
-         return skipUntilProbableEndOfStmt();
+         done = true;
+         break;
       }
 
-      if (declKind == DeclKind::TYPEDEF && isStatic) {
-         SP.diagnose(err_cannot_be_static, currentTok().getSourceLoc(), 
-                     "typedef");
-      }
+      if (done)
+         break;
 
-      start = currentTok().getSourceLoc();
       advance();
    }
 
-   if (isMutating && declKind != DeclKind::METHOD) {
-      SP.diagnose(err_mutating_non_method, currentTok().getSourceLoc());
-   }
+   bool StaticValid = false;
+   bool AccessValid = true;
 
-   switch (declKind) {
-   case DeclKind::TYPEDEF:
-      return parseTypedef(access);
-   case DeclKind::Alias:
-      return parseAlias();
-   case DeclKind::CONSTR:
-      if (isStatic) {
-         SP.diagnose(err_cannot_be_static, currentTok().getSourceLoc(), 
-                     "initializer");
-      }
+   tok::TokenType DeclKind = currentTok().getKind();
+   tok::TokenType NextKind = lookahead().getKind();
 
-      lexer->backtrack();
-
-      if (memberwiseInit) {
-         advance();
-         auto Init = InitDecl::CreateMemberwise(Context, access, start);
-         SP.addDeclToContext(SP.getDeclContext(), Init);
-
-         return Init;
-      }
-      else {
-         return parseConstrDecl(access);
+   ParseResult NextDecl;
+   switch (DeclKind) {
+   case tok::kw_public:
+   case tok::kw_abstract:
+   case tok::kw_private:
+   case tok::kw_fileprivate:
+   case tok::kw_internal:
+      NextDecl = parseAccessSpecScope(false);
+      break;
+   case tok::kw_static:
+      AccessValid = false;
+      switch (lookahead().getKind()) {
+      case tok::kw_if:
+         NextDecl = parseStaticIfDecl(); break;
+      case tok::kw_for:
+         NextDecl = parseStaticForDecl(); break;
+      default:
+         goto case_bad_token;
       }
 
       break;
-   case DeclKind::DESTR:
-      lexer->backtrack();
-      return parseDestrDecl();
-   case DeclKind::FIELD:
-      return parseFieldDecl(access, isStatic, isConstField);
-   case DeclKind::PROP:
-      return parsePropDecl(access, isStatic, isConstField);
-   case DeclKind::METHOD:
-      if (isOperator) {
-         lexer->backtrack();
-      }
+   case tok::kw_static_assert:
+      AccessValid = false;
+      NextDecl = parseStaticAssert();
+      break;
+   case tok::kw_static_print:
+      AccessValid = false;
+      NextDecl = parseStaticPrint();
+      break;
+   case tok::kw_typedef:
+      NextDecl = parseTypedef(accessSpec);
+      break;
+   case tok::kw_alias:
+      NextDecl = parseAlias(accessSpec);
+      break;
+   case tok::kw_let:
+   case tok::kw_var:
+      StaticValid = true;
+      NextDecl = parseFieldDecl(accessSpec, StaticLoc.isValid());
+      break;
+   case tok::kw_prop:
+      StaticValid = true;
+      NextDecl = parsePropDecl(accessSpec, StaticLoc.isValid());
+      break;
+   case tok::kw_def:
+      StaticValid = true;
+      NextDecl = parseMethodDecl(accessSpec, StaticLoc.isValid());
+      break;
+   case tok::kw_init:
+      NextDecl = parseConstrDecl(accessSpec);
+      break;
+   case tok::kw_deinit:
+      NextDecl = parseDestrDecl();
+      break;
+   case tok::kw_case: {
+      AccessValid = false;
 
-      return parseMethodDecl(access, isStatic, isMutating, isOperator);
-   case DeclKind::CASE: {
       ParseResult PR;
       while (1) {
          PR = parseEnumCase();
 
          if (lookahead().is(tok::comma)) {
             advance();
+
+            if (!lookahead().is(tok::ident))
+               break;
+
             advance();
          }
          else
             break;
       }
 
-      return PR;
-   }
-   case DeclKind::AssociatedType:
-      return parseAssociatedType();
-   case DeclKind::InnerRecord:
-      return parseAnyRecord(innerRecordKind);
-   case DeclKind::StaticIf:
-      return parseStaticIfDecl();
-   case DeclKind::StaticFor:
-      return parseStaticForDecl();
+      NextDecl = PR;
       break;
-   case DeclKind::StaticAssert:
-      return parseStaticAssert();
-   case DeclKind::StaticPrint:
-      return parseStaticPrint();
-   default:
-      return ParseError();
    }
+   case tok::kw_class:
+   case tok::kw_enum:
+   case tok::kw_struct:
+   case tok::kw_union:
+   case tok::kw_protocol:
+      NextDecl = parseAnyRecord(DeclKind);
+      break;
+   case tok::kw_associatedType:
+      AccessValid = false;
+      NextDecl = parseAssociatedType();
+      break;
+   default:
+   case_bad_token:
+      SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(),
+                  currentTok().toString(), /*record level*/ false);
+
+      return skipUntilProbableEndOfStmt();
+   }
+
+   int selector;
+   switch (DeclKind) {
+   case tok::kw_associatedType: selector = 0; break;
+   case tok::kw_static: {
+      if (NextKind == tok::kw_if)
+         selector = 1;
+      else
+         selector = 2;
+
+      break;
+   }
+   case tok::kw_static_assert: selector = 3; break;
+   case tok::kw_static_print: selector = 4; break;
+   case tok::kw_typedef: selector = 5; break;
+   case tok::kw_alias: selector = 6; break;
+   case tok::kw_init: selector = 7; break;
+   case tok::kw_deinit: selector = 8; break;
+   case tok::kw_case: selector = 9; break;
+   case tok::kw_class:
+   case tok::kw_enum:
+   case tok::kw_struct:
+   case tok::kw_union:
+   case tok::kw_protocol:
+      selector = 9;
+      break;
+   default:
+      selector = -1;
+      break;
+   }
+
+   if (!NextDecl)
+      return ParseError();
+
+   if (!StaticValid && StaticLoc) {
+      SP.diagnose(err_cannot_be_static, StaticLoc, selector);
+   }
+
+   if (!AccessValid && AccessLoc) {
+      SP.diagnose(err_cannot_have_access_spec, AccessLoc, selector);
+   }
+
+   auto *D = NextDecl.getDecl();
+   if (auto ND = dyn_cast<NamedDecl>(D))
+      ND->setAccessLoc(AccessLoc);
+
+   return D;
 }
 
 void Parser::parseClassHead(RecordHead &Head)
 {
-   bool am_set = false;
+   bool AccessSet = false;
+   Head.access = AccessSpecifier::Default;
 
    while (currentTok().is_keyword()) {
       auto kind = currentTok().getKind();
       switch (kind) {
-         case tok::kw_public:
-         case tok::kw_private:
-         case tok::kw_protected:
-            if (am_set) {
-               SP.diagnose(err_duplicate_access_spec,
-                           currentTok().getSourceLoc());
-            }
+      case tok::kw_public:
+         Head.access = AccessSpecifier::Public;
+         goto case_access_spec;
+      case tok::kw_private:
+         Head.access = AccessSpecifier::Private;
+         goto case_access_spec;
+      case tok::kw_protected:
+         Head.access = AccessSpecifier::Protected;
+         goto case_access_spec;
+      case tok::kw_fileprivate:
+         Head.access = AccessSpecifier::FilePrivate;
+         goto case_access_spec;
+      case tok::kw_internal:
+         Head.access = AccessSpecifier::Internal;
+         goto case_access_spec;
+      case_access_spec:
+         if (AccessSet) {
+            SP.diagnose(err_duplicate_access_spec,
+                        currentTok().getSourceLoc());
+         }
 
-            Head.access = kind == tok::kw_public ? AccessModifier::PUBLIC
-                                                 : AccessModifier::PRIVATE;
-            am_set = true;
-            break;
-         case tok::kw_abstract:
-            Head.isAbstract = true;
-            break;
-         case tok::kw_struct:
-         case tok::kw_enum:
-         case tok::kw_class:
-         case tok::kw_union:
-         case tok::kw_protocol:
-         case tok::kw_extend:
-            break;
-         default:
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                        currentTok().toString(), false);
+         AccessSet = true;
+         Head.AccessLoc = currentTok().getSourceLoc();
+         break;
+      case tok::kw_abstract:
+         Head.isAbstract = true;
+         break;
+      case tok::kw_struct:
+      case tok::kw_enum:
+      case tok::kw_class:
+      case tok::kw_union:
+      case tok::kw_protocol:
+      case tok::kw_extend:
+         break;
+      default:
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                     currentTok().toString(), false);
+         break;
       }
 
       advance();
@@ -491,7 +518,7 @@ void Parser::parseClassHead(RecordHead &Head)
    }
 }
 
-ParseResult Parser::parseConstrDecl(AccessModifier am)
+ParseResult Parser::parseConstrDecl(AccessSpecifier am)
 {
    auto Loc = currentTok().getSourceLoc();
    auto params = tryParseTemplateParameters();
@@ -513,8 +540,7 @@ ParseResult Parser::parseConstrDecl(AccessModifier am)
    Init->setBody(body);
    Init->setVararg(varargLoc.isValid());
 
-   SP.addDeclToContext(SP.getDeclContext(), Init);
-
+   SP.ActOnInitDecl(Init);
    return Init;
 }
 
@@ -542,19 +568,26 @@ ParseResult Parser::parseDestrDecl()
    Deinit->setReturnType(SourceType(Context.getVoidType()));
    Deinit->setBody(body);
 
-   SP.addDeclToContext(SP.getDeclContext(), Deinit);
-
+   SP.ActOnDeinitDecl(Deinit);
    return Deinit;
 }
 
-ParseResult Parser::parseFieldDecl(AccessModifier am,
-                                   bool isStatic,
-                                   bool isConst) {
+ParseResult Parser::parseFieldDecl(AccessSpecifier accessSpec,
+                                   bool isStatic) {
+   bool isConst = currentTok().is(tok::kw_let);
+   advance();
+
+   bool Variadic = false;
+   if (currentTok().is(tok::triple_period)) {
+      Variadic = true;
+      advance();
+   }
+
    if (currentTok().getKind() != tok::ident) {
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
                   currentTok().toString(), true, "identifier");
 
-      return skipUntilProbableEndOfStmt();
+      return ParseError();
    }
 
    auto Loc = currentTok().getSourceLoc();
@@ -576,8 +609,11 @@ ParseResult Parser::parseFieldDecl(AccessModifier am,
       typeref = SourceType(Context.getAutoType());
    }
 
-   auto field = FieldDecl::Create(Context, am, Loc, ColonLoc, fieldName,
-                                  typeref, isStatic, isConst, nullptr);
+   auto field = FieldDecl::Create(Context, accessSpec, Loc, ColonLoc,
+                                  fieldName, typeref, isStatic, isConst,
+                                  nullptr);
+
+   field->setVariadic(Variadic);
 
    // getter and setter
    bool getter = false;
@@ -591,8 +627,7 @@ ParseResult Parser::parseFieldDecl(AccessModifier am,
       advance();
 
       while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().getKind() == tok::ident
-             && currentTok().getIdentifierInfo()->isStr("get")) {
+         if (currentTok().is(Ident_get)) {
             if (getter) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 0);
@@ -612,8 +647,7 @@ ParseResult Parser::parseFieldDecl(AccessModifier am,
                advance();
             }
          }
-         else if (currentTok().getKind() == tok::ident
-                  && currentTok().getIdentifierInfo()->isStr("set")) {
+         else if (currentTok().is(Ident_set)) {
             if (setter) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 1);
@@ -659,17 +693,18 @@ ParseResult Parser::parseFieldDecl(AccessModifier am,
    return field;
 }
 
-ParseResult Parser::parsePropDecl(AccessModifier am,
-                                  bool isStatic,
-                                  bool isConst) {
+ParseResult Parser::parsePropDecl(AccessSpecifier accessSpec,
+                                  bool isStatic) {
+   auto BeginLoc = currentTok().getSourceLoc();
+   advance();
+
    if (currentTok().getKind() != tok::ident) {
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
                   currentTok().toString(), true, "identifier");
 
-      return skipUntilProbableEndOfStmt();
+      return ParseError();
    }
 
-   auto Loc = currentTok().getSourceLoc();
    IdentifierInfo *fieldName = currentTok().getIdentifierInfo();
    bool hasDefinition = true;
 
@@ -701,8 +736,7 @@ ParseResult Parser::parsePropDecl(AccessModifier am,
       advance();
 
       while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().getKind() == tok::ident
-             && currentTok().getIdentifierInfo()->isStr("get")) {
+         if (currentTok().is(Ident_get)) {
             if (hasGetter) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 0);
@@ -719,8 +753,7 @@ ParseResult Parser::parsePropDecl(AccessModifier am,
 
             advance();
          }
-         else if (currentTok().getKind() == tok::ident
-                  && currentTok().getIdentifierInfo()->isStr("set")) {
+         else if (currentTok().is(Ident_set)) {
             if (hasSetter) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 1);
@@ -772,10 +805,11 @@ ParseResult Parser::parsePropDecl(AccessModifier am,
       newValName = &Context.getIdentifiers().get("newVal");
 
    if (!hasGetter && !hasSetter) {
-      SP.diagnose(err_prop_must_have_get_or_set, currentTok().getSourceLoc());
+      SP.diagnose(err_prop_must_have_get_or_set, BeginLoc);
    }
 
-   auto prop = PropDecl::Create(Context,am, Loc, fieldName,
+   SourceRange SR(BeginLoc, currentTok().getSourceLoc());
+   auto prop = PropDecl::Create(Context, accessSpec, SR, fieldName,
                                 typeref, isStatic, hasDefinition,
                                 hasGetter, hasSetter, getter, setter,
                                 newValName);
@@ -789,7 +823,7 @@ ParseResult Parser::parsePropDecl(AccessModifier am,
 
 ParseResult Parser::parseAssociatedType()
 {
-   auto Loc = currentTok().getSourceLoc();
+   auto Loc = consumeToken(tok::kw_associatedType);
    IdentifierInfo *protoSpecifier = nullptr;
 
    while (lookahead().is(tok::period)) {
@@ -907,15 +941,18 @@ DeclarationName Parser::parseOperatorName(OperatorInfo &Info,
    return DeclarationName();
 }
 
-ParseResult Parser::parseMethodDecl(AccessModifier am,
-                                    bool isStatic,
-                                    bool isMutating,
-                                    bool isOperator) {
+ParseResult Parser::parseMethodDecl(AccessSpecifier accessSpec,
+                                    bool isStatic) {
    auto DefLoc = currentTok().getSourceLoc();
+   advance();
+
+   bool IsMutating = false;
+   bool IsOperator = false;
+   bool IsVirtual = false;
+   bool IsOverride = false;
 
    OperatorInfo OpInfo;
-
-   if (isOperator) {
+   if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
       switch (currentTok().getKind()) {
          case tok::kw_infix: OpInfo.setFix(FixKind::Infix); break;
          case tok::kw_prefix: OpInfo.setFix(FixKind::Prefix); break;
@@ -924,17 +961,33 @@ ParseResult Parser::parseMethodDecl(AccessModifier am,
             llvm_unreachable("bad fix kind");
       }
 
+      IsOperator = true;
       OpInfo.setPrecedenceGroup(PrecedenceGroup(12, Associativity::Left));
+
       advance();
    }
 
-   bool isCastOp = false;
+   if (currentTok().is(Ident_virtual)) {
+      IsVirtual = true;
+      advance();
+   }
+   else if (currentTok().is(Ident_override)) {
+      IsOverride = true;
+      advance();
+   }
+
+   if (currentTok().is(tok::kw_mutating)) {
+      IsMutating = true;
+      advance();
+   }
+
+   bool isConversionOp = false;
    SourceType returnType;
    DeclarationName methodName;
 
-   if (isOperator) {
-      methodName = parseOperatorName(OpInfo, isCastOp, returnType);
-      if (isCastOp) {
+   if (IsOperator) {
+      methodName = parseOperatorName(OpInfo, isConversionOp, returnType);
+      if (isConversionOp) {
          if (OpInfo.getFix() != FixKind::Infix) {
             SP.diagnose(err_generic_error, currentTok().getSourceLoc(), 
                         "cast operator must be infix");
@@ -977,20 +1030,21 @@ ParseResult Parser::parseMethodDecl(AccessModifier am,
    }
 
    MethodDecl *methodDecl;
-   if (isCastOp) {
-      methodDecl = MethodDecl::CreateConversionOp(Context, am, DefLoc,
+   if (isConversionOp) {
+      methodDecl = MethodDecl::CreateConversionOp(Context, accessSpec, DefLoc,
                                                   returnType, move(args),
                                                   move(templateParams),
                                                   nullptr);
    }
    else if (OpInfo.getPrecedenceGroup().isValid()) {
-      methodDecl = MethodDecl::CreateOperator(Context, am, DefLoc, methodName,
+      methodDecl = MethodDecl::CreateOperator(Context, accessSpec, DefLoc,
+                                              methodName,
                                               returnType, std::move(args),
                                               move(templateParams),
                                               nullptr, OpInfo, isStatic);
    }
    else {
-      methodDecl = MethodDecl::Create(Context, am, DefLoc, methodName,
+      methodDecl = MethodDecl::Create(Context, accessSpec, DefLoc, methodName,
                                       returnType, std::move(args),
                                       move(templateParams),
                                       nullptr, isStatic);
@@ -1004,10 +1058,12 @@ ParseResult Parser::parseMethodDecl(AccessModifier am,
 
    methodDecl->setVararg(varargLoc.isValid());
    methodDecl->setBody(body);
-   methodDecl->setMutating(isMutating);
+   methodDecl->setMutating(IsMutating);
+   methodDecl->setIsVirtual(IsVirtual);
+   methodDecl->setIsOverride(IsOverride);
 
    Context.setConstraints(methodDecl, constraints);
-   SP.addDeclToContext(SP.getDeclContext(), methodDecl);
+   SP.ActOnMethodDecl(methodDecl);
 
    return methodDecl;
 }
@@ -1015,12 +1071,13 @@ ParseResult Parser::parseMethodDecl(AccessModifier am,
 ParseResult Parser::parseEnumCase()
 {
    auto CaseLoc = currentTok().getSourceLoc();
+   consumeToken(tok::kw_case);
 
    if (currentTok().getKind() != tok::ident) {
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
                   currentTok().toString(), true, "identifier");
 
-      return skipUntilProbableEndOfStmt();
+      return ParseError();
    }
 
    auto caseName = currentTok().getIdentifierInfo();
@@ -1043,10 +1100,10 @@ ParseResult Parser::parseEnumCase()
       Expr = StaticExpr::Create(Context, parseExprSequence().tryGetExpr());
    }
 
-   caseDecl = EnumCaseDecl::Create(Context, AccessModifier ::PUBLIC,
+   caseDecl = EnumCaseDecl::Create(Context, AccessSpecifier ::Public,
                                    CaseLoc, CaseLoc,
                                    caseName, Expr,
-                                   std::move(associatedTypes));
+                                   associatedTypes);
 
    SP.addDeclToContext(SP.getDeclContext(), caseDecl);
    return caseDecl;

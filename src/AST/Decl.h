@@ -5,31 +5,36 @@
 #ifndef CDOT_NAMEDDECL_H
 #define CDOT_NAMEDDECL_H
 
-#include "Attr.h"
 #include "AST/SourceType.h"
-#include "Sema/Template.h"
+#include "Attr.h"
 #include "Basic/DeclarationName.h"
 #include "Basic/Precedence.h"
+#include "Sema/Template.h"
 #include "Support/Casting.h"
 
-#include <llvm/Support/TrailingObjects.h>
-#include <llvm/ADT/PointerUnion.h>
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/PointerUnion.h>
 #include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/Support/TrailingObjects.h>
 
 #include <unordered_map>
 
 namespace cdot {
+namespace il {
+   class Constant;
+}
 
 class FunctionType;
 enum class BuiltinFn : unsigned char;
 enum class KnownFunction : unsigned char;
 
-enum class AccessModifier : unsigned char {
-   DEFAULT = 0,
-   PUBLIC,
-   PRIVATE,
-   PROTECTED
+enum class AccessSpecifier : unsigned char {
+   Default = 0,
+   Public,
+   Private,
+   Protected,
+   Internal,
+   FilePrivate,
 };
 
 namespace ast {
@@ -41,7 +46,7 @@ class DeclContext;
 class RecordDecl;
 class StaticExpr;
 class TemplateParamDecl;
-class ImportStmt;
+class ImportDecl;
 class ConstraintExpr;
 class Expression;
 class NamespaceDecl;
@@ -58,15 +63,12 @@ class MethodDecl;
 class InitDecl;
 class TypedefDecl;
 class DeinitDecl;
-class StaticStmt;
 class StaticExpr;
 class AssociatedTypeDecl;
 class EnumDecl;
 class UnionDecl;
 class ProtocolDecl;
 class ExtensionDecl;
-
-using TemplateParamVec = std::vector<TemplateParamDecl*>;
 
 template<class T>
 struct InstantiationInfo {
@@ -86,13 +88,6 @@ struct InstantiationInfo {
    sema::TemplateArgList templateArgs;
    T *specializedTemplate = nullptr;
    NamedDecl *instantiatedWithin = nullptr;
-};
-
-enum class ExternKind: unsigned char {
-   None,
-   C,
-   CXX,
-   Native
 };
 
 class LLVM_ALIGNAS(sizeof(void*)) Decl {
@@ -120,10 +115,17 @@ public:
       DF_WasDeclared         = DF_External << 1u,
       DF_Synthesized         = DF_WasDeclared << 1u,
       DF_CheckedAttrs        = DF_Synthesized << 1u,
+      DF_ExternC             = DF_CheckedAttrs << 1u,
+      DF_ExternCXX           = DF_ExternC << 1u,
+      DF_Instantiation       = DF_ExternCXX << 1u,
+      DF_Builtin             = DF_Instantiation << 1u,
 
       StatusFlags            = DF_TypeDependent | DF_ValueDependent |
                                DF_IsInvalid,
    };
+
+   void dumpFlags() const;
+   void printFlags(llvm::raw_ostream &OS) const;
 
    bool isStatic() const { return declFlagSet(DF_Static); }
    bool isConst() const { return declFlagSet(DF_Const); }
@@ -174,6 +176,15 @@ public:
    bool isSynthesized() const { return declFlagSet(DF_Synthesized); }
    void setSynthesized(bool synth = true){ setDeclFlag(DF_Synthesized, synth); }
 
+   bool isExternC() const { return declFlagSet(DF_ExternC); }
+   void setExternC(bool ext) { setDeclFlag(DF_ExternC, ext); }
+
+   bool isExternCXX() const { return declFlagSet(DF_ExternCXX); }
+   void setExternCXX(bool ext) { setDeclFlag(DF_ExternCXX, ext); }
+
+   bool isBuiltin() const { return declFlagSet(DF_Builtin); }
+   void setBuiltin(bool BI) { setDeclFlag(DF_Builtin, BI); }
+
    bool alreadyCheckedOrIsInvalid() const
    {
       static uint32_t mask = DF_IsInvalid | DF_SemanticallyChecked;
@@ -191,6 +202,11 @@ public:
       else
          flags &= ~f;
    }
+
+   bool isInStdNamespace() const;
+   bool isInCompilerNamespace() const;
+
+   bool isInExtension() const;
 
    template<class T>
    bool hasAttribute() const
@@ -225,9 +241,14 @@ public:
    DeclKind getKind() const { return kind; }
    RecordDecl *getRecord() const;
 
-   DeclContext *getDeclContext() const { return declContext; }
-   void setDeclContext(DeclContext *ctx);
-   void setDeclContextUnchecked(DeclContext *ctx);
+   DeclContext *getNonTransparentDeclContext() const;
+
+   DeclContext *getDeclContext() const;
+   DeclContext *getLexicalContext() const;
+
+   void setLexicalContext(DeclContext *ctx);
+   void setLogicalContext(DeclContext *Ctx);
+   void setLexicalContextUnchecked(DeclContext *ctx);
 
    Decl *getNextDeclInContext() const { return nextDeclInContext; }
    void setNextDeclInContext(Decl *next) { nextDeclInContext = next; }
@@ -258,13 +279,26 @@ protected:
    unsigned flags : 24;
 
    Decl *nextDeclInContext = nullptr;
-   DeclContext *declContext = nullptr;
+
+   struct LLVM_ALIGNAS(8) MultipleDeclContext {
+      DeclContext *LogicalDC;
+      DeclContext *LexicalDC;
+   };
+
+   using DeclContextUnion = llvm::PointerUnion<DeclContext*,
+                                               MultipleDeclContext*>;
+
+   DeclContextUnion ContextUnion;
 };
 
 class NamedDecl: public Decl {
 public:
-   AccessModifier getAccess() const { return access; }
-   void setAccess(AccessModifier AS) { access = AS; }
+   AccessSpecifier getAccess() const { return access; }
+   void setAccess(AccessSpecifier AS) { access = AS; }
+
+   SourceLocation getAccessLoc() const { return AccessLoc; }
+   void setAccessLoc(SourceLocation Loc);
+   SourceRange getAccessRange() const;
 
    llvm::StringRef getName() const
    {
@@ -283,11 +317,13 @@ public:
    llvm::ArrayRef<StaticExpr*> getConstraints() const;
 
    bool isTemplate() const;
-   bool isTemplateOrInTemplate() const;
+   bool inDependentContext() const;
 
    llvm::ArrayRef<TemplateParamDecl*> getTemplateParams() const;
 
-   bool isInstantiation() const;
+   bool isInstantiation() const { return declFlagSet(DF_Instantiation) ;}
+   void setIsInstantiation(bool I) { setDeclFlag(DF_Instantiation, I); }
+
    const sema::TemplateArgList &getTemplateArgs() const;
    NamedDecl *getSpecializedTemplate() const;
    SourceLocation getInstantiatedFrom() const;
@@ -305,9 +341,6 @@ public:
    unsigned int getFlags() const { return flags; }
    void setFlags(unsigned int flags) { NamedDecl::flags = flags; }
 
-   ExternKind getExternKind() const { return externKind; }
-   void setExternKind(ExternKind kind) { externKind = kind; }
-
    static bool classof(const Decl *T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind)
    {
@@ -317,50 +350,145 @@ public:
 
 protected:
    NamedDecl(DeclKind typeID,
-             AccessModifier access,
+             AccessSpecifier access,
              DeclarationName DN);
 
-   ExternKind externKind = ExternKind::None;
-   AccessModifier access;
+   AccessSpecifier access;
+   SourceLocation AccessLoc;
+
    DeclarationName Name;
 };
+
+class UsingDecl final: public NamedDecl,
+                       llvm::TrailingObjects<UsingDecl, IdentifierInfo*> {
+   UsingDecl(SourceRange Loc,
+             AccessSpecifier Access,
+             DeclarationName Name,
+             llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+             bool wildCardImport);
+
+   SourceRange Loc;
+   unsigned NumSpecifierNames;
+   bool IsWildCard;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == UsingDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static UsingDecl *Create(ASTContext &C,
+                            SourceRange Loc,
+                            AccessSpecifier Access,
+                            DeclarationName Name,
+                            llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+                            bool wildCardImport);
+
+   friend TrailingObjects;
+
+   SourceRange getSourceRange() const { return Loc; }
+
+   llvm::ArrayRef<IdentifierInfo*> getNestedImportName() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumSpecifierNames };
+   }
+
+   bool isWildCardImport() const { return IsWildCard; }
+};
+
+class ModuleDecl final: public NamedDecl,
+                        llvm::TrailingObjects<ModuleDecl, IdentifierInfo*> {
+   ModuleDecl(SourceRange Loc,
+              AccessSpecifier Access,
+              llvm::ArrayRef<IdentifierInfo*> moduleName);
+
+   SourceRange Loc;
+   unsigned NumNameQuals;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == ModuleDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static ModuleDecl *Create(ASTContext &C,
+                             SourceRange Loc,
+                             AccessSpecifier Access,
+                             llvm::ArrayRef<IdentifierInfo*> moduleName);
+
+   friend TrailingObjects;
+
+   SourceRange getSourceRange() const { return Loc; }
+
+   llvm::ArrayRef<IdentifierInfo*> getQualifiedModuleName() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumNameQuals };
+   }
+};
+
+class ImportDecl final: public NamedDecl,
+                        llvm::TrailingObjects<ImportDecl, IdentifierInfo*> {
+   ImportDecl(SourceRange Loc,
+              AccessSpecifier Access,
+              llvm::ArrayRef<IdentifierInfo*> moduleName);
+
+   SourceRange Loc;
+   unsigned NumNameQuals;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == ImportDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static ImportDecl *Create(ASTContext &C,
+                             SourceRange Loc,
+                             AccessSpecifier Access,
+                             llvm::ArrayRef<IdentifierInfo*> moduleName);
+
+   friend TrailingObjects;
+
+   SourceRange getSourceRange() const { return Loc; }
+
+   llvm::ArrayRef<IdentifierInfo*> getQualifiedImportName() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumNameQuals };
+   }
+};
+
 
 class TemplateParamDecl: public NamedDecl {
 public:
    static TemplateParamDecl *Create(ASTContext &C,
-                                    IdentifierInfo *II,
+                                    DeclarationName Name,
                                     SourceType covariance,
                                     SourceType contravariance,
                                     Expression *defaultValue,
+                                    unsigned Index,
                                     SourceLocation TypeNameOrValueLoc,
                                     SourceLocation NameLoc,
                                     SourceLocation EllipsisLoc);
 
    static TemplateParamDecl *Create(ASTContext &C,
-                                    IdentifierInfo *II,
+                                    DeclarationName Name,
                                     SourceType valueType,
                                     Expression *defaultValue,
+                                    unsigned Index,
                                     SourceLocation TypeNameOrValueLoc,
                                     SourceLocation NameLoc,
                                     SourceLocation EllipsisLoc);
-
-   TemplateParamDecl(const TemplateParamDecl &) = default;
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind){ return kind == TemplateParamDeclID; }
    
 private:
-   TemplateParamDecl(IdentifierInfo *II,
+   TemplateParamDecl(DeclarationName Name,
                      SourceType covariance,
                      SourceType contravariance,
                      Expression *defaultValue,
+                     unsigned Index,
                      SourceLocation TypeNameOrValueLoc,
                      SourceLocation NameLoc,
                      SourceLocation EllipsisLoc);
 
-   TemplateParamDecl(IdentifierInfo *II,
+   TemplateParamDecl(DeclarationName Name,
                      SourceType valueType,
                      Expression *defaultValue,
+                     unsigned Index,
                      SourceLocation TypeNameOrValueLoc,
                      SourceLocation NameLoc,
                      SourceLocation EllipsisLoc);
@@ -369,8 +497,8 @@ private:
    SourceType contravariance;
 
    bool typeName : 1;
-
    Expression *defaultValue;
+   unsigned Index;
 
    SourceLocation TypeNameOrValueLoc;
    SourceLocation NameLoc;
@@ -380,11 +508,7 @@ public:
    SourceLocation getTypeNameOrValueLoc() const { return TypeNameOrValueLoc; }
    SourceLocation getNameLoc() const { return NameLoc; }
    SourceLocation getEllipsisLoc() const { return EllipsisLoc; }
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(TypeNameOrValueLoc ? TypeNameOrValueLoc
-                                            : NameLoc);
-   }
+   SourceRange getSourceRange() const;
 
    const SourceType &getCovariance() const { return covariance; }
    const SourceType &getValueType() const { return covariance; }
@@ -399,6 +523,7 @@ public:
 
    bool isTypeName() const { return typeName; }
    bool isVariadic() const { return EllipsisLoc.isValid(); }
+   unsigned getIndex() const { return Index; }
 };
 
 class VarDecl: public NamedDecl {
@@ -411,25 +536,31 @@ public:
 
 protected:
    VarDecl(DeclKind id,
-           AccessModifier access,
+           AccessSpecifier access,
            SourceLocation VarOrLetLoc,
            SourceLocation ColonLoc,
            bool isConst,
-           IdentifierInfo *II,
+           DeclarationName Name,
            SourceType type,
            Expression* value);
 
    SourceLocation VarOrLetLoc;
    SourceLocation ColonLoc;
+   SourceLocation EqualsLoc;
    SourceType type;
    Expression* value = nullptr;
 
    bool CanElideCopy : 1;
+   bool Variadic     : 1;
+   bool Captured     : 1;
 
 public:
    SourceRange getSourceRange() const;
    SourceLocation getVarOrLetLoc() const { return VarOrLetLoc; }
    SourceLocation getColonLoc() const { return ColonLoc; }
+
+   void setEqualsLoc(SourceLocation L) { EqualsLoc = L; }
+   SourceLocation getEqualsLoc() const { return EqualsLoc; }
 
    const SourceType &getType() const { return type; }
    void setType(SourceType ty) { type = ty; }
@@ -437,16 +568,22 @@ public:
    Expression* getValue() const { return value; }
    void setValue(Expression *V) { value = V; }
 
+   bool isVariadic() const { return Variadic; }
+   void setVariadic(bool V) { Variadic = V; }
+
    bool canElideCopy() const { return CanElideCopy; }
    void setCanElideCopy(bool CanElide) { CanElideCopy = CanElide; }
+
+   bool isCaptured() const { return Captured; }
+   void setCaptured(bool capt) { Captured = capt; }
 };
 
 class LocalVarDecl: public VarDecl {
-   LocalVarDecl(AccessModifier access,
+   LocalVarDecl(AccessSpecifier access,
                 SourceLocation VarOrLetLoc,
                 SourceLocation ColonLoc,
                 bool isConst,
-                IdentifierInfo *II,
+                DeclarationName Name,
                 SourceType type,
                 Expression* value);
 
@@ -454,11 +591,11 @@ class LocalVarDecl: public VarDecl {
 
 public:
    static LocalVarDecl *Create(ASTContext &C,
-                               AccessModifier access,
+                               AccessSpecifier access,
                                SourceLocation VarOrLetLoc,
                                SourceLocation ColonLoc,
                                bool isConst,
-                               IdentifierInfo *II,
+                               DeclarationName Name,
                                SourceType type,
                                Expression* value);
 
@@ -470,11 +607,11 @@ public:
 };
 
 class GlobalVarDecl: public VarDecl {
-   GlobalVarDecl(AccessModifier access,
+   GlobalVarDecl(AccessSpecifier access,
                  SourceLocation VarOrLetLoc,
                  SourceLocation ColonLoc,
                  bool isConst,
-                 IdentifierInfo *II,
+                 DeclarationName Name,
                  SourceType type,
                  Expression* value);
 
@@ -482,11 +619,11 @@ class GlobalVarDecl: public VarDecl {
 
 public:
    static GlobalVarDecl *Create(ASTContext &C,
-                                AccessModifier access,
+                                AccessSpecifier access,
                                 SourceLocation VarOrLetLoc,
                                 SourceLocation ColonLoc,
                                 bool isConst,
-                                IdentifierInfo *II,
+                                DeclarationName Name,
                                 SourceType type,
                                 Expression* value);
 
@@ -500,7 +637,7 @@ public:
 class FuncArgDecl: public VarDecl {
    FuncArgDecl(SourceLocation VarLetOrIdentLoc,
                SourceLocation ColonLoc,
-               IdentifierInfo *II,
+               DeclarationName Name,
                SourceType argType,
                Expression* defaultValue,
                bool variadicArgPackExpansion,
@@ -516,7 +653,7 @@ public:
    static FuncArgDecl *Create(ASTContext &C,
                               SourceLocation VarLetOrIdentLoc,
                               SourceLocation ColonLoc,
-                              IdentifierInfo *II,
+                              DeclarationName Name,
                               SourceType argType,
                               Expression* defaultValue,
                               bool variadicArgPackExpansion,
@@ -698,7 +835,10 @@ public:
       ADR_DuplicateDifferentKind,
    };
 
+   using DeclsMap = llvm::SmallDenseMap<DeclarationName, DeclList, 4>;
+
    bool isTransparent() const;
+   bool isAnonymousNamespace() const;
 
    void addDecl(Decl *decl);
 
@@ -707,8 +847,6 @@ public:
 
    [[nodiscard]]
    AddDeclResultKind addDecl(DeclarationName Name, NamedDecl *decl);
-
-   void addTransparentDecls();
 
    LookupResult lookupOwn(DeclarationName name) const
    {
@@ -727,6 +865,8 @@ public:
 
    LookupResult lookup(DeclarationName name) const;
    NamedDecl *lookupSingle(DeclarationName name) const;
+
+   const DeclsMap &getAllNamedDecls() const { return namedDecls; }
 
    bool hasAnyDeclNamed(DeclarationName name) const
    {
@@ -803,9 +943,12 @@ public:
       namedDecls.clear();
    }
 
-   void makeAllDeclsAvailable(DeclContext *Ctx);
-   void makeDeclAvailable(NamedDecl *decl);
-   void makeDeclAvailable(DeclarationName Name, NamedDecl *decl);
+   [[nodiscard]]
+   AddDeclResultKind makeDeclAvailable(NamedDecl *decl);
+
+   [[nodiscard]]
+   AddDeclResultKind makeDeclAvailable(DeclarationName Name, NamedDecl *decl);
+
    void replaceDecl(Decl *Orig, Decl *Rep);
 
    Decl::DeclKind getDeclKind() const { return declKind; }
@@ -830,8 +973,6 @@ protected:
       : declKind(typeID)
    {}
 
-   using DeclsMap = llvm::SmallDenseMap<DeclarationName, DeclList, 4>;
-
    Decl::DeclKind declKind;
 
    DeclsMap namedDecls;
@@ -839,8 +980,6 @@ protected:
    Decl *lastAddedDecl = nullptr;
 
    DeclContext *parentCtx = nullptr;
-
-   void addTransparentDecls(DeclContext &Ctx);
 
 public:
    class decl_iterator {
@@ -966,7 +1105,11 @@ public:
    }
 
    template<class SpecificDecl>
-   llvm::iterator_range<specific_decl_iterator<SpecificDecl>> getDecls() const
+   using specific_decl_iterator_range
+      = llvm::iterator_range<specific_decl_iterator<SpecificDecl>>;
+
+   template<class SpecificDecl>
+   specific_decl_iterator_range<SpecificDecl> getDecls() const
    {
       return { decl_begin<SpecificDecl>(), decl_end<SpecificDecl>() };
    }
@@ -1078,12 +1221,12 @@ public:
 class TranslationUnit final:
    public NamedDecl,
    public DeclContext,
-   private llvm::TrailingObjects<TranslationUnit, ImportStmt*> {
+   private llvm::TrailingObjects<TranslationUnit, ImportDecl*> {
 public:
    static TranslationUnit *Create(ASTContext &ASTCtx,
                                   IdentifierInfo *fileName,
                                   size_t sourceId,
-                                  llvm::ArrayRef<ImportStmt*> imports);
+                                  llvm::ArrayRef<ImportDecl*> imports);
 
    static bool classofKind(DeclKind kind) { return kind == TranslationUnitID; }
    static bool classof(Decl const* T)
@@ -1107,7 +1250,7 @@ private:
    TranslationUnit(ASTContext &ASTCtx,
                    IdentifierInfo *fileName,
                    size_t sourceId,
-                   llvm::ArrayRef<ImportStmt*> imports);
+                   llvm::ArrayRef<ImportDecl*> imports);
 
    ASTContext &ASTCtx;
    size_t sourceId;
@@ -1119,12 +1262,12 @@ public:
 
    SourceRange getSourceRange() const { return SourceRange(); }
 
-   using import_iterator = ImportStmt**;
-   using import_range    = llvm::ArrayRef<ImportStmt*>;
+   using import_iterator = ImportDecl**;
+   using import_range    = llvm::ArrayRef<ImportDecl*>;
 
    size_t import_size() const { return numImports; }
 
-   import_iterator import_begin() { return getTrailingObjects<ImportStmt*>(); }
+   import_iterator import_begin() { return getTrailingObjects<ImportDecl*>(); }
    import_iterator import_end() { return import_begin() + import_size(); }
 
    import_range getImports()
@@ -1138,19 +1281,16 @@ public:
 class NamespaceDecl: public NamedDecl, public DeclContext {
    NamespaceDecl(SourceLocation NamespaceLoc,
                  SourceLocation LBrace,
-                 IdentifierInfo *II,
-                 bool isAnonymous);
+                 DeclarationName Name);
 
    SourceLocation NamespaceLoc;
    SourceRange Braces;
-   bool anonymousNamespace = false;
    
 public:
    static NamespaceDecl *Create(ASTContext &C,
                                 SourceLocation NamespaceLoc,
                                 SourceLocation LBrace,
-                                IdentifierInfo *II,
-                                bool isAnonymous);
+                                DeclarationName Name);
 
    SourceLocation getNamespaceLoc() const { return NamespaceLoc; }
 
@@ -1165,7 +1305,7 @@ public:
       return SourceRange(NamespaceLoc, Braces.getEnd());
    }
 
-   bool isAnonymousNamespace() const { return anonymousNamespace; }
+   bool isAnonymousNamespace() const { return !Name; }
 
    static bool classofKind(DeclKind kind) { return kind == NamespaceDeclID; }
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
@@ -1233,22 +1373,20 @@ public:
 
 protected:
    CallableDecl(DeclKind typeID,
-                AccessModifier am,
+                AccessSpecifier am,
                 SourceLocation DefLoc,
                 DeclarationName Name,
                 SourceType returnType,
-                std::vector<FuncArgDecl*> &&args,
+                llvm::ArrayRef<FuncArgDecl*> args,
                 Statement* body,
                 OperatorInfo op,
                 std::vector<TemplateParamDecl*> &&templateParams);
 
    SourceLocation DefLoc;
-   std::string linkageName;
-
    FunctionType *functionType = nullptr;
 
    SourceType returnType;
-   std::vector<FuncArgDecl* > args;
+   unsigned NumArgs;
    Statement* body;
 
    std::vector<TemplateParamDecl*> templateParams;
@@ -1256,7 +1394,6 @@ protected:
 
    LocalVarDecl* NRVOCandidate = nullptr;
    llvm::SmallPtrSet<Type*, 2> thrownTypes;
-   size_t methodID = 0;
 
    KnownFunction knownFnKind = KnownFunction(0);
 
@@ -1265,8 +1402,7 @@ protected:
    enum Flag : uint32_t {
       // general flags
       NoThrow  = 1u,
-      ExternC  = NoThrow << 1u,
-      Native   = ExternC << 1u,
+      Native   = NoThrow << 1u,
       ConvOp   = Native  << 1u,
       External = ConvOp << 1u,
       Main     = External << 1u,
@@ -1274,9 +1410,12 @@ protected:
       CVarArg  = Vararg << 1u,
       Defined  = CVarArg << 1u,
       NoReturn = Defined << 1u,
+      Lambda   = NoReturn << 1u,
+      GlobalCtor = Lambda << 1u,
+      GlobalDtor = GlobalCtor << 1u,
 
       // method flags
-      Abstract         = NoReturn << 1u,
+      Abstract         = GlobalDtor << 1u,
       Alias            = Abstract << 1u,
       MutableSelf      = Alias << 1u,
       ProtoMethod      = MutableSelf << 1u,
@@ -1309,11 +1448,24 @@ public:
    void checkKnownFnKind();
    KnownFunction getKnownFnKind();
 
-   std::vector<FuncArgDecl* > &getArgs() { return args; }
-   llvm::ArrayRef<FuncArgDecl* > getArgs() const { return args; }
-   void setArgs(std::vector<FuncArgDecl* > &&args) { this->args = move(args); }
+   using arg_iterator       = FuncArgDecl**;
+   using const_arg_iterator = FuncArgDecl* const*;
 
-   void setLinkageName(std::string &&LN) { linkageName = move(LN); }
+   arg_iterator arg_begin();
+   arg_iterator arg_end() { return arg_begin() + NumArgs; }
+
+   const_arg_iterator arg_begin() const;
+   const_arg_iterator arg_end() const { return arg_begin() + NumArgs; }
+
+   llvm::MutableArrayRef<FuncArgDecl*> getArgs()
+   {
+      return llvm::MutableArrayRef<FuncArgDecl*>(arg_begin(), NumArgs);
+   }
+
+   llvm::ArrayRef<FuncArgDecl*> getArgs() const
+   {
+      return llvm::ArrayRef<FuncArgDecl*>(arg_begin(), NumArgs);
+   }
 
    void setBody(Statement* body)
    {
@@ -1327,12 +1479,7 @@ public:
    const SourceType &getReturnType() const { return returnType; }
    void setReturnType(SourceType RetTy) { returnType = RetTy; }
 
-   llvm::StringRef getLinkageName() const { return linkageName; }
-
    Statement* getBody() const { return body; }
-
-   size_t getMethodID() const { return methodID; }
-   void setMethodID(size_t ID) { methodID = ID; }
 
    LocalVarDecl *getNRVOCandidate() const { return NRVOCandidate; }
    void setNRVOCandidate(LocalVarDecl *Cand) { NRVOCandidate = Cand; }
@@ -1351,9 +1498,6 @@ public:
    bool isExternal() const { return getFlag(External); }
    void setExternal(bool external) { setFlag(External, external); }
 
-   bool isExternC() const { return getFlag(ExternC); }
-   void setExternC(bool externC) { setFlag(ExternC, externC); }
-
    bool isNative() const { return getFlag(Native); }
    void setNative(bool native) { setFlag(Native, native); }
 
@@ -1363,10 +1507,22 @@ public:
    bool isCstyleVararg() const { return getFlag(CVarArg); }
    void setCstyleVararg(bool cstyleVararg) { setFlag(CVarArg, cstyleVararg); }
 
+   bool isLambda() const { return getFlag(Lambda); }
+   void setIsLambda(bool l) { setFlag(Lambda, l); }
+
+   bool isGlobalCtor() const { return getFlag(GlobalCtor); }
+   void setGlobalCtor(bool ctor) { setFlag(GlobalCtor, ctor); }
+
+   bool isGlobalDtor() const { return getFlag(GlobalDtor); }
+   void setGlobalDtor(bool dtor) { setFlag(GlobalDtor, dtor); }
+
    bool hasMutableSelf() const { return getFlag(MutableSelf); }
 
    bool isNoReturn() const { return getFlag(NoReturn); }
    void setIsNoReturn(bool noRet) { setFlag(NoReturn, noRet); }
+
+   bool isInitializerOfTemplate() const;
+   bool isCaseOfTemplatedEnum() const;
 
    uint32_t getFunctionFlags() const { return Flags; }
    void setFunctionFlags(uint32_t Flags) { CallableDecl::Flags = Flags; }
@@ -1392,17 +1548,15 @@ public:
    bool isNoThrow() const { return getFlag(NoThrow); }
    void isNoThrow(bool nothrow) { setFlag(NoThrow, nothrow); }
 
-   void setInstantiationInfo(InstantiationInfo<CallableDecl> *instantiationInfo)
+   void setInstantiationInfo(InstantiationInfo<CallableDecl> *II)
    {
-      CallableDecl::instantiationInfo = instantiationInfo;
+      instantiationInfo = II;
    }
 
    llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
    {
       return templateParams;
    }
-
-   bool isInstantiation() const { return instantiationInfo != nullptr; }
 
    const SourceLocation &getInstantiatedFrom() const
    {
@@ -1428,10 +1582,10 @@ public:
 class CompoundStmt;
 
 class FunctionDecl : public CallableDecl {
-   FunctionDecl(AccessModifier am,
+   FunctionDecl(AccessSpecifier am,
                 SourceLocation DefLoc,
                 DeclarationName II,
-                std::vector<FuncArgDecl* > &&args,
+                llvm::ArrayRef<FuncArgDecl*> args,
                 SourceType returnType,
                 Statement* body,
                 OperatorInfo op,
@@ -1439,10 +1593,10 @@ class FunctionDecl : public CallableDecl {
 
 public:
    static FunctionDecl *Create(ASTContext &C,
-                               AccessModifier am,
+                               AccessSpecifier am,
                                SourceLocation DefLoc,
                                DeclarationName II,
-                               std::vector<FuncArgDecl* > &&args,
+                               llvm::ArrayRef<FuncArgDecl*> args,
                                SourceType returnType,
                                Statement* body,
                                OperatorInfo op,
@@ -1463,9 +1617,9 @@ public:
 };
 
 class TypedefDecl: public NamedDecl {
-   TypedefDecl(AccessModifier access,
+   TypedefDecl(AccessSpecifier access,
                SourceLocation Loc,
-               IdentifierInfo *II,
+               DeclarationName Name,
                SourceType origin,
                std::vector<TemplateParamDecl*> &&templateParams);
 
@@ -1475,9 +1629,9 @@ class TypedefDecl: public NamedDecl {
 
 public:
    static TypedefDecl *Create(ASTContext &C,
-                              AccessModifier access,
+                              AccessSpecifier access,
                               SourceLocation Loc,
-                              IdentifierInfo *II,
+                              DeclarationName Name,
                               SourceType origin,
                               std::vector<TemplateParamDecl*> &&templateParams);
 
@@ -1494,25 +1648,31 @@ public:
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
 };
 
-class AliasDecl: public NamedDecl,
-                 public DeclContext,
-                 public llvm::FoldingSetNode {
+class AliasDecl final: public NamedDecl,
+                       public DeclContext,
+                       public llvm::FoldingSetNode,
+                       llvm::TrailingObjects<AliasDecl, TemplateParamDecl*> {
    AliasDecl(SourceLocation Loc,
-             IdentifierInfo *II,
+             AccessSpecifier AccessSpec,
+             DeclarationName Name,
+             SourceType Type,
              StaticExpr* aliasExpr,
-             std::vector<TemplateParamDecl*> &&templateParams);
+             llvm::ArrayRef<TemplateParamDecl*> templateParams);
 
    SourceLocation Loc;
+   SourceType Type;
    StaticExpr* aliasExpr;
-   std::vector<TemplateParamDecl*> templateParams;
+   unsigned NumParams;
    InstantiationInfo<AliasDecl> *instantiationInfo = nullptr;
 
 public:
    static AliasDecl *Create(ASTContext &C,
                             SourceLocation Loc,
-                            IdentifierInfo *II,
+                            AccessSpecifier AccessSpec,
+                            DeclarationName Name,
+                            SourceType Type,
                             StaticExpr* aliasExpr,
-                            std::vector<TemplateParamDecl*> &&templateParams);
+                            llvm::ArrayRef<TemplateParamDecl*> templateParams);
 
    static bool classofKind(DeclKind kind) { return kind == AliasDeclID; }
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
@@ -1529,8 +1689,12 @@ public:
       list.Profile(ID);
    }
 
+   friend TrailingObjects;
+
    SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return SourceRange(Loc); }
+   SourceRange getSourceRange() const;
+
+   const SourceType &getType() const { return Type; }
 
    StaticExpr* getAliasExpr() const { return aliasExpr; }
    void setAliasExpr(StaticExpr *Expr) { aliasExpr = Expr; }
@@ -1539,18 +1703,17 @@ public:
 
    llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
    {
-      return templateParams;
+      return { getTrailingObjects<TemplateParamDecl*>(), NumParams };
    }
 
-   bool isInstantiation() const { return instantiationInfo != nullptr; }
    InstantiationInfo <AliasDecl> *getInstantiationInfo() const
    {
       return instantiationInfo;
    }
 
-   void setInstantiationInfo(InstantiationInfo <AliasDecl> *instantiationInfo)
+   void setInstantiationInfo(InstantiationInfo <AliasDecl> *II)
    {
-      AliasDecl::instantiationInfo = instantiationInfo;
+      instantiationInfo = II;
    }
 
    sema::TemplateArgList const& getTemplateArgs() const
@@ -1626,16 +1789,15 @@ public:
    MethodDecl *getConversionOperator(QualType toType) const;
    MethodDecl *getComparisonOperator(QualType withType) const;
 
+   llvm::ArrayRef<ExtensionDecl*> getExtensions() const;
+   void addExtension(ExtensionDecl *E) const;
+
    bool hasMethodWithName(DeclarationName name) const;
    bool hasMethodTemplate(DeclarationName name) const;
 
    PropDecl *getProperty(DeclarationName name) const;
    FieldDecl* getField(DeclarationName name) const;
 
-   MethodDecl* getMethod(DeclarationName name, bool checkParent = true) const;
-   MethodDecl* getMethod(size_t id) const;
-
-   MethodDecl* getOwnMethod(DeclarationName name);
    bool hasInnerRecord(RecordDecl *R) const
    {
       return innerRecords.find(R) != innerRecords.end();
@@ -1646,28 +1808,21 @@ public:
       return conformances.find(P) != conformances.end();
    }
 
-   bool conformsToBaseTemplate(ProtocolDecl *P) const;
-   void addExtension(ExtensionDecl *E);
-
    [[nodiscard]]
    DeclContext::AddDeclResultKind addDecl(NamedDecl *decl);
 
 protected:
    RecordDecl(DeclKind typeID,
-              AccessModifier access,
+              AccessSpecifier access,
               SourceLocation KeywordLoc,
-              IdentifierInfo *II,
+              DeclarationName Name,
               std::vector<SourceType> &&conformanceTypes,
               std::vector<TemplateParamDecl*> &&templateParams);
-
-   static size_t lastRecordID;
 
    SourceLocation KeywordLoc;
    SourceRange BraceRange;
 
-   size_t lastMethodID = 1;
-   size_t uses = 0;
-   size_t recordID;
+   unsigned lastMethodID = 1;
 
    std::vector<SourceType> conformanceTypes;
 
@@ -1742,19 +1897,14 @@ public:
       return destructuringOperators;
    }
 
-   void setInstantiationInfo(InstantiationInfo<RecordDecl> *instantiationInfo)
+   void setInstantiationInfo(InstantiationInfo<RecordDecl> *II)
    {
-      RecordDecl::instantiationInfo = instantiationInfo;
+      instantiationInfo = II;
    }
 
    llvm::ArrayRef<TemplateParamDecl *> getTemplateParams() const
    {
       return templateParams;
-   }
-
-   bool isInstantiation() const
-   {
-      return instantiationInfo != nullptr;
    }
 
    RecordDecl *getSpecializedTemplate() const
@@ -1782,11 +1932,11 @@ public:
 
    sema::ResolvedTemplateArg const* getTemplateArg(llvm::StringRef name) const;
 
-   size_t getUses() const { return uses; }
-   size_t getRecordID() const { return recordID; }
-
    unsigned getSize() const { return occupiedBytes; }
    unsigned short getAlignment() const { return alignment; }
+
+   unsigned getLastMethodID() const { return lastMethodID; }
+   void setLastMethodID(unsigned ID) { lastMethodID = ID; }
 
    void setSize(unsigned s) { occupiedBytes = s; }
    void setAlignment(unsigned short al) { alignment = al; }
@@ -1825,49 +1975,116 @@ public:
    }
 };
 
+class FieldDecl: public VarDecl {
+public:
+   static FieldDecl *Create(ASTContext &C,
+                            AccessSpecifier Access,
+                            SourceLocation VarOrLetLoc,
+                            SourceLocation ColonLoc,
+                            DeclarationName Name,
+                            SourceType Type,
+                            bool IsStatic,
+                            bool IsConst,
+                            Expression* DefaultVal);
+
+   void setDefaultVal(Expression *expr) { value = expr; }
+
+   void addGetter(CompoundStmt* body = nullptr)
+   {
+      HasGetter = true;
+      getterBody = body;
+   }
+
+   void addSetter(CompoundStmt* body = nullptr)
+   {
+      HasSetter = true;
+      setterBody = body;
+   }
+
+   static bool classofKind(DeclKind kind) { return kind == FieldDeclID; }
+   static bool classof(Decl const* T) { return classofKind(T->getKind()); }
+
+private:
+   FieldDecl(AccessSpecifier Access,
+             SourceLocation VarOrLetLoc,
+             SourceLocation ColonLoc,
+             DeclarationName Name,
+             SourceType Type,
+             bool IsStatic,
+             bool IsConst,
+             Expression* DefaultVal);
+
+   bool HasGetter = false;
+   bool HasSetter = false;
+
+   CompoundStmt* getterBody = nullptr;
+   CompoundStmt* setterBody = nullptr;
+
+   MethodDecl *getterMethod;
+   MethodDecl *setterMethod;
+
+   FuncArgDecl* newVal = nullptr;
+   size_t globalOrdering = 0;
+
+public:
+   bool hasGetter() const { return HasGetter; }
+   void hasGetter(bool hasGetter) { HasGetter = hasGetter; }
+
+   bool hasSetter() const { return HasSetter; }
+   void hasSetter(bool hasSetter) { HasSetter = hasSetter; }
+
+   CompoundStmt* getGetterBody() const { return getterBody; }
+   void setGetterBody(CompoundStmt* body) { getterBody = body; }
+
+   CompoundStmt* getSetterBody() const { return setterBody; }
+   void setSetterBody(CompoundStmt* body) { setterBody = body; }
+
+   MethodDecl *getGetterMethod() const { return getterMethod; }
+   void setGetterMethod(MethodDecl *method) { getterMethod = method; }
+
+   MethodDecl *getSetterMethod() const { return setterMethod; }
+   void setSetterMethod(MethodDecl *method) { setterMethod = method; }
+
+   FuncArgDecl* getNewVal() const { return newVal; }
+   void setNewVal(FuncArgDecl* Val) { newVal = Val; }
+
+   Expression* getDefaultVal() const { return value; }
+
+   size_t getGlobalOrdering() const { return globalOrdering; }
+   void setGlobalOrdering(size_t globalOrder) { globalOrdering = globalOrder; }
+
+   // used as a predicate for filtered_decl_iterator
+   bool isNotStatic() const { return !isStatic(); }
+};
+
 class StructDecl: public RecordDecl {
 public:
    static StructDecl *Create(ASTContext &C,
-                             AccessModifier access,
+                             AccessSpecifier access,
                              SourceLocation KeywordLoc,
-                             IdentifierInfo *II,
+                             DeclarationName Name,
                              std::vector<SourceType> &&conformanceTypes,
                              std::vector<TemplateParamDecl*> &&templateParams);
 
-   InitDecl *getParameterlessConstructor() const
-   {
-      return parameterlessConstructor;
-   }
+   InitDecl*getParameterlessConstructor()const{return parameterlessConstructor;}
+   void setParameterlessConstructor(InitDecl *C) {parameterlessConstructor = C;}
 
-   void setParameterlessConstructor(InitDecl *parameterlessConstructor)
-   {
-      StructDecl::parameterlessConstructor = parameterlessConstructor;
-   }
+   InitDecl *getMemberwiseInitializer() const { return memberwiseInitializer; }
+   void setMemberwiseInitializer(InitDecl *Init) {memberwiseInitializer = Init;}
 
-   InitDecl *getMemberwiseInitializer() const
-   {
-      return memberwiseInitializer;
-   }
+   MethodDecl *getDefaultInitializer() const { return defaultInitializer; }
+   void setDefaultInitializer(MethodDecl *Init) { defaultInitializer = Init; }
 
-   void setMemberwiseInitializer(InitDecl *memberwiseInitializer)
-   {
-      StructDecl::memberwiseInitializer = memberwiseInitializer;
-   }
+   using StoredFieldVec = llvm::SmallVector<FieldDecl*, 0>;
+   using field_iterator = StoredFieldVec::const_iterator;
 
-   MethodDecl *getDefaultInitializer() const
-   {
-      return defaultInitializer;
-   }
+   field_iterator stored_field_begin() const { return StoredFields.begin(); }
+   field_iterator stored_field_end() const { return StoredFields.end(); }
 
-   void setDefaultInitializer(MethodDecl *defaultInitializer)
-   {
-      StructDecl::defaultInitializer = defaultInitializer;
-   }
+   const StoredFieldVec &getFields() const { return StoredFields; }
 
-   llvm::ArrayRef<FieldDecl*> getFields() const
-   {
-      return fields;
-   }
+   unsigned getNumNonStaticFields() const
+   { return (unsigned)StoredFields.size(); }
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind)
@@ -1894,21 +2111,21 @@ public:
    friend class RecordDecl; // for access to fields
 
 private:
-   StructDecl(AccessModifier access,
+   StructDecl(AccessSpecifier access,
               SourceLocation KeywordLoc,
-              IdentifierInfo *II,
+              DeclarationName Name,
               std::vector<SourceType> &&conformanceTypes,
               std::vector<TemplateParamDecl*> &&templateParams);
 
 protected:
    StructDecl(DeclKind typeID,
-              AccessModifier access,
+              AccessSpecifier access,
               SourceLocation KeywordLoc,
-              IdentifierInfo *II,
+              DeclarationName Name,
               std::vector<SourceType> &&conformanceTypes,
               std::vector<TemplateParamDecl*> &&templateParams);
 
-   std::vector<FieldDecl*> fields;
+   StoredFieldVec StoredFields;
 
    InitDecl* parameterlessConstructor = nullptr;
    InitDecl* memberwiseInitializer    = nullptr;
@@ -1918,9 +2135,9 @@ protected:
 class ClassDecl: public StructDecl {
 public:
    static ClassDecl *Create(ASTContext &C,
-                            AccessModifier access,
+                            AccessSpecifier access,
                             SourceLocation KeywordLoc,
-                            IdentifierInfo *II,
+                            DeclarationName Name,
                             std::vector<SourceType> &&conformanceTypes,
                             std::vector<TemplateParamDecl*> &&templateParams,
                             SourceType parentClass,
@@ -1929,7 +2146,7 @@ public:
    const SourceType &getParentType() const { return parentType; }
 
    ClassDecl *getParentClass() const { return parentClass; }
-   void setParentClass(ClassDecl *C) { parentClass = C; }
+   void inherit(ClassDecl *C);
 
    bool isBaseClassOf(ClassDecl const* C) const
    {
@@ -1943,6 +2160,9 @@ public:
 
       return false;
    }
+
+   void setNumVirtualFns(unsigned int Num) { NumVirtualFns = Num; }
+   unsigned getNumVirtualFns() const { return NumVirtualFns; }
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == ClassDeclID; }
@@ -1958,9 +2178,9 @@ public:
    }
 
 private:
-   ClassDecl(AccessModifier access,
+   ClassDecl(AccessSpecifier access,
              SourceLocation KeywordLoc,
-             IdentifierInfo *II,
+             DeclarationName Name,
              std::vector<SourceType> &&conformanceTypes,
              std::vector<TemplateParamDecl*> &&templateParams,
              SourceType parentClass,
@@ -1969,6 +2189,8 @@ private:
    SourceType parentType;
    ClassDecl *parentClass = nullptr;
    bool IsAbstract = false;
+
+   unsigned NumVirtualFns = 0;
 
 public:
    bool isAbstract() const { return IsAbstract; }
@@ -1979,9 +2201,9 @@ class EnumCaseDecl;
 class EnumDecl: public RecordDecl {
 public:
    static EnumDecl *Create(ASTContext &C,
-                           AccessModifier access,
+                           AccessSpecifier access,
                            SourceLocation KeywordLoc,
-                           IdentifierInfo *II,
+                           DeclarationName Name,
                            std::vector<SourceType> &&conformanceTypes,
                            std::vector<TemplateParamDecl*> &&templateParams,
                            SourceType rawType);
@@ -2004,38 +2226,61 @@ public:
    friend class RecordDecl; // for maxAssociatedTypes, cases
 
 private:
-   EnumDecl(AccessModifier access,
+   EnumDecl(AccessSpecifier access,
             SourceLocation KeywordLoc,
-            IdentifierInfo *II,
+            DeclarationName Name,
             std::vector<SourceType> &&conformanceTypes,
             std::vector<TemplateParamDecl*> &&templateParams,
             SourceType rawType);
 
    SourceType rawType;
    size_t maxAssociatedTypes = 0;
-   std::vector<EnumCaseDecl*> cases;
+   bool Unpopulated = true;
 
 public:
    const SourceType &getRawType() const { return rawType; }
    void setRawType(SourceType ty) { rawType = ty; }
 
    size_t getMaxAssociatedTypes() const { return maxAssociatedTypes; }
-   llvm::ArrayRef<EnumCaseDecl *> getCases() const { return cases; }
+   specific_decl_iterator_range<EnumCaseDecl> getCases() const
+   {
+      return getDecls<EnumCaseDecl>();
+   }
 
-   bool isUnpopulated() const { return cases.empty(); }
+   bool isUnpopulated() const { return Unpopulated; }
 };
 
 class UnionDecl: public RecordDecl {
 public:
    static UnionDecl *Create(ASTContext &C,
-                            AccessModifier access,
+                            AccessSpecifier access,
                             SourceLocation KeywordLoc,
-                            IdentifierInfo *II,
+                            DeclarationName Name,
                             std::vector<SourceType> &&conformanceTypes,
                             std::vector<TemplateParamDecl*> &&templateParams);
 
    bool isConst() const { return IsConst; }
    void isConst(bool is_const) { this->IsConst = is_const; }
+
+   using field_iterator = filtered_decl_iterator<FieldDecl,
+                                                 &FieldDecl::isNotStatic>;
+
+   using field_iterator_range = llvm::iterator_range<field_iterator>;
+
+   field_iterator stored_field_begin() const
+   {
+      return field_iterator(firstDecl);
+   }
+
+   field_iterator stored_field_end() const
+   {
+      return field_iterator();
+   }
+
+   field_iterator_range getFields() const
+   {
+      return { stored_field_begin(), stored_field_end() };
+   }
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind)
@@ -2054,9 +2299,9 @@ public:
    }
 
 private:
-   UnionDecl(AccessModifier access,
+   UnionDecl(AccessSpecifier access,
              SourceLocation KeywordLoc,
-             IdentifierInfo *II,
+             DeclarationName Name,
              std::vector<SourceType> &&conformanceTypes,
              std::vector<TemplateParamDecl*> &&templateParams);
 
@@ -2066,9 +2311,9 @@ private:
 class ProtocolDecl: public RecordDecl {
 public:
    static ProtocolDecl *Create(ASTContext &C,
-                               AccessModifier access,
+                               AccessSpecifier access,
                                SourceLocation KeywordLoc,
-                               IdentifierInfo *II,
+                               DeclarationName Name,
                                std::vector<SourceType> &&conformanceTypes,
                                std::vector<TemplateParamDecl*>&&templateParams);
 
@@ -2088,22 +2333,48 @@ public:
    void clearTemplateParams() { templateParams.clear(); }
 
 private:
-   ProtocolDecl(AccessModifier access,
+   ProtocolDecl(AccessSpecifier access,
                 SourceLocation KeywordLoc,
-                IdentifierInfo *II,
+                DeclarationName Name,
                 std::vector<SourceType> &&conformanceTypes,
                 std::vector<TemplateParamDecl*> &&templateParams);
 };
 
-class ExtensionDecl: public RecordDecl {
+class ExtensionDecl final: public NamedDecl,
+                           public DeclContext,
+                           llvm::TrailingObjects<ExtensionDecl, SourceType> {
 public:
    static ExtensionDecl *Create(ASTContext &C,
-                                AccessModifier access,
+                                AccessSpecifier access,
                                 SourceLocation KeywordLoc,
-                                IdentifierInfo *II,
-                                std::vector<SourceType> &&conformanceTypes,
-                                std::vector<TemplateParamDecl*>
-                                                              &&templateParams);
+                                SourceType ExtendedType,
+                                llvm::ArrayRef<SourceType> conformanceTypes);
+
+   static ExtensionDecl *Create(ASTContext &C,
+                                AccessSpecifier access,
+                                SourceLocation KeywordLoc,
+                                RecordDecl *R,
+                                llvm::ArrayRef<SourceType> conformanceTypes);
+
+   SourceLocation getExtLoc() const { return ExtLoc; }
+   SourceRange getBraceRange() const { return BraceRange; }
+   void setBraceRange(SourceRange BR) { BraceRange = BR; }
+
+   SourceRange getSourceRange() const
+   {
+      return SourceRange(ExtLoc, BraceRange.getEnd());
+   }
+
+   void setName(DeclarationName N) { Name = N; }
+   const SourceType &getExtendedType() const { return ExtendedType; }
+
+   RecordDecl *getExtendedRecord() const { return ExtendedRecord; }
+   void setExtendedRecord(RecordDecl *R) { ExtendedRecord = R; }
+
+   llvm::ArrayRef<SourceType> getConformanceTypes() const
+   {
+      return { getTrailingObjects<SourceType>(), NumConformances };
+   }
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == ExtensionDeclID; }
@@ -2118,32 +2389,46 @@ public:
       return static_cast<ExtensionDecl*>(const_cast<DeclContext*>(Ctx));
    }
 
+   friend TrailingObjects;
+
 private:
-   ExtensionDecl(AccessModifier access,
+   ExtensionDecl(AccessSpecifier access,
                  SourceLocation KeywordLoc,
-                 IdentifierInfo *II,
-                 std::vector<SourceType> &&conformanceTypes,
-                 std::vector<TemplateParamDecl*> &&templateParams);
+                 SourceType ExtendedType,
+                 llvm::ArrayRef<SourceType> conformanceTypes);
+
+   ExtensionDecl(AccessSpecifier access,
+                 SourceLocation KeywordLoc,
+                 RecordDecl *R,
+                 llvm::ArrayRef<SourceType> conformanceTypes);
+
+   SourceLocation ExtLoc;
+   SourceRange BraceRange;
+
+   SourceType ExtendedType;
+   RecordDecl *ExtendedRecord = nullptr;
+
+   unsigned NumConformances;
 };
 
 class MethodDecl: public CallableDecl {
 public:
    static MethodDecl *Create(ASTContext &C,
-                             AccessModifier access,
+                             AccessSpecifier access,
                              SourceLocation DefLoc,
                              DeclarationName II,
                              SourceType returnType,
-                             std::vector<FuncArgDecl*> &&args,
+                             llvm::ArrayRef<FuncArgDecl*> args,
                              std::vector<TemplateParamDecl*> &&templateParams,
                              Statement* body,
                              bool isStatic);
 
    static MethodDecl *CreateOperator(ASTContext &C,
-                                     AccessModifier access,
+                                     AccessSpecifier access,
                                      SourceLocation DefLoc,
                                      DeclarationName OperatorName,
                                      SourceType returnType,
-                                     std::vector<FuncArgDecl*> &&args,
+                                     llvm::ArrayRef<FuncArgDecl*> args,
                                      std::vector<TemplateParamDecl*>
                                                                &&templateParams,
                                      Statement* body,
@@ -2151,10 +2436,10 @@ public:
                                      bool isStatic);
 
    static MethodDecl *CreateConversionOp(ASTContext &C,
-                                         AccessModifier access,
+                                         AccessSpecifier access,
                                          SourceLocation DefLoc,
                                          SourceType returnType,
-                                         std::vector<FuncArgDecl*> &&args,
+                                         llvm::ArrayRef<FuncArgDecl*> args,
                                          std::vector<TemplateParamDecl*>
                                                                &&templateParams,
                                          Statement* body);
@@ -2183,20 +2468,20 @@ public:
    }
 
 private:
-   MethodDecl(AccessModifier access,
+   MethodDecl(AccessSpecifier access,
               SourceLocation DefLoc,
               DeclarationName II,
               SourceType returnType,
-              std::vector<FuncArgDecl*> &&args,
+              llvm::ArrayRef<FuncArgDecl*> args,
               std::vector<TemplateParamDecl*> &&templateParams,
               Statement* body,
               bool isStatic);
 
-   MethodDecl(AccessModifier access,
+   MethodDecl(AccessSpecifier access,
               SourceLocation DefLoc,
               DeclarationName OperatorName,
               SourceType returnType,
-              std::vector<FuncArgDecl*> &&args,
+              llvm::ArrayRef<FuncArgDecl*> args,
               std::vector<TemplateParamDecl*> &&templateParams,
               Statement* body,
               OperatorInfo op,
@@ -2204,28 +2489,29 @@ private:
 
    // the declaration name of a conversion operator is only known after the
    // first declaration pass
-   MethodDecl(AccessModifier access,
+   MethodDecl(AccessSpecifier access,
               SourceLocation DefLoc,
               SourceType returnType,
-              std::vector<FuncArgDecl*> &&args,
+              llvm::ArrayRef<FuncArgDecl*> args,
               std::vector<TemplateParamDecl*> &&templateParams,
               Statement* body);
 
 protected:
    MethodDecl(DeclKind typeID,
-              AccessModifier access,
+              AccessSpecifier access,
               SourceLocation Loc,
               DeclarationName Name,
               SourceType returnType,
-              std::vector<FuncArgDecl*> &&args,
+              llvm::ArrayRef<FuncArgDecl*> args,
               std::vector<TemplateParamDecl*> &&templateParams,
               Statement* body);
 
-   size_t methodID;
-   size_t protocolTableOffset = 0;
+   unsigned methodID = 0;
 
    SourceLocation BodyInstantiationLoc;
-   Statement *BodyTemplate = nullptr;
+   MethodDecl *BodyTemplate = nullptr;
+
+   MethodDecl *OverridenMethod = nullptr;
 
 public:
    void setName(DeclarationName Name)
@@ -2234,10 +2520,8 @@ public:
       this->Name = Name;
    }
 
-   size_t getMethodID() const { return methodID; }
-
-   size_t getProtocolTableOffset() const { return protocolTableOffset; }
-   void setProtocolTableOffset(size_t offset) { protocolTableOffset = offset; }
+   unsigned getMethodID() const { return methodID; }
+   void setMethodID(unsigned ID) { methodID = ID; }
 
    SourceLocation getBodyInstantiationLoc()const{ return BodyInstantiationLoc; }
    void setBodyInstantiationLoc(SourceLocation Loc)
@@ -2245,16 +2529,16 @@ public:
       BodyInstantiationLoc = Loc;
    }
 
-   Statement *getBodyTemplate() const { return BodyTemplate; }
-   void setBodyTemplate(Statement *T) { BodyTemplate = T; }
+   MethodDecl *getBodyTemplate() const { return BodyTemplate; }
+   void setBodyTemplate(MethodDecl *T) { BodyTemplate = T; }
 
    bool isAbstract() const { return getFlag(Abstract); }
    bool isProtocolMethod() const { return getFlag(ProtoMethod); }
    bool isVirtual() const { return getFlag(Virtual); }
    bool isOverride() const { return getFlag(Override); }
+   bool isVirtualOrOverride() const { return isVirtual() || isOverride(); }
    bool isProperty() const { return getFlag(Property); }
 
-   bool isTemplatedInitializer() const;
    bool isProtocolDefaultImpl() const { return getFlag(ProtoMethod); }
    bool isHasDefinition() const { return getFlag(Defined); }
 
@@ -2266,25 +2550,29 @@ public:
    void setMutating(bool mutating) { setFlag(MutableSelf, mutating); }
    void setIsProtocolMethod(bool PM) { setFlag(ProtoMethod, PM); }
    void setIsVirtual(bool virt) { setFlag(Virtual, virt); }
+   void setIsOverride(bool ovr) { setFlag(Override, ovr); }
    void setProperty(bool property) { setFlag(Property, property); }
    void setProtocolDefaultImpl(bool impl) { setFlag(ProtoDefaultImpl, impl); }
    void setMemberwiseInitializer(bool init) { setFlag(MemberwiseInit, init); }
+
+   MethodDecl *getOverridenMethod() const { return OverridenMethod; }
+   void setOverridenMethod(MethodDecl *M) { OverridenMethod = M; }
 };
 
 class InitDecl: public MethodDecl {
 public:
    static InitDecl *CreateMemberwise(ASTContext &C,
-                                     AccessModifier am,
+                                     AccessSpecifier am,
                                      SourceLocation Loc,
-                                     QualType InitializedType = QualType());
+                                     DeclarationName Name = DeclarationName());
 
    static InitDecl *Create(ASTContext &C,
-                           AccessModifier am,
+                           AccessSpecifier am,
                            SourceLocation Loc,
-                           std::vector<FuncArgDecl* > &&args,
+                           llvm::ArrayRef<FuncArgDecl*> args,
                            std::vector<TemplateParamDecl*> &&templateParams,
                            Statement* body,
-                           QualType InitializedType = QualType());
+                           DeclarationName Name = DeclarationName());
 
    std::vector<TemplateParamDecl*> &getTemplateParamsRef()
    {
@@ -2305,13 +2593,13 @@ public:
    }
 
 private:
-   InitDecl(AccessModifier am,
+   InitDecl(AccessSpecifier am,
             SourceLocation Loc,
             DeclarationName Name);
 
-   InitDecl(AccessModifier am,
+   InitDecl(AccessSpecifier am,
             SourceLocation Loc,
-            std::vector<FuncArgDecl* > &&args,
+            llvm::ArrayRef<FuncArgDecl*> args,
             std::vector<TemplateParamDecl*> &&templateParams,
             Statement* body,
             DeclarationName Name);
@@ -2331,7 +2619,7 @@ public:
    static DeinitDecl *Create(ASTContext &C,
                              SourceLocation Loc,
                              Statement* body,
-                             QualType DeinitializedType = QualType());
+                             DeclarationName Name = DeclarationName());
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == DeinitDeclID; }
@@ -2347,102 +2635,18 @@ public:
    }
 };
 
-class FieldDecl: public VarDecl {
-public:
-   static FieldDecl *Create(ASTContext &C,
-                            AccessModifier Access,
-                            SourceLocation VarOrLetLoc,
-                            SourceLocation ColonLoc,
-                            IdentifierInfo *II,
-                            SourceType Type,
-                            bool IsStatic,
-                            bool IsConst,
-                            Expression* DefaultVal);
-
-   void setDefaultVal(Expression *expr) { value = expr; }
-
-   void addGetter(CompoundStmt* body = nullptr)
-   {
-      HasGetter = true;
-      getterBody = body;
-   }
-
-   void addSetter(CompoundStmt* body = nullptr)
-   {
-      HasSetter = true;
-      setterBody = body;
-   }
-
-   static bool classofKind(DeclKind kind) { return kind == FieldDeclID; }
-   static bool classof(Decl const* T) { return classofKind(T->getKind()); }
-
-private:
-   FieldDecl(AccessModifier Access,
-             SourceLocation VarOrLetLoc,
-             SourceLocation ColonLoc,
-             IdentifierInfo *II,
-             SourceType Type,
-             bool IsStatic,
-             bool IsConst,
-             Expression* DefaultVal);
-
-   std::string linkageName;
-
-   bool HasGetter = false;
-   bool HasSetter = false;
-
-   CompoundStmt* getterBody = nullptr;
-   CompoundStmt* setterBody = nullptr;
-
-   MethodDecl *getterMethod;
-   MethodDecl *setterMethod;
-
-   FuncArgDecl* newVal = nullptr;
-   size_t globalOrdering = 0;
-
-public:
-   llvm::StringRef getLinkageName() const { return linkageName; }
-   void setLinkageName(std::string &&name) { linkageName = move(name); }
-
-   bool hasGetter() const { return HasGetter; }
-   void hasGetter(bool hasGetter) { HasGetter = hasGetter; }
-
-   bool hasSetter() const { return HasSetter; }
-   void hasSetter(bool hasSetter) { HasSetter = hasSetter; }
-
-   CompoundStmt* getGetterBody() const { return getterBody; }
-   void setGetterBody(CompoundStmt* body) { getterBody = body; }
-
-   CompoundStmt* getSetterBody() const { return setterBody; }
-   void setSetterBody(CompoundStmt* body) { setterBody = body; }
-
-   MethodDecl *getGetterMethod() const { return getterMethod; }
-   void setGetterMethod(MethodDecl *method) { getterMethod = method; }
-
-   MethodDecl *getSetterMethod() const { return setterMethod; }
-   void setSetterMethod(MethodDecl *method) { setterMethod = method; }
-
-   FuncArgDecl* getNewVal() const { return newVal; }
-   void setNewVal(FuncArgDecl* Val) { newVal = Val; }
-
-   Expression* getDefaultVal() const { return value; }
-
-   size_t getGlobalOrdering() const { return globalOrdering; }
-   void setGlobalOrdering(size_t globalOrder) { globalOrdering = globalOrder; }
-};
-
 class AssociatedTypeDecl: public NamedDecl {
 public:
    static AssociatedTypeDecl *Create(ASTContext &C,
                                      SourceLocation Loc,
                                      IdentifierInfo *ProtoSpec,
-                                     IdentifierInfo *Name,
+                                     DeclarationName Name,
                                      SourceType actualType);
 
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const { return SourceRange(Loc); }
 
-   SourceType getActualType() const { return actualType; }
+   const SourceType &getActualType() const { return actualType; }
    void setActualType(SourceType ty) { actualType = ty; }
 
    IdentifierInfo *getProtoSpecInfo() const { return protocolSpecifier; }
@@ -2450,6 +2654,8 @@ public:
    {
       return protocolSpecifier->getIdentifier();
    }
+
+   bool isImplementation() const;
 
    ProtocolDecl *getProto() const { return Proto; }
    void setProto(ProtocolDecl *P) { Proto = P; }
@@ -2460,7 +2666,7 @@ public:
 private:
    AssociatedTypeDecl(SourceLocation Loc,
                       IdentifierInfo *ProtoSpec,
-                      IdentifierInfo *Name,
+                      DeclarationName Name,
                       SourceType actualType);
 
    SourceLocation Loc;
@@ -2470,9 +2676,9 @@ private:
 };
 
 class PropDecl: public NamedDecl {
-   PropDecl(AccessModifier access,
-            SourceLocation Loc,
-            IdentifierInfo *propName,
+   PropDecl(AccessSpecifier access,
+            SourceRange Loc,
+            DeclarationName Name,
             SourceType type,
             bool isStatic,
             bool hasDefinition,
@@ -2482,7 +2688,7 @@ class PropDecl: public NamedDecl {
             CompoundStmt* setter,
             IdentifierInfo *newValName);
 
-   SourceLocation Loc;
+   SourceRange Loc;
    SourceType type;
 
    CompoundStmt* getterBody = nullptr;
@@ -2500,9 +2706,9 @@ class PropDecl: public NamedDecl {
 
 public:
    static PropDecl *Create(ASTContext &C,
-                           AccessModifier access,
-                           SourceLocation Loc,
-                           IdentifierInfo *propName,
+                           AccessSpecifier access,
+                           SourceRange Loc,
+                           DeclarationName Name,
                            SourceType type,
                            bool isStatic,
                            bool hasDefinition,
@@ -2515,8 +2721,7 @@ public:
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == PropDeclID; }
 
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const { return SourceRange(Loc); }
+   SourceRange getSourceRange() const { return Loc; }
 
    const SourceType &getType() const { return type; }
 
@@ -2543,26 +2748,28 @@ public:
 };
 
 class EnumCaseDecl: public CallableDecl {
-   EnumCaseDecl(AccessModifier AS,
+   EnumCaseDecl(AccessSpecifier AS,
                 SourceLocation CaseLoc,
                 SourceLocation IdentLoc,
-                IdentifierInfo *II,
+                DeclarationName Name,
                 StaticExpr* rawValue,
-                std::vector<FuncArgDecl*>&& associatedTypes);
+                llvm::ArrayRef<FuncArgDecl*> args);
 
    SourceLocation CaseLoc;
    SourceLocation IdentLoc;
    StaticExpr* rawValExpr;
    long long rawValue = 0;
 
+   il::Constant *ILValue = nullptr;
+
 public:
    static EnumCaseDecl *Create(ASTContext &C,
-                               AccessModifier AS,
+                               AccessSpecifier AS,
                                SourceLocation CaseLoc,
                                SourceLocation IdentLoc,
-                               IdentifierInfo *II,
+                               DeclarationName Name,
                                StaticExpr* rawValue,
-                               std::vector<FuncArgDecl*>&& associatedTypes);
+                               llvm::ArrayRef<FuncArgDecl*> args);
 
    static bool classofKind(DeclKind kind) { return kind == EnumCaseDeclID; }
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
@@ -2579,6 +2786,9 @@ public:
 
    long long getRawValue() const { return rawValue; }
    void setRawValue(long val) { rawValue = val; }
+
+   il::Constant *getILValue() const { return ILValue; }
+   void setILValue(il::Constant *V) { ILValue = V; }
 
    std::vector<TemplateParamDecl*> &getTemplateParamsRef()
    {
@@ -2659,11 +2869,7 @@ public:
       return SourceRange(StaticLoc, RBRaceLoc);
    }
 
-   IdentifierInfo *getElementNameIdentifier() const { return elementName; }
-   llvm::StringRef getElementName() const
-   {
-      return elementName->getIdentifier();
-   }
+   IdentifierInfo *getElementName() const { return elementName; }
 
    StaticExpr *getRange() const { return range; }
    void setRange(StaticExpr *S) { range = S; }

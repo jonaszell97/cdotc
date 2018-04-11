@@ -5,6 +5,8 @@
 #ifndef CDOT_BUILTIN_TYPE_H
 #define CDOT_BUILTIN_TYPE_H
 
+#include "Support/Casting.h"
+
 #include <string>
 
 #include <llvm/ADT/ArrayRef.h>
@@ -52,6 +54,10 @@ namespace cdot {
 namespace ast {
    class ASTContext;
    class Expression;
+   class StaticExpr;
+   class TemplateParamDecl;
+   class AssociatedTypeDecl;
+   struct SourceType;
 } // namespace ast
 
 namespace diag {
@@ -93,20 +99,20 @@ namespace ast {
 struct Variant;
 class QualType;
 
-enum class TypeID : unsigned char {
-#  define CDOT_TYPE(Name) \
-   Name##ID,
-#  include "Types.def"
-};
-
-#define CDOT_TYPE(Name) \
+#define CDOT_TYPE(Name, Parent) \
 class Name;
 
-#define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name)
+#define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name, "")
 #include "Types.def"
 
 class Type {
 public:
+   enum TypeID : unsigned char {
+#  define CDOT_TYPE(Name, Parent) \
+   Name##ID,
+#  include "Types.def"
+   };
+
    enum BuiltinKind : unsigned char {
 #  define CDOT_BUILTIN_TYPE(Name)   \
       Name,
@@ -120,18 +126,19 @@ public:
 
    static bool classof(Type const* T) { return true; }
 
-   bool needsLvalueToRvalueConv() const
-   {
-      return !isStruct() && !isProtocol();
-   }
+   template<class T>
+   const T *getAs() const;
 
-#  define CDOT_TYPE(Name)        \
-   bool is##Name() const;        \
-   Name *as##Name();             \
-   Name *as##Name() const;       \
+   template<class T>
+   bool isa() const;
+
+#  define CDOT_TYPE(Name, Parent)  \
+   bool is##Name() const;          \
+   Name *as##Name();               \
+   Name *as##Name() const;         \
    Name *uncheckedAs##Name() const;
 
-#  define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name)
+#  define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name, "")
 #  include "Types.def"
 
    bool isIntegerType() const;
@@ -146,7 +153,7 @@ public:
    bool isFloatTy() const;
    bool isDoubleTy() const;
 
-   bool isRawFunctionTy() const;
+   bool isThinFunctionTy() const;
    bool isRawEnum() const;
 
    bool isRealTypedefType() const; // isTypedefType queries the aliased type
@@ -157,8 +164,6 @@ public:
    Type *getCanonicalType() const { return CanonicalType; }
 
    Type *getDesugaredType() const;
-
-   bool isSelfTy() const;
 
    bool isNumeric() const
    {
@@ -171,11 +176,9 @@ public:
    sema::TemplateArgList const& getTemplateArgs() const;
    bool hasTemplateArgs() const;
 
-   llvm::StringRef getClassName() const;
    ast::RecordDecl *getRecord() const;
 
    std::string toString() const;
-   std::string toUniqueString() const;
 
    QualType getPointeeType() const;
    QualType getReferencedType() const;
@@ -255,22 +258,27 @@ public:
    bool isStruct() const;
    bool isEnum() const;
 
-   bool needsStructReturn() const;
-
    bool isOptionTy() const;
 
-   bool isRefcounted() const { return isClass(); }
-
+   bool needsStructReturn() const;
+   bool isRefcounted() const;
    bool needsCleanup() const;
 
    bool isValueType() const
    {
-      return isNumeric() || isRawFunctionTy() || isStruct();
+      return isNumeric() || isThinFunctionTy() || isStruct();
    }
 
    bool needsMemCpy() const;
 
    operator QualType();
+
+   using child_iterator       = const QualType*;
+   using child_iterator_range = llvm::iterator_range<child_iterator>;
+
+   child_iterator child_begin()    const;
+   child_iterator child_end()      const;
+   child_iterator_range children() const;
 
 protected:
    Type(TypeID id, Type *CanonicalType, bool Dependent = false)
@@ -337,6 +345,9 @@ public:
    bool is##Name##Ty() const { return getKind() == Name; }
 #  include "Basic/BuiltinTypes.def"
 
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end()   const { return child_iterator{}; }
+
    static bool classof(Type const *T)
    {
       return T->getTypeID() == TypeID::BuiltinTypeID;
@@ -346,7 +357,8 @@ public:
 
 private:
    explicit BuiltinType(BuiltinKind kind)
-      : Type(TypeID::BuiltinTypeID, this, kind == UnknownAny)
+      : Type(TypeID::BuiltinTypeID, this,
+             kind == UnknownAny || kind == Self)
    {
       BuiltinBits.kind = kind;
    }
@@ -428,6 +440,11 @@ public:
       return Value.getPointer();
    }
 
+   Qualifiers getQuals() const
+   {
+      return Qualifiers(Value.getInt());
+   }
+
    QualType getPointerTo(ast::ASTContext &Ctx) const;
 
    operator Type*()
@@ -468,6 +485,11 @@ public:
 };
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, QualType Ty);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const ast::SourceType &Ty);
+
+diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag, QualType Ty);
+diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag,
+                                    const ast::SourceType &Ty);
 
 } // namespace cdot
 
@@ -486,8 +508,9 @@ namespace llvm {
 template<class T> struct simplify_type;
 template<class T> struct DenseMapInfo;
 
+// teach isa etc. to treat QualType like a type
 template<> struct simplify_type<::cdot::QualType> {
-   using SimpleType = const ::cdot::Type*;
+   using SimpleType = ::cdot::Type*;
 
    static SimpleType getSimplifiedValue(::cdot::QualType Val)
    {
@@ -562,6 +585,9 @@ public:
       return alignof(void*);
    }
 
+   child_iterator child_begin() const { return &pointeeType; }
+   child_iterator child_end()   const { return &pointeeType + 1; }
+
    void Profile(llvm::FoldingSetNodeID &ID)
    {
       Profile(ID, getPointeeType());
@@ -607,6 +633,9 @@ public:
       return alignof(void*);
    }
 
+   child_iterator child_begin() const { return &referencedType; }
+   child_iterator child_end()   const { return &referencedType + 1; }
+
    void Profile(llvm::FoldingSetNodeID &ID)
    {
       Profile(ID, getReferencedType());
@@ -620,51 +649,6 @@ public:
    static bool classof(Type const* T)
    {
       return T->getTypeID() == TypeID::ReferenceTypeID;
-   }
-
-   friend class ast::ASTContext;
-
-protected:
-   QualType referencedType;
-};
-
-class MovedType: public Type, public llvm::FoldingSetNode {
-protected:
-   MovedType(QualType referencedType, Type *CanonicalType)
-      : Type(TypeID::MovedTypeID, CanonicalType,
-             referencedType->isDependentType()),
-        referencedType(referencedType)
-   {}
-
-public:
-   QualType getReferencedType() const
-   {
-      return referencedType;
-   }
-
-   size_t getSize() const
-   {
-      return sizeof(void*);
-   }
-
-   unsigned short getAlignment() const
-   {
-      return alignof(void*);
-   }
-
-   void Profile(llvm::FoldingSetNodeID &ID)
-   {
-      Profile(ID, getReferencedType());
-   }
-
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType referencedTy)
-   {
-      ID.AddPointer(referencedTy.getAsOpaquePtr());
-   }
-
-   static bool classof(Type const* T)
-   {
-      return T->getTypeID() == TypeID::MovedTypeID;
    }
 
    friend class ast::ASTContext;
@@ -699,6 +683,9 @@ public:
    }
 
    friend class ast::ASTContext;
+
+   child_iterator child_begin() const { return &elementType; }
+   child_iterator child_end() const { return &elementType + 1; }
 
    size_t getSize() const
    {
@@ -739,18 +726,18 @@ public:
 
 class DependentSizeArrayType: public ArrayType {
 public:
-   ast::Expression *getDependentExpr() const
+   ast::StaticExpr *getSizeExpr() const
    {
       return DependentExpr;
    }
 
    void Profile(llvm::FoldingSetNodeID &ID)
    {
-      Profile(ID, getElementType(), getDependentExpr());
+      Profile(ID, getElementType(), getSizeExpr());
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID, QualType elementType,
-                       ast::Expression *DependentExpr) {
+                       ast::StaticExpr *DependentExpr) {
       ID.AddPointer(elementType.getAsOpaquePtr());
       ID.AddPointer(DependentExpr);
    }
@@ -763,13 +750,15 @@ public:
    friend class ast::ASTContext;
 
 private:
-   DependentSizeArrayType(QualType elementType, ast::Expression *DependentExpr,
+   DependentSizeArrayType(QualType elementType, ast::StaticExpr *DependentExpr,
                           Type *CanonicalType)
       : ArrayType(TypeID::DependentSizeArrayTypeID, elementType, CanonicalType),
         DependentExpr(DependentExpr)
-   {}
+   {
+      Bits.Dependent = true;
+   }
 
-   ast::Expression *DependentExpr;
+   ast::StaticExpr *DependentExpr;
 };
 
 class InferredSizeArrayType: public ArrayType {
@@ -822,8 +811,8 @@ protected:
                 Type *CanonicalType,
                 bool Dependent);
 
-   QualType returnType;
    unsigned NumParams;
+   QualType returnType; // must come last for 'children' to work!
 
 public:
    QualType getReturnType() const
@@ -844,7 +833,12 @@ public:
       return { param_begin(), NumParams };
    }
 
-   bool isRawFunctionTy() const { return Bits.id == TypeID::FunctionTypeID; }
+   unsigned getNumParams() const { return NumParams; }
+
+   child_iterator child_begin() const { return &returnType; }
+   child_iterator child_end() const { return param_end(); }
+
+   bool isThinFunctionTy() const { return Bits.id == TypeID::FunctionTypeID; }
    bool isVararg()        const { return (FuncBits.flags & Vararg) != 0; }
    bool isCStyleVararg()  const { return (FuncBits.flags & CStyleVararg) != 0; }
    bool isNoThrow()       const { return (FuncBits.flags & NoThrow) != 0; }
@@ -853,7 +847,7 @@ public:
 
    size_t getSize() const
    {
-      if (isRawFunctionTy())
+      if (isThinFunctionTy())
          return sizeof(void(*)());
 
       // size of lambda object
@@ -928,6 +922,9 @@ public:
    iterator type_begin() const { return reinterpret_cast<iterator>(this + 1); }
    iterator type_end()   const { return type_begin() + NumTys; }
 
+   child_iterator child_begin() const { return type_begin(); }
+   child_iterator child_end() const { return type_end(); }
+
    QualType getContainedType(size_t i) const
    {
       assert(i < NumTys && "type index out of bounds");
@@ -987,17 +984,16 @@ class RecordDecl;
 
 class RecordType: public Type, public llvm::FoldingSetNode {
 protected:
-   explicit RecordType(ast::RecordDecl *record)
-      : Type(TypeID::RecordTypeID, nullptr), Rec(record)
-   {}
+   explicit RecordType(ast::RecordDecl *record,
+                       llvm::ArrayRef<QualType> TypeTemplateArgs);
 
    RecordType(TypeID typeID,
               ast::RecordDecl *record,
-              bool Dependent)
-      : Type(typeID, nullptr, Dependent), Rec(record)
-   {}
+              llvm::ArrayRef<QualType> TypeTemplateArgs,
+              bool Dependent);
 
    ast::RecordDecl *Rec;
+   unsigned NumTypeTemplateArgs;
 
 public:
    bool isRawEnum() const;
@@ -1013,6 +1009,12 @@ public:
    unsigned short getAlignment() const;
    size_t getSize() const;
 
+   child_iterator child_begin() const;
+   child_iterator child_end() const
+   {
+      return child_begin() + NumTypeTemplateArgs;
+   }
+
    void Profile(llvm::FoldingSetNodeID &ID)
    {
       Profile(ID, getRecord());
@@ -1027,11 +1029,11 @@ public:
    static bool classof(Type const* T)
    {
       switch(T->getTypeID()) {
-#     define CDOT_OBJ_TYPE(Name) \
-         case TypeID::Name##ID: return true;
-#     include "Types.def"
-
-         default: return false;
+      case TypeID::RecordTypeID:
+      case TypeID::DependentRecordTypeID:
+         return true;
+      default:
+         return false;
       }
    }
 
@@ -1043,10 +1045,8 @@ public:
 class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
-                        sema::TemplateArgList *templateArgs)
-      : RecordType(TypeID::DependentRecordTypeID, record, true),
-        templateArgs(templateArgs)
-   {}
+                       sema::TemplateArgList *templateArgs,
+                       llvm::ArrayRef<QualType> TypeTemplateArgs);
 
    sema::TemplateArgList *templateArgs;
 
@@ -1079,41 +1079,76 @@ public:
 };
 
 class GenericType: public Type, public llvm::FoldingSetNode {
-protected:
-   GenericType(QualType actualType,
-               llvm::StringRef genericTypeName)
-      : Type(TypeID::GenericTypeID, nullptr, true),
-        actualType(actualType), genericTypeName(genericTypeName)
-   {}
+   explicit GenericType(ast::TemplateParamDecl *Param);
 
-   QualType actualType;
-   llvm::StringRef genericTypeName;
+   ast::TemplateParamDecl *P;
 
 public:
-   llvm::StringRef getGenericTypeName() const
-   {
-      return genericTypeName;
-   }
+   // HACK - on creation, the actual underlying type of the
+   // TemplateParamDecl might not be known yet. We have to violate type
+   // immutability to update the canonical type before any actual type
+   // checking is done
+   void setCanonicalType(QualType CanonicalType);
 
-   QualType getActualType() const { return actualType; }
+   ast::TemplateParamDecl *getParam() const { return P; }
+   llvm::StringRef getGenericTypeName() const;
+   QualType getCovariance() const;
+   QualType getContravariance() const;
+   unsigned getIndex() const;
+   bool isVariadic() const;
 
-   unsigned short getAlignment() const { return actualType->getAlignment(); }
-   size_t getSize() const { return actualType->getSize(); }
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
 
    void Profile(llvm::FoldingSetNodeID &ID)
    {
-      Profile(ID, getActualType(), getGenericTypeName());
+      Profile(ID, P);
    }
 
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType actualType,
-                       llvm::StringRef typeName) {
-      ID.AddPointer(actualType.getAsOpaquePtr());
-      ID.AddString(typeName);
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::TemplateParamDecl *P)
+   {
+      ID.AddPointer(P);
    }
 
    static bool classof(Type const* T)
    {
       return T->getTypeID() == TypeID::GenericTypeID;
+   }
+
+   friend class ast::ASTContext;
+};
+
+class AssociatedType: public Type, public llvm::FoldingSetNode {
+   explicit AssociatedType(ast::AssociatedTypeDecl *AT);
+
+   ast::AssociatedTypeDecl *AT;
+
+public:
+   // HACK - on creation, the actual underlying type of the
+   // AssociatedTypeDecl might not be known yet. We have to violate type
+   // immutability to update the canonical type before any actual type
+   // checking is done
+   void setCanonicalType(QualType CanonicalType);
+
+   ast::AssociatedTypeDecl *getDecl() const { return AT; }
+   QualType getActualType() const;
+
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
+
+   void Profile(llvm::FoldingSetNodeID &ID)
+   {
+      Profile(ID, AT);
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::AssociatedTypeDecl *P)
+   {
+      ID.AddPointer(P);
+   }
+
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::AssociatedTypeID;
    }
 
    friend class ast::ASTContext;
@@ -1127,6 +1162,16 @@ namespace ast {
 
 class MetaType: public Type, public llvm::FoldingSetNode {
 public:
+   enum : unsigned { MemberCount = 6u };
+   enum : unsigned {
+      BaseClass = 0u,
+      VTable,
+      PTable,
+      Name,
+      Deinitializer,
+      Conformances,
+   };
+
    void Profile(llvm::FoldingSetNodeID &ID)
    {
       Profile(ID, getUnderlyingType());
@@ -1144,6 +1189,9 @@ public:
 
    friend class ast::ASTContext;
 
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
+
    QualType getUnderlyingType() const { return forType; }
 
    size_t getSize() const { llvm_unreachable("should never be a member"); }
@@ -1160,44 +1208,14 @@ protected:
    QualType forType;
 };
 
-class NamespaceType: public Type, public llvm::FoldingSetNode {
-public:
-   ast::NamespaceDecl *getNamespace() const
-   {
-      return NS;
-   }
-
-   llvm::StringRef getNamespaceName() const;
-
-   void Profile(llvm::FoldingSetNodeID &ID)
-   {
-      Profile(ID, getNamespace());
-   }
-
-   static void Profile(llvm::FoldingSetNodeID &ID, ast::NamespaceDecl *NS)
-   {
-      ID.AddPointer(NS);
-   }
-
-   static bool classof(Type const *T)
-   {
-      return T->getTypeID() == TypeID::NamespaceTypeID;
-   }
-
-   friend class ast::ASTContext;
-
-private:
-   explicit NamespaceType(ast::NamespaceDecl *NS)
-      : Type(TypeID::NamespaceTypeID, this), NS(NS)
-   {
-
-   }
-
-   ast::NamespaceDecl *NS;
-};
-
 class TypedefType: public Type, public llvm::FoldingSetNode {
 public:
+   // HACK - on creation, the actual underlying type of the
+   // TypedefDecl might not be known yet. We have to violate type
+   // immutability to update the canonical type before any actual type
+   // checking is done
+   void setCanonicalType(QualType CanonicalType);
+
    void Profile(llvm::FoldingSetNodeID &ID)
    {
       Profile(ID, getTypedef());
@@ -1215,38 +1233,36 @@ public:
 
    friend class ast::ASTContext;
 
-   ast::TypedefDecl *getTypedef() const
-   {
-      return td;
-   }
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
+
+   ast::TypedefDecl *getTypedef() const { return td; }
 
    QualType getAliasedType() const;
    llvm::StringRef getAliasName() const;
 
 private:
-   explicit TypedefType(ast::TypedefDecl *td)
-      : Type(TypeID::TypedefTypeID, nullptr),
-        td(td)
-   {
-      CanonicalType = getAliasedType();
-   }
+   explicit TypedefType(ast::TypedefDecl *td);
 
    ast::TypedefDecl *td;
 };
 
+template<class T> const T* Type::getAs() const
+{
+   if (auto Ty = support::dyn_cast<T>(this))
+      return Ty;
+
+   return support::dyn_cast<T>(CanonicalType);
+}
+
+template<class T> bool Type::isa() const
+{
+   if (support::isa<T>(this))
+      return true;
+
+   return support::isa<T>(CanonicalType);
+}
+
 } // namespace cdot
-
-namespace llvm {
-
-template <class X> inline bool
-isa(::cdot::Type*) = delete;
-template <class X> inline typename llvm::cast_retty<X, ::cdot::Type*>::ret_type
-cast(::cdot::Type*) = delete;
-template <class X> inline typename llvm::cast_retty<X, ::cdot::Type*>::ret_type
-dyn_cast(::cdot::Type*) = delete;
-template <class X> inline typename llvm::cast_retty<X, ::cdot::Type*>::ret_type
-dyn_cast_or_null(::cdot::Type*) = delete;
-
-} // namespace llvm
 
 #endif //CDOT_BUILTIN_TYPE_H

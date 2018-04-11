@@ -27,14 +27,29 @@ def __lldb_init_module(debugger, internal_dict):
                            '-l lldbDataFormatters.TupleTypeSynthProvider '
                            '-x "^cdot::TupleType$"')
     debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.TupleTypeExprSynthProvider '
+                           '-x "^cdot::ast::TupleTypeExpr$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.FunctionTypeSynthProvider '
                            '-x "^cdot::FunctionType$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.LambdaTypeSynthProvider '
+                           '-x "^cdot::LambdaType$"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.QualTypeSynthProvider '
                            '-x "^cdot::QualType"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.DeclarationNameSynthProvider '
                            '-x "^cdot::DeclarationName$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.ExprSequenceSynthProvider '
+                           '-x "^cdot::ast::ExprSequence$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.CompoundStmtSynthProvider '
+                           '-x "^cdot::ast::CompoundStmt$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.DeclContextUnionSynthProvider '
+                           '-x "^cdot::ast::Decl::DeclContextUnion$"')
 
 # Pretty printer for llvm::SmallVector/llvm::SmallVectorImpl
 class SmallVectorSynthProvider:
@@ -144,6 +159,43 @@ class TupleTypeSynthProvider:
                                       .GetValueAsUnsigned(0)
         return True
 
+class TupleTypeExprSynthProvider:
+    """ Provider for cdot::ast::TupleTypeExpr """
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.normal_child_count = 2 # TypeExpr base, NumTys
+        self.update()
+
+    def num_children(self):
+        return self.child_count + self.normal_child_count
+
+    def get_child_index(self, name):
+        if name == 'NumTys':
+            return 1
+
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normal_child_count:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normal_child_count) * self.type_size
+
+        name = '[' + str(index - self.normal_child_count) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.data_type)
+
+    def update(self):
+        self.data_type = self.valobj.GetFrame().GetModule() \
+            .FindFirstType("cdot::ast::SourceType")
+        self.type_size = self.data_type.GetByteSize()
+        self.child_count = self.valobj.GetChildMemberWithName("NumTys") \
+            .GetValueAsUnsigned(0)
+        return True
+
 class FunctionTypeSynthProvider:
     """ Provider for cdot::FunctionType """
     def __init__(self, valobj, dict):
@@ -183,6 +235,40 @@ class FunctionTypeSynthProvider:
         self.type_size = self.data_type.GetByteSize()
         self.child_count = self.valobj.GetChildMemberWithName("NumParams") \
                                .GetValueAsUnsigned(0)
+        return True
+
+class LambdaTypeSynthProvider:
+    """ Provider for cdot::LambdaType """
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.normal_child_count = 1 # Function base
+        self.update()
+
+    def num_children(self):
+        return self.child_count + self.normal_child_count
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normal_child_count:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normal_child_count) * self.type_size
+
+        name = '[' + str(index - self.normal_child_count) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.data_type)
+
+    def update(self):
+        self.data_type = self.valobj.GetFrame().GetModule() \
+            .FindFirstType("cdot::QualType")
+        self.type_size = self.data_type.GetByteSize()
+        self.child_count = self.valobj.GetChildMemberWithName("NumParams") \
+            .GetValueAsUnsigned(0)
         return True
 
 def OptionalSummaryProvider(valobj, internal_dict):
@@ -329,4 +415,117 @@ class QualTypeSynthProvider:
     def update(self):
         self.Val = self.valobj.GetChildAtIndex(0).GetChildAtIndex(
             0).GetValueAsUnsigned(0)
+        return False
+
+class ExprSequenceSynthProvider:
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.SeqElTy = self.valobj.GetFrame().GetModule().FindFirstType(
+            "cdot::ast::SequenceElement")
+        self.typeSize = self.SeqElTy.GetByteSize()
+        self.normalChildCount = 2 # Expression base, NumElements
+        self.numElements = self.valobj.GetChildMemberWithName(
+            "NumFragments").GetValueAsUnsigned(0)
+        self.update()
+
+    def num_children(self):
+        return self.normalChildCount + self.numElements
+
+    def has_children(self):
+        return True
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normalChildCount:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normalChildCount) * self.typeSize
+
+        name = '[' + str(index - self.normalChildCount) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.SeqElTy)
+
+    def update(self):
+        return True
+
+class CompoundStmtSynthProvider:
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.StmtTy = self.valobj.GetFrame().GetModule().FindFirstType(
+            "cdot::ast::Statement").GetPointerType()
+        self.typeSize = self.StmtTy.GetByteSize()
+        self.normalChildCount = 5 # Statement base, numStmts, preserveScope,
+                                  # LBraceLoc, RBraceLoc
+        self.numElements = self.valobj.GetChildMemberWithName(
+            "numStmts").GetValueAsUnsigned(0)
+        self.update()
+
+    def num_children(self):
+        return self.normalChildCount + self.numElements
+
+    def has_children(self):
+        return True
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normalChildCount:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normalChildCount) * self.typeSize
+
+        name = '[' + str(index - self.normalChildCount) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.StmtTy)
+
+    def update(self):
+        return True
+
+class DeclContextUnionSynthProvider:
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.rawValue = self.valobj.GetChildAtIndex(0).GetChildAtIndex(
+            0).GetValueAsUnsigned(0)
+        self.mask = 0x4 # llvm::PointerIntPair uses the highest bit available
+        self.contextTy = self.valobj.GetFrame().GetModule().FindFirstType(
+            "cdot::ast::DeclContext").GetPointerType()
+        self.multipleTy = self.valobj.GetFrame().GetModule().FindFirstType(
+            "cdot::ast::Decl::MultipleDeclContext").GetPointerType()
+        process = valobj.GetProcess()
+        self.endianness = process.GetByteOrder()
+        self.pointer_size = process.GetAddressByteSize()
+        self.update()
+
+    def num_children(self):
+        return 1
+
+    def has_children(self):
+        return True
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if not self.isMultiple:
+            return self.valobj.CreateChildAtOffset("Single", 0, self.contextTy)
+        else:
+            return self.valobj.CreateValueFromData(
+                "Multiple", lldb.SBData.CreateDataFromUInt64Array(
+                    self.endianness, self.pointer_size,
+                    [self.rawValue & ~self.mask]), self.multipleTy)
+
+    def update(self):
+        self.isMultiple = (self.rawValue & self.mask) != 0
         return False

@@ -17,7 +17,7 @@ struct CompilerOptions;
 
 namespace ast {
    class CompoundStmt;
-   class ImportStmt;
+   class ImportDecl;
 } // namespace ast
 
 namespace module {
@@ -34,10 +34,10 @@ class ModuleManager {
 public:
    static void createModule(ast::SemaPass &SP);
    static Module *importModule(ast::SemaPass &SP,
-                               ast::ImportStmt *stmt);
+                               ast::ImportDecl *stmt);
 
    static Module *getModule(ast::SemaPass &SP,
-                            ast::ImportStmt *stmt);
+                            ast::ImportDecl *stmt);
 };
 
 } // namespace module

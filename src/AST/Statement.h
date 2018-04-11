@@ -36,8 +36,7 @@ public:
       TypeDependent          = 1u,
       ValueDependent         = TypeDependent  << 1u,
       HadError               = ValueDependent << 1u,
-      CtfeDependent          = HadError << 1u,
-      SemanticallyChecked    = CtfeDependent << 1u,
+      SemanticallyChecked    = HadError << 1u,
       GlobalInitializer      = SemanticallyChecked  << 1u,
       ContainsUnexpandedPack = GlobalInitializer << 1u,
 
@@ -45,10 +44,12 @@ public:
                           | ContainsUnexpandedPack,
    };
 
+   void dumpFlags() const;
+   void printFlags(llvm::raw_ostream &OS) const;
 
    bool isDependent() const
    {
-      return isTypeDependent() || isValueDependent() || isCtfeDependent();
+      return isTypeDependent() || isValueDependent();
    }
 
    bool isTypeDependent() const
@@ -91,17 +92,15 @@ public:
       setFlag(GlobalInitializer, globalInit);
    }
 
-   bool hadError() const
+   bool isInvalid() const
    {
       return flagIsSet(HadError);
    }
 
-   void setHadError(bool error)
+   void setIsInvalid(bool error)
    {
       setFlag(HadError, error);
    }
-
-   bool isCtfeDependent() const { return flagIsSet(CtfeDependent); }
 
    bool isSemanticallyChecked() const { return flagIsSet(SemanticallyChecked); }
    void setSemanticallyChecked(bool chk = true)
@@ -235,98 +234,6 @@ public:
    static NullStmt *Create(ASTContext &C, SourceLocation Loc);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
-};
-
-class UsingStmt final: public Statement,
-                       llvm::TrailingObjects<UsingStmt, IdentifierInfo*> {
-   UsingStmt(SourceRange Loc,
-             llvm::ArrayRef<IdentifierInfo*> declContextSpecifier,
-             llvm::ArrayRef<IdentifierInfo*> importedItems,
-             bool wildCardImport);
-
-   SourceRange Loc;
-   unsigned NumSpecifierNames;
-   unsigned NumItems;
-   bool IsWildCard;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == UsingStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static UsingStmt *Create(ASTContext &C,
-                            SourceRange Loc,
-                            llvm::ArrayRef<IdentifierInfo*>declContextSpecifier,
-                            llvm::ArrayRef<IdentifierInfo*>importedItems,
-                            bool wildCardImport);
-
-   friend TrailingObjects;
-
-   SourceRange getSourceRange() const { return Loc; }
-
-   llvm::ArrayRef<IdentifierInfo*> getDeclContextSpecifier() const
-   {
-      return { getTrailingObjects<IdentifierInfo*>(), NumSpecifierNames };
-   }
-
-   llvm::ArrayRef<IdentifierInfo*> getImportedItems() const
-   {
-      return { getTrailingObjects<IdentifierInfo*>() + NumSpecifierNames,
-         NumItems };
-   }
-
-   bool isWildCardImport() const { return IsWildCard; }
-};
-
-class ModuleStmt final: public Statement,
-                        llvm::TrailingObjects<ModuleStmt, IdentifierInfo*> {
-   ModuleStmt(SourceRange Loc,
-              llvm::ArrayRef<IdentifierInfo*> moduleName);
-
-   SourceRange Loc;
-   unsigned NumNameQuals;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == ModuleStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static ModuleStmt *Create(ASTContext &C,
-                             SourceRange Loc,
-                             llvm::ArrayRef<IdentifierInfo*> moduleName);
-
-   friend TrailingObjects;
-
-   SourceRange getSourceRange() const { return Loc; }
-
-   llvm::ArrayRef<IdentifierInfo*> getQualifiedModuleName() const
-   {
-      return { getTrailingObjects<IdentifierInfo*>(), NumNameQuals };
-   }
-};
-
-class ImportStmt final: public Statement,
-                        llvm::TrailingObjects<ImportStmt, IdentifierInfo*> {
-   ImportStmt(SourceRange Loc,
-              llvm::ArrayRef<IdentifierInfo*> moduleName);
-
-   SourceRange Loc;
-   unsigned NumNameQuals;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == ImportStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static ImportStmt *Create(ASTContext &C,
-                             SourceRange Loc,
-                             llvm::ArrayRef<IdentifierInfo*> moduleName);
-
-   friend TrailingObjects;
-
-   SourceRange getSourceRange() const { return Loc; }
-
-   llvm::ArrayRef<IdentifierInfo*> getQualifiedImportName() const
-   {
-      return { getTrailingObjects<IdentifierInfo*>(), NumNameQuals };
-   }
 };
 
 class CompoundStmt final: public Statement,
@@ -783,13 +690,13 @@ protected:
    DestructuringDecl(NodeType typeID,
                      SourceRange SR,
                      unsigned NumDecls,
-                     AccessModifier access,
+                     AccessSpecifier access,
                      bool isConst,
                      SourceType type,
                      Expression *value);
 
    SourceRange SR;
-   AccessModifier access;
+   AccessSpecifier access;
    bool IsConst;
 
    unsigned NumDecls;
@@ -814,8 +721,8 @@ public:
 
    SourceRange getSourceRange() const { return SR; }
 
-   AccessModifier getAccess() const { return access; }
-   void setAccess(AccessModifier A) { access = A; }
+   AccessSpecifier getAccess() const { return access; }
+   void setAccess(AccessSpecifier A) { access = A; }
 
    bool isConst() const { return IsConst; }
 
@@ -837,7 +744,7 @@ class LocalDestructuringDecl final:
    llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
 private:
    LocalDestructuringDecl(SourceRange SR,
-                          AccessModifier access,
+                          AccessSpecifier access,
                           bool isConst,
                           llvm::ArrayRef<VarDecl*> Decls,
                           SourceType type,
@@ -848,7 +755,7 @@ public:
 
    static LocalDestructuringDecl *Create(ASTContext &C,
                                          SourceRange SR,
-                                         AccessModifier access,
+                                         AccessSpecifier access,
                                          bool isConst,
                                          llvm::ArrayRef<VarDecl*> Decls,
                                          SourceType type,
@@ -871,7 +778,7 @@ class GlobalDestructuringDecl:
    llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
 private:
    GlobalDestructuringDecl(SourceRange SR,
-                           AccessModifier access,
+                           AccessSpecifier access,
                            bool isConst,
                            llvm::ArrayRef<VarDecl*> Decls,
                            SourceType type,
@@ -884,7 +791,7 @@ public:
 
    static GlobalDestructuringDecl *Create(ASTContext &C,
                                           SourceRange SR,
-                                          AccessModifier access,
+                                          AccessSpecifier access,
                                           bool isConst,
                                           llvm::ArrayRef<VarDecl*> Decls,
                                           SourceType type,
@@ -951,7 +858,7 @@ class StaticForStmt: public Statement {
 public:
    StaticForStmt(SourceLocation StaticLoc,
                  SourceLocation IfLoc,
-                 std::string &&elementName,
+                 IdentifierInfo *elementName,
                  StaticExpr *range,
                  Statement *body);
 
@@ -961,7 +868,7 @@ public:
 private:
    SourceLocation StaticLoc;
    SourceLocation ForLoc;
-   std::string elementName;
+   IdentifierInfo *elementName;
    StaticExpr *range;
    Statement *body;
 
@@ -973,7 +880,7 @@ public:
       return SourceRange(StaticLoc, body->getSourceRange().getEnd());
    }
 
-   llvm::StringRef getElementName() const { return elementName; }
+   IdentifierInfo * getElementName() const { return elementName; }
    Statement* getBody() const { return body; }
    StaticExpr *getRange() const { return range; }
 

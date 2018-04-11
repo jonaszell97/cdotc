@@ -104,7 +104,7 @@ llvm::MemoryBuffer *FileManager::getBuffer(size_t sourceId)
    return index->getSecond()->getValue().Buf.get();
 }
 
-size_t FileManager::getSourceId(SourceLocation loc)
+unsigned FileManager::getSourceId(SourceLocation loc)
 {
    if (loc.getOffset() == 0)
       return 0;
@@ -153,6 +153,38 @@ size_t FileManager::createSourceLocAlias(SourceLocation aliasedLoc)
    aliases.emplace(id, aliasedLoc);
 
    return id;
+}
+
+void FileManager::addFileInclude(size_t IncludedFromID, size_t IncludedFileID)
+{
+   auto FromIt = IdFileMap.find(IncludedFromID);
+   assert(FromIt != IdFileMap.end() && "file does not exist!");
+
+   auto IncIt = IdFileMap.find(IncludedFileID);
+   assert(IncIt != IdFileMap.end() && "file does not exist!");
+
+   IncIt->getSecond()->getValue().IncludedFrom = FromIt->getSecond();
+}
+
+bool FileManager::wasIncludedFrom(size_t CurrentFile,
+                                  size_t PossiblyIncludedFile) {
+   auto FromIt = IdFileMap.find(CurrentFile);
+   assert(FromIt != IdFileMap.end() && "file does not exist!");
+
+   auto IncIt = IdFileMap.find(PossiblyIncludedFile);
+   assert(IncIt != IdFileMap.end() && "file does not exist!");
+
+   auto *BaseFileFromCurrent = FromIt->getSecond()->getValue().IncludedFrom;
+   while (BaseFileFromCurrent) {
+      BaseFileFromCurrent = BaseFileFromCurrent->getValue().IncludedFrom;
+   }
+
+   auto *BaseFileFromIncluded = IncIt->getSecond()->getValue().IncludedFrom;
+   while (BaseFileFromIncluded) {
+      BaseFileFromIncluded = BaseFileFromIncluded->getValue().IncludedFrom;
+   }
+
+   return BaseFileFromCurrent == BaseFileFromIncluded;
 }
 
 SourceLocation FileManager::getAliasLoc(size_t sourceId)

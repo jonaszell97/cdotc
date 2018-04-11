@@ -59,7 +59,7 @@ public:
    {
       llvm::SmallVector<CompilationUnit, 4> Jobs;
 
-      std::unordered_map<CompilationUnit*, std::vector<ImportStmt*>> ImportMap;
+      std::unordered_map<CompilationUnit*, std::vector<ImportDecl*>> ImportMap;
       std::unordered_map<Module*, CompilationUnit*> UnitMap;
 
       llvm::SmallString<128> ScratchBuf;
@@ -764,7 +764,7 @@ void ModuleManager::createModule(SemaPass &SP)
 }
 
 Module * ModuleManager::getModule(ast::SemaPass &SP,
-                                  ImportStmt *stmt) {
+                                  ImportDecl *stmt) {
    auto &ModuleName = stmt->getQualifiedModuleName();
 //   auto loc = stmt->getSourceLoc();
    auto &options = SP.getCompilationUnit().getOptions();
@@ -798,7 +798,7 @@ Module * ModuleManager::getModule(ast::SemaPass &SP,
 }
 
 Module *ModuleManager::importModule(SemaPass &SP,
-                                    ImportStmt *stmt) {
+                                    ImportDecl *stmt) {
    auto importedFrom = stmt->getSourceLoc();
 
    auto M = getModule(SP, stmt);

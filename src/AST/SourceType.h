@@ -65,4 +65,63 @@ private:
 } // namespace ast
 } // namespace cdot
 
+namespace llvm {
+
+template<class T> struct simplify_type;
+template<class T> struct DenseMapInfo;
+
+// teach isa etc. to treat QualType like a type
+template<> struct simplify_type<::cdot::ast::SourceType> {
+   using SimpleType = ::cdot::Type*;
+
+   static SimpleType getSimplifiedValue(::cdot::ast::SourceType Val)
+   {
+      return Val.getResolvedType();
+   }
+};
+
+template<>
+class PointerLikeTypeTraits<::cdot::ast::SourceType> {
+public:
+   static inline void *getAsVoidPointer(::cdot::ast::SourceType P)
+   {
+      return P.getResolvedType().getAsOpaquePtr();
+   }
+
+   static inline ::cdot::ast::SourceType getFromVoidPointer(void *P)
+   {
+      return ::cdot::ast::SourceType(::cdot::QualType::getFromOpaquePtr(P));
+   }
+
+   // Various qualifiers go in low bits.
+   enum { NumLowBitsAvailable = 0 };
+};
+
+template<> struct DenseMapInfo<::cdot::ast::SourceType> {
+   static ::cdot::ast::SourceType getEmptyKey() {
+      uintptr_t Val = static_cast<uintptr_t>(-1);
+      Val <<= ::cdot::TypeAlignmentInBits;
+      return ::cdot::ast::SourceType(::cdot::QualType::getFromOpaquePtr(
+         (void*)Val));
+   }
+
+   static ::cdot::ast::SourceType getTombstoneKey() {
+      uintptr_t Val = static_cast<uintptr_t>(-2);
+      Val <<= ::cdot::TypeAlignmentInBits;
+      return ::cdot::ast::SourceType(::cdot::QualType::getFromOpaquePtr(
+         (void*)Val));
+   }
+
+   static int getHashValue(const ::cdot::ast::SourceType &P) {
+      return (int)(uintptr_t)P.getResolvedType().getAsOpaquePtr();
+   }
+
+   static bool isEqual(const ::cdot::ast::SourceType &LHS,
+                       const ::cdot::ast::SourceType &RHS) {
+      return LHS == RHS;
+   }
+};
+
+} // namespace llvm
+
 #endif //CDOT_SOURCETYPE_H

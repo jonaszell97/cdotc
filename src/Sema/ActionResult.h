@@ -5,6 +5,7 @@
 #ifndef CDOT_ACTIONRESULT_H
 #define CDOT_ACTIONRESULT_H
 
+#include "AST/DeclDenseMapInfo.h"
 #include "AST/Type.h"
 
 #include <llvm/ADT/PointerIntPair.h>
@@ -16,39 +17,6 @@ namespace ast {
    class Decl;
 } // namespace ast
 } // namespace cdot
-
-namespace llvm {
-
-template <typename T>
-class PointerLikeTypeTraits;
-
-template<>
-class PointerLikeTypeTraits<::cdot::ast::Statement*> {
-public:
-   static inline void *getAsVoidPointer(::cdot::ast::Statement* P) { return P; }
-
-   static inline ::cdot::ast::Statement *getFromVoidPointer(void *P)
-   {
-      return static_cast<::cdot::ast::Statement*>(P);
-   }
-
-   enum { NumLowBitsAvailable = 2 };
-};
-
-template<>
-class PointerLikeTypeTraits<::cdot::ast::Decl*> {
-public:
-   static inline void *getAsVoidPointer(::cdot::ast::Decl* P) { return P; }
-
-   static inline ::cdot::ast::Decl *getFromVoidPointer(void *P)
-   {
-      return static_cast<::cdot::ast::Decl*>(P);
-   }
-
-   enum { NumLowBitsAvailable = 2 };
-};
-
-} // namespace llvm
 
 namespace cdot {
 
@@ -75,21 +43,18 @@ public:
       : Val(T()), Valid(false)
    {}
 
-   bool isValid() const
-   {
-      return Valid;
-   }
+   bool isValid() const { return Valid; }
+   bool hasValue() const { return Valid; }
 
-   operator bool() const
-   {
-      return isValid();
-   }
+   operator bool() const { return isValid(); }
 
    T get() const
    {
       assert(isValid() && "called 'get()' on invalid action result");
       return Val;
    }
+
+   T getValue() const { return get(); }
 
    void set(T t) { Val = t; }
    void setValid(bool Valid) { this->Valid = Valid; }
@@ -120,21 +85,17 @@ public:
       : Val(T(), false)
    {}
 
-   bool isValid() const
-   {
-      return Val.getPointer();
-   }
-
-   operator bool() const
-   {
-      return isValid();
-   }
+   bool isValid() const { return Val.getInt(); }
+   bool hasValue() const { return Val.getInt(); }
+   operator bool() const { return isValid(); }
 
    T get() const
    {
       assert(isValid() && "called 'get()' on invalid action result");
       return Val.getPointer();
    }
+
+   T getValue() const { return get(); }
 
    void set(T t) { Val.setPointer(t); }
    void setValid(bool Valid) { Val.setInt(Valid); }

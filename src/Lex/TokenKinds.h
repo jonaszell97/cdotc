@@ -14,7 +14,6 @@ enum TokenType: unsigned short {
 
 #  define CDOT_TOKEN(Name, Spelling) Name,
 #  define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling) Name,
-
 #  include "Tokens.def"
 };
 

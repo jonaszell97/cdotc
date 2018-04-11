@@ -11,8 +11,6 @@ namespace ast {
 static bool prepareDeclForCtfe(SemaPass &Sema, Decl *Decl)
 {
    if (!Sema.isDeclared(Decl)) {
-      assert(Sema.inCTFE() && "missing declaration!");
-
       SemaPass::DeclScopeRAII declContextRAII(Sema, Decl->getDeclContext());
       auto Result = Sema.declareStmt(Decl);
       if (!Result)
@@ -25,6 +23,17 @@ static bool prepareDeclForCtfe(SemaPass &Sema, Decl *Decl)
 bool SemaPass::ensureDeclared(Decl *D)
 {
    return prepareDeclForCtfe(*this, D);
+}
+
+bool SemaPass::ensureVisited(Decl *D)
+{
+   if (VisitedDecls.find((uintptr_t)D) != VisitedDecls.end())
+      return true;
+
+   DeclScopeRAII declContextRAII(*this, D->getDeclContext());
+   ScopeResetRAII scopeResetRAII(*this);
+
+   return visitDecl(D).isValid();
 }
 
 bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
@@ -48,6 +57,26 @@ bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
    }
 
    return true;
+}
+
+DeclResult SemaPass::declareAndVisit(Decl *D)
+{
+   if (!ensureDeclared(D))
+      return DeclError();
+
+   DeclScopeRAII declContextRAII(*this, D->getDeclContext());
+   ScopeResetRAII scopeResetRAII(*this);
+
+   auto Res = visitDecl(D);
+   if (!Res)
+      return Res;
+
+   if (auto M = support::dyn_cast<MethodDecl>(D)) {
+      if (!ILGen->VisitedDecls.count((uintptr_t) D))
+         ILGen->DeclareFunction(M);
+   }
+
+   return D;
 }
 
 bool SemaPass::ensureSizeKnown(QualType Ty,

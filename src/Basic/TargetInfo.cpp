@@ -23,7 +23,9 @@ unsigned TargetInfo::getSizeOfType(QualType Ty) const
    Ty = Ty->getCanonicalType();
 
    switch (Ty->getTypeID()) {
-   case TypeID::RecordTypeID: {
+   case Type::MetaTypeID:
+      return PointerSizeInBytes;
+   case Type::RecordTypeID: {
       auto R = Ty->getRecord();
       if (R->isClass()) {
          return PointerSizeInBytes;
@@ -41,7 +43,9 @@ unsigned short TargetInfo::getAlignOfType(QualType Ty) const
    Ty = Ty->getCanonicalType();
 
    switch (Ty->getTypeID()) {
-   case TypeID::RecordTypeID: {
+   case Type::MetaTypeID:
+      return PointerAlignInBytes;
+   case Type::RecordTypeID: {
       auto R = Ty->getRecord();
       if (R->isClass()) {
          return PointerAlignInBytes;
@@ -87,7 +91,7 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
    assert(Ty->isCanonical());
 
    switch (Ty->getTypeID()) {
-   case TypeID::BuiltinTypeID: {
+   case Type::BuiltinTypeID: {
       using BK = Type::BuiltinKind;
       switch (Ty->asBuiltinType()->getKind()) {
       case BK::i1: case BK::i8: case BK::u8: return 1;
@@ -101,29 +105,29 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
          llvm_unreachable("bad builtin type kind!");
       }
    }
-   case TypeID::PointerTypeID:
-   case TypeID::ReferenceTypeID:
+   case Type::PointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::FunctionTypeID:
+   case Type::LambdaTypeID:
       return PointerSizeInBytes;
-   case TypeID::ArrayTypeID: {
+   case Type::ArrayTypeID: {
       auto Arr = Ty->uncheckedAsArrayType();
       return (unsigned)Arr->getNumElements()
                  * getSizeOfType(Arr->getElementType());
    }
-   case TypeID::TupleTypeID: {
+   case Type::TupleTypeID: {
       unsigned size = 0;
       for (auto &ElTy : Ty->uncheckedAsTupleType()->getContainedTypes())
          size += getSizeOfType(ElTy);
 
       return size;
    }
-   case TypeID::FunctionTypeID:
-      return PointerSizeInBytes;
-   case TypeID::LambdaTypeID:
-      return 2 * PointerSizeInBytes;
-   case TypeID::RecordTypeID: {
+   case Type::RecordTypeID: {
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->getSize();
    }
+   case Type::MetaTypeID:
+      return MetaType::MemberCount * PointerSizeInBytes;
    default:
       llvm_unreachable("bad type kind!");
    }
@@ -134,16 +138,17 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
    assert(Ty->isCanonical());
 
    switch (Ty->getTypeID()) {
-   case TypeID::BuiltinTypeID:
+   case Type::BuiltinTypeID:
       return (unsigned short)getSizeOfType(Ty);
-   case TypeID::PointerTypeID:
-   case TypeID::ReferenceTypeID:
-   case TypeID::LambdaTypeID:
-   case TypeID::FunctionTypeID:
+   case Type::PointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::LambdaTypeID:
+   case Type::FunctionTypeID:
+   case Type::MetaTypeID:
       return PointerAlignInBytes;
-   case TypeID::ArrayTypeID:
+   case Type::ArrayTypeID:
       return getAlignOfType(Ty->uncheckedAsArrayType()->getElementType());
-   case TypeID::TupleTypeID: {
+   case Type::TupleTypeID: {
       unsigned short align = 1;
       for (auto &ElTy : Ty->uncheckedAsTupleType()->getContainedTypes()) {
          auto ElAlign = getAlignOfType(ElTy);
@@ -153,7 +158,7 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
 
       return align;
    }
-   case TypeID::RecordTypeID: {
+   case Type::RecordTypeID: {
       assert(Ty->getRecord()->getSize() && "alignment not calculated!");
       return Ty->getRecord()->getAlignment();
    }

@@ -11,6 +11,9 @@
 #include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
+
+class IdentifierInfo;
+
 namespace ast {
    class CallableDecl;
    class MethodDecl;
@@ -234,18 +237,18 @@ private:
 
 class StaticForScope: public Scope {
 public:
-   StaticForScope(llvm::StringRef elementName,
+   StaticForScope(IdentifierInfo *elementName,
                   QualType elementTy,
                   Scope *enclosingScope = nullptr);
 
-   llvm::StringRef getElementName() const { return elementName; }
+   IdentifierInfo * getElementName() const { return elementName; }
    QualType getElementTy() const { return elementTy; }
 
    static bool classofKind(TypeID id) { return id == StaticForScopeID; }
    static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }
 
 private:
-   llvm::StringRef elementName;
+   IdentifierInfo *elementName;
    QualType elementTy;
 };
 

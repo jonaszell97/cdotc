@@ -8,8 +8,8 @@
 #include "AST/PrettyPrinter.h"
 #include "Basic/FileUtils.h"
 #include "Basic/FileManager.h"
-#include "IL/Module/Context.h"
-#include "IL/Module/Module.h"
+#include "IL/Context.h"
+#include "IL/Module.h"
 #include "IRGen/IRGen.h"
 #include "Lex/Lexer.h"
 #include "Message/Diagnostics.h"
@@ -245,7 +245,7 @@ namespace {
 
 void importBuiltinModules(ASTContext &Ctx,
                           size_t sourceId,
-                          llvm::SmallVectorImpl<ImportStmt*> &importStmts,
+                          llvm::SmallVectorImpl<ImportDecl*> &importStmts,
                           Module *compiledModule) {
 //   llvm::SmallString<32> str("std.");
 //
@@ -254,7 +254,7 @@ void importBuiltinModules(ASTContext &Ctx,
 //      if (compiledModule && str.str().equals(compiledModule->getFullName()))
 //         continue;
 //
-//      ImportStmt *import = ImportStmt::C({ "std", M });
+//      ImportDecl *import = ImportDecl::C({ "std", M });
 //      import->setSourceLoc(SourceLocation());
 //
 //      importStmts.push_back(import);
@@ -337,7 +337,7 @@ void CompilationUnit::parse()
 
       PrettyParserStackTraceEntry PST(parser);
 
-      llvm::SmallVector<ImportStmt*, 4> importStmts;
+      llvm::SmallVector<ImportDecl*, 4> importStmts;
       llvm::SmallVector<Statement*, 32> statements;
 
       if (!options.noBasicLib())

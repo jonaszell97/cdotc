@@ -37,11 +37,6 @@
       CDOT_STMT(DebugStmt)
       CDOT_STMT(NullStmt)
 
-      CDOT_STMT(UsingStmt)
-
-      CDOT_STMT(ModuleStmt)
-      CDOT_STMT(ImportStmt)
-
       CDOT_STMT(StaticIfStmt)
       CDOT_STMT(StaticForStmt)
       CDOT_STMT(MixinStmt)

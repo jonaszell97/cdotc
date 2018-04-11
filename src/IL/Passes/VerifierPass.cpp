@@ -3,11 +3,14 @@
 //
 
 #include "VerifierPass.h"
-#include "../Writer/ModuleWriter.h"
-#include "../../Basic/CastKind.h"
+
+#include "Basic/CastKind.h"
+#include "IL/Constants.h"
+#include "IL/Writer/ModuleWriter.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
+#include <IL/Instructions.h>
 
 using namespace cdot::support;
 
@@ -36,14 +39,6 @@ void VerifierPass::emitError(Function const& F)
    Writer.WriteFunctionDeclTo(llvm::outs());
 }
 
-void VerifierPass::emitError(AggregateType const& Ty)
-{
-   llvm::outs() << "   ";
-
-   ModuleWriter Writer(&Ty);
-   Writer.WriteTo(llvm::outs());
-}
-
 void VerifierPass::emitError(GlobalVariable const& G)
 {
    llvm::outs() << "   ";
@@ -63,9 +58,6 @@ void VerifierPass::emitError(BasicBlock const &B)
 
 void VerifierPass::visitModule(Module& M)
 {
-   for (const auto &Ty : M.getReferencedTypes())
-      visitAggregateType(*Ty);
-
    for (const auto &G : M.getGlobalList())
       visitGlobalVariable(G);
 
@@ -87,21 +79,6 @@ namespace {
 
 bool typesCompatible(const QualType &lhs, const QualType &rhs)
 {
-   if (lhs->isReferenceType() && !rhs->isReferenceType()) {
-      QualType ref = lhs->getReferencedType();
-      if (!typesCompatible(ref, rhs))
-         return false;
-
-      return ref->needsStructReturn();
-   }
-   if (rhs->isReferenceType() && !lhs->isReferenceType()) {
-      QualType ref = rhs->getReferencedType();
-      if (!typesCompatible(lhs, ref))
-         return false;
-
-      return ref->needsStructReturn();
-   }
-
    return *lhs == *rhs;
 }
 
@@ -115,11 +92,6 @@ void VerifierPass::checkOperandAccessibility(il::Instruction const& I)
          errorIf(I.getParent()->getParent() != Inst->getParent()->getParent(),
                  "referencing instruction in different function!", I, *Inst);
    }
-}
-
-void VerifierPass::visitAggregateType(AggregateType const &Ty)
-{
-
 }
 
 void VerifierPass::visitGlobalVariable(GlobalVariable const &G)
@@ -161,9 +133,26 @@ void VerifierPass::visitBasicBlock(BasicBlock const &B)
 
 void VerifierPass::visitAllocaInst(AllocaInst const& I)
 {
-   errorIf((I.getType()->isVoidType()), "allocated type cannot be void", I);
+   errorIf((I.getType()->getReferencedType()->isVoidType()),
+           "allocated type cannot be void", I);
    errorIf(I.getAlignment() != 1 && I.getAlignment() % 2 != 0, "invalid "
       "alignment", I);
+}
+
+void VerifierPass::visitAllocBoxInst(const il::AllocBoxInst &I)
+{
+   errorIf((I.getType()->getReferencedType()->isVoidType()),
+           "allocated type cannot be void", I);
+}
+
+void VerifierPass::visitDeallocInst(const il::DeallocInst &I)
+{
+
+}
+
+void VerifierPass::visitDeallocBoxInst(const il::DeallocBoxInst &I)
+{
+
 }
 
 void VerifierPass::visitLambdaInitInst(LambdaInitInst const& I)
@@ -425,8 +414,6 @@ void VerifierPass::visitVirtualInvokeInst(const VirtualInvokeInst &I)
 
 void VerifierPass::visitProtocolInvokeInst(const ProtocolInvokeInst &I)
 {
-   errorIf(!I.getCalledMethod()->isProtocolMethod(), "method is not a "
-      "protocol method", I);
    visitInvokeInst(I);
 }
 
@@ -475,8 +462,6 @@ void VerifierPass::visitVirtualCallInst(const VirtualCallInst &I)
 
 void VerifierPass::visitProtocolCallInst(const ProtocolCallInst &I)
 {
-   errorIf(!I.getCalledMethod()->isProtocolMethod(), "method is not a "
-      "protocol method", I);
    visitCallInst(I);
 }
 
@@ -558,9 +543,9 @@ bool hasValidBinOpType(Value const* V)
 {
    auto ty = V->getType();
    switch (ty->getTypeID()) {
-      case TypeID::BuiltinTypeID:
+      case Type::BuiltinTypeID:
          return ty->isIntegerType() || ty->isFPType();
-      case TypeID::PointerTypeID:
+      case Type::PointerTypeID:
          return true;
       default:
          return false;
@@ -575,12 +560,16 @@ void VerifierPass::visitBinaryOperatorInst(const BinaryOperatorInst &I)
 
    switch (I.getOpCode()) {
    case OP::Add: case OP::Sub: case OP::Mul: case OP::Div: case OP::Mod:
-   case OP::Exp:
       errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
       errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);
       errorIf(!typesCompatible(I.getOperand(0)->getType(),
                                I.getOperand(1)->getType()),
               "operands are not of the same type", I);
+
+      break;
+   case OP::Exp:
+      errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
+      errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);
 
       break;
    case OP::And: case OP::Or: case OP::Xor: case OP::Shl: case OP::AShr:
@@ -611,10 +600,17 @@ void VerifierPass::visitUnaryOperatorInst(const UnaryOperatorInst &I)
    errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
 }
 
+static bool isValidBitCastType(QualType Ty)
+{
+   return Ty->isPointerType() || Ty->isReferenceType() || Ty->isClass()
+          || Ty->isArrayType() || Ty->isMetaType()
+          || Ty->isThinFunctionTy();
+}
+
 void VerifierPass::visitBitCastInst(BitCastInst const& I)
 {
-   errorIf(!I.getType()->isPointerType() && !I.getType()->isRefcounted()
-           && !I.getType()->isRawFunctionTy(),
+   errorIf(!isValidBitCastType(I.getType())
+           || !isValidBitCastType(I.getOperand(0)->getType()),
            "bitcast type must be a pointer type", I);
 }
 
@@ -625,12 +621,12 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
 
    switch (I.getKind()) {
    case CastKind::IntToPtr:
-      errorIf(!from->isIntegerType(), "inttoptr operand must be integral", I);
-      errorIf(!to->isPointerType(), "not a pointer type", I);
+      errorIf(!from->isIntegerType(),"inttoptr operand must be integral", I);
+      errorIf(!isValidBitCastType(to), "not a pointer type", I);
       break;
    case CastKind::PtrToInt:
       errorIf(!to->isIntegerType(), "ptrtoint result type must be integral", I);
-      errorIf(!from->isPointerType() && !from->isRecordType(),
+      errorIf(!isValidBitCastType(from),
               "ptrtoint operand must be pointer", I);
       break;
    case CastKind::IntToFP:
@@ -708,6 +704,16 @@ void VerifierPass::visitIntToEnumInst(IntToEnumInst const& I)
       "associated values!", I);
 }
 
+void VerifierPass::visitDeinitializeLocalInst(
+                                           const il::DeinitializeLocalInst &I) {
+
+}
+
+void VerifierPass::visitDeinitializeTemporaryInst(
+                                       const il::DeinitializeTemporaryInst &I) {
+
+}
+
 void VerifierPass::visitUnionCastInst(UnionCastInst const& I)
 {
 
@@ -724,6 +730,16 @@ void VerifierPass::visitExceptionCastInst(ExceptionCastInst const& I)
 }
 
 void  VerifierPass::visitDynamicCastInst(const DynamicCastInst &I)
+{
+
+}
+
+void VerifierPass::visitDebugLocInst(const DebugLocInst &I)
+{
+
+}
+
+void VerifierPass::visitDebugLocalInst(const DebugLocalInst &I)
 {
 
 }

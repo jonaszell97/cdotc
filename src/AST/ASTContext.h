@@ -32,6 +32,7 @@ class Decl;
 class CallableDecl;
 class RecordDecl;
 class AliasDecl;
+class ExtensionDecl;
 
 class ASTContext {
 public:
@@ -70,6 +71,7 @@ public:
 
    using AttrVec       = llvm::SmallVector<Attr*, 0>;
    using ConstraintVec = llvm::SmallVector<StaticExpr*, 0>;
+   using ExtensionVec  = llvm::SmallVector<ExtensionDecl*, 0>;
 
 private:
    mutable llvm::BumpPtrAllocator Allocator;
@@ -80,6 +82,7 @@ private:
 
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
    mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
+   mutable llvm::DenseMap<const RecordDecl*, ExtensionVec*> ExtensionMap;
 
 #  define CDOT_BUILTIN_TYPE(Name)                              \
    alignas(TypeAlignment) mutable BuiltinType Name##Ty;
@@ -87,16 +90,15 @@ private:
 
    mutable llvm::FoldingSet<PointerType> PointerTypes;
    mutable llvm::FoldingSet<ReferenceType> ReferenceTypes;
-   mutable llvm::FoldingSet<MovedType> MovedTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
    mutable llvm::FoldingSet<InferredSizeArrayType> InferredSizeArrayTypes;
    mutable llvm::FoldingSet<TupleType> TupleTypes;
    mutable llvm::FoldingSet<GenericType> GenericTypes;
+   mutable llvm::FoldingSet<AssociatedType> AssociatedTypes;
    mutable llvm::FoldingSet<DependentRecordType> DependentRecordTypes;
    mutable llvm::FoldingSet<MetaType> MetaTypes;
-   mutable llvm::FoldingSet<NamespaceType> NamespaceTypes;
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
 
@@ -105,7 +107,7 @@ public:
    BuiltinType *getVoidType() const { return &VoidTy; }
 
    BuiltinType *getInt1Ty() const { return &i1Ty; }
-   BuiltinType *getUInt1Ty() const { return &i1Ty; }
+   BuiltinType *getUInt1Ty() const { return &u1Ty; }
 
    BuiltinType *getBoolTy() const { return &i1Ty; }
 
@@ -169,7 +171,7 @@ public:
       }
       else {
          switch (bits) {
-            case 1: return &i1Ty;
+            case 1: return &u1Ty;
             case 8: return &u8Ty;
             case 16: return &u16Ty;
             case 32: return &u32Ty;
@@ -187,7 +189,6 @@ public:
 
    PointerType *getPointerType(QualType pointeeType) const;
    ReferenceType *getReferenceType(QualType referencedType) const;
-   MovedType *getMovedType(QualType referencedType) const;
 
    FunctionType *getFunctionType(QualType returnType,
                                  llvm::ArrayRef<QualType> argTypes,
@@ -202,7 +203,7 @@ public:
    ArrayType *getArrayType(QualType elementType, size_t numElements) const;
    DependentSizeArrayType *getValueDependentSizedArrayType(
                                              QualType elementType,
-                                             Expression* DependentExpr) const;
+                                             StaticExpr* DependentExpr) const;
    InferredSizeArrayType *getInferredSizeArrayType(QualType elTy) const;
 
    TupleType *getTupleType(llvm::ArrayRef<QualType> containedTypes) const;
@@ -213,10 +214,9 @@ public:
                                           RecordDecl *R,
                                           sema::TemplateArgList &&args) const;
 
-   GenericType *getTemplateArgType(QualType covariance,
-                                   llvm::StringRef typeName) const;
+   AssociatedType *getAssociatedType(AssociatedTypeDecl *AT) const;
+   GenericType *getTemplateArgType(TemplateParamDecl *Param) const;
 
-   NamespaceType *getNamespaceType(NamespaceDecl *NS) const;
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(TypedefDecl *TD) const;
 
@@ -254,6 +254,9 @@ public:
    llvm::ArrayRef<StaticExpr*> getConstraints(const Decl *D) const;
    void setConstraints(const Decl *D, llvm::ArrayRef<StaticExpr*> cvec) const;
    void addConstraint(const Decl *D, StaticExpr* C) const;
+
+   llvm::ArrayRef<ExtensionDecl*> getExtensions(const RecordDecl *R) const;
+   void addExtension(const RecordDecl *R, ExtensionDecl* E) const;
 };
 
 } // namespace ast

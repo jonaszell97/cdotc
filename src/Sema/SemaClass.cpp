@@ -29,7 +29,8 @@ void SemaPass::checkConformances(DeclContext *Ctx)
 {
    for (auto &Decl : Ctx->getDecls()) {
       if (auto R = dyn_cast<RecordDecl>(Decl)) {
-         checkProtocolConformance(R);
+         if (!R->inDependentContext())
+            checkProtocolConformance(R);
       }
 
       if (auto InnerCtx = dyn_cast<DeclContext>(Decl)) {
@@ -90,35 +91,7 @@ DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
    if (alreadyVisited(FD))
       return FD;
 
-   auto R = FD->getRecord();
    auto &fieldType = FD->getType();
-
-   if (auto defaultVal = FD->getDefaultVal()) {
-      defaultVal->setContextualType(fieldType);
-
-      auto typeRes = getAsOrCast(FD, defaultVal, fieldType);
-      if (typeRes) {
-         auto givenType = typeRes.get()->getExprType();
-         if (fieldType->isAutoType()) {
-            fieldType.setResolvedType(givenType);
-
-            FD->getType().setResolvedType(givenType);
-            R->getField(FD->getDeclName())
-             ->getType().setResolvedType(fieldType);
-
-            if (!FD->isStatic()) {
-               auto ty = fieldType;
-               if (FD->hasGetter()) {
-                  FD->getGetterMethod()->getReturnType().setResolvedType(ty);
-               }
-               if (FD->hasSetter()) {
-                  FD->getSetterMethod()->getArgs().front()
-                    ->getType().setResolvedType(ty);
-               }
-            }
-         }
-      }
-   }
 
    if (FD->hasGetter() && FD->getGetterBody() != nullptr) {
       ScopeGuard scope(*this, FD->getGetterMethod());
@@ -173,46 +146,34 @@ DeclResult SemaPass::visitPropDecl(PropDecl *PD)
 
 DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
 {
+   if (alreadyVisited(ATDecl))
+      return ATDecl;
+
    auto Rec = ATDecl->getRecord();
-   if (!isa<ProtocolDecl>(Rec)) {
+
+   // must be in a dependent extension decl, ignore for now
+   if (!Rec)
+      return ATDecl;
+
+   if (ATDecl->isImplementation()) {
       AssociatedTypeDecl const* AT = nullptr;
       ProtocolDecl* Proto = nullptr;
 
-      if (!ATDecl->getProtocolSpecifier().empty()) {
-         auto proto = getRecord(ATDecl->getProtocolSpecifier());
-         if (!proto || !isa<ProtocolDecl>(proto)) {
-            diagnose(ATDecl, err_conforming_to_non_protocol,
-                     ATDecl->getProtocolSpecifier());
+      for (ProtocolDecl *CF : Rec->getConformances()) {
+         auto MaybeAT = CF->getAssociatedType(ATDecl->getDeclName());
+         if (MaybeAT && AT) {
+            diagnose(ATDecl, err_associated_type_ambiguous,
+                     ATDecl->getName());
 
-            return ATDecl;
+            diagnose(ATDecl, note_candidate_here, AT->getSourceLoc());
+            diagnose(ATDecl, note_candidate_here, MaybeAT->getSourceLoc());
+
+            break;
          }
 
-         if (!Rec->conformsTo(ATDecl->getProto())) {
-            diagnose(ATDecl, err_does_not_conform,
-                     Rec->getSpecifierForDiagnostic(), Rec->getName(),
-                     proto->getName());
-         }
-
-         Proto = cast<ProtocolDecl>(proto);
-         AT = Proto->getAssociatedType(ATDecl->getDeclName());
-      }
-      else {
-         for (ProtocolDecl *CF : Rec->getConformances()) {
-            auto MaybeAT = CF->getAssociatedType(ATDecl->getDeclName());
-            if (MaybeAT && AT) {
-               diagnose(ATDecl, err_associated_type_ambiguous,
-                        ATDecl->getName());
-
-               diagnose(ATDecl, note_candidate_here, AT->getSourceLoc());
-               diagnose(ATDecl, note_candidate_here, MaybeAT->getSourceLoc());
-
-               break;
-            }
-
-            if (MaybeAT) {
-               AT = MaybeAT;
-               Proto = CF;
-            }
+         if (MaybeAT) {
+            AT = MaybeAT;
+            Proto = CF;
          }
       }
 
@@ -239,21 +200,27 @@ DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
          return ATDecl;
 
       DeclScopeRAII guard(*this, Proto);
+      ScopeResetRAII scopeResetRAII(*this);
+      AssociatedTypeSubstRAII substRAII(*this, Rec);
 
       for (const auto &C : AT->getConstraints()) {
-         TemplateArgList list(*this);
-         list.insert(ATDecl->getName(), ATDecl->getActualType());
-
          auto Inst = Instantiator.InstantiateStaticExpr(ATDecl->getSourceLoc(),
-                                                        C, list);
+                                                        C, {});
 
-         auto res = evaluateAsBool(Inst);
+         if (!Inst.hasValue())
+            continue;
+
+         auto Expr = Inst.getValue();
+
+         auto res = evaluateAsBool(Expr);
          if (!res)
             continue;
 
          if (!res.getValue().getZExtValue()) {
-            diagnose(ATDecl, err_constraint_not_satisfied, 0, "");
-            diagnose(ATDecl, note_constraint_here, Inst->getSourceLoc());
+            diagnose(ATDecl, err_constraint_not_satisfied, 0, "",
+                     ATDecl->getSourceLoc());
+
+            diagnose(ATDecl, note_constraint_here, Expr->getSourceRange());
          }
       }
    }
@@ -263,8 +230,18 @@ DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
 
 DeclResult SemaPass::visitExtensionDecl(ExtensionDecl *Ext)
 {
-   if (!alreadyVisited(Ext))
-      visitRecordCommon(Ext);
+   if (alreadyVisited(Ext) || Ext->isInvalid())
+      return Ext;
+
+   if (!isDeclared(Ext)) {
+      auto declRes = declareStmt(Ext);
+      if (!declRes)
+         return Ext;
+   }
+
+   DeclContextRAII declContextRAII(*this, Ext->getExtendedRecord());
+   for (auto &decl : Ext->getDecls())
+      visitStmt(Ext, decl);
 
    return Ext;
 }
@@ -297,6 +274,79 @@ DeclResult SemaPass::visitMethodDecl(MethodDecl *M)
       return M;
 
    return visitCallableDecl(M);
+}
+
+void SemaPass::checkVirtualOrOverrideMethod(MethodDecl *M)
+{
+   if (M->isSynthesized() || isa<InitDecl>(M) || isa<DeinitDecl>(M)
+         || M->isStatic() || M->inDependentContext())
+      return;
+
+   if (!isa<ClassDecl>(M->getRecord())) {
+      // virtual methods may only appear in a class declaration
+      if (M->isVirtualOrOverride()) {
+         if (!isa<ClassDecl>(M->getRecord())) {
+            diagnose(M, err_virt_method_outside_class, M->isOverride(),
+                     M->getSourceLoc());
+         }
+      }
+
+      return;
+   }
+
+   auto Base = cast<ClassDecl>(M->getRecord())->getParentClass();
+   MethodDecl *OverridenMethod = nullptr;
+   MethodDecl *Candidate = nullptr;
+   int EC = -1;
+
+   while (Base && !OverridenMethod) {
+      auto Candidates = Base->lookupOwn(M->getDeclName());
+      for (auto &Cand : Candidates) {
+         auto BaseMethod = dyn_cast<MethodDecl>(Cand);
+         if (!BaseMethod)
+            continue;
+
+         auto Err = signaturesCompatible(M, BaseMethod);
+         if (Err < 0) {
+            OverridenMethod = BaseMethod;
+            break;
+         }
+         else {
+            Candidate = BaseMethod;
+            EC = Err;
+         }
+      }
+
+      Base = Base->getParentClass();
+   }
+
+   // all good.
+   if (!OverridenMethod && !M->isOverride()) {
+      return;
+   }
+
+   if (!OverridenMethod) {
+      diagnose(M, err_override_no_matching_method,
+               M->getSourceLoc(), Candidate == nullptr);
+
+      if (Candidate) {
+         assert(EC && "no error code?");
+         diagnose(note_override_cand_not_viable, Candidate->getSourceLoc(),
+                  EC);
+      }
+   }
+   else if (!M->isOverride()) {
+      diagnose(M, err_overriding_decl_requires_override, M->getSourceLoc());
+      diagnose(note_declared_here, OverridenMethod->getSourceLoc());
+   }
+   else if (!OverridenMethod->isVirtualOrOverride()) {
+      diagnose(M, err_overriden_method_not_virtual, M->getDeclName(),
+               M->getSourceLoc());
+
+      diagnose(note_declared_here, OverridenMethod->getSourceLoc());
+   }
+
+   M->setOverridenMethod(OverridenMethod);
 }
 
 DeclResult SemaPass::visitClassDecl(ClassDecl *C)
@@ -341,7 +391,7 @@ DeclResult SemaPass::visitProtocolDecl(ProtocolDecl *P)
 
 void SemaPass::calculateRecordSize(RecordDecl *R)
 {
-   if (R->isInvalid() || R->isTemplate())
+   if (R->isInvalid() || R->inDependentContext())
       return;
 
    unsigned occupiedBytes = R->getSize();
@@ -352,7 +402,7 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
 
    auto &TI = getContext().getTargetInfo();
    if (auto S = dyn_cast<StructDecl>(R)) {
-      for (auto &F : S->getFields()) {
+      for (auto F : S->getFields()) {
          auto FieldRes = visitStmt(R, F);
          if (!FieldRes)
             return;
@@ -385,9 +435,33 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
       }
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
-      occupiedBytes += TI.getPointerSizeInBytes() * E->getMaxAssociatedTypes();
+      unsigned maxSize = 0;
+      unsigned short maxAlign = 1;
+
+      for (auto C : E->getCases()) {
+         unsigned caseSize = 0;
+         unsigned short caseAlign = 1;
+
+         for (const auto &Val : C->getArgs()) {
+            auto &ty = Val->getType();
+            caseSize += TI.getSizeOfType(ty);
+
+            auto valAlign = TI.getAlignOfType(ty);
+            if (valAlign > caseAlign)
+               caseAlign = valAlign;
+         }
+
+         if (caseSize > maxSize)
+            maxSize = caseSize;
+
+         if (caseAlign > maxAlign)
+            maxAlign = caseAlign;
+      }
+
       occupiedBytes += TI.getSizeOfType(E->getRawType());
-      alignment = TI.getPointerAlignInBytes();
+      occupiedBytes += maxSize;
+
+      alignment = std::max(TI.getAlignOfType(E->getRawType()), maxAlign);
    }
    else if (isa<UnionDecl>(R)) {
       for (auto &decl : R->getDecls()) {
@@ -407,14 +481,16 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
       }
    }
 
+   if (!occupiedBytes) {
+      occupiedBytes = 1;
+      alignment = 1;
+   }
+
    R->setSize(occupiedBytes);
    R->setAlignment(alignment);
-
-   if (!R->isTemplate() && !R->isInvalid())
-      ILGen->GenerateTypeInfo(R);
 }
 
-void SemaPass::calculateRecordSizes()
+void SemaPass::finalizeRecordDecls()
 {
    auto Order = LayoutDependency.constructOrderedList();
    if (!Order.second) {
@@ -427,8 +503,20 @@ void SemaPass::calculateRecordSizes()
    }
 
    for (auto &R : Order.first) {
+      if (R->isInvalid() || R->inDependentContext())
+         continue;
+
       calculateRecordSize(R);
    }
+
+   for (auto &R : Order.first) {
+      if (R->isInvalid() || R->inDependentContext())
+         continue;
+
+      finalizeRecordInstantiation(R);
+   }
+
+   LayoutDependency.clear();
 }
 
 void SemaPass::addImplicitConformance(RecordDecl *R,
@@ -436,15 +524,17 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
    MethodDecl *M;
    switch (kind) {
       case ImplicitConformanceKind::StringRepresentable: {
-         auto String = getObjectTy("String");
+         auto String = getStringDecl();
+         assert(String && "StringRepresentable without String!");
+
          if (R->getToStringFn())
             return;
 
-         auto retTy = SourceType(String);
+         auto retTy = SourceType(Context.getRecordType(String));
          std::vector<FuncArgDecl*> args;
 
          auto stringTy = Context.getRecordType(getStringDecl());
-         M = MethodDecl::CreateConversionOp(Context, AccessModifier::PUBLIC,
+         M = MethodDecl::CreateConversionOp(Context, AccessSpecifier::Public,
                                             R->getSourceLoc(), retTy,
                                             move(args), {}, nullptr);
 
@@ -476,9 +566,12 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
                                                    Associativity::Right));
 
 
-         auto *OpName = &Context.getIdentifiers().get("==");
-         M = MethodDecl::CreateOperator(Context, AccessModifier::PUBLIC,
-                                        R->getSourceLoc(), OpName,  retTy,
+         auto &OpName = Context.getIdentifiers().get("==");
+         DeclarationName DN = Context.getDeclNameTable()
+                                     .getInfixOperatorName(OpName);
+
+         M = MethodDecl::CreateOperator(Context, AccessSpecifier::Public,
+                                        R->getSourceLoc(), DN,  retTy,
                                         move(args), {}, nullptr, OpInfo, false);
 
 
@@ -506,6 +599,7 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
    }
 
    addDeclToContext(*R, M);
+   declareAndVisit(M);
 }
 
 } // namespace ast

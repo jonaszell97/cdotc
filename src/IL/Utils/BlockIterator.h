@@ -5,8 +5,9 @@
 #ifndef CDOT_BLOCKITERATOR_H
 #define CDOT_BLOCKITERATOR_H
 
-#include "IL/Value/Function/BasicBlock.h"
-#include "IL/Value/Instruction/Terminator/TerminatorInst.h"
+#include "IL/BasicBlock.h"
+#include "IL/Instructions.h"
+
 #include <iterator>
 
 namespace cdot {

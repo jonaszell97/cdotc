@@ -5,8 +5,11 @@
 #ifndef CDOT_TEMPLATEINSTANTIATOR_H
 #define CDOT_TEMPLATEINSTANTIATOR_H
 
-#include "Lex/SourceLocation.h"
 #include "AST/Type.h"
+#include "AST/StmtOrDecl.h"
+#include "Lex/SourceLocation.h"
+#include "Sema/ActionResult.h"
+#include "Support/Optional.h"
 
 #include <llvm/ADT/ArrayRef.h>
 
@@ -14,6 +17,7 @@ namespace cdot {
 
 struct Variant;
 struct SourceLocation;
+class IdentifierInfo;
 
 namespace ast {
    class Expression;
@@ -32,6 +36,27 @@ namespace sema {
    class MultiLevelTemplateArgList;
 } // namespace sema
 
+template<> struct IsLowBitAvailable<ast::RecordDecl*> {
+   static constexpr bool value = true;
+};
+
+template<> struct IsLowBitAvailable<ast::FunctionDecl*> {
+   static constexpr bool value = true;
+};
+
+template<> struct IsLowBitAvailable<ast::MethodDecl*> {
+   static constexpr bool value = true;
+};
+
+template<> struct IsLowBitAvailable<ast::AliasDecl*> {
+   static constexpr bool value = true;
+};
+
+using RecordInstResult   = ActionResult<ast::RecordDecl*>;
+using FunctionInstResult = ActionResult<ast::FunctionDecl*>;
+using MethodInstResult   = ActionResult<ast::MethodDecl*>;
+using AliasInstResult    = ActionResult<ast::AliasDecl*>;
+
 class TemplateInstantiator {
 public:
    using TemplateArgs = sema::TemplateArgList;
@@ -42,50 +67,52 @@ public:
 
    }
 
-   ast::RecordDecl* InstantiateRecord(ast::Statement *POI,
+   RecordInstResult InstantiateRecord(StmtOrDecl POI,
                                       ast::RecordDecl *rec,
                                       TemplateArgs&& templateArgs,
                                       bool *isNew = nullptr);
 
-   ast::FunctionDecl* InstantiateFunction(ast::Statement *POI,
+   FunctionInstResult InstantiateFunction(StmtOrDecl POI,
                                           ast::FunctionDecl *F,
                                           TemplateArgs&& templateArgs,
                                           bool *isNew = nullptr);
 
-   ast::MethodDecl *InstantiateMethod(ast::Statement *POI,
+   MethodInstResult InstantiateMethod(StmtOrDecl POI,
                                       ast::MethodDecl *M,
                                       TemplateArgs&& templateArgs,
                                       bool *isNew = nullptr);
 
-   ast::MethodDecl*
+   MethodInstResult
    InstantiateProtocolDefaultImpl(SourceLocation instantiatedFrom,
                                   ast::RecordDecl *Rec,
                                   ast::MethodDecl *M);
 
-   ast::Statement* InstantiateStatement(SourceLocation instantiatedFrom,
-                                        ast::Statement* stmt,
-                                        TemplateArgs const& templateArgs);
+   StmtResult
+   InstantiateStatement(SourceLocation instantiatedFrom,
+                        ast::Statement* stmt,
+                        sema::MultiLevelTemplateArgList &&templateArgs);
 
-   ast::Statement* InstantiateStatement(ast::Statement *POI,
-                                        ast::Statement* stmt,
-                                        llvm::StringRef SubstName,
-                                        QualType SubstTy,
-                                        const Variant &SubstVal);
+   StmtResult InstantiateStatement(StmtOrDecl POI,
+                                   ast::Statement* stmt,
+                                   IdentifierInfo *SubstName,
+                                   QualType SubstTy,
+                                   const Variant &SubstVal);
 
-   ast::Statement *InstantiateMethodBody(ast::Statement *POI,
-                                         ast::MethodDecl *Method);
+   StmtResult InstantiateMethodBody(StmtOrDecl POI,
+                                    ast::MethodDecl *Method);
 
-   ast::Expression*
+   ExprResult
    InstantiateStaticExpr(SourceLocation instantiatedFrom,
                          ast::Expression* stmt,
-                         TemplateArgs const& templateArgs);
+                         sema::MultiLevelTemplateArgList &&templateArgs);
 
-   ast::AliasDecl* InstantiateAlias(ast::AliasDecl *alias,
+   AliasInstResult InstantiateAlias(ast::AliasDecl *alias,
                                     SourceLocation instantiatedFrom,
                                     TemplateArgs&& templateArgs);
 
 private:
    ast::SemaPass &SP;
+   bool InstantiatingRecord = false;
 };
 
 } // namespace cdot

@@ -15,10 +15,10 @@
 #include "Message/Diagnostics.h"
 #include "Sema/ActionResult.h"
 
+#include <llvm/ADT/PointerUnion.h>
 
 #include <string>
 #include <vector>
-#include <llvm/ADT/PointerUnion.h>
 
 namespace llvm {
    class MemoryBuffer;
@@ -38,7 +38,7 @@ namespace lex {
 class Type;
 class RecordType;
 class GenericType;
-enum class AccessModifier : unsigned char;
+enum class AccessSpecifier : unsigned char;
 
 enum class FixKind : unsigned char;
 enum class Associativity : unsigned char;
@@ -217,6 +217,7 @@ public:
 
    private:
       Parser &P;
+      bool PrevInRecordDecl;
       void *StackTraceEntry[3]; // don't want to pull in PrettyStackTrace.h
                                 // here, these are actually a
                                 // PrettyStackTraceEntry base (with a next
@@ -228,22 +229,27 @@ public:
       return source_id;
    }
 
-   void parseImports(llvm::SmallVectorImpl<ImportStmt*> &stmts);
+   void parseImports(llvm::SmallVectorImpl<ImportDecl*> &stmts);
    void parse(llvm::SmallVectorImpl<Statement*> &stmts);
 
    ParseResult parseFunctionDecl();
+   ParseResult parseGlobalCtor();
+   ParseResult parseGlobalDtor();
 
    DeclarationName parseOperatorName(OperatorInfo &Info,
                                      bool &isCastOp,
                                      SourceType &castType);
 
-   ParseResult parseMethodDecl(AccessModifier,
-                               bool isStatic,
-                               bool isMutating,
-                               bool isOperator);
+   ParseResult parseMethodDecl(AccessSpecifier accessSpec, bool isStatic);
 
    void skipAttribute();
-   ParseResult skipUntilNextDecl();
+
+   // returns true if at the start of a declaration, false otherwise
+   bool skipUntilNextDecl();
+
+   // returns true if at the start of a declaration, false otherwise
+   bool skipUntilNextDeclOrClosingBrace();
+
    ParseResult skipUntilProbableEndOfStmt();
    ParseResult skipUntilProbableEndOfStmt(lex::tok::TokenType kind);
    ParseResult skipUntilProbableEndOfExpr();
@@ -309,12 +315,11 @@ private:
 
    unsigned source_id;
 
+   bool InRecordScope = false;
    bool isModuleParser;
 
-   lex::Lexer *lexer; // unowned
+   lex::Lexer *lexer;
    SemaPass &SP;
-
-   unsigned StaticExprStack = 0;
 
    IdentifierTable &Idents;
 
@@ -327,6 +332,10 @@ private:
    IdentifierInfo *Ident_value;
    IdentifierInfo *Ident_sizeof;
    IdentifierInfo *Ident_decltype;
+   IdentifierInfo *Ident_get;
+   IdentifierInfo *Ident_set;
+   IdentifierInfo *Ident_virtual;
+   IdentifierInfo *Ident_override;
    IdentifierInfo *Ident___traits;
    IdentifierInfo *Ident___nullptr;
    IdentifierInfo *Ident___func__;
@@ -355,14 +364,14 @@ private:
          return true;
       }
 
-      errorUnexpectedToken(lookahead().getKind());
+      errorUnexpectedToken(lookahead(), kind);
       return findTokOnLine(kind, toks...);
    }
 
-   ParseResult parseTopLevelDecl();
+   ParseResult parseTopLevelDecl(lex::tok::TokenType kind = lex::tok::sentinel);
    ParseResult parseRecordLevelDecl();
 
-   bool isAtRecordLevel() const;
+   bool isAtRecordLevel() const { return InRecordScope; }
 
    void parseAttributes(llvm::SmallVectorImpl<Attr*> &Attrs);
 
@@ -374,15 +383,26 @@ private:
    void checkAttrApplicability(ParseResult Result, Attr *A);
 
    bool expectToken(lex::tok::TokenType expected);
-   void errorUnexpectedToken();
-   void errorUnexpectedToken(lex::tok::TokenType expected);
+   void errorUnexpectedToken(const lex::Token &given,
+                             lex::tok::TokenType expected);
 
-   AccessModifier tokenToAccessSpec(lex::tok::TokenType kind);
+   AccessSpecifier tokenToAccessSpec(lex::tok::TokenType kind);
 
    lex::Token lookahead(bool ignoreNewline = true, bool sw = false);
    void advance(bool ignoreNewline = true, bool sw = false);
 
-   SourceLocation consumeToken(lex::tok::TokenType kind);
+   template<class Fst, class ...Toks>
+   SourceLocation consumeToken(Fst fst, Toks ...rest)
+   {
+      if (currentTok().oneOf(fst, rest...)) {
+         auto loc = currentTok().getSourceLoc();
+         advance();
+         return loc;
+      }
+
+      return SourceLocation();
+   }
+
    SourceLocation consumeToken()
    {
       auto Loc = currentTok().getSourceLoc();
@@ -391,18 +411,21 @@ private:
       return Loc;
    }
 
-   AccessModifier maybeParseAccessModifier();
+   void maybeParseAccessModifier(AccessSpecifier &AS,
+                                 SourceLocation &AccessLoc);
 
    ParseResult parseNextDecl();
    ParseResult parseNextStmt();
 
    ParseResult parseNamespaceDecl();
-   ParseResult parseUsingStmt();
-   ParseResult parseModuleStmt();
-   ParseResult parseImportStmt();
+   ParseResult parseUsingDecl();
+   ParseResult parseModuleDecl();
+   ParseResult parseImportDecl();
+
+   ParseResult parseAccessSpecScope(bool TopLevel);
 
    ParseResult parseVarDecl();
-   ParseResult parseDestructuringDecl(AccessModifier access, bool isLet);
+   ParseResult parseDestructuringDecl(AccessSpecifier access, bool isLet);
 
    ParseResult parseKeyword();
 
@@ -443,7 +466,9 @@ private:
    struct RecordHead {
       RecordHead() : enumRawType() {}
 
-      AccessModifier access;
+      AccessSpecifier access;
+      SourceLocation AccessLoc;
+
       IdentifierInfo *recordName;
       std::vector<SourceType> conformances;
       std::vector<StaticExpr*> constraints;
@@ -463,12 +488,13 @@ private:
    ParseResult parseAnyRecord(lex::tok::TokenType kind,
                               RecordDecl *outer = nullptr);
 
-   ParseResult parseConstrDecl(AccessModifier access);
+   ParseResult parseExtension();
+
+   ParseResult parseConstrDecl(AccessSpecifier access);
    ParseResult parseDestrDecl();
 
-   ParseResult parsePropDecl(AccessModifier am, bool isStatic, bool isConst);
-   ParseResult parseFieldDecl(AccessModifier access, bool isStatic,
-                              bool isConst);
+   ParseResult parsePropDecl(AccessSpecifier accessSpec, bool isStatic);
+   ParseResult parseFieldDecl(AccessSpecifier accessSpec, bool isStatic);
 
    ParseResult parseEnumCase();
    ParseResult parseAssociatedType();
@@ -477,13 +503,18 @@ private:
 
    std::vector<TemplateParamDecl*> tryParseTemplateParameters();
 
-   void parseClassInner(RecordDecl *decl);
+   void parseClassInner();
 
-   ParseTypeResult parseType(bool allowInferredArraySize = false);
-   ParseTypeResult parseTypeImpl(bool allowInferredArraySize);
+   ParseTypeResult parseType(bool allowInferredArraySize = false,
+                             bool InTypePosition = true,
+                             bool AllowMissingTemplateArguments = false);
 
-   ParseResult parseTypedef(AccessModifier am = (AccessModifier) 0);
-   ParseResult parseAlias();
+   ParseTypeResult parseTypeImpl(bool allowInferredArraySize,
+                                 bool InTypePosition,
+                                 bool AllowMissingTemplateArguments);
+
+   ParseResult parseTypedef(AccessSpecifier access = (AccessSpecifier) 0);
+   ParseResult parseAlias(AccessSpecifier access = (AccessSpecifier) 0);
 
    ParseResult parseIdentifierExpr(bool parsingType = false);
    ParseResult maybeParseSubExpr(Expression *ParentExpr,

@@ -36,7 +36,6 @@
 #ifdef CDOT_KEYWORD_TOKEN
 #  define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
 
-   CDOT_KEYWORD_TOKEN(op_typeof, "typeof")
    CDOT_KEYWORD_TOKEN(is, "is")
    CDOT_KEYWORD_TOKEN(as, "as")
    CDOT_KEYWORD_TOKEN(underscore, "_")
@@ -86,6 +85,8 @@
    CDOT_KEYWORD(public)
    CDOT_KEYWORD(private)
    CDOT_KEYWORD(protected)
+   CDOT_KEYWORD(fileprivate)
+   CDOT_KEYWORD(internal)
    CDOT_KEYWORD(static)
    CDOT_KEYWORD(abstract)
    CDOT_KEYWORD(prop)

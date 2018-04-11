@@ -16,7 +16,7 @@ namespace cdot {
 class Attr;
 class Type;
 
-enum class AccessModifier : unsigned char;
+enum class AccessSpecifier : unsigned char;
 
 using string = std::string;
 

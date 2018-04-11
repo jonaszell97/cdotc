@@ -421,7 +421,7 @@
 //      File,
 //      lineAndLoc.line,
 //      getTypeDI(*node->getType()->getType()),
-//      node->getAccess() != AccessModifier::PUBLIC
+//      node->getAccess() != AccessSpecifier::PUBLIC
 //   );
 //
 //   var->addDebugInfo(MD);

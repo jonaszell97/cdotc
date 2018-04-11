@@ -69,6 +69,8 @@ OperatorKind fromToken(lex::tok::TokenType kind)
    case tok::div: return op::Div;
    case tok::percent: return op::Mod;
    case tok::times_times: return op::Exp;
+   case tok::tilde: return op::UnaryNot;
+   case tok::exclaim: return op::UnaryLNot;
    default: return op::UnknownOp;
    }
 }

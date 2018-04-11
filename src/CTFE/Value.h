@@ -108,7 +108,6 @@ public:
 
    /*implicit*/ Value(void *buffer) : buffer((char*)buffer)
    {
-      (void)Arr;
       (void)APF;
       (void)APS;
    }
@@ -142,7 +141,6 @@ private:
       double d;
       float f;
 
-      Value **Arr;
       Value* V;
       il::Function const* F;
 

@@ -19,135 +19,121 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-namespace {
-
-bool isMetaType(Expression* const &expr)
-{
-   return isa<TypeExpr>(expr) || expr->getExprType()->isMetaType();
-}
-
-} // anonymous namespace
-
 ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
 {
-   auto lhsResult = visitExpr(Pred, Pred->getLHS());
-   if (!lhsResult)
-      return ExprError();
+   Pred->setExprType(Context.getBoolTy());
+   auto PredExpr = Pred->getRHS();
 
-   Pred->setLHS(lhsResult.get());
-
-   auto lhs = lhsResult.get()->getExprType();
-   bool result = false;
-
-   if (Pred->getKind() == op::Colon) {
-      QualType lhsTy;
-      if (isa<TypeExpr>(Pred->getLHS())) {
-         lhsTy = lhs;
-      }
-      else if (!lhs->isMetaType()) {
-         diagnose(Pred, err_generic_error,
-                  "invalid left hand side operand to ':' operator");
-
-         return {};
-      }
-      else {
-         lhsTy = *lhs->asMetaType()->getUnderlyingType();
-      }
-
-      auto PredExpr = cast<ConstraintExpr>(Pred->getRHS());
-
-      QualType rhsTy;
-      ConstraintExpr::Kind kind = PredExpr->getKind();
-
-      if (kind == ConstraintExpr::Type) {
-         auto typeRes = visitSourceType(PredExpr,
-                                        PredExpr->getTypeConstraint());
-
-         if (!typeRes)
-            return ExprError();
-
-         rhsTy = typeRes.get();
-      }
-
-      switch (kind) {
-         case ConstraintExpr::Type: {
-            if (lhsTy == rhsTy)
-               result = true;
-            else if (!lhsTy->isRecordType() || !rhsTy->isRecordType())
-               result = false;
-            else {
-               auto Self = lhsTy->getRecord();
-               auto Other = rhsTy->getRecord();
-
-               if (!isa<ProtocolDecl>(Other))
-                  result = false;
-               else
-                  result = Self->conformsTo(cast<ProtocolDecl>(Other));
-            }
-
-            break;
-         }
-         case ConstraintExpr::Class:
-         case ConstraintExpr::Struct:
-         case ConstraintExpr::Enum:
-         case ConstraintExpr::Union: {
-            if (!lhsTy->isRecordType()) {
-               result = false;
-            }
-            else {
-               auto rec = lhsTy->getRecord();
-               result = rec->getKind() == (Decl::DeclKind)kind;
-            }
-
-            break;
-         }
-         case ConstraintExpr::DefaultConstructible:
-            result = hasDefaultValue(lhsTy);
-            break;
-         case ConstraintExpr::Function:
-            result = lhsTy->isFunctionType();
-            break;
-         case ConstraintExpr::Pointer:
-            result = lhsTy->isPointerType() || lhsTy->isRawFunctionTy();
-            break;
-         case ConstraintExpr::Reference:
-            llvm_unreachable("Hmmm....");
-      }
-   }
-   else {
-      auto rhsRes = visitExpr(Pred, Pred->getRHS());
-      if (!rhsRes)
+   if (PredExpr->getKind() == ConstraintExpr::Reference) {
+      auto lhsResult = visitExpr(Pred, Pred->getLHS());
+      if (!lhsResult)
          return ExprError();
 
-      if (!isMetaType(Pred->getLHS()) || !isMetaType(Pred->getRHS())){
-         diagnose(Pred, err_generic_error,
-                  "type predicate needs two types as operands");
-      }
-      else {
-         auto lhsTy = *lhs;
-         if (cdot::MetaType *Meta = lhsTy->asMetaType())
-            lhsTy = *Meta->getUnderlyingType();
+      Pred->setLHS(lhsResult.get());
+   }
+   else {
+      auto lhsResult = getRValue(Pred, Pred->getLHS());
+      if (!lhsResult)
+         return ExprError();
 
-         auto rhsTy = *Pred->getRHS()->getExprType();
-         if (cdot::MetaType *Meta = rhsTy->asMetaType())
-            rhsTy = *Meta->getUnderlyingType();
-
-         if (Pred->getKind() == op::CompEQ) {
-            result = rhsTy == lhsTy;
-         }
-         else if (Pred->getKind() == op::CompNE) {
-            result = rhsTy != lhsTy;
-         }
-         else {
-            diagnose(Pred, err_generic_error,
-                     "unsupported type predicate "
-                     + op::toString(Pred->getKind()));
-         }
-      }
+      Pred->setLHS(lhsResult.get());
    }
 
+   auto lhs = Pred->getLHS()->getExprType();
+   bool result = false;
+   bool IsDirectType = true;
+   bool CompileTimeCheck = true;
+
+   QualType TypeToCheck;
+   if (auto Meta = dyn_cast<cdot::MetaType>(lhs)) {
+      TypeToCheck = Meta->getUnderlyingType();
+   }
+   else {
+      IsDirectType = false;
+      TypeToCheck = lhs->stripReference();
+   }
+
+   switch (PredExpr->getKind()) {
+   case ConstraintExpr::Type: {
+      auto RhsResult = visitSourceType(Pred,
+                                       Pred->getRHS()->getTypeConstraint());
+
+      if (!RhsResult)
+         return ExprError();
+
+      auto rhs = RhsResult.get();
+      if (rhs->isDependentType()) {
+         Pred->setIsTypeDependent(true);
+         return Pred;
+      }
+
+      if (TypeToCheck == rhs) {
+         result = true;
+      }
+      else if (!TypeToCheck->isRecordType() || !rhs->isRecordType()) {
+         result = false;
+      }
+      else {
+         auto Self = TypeToCheck->getRecord();
+         auto Other = rhs->getRecord();
+
+         if (Self->isClass() && Other->isClass()) {
+            auto SelfClass = cast<ClassDecl>(Self);
+            auto OtherClass = cast<ClassDecl>(Other);
+
+            if (OtherClass->isBaseClassOf(SelfClass)) {
+               result = true;
+            }
+            else if (SelfClass->isBaseClassOf(OtherClass)) {
+               if (IsDirectType) {
+                  result = false;
+               }
+               else {
+                  CompileTimeCheck = false;
+               }
+            }
+            else {
+               result = false;
+            }
+         }
+         else if (!isa<ProtocolDecl>(Other)) {
+            result = false;
+         }
+         else {
+            result = Self->conformsTo(cast<ProtocolDecl>(Other));
+         }
+      }
+
+      break;
+   }
+   case ConstraintExpr::Class:
+      result = TypeToCheck->isClass();
+      break;
+   case ConstraintExpr::Struct:
+      result = TypeToCheck->isStruct();
+      break;
+   case ConstraintExpr::Enum:
+      result = TypeToCheck->isEnum();
+      break;
+   case ConstraintExpr::Union:
+      result = TypeToCheck->isUnion();
+      break;
+   case ConstraintExpr::DefaultConstructible:
+      result = hasDefaultValue(TypeToCheck);
+      break;
+   case ConstraintExpr::Function:
+      result = TypeToCheck->isFunctionType();
+      break;
+   case ConstraintExpr::Pointer:
+      result = TypeToCheck->isPointerType() || TypeToCheck->isThinFunctionTy();
+      break;
+   case ConstraintExpr::Reference:
+      result = lhs->isReferenceType();
+      break;
+   }
+
+   Pred->setIsCompileTimeCheck(CompileTimeCheck);
    Pred->setResult(result);
-   Pred->setExprType(Context.getBoolTy());
 
    return Pred;
 }
@@ -157,8 +143,13 @@ ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
    ExpressionResolver Resolver(*this);
    auto Expr = Resolver.resolve(ExprSeq);
 
-   if (!Expr)
-      return ExprError();
+   if (!Expr) {
+      if (ExprSeq->isInvalid())
+         return ExprError();
+
+      ExprSeq->setExprType(UnknownAnyTy);
+      return ExprSeq;
+   }
 
    auto result = visitExpr(ExprSeq, Expr);
    if (!result)
@@ -307,17 +298,24 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
                                                ->getReferencedType(),
                                             false,
                                             diag::err_assign_type_mismatch));
+
+      rhs = BinOp->getRhs();
    }
    else {
       BinOp->setLhs(
          forceCast(lhs, *BinOp->getFunctionType()->getParamTypes()[0]));
       BinOp->setRhs(
          forceCast(rhs, *BinOp->getFunctionType()->getParamTypes()[1]));
+
+      lhs = BinOp->getLhs();
+      rhs = BinOp->getRhs();
    }
 
    if (preAssignOp != op::UnknownOp) {
-      auto operandTy = lhs->getExprType()->getReferencedType();
-      auto FnTy = Context.getFunctionType(operandTy, { operandTy, operandTy });
+      auto lhsTy = lhs->getExprType()->getReferencedType();
+      auto rhsTy = rhs->getExprType();
+
+      auto FnTy = Context.getFunctionType(lhsTy, { lhsTy, rhsTy });
       auto PreOp = BinaryOperator::Create(Context, BinOp->getSourceLoc(),
                                           preAssignOp, FnTy, lhs, rhs);
 
@@ -365,8 +363,46 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
    UnOp->setTarget(forceCast(target, UnOp->getFunctionType()->getParamTypes()
                                          .front()));
 
-   UnOp->setExprType(UnOp->getFunctionType()->getReturnType());
+   if (UnOp->getKind() == op::TypeOf) {
+      auto TI = getTypeInfoDecl();
+      if (!TI) {
+         diagnose(UnOp, err_no_builtin_decl, UnOp->getSourceRange(), 10);
+         return ExprError();
+      }
+
+      UnOp->setExprType(Context.getReferenceType(Context.getRecordType(TI)));
+   }
+   else {
+      UnOp->setExprType(UnOp->getFunctionType()->getReturnType());
+   }
+
    return UnOp;
+}
+
+ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
+{
+   auto CondRes = visitExpr(Expr, Expr->getCond());
+   if (!CondRes)
+      return ExprError();
+
+   Expr->setCond(implicitCastIfNecessary(CondRes.get(), Context.getBoolTy()));
+
+   auto TrueValRes = visitExpr(Expr, Expr->getTrueVal());
+   if (!TrueValRes)
+      return ExprError();
+
+   Expr->setTrueVal(TrueValRes.get());
+
+   auto TrueType = Expr->getTrueVal()->getExprType();
+   Expr->setExprType(TrueType);
+
+   auto FalseValRes = visitExpr(Expr, Expr->getFalseVal(), TrueType);
+
+   if (!FalseValRes)
+      return Expr; // recoverable since the type of the full expression is known
+
+   Expr->setFalseVal(implicitCastIfNecessary(FalseValRes.get(), TrueType));
+   return Expr;
 }
 
 ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
@@ -377,7 +413,9 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 
    if (TypeResult.get()->isDependentType()) {
       Cast->setIsTypeDependent(true);
-      return ExprError();
+      Cast->setExprType(TypeResult.get());
+
+      return Cast;
    }
 
    auto to = Cast->getTargetType();
@@ -392,22 +430,80 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
    Cast->setTarget(Result.get());
 
    auto from = Cast->getTarget()->getExprType();
+   auto IsCastStrengthCompatible = [&](CastStrength Given, CastStrength Needed){
+      if (Needed == CastStrength::Implicit)
+         return Given != CastStrength::Fallible;
+
+      switch (Given) {
+      case CastStrength::Implicit:
+         llvm_unreachable("implicit cast in cast expression?");
+      case CastStrength::Normal:
+         return Needed == CastStrength::Normal;
+      case CastStrength::Fallible:
+         return Needed == CastStrength::Fallible;
+      case CastStrength::Force:
+         return true;
+      }
+   };
 
    auto ConvSeq = getConversionSequence(from, to);
    if (!ConvSeq.isValid()) {
-      diagnose(Cast, err_no_explicit_cast, from, to);
+      auto LHSRange = Cast->getTarget()->getSourceRange();
+      SourceRange RHSRange;
+      if (auto E = Cast->getTargetType().getTypeExpr())
+         RHSRange = E->getSourceRange();
+
+      diagnose(Cast, err_no_explicit_cast, from, to,
+               Cast->getAsLoc(), LHSRange, RHSRange);
    }
-   else if (Cast->getStrength() != ConvSeq.getStrength()
-            && !ConvSeq.isImplicit()) {
-      if (!(Cast->getStrength() == CastStrength::Normal
-            && ConvSeq.getStrength() == CastStrength::Implicit)) {
-         diagnose(Cast, err_cast_requires_op,
-                  diag::opt::show_constness,
-                  from, to, (int)ConvSeq.getStrength() - 1);
-      }
+   else if (!IsCastStrengthCompatible(Cast->getStrength(),
+                                      ConvSeq.getStrength())) {
+      auto LHSRange = Cast->getTarget()->getSourceRange();
+      SourceRange RHSRange;
+      if (auto E = Cast->getTargetType().getTypeExpr())
+         RHSRange = E->getSourceRange();
+
+      diagnose(Cast, err_cast_requires_op, diag::opt::show_constness,
+               Cast->getAsLoc(), LHSRange, RHSRange,
+               from->stripReference(), to->stripReference(),
+               (int)ConvSeq.getStrength() - 1);
    }
 
    Cast->setExprType(to);
+
+   // instantiate Option if a failable cast is used
+   if (Cast->getStrength() == CastStrength::Fallible) {
+      auto Opt = getOptionDecl();
+      if (!Opt) {
+         diagnose(Cast, err_no_builtin_decl, 8,
+                  Cast->getAsLoc());
+      }
+      else {
+         TemplateArgList list(*this, Opt);
+         list.insert("T", Cast->getExprType());
+
+         assert(!list.isStillDependent()
+                && "dependent type should have returned before!");
+
+         auto Inst = Instantiator.InstantiateRecord(Cast, Opt, move(list));
+
+         // instantiation of Optional should never fail
+         Cast->setExprType(Context.getRecordType(Inst.getValue()));
+      }
+
+      for (auto &Step : ConvSeq.getSteps()) {
+         if (Step.getKind() == CastKind::DynCast) {
+            Step.setResultType(Cast->getExprType());
+            break;
+         }
+         else {
+            assert((Step.getKind() == CastKind::NoOp
+                    || Step.getKind() == CastKind::LValueToRValue) &&
+                   "invalid failible conversion sequence!");
+         }
+      }
+   }
+
    Cast->setConvSeq(move(ConvSeq));
 
    return Cast;

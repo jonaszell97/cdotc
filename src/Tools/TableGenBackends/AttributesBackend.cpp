@@ -11,6 +11,7 @@
 #include <llvm/ADT/SmallString.h>
 
 #include <unordered_map>
+#include <llvm/ADT/StringSwitch.h>
 
 using namespace cdot::tblgen;
 using namespace cdot::support;
@@ -176,6 +177,8 @@ public:
    void emitPrintPrettyImpl(Record *Attr, Class *Base);
    void emitCloneImpl(Record *Attr, Class *Base);
 
+   void emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs);
+
 private:
    llvm::raw_ostream &out;
    RecordKeeper &RK;
@@ -327,6 +330,12 @@ void AttrClassEmitter::emit()
    }
 
    out << "\n#endif\n#undef CDOT_ATTR_IMPL\n\n";
+
+   // Sema
+
+   out << "\n#ifdef CDOT_ATTR_SEMA\n\n";
+   emitAttrSema(Attrs);
+   out << "\n#endif\n#undef CDOT_ATTR_SEMA\n\n";
 }
 
 void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
@@ -637,6 +646,31 @@ void AttrClassEmitter::emitCloneImpl(Record *Attr, Class *)
    out << Newline() << "}\n\n";
 }
 
+void AttrClassEmitter::emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs)
+{
+   for (auto &Attr : Attrs) {
+      auto VisitNever =
+         cast<RecordVal>(Attr->getFieldValue("Visit"))
+            ->getRecord()->getName() == "Never";
+
+      if (!VisitNever)
+         continue;
+
+      auto BaseName = Attr->getBases().front().getBase()->getName();
+      llvm::StringRef Kind = llvm::StringSwitch<llvm::StringRef>(BaseName)
+         .Case("DeclAttr", "Decl")
+         .Case("ExprAttr", "Expression")
+         .Case("TypeAttr", "Expression")
+         .Case("StmtAttr", "Statement")
+         .Default("");
+
+      assert(!Kind.empty() && "bad attribute kind!");
+
+      out << "void SemaPass::check" << Attr->getName()
+          << "Attr(" << Kind << "*, " << Attr->getName() << "Attr*) {}\n";
+   }
+}
+
 namespace {
 
 class AttrParseEmitter {
@@ -651,6 +685,7 @@ public:
       llvm::StringRef AttrName;
       unsigned ArgNo;
       std::pair<std::string, std::string> &TypeAndName;
+      Record *Arg;
    };
 
    void parseStringArg(llvm::raw_ostream &out,
@@ -689,8 +724,6 @@ void AttrParseEmitter::emit()
       auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
 
       out << "case AttrKind::" << Attr->getName() << ": {" << Newline();
-      out << "unsigned NumNeededArgs = " << Args.size() << ";" << Newline();
-
       std::vector<std::pair<std::string, std::string>> NeededArgVals;
 
       // reserve space for every needed argument
@@ -726,7 +759,8 @@ void AttrParseEmitter::emit()
          CurrentArgInfo ArgInfo{
             cast<StringLiteral>(Attr->getFieldValue("name"))->getVal(),
             ArgNo,
-            NeededArgVals[ArgNo - 1]
+            NeededArgVals[ArgNo - 1],
+            cast<RecordVal>(Arg)->getRecord()
          };
 
          if (C->getName() == "IntArg")
@@ -768,44 +802,48 @@ void AttrParseEmitter::emit()
 
       Switch.flush();
 
-      // build a simple state machine for argument parsing
-      out << R"__(
-      unsigned ArgNo = 0;
+      bool SkipArgs = cast<IntegerLiteral>(
+         Attr->getFieldValue("IgnoreFollowingParens"))->getVal().getBoolValue();
 
-      if (lookahead().is(tok::open_paren)) {
-         advance();
-         advance();
+      if (!SkipArgs) {
+         // build a simple state machine for argument parsing
+         out << "unsigned NumNeededArgs = " << Args.size() << ";" << Newline();
+         out << R"__(
+         unsigned ArgNo = 0;
 
-         while (!currentTok().is(tok::close_paren)) {
-            switch (ArgNo++) {
-            )__" << SwitchStr << R"__(
-            }
-
+         if (lookahead().is(tok::open_paren)) {
             advance();
-            if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
-               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                           currentTok().toString(), true, "')'");
+            advance();
 
-               if (!findTokOnLine(tok::comma, tok::close_paren)) {
-                  return skipAttribute();
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               )__" << SwitchStr << R"__(
                }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
             }
-
-            if (currentTok().is(tok::comma)) advance();
          }
+
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      )__";
       }
 
-      if (ArgNo != NumNeededArgs) {
-         SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
-                     NumNeededArgs, ArgNo);
-         break;
-      }
-
-      auto EndLoc = currentTok().getSourceLoc();
-)__";
-
-      out << "Attrs.push_back(new (Context) " << Attr->getName()
-                                              << "Attr(";
+      out << "auto EndLoc = currentTok().getSourceLoc();\n"
+          << "Attrs.push_back(new (Context) " << Attr->getName() << "Attr(";
 
       unsigned i = 0;
       for (auto &Arg : NeededArgVals) {
@@ -993,6 +1031,19 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
       out << "if (Ident==\"" << cast<StringLiteral>(Case)->getVal() << "\") {";
       out << " _enumKind = " << EnumOwner << "::"
           << cast<StringLiteral>(Case)->getVal() << "; }\n";
+   }
+
+   // aliases
+   auto ArgAliases = cast<ListLiteral>(ArgInfo.Arg->getFieldValue("aliases"));
+   for (auto &aliasVal : ArgAliases->getValues()) {
+      auto Val = cast<RecordVal>(aliasVal)->getRecord();
+      auto AliasName = cast<StringLiteral>(Val->getFieldValue("alias"));
+      auto AliaseeName = cast<StringLiteral>(Val->getFieldValue("aliasee"));
+
+      if (i++ != 0) out << "else ";
+      out << "if (Ident==\"" << AliasName->getVal() << "\") {";
+      out << " _enumKind = " << EnumOwner << "::"
+          << AliaseeName->getVal() << "; }\n";
    }
 
    out << R"__(

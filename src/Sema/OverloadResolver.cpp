@@ -4,15 +4,7 @@
 
 #include "OverloadResolver.h"
 
-#include "AST/Decl.h"
-#include "TemplateInstantiator.h"
-#include "SemaPass.h"
-
-#include "AST/Type.h"
-#include "CandidateSet.h"
-
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/ADT/StringSet.h>
+#include "Sema/SemaPass.h"
 
 using namespace cdot::support;
 using namespace cdot::sema;
@@ -33,98 +25,43 @@ OverloadResolver::OverloadResolver(SemaPass &SP,
 static bool resolveContextDependentArgs(SemaPass &SP,
                                         llvm::ArrayRef<Expression*> args,
                                         llvm::SmallVectorImpl<QualType> &result,
-                                        std::vector<QualType> &neededArgs,
-                                        CandidateSet::Candidate &Cand,
-                                        Statement *Caller) {
+                                        llvm::ArrayRef<QualType> neededArgs,
+                                        CandidateSet::Candidate &Cand) {
    size_t i = 0;
-   std::vector<QualType> resolvedGivenArgs;
-   auto &declaredArgs = Cand.Func->getArgs();
-
-   bool foundVariadic = false;
-   size_t variadicIdx = 0;
-
-   for (auto &arg : args) {
-      QualType needed;
-      if (i < neededArgs.size()) {
-         needed = neededArgs[i];
-
-         auto &argDecl = declaredArgs[i];
-         if (argDecl->getType().getTypeExpr()->isVariadicArgPackExpansion()){
-            foundVariadic = true;
-         }
-      }
-
-      if (needed && needed->isDependentType()) {
-         if (foundVariadic) {
-            needed = SP.resolveDependencies(needed, Cand.TemplateArgs, Caller,
-                                            variadicIdx);
-         }
-         else {
-            needed = SP.resolveDependencies(needed, Cand.TemplateArgs, Caller);
-         }
-      }
-
-      if (arg->isContextDependent()) {
-         arg->setSemanticallyChecked(false);
-
-         SemaPass::DiagnosticScopeRAII diagnosticScopeRAII(SP);
-         arg->setContextualType(needed);
-
-         auto res = SP.visitExpr(arg);
-         if (!res) {
-            Cand.setHasIncompatibleArgument(i);
-            return false;
+   for (auto &GivenArg : args) {
+      if (i >= neededArgs.size()) {
+         auto Res = SP.visitExpr(GivenArg);
+         if (!Res) {
+            Cand.setIsInvalid();
          }
 
-         result.push_back(res.get()->getExprType());
-      }
-      else {
-         result.push_back(arg->getExprType());
-      }
+         result.push_back(Res.get()->getExprType());
 
-      if (!foundVariadic)
          ++i;
-      else
-         ++variadicIdx;
-   }
-
-   return true;
-}
-
-static bool resolveContextDependentArgs(SemaPass &SP,
-                                        llvm::ArrayRef<Expression*> args,
-                                        llvm::SmallVectorImpl<QualType> &result,
-                                        FunctionType *FuncTy,
-                                        CandidateSet::Candidate &Cand,
-                                        Statement *Caller) {
-   size_t i = 0;
-   std::vector<QualType> resolvedGivenArgs;
-   auto neededArgs = FuncTy->getParamTypes();
-
-   for (auto &arg : args) {
-      QualType needed;
-      if (i < neededArgs.size()) {
-         needed = neededArgs[i];
+         continue;
       }
 
-      if (arg->isContextDependent()) {
-         arg->setSemanticallyChecked(false);
+      QualType NeededArg = neededArgs[i++];
+      if (GivenArg->isContextDependent()) {
+         if (!SP.ExprCanReturn(GivenArg, NeededArg)) {
+            if (GivenArg->isInvalid()) {
+               Cand.setIsInvalid();
+            }
+            else {
+               if (!SP.visitExpr(GivenArg))
+                  Cand.setIsInvalid();
+               else
+                  Cand.setHasIncompatibleArgument(i);
+            }
 
-         SemaPass::DiagnosticScopeRAII diagnosticScopeRAII(SP);
-
-         auto res = SP.visitExpr(Caller, arg, needed);
-         if (!res) {
-            Cand.setHasIncompatibleArgument(i);
             return false;
          }
 
-         result.push_back(res.get()->getExprType());
+         result.push_back(NeededArg);
       }
       else {
-         result.push_back(arg->getExprType());
+         result.push_back(GivenArg->getExprType());
       }
-
-      ++i;
    }
 
    return true;
@@ -182,8 +119,9 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
                 && "function without function type");
 
       if (Cand.Func) {
-         if (!SP.ensureDeclared(Cand.Func)) {
+         if (!SP.ensureDeclared(Cand.Func) || Cand.Func->isInvalid()) {
             Cand.setIsInvalid();
+            CandSet.InvalidCand = true;
             continue;
          }
       }
@@ -212,10 +150,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
       }
 
       if (needDropFirstArgument(CandSet, Cand)) {
-         resolve(Cand, givenArgs.drop_front(1), Conversions);
+         resolve(CandSet, Cand, givenArgs.drop_front(1), Conversions);
       }
       else {
-         resolve(Cand, givenArgs, Conversions);
+         resolve(CandSet, Cand, givenArgs, Conversions);
       }
 
       if (Cand) {
@@ -226,9 +164,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
 
          foundMatch = true;
          CandSet.maybeUpdateBestConversionPenalty(Cand.ConversionPenalty);
-         CandSet.Conversions.insert(CandSet.Conversions.end(),
-                                    std::make_move_iterator(Conversions.begin()),
-                                    std::make_move_iterator(Conversions.end()));
+
+         CandSet.Conversions.resize(Conversions.size());
+         std::move(Conversions.begin(), Conversions.end(),
+                   CandSet.Conversions.begin());
       }
 
       Conversions.clear();
@@ -240,7 +179,21 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
       CandSet.Status = CandidateSet::Success;
 }
 
-void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
+LLVM_ATTRIBUTE_UNUSED
+static bool hasDependentSignature(CallableDecl *C)
+{
+   for (auto &Arg : C->getArgs())
+      if (Arg->isDependent())
+         return true;
+
+   if (auto E = C->getReturnType().getTypeExpr())
+      return E->isDependent();
+
+   return false;
+}
+
+void OverloadResolver::resolve(CandidateSet &CandSet,
+                               CandidateSet::Candidate &Cand,
                                llvm::ArrayRef<Expression*> givenArgs,
                                llvm::SmallVectorImpl<ConversionSequence>
                                                                  &Conversions) {
@@ -248,36 +201,94 @@ void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
 
    llvm::SmallVector<QualType, 8> resolvedGivenArgs;
 
-   bool IsTemplate = Cand.Func && Cand.Func->isTemplate();
+   bool IsTemplate = Cand.Func
+                     && (Cand.Func->isTemplate()
+                         || Cand.Func->isInitializerOfTemplate()
+                         || Cand.Func->isCaseOfTemplatedEnum());
+
    if (IsTemplate) {
       SourceLocation listLoc = givenTemplateArgs.empty()
-                               ? (Caller ? Caller->getSourceLoc()
-                                         : SourceLocation())
+                               ? Caller->getSourceLoc()
                                : givenTemplateArgs.front()->getSourceLoc();
 
-      Cand.TemplateArgs = TemplateArgList(SP, Cand.Func, givenTemplateArgs,
-                                          listLoc);
+      bool NeedOuterTemplateParams
+         = isa<InitDecl>(Cand.Func) || isa<EnumCaseDecl>(Cand.Func);
+
+      Cand.InnerTemplateArgs = TemplateArgList(
+         SP, Cand.Func,
+         // if we have an initializer or enum case, the given template
+         // arguments will be passed to the record parameter list
+         NeedOuterTemplateParams ? llvm::ArrayRef<Expression*>()
+                                 : givenTemplateArgs,
+         listLoc);
+
+      TemplateArgList OuterTemplateArgs;
+      MultiLevelTemplateArgList TemplateArgs(Cand.InnerTemplateArgs);
+
+      // initializers and enum cases also need their containing records
+      // template arguments specified (or inferred)
+      if (NeedOuterTemplateParams) {
+         OuterTemplateArgs = TemplateArgList(
+            SP, cast<RecordDecl>(Cand.Func->getDeclContext()),
+            givenTemplateArgs, listLoc);
+
+         TemplateArgs.addOuterList(OuterTemplateArgs);
+      }
 
       std::vector<QualType> resolvedNeededArgs = FuncTy->getParamTypes();
       if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
-                                       resolvedNeededArgs, Cand, Caller)) {
+                                       resolvedNeededArgs, Cand)) {
          return;
       }
 
+      // try to infer unspecified template arguments from the function signature
       if (Caller && Caller->getContextualType()) {
-         Cand.TemplateArgs.inferFromReturnType(Caller->getContextualType(),
-                                               FuncTy->getReturnType());
+         TemplateArgs.inferFromReturnType(Caller->getContextualType(),
+                                          FuncTy->getReturnType());
       }
 
-      Cand.TemplateArgs.inferFromArgList(resolvedGivenArgs,
-                                         Cand.Func->getArgs());
+      TemplateArgs.inferFromArgList(resolvedGivenArgs, Cand.Func->getArgs());
 
-      auto comp = Cand.TemplateArgs.checkCompatibility();
+      // if the template argument list is itself dependent, we have to delay
+      // the overload resolution until instantiation time
+      if (TemplateArgs.isStillDependent())
+         return Cand.setIsDependent();
+
+      auto comp = TemplateArgs.checkCompatibility();
       if (!comp)
          return Cand.setTemplateArgListFailure(comp);
 
-      resolveTemplateArgs(resolvedNeededArgs, Cand.Func->getArgs(),
-                          Cand.TemplateArgs);
+      // if the function signature is in any way dependent, we need to
+      // instantiate the full record declaration now to be able to substitute
+      // the needed types
+      if (NeedOuterTemplateParams) {
+         bool DidInstantiate = SP.maybeInstantiateRecord(Cand,
+                                                         move(OuterTemplateArgs),
+                                                         Caller);
+
+         auto R = Cand.Func->getRecord();
+         if (R->isInvalid()) {
+            CandSet.InvalidCand = true;
+            return Cand.setIsInvalid();
+         }
+
+         // this 'steals' our outer template argument list, so we need to
+         // update it
+         if (DidInstantiate) {
+            (void) TemplateArgs.pop_back_val();
+            TemplateArgs.addOuterList(R->getTemplateArgs());
+         }
+      }
+
+      // resolve the needed function arguments with the resolved template
+      // arguments, i.e. turn
+      //  `(T, i64) -> i64` into `(String, i64) -> i64`
+      // with template parameter T = String
+      {
+         SemaPass::DeclScopeRAII declScopeRAII(SP, Cand.Func->getDeclContext());
+         resolveTemplateArgs(resolvedNeededArgs, Cand.Func->getArgs(),
+                             TemplateArgs);
+      }
 
       FuncTy = SP.getContext().getFunctionType(FuncTy->getReturnType(),
                                                resolvedNeededArgs,
@@ -285,13 +296,14 @@ void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
 
       Cand.setFunctionType(FuncTy);
 
+      // check the constraints here to take the resolved
+      // template arguments into account
       if (!Cand.Func->getConstraints().empty()) {
-         auto idx = SP.checkConstraints(Caller, Cand.Func,
-                                        Cand.TemplateArgs);
+         auto Res = SP.checkConstraints(Caller->getSourceLoc(), Cand.Func,
+                                        TemplateArgs);
 
-         if (idx != string::npos) {
-            return Cand.setHasFailedConstraint(
-               Cand.Func->getConstraints()[idx]);
+         if (auto C = Res.getFailedConstraint()) {
+            return Cand.setHasFailedConstraint(C);
          }
       }
    }
@@ -299,10 +311,11 @@ void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
       return Cand.setHasTooManyTemplateArgs(givenTemplateArgs.size(), 0);
    }
    else if (!resolveContextDependentArgs(SP, givenArgs, resolvedGivenArgs,
-                                         FuncTy, Cand, Caller)) {
+                                         FuncTy->getParamTypes(), Cand)) {
       return;
    }
 
+   // find position of first argument with a default value
    size_t firstDefault = string::npos;
    if (Cand.Func) {
       firstDefault = 0;
@@ -316,11 +329,12 @@ void OverloadResolver::resolve(CandidateSet::Candidate &Cand,
 
    isCallCompatible(Cand, resolvedGivenArgs, FuncTy, Conversions, firstDefault);
 
+   // check constraints if we haven't checked them already
    if (!IsTemplate) {
       if (Cand && Cand.Func) {
-         auto idx = SP.checkConstraints(Caller, Cand.Func);
-         if (idx != string::npos) {
-            Cand.setHasFailedConstraint(Cand.Func->getConstraints()[idx]);
+         auto Res = SP.checkConstraints(Caller->getSourceLoc(), Cand.Func);
+         if (auto C = Res.getFailedConstraint()) {
+            Cand.setHasFailedConstraint(C);
          }
       }
    }
@@ -337,12 +351,8 @@ size_t castPenalty(const ConversionSequence &neededCast)
       switch (C.getKind()) {
          case CastKind::NoOp:
          case CastKind::LValueToRValue:
-            break;
-         case CastKind::IBox:
-         case CastKind::IUnbox:
-         case CastKind::FPBox:
-         case CastKind::FPUnbox:
-            penalty += 2;
+         case CastKind::BitCast: // only u8* -> void* can appear as an
+                                 // implicit bitcast
             break;
          case CastKind::Ext:
          case CastKind::FPExt:
@@ -373,8 +383,7 @@ size_t castPenalty(const ConversionSequence &neededCast)
 void OverloadResolver::isCallCompatible(CandidateSet::Candidate &Cand,
                                         llvm::ArrayRef<QualType> givenArgs,
                                         FunctionType *FuncTy,
-                                        llvm::SmallVectorImpl<ConversionSequence>
-                                                                   &Conversions,
+                                        ConvSeqVec &Conversions,
                                         size_t firstDefaultArg) {
    auto neededArgs = FuncTy->getParamTypes();
    size_t numGivenArgs = givenArgs.size();
@@ -397,9 +406,9 @@ void OverloadResolver::isCallCompatible(CandidateSet::Candidate &Cand,
          if (!ConvSeq.isImplicit()) {
             return Cand.setHasIncompatibleArgument(i);
          }
-         else if (givenTy != needed) {
-            Cand.ConversionPenalty += castPenalty(ConvSeq);
-         }
+
+         Cand.ConversionPenalty += castPenalty(ConvSeq);
+         Conversions.emplace_back(move(ConvSeq));
       }
       else if (i < firstDefaultArg) {
          return Cand.setHasTooFewArguments(numGivenArgs, numNeededArgs);
@@ -409,32 +418,50 @@ void OverloadResolver::isCallCompatible(CandidateSet::Candidate &Cand,
    }
 
    if (isVararg)
-      isVarargCallCompatible(Cand, givenArgs, FuncTy);
+      isVarargCallCompatible(Cand, givenArgs, FuncTy, Conversions);
 }
 
 void
 OverloadResolver::isVarargCallCompatible(CandidateSet::Candidate &Cand,
                                          llvm::ArrayRef<QualType> givenArgs,
-                                         FunctionType *FuncTy) {
+                                         FunctionType *FuncTy,
+                                         ConvSeqVec &Conversions) {
    assert(FuncTy->isCStyleVararg() || FuncTy->isVararg());
 
-   // cstyle vararg accepts all types
-   if (FuncTy->isCStyleVararg())
-      return;
-
    auto neededArgs = FuncTy->getParamTypes();
+
+   // cstyle vararg accepts all types...
+   if (FuncTy->isCStyleVararg()) {
+      for (size_t i = neededArgs.size(); i < givenArgs.size(); ++i) {
+         auto &arg = givenArgs[i];
+
+         Conversions.emplace_back();
+         ConversionSequence &ConvSeq = Conversions.back();
+
+         // ...and only takes rvalues
+         if (arg->isReferenceType()) {
+            ConvSeq.addStep(CastKind::LValueToRValue, arg->getReferencedType());
+         }
+         else {
+            ConvSeq.addStep(CastKind::NoOp, arg);
+         }
+      }
+
+      return;
+   }
+
    auto vaTy = neededArgs.back();
 
    // we only need to check the remaining arguments, others have been checked
    // by isCallCompatible
-   for (size_t i = neededArgs.size() - 1; i < givenArgs.size(); ++i) {
+   for (size_t i = neededArgs.size(); i < givenArgs.size(); ++i) {
       auto& given = givenArgs[i];
 
       auto ConvSeq = SP.getConversionSequence(given, vaTy);
       if (!ConvSeq.isImplicit()) {
          return Cand.setHasIncompatibleArgument(i);
       }
-      else if (!vaTy.isNull() && given != vaTy) {
+      if (!vaTy.isNull() && given != vaTy) {
          Cand.ConversionPenalty += castPenalty(ConvSeq);
       }
    }
@@ -443,12 +470,14 @@ OverloadResolver::isVarargCallCompatible(CandidateSet::Candidate &Cand,
 void
 OverloadResolver::resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
                                       llvm::ArrayRef<FuncArgDecl*> neededArgs,
-                                      TemplateArgList const& templateArgs) {
+                                      const MultiLevelTemplateArgList
+                                                               &templateArgs) {
    size_t i = 0;
    for (auto &arg : neededArgs) {
-      if (arg->getType().getTypeExpr()->isVariadicArgPackExpansion()) {
-         auto typeName = arg->getType()->uncheckedAsGenericType()
-                            ->getGenericTypeName();
+      auto Expr = arg->getType().getTypeExpr();
+      if (Expr && Expr->isVariadicArgPackExpansion()) {
+         auto typeName = cast<GenericType>(arg->getType())
+            ->getGenericTypeName();
 
          assert(resolvedArgs.back()->isDependentType()
                 && "variadic expansion not reflected in arguments");
@@ -466,8 +495,13 @@ OverloadResolver::resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
       }
 
       auto ty = arg->getType().getResolvedType();
-      resolvedArgs[i] = QualType(SP.resolveDependencies(ty, templateArgs,
+      auto resolvedTy = QualType(SP.resolveDependencies(ty, templateArgs,
                                                         Caller));
+
+      if (resolvedTy)
+         resolvedArgs[i] = resolvedTy;
+      else
+         resolvedTy = ty;
 
       ++i;
    }

@@ -100,20 +100,26 @@ private:
       }
    }
 
-   void printAccessModifier(AccessModifier access)
+   void printAccessModifier(AccessSpecifier access)
    {
       switch (access) {
-         case AccessModifier::DEFAULT:
-            break;
-         case AccessModifier::PUBLIC:
-            out << "public ";
-            break;
-         case AccessModifier::PRIVATE:
-            out << "private ";
-            break;
-         case AccessModifier::PROTECTED:
-            out << "protected ";
-            break;
+      case AccessSpecifier::Default:
+         break;
+      case AccessSpecifier::Public:
+         out << "public ";
+         break;
+      case AccessSpecifier::Private:
+         out << "private ";
+         break;
+      case AccessSpecifier::Protected:
+         out << "protected ";
+         break;
+      case AccessSpecifier::FilePrivate:
+         out << "fileprivate ";
+         break;
+      case AccessSpecifier::Internal:
+         out << "internal ";
+         break;
       }
    }
 
@@ -153,8 +159,7 @@ void PrettyPrinterImpl::visitAttributedExpr(cdot::ast::AttributedExpr *E)
 
 void PrettyPrinterImpl::visitTranslationUnit(TranslationUnit *stmt)
 {
-   for (auto &I : stmt->getImports())
-      visit(I);
+
 }
 
 void PrettyPrinterImpl::visitTemplateParamDecl(TemplateParamDecl *stmt)
@@ -401,17 +406,17 @@ void PrettyPrinterImpl::visitNamespaceDecl(NamespaceDecl* stmt)
 
 }
 
-void PrettyPrinterImpl::visitUsingStmt(UsingStmt* stmt)
+void PrettyPrinterImpl::visitUsingDecl(UsingDecl* stmt)
 {
 
 }
 
-void PrettyPrinterImpl::visitModuleStmt(ModuleStmt *stmt)
+void PrettyPrinterImpl::visitModuleDecl(ModuleDecl *stmt)
 {
 
 }
 
-void PrettyPrinterImpl::visitImportStmt(ImportStmt *stmt)
+void PrettyPrinterImpl::visitImportDecl(ImportDecl *stmt)
 {
 
 }
@@ -637,7 +642,9 @@ void PrettyPrinterImpl::visitDictionaryLiteral(DictionaryLiteral* expr)
 
 void PrettyPrinterImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
 {
-   out << DeclarationName(expr->getIdentInfo());
+   if (expr->getIdentInfo())
+      out << DeclarationName(expr->getIdentInfo());
+
    WriteList(expr->getTemplateArgs(), &PrettyPrinterImpl::visitExpr,
              "[", ", ", "]", true);
 }

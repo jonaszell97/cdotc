@@ -189,7 +189,7 @@ public:
 
    void skip_until_even(ParenKind kind);
 
-   llvm::ArrayRef<Token> getTokens() const
+   std::vector<Token> &getTokens()
    {
       return tokens;
    }

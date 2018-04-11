@@ -446,6 +446,33 @@ src/AST/Statement.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Statement.cpp.s
 .PHONY : src/AST/Statement.cpp.s
 
+src/AST/StmtOrDecl.o: src/AST/StmtOrDecl.cpp.o
+
+.PHONY : src/AST/StmtOrDecl.o
+
+# target to build an object file
+src/AST/StmtOrDecl.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/StmtOrDecl.cpp.o
+.PHONY : src/AST/StmtOrDecl.cpp.o
+
+src/AST/StmtOrDecl.i: src/AST/StmtOrDecl.cpp.i
+
+.PHONY : src/AST/StmtOrDecl.i
+
+# target to preprocess a source file
+src/AST/StmtOrDecl.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/StmtOrDecl.cpp.i
+.PHONY : src/AST/StmtOrDecl.cpp.i
+
+src/AST/StmtOrDecl.s: src/AST/StmtOrDecl.cpp.s
+
+.PHONY : src/AST/StmtOrDecl.s
+
+# target to generate assembly for a file
+src/AST/StmtOrDecl.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/StmtOrDecl.cpp.s
+.PHONY : src/AST/StmtOrDecl.cpp.s
+
 src/AST/Transform.o: src/AST/Transform.cpp.o
 
 .PHONY : src/AST/Transform.o
@@ -920,6 +947,195 @@ src/Compiler.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Compiler.cpp.s
 .PHONY : src/Compiler.cpp.s
 
+src/IL/Argument.o: src/IL/Argument.cpp.o
+
+.PHONY : src/IL/Argument.o
+
+# target to build an object file
+src/IL/Argument.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Argument.cpp.o
+.PHONY : src/IL/Argument.cpp.o
+
+src/IL/Argument.i: src/IL/Argument.cpp.i
+
+.PHONY : src/IL/Argument.i
+
+# target to preprocess a source file
+src/IL/Argument.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Argument.cpp.i
+.PHONY : src/IL/Argument.cpp.i
+
+src/IL/Argument.s: src/IL/Argument.cpp.s
+
+.PHONY : src/IL/Argument.s
+
+# target to generate assembly for a file
+src/IL/Argument.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Argument.cpp.s
+.PHONY : src/IL/Argument.cpp.s
+
+src/IL/BasicBlock.o: src/IL/BasicBlock.cpp.o
+
+.PHONY : src/IL/BasicBlock.o
+
+# target to build an object file
+src/IL/BasicBlock.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/BasicBlock.cpp.o
+.PHONY : src/IL/BasicBlock.cpp.o
+
+src/IL/BasicBlock.i: src/IL/BasicBlock.cpp.i
+
+.PHONY : src/IL/BasicBlock.i
+
+# target to preprocess a source file
+src/IL/BasicBlock.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/BasicBlock.cpp.i
+.PHONY : src/IL/BasicBlock.cpp.i
+
+src/IL/BasicBlock.s: src/IL/BasicBlock.cpp.s
+
+.PHONY : src/IL/BasicBlock.s
+
+# target to generate assembly for a file
+src/IL/BasicBlock.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/BasicBlock.cpp.s
+.PHONY : src/IL/BasicBlock.cpp.s
+
+src/IL/Constant.o: src/IL/Constant.cpp.o
+
+.PHONY : src/IL/Constant.o
+
+# target to build an object file
+src/IL/Constant.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constant.cpp.o
+.PHONY : src/IL/Constant.cpp.o
+
+src/IL/Constant.i: src/IL/Constant.cpp.i
+
+.PHONY : src/IL/Constant.i
+
+# target to preprocess a source file
+src/IL/Constant.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constant.cpp.i
+.PHONY : src/IL/Constant.cpp.i
+
+src/IL/Constant.s: src/IL/Constant.cpp.s
+
+.PHONY : src/IL/Constant.s
+
+# target to generate assembly for a file
+src/IL/Constant.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constant.cpp.s
+.PHONY : src/IL/Constant.cpp.s
+
+src/IL/Constants.o: src/IL/Constants.cpp.o
+
+.PHONY : src/IL/Constants.o
+
+# target to build an object file
+src/IL/Constants.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constants.cpp.o
+.PHONY : src/IL/Constants.cpp.o
+
+src/IL/Constants.i: src/IL/Constants.cpp.i
+
+.PHONY : src/IL/Constants.i
+
+# target to preprocess a source file
+src/IL/Constants.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constants.cpp.i
+.PHONY : src/IL/Constants.cpp.i
+
+src/IL/Constants.s: src/IL/Constants.cpp.s
+
+.PHONY : src/IL/Constants.s
+
+# target to generate assembly for a file
+src/IL/Constants.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Constants.cpp.s
+.PHONY : src/IL/Constants.cpp.s
+
+src/IL/Context.o: src/IL/Context.cpp.o
+
+.PHONY : src/IL/Context.o
+
+# target to build an object file
+src/IL/Context.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Context.cpp.o
+.PHONY : src/IL/Context.cpp.o
+
+src/IL/Context.i: src/IL/Context.cpp.i
+
+.PHONY : src/IL/Context.i
+
+# target to preprocess a source file
+src/IL/Context.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Context.cpp.i
+.PHONY : src/IL/Context.cpp.i
+
+src/IL/Context.s: src/IL/Context.cpp.s
+
+.PHONY : src/IL/Context.s
+
+# target to generate assembly for a file
+src/IL/Context.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Context.cpp.s
+.PHONY : src/IL/Context.cpp.s
+
+src/IL/Function.o: src/IL/Function.cpp.o
+
+.PHONY : src/IL/Function.o
+
+# target to build an object file
+src/IL/Function.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Function.cpp.o
+.PHONY : src/IL/Function.cpp.o
+
+src/IL/Function.i: src/IL/Function.cpp.i
+
+.PHONY : src/IL/Function.i
+
+# target to preprocess a source file
+src/IL/Function.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Function.cpp.i
+.PHONY : src/IL/Function.cpp.i
+
+src/IL/Function.s: src/IL/Function.cpp.s
+
+.PHONY : src/IL/Function.s
+
+# target to generate assembly for a file
+src/IL/Function.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Function.cpp.s
+.PHONY : src/IL/Function.cpp.s
+
+src/IL/GlobalVariable.o: src/IL/GlobalVariable.cpp.o
+
+.PHONY : src/IL/GlobalVariable.o
+
+# target to build an object file
+src/IL/GlobalVariable.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/GlobalVariable.cpp.o
+.PHONY : src/IL/GlobalVariable.cpp.o
+
+src/IL/GlobalVariable.i: src/IL/GlobalVariable.cpp.i
+
+.PHONY : src/IL/GlobalVariable.i
+
+# target to preprocess a source file
+src/IL/GlobalVariable.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/GlobalVariable.cpp.i
+.PHONY : src/IL/GlobalVariable.cpp.i
+
+src/IL/GlobalVariable.s: src/IL/GlobalVariable.cpp.s
+
+.PHONY : src/IL/GlobalVariable.s
+
+# target to generate assembly for a file
+src/IL/GlobalVariable.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/GlobalVariable.cpp.s
+.PHONY : src/IL/GlobalVariable.cpp.s
+
 src/IL/ILBuilder.o: src/IL/ILBuilder.cpp.o
 
 .PHONY : src/IL/ILBuilder.o
@@ -947,59 +1163,113 @@ src/IL/ILBuilder.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/ILBuilder.cpp.s
 .PHONY : src/IL/ILBuilder.cpp.s
 
-src/IL/Module/Context.o: src/IL/Module/Context.cpp.o
+src/IL/Instruction.o: src/IL/Instruction.cpp.o
 
-.PHONY : src/IL/Module/Context.o
-
-# target to build an object file
-src/IL/Module/Context.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Context.cpp.o
-.PHONY : src/IL/Module/Context.cpp.o
-
-src/IL/Module/Context.i: src/IL/Module/Context.cpp.i
-
-.PHONY : src/IL/Module/Context.i
-
-# target to preprocess a source file
-src/IL/Module/Context.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Context.cpp.i
-.PHONY : src/IL/Module/Context.cpp.i
-
-src/IL/Module/Context.s: src/IL/Module/Context.cpp.s
-
-.PHONY : src/IL/Module/Context.s
-
-# target to generate assembly for a file
-src/IL/Module/Context.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Context.cpp.s
-.PHONY : src/IL/Module/Context.cpp.s
-
-src/IL/Module/Module.o: src/IL/Module/Module.cpp.o
-
-.PHONY : src/IL/Module/Module.o
+.PHONY : src/IL/Instruction.o
 
 # target to build an object file
-src/IL/Module/Module.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Module.cpp.o
-.PHONY : src/IL/Module/Module.cpp.o
+src/IL/Instruction.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instruction.cpp.o
+.PHONY : src/IL/Instruction.cpp.o
 
-src/IL/Module/Module.i: src/IL/Module/Module.cpp.i
+src/IL/Instruction.i: src/IL/Instruction.cpp.i
 
-.PHONY : src/IL/Module/Module.i
+.PHONY : src/IL/Instruction.i
 
 # target to preprocess a source file
-src/IL/Module/Module.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Module.cpp.i
-.PHONY : src/IL/Module/Module.cpp.i
+src/IL/Instruction.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instruction.cpp.i
+.PHONY : src/IL/Instruction.cpp.i
 
-src/IL/Module/Module.s: src/IL/Module/Module.cpp.s
+src/IL/Instruction.s: src/IL/Instruction.cpp.s
 
-.PHONY : src/IL/Module/Module.s
+.PHONY : src/IL/Instruction.s
 
 # target to generate assembly for a file
-src/IL/Module/Module.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module/Module.cpp.s
-.PHONY : src/IL/Module/Module.cpp.s
+src/IL/Instruction.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instruction.cpp.s
+.PHONY : src/IL/Instruction.cpp.s
+
+src/IL/Instructions.o: src/IL/Instructions.cpp.o
+
+.PHONY : src/IL/Instructions.o
+
+# target to build an object file
+src/IL/Instructions.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instructions.cpp.o
+.PHONY : src/IL/Instructions.cpp.o
+
+src/IL/Instructions.i: src/IL/Instructions.cpp.i
+
+.PHONY : src/IL/Instructions.i
+
+# target to preprocess a source file
+src/IL/Instructions.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instructions.cpp.i
+.PHONY : src/IL/Instructions.cpp.i
+
+src/IL/Instructions.s: src/IL/Instructions.cpp.s
+
+.PHONY : src/IL/Instructions.s
+
+# target to generate assembly for a file
+src/IL/Instructions.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Instructions.cpp.s
+.PHONY : src/IL/Instructions.cpp.s
+
+src/IL/MetaData.o: src/IL/MetaData.cpp.o
+
+.PHONY : src/IL/MetaData.o
+
+# target to build an object file
+src/IL/MetaData.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/MetaData.cpp.o
+.PHONY : src/IL/MetaData.cpp.o
+
+src/IL/MetaData.i: src/IL/MetaData.cpp.i
+
+.PHONY : src/IL/MetaData.i
+
+# target to preprocess a source file
+src/IL/MetaData.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/MetaData.cpp.i
+.PHONY : src/IL/MetaData.cpp.i
+
+src/IL/MetaData.s: src/IL/MetaData.cpp.s
+
+.PHONY : src/IL/MetaData.s
+
+# target to generate assembly for a file
+src/IL/MetaData.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/MetaData.cpp.s
+.PHONY : src/IL/MetaData.cpp.s
+
+src/IL/Module.o: src/IL/Module.cpp.o
+
+.PHONY : src/IL/Module.o
+
+# target to build an object file
+src/IL/Module.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module.cpp.o
+.PHONY : src/IL/Module.cpp.o
+
+src/IL/Module.i: src/IL/Module.cpp.i
+
+.PHONY : src/IL/Module.i
+
+# target to preprocess a source file
+src/IL/Module.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module.cpp.i
+.PHONY : src/IL/Module.cpp.i
+
+src/IL/Module.s: src/IL/Module.cpp.s
+
+.PHONY : src/IL/Module.s
+
+# target to generate assembly for a file
+src/IL/Module.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Module.cpp.s
+.PHONY : src/IL/Module.cpp.s
 
 src/IL/Passes/PassManager.o: src/IL/Passes/PassManager.cpp.o
 
@@ -1109,6 +1379,60 @@ src/IL/Serialize/Serialization.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Serialize/Serialization.cpp.s
 .PHONY : src/IL/Serialize/Serialization.cpp.s
 
+src/IL/SymbolTableList.o: src/IL/SymbolTableList.cpp.o
+
+.PHONY : src/IL/SymbolTableList.o
+
+# target to build an object file
+src/IL/SymbolTableList.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/SymbolTableList.cpp.o
+.PHONY : src/IL/SymbolTableList.cpp.o
+
+src/IL/SymbolTableList.i: src/IL/SymbolTableList.cpp.i
+
+.PHONY : src/IL/SymbolTableList.i
+
+# target to preprocess a source file
+src/IL/SymbolTableList.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/SymbolTableList.cpp.i
+.PHONY : src/IL/SymbolTableList.cpp.i
+
+src/IL/SymbolTableList.s: src/IL/SymbolTableList.cpp.s
+
+.PHONY : src/IL/SymbolTableList.s
+
+# target to generate assembly for a file
+src/IL/SymbolTableList.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/SymbolTableList.cpp.s
+.PHONY : src/IL/SymbolTableList.cpp.s
+
+src/IL/Use.o: src/IL/Use.cpp.o
+
+.PHONY : src/IL/Use.o
+
+# target to build an object file
+src/IL/Use.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Use.cpp.o
+.PHONY : src/IL/Use.cpp.o
+
+src/IL/Use.i: src/IL/Use.cpp.i
+
+.PHONY : src/IL/Use.i
+
+# target to preprocess a source file
+src/IL/Use.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Use.cpp.i
+.PHONY : src/IL/Use.cpp.i
+
+src/IL/Use.s: src/IL/Use.cpp.s
+
+.PHONY : src/IL/Use.s
+
+# target to generate assembly for a file
+src/IL/Use.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Use.cpp.s
+.PHONY : src/IL/Use.cpp.s
+
 src/IL/Utils/BlockIterator.o: src/IL/Utils/BlockIterator.cpp.o
 
 .PHONY : src/IL/Utils/BlockIterator.o
@@ -1136,653 +1460,59 @@ src/IL/Utils/BlockIterator.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Utils/BlockIterator.cpp.s
 .PHONY : src/IL/Utils/BlockIterator.cpp.s
 
-src/IL/Value/Constant/Constant.o: src/IL/Value/Constant/Constant.cpp.o
+src/IL/Value.o: src/IL/Value.cpp.o
 
-.PHONY : src/IL/Value/Constant/Constant.o
-
-# target to build an object file
-src/IL/Value/Constant/Constant.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/Constant.cpp.o
-.PHONY : src/IL/Value/Constant/Constant.cpp.o
-
-src/IL/Value/Constant/Constant.i: src/IL/Value/Constant/Constant.cpp.i
-
-.PHONY : src/IL/Value/Constant/Constant.i
-
-# target to preprocess a source file
-src/IL/Value/Constant/Constant.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/Constant.cpp.i
-.PHONY : src/IL/Value/Constant/Constant.cpp.i
-
-src/IL/Value/Constant/Constant.s: src/IL/Value/Constant/Constant.cpp.s
-
-.PHONY : src/IL/Value/Constant/Constant.s
-
-# target to generate assembly for a file
-src/IL/Value/Constant/Constant.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/Constant.cpp.s
-.PHONY : src/IL/Value/Constant/Constant.cpp.s
-
-src/IL/Value/Constant/ConstantExpr.o: src/IL/Value/Constant/ConstantExpr.cpp.o
-
-.PHONY : src/IL/Value/Constant/ConstantExpr.o
+.PHONY : src/IL/Value.o
 
 # target to build an object file
-src/IL/Value/Constant/ConstantExpr.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantExpr.cpp.o
-.PHONY : src/IL/Value/Constant/ConstantExpr.cpp.o
+src/IL/Value.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value.cpp.o
+.PHONY : src/IL/Value.cpp.o
 
-src/IL/Value/Constant/ConstantExpr.i: src/IL/Value/Constant/ConstantExpr.cpp.i
+src/IL/Value.i: src/IL/Value.cpp.i
 
-.PHONY : src/IL/Value/Constant/ConstantExpr.i
+.PHONY : src/IL/Value.i
 
 # target to preprocess a source file
-src/IL/Value/Constant/ConstantExpr.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantExpr.cpp.i
-.PHONY : src/IL/Value/Constant/ConstantExpr.cpp.i
+src/IL/Value.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value.cpp.i
+.PHONY : src/IL/Value.cpp.i
 
-src/IL/Value/Constant/ConstantExpr.s: src/IL/Value/Constant/ConstantExpr.cpp.s
+src/IL/Value.s: src/IL/Value.cpp.s
 
-.PHONY : src/IL/Value/Constant/ConstantExpr.s
+.PHONY : src/IL/Value.s
 
 # target to generate assembly for a file
-src/IL/Value/Constant/ConstantExpr.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantExpr.cpp.s
-.PHONY : src/IL/Value/Constant/ConstantExpr.cpp.s
+src/IL/Value.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value.cpp.s
+.PHONY : src/IL/Value.cpp.s
 
-src/IL/Value/Constant/ConstantVal.o: src/IL/Value/Constant/ConstantVal.cpp.o
+src/IL/ValueSymbolTable.o: src/IL/ValueSymbolTable.cpp.o
 
-.PHONY : src/IL/Value/Constant/ConstantVal.o
+.PHONY : src/IL/ValueSymbolTable.o
 
 # target to build an object file
-src/IL/Value/Constant/ConstantVal.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantVal.cpp.o
-.PHONY : src/IL/Value/Constant/ConstantVal.cpp.o
+src/IL/ValueSymbolTable.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/ValueSymbolTable.cpp.o
+.PHONY : src/IL/ValueSymbolTable.cpp.o
 
-src/IL/Value/Constant/ConstantVal.i: src/IL/Value/Constant/ConstantVal.cpp.i
+src/IL/ValueSymbolTable.i: src/IL/ValueSymbolTable.cpp.i
 
-.PHONY : src/IL/Value/Constant/ConstantVal.i
-
-# target to preprocess a source file
-src/IL/Value/Constant/ConstantVal.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantVal.cpp.i
-.PHONY : src/IL/Value/Constant/ConstantVal.cpp.i
-
-src/IL/Value/Constant/ConstantVal.s: src/IL/Value/Constant/ConstantVal.cpp.s
-
-.PHONY : src/IL/Value/Constant/ConstantVal.s
-
-# target to generate assembly for a file
-src/IL/Value/Constant/ConstantVal.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Constant/ConstantVal.cpp.s
-.PHONY : src/IL/Value/Constant/ConstantVal.cpp.s
-
-src/IL/Value/Function/Argument.o: src/IL/Value/Function/Argument.cpp.o
-
-.PHONY : src/IL/Value/Function/Argument.o
-
-# target to build an object file
-src/IL/Value/Function/Argument.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Argument.cpp.o
-.PHONY : src/IL/Value/Function/Argument.cpp.o
-
-src/IL/Value/Function/Argument.i: src/IL/Value/Function/Argument.cpp.i
-
-.PHONY : src/IL/Value/Function/Argument.i
+.PHONY : src/IL/ValueSymbolTable.i
 
 # target to preprocess a source file
-src/IL/Value/Function/Argument.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Argument.cpp.i
-.PHONY : src/IL/Value/Function/Argument.cpp.i
+src/IL/ValueSymbolTable.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/ValueSymbolTable.cpp.i
+.PHONY : src/IL/ValueSymbolTable.cpp.i
 
-src/IL/Value/Function/Argument.s: src/IL/Value/Function/Argument.cpp.s
+src/IL/ValueSymbolTable.s: src/IL/ValueSymbolTable.cpp.s
 
-.PHONY : src/IL/Value/Function/Argument.s
-
-# target to generate assembly for a file
-src/IL/Value/Function/Argument.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Argument.cpp.s
-.PHONY : src/IL/Value/Function/Argument.cpp.s
-
-src/IL/Value/Function/BasicBlock.o: src/IL/Value/Function/BasicBlock.cpp.o
-
-.PHONY : src/IL/Value/Function/BasicBlock.o
-
-# target to build an object file
-src/IL/Value/Function/BasicBlock.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/BasicBlock.cpp.o
-.PHONY : src/IL/Value/Function/BasicBlock.cpp.o
-
-src/IL/Value/Function/BasicBlock.i: src/IL/Value/Function/BasicBlock.cpp.i
-
-.PHONY : src/IL/Value/Function/BasicBlock.i
-
-# target to preprocess a source file
-src/IL/Value/Function/BasicBlock.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/BasicBlock.cpp.i
-.PHONY : src/IL/Value/Function/BasicBlock.cpp.i
-
-src/IL/Value/Function/BasicBlock.s: src/IL/Value/Function/BasicBlock.cpp.s
-
-.PHONY : src/IL/Value/Function/BasicBlock.s
+.PHONY : src/IL/ValueSymbolTable.s
 
 # target to generate assembly for a file
-src/IL/Value/Function/BasicBlock.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/BasicBlock.cpp.s
-.PHONY : src/IL/Value/Function/BasicBlock.cpp.s
-
-src/IL/Value/Function/Function.o: src/IL/Value/Function/Function.cpp.o
-
-.PHONY : src/IL/Value/Function/Function.o
-
-# target to build an object file
-src/IL/Value/Function/Function.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Function.cpp.o
-.PHONY : src/IL/Value/Function/Function.cpp.o
-
-src/IL/Value/Function/Function.i: src/IL/Value/Function/Function.cpp.i
-
-.PHONY : src/IL/Value/Function/Function.i
-
-# target to preprocess a source file
-src/IL/Value/Function/Function.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Function.cpp.i
-.PHONY : src/IL/Value/Function/Function.cpp.i
-
-src/IL/Value/Function/Function.s: src/IL/Value/Function/Function.cpp.s
-
-.PHONY : src/IL/Value/Function/Function.s
-
-# target to generate assembly for a file
-src/IL/Value/Function/Function.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Function.cpp.s
-.PHONY : src/IL/Value/Function/Function.cpp.s
-
-src/IL/Value/Function/Method.o: src/IL/Value/Function/Method.cpp.o
-
-.PHONY : src/IL/Value/Function/Method.o
-
-# target to build an object file
-src/IL/Value/Function/Method.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Method.cpp.o
-.PHONY : src/IL/Value/Function/Method.cpp.o
-
-src/IL/Value/Function/Method.i: src/IL/Value/Function/Method.cpp.i
-
-.PHONY : src/IL/Value/Function/Method.i
-
-# target to preprocess a source file
-src/IL/Value/Function/Method.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Method.cpp.i
-.PHONY : src/IL/Value/Function/Method.cpp.i
-
-src/IL/Value/Function/Method.s: src/IL/Value/Function/Method.cpp.s
-
-.PHONY : src/IL/Value/Function/Method.s
-
-# target to generate assembly for a file
-src/IL/Value/Function/Method.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Function/Method.cpp.s
-.PHONY : src/IL/Value/Function/Method.cpp.s
-
-src/IL/Value/GlobalVariable.o: src/IL/Value/GlobalVariable.cpp.o
-
-.PHONY : src/IL/Value/GlobalVariable.o
-
-# target to build an object file
-src/IL/Value/GlobalVariable.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/GlobalVariable.cpp.o
-.PHONY : src/IL/Value/GlobalVariable.cpp.o
-
-src/IL/Value/GlobalVariable.i: src/IL/Value/GlobalVariable.cpp.i
-
-.PHONY : src/IL/Value/GlobalVariable.i
-
-# target to preprocess a source file
-src/IL/Value/GlobalVariable.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/GlobalVariable.cpp.i
-.PHONY : src/IL/Value/GlobalVariable.cpp.i
-
-src/IL/Value/GlobalVariable.s: src/IL/Value/GlobalVariable.cpp.s
-
-.PHONY : src/IL/Value/GlobalVariable.s
-
-# target to generate assembly for a file
-src/IL/Value/GlobalVariable.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/GlobalVariable.cpp.s
-.PHONY : src/IL/Value/GlobalVariable.cpp.s
-
-src/IL/Value/Instruction/CallInst.o: src/IL/Value/Instruction/CallInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/CallInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/CallInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/CallInst.cpp.o
-.PHONY : src/IL/Value/Instruction/CallInst.cpp.o
-
-src/IL/Value/Instruction/CallInst.i: src/IL/Value/Instruction/CallInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/CallInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/CallInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/CallInst.cpp.i
-.PHONY : src/IL/Value/Instruction/CallInst.cpp.i
-
-src/IL/Value/Instruction/CallInst.s: src/IL/Value/Instruction/CallInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/CallInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/CallInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/CallInst.cpp.s
-.PHONY : src/IL/Value/Instruction/CallInst.cpp.s
-
-src/IL/Value/Instruction/Cast/CastInst.o: src/IL/Value/Instruction/Cast/CastInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Cast/CastInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Cast/CastInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.cpp.o
-
-src/IL/Value/Instruction/Cast/CastInst.i: src/IL/Value/Instruction/Cast/CastInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Cast/CastInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Cast/CastInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.cpp.i
-
-src/IL/Value/Instruction/Cast/CastInst.s: src/IL/Value/Instruction/Cast/CastInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Cast/CastInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Cast/CastInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Cast/CastInst.cpp.s
-
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.o: src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.o
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.o
-
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.i: src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.i
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.i
-
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.s: src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.s
-.PHONY : src/IL/Value/Instruction/ControlFlow/ControlFlowInst.cpp.s
-
-src/IL/Value/Instruction/Instruction.o: src/IL/Value/Instruction/Instruction.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Instruction.o
-
-# target to build an object file
-src/IL/Value/Instruction/Instruction.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Instruction.cpp.o
-.PHONY : src/IL/Value/Instruction/Instruction.cpp.o
-
-src/IL/Value/Instruction/Instruction.i: src/IL/Value/Instruction/Instruction.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Instruction.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Instruction.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Instruction.cpp.i
-.PHONY : src/IL/Value/Instruction/Instruction.cpp.i
-
-src/IL/Value/Instruction/Instruction.s: src/IL/Value/Instruction/Instruction.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Instruction.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Instruction.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Instruction.cpp.s
-.PHONY : src/IL/Value/Instruction/Instruction.cpp.s
-
-src/IL/Value/Instruction/Memory/AllocaInst.o: src/IL/Value/Instruction/Memory/AllocaInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Memory/AllocaInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/AllocaInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.cpp.o
-
-src/IL/Value/Instruction/Memory/AllocaInst.i: src/IL/Value/Instruction/Memory/AllocaInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Memory/AllocaInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/AllocaInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.cpp.i
-
-src/IL/Value/Instruction/Memory/AllocaInst.s: src/IL/Value/Instruction/Memory/AllocaInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Memory/AllocaInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/AllocaInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Memory/AllocaInst.cpp.s
-
-src/IL/Value/Instruction/Memory/GEPInst.o: src/IL/Value/Instruction/Memory/GEPInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Memory/GEPInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/GEPInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.cpp.o
-
-src/IL/Value/Instruction/Memory/GEPInst.i: src/IL/Value/Instruction/Memory/GEPInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Memory/GEPInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/GEPInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.cpp.i
-
-src/IL/Value/Instruction/Memory/GEPInst.s: src/IL/Value/Instruction/Memory/GEPInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Memory/GEPInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/GEPInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Memory/GEPInst.cpp.s
-
-src/IL/Value/Instruction/Memory/InitInst.o: src/IL/Value/Instruction/Memory/InitInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Memory/InitInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/InitInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.cpp.o
-
-src/IL/Value/Instruction/Memory/InitInst.i: src/IL/Value/Instruction/Memory/InitInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Memory/InitInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/InitInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.cpp.i
-
-src/IL/Value/Instruction/Memory/InitInst.s: src/IL/Value/Instruction/Memory/InitInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Memory/InitInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/InitInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Memory/InitInst.cpp.s
-
-src/IL/Value/Instruction/Memory/StoreInst.o: src/IL/Value/Instruction/Memory/StoreInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Memory/StoreInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/StoreInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.cpp.o
-
-src/IL/Value/Instruction/Memory/StoreInst.i: src/IL/Value/Instruction/Memory/StoreInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Memory/StoreInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/StoreInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.cpp.i
-
-src/IL/Value/Instruction/Memory/StoreInst.s: src/IL/Value/Instruction/Memory/StoreInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Memory/StoreInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Memory/StoreInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Memory/StoreInst.cpp.s
-
-src/IL/Value/Instruction/Operator/OperatorInst.o: src/IL/Value/Instruction/Operator/OperatorInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Operator/OperatorInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Operator/OperatorInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.cpp.o
-
-src/IL/Value/Instruction/Operator/OperatorInst.i: src/IL/Value/Instruction/Operator/OperatorInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Operator/OperatorInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Operator/OperatorInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.cpp.i
-
-src/IL/Value/Instruction/Operator/OperatorInst.s: src/IL/Value/Instruction/Operator/OperatorInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Operator/OperatorInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Operator/OperatorInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Operator/OperatorInst.cpp.s
-
-src/IL/Value/Instruction/Terminator/TerminatorInst.o: src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.o
-
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.o
-
-# target to build an object file
-src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.o
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.o
-
-src/IL/Value/Instruction/Terminator/TerminatorInst.i: src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.i
-
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.i
-
-# target to preprocess a source file
-src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.i
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.i
-
-src/IL/Value/Instruction/Terminator/TerminatorInst.s: src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.s
-
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.s
-
-# target to generate assembly for a file
-src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.s
-.PHONY : src/IL/Value/Instruction/Terminator/TerminatorInst.cpp.s
-
-src/IL/Value/MetaData/MetaData.o: src/IL/Value/MetaData/MetaData.cpp.o
-
-.PHONY : src/IL/Value/MetaData/MetaData.o
-
-# target to build an object file
-src/IL/Value/MetaData/MetaData.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/MetaData/MetaData.cpp.o
-.PHONY : src/IL/Value/MetaData/MetaData.cpp.o
-
-src/IL/Value/MetaData/MetaData.i: src/IL/Value/MetaData/MetaData.cpp.i
-
-.PHONY : src/IL/Value/MetaData/MetaData.i
-
-# target to preprocess a source file
-src/IL/Value/MetaData/MetaData.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/MetaData/MetaData.cpp.i
-.PHONY : src/IL/Value/MetaData/MetaData.cpp.i
-
-src/IL/Value/MetaData/MetaData.s: src/IL/Value/MetaData/MetaData.cpp.s
-
-.PHONY : src/IL/Value/MetaData/MetaData.s
-
-# target to generate assembly for a file
-src/IL/Value/MetaData/MetaData.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/MetaData/MetaData.cpp.s
-.PHONY : src/IL/Value/MetaData/MetaData.cpp.s
-
-src/IL/Value/Record/AggregateType.o: src/IL/Value/Record/AggregateType.cpp.o
-
-.PHONY : src/IL/Value/Record/AggregateType.o
-
-# target to build an object file
-src/IL/Value/Record/AggregateType.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Record/AggregateType.cpp.o
-.PHONY : src/IL/Value/Record/AggregateType.cpp.o
-
-src/IL/Value/Record/AggregateType.i: src/IL/Value/Record/AggregateType.cpp.i
-
-.PHONY : src/IL/Value/Record/AggregateType.i
-
-# target to preprocess a source file
-src/IL/Value/Record/AggregateType.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Record/AggregateType.cpp.i
-.PHONY : src/IL/Value/Record/AggregateType.cpp.i
-
-src/IL/Value/Record/AggregateType.s: src/IL/Value/Record/AggregateType.cpp.s
-
-.PHONY : src/IL/Value/Record/AggregateType.s
-
-# target to generate assembly for a file
-src/IL/Value/Record/AggregateType.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Record/AggregateType.cpp.s
-.PHONY : src/IL/Value/Record/AggregateType.cpp.s
-
-src/IL/Value/SymbolTableList.o: src/IL/Value/SymbolTableList.cpp.o
-
-.PHONY : src/IL/Value/SymbolTableList.o
-
-# target to build an object file
-src/IL/Value/SymbolTableList.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/SymbolTableList.cpp.o
-.PHONY : src/IL/Value/SymbolTableList.cpp.o
-
-src/IL/Value/SymbolTableList.i: src/IL/Value/SymbolTableList.cpp.i
-
-.PHONY : src/IL/Value/SymbolTableList.i
-
-# target to preprocess a source file
-src/IL/Value/SymbolTableList.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/SymbolTableList.cpp.i
-.PHONY : src/IL/Value/SymbolTableList.cpp.i
-
-src/IL/Value/SymbolTableList.s: src/IL/Value/SymbolTableList.cpp.s
-
-.PHONY : src/IL/Value/SymbolTableList.s
-
-# target to generate assembly for a file
-src/IL/Value/SymbolTableList.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/SymbolTableList.cpp.s
-.PHONY : src/IL/Value/SymbolTableList.cpp.s
-
-src/IL/Value/Use.o: src/IL/Value/Use.cpp.o
-
-.PHONY : src/IL/Value/Use.o
-
-# target to build an object file
-src/IL/Value/Use.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.o
-.PHONY : src/IL/Value/Use.cpp.o
-
-src/IL/Value/Use.i: src/IL/Value/Use.cpp.i
-
-.PHONY : src/IL/Value/Use.i
-
-# target to preprocess a source file
-src/IL/Value/Use.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.i
-.PHONY : src/IL/Value/Use.cpp.i
-
-src/IL/Value/Use.s: src/IL/Value/Use.cpp.s
-
-.PHONY : src/IL/Value/Use.s
-
-# target to generate assembly for a file
-src/IL/Value/Use.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Use.cpp.s
-.PHONY : src/IL/Value/Use.cpp.s
-
-src/IL/Value/Value.o: src/IL/Value/Value.cpp.o
-
-.PHONY : src/IL/Value/Value.o
-
-# target to build an object file
-src/IL/Value/Value.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Value.cpp.o
-.PHONY : src/IL/Value/Value.cpp.o
-
-src/IL/Value/Value.i: src/IL/Value/Value.cpp.i
-
-.PHONY : src/IL/Value/Value.i
-
-# target to preprocess a source file
-src/IL/Value/Value.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Value.cpp.i
-.PHONY : src/IL/Value/Value.cpp.i
-
-src/IL/Value/Value.s: src/IL/Value/Value.cpp.s
-
-.PHONY : src/IL/Value/Value.s
-
-# target to generate assembly for a file
-src/IL/Value/Value.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/Value.cpp.s
-.PHONY : src/IL/Value/Value.cpp.s
-
-src/IL/Value/ValueSymbolTable.o: src/IL/Value/ValueSymbolTable.cpp.o
-
-.PHONY : src/IL/Value/ValueSymbolTable.o
-
-# target to build an object file
-src/IL/Value/ValueSymbolTable.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/ValueSymbolTable.cpp.o
-.PHONY : src/IL/Value/ValueSymbolTable.cpp.o
-
-src/IL/Value/ValueSymbolTable.i: src/IL/Value/ValueSymbolTable.cpp.i
-
-.PHONY : src/IL/Value/ValueSymbolTable.i
-
-# target to preprocess a source file
-src/IL/Value/ValueSymbolTable.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/ValueSymbolTable.cpp.i
-.PHONY : src/IL/Value/ValueSymbolTable.cpp.i
-
-src/IL/Value/ValueSymbolTable.s: src/IL/Value/ValueSymbolTable.cpp.s
-
-.PHONY : src/IL/Value/ValueSymbolTable.s
-
-# target to generate assembly for a file
-src/IL/Value/ValueSymbolTable.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/Value/ValueSymbolTable.cpp.s
-.PHONY : src/IL/Value/ValueSymbolTable.cpp.s
+src/IL/ValueSymbolTable.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/IL/ValueSymbolTable.cpp.s
+.PHONY : src/IL/ValueSymbolTable.cpp.s
 
 src/IL/Writer/ModuleWriter.o: src/IL/Writer/ModuleWriter.cpp.o
 
@@ -2933,6 +2663,33 @@ src/Sema/SemaPass.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/SemaPass.cpp.s
 .PHONY : src/Sema/SemaPass.cpp.s
 
+src/Sema/SemaReflect.o: src/Sema/SemaReflect.cpp.o
+
+.PHONY : src/Sema/SemaReflect.o
+
+# target to build an object file
+src/Sema/SemaReflect.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/SemaReflect.cpp.o
+.PHONY : src/Sema/SemaReflect.cpp.o
+
+src/Sema/SemaReflect.i: src/Sema/SemaReflect.cpp.i
+
+.PHONY : src/Sema/SemaReflect.i
+
+# target to preprocess a source file
+src/Sema/SemaReflect.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/SemaReflect.cpp.i
+.PHONY : src/Sema/SemaReflect.cpp.i
+
+src/Sema/SemaReflect.s: src/Sema/SemaReflect.cpp.s
+
+.PHONY : src/Sema/SemaReflect.s
+
+# target to generate assembly for a file
+src/Sema/SemaReflect.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/SemaReflect.cpp.s
+.PHONY : src/Sema/SemaReflect.cpp.s
+
 src/Sema/SemaTemplate.o: src/Sema/SemaTemplate.cpp.o
 
 .PHONY : src/Sema/SemaTemplate.o
@@ -3544,6 +3301,9 @@ help:
 	@echo "... src/AST/Statement.o"
 	@echo "... src/AST/Statement.i"
 	@echo "... src/AST/Statement.s"
+	@echo "... src/AST/StmtOrDecl.o"
+	@echo "... src/AST/StmtOrDecl.i"
+	@echo "... src/AST/StmtOrDecl.s"
 	@echo "... src/AST/Transform.o"
 	@echo "... src/AST/Transform.i"
 	@echo "... src/AST/Transform.s"
@@ -3595,15 +3355,42 @@ help:
 	@echo "... src/Compiler.o"
 	@echo "... src/Compiler.i"
 	@echo "... src/Compiler.s"
+	@echo "... src/IL/Argument.o"
+	@echo "... src/IL/Argument.i"
+	@echo "... src/IL/Argument.s"
+	@echo "... src/IL/BasicBlock.o"
+	@echo "... src/IL/BasicBlock.i"
+	@echo "... src/IL/BasicBlock.s"
+	@echo "... src/IL/Constant.o"
+	@echo "... src/IL/Constant.i"
+	@echo "... src/IL/Constant.s"
+	@echo "... src/IL/Constants.o"
+	@echo "... src/IL/Constants.i"
+	@echo "... src/IL/Constants.s"
+	@echo "... src/IL/Context.o"
+	@echo "... src/IL/Context.i"
+	@echo "... src/IL/Context.s"
+	@echo "... src/IL/Function.o"
+	@echo "... src/IL/Function.i"
+	@echo "... src/IL/Function.s"
+	@echo "... src/IL/GlobalVariable.o"
+	@echo "... src/IL/GlobalVariable.i"
+	@echo "... src/IL/GlobalVariable.s"
 	@echo "... src/IL/ILBuilder.o"
 	@echo "... src/IL/ILBuilder.i"
 	@echo "... src/IL/ILBuilder.s"
-	@echo "... src/IL/Module/Context.o"
-	@echo "... src/IL/Module/Context.i"
-	@echo "... src/IL/Module/Context.s"
-	@echo "... src/IL/Module/Module.o"
-	@echo "... src/IL/Module/Module.i"
-	@echo "... src/IL/Module/Module.s"
+	@echo "... src/IL/Instruction.o"
+	@echo "... src/IL/Instruction.i"
+	@echo "... src/IL/Instruction.s"
+	@echo "... src/IL/Instructions.o"
+	@echo "... src/IL/Instructions.i"
+	@echo "... src/IL/Instructions.s"
+	@echo "... src/IL/MetaData.o"
+	@echo "... src/IL/MetaData.i"
+	@echo "... src/IL/MetaData.s"
+	@echo "... src/IL/Module.o"
+	@echo "... src/IL/Module.i"
+	@echo "... src/IL/Module.s"
 	@echo "... src/IL/Passes/PassManager.o"
 	@echo "... src/IL/Passes/PassManager.i"
 	@echo "... src/IL/Passes/PassManager.s"
@@ -3616,81 +3403,21 @@ help:
 	@echo "... src/IL/Serialize/Serialization.o"
 	@echo "... src/IL/Serialize/Serialization.i"
 	@echo "... src/IL/Serialize/Serialization.s"
+	@echo "... src/IL/SymbolTableList.o"
+	@echo "... src/IL/SymbolTableList.i"
+	@echo "... src/IL/SymbolTableList.s"
+	@echo "... src/IL/Use.o"
+	@echo "... src/IL/Use.i"
+	@echo "... src/IL/Use.s"
 	@echo "... src/IL/Utils/BlockIterator.o"
 	@echo "... src/IL/Utils/BlockIterator.i"
 	@echo "... src/IL/Utils/BlockIterator.s"
-	@echo "... src/IL/Value/Constant/Constant.o"
-	@echo "... src/IL/Value/Constant/Constant.i"
-	@echo "... src/IL/Value/Constant/Constant.s"
-	@echo "... src/IL/Value/Constant/ConstantExpr.o"
-	@echo "... src/IL/Value/Constant/ConstantExpr.i"
-	@echo "... src/IL/Value/Constant/ConstantExpr.s"
-	@echo "... src/IL/Value/Constant/ConstantVal.o"
-	@echo "... src/IL/Value/Constant/ConstantVal.i"
-	@echo "... src/IL/Value/Constant/ConstantVal.s"
-	@echo "... src/IL/Value/Function/Argument.o"
-	@echo "... src/IL/Value/Function/Argument.i"
-	@echo "... src/IL/Value/Function/Argument.s"
-	@echo "... src/IL/Value/Function/BasicBlock.o"
-	@echo "... src/IL/Value/Function/BasicBlock.i"
-	@echo "... src/IL/Value/Function/BasicBlock.s"
-	@echo "... src/IL/Value/Function/Function.o"
-	@echo "... src/IL/Value/Function/Function.i"
-	@echo "... src/IL/Value/Function/Function.s"
-	@echo "... src/IL/Value/Function/Method.o"
-	@echo "... src/IL/Value/Function/Method.i"
-	@echo "... src/IL/Value/Function/Method.s"
-	@echo "... src/IL/Value/GlobalVariable.o"
-	@echo "... src/IL/Value/GlobalVariable.i"
-	@echo "... src/IL/Value/GlobalVariable.s"
-	@echo "... src/IL/Value/Instruction/CallInst.o"
-	@echo "... src/IL/Value/Instruction/CallInst.i"
-	@echo "... src/IL/Value/Instruction/CallInst.s"
-	@echo "... src/IL/Value/Instruction/Cast/CastInst.o"
-	@echo "... src/IL/Value/Instruction/Cast/CastInst.i"
-	@echo "... src/IL/Value/Instruction/Cast/CastInst.s"
-	@echo "... src/IL/Value/Instruction/ControlFlow/ControlFlowInst.o"
-	@echo "... src/IL/Value/Instruction/ControlFlow/ControlFlowInst.i"
-	@echo "... src/IL/Value/Instruction/ControlFlow/ControlFlowInst.s"
-	@echo "... src/IL/Value/Instruction/Instruction.o"
-	@echo "... src/IL/Value/Instruction/Instruction.i"
-	@echo "... src/IL/Value/Instruction/Instruction.s"
-	@echo "... src/IL/Value/Instruction/Memory/AllocaInst.o"
-	@echo "... src/IL/Value/Instruction/Memory/AllocaInst.i"
-	@echo "... src/IL/Value/Instruction/Memory/AllocaInst.s"
-	@echo "... src/IL/Value/Instruction/Memory/GEPInst.o"
-	@echo "... src/IL/Value/Instruction/Memory/GEPInst.i"
-	@echo "... src/IL/Value/Instruction/Memory/GEPInst.s"
-	@echo "... src/IL/Value/Instruction/Memory/InitInst.o"
-	@echo "... src/IL/Value/Instruction/Memory/InitInst.i"
-	@echo "... src/IL/Value/Instruction/Memory/InitInst.s"
-	@echo "... src/IL/Value/Instruction/Memory/StoreInst.o"
-	@echo "... src/IL/Value/Instruction/Memory/StoreInst.i"
-	@echo "... src/IL/Value/Instruction/Memory/StoreInst.s"
-	@echo "... src/IL/Value/Instruction/Operator/OperatorInst.o"
-	@echo "... src/IL/Value/Instruction/Operator/OperatorInst.i"
-	@echo "... src/IL/Value/Instruction/Operator/OperatorInst.s"
-	@echo "... src/IL/Value/Instruction/Terminator/TerminatorInst.o"
-	@echo "... src/IL/Value/Instruction/Terminator/TerminatorInst.i"
-	@echo "... src/IL/Value/Instruction/Terminator/TerminatorInst.s"
-	@echo "... src/IL/Value/MetaData/MetaData.o"
-	@echo "... src/IL/Value/MetaData/MetaData.i"
-	@echo "... src/IL/Value/MetaData/MetaData.s"
-	@echo "... src/IL/Value/Record/AggregateType.o"
-	@echo "... src/IL/Value/Record/AggregateType.i"
-	@echo "... src/IL/Value/Record/AggregateType.s"
-	@echo "... src/IL/Value/SymbolTableList.o"
-	@echo "... src/IL/Value/SymbolTableList.i"
-	@echo "... src/IL/Value/SymbolTableList.s"
-	@echo "... src/IL/Value/Use.o"
-	@echo "... src/IL/Value/Use.i"
-	@echo "... src/IL/Value/Use.s"
-	@echo "... src/IL/Value/Value.o"
-	@echo "... src/IL/Value/Value.i"
-	@echo "... src/IL/Value/Value.s"
-	@echo "... src/IL/Value/ValueSymbolTable.o"
-	@echo "... src/IL/Value/ValueSymbolTable.i"
-	@echo "... src/IL/Value/ValueSymbolTable.s"
+	@echo "... src/IL/Value.o"
+	@echo "... src/IL/Value.i"
+	@echo "... src/IL/Value.s"
+	@echo "... src/IL/ValueSymbolTable.o"
+	@echo "... src/IL/ValueSymbolTable.i"
+	@echo "... src/IL/ValueSymbolTable.s"
 	@echo "... src/IL/Writer/ModuleWriter.o"
 	@echo "... src/IL/Writer/ModuleWriter.i"
 	@echo "... src/IL/Writer/ModuleWriter.s"
@@ -3817,6 +3544,9 @@ help:
 	@echo "... src/Sema/SemaPass.o"
 	@echo "... src/Sema/SemaPass.i"
 	@echo "... src/Sema/SemaPass.s"
+	@echo "... src/Sema/SemaReflect.o"
+	@echo "... src/Sema/SemaReflect.i"
+	@echo "... src/Sema/SemaReflect.s"
 	@echo "... src/Sema/SemaTemplate.o"
 	@echo "... src/Sema/SemaTemplate.i"
 	@echo "... src/Sema/SemaTemplate.s"

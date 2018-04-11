@@ -171,7 +171,10 @@ int main(int argc, char **argv)
       }
    }
 
-   llvm::raw_fd_ostream out(FD, /*shouldClose=*/ !opts.OutFile.empty());
+   // use a string stream first so that the actual file is not affected if
+   // TblGen crashes
+   std::string str;
+   llvm::raw_string_ostream OS(str);
 
    auto &RK = parser.getRK();
    switch (opts.backend) {
@@ -200,14 +203,17 @@ int main(int argc, char **argv)
          auto Backend = reinterpret_cast<void(*)(llvm::raw_ostream &,
                                                  RecordKeeper&)>(Ptr);
 
-         Backend(out, RK);
+         Backend(OS, RK);
          break;
       }
       case B_PrintRecords:
-         PrintRecords(out, RK);
+         PrintRecords(OS, RK);
          break;
       case B_EmitClassHierarchy:
-         EmitClassHierarchy(out, RK);
+         EmitClassHierarchy(OS, RK);
          break;
    }
+
+   llvm::raw_fd_ostream out(FD, /*shouldClose=*/ !opts.OutFile.empty());
+   out << OS.str();
 }

@@ -3,9 +3,10 @@
 //
 
 #include "Parser.h"
+
 #include "AST/Attr.h"
-#include "Sema/SemaPass.h"
 #include "AST/Decl.h"
+#include "Sema/SemaPass.h"
 
 #include <llvm/ADT/StringSwitch.h>
 
@@ -89,7 +90,8 @@ ParseTypeResult Parser::parseAttributedType()
    for (auto &A : Attrs)
       checkAttrApplicability(Ty.get().getTypeExpr(), A);
 
-   return Ty;
+   return SourceType(AttributedExpr::Create(Context, Ty.get().getTypeExpr(),
+                                            Attrs));
 }
 
 void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr *> &Attrs)
@@ -116,8 +118,7 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr *> &Attrs)
          .Default(AttrKind::_notAttr);
 
       if (Kind == AttrKind::_notAttr) {
-         SP.diagnose(err_generic_error, AttrLoc,
-                     std::string("unknown attribute @") + Ident);
+         SP.diagnose(err_attr_does_not_exist, Ident, AttrLoc);
 
          if (lookahead().is(tok::open_paren)) {
             advance();
@@ -165,7 +166,7 @@ void Parser::checkAttrApplicability(ParseResult Result, Attr *A)
          SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                      A->getSpelling(), 3 /*types*/);
       }
-      else if (!isa<ExprAttr>(A)) {
+      else if (!isa<ExprAttr>(A) && !isa<TypeAttr>(A)) {
          SP.diagnose(err_attribute_applicability, A->getSourceLoc(),
                      A->getSpelling(), 2 /*expressions*/);
       }

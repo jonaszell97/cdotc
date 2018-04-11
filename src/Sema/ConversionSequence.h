@@ -17,7 +17,7 @@ class ConversionStep {
    CastKind Kind : 7;
    bool Halt : 1;
 
-   void *Data;
+   mutable void *Data;
 
 public:
    ConversionStep(CastKind Kind, QualType ty)
@@ -42,6 +42,8 @@ public:
       assert(Kind != CastKind::ConversionOp && "does not store a result type!");
       return QualType::getFromOpaquePtr(Data);
    }
+
+   void setResultType(QualType Ty) const { Data = Ty.getAsOpaquePtr(); }
 
    ast::CallableDecl *getConversionOp() const
    {

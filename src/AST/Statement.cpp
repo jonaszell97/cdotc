@@ -1,14 +1,29 @@
 
-#include "Statement.h"
+#include "ASTContext.h"
 #include "Decl.h"
+#include "Expression.h"
+#include "Statement.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "AST/Expression.h"
-#include "AST/Statement.h"
+#include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
 namespace ast {
+
+void Statement::dumpFlags() const
+{
+   printFlags(llvm::errs());
+}
+
+void Statement::printFlags(llvm::raw_ostream &OS) const
+{
+   OS << "TypeDependent = " << (isTypeDependent() ? "true" : "false") << "\n";
+   OS << "ValueDependent = " << (isValueDependent() ? "true" : "false") << "\n";
+   OS << "HadError = " << (isInvalid() ? "true" : "false") << "\n";
+   OS << "SemaChecked = "<<(isSemanticallyChecked() ? "true" : "false") << "\n";
+   OS << "GlobalInit = " << (isGlobalInitializer() ? "true" : "false") << "\n";
+   OS << "ContainsUnexpandedPack = "
+      << (containsUnexpandedParameterPack() ? "true" : "false") << "\n";
+}
 
 void Statement::copyStatusFlags(Statement *Stmt)
 {
@@ -68,7 +83,8 @@ SourceRange DeclStmt::getSourceRange() const
 
 AttributedStmt::AttributedStmt(Statement *Stmt,
                                llvm::ArrayRef<Attr *> Attrs)
-   : Statement(AttributedStmtID), Stmt(Stmt)
+   : Statement(AttributedStmtID),
+     Stmt(Stmt), NumAttrs((unsigned)Attrs.size())
 {
    std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attr*>());
 }
@@ -91,68 +107,6 @@ NullStmt::NullStmt(SourceLocation Loc)
 NullStmt* NullStmt::Create(ASTContext &C, SourceLocation Loc)
 {
    return new(C) NullStmt(Loc);
-}
-
-UsingStmt::UsingStmt(SourceRange Loc,
-                     llvm::ArrayRef<IdentifierInfo *> declContextSpecifier,
-                     llvm::ArrayRef<IdentifierInfo *> importedItems,
-                     bool wildCardImport)
-   : Statement(UsingStmtID), Loc(Loc),
-     NumSpecifierNames((unsigned)declContextSpecifier.size()),
-     NumItems((unsigned)importedItems.size()),
-     IsWildCard(wildCardImport)
-{
-   std::copy(declContextSpecifier.begin(), declContextSpecifier.end(),
-             getTrailingObjects<IdentifierInfo*>());
-   std::copy(importedItems.begin(), importedItems.end(),
-             getTrailingObjects<IdentifierInfo*>() + NumSpecifierNames);
-}
-
-UsingStmt* UsingStmt::Create(ASTContext &C, SourceRange Loc,
-                             llvm::ArrayRef<IdentifierInfo *> declContextSpecifier,
-                             llvm::ArrayRef<IdentifierInfo *> importedItems,
-                             bool wildCardImport) {
-   void *Mem = C.Allocate(
-      totalSizeToAlloc<IdentifierInfo*>(
-         declContextSpecifier.size() + importedItems.size()),
-      alignof(UsingStmt));
-
-   return new(Mem) UsingStmt(Loc, declContextSpecifier, importedItems,
-                             wildCardImport);
-}
-
-ImportStmt::ImportStmt(SourceRange Loc,
-                       llvm::ArrayRef<IdentifierInfo *> moduleName)
-   : Statement(ImportStmtID), Loc(Loc),
-     NumNameQuals((unsigned)moduleName.size())
-{
-   std::copy(moduleName.begin(), moduleName.end(),
-             getTrailingObjects<IdentifierInfo*>());
-}
-
-ImportStmt* ImportStmt::Create(ASTContext &C, SourceRange Loc,
-                               llvm::ArrayRef<IdentifierInfo *> moduleName) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(moduleName.size()),
-                          alignof(ImportStmt));
-
-   return new(Mem) ImportStmt(Loc, moduleName);
-}
-
-ModuleStmt::ModuleStmt(SourceRange Loc,
-                       llvm::ArrayRef<IdentifierInfo *> moduleName)
-   : Statement(ModuleStmtID), Loc(Loc),
-     NumNameQuals((unsigned)moduleName.size())
-{
-   std::copy(moduleName.begin(), moduleName.end(),
-             getTrailingObjects<IdentifierInfo*>());
-}
-
-ModuleStmt* ModuleStmt::Create(ASTContext &C, SourceRange Loc,
-                               llvm::ArrayRef<IdentifierInfo *> moduleName) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(moduleName.size()),
-                          alignof(ModuleStmt));
-
-   return new(Mem) ModuleStmt(Loc, moduleName);
 }
 
 CompoundStmt::CompoundStmt(bool preservesScope,
@@ -322,7 +276,8 @@ MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
                      Expression *switchVal,
                      llvm::ArrayRef<CaseStmt*> cases)
    : Statement(MatchStmtID),
-     Braces(Braces), switchValue(switchVal), NumCases((unsigned)cases.size())
+     MatchLoc(MatchLoc), Braces(Braces),
+     switchValue(switchVal), NumCases((unsigned)cases.size())
 {
    std::copy(cases.begin(), cases.end(), getTrailingObjects<CaseStmt*>());
 }
@@ -407,7 +362,7 @@ llvm::ArrayRef<VarDecl*> DestructuringDecl::getDecls() const
 DestructuringDecl::DestructuringDecl(NodeType typeID,
                                      SourceRange SR,
                                      unsigned NumDecls,
-                                     AccessModifier access,
+                                     AccessSpecifier access,
                                      bool isConst,
                                      SourceType type,
                                      Expression *value)
@@ -417,7 +372,7 @@ DestructuringDecl::DestructuringDecl(NodeType typeID,
 {}
 
 LocalDestructuringDecl::LocalDestructuringDecl(SourceRange SR,
-                                               AccessModifier access,
+                                               AccessSpecifier access,
                                                bool isConst,
                                                llvm::ArrayRef<VarDecl*> Decls,
                                                SourceType type,
@@ -431,7 +386,7 @@ LocalDestructuringDecl::LocalDestructuringDecl(SourceRange SR,
 LocalDestructuringDecl*
 LocalDestructuringDecl::Create(ASTContext &C,
                                SourceRange SR,
-                               AccessModifier access,
+                               AccessSpecifier access,
                                bool isConst,
                                llvm::ArrayRef<VarDecl *> Decls,
                                SourceType type,
@@ -444,7 +399,7 @@ LocalDestructuringDecl::Create(ASTContext &C,
 }
 
 GlobalDestructuringDecl::GlobalDestructuringDecl(SourceRange SR,
-                                                 AccessModifier access,
+                                                 AccessSpecifier access,
                                                  bool isConst,
                                                  llvm::ArrayRef<VarDecl*> Decls,
                                                  SourceType type,
@@ -458,7 +413,7 @@ GlobalDestructuringDecl::GlobalDestructuringDecl(SourceRange SR,
 GlobalDestructuringDecl*
 GlobalDestructuringDecl::Create(ASTContext &C,
                                 SourceRange SR,
-                                AccessModifier access,
+                                AccessSpecifier access,
                                 bool isConst,
                                 llvm::ArrayRef<VarDecl*> Decls,
                                 SourceType type,
@@ -482,11 +437,11 @@ StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,
 
 StaticForStmt::StaticForStmt(SourceLocation StaticLoc,
                              SourceLocation IfLoc,
-                             std::string &&elementName,
+                             IdentifierInfo *elementName,
                              StaticExpr *range,
                              Statement *body)
    : Statement(StaticForStmtID),
-     elementName(move(elementName)), range(range), body(body)
+     elementName(elementName), range(range), body(body)
 {}
 
 } // namespace ast

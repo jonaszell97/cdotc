@@ -146,6 +146,10 @@ public:
 
       Expr = semaRes.get();
 
+      if (Expr->isDependent())
+         return StaticExprResult(Expr->isTypeDependent(),
+                                 Expr->isValueDependent());
+
       EvaluationMethodDecider Decider;
       Decider.visit(Expr);
 
@@ -233,12 +237,12 @@ Variant EvaluatorImpl::visitCharLiteral(CharLiteral* expr)
 
 Variant EvaluatorImpl::visitStringLiteral(StringLiteral* expr)
 {
-   Variant Str(expr->getValue());
-   if (expr->isCString())
-      return Variant(move(Str));
-
-   Variant Size = Variant(uint64_t(expr->getValue().size()));
-   return makeStruct({ move(Str), move(Size) });
+   return Variant(expr->getValue());
+//   if (expr->isCString())
+//      return Variant(move(Str));
+//
+//   Variant Size = Variant(uint64_t(expr->getValue().size()));
+//   return makeStruct({ move(Str), move(Size) });
 }
 
 Variant EvaluatorImpl::visitStringInterpolation(StringInterpolation* expr)
@@ -479,25 +483,41 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
             auto lhsVal = lhs.getAPSInt().getZExtValue();
             auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            return Variant(uint64_t(support::intPower(lhsVal, rhsVal)));
+            uint64_t Result(support::intPower(lhsVal, rhsVal));
+            llvm::APSInt APS = lhs.getAPSInt();
+            APS = Result;
+
+            return move(APS);
          }
          case op::Shl: {
             auto lhsVal = lhs.getAPSInt().getZExtValue();
             auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            return Variant(uint64_t(lhsVal << rhsVal));
+            uint64_t Result(lhsVal << rhsVal);
+            llvm::APSInt APS = lhs.getAPSInt();
+            APS = Result;
+
+            return move(APS);
          }
          case op::AShr: {
             auto lhsVal = lhs.getAPSInt().getZExtValue();
             auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            return Variant(uint64_t(lhsVal << rhsVal));
+            uint64_t Result(lhsVal >> rhsVal);
+            llvm::APSInt APS = lhs.getAPSInt();
+            APS = Result;
+
+            return move(APS);
          }
          case op::LShr: {
             auto lhsVal = lhs.getAPSInt().getSExtValue();
             auto rhsVal = rhs.getAPSInt().getSExtValue();
 
-            return Variant(uint64_t(lhsVal << rhsVal));
+            int64_t Result(lhsVal >> rhsVal);
+            llvm::APSInt APS = lhs.getAPSInt();
+            APS = Result;
+
+            return move(APS);
          }
          default:
             llvm_unreachable("bad binary op");

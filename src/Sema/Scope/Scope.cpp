@@ -40,7 +40,7 @@ LambdaScope::LambdaScope(ast::LambdaExpr *L, Scope *enclosingScope)
 
 }
 
-StaticForScope::StaticForScope(llvm::StringRef elementName,
+StaticForScope::StaticForScope(IdentifierInfo *elementName,
                                QualType elementTy,
                                Scope *enclosingScope)
    : Scope(StaticForScopeID, enclosingScope),

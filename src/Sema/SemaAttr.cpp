@@ -31,10 +31,11 @@ void SemaPass::checkDeclAttrs(Decl *D, Attr::VisitationPoint VP)
 
 StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
 {
+   auto S = Stmt->getStatement();
    for (auto &A : Stmt->getAttributes()) {
       switch (A->getKind()) {
 #     define CDOT_STMT_ATTR(Name, Spelling)                                    \
-      case AttrKind::Name: check##Name##Attr(Stmt, cast<Name##Attr>(A)); break;
+      case AttrKind::Name: check##Name##Attr(S, cast<Name##Attr>(A)); break;
 #     include "AST/Attributes.def"
 
       default:
@@ -42,7 +43,7 @@ StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
       }
    }
 
-   auto Res = visitStmt(Stmt, Stmt->getStatement());
+   auto Res = visitStmt(Stmt, S);
    if (!Res)
       return StmtError();
 
@@ -51,10 +52,13 @@ StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
 
 ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
 {
+   auto E = Expr->getExpr();
    for (auto &A : Expr->getAttributes()) {
       switch (A->getKind()) {
 #     define CDOT_EXPR_ATTR(Name, Spelling)                                    \
-      case AttrKind::Name: check##Name##Attr(Expr, cast<Name##Attr>(A)); break;
+      case AttrKind::Name: check##Name##Attr(E, cast<Name##Attr>(A)); break;
+#     define CDOT_TYPE_ATTR(Name, Spelling)                                    \
+      case AttrKind::Name: check##Name##Attr(E, cast<Name##Attr>(A)); break;
 #     include "AST/Attributes.def"
 
       default:
@@ -62,18 +66,24 @@ ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
       }
    }
 
-   auto Res = visitExpr(Expr, Expr->getExpr());
+   auto Res = visitExpr(Expr, E);
    if (!Res)
       return ExprError();
 
-   Expr->setExprType(Expr->getExpr()->getExprType());
+   Expr->setExprType(E->getExprType());
    return Expr;
 }
 
 void SemaPass::checkExternAttr(Decl *D, ExternAttr *A)
 {
-   if (A->getLang() == ExternAttr::C)
-      cast<CallableDecl>(D)->setExternC(true);
+   switch (A->getLang()) {
+   case ExternAttr::C:
+      D->setExternC(true);
+      break;
+   case ExternAttr::CXX:
+      D->setExternCXX(true);
+      break;
+   }
 }
 
 void SemaPass::checkInlineAttr(Decl *D, InlineAttr *A)
@@ -134,20 +144,19 @@ void SemaPass::checkImplicitAttr(Decl *D, ImplicitAttr*)
    C->getOperator().setImplicit(true);
 }
 
-void SemaPass::checkOpaqueAttr(Decl *D, OpaqueAttr *A)
+void SemaPass::checkThinAttr(Expression *E, ThinAttr *A)
 {
+   if (auto Fn = dyn_cast_or_null<FunctionTypeExpr>(E)) {
+      Fn->setThin(true);
+      return;
+   }
 
+   diagnose(E, err_attr_can_only_be_used, "thin", /*function types*/3,
+            E->getSourceRange());
 }
 
-void SemaPass::checkThinAttr(SourceType Ty, ThinAttr *A)
-{
-
-}
-
-void SemaPass::checkDiscardableResultAttr(Decl *D,
-                                          DiscardableResultAttr *A) {
-
-}
+#define CDOT_ATTR_SEMA
+#include "AST/Attr.inc"
 
 } // namespace ast
 } // namespace cdot

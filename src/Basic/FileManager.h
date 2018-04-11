@@ -68,7 +68,7 @@ public:
       return getBaseOffset(getSourceId(loc));
    }
 
-   size_t getSourceId(SourceLocation loc);
+   unsigned getSourceId(SourceLocation loc);
 
    llvm::StringRef getFileName(SourceLocation loc)
    {
@@ -90,6 +90,9 @@ public:
 
    size_t createSourceLocAlias(SourceLocation aliasedLoc);
 
+   void addFileInclude(size_t IncludedFromID, size_t IncludedFileID);
+   bool wasIncludedFrom(size_t CurrentFile, size_t PossiblyIncludedFile);
+
 private:
    std::vector<unsigned> sourceIdOffsets;
 
@@ -108,6 +111,8 @@ private:
 
       bool IsMacroExpansion : 1;
       bool IsMixin          : 1;
+
+      llvm::StringMapEntry<CachedFile> *IncludedFrom = nullptr;
    };
 
    llvm::StringMap<CachedFile> MemBufferCache;

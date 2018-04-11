@@ -43,34 +43,28 @@ class TemplateArgList;
 
 struct ResolvedTemplateArg {
    ResolvedTemplateArg()
-      : IsType(false), IsVariadic(false), IsNull(true),
-        ManuallySpecifiedVariadicArgs(0)
+      : IsType(false), IsVariadic(false), IsNull(true), Dependent(false),
+        ManuallySpecifiedVariadicArgs(0), Param(nullptr)
    {}
 
-   explicit ResolvedTemplateArg(QualType type, SourceLocation loc = {})
-      : IsType(true), IsVariadic(false), IsNull(false),
-        ManuallySpecifiedVariadicArgs(0),
-        Type(type), Loc(loc)
-   {}
+   explicit ResolvedTemplateArg(ast::TemplateParamDecl *Param,
+                                QualType type,
+                                SourceLocation loc = {}) noexcept;
 
-   ResolvedTemplateArg(Variant &&V,
-                       QualType valueType,
+   ResolvedTemplateArg(ast::TemplateParamDecl *Param,
+                       Variant &&V,
                        SourceLocation loc = {}) noexcept;
 
    explicit
-   ResolvedTemplateArg(bool isType,
+   ResolvedTemplateArg(ast::TemplateParamDecl *Param,  bool isType,
                        std::vector<ResolvedTemplateArg> &&variadicArgs = {},
-                       SourceLocation loc = {})
-      : IsType(isType), IsVariadic(true), IsNull(false),
-        ManuallySpecifiedVariadicArgs(0),
-        VariadicArgs(move(variadicArgs)), Loc(loc)
-   {}
+                       SourceLocation loc = {});
 
    ResolvedTemplateArg(ResolvedTemplateArg &&other) noexcept;
 
    ~ResolvedTemplateArg();
 
-   ResolvedTemplateArg& operator=(ResolvedTemplateArg &&other);
+   ResolvedTemplateArg& operator=(ResolvedTemplateArg &&other) noexcept;
 
    QualType getType() const
    {
@@ -78,12 +72,13 @@ struct ResolvedTemplateArg {
       return Type;
    }
 
-   QualType getValueType() const
+   void setType(QualType Ty) const
    {
-      assert(isValue());
-      return Type;
+      assert(isType());
+      Type = Ty;
    }
 
+   QualType getValueType() const;
    const Variant &getValue() const;
 
    template<class ...Args>
@@ -105,6 +100,8 @@ struct ResolvedTemplateArg {
       return VariadicArgs;
    }
 
+   ast::TemplateParamDecl *getParam() const { return Param; }
+
    ResolvedTemplateArg clone() const;
 
    bool isVariadic() const { return IsVariadic; }
@@ -125,14 +122,16 @@ private:
    bool IsType     : 1;
    bool IsVariadic : 1;
    bool IsNull     : 1;
+   bool Dependent  : 1;
 
    // number of variadic arguments that were manually specified, only when
    // this becomes 0 we begin adding inferred ones
    unsigned ManuallySpecifiedVariadicArgs : 24;
 
-   QualType Type;
+   ast::TemplateParamDecl *Param;
 
    union {
+      mutable QualType Type;
       std::unique_ptr<Variant> V;
       std::vector<ResolvedTemplateArg> VariadicArgs;
    };
@@ -239,6 +238,8 @@ public:
       return *this;
    }
 
+   TemplateArgList copy() const;
+
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
       Profile(ID, *this);
@@ -247,9 +248,9 @@ public:
    static void Profile(llvm::FoldingSetNodeID &ID,
                        TemplateArgList const& list);
 
-   void inferFromReturnType(QualType contextualType, QualType returnType);
+   void inferFromReturnType(QualType contextualType, QualType returnType) const;
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
-                         llvm::ArrayRef<ast::FuncArgDecl*> neededArgs);
+                         llvm::ArrayRef<ast::FuncArgDecl*> neededArgs) const;
 
    void resolveWith(ast::NamedDecl *R);
 
@@ -265,85 +266,49 @@ public:
    bool isStillDependent() const;
 
    ResolvedTemplateArg* getNamedArg(llvm::StringRef name) const;
+   ResolvedTemplateArg* getArgForParam(TemplateParamDecl *P) const;
    TemplateParamDecl* getParameter(ResolvedTemplateArg *forArg) const;
 
    bool insert(llvm::StringRef name, QualType ty);
-   bool insert(llvm::StringRef name, Variant &&V, QualType valueTy);
+   bool insert(llvm::StringRef name, Variant &&V);
    bool insert(llvm::StringRef name, bool isType,
                std::vector<ResolvedTemplateArg> &&variadicArgs);
 
-   bool insert(llvm::StringRef name, ResolvedTemplateArg &&arg);
+   bool insert(ResolvedTemplateArg &&arg);
 
    bool empty() const;
    size_t size() const;
 
+   const ResolvedTemplateArg &operator[](size_t idx) const;
+   const ResolvedTemplateArg &front() const;
+   const ResolvedTemplateArg &back() const;
+
+   ast::NamedDecl *getTemplate() const;
    llvm::ArrayRef<ast::Expression*> getOriginalArgs() const;
-
-   struct arg_iterator: public std::iterator<std::forward_iterator_tag,
-                                             const ResolvedTemplateArg> {
-      explicit arg_iterator(TemplateArgList const &list);
-      arg_iterator()
-         : arg(nullptr), list(nullptr), it{}
-      {}
-
-      void operator++();
-
-      ResolvedTemplateArg const& operator*()
-      {
-         return *arg;
-      }
-
-      ResolvedTemplateArg const* operator->()
-      {
-         return arg;
-      }
-
-      bool operator==(arg_iterator const &rhs)
-      {
-         return arg == rhs.arg
-              && list == rhs.list;
-      }
-
-      bool operator!=(arg_iterator const &rhs)
-      {
-         return !operator==(rhs);
-      }
-
-      TemplateParamDecl* const& getParam() const
-      {
-         return *it;
-      }
-
-   private:
-      ResolvedTemplateArg const* arg;
-      TemplateArgList const* list;
-      llvm::ArrayRef<TemplateParamDecl*>::iterator it;
-   };
 
    void print(llvm::raw_ostream &OS,
               char begin = '[', char end = ']', bool showNames = false) const;
    std::string toString(char begin = '[', char end = ']',
                         bool showNames = false) const;
 
-   arg_iterator begin() const
-   {
-      return arg_iterator(*this);
-   }
+   using arg_iterator       = ResolvedTemplateArg *;
+   using const_arg_iterator = const ResolvedTemplateArg *;
 
-   arg_iterator end() const
-   {
-      return arg_iterator();
-   }
+   arg_iterator begin();
+   arg_iterator end();
+
+   const_arg_iterator begin() const;
+   const_arg_iterator end() const;
 
    friend class TemplateArgListImpl;
 
 private:
-   TemplateArgListImpl *pImpl;
+   mutable TemplateArgListImpl *pImpl;
 };
 
 class MultiLevelTemplateArgList {
 public:
-   using VecTy = llvm::SmallVector<const TemplateArgList*, 4>;
+   using VecTy = llvm::SmallVector<const TemplateArgList*, 0>;
 
    MultiLevelTemplateArgList() = default;
 
@@ -367,10 +332,14 @@ public:
    const TemplateArgList &innermost() const { return *ArgLists.front(); }
    const TemplateArgList &outermost() const { return *ArgLists.back(); }
 
+   const TemplateArgList *pop_back_val() { return ArgLists.pop_back_val(); }
+
    const TemplateArgList &operator[](size_t idx) const
    {
       return *ArgLists[idx];
    }
+
+   TemplateArgListResult checkCompatibility() const;
 
    bool isStillDependent() const
    {
@@ -390,6 +359,15 @@ public:
       return nullptr;
    }
 
+   ResolvedTemplateArg* getArgForParam(ast::TemplateParamDecl *P) const
+   {
+      for (auto &list : ArgLists)
+         if (auto arg = list->getArgForParam(P))
+            return arg;
+
+      return nullptr;
+   }
+
    ast::TemplateParamDecl* getParameter(ResolvedTemplateArg *forArg) const
    {
       for (auto &list : ArgLists)
@@ -399,13 +377,18 @@ public:
       return nullptr;
    }
 
-   size_t getNumLevels() const { return ArgLists.size(); }
+   void inferFromReturnType(QualType contextualType, QualType returnType);
+   void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
+                         llvm::ArrayRef<ast::FuncArgDecl*> neededArgs);
+
+   size_t size() const { return ArgLists.size(); }
+   bool empty() const { return ArgLists.empty(); }
 
    VecTy::iterator begin() { return ArgLists.begin(); }
    VecTy::iterator end()   { return ArgLists.end(); }
 
    VecTy::const_iterator begin() const { return ArgLists.begin(); }
-   VecTy::const_iterator end()   const { return ArgLists.begin(); }
+   VecTy::const_iterator end()   const { return ArgLists.end(); }
 
    void print(llvm::raw_ostream &OS) const;
 

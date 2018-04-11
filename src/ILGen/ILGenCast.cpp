@@ -5,18 +5,15 @@
 #include "ILGenPass.h"
 
 #include "AST/Decl.h"
+#include "AST/Type.h"
+#include "IL/Context.h"
+#include "IL/Module.h"
+#include "IL/Instructions.h"
 #include "Sema/ConversionSequence.h"
 #include "Sema/SemaPass.h"
 
-#include "IL/Module/Module.h"
-#include "IL/Value/Instruction/Cast/CastInst.h"
-#include "IL/Value/Instruction/Memory/StoreInst.h"
-#include "IL/Value/Instruction/Memory/GEPInst.h"
-#include "IL/Value/Instruction/Memory/AllocaInst.h"
-
-#include "AST/Type.h"
-
 using namespace cdot::il;
+using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
@@ -31,7 +28,8 @@ il::Value* ILGenPass::castTo(il::Value *V, QualType to)
 
 static il::Value *applySingleConversionStep(const ConversionStep &Step,
                                             il::Value *Val,
-                                            ILGenPass &ILGen) {
+                                            ILGenPass &ILGen,
+                                            bool forced) {
    auto &Builder = ILGen.Builder;
    switch (Step.getKind()) {
       case CastKind::LValueToRValue:
@@ -42,8 +40,6 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       case CastKind::PtrToInt:
       case CastKind::Ext:
       case CastKind::Trunc:
-         return Builder.CreateIntegerCast(Step.getKind(), Val,
-                                         Step.getResultType());
       case CastKind::SignFlip:
          return Builder.CreateIntegerCast(Step.getKind(), Val,
                                          Step.getResultType());
@@ -53,8 +49,18 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       case CastKind::FPExt:
          return Builder.CreateFPCast(Step.getKind(), Val,
                                     Step.getResultType());
-      case CastKind::DynCast:
-         return Builder.CreateDynamicCast(Val, Step.getResultType());
+      case CastKind::DynCast: {
+         if (forced)
+            return Builder.CreateBitCast(Step.getKind(), Val,
+                                         Step.getResultType());
+
+         auto Option = Step.getResultType()->getRecord();
+         auto WrappedTy = Option->getTemplateArg("T")->getType();
+
+         return Builder.CreateDynamicCast(
+            Val, cast<ClassDecl>(WrappedTy->getRecord()),
+            ILGen.getContext().getASTCtx().getRecordType(Option));
+      }
       case CastKind::ProtoWrap:
       case CastKind::ProtoUnwrap:
          return Builder.CreateProtoCast(Val, Step.getResultType());
@@ -75,7 +81,8 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
 
 static il::Value *doTupleCast(const ConversionSequence &ConvSeq,
                               il::Value *Val,
-                              ILGenPass &ILGen) {
+                              ILGenPass &ILGen,
+                              bool forced) {
    auto &Builder = ILGen.Builder;
    auto Steps = ConvSeq.getSteps();
 
@@ -119,22 +126,51 @@ static il::Value *doTupleCast(const ConversionSequence &ConvSeq,
          continue;
       }
 
-      El = applySingleConversionStep(Step, El, ILGen);
+      El = applySingleConversionStep(Step, El, ILGen, forced);
    }
 
    return Result;
 }
 
+static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
+                                 il::Value *Val,
+                                 ILGenPass &ILGen,
+                                 bool forced) {
+   auto &Builder = ILGen.Builder;
+   auto Steps = ConvSeq.getSteps();
+
+   size_t i = 0;
+   for (auto &Step : Steps) {
+      ++i;
+
+      if (Step.isHalt())
+         break;
+
+      // until line halt, casts are meant for the entire tuple
+      switch (Step.getKind()) {
+      case CastKind::NoOp: break;
+      case CastKind::LValueToRValue:
+         Val = Builder.CreateLoad(Val);
+         break;
+      default:
+         llvm_unreachable("invalid tuple cast!");
+      }
+   }
+
+   assert(i == Steps.size() && "unimplemented");
+   return Val;
+}
+
 il::Value* ILGenPass::HandleCast(const ConversionSequence &ConvSeq,
-                                 il::Value *Val) {
+                                 il::Value *Val, bool forced) {
    if (Val->getType()->isTupleType()) {
-      Val = doTupleCast(ConvSeq, Val, *this);
+      Val = doTupleCast(ConvSeq, Val, *this, forced);
    }
    else if (Val->getType()->isFunctionType()) {
-      llvm_unreachable("not implemented");
+      Val = doFunctionCast(ConvSeq, Val, *this, forced);
    }
    else for (auto &Step : ConvSeq.getSteps()) {
-      Val = applySingleConversionStep(Step, Val, *this);
+      Val = applySingleConversionStep(Step, Val, *this, forced);
    }
 
    return Val;

@@ -145,7 +145,7 @@ private:
    }
 
    struct DeclPrelude {
-      AccessModifier access;
+      AccessSpecifier access;
       unsigned flags;
       string name;
       std::vector<StaticExpr*> constraints;
@@ -396,7 +396,7 @@ void IdentifierTableWriterImpl::writeDeclPrelude(NamedDecl *decl)
 IdentifierTableImpl::DeclPrelude IdentifierTableImpl::readDeclPrelude()
 {
    IdentifierTableImpl::DeclPrelude prelude;
-   prelude.access = ReadEnum<AccessModifier>();
+   prelude.access = ReadEnum<AccessSpecifier>();
    prelude.flags = (unsigned)Reader.ReadULEB128();
    prelude.name = ReadString();
 

@@ -10,6 +10,11 @@
 
 namespace cdot {
 
+namespace sema {
+   class TemplateArgList;
+} // namespace sema
+
+class BlockScope;
 class DeclarationNameTable;
 class DeclarationNameInfo;
 
@@ -24,6 +29,10 @@ public:
       PrefixOperatorName,
       PostfixOperatorName,
       ConversionOperatorName,
+      InstantiationName,
+      ExtensionName,
+      PackExpansionName,
+      LocalVarName,
    };
 
    DeclarationName() : Val(0) {}
@@ -42,6 +51,12 @@ public:
    bool isSimpleIdentifier() const
    {
       return *this && getStoredKind() == StoredIdentifier;
+   }
+
+   template <std::size_t StrLen>
+   bool isStr(const char (&Str)[StrLen]) const
+   {
+      return isSimpleIdentifier() && getIdentifierInfo()->isStr(Str);
    }
 
    IdentifierInfo *getIdentifierInfo() const
@@ -73,7 +88,18 @@ public:
    const IdentifierInfo* getInfixOperatorName() const;
    const IdentifierInfo* getPrefixOperatorName() const;
    const IdentifierInfo* getPostfixOperatorName() const;
+
+   DeclarationName getPackExpansionName() const;
+   unsigned getPackExpansionIndex() const;
+
+   DeclarationName getLocalVarName() const;
+   BlockScope *getLocalVarScope() const;
+
+   DeclarationName getInstantiationName() const;
+   const sema::TemplateArgList *getInstantiationArgs() const;
+
    QualType getConversionOperatorType() const;
+   QualType getExtendedType() const;
 
    DeclarationKind getDeclarationKind() const;
 
@@ -116,6 +142,8 @@ public:
 
       return DN;
    }
+
+   DeclarationName getManglingName() const;
 
    int compare(const DeclarationName &RHS) const;
 
@@ -226,6 +254,7 @@ namespace cdot {
 class DeclarationNameTable {
    // actually llvm::FoldingSet<DeclarationNameInfo>*
    void *FoldingSetPtr;
+
    ast::ASTContext &Ctx;
 
 public:
@@ -241,11 +270,19 @@ public:
    DeclarationName getPostfixOperatorName(const IdentifierInfo &II);
    DeclarationName getConversionOperatorName(QualType ConversionType);
 
-   DeclarationName getSpecialName(DeclarationName::DeclarationKind Kind,
-                                  const IdentifierInfo &II);
+   DeclarationName getPackExpansionName(DeclarationName Name,
+                                        unsigned idx);
+
+   DeclarationName getLocalVarName(DeclarationName Name,
+                                   BlockScope *Scope);
+
+   DeclarationName getExtensionName(QualType ExtendedType);
+
+   DeclarationName getInstantiationName(DeclarationName BaseName,
+                                        const sema::TemplateArgList &argList);
 
    DeclarationName getSpecialName(DeclarationName::DeclarationKind Kind,
-                                  QualType Ty);
+                                  uintptr_t Data1, uintptr_t Data2 = 0);
 };
 
 diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,

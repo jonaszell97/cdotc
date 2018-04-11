@@ -23,9 +23,9 @@ BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
 static bool isIntFPOrPointerType(QualType ty, bool allowPtr = true)
 {
    switch (ty->getTypeID()) {
-   case TypeID::PointerTypeID:
+   case Type::PointerTypeID:
       return allowPtr;
-   case TypeID::BuiltinTypeID:
+   case Type::BuiltinTypeID:
       switch (ty->uncheckedAsBuiltinType()->getKind()) {
 #     define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
       case BuiltinType::Name: return true;
@@ -196,10 +196,25 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
 
       break;
    }
-      // Division, Modulo, Exponentiation
+   // Division, Modulo, Exponentiation
    case op::Exp:
       prec = prec::Exponentiation;
       assoc = Associativity::Right;
+
+      // floating point values also have an overload for integer types on the
+      // right hand side
+      if (lhsType->isFPType()) {
+         FunctionType *FnTy =
+            Context.getFunctionType(lhsType, { lhsType,Context.getu32Ty() });
+
+         Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
+
+         FnTy = Context.getFunctionType(lhsType,
+                                        { lhsType, Context.getu64Ty() });
+
+         Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
+      }
+
       goto case_div_mod_exp;
    case op::Div: case op::Mod:
       prec = prec::Multiplicative;
@@ -217,7 +232,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
       break;
    }
-      // Bitwise Ops
+   // Bitwise Ops
    case op::And:
       prec = prec::BitwiseAnd;
       goto case_bitwise;
@@ -261,7 +276,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       if (lhsType->isMetaType()) {
          if (opKind == op::CompEQ || opKind == op::CompNE) {
             FunctionType *FnTy = Context.getFunctionType(
-               Context.getBoolTy(), { lhsType, lhsType });
+               Context.getBoolTy(), { lhsType, Context.getUnknownAnyTy() });
 
             Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
          }
@@ -406,7 +421,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
    case op::BlockAddrOf: {
       if (!lhsType->isBuiltinType())
          break;
-      if (!lhsType->uncheckedAsBuiltinType()->isAnyLabelTy())
+      if (!lhsType->uncheckedAsBuiltinType()->isLabelTy())
          break;
 
       FunctionType *FnTy = Context.getFunctionType(lhsType, { lhsType });
@@ -415,8 +430,9 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       break;
    }
    case op::TypeOf: {
-      FunctionType *FnTy = Context.getFunctionType(Context.getMetaType(lhsType),
-                                                   { lhsType });
+      lhsType = lhsType->stripReference();
+      FunctionType *FnTy = Context.getFunctionType(
+         Context.getMetaType(lhsType), { lhsType });
 
       Vec.emplace_back(FnTy, PrecedenceGroup());
       break;
@@ -436,7 +452,16 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       break;
    }
    case op::UnaryOption: {
-      llvm_unreachable("TODO!");
+      if (!lhsType->isMetaType())
+         break;
+
+      FunctionType *FnTy =
+         Context.getFunctionType(
+            Context.getUInt8PtrTy(), // will never actually be used
+            { lhsType });
+
+      Vec.emplace_back(FnTy, PrecedenceGroup());
+      break;
    }
    default:
       llvm_unreachable("bad builtin operator kind!");;

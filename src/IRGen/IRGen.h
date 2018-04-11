@@ -20,6 +20,11 @@ class DIBuilder;
 } // namespace llvm;
 
 namespace cdot {
+namespace ast {
+   class RecordDecl;
+   class StructDecl;
+}
+
 namespace il {
 
 class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
@@ -39,7 +44,7 @@ public:
 
 #  define CDOT_INSTRUCTION(Name) \
    llvm::Value *visit##Name(Name const& I);
-#  include "IL/Value/Instructions.def"
+#  include "IL/Instructions.def"
 
 private:
    void DeclareFunction(il::Function const* F);
@@ -47,22 +52,22 @@ private:
    void ForwardDeclareGlobal(il::GlobalVariable const* G);
    void DeclareGlobal(il::GlobalVariable const* G);
 
-   void ForwardDeclareType(il::AggregateType const* Ty);
-   void DeclareType(il::AggregateType const* Ty);
+   void ForwardDeclareType(ast::RecordDecl *R);
+   void DeclareType(ast::RecordDecl *R);
 
-   void outputIR(const CompilationUnit &CU);
    void finalize(const CompilationUnit &CU);
 
-   llvm::StructType *getStructTy(Type *Ty);
-   llvm::StructType *getStructTy(llvm::StringRef name);
-   llvm::StructType *getStructTy(AggregateType *Ty);
+   llvm::StructType *getStructTy(QualType Ty);
+   llvm::StructType *getStructTy(ast::RecordDecl *R);
 
-   llvm::Type *getLlvmType(QualType Ty);
-   llvm::Type *getFieldType(ValueType Ty);
+   llvm::Type *getLlvmTypeImpl(QualType Ty);
 
-   llvm::Type *getLlvmType(Type *Ty);
+   llvm::Type *getStorageType(QualType Ty);
+   llvm::Type *getParameterType(QualType Ty);
 
+   llvm::Value *unboxValue(llvm::Value *V, QualType Ty);
    llvm::Value *getLlvmValue(il::Value const* V);
+   llvm::Value *getPotentiallyBoxedValue(il::Value const* V);
 
    llvm::Constant *getConstantVal(il::Constant const* C);
    llvm::Value *getBlockArg(il::Argument const* A);
@@ -75,22 +80,31 @@ private:
 
    llvm::ConstantInt *wordSizedInt(uint64_t val);
    llvm::Value *toInt8Ptr(llvm::Value *V);
+   llvm::Constant *toInt8Ptr(llvm::Constant *V);
+
+   llvm::Value *CreateSizeOf(llvm::Type *Ty);
 
    llvm::Value *CreateCall(il::Function *F,
                            llvm::SmallVector<llvm::Value*, 8> &args);
 
-   llvm::Value *CreateAlloca(llvm::Type *AllocatedType,
-                             size_t allocatedSize = 1,
-                             unsigned alignment = 0);
+   llvm::AllocaInst *CreateAlloca(llvm::Type *AllocatedType,
+                                  size_t allocatedSize = 1,
+                                  unsigned alignment = 0);
 
-   llvm::Value *CreateAlloca(QualType AllocatedType,
-                             size_t allocatedSize = 1,
-                             unsigned alignment = 0);
+   llvm::AllocaInst *CreateAlloca(QualType AllocatedType,
+                                  size_t allocatedSize = 1,
+                                  unsigned alignment = 0);
 
-   llvm::Value *AccessField(StructType *Ty,
+   unsigned getFieldOffset(ast::StructDecl *S,
+                           const DeclarationName &FieldName);
+
+   llvm::Value *AccessField(ast::StructDecl *S,
                             Value *Val,
-                            llvm::StringRef fieldName,
+                            const DeclarationName &FieldName,
                             bool load = false);
+
+   llvm::Value *getVTable(llvm::Value *llvmVal);
+   llvm::Value *getTypeInfo(llvm::Value *llvmVal);
 
    llvm::FunctionType *getLambdaType(FunctionType *FTy);
 
@@ -98,8 +112,14 @@ private:
    llvm::Constant *getFreeFn();
    llvm::Constant *getThrowFn();
    llvm::Constant *getAllocExcnFn();
+
    llvm::Constant *getReleaseFn();
    llvm::Constant *getRetainFn();
+   llvm::Constant *getReleaseLambdaFn();
+   llvm::Constant *getRetainLambdaFn();
+   llvm::Constant *getReleaseBoxFn();
+   llvm::Constant *getRetainBoxFn();
+
    llvm::Constant *getPrintfFn();
    llvm::Constant *getMemCmpFn();
    llvm::Constant *getIntPowFn(QualType IntTy);
@@ -115,12 +135,18 @@ private:
    llvm::DIBuilder *DI;
    llvm::DIFile *File;
    llvm::DICompileUnit *CU;
-   llvm::SmallDenseMap<size_t, llvm::DIFile*> DIFileMap;
-   llvm::SmallDenseMap<QualType, llvm::DIType*> DITypeMap;
-   llvm::SmallDenseMap<uintptr_t, llvm::DISubprogram*> DIFuncMap;
+   llvm::DenseMap<size_t, llvm::DIFile*> DIFileMap;
+   llvm::DenseMap<QualType, llvm::DIType*> DITypeMap;
+   llvm::DenseMap<uintptr_t, llvm::DISubprogram*> DIFuncMap;
    std::stack<llvm::DIScope*> ScopeStack;
 
-   llvm::SmallDenseMap<uintptr_t, llvm::StructType*> TypeMap;
+   llvm::DenseMap<ast::RecordDecl*, llvm::StructType*> StructTypeMap;
+   llvm::DenseMap<QualType, llvm::Type*> TypeMap;
+
+   const il::DebugLocalInst *ElidedDebugLocalInst = nullptr;
+
+   llvm::SmallVector<llvm::Function*, 4> GlobalInitFns;
+   llvm::SmallVector<llvm::Function*, 4> GlobalDeinitFns;
 
    llvm::LLVMContext &Ctx;
    llvm::Module *M;
@@ -130,12 +156,12 @@ private:
    llvm::IntegerType *Int1Ty;
 
    llvm::PointerType *Int8PtrTy;
+   llvm::PointerType *EmptyArrayPtrTy;
    llvm::Type *VoidTy;
 
    llvm::StructType *ProtocolTy;
    llvm::StructType *TypeInfoTy;
-   llvm::StructType *ClassInfoTy;
-   llvm::StructType *RefcountedTy;
+   llvm::StructType *BoxTy;
    llvm::StructType *LambdaTy;
 
    llvm::FunctionType *DeinitializerTy;
@@ -146,9 +172,16 @@ private:
    llvm::Constant *AllocExcFn;
    llvm::Constant *RetainFn;
    llvm::Constant *ReleaseFn;
+   llvm::Constant *RetainLambdaFn;
+   llvm::Constant *ReleaseLambdaFn;
+   llvm::Constant *RetainBoxFn;
+   llvm::Constant *ReleaseBoxFn;
    llvm::Constant *PrintfFn;
    llvm::Constant *MemCmpFn;
    llvm::Constant *IntPowFn;
+
+   llvm::Constant *WordOne;
+   llvm::Constant *WordZero;
 
    llvm::DenseMap<il::Value const*, llvm::Value*> ValueMap;
 
@@ -162,15 +195,15 @@ private:
    llvm::DIType *getTypeDI(QualType ty);
    llvm::DIType *getRecordDI(QualType ty);
 
-   llvm::dwarf::Tag getTagForRecord(il::AggregateType *Ty);
+   llvm::dwarf::Tag getTagForRecord(ast::RecordDecl *R);
 
    void beginLexicalScope(const SourceLocation &loc);
 
    void beginScope(llvm::DIScope *scope);
    void endScope();
 
-   void emitLocalVarDI(Instruction const &I,
-                       llvm::Value *inst);
+   void emitLocalVarDI(const il::DebugLocalInst &Inst,
+                       llvm::Value *Val = nullptr);
 
    llvm::MDNode *emitGlobalVarDI(GlobalVariable const& G,
                                  llvm::GlobalVariable *var);

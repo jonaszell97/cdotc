@@ -52,7 +52,7 @@ DiagnosticBuilder::DiagnosticBuilder(DiagnosticsEngine &Engine)
    : Engine(Engine), msg(_first_err), showWiggle(false), showWholeLine(false),
      noInstCtx(false), noteMemberwiseInit(false), valid(false),
      noExpansionInfo(false), noImportInfo(false), hasFakeSourceLoc(false),
-     ShowConst(false)
+     ShowConst(false), Disabled(false)
 {
    assert(!Engine.hasInFlightDiag() && "diagnostic issued while preparing "
                                        "other diagnostic!");
@@ -63,7 +63,7 @@ DiagnosticBuilder::DiagnosticBuilder(DiagnosticsEngine &Engine,
    : Engine(Engine), msg(msg), showWiggle(false), showWholeLine(false),
      noInstCtx(false), noteMemberwiseInit(false), valid(true),
      noExpansionInfo(false), noImportInfo(false), hasFakeSourceLoc(false),
-     ShowConst(false)
+     ShowConst(false), Disabled(false)
 {
    assert(!Engine.hasInFlightDiag() && "diagnostic issued while preparing "
                                        "other diagnostic!");
@@ -252,6 +252,13 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
 
 DiagnosticBuilder::~DiagnosticBuilder()
 {
+   if (Disabled) {
+      Engine.NumArgs = 0;
+      Engine.NumSourceRanges = 0;
+
+      return;
+   }
+
    finalize();
 }
 
@@ -362,7 +369,8 @@ void DiagnosticBuilder::finalize()
 
    for (unsigned i = 0; i < Engine.NumSourceRanges; ++i) {
       auto &SR = Engine.SourceRanges[i];
-      assert(SR.getStart() && "invalid source range for diagnostic");
+      if (!SR.getStart())
+         continue;
 
       // single source location, show caret
       if (!SR.getEnd()) {
@@ -377,8 +385,8 @@ void DiagnosticBuilder::finalize()
          auto EndOffset   = SR.getEnd().getOffset() - File.BaseOffset;
 
          unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
-         unsigned EndOffsetOnLine   = std::min(EndOffset - newlineIndex - 1,
-                                               lineEndIndex);
+         unsigned EndOffsetOnLine   = std::min(EndOffset, lineEndIndex)
+                                      - newlineIndex - 1;
 
          assert(EndOffsetOnLine >= BeginOffsetOnLine
                 && EndOffsetOnLine <= lineEndIndex
@@ -406,8 +414,7 @@ void DiagnosticBuilder::finalize()
    out << ErrLine << "\n"
        << std::string(LinePrefixSize, ' ') << Markers << "\n";
 
-   out.flush();
-   Engine.finalizeDiag(str, severity);
+   Engine.finalizeDiag(out.str(), severity);
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(int i)
@@ -471,13 +478,17 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(const char* str)
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceLocation loc)
 {
-   Engine.SourceRanges[Engine.NumSourceRanges++] = SourceRange(loc);
+   if (loc)
+      Engine.SourceRanges[Engine.NumSourceRanges++] = SourceRange(loc);
+
    return *this;
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(SourceRange loc)
 {
-   Engine.SourceRanges[Engine.NumSourceRanges++] = loc;
+   if (loc.getStart())
+      Engine.SourceRanges[Engine.NumSourceRanges++] = loc;
+
    return *this;
 }
 
@@ -491,31 +502,6 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(FakeSourceLocation const& loc)
 
    return *this;
 }
-
-#ifndef CDOT_SMALL_VARIANT
-DiagnosticBuilder& DiagnosticBuilder::operator<<(const SourceType &Ty)
-{
-   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
-   Engine.StringArgs[Engine.NumArgs] = Ty.getResolvedType().toString();
-   ++Engine.NumArgs;
-
-   return *this;
-}
-
-DiagnosticBuilder& DiagnosticBuilder::operator<<(QualType const& Ty)
-{
-   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
-   Engine.StringArgs[Engine.NumArgs] = Ty.toString();
-   ++Engine.NumArgs;
-
-   return *this;
-}
-
-DiagnosticBuilder& DiagnosticBuilder::operator<<(Type *const& Ty)
-{
-   return *this << QualType(Ty);
-}
-#endif
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(opt::Option const &opt)
 {

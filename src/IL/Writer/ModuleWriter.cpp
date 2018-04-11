@@ -4,18 +4,20 @@
 
 #include "ModuleWriter.h"
 
+#include "AST/Decl.h"
 #include "Basic/CastKind.h"
+#include "Basic/DeclarationName.h"
 #include "Compiler.h"
-#include "IL/Module/Module.h"
-#include "IL/Module/Context.h"
+#include "IL/Context.h"
+#include "IL/Constants.h"
+#include "IL/Instructions.h"
+#include "IL/Module.h"
 #include "IL/Utils/BlockIterator.h"
 #include "Support/Format.h"
 #include "Support/WriterBase.h"
 
-#define CDOT_VALUE_INCLUDE
-#include "IL/Value/ValueIncludes.def"
-
 #include <llvm/ADT/Twine.h>
+#include <IL/Instructions.h>
 
 using namespace cdot::support;
 
@@ -39,9 +41,11 @@ public:
    void WriteBasicBlock(const BasicBlock *BB, bool first = false,
                         bool onlyDecl = false);
    void WriteFunction(const Function *F, bool onlyDecl = false);
-   void WriteAggrDecl(const AggregateType *ty);
+   void WriteRecordDecl(ast::RecordDecl *R);
 
-protected:
+private:
+   llvm::DenseMap<ast::RecordDecl*, std::string> RecordNameCache;
+
    enum class ValPrefix : unsigned char {
       None = '\0',
       Constant = '@',
@@ -62,18 +66,30 @@ protected:
    }
 
    void WriteName(llvm::StringRef name, ValPrefix prefix);
-   void WriteType(const Type *ty);
-   void WriteQualType(QualType type);
+   void WriteName(DeclarationName name, ValPrefix prefix);
+
+   void WriteRecordType(ast::RecordDecl *R)
+   {
+      auto it = RecordNameCache.find(R);
+      if (it != RecordNameCache.end()) {
+         WriteName(it->getSecond(), ValPrefix::Type);
+         return;
+      }
+
+      std::string s = R->getFullName();
+      WriteName(s, ValPrefix::Type);
+
+      RecordNameCache[R] = move(s);
+   }
+
+   void WriteQualType(QualType ty);
    void WriteValueType(ValueType type) { WriteQualType(type); }
 
-   void WriteField(const StructType::Field &F);
-   void WriteStructTy(const StructType *Ty);
-   void WriteVTableFunction(const Constant *C);
-   void WriteClassTy(const ClassType *Ty);
+   void WriteStructTy(ast::StructDecl *S);
+   void WriteClassTy(ast::ClassDecl *C);
 
-   void WriteCase(const EnumType::Case &C);
-   void WriteEnumTy(const EnumType *Ty);
-   void WriteUnionTy(const UnionType *Ty);
+   void WriteEnumTy(ast::EnumDecl *E);
+   void WriteUnionTy(ast::UnionDecl *U);
 
    void WriteConstant(const Constant *C);
    void WriteValue(const Value *V);
@@ -100,7 +116,18 @@ void ModuleWriterImpl::WriteName(llvm::StringRef name, ValPrefix prefix)
    out << name;
 }
 
-void ModuleWriterImpl::WriteType(const Type *ty)
+void ModuleWriterImpl::WriteName(DeclarationName name, ValPrefix prefix)
+{
+   std::string S;
+   {
+      llvm::raw_string_ostream OS(S);
+      OS << name;
+   }
+
+   WriteName(S, prefix);
+}
+
+void ModuleWriterImpl::WriteQualType(QualType ty)
 {
    assert(!ty->isAutoType());
 
@@ -116,10 +143,16 @@ void ModuleWriterImpl::WriteType(const Type *ty)
       out << ty->getBitwidth();
    }
    else if (ty->isFPType()) {
-      out << (ty->isFloatTy() ? "float" : "double");
+      out << (ty->isFloatTy() ? "f32" : "f64");
    }
    else if (ty->isRecordType()) {
-      WriteName(ty->getClassName(), ValPrefix::Type);
+      std::string S;
+      {
+         llvm::raw_string_ostream OS(S);
+         OS << ty;
+      }
+
+      WriteName(S, ValPrefix::Type);
    }
    else if (ty->isPointerType()) {
       WriteQualType(ty->asPointerType()->getPointeeType());
@@ -127,7 +160,7 @@ void ModuleWriterImpl::WriteType(const Type *ty)
    }
    else if (ty->isFunctionType() ) {
       if (ty->isLambdaType())
-         out << "lambda ";
+         out << "[thick] ";
 
       WriteQualType(ty->asFunctionType()->getReturnType());
 
@@ -140,110 +173,128 @@ void ModuleWriterImpl::WriteType(const Type *ty)
    }
    else if (ty->isArrayType()) {
       auto ArrTy = ty->asArrayType();
-      out << '[';
+      out << "[" << ArrTy->getNumElements() << " x ";
       WriteQualType(ArrTy->getElementType());
-      out << " x " << ArrTy->getNumElements() << ']';
+      out << "]";
+   }
+   else if (ty->isMetaType()) {
+      out << "Meta[";
+      WriteQualType(ty->asMetaType()->getUnderlyingType());
+      out << "]";
    }
    else {
       llvm_unreachable("bad type kind");
    }
 }
 
-void ModuleWriterImpl::WriteQualType(QualType type)
+void ModuleWriterImpl::WriteStructTy(ast::StructDecl *S)
 {
-   WriteType(*type);
-}
+   auto Fields = S->getFields();
+   out << "{ ";
 
-void ModuleWriterImpl::WriteField(const StructType::Field &F)
-{
-   WriteName(F.name, ValPrefix::Value);
-   out << ": ";
-   WriteValueType(F.type);
-}
+   size_t i = 0;
+   for (auto F : Fields) {
+      if (i++ != 0) out << ", ";
 
-void ModuleWriterImpl::WriteStructTy(const StructType *Ty)
-{
-   if (Ty->getFields().empty()) {
-      out << "{ }";
-      return;
+      WriteName(F->getDeclName(), ValPrefix::Value);
+      out << ": ";
+      WriteQualType(F->getType());
    }
 
-   WriteList(Ty->getFields(), &ModuleWriterImpl::WriteField, "{ ", ", ", " }");
+   if (i)
+      out << " ";
+
+   out << "}";
 }
 
-void ModuleWriterImpl::WriteVTableFunction(const il::Constant *C)
+void ModuleWriterImpl::WriteClassTy(ast::ClassDecl *C)
 {
-   NewLine();
-   ApplyTab();
-
-   WriteName(cast<Method>(C)->getName(), ValPrefix::Constant);
-   out << ": ";
-   WriteValueType(C->getType());
+   WriteStructTy(C);
 }
 
-void ModuleWriterImpl::WriteClassTy(const ClassType *Ty)
-{
-   WriteStructTy(Ty);
-}
-
-void ModuleWriterImpl::WriteCase(const EnumType::Case &C)
-{
-   WriteName(C.name, ValPrefix::Value);
-   WriteList(C.AssociatedTypes, &ModuleWriterImpl::WriteQualType);
-
-   out << " = ";
-   WriteConstant(C.caseVal);
-}
-
-void ModuleWriterImpl::WriteEnumTy(const EnumType *Ty)
+void ModuleWriterImpl::WriteEnumTy(ast::EnumDecl *E)
 {
    out << "{ ";
 
-   WriteType(Ty->getRawType());
-   if (!Ty->getCases().empty()) {
-      auto Cases = Ty->getCases();
-      std::sort(Cases.begin(), Cases.end(),
-                [](const EnumType::Case &C1, const EnumType::Case &C2) {
-                   return C1.caseVal->getZExtValue() < C2.caseVal->getZExtValue();
-                });
+   WriteQualType(E->getRawType());
 
-      WriteList(Cases,
-                &ModuleWriterImpl::WriteCase, ", ", ", ", "");
+   auto Cases = E->getCases();
+   for (auto C : Cases) {
+      out << ", ";
+
+      WriteName(C->getDeclName(), ValPrefix::Value);
+
+      auto Args = C->getArgs();
+      if (!Args.empty()) {
+         out << "(";
+
+         size_t i = 0;
+         for (auto A : Args) {
+            if (i++ != 0) out << ", ";
+            WriteQualType(A->getType());
+         }
+
+         out << ")";
+      }
+
+      out << " = ";
+      WriteConstant(C->getILValue());
    }
 
    out << " }";
 }
 
-void ModuleWriterImpl::WriteUnionTy(const UnionType *Ty)
+void ModuleWriterImpl::WriteUnionTy(ast::UnionDecl *U)
 {
-   WriteStructTy(Ty);
+   auto Fields = U->getFields();
+   out << "{ ";
+
+   size_t i = 0;
+   for (auto F : Fields) {
+      if (i++ != 0) out << ", ";
+
+      WriteName(F->getDeclName(), ValPrefix::Value);
+      out << ": ";
+      WriteQualType(F->getType());
+   }
+
+   if (i)
+      out << " ";
+
+   out << "}";
 }
 
-void ModuleWriterImpl::WriteAggrDecl(const AggregateType *ty)
+void ModuleWriterImpl::WriteRecordDecl(ast::RecordDecl *R)
 {
-   WriteName(ty->getName(), ValPrefix::Type);
+   WriteRecordType(R);
    out << " = ";
-   if (auto Class = dyn_cast<ClassType>(ty)) {
+
+   switch (R->getKind()) {
+   case ast::Decl::ClassDeclID:
       out << "class ";
-      WriteClassTy(Class);
-   }
-   else if (auto Union = dyn_cast<UnionType>(ty)) {
-      out << "union ";
-      WriteUnionTy(Union);
-   }
-   else if (auto Struct = dyn_cast<StructType>(ty)) {
+      WriteClassTy(cast<ast::ClassDecl>(R));
+
+      break;
+   case ast::Decl::StructDeclID:
       out << "struct ";
-      WriteStructTy(Struct);
-   }
-   else if (auto Enum = dyn_cast<EnumType>(ty)) {
+      WriteStructTy(cast<ast::StructDecl>(R));
+
+      break;
+   case ast::Decl::EnumDeclID:
       out << "enum ";
-      WriteEnumTy(Enum);
-   }
-   else if (auto Proto = dyn_cast<ProtocolType>(ty)) {
+      WriteEnumTy(cast<ast::EnumDecl>(R));
+
+      break;
+   case ast::Decl::UnionDeclID:
+      out << "union ";
+      WriteUnionTy(cast<ast::UnionDecl>(R));
+
+      break;
+   case ast::Decl::ProtocolDeclID:
       out << "protocol {}";
-   }
-   else {
-      llvm_unreachable("bad type kind");
+      break;
+   default:
+      llvm_unreachable("bad struct kind");
    }
 
    NewLine();
@@ -260,10 +311,6 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       WriteName(C->getName(), ValPrefix::Constant);
       return;
    }
-   if (isa<AggregateType>(C)) {
-      WriteName(C->getName(), ValPrefix::Type);
-      return;
-   }
    if (auto Fun = dyn_cast<Function>(C)) {
       WriteValueType(Fun->getType());
       out << ' ';
@@ -271,93 +318,125 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       return;
    }
 
-   if (auto TI = dyn_cast<TypeInfo>(C)) {
-      out << "typeinfo ";
-      WriteType(TI->getForType());
-   }
-   else {
-      WriteValueType(C->getType());
-   }
-
+   WriteValueType(C->getType());
    out << ' ';
 
    switch (C->getTypeID()) {
-      case Value::GlobalVariableID:
-         WriteName(C->getName(), ValPrefix::Constant);
-         break;
-      case Value::ConstantIntID: {
-         auto Int = cast<ConstantInt>(C);
-         if (Int->getType()->getBitwidth() == 1) {
-            out << (Int->getBoolValue() ? "true" : "false");
+   case Value::GlobalVariableID:
+      WriteName(C->getName(), ValPrefix::Constant);
+      break;
+   case Value::VTableID: {
+      auto &VT = *cast<VTable>(C);
+
+      out << "vtable ";
+      WriteRecordType(VT.getClassDecl());
+      out << " [\n";
+
+      size_t i = 0;
+      for (auto &fn : VT.getFunctions()) {
+         if (i++ != 0) out << ",\n";
+         ApplyTab();
+         WriteConstant(fn);
+      }
+
+      out << "\n]";
+      break;
+   }
+   case Value::ConstantIntID: {
+      auto Int = cast<ConstantInt>(C);
+      if (Int->getType()->getBitwidth() == 1) {
+         out << (Int->getBoolValue() ? "true" : "false");
+      }
+      else {
+         if (Int->getValue().isAllOnesValue()) {
+            out << "-1";
          }
          else {
-            if (Int->getValue().isAllOnesValue()) {
-               out << "-1";
-            }
-            else {
-               llvm::SmallString<64> str;
-               Int->getValue().toString(str, 10);
+            llvm::SmallString<64> str;
+            Int->getValue().toString(str, 10);
 
-               out << str.str();
-            }
+            out << str.str();
          }
-
-         break;
       }
-      case Value::ConstantFloatID: {
-         if (C->getType()->isFloatTy()) {
-            WriteHex(cast<ConstantFloat>(C)->getFloatVal());
-         }
-         else {
-            WriteHex(cast<ConstantFloat>(C)->getDoubleVal());
-         }
 
-         break;
+      break;
+   }
+   case Value::ConstantFloatID: {
+      if (C->getType()->isFloatTy()) {
+         WriteHex(cast<ConstantFloat>(C)->getFloatVal());
       }
-      case Value::ConstantStringID:
-         out << '"';
-         WriteEscapedString(cast<ConstantString>(C)->getValue());
-         out << '"';
-         break;
-      case Value::ConstantArrayID: {
-         auto &Elements = cast<ConstantArray>(C)->getVec();
-         WriteList(Elements, &ModuleWriterImpl::WriteConstant,
-                   "[", ", ", "]");
-         break;
+      else {
+         WriteHex(cast<ConstantFloat>(C)->getDoubleVal());
       }
-      case Value::ConstantStructID:
-      case Value::TypeInfoID: {
-         auto Struct = cast<ConstantStruct>(C);
-         auto &Elements = Struct->getElements();
 
-         WriteList(Elements, &ModuleWriterImpl::WriteConstant,
-                   "{ ", ", ", " }");
-         break;
+      break;
+   }
+   case Value::ConstantStringID:
+      out << '"';
+      WriteEscapedString(cast<ConstantString>(C)->getValue());
+      out << '"';
+      break;
+   case Value::ConstantArrayID: {
+      auto Elements = cast<ConstantArray>(C)->getVec();
+      WriteList(Elements, &ModuleWriterImpl::WriteConstant,
+                "[", ", ", "]");
+      break;
+   }
+   case Value::ConstantStructID: {
+      auto Struct = cast<ConstantStruct>(C);
+      auto Elements = Struct->getElements();
+
+      WriteList(Elements, &ModuleWriterImpl::WriteConstant,
+                "{ ", ", ", " }");
+      break;
+   }
+   case Value::TypeInfoID: {
+      auto &TI = *cast<TypeInfo>(C);
+
+      out << "typeinfo ";
+      WriteQualType(TI.getForType());
+      out << " {\n";
+
+      size_t i = 0;
+      for (auto &fn : TI.getValues()) {
+         if (i++ != 0) out << ",\n";
+         ApplyTab();
+         WriteConstant(fn);
       }
-      case Value::ConstantPointerID: {
-         auto Ptr = cast<ConstantPointer>(C);
-         if (!Ptr->getValue())
-            out << "null";
-         else
-            WriteHex(uint64_t(Ptr->getValue()));
 
-         break;
-      }
-      case Value::ConstantBitCastInstID:
-         out << "bitcast ";
-         WriteConstant(cast<ConstantBitCastInst>(C)->getTarget());
+      out << "\n}";
+      break;
+   }
+   case Value::ConstantPointerID: {
+      out << "null";
+      break;
+   }
+   case Value::ConstantBitCastInstID:
+      out << "bitcast (";
+      WriteConstant(cast<ConstantBitCastInst>(C)->getTarget());
 
-         out << " to ";
-         WriteValueType(C->getType());
+      out << ") to ";
+      WriteValueType(C->getType());
 
-         break;
-      case Value::ConstantAddrOfInstID:
-         out << "addr_of ";
-         WriteConstant(cast<ConstantAddrOfInst>(C)->getTarget());
+      break;
+   case Value::ConstantAddrOfInstID:
+      out << "addr_of (";
+      WriteConstant(cast<ConstantAddrOfInst>(C)->getTarget());
+      out << ")";
 
-         break;
-      default:
-         llvm_unreachable("bad constant kind");
+      break;
+   case Value::ConstantIntCastInstID: {
+      auto Cast = cast<ConstantIntCastInst>(C);
+      out << cdot::CastNames[(unsigned char) Cast->getKind()];
+
+      out << " (";
+      WriteValue(Cast->getTarget());
+
+      out << ") to ";
+      WriteValueType(Cast->getType());
+   }
+   default:
+      llvm_unreachable("bad constant kind");
    }
 }
 
@@ -400,7 +479,9 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
    WriteName(G->getName(), ValPrefix::Constant);
    out << " = ";
 
-   out << LinkageTypeNames[G->getLinkage()] << " ";
+   if (G->getLinkage() != GlobalVariable::ExternalLinkage)
+      out << LinkageTypeNames[G->getLinkage()] << " ";
+
    if (G->getUnnamedAddr() != GlobalVariable::UnnamedAddr::None) {
       out << UnnamedAddrNames[(int)G->getUnnamedAddr()] << " ";
    }
@@ -426,8 +507,27 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       out << " = ";
    }
 
+   if (auto DebugLoc = dyn_cast<DebugLocInst>(I)) {
+      out << "debug_loc { line: " << DebugLoc->getLine()
+          << ", col: " << DebugLoc->getCol()
+          << ", file: " << DebugLoc->getFileID() << " }";
+
+      return;
+   }
+
+   if (auto DebugLocal = dyn_cast<DebugLocalInst>(I)) {
+      out << "debug_local { name: \"" << DebugLocal->getName()->getIdentifier()
+          << "\", value: ";
+
+      WriteValue(DebugLocal->getVal());
+
+      out << " }";
+
+      return;
+   }
+
    if (auto Alloca = dyn_cast<AllocaInst>(I)) {
-      out << (Alloca->isHeapAlloca() ? "heap_alloc " : "stack_alloc ");
+      out << (Alloca->isHeapAlloca() ? "alloc_heap " : "alloc_stack ");
       WriteQualType(I->getType()->getReferencedType());
 
       if (Alloca->getAllocSize() != 1) {
@@ -436,6 +536,32 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       if (auto align = Alloca->getAlignment()) {
          out << ", align " << align;
       }
+
+      return;
+   }
+
+   if (auto BoxAlloc = dyn_cast<AllocBoxInst>(I)) {
+      out << "alloc_box ";
+      WriteQualType(BoxAlloc->getType()->getReferencedType());
+
+      if (auto deinit = BoxAlloc->getDeinitializer()) {
+         out << ", ";
+         WriteConstant(deinit);
+      }
+
+      return;
+   }
+
+   if (auto Dealloc = dyn_cast<DeallocInst>(I)) {
+      out << (Dealloc->isHeap() ? "dealloc_heap " : "dealloc_stack ");
+      WriteValue(Dealloc->getValue());
+
+      return;
+   }
+
+   if (auto Dealloc = dyn_cast<DeallocBoxInst>(I)) {
+      out << "dealloc_box ";
+      WriteValue(Dealloc->getValue());
 
       return;
    }
@@ -498,7 +624,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteValueType(FieldRef->getType());
 
       out << " ";
-      WriteConstant(FieldRef->getAccessedType());
+      WriteRecordType(FieldRef->getAccessedType());
       out << "::" << FieldRef->getFieldName() << ", ";
 
       WriteValue(FieldRef->getOperand(0));
@@ -526,7 +652,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Init = dyn_cast<InitInst>(I)) {
       out << "init ";
-      WriteValue(Init->getInitializedType());
+      WriteRecordType(Init->getInitializedType());
 
       out << ", ";
       WriteName(Init->getInit()->getName(), ValPrefix::Constant);
@@ -537,7 +663,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Init = dyn_cast<UnionInitInst>(I)) {
       out << "union_init ";
-      WriteValue(Init->getUnionTy());
+      WriteRecordType(Init->getUnionTy());
 
       out << ", ";
       WriteValue(Init->getInitializerVal());
@@ -546,7 +672,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Init = dyn_cast<EnumInitInst>(I)) {
       out << "enum_init ";
-      WriteValue(Init->getEnumTy());
+      WriteRecordType(Init->getEnumTy());
 
       out << ", ";
       WriteName(Init->getCaseName(), ValPrefix::Value);
@@ -564,6 +690,30 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteConstant(Lambda->getFunction());
 
       WriteList(Lambda->getOperands(), &ModuleWriterImpl::WriteValue);
+      return;
+   }
+
+   if (auto Deinit = dyn_cast<DeinitializeLocalInst>(I)) {
+      out << "deinit_local ";
+      WriteValue(Deinit->getVal());
+
+      if (auto Fn = Deinit->getDeinitializer()) {
+         out << ", ";
+         WriteConstant(Fn);
+      }
+
+      return;
+   }
+
+   if (auto Deinit = dyn_cast<DeinitializeTemporaryInst>(I)) {
+      out << "deinit_temporary ";
+      WriteValue(Deinit->getVal());
+
+      if (auto Fn = Deinit->getDeinitializer()) {
+         out << ", ";
+         WriteConstant(Fn);
+      }
+
       return;
    }
 
@@ -617,12 +767,8 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteName(Invoke->getCalledFunction()->getName(),
                 ValPrefix::Constant);
 
-      WriteList(Invoke->getArgsWithoutSelf(), &ModuleWriterImpl::WriteValue);
-
-      if (Invoke->isMethodCall()) {
-         out << " on ";
-         WriteValue(Invoke->getSelf());
-      }
+      WriteList(Invoke->getArgs().drop_back(0),
+                &ModuleWriterImpl::WriteValue);
 
       auto Guard = makeTabGuard();
 
@@ -770,7 +916,8 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
          out << "inttoenum";
       }
       else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
-         out << (ProtoCast->isWrap() ? "proto_wrap" : "proto_unwrap");
+         out << (ProtoCast->isWrap()
+                 ? "proto_wrap" : "proto_unwrap");
       }
       else {
          out << il::CastNames[(unsigned short)Cast->getTypeID() - FirstCast];
@@ -789,7 +936,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       switch (BinOp->getOpCode()) {
 #     define CDOT_BINARY_OP(Name, Op)                                   \
       case BinaryOperatorInst::Name: out << Op; break;
-#     include "IL/Value/Instructions.def"
+#     include "IL/Instructions.def"
       }
 
       out << " ";
@@ -804,7 +951,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       switch (Comp->getOpCode()) {
 #     define CDOT_COMP_OP(Name, Op)                                      \
       case CompInst::Name: out << Op; break;
-#     include "IL/Value/Instructions.def"
+#     include "IL/Instructions.def"
       }
 
       out << " ";
@@ -819,7 +966,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       switch (UnOp->getOpCode()) {
 #     define CDOT_UNARY_OP(Name, Op)                                      \
       case UnaryOperatorInst::Name: out << Op; break;
-#     include "IL/Value/Instructions.def"
+#     include "IL/Instructions.def"
       }
 
       out << " ";
@@ -881,6 +1028,13 @@ void ModuleWriterImpl::WriteFunction(const Function *F, bool onlyDecl)
       out << "define ";
    }
 
+   if (F->getLinkage() != Function::ExternalLinkage)
+      out << LinkageTypeNames[F->getLinkage()] << " ";
+
+   if (F->getUnnamedAddr() != Function::UnnamedAddr::None) {
+      out << UnnamedAddrNames[(int)F->getUnnamedAddr()] << " ";
+   }
+
    WriteName(F->getName(), ValPrefix::Constant);
 
    size_t i = 0;
@@ -928,29 +1082,18 @@ void ModuleWriterImpl::Write(Module const* M)
    NewLine();
    WriteModuleMetadata(M);
 
-   auto &Types = M->getReferencedTypes();
+   auto &Types = M->getRecords();
    auto &Globals = M->getGlobalList();
    auto &Functions = M->getFuncList();
 
-   llvm::SmallVector<AggregateType const*, 4> ModuleTypes(Types.begin(),
-                                                          Types.end());
-
-   std::sort(ModuleTypes.begin(), ModuleTypes.end(),
-             [](AggregateType const* &lhs, AggregateType const* &rhs) {
-                if (lhs->getTypeID() == rhs->getTypeID())
-                   return lhs->getName() < rhs->getName();
-
-                return (unsigned)lhs->getTypeID() < (unsigned)rhs->getTypeID();
-             });
-
    size_t i = 0;
-   bool prevWasWritten = !ModuleTypes.empty();
+   bool prevWasWritten = !Types.empty();
    bool newLineWritten = false;
 
    // -- Referenced Types --
 
-   for (const auto &A : ModuleTypes) {
-      WriteAggrDecl(A);
+   for (const auto &R : Types) {
+      WriteRecordDecl(R);
    }
 
    prevWasWritten |= !Globals.empty();
@@ -958,6 +1101,7 @@ void ModuleWriterImpl::Write(Module const* M)
 
    // -- Module Globals --
 
+   i = 0;
    for (const auto &G : Globals) {
       if (prevWasWritten && !newLineWritten) {
          NewLine();
@@ -965,6 +1109,14 @@ void ModuleWriterImpl::Write(Module const* M)
       }
 
       WriteGlobal(&G);
+
+      if (G.getInitializer() && (isa<VTable>(G.getInitializer())
+                                       || isa<TypeInfo>(G.getInitializer()))) {
+         if (i != Globals.size() - 1)
+            NewLine();
+      }
+
+      ++i;
    }
 
    prevWasWritten |= !Globals.empty();
@@ -1008,7 +1160,7 @@ void ModuleWriter::WriteTo(llvm::raw_ostream &out)
          ModuleWriterImpl(out).WriteGlobal(G);
          break;
       case Kind::Type:
-         ModuleWriterImpl(out).WriteAggrDecl(Ty);
+         ModuleWriterImpl(out).WriteRecordDecl(R);
          break;
       case Kind::BasicBlock:
          ModuleWriterImpl(out).WriteBasicBlock(BB);

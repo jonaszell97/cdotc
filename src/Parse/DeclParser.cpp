@@ -75,24 +75,24 @@
 //
 //   void parseFunction();
 //
-//   AccessModifier maybeParseAccessModifier()
+//   AccessSpecifier maybeParseAccessModifier()
 //   {
-//      AccessModifier am = AccessModifier::DEFAULT;
+//      AccessSpecifier am = AccessSpecifier::DEFAULT;
 //      switch (lexer.currentTok().getKind()) {
 //         case tok::kw_public:
-//            am = AccessModifier::PUBLIC;
+//            am = AccessSpecifier::PUBLIC;
 //            break;
 //         case tok::kw_private:
-//            am = AccessModifier::PRIVATE;
+//            am = AccessSpecifier::PRIVATE;
 //            break;
 //         case tok::kw_protected:
-//            am = AccessModifier::PROTECTED;
+//            am = AccessSpecifier::PROTECTED;
 //            break;
 //         default:
 //            break;
 //      }
 //
-//      if (am != AccessModifier::DEFAULT)
+//      if (am != AccessSpecifier::DEFAULT)
 //         lexer.advance();
 //
 //      return am;

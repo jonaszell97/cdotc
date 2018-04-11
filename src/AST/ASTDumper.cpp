@@ -127,20 +127,26 @@ private:
       }
    }
 
-   void printAccessModifier(AccessModifier access)
+   void printAccessModifier(AccessSpecifier access)
    {
       switch (access) {
-         case AccessModifier::DEFAULT:
-            break;
-         case AccessModifier::PUBLIC:
-            out << "public";
-            break;
-         case AccessModifier::PRIVATE:
-            out << "private";
-            break;
-         case AccessModifier::PROTECTED:
-            out << "protected";
-            break;
+      case AccessSpecifier::Default:
+         break;
+      case AccessSpecifier::Public:
+         out << "public";
+         break;
+      case AccessSpecifier::Private:
+         out << "private";
+         break;
+      case AccessSpecifier::Protected:
+         out << "protected";
+         break;
+      case AccessSpecifier::Internal:
+         out << "internal";
+         break;
+      case AccessSpecifier::FilePrivate:
+         out << "fileprivate";
+         break;
       }
    }
 
@@ -396,17 +402,17 @@ bool DumperImpl::visitNamespaceDecl(NamespaceDecl* stmt)
    return true;
 }
 
-bool DumperImpl::visitUsingStmt(UsingStmt* stmt)
+bool DumperImpl::visitUsingDecl(UsingDecl* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitModuleStmt(ModuleStmt *stmt)
+bool DumperImpl::visitModuleDecl(ModuleDecl *stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitImportStmt(ImportStmt *stmt)
+bool DumperImpl::visitImportDecl(ImportDecl *stmt)
 {
    return true;
 }
