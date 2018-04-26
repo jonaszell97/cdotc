@@ -551,20 +551,6 @@ bool DumperImpl::visitStringLiteral(StringLiteral* expr)
 
 bool DumperImpl::visitStringInterpolation(StringInterpolation* expr)
 {
-   out << "[" << '"';
-
-   for (auto &str : expr->getStrings()) {
-      if (auto S = dyn_cast<StringLiteral>(expr)) {
-         out << S->getValue();
-      }
-      else {
-         out << "${";
-         visit(str);
-         out << "}";
-      }
-   }
-
-   out << '"' << "]";
    return true;
 }
 
@@ -626,6 +612,11 @@ bool DumperImpl::visitCallExpr(CallExpr* expr)
    return true;
 }
 
+bool DumperImpl::visitAnonymousCallExpr(AnonymousCallExpr *expr)
+{
+   return true;
+}
+
 bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
 {
    out << "[." << DeclarationName(expr->getIdentInfo()) << "]";
@@ -666,6 +657,11 @@ bool DumperImpl::visitUnaryOperator(UnaryOperator* expr)
 bool DumperImpl::visitBinaryOperator(BinaryOperator* expr)
 {
    out << "[" << op::toString(expr->getKind()) << "]";
+   return true;
+}
+
+bool DumperImpl::visitAssignExpr(AssignExpr *expr)
+{
    return true;
 }
 
@@ -805,6 +801,31 @@ bool DumperImpl::visitTraitsExpr(TraitsExpr* expr)
 
    out << "]";
 
+   return true;
+}
+
+bool DumperImpl::visitMacroDecl(MacroDecl *decl)
+{
+   return false;
+}
+
+bool DumperImpl::visitMacroExpansionDecl(MacroExpansionDecl *decl)
+{
+   return false;
+}
+
+bool DumperImpl::visitMacroExpansionStmt(MacroExpansionStmt *decl)
+{
+   return false;
+}
+
+bool DumperImpl::visitMacroExpansionExpr(MacroExpansionExpr *decl)
+{
+   return false;
+}
+
+bool DumperImpl::visitMacroVariableExpr(MacroVariableExpr *decl)
+{
    return true;
 }
 

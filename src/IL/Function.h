@@ -17,7 +17,8 @@
 
 namespace cdot {
 
-enum class KnownFunction: unsigned char;
+enum class KnownFunction   : unsigned char;
+enum class ConstructorKind : unsigned char;
 
 namespace il {
 
@@ -184,7 +185,13 @@ public:
 
    Initializer(llvm::StringRef methodName,
                FunctionType *FuncTy,
+               ConstructorKind Kind,
                Module *parent);
+
+   ConstructorKind getCtorKind() const
+   {
+      return (ConstructorKind)FnBits.CtorKind;
+   }
 
 protected:
    Initializer(const Initializer &other);

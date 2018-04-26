@@ -18,6 +18,7 @@
    CDOT_DECL(StaticForDecl)
    CDOT_DECL(MixinDecl)
    CDOT_DECL(CompoundDecl)
+   CDOT_DECL(MacroExpansionDecl)
 #endif
 
 #ifdef CDOT_NAMED_DECL
@@ -28,6 +29,10 @@
       CDOT_NAMED_DECL(NamespaceDecl)
       CDOT_NAMED_DECL(TranslationUnit)
       CDOT_NAMED_DECL(AliasDecl)
+
+      CDOT_NAMED_DECL(PrecedenceGroupDecl)
+      CDOT_NAMED_DECL(OperatorDecl)
+      CDOT_NAMED_DECL(MacroDecl)
 
       CDOT_NAMED_DECL(ModuleDecl)
       CDOT_NAMED_DECL(ImportDecl)

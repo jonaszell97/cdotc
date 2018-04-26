@@ -24,8 +24,8 @@ public:
    PrettyPrinter(llvm::raw_ostream &out, Options opts = None);
    ~PrettyPrinter();
 
-   void print(Expression* expr);
-   void print(Statement* stmt);
+   void print(const Expression* expr);
+   void print(const Statement* stmt);
 
 private:
    PrettyPrinterImpl *pImpl;

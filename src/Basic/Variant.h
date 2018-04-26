@@ -55,12 +55,12 @@ struct Variant {
 
    Variant(bool b) : kind(VariantType::Int), Data{}
    {
-      new (Data.buffer) llvm::APInt(1, (uint64_t)b, false);
+      new (Data.buffer) llvm::APSInt(llvm::APInt(1, (uint64_t)b), true);
    }
 
    Variant(char c) : kind(VariantType::Int), Data{}
    {
-      new (Data.buffer) llvm::APInt(CHAR_BIT, (uint64_t)c, false);
+      new (Data.buffer)  llvm::APSInt(llvm::APInt(8, (uint64_t)c), true);
    }
 
    Variant(double d) : kind(VariantType::Floating), Data{}

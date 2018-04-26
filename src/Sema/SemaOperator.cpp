@@ -14,6 +14,7 @@
 #include <llvm/ADT/Twine.h>
 
 using namespace cdot::diag;
+using namespace cdot::sema;
 using namespace cdot::support;
 
 namespace cdot {
@@ -100,7 +101,8 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
             result = false;
          }
          else {
-            result = Self->conformsTo(cast<ProtocolDecl>(Other));
+            auto &ConfTable = Context.getConformanceTable();
+            result = ConfTable.conformsTo(Self, cast<ProtocolDecl>(Other));
          }
       }
 
@@ -158,82 +160,6 @@ ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
    return result.get();
 }
 
-void SemaPass::noteConstantDecl(Expression *DeclRef)
-{
-   llvm::StringRef name;
-   SourceLocation loc;
-
-   while (DeclRef) {
-      if (auto Ident = dyn_cast<IdentifierRefExpr>(DeclRef)) {
-         switch (Ident->getKind()) {
-         case IdentifierKind::LocalVar:
-            if (Ident->getLocalVar()->isConst()) {
-               name = Ident->getLocalVar()->getName();
-               loc = Ident->getLocalVar()->getSourceLoc();
-            }
-
-            break;
-         case IdentifierKind::GlobalVar:
-            if (Ident->getGlobalVar()->isConst()) {
-               name = Ident->getGlobalVar()->getName();
-               loc = Ident->getGlobalVar()->getSourceLoc();
-            }
-
-            break;
-         case IdentifierKind::Field:
-            if (Ident->getFieldDecl()->isConst()) {
-               name = Ident->getFieldDecl()->getName();
-               loc = Ident->getFieldDecl()->getSourceLoc();
-            }
-
-            break;
-         case IdentifierKind::StaticField:
-            if (Ident->getStaticFieldDecl()->isConst()) {
-               name = Ident->getStaticFieldDecl()->getName();
-               loc = Ident->getStaticFieldDecl()->getSourceLoc();
-            }
-
-            break;
-         case IdentifierKind::FunctionArg:
-            if (Ident->getFuncArg()->isConst()) {
-               name = Ident->getFuncArg()->getName();
-               loc = Ident->getFuncArg()->getSourceLoc();
-            }
-
-            break;
-         default:
-            break;
-         }
-
-         if (loc)
-            break;
-
-         DeclRef = Ident->getParentExpr();
-         continue;
-      }
-      else if (auto Subscript = dyn_cast<SubscriptExpr>(DeclRef)) {
-         DeclRef = Subscript->getParentExpr();
-         continue;
-      }
-      else if (auto Tup = dyn_cast<TupleMemberExpr>(DeclRef)) {
-         DeclRef = Tup->getParentExpr();
-         continue;
-      }
-      else if (auto Self = dyn_cast<SelfExpr>(DeclRef)) {
-         name = "self";
-         loc = Self->getSourceLoc();
-
-         break;
-      }
-
-
-      break;
-   }
-
-   assert(loc && "no const decl");
-   diagnose(DeclRef, note_declared_const_here, name, loc);
-}
-
 ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
 {
    auto lhs = BinOp->getLhs();
@@ -251,83 +177,48 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    op::OperatorKind preAssignOp = op::UnknownOp;
 
    switch (BinOp->getKind()) {
-   case op::AddAssign: preAssignOp = op::Add; goto case_assign;
-   case op::SubAssign: preAssignOp = op::Sub; goto case_assign;
-   case op::MulAssign: preAssignOp = op::Mul; goto case_assign;
-   case op::DivAssign: preAssignOp = op::Div; goto case_assign;
-   case op::ModAssign: preAssignOp = op::Mod; goto case_assign;
-   case op::ExpAssign: preAssignOp = op::Exp; goto case_assign;
-   case op::AndAssign: preAssignOp = op::And; goto case_assign;
-   case op::OrAssign: preAssignOp = op::Or; goto case_assign;
-   case op::XorAssign: preAssignOp = op::Xor; goto case_assign;
-   case op::ShlAssign: preAssignOp = op::Shl; goto case_assign;
-   case op::AShrAssign: preAssignOp = op::AShr; goto case_assign;
-   case op::LShrAssign: preAssignOp = op::LShr; goto case_assign;
-   case_assign:
-   case op::Assign: {
-      if (!lhs->isLValue()) {
-         diagnose(BinOp, err_assign_to_rvalue, lhs->getExprType(),
-                  lhs->getSourceLoc());
-
-         lhs->setExprType(Context.getReferenceType(lhs->getExprType()));
-      }
-
-      assert(lhs->getExprType()->isReferenceType()
-             && "assigning to non-reference");
-
-//         if (lhs->isConst()) {
-//            diagnose(BinOp, err_reassign_constant, lhs->getSourceLoc());
-//            noteConstantDecl(lhs);
-//         }
-
-   } break;
+   case op::AddAssign: preAssignOp = op::Add; break;
+   case op::SubAssign: preAssignOp = op::Sub; break;
+   case op::MulAssign: preAssignOp = op::Mul; break;
+   case op::DivAssign: preAssignOp = op::Div; break;
+   case op::ModAssign: preAssignOp = op::Mod; break;
+   case op::ExpAssign: preAssignOp = op::Exp; break;
+   case op::AndAssign: preAssignOp = op::And; break;
+   case op::OrAssign: preAssignOp = op::Or; break;
+   case op::XorAssign: preAssignOp = op::Xor; break;
+   case op::ShlAssign: preAssignOp = op::Shl; break;
+   case op::AShrAssign: preAssignOp = op::AShr; break;
+   case op::LShrAssign: preAssignOp = op::LShr; break;
    default:
       break;
-
    // workaround to avoid highlighting error for 'always false condition'.
    // should never actually happen here
    case op::UnaryOption:
-      preAssignOp = op::UnaryOption;
-      break;
+      llvm_unreachable("");
    }
 
-   if (BinOp->getKind() == op::Assign) {
-      BinOp->setRhs(implicitCastIfNecessary(rhs,
-                                            lhs->getExprType()
-                                               ->asReferenceType()
-                                               ->getReferencedType(),
-                                            false,
-                                            diag::err_assign_type_mismatch));
+   BinOp->setLhs(forceCast(lhs, *BinOp->getFunctionType()->getParamTypes()[0]));
+   BinOp->setRhs(forceCast(rhs, *BinOp->getFunctionType()->getParamTypes()[1]));
 
-      rhs = BinOp->getRhs();
-   }
-   else {
-      BinOp->setLhs(
-         forceCast(lhs, *BinOp->getFunctionType()->getParamTypes()[0]));
-      BinOp->setRhs(
-         forceCast(rhs, *BinOp->getFunctionType()->getParamTypes()[1]));
-
-      lhs = BinOp->getLhs();
-      rhs = BinOp->getRhs();
-   }
+   lhs = BinOp->getLhs();
+   rhs = BinOp->getRhs();
 
    if (preAssignOp != op::UnknownOp) {
       auto lhsTy = lhs->getExprType()->getReferencedType();
       auto rhsTy = rhs->getExprType();
 
       auto FnTy = Context.getFunctionType(lhsTy, { lhsTy, rhsTy });
-      auto PreOp = BinaryOperator::Create(Context, BinOp->getSourceLoc(),
-                                          preAssignOp, FnTy, lhs, rhs);
+      BinOp->setFunctionType(FnTy);
+      BinOp->setKind(preAssignOp);
+      BinOp->setLhs(castToRValue(lhs));
 
-      auto Res = visitExpr(BinOp, PreOp);
+      auto Assign = AssignExpr::Create(Context, BinOp->getOperatorLoc(),
+                                       lhs, BinOp);
 
-      (void)Res;
-      assert(Res && "invalid compound assignment");
-
-      BinOp->setRhs(PreOp);
-      BinOp->setKind(op::Assign);
+      return visitExpr(BinOp, Assign);
    }
-   else if (lhs->getExprType()->isPointerType()) {
+
+   if (lhs->getExprType()->isPointerType()) {
       ensureSizeKnown(lhs->getExprType()->getPointeeType(),
                       BinOp->getSourceLoc());
    }
@@ -336,28 +227,39 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    return BinOp;
 }
 
+ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
+{
+   auto lhs = Expr->getLhs();
+   auto rhs = Expr->getRhs();
+
+   auto LhsResult = visitExpr(Expr, lhs);
+   auto RhsResult = visitExpr(Expr, rhs);
+
+   (void)LhsResult;
+   assert(LhsResult && "should not have built AssignExpr!");
+
+   (void)RhsResult;
+   assert(RhsResult && "should not have built AssignExpr!");
+
+   assert(lhs->getExprType()->isMutableReferenceType()
+          && "assigning to non-reference");
+
+   rhs = implicitCastIfNecessary(rhs, lhs->getExprType()->asReferenceType()
+                                         ->getReferencedType(),
+                                 false, diag::err_assign_type_mismatch);
+
+   Expr->setRhs(rhs);
+   Expr->setExprType(Context.getVoidType());
+
+   return Expr;
+}
+
 ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
 {
    auto TargetResult = visitExpr(UnOp, UnOp->getTarget());
 
    (void)TargetResult;
    assert(TargetResult && "should not have built UnaryOperator!");
-
-   switch (UnOp->getKind()) {
-   case op::PostInc:
-   case op::PreInc:
-   case op::PostDec:
-   case op::PreDec:
-      if (UnOp->getTarget()->isConst()) {
-            diagnose(UnOp, err_reassign_constant,
-                     UnOp->getTarget()->getSourceLoc());
-            noteConstantDecl(UnOp->getTarget());
-      }
-
-      break;
-   default:
-      break;
-   }
 
    auto target = UnOp->getTarget();
    UnOp->setTarget(forceCast(target, UnOp->getFunctionType()->getParamTypes()
@@ -407,18 +309,23 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 
 ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 {
-   auto TypeResult = visitSourceType(Cast, Cast->getTargetType());
+   // right hand side might not have been parsed as a type, check if we were
+   // actually given a meta type
+   auto TypeResult = visitSourceType(Cast, Cast->getTargetType(), true);
    if (!TypeResult)
       return ExprError();
 
    if (TypeResult.get()->isDependentType()) {
       Cast->setIsTypeDependent(true);
-      Cast->setExprType(TypeResult.get());
-
-      return Cast;
    }
 
    auto to = Cast->getTargetType();
+   if (!to->isMetaType()) {
+      diagnose(Cast, err_expression_in_type_position, Cast->getSourceRange());
+   }
+   else {
+      to = to->asMetaType()->getUnderlyingType();
+   }
 
    auto Result = visitExpr(Cast, Cast->getTarget());
    if (!Result || Result.get()->isTypeDependent()) {
@@ -428,6 +335,11 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
    }
 
    Cast->setTarget(Result.get());
+
+   if (to->isDependentType()) {
+      Cast->setExprType(to);
+      return Cast;
+   }
 
    auto from = Cast->getTarget()->getExprType();
    auto IsCastStrengthCompatible = [&](CastStrength Given, CastStrength Needed){
@@ -479,13 +391,13 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
                   Cast->getAsLoc());
       }
       else {
-         TemplateArgList list(*this, Opt);
-         list.insert("T", Cast->getExprType());
+         ResolvedTemplateArg Arg(Opt->getTemplateParams().front(),
+                                 Cast->getExprType(), Cast->getSourceLoc());
 
-         assert(!list.isStillDependent()
-                && "dependent type should have returned before!");
+         auto TemplateArgs = FinalTemplateArgumentList::Create(Context,
+                                                               { Arg });
 
-         auto Inst = Instantiator.InstantiateRecord(Cast, Opt, move(list));
+         auto Inst = Instantiator.InstantiateRecord(Cast, Opt, TemplateArgs);
 
          // instantiation of Optional should never fail
          Cast->setExprType(Context.getRecordType(Inst.getValue()));

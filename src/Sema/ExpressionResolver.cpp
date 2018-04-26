@@ -86,61 +86,77 @@ public:
 
       expr->setContextualType(ctxType);
    }
+   
+   struct ExprProxy {
+      /*implicit*/ ExprProxy(Expression *E,
+                             const SequenceElement *Seq = nullptr)
+         : E(E), Seq(Seq)
+      { }
+      
+      /*implicit*/ operator Expression*() const { return E; }
+      Expression *operator->() const { return E; }
 
-   Expression* ParseUnaryExpression(QualType ContextualType = QualType());
-   Expression* GetUnaryExpressionTarget();
+      ExprProxy &operator=(Expression *E)
+      {
+         this->E = E;
+         if (Seq)
+            Seq->setExpr(E);
+         
+         return *this;
+      }
+      
+      Expression *E;
+      const SequenceElement *Seq;
+   };
 
    struct PrecedenceResult {
-      PrecedenceResult() {}
-
-      PrecedenceResult(DeclarationName opName, SourceLocation OpLoc,
-                       Expression *RHS = nullptr)
-         : RHS(RHS), OpLoc(OpLoc), OpName(opName)
-      {}
-
-      PrecedenceResult(CandidateSet &&CandSet,
-                       Expression *RHS,
-                       DeclarationName opName,
-                       SourceLocation opLoc,
-                       size_t endIdx)
-         : CandSet(std::move(CandSet)), RHS(RHS),
-           OpLoc(opLoc), OpName(opName), EndIdx(endIdx)
+      PrecedenceResult(DeclarationName OpName = DeclarationName(),
+                       SourceLocation OpLoc = SourceLocation(),
+                       PrecedenceGroupDecl *PG = nullptr)
+         : PG(PG), OpName(OpName), OpLoc(OpLoc)
       {}
 
       operator bool() const
       {
-         return !!CandSet;
+         return PG != nullptr;
       }
 
-      int getPrecedence()
-      {
-         return CandSet.getBestMatch().getPrecedenceGroup().getPrecedence();
-      }
-
-      CandidateSet CandSet;
-      Expression *RHS = nullptr;
-
-      SourceLocation OpLoc;
-
+      PrecedenceGroupDecl *PG;
       DeclarationName OpName;
-      size_t BeginIdx = 0;
-      size_t EndIdx   = 0;
+      SourceLocation OpLoc;
    };
 
-   Expression* ParseExpression(Expression *lhs = nullptr,
-                               unsigned minPrecedence = 0,
-                               PrecedenceResult &&Previous
-                                 = PrecedenceResult());
+   ExprProxy ParseUnaryExpression(QualType ContextualType = QualType());
+   ExprProxy GetUnaryExpressionTarget();
+   ExprProxy ParseBinOpRightHandSide(PrecedenceResult &Prec);
 
-   PrecedenceResult getBinOpImpl(Expression *lhs);
-   PrecedenceResult getBinOp(Expression *lhs);
+   Expression* ParseExpression(Expression *LHS = nullptr,
+                               PrecedenceGroupDecl *MinPrec = nullptr);
 
-   bool reCheckBinaryOp(PrecedenceResult &Previous, Expression *lhs);
+   PrecedenceResult getBinOp();
+   PrecedenceResult precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
+                                          bool HigherOrEqual);
 
-   Expression *buildBinaryOp(PrecedenceResult &Res, Expression *lhs);
+   PrecedenceResult higherOrEqualPrecedenceFollows(PrecedenceGroupDecl *MinPrec)
+   {
+      return precedenceFollowsImpl(MinPrec, true);
+   }
+
+   PrecedenceResult higherPrecedenceFollows(PrecedenceGroupDecl *MinPrec)
+   {
+      return precedenceFollowsImpl(MinPrec, false);
+   }
+
+   Expression *buildBinaryOp(PrecedenceResult &Res,
+                             Expression *LHS, Expression *RHS);
+   
    Expression *checkAccesssor(PrecedenceResult &Res,
                               CandidateSet::Candidate &Cand,
-                              Expression *lhs);
+                              Expression *LHS, Expression *RHS);
+
+   Expression *buildCastExpr(PrecedenceResult &Res,
+                             CandidateSet::Candidate &Cand,
+                             Expression *LHS, Expression *RHS);
 
    struct UnaryOpResult {
       UnaryOpResult()
@@ -211,12 +227,13 @@ public:
    ExprSequence *ExprSeq;
 };
 
-Expression* ExprResolverImpl::GetUnaryExpressionTarget()
+ExprResolverImpl::ExprProxy
+ExprResolverImpl::GetUnaryExpressionTarget()
 {
    auto &Frag = current();
    switch (Frag.getKind()) {
       case SequenceElement::EF_Expression:
-         return Frag.getExpr();
+         return ExprProxy(Frag.getExpr(), &Frag);
       case SequenceElement::EF_Operator: {
          auto *II = &SP.getContext().getIdentifiers().get(
             op::toString(Frag.getOperatorKind()));
@@ -229,7 +246,8 @@ Expression* ExprResolverImpl::GetUnaryExpressionTarget()
    }
 }
 
-Expression* ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
+ExprResolverImpl::ExprProxy 
+ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
 {
    auto SubstIt = ExprSubstMap.find(counter);
    if (SubstIt != ExprSubstMap.end()) {
@@ -237,8 +255,12 @@ Expression* ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
       return SubstIt->second.second;
    }
 
-   if (!hasNext())
-      return GetUnaryExpressionTarget();
+   if (!hasNext()) {
+      auto Expr = GetUnaryExpressionTarget();
+      Expr->setContextualType(ContextualType);
+
+      return Expr;
+   }
 
    auto beginIdx = counter;
 
@@ -258,12 +280,17 @@ Expression* ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
 
    while (true) {
       switch (current().getKind()) {
-         case SequenceElement::EF_Expression:
-            Target = GetUnaryExpressionTarget();
+         case SequenceElement::EF_Expression: {
+            auto NextExpr = GetUnaryExpressionTarget();
+
+            Target = NextExpr.E;
+            ExprElement = NextExpr.Seq;
+
             Target->setIsLHSOfAssignment(IsAssignment);
 
             ExprElement = &current();
             break;
+         }
          case SequenceElement::EF_PossibleOperator:
             if (auto I = SP.wouldBeValidIdentifier(current().getLoc(),
                                                    current().getOp(),
@@ -356,6 +383,9 @@ Expression* ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
          TypeDependent = true;
          return nullptr;
       }
+
+      if (ExprElement)
+         ExprElement->setExpr(Target);
    }
 
    counter = savedCtr;
@@ -388,6 +418,9 @@ Expression* ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
                   return nullptr;
                }
 
+               if (ExprElement)
+                  ExprElement->setExpr(Target);
+
                advance();
             }
             else {
@@ -408,16 +441,25 @@ ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
                                       FixKind fix,
                                       llvm::StringRef op,
                                       SourceLocation loc) {
+   auto &II = SP.getContext().getIdentifiers().get(op);
+
+   // fast path if there exists no prefix / postfix operator with this name
+   // in the whole program (which is the case most times when calling this)
+   if (fix == FixKind::Prefix && !SP.getContext().isPrefixOperator(&II)) {
+      return UnaryOpResult();
+   }
+   if (fix == FixKind::Postfix && !SP.getContext().isPostfixOperator(&II)) {
+      return UnaryOpResult();
+   }
+
    auto &NameTable = SP.getContext().getDeclNameTable();
    DeclarationName DeclName =
       (fix == FixKind::Prefix)
-        ? NameTable.getPrefixOperatorName(SP.getContext().getIdentifiers()
-                                            .get(op))
-        : NameTable.getPostfixOperatorName(SP.getContext().getIdentifiers()
-                                             .get(op));
+        ? NameTable.getPrefixOperatorName(II)
+        : NameTable.getPostfixOperatorName(II);
 
-   auto CandSet = SP.lookupMethod(DeclName, Expr, {}, {}, ExprSeq,
-                                  /*suppressDiags=*/ true);
+   auto CandSet = SP.lookupFunction(DeclName, { Expr }, {}, ExprSeq,
+                                    /*suppressDiags=*/ true);
 
    if (CandSet.isDependent()) {
       TypeDependent = true;
@@ -498,18 +540,7 @@ Expression* ExprResolverImpl::buildUnaryOp(Expression *Expr,
    return UnOp;
 }
 
-ExprResolverImpl::PrecedenceResult
-ExprResolverImpl::getBinOp(Expression *lhs)
-{
-   auto beginIdx = counter;
-   auto PR = getBinOpImpl(lhs);
-
-   PR.BeginIdx = beginIdx;
-   return PR;
-}
-
-ExprResolverImpl::PrecedenceResult
-ExprResolverImpl::getBinOpImpl(Expression *lhs)
+ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
 {
    if (!hasNext(2))
       return PrecedenceResult();
@@ -518,173 +549,215 @@ ExprResolverImpl::getBinOpImpl(Expression *lhs)
    if (Next.isExpression())
       return PrecedenceResult();
 
-   // invalidate saved unary operator so we diagnose the bad binary operator
-   // instead
-   if (!lookahead(2).isOperator()) {
-      LastFailedUnaryOp = UnaryOpResult();
-   }
+   auto OpStr = Next.asString();
+   auto *II = &SP.getContext().getIdentifiers().get(OpStr);
+   auto OpName = SP.getContext().getDeclNameTable().getInfixOperatorName(*II);
 
-   auto op = Next.asString();
-   auto opLoc = Next.getLoc();
+   auto Decl = SP.getContext().getInfixOperator(II);
+   if (!Decl)
+      return PrecedenceResult(OpName, Next.getLoc());
 
-   auto *II = &SP.getContext().getIdentifiers().get(op);
-   auto DeclName = SP.getContext().getDeclNameTable().getInfixOperatorName(*II);
-
-   auto CandSet = SP.getCandidates(DeclName, lhs);
-   if (CandSet.Candidates.empty())
-      return PrecedenceResult(DeclName, opLoc);
-
-   // skip over the operator
-   advance();
-   advance();
-
-   auto rhs = ParseUnaryExpression(lhs->getExprType()->stripReference());
-   if (!rhs)
-      return PrecedenceResult(DeclName, opLoc);
-
-   if (!rhs->isContextDependent()) {
-      auto SemaRes = SP.visitExpr(ExprSeq, rhs, lhs->getExprType()
-                                                   ->stripReference());
-
-      if (!SemaRes) {
-         HadError = true;
-         return PrecedenceResult(DeclName, opLoc, rhs);
-      }
-
-      rhs = SemaRes.get();
-      if (rhs->isTypeDependent()) {
-         TypeDependent = true;
-         return PrecedenceResult(DeclName, opLoc, rhs);
-      }
-   }
-
-   SP.lookupFunction(CandSet, DeclName, { lhs, rhs }, {},
-                     ExprSeq, /*suppressDiags=*/ true);
-
-   if (CandSet.isDependent()) {
-      TypeDependent = true;
-      return PrecedenceResult();
-   }
-
-   return PrecedenceResult(move(CandSet), rhs, DeclName, opLoc, counter);
-}
-
-bool ExprResolverImpl::reCheckBinaryOp(PrecedenceResult &Previous,
-                                       Expression *lhs) {
-   auto CandSet = SP.lookupFunction(Previous.OpName, { lhs, Previous.RHS },
-                                    {}, ExprSeq, /*suppressDiags=*/ false);
-
-   if (CandSet.isDependent()) {
-      TypeDependent = true;
-      Previous = PrecedenceResult();
-
-      return false;
-   }
-
-   if (!CandSet)
-      return false;
-
-   Previous.CandSet = move(CandSet);
-   return true;
+   return PrecedenceResult(OpName, Next.getLoc(), Decl);
 }
 
 Expression* ExprResolverImpl::checkAccesssor(PrecedenceResult &Res,
                                              CandidateSet::Candidate &Cand,
-                                             Expression *lhs) {
-   if (Cand.BuiltinCandidate.OpKind != op::Assign)
-      return nullptr;
+                                             Expression *LHS,
+                                             Expression *RHS) {
+   assert(Cand.BuiltinCandidate.OpKind == op::Assign);
 
-   auto Ident = dyn_cast<IdentifierRefExpr>(lhs);
+   auto Ident = dyn_cast<IdentifierRefExpr>(LHS);
    if (!Ident)
       return nullptr;
 
    if (Ident->getKind() != IdentifierKind::Accessor)
       return nullptr;
 
+   auto Setter = Ident->getAccessor()->getSetterMethod();
+   if (!Setter) {
+      // Sema should have issued a diagnostic about the missing setter
+      assert(Ident->isInvalid() && "didn't complain about missing setter!");
+      return nullptr;
+   }
+
    // build a call to the appropriate accessor method
    return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        { lhs, Res.RHS },
+                                        { LHS, RHS },
                                         Ident->getAccessor()
                                              ->getSetterMethod());
 }
 
+static CastStrength getCastStrength(op::OperatorKind Kind)
+{
+   switch (Kind) {
+   case op::As: return CastStrength::Normal;
+   case op::AsExclaim: return CastStrength::Force;
+   case op::AsQuestion: return CastStrength::Fallible;
+   default:
+      llvm_unreachable("not a conversion operator!");
+   }
+}
+
+Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult &Res,
+                                            CandidateSet::Candidate &Cand,
+                                            Expression *LHS,
+                                            Expression *RHS) {
+   return CastExpr::Create(SP.getContext(), Res.OpLoc,
+                           getCastStrength(Cand.BuiltinCandidate.OpKind),
+                           LHS, SourceType(RHS));
+}
+
 Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
-                                            Expression *lhs) {
-   auto &Cand = Res.CandSet.getBestMatch();
+                                            Expression *LHS,
+                                            Expression *RHS) {
+   auto CandSet = SP.lookupFunction(Res.OpName, { LHS, RHS }, {}, ExprSeq);
+   if (!CandSet) {
+      HadError = true;
+      return nullptr;
+   }
+   
+   auto &Cand = CandSet.getBestMatch();
 
-   Expression *Exprs[2] = { lhs, Res.RHS };
-   SP.ApplyCasts(Exprs, ExprSeq, Res.CandSet);
+   Expression *Exprs[2] = { LHS, RHS };
+   SP.ApplyCasts(Exprs, ExprSeq, CandSet);
 
-   lhs = Exprs[0];
-   Res.RHS = Exprs[1];
+   LHS = Exprs[0];
+   RHS = Exprs[1];
 
    if (Cand.isBuiltinCandidate()) {
       // check for meta type comparison
-      if (lhs->getExprType()->isMetaType()) {
+      if (LHS->getExprType()->isMetaType()) {
          bool CmpRes;
          if (Res.OpName.getInfixOperatorName()->isStr("==")) {
-            CmpRes = lhs->getExprType() == Res.RHS->getExprType();
+            CmpRes = LHS->getExprType() == RHS->getExprType();
          }
          else {
             assert(Res.OpName.getInfixOperatorName()->isStr("!=")
                    && "bad meta type operator!");
 
-            CmpRes = lhs->getExprType() != Res.RHS->getExprType();
+            CmpRes = LHS->getExprType() != RHS->getExprType();
          }
 
          return BoolLiteral::Create(SP.getContext(), Res.OpLoc,
                                     SP.getContext().getBoolTy(), CmpRes);
       }
 
-      if (auto E = checkAccesssor(Res, Cand, lhs))
-         return E;
+      switch (Cand.BuiltinCandidate.OpKind) {
+      case op::Assign:
+         if (auto E = checkAccesssor(Res, Cand, LHS, RHS))
+            return E;
 
-      return BinaryOperator::Create(SP.getContext(), Res.OpLoc,
-                                    Cand.BuiltinCandidate.OpKind,
-                                    Cand.BuiltinCandidate.FuncTy,
-                                    lhs, Res.RHS);
+         return AssignExpr::Create(SP.getContext(), Res.OpLoc, LHS, RHS);
+      case op::As: case op::AsQuestion: case op::AsExclaim:
+         return buildCastExpr(Res, Cand, LHS, RHS);
+      default:
+         return BinaryOperator::Create(SP.getContext(), Res.OpLoc,
+                                       Cand.BuiltinCandidate.OpKind,
+                                       Cand.BuiltinCandidate.FuncTy,
+                                       LHS, RHS);
+      }
    }
 
    return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        { lhs, Res.RHS }, Cand.Func);
+                                        { LHS, RHS }, Cand.Func);
 }
 
-Expression* ExprResolverImpl::ParseExpression(Expression *lhs,
-                                              unsigned minPrecedence,
-                                              PrecedenceResult &&BinOpResult) {
-   if (!BinOpResult) {
+ExprResolverImpl::PrecedenceResult
+ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
+                                        bool HigherOrEqual) {
+   auto NextPrec = getBinOp();
+   if (!NextPrec || !MinPrec)
+      return NextPrec;
+
+   auto Rel = NextPrec.PG->getRelationTo(MinPrec);
+   switch (Rel) {
+   case PrecedenceGroupDecl::Undefined:
+      SP.diagnose(ExprSeq, err_undefined_precedence, NextPrec.PG->getDeclName(),
+                  MinPrec->getDeclName(), ExprSeq->getSourceRange());
+
+      return PrecedenceResult();
+   case PrecedenceGroupDecl::Equal:
+      if (!HigherOrEqual)
+         return PrecedenceResult(NextPrec.OpName);
+
+      LLVM_FALLTHROUGH;
+   case PrecedenceGroupDecl::Higher:
+      return NextPrec;
+   case PrecedenceGroupDecl::Lower:
+      return PrecedenceResult(NextPrec.OpName);
+   }
+}
+
+Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
+                                              PrecedenceGroupDecl *MinPrec) {
+   if (!LHS) {
       advance();
 
-      lhs = ParseUnaryExpression();
-      if (!lhs)
+      LHS = ParseUnaryExpression();
+      if (!LHS)
          return nullptr;
 
-      auto exprResult = SP.visitExpr(lhs);
+      auto exprResult = SP.visitExpr(LHS);
       if (!exprResult)
          return nullptr;
 
-      lhs = exprResult.get();
-      if (lhs->isTypeDependent()) {
+      LHS = exprResult.get();
+      if (LHS->isTypeDependent()) {
          TypeDependent = true;
          return nullptr;
       }
    }
 
-   struct {
-      PrecedenceResult Res;
-      unsigned End = 0;
+   while (auto NextPrec = higherOrEqualPrecedenceFollows(MinPrec)) {
+      // skip over the operator
+      advance();
+      advance();
 
-      operator bool() { return End != 0; }
-      void clear() { End = 0; }
+      // get the right hand side
+      auto RHS = ParseUnaryExpression(LHS->getExprType()->stripReference());
+      if (!RHS)
+         return nullptr;
 
-   } SavedBinaryOp;
+      auto rhsResult = SP.visitExpr(RHS);
+      if (!rhsResult)
+         return nullptr;
 
-   while (true) {
-      if (!hasNext())
-         return lhs;
+      RHS = rhsResult.get();
+      if (RHS->isTypeDependent()) {
+         TypeDependent = true;
+         return nullptr;
+      }
 
-      // can only be meant to be a postfix unary operator, but was not parsed as
-      // one (i.e. is invalid)
+      // check if a higher precedence operator follows
+      while (auto FollowingPrec = higherPrecedenceFollows(NextPrec.PG)) {
+         RHS = ParseExpression(RHS, FollowingPrec.PG);
+         if (!RHS)
+            return nullptr;
+      }
+
+      // build the resulting binary operator expression
+      auto binOp = buildBinaryOp(NextPrec, LHS, RHS);
+      if (!binOp)
+         return nullptr;
+
+      binOp->setContextualType(LHS->getExprType());
+
+      auto binOpResult = SP.visitExpr(ExprSeq, binOp);
+      if (!binOpResult)
+         return nullptr;
+
+      LHS = binOpResult.get();
+      if (LHS->isTypeDependent()) {
+         TypeDependent = true;
+         return nullptr;
+      }
+
+      LastFailedUnaryOp = UnaryOpResult();
+   }
+
+   // can only be meant to be a postfix unary operator, but was not parsed as
+   // one (i.e. is invalid))
+   if (!MinPrec && !fragmentsLeft(0)) {
       if (fragmentsLeft(1)) {
          if (HadError || TypeDependent)
             return nullptr;
@@ -699,93 +772,20 @@ Expression* ExprResolverImpl::ParseExpression(Expression *lhs,
          return nullptr;
       }
 
-      if (SavedBinaryOp) {
-         BinOpResult = move(SavedBinaryOp.Res);
-         counter = SavedBinaryOp.End;
+      HadError = true;
 
-         SavedBinaryOp.clear();
-      }
-      else if (!BinOpResult) {
-         BinOpResult = getBinOp(lhs);
-      }
-      else {
-         counter = BinOpResult.EndIdx;
+      if (lookahead().isExpression()) {
+         diagnoseUnexpectedExpr();
       }
 
-      if (!BinOpResult) {
-         if (HadError || TypeDependent)
-            return nullptr;
+      SP.diagnose(ExprSeq, err_generic_error, lookahead().getLoc(),
+                  lookahead().asString() + " is not an operator");
 
-         counter = BinOpResult.BeginIdx;
-         if (LastFailedUnaryOp.holdsValue()) {
-            diagnoseInvalidUnaryOp(LastFailedUnaryOp);
-         }
-         else if (BinOpResult.OpName) {
-            diagnoseInvalidBinOpOrRHS(lhs, BinOpResult);
-         }
-         else {
-            diagnoseUnexpectedExpr();
-         }
-
-         return nullptr;
-      }
-
-      if (BinOpResult.getPrecedence() < minPrecedence) {
-         counter = BinOpResult.BeginIdx;
-         break;
-      }
-
-      QualType RHSType = BinOpResult.RHS->getExprType();
-
-      auto InnerMinPrec = BinOpResult.getPrecedence();
-      while (auto InnerResult = getBinOp(BinOpResult.RHS)) {
-         unsigned End = (unsigned)counter;
-         counter = InnerResult.BeginIdx;
-
-         if (InnerResult.getPrecedence() <= InnerMinPrec) {
-            SavedBinaryOp = { move(InnerResult), End };
-            break;
-         }
-
-         InnerMinPrec = InnerResult.getPrecedence();
-         BinOpResult.RHS = ParseExpression(BinOpResult.RHS,
-                                           BinOpResult.getPrecedence(),
-                                           move(InnerResult));
-      }
-
-      // if the RHS type changed, we need to re-check the binary operator
-      if (BinOpResult.RHS->getExprType() != RHSType) {
-         if (!reCheckBinaryOp(BinOpResult, lhs)) {
-            return nullptr;
-         }
-      }
-
-      RHSType = BinOpResult.RHS->getExprType();
-
-      auto binOp = buildBinaryOp(BinOpResult, lhs);
-      binOp->setContextualType(lhs->getExprType());
-
-      auto exprResult = SP.visitExpr(ExprSeq, binOp);
-      if (!exprResult)
-         return nullptr;
-
-      lhs = exprResult.get();
-      if (lhs->isTypeDependent()) {
-         TypeDependent = true;
-         return nullptr;
-      }
-
-      // can't reuse the saved candidate if the type changed
-      if (binOp->getExprType() != RHSType) {
-         SavedBinaryOp.clear();
-      }
-
-      LastFailedUnaryOp = UnaryOpResult();
-      BinOpResult = PrecedenceResult();
+      return nullptr;
    }
 
    assert(!HadError && !TypeDependent && "should have returned before!");
-   return lhs;
+   return LHS;
 }
 
 LLVM_ATTRIBUTE_UNUSED
@@ -798,31 +798,31 @@ static llvm::StringRef dropPrefix(llvm::StringRef op)
    return op;
 }
 
-void ExprResolverImpl::diagnoseInvalidBinOpOrRHS(Expression *LHS,
-                                                 PrecedenceResult &PR) {
-   assert(hasNext(2) && "don't call this otherwise!");
-   advance();
-   advance();
-
-   if (!PR.RHS)
-      PR.RHS = GetUnaryExpressionTarget();
-
-   auto RHSResult = SP.visitExpr(ExprSeq, PR.RHS, LHS->getExprType());
-
-   // ok, don't issue a diagnostic about the operator, Sema will have
-   // complained about a malformed RHS
-   if (!RHSResult)
-      return;
-
-   PR.RHS = RHSResult.get();
-   if (PR.RHS->isTypeDependent()) {
-      TypeDependent = true;
-      return;
-   }
-
-   PR.CandSet.diagnose(SP, PR.OpName, { LHS, PR.RHS }, {}, ExprSeq, true,
-                       PR.OpLoc);
-}
+//void ExprResolverImpl::diagnoseInvalidBinOpOrRHS(Expression *LHS,
+//                                                 PrecedenceResult &PR) {
+//   assert(hasNext(2) && "don't call this otherwise!");
+//   advance();
+//   advance();
+//
+//   if (!PR.RHS)
+//      PR.RHS = GetUnaryExpressionTarget();
+//
+//   auto RHSResult = SP.visitExpr(ExprSeq, PR.RHS, LHS->getExprType());
+//
+//   // ok, don't issue a diagnostic about the operator, Sema will have
+//   // complained about a malformed RHS
+//   if (!RHSResult)
+//      return;
+//
+//   PR.RHS = RHSResult.get();
+//   if (PR.RHS->isTypeDependent()) {
+//      TypeDependent = true;
+//      return;
+//   }
+//
+//   PR.CandSet.diagnose(SP, PR.OpName, { LHS, PR.RHS }, {}, ExprSeq, true,
+//                       PR.OpLoc);
+//}
 
 void ExprResolverImpl::diagnoseInvalidUnaryOp(UnaryOpResult &Res)
 {
@@ -841,7 +841,23 @@ Expression *ExpressionResolver::resolve(ExprSequence *expr, bool ignoreErrors)
    auto Result = Resolver.ParseExpression();
 
    expr->setIsInvalid(Resolver.HadError);
-   expr->setIsTypeDependent(Resolver.TypeDependent);
+
+   // visit all expressions so they're ready for instantiation
+   // FIXME find a better way to do this
+   if (Resolver.TypeDependent) {
+      expr->setIsTypeDependent(true);
+
+      for (auto &SeqEl : expr->getFragments()) {
+         if (SeqEl.isExpression()) {
+            auto E = SeqEl.getExpr();
+            if (!E->isContextDependent()) {
+               auto Res = SP.visitExpr(expr, E);
+               if (Res)
+                  SeqEl.setExpr(Res.get());
+            }
+         }
+      }
+   }
 
    return Result;
 }

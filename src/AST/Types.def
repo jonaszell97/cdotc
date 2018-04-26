@@ -11,6 +11,9 @@ CDOT_TYPE(LambdaType, FunctionType)
 CDOT_TYPE(GenericType, Type)
 CDOT_TYPE(AssociatedType, Type)
 CDOT_TYPE(PointerType, Type)
+CDOT_TYPE(MutablePointerType, PointerType)
+CDOT_TYPE(ReferenceType, Type)
+CDOT_TYPE(MutableReferenceType, ReferenceType)
 CDOT_TYPE(TupleType, Type)
 CDOT_TYPE(ArrayType, Type)
 CDOT_TYPE(InferredSizeArrayType, ArrayType)
@@ -18,7 +21,6 @@ CDOT_TYPE(DependentSizeArrayType, ArrayType)
 CDOT_TYPE(MetaType, Type)
 CDOT_TYPE(TypedefType, Type)
 
-CDOT_TYPE(ReferenceType, Type)
 
 #ifdef CDOT_BASE_TYPE
    CDOT_BASE_TYPE(Type)

@@ -11,7 +11,7 @@
 namespace cdot {
 
 namespace sema {
-   class TemplateArgList;
+   class FinalTemplateArgumentList;
 } // namespace sema
 
 class BlockScope;
@@ -23,16 +23,26 @@ public:
    enum : uintptr_t { PtrMask = 0x3u };
    enum DeclarationKind: unsigned char {
       NormalIdentifier,
-      ConstructorName,
+      ConstructorName,      // complete constructor
+      BaseConstructorName,
       DestructorName,
       InfixOperatorName,
       PrefixOperatorName,
       PostfixOperatorName,
+      OperatorDeclName,
       ConversionOperatorName,
       InstantiationName,
       ExtensionName,
       PackExpansionName,
       LocalVarName,
+      AccessorName,
+      ClosureArgumentName,
+      MacroName,
+      ErrorName,
+   };
+
+   enum AccessorKind : unsigned char {
+      Getter, Setter,
    };
 
    DeclarationName() : Val(0) {}
@@ -67,15 +77,7 @@ public:
       return nullptr;
    }
 
-   QualType getConstructorType() const
-   {
-      if (getStoredKind() == StoredInitializerName)
-         return QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Val & ~PtrMask));
-
-      return QualType();
-   }
-
+   QualType getConstructorType() const;
    QualType getDestructorType() const
    {
       if (getStoredKind() == StoredDeinitializerName)
@@ -89,6 +91,15 @@ public:
    const IdentifierInfo* getPrefixOperatorName() const;
    const IdentifierInfo* getPostfixOperatorName() const;
 
+   const IdentifierInfo *getAccessorName() const;
+   AccessorKind getAccessorKind() const;
+
+   unsigned getClosureArgumentIdx() const;
+
+   DeclarationName getDeclaredOperatorName() const;
+
+   const IdentifierInfo *getMacroName() const;
+
    DeclarationName getPackExpansionName() const;
    unsigned getPackExpansionIndex() const;
 
@@ -96,10 +107,12 @@ public:
    BlockScope *getLocalVarScope() const;
 
    DeclarationName getInstantiationName() const;
-   const sema::TemplateArgList *getInstantiationArgs() const;
+   const sema::FinalTemplateArgumentList *getInstantiationArgs() const;
 
    QualType getConversionOperatorType() const;
    QualType getExtendedType() const;
+
+   bool isErrorName() const { return getDeclarationKind() == ErrorName; }
 
    DeclarationKind getDeclarationKind() const;
 
@@ -254,15 +267,16 @@ namespace cdot {
 class DeclarationNameTable {
    // actually llvm::FoldingSet<DeclarationNameInfo>*
    void *FoldingSetPtr;
-
    ast::ASTContext &Ctx;
+   DeclarationName ErrorName;
 
 public:
    explicit DeclarationNameTable(ast::ASTContext &Ctx);
    ~DeclarationNameTable();
 
    DeclarationName getNormalIdentifier(const IdentifierInfo &II);
-   DeclarationName getConstructorName(QualType ConstructedType);
+   DeclarationName getConstructorName(QualType ConstructedType,
+                                      bool IsCompleteCtor = true);
    DeclarationName getDestructorName(QualType DestructedType);
 
    DeclarationName getInfixOperatorName(const IdentifierInfo &II);
@@ -270,16 +284,27 @@ public:
    DeclarationName getPostfixOperatorName(const IdentifierInfo &II);
    DeclarationName getConversionOperatorName(QualType ConversionType);
 
+   DeclarationName getMacroName(const IdentifierInfo &II);
+
    DeclarationName getPackExpansionName(DeclarationName Name,
                                         unsigned idx);
+
+   DeclarationName getAccessorName(const IdentifierInfo &II,
+                                   DeclarationName::AccessorKind Kind);
+
+   DeclarationName getClosureArgumentName(unsigned ArgNo);
 
    DeclarationName getLocalVarName(DeclarationName Name,
                                    BlockScope *Scope);
 
    DeclarationName getExtensionName(QualType ExtendedType);
 
-   DeclarationName getInstantiationName(DeclarationName BaseName,
-                                        const sema::TemplateArgList &argList);
+   DeclarationName getInstantiationName(
+                              DeclarationName BaseName,
+                              const sema::FinalTemplateArgumentList &argList);
+
+   DeclarationName getOperatorDeclName(DeclarationName OpName);
+   DeclarationName getErrorName();
 
    DeclarationName getSpecialName(DeclarationName::DeclarationKind Kind,
                                   uintptr_t Data1, uintptr_t Data2 = 0);

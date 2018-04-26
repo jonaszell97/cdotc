@@ -73,6 +73,36 @@ def err_import_not_at_begin : Error<"'import' statements may only appear at the 
 
 def err_labeled_args_last : Error<"labeled arguments must come last in a function call">
 
+def err_anon_closure_arg : Error<"anonymous closure argument used outside of a closure">
+def err_anon_closure_idx_too_high : Error<"closures may not have more than $0 arguments, $1 given">
+
+def err_prec_prop_already_defined : Error<"${ 0 | select('higherThan' relationship, 'lowerThan' relationship, associativity) } already defined">
+def err_bad_associativity : Error<"associativity must be either 'left' or 'right'">
+
+def err_must_be_top_level : Error<"${ 0 | select(precedence group, operator) } declaration cannot be in a nested scope">
+
+def err_precedence_cycle : Error<"cycle in precedence relation between '$0' and '$1'">
+def err_precedence_group_does_not_exist : Error<"precedence group '$0' does not exist">
+def err_undefined_precedence : Error<"expression must be parenthesized because no precedence relation exists between '$0' and '$1'">
+
+def err_undeclared_operator : Error<"undeclared operator '$0'">
+
+def err_macro_delim_must_be : Error<"macro delimiter must be either '()', '{}' or '[]'">
+def err_variable_kind_must_be : Error<"macro variable kind must be one of 'expr', 'stmt', 'type' or 'decl'">
+def err_expected_after_repetition : Error<"expected '*', '?' or '+' after repeated macro pattern">
+def err_macro_does_not_exist : Error<"macro '$0' does not exist in current scope">
+def err_macro_expects_delim : Error<"macro '$0' expects '$1' as its delimiter">
+def err_macro_undeclared_variable : Error<"variable '$0' was not declared in macro pattern">
+def err_macro_variable_unexpanded : Error<"macro variable '$0' can only be referenced in an expansion expression of the form '$$()...'">
+def err_multiple_expanded_macro_variables : Error<"'$0' and '$1' appear in the same expansion context but have different amounts of repetition ($2 vs $3)">
+def err_expansion_without_variable : Error<"expansion does not contain any expandable macro variable">
+def err_macro_var_redeclaration : Error<"redeclaration of macro variable '$0'">
+def err_macro_must_form : Error<"macro in ${ 0 | select(expression,statement,type,declaration) } position must form a valid ${ 0 | select(expression,statement,type,declaration) }">
+def err_invalid_seperator_token : Error<"a valid seperator token (e.g. ';' or ',') must follow a${ 0 | select(_, n 'expr', 'stmt', 'decl', 'type',) } variable in a macro pattern">
+def err_leftover_tokens_after_parsing : Error<"unexpected leftover tokens after parsing ${ 0 | select(expression,statement,type,declaration) }">
+def err_could_not_match_pattern : Error<"could not match given arguments against any pattern of macro '$0'">
+def err_bad_macro_variable_kind : Error<"unexpected ${ 0 | select(expression,statement,type,declaration) } after expanding macro variable, expecting ${ 1 | select(expression,statement,type,declaration) }">
+
 // Attribute Errors
 def err_attribute_no_args : Error<"attribute @$0 does not take any arguments">
 def err_attribute_arg_count : Error<"attribute @$0 expects ${ 1 | select(at least, at most) } $2 ${ 2 | plural_s(argument) }, $3 given">
@@ -94,8 +124,10 @@ def err_max_macro_recursion_depth : Error<"maximum macro recursion depth reached
 /* TYPE ERRORS */
 def warn_implicit_cast : Warning<"implicit cast from $0 to $1">
 def err_type_mismatch : Error<"incompatible types $0 and $1">
-def err_no_implicit_conv : Error<"no implicit conversion from $0 to $1">
+def err_no_implicit_conv : Error<"no implicit conversion from '$0' to '$1'">
 def err_unexpected_value : Error<"expected $0">
+
+def err_expression_in_type_position : Error<"expression cannot be used as a type">
 
 def err_no_explicit_cast : Error<"no known explicit conversion from $0 to $1">
 
@@ -151,13 +183,15 @@ def err_could_not_infer_arr_element_type : Error<"could not infer array literal 
 
 def err_no_builtin_decl : Error<"${ 0 | select(none, optional type, array literal, dictionary literal, string literal, 'Array' type, 'Dictionary' type, 'Option' type, failible cast, 'typeof') } cannot be used because the declaration for '${ 0 | select(Option, Option, Array, Dictionary, String, Array, Dictionary, Option, Option, TypeInfo) }' was not found">
 
+def err_builtin_decl_not_found : Error<"builtin declaration '$0' is missing">
+
 def err_cannot_reference_type : Error<"type '$0' cannot be referenced">
 def err_pointer_to_void : Error<"pointers to 'Void' are not allowed, use 'u8*' instead">
 
 def err_array_size_too_large : Error<"fixed array size is too large (max. allowed size is $0, $1 given)">
 def err_array_size_must_be_integral : Error<"fixed array size must be an integral constant">
 def err_zero_size_array : Error<"fixed size arrays cannot have size zero">
-def err_meta_type_expects : Error<"'Meta' type expects one type template argument">
+def err_builtin_type_expects : Error<"'${ 0 | select(MetaType, UnsafePtr, UnsafeMutablePtr) }' type expects one type template argument">
 
 def warn_expr_result_unused : Warning<"expression result unused">
 
@@ -175,23 +209,28 @@ def err_ambiguous_destructure : Error<"reference to destructuring operator is am
 
 /* FUNCTION / METHOD CALL ERRORS */
 def err_func_not_found : Error<"${ 0 | select(function, method) } '$1' not found">
-def err_no_matching_call : Error<"no matching call for ${ 0 | select(function,method,alias) } '$1' found">
+def err_no_matching_call : Error<"no matching call ${ 0 | if(for ${ 1 | select(function,method,alias) } '$2') } found">
 def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | select(class,struct,enum,union) } '$2' found">
 
 def err_cannot_call : Error<"cannot call ${ 0 | select(typedef,namespace) }">
 def err_cannot_call_method_on : Error<"cannot call method on value of type $0">
 def err_cannot_call_type : Error<"cannot call type $0${ 1 | if(  statically) }">
 
-def note_cand_no_implicit_conv : Note<"candidate not viable: no implicit conversion from $0 to $1 for ${ 2 | ordinal } argument${ 3 | if( (builtin operator candidate)) }">
-def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implicit conversion from $0 to $1 for ${ 2 | ordinal } argument (with template arguments inferred as [$3])">
+def err_dot_init_must_be_on_self : Error<"'.init' must be called on 'self' or on a type name">
+def err_dot_init_bad_type : Error<"cannot call '.init' on type '$0'">
+def err_dot_init_outside_initializer : Error<"'self.init' cannot be called outside of an initializer">
+
+def note_cand_no_implicit_conv : Note<"candidate not viable: no implicit conversion from '$0' to '$1' for ${ 2 | ordinal } argument${ 3 | if( (builtin operator candidate)) }">
+def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implicit conversion from '$0' to '$1' for ${ 2 | ordinal } argument (with template arguments inferred as [$3])">
 def note_cand_failed_constraint : Note<"candidate not viable because of failed constraint: $0">
-def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: $0 (with template arguments inferred as [$1])">
+def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: '$0' (with template arguments inferred as [$1])">
 def note_cand_invalid_self : Note<"candidate not viable: 'self' argument has type '$0', '$1' given">
 
 def note_too_few_arguments : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_many_arguments : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_few_arguments_inferred : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as [$2])">
 def note_too_many_arguments_inferred : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as [$2])">
+def note_candidate_requires_context : Note<"candidate not viable: could not infer type of ${ 0 | ordinal } argument">
 
 def note_could_not_infer_template_arg : Note<"candidate not viable: could not infer template argument $0">
 def note_inferred_template_arg_conflict : Note<"candidate not viable: conflicting ${ 0 | select(types,values) } $1 and $2 deduced for template argument $3">
@@ -203,6 +242,8 @@ def note_too_many_template_args : Note<"candidate not viable: expected at most $
 def note_method_must_be_static : Note<"candidate method not viable: not declared 'static'">
 def note_candidate_is_mutating : Note<"candidate method not viable: is 'mutating', but self parameter is ${ 0 | select(`let` constant, not an lvalue) }">
 
+def note_candidate_requires_ref : Note<"candidate function not viable: requires ${ 0 | if(mutable) } ${ 1 | select(reference, pointer) } for ${ 2 | ordinal } argument">
+
 def err_ambiguous_call : Error<"call to ${ 0 | select(function, method, alias) } '$1' is ambiguous">
 def note_candidate_here : Note<"candidate declared here">
 def note_builtin_candidate : Note<"builtin ${ 0 | if(operator ) }candidate">
@@ -212,6 +253,8 @@ def err_ambiguous_reference : Error<"reference to ${ 0 | select(function, method
 def err_prop_does_not_have : Error<"property '$0' does not have a ${ 1 | select(getter, setter) }">
 
 def err_incompatible_template_args : Error<"incompatible template arguments for ${ 0 | select(class,struct,enum,union,protocol,alias) } $1">
+
+def err_mutating_accessor_on_const : Error<"cannot access mutating ${ 0 | select(getter, setter) } on a 'let' constant">
 
 // anonymous calls
 def err_too_few_args_for_call : Error<"too few arguments for function call, expected $0 but found $1">
@@ -257,10 +300,18 @@ def note_printf_ctfe : Note<"'printf' encountered during ctfe: $0">
 
 def err_size_not_known : Error<"size of ${ 0 | select(class,struct,enum,union,protocol) } '$1' is not known when requested here">
 
+def err_cannot_persist_type : Error<"static expression cannot return value of type '$0' because it is not persistable">
+def note_non_persistable_member_here : Error<"member of non-persistable type '$0' here">
+
 // reflection error
 
 def err_compiler_ns_unknown_entity : Error<"unknown entity '$0' in reserved 'Compiler' namespace">
 def err_compiler_ns_bad_def : Error<"unexpected structure of '$0' entity in reserved 'Compiler' namespace">
+
+def err_reflection_decl_not_found : Error<"declaration for '$0' was not found in 'Compiler' namespace">
+def err_reflect_outside_func : Error<"'Compiler.${ 0 | select(function, mangledFunction) }' cannot be used outside of a function body">
+
+def err_cannot_reflect_type : Error<"cannot reflect over type '$0'">
 
 /* NAMESPACE ERRORS */
 def err_namespace_not_found : Error<"namespace $0 does not exist">
@@ -320,7 +371,8 @@ def note_incorrect_protocol_impl_method_num_args : Note<"candidate has incorrect
 def note_incorrect_protocol_impl_method_signature : Note<"candidate has incomaptible signature ('$0' expected for ${ 1 | ordinal } argument, found '$2')">
 def note_incorrect_protocol_impl_method_return_type : Note<"candidate has incomaptible return type ('$0' expected, found '$1')">
 
-def err_circular_conformance : Error<"circular protocol conformance between $0 and $1">
+def err_circular_conformance : Error<"circular protocol conformance between '$0' and '$1'">
+def note_conformance_chain : Note<"conformance chain: $0">
 
 def note_incorrect_protocol_impl_prop_type : Note<"property '$0' has incompatible type, expected $1 but found $2">
 
@@ -332,6 +384,15 @@ def err_associated_type_constraint : Note<"associated type '$0' does not satisfy
 
 def err_constraint_not_satisfied : Error<"unsatisified constraint${ 0 | if(: ) }$1">
 def note_constraint_here : Note<"constraint declared here">
+
+def err_mutating_on_class : Error<"'mutating' cannot be used on class methods">
+
+def err_cannot_assign_to_self : Error<"cannot assign to 'self' in non mutating method">
+def err_cannot_assign_to_property : Error<"cannot assign to property in non mutating method">
+def note_mark_mutating : Note<"mark method as 'mutating' to make 'self' mutable">
+
+def err_self_used_before_initialized : Error<"'self' cannot be accessed before all properties are initialized">
+def err_field_must_be_initialized : Error<"property '$0' must be initialized before the end of the constructor">
 
 /* ENUM ERRORS */
 def err_enum_case_not_found : Error<"enum $0 does not define case $1 ${ 2 | if(with the given arguments) }">
@@ -435,6 +496,7 @@ def err_duplicate_catch : Error<"duplicate type in catch statement">
 
 // mixins
 def err_invalid_mixin_kind : Error<"mixin in ${ 0 | select(expression,declaration,statement) } position must form a valid ${ 0 | select(expression,declaration,statement) }">
+def err_mixin_expr_must_be_string : Error<"mixin expression must be of type 'String' ('$0' given)">
 
 // backend
 def err_llvm_backend : Error<"an error occured in the LLVM backend: '$0'">

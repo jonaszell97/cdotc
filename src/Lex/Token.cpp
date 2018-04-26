@@ -10,12 +10,13 @@
 
 #include <iostream>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/raw_ostream.h>
 
+using cdot::lex::tok::TokenType;
 using std::string;
 
 namespace cdot {
 namespace lex {
-
 namespace tok {
 
 string tokenTypeToString(TokenType kind)
@@ -48,7 +49,45 @@ string tokenTypeToString(TokenType kind)
 
 } // namespace tok
 
-using tok::TokenType;
+template <unsigned StrLen>
+static constexpr unsigned strLen(const char (&Str)[StrLen])
+{
+   return StrLen;
+}
+
+SourceLocation Token::getEndLoc() const
+{
+   unsigned Length;
+   switch (kind) {
+   case tok::charliteral:
+   case tok::stringliteral:
+   case tok::integerliteral:
+   case tok::fpliteral:
+      Length = Data;
+      break;
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling)             \
+   case tok::Name: Length = strLen(Spelling); break;
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling)              \
+   case tok::Name: Length = strLen(Spelling); break;
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)        \
+   case tok::Name: Length = strLen(Spelling); break;
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)           \
+   case tok::Name: Length = 1; break;
+#  include "Tokens.def"
+   case tok::sentinel:
+   case tok::eof:
+   case tok::interpolation_begin: Length = 2; break;
+   case tok::interpolation_end: Length = 1; break;
+   case tok::ident:
+   case tok::op_ident:
+      Length = (unsigned)getIdentifierInfo()->getIdentifier().size();
+      break;
+   default:
+      llvm_unreachable("bad token kind");
+   }
+
+   return SourceLocation(loc.getOffset() + Length);
+}
 
 template<unsigned N>
 void Token::rawRepr(llvm::SmallString<N> &s) const
@@ -59,79 +98,85 @@ void Token::rawRepr(llvm::SmallString<N> &s) const
    }
 
    switch (kind) {
-      case tok::charliteral:
-      case tok::stringliteral:
-         s += llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1,
-                              Data + 2);
-         break;
+   case tok::charliteral:
+   case tok::stringliteral:
+      s += llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1,
+                           Data + 2);
+      break;
 #  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                               \
-      case tok::Name: s += (Spelling); break;
+   case tok::Name: s += (Spelling); break;
 #  include "Tokens.def"
-      default:
-         toString(s);
-         break;
+   default:
+      toString(s);
+      break;
    }
 }
 
 template<unsigned N>
 void Token::toString(llvm::SmallString<N> &s) const
 {
+   llvm::raw_svector_ostream OS(s);
+   print(OS);
+}
+
+void Token::dump() const
+{
+   print(llvm::errs());
+}
+
+void Token::print(llvm::raw_ostream &OS) const
+{
+   if (kind == tok::space) {
+      OS << getText();
+      return;
+   }
+
    switch (kind) {
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
-      case tok::Name: s += (Spelling); return;
-#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
-      case tok::Name: s += (Spelling); return;
-#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
-      case tok::Name: s += (Spelling); return;
-#  define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling) \
-      case tok::Name: s += (Spelling); return;
-#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                               \
-      case tok::Name: s += '\''; support::unescape_char((Spelling), s);       \
-         s += '\''; return;
-      case tok::sentinel: s += "<sentinel>"; return;
-      case tok::eof: s += "<eof>"; return;
-      case tok::expr_begin: s += "#{"; return;
-      case tok::stringify_begin: s += "##{"; return;
-      case tok::ident:
-      case tok::op_ident:
-         s += getIdentifier(); return;
-      case tok::dollar_ident: {
-         s += "$";
-         s += getIdentifier();
-
-         return;
-      }
-      case tok::dollar_dollar_ident: {
-         s += "$$";
-         s += getIdentifier();
-
-         return;
-      }
-      case tok::percent_ident: {
-         s += "%";
-         s += getIdentifier();
-
-         return;
-      }
-      case tok::percent_percent_ident: {
-         s += "%%";
-         s += getIdentifier();
-
-         return;
-      }
-      case tok::charliteral:
-         s += *reinterpret_cast<const char*>(Ptr);
-         return;
-      case tok::stringliteral:
-      case tok::fpliteral:
-      case tok::integerliteral:
-         s += getText();
-         return;
-      case tok::preprocessor_value:
-         s += getPreprocessorValue().toString();
-         break;
-      default:
-         llvm_unreachable("unhandled token kind");
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling)                               \
+   case tok::Name: OS << (Spelling); return;
+#  define CDOT_KEYWORD_TOKEN(Name, Spelling)                                \
+   case tok::Name: OS << (Spelling); return;
+#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)                          \
+   case tok::Name: OS << (Spelling); return;
+#  define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling)                          \
+   case tok::Name: OS << (Spelling); return;
+#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                             \
+   case tok::Name: support::unescape_char((Spelling), OS); return;
+   case tok::sentinel: OS << "<sentinel>"; return;
+   case tok::eof: OS << "<eof>"; return;
+   case tok::expr_begin: OS << "#{"; return;
+   case tok::stringify_begin: OS << "##{"; return;
+   case tok::interpolation_begin: OS << "${"; return;
+   case tok::interpolation_end: OS << "}"; return;
+   case tok::ident:
+   case tok::op_ident:
+      OS << getIdentifier(); return;
+   case tok::dollar_ident: {
+      OS << "$" << getIdentifier();
+      return;
+   }
+   case tok::charliteral:
+   case tok::stringliteral:
+      OS << llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1, Data + 2);
+      break;
+   case tok::fpliteral:
+   case tok::integerliteral:
+      OS << getText();
+      return;
+   case tok::macro_name:
+      OS << getText() << "!";
+      break;
+   case tok::macro_expression:
+      OS << "<expr " << getExpr() << ">";
+      break;
+   case tok::macro_statement:
+      OS << "<stmt " << getStmt() << ">";
+      break;
+   case tok::macro_declaration:
+      OS << "<decl " << getDecl() << ">";
+      break;
+   default:
+      llvm_unreachable("unhandled token kind");
 
 #  include "Tokens.def"
    }

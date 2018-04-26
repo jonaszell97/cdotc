@@ -56,6 +56,7 @@ public:
    };
 
 protected:
+   SourceLocation SourceLoc;
    Module *parent;
 
    unsigned Linkage : 4;       // The linkage of this global
@@ -77,6 +78,9 @@ public:
 
    UnnamedAddr getUnnamedAddr() const { return UnnamedAddr(UnnamedAddrVal); }
    void setUnnamedAddr(UnnamedAddr Val) { UnnamedAddrVal = unsigned(Val); }
+
+   SourceLocation getSourceLoc() const { return SourceLoc; }
+   void setSourceLoc(SourceLocation Loc) { SourceLoc = Loc; }
 };
 
 class GlobalVariable: public GlobalObject,
@@ -96,25 +100,31 @@ public:
 
    void setInitializer(Constant *initializer);
 
-   BasicBlock *getInitBB() const
-   {
-      return InitBB;
-   }
+   Function *getInitFn() const { return InitFn; }
+   void setInitFn(Function *InitFn) { GlobalVariable::InitFn = InitFn; }
 
-   void setInitBB(BasicBlock *InitBB)
-   {
-      GlobalVariable::InitBB = InitBB;
-   }
+   BasicBlock *getInitBB() const { return InitBB; }
+   void setInitBB(BasicBlock *BB) { InitBB = BB; }
+
+   GlobalVariable *getInitializedFlag() const { return InitializedFlag; }
+   void setInitializedFlag(GlobalVariable *F) { InitializedFlag = F; }
+
+   void makeMutable();
 
 protected:
    Constant *initializer;
-   BasicBlock *InitBB = nullptr;
+   GlobalVariable *InitializedFlag = nullptr;
+
+   union {
+      Function *InitFn = nullptr;
+      BasicBlock *InitBB;
+   };
 
 public:
    bool isDeclared() const { return initializer == nullptr; }
    bool isConstant() const { return GVBits.Const; }
-   bool isLateInitialized() const { return GVBits.LateInitialized; }
-   void setIsLateInitialized() { GVBits.LateInitialized = true; }
+   bool isLazilyInitialized() const { return GVBits.LazilyInitialized; }
+   void setIsLazilyInitialized() { GVBits.LazilyInitialized = true; }
 
 private:
    GlobalVariable(const GlobalVariable &var);

@@ -111,9 +111,26 @@ bool BasicBlock::hasNoPredecessors() const
    return pred_begin(this) == pred_end(this);
 }
 
+bool BasicBlock::isExitBlock() const
+{
+   auto Term = getTerminator();
+   if (!Term)
+      return false;
+
+   switch (Term->getTypeID()) {
+   case RetInstID:
+   case ThrowInstID:
+      return true;
+   default:
+      return false;
+   }
+}
+
 void BasicBlock::addBlockArg(QualType ty, llvm::StringRef name)
 {
-   Args.push_back(new Argument(ValueType(getCtx(), ty), false, this));
+   Args.push_back(new Argument(ValueType(getCtx(), ty), Argument::Owned,
+                               this));
+
    if (!name.empty()) {
       Args.back().setName(name);
    }

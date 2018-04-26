@@ -42,6 +42,8 @@ enum class KnownFunction: unsigned char {
 
    llvm_floor_f64, llvm_ceil_f64,
    llvm_floor_f32, llvm_ceil_f32,
+
+   llvm_ctlz_i32, llvm_ctlz_i64
 };
 
 } // namespace cdot

@@ -5,25 +5,24 @@
 #ifndef CDOT_CONSTANTINT_H
 #define CDOT_CONSTANTINT_H
 
+#include "Basic/CastKind.h"
 #include "Constant.h"
 
-#include "Basic/CastKind.h"
-
-#include <cstdint>
-#include <string>
-#include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APSInt.h>
+#include <llvm/ADT/FoldingSet.h>
 
 namespace cdot {
 namespace ast {
    class ClassDecl;
+   class EnumCaseDecl;
 } // namespace ast
 
 namespace il {
 
 class Module;
 class Function;
+class GlobalVariable;
 
 class ConstantInt: public Constant {
 public:
@@ -78,25 +77,45 @@ private:
    llvm::APSInt Val;
 
 public:
-   static inline bool classof(Value const* T) {
+   static bool classof(Value const* T)
+   {
       return T->getTypeID() == ConstantIntID;
    }
 };
 
 class ConstantPointer: public Constant {
+   explicit ConstantPointer(ValueType ty);
+
 public:
    static ConstantPointer *get(ValueType ty);
 
-private:
-   ConstantPointer(ValueType ty);
-
-public:
-   static inline bool classof(Value const* T) {
+   static bool classof(Value const* T)
+   {
       return T->getTypeID() == ConstantPointerID;
    }
 };
 
+class UndefValue: public Constant {
+   UndefValue(ValueType Ty);
+
+public:
+   static UndefValue *get(ValueType Ty);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == UndefValueID;
+   }
+};
+
 class ConstantFloat: public Constant {
+   ConstantFloat(ValueType Ty, llvm::APFloat &&APF)
+      : Constant(ConstantFloatID, Ty), Val(std::move(APF))
+   {
+
+   }
+
+   llvm::APFloat Val;
+
 public:
    static ConstantFloat* get(ValueType Ty, float val);
    static ConstantFloat* get(ValueType Ty, double val);
@@ -107,29 +126,13 @@ public:
 
    const llvm::APFloat getValue() const { return Val; }
 
-private:
-   ConstantFloat(ValueType Ty, llvm::APFloat &&APF)
-      : Constant(ConstantFloatID, Ty), Val(std::move(APF))
+   static bool classof(Value const* T)
    {
-
-   }
-
-   llvm::APFloat Val;
-
-public:
-   static inline bool classof(Value const* T) {
       return T->getTypeID() == ConstantFloatID;
    }
 };
 
 class ConstantString: public Constant {
-public:
-   static ConstantString *get(Context &Ctx,
-                              llvm::StringRef val);
-
-   const std::string &getValue() const { return value; }
-
-private:
    explicit ConstantString(ValueType Int8PtrTy, llvm::StringRef val)
       : Constant(ConstantStringID, Int8PtrTy),
         value(val)
@@ -140,13 +143,19 @@ private:
    std::string value;
 
 public:
-   static inline bool classof(Value const* T) {
+   static ConstantString *get(Context &Ctx,
+                              llvm::StringRef val);
+
+   llvm::StringRef getValue() const { return value; }
+
+   static bool classof(Value const* T)
+   {
       return T->getTypeID() == ConstantStringID;
    }
 };
 
-class ConstantArray final: public Constant {
-   explicit ConstantArray(ValueType ty, llvm::ArrayRef<Constant*> vec);
+class ConstantArray final: public Constant, public llvm::FoldingSetNode {
+   ConstantArray(ValueType ty, llvm::ArrayRef<Constant*> vec);
 
    unsigned NumElements;
 
@@ -164,13 +173,52 @@ public:
       return type->asArrayType()->getElementType();
    }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getElementType(), getVec());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType ElementTy,
+                       llvm::ArrayRef<Constant*> Values);
+
    static inline bool classof(Value const* T)
    {
       return T->getTypeID() == ConstantArrayID;
    }
 };
 
-class ConstantStruct final: public Constant {
+class ConstantTuple final: public Constant, public llvm::FoldingSetNode {
+   ConstantTuple(ValueType ty, llvm::ArrayRef<Constant*> vec);
+
+   unsigned NumElements;
+
+public:
+   static ConstantTuple *get(ValueType ty, llvm::ArrayRef<Constant*> vec);
+
+   llvm::ArrayRef<Constant*> getVec() const
+   {
+      return { reinterpret_cast<Constant* const*>(this + 1), NumElements };
+   }
+
+   unsigned getNumElements() const { return NumElements; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getType(), getVec());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType Ty,
+                       llvm::ArrayRef<Constant*> Values);
+
+   static inline bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantTupleID;
+   }
+};
+
+class ConstantStruct final: public Constant, public llvm::FoldingSetNode {
    ConstantStruct(ValueType Ty,
                   llvm::ArrayRef<Constant*> vec);
 
@@ -184,14 +232,134 @@ public:
    static ConstantStruct *get(ValueType Ty,
                               llvm::ArrayRef<Constant*> vec);
 
+   unsigned int getNumElements() const { return NumElements; }
+
    llvm::ArrayRef<Constant*> getElements() const
    {
       return { reinterpret_cast<Constant* const*>(this + 1), NumElements };
    }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getType(), getElements());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType Type,
+                       llvm::ArrayRef<Constant*> Elements);
+
    static inline bool classof(Value const* T)
    {
      return T->getTypeID() == ConstantStructID;
+   }
+};
+
+class ConstantClass final: public Constant, public llvm::FoldingSetNode {
+   ConstantClass(ConstantStruct *StructVal,
+                 GlobalVariable *TI,
+                 ConstantClass *Base);
+
+   ConstantClass(ValueType Ty, GlobalVariable *TI);
+
+   GlobalVariable *TI;
+   ConstantStruct *StructVal;
+   ConstantClass *Base;
+
+public:
+   static ConstantClass *get(ConstantStruct *StructVal,
+                             GlobalVariable *TI,
+                             ConstantClass *Base = nullptr);
+
+   static ConstantClass *ForwardDeclare(ValueType Ty, GlobalVariable *TI);
+
+   bool isForwardDecl() const { return !StructVal; }
+   ConstantClass *ReplaceForwardDecl(ConstantStruct *Value,
+                                     ConstantClass *Base = nullptr);
+
+   GlobalVariable *getTypeInfo() const { return TI; }
+   ConstantClass *getBase() const { return Base; }
+   ConstantStruct *getStructVal() const { return StructVal; }
+
+   llvm::ArrayRef<Constant*> getElements() const
+   {
+      assert(!isForwardDecl() && "forward declared ConstantClass!");
+      return StructVal->getElements();
+   }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getStructVal(), getBase());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       ConstantStruct *StructVal,
+                       ConstantClass *Base);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantClassID;
+   }
+};
+
+class ConstantUnion: public Constant, public llvm::FoldingSetNode {
+   ConstantUnion(ValueType Ty, Constant *InitVal);
+
+   Constant *InitVal;
+
+public:
+   static ConstantUnion *get(ValueType Ty, Constant *InitVal);
+
+   Constant *getInitVal() const { return InitVal; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getType(), getInitVal());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType Type,
+                       Constant *InitVal);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantUnionID;
+   }
+};
+
+class ConstantEnum: public Constant, public llvm::FoldingSetNode {
+   ConstantEnum(il::Context &Ctx,
+                ast::EnumCaseDecl *Case,
+                llvm::ArrayRef<Constant*> vec);
+
+   ast::EnumCaseDecl *Case;
+   unsigned NumValues;
+
+public:
+   static ConstantEnum *get(il::Context &Ctx,
+                            ast::EnumCaseDecl *Case,
+                            llvm::ArrayRef<Constant*> vec);
+
+   Constant *getDiscriminator() const;
+   unsigned getNumValues() const { return NumValues; }
+
+   ast::EnumCaseDecl *getCase() const { return Case; }
+   llvm::ArrayRef<Constant*> getCaseValues() const
+   {
+      return { reinterpret_cast<Constant* const*>(this + 1), NumValues };
+   }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getCase(), getCaseValues());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       ast::EnumCaseDecl *Case,
+                       llvm::ArrayRef<Constant*> Elements);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantEnumID;
    }
 };
 
@@ -253,11 +421,36 @@ public:
    }
 };
 
+class MagicConstant: public Constant {
+public:
+   enum Kind : unsigned char {
+      __ctfe = 0,
+   };
+
+private:
+   MagicConstant(ValueType Ty, Kind MagicConstantKind);
+
+   Kind MagicConstantKind;
+
+public:
+   static MagicConstant *get(ValueType Ty, Kind MagicConstantKind);
+
+   Kind getMagicConstantKind() const { return MagicConstantKind; }
+
+   static inline bool classof(Value const* T)
+   {
+      return T->getTypeID() == MagicConstantID;
+   }
+};
+
 class ConstantBitCastInst;
 class ConstantAddrOfInst;
 class ConstantIntCastInst;
+class ConstantOperatorInst;
+class ConstantGEPInst;
+class ConstantLoadInst;
 
-class ConstantExpr: public Constant {
+class ConstantExpr: public Constant, public llvm::FoldingSetNode {
 public:
    static ConstantBitCastInst *getBitCast(Constant *Val, QualType toType);
    static ConstantAddrOfInst *getAddrOf(Constant *Val);
@@ -300,6 +493,26 @@ public:
       return getIntCast(CastKind::IntToFP, Target, toType);
    }
 
+   static ConstantOperatorInst *getOperator(unsigned OPC,
+                                            Constant *LHS,
+                                            Constant *RHS);
+
+   inline static ConstantOperatorInst *getAdd(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getSub(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getMul(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getDiv(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getShl(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getShr(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getMod(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getAnd(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getOr(Constant *LHS, Constant *RHS);
+   inline static ConstantOperatorInst *getXor(Constant *LHS, Constant *RHS);
+
+   static ConstantGEPInst *getGEP(Constant *Target,
+                                  ConstantInt *Idx);
+
+   static ConstantLoadInst *getLoad(Constant *Target);
+
 protected:
    ConstantExpr(TypeID id, ValueType ty);
 
@@ -324,6 +537,15 @@ public:
       return target;
    }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getType(), getTarget());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType Type,
+                       Constant *Target);
+
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ConstantBitCastInstID;
@@ -343,6 +565,14 @@ public:
    {
       return target;
    }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getTarget());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       Constant *Target);
 
    static bool classof(Value const* T)
    {
@@ -364,11 +594,167 @@ public:
    Constant *getTarget() const { return Target; }
    CastKind getKind() const { return Kind; }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getType(), getKind(), getTarget());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType Type,
+                       CastKind Kind,
+                       Constant *Target);
+
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ConstantIntCastInstID;
    }
 };
+
+class ConstantOperatorInst: public ConstantExpr {
+public:
+   enum OpCode: unsigned char {
+#  define CDOT_BINARY_OP(Name, OP)               \
+      Name,
+#  include "Instructions.def"
+   };
+
+private:
+   ConstantOperatorInst(OpCode OPC,
+                        Constant *LHS,
+                        Constant *RHS);
+
+   OpCode OPC;
+   Constant *LHS;
+   Constant *RHS;
+
+public:
+   friend class ConstantExpr;
+
+   OpCode getOpCode() const { return OPC; }
+   Constant *getLHS() const { return LHS; }
+   Constant *getRHS() const { return RHS; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getOpCode(), getLHS(), getRHS());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       OpCode OPC,
+                       Constant *LHS,
+                       Constant *RHS);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantOperatorInstID;
+   }
+};
+
+class ConstantGEPInst: public ConstantExpr {
+   ConstantGEPInst(Constant *Target, ConstantInt *Idx);
+
+   Constant *Target;
+   ConstantInt *Idx;
+
+public:
+   friend class ConstantExpr;
+
+   Constant *getTarget() const { return Target; }
+   ConstantInt *getIdx() const { return Idx; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getTarget(), getIdx());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       Constant *Target,
+                       ConstantInt *Idx) {
+      ID.AddPointer(Target);
+      ID.AddPointer(Idx);
+   }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantGEPInstID;
+   }
+};
+
+class ConstantLoadInst: public ConstantExpr {
+   ConstantLoadInst(Constant *Target);
+
+   Constant *Target;
+
+public:
+   friend class ConstantExpr;
+
+   Constant *getTarget() const { return Target; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, getTarget());
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       Constant *Target) {
+      ID.AddPointer(Target);
+   }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantLoadInstID;
+   }
+};
+
+ConstantOperatorInst* ConstantExpr::getAdd(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Add, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getSub(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Sub, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getMul(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Mul, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getDiv(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Div, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getMod(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Mod, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getShl(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Shl, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getShr(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::AShr, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getAnd(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::And, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getOr(Constant *LHS,
+                                          Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Or, LHS, RHS);
+}
+
+ConstantOperatorInst* ConstantExpr::getXor(Constant *LHS,
+                                           Constant *RHS) {
+   return getOperator(ConstantOperatorInst::Xor, LHS, RHS);
+}
 
 } // namespace il
 } // namespace cdot

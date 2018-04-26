@@ -226,6 +226,15 @@
 		<Unit filename="/Users/Jonas/CDot/src/AST/Attribute.h">
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ConformanceTable.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ConformanceTable.h">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/ContinuationPoint.h">
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Decl.cpp">
 			<Option target="cdotc"/>
 		</Unit>
@@ -664,6 +673,9 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Parse/ParseAttr.cpp">
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Parse/ParseMacro.cpp">
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Parse/ParseRecord.cpp">

@@ -47,6 +47,15 @@ void Instruction::setParent(BasicBlock *parent)
    Instruction::parent = parent;
 }
 
+bool Instruction::isRetainOrRelease() const
+{
+   if (auto I = dyn_cast<IntrinsicCallInst>(this))
+      return I->getCalledIntrinsic() == Intrinsic::retain
+          || I->getCalledIntrinsic() == Intrinsic::release;
+
+   return false;
+}
+
 void Instruction::handleReplacement(Value *with)
 {
    for (auto it = op_begin(); it != op_end(); ++it) {

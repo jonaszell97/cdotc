@@ -17,6 +17,9 @@ struct StmtOrDecl {
    /*implicit*/ StmtOrDecl(ast::Statement *S) : Union(S) {}
    /*implicit*/ StmtOrDecl(ast::Decl *D) : Union(D) {}
 
+   /*implicit*/ StmtOrDecl(std::nullptr_t) : Union((ast::Statement*)nullptr) {}
+   StmtOrDecl() : Union((ast::Decl*)nullptr) {}
+
    SourceLocation getSourceLoc() const;
    SourceRange getSourceRange() const;
 
@@ -32,6 +35,9 @@ struct StmtOrDecl {
    void setIsInvalid(bool b) const;
 
    void copyStatusFlags(StmtOrDecl Other) const;
+
+   bool isNull() const { return Union.isNull(); }
+   operator bool() const { return !isNull(); }
 
 private:
    llvm::PointerUnion<ast::Decl*, ast::Statement*> Union;

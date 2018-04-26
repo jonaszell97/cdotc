@@ -18,26 +18,42 @@ namespace cdot {
 namespace il {
 
 AllocaInst::AllocaInst(ValueType ty,
+                       bool IsLet,
                        BasicBlock *parent,
                        unsigned alignment,
                        bool heap)
    : Instruction(AllocaInstID, ty, parent)
 {
-   setIsLvalue(true);
    AllocaBits.Heap = heap;
-   AllocaBits.Alignment = alignment;
+   Alignment = alignment;
+   AllocaBits.IsLet = IsLet;
+
+   if (IsLet) {
+      type = getASTCtx().getReferenceType(ty);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(ty);
+   }
 }
 
 AllocaInst::AllocaInst(ValueType ty,
+                       bool IsLet,
                        BasicBlock *parent,
                        size_t allocSize,
                        unsigned alignment,
                        bool heap)
    : Instruction(AllocaInstID, ty, parent), allocSize(allocSize)
 {
-   setIsLvalue(true);
    AllocaBits.Heap = heap;
-   AllocaBits.Alignment = alignment;
+   Alignment = alignment;
+   AllocaBits.IsLet = IsLet;
+
+   if (IsLet) {
+      type = getASTCtx().getReferenceType(ty);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(ty);
+   }
 }
 
 AllocBoxInst::AllocBoxInst(il::ValueType ty,
@@ -51,6 +67,7 @@ AllocBoxInst::AllocBoxInst(il::ValueType ty,
 
 FieldRefInst::FieldRefInst(Value *val,
                            DeclarationName fieldName,
+                           bool IsLet,
                            BasicBlock *parent)
    : UnaryInstruction(FieldRefInstID, val, nullptr, parent),
      fieldName(fieldName)
@@ -58,8 +75,14 @@ FieldRefInst::FieldRefInst(Value *val,
    auto Field = val->getType()->getRecord()->getField(fieldName);
    assert(Field && "field does not exist on type!");
 
+   FieldRefBits.IsLet = IsLet;
    type = Field->getType();
-   setIsLvalue(true);
+   if (IsLet) {
+      type = getASTCtx().getReferenceType(type);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(type);
+   }
 }
 
 StructDecl* FieldRefInst::getAccessedType() const
@@ -67,7 +90,7 @@ StructDecl* FieldRefInst::getAccessedType() const
    return cast<StructDecl>(getOperand(0)->getType()->getRecord());
 }
 
-GEPInst::GEPInst(il::Value *val, size_t idx, il::BasicBlock *parent)
+GEPInst::GEPInst(il::Value *val, size_t idx, bool IsLet, il::BasicBlock *parent)
    : BinaryInstruction(GEPInstID, val,
                        ConstantInt::get(ValueType(val->getCtx(),
                                                   val->getASTCtx()
@@ -89,10 +112,18 @@ GEPInst::GEPInst(il::Value *val, size_t idx, il::BasicBlock *parent)
       }
    }
 
-   type.makeReference();
+   GEPBits.IsLet = IsLet;
+   if (IsLet) {
+      type = getASTCtx().getReferenceType(type);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(type);
+   }
 }
 
-GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
+GEPInst::GEPInst(Value *val, Value *idx,
+                 bool IsLet,
+                 BasicBlock *parent)
    : BinaryInstruction(GEPInstID, val, idx, nullptr, parent)
 {
    val->addUse(this);
@@ -119,13 +150,21 @@ GEPInst::GEPInst(Value *val, Value *idx, BasicBlock *parent)
       llvm_unreachable("cannot GEP on given type!");
    }
 
-   type = ValueType(val->getCtx(), resultTy);
-   type.makeReference();
+   GEPBits.IsLet = IsLet;
+   if (IsLet) {
+      type = ValueType(val->getCtx(), getASTCtx().getReferenceType(resultTy));
+   }
+   else {
+      type = ValueType(val->getCtx(),
+                       getASTCtx().getMutableReferenceType(resultTy));
+   }
 }
 
-TupleExtractInst::TupleExtractInst(Value *val, ConstantInt *idx,
+TupleExtractInst::TupleExtractInst(Value *val,
+                                   ConstantInt *idx,
+                                   bool IsLet,
                                    BasicBlock *parent)
-   : GEPInst(val, idx, parent)
+   : GEPInst(val, idx, IsLet, parent)
 {
    id = TupleExtractInstID;
 }
@@ -145,24 +184,35 @@ EnumRawValueInst::EnumRawValueInst(Value *Val,
    type = ValueType(Val->getCtx(), cast<EnumDecl>(rec)->getRawType());
 }
 
-EnumExtractInst::EnumExtractInst(Value *Val, const IdentifierInfo *caseName,
-                                 ConstantInt *caseVal, BasicBlock *parent)
+EnumExtractInst::EnumExtractInst(Value *Val,
+                                 ast::EnumCaseDecl *Case,
+                                 ConstantInt *caseVal,
+                                 bool IsLet,
+                                 BasicBlock *parent)
    : UnaryInstruction(EnumExtractInstID, Val, nullptr, parent),
-     caseName(caseName), caseVal(caseVal)
+     Case(Case), caseVal(caseVal)
 {
    auto rec = Val->getType()->getRecord();
    assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
-   auto E = cast<EnumDecl>(Val->getType()->getRecord());
-   auto Case = E->hasCase(caseName);
+   setIndirect(Case->isIndirect());
 
    auto idx = caseVal->getZExtValue();
    auto AssociatedValues = Case->getArgs();
    assert(AssociatedValues.size() > idx && "invalid case index");
 
    type = AssociatedValues[idx]->getType();
+   if (IsLet) {
+      type = getASTCtx().getReferenceType(type);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(type);
+   }
+}
 
-   setIsLvalue(true);
+DeclarationName EnumExtractInst::getCaseName() const
+{
+   return Case->getDeclName();
 }
 
 EnumDecl* EnumExtractInst::getEnumTy() const
@@ -399,7 +449,9 @@ IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
      MultiOperandInst(args),
      calledIntrinsic(id)
 {
-
+   for (const auto &arg : args) {
+      arg->addUse(this);
+   }
 }
 
 BrInst::BrInst(Value *Condition,
@@ -663,13 +715,19 @@ UnionInitInst::UnionInitInst(UnionDecl *UnionTy,
 
 EnumInitInst::EnumInitInst(Context &Ctx,
                            EnumDecl *EnumTy,
-                           const IdentifierInfo *caseName,
+                           ast::EnumCaseDecl *Case,
                            llvm::ArrayRef<Value *> args,
                            BasicBlock *parent)
    : CallInst(EnumInitInstID, Ctx, args, parent),
-     EnumTy(EnumTy), caseName(caseName)
+     EnumTy(EnumTy), Case(Case)
 {
    type = getASTCtx().getRecordType(EnumTy);
+   setIndirect(Case->isIndirect());
+}
+
+DeclarationName EnumInitInst::getCaseName() const
+{
+   return Case->getDeclName();
 }
 
 LambdaInitInst::LambdaInitInst(il::Function *F,
@@ -741,10 +799,11 @@ DeinitializeTemporaryInst::DeinitializeTemporaryInst(il::Function *DeinitFn,
 
 }
 
-StoreInst::StoreInst(Value *dst, Value *src, BasicBlock *parent)
+StoreInst::StoreInst(Value *dst, Value *src,
+                     bool IsInit, BasicBlock *parent)
    : BinaryInstruction(StoreInstID, dst, src, nullptr, parent)
 {
-
+   StoreBits.IsInit = IsInit;
 }
 
 bool StoreInst::useMemCpy() const
@@ -775,7 +834,19 @@ AddrOfInst::AddrOfInst(Value *target,
                          target->getType()->getReferencedType()),
                       parent)
 {
-
+   if (target->getType()->isMutableReferenceType()) {
+      type = ValueType(
+         target->getCtx(),
+         target->getASTCtx().getMutablePointerType(
+            target->getType()->getReferencedType()));
+   }
+   else {
+      assert(target->getType()->isReferenceType());
+      type = ValueType(
+         target->getCtx(),
+         target->getASTCtx().getPointerType(
+            target->getType()->getReferencedType()));
+   }
 }
 
 PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)
@@ -787,13 +858,14 @@ PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)
 
 }
 
-DebugLocInst::DebugLocInst(unsigned Line,
+DebugLocInst::DebugLocInst(SourceLocation Loc,
+                           unsigned Line,
                            unsigned Col,
                            unsigned FileID,
                            ValueType VoidTy,
                            il::BasicBlock *Parent)
    : Instruction(DebugLocInstID, VoidTy, Parent),
-     Line(Line), Col(Col), FileID(FileID)
+     Loc(Loc), Line(Line), Col(Col), FileID(FileID)
 {
 
 }

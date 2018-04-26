@@ -44,9 +44,19 @@ public:
       return Ctx.getPointerType(visit(T->getPointeeType()));
    }
 
+   QualType visitMutablePointerType(MutablePointerType *T)
+   {
+      return Ctx.getMutablePointerType(visit(T->getPointeeType()));
+   }
+
    QualType visitReferenceType(ReferenceType *T)
    {
       return Ctx.getReferenceType(visit(T->getReferencedType()));
+   }
+
+   QualType visitMutableReferenceType(MutableReferenceType *T)
+   {
+      return Ctx.getMutableReferenceType(visit(T->getReferencedType()));
    }
 
    QualType visitMetaType(cdot::MetaType *T)
@@ -59,15 +69,13 @@ public:
       return Ctx.getArrayType(visit(T->getElementType()), T->getNumElements());
    }
 
-   QualType
-   visitDependentSizeArrayType(DependentSizeArrayType *T)
+   QualType visitDependentSizeArrayType(DependentSizeArrayType *T)
    {
       return Ctx.getValueDependentSizedArrayType(visit(T->getElementType()),
                                                  T->getSizeExpr());
    }
 
-   QualType
-   visitInferredSizeArrayType(InferredSizeArrayType *T)
+   QualType visitInferredSizeArrayType(InferredSizeArrayType *T)
    {
       return Ctx.getInferredSizeArrayType(visit(T->getElementType()));
    }
@@ -124,16 +132,23 @@ public:
       auto  R = T->getRecord();
       if (R->isInstantiation()) {
          auto &TemplateArgs = T->getTemplateArgs();
-         sema::TemplateArgList Copy(SP, R);
+         llvm::SmallVector<sema::ResolvedTemplateArg, 0> Args;
 
+         bool Dependent = false;
          for (auto &Arg : TemplateArgs) {
-            Copy.insert(VisitTemplateArg(Arg));
+            auto Copy = VisitTemplateArg(Arg);
+            Dependent |= Copy.isStillDependent();
+
+            Args.emplace_back(move(Copy));
          }
 
-         if (Copy.isStillDependent())
-            return Ctx.getDependentRecordType(R, move(Copy));
+         auto FinalList = sema::FinalTemplateArgumentList::Create(
+            SP.getContext(), Args);
 
-         auto Inst = SP.getInstantiator().InstantiateRecord(SOD, R, move(Copy));
+         if (Dependent)
+            return Ctx.getDependentRecordType(R, FinalList);
+
+         auto Inst = SP.getInstantiator().InstantiateRecord(SOD, R, FinalList);
          if (Inst)
             return Ctx.getRecordType(Inst.getValue());
 
@@ -145,22 +160,29 @@ public:
    QualType visitDependentRecordType(DependentRecordType *T)
    {
       auto &TemplateArgs = T->getTemplateArgs();
-      sema::TemplateArgList Copy(SP, T->getRecord());
+      llvm::SmallVector<sema::ResolvedTemplateArg, 0> Args;
 
+      bool Dependent = false;
       for (auto &Arg : TemplateArgs) {
-         Copy.insert(VisitTemplateArg(Arg));
+         auto Copy = VisitTemplateArg(Arg);
+         Dependent |= Copy.isStillDependent();
+
+         Args.emplace_back(move(Copy));
       }
 
-      if (Copy.isStillDependent())
-         return Ctx.getDependentRecordType(T->getRecord(), move(Copy));
+      auto FinalList = sema::FinalTemplateArgumentList::Create(SP.getContext(),
+                                                               Args);
+
+      if (Dependent)
+         return Ctx.getDependentRecordType(T->getRecord(), FinalList);
 
       auto Inst = SP.getInstantiator().InstantiateRecord(SOD, T->getRecord(),
-                                                         move(Copy));
+                                                         FinalList);
 
       if (Inst)
          return Ctx.getRecordType(Inst.getValue());
 
-      return Ctx.getDependentRecordType(T->getRecord(), move(Copy));
+      return Ctx.getDependentRecordType(T->getRecord(), FinalList);
    }
 
    QualType visitGenericType(GenericType *T)

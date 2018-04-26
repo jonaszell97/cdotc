@@ -58,8 +58,14 @@ GlobalVariable::GlobalVariable(QualType ty,
    : GlobalObject(GlobalVariableID, ty, module, name),
      initializer(initializer)
 {
-   setIsLvalue(true);
    GVBits.Const = isConstant;
+
+   if (isConstant) {
+      type = getASTCtx().getReferenceType(ty);
+   }
+   else {
+      type = getASTCtx().getMutableReferenceType(ty);
+   }
 
    if (module)
       module->insertGlobal(this);
@@ -77,6 +83,12 @@ GlobalVariable::GlobalVariable(const GlobalVariable &var)
 void GlobalVariable::setInitializer(Constant *initializer)
 {
    GlobalVariable::initializer = initializer;
+}
+
+void GlobalVariable::makeMutable()
+{
+   GVBits.Const = false;
+   type = getASTCtx().getMutableReferenceType(type->getReferencedType());
 }
 
 GlobalVariable* GlobalVariable::getDeclarationIn(Module *M)

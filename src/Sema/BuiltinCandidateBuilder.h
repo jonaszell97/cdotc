@@ -17,6 +17,7 @@ namespace cdot {
    class FunctionType;
 namespace ast {
 
+class PrecedenceGroupDecl;
 class Expression;
 class SemaPass;
 
@@ -37,12 +38,12 @@ public:
                              QualType lhsType);
 
    struct CachedOp {
-      CachedOp(FunctionType *Ty, PrecedenceGroup PG = PrecedenceGroup())
+      CachedOp(FunctionType *Ty, ast::PrecedenceGroupDecl *PG = nullptr)
          : Ty(Ty), PG(PG)
       { }
 
       FunctionType *Ty;
-      PrecedenceGroup PG;
+      ast::PrecedenceGroupDecl *PG;
    };
 
 private:
@@ -57,6 +58,8 @@ private:
    BuiltinKindMap::iterator fillCache(BuiltinKindMap &Map,
                                       QualType ty,
                                       op::OperatorKind opKind);
+
+   ast::PrecedenceGroupDecl *getPrecedenceGroup(op::OperatorKind opKind);
 
    void getOpKindAndFix(DeclarationName opName,
                         op::OperatorKind &opKind,

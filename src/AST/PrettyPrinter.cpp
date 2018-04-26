@@ -7,7 +7,7 @@
 #include "AST/Decl.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"
-
+#include "IL/Constants.h"
 #include "Support/Format.h"
 #include "Support/WriterBase.h"
 
@@ -506,7 +506,7 @@ void PrettyPrinterImpl::visitArrayTypeExpr(ArrayTypeExpr *expr)
 {
    out << "[";
    visit(expr->getElementTy());
-   out << "; " << expr->getSizeExpr()->getEvaluatedExpr().getAPSInt() << "]";
+//   out << "; " << expr->getSizeExpr()->getEvaluatedExpr().getAPSInt() << "]";
 }
 
 void PrettyPrinterImpl::visitDeclTypeExpr(DeclTypeExpr *expr)
@@ -584,7 +584,7 @@ void PrettyPrinterImpl::visitStringInterpolation(StringInterpolation* expr)
 {
    out << '"';
 
-   for (auto &str : expr->getStrings()) {
+   for (auto &str : expr->getSegments()) {
       if (auto S = dyn_cast<StringLiteral>(expr)) {
          out << S->getValue();
       }
@@ -680,6 +680,16 @@ void PrettyPrinterImpl::visitTupleMemberExpr(ast::TupleMemberExpr *expr)
 
 void PrettyPrinterImpl::visitCallExpr(CallExpr* expr)
 {
+   if (expr->getParentExpr()) {
+      out << (expr->isPointerAccess() ? "->" : ".");
+   }
+
+   out << expr->getDeclName();
+   WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
+}
+
+void PrettyPrinterImpl::visitAnonymousCallExpr(AnonymousCallExpr *expr)
+{
    WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
 }
 
@@ -733,6 +743,13 @@ void PrettyPrinterImpl::visitBinaryOperator(BinaryOperator* expr)
    visitExpr(expr->getRhs());
 }
 
+void PrettyPrinterImpl::visitAssignExpr(AssignExpr *expr)
+{
+   visitExpr(expr->getLhs());
+   out << " = ";
+   visitExpr(expr->getRhs());
+}
+
 void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
 {
    visitExpr(expr->getLHS());
@@ -752,7 +769,7 @@ void PrettyPrinterImpl::visitExprSequence(ExprSequence* expr)
          out << op::toString(frag.getOperatorKind());
       }
       else {
-         out << frag.getOp();
+         out << frag.getOp()->getIdentifier();
       }
    }
 }
@@ -794,7 +811,10 @@ void PrettyPrinterImpl::visitDeclStmt(DeclStmt *stmt)
 
 void PrettyPrinterImpl::visitStaticExpr(StaticExpr* expr)
 {
-   visitExpr(expr->getExpr());
+   if (expr->getExpr())
+      visitExpr(expr->getExpr());
+   else
+      out << *expr->getEvaluatedExpr();
 }
 
 void PrettyPrinterImpl::visitConstraintExpr(ConstraintExpr* expr)
@@ -888,6 +908,31 @@ void PrettyPrinterImpl::visitTraitsExpr(TraitsExpr* expr)
    }
 }
 
+void PrettyPrinterImpl::visitMacroDecl(MacroDecl *decl)
+{
+   
+}
+
+void PrettyPrinterImpl::visitMacroExpansionDecl(MacroExpansionDecl *decl)
+{
+   
+}
+
+void PrettyPrinterImpl::visitMacroExpansionStmt(MacroExpansionStmt *decl)
+{
+
+}
+
+void PrettyPrinterImpl::visitMacroExpansionExpr(MacroExpansionExpr *decl)
+{
+
+}
+
+void PrettyPrinterImpl::visitMacroVariableExpr(MacroVariableExpr *decl)
+{
+
+}
+
 void PrettyPrinterImpl::visitMixinExpr(ast::MixinExpr *expr)
 {
    out << "mixin(";
@@ -920,14 +965,14 @@ PrettyPrinter::~PrettyPrinter()
    delete pImpl;
 }
 
-void PrettyPrinter::print(Expression* expr)
+void PrettyPrinter::print(const Expression* expr)
 {
-   pImpl->visit(expr);
+   pImpl->visit(const_cast<Expression*>(expr));
 }
 
-void PrettyPrinter::print(Statement* stmt)
+void PrettyPrinter::print(const Statement* stmt)
 {
-   pImpl->visit(stmt);
+   pImpl->visit(const_cast<Statement*>(stmt));
 }
 
 } // namespace ast

@@ -5,9 +5,11 @@
 #ifndef CDOT_MANGLE_H
 #define CDOT_MANGLE_H
 
+#include "AST/DeclDenseMapInfo.h"
 #include "Support/LLVM.h"
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseMap.h>
 
 namespace cdot {
 
@@ -24,6 +26,7 @@ namespace ast {
    class MethodDecl;
    class RecordDecl;
    class NamedDecl;
+   class Decl;
 } // namespace ast
 
 class SymbolMangler {
@@ -38,6 +41,7 @@ public:
 
 private:
    ast::SemaPass &SP;
+   mutable llvm::DenseMap<const ast::Decl*, std::string> Cache;
 };
 
 } // namespace cdot

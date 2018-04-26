@@ -106,14 +106,6 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
          );
          
          break;
-      case BuiltinType::u1:
-         MD = DI->createBasicType(
-            "u1",
-            8,
-            llvm::dwarf::DW_ATE_boolean
-         );
-
-         break;
       case BuiltinType::i8:
          MD = DI->createBasicType(
             "i8",
@@ -217,7 +209,8 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
 
       break;
    }
-   case Type::PointerTypeID: {
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID: {
       MD = DI->createPointerType(
          getTypeDI(ty->getPointeeType()),
          TI.getPointerSizeInBytes() * 8,
@@ -226,7 +219,8 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
 
       break;
    }
-   case Type::ReferenceTypeID: {
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID: {
       MD = DI->createReferenceType(
          llvm::dwarf::DW_TAG_reference_type,
          getTypeDI(ty->getReferencedType()),
@@ -383,21 +377,26 @@ llvm::dwarf::Tag IRGen::getTagForRecord(ast::RecordDecl *R)
 {
    llvm::dwarf::Tag Tag;
    switch (R->getKind()) {
-      case Decl::StructDeclID:
-      case Decl::ProtocolDeclID:
-         Tag = llvm::dwarf::DW_TAG_structure_type;
-         break;
-      case Decl::ClassDeclID:
-         Tag = llvm::dwarf::DW_TAG_class_type;
-         break;
-      case Decl::EnumDeclID:
+   case Decl::StructDeclID:
+   case Decl::ProtocolDeclID:
+      Tag = llvm::dwarf::DW_TAG_structure_type;
+      break;
+   case Decl::ClassDeclID:
+      Tag = llvm::dwarf::DW_TAG_class_type;
+      break;
+   case Decl::EnumDeclID:
+      if (R->isRawEnum())
          Tag = llvm::dwarf::DW_TAG_enumeration_type;
-         break;
-      case Decl::UnionDeclID:
+      else
+         // FIXME use DW_TAG_variant_part once available
          Tag = llvm::dwarf::DW_TAG_union_type;
-         break;
-      default:
-         llvm_unreachable("not a type!");
+
+      break;
+   case Decl::UnionDeclID:
+      Tag = llvm::dwarf::DW_TAG_union_type;
+      break;
+   default:
+      llvm_unreachable("not a type!");
    }
 
    return Tag;
@@ -513,40 +512,6 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       if (forwardDecl->isForwardDecl())
          llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
-//
-//      if (isa<ClassDecl>(Ty)) {
-//         MD = DI->createClassType(
-//            ScopeStack.top(),
-//            fullName,
-//            File,
-//            LineAndCol.line,
-//            ty->getSize() * 8,
-//            ty->getAlignment() * (unsigned short)8,
-//            0,
-//            flags,
-//            nullptr,
-//            contained,
-//            nullptr,
-//            nullptr,
-//            fullName
-//         );
-//      }
-//      else {
-//         MD = DI->createStructType(
-//            ScopeStack.top(),
-//            fullName,
-//            File,
-//            LineAndCol.line,
-//            ty->getSize() * 8,
-//            ty->getAlignment() * (unsigned short)8,
-//            flags,
-//            nullptr,
-//            contained,
-//            llvm::dwarf::DW_LANG_C11,
-//            nullptr,
-//            fullName
-//         );
-//      }
    }
    else if (auto U = dyn_cast<UnionDecl>(Ty)) {
       for (const auto &field : U->getFields()) {
@@ -559,28 +524,133 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       if (forwardDecl->isForwardDecl())
          llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
-
-//      MD = DI->createUnionType(
-//         ScopeStack.top(),
-//         fullName,
-//         File,
-//         LineAndCol.line,
-//         ty->getSize() * 8,
-//         ty->getAlignment() * (unsigned short)8,
-//         flags,
-//         contained
-//      );
    }
    else if (auto E = dyn_cast<EnumDecl>(Ty)) {
-      for (const auto &Case : E->getCases()) {
-         containedTypes.push_back(DI->createEnumerator(
-            Case->getName(),
-            cast<ConstantInt>(Case->getILValue())->getZExtValue()
-         ));
-      }
+      if (E->isRawEnum()) {
+         for (const auto &Case : E->getCases()) {
+            containedTypes.push_back(DI->createEnumerator(
+               Case->getName(),
+               cast<ConstantInt>(Case->getILValue())->getZExtValue()
+            ));
+         }
 
-      auto contained = DI->getOrCreateArray(containedTypes);
-      DI->replaceArrays(forwardDecl, contained);
+         DI->replaceArrays(forwardDecl, DI->getOrCreateArray(containedTypes));
+      }
+      else {
+         std::string CurrentName;
+         llvm::raw_string_ostream OS(CurrentName);
+
+         OS << fullName << ".Discriminator";
+         llvm::DICompositeType *DiscrimDecl =
+            DI->createReplaceableCompositeType(
+               llvm::dwarf::DW_TAG_enumeration_type,
+               OS.str(),
+               ScopeStack.top(),
+               File,
+               LineAndCol.line
+            );
+
+         for (const auto &Case : E->getCases()) {
+            containedTypes.push_back(DI->createEnumerator(
+               Case->getName(),
+               cast<ConstantInt>(Case->getILValue())->getZExtValue()
+            ));
+         }
+
+         DI->replaceArrays(DiscrimDecl, DI->getOrCreateArray(containedTypes));
+         if (DiscrimDecl->isForwardDecl())
+            llvm::MDNode::replaceWithPermanent(
+               llvm::TempDICompositeType(DiscrimDecl));
+
+         CurrentName.clear();
+         containedTypes.clear();
+
+         QualType RawTy = E->getRawType();
+         unsigned offset = TI.getSizeOfType(RawTy) * 8;
+
+         auto DiscrimType = DI->createMemberType(
+            forwardDecl, "discriminator", File, LineAndCol.line,
+            offset, TI.getAlignOfType(RawTy), 0, flags,
+            DiscrimDecl);
+
+         containedTypes.push_back(DiscrimType);
+
+         for (const auto &Case : E->getCases()) {
+            if (Case->getArgs().empty())
+               continue;
+
+            OS << fullName << "." << Case->getDeclName() << ".Payload";
+            llvm::DICompositeType *PayloadDecl =
+               DI->createReplaceableCompositeType(
+                  llvm::dwarf::DW_TAG_structure_type,
+                  OS.str(),
+                  ScopeStack.top(),
+                  File,
+                  LineAndCol.line
+               );
+
+            CurrentName.clear();
+
+            unsigned SizeInBits = 0;
+            unsigned short AlignInBits = 8;
+            unsigned LocalOffset = offset;
+
+            auto LocalDiscrim = DI->createMemberType(
+               PayloadDecl, "discriminator", File, LineAndCol.line,
+               offset, TI.getAlignOfType(RawTy), 0, flags,
+               DiscrimDecl);
+
+            llvm::SmallVector<llvm::Metadata*, 4> CaseTypes{ LocalDiscrim };
+            for (auto &Val : Case->getArgs()) {
+               unsigned Size = TI.getSizeOfType(Val->getType()) * 8;
+               unsigned short Align = TI.getAlignOfType(Val->getType())
+                                      * (unsigned short)8;
+
+               OS << Val->getDeclName();
+               CaseTypes.push_back(
+                  DI->createMemberType(
+                     PayloadDecl,
+                     OS.str(),
+                     File,
+                     LineAndCol.line,
+                     Size,
+                     Align,
+                     LocalOffset,
+                     flags,
+                     getTypeDI(Val->getType())
+                  ));
+
+               LocalOffset += Size;
+               SizeInBits += Size;
+               if (Align > AlignInBits)
+                  AlignInBits = Align;
+
+               CurrentName.clear();
+            }
+
+            DI->replaceArrays(PayloadDecl, DI->getOrCreateArray(CaseTypes));
+            if (PayloadDecl->isForwardDecl())
+               llvm::MDNode::replaceWithPermanent(
+                  llvm::TempDICompositeType(PayloadDecl));
+
+            llvm::DIType *PayloadTy = PayloadDecl;
+            if (Case->isIndirect()) {
+               PayloadTy = DI->createPointerType(
+                  PayloadTy, TI.getPointerSizeInBytes() * 8,
+                  TI.getPointerAlignInBytes() * (unsigned short)8);
+            }
+
+            OS << Case->getDeclName();
+            auto CasePayload = DI->createMemberType(
+               forwardDecl, OS.str(), File, LineAndCol.line, SizeInBits,
+               AlignInBits, 0, flags, PayloadTy);
+
+            containedTypes.push_back(CasePayload);
+            CurrentName.clear();
+         }
+
+         DI->replaceArrays(forwardDecl, DI->getOrCreateArray(containedTypes));
+      }
 
       if (forwardDecl->isForwardDecl())
          llvm::MDNode::replaceWithPermanent(
@@ -736,10 +806,6 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
 {
    std::vector<llvm::Metadata*> argTypes;
    for (const auto& arg : F.getEntryBlock()->getArgs()) {
-      if (arg.isVararg()) {
-         break;
-      }
-
       argTypes.push_back(getTypeDI(arg.getType()));
    }
 

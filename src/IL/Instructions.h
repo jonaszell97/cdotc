@@ -20,6 +20,7 @@ namespace ast {
    class ProtocolDecl;
    class ClassDecl;
    class EnumDecl;
+   class EnumCaseDecl;
    class StructDecl;
 } // namespace ast
 
@@ -32,20 +33,23 @@ class Method;
 
 class AllocaInst: public Instruction {
    size_t allocSize = 1;
+   unsigned Alignment = 0;
 
 public:
    AllocaInst(ValueType ty,
+              bool IsLet,
               BasicBlock *parent,
               unsigned alignment = 0,
               bool heap = false);
 
    AllocaInst(ValueType ty,
+              bool IsLet,
               BasicBlock *parent,
               size_t allocSize,
               unsigned alignment = 0,
               bool heap = false);
 
-   unsigned int getAlignment() const { return AllocaBits.Alignment; }
+   unsigned int getAlignment() const { return Alignment; }
    bool isHeapAlloca() const { return AllocaBits.Heap; }
 
    bool canUseSRetValue() const { return AllocaBits.CanUseSRetValue; }
@@ -58,6 +62,7 @@ public:
    void setIsInitializer(bool b) { AllocaBits.IsLocalVarDecl = b; }
 
    size_t getAllocSize() const { return allocSize; }
+   bool isLet() const { return AllocaBits.IsLet; }
 
    static inline bool classof(Value const* T)
    {
@@ -283,11 +288,6 @@ public:
       default:
          return false;
       }
-   }
-
-   llvm::ArrayRef<Value const*> getOperands() const
-   {
-      return { Operands, numOperands };
    }
 
    friend class Instruction;
@@ -978,10 +978,13 @@ class FieldRefInst: public UnaryInstruction {
 public:
    FieldRefInst(Value *val,
                 DeclarationName fieldName,
+                bool IsLet,
                 BasicBlock *parent);
 
    DeclarationName getFieldName() const { return fieldName; }
    ast::StructDecl *getAccessedType() const;
+
+   bool isLet() const { return FieldRefBits.IsLet; }
 
    static bool classof(Value const* T)
    {
@@ -996,14 +999,18 @@ class GEPInst: public BinaryInstruction {
 public:
    GEPInst(Value *val,
            size_t idx,
+           bool IsLet,
            BasicBlock *parent);
 
    GEPInst(Value *val,
            Value *idx,
+           bool IsLet,
            BasicBlock *parent);
 
    Value *getIndex() const  { return Operands[1]; }
    Value *getVal() const    { return Operands[0]; }
+
+   bool isLet() const { return GEPBits.IsLet; }
 
    static bool classof(Value const* T)
    {
@@ -1021,6 +1028,7 @@ class TupleExtractInst: public GEPInst {
 public:
    TupleExtractInst(Value *val,
                     ConstantInt *idx,
+                    bool IsLet,
                     BasicBlock *parent);
 
    ConstantInt *getIdx() const;
@@ -1048,8 +1056,9 @@ public:
 class EnumExtractInst: public UnaryInstruction {
 public:
    EnumExtractInst(Value *Val,
-                   const IdentifierInfo *caseName,
+                   ast::EnumCaseDecl *Case,
                    ConstantInt *caseVal,
+                   bool IsLet,
                    BasicBlock *parent);
 
    static bool classof(Value const* T)
@@ -1057,18 +1066,19 @@ public:
       return T->getTypeID() == EnumExtractInstID;
    }
 
-   llvm::StringRef getCaseName() const { return caseName->getIdentifier(); }
-   const IdentifierInfo *getCaseNameIdent() const
-   {
-      return caseName;
-   }
+   DeclarationName getCaseName() const;
+   ast::EnumCaseDecl *getCase() const { return Case; }
+
+   bool isIndirect() const { return EnumExtractBits.IsIndirect; }
+   void setIndirect(bool indirect) { EnumExtractBits.IsIndirect = indirect; }
 
    ConstantInt *getCaseVal() const { return caseVal; }
-
    ast::EnumDecl *getEnumTy() const;
 
+   bool isLet() const { return EnumExtractBits.IsLet; }
+
 private:
-   const IdentifierInfo *caseName;
+   ast::EnumCaseDecl *Case;
    ConstantInt *caseVal;
 };
 
@@ -1296,23 +1306,23 @@ class EnumInitInst: public CallInst {
 public:
    EnumInitInst(Context &Ctx,
                 ast::EnumDecl *EnumTy,
-                const IdentifierInfo *caseName,
+                ast::EnumCaseDecl *Case,
                 llvm::ArrayRef<Value *> args,
                 BasicBlock *parent);
 
-   bool canUseSRetValue() const { return AllocaBits.CanUseSRetValue; }
-   void setCanUseSRetValue() { AllocaBits.CanUseSRetValue = true; }
+   bool canUseSRetValue() const { return EnumInitBits.CanUseSRetValue; }
+   void setCanUseSRetValue() { EnumInitBits.CanUseSRetValue = true; }
+
+   bool isIndirect() const { return EnumInitBits.IsIndirect; }
+   void setIndirect(bool indirect) { EnumInitBits.IsIndirect = indirect; }
 
    ast::EnumDecl *getEnumTy() const { return EnumTy; }
-   llvm::StringRef getCaseName() const { return caseName->getIdentifier(); }
-   const IdentifierInfo *getCaseNameIdent() const
-   {
-      return caseName;
-   }
+   ast::EnumCaseDecl *getCase() const { return Case; }
+   DeclarationName getCaseName() const;
 
 protected:
    ast::EnumDecl *EnumTy;
-   const IdentifierInfo *caseName;
+   ast::EnumCaseDecl *Case;
 
 public:
    static bool classof(Value const* T)
@@ -1427,12 +1437,16 @@ class StoreInst: public BinaryInstruction {
 public:
    StoreInst(Value *dst,
              Value *src,
+             bool IsInit,
              BasicBlock *parent);
 
    bool useMemCpy() const;
 
    Value *getDst() const { return Operands[0]; }
    Value *getSrc() const { return Operands[1]; }
+
+   bool isInit() const { return StoreBits.IsInit; }
+   void setIsInit(bool I) { StoreBits.IsInit = I; }
 
    op_iterator op_begin_impl() { return Operands; }
    op_iterator op_end_impl()   { return Operands + 2; }
@@ -1491,17 +1505,20 @@ public:
 };
 
 class DebugLocInst: public Instruction {
+   SourceLocation Loc;
    unsigned Line;
    unsigned Col;
    unsigned FileID;
 
 public:
-   DebugLocInst(unsigned Line,
+   DebugLocInst(SourceLocation Loc,
+                unsigned Line,
                 unsigned Col,
                 unsigned FileID,
                 ValueType VoidTy,
                 BasicBlock *Parent);
 
+   SourceLocation getLoc() const { return Loc; }
    unsigned int getLine() const { return Line; }
    unsigned int getCol() const { return Col; }
    unsigned int getFileID() const { return FileID; }

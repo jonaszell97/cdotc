@@ -65,7 +65,9 @@ public:
    TerminatorInst* getTerminator();
 
    bool hasNoPredecessors() const;
+
    bool isEntryBlock() const;
+   bool isExitBlock() const;
 
    void addBlockArg(QualType ty, llvm::StringRef name = {});
 

@@ -101,12 +101,15 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
       case BK::u128: case BK::i128: return 16;
       case BK::f32: return 4;
       case BK::f64: return 8;
+      case BK::Void: return 0;
       default:
          llvm_unreachable("bad builtin type kind!");
       }
    }
    case Type::PointerTypeID:
    case Type::ReferenceTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::MutableReferenceTypeID:
    case Type::FunctionTypeID:
    case Type::LambdaTypeID:
       return PointerSizeInBytes;
@@ -141,7 +144,9 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
    case Type::BuiltinTypeID:
       return (unsigned short)getSizeOfType(Ty);
    case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
    case Type::LambdaTypeID:
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
@@ -161,6 +166,54 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
    case Type::RecordTypeID: {
       assert(Ty->getRecord()->getSize() && "alignment not calculated!");
       return Ty->getRecord()->getAlignment();
+   }
+   default:
+      llvm_unreachable("bad type kind!");
+   }
+}
+
+bool TargetInfo::isTriviallyCopyable(QualType Ty) const
+{
+   auto it = TriviallyCopyable.find(Ty);
+   if (it != TriviallyCopyable.end())
+      return it->getSecond();
+
+   bool IsTrivial = calculateIsTriviallyCopyable(Ty);
+   TriviallyCopyable[Ty] = IsTrivial;
+
+   return IsTrivial;
+}
+
+bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
+{
+   switch (Ty->getTypeID()) {
+   case Type::BuiltinTypeID:
+      return true;
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::FunctionTypeID:
+   case Type::MetaTypeID:
+      return true;
+   case Type::LambdaTypeID:
+      return false;
+   case Type::ArrayTypeID:
+      return isTriviallyCopyable(Ty->uncheckedAsArrayType()->getElementType());
+   case Type::TupleTypeID: {
+      bool trivial = true;
+      for (auto &ElTy : Ty->uncheckedAsTupleType()->getContainedTypes()) {
+         trivial &= isTriviallyCopyable(ElTy);
+      }
+
+      return trivial;
+   }
+   case Type::RecordTypeID: {
+      if (support::isa<ast::ClassDecl>(Ty->getRecord()))
+         return false;
+
+      assert(Ty->getRecord()->getSize() && "size not calculated!");
+      return Ty->getRecord()->isTriviallyCopyable();
    }
    default:
       llvm_unreachable("bad type kind!");

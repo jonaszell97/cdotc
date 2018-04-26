@@ -8,7 +8,6 @@
 #include "AST/Type.h"
 
 #include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
 
@@ -89,24 +88,20 @@ protected:
 class BlockScope: public Scope {
 public:
    explicit BlockScope(Scope *enclosingScope = nullptr)
-      : Scope(BlockScopeID, enclosingScope), scopeID(lastID++)
+      : Scope(BlockScopeID, enclosingScope)
    {}
-
-   unsigned long long getScopeID() const
-   {
-      return scopeID;
-   }
 
    static bool classofKind(TypeID id)
    {
       switch (id) {
-         case BlockScopeID:
-         case FunctionScopeID:
-         case MethodScopeID:
-         case LambdaScopeID:
-            return true;
-         default:
-            return false;
+      case BlockScopeID:
+      case FunctionScopeID:
+      case MethodScopeID:
+      case LambdaScopeID:
+      case LoopScopeID:
+         return true;
+      default:
+         return false;
       }
    }
 
@@ -114,11 +109,8 @@ public:
 
 protected:
    explicit BlockScope(TypeID id, Scope *enclosingScope = nullptr)
-      : Scope(id, enclosingScope), scopeID(lastID++)
+      : Scope(id, enclosingScope)
    {}
-
-   static unsigned long long lastID;
-   unsigned long long scopeID;
 };
 
 class FunctionScope: public BlockScope {
@@ -140,12 +132,12 @@ public:
    static bool classofKind(TypeID id)
    {
       switch (id) {
-         case FunctionScopeID:
-         case MethodScopeID:
-         case LambdaScopeID:
-            return true;
-         default:
-            return false;
+      case FunctionScopeID:
+      case MethodScopeID:
+      case LambdaScopeID:
+         return true;
+      default:
+         return false;
       }
    }
 
@@ -191,39 +183,25 @@ private:
    ast::LambdaExpr *L;
 };
 
-class LoopScope: public Scope {
+class LoopScope: public BlockScope {
 public:
    LoopScope(bool continuable,
              bool breakable,
              bool lastCaseInMatch,
              bool nextCaseHasArgs,
              Scope *enclosingScope = nullptr)
-      : Scope(LoopScopeID, enclosingScope),
+      : BlockScope(LoopScopeID, enclosingScope),
         continuable(continuable),
         breakable(breakable),
         lastCaseInMatch(lastCaseInMatch),
         argsInNextCase(nextCaseHasArgs)
    { }
 
-   bool isContinuable() const
-   {
-      return continuable;
-   }
+   bool isContinuable() const { return continuable; }
+   bool isBreakable() const { return breakable; }
 
-   bool isBreakable() const
-   {
-      return breakable;
-   }
-
-   bool isLastCaseInMatch() const
-   {
-      return lastCaseInMatch;
-   }
-
-   bool nextCaseHasArguments() const
-   {
-      return argsInNextCase;
-   }
+   bool isLastCaseInMatch() const { return lastCaseInMatch; }
+   bool nextCaseHasArguments() const { return argsInNextCase; }
 
    static bool classofKind(TypeID id) { return id == LoopScopeID; }
    static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }

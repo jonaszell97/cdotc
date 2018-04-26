@@ -19,6 +19,10 @@ struct Variant;
 struct SourceLocation;
 class IdentifierInfo;
 
+namespace il {
+   class Constant;
+} // namespace il
+
 namespace ast {
    class Expression;
    class NamedDecl;
@@ -29,11 +33,14 @@ namespace ast {
    class StaticExpr;
    class SemaPass;
    class AliasDecl;
+   class CallableDecl;
 } // namespace ast
 
 namespace sema {
    class TemplateArgList;
    class MultiLevelTemplateArgList;
+   class MultiLevelFinalTemplateArgList;
+   class FinalTemplateArgumentList;
 } // namespace sema
 
 template<> struct IsLowBitAvailable<ast::RecordDecl*> {
@@ -59,7 +66,7 @@ using AliasInstResult    = ActionResult<ast::AliasDecl*>;
 
 class TemplateInstantiator {
 public:
-   using TemplateArgs = sema::TemplateArgList;
+   using TemplateArgs = sema::FinalTemplateArgumentList;
 
    explicit TemplateInstantiator(ast::SemaPass &SP)
       : SP(SP)
@@ -69,18 +76,37 @@ public:
 
    RecordInstResult InstantiateRecord(StmtOrDecl POI,
                                       ast::RecordDecl *rec,
-                                      TemplateArgs&& templateArgs,
+                                      TemplateArgs *templateArgs,
+                                      bool *isNew = nullptr);
+
+   RecordInstResult InstantiateRecord(StmtOrDecl POI,
+                                      ast::RecordDecl *rec,
+                                      const sema::TemplateArgList &templateArgs,
                                       bool *isNew = nullptr);
 
    FunctionInstResult InstantiateFunction(StmtOrDecl POI,
                                           ast::FunctionDecl *F,
-                                          TemplateArgs&& templateArgs,
+                                          TemplateArgs *templateArgs,
+                                          bool *isNew = nullptr);
+
+   FunctionInstResult InstantiateFunction(StmtOrDecl POI,
+                                          ast::FunctionDecl *F,
+                                          const sema::TemplateArgList &templateArgs,
                                           bool *isNew = nullptr);
 
    MethodInstResult InstantiateMethod(StmtOrDecl POI,
                                       ast::MethodDecl *M,
-                                      TemplateArgs&& templateArgs,
+                                      TemplateArgs *templateArgs,
                                       bool *isNew = nullptr);
+
+   MethodInstResult InstantiateMethod(StmtOrDecl POI,
+                                      ast::MethodDecl *M,
+                                      const sema::TemplateArgList &templateArgs,
+                                      bool *isNew = nullptr);
+
+   FunctionType *InstantiateFunctionType(StmtOrDecl SOD,
+                                         ast::CallableDecl *Template,
+                                     const sema::TemplateArgList &templateArgs);
 
    MethodInstResult
    InstantiateProtocolDefaultImpl(SourceLocation instantiatedFrom,
@@ -90,13 +116,22 @@ public:
    StmtResult
    InstantiateStatement(SourceLocation instantiatedFrom,
                         ast::Statement* stmt,
-                        sema::MultiLevelTemplateArgList &&templateArgs);
+                        const sema::TemplateArgList &templateArgs);
+
+   StmtResult
+   InstantiateStatement(SourceLocation instantiatedFrom,
+                        ast::Statement* stmt,
+                        sema::MultiLevelFinalTemplateArgList &&templateArgs);
+
+   DeclResult
+   InstantiateDecl(SourceLocation instantiatedFrom,
+                   ast::Decl* D,
+                   sema::MultiLevelFinalTemplateArgList &&templateArgs);
 
    StmtResult InstantiateStatement(StmtOrDecl POI,
                                    ast::Statement* stmt,
                                    IdentifierInfo *SubstName,
-                                   QualType SubstTy,
-                                   const Variant &SubstVal);
+                                   il::Constant *SubstVal);
 
    StmtResult InstantiateMethodBody(StmtOrDecl POI,
                                     ast::MethodDecl *Method);
@@ -104,11 +139,11 @@ public:
    ExprResult
    InstantiateStaticExpr(SourceLocation instantiatedFrom,
                          ast::Expression* stmt,
-                         sema::MultiLevelTemplateArgList &&templateArgs);
+                         const sema::TemplateArgList &templateArgs);
 
    AliasInstResult InstantiateAlias(ast::AliasDecl *alias,
                                     SourceLocation instantiatedFrom,
-                                    TemplateArgs&& templateArgs);
+                                    TemplateArgs *templateArgs);
 
 private:
    ast::SemaPass &SP;

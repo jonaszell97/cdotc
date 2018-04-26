@@ -192,8 +192,6 @@ prec::PrecedenceLevel getOperatorPrecedence(lex::tok::TokenType kind)
          return Multiplicative;
       case tok::times_times:
          return Exponentiation;
-      case tok::as:
-         return Cast;
       default:
          return Unknown;
    }

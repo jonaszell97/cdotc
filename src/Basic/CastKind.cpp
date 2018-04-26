@@ -3,6 +3,7 @@
 //
 
 #include "CastKind.h"
+
 namespace cdot {
 
 const char* CastNames[] = {
@@ -11,6 +12,7 @@ const char* CastNames[] = {
    "trunc", "ptrtoint", "inttoptr", "sign_cast",
    "fpext", "fptrunc", "fpbox", "fpunbox",
    "dyn_cast", "upcast", "<conv_op>", "bitcast", "proto_wrap", "proto_unwrap",
+   "nothrow_to_throw", "mut_ref_to_ref", "mut_ptr_to_ptr",
    "<int_to_enum>", "<enum_to_int>"
 };
 

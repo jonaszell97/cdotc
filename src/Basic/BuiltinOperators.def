@@ -59,7 +59,6 @@
    CDOT_OPERATOR(As, "as", Cast, Infix)
    CDOT_OPERATOR(AsExclaim, "as!", Cast, Infix)
    CDOT_OPERATOR(AsQuestion, "as?", Cast, Infix)
-   CDOT_OPERATOR(Colon, ":", Cast, Infix)
    CDOT_OPERATOR(UnaryPlus, "+", Unknown, Prefix)
    CDOT_OPERATOR(UnaryMin, "-", Unknown, Prefix)
    CDOT_OPERATOR(UnaryNot, "~", Unknown, Prefix)
@@ -473,7 +472,6 @@
    CDOT_BINARY_OP(As, as, /*operandType=*/ Any, /*resultType=*/ UnknownAny, /*lvalueOperand=*/ false)
    CDOT_BINARY_OP(AsQuestion, as?, /*operandType=*/ Any, /*resultType=*/ UnknownAny, /*lvalueOperand=*/ false)
    CDOT_BINARY_OP(AsExclaim, as!, /*operandType=*/ Any, /*resultType=*/ UnknownAny, /*lvalueOperand=*/ false)
-   CDOT_BINARY_OP(Colon, :, /*operandType=*/ AnyMeta, /*resultType=*/ i1, /*lvalueOperand=*/ false)
 #endif
 #undef CDOT_BINARY_OP
 

@@ -10,6 +10,7 @@
 namespace cdot {
 namespace ast {
    class RecordDecl;
+   class ProtocolDecl;
    class Statement;
    class Decl;
 } // namespace ast
@@ -88,6 +89,46 @@ template<> struct DenseMapInfo<::cdot::ast::RecordDecl*> {
 
    static bool isEqual(const ::cdot::ast::RecordDecl *LHS,
                        const ::cdot::ast::RecordDecl *RHS) {
+      return LHS == RHS;
+   }
+};
+
+template<>
+class PointerLikeTypeTraits<::cdot::ast::ProtocolDecl*> {
+public:
+   static inline void *getAsVoidPointer(::cdot::ast::ProtocolDecl*P)
+   { return P; }
+
+   static inline ::cdot::ast::ProtocolDecl*getFromVoidPointer(void *P)
+   {
+      return static_cast<::cdot::ast::ProtocolDecl*>(P);
+   }
+
+   enum { NumLowBitsAvailable = detail::RecordDeclAlign };
+};
+
+template<> struct DenseMapInfo<::cdot::ast::ProtocolDecl*> {
+   static ::cdot::ast::ProtocolDecl *getEmptyKey()
+   {
+      uintptr_t Val = static_cast<uintptr_t>(-1);
+      Val <<= detail::RecordDeclAlign;
+      return (::cdot::ast::ProtocolDecl*)Val;
+   }
+
+   static ::cdot::ast::ProtocolDecl *getTombstoneKey()
+   {
+      uintptr_t Val = static_cast<uintptr_t>(-2);
+      Val <<= detail::RecordDeclAlign;
+      return (::cdot::ast::ProtocolDecl*)Val;
+   }
+
+   static int getHashValue(const ::cdot::ast::ProtocolDecl* P)
+   {
+      return (int)(uintptr_t)P;
+   }
+
+   static bool isEqual(const ::cdot::ast::ProtocolDecl *LHS,
+                       const ::cdot::ast::ProtocolDecl *RHS) {
       return LHS == RHS;
    }
 };

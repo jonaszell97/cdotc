@@ -24,10 +24,10 @@ class ConformanceCheckerImpl;
 
 class ConformanceChecker {
 public:
-   explicit ConformanceChecker(ast::SemaPass &SP, ast::RecordDecl *Rec);
+   explicit ConformanceChecker(ast::SemaPass &SP);
    ~ConformanceChecker();
 
-   void checkConformance();
+   void checkConformance(ast::RecordDecl *Rec);
 
 private:
    ConformanceCheckerImpl *pImpl;

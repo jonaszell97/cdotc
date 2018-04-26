@@ -7,6 +7,7 @@
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
 #include "Basic/CastKind.h"
+#include "IL/Constant.h"
 #include "Message/Diagnostics.h"
 #include "Support/Casting.h"
 #include "TypeVisitor.h"
@@ -336,7 +337,7 @@ TypedefType const* Type::asRealTypedefType() const
 
 Type* Type::getDesugaredType() const
 {
-   return getCanonicalType();
+   llvm_unreachable("");
 }
 
 bool Type::isUnpopulatedType() const
@@ -349,7 +350,7 @@ bool Type::isUnpopulatedType() const
    return support::isa<EnumDecl>(R) && cast<EnumDecl>(R)->isUnpopulated();
 }
 
-sema::TemplateArgList const& Type::getTemplateArgs() const
+sema::FinalTemplateArgumentList& Type::getTemplateArgs() const
 {
    assert(isRecordType() && "not an object");
    if (auto Inconcrete = this->asDependentRecordType())
@@ -661,7 +662,7 @@ public:
          this->visit(Arg.getType());
       }
       else {
-         OS << Arg.getValue();
+         OS << *Arg.getValue();
       }
    }
 
@@ -762,7 +763,7 @@ public:
    void visitMetaType(const MetaType *Ty)
    {
       OS << "MetaType["
-         << Ty->uncheckedAsMetaType()->getUnderlyingType().toString()
+         << Ty->uncheckedAsMetaType()->getUnderlyingType()
          << "]";
    }
 
@@ -778,7 +779,20 @@ public:
 
    void visitPointerType(const PointerType *Ty)
    {
-      OS << Ty->getPointeeType().toString() << "*";
+      auto pointee = Ty->getPointeeType();
+      if (pointee->isVoidType())
+         OS << "UnsafeRawPtr";
+      else
+         OS << "UnsafePtr[" << pointee << "]";
+   }
+
+   void visitMutablePointerType(const MutablePointerType *Ty)
+   {
+      auto pointee = Ty->getPointeeType();
+      if (pointee->isVoidType())
+         OS << "UnsafeMutableRawPtr";
+      else
+         OS << "UnsafeMutablePtr[" << pointee << "]";
    }
 
    void visitReferenceType(const ReferenceType *Ty)
@@ -855,6 +869,16 @@ public:
 
    void visitGenericType(const GenericType *Ty)
    {
+      auto Cov = cast<GenericType>(Ty)->getCovariance();
+      OS << Ty->getGenericTypeName();
+
+      if (!Cov->isUnknownAnyType()) {
+         OS << ": " << Cov;
+      }
+   }
+
+   void visitTypedefType(const TypedefType *Ty)
+   {
       auto TD = cast<TypedefType>(Ty)->getTypedef();
       OS << TD->getDeclName() << " (aka " << TD->getOriginTy() << ")";
    }
@@ -866,6 +890,16 @@ public:
       if (AT->isImplementation()) {
          OS << " (aka " << AT->getActualType() << ")";
       }
+   }
+
+   void visitReferenceType(const ReferenceType *Ty)
+   {
+      OS << "ref " << Ty->getReferencedType();
+   }
+
+   void visitMutableReferenceType(const MutableReferenceType *Ty)
+   {
+      OS << "mut ref " << Ty->getReferencedType();
    }
 };
 
@@ -896,9 +930,24 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag,
    return Diag << Ty.getResolvedType();
 }
 
+MutablePointerType::MutablePointerType(QualType pointeeType,
+                                       Type *CanonicalType)
+   : PointerType(MutablePointerTypeID, pointeeType, CanonicalType)
+{
+
+}
+
+MutableReferenceType::MutableReferenceType(QualType referencedType,
+                                           Type *CanonicalType)
+   : ReferenceType(MutableReferenceTypeID, referencedType, CanonicalType)
+{
+
+}
+
 RecordType::RecordType(RecordDecl *record,
                        llvm::ArrayRef<QualType> TypeTemplateArgs)
-   : Type(TypeID::RecordTypeID, nullptr, record->inDependentContext()),
+   : Type(TypeID::RecordTypeID, nullptr,
+          record->isTemplateOrInTemplate()),
      Rec(record), NumTypeTemplateArgs((unsigned)TypeTemplateArgs.size())
 {
    std::copy(TypeTemplateArgs.begin(), TypeTemplateArgs.end(),
@@ -926,8 +975,10 @@ Type::child_iterator RecordType::child_begin() const
 }
 
 DependentRecordType::DependentRecordType(RecordDecl *record,
-                                         sema::TemplateArgList *templateArgs,
-                                         llvm::ArrayRef<QualType> TypeTemplateArgs)
+                                         sema::FinalTemplateArgumentList
+                                                                  *templateArgs,
+                                         llvm::ArrayRef<QualType>
+                                                               TypeTemplateArgs)
    : RecordType(TypeID::DependentRecordTypeID, record,
                 TypeTemplateArgs, true),
      templateArgs(templateArgs)
@@ -935,7 +986,7 @@ DependentRecordType::DependentRecordType(RecordDecl *record,
 
 }
 
-const sema::TemplateArgList& RecordType::getTemplateArgs() const
+sema::FinalTemplateArgumentList& RecordType::getTemplateArgs() const
 {
    return Rec->getTemplateArgs();
 }
@@ -962,13 +1013,11 @@ size_t RecordType::getSize() const
 }
 
 void DependentRecordType::Profile(llvm::FoldingSetNodeID &ID,
-                                  cdot::ast::RecordDecl *R,
-                                  cdot::sema::TemplateArgList *templateArgs) {
+                                  ast::RecordDecl *R,
+                                  sema::FinalTemplateArgumentList
+                                                               *templateArgs) {
    ID.AddPointer(R);
-   ID.AddInteger(templateArgs->size());
-
-   for (auto &arg : *templateArgs)
-      arg.Profile(ID);
+   templateArgs->Profile(ID);
 }
 
 FunctionType::FunctionType(TypeID typeID,
@@ -1006,7 +1055,7 @@ FunctionType::FunctionType(QualType returnType,
 
 TupleType::TupleType(llvm::ArrayRef<QualType> containedTypes,
                      Type *CanonicalType, bool Dependent)
-   : Type(TypeID::TupleTypeID, CanonicalType, Dependent),
+   : Type(TupleTypeID, CanonicalType, Dependent),
      NumTys((unsigned)containedTypes.size())
 {
    std::copy(containedTypes.begin(), containedTypes.end(),
@@ -1051,7 +1100,7 @@ bool GenericType::isVariadic() const
 }
 
 AssociatedType::AssociatedType(AssociatedTypeDecl *AT)
-   : Type(TypeID::AssociatedTypeID, nullptr,
+   : Type(AssociatedTypeID, nullptr,
           !AT->isImplementation()),
      AT(AT)
 {

@@ -275,14 +275,24 @@ bool Value::hasName() const
    return !name.empty();
 }
 
-void Value::setLocation(SourceLocation location)
-{
-   loc = location;
-}
-
 SourceLocation Value::getSourceLoc() const
 {
-   return loc;
+   if (auto I = dyn_cast<Instruction>(this)) {
+      while (I) {
+         if (auto DL = dyn_cast<DebugLocInst>(I))
+            return DL->getLoc();
+
+         I = I->getPrevNode();
+      }
+   }
+
+   if (auto GO = dyn_cast<GlobalObject>(this))
+      return GO->getSourceLoc();
+
+   if (auto Arg = dyn_cast<Argument>(this))
+      return Arg->getSourceLoc();
+
+   return SourceLocation();
 }
 
 MDSet *Value::getMetaData() const

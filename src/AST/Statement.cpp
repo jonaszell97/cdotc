@@ -1,8 +1,10 @@
 
+#include "Statement.h"
+
 #include "ASTContext.h"
 #include "Decl.h"
 #include "Expression.h"
-#include "Statement.h"
+#include "PrettyPrinter.h"
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -65,6 +67,17 @@ SourceRange Statement::getSourceRange() const
    default:
       llvm_unreachable("not a statement");
    }
+}
+
+void Statement::print(llvm::raw_ostream &OS) const
+{
+   PrettyPrinter PP(OS);
+   PP.print(this);
+}
+
+void Statement::dump() const
+{
+   print(llvm::outs());
 }
 
 DeclStmt::DeclStmt(Decl *D)
@@ -432,17 +445,90 @@ StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,
                            Statement *elseBranch)
    : Statement(StaticIfStmtID),
      StaticLoc(StaticLoc), IfLoc(IfLoc),
-     condition(condition), ifBranch(ifBranch), elseBranch(elseBranch)
+     condition(condition), ifBranch(ifBranch), elseBranch(elseBranch),
+     Template(nullptr)
 {}
 
+StaticIfStmt* StaticIfStmt::Create(ASTContext &C,
+                                   SourceLocation StaticLoc,
+                                   SourceLocation IfLoc,
+                                   StaticExpr *condition,
+                                   Statement *ifBranch,
+                                   Statement *elseBranch) {
+   return new(C) StaticIfStmt(StaticLoc, IfLoc, condition, ifBranch,
+                              elseBranch);
+}
+
+StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,
+                           SourceLocation IfLoc,
+                           StaticExpr *condition,
+                           StaticIfStmt *Template)
+   : Statement(StaticIfStmtID),
+     StaticLoc(StaticLoc), IfLoc(IfLoc),
+     condition(condition), ifBranch(nullptr), elseBranch(nullptr),
+     Template(Template)
+{
+
+}
+
+StaticIfStmt* StaticIfStmt::Create(ASTContext &C,
+                                   SourceLocation StaticLoc,
+                                   SourceLocation IfLoc,
+                                   StaticExpr *condition,
+                                   StaticIfStmt *Template) {
+   return new(C) StaticIfStmt(StaticLoc, IfLoc, condition, Template);
+}
+
+SourceRange StaticIfStmt::getSourceRange() const
+{
+   if (Template)
+      return Template->getSourceRange();
+
+   return SourceRange(StaticLoc, elseBranch
+                                 ? elseBranch->getSourceRange().getEnd()
+                                 : ifBranch->getSourceRange().getEnd());
+}
+
 StaticForStmt::StaticForStmt(SourceLocation StaticLoc,
-                             SourceLocation IfLoc,
+                             SourceLocation ForLoc,
                              IdentifierInfo *elementName,
                              StaticExpr *range,
                              Statement *body)
    : Statement(StaticForStmtID),
+     StaticLoc(StaticLoc), ForLoc(ForLoc),
      elementName(elementName), range(range), body(body)
 {}
+
+StaticForStmt* StaticForStmt::Create(ASTContext &C,
+                                     SourceLocation StaticLoc,
+                                     SourceLocation IfLoc,
+                                     IdentifierInfo *elementName,
+                                     StaticExpr *range,
+                                     Statement *body) {
+   return new(C) StaticForStmt(StaticLoc, IfLoc, elementName, range, body);
+}
+
+MacroExpansionStmt::MacroExpansionStmt(SourceRange SR,
+                                       DeclarationName MacroName,
+                                       Delimiter Delim,
+                                       llvm::ArrayRef<lex::Token> Toks)
+   : Statement(MacroExpansionStmtID),
+     SR(SR), Delim(Delim), MacroName(MacroName),
+     NumTokens((unsigned)Toks.size())
+{
+   std::copy(Toks.begin(), Toks.end(), getTrailingObjects<lex::Token>());
+}
+
+MacroExpansionStmt* MacroExpansionStmt::Create(ASTContext &C,
+                                               SourceRange SR,
+                                               DeclarationName MacroName,
+                                               Delimiter Delim,
+                                               llvm::ArrayRef<lex::Token> Toks){
+   void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(Toks.size()),
+                          alignof(MacroExpansionStmt));
+
+   return new(Mem) MacroExpansionStmt(SR, MacroName, Delim, Toks);
+}
 
 } // namespace ast
 } // namespace cdot

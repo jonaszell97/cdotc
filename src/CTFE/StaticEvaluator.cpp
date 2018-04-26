@@ -5,13 +5,11 @@
 #include "StaticEvaluator.h"
 
 #include "AST/AbstractPass.h"
-#include "Sema/SemaPass.h"
-#include "Sema/Builtin.h"
-#include "ILGen/ILGenPass.h"
-
 #include "CTFE/CTFEEngine.h"
 #include "CTFE/Value.h"
-
+#include "ILGen/ILGenPass.h"
+#include "Sema/SemaPass.h"
+#include "Sema/Builtin.h"
 #include "Support/Format.h"
 
 #include <llvm/ADT/StringSwitch.h>
@@ -60,8 +58,6 @@ public:
          auto Ident = cast<IdentifierRefExpr>(Stmt);
 
          switch (Ident->getKind()) {
-         case IdentifierKind::Alias:
-            return false;
          case IdentifierKind::MetaType:
          case IdentifierKind::Namespace:
             return visitChildren(Ident);
@@ -116,8 +112,10 @@ public:
       }
       case Statement::StaticExprID: {
          auto SE = cast<StaticExpr>(Stmt);
-         if (!SE->getEvaluatedExpr().isVoid())
+         if (!SE->getExpr()) {
+            UseCTFE = true;
             return false;
+         }
 
          return decide(SE->getExpr());
       }
@@ -161,7 +159,10 @@ public:
          return StaticExprResult(move(res.getVal()));
       }
 
-      return StaticExprResult(visit(Expr));
+      Variant V = visit(Expr);
+
+      return StaticExprResult(SP.getILGen()
+                                .getConstantVal(Expr->getExprType(), V));
    }
 
    friend class AbstractPass<EvaluatorImpl, Variant>;
@@ -227,12 +228,13 @@ Variant EvaluatorImpl::visitFPLiteral(FPLiteral* expr)
 
 Variant EvaluatorImpl::visitBoolLiteral(BoolLiteral* expr)
 {
-   return Variant(llvm::APInt(1, uint64_t(expr->getValue()), false));
+   return Variant(expr->getValue());
 }
 
 Variant EvaluatorImpl::visitCharLiteral(CharLiteral* expr)
 {
-   return Variant(llvm::APInt(8, uint64_t(expr->getNarrow()), false));
+   return Variant(llvm::APSInt(llvm::APInt(8, uint64_t(expr->getNarrow())),
+                               true));
 }
 
 Variant EvaluatorImpl::visitStringLiteral(StringLiteral* expr)
@@ -248,7 +250,7 @@ Variant EvaluatorImpl::visitStringLiteral(StringLiteral* expr)
 Variant EvaluatorImpl::visitStringInterpolation(StringInterpolation* expr)
 {
    llvm::SmallString<128> str;
-   for (auto &s : expr->getStrings()) {
+   for (auto &s : expr->getSegments()) {
       auto V = visit(s);
       if (!V.isStruct()) {
          str += V.toString();
@@ -268,10 +270,9 @@ Variant EvaluatorImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
       default:
          llvm_unreachable("bad identifier kind");
       case IK::MetaType:
+         return Variant(expr->getExprType()->asMetaType()->getUnderlyingType());
       case IK::Namespace:
          return Variant();
-      case IK::Alias:
-         return Variant(Variant(expr->getAliasVal()));
    }
 }
 
@@ -437,19 +438,19 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
    switch (kind) {
       case op::LAnd: {
          if (!lhs.getZExtValue()) {
-            return Variant(uint64_t(false));
+            return Variant(false);
          }
 
          auto rhs = visit(BinOp->getRhs());
-         return Variant(uint64_t(rhs.getZExtValue() != 0));
+         return Variant(rhs.getZExtValue() != 0);
       }
       case op::LOr: {
          if (lhs.getZExtValue()) {
-            return Variant(uint64_t(true));
+            return Variant(true);
          }
 
          auto rhs = visit(BinOp->getRhs());
-         return Variant(uint64_t(rhs.getZExtValue() != 0));
+         return Variant(rhs.getZExtValue() != 0);
       }
       default:
          break;
@@ -581,14 +582,10 @@ Variant EvaluatorImpl::visitIfExpr(IfExpr *Expr)
 
 Variant EvaluatorImpl::visitStaticExpr(StaticExpr* expr)
 {
-   if (!expr->getEvaluatedExpr().isVoid())
-      return Variant(expr->getEvaluatedExpr());
-
-   expr->setEvaluatedExpr(visit(expr->getExpr()));
-   return expr->getEvaluatedExpr();
+   return visit(expr->getExpr());
 }
 
-Variant EvaluatorImpl::visitTraitsExpr(TraitsExpr* expr)
+Variant EvaluatorImpl::visitTraitsExpr(TraitsExpr*)
 {
    llvm_unreachable("should not appear here!");
 }

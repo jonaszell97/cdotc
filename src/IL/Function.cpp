@@ -26,7 +26,7 @@ Function::Function(llvm::StringRef name,
    auto Canon = cast<FunctionType>(funcTy->getCanonicalType());
 
    FnBits.Declared = true;
-   FnBits.Throws = !Canon->isNoThrow();
+   FnBits.Throws = Canon->throws();
    FnBits.SRet = Canon->getReturnType()->needsStructReturn();
    FnBits.Vararg = Canon->isCStyleVararg();
 
@@ -44,7 +44,7 @@ Function::Function(TypeID id, FunctionType *Ty,
    auto Canon = cast<FunctionType>(Ty->getCanonicalType());
 
    FnBits.Declared = true;
-   FnBits.Throws = !Canon->isNoThrow();
+   FnBits.Throws = Canon->throws();
    FnBits.SRet = Canon->getReturnType()->needsStructReturn();
    FnBits.Vararg = Canon->isCStyleVararg();
 
@@ -137,7 +137,8 @@ Method::Method(const Method &other)
 
 ast::RecordDecl* Method::getRecordType() const
 {
-   return BasicBlocks.front().getArgs().front().getType()->getRecord();
+   return BasicBlocks.front().getArgs()
+                     .front().getType()->stripReference()->getRecord();
 }
 
 Argument *Method::getSelf()
@@ -148,10 +149,12 @@ Argument *Method::getSelf()
 
 Initializer::Initializer(llvm::StringRef methodName,
                          FunctionType *FuncTy,
+                         ConstructorKind Kind,
                          Module *parent)
    : Method(methodName, FuncTy, false, false, parent)
 {
    id = InitializerID;
+   FnBits.CtorKind = (unsigned)Kind;
 }
 
 Initializer::Initializer(const Initializer &other)

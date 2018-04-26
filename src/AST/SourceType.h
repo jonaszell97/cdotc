@@ -55,7 +55,10 @@ struct SourceType {
    bool operator==(QualType Q) const { return ResolvedType == Q; }
    bool operator!=(QualType Q) const { return !(*this == Q); }
 
-   SourceType &operator=(QualType Ty) { ResolvedType = Ty; return *this; }
+   const SourceType &operator=(QualType Ty) const
+   {
+      ResolvedType = Ty; return *this;
+   }
 
 private:
    Expression *TypeExpr;

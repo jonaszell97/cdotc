@@ -180,15 +180,15 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
-   case AttrKind::Opaque:
-   case AttrKind::DiscardableResult:
-   case AttrKind::_Builtin:
-      return Never;
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
+   case AttrKind::Opaque:
+   case AttrKind::DiscardableResult:
+      return Never;
    case AttrKind::Extern:
    case AttrKind::Thin:
+   case AttrKind::_Builtin:
       return BeforeDeclaration;
 
       }
@@ -310,7 +310,6 @@ _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
 
 void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
 void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
-void SemaPass::check_BuiltinAttr(Decl*, _BuiltinAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

@@ -5,15 +5,15 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include "Message/Diagnostics.h"
+#include "Token.h"
+
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/MemoryBuffer.h>
+
 #include <string>
 #include <vector>
-#include <stack>
-#include <llvm/Support/MemoryBuffer.h>
-#include <llvm/ADT/StringMap.h>
-#include <llvm/ADT/ArrayRef.h>
-
-#include "Token.h"
-#include "../Message/Diagnostics.h"
 
 namespace llvm {
    class MemoryBuffer;
@@ -35,21 +35,12 @@ namespace diag {
    class DiagnosticBuilder;
 } // namespace Parse
 
-namespace module {
-   struct ModuleLexerTraits;
-} // namespace module
-
 namespace lex {
 
 class Lexer {
 public:
-#ifdef NDEBUG
-   using TokenVec   = llvm::SmallVector<Token, 256>;
-   using PPTokenVec = llvm::SmallVector<Token, 64>;
-#else
    using TokenVec   = std::vector<Token>;
    using PPTokenVec = std::vector<Token>;
-#endif
 
    Lexer(IdentifierTable &Idents,
          DiagnosticsEngine &Diags,
@@ -57,6 +48,12 @@ public:
          unsigned sourceId,
          unsigned offset = 1,
          const char InterpolationBegin = '$');
+
+   Lexer(IdentifierTable &Idents,
+         DiagnosticsEngine &Diags,
+         llvm::ArrayRef<Token> Tokens,
+         unsigned sourceId,
+         unsigned offset = 1);
 
 #ifndef NDEBUG
    virtual
@@ -211,6 +208,8 @@ protected:
 
    bool isIdentifierContinuationChar(char c);
    Token lexIdentifier(tok::TokenType = tok::ident);
+
+   Token lexClosureArgumentName();
 
    void lexOperator();
    void lexPreprocessorExpr();

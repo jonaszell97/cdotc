@@ -10,6 +10,7 @@
 #include "AST/Decl.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"
+#include "AST/StmtOrDecl.h"
 #include "Basic/Precedence.h"
 #include "Lex/Token.h"
 #include "Message/Diagnostics.h"
@@ -93,7 +94,7 @@ struct ParseResult {
    bool holdsExpr() const
    {
       return Value.is<Statement*>() != 0
-         && support::isa<Expression>(getStatement());
+         && support::dyn_cast_or_null<Expression>(getStatement());
    }
 
    bool holdsDecl() const
@@ -202,6 +203,10 @@ inline ParseResult ParseError()
 
 using AttrVec = std::vector<Attr*>;
 
+class MacroParser;
+class PatternMatcher;
+class MacroExpander;
+
 class Parser {
 public:
    explicit Parser(ASTContext& Context,
@@ -236,7 +241,7 @@ public:
    ParseResult parseGlobalCtor();
    ParseResult parseGlobalDtor();
 
-   DeclarationName parseOperatorName(OperatorInfo &Info,
+   DeclarationName parseOperatorName(FixKind Fix,
                                      bool &isCastOp,
                                      SourceType &castType);
 
@@ -304,11 +309,37 @@ public:
 
    ParseResult parseExprSequence(bool stopAtThen = false,
                                  bool stopAtColon = false,
-                                 bool stopAtNewline = true);
+                                 bool stopAtNewline = true,
+                                 bool AllowBraceClosure = true,
+                                 bool parsingType = false);
 
    void parseStmts(llvm::SmallVectorImpl<Statement*> &Stmts);
 
+   enum class ExpansionKind {
+      Expr, Stmt, Decl, Type
+   };
+
+   static ParseResult expandMacro(SemaPass &SP,
+                                  MacroDecl *Macro,
+                                  StmtOrDecl SOD,
+                                  llvm::ArrayRef<lex::Token> Tokens,
+                                  ExpansionKind Kind);
+
+   static std::pair<ParseResult, bool>
+   checkBuiltinMacro(SemaPass &SP,
+                     DeclarationName DN,
+                     StmtOrDecl SOD,
+                     llvm::ArrayRef<lex::Token> Tokens,
+                     ExpansionKind Kind);
+
+   ParseResult parseWithKind(SourceLocation Loc, ExpansionKind Kind,
+                             bool IsIncludeMacro = false);
+
    const lex::Token &currentTok() const;
+
+   friend class MacroParser;
+   friend class PatternMatcher;
+   friend class MacroExpander;
 
 private:
    ASTContext& Context;
@@ -326,6 +357,8 @@ private:
    IdentifierInfo *Ident_self;
    IdentifierInfo *Ident_super;
    IdentifierInfo *Ident_in;
+   IdentifierInfo *Ident_as;
+   IdentifierInfo *Ident_is;
    IdentifierInfo *Ident_then;
    IdentifierInfo *Ident_default;
    IdentifierInfo *Ident_typename;
@@ -336,11 +369,65 @@ private:
    IdentifierInfo *Ident_set;
    IdentifierInfo *Ident_virtual;
    IdentifierInfo *Ident_override;
+   IdentifierInfo *Ident_with;
+   IdentifierInfo *Ident_precedenceGroup;
+   IdentifierInfo *Ident_higherThan;
+   IdentifierInfo *Ident_lowerThan;
+   IdentifierInfo *Ident_associativity;
+   IdentifierInfo *Ident_macro;
    IdentifierInfo *Ident___traits;
    IdentifierInfo *Ident___nullptr;
    IdentifierInfo *Ident___func__;
    IdentifierInfo *Ident___mangled_func;
    IdentifierInfo *Ident___ctfe;
+
+   struct ClosureScope {
+      llvm::DenseMap<unsigned, SourceLocation> ArgLocs;
+      unsigned NumArgs = 0;
+   };
+
+   std::stack<ClosureScope> UnnamedClosureArgumentStack;
+   std::stack<bool> AllowTrailingClosureStack;
+
+   bool AllowBraceClosure()
+   {
+      return AllowTrailingClosureStack.top();
+   }
+
+   struct ClosureRAII {
+      explicit ClosureRAII(Parser &P) : P(P)
+      {
+         P.UnnamedClosureArgumentStack.emplace();
+      }
+
+      unsigned getClosureArgumentCount()
+      {
+         return P.UnnamedClosureArgumentStack.top().NumArgs;
+      }
+
+      ~ClosureRAII()
+      {
+         P.UnnamedClosureArgumentStack.pop();
+      }
+
+   private:
+      Parser &P;
+   };
+
+   struct AllowTrailingClosureRAII {
+      explicit AllowTrailingClosureRAII(Parser &P, bool Allow) : P(P)
+      {
+         P.AllowTrailingClosureStack.emplace(Allow);
+      }
+
+      ~AllowTrailingClosureRAII()
+      {
+         P.AllowTrailingClosureStack.pop();
+      }
+
+   private:
+      Parser &P;
+   };
 
    struct StateSaveRAII {
       explicit StateSaveRAII(Parser &P);
@@ -368,8 +455,14 @@ private:
       return findTokOnLine(kind, toks...);
    }
 
-   ParseResult parseTopLevelDecl(lex::tok::TokenType kind = lex::tok::sentinel);
+   void skipWhitespace();
+
+   ParseResult parseTopLevelDecl(const lex::Token *Tok = nullptr);
    ParseResult parseRecordLevelDecl();
+
+   Statement *parseStmts();
+   CompoundDecl *parseDecls(SourceLocation Loc, bool RecordLevel);
+   void parseDecls(bool RecordLevel);
 
    bool isAtRecordLevel() const { return InRecordScope; }
 
@@ -414,6 +507,10 @@ private:
    void maybeParseAccessModifier(AccessSpecifier &AS,
                                  SourceLocation &AccessLoc);
 
+   ParseResult parseMacro(AccessSpecifier AS = AccessSpecifier::Default);
+
+   ParseResult parseTrailingClosure();
+
    ParseResult parseNextDecl();
    ParseResult parseNextStmt();
 
@@ -429,7 +526,8 @@ private:
 
    ParseResult parseKeyword();
 
-   ParseResult parseBlock(bool = false);
+   ParseResult parseBlock(bool preserveTopLevel = false,
+                          bool noOpenBrace = false);
 
    ParseResult parseCollectionLiteral();
 
@@ -493,6 +591,19 @@ private:
    ParseResult parseConstrDecl(AccessSpecifier access);
    ParseResult parseDestrDecl();
 
+   struct AccessorInfo {
+      bool HasGetter = false;
+      AccessSpecifier GetterAccess = AccessSpecifier::Default;
+      ParseResult GetterBody;
+
+      bool HasSetter = false;
+      AccessSpecifier SetterAccess = AccessSpecifier::Default;
+      ParseResult SetterBody;
+      IdentifierInfo *NewValName = nullptr;
+   };
+
+   void parseAccessor(AccessorInfo &Info);
+
    ParseResult parsePropDecl(AccessSpecifier accessSpec, bool isStatic);
    ParseResult parseFieldDecl(AccessSpecifier accessSpec, bool isStatic);
 
@@ -513,10 +624,15 @@ private:
                                  bool InTypePosition,
                                  bool AllowMissingTemplateArguments);
 
-   ParseResult parseTypedef(AccessSpecifier access = (AccessSpecifier) 0);
-   ParseResult parseAlias(AccessSpecifier access = (AccessSpecifier) 0);
+   ParseResult parseTypedef(AccessSpecifier AS = AccessSpecifier::Default);
+   ParseResult parseAlias(AccessSpecifier AS = AccessSpecifier::Default);
 
-   ParseResult parseIdentifierExpr(bool parsingType = false);
+   ParseResult parsePrecedenceGroup(AccessSpecifier AS
+                                       = AccessSpecifier::Default);
+   ParseResult parseOperatorDecl();
+
+   ParseResult parseIdentifierExpr(bool parsingType = false,
+                                   bool parseSubExpr = true);
    ParseResult maybeParseSubExpr(Expression *ParentExpr,
                                  bool parsingType = false);
 
@@ -547,6 +663,10 @@ private:
 
    ParseResult parseConstraintExpr();
    ParseResult parseTraitsExpr();
+
+   ParseResult parseMacroExpansionExpr(Expression *ParentExpr = nullptr);
+   ParseResult parseMacroExpansionStmt();
+   ParseResult parseMacroExpansionDecl();
 
    bool modifierFollows(char c);
    Expression *parseNumericLiteral();

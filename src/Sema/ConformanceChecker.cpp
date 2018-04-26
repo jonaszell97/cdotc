@@ -22,9 +22,15 @@ class AssociatedTypeSubstVisitor:
    RecordDecl *R;
 
 public:
-   AssociatedTypeSubstVisitor(SemaPass &SP, RecordDecl *R)
-      : TypeBuilder(SP, R), R(R)
+   AssociatedTypeSubstVisitor(SemaPass &SP)
+      : TypeBuilder(SP, (Decl*)nullptr), R(nullptr)
    {}
+
+   void setRecord(RecordDecl *Rec)
+   {
+      R = Rec;
+      SOD = Rec;
+   }
 
    QualType visitAssociatedType(AssociatedType *Ty)
    {
@@ -46,12 +52,12 @@ public:
 
 class ConformanceCheckerImpl {
 public:
-   ConformanceCheckerImpl(SemaPass &SP, RecordDecl *Rec)
-      : SP(SP), Rec(Rec),
-        TypeSubstVisitor(SP, Rec)
+   ConformanceCheckerImpl(SemaPass &SP)
+      : SP(SP),
+        TypeSubstVisitor(SP)
    {}
 
-   void checkConformance();
+   void checkConformance(RecordDecl *Rec);
 
    struct MethodCandidate {
       MethodDecl *M;
@@ -65,36 +71,39 @@ public:
 
 private:
    SemaPass &SP;
-   RecordDecl *Rec;
+
    AssociatedTypeSubstVisitor TypeSubstVisitor;
    llvm::SmallVector<NamedDecl*, 0> DelayedChecks;
+   llvm::SmallPtrSet<ProtocolDecl*, 4> CheckedConformanceSet;
 
    bool IssuedError = false;
 
-   void checkRecordCommon(ProtocolDecl *Proto);
-   void checkSingleDecl(ProtocolDecl *Proto, NamedDecl *decl,
+   void checkRecordCommon(RecordDecl *Rec, ProtocolDecl *Proto);
+   void checkSingleDecl(RecordDecl *Rec, ProtocolDecl *Proto, NamedDecl *decl,
                         bool IsFirstTry = false);
-
-   void checkStruct(ProtocolDecl *Proto, StructDecl *St);
-   void checkClass(ProtocolDecl *Proto, ClassDecl *Cl);
-   void checkEnum(ProtocolDecl *Proto, EnumDecl *En);
-   void checkUnion(ProtocolDecl *Proto, UnionDecl *Un);
 
    bool checkTypeCompatibility(QualType given, QualType &needed);
 
-   bool checkIfImplicitConformance(ProtocolDecl *Proto, MethodDecl& M);
-   bool checkIfProtocolDefaultImpl(ProtocolDecl *Proto, MethodDecl& M);
+   bool checkIfImplicitConformance(RecordDecl *Rec,
+                                   ProtocolDecl *Proto,
+                                   MethodDecl& M);
 
-   void genericError(ProtocolDecl *P)
-   {
-      if (IssuedError)
-         return;
+   bool checkIfProtocolDefaultImpl(RecordDecl *Rec,
+                                   ProtocolDecl *Proto,
+                                   MethodDecl& M);
 
-      IssuedError = true;
-      SP.diagnose(Rec, err_incorrect_protocol_impl, Rec->getNameSelector(),
-                  Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
-   }
+   void genericError(RecordDecl *Rec, ProtocolDecl *P);
 };
+
+void ConformanceCheckerImpl::genericError(RecordDecl *Rec, ProtocolDecl *P)
+{
+   if (IssuedError)
+      return;
+
+   IssuedError = true;
+   SP.diagnose(Rec, err_incorrect_protocol_impl, Rec->getNameSelector(),
+               Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
+}
 
 bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
                                                     QualType &needed) {
@@ -105,44 +114,44 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
    return given->getCanonicalType() == needed->getCanonicalType();
 }
 
-void ConformanceCheckerImpl::checkConformance()
+void ConformanceCheckerImpl::checkConformance(RecordDecl *Rec)
 {
+   if (isa<ProtocolDecl>(Rec))
+      return;
+
    SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
+   TypeSubstVisitor.setRecord(Rec);
 
-   auto &Conf = Rec->getConformances();
-   for (const auto &P : Conf) {
-      switch (Rec->getKind()) {
-         case Decl::StructDeclID:
-            checkStruct(P, cast<StructDecl>(Rec)); break;
-         case Decl::ClassDeclID:
-            checkClass(P, cast<ClassDecl>(Rec)); break;
-         case Decl::EnumDeclID:
-            checkEnum(P, cast<EnumDecl>(Rec)); break;
-         case Decl::UnionDeclID:
-            checkUnion(P, cast<UnionDecl>(Rec)); break;
-         default:
-            return;
-      }
+   auto Conformances = SP.getContext().getConformanceTable()
+                         .getExplicitConformances(Rec);
 
-      IssuedError = false;
+   for (auto Conf : Conformances) {
+      checkRecordCommon(Rec, Conf);
    }
 
    size_t i = 0;
    while (i < DelayedChecks.size()) {
-      auto Next = DelayedChecks.front();
-      checkSingleDecl(cast<ProtocolDecl>(Next->getNonTransparentDeclContext()),
+      auto Next = DelayedChecks[i];
+      checkSingleDecl(Rec,
+                      cast<ProtocolDecl>(Next->getNonTransparentDeclContext()),
                       Next, false);
 
       ++i;
    }
+
+   CheckedConformanceSet.clear();
+   DelayedChecks.clear();
+
+   SP.registerImplicitAndInheritedConformances(Rec);
 }
 
-bool ConformanceCheckerImpl::checkIfImplicitConformance(ProtocolDecl *Proto,
+bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
+                                                        ProtocolDecl *Proto,
                                                         MethodDecl &M) {
    if (!Proto->isGlobalDecl())
       return false;
 
-   if (Proto->getIdentifierInfo()->isStr("Equatable")) {
+   if (Proto == SP.getEquatableDecl()) {
       IdentifierInfo &II = SP.getContext().getIdentifiers().get("==");
       DeclarationName DeclName = SP.getContext().getDeclNameTable()
                                    .getInfixOperatorName(II);
@@ -167,23 +176,26 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(ProtocolDecl *Proto,
          return true;
       }
    }
-   else if (Proto->getIdentifierInfo()->isStr("Hashable")) {
-      if (M.getDeclName().isStr("hashCode") && M.getArgs().empty()) {
+   else if (Proto == SP.getHashableDecl()) {
+      if (M.getDeclName().isStr("hashValue") && M.getArgs().empty()) {
          SP.addImplicitConformance(Rec, ImplicitConformanceKind::Hashable);
          return true;
       }
    }
-   else if (Proto->getIdentifierInfo()->isStr("StringRepresentable")) {
+   else if (Proto == SP.getStringRepresentableDecl()) {
       auto Str = SP.getStringDecl();
       assert(Str && "StringRepresentable without String decl?");
 
-      DeclarationName DN = SP.getContext().getDeclNameTable()
-                             .getConversionOperatorName(SP.getContext()
-                                                          .getRecordType(Str));
-
+      DeclarationName DN = SP.getContext().getIdentifiers().get("toString");
       if (M.getDeclName() == DN) {
          SP.addImplicitConformance(
             Rec, ImplicitConformanceKind::StringRepresentable);
+         return true;
+      }
+   }
+   else if (Proto == SP.getCopyableDecl()) {
+      if (M.getDeclName().isStr("copy") && M.getArgs().empty()) {
+         SP.addImplicitConformance(Rec, ImplicitConformanceKind::Copyable);
          return true;
       }
    }
@@ -191,7 +203,8 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(ProtocolDecl *Proto,
    return false;
 }
 
-bool ConformanceCheckerImpl::checkIfProtocolDefaultImpl(ProtocolDecl*,
+bool ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec,
+                                                        ProtocolDecl*,
                                                         MethodDecl& M) {
    if (!M.getBody())
       return false;
@@ -224,18 +237,28 @@ static void issueDiagnostics(
    }
 }
 
-void ConformanceCheckerImpl::checkRecordCommon(ProtocolDecl *Proto)
-{
+void ConformanceCheckerImpl::checkRecordCommon(RecordDecl *Rec,
+                                               ProtocolDecl *Proto) {
+   if (!CheckedConformanceSet.insert(Proto).second)
+      return;
+
    for (auto &decl : Proto->getDecls()) {
       auto ND = dyn_cast<NamedDecl>(decl);
       if (!ND)
          continue;
 
-      checkSingleDecl(Proto, ND, true);
+      checkSingleDecl(Rec, Proto, ND, true);
+   }
+
+   IssuedError = false;
+   for (auto Conf : SP.getContext().getConformanceTable()
+                      .getExplicitConformances(Proto)) {
+      checkRecordCommon(Rec, Conf);
    }
 }
 
-void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
+void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
+                                             ProtocolDecl *Proto,
                                              NamedDecl *decl,
                                              bool IsFirstTry) {
    if (auto AT = dyn_cast<AssociatedTypeDecl>(decl)) {
@@ -252,19 +275,19 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
             return;
          }
 
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_associated_type_missing, AT->getDeclName(),
                      AT->getSourceLoc());
 
          return;
       }
 
-      SP.visitAssociatedTypeDecl(Impl);
+      SP.visitScoped(Impl);
    }
    else if (auto Prop = dyn_cast<PropDecl>(decl)) {
       auto FoundProp = Rec->getProperty(Prop->getDeclName());
       if (!FoundProp) {
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_prop,
                      Prop->getDeclName(), 0 /*is missing*/,
                      Prop->getSourceLoc());
@@ -276,7 +299,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
 
       QualType NeededTy = Prop->getType();
       if (!checkTypeCompatibility(GivenTy, NeededTy)) {
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_prop_type,
                      Prop->getDeclName(), GivenTy, NeededTy,
                      Rec->getSourceLoc());
@@ -285,7 +308,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
       }
 
       if (Prop->hasGetter() && !FoundProp->hasGetter()) {
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_prop,
                      Prop->getDeclName(), 1 /*requires getter*/,
                      Prop->getSourceLoc());
@@ -294,7 +317,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
       }
 
       if (Prop->hasSetter() && !FoundProp->hasSetter()) {
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_prop,
                      Prop->getDeclName(), 2 /*requires setter*/,
                      Prop->getSourceLoc());
@@ -359,7 +382,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
       }
 
       if (!MethodImpl) {
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_method_missing,
                      "init", Init->getSourceLoc());
 
@@ -408,7 +431,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
                                         .getResolvedType()
                                         .getAsOpaquePtr();
 
-            Cand.SR = Impl->getReturnType().getTypeExpr()->getSourceRange();
+            Cand.SR = Impl->getSourceLoc();
 
             continue;
          }
@@ -442,7 +465,7 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
       }
 
       if (!MethodImpl) {
-         if (checkIfProtocolDefaultImpl(Proto, *Method)) {
+         if (checkIfProtocolDefaultImpl(Rec, Proto, *Method)) {
             return;
          }
          if (IsFirstTry) {
@@ -451,11 +474,11 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
             DelayedChecks.push_back(decl);
             return;
          }
-         if (checkIfImplicitConformance(Proto, *Method)) {
+         if (checkIfImplicitConformance(Rec, Proto, *Method)) {
             return;
          }
 
-         genericError(Proto);
+         genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_method_missing,
                      Method->getDeclName(), Method->getSourceLoc());
 
@@ -463,39 +486,32 @@ void ConformanceCheckerImpl::checkSingleDecl(ProtocolDecl *Proto,
          return;
       }
 
+      if (Proto == SP.getCopyableDecl()
+          && Method->getDeclName().isStr("copy")) {
+         Rec->setCopyFn(MethodImpl);
+      }
+      else if (Proto == SP.getStringRepresentableDecl()
+               && Method->getDeclName().isStr("toString")) {
+         Rec->setToStringFn(MethodImpl);
+      }
+      else if (Proto == SP.getHashableDecl()
+               && Method->getDeclName().isStr("hashValue")) {
+         Rec->setHashCodeFn(MethodImpl);
+      }
+
       MethodImpl->setIsProtocolMethod(true);
    }
 }
 
-void ConformanceCheckerImpl::checkStruct(ProtocolDecl *Proto, StructDecl *St)
-{
-   checkRecordCommon(Proto);
-}
-
-void ConformanceCheckerImpl::checkClass(ProtocolDecl *Proto, ClassDecl *Cl)
-{
-   checkStruct(Proto, Cl);
-}
-
-void ConformanceCheckerImpl::checkEnum(ProtocolDecl *Proto, EnumDecl *En)
-{
-   checkRecordCommon(Proto);
-}
-
-void ConformanceCheckerImpl::checkUnion(ProtocolDecl *Proto, UnionDecl *Un)
-{
-   checkRecordCommon(Proto);
-}
-
-ConformanceChecker::ConformanceChecker(ast::SemaPass &SP, RecordDecl *Rec)
-   : pImpl(new ConformanceCheckerImpl(SP, Rec))
+ConformanceChecker::ConformanceChecker(ast::SemaPass &SP)
+   : pImpl(new ConformanceCheckerImpl(SP))
 {
 
 }
 
-void ConformanceChecker::checkConformance()
+void ConformanceChecker::checkConformance(ast::RecordDecl *Rec)
 {
-   pImpl->checkConformance();
+   pImpl->checkConformance(Rec);
 }
 
 ConformanceChecker::~ConformanceChecker()

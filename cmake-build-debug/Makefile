@@ -39,10 +39,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = "/Applications/CLion 2018.2.app/Contents/bin/cmake/bin/cmake"
+CMAKE_COMMAND = "/Applications/CLion 2018.1 EAP.app/Contents/bin/cmake/bin/cmake"
 
 # The command to remove a file.
-RM = "/Applications/CLion 2018.2.app/Contents/bin/cmake/bin/cmake" -E remove -f
+RM = "/Applications/CLion 2018.1 EAP.app/Contents/bin/cmake/bin/cmake" -E remove -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -59,7 +59,7 @@ CMAKE_BINARY_DIR = /Users/Jonas/CDot/cmake-build-debug
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	"/Applications/CLion 2018.2.app/Contents/bin/cmake/bin/cmake" -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	"/Applications/CLion 2018.1 EAP.app/Contents/bin/cmake/bin/cmake" -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -70,7 +70,7 @@ rebuild_cache/fast: rebuild_cache
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "No interactive CMake dialog available..."
-	"/Applications/CLion 2018.2.app/Contents/bin/cmake/bin/cmake" -E echo No\ interactive\ CMake\ dialog\ available.
+	"/Applications/CLion 2018.1 EAP.app/Contents/bin/cmake/bin/cmake" -E echo No\ interactive\ CMake\ dialog\ available.
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -310,6 +310,33 @@ src/AST/Attribute.s: src/AST/Attribute.cpp.s
 src/AST/Attribute.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Attribute.cpp.s
 .PHONY : src/AST/Attribute.cpp.s
+
+src/AST/ConformanceTable.o: src/AST/ConformanceTable.cpp.o
+
+.PHONY : src/AST/ConformanceTable.o
+
+# target to build an object file
+src/AST/ConformanceTable.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/ConformanceTable.cpp.o
+.PHONY : src/AST/ConformanceTable.cpp.o
+
+src/AST/ConformanceTable.i: src/AST/ConformanceTable.cpp.i
+
+.PHONY : src/AST/ConformanceTable.i
+
+# target to preprocess a source file
+src/AST/ConformanceTable.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/ConformanceTable.cpp.i
+.PHONY : src/AST/ConformanceTable.cpp.i
+
+src/AST/ConformanceTable.s: src/AST/ConformanceTable.cpp.s
+
+.PHONY : src/AST/ConformanceTable.s
+
+# target to generate assembly for a file
+src/AST/ConformanceTable.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/ConformanceTable.cpp.s
+.PHONY : src/AST/ConformanceTable.cpp.s
 
 src/AST/Decl.o: src/AST/Decl.cpp.o
 
@@ -2177,6 +2204,33 @@ src/Parse/ParseAttr.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parse/ParseAttr.cpp.s
 .PHONY : src/Parse/ParseAttr.cpp.s
 
+src/Parse/ParseMacro.o: src/Parse/ParseMacro.cpp.o
+
+.PHONY : src/Parse/ParseMacro.o
+
+# target to build an object file
+src/Parse/ParseMacro.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parse/ParseMacro.cpp.o
+.PHONY : src/Parse/ParseMacro.cpp.o
+
+src/Parse/ParseMacro.i: src/Parse/ParseMacro.cpp.i
+
+.PHONY : src/Parse/ParseMacro.i
+
+# target to preprocess a source file
+src/Parse/ParseMacro.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parse/ParseMacro.cpp.i
+.PHONY : src/Parse/ParseMacro.cpp.i
+
+src/Parse/ParseMacro.s: src/Parse/ParseMacro.cpp.s
+
+.PHONY : src/Parse/ParseMacro.s
+
+# target to generate assembly for a file
+src/Parse/ParseMacro.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parse/ParseMacro.cpp.s
+.PHONY : src/Parse/ParseMacro.cpp.s
+
 src/Parse/ParseRecord.o: src/Parse/ParseRecord.cpp.o
 
 .PHONY : src/Parse/ParseRecord.o
@@ -3286,6 +3340,9 @@ help:
 	@echo "... src/AST/Attribute.o"
 	@echo "... src/AST/Attribute.i"
 	@echo "... src/AST/Attribute.s"
+	@echo "... src/AST/ConformanceTable.o"
+	@echo "... src/AST/ConformanceTable.i"
+	@echo "... src/AST/ConformanceTable.s"
 	@echo "... src/AST/Decl.o"
 	@echo "... src/AST/Decl.i"
 	@echo "... src/AST/Decl.s"
@@ -3490,6 +3547,9 @@ help:
 	@echo "... src/Parse/ParseAttr.o"
 	@echo "... src/Parse/ParseAttr.i"
 	@echo "... src/Parse/ParseAttr.s"
+	@echo "... src/Parse/ParseMacro.o"
+	@echo "... src/Parse/ParseMacro.i"
+	@echo "... src/Parse/ParseMacro.s"
 	@echo "... src/Parse/ParseRecord.o"
 	@echo "... src/Parse/ParseRecord.i"
 	@echo "... src/Parse/ParseRecord.s"

@@ -35,13 +35,20 @@ public:
    Module *getModule() const;
 
    void setParent(BasicBlock *parent);
+   
+   bool isSanctionedSelfUse() const { return InstBits.IsSanctionedSelfUse; }
+   void setIsSanctionedSelfUse(bool b) { InstBits.IsSanctionedSelfUse = b; }
+
+   bool isRetainOrRelease() const;
 
    Value *getOperand(unsigned idx) const;
    unsigned getNumOperands() const;
    void setOperand(unsigned idx, Value *val);
 
-   using op_iterator =       Value**;
-   using op_const_iterator = Value* const*;
+   using op_iterator          = Value**;
+   using op_const_iterator    = Value* const*;
+   using iterator_range       = llvm::iterator_range<op_iterator>;
+   using const_iterator_range = llvm::iterator_range<op_const_iterator>;
 
    op_iterator op_begin();
    op_iterator op_end();
@@ -54,6 +61,16 @@ public:
 
    op_const_iterator op_begin_impl() const  { return nullptr; }
    op_const_iterator op_end_impl() const  { return nullptr; }
+
+   iterator_range getOperands()
+   {
+      return iterator_range(op_begin(), op_end());
+   }
+
+   const_iterator_range getOperands() const
+   {
+      return const_iterator_range(op_begin(), op_end());
+   }
 
    unsigned getNumOperandsImpl() const { return 0; }
 

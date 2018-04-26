@@ -18,6 +18,7 @@
 #include "Basic/Mangle.h"
 #include "Basic/Precedence.h"
 #include "BuiltinCandidateBuilder.h"
+#include "ConformanceChecker.h"
 #include "Compiler.h"
 #include "CTFE/StaticEvaluator.h"
 #include "Message/DiagnosticsEngine.h"
@@ -45,6 +46,7 @@ class ILGenPass;
 class OverloadResolver;
 class LookupResult;
 class ExprResolverImpl;
+class ReflectionBuilder;
 
 class SemaPass: public ASTVisitor<ExprResult, StmtResult, DeclResult> {
 public:
@@ -234,6 +236,9 @@ public:
    void ActOnUnionDecl(UnionDecl *U);
    void ActOnExtensionDecl(ExtensionDecl* Ext);
 
+   void ActOnOperatorDecl(OperatorDecl* Op);
+   void ActOnPrecedenceGroupDecl(PrecedenceGroupDecl* PG);
+
    void ActOnFunctionDecl(FunctionDecl *F);
    void ActOnTypedefDecl(TypedefDecl *TD);
    void ActOnAliasDecl(AliasDecl *Alias);
@@ -244,6 +249,7 @@ public:
    void ActOnDeinitDecl(DeinitDecl *D);
 
    void ActOnTemplateParamDecl(DeclContext &Ctx, TemplateParamDecl *P);
+   void ActOnMacroExpansionDecl(MacroExpansionDecl *Decl);
    
    // Declaration pass
 
@@ -256,6 +262,12 @@ public:
    DeclResult declareCompoundDecl(CompoundDecl *Compound);
    DeclResult declareTranslationUnit(TranslationUnit *node);
 
+   DeclResult declareMacroDecl(MacroDecl *Decl) { return Decl; }
+   DeclResult declareMacroExpansionDecl(MacroExpansionDecl *Decl);
+
+   DeclResult declarePrecedenceGroupDecl(PrecedenceGroupDecl *Decl);
+   DeclResult declareOperatorDecl(OperatorDecl *Decl);
+
    DeclResult declareNamespaceDecl(NamespaceDecl *NS);
    DeclResult declareUsingDecl(UsingDecl *UD);
 
@@ -265,7 +277,7 @@ public:
    DeclResult declareFunctionDecl(FunctionDecl *F);
    DeclResult declareFuncArgDecl(FuncArgDecl *Decl);
 
-   DeclResult declareLocalVarDecl(LocalVarDecl *Decl) { return {}; }
+   DeclResult declareLocalVarDecl(LocalVarDecl *Decl) { return Decl; }
 
    DeclResult declareGlobalVarDecl(GlobalVarDecl *Decl);
    StmtResult declareGlobalDestructuringDecl(GlobalDestructuringDecl *Decl);
@@ -327,6 +339,7 @@ public:
    ExprResult visitAttributedExpr(AttributedExpr *Expr);
 
    StmtResult visitDeclStmt(DeclStmt *Stmt);
+   DeclResult visitUsingDecl(UsingDecl *UD);
 
    DeclResult visitCompoundDecl(CompoundDecl *D);
 
@@ -368,6 +381,7 @@ public:
    ExprResult visitBuiltinExpr(BuiltinExpr *node);
    ExprResult visitSubscriptExpr(SubscriptExpr *Expr);
    ExprResult visitCallExpr(CallExpr *Call);
+   ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Call);
    ExprResult visitMemberRefExpr(MemberRefExpr *Expr);
    ExprResult visitEnumCaseExpr(EnumCaseExpr *Expr);
 
@@ -406,6 +420,7 @@ public:
    ExprResult visitExprSequence(ExprSequence *Expr);
    ExprResult visitTypePredicateExpr(TypePredicateExpr *Pred);
    ExprResult visitBinaryOperator(BinaryOperator *BinOp);
+   ExprResult visitAssignExpr(AssignExpr *Expr);
    ExprResult visitUnaryOperator(UnaryOperator *UnOp);
    ExprResult visitIfExpr(IfExpr *Expr);
 
@@ -444,7 +459,7 @@ public:
    DeclResult visitAliasDecl(AliasDecl *Alias);
 
    StmtResult visitStaticIfStmt(StaticIfStmt *Stmt);
-   StmtResult visitStaticForStmt(StaticForStmt *Decl);
+   StmtResult visitStaticForStmt(StaticForStmt *Stmt);
 
    DeclResult visitStaticAssertStmt(StaticAssertStmt *Decl);
    DeclResult visitStaticPrintStmt(StaticPrintStmt *Decl);
@@ -456,9 +471,20 @@ public:
    StmtResult visitMixinStmt(MixinStmt *Stmt);
    DeclResult visitMixinDecl(MixinDecl *Decl);
 
-   TypeResult visitSourceType(Decl *D, const SourceType &Ty);
-   TypeResult visitSourceType(Statement *S, const SourceType &Ty);
-   TypeResult visitSourceType(const SourceType &Ty);
+   ExprResult visitMacroExpansionExpr(MacroExpansionExpr *Expr);
+   StmtResult visitMacroExpansionStmt(MacroExpansionStmt *Stmt);
+
+   TypeResult visitSourceType(Decl *D, const SourceType &Ty,
+                              bool WantMeta = false);
+   TypeResult visitSourceType(Statement *S, const SourceType &Ty,
+                              bool WantMeta = false);
+   TypeResult visitSourceType(const SourceType &Ty, bool WantMeta = false);
+
+   void registerExplicitConformances(RecordDecl *Rec);
+   void registerExplicitConformances(RecordDecl *Rec,
+                                     llvm::ArrayRef<SourceType> ConfTypes);
+
+   void registerImplicitAndInheritedConformances(RecordDecl *Rec);
 
    // disallow passing an rvalue as second parameter
    template<class T>
@@ -468,14 +494,15 @@ public:
    TypeResult visitSourceType(SourceType &&Ty) = delete;
 
    struct StaticExprResult {
-      explicit StaticExprResult(Expression *Expr, Variant &&V)
-         : Expr(Expr), Value(std::move(V)), HadError(false)
+      explicit StaticExprResult(Expression *Expr, il::Constant *V)
+         : Expr(Expr), Value(V), HadError(false)
       {}
 
-      StaticExprResult() : HadError(true)
+      StaticExprResult(Expression *Expr = nullptr)
+         : Expr(Expr), HadError(true)
       {}
 
-      Variant &getValue()
+      il::Constant *getValue()
       {
          assert(!hadError());
          return Value;
@@ -495,19 +522,14 @@ public:
 
    private:
       Expression *Expr = nullptr;
-      Variant Value;
+      il::Constant *Value = nullptr;
       bool HadError;
    };
 
-   StaticExprResult evalStaticExpr(Expression *expr);
-   StaticExprResult evalStaticExpr(Statement *DependentStmt, Expression *expr);
-   StaticExprResult evalStaticExpr(Decl *DependentDecl, Expression *expr);
-
-   StaticExprResult evalStaticExpr(Expression *expr,
-                                   TemplateArgList const& templateArgs);
-
-   StaticExprResult evaluateAs(Expression *expr, QualType Ty);
-   StaticExprResult evaluateAsBool(Expression *expr);
+   StaticExprResult evalStaticExpr(StmtOrDecl DependentStmt, Expression *expr);
+   StaticExprResult evaluateAs(StmtOrDecl DependentStmt, Expression *expr,
+                               QualType Ty);
+   StaticExprResult evaluateAsBool(StmtOrDecl DependentStmt, Expression *expr);
 
 
    // returns the index of the failed constraint, or -1 if all are successful
@@ -563,25 +585,25 @@ public:
       llvm::PointerIntPair<StaticExpr*, 2, Dependence> ValuePair;
    };
 
-   ConstraintResult checkConstraints(SourceLocation Loc,
+   ConstraintResult checkConstraints(StmtOrDecl DependentDecl,
                                      NamedDecl *ConstrainedDecl,
-                                     const sema::MultiLevelTemplateArgList
-                                                               &templateArgs);
+                                     const sema::TemplateArgList &templateArgs);
 
-   ConstraintResult checkConstraints(SourceLocation Loc,
-                           NamedDecl *ConstrainedDecl);
+   ConstraintResult checkConstraints(StmtOrDecl DependentDecl,
+                                     NamedDecl *ConstrainedDecl);
 
-   bool checkConstraint(SourceLocation Loc,
+   bool checkConstraint(StmtOrDecl DependentDecl,
                         Expression *Constraint);
 
    bool getStringValue(Expression *Expr,
-                       Variant const &V,
+                       il::Constant *V,
                        llvm::StringRef &Str);
 
    bool getBoolValue(Expression *Expr,
-                     Variant const &V,
+                     il::Constant *V,
                      bool &Val);
 
+   void resolvePrecedenceGroups();
    void visitDelayedDeclsAfterParsing();
    void visitDelayedDeclsAfterDeclaration();
    void visitDelayedInstantiations();
@@ -592,8 +614,6 @@ public:
                                              IdentifierInfo *maybeIdent,
                                              bool LHSOfAssignment = false);
 
-   void noteConstantDecl(Expression *DeclRef);
-
    template<class T, class ...Args>
    T *makeStmt(Args&& ...args)
    {
@@ -601,7 +621,11 @@ public:
    }
 
    QualType resolveDependencies(QualType Ty,
-                                MultiLevelTemplateArgList const& TAs,
+                                const MultiLevelTemplateArgList& TAs,
+                                Statement *PointOfInstantiation);
+
+   QualType resolveDependencies(QualType Ty,
+                                const sema::MultiLevelFinalTemplateArgList& TAs,
                                 Statement *PointOfInstantiation);
 
    QualType resolveDependencies(QualType Ty,
@@ -624,6 +648,16 @@ public:
    {
       if (diag::isError(msg)) {
          D->setIsInvalid(true);
+      }
+
+      diagnose(msg, std::forward<Args const&>(args)...);
+   }
+
+   template<class ...Args>
+   void diagnose(StmtOrDecl SOD, diag::MessageKind msg, Args const&... args)
+   {
+      if (diag::isError(msg)) {
+         SOD.setIsInvalid(true);
       }
 
       diagnose(msg, std::forward<Args const&>(args)...);
@@ -653,6 +687,7 @@ public:
    void diagnoseTemplateArgErrors(NamedDecl *Template,
                                   Statement *ErrorStmt,
                                   TemplateArgList &list,
+                                  llvm::ArrayRef<Expression*> OriginalArgs,
                                   sema::TemplateArgListResult &Cand);
 
    void visitRecordInstantiation(StmtOrDecl DependentStmt, RecordDecl *Inst);
@@ -672,15 +707,13 @@ public:
                                                    NamedDecl *globalVar);
 
    enum class Stage {
-      Declaration = 0,
+      Parsing = 0,
+      Declaration,
       Sema,
       ILGen,
    };
 
-   Stage getStage() const
-   {
-      return stage;
-   }
+   Stage getStage() const { return stage; }
 
    template<class T>
    T *lookup(llvm::StringRef name, unsigned lvl = 2) const
@@ -694,6 +727,38 @@ public:
 
    DeclContext *getNearestDeclContext(Statement *Stmt) const;
    CallableDecl *getCurrentFun() const;
+
+   struct SemaState {
+      SemaState(SemaPass &SP)
+         : StateBits(SP.StateUnion),
+           EvaluatingGlobalVar(SP.EvaluatingGlobalVar),
+           S(SP.currentScope)
+      {
+      }
+
+      uint8_t StateBits;
+      GlobalVarDecl *EvaluatingGlobalVar;
+      Scope *S;
+   };
+
+   SemaState getSemaState()
+   {
+      return SemaState(*this);
+   }
+
+   void resetState(const SemaState &State)
+   {
+      StateUnion = State.StateBits;
+      EvaluatingGlobalVar = State.EvaluatingGlobalVar;
+      currentScope = State.S;
+   }
+
+   void clearState()
+   {
+      StateUnion = 0;
+      EvaluatingGlobalVar = nullptr;
+      currentScope = nullptr;
+   }
 
    struct DiagnosticScopeRAII {
       explicit DiagnosticScopeRAII(SemaPass &SP, bool Disabled = false)
@@ -744,51 +809,40 @@ public:
    struct DeclScopeRAII {
       DeclScopeRAII(SemaPass &SP, DeclContext *Ctx)
          : SP(SP), declContext(SP.DeclCtx),
-           AllowUnexpanded(SP.AllowUnexpandedParameterPack),
-           AllowIncompleteTys(SP.AllowIncompleteTemplateTypes)
+           State(SP.getSemaState())
       {
          SP.DeclCtx = Ctx;
-         SP.AllowUnexpandedParameterPack = false;
-         SP.AllowIncompleteTemplateTypes = false;
+         SP.clearState();
       }
 
       ~DeclScopeRAII()
       {
          SP.DeclCtx = declContext;
-         SP.AllowUnexpandedParameterPack = AllowUnexpanded;
-         SP.AllowIncompleteTemplateTypes = AllowIncompleteTys;
+         SP.resetState(State);
       }
 
    private:
       SemaPass &SP;
       DeclContext *declContext;
-      bool AllowUnexpanded    : 1;
-      bool AllowIncompleteTys : 1;
+      SemaState State;
    };
 
    struct ScopeResetRAII {
-      explicit ScopeResetRAII(SemaPass &S)
-         : S(S), scope(S.currentScope),
-           AllowUnexpanded(S.AllowUnexpandedParameterPack),
-           AllowIncompleteTys(S.AllowIncompleteTemplateTypes)
+      explicit ScopeResetRAII(SemaPass &SP, Scope *S = nullptr)
+         : SP(SP), State(SP.getSemaState())
       {
-         S.currentScope = nullptr;
-         S.AllowUnexpandedParameterPack = false;
-         S.AllowIncompleteTemplateTypes = false;
+         SP.clearState();
+         SP.currentScope = S;
       }
 
       ~ScopeResetRAII()
       {
-         S.currentScope = scope;
-         S.AllowUnexpandedParameterPack = AllowUnexpanded;
-         S.AllowIncompleteTemplateTypes = AllowIncompleteTys;
+         SP.resetState(State);
       }
 
    private:
-      SemaPass &S;
-      Scope *scope;
-      bool AllowUnexpanded    : 1;
-      bool AllowIncompleteTys : 1;
+      SemaPass &SP;
+      SemaState State;
    };
 
    enum SetParentCtxDiscrim {
@@ -810,14 +864,14 @@ public:
 
    struct ArgPackExpansionRAII {
       ArgPackExpansionRAII(SemaPass &SP, bool IsExpansion)
-         : SP(SP), Previous(SP.AllowUnexpandedParameterPack)
+         : SP(SP), Previous(SP.Bits.AllowUnexpandedParameterPack)
       {
-         SP.AllowUnexpandedParameterPack |= IsExpansion;
+         SP.Bits.AllowUnexpandedParameterPack |= IsExpansion;
       }
 
       ~ArgPackExpansionRAII()
       {
-         SP.AllowUnexpandedParameterPack = Previous;
+         SP.Bits.AllowUnexpandedParameterPack = Previous;
       }
 
    private:
@@ -827,19 +881,53 @@ public:
 
    struct AllowIncompleteTemplateTypeRAII {
       AllowIncompleteTemplateTypeRAII(SemaPass &SP)
-         : SP(SP), Previous(SP.AllowIncompleteTemplateTypes)
+         : SP(SP), Previous(SP.Bits.AllowIncompleteTemplateTypes)
       {
-         SP.AllowIncompleteTemplateTypes = true;
+         SP.Bits.AllowIncompleteTemplateTypes = true;
       }
 
       ~AllowIncompleteTemplateTypeRAII()
       {
-         SP.AllowIncompleteTemplateTypes = Previous;
+         SP.Bits.AllowIncompleteTemplateTypes = Previous;
       }
 
    private:
       SemaPass &SP;
       bool Previous;
+   };
+
+   struct DefaultArgumentValueRAII {
+      DefaultArgumentValueRAII(SemaPass &SP)
+         : SP(SP), Previous(SP.Bits.InDefaultArgumentValue)
+      {
+         SP.Bits.InDefaultArgumentValue = true;
+      }
+
+      ~DefaultArgumentValueRAII()
+      {
+         SP.Bits.InDefaultArgumentValue = Previous;
+      }
+
+   private:
+      SemaPass &SP;
+      bool Previous;
+   };
+
+   struct EnterGlobalVarScope {
+      EnterGlobalVarScope(SemaPass &SP, GlobalVarDecl *V)
+         : SP(SP), Prev(SP.EvaluatingGlobalVar)
+      {
+         SP.EvaluatingGlobalVar = V;
+      }
+
+      ~EnterGlobalVarScope()
+      {
+         SP.EvaluatingGlobalVar = Prev;
+      }
+
+   private:
+      SemaPass &SP;
+      GlobalVarDecl *Prev;
    };
 
    struct AssociatedTypeSubstRAII {
@@ -880,14 +968,14 @@ public:
    };
 
    struct EnterCtfeScope {
-      explicit EnterCtfeScope(SemaPass &SP) : SP(SP), previous(SP.InCTFE)
+      explicit EnterCtfeScope(SemaPass &SP) : SP(SP), previous(SP.Bits.InCTFE)
       {
-         SP.InCTFE = true;
+         SP.Bits.InCTFE = true;
       }
 
       ~EnterCtfeScope()
       {
-         SP.InCTFE = previous;
+         SP.Bits.InCTFE = previous;
       }
 
    private:
@@ -896,9 +984,9 @@ public:
    };
 
    Scope *getScope() const { return currentScope; }
-   bool inCTFE()     const { return InCTFE; }
+   bool inCTFE()     const { return Bits.InCTFE; }
    bool allowIncompleteTemplateTypes() const
-   { return AllowIncompleteTemplateTypes; }
+   { return Bits.AllowIncompleteTemplateTypes; }
 
    bool hasDefaultValue(QualType type) const;
 
@@ -920,7 +1008,7 @@ private:
    ASTContext &Context;
    DeclContext *DeclCtx;
 
-   Stage stage = Stage::Declaration;
+   Stage stage = Stage::Parsing;
 
    Scope *currentScope = nullptr;
 
@@ -928,17 +1016,23 @@ private:
    llvm::SmallVector<std::pair<StmtOrDecl, NamedDecl*>, 0>
       DelayedInstantiations;
 
-   DependencyGraph<RecordDecl*> LayoutDependency;
+   DependencyGraph<NamedDecl*> LayoutDependency;
+   DependencyGraph<ProtocolDecl*> ConformanceDependency;
+   DependencyGraph<const IdentifierInfo*> PrecedenceDependency;
+
    llvm::StringMap<GotoStmt*> UnresolvedGotos;
    
    SymbolMangler mangle;
    StaticEvaluator Evaluator;
    BuiltinCandidateBuilder CandBuilder;
    mutable TemplateInstantiator Instantiator;
+   sema::ConformanceChecker ConformanceChecker;
 
    llvm::StringSet<> labels;
    llvm::DenseSet<uintptr_t> DeclaredDecls;
    llvm::DenseSet<uintptr_t> VisitedDecls;
+
+   llvm::DenseMap<QualType, bool> PersistableTypes;
 
    std::vector<NamedDecl*> InstantiationStack;
 
@@ -947,31 +1041,52 @@ private:
 
    std::unique_ptr<ILGenPass> ILGen;
 
-   bool fatalError                   : 1;
-   bool fatalErrorInScope            : 1;
-   bool EncounteredError             : 1;
-   bool InCTFE                       : 1;
-   bool AllowUnexpandedParameterPack : 1;
-   bool AllowIncompleteTemplateTypes : 1;
+   bool fatalError         : 1;
+   bool fatalErrorInScope  : 1;
+   bool EncounteredError   : 1;
+
+   struct StateBits {
+      bool InCTFE                       : 1;
+      bool AllowUnexpandedParameterPack : 1;
+      bool AllowIncompleteTemplateTypes : 1;
+      bool InDefaultArgumentValue       : 1;
+   };
+
+   union {
+      uint8_t StateUnion = 0;
+      StateBits Bits;
+   };
 
    RecordDecl *AssociatedTypeSubst = nullptr;
+   GlobalVarDecl *EvaluatingGlobalVar = nullptr;
 
    QualType UnknownAnyTy;
 
-   ClassDecl *ArrayDecl      = nullptr;
-   ClassDecl *DictionaryDecl = nullptr;
-   ClassDecl *StringDecl     = nullptr;
+   ClassDecl  *ArrayDecl      = nullptr;
+   StructDecl *ArrayViewDecl  = nullptr;
+   ClassDecl  *DictionaryDecl = nullptr;
+   ClassDecl  *StringDecl     = nullptr;
    StructDecl *StringViewDecl = nullptr;
-   EnumDecl *OptionDecl     = nullptr;
+   EnumDecl   *OptionDecl     = nullptr;
    StructDecl *TypeInfoDecl   = nullptr;
 
    ProtocolDecl *AnyDecl                 = nullptr;
    ProtocolDecl *EquatableDecl           = nullptr;
    ProtocolDecl *HashableDecl            = nullptr;
+   ProtocolDecl *CopyableDecl            = nullptr;
    ProtocolDecl *StringRepresentableDecl = nullptr;
+   ProtocolDecl *PersistableDecl         = nullptr;
+
+   PrecedenceGroupDecl *DefaultPrecedenceGroup = nullptr;
+
+   InitDecl *StringInit = nullptr;
+   MethodDecl *StringPlusEqualsString = nullptr;
+
+   ReflectionBuilder *ReflBuilder = nullptr;
 
 public:
    ClassDecl *getArrayDecl();
+   StructDecl *getArrayViewDecl();
    ClassDecl *getDictionaryDecl();
    ClassDecl *getStringDecl();
    StructDecl *getStringViewDecl();
@@ -981,7 +1096,14 @@ public:
    ProtocolDecl *getAnyDecl();
    ProtocolDecl *getEquatableDecl();
    ProtocolDecl *getHashableDecl();
+   ProtocolDecl *getCopyableDecl();
    ProtocolDecl *getStringRepresentableDecl();
+   ProtocolDecl *getPersistableDecl();
+
+   PrecedenceGroupDecl *getDefaultPrecedenceGroup();
+
+   InitDecl *getStringInit();
+   MethodDecl *getStringPlusEqualsString();
 
    ExprResult visit(Expression *Expr, bool);
    StmtResult visit(Statement *node, bool);
@@ -991,6 +1113,7 @@ public:
 
    RecordDecl *getCurrentRecordCtx();
    bool inTemplate();
+   bool isInDependentContext();
 
    void pushInstantiationContext(NamedDecl *Decl)
    {
@@ -1009,6 +1132,8 @@ public:
    void checkConformances(DeclContext *Ctx);
    void checkProtocolConformance(RecordDecl *R);
 
+   bool isPersistableType(QualType Ty);
+
    int inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy);
 
    NamedDecl *getCurrentDecl() const;
@@ -1019,6 +1144,7 @@ public:
    bool ensureDeclared(Decl *D);
    bool ensureVisited(Decl *D);
    bool prepareFunctionForCtfe(CallableDecl *Fn);
+   bool prepareGlobalForCtfe(VarDecl *Decl);
 
    DeclResult declareAndVisit(Decl *D);
 
@@ -1135,24 +1261,14 @@ public:
                   llvm::ArrayRef<Expression*> args,
                   llvm::ArrayRef<Expression*> templateArgs = {},
                   Statement *Caller = nullptr,
-                  bool suppressDiags = false,
-                  bool includesSelf = false);
+                  bool suppressDiags = false);
 
    CandidateSet
    lookupFunction(DeclarationName name,
                   llvm::ArrayRef<Expression*> args,
                   llvm::ArrayRef<Expression*> templateArgs = {},
                   Statement *Caller = nullptr,
-                  bool suppressDiags = false,
-                  bool includesSelf = false);
-
-   CandidateSet
-   lookupMethod(DeclarationName name,
-                Expression *SelfExpr,
-                llvm::ArrayRef<Expression*> args,
-                llvm::ArrayRef<Expression*> templateArgs = {},
-                Statement *Caller = nullptr,
-                bool suppressDiags = false);
+                  bool suppressDiags = false);
 
    CandidateSet getCandidates(DeclarationName name,
                               Expression *SelfExpr);
@@ -1169,7 +1285,7 @@ public:
                        DeclarationName name,
                        llvm::ArrayRef<Expression*> args,
                        llvm::ArrayRef<Expression*> templateArgs = {},
-                       Statement *Caller = nullptr,
+                       Statement *Expr = nullptr,
                        bool suppressDiags = false);
 
    CandidateSet checkAnonymousCall(FunctionType *FTy,
@@ -1177,10 +1293,13 @@ public:
                                    Statement *Caller = nullptr);
 
    bool ExprCanReturn(Expression *E, QualType Ty);
+   QualType ResolveContextualLambdaExpr(LambdaExpr *E, QualType Ty);
+
+   QualType GetDefaultExprType(Expression *E);
 
    void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
    bool maybeInstantiateRecord(CandidateSet::Candidate &Cand,
-                               TemplateArgList &&templateArgs,
+                               const TemplateArgList &templateArgs,
                                Statement *Caller);
 
    void maybeInstantiateMemberFunction(MethodDecl *M, StmtOrDecl Caller);
@@ -1316,6 +1435,14 @@ private:
 
    // MemberRef
 
+   struct LocalLookupResult {
+      LookupResult lookupResult;
+      LambdaScope *lambdaScope = nullptr;
+   };
+
+   LocalLookupResult PerformLocalLookup(DeclarationName DeclName,
+                                        DeclContext *Ctx);
+
    ExprResult HandleBuiltinTypeMember(MemberRefExpr *Expr, QualType Ty);
    ExprResult HandleStaticTypeMember(MemberRefExpr *Expr, QualType Ty);
 
@@ -1325,6 +1452,9 @@ private:
    ExprResult HandleEnumCase(IdentifierRefExpr *node, EnumDecl *E);
 
    // CallExpr
+
+   ExprResult HandleCallWithKnownCandidates(CallExpr *Expr,
+                                            CandidateSet &CandSet);
 
    ExprResult HandleFunctionCall(CallExpr* Call,
                                  DeclContext *Ctx,
@@ -1340,40 +1470,49 @@ private:
    ExprResult HandleAnonCall(CallExpr *node, Expression *ParentExpr);
 
    void diagnoseMemberNotFound(DeclContext *Ctx,
-                               Statement *Subject,
+                               StmtOrDecl Subject,
                                DeclarationName memberName,
                                diag::MessageKind msg
                                  = diag::err_undeclared_identifer);
 
-   void diagnoseMemberNotFound(DeclContext *Ctx,
-                               Decl *Subject,
-                               DeclarationName memberName,
-                               diag::MessageKind msg
-                               = diag::err_undeclared_identifer);
-
    void checkDefaultAccessibility(NamedDecl *ND);
+
+   bool isAccessible(NamedDecl *ND);
    void checkAccessibility(NamedDecl *ND, Expression* Expr);
+
+   StmtOrDecl checkMacroCommon(StmtOrDecl SOD,
+                               DeclarationName MacroName,
+                               DeclContext &Ctx,
+                               MacroDecl::Delimiter Delim,
+                               llvm::ArrayRef<lex::Token> Tokens,
+                               unsigned Kind);
 
 public:
    void ApplyCasts(llvm::MutableArrayRef<Expression*> args,
                    Expression *DependentExpr,
                    CandidateSet &CandSet);
 
-   void PrepareCallArgs(std::vector<Expression*>& args,
+   void PrepareCallArgs(CandidateSet::Candidate &Cand,
+                        std::vector<Expression*> &args,
+                        Expression *Expr,
                         CallableDecl *C);
 
    void calculateRecordSize(RecordDecl *R);
    void finalizeRecordDecls();
 
+   llvm::DenseMap<DeclarationName, NamedDecl*> BuiltinDecls;
+
 private:
    // static reflection
-   const IdentifierInfo *ReflectionIdents[10];
+   const IdentifierInfo *ReflectionIdents[35];
    bool ReflectionIdentsInitialized = false;
 
    void initReflectionIdents();
 
    ExprResult HandleReflectionAlias(AliasDecl *Al, Expression *Expr);
    ExprResult HandleReflectionCall(CallableDecl *C);
+
+   friend class ReflectionBuilder;
 };
 
 } // namespace ast

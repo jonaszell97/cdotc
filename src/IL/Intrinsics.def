@@ -16,6 +16,8 @@
    CDOT_INTRINSIC(weak_refcount, "__get_weak_refcount")
    CDOT_INTRINSIC(vtable_ref, "__get_vtable_ref")
    CDOT_INTRINSIC(typeinfo_ref, "__get_typeinfo")
+
+   CDOT_INTRINSIC(indirect_case_ref, "__indirect_case_ref")
 #endif
 
 #undef CDOT_INTRINSIC

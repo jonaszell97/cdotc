@@ -6,9 +6,10 @@
 
 #include "AST/Expression.h"
 #include "AST/Decl.h"
-#include "SemaPass.h"
+#include "IL/Constants.h"
+#include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
-#include "Basic/Variant.h"
+#include "SemaPass.h"
 
 using std::string;
 
@@ -25,15 +26,22 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
    : IsType(true), IsVariadic(false), IsNull(false),
      Dependent(type->isDependentType()),
      ManuallySpecifiedVariadicArgs(0),
-     Param(Param), Type(type->getCanonicalType()), Loc(loc)
-{}
+     Param(Param), Type(), Loc(loc)
+{
+   if (type->isDependentType()) {
+      Type = type;
+   }
+   else {
+      Type = type->getCanonicalType();
+   }
+}
 
 ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
-                                         Variant &&V,
+                                         il::Constant *V,
                                          SourceLocation loc) noexcept
    : IsType(false), IsVariadic(false), IsNull(false), Dependent(false),
      ManuallySpecifiedVariadicArgs(0),
-     Param(Param), V(new Variant(std::move(V))), Loc(loc)
+     Param(Param), V(V), Loc(loc)
 {}
 
 ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
@@ -67,7 +75,7 @@ ResolvedTemplateArg::ResolvedTemplateArg(ResolvedTemplateArg &&other) noexcept
       Type = other.Type;
    }
    else {
-      new (&V) std::unique_ptr<Variant>(new Variant(std::move(*other.V)));
+      V = other.V;
    }
 }
 
@@ -95,15 +103,6 @@ void ResolvedTemplateArg::destroyValue()
 
       VariadicArgs.~vector();
    }
-   else if (!IsType) {
-      V.~unique_ptr();
-   }
-}
-
-const Variant& ResolvedTemplateArg::getValue() const
-{
-   assert(!isType());
-   return *V;
 }
 
 QualType ResolvedTemplateArg::getValueType() const
@@ -135,7 +134,7 @@ ResolvedTemplateArg ResolvedTemplateArg::clone() const
       return ResolvedTemplateArg(Param, getType(), getLoc());
    }
 
-   return ResolvedTemplateArg(Param, Variant(getValue()), getLoc());
+   return ResolvedTemplateArg(Param, getValue(), getLoc());
 }
 
 std::string ResolvedTemplateArg::toString() const
@@ -159,7 +158,11 @@ std::string ResolvedTemplateArg::toString() const
       return Type->toString();
    }
 
-   return V->toString();
+   std::string str;
+   llvm::raw_string_ostream OS(str);
+
+   OS << *V;
+   return OS.str();
 }
 
 void ResolvedTemplateArg::Profile(llvm::FoldingSetNodeID &ID) const
@@ -179,7 +182,7 @@ void ResolvedTemplateArg::Profile(llvm::FoldingSetNodeID &ID) const
    else if (isType())
       ID.AddPointer(getType().getAsOpaquePtr());
    else
-      getValue().Profile(ID);
+      ID.AddPointer(V);
 }
 
 class TemplateArgListImpl {
@@ -188,7 +191,7 @@ public:
                        NamedDecl *Template,
                        llvm::ArrayRef<Expression*> templateArgs,
                        SourceLocation loc)
-      : SP(SP), OriginalArgs(templateArgs), ListLoc(loc),
+      : SP(SP), ListLoc(loc),
         Template(Template),
         StillDependent(false), HadError(false),
         FullyInferred(templateArgs.empty()), PartiallyInferred(false)
@@ -196,7 +199,7 @@ public:
       doInitialFill();
 
       if (!templateArgs.empty()) {
-         resolveWithParameters();
+         resolveWithParameters(templateArgs);
       }
       else {
          inferFromContext();
@@ -206,7 +209,7 @@ public:
    TemplateArgListImpl(SemaPass &SP,
                        llvm::ArrayRef<Expression*> templateArgs,
                        SourceLocation loc)
-      : SP(SP), OriginalArgs(templateArgs), ListLoc(loc),
+      : SP(SP), ListLoc(loc),
         StillDependent(false), HadError(false),
         FullyInferred(templateArgs.empty()), PartiallyInferred(false)
    {
@@ -232,7 +235,7 @@ public:
       }
    }
 
-   void resolveWithParameters()
+   void resolveWithParameters(llvm::ArrayRef<Expression*> OriginalArgs)
    {
       size_t i = 0;
       auto parameters = getParameters();
@@ -297,7 +300,7 @@ public:
                }
                else {
                   emplace(P, P,
-                          Variant(cast<StaticExpr>(V)->getEvaluatedExpr()),
+                          cast<StaticExpr>(V)->getEvaluatedExpr(),
                           P->getSourceLoc());
                }
             }
@@ -344,7 +347,7 @@ public:
          }
 
          StatExp = cast<StaticExpr>(SemaResult.get());
-         Out = ResolvedTemplateArg(P, Variant(StatExp->getEvaluatedExpr()),
+         Out = ResolvedTemplateArg(P, StatExp->getEvaluatedExpr(),
                                    StatExp->getSourceLoc());
       }
 
@@ -365,13 +368,31 @@ public:
       }
    }
 
-   ResolvedTemplateArg* getNamedArg(llvm::StringRef name)
+   void copyFromList(const FinalTemplateArgumentList &list)
    {
-      auto idx = getIndexFor(name);
+      auto it = list.begin();
+      auto end = list.end();
+
+      auto param_it = getParameters().begin();
+      for (; it != end; ++it) {
+         if (!it->isNull()) {
+            auto &Param = *param_it++;
+            emplace(Param, it->clone());
+         }
+      }
+   }
+
+   ResolvedTemplateArg* getNamedArg(DeclarationName Name)
+   {
+      auto idx = getIndexFor(Name);
       if (idx == string::npos)
          return nullptr;
 
-      return &ResolvedArgs[idx];
+      auto &Arg = ResolvedArgs[idx];
+      if (Arg.isNull())
+         return nullptr;
+
+      return &Arg;
    }
 
    ResolvedTemplateArg* getArgForParam(TemplateParamDecl *P)
@@ -380,10 +401,15 @@ public:
       if (idx == string::npos)
          return nullptr;
 
-      return &ResolvedArgs[idx];
+      auto &Arg = ResolvedArgs[idx];
+      if (Arg.isNull())
+         return nullptr;
+
+      return &Arg;
    }
 
-   void inferFromReturnType(QualType contextualType, QualType returnType);
+   void inferFromReturnType(QualType contextualType, QualType returnType,
+                            bool IsLastVariadicParam);
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
                          llvm::ArrayRef<FuncArgDecl*> neededArgs);
 
@@ -407,36 +433,6 @@ public:
       return Template->getTemplateParams();
    }
 
-   bool insert(llvm::StringRef name, QualType ty)
-   {
-      auto idx = getIndexFor(name);
-      if (idx == string::npos)
-         return false;
-
-      auto Param = getParameters()[idx];
-      return emplace(Param, Param, ty).second;
-   }
-
-   bool insert(llvm::StringRef name, Variant &&V)
-   {
-      auto idx = getIndexFor(name);
-      if (idx == string::npos)
-         return false;
-
-      auto Param = getParameters()[idx];
-      return emplace(Param, Param, std::move(V)).second;
-   }
-
-   bool insert(llvm::StringRef name, bool isType,
-               std::vector<ResolvedTemplateArg> &&variadicArgs) {
-      auto idx = getIndexFor(name);
-      if (idx == string::npos)
-         return false;
-
-      auto Param = getParameters()[idx];
-      return emplace(Param, Param, isType, std::move(variadicArgs)).second;
-   }
-
    bool insert(ResolvedTemplateArg &&arg)
    {
       auto Param = arg.getParam();
@@ -445,11 +441,11 @@ public:
       return emplace(Param, move(arg)).second;
    }
 
-   size_t getIndexFor(llvm::StringRef name)
+   size_t getIndexFor(DeclarationName Name)
    {
       size_t idx = 0;
       for (auto &param : getParameters()) {
-         if (param->getName() == name)
+         if (param->getDeclName() == Name)
             return idx;
 
          ++idx;
@@ -475,7 +471,6 @@ public:
 
 private:
    SemaPass &SP;
-   llvm::ArrayRef<Expression*> OriginalArgs;
    llvm::SmallVector<ResolvedTemplateArg, 0> ResolvedArgs;
 
    SourceLocation ListLoc;
@@ -489,13 +484,6 @@ private:
    TemplateArgListResult Res;
 
    bool inferTemplateArg(QualType given, QualType needed);
-
-   template<class ...Args>
-   std::pair<size_t, bool> emplace(llvm::StringRef name, Args&&... args)
-   {
-      auto idx = getIndexFor(name);
-      return emplace(idx, std::forward<Args&&>(args)...);
-   }
 
    template<class ...Args>
    std::pair<size_t, bool> emplace(TemplateParamDecl *Decl, Args&&... args)
@@ -528,7 +516,7 @@ private:
             emplace(P, P, P->getCovariance(), P->getSourceLoc());
          }
          else {
-            emplace(P, P, Variant(), P->getSourceLoc());
+            emplace(P, P, nullptr, P->getSourceLoc());
          }
       }
    }
@@ -564,21 +552,20 @@ private:
 
    bool resolveDefault(ResolvedTemplateArg &Arg)
    {
-      auto Def = Arg.getParam()->getDefaultValue();
+      auto Param = Arg.getParam();
+      auto Def = Param->getDefaultValue();
       if (!Def)
          return false;
 
-      assert(!Arg.isVariadic() && "variadics cannot have a default value!");
+      assert(!Param->isVariadic() && "variadics cannot have a default value!");
 
-      if (Arg.isType()) {
-         Arg = ResolvedTemplateArg(Arg.getParam(),
-                                   Def->getExprType(),
+      if (Param->isTypeName()) {
+         Arg = ResolvedTemplateArg(Param, Def->getExprType(),
                                    Def->getSourceLoc());
       }
       else {
          auto SE = cast<StaticExpr>(Def);
-         Arg = ResolvedTemplateArg(Arg.getParam(),
-                                   Variant(SE->getEvaluatedExpr()),
+         Arg = ResolvedTemplateArg(Arg.getParam(), SE->getEvaluatedExpr(),
                                    Def->getSourceLoc());
       }
 
@@ -587,11 +574,24 @@ private:
 };
 
 void TemplateArgListImpl::inferFromReturnType(QualType contextualType,
-                                              QualType returnType) {
+                                              QualType returnType,
+                                              bool IsLastVariadicParam) {
    if (contextualType->isAutoType())
       return;
 
    inferTemplateArg(contextualType, returnType);
+
+   if (IsLastVariadicParam)
+      return;
+
+   // update variadic arguments so we don't infer them again
+   for (auto &Arg : ResolvedArgs) {
+      if (!Arg.isVariadic())
+         continue;
+
+      Arg.ManuallySpecifiedVariadicArgs
+         = (unsigned)Arg.VariadicArgs.size();
+   }
 }
 
 void
@@ -634,6 +634,11 @@ TemplateArgListImpl::inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
 
 bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
 {
+   if (given->isDependentType()) {
+      StillDependent = true;
+      return true;
+   }
+
    if (given->isReferenceType() && !needed->isReferenceType()) {
       given = given->getReferencedType();
    }
@@ -656,6 +661,15 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
                               cast<ReferenceType>(needed)->getReferencedType());
    }
 
+   if (needed->isMetaType()) {
+      if (!given->isMetaType()) {
+         return false;
+      }
+
+      return inferTemplateArg(cast<MetaType>(given)->getUnderlyingType(),
+                              cast<MetaType>(needed)->getUnderlyingType());
+   }
+
    if (needed->isFunctionType()) {
       if (!given->isFunctionType()) {
          return false;
@@ -663,11 +677,6 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
 
       auto givenFunc = cast<FunctionType>(given);
       auto neededFunc = cast<FunctionType>(needed);
-
-      if (givenFunc->getParamTypes().size()
-          != neededFunc->getParamTypes().size()) {
-         return false;
-      }
 
       auto givenRet = *givenFunc->getReturnType();
       auto neededRet = *neededFunc->getReturnType();
@@ -720,8 +729,8 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       }
 
       if (given->hasTemplateArgs() && needed->hasTemplateArgs()) {
-         auto &givenConcrete = cast<RecordType>(given)->getTemplateArgs();
-         auto &neededConcrete = cast<RecordType>(needed)->getTemplateArgs();
+         auto &givenConcrete = given->getTemplateArgs();
+         auto &neededConcrete = needed->getTemplateArgs();
 
          if (givenConcrete.size() != neededConcrete.size()) {
             return false;
@@ -765,19 +774,23 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       if (auto Inf = dyn_cast<DependentSizeArrayType>(neededArr)) {
          auto Ident = dyn_cast<IdentifierRefExpr>(Inf->getSizeExpr()
                                                      ->getExpr());
-         if (!Ident)
+
+         if (!Ident || Ident->getKind() != IdentifierKind::TemplateParam)
             return true;
 
-         size_t i = 0;
-         for (const auto &P : getParameters()) {
-            if (Ident->getIdentInfo() == P->getDeclName().getIdentifierInfo()) {
-               auto idx = getIndexFor(P);
-               if (ResolvedArgs[idx].isNull()) {
-                  emplace(P, P, Variant((uint64_t)givenArr->getNumElements()));
-               }
-            }
+         auto Param = Ident->getTemplateParam();
 
-            ++i;
+         // have to lookup via name because the address might change if an
+         // outer record is instantiated
+         auto Idx = getIndexFor(Param->getDeclName());
+         if (Idx == string::npos)
+            return true;
+
+         if (ResolvedArgs[Idx].isNull()) {
+            auto &Builder = SP.getILGen().Builder;
+            emplace(Idx, Param,
+                    Builder.GetConstantInt(Param->getValueType(),
+                                           givenArr->getNumElements()));
          }
       }
 
@@ -789,10 +802,8 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
    }
 
    GenericType *neededGen = cast<GenericType>(needed);
-   auto neededTypeName = neededGen->getGenericTypeName();
-
    auto parameters = getParameters();
-   auto idx = getIndexFor(neededTypeName);
+   auto idx = getIndexFor(neededGen->getParam());
 
    if (idx >= parameters.size())
       return true;
@@ -857,10 +868,11 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
    return true;
 }
 
-void MultiLevelTemplateArgList::inferFromReturnType(QualType contextualType,
-                                                    QualType returnType) {
+void MultiLevelTemplateArgList::inferFromType(QualType contextualType,
+                                              QualType returnType,
+                                              bool IsLastVariadicParam) {
    for (auto &list : *this)
-      list->inferFromReturnType(contextualType, returnType);
+      list->inferFromType(contextualType, returnType, IsLastVariadicParam);
 }
 
 void MultiLevelTemplateArgList::inferFromArgList(
@@ -1022,10 +1034,11 @@ void TemplateArgList::Profile(llvm::FoldingSetNodeID &ID,
       arg.Profile(ID);
 }
 
-void TemplateArgList::inferFromReturnType(QualType contextualType,
-                                          QualType returnType) const {
+void TemplateArgList::inferFromType(QualType contextualType,
+                                    QualType returnType,
+                                    bool IsLastVariadicParam) const {
    assert(pImpl && "incomplete argument list!");
-   pImpl->inferFromReturnType(contextualType, returnType);
+   pImpl->inferFromReturnType(contextualType, returnType, IsLastVariadicParam);
 }
 
 void
@@ -1047,16 +1060,6 @@ bool TemplateArgList::isPartiallyInferred() const
    return !pImpl->FullyInferred && pImpl->PartiallyInferred;
 }
 
-void TemplateArgList::resolveWith(NamedDecl *T)
-{
-   pImpl->Template = T;
-
-   assert(pImpl->ResolvedArgs.empty() && "should only be called once!");
-
-   pImpl->doInitialFill();
-   pImpl->resolveWithParameters();
-}
-
 TemplateArgListResult TemplateArgList::checkCompatibility() const
 {
    assert(pImpl && "incomplete argument list!");
@@ -1070,10 +1073,10 @@ bool TemplateArgList::isStillDependent() const
    return pImpl && pImpl->isStillDependant();
 }
 
-ResolvedTemplateArg* TemplateArgList::getNamedArg(llvm::StringRef name)
+ResolvedTemplateArg* TemplateArgList::getNamedArg(DeclarationName Name)
 const
 {
-   return pImpl ? pImpl->getNamedArg(name) : nullptr;
+   return pImpl ? pImpl->getNamedArg(Name) : nullptr;
 }
 
 ResolvedTemplateArg* TemplateArgList::getArgForParam(TemplateParamDecl *P) const
@@ -1103,12 +1106,6 @@ ast::NamedDecl* TemplateArgList::getTemplate() const
    return pImpl->Template;
 }
 
-llvm::ArrayRef<Expression*> TemplateArgList::getOriginalArgs() const
-{
-   assert(pImpl && "incomplete argument list!");
-   return pImpl->OriginalArgs;
-}
-
 bool TemplateArgList::empty() const
 {
    return !pImpl || pImpl->ResolvedArgs.empty();
@@ -1132,24 +1129,6 @@ const ResolvedTemplateArg& TemplateArgList::back() const
 const ResolvedTemplateArg& TemplateArgList::operator[](size_t idx) const
 {
    return pImpl->ResolvedArgs[idx];
-}
-
-bool TemplateArgList::insert(llvm::StringRef name, QualType ty)
-{
-   assert(pImpl && "incomplete argument list!");
-   return pImpl->insert(name, ty);
-}
-
-bool TemplateArgList::insert(llvm::StringRef name,Variant &&V)
-{
-   assert(pImpl && "incomplete argument list!");
-   return pImpl->insert(name, std::move(V));
-}
-
-bool TemplateArgList::insert(llvm::StringRef name, bool isType,
-                             std::vector<ResolvedTemplateArg> &&variadicArgs) {
-   assert(pImpl && "incomplete argument list!");
-   return pImpl->insert(name, isType, move(variadicArgs));
 }
 
 bool TemplateArgList::insert(ResolvedTemplateArg &&arg)
@@ -1211,6 +1190,13 @@ TemplateArgList::const_arg_iterator TemplateArgList::end() const
    return pImpl->ResolvedArgs.end();
 }
 
+llvm::MutableArrayRef<ResolvedTemplateArg>
+TemplateArgList::getMutableArgs() const
+{
+   return pImpl ? pImpl->ResolvedArgs
+                : llvm::MutableArrayRef<ResolvedTemplateArg>();
+}
+
 TemplateArgListResult MultiLevelTemplateArgList::checkCompatibility() const
 {
    for (auto &list : *this) {
@@ -1223,6 +1209,119 @@ TemplateArgListResult MultiLevelTemplateArgList::checkCompatibility() const
 }
 
 void MultiLevelTemplateArgList::print(llvm::raw_ostream &OS) const
+{
+   OS << "[";
+
+   for (auto &list : *this) {
+      list->print(OS, '\0', '\0', true);
+   }
+
+   OS << "]";
+}
+
+FinalTemplateArgumentList::FinalTemplateArgumentList(
+                              llvm::MutableArrayRef<ResolvedTemplateArg> Args,
+                              bool Dependent)
+   : NumArgs((unsigned)Args.size()),
+     Dependent(Dependent)
+{
+   auto it = getTrailingObjects<ResolvedTemplateArg>();
+   for (auto &Arg : Args) {
+      new (it++) ResolvedTemplateArg(Arg.clone());
+   }
+}
+
+FinalTemplateArgumentList*
+FinalTemplateArgumentList::Create(ASTContext &C,
+                                  const TemplateArgList &list) {
+   void *Mem = C.Allocate(totalSizeToAlloc<ResolvedTemplateArg>(list.size()),
+                          alignof(FinalTemplateArgumentList));
+
+   return new(Mem) FinalTemplateArgumentList(list.getMutableArgs(),
+                                             list.isStillDependent());
+}
+
+FinalTemplateArgumentList *FinalTemplateArgumentList::Create(
+                              ASTContext &C,
+                              llvm::MutableArrayRef<ResolvedTemplateArg> Args) {
+   void *Mem = C.Allocate(totalSizeToAlloc<ResolvedTemplateArg>(Args.size()),
+                          alignof(FinalTemplateArgumentList));
+
+   return new(Mem) FinalTemplateArgumentList(Args, false);
+}
+
+void FinalTemplateArgumentList::print(llvm::raw_ostream &OS, char beginC,
+                                      char endC, bool showNames) const {
+   if (beginC)
+      OS << beginC;
+
+   size_t i = 0;
+   auto end_it = end();
+
+   for (auto it = begin(); it != end_it; ++it, ++i) {
+      if (i != 0) OS << ", ";
+      if (showNames) {
+         OS << it->getParam()->getName();
+         OS << " = ";
+      }
+
+      OS << it->toString();
+   }
+
+   if (endC)
+      OS << endC;
+}
+
+std::string FinalTemplateArgumentList::toString(char begin, char end,
+                                                bool showNames) const {
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+   print(OS, begin, end, showNames);
+
+   return OS.str();
+}
+
+const ResolvedTemplateArg*
+FinalTemplateArgumentList::getNamedArg(DeclarationName Name) const
+{
+   for (auto &Arg : *this) {
+      if (!Arg.isNull() && Arg.getParam()->getDeclName() == Name)
+         return &Arg;
+   }
+
+   return nullptr;
+}
+
+const ResolvedTemplateArg*
+FinalTemplateArgumentList::getArgForParam(TemplateParamDecl *P) const
+{
+   for (auto &Arg : *this) {
+      if (Arg.getParam() == P)
+         return &Arg;
+   }
+
+   return nullptr;
+}
+
+ast::TemplateParamDecl*
+FinalTemplateArgumentList::getParameter(ResolvedTemplateArg *forArg) const
+{
+   for (auto &Arg : *this) {
+      if (&Arg == forArg)
+         return Arg.getParam();
+   }
+
+   return nullptr;
+}
+
+void FinalTemplateArgumentList::Profile(llvm::FoldingSetNodeID &ID,
+                                        const FinalTemplateArgumentList &list) {
+   ID.AddInteger(list.size());
+   for (auto &arg : list)
+      arg.Profile(ID);
+}
+
+void MultiLevelFinalTemplateArgList::print(llvm::raw_ostream &OS) const
 {
    OS << "[";
 

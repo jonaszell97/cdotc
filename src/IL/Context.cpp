@@ -19,10 +19,29 @@ Context::Context(ast::ASTContext &ASTCtx) : ASTCtx(ASTCtx)
 
 }
 
+template<class T>
+void destroyFoldingSet(llvm::FoldingSet<T> &Set)
+{
+   for (T &Val : Set)
+      delete &Val;
+}
+
 Context::~Context()
 {
    delete TrueVal;
    delete FalseVal;
+
+   destroyFoldingSet(ArrayConstants);
+   destroyFoldingSet(StructConstants);
+   destroyFoldingSet(ClassConstants);
+   destroyFoldingSet(UnionConstants);
+   destroyFoldingSet(EnumConstants);
+   destroyFoldingSet(BitCastConstants);
+   destroyFoldingSet(IntCastConstants);
+   destroyFoldingSet(AddrOfConstants);
+   destroyFoldingSet(LoadConstants);
+   destroyFoldingSet(OperatorConstants);
+   destroyFoldingSet(GEPConstants);
 }
 
 Function *Context::getFunction(llvm::StringRef name)

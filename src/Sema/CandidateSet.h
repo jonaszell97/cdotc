@@ -21,6 +21,7 @@ namespace ast {
    class Statement;
    class Expression;
    class SemaPass;
+   class PrecedenceGroupDecl;
 } // namespace ast
 
 class FunctionType;
@@ -39,6 +40,8 @@ struct CandidateSet {
       TooManyArguments,
       IncompatibleArgument,
       IncompatibleSelfArgument,
+      CouldNotInferArgumentType,
+      ArgumentRequiresRef,
 
       CouldNotInferTemplateArg, // Must be kept in this order
       ConflictingInferredArg,
@@ -56,37 +59,47 @@ struct CandidateSet {
       IsInvalid, // invalid declaration, don't emit any extra diagnostics
    };
 
+   enum UFCSKind {
+      NoUFCS,
+      MethodCalledAsFunction,
+      FunctionCalledAsMethod,
+   };
+
    struct Candidate {
       Candidate() = default;
 
       explicit Candidate(ast::CallableDecl *Func)
-         : Func(Func)
+         : Func(Func), UFCS(NoUFCS), IsBuiltinCand(false)
       {}
 
       explicit Candidate(FunctionType *FuncTy,
-                         PrecedenceGroup PG = {},
+                         ast::PrecedenceGroupDecl *PG = nullptr,
                          op::OperatorKind OpKind = op::UnknownOp)
-         : BuiltinCandidate{ FuncTy, PG, OpKind }
+         : precedenceGroup(PG), BuiltinCandidate{ FuncTy, OpKind },
+           UFCS(NoUFCS), IsBuiltinCand(true)
       {}
 
       explicit Candidate(ast::AliasDecl *Alias)
-         : Alias(Alias)
+         : Alias(Alias), UFCS(NoUFCS), IsBuiltinCand(false)
       {}
 
       union {
          ast::CallableDecl *Func = nullptr;
          ast::AliasDecl *Alias;
+         ast::PrecedenceGroupDecl *precedenceGroup;
       };
 
       sema::TemplateArgList InnerTemplateArgs;
 
       struct {
          FunctionType *FuncTy = nullptr;
-         PrecedenceGroup precedenceGroup;
          op::OperatorKind OpKind = op::UnknownOp;
       } BuiltinCandidate;
 
       FailureReason FR = None;
+      UFCSKind UFCS : 7;
+      bool IsBuiltinCand : 1;
+
       union {
          uintptr_t ConversionPenalty = 0;
          uintptr_t Data1; // additional info dependent on the failure reason
@@ -111,11 +124,11 @@ struct CandidateSet {
 
       FunctionType *getFunctionType() const;
       SourceLocation getSourceLoc() const;
-      PrecedenceGroup getPrecedenceGroup() const;
+      ast::PrecedenceGroupDecl *getPrecedenceGroup() const;
 
       bool isBuiltinCandidate() const
       {
-         return Func == nullptr;
+         return IsBuiltinCand;
       }
 
       void setHasTooFewArguments(uintptr_t givenCount,
@@ -135,6 +148,18 @@ struct CandidateSet {
       void setHasIncompatibleArgument(uintptr_t argIndex)
       {
          FR = IncompatibleArgument;
+         Data1 = argIndex;
+      }
+
+      void setCouldNotInferArgumentType(uintptr_t argIndex)
+      {
+         FR = CouldNotInferArgumentType;
+         Data1 = argIndex;
+      }
+
+      void setRequiresRef(uintptr_t argIndex)
+      {
+         FR = ArgumentRequiresRef;
          Data1 = argIndex;
       }
 
@@ -219,7 +244,8 @@ struct CandidateSet {
    };
 
    CandidateSet()
-      : Status(NoMatch), IncludesSelfArgument(false), InvalidCand(false)
+      : Status(NoMatch), IncludesSelfArgument(false), InvalidCand(false),
+        Dependent(false)
    {}
 
    CandidateSet(const CandidateSet&) = delete;
@@ -247,7 +273,7 @@ struct CandidateSet {
    }
 
    Candidate &addCandidate(FunctionType *FuncTy,
-                           PrecedenceGroup PG = {},
+                           ast::PrecedenceGroupDecl *PG = nullptr,
                            op::OperatorKind OpKind = op::UnknownOp) {
       Candidates.emplace_back(FuncTy, PG, OpKind);
       return Candidates.back();
@@ -325,16 +351,13 @@ struct CandidateSet {
 
    bool isDependent() const
    {
-      for (auto &Cand : Candidates)
-         if (Cand.FR == IsDependent)
-            return true;
-
-      return false;
+      return Dependent;
    }
 
    CandStatus Status         : 8;
    bool IncludesSelfArgument : 1;
    bool InvalidCand          : 1;
+   bool Dependent            : 1;
 
    uintptr_t BestConversionPenalty = uintptr_t(-1);
    std::vector<ConversionSequence> Conversions;

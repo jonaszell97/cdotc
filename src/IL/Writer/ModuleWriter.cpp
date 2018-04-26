@@ -133,6 +133,9 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
 
    if (ty->isReferenceType()) {
       out << (unsigned char)ValPrefix::Lvalue;
+      if (isa<MutableReferenceType>(ty))
+         out << "mut ";
+
       WriteQualType(ty->asReferenceType()->getReferencedType());
    }
    else if (ty->isVoidType()) {
@@ -156,7 +159,11 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
    }
    else if (ty->isPointerType()) {
       WriteQualType(ty->asPointerType()->getPointeeType());
-      out << '*';
+
+      if (isa<MutablePointerType>(ty))
+         out << " *mut";
+      else
+         out << '*';
    }
    else if (ty->isFunctionType() ) {
       if (ty->isLambdaType())
@@ -221,6 +228,9 @@ void ModuleWriterImpl::WriteEnumTy(ast::EnumDecl *E)
    auto Cases = E->getCases();
    for (auto C : Cases) {
       out << ", ";
+
+      if (C->isIndirect())
+         out << "indirect ";
 
       WriteName(C->getDeclName(), ValPrefix::Value);
 
@@ -382,12 +392,52 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
                 "[", ", ", "]");
       break;
    }
+   case Value::ConstantTupleID: {
+      auto Elements = cast<ConstantTuple>(C)->getVec();
+      WriteList(Elements, &ModuleWriterImpl::WriteConstant,
+                "(", ", ", ")");
+      break;
+   }
    case Value::ConstantStructID: {
       auto Struct = cast<ConstantStruct>(C);
       auto Elements = Struct->getElements();
 
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
-                "{ ", ", ", " }");
+                "struct { ", ", ", " }");
+      break;
+   }
+   case Value::ConstantClassID: {
+      auto Class = cast<ConstantClass>(C);
+      auto Elements = Class->getElements();
+
+      out << "class { ";
+      if (auto Base = Class->getBase()) {
+         WriteConstant(Base);
+         if (!Elements.empty())
+            out << ", ";
+      }
+
+      WriteList(Elements, &ModuleWriterImpl::WriteConstant,
+                "", ", ", " }");
+      break;
+   }
+   case Value::ConstantUnionID: {
+      auto Union = cast<ConstantUnion>(C);
+
+      out << "union { ";
+      WriteConstant(Union->getInitVal());
+      out << " }";
+
+      break;
+   }
+   case Value::ConstantEnumID: {
+      auto Enum = cast<ConstantEnum>(C);
+
+      out << "enum ";
+      WriteName(Enum->getCase()->getDeclName(), ValPrefix::Value);
+      WriteList(Enum->getCaseValues(), &ModuleWriterImpl::WriteConstant,
+                " { ", ", ", " }");
+
       break;
    }
    case Value::TypeInfoID: {
@@ -434,7 +484,45 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
 
       out << ") to ";
       WriteValueType(Cast->getType());
+
+      break;
    }
+   case Value::ConstantOperatorInstID: {
+      auto Op = cast<ConstantOperatorInst>(C);
+      switch (Op->getOpCode()) {
+#     define CDOT_BINARY_OP(Name, Op)                                   \
+      case ConstantOperatorInst::Name: out << Op; break;
+#     include "IL/Instructions.def"
+      }
+
+      out << " (";
+      WriteConstant(Op->getLHS());
+      out << ", ";
+      WriteConstant(Op->getRHS());
+      out << ")";
+
+      break;
+   }
+   case Value::ConstantGEPInstID: {
+      auto GEP = cast<ConstantGEPInst>(C);
+      out << "gep (";
+      WriteConstant(GEP->getIdx());
+      out << ", ";
+      WriteConstant(GEP->getTarget());
+      out << ")";
+
+      break;
+   }
+   case Value::ConstantLoadInstID: {
+      out << "load (";
+      WriteConstant(cast<ConstantLoadInst>(C)->getTarget());
+      out << ")";
+
+      break;
+   }
+   case Value::UndefValueID:
+      out << "undef";
+      break;
    default:
       llvm_unreachable("bad constant kind");
    }
@@ -454,24 +542,25 @@ void ModuleWriterImpl::WriteValue(const il::Value *V)
 
 void ModuleWriterImpl::WriteArgument(const Argument &Arg)
 {
-   if (Arg.isVararg()) {
-      out << "...";
-   }
-   else {
-      WriteName(Arg.getName(), ValPrefix::Value);
-      out << ": ";
-      WriteValueType(Arg.getType());
-   }
+   WriteName(Arg.getName(), ValPrefix::Value);
+   out << ": ";
+   WriteValueType(Arg.getType());
 }
 
 void ModuleWriterImpl::WriteArgumentNoName(const Argument &Arg)
 {
-   if (Arg.isVararg()) {
-      out << "...";
+   switch (Arg.getConvention()) {
+   case Argument::Copied:
+      break;
+   case Argument::Borrowed:
+      out << "[borrow] ";
+      break;
+   case Argument::Owned:
+      out << "[owned] ";
+      break;
    }
-   else {
-      WriteValueType(Arg.getType());
-   }
+
+   WriteValueType(Arg.getType());
 }
 
 void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
@@ -528,6 +617,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Alloca = dyn_cast<AllocaInst>(I)) {
       out << (Alloca->isHeapAlloca() ? "alloc_heap " : "alloc_stack ");
+      if (Alloca->isLet())
+         out << "[let] ";
+
       WriteQualType(I->getType()->getReferencedType());
 
       if (Alloca->getAllocSize() != 1) {
@@ -575,6 +667,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto Store = dyn_cast<StoreInst>(I)) {
       out << "store ";
+      if (Store->isInit())
+         out << "[init] ";
+
       WriteValue(Store->getSrc());
 
       out << ", ";
@@ -609,6 +704,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteValue(EnumExtract->getOperand(0));
 
       out << ", ";
+      if (EnumExtract->isIndirect())
+         out << "indirect ";
+
       WriteName(EnumExtract->getCaseName(), ValPrefix::Value);
 
       out << "(";
@@ -621,6 +719,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
 
    if (auto FieldRef = dyn_cast<FieldRefInst>(I)) {
       out << "field_ref ";
+      if (FieldRef->isLet())
+         out << "[let] ";
+
       WriteValueType(FieldRef->getType());
 
       out << " ";
@@ -675,6 +776,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       WriteRecordType(Init->getEnumTy());
 
       out << ", ";
+      if (Init->isIndirect())
+         out << "indirect ";
+
       WriteName(Init->getCaseName(), ValPrefix::Value);
 
       auto Args = Init->getArgs();

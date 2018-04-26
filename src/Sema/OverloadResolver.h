@@ -43,7 +43,8 @@ public:
 
    using ConvSeqVec = llvm::SmallVectorImpl<ConversionSequence>;
 
-   void isCallCompatible(CandidateSet::Candidate &comp,
+   void isCallCompatible(CandidateSet &CandSet,
+                         CandidateSet::Candidate &comp,
                          llvm::ArrayRef<QualType> givenArgs,
                          FunctionType *FuncTy,
                          ConvSeqVec &Conversions,
@@ -64,7 +65,8 @@ protected:
                             llvm::ArrayRef<FuncArgDecl*> neededArgs,
                             const sema::MultiLevelTemplateArgList&templateArgs);
 
-   void isVarargCallCompatible(CandidateSet::Candidate &comp,
+   void isVarargCallCompatible(CandidateSet &CandSet,
+                               CandidateSet::Candidate &comp,
                                llvm::ArrayRef<QualType> givenArgs,
                                FunctionType *FuncTy,
                                ConvSeqVec &Conversions);

@@ -49,10 +49,12 @@ void ILBuilder::SetInsertPoint(iterator it)
    LastDebugLoc = SourceLocation();
 }
 
-void ILBuilder::SetInsertPoint(BasicBlock *bb)
+void ILBuilder::SetInsertPoint(BasicBlock *bb, bool KeepDebugLoc)
 {
    InsertBlock = bb;
-   LastDebugLoc = SourceLocation();
+
+   if (!KeepDebugLoc)
+      LastDebugLoc = SourceLocation();
 
    if (bb) {
       insertPoint = bb->getInstructions().end();
@@ -87,7 +89,7 @@ il::DebugLocInst* ILBuilder::CreateDebugLoc(SourceLocation Loc)
    auto ID = FileMgr.getSourceId(Loc);
    auto LineAndCol = FileMgr.getLineAndCol(Loc);
 
-   auto inst = new DebugLocInst(LineAndCol.line, LineAndCol.col, ID,
+   auto inst = new DebugLocInst(Loc, LineAndCol.line, LineAndCol.col, ID,
                                 ValueType(Ctx, ASTCtx.getVoidType()),
                                 getInsertBlock());
 
@@ -196,6 +198,51 @@ ConstantStruct* ILBuilder::GetConstantStruct(ast::StructDecl *S,
                               elements);
 }
 
+ConstantClass *ILBuilder::GetConstantClass(ast::ClassDecl *S,
+                                           il::GlobalVariable *TI,
+                                           llvm::ArrayRef<Constant*> elements,
+                                           ConstantClass *Base) {
+   auto CS = GetConstantStruct(S, elements);
+   return ConstantClass::get(CS, TI, Base);
+}
+
+ConstantClass *ILBuilder::GetConstantClass(ConstantStruct *S,
+                                           il::GlobalVariable *TI,
+                                           ConstantClass *Base) {
+   return ConstantClass::get(S, TI, Base);
+}
+
+ConstantClass *ILBuilder::ForwardDeclareConstantClass(ast::ClassDecl *S,
+                                                      GlobalVariable *TI) {
+   return ConstantClass::ForwardDeclare(ValueType(Ctx, ASTCtx.getRecordType(S)),
+                                        TI);
+}
+
+ConstantClass* ILBuilder::ReplaceForwardDecl(ConstantClass *ForwardDecl,
+                                             ConstantStruct *StructVal,
+                                             ConstantClass *Base) {
+   return ForwardDecl->ReplaceForwardDecl(StructVal, Base);
+}
+
+ConstantClass* ILBuilder::ReplaceForwardDecl(ConstantClass *ForwardDecl,
+                                             llvm::ArrayRef<Constant*> elements,
+                                             ConstantClass *Base) {
+   return ReplaceForwardDecl(ForwardDecl,
+                             ConstantStruct::get(ForwardDecl->getType(),
+                                                 elements),
+                             Base);
+}
+
+ConstantUnion *ILBuilder::GetConstantUnion(ast::UnionDecl *U,
+                                           il::Constant *InitVal) {
+   return ConstantUnion::get(ValueType(Ctx, ASTCtx.getRecordType(U)), InitVal);
+}
+
+ConstantEnum *ILBuilder::GetConstantEnum(ast::EnumCaseDecl *Case,
+                                         llvm::ArrayRef<Constant*> CaseVals) {
+   return ConstantEnum::get(Ctx, Case, CaseVals);
+}
+
 ConstantArray *ILBuilder::GetConstantArray(QualType ArrTy,
                                            llvm::ArrayRef<il::Constant *> Arr) {
    return ConstantArray::get(ValueType(Ctx, ArrTy), Arr);
@@ -214,6 +261,21 @@ ConstantArray* ILBuilder::GetConstantArray(QualType ty, size_t numElements)
                              {});
 }
 
+ConstantTuple *ILBuilder::GetConstantTuple(llvm::ArrayRef<Constant *> Arr)
+{
+   llvm::SmallVector<QualType, 4> TupleTypes;
+   for (auto &Val : Arr)
+      TupleTypes.push_back(Val->getType());
+
+   return ConstantTuple::get(ValueType(Ctx, ASTCtx.getTupleType(TupleTypes)),
+                             Arr);
+}
+
+ConstantTuple *ILBuilder::GetConstantTuple(QualType TupleTy,
+                                           llvm::ArrayRef<Constant *> Arr) {
+   return ConstantTuple::get(ValueType(Ctx, TupleTy), Arr);
+}
+
 Constant* ILBuilder::GetConstantPtr(QualType ty, uintptr_t val)
 {
    if (val == 0)
@@ -223,15 +285,37 @@ Constant* ILBuilder::GetConstantPtr(QualType ty, uintptr_t val)
                                     ty);
 }
 
-Argument* ILBuilder::CreateArgument(QualType type, bool vararg,
+UndefValue *ILBuilder::GetUndefValue(QualType Ty)
+{
+   return UndefValue::get(ValueType(Ctx, Ty));
+}
+
+static QualType getMagicConstantType(ast::ASTContext &C,
+                                     MagicConstant::Kind Kind) {
+   switch (Kind) {
+   case MagicConstant::__ctfe:
+      return C.getBoolTy();
+   }
+}
+
+MagicConstant* ILBuilder::GetMagicConstant(unsigned char Kind)
+{
+   auto RealKind = static_cast<MagicConstant::Kind>(Kind);
+   return MagicConstant::get(ValueType(Ctx,
+                                       getMagicConstantType(ASTCtx, RealKind)),
+                             RealKind);
+}
+
+Argument* ILBuilder::CreateArgument(QualType type,
+                                    unsigned Convention,
                                     BasicBlock *parent,
                                     llvm::StringRef name,
                                     SourceLocation loc) {
    auto arg = new Argument(ValueType(Ctx, type),
-                           vararg, parent, name);
+                           (Argument::Convention)Convention, parent, name);
 
    if (loc)
-      arg->setLocation(loc);
+      arg->setSourceLoc(loc);
 
    return arg;
 }
@@ -247,8 +331,8 @@ Function* ILBuilder::CreateFunction(llvm::StringRef name,
       argTypes.push_back(arg->getType());
 
    unsigned flags = 0;
-   if (!mightThrow)
-      flags |= FunctionType::NoThrow;
+   if (mightThrow)
+      flags |= FunctionType::Throws;
 
    if (vararg)
       flags |= FunctionType::CStyleVararg;
@@ -257,7 +341,7 @@ Function* ILBuilder::CreateFunction(llvm::StringRef name,
 
    auto F = new Function(name, FuncTy, M);
    if (loc)
-      F->setLocation(loc);
+      F->setSourceLoc(loc);
 
    auto EntryBlock = new BasicBlock(F);
    EntryBlock->setName("entry");
@@ -276,14 +360,14 @@ Lambda* ILBuilder::CreateLambda(QualType returnType,
       argTypes.push_back(arg->getType());
 
    unsigned flags = 0;
-   if (!mightThrow)
-      flags |= FunctionType::NoThrow;
+   if (mightThrow)
+      flags |= FunctionType::Throws;
 
    auto FuncTy = ASTCtx.getFunctionType(returnType, argTypes, flags);
 
    auto L = new Lambda(FuncTy, M);
    if (loc)
-      L->setLocation(loc);
+      L->setSourceLoc(loc);
 
    auto EntryBlock = new BasicBlock(L);
    EntryBlock->setName("entry");
@@ -307,8 +391,8 @@ Method *ILBuilder::CreateMethod(llvm::StringRef methodName,
       argTypes.push_back(arg->getType());
 
    unsigned flags = 0;
-   if (!mightThrow)
-      flags |= FunctionType::NoThrow;
+   if (mightThrow)
+      flags |= FunctionType::Throws;
 
    if (vararg)
       flags |= FunctionType::CStyleVararg;
@@ -317,7 +401,7 @@ Method *ILBuilder::CreateMethod(llvm::StringRef methodName,
 
    auto M = new Method(methodName, FuncTy, isStatic, isVirtual, this->M);
    if (loc)
-      M->setLocation(loc);
+      M->setSourceLoc(loc);
 
    auto EntryBlock = new BasicBlock(M);
    EntryBlock->setName("entry");
@@ -332,14 +416,15 @@ Initializer* ILBuilder::CreateInitializer(llvm::StringRef methodName,
                                           llvm::ArrayRef<Argument *> args,
                                           bool mightThrow,
                                           bool vararg,
+                                          ConstructorKind Kind,
                                           SourceLocation loc) {
    llvm::SmallVector<QualType, 8> argTypes;
    for (auto &arg : args)
       argTypes.push_back(arg->getType());
 
    unsigned flags = 0;
-   if (!mightThrow)
-      flags |= FunctionType::NoThrow;
+   if (mightThrow)
+      flags |= FunctionType::Throws;
 
    if (vararg)
       flags |= FunctionType::CStyleVararg;
@@ -347,9 +432,9 @@ Initializer* ILBuilder::CreateInitializer(llvm::StringRef methodName,
    auto FuncTy = ASTCtx.getFunctionType(ASTCtx.getVoidType(),
                                         argTypes, flags);
 
-   auto I = new Initializer(methodName, FuncTy, M);
+   auto I = new Initializer(methodName, FuncTy, Kind, M);
    if (loc)
-      I->setLocation(loc);
+      I->setSourceLoc(loc);
 
    auto EntryBlock = new BasicBlock(I);
    EntryBlock->setName("entry");
@@ -366,7 +451,7 @@ GlobalVariable* ILBuilder::CreateGlobalVariable(QualType type, bool isConst,
                                                 SourceLocation loc) {
    auto G = new GlobalVariable(type, isConst, name, M, initializer);
    if (loc)
-      G->setLocation(loc);
+      G->setSourceLoc(loc);
 
    return G;
 }
@@ -379,7 +464,7 @@ GlobalVariable* ILBuilder::CreateGlobalVariable(Constant *initializer,
                                initializer);
 
    if (loc)
-      G->setLocation(loc);
+      G->setSourceLoc(loc);
 
    return G;
 }
@@ -468,6 +553,9 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
    case Intrinsic::typeinfo_ref:
       assert(args.size() == 1 && args.front()->getType()->isClass());
       break;
+   case Intrinsic::indirect_case_ref:
+      assert(args.size() == 1 && args.front()->getType()->isEnum());
+      break;
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end:
       assert(args.size() == 2);
@@ -494,17 +582,19 @@ QualType getIntrinsicReturnType(ast::ASTContext &Ctx, Intrinsic id)
    case Intrinsic::memcmp:
       return Ctx.getInt32Ty();
    case Intrinsic::get_lambda_env:
-      return Ctx.getReferenceType(Ctx.getInt8PtrTy()->getPointerTo(Ctx));
+      return Ctx.getMutableReferenceType(Ctx.getInt8PtrTy()->getPointerTo(Ctx));
    case Intrinsic::get_lambda_funcptr:
       return Ctx.getPointerType(Ctx.getInt8PtrTy());
    case Intrinsic::strong_refcount:
-      return Ctx.getReferenceType(Ctx.getUIntTy());
+      return Ctx.getMutableReferenceType(Ctx.getUIntTy());
    case Intrinsic::weak_refcount:
-      return Ctx.getReferenceType(Ctx.getUIntTy());
+      return Ctx.getMutableReferenceType(Ctx.getUIntTy());
    case Intrinsic::vtable_ref:
-      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
+      return Ctx.getMutableReferenceType(Ctx.getInt8PtrTy());
    case Intrinsic::typeinfo_ref:
-      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
+      return Ctx.getMutableReferenceType(Ctx.getInt8PtrTy());
+   case Intrinsic::indirect_case_ref:
+      return Ctx.getMutableReferenceType(Ctx.getInt8PtrTy());
    }
 }
 
@@ -620,8 +710,9 @@ VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Method *M,
 AllocaInst* ILBuilder::CreateAlloca(QualType ofType,
                                     unsigned int align,
                                     bool heap,
+                                    bool IsLet,
                                     llvm::StringRef name) {
-   auto inst = new AllocaInst(ValueType(Ctx, ofType),
+   auto inst = new AllocaInst(ValueType(Ctx, ofType), IsLet,
                               getInsertBlock(), align, heap);
 
    insertInstruction(inst, name);
@@ -632,9 +723,10 @@ AllocaInst* ILBuilder::CreateAlloca(QualType ofType,
                                     size_t size,
                                     unsigned int align,
                                     bool heap,
+                                    bool IsLet,
                                     llvm::StringRef name) {
-   auto inst = new AllocaInst(ValueType(Ctx, ofType), getInsertBlock(), size,
-                              align, heap);
+   auto inst = new AllocaInst(ValueType(Ctx, ofType), IsLet,
+                              getInsertBlock(), size, align, heap);
 
    insertInstruction(inst, name);
    return inst;
@@ -645,7 +737,7 @@ Instruction* ILBuilder::AllocUninitialized(size_t size,
                                            bool heap,
                                            llvm::StringRef name) {
    auto ArrTy = ASTCtx.getArrayType(ASTCtx.getUInt8Ty(), size);
-   auto alloca = new AllocaInst(ValueType(Ctx, ArrTy), getInsertBlock(),
+   auto alloca = new AllocaInst(ValueType(Ctx, ArrTy), false, getInsertBlock(),
                                 1, 0, heap);
 
    insertInstruction(alloca, "");
@@ -682,8 +774,9 @@ DeallocBoxInst* ILBuilder::CreateDeallocBox(il::Value *V,
 
 StoreInst* ILBuilder::CreateStore(Value *val,
                                   Value *ptr,
+                                  bool IsInit,
                                   llvm::StringRef name) {
-   auto inst = new StoreInst(ptr, val, getInsertBlock());
+   auto inst = new StoreInst(ptr, val, IsInit, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -691,8 +784,9 @@ StoreInst* ILBuilder::CreateStore(Value *val,
 
 FieldRefInst* ILBuilder::CreateFieldRef(Value *val,
                                         const DeclarationName &fieldName,
+                                        bool IsLet,
                                         llvm::StringRef name) {
-   auto inst = new FieldRefInst(val, fieldName, getInsertBlock());
+   auto inst = new FieldRefInst(val, fieldName, IsLet, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -700,8 +794,9 @@ FieldRefInst* ILBuilder::CreateFieldRef(Value *val,
 
 GEPInst* ILBuilder::CreateStructGEP(il::Value *val,
                                     size_t idx,
+                                    bool IsLet,
                                     llvm::StringRef name) {
-   auto inst = new GEPInst(val, idx, getInsertBlock());
+   auto inst = new GEPInst(val, idx, IsLet, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -709,24 +804,25 @@ GEPInst* ILBuilder::CreateStructGEP(il::Value *val,
 
 GEPInst* ILBuilder::CreateGEP(Value *val,
                               size_t idx,
+                              bool IsLet,
                               llvm::StringRef name) {
    auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
-   auto gep = new GEPInst(val, CI, getInsertBlock());
+   auto gep = new GEPInst(val, CI, IsLet, getInsertBlock());
    insertInstruction(gep, name);
 
    return gep;
 }
 
 Instruction* ILBuilder::CreateExtractValue(Value *val,
-                                           size_t idx,
+                                           size_t idx, bool IsLet,
                                            llvm::StringRef name) {
-   return CreateLoad(CreateGEP(val, idx, name));
+   return CreateLoad(CreateGEP(val, idx, IsLet, name));
 }
 
 GEPInst* ILBuilder::CreateGEP(Value *val, Value *idx,
-                              llvm::StringRef name) {
-   auto gep = new GEPInst(val, idx, getInsertBlock());
+                              bool IsLet, llvm::StringRef name) {
+   auto gep = new GEPInst(val, idx, IsLet, getInsertBlock());
    insertInstruction(gep, name);
 
    return gep;
@@ -743,10 +839,11 @@ CaptureExtractInst* ILBuilder::CreateCaptureExtract(size_t idx,
 }
 
 TupleExtractInst* ILBuilder::CreateTupleExtract(Value *val, size_t idx,
+                                                bool IsLet,
                                                 llvm::StringRef name) {
    auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), idx);
 
-   auto gep = new TupleExtractInst(val, CI, getInsertBlock());
+   auto gep = new TupleExtractInst(val, CI, IsLet, getInsertBlock());
    insertInstruction(gep, name);
 
    return gep;
@@ -761,14 +858,28 @@ EnumRawValueInst* ILBuilder::CreateEnumRawValue(Value *Val,
 }
 
 EnumExtractInst* ILBuilder::CreateEnumExtract(Value *Val,
-                                              const IdentifierInfo *caseName,
-                                              size_t caseVal,
+                                              ast::EnumCaseDecl *Case,
+                                              size_t caseVal, bool IsLet,
                                               llvm::StringRef name) {
    auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), caseVal);
 
-   auto inst = new EnumExtractInst(Val, caseName, CI, getInsertBlock());
+   auto inst = new EnumExtractInst(Val, Case, CI, IsLet, getInsertBlock());
    insertInstruction(inst, name);
 
+   return inst;
+}
+
+EnumExtractInst* ILBuilder::CreateEnumExtract(Value *Val,
+                                              const IdentifierInfo *CaseName,
+                                              size_t caseVal, bool IsLet,
+                                              llvm::StringRef name) {
+   auto CI = ConstantInt::get(ValueType(Ctx, ASTCtx.getUIntTy()), caseVal);
+
+   auto E = support::cast<ast::EnumDecl>(Val->getType()->getRecord());
+   auto inst = new EnumExtractInst(Val, E->hasCase(CaseName), CI, IsLet,
+                                   getInsertBlock());
+
+   insertInstruction(inst, name);
    return inst;
 }
 
@@ -815,10 +926,10 @@ UnionInitInst* ILBuilder::CreateUnionInit(ast::UnionDecl *UnionTy,
 }
 
 EnumInitInst* ILBuilder::CreateEnumInit(ast::EnumDecl *EnumTy,
-                                        const IdentifierInfo *caseName,
+                                        ast::EnumCaseDecl *Case,
                                         llvm::ArrayRef<Value *> args,
                                         llvm::StringRef name) {
-   auto inst = new EnumInitInst(Ctx, EnumTy, caseName, args, getInsertBlock());
+   auto inst = new EnumInitInst(Ctx, EnumTy, Case, args, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;

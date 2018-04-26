@@ -40,6 +40,21 @@ Lexer::Lexer(IdentifierTable &Idents,
 
 }
 
+Lexer::Lexer(IdentifierTable &Idents,
+             DiagnosticsEngine &Diags,
+             llvm::ArrayRef<Token> Tokens,
+             unsigned sourceId,
+             unsigned int offset)
+   : Idents(Idents), Diags(Diags), tokens(Tokens.begin(), Tokens.end()),
+     sourceId(sourceId), tokenIndex(1),
+     CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
+     InterpolationBegin('$'), doneLexing(true), isModuleLexer(false),
+     offset(offset)
+{
+   if (tokens.empty() || !tokens.back().is(tok::eof))
+      tokens.push_back(Token(tok::eof));
+}
+
 Token Lexer::makeEOF()
 {
    auto Offset = std::max<unsigned long>(1, BufEnd - BufStart + offset - 1);
@@ -61,11 +76,11 @@ void Lexer::lex()
    }
    while (!tokens.back().is(tok::eof));
 
-   TokenVec finalTokenVec;
-   Preprocessor PP(finalTokenVec, Idents, Diags, tokens, sourceId);
-   PP.doPreprocessing();
-
-   tokens     = std::move(finalTokenVec);
+//   TokenVec finalTokenVec;
+//   Preprocessor PP(finalTokenVec, Idents, Diags, tokens, sourceId);
+//   PP.doPreprocessing();
+//
+//   tokens     = std::move(finalTokenVec);
    tokenIndex = 1;
    doneLexing = true;
 }
@@ -234,19 +249,13 @@ Token Lexer::lex_next_token()
    }
    // dollar identifier
    case '$': {
-      kind = tok::dollar_ident;
+      if (::isdigit(*CurPtr))
+         return lexClosureArgumentName();
 
-      if (*CurPtr == '$') {
-         ++TokBegin;
-         ++CurPtr;
-         kind = tok::dollar_dollar_ident;
-      }
-      else if (!isIdentifierContinuationChar(*CurPtr)) {
-         return makeToken(tok::dollar);
-      }
+      if (isIdentifierContinuationChar(*CurPtr))
+         return lexIdentifier(tok::dollar_ident);
 
-      ++TokBegin;
-      return lexIdentifier(kind);
+      return tok::dollar;
    }
    // punctuators
    case ',': kind = tok::comma; break;
@@ -565,17 +574,16 @@ Token Lexer::lexStringLiteral()
             CurPtr += 2;
          }
       }
-      else if (*CurPtr == InterpolationBegin) {
+      else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
          if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
             ++CurPtr;
             continue;
          }
 
-         tokens.emplace_back(TokBegin, CurPtr - TokBegin,
-                             tok::stringliteral,
-                             SourceLocation(CurPtr - BufStart + offset));
+         tokens.emplace_back(makeToken(TokBegin, CurPtr - TokBegin,
+                                       tok::stringliteral));
 
-         tokens.emplace_back(tok::sentinel);
+         tokens.emplace_back(tok::interpolation_begin);
 
          ++CurPtr;
          if (*CurPtr == '{') {
@@ -605,7 +613,7 @@ Token Lexer::lexStringLiteral()
             tokens.push_back(lex_next_token());
          }
 
-         tokens.emplace_back(tok::sentinel);
+         tokens.emplace_back(tok::interpolation_end);
          TokBegin = CurPtr;
 
          continue;
@@ -630,7 +638,8 @@ void Lexer::lexDiagnostic()
    while (1) {
       if (*CurPtr == '"')
          break;
-      else if (*CurPtr == '\0') {
+
+      if (*CurPtr == '\0') {
          if (CurPtr >= BufEnd)
             break;
       }
@@ -645,6 +654,15 @@ void Lexer::lexDiagnostic()
          }
       }
       else if (*CurPtr == InterpolationBegin) {
+         if (CurPtr[1] == InterpolationBegin) {
+            ++CurPtr;
+            tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
+                                SourceLocation(CurPtr - BufStart + offset));
+
+            TokBegin = ++CurPtr;
+            continue;
+         }
+
          tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
                              SourceLocation(CurPtr - BufStart + offset));
 
@@ -866,6 +884,20 @@ Token Lexer::lexNumericLiteral()
                     foundDecimalPoint ? tok::fpliteral : tok::integerliteral);
 }
 
+Token Lexer::lexClosureArgumentName()
+{
+   if (!::isdigit(*CurPtr)) {
+      Diags.Diag(err_generic_error)
+         << "expected numeric literal after '$'"
+         << SourceLocation(currentIndex() + offset);
+   }
+
+   while (::isdigit(*CurPtr))
+      ++CurPtr;
+
+   return makeToken(TokBegin + 1, CurPtr - TokBegin - 1, tok::closure_arg);
+}
+
 bool Lexer::isIdentifierContinuationChar(char c)
 {
    switch (c) {
@@ -901,16 +933,38 @@ bool Lexer::isIdentifierContinuationChar(char c)
       case '\r':
       case ' ':
       case '\0':
+      case '$':
          return false;
       default:
          return true;
    }
 }
 
-Token Lexer::lexIdentifier(cdot::lex::tok::TokenType identifierKind)
+static bool isMacroInvocation(const char *CurPtr)
+{
+   if (*CurPtr != '!')
+      return false;
+
+   switch (CurPtr[1]) {
+   case '(': case '[': case '{':
+      return true;
+   default:
+      return false;
+   }
+}
+
+Token Lexer::lexIdentifier(tok::TokenType identifierKind)
 {
    while (isIdentifierContinuationChar(*CurPtr)) {
       ++CurPtr;
+   }
+
+   if (identifierKind == tok::ident && isMacroInvocation(CurPtr)) {
+      auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
+      ++CurPtr;
+
+      return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+                   tok::macro_name);
    }
 
    auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });

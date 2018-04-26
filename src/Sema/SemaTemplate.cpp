@@ -25,9 +25,24 @@ bool SemaPass::inTemplate()
    return false;
 }
 
+bool SemaPass::isInDependentContext()
+{
+   for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
+      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+         if (ND->inDependentContext() || isa<ProtocolDecl>(ND))
+            return true;
+      }
+   }
+
+   return false;
+}
+
 void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
 {
    checkProtocolConformance(R);
+   if (R->isInvalid())
+      return;
+
    getILGen().GenerateTypeInfo(R);
 }
 
@@ -68,6 +83,14 @@ void SemaPass::visitFunctionInstantiation(StmtOrDecl DependentStmt,
          ILGen->DeclareFunction(M);
 
       (void)visitStmt(DependentStmt, M);
+
+      // if this is a complete initializer, we also need to declare the base
+      // initializer
+      if (auto Init = dyn_cast<InitDecl>(M)) {
+         if (Init->isCompleteInitializer()) {
+            ILGen->DeclareFunction(Init->getBaseInit());
+         }
+      }
    }
 }
 

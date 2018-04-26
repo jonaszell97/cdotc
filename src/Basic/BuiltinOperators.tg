@@ -91,9 +91,6 @@ def As         : BinaryOperator<"as", Cast>
 def AsExclaim  : BinaryOperator<"as!", Cast>
 def AsQuestion : BinaryOperator<"as?", Cast>
 
-// Other Ops
-def Colon      : BinaryOperator<":", Cast>
-
 // UNARY OPS
 
 class PrefixUnaryOp<opString: string> : BuiltinOperator<opString, Unknown, Prefix> {}
@@ -197,9 +194,6 @@ namespace Binary {
     def `as`  : OperatorInfo<As, UnknownAny, [Any]>
     def `as?` : OperatorInfo<AsQuestion, UnknownAny, [Any]>
     def `as!` : OperatorInfo<AsExclaim, UnknownAny, [Any]>
-
-    // Other Ops
-    def `:` : OperatorInfo<Colon, i1, [AnyMeta]>
 }
 
 namespace Unary {

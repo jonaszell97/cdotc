@@ -3,6 +3,7 @@
 //
 
 #include "SemaPass.h"
+#include "IL/Constants.h"
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -13,7 +14,7 @@ namespace ast {
 void SemaPass::checkDeclAttrs(Decl *D, Attr::VisitationPoint VP)
 {
    for (auto &A : D->getAttributes()) {
-      if (VP < A->getVisitationPoint())
+      if (VP != A->getVisitationPoint())
          continue;
 
       switch (A->getKind()) {
@@ -99,22 +100,24 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
    if (!ValueResult)
       return;
 
-   auto &Val = ValueResult.getValue();
-   if (!Val.isInt()) {
+   auto Val = ValueResult.getValue();
+   if (!isa<il::ConstantInt>(Val)) {
       return diagnose(A->getAlignment(), err_attr_align_bad_arg,
                       /*must be integral*/ 0);
    }
 
-   if (Val.getAPSInt() > MaxAlign) {
+   auto &APS = cast<il::ConstantInt>(Val)->getValue();
+
+   if (APS > MaxAlign) {
       return diagnose(A->getAlignment(), err_attr_align_too_high);
    }
 
-   if (Val.getAPSInt() <= 0) {
+   if (APS <= 0) {
       return diagnose(A->getAlignment(), err_attr_align_bad_arg,
                       /*<= 0>*/ 2);
    }
 
-   if (Val.getAPSInt() != 1 && Val.getAPSInt().getZExtValue() % 2 != 0) {
+   if (APS != 1 && APS.getZExtValue() % 2 != 0) {
       return diagnose(A->getAlignment(), err_attr_align_bad_arg,
                       /*must be power of two*/ 1);
    }
@@ -128,9 +131,9 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
       NaturalAlignment = cast<RecordDecl>(D)->getAlignment();
    }
 
-   if (Val.getAPSInt() < NaturalAlignment) {
+   if (APS < NaturalAlignment) {
       return diagnose(A->getAlignment(), err_attr_align_lower_than_natural,
-                      NaturalAlignment, Val.getAPSInt());
+                      NaturalAlignment, APS);
    }
 }
 
@@ -140,8 +143,6 @@ void SemaPass::checkImplicitAttr(Decl *D, ImplicitAttr*)
    if (!isa<InitDecl>(C) && !C->isOperator()) {
       return diagnose(D, err_implicit_attr_not_valid);
    }
-
-   C->getOperator().setImplicit(true);
 }
 
 void SemaPass::checkThinAttr(Expression *E, ThinAttr *A)
@@ -153,6 +154,12 @@ void SemaPass::checkThinAttr(Expression *E, ThinAttr *A)
 
    diagnose(E, err_attr_can_only_be_used, "thin", /*function types*/3,
             E->getSourceRange());
+}
+
+void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr*)
+{
+   auto ND = cast<NamedDecl>(D);
+   BuiltinDecls[ND->getDeclName()] = ND;
 }
 
 #define CDOT_ATTR_SEMA

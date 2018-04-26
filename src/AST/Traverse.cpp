@@ -378,7 +378,8 @@ void collectStringLiteral(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectStringInterpolation(llvm::SmallVectorImpl<Statement*> &children,
                                 StringInterpolation* stmt) {
-   insertStmts(children, stmt->getStrings());
+   for (auto &Seg : stmt->getSegments())
+      children.push_back(Seg);
 }
 
 void collectLambdaExpr(llvm::SmallVectorImpl<Statement*> &children,
@@ -441,6 +442,12 @@ void collectCallExpr(llvm::SmallVectorImpl<Statement*> &children,
    insertStmts(children, stmt->getArgs());
 }
 
+void collectAnonymousCallExpr(llvm::SmallVectorImpl<Statement*> &children,
+                              AnonymousCallExpr* stmt) {
+   insertIfNotNull(children, stmt->getParentExpr());
+   insertStmts(children, stmt->getArgs());
+}
+
 void collectEnumCaseExpr(llvm::SmallVectorImpl<Statement*> &children,
                          EnumCaseExpr* stmt) {
    insertStmts(children, stmt->getArgs());
@@ -486,6 +493,12 @@ void collectUnaryOperator(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectBinaryOperator(llvm::SmallVectorImpl<Statement*> &children,
                            BinaryOperator* stmt) {
+   children.push_back(stmt->getLhs());
+   children.push_back(stmt->getRhs());
+}
+
+void collectAssignExpr(llvm::SmallVectorImpl<Statement*> &children,
+                       AssignExpr* stmt) {
    children.push_back(stmt->getLhs());
    children.push_back(stmt->getRhs());
 }
@@ -567,12 +580,16 @@ void collectAttributedExpr(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectFunctionTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
                              FunctionTypeExpr* expr) {
+   for (auto &Ty : expr->getArgTypes())
+      children.push_back(Ty.getTypeExpr());
 
+   children.push_back(expr->getReturnType().getTypeExpr());
 }
 
 void collectTupleTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
                              TupleTypeExpr* expr) {
-
+   for (auto &Ty : expr->getContainedTypes())
+      children.push_back(Ty.getTypeExpr());
 }
 
 void collectArrayTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
@@ -602,6 +619,21 @@ void collectOptionTypeExpr(llvm::SmallVectorImpl<Statement*> &children,
 
 void collectMixinStmt(llvm::SmallVectorImpl<Statement*> &children,
                            MixinStmt* expr) {
+
+}
+
+void collectMacroExpansionExpr(llvm::SmallVectorImpl<Statement*> &children,
+                      MacroExpansionExpr* expr) {
+
+}
+
+void collectMacroVariableExpr(llvm::SmallVectorImpl<Statement*> &children,
+                               MacroVariableExpr* expr) {
+
+}
+
+void collectMacroExpansionStmt(llvm::SmallVectorImpl<Statement*> &children,
+                               MacroExpansionStmt* expr) {
 
 }
 

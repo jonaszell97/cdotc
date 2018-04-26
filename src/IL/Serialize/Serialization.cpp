@@ -107,9 +107,6 @@ private:
 
    void WriteArgument(const Argument &Arg)
    {
-      if (Arg.isVararg())
-         return WriteBool(true);
-
       WriteBool(false);
       WriteString(Arg.getName());
       WriteQualType(Arg.getType());
@@ -239,7 +236,7 @@ private:
          type = ReadQualType();
       }
 
-      return Builder.CreateArgument(type, vararg, nullptr, name);
+      return Builder.CreateArgument(type, 0, nullptr, name);
    }
 };
 
@@ -447,7 +444,7 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
 
    if (auto EnumExtract = dyn_cast<EnumExtractInst>(&I)) {
       WriteValue(*EnumExtract->getOperand(0));
-      WriteString(EnumExtract->getCaseName());
+//      WriteString(EnumExtract->getCaseName());
       Writer.WriteULEB128(EnumExtract->getCaseVal()->getZExtValue());
 
       return;
@@ -478,7 +475,7 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
 
    if (auto Init = dyn_cast<EnumInitInst>(&I)) {
       WriteString(Init->getEnumTy()->getName());
-      WriteString(Init->getCaseName());
+//      WriteString(Init->getCaseName());
       WriteList(Init->getArgs(), &ModuleSerializer::WriteValuePtr);
 
       return;
@@ -486,7 +483,7 @@ void ModuleSerializer::WriteInstruction(const Instruction &I)
 
    if (auto Lambda = dyn_cast<LambdaInitInst>(&I)) {
       WriteString(Lambda->getFunction()->getName());
-      WriteList(Lambda->getOperands(), &ModuleSerializer::WriteValuePtr);
+//      WriteList(Lambda->getOperands(), &ModuleSerializer::WriteValuePtr);
 
       return;
    }
@@ -679,16 +676,17 @@ Instruction *ModuleDeserializer::ReadInstruction()
 
       // FIXME
       I = Builder.CreateFieldRef(val,
-                                 DeclarationName(),
+                                 DeclarationName(), false,
                                  fieldName);
    }
    else if (kind == Value::EnumExtractInstID) {
-      auto val = ReadValue();
+//      auto val = ReadValue();
 //      auto caseName = ReadString();
-      auto idx = Reader.ReadULEB128();
+//      auto idx = Reader.ReadULEB128();
 
       //FIXME
-      I = Builder.CreateEnumExtract(val, nullptr, idx);
+      llvm_unreachable("");
+//      I = Builder.CreateEnumExtract(val, nullptr, idx);
    }
    else if (kind == Value::EnumRawValueInstID) {
       I = Builder.CreateEnumRawValue(ReadValue());

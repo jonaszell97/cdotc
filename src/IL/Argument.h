@@ -16,22 +16,30 @@ class BasicBlock;
 class Argument: public Value,
                 public llvm::ilist_node_with_parent<Argument, BasicBlock> {
 public:
+   enum Convention {
+      Copied, Owned, Borrowed,
+   };
+
    Argument(ValueType type,
-            bool vararg,
+            Convention Conv,
             BasicBlock *parent,
             llvm::StringRef name = "");
 
    BasicBlock *getParent() const { return parent; }
-   void setParent(BasicBlock *p);
-   bool isVararg() const { return vararg; }
+   void setParent(BasicBlock *p) { parent = p; }
 
-   bool isSelf() const { return self; }
-   void setSelf(bool self) { Argument::self = self; }
+   Convention getConvention() const { return (Convention)ArgBits.Convention; }
+   void setConvention(Convention C) { ArgBits.Convention = C; }
+
+   bool isSelf() const { return ArgBits.IsSelf; }
+   void setSelf(bool self) { ArgBits.IsSelf = self; }
+
+   SourceLocation getSourceLoc() const { return SourceLoc; }
+   void setSourceLoc(SourceLocation Loc) { SourceLoc = Loc; }
 
 protected:
+   SourceLocation SourceLoc;
    BasicBlock *parent;
-   bool vararg = false;
-   bool self = false;
 
 public:
    static bool classof(Argument const* T) { return true; }

@@ -19,6 +19,7 @@ namespace ast {
 
 namespace il {
    class Function;
+   class Constant;
 } // namespace il;
 
 namespace ctfe {
@@ -27,30 +28,20 @@ class EngineImpl;
 class Value;
 
 struct CTFEResult {
-   explicit CTFEResult(Variant &&Val)
-      : val(std::move(Val)), HadError(false)
+   explicit CTFEResult(il::Constant *Val)
+      : Val(Val), HadError(false)
    {}
 
-   CTFEResult() : HadError(true)
+   CTFEResult() : Val(nullptr), HadError(true)
    {}
 
-   bool hadError() const
-   {
-      return HadError;
-   }
+   bool hadError() const { return HadError; }
+   operator bool() const { return !hadError(); }
 
-   operator bool() const
-   {
-      return !hadError();
-   }
-
-   Variant &getVal()
-   {
-      return val;
-   }
+   il::Constant *getVal() const { return Val; }
 
 private:
-   cdot::Variant val;
+   il::Constant *Val;
    bool HadError;
 };
 

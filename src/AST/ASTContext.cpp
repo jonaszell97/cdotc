@@ -122,6 +122,27 @@ PointerType* ASTContext::getPointerType(QualType pointeeType) const
    return New;
 }
 
+MutablePointerType*
+ASTContext::getMutablePointerType(QualType pointeeType) const
+{
+   llvm::FoldingSetNodeID ID;
+   MutablePointerType::Profile(ID, pointeeType);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = MutablePointerTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!pointeeType.isCanonical())
+      CanonicalTy = getMutablePointerType(pointeeType.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment)
+      MutablePointerType(pointeeType, CanonicalTy);
+
+   MutablePointerTypes.InsertNode(New, insertPos);
+   return New;
+}
+
 ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
 {
    assert(!referencedType->isReferenceType() && "reference to reference type!");
@@ -141,6 +162,29 @@ ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
                                                        CanonicalTy);
 
    ReferenceTypes.InsertNode(New, insertPos);
+   return New;
+}
+
+MutableReferenceType*
+ASTContext::getMutableReferenceType(QualType referencedType) const
+{
+   assert(!referencedType->isReferenceType() && "reference to reference type!");
+
+   llvm::FoldingSetNodeID ID;
+   MutableReferenceType::Profile(ID, referencedType);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = MutableReferenceTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!referencedType.isCanonical())
+      CanonicalTy = getMutableReferenceType(referencedType.getCanonicalType());
+
+   auto New = new (*this, TypeAlignment) MutableReferenceType(referencedType,
+                                                              CanonicalTy);
+
+   MutableReferenceTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -338,7 +382,7 @@ static void addArg(const sema::ResolvedTemplateArg &arg,
 }
 
 static std::vector<QualType> getTypeTemplateParams(
-   const sema::TemplateArgList &list)
+   const sema::FinalTemplateArgumentList &list)
 {
    std::vector<QualType> vec;
    for (auto &arg : list) {
@@ -378,22 +422,20 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
 
 DependentRecordType*
 ASTContext::getDependentRecordType(RecordDecl *R,
-                                   sema::TemplateArgList &&args) const {
+                                   sema::FinalTemplateArgumentList *args)const{
    llvm::FoldingSetNodeID ID;
-   DependentRecordType::Profile(ID, R, &args);
+   DependentRecordType::Profile(ID, R, args);
 
    void *insertPos = nullptr;
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto typeParams = getTypeTemplateParams(args);
-   auto *newArgs = new(*this) sema::TemplateArgList(std::move(args));
-
+   auto typeParams = getTypeTemplateParams(*args);
    void *Mem = Allocate(sizeof(DependentRecordType)
                         + typeParams.size() * sizeof(QualType),
                         TypeAlignment);
 
-   auto New = new(Mem) DependentRecordType(R, newArgs, typeParams);
+   auto New = new(Mem) DependentRecordType(R, args, typeParams);
 
    DependentRecordTypes.InsertNode(New, insertPos);
    return New;
@@ -465,7 +507,7 @@ TypedefType* ASTContext::getTypedefType(cdot::ast::TypedefDecl *TD) const
 
 CallableDecl*
 ASTContext::getFunctionTemplateInstantiation(CallableDecl *Template,
-                                             sema::TemplateArgList &argList,
+                                             TemplateArgs &argList,
                                              void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    CallableDecl::Profile(ID, Template, argList);
@@ -475,7 +517,7 @@ ASTContext::getFunctionTemplateInstantiation(CallableDecl *Template,
 
 RecordDecl*
 ASTContext::getRecordTemplateInstantiation(RecordDecl *Template,
-                                           sema::TemplateArgList &argList,
+                                           TemplateArgs &argList,
                                            void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    RecordDecl::Profile(ID, Template, argList);
@@ -485,8 +527,8 @@ ASTContext::getRecordTemplateInstantiation(RecordDecl *Template,
 
 AliasDecl*
 ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
-                                           sema::TemplateArgList &argList,
-                                           void *&insertPos) {
+                                          TemplateArgs &argList,
+                                          void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    AliasDecl::Profile(ID, Template, argList);
 
@@ -506,6 +548,19 @@ void ASTContext::insertRecordTemplateInstantiation(RecordDecl *Inst,
 void ASTContext::insertAliasTemplateInstantiation(AliasDecl *Inst,
                                                   void *insertPos) {
    AliasTemplateInstatiations.InsertNode(Inst, insertPos);
+}
+
+void ASTContext::initializeOpNames() const
+{
+#  define Infix(Spelling) registerInfixOperator(&Identifiers.get(Spelling))
+#  define Prefix(Spelling) registerPrefixOperator(&Identifiers.get(Spelling))
+#  define Postfix(Spelling) registerPostfixOperator(&Identifiers.get(Spelling))
+#  define CDOT_OPERATOR(Name, Spelling, Precedence, Fix) Fix(Spelling);
+#  include "Basic/BuiltinOperators.def"
+
+#  undef Infix
+#  undef Prefix
+#  undef Postfix
 }
 
 ASTContext::ASTContext()

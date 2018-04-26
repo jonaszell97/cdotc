@@ -165,6 +165,9 @@ void  VerifierPass::visitStoreInst(StoreInst const& I)
    auto dst = I.getDst()->getType();
    auto src = I.getSrc()->getType();
 
+   errorIf(!dst->isMutableReferenceType() && !I.isInit(),
+           "storing to constant reference", I);
+
    if (dst->isReferenceType()) {
       errorIf(!typesCompatible(dst->getReferencedType(), src),
               "stored operand must have the same type as destination", I);
@@ -252,7 +255,7 @@ void VerifierPass::visitUnreachableInst(UnreachableInst const& I)
 void VerifierPass::visitBrInst(BrInst const& I)
 {
    if (auto Cond = I.getCondition()) {
-      errorIf(!Cond->getType()->isInt1Ty(false), "condition must have i1 "
+      errorIf(!Cond->getType()->isInt1Ty(), "condition must have i1 "
          "type", I);
    }
 
@@ -395,9 +398,6 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
 
    size_t i = 0;
    for (const auto &needed : NeededArgs) {
-      if (needed.isVararg())
-         break;
-
       auto &given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
@@ -443,9 +443,6 @@ void VerifierPass::visitCallInst(CallInst const& I)
 
    size_t i = 0;
    for (const auto &needed : NeededArgs) {
-      if (needed.isVararg())
-         break;
-
       auto &given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I, *F);
@@ -516,8 +513,6 @@ void  VerifierPass::visitInitInst(InitInst const& I)
          first = false;
          continue;
       }
-      if (needed.isVararg())
-         break;
 
       auto &given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
@@ -546,6 +541,7 @@ bool hasValidBinOpType(Value const* V)
       case Type::BuiltinTypeID:
          return ty->isIntegerType() || ty->isFPType();
       case Type::PointerTypeID:
+      case Type::MutablePointerTypeID:
          return true;
       default:
          return false;

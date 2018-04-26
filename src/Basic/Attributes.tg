@@ -60,5 +60,5 @@ def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]> {
 
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
-    Visit = Never
+    Visit = BeforeDeclaration
 }

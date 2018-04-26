@@ -55,7 +55,7 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
                                          Step.getResultType());
 
          auto Option = Step.getResultType()->getRecord();
-         auto WrappedTy = Option->getTemplateArg("T")->getType();
+         auto WrappedTy = Option->getTemplateArgs().front().getType();
 
          return Builder.CreateDynamicCast(
             Val, cast<ClassDecl>(WrappedTy->getRecord()),
@@ -68,8 +68,11 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
          return Builder.CreateIntToEnum(Val, Step.getResultType());
       case CastKind::BitCast:
       case CastKind::UpCast:
+      case CastKind::NoThrowToThrows:
+      case CastKind::MutRefToRef:
+      case CastKind::MutPtrToPtr:
          return Builder.CreateBitCast(Step.getKind(), Val,
-                                     Step.getResultType());
+                                      Step.getResultType());
       case CastKind::ConversionOp:
          return ILGen.CreateCall(Step.getConversionOp(), { Val });
       case CastKind::NoOp:
@@ -153,7 +156,7 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
          Val = Builder.CreateLoad(Val);
          break;
       default:
-         llvm_unreachable("invalid tuple cast!");
+         llvm_unreachable("invalid function cast!");
       }
    }
 
@@ -161,12 +164,18 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
    return Val;
 }
 
+static bool lastTypeIsFunctionType(const ConversionSequence &ConvSeq)
+{
+   return ConvSeq.getSteps().back().getResultType()->isFunctionType();
+}
+
 il::Value* ILGenPass::HandleCast(const ConversionSequence &ConvSeq,
                                  il::Value *Val, bool forced) {
    if (Val->getType()->isTupleType()) {
       Val = doTupleCast(ConvSeq, Val, *this, forced);
    }
-   else if (Val->getType()->isFunctionType()) {
+   else if (Val->getType()->isFunctionType()
+            && lastTypeIsFunctionType(ConvSeq)) {
       Val = doFunctionCast(ConvSeq, Val, *this, forced);
    }
    else for (auto &Step : ConvSeq.getSteps()) {

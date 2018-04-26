@@ -56,16 +56,18 @@ class ConversionSequence {
    CastStrength Strength;
    std::vector<ConversionStep> Steps;
 
+   ConversionSequence(const ConversionSequence&)            = default;
+   ConversionSequence &operator=(const ConversionSequence&) = default;
+
 public:
    ConversionSequence()
       : Strength(CastStrength::Implicit)
    { }
 
-   ConversionSequence(const ConversionSequence&) = delete;
-   ConversionSequence(ConversionSequence&&)      = default;
+   ConversionSequence(ConversionSequence&&)            = default;
+   ConversionSequence &operator=(ConversionSequence&&) = default;
 
-   ConversionSequence &operator=(const ConversionSequence&) = delete;
-   ConversionSequence &operator=(ConversionSequence&&)      = default;
+   ConversionSequence copy() const { return *this; }
 
    void addStep(CastKind kind, QualType resultType)
    {

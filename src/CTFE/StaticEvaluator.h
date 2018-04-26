@@ -5,7 +5,6 @@
 #ifndef CDOT_STATICEVALUATOR_H
 #define CDOT_STATICEVALUATOR_H
 
-#include "Basic/Variant.h"
 #include "Message/Diagnostics.h"
 
 #include <llvm/ADT/SmallVector.h>
@@ -22,45 +21,36 @@ namespace diag {
    class DiagnosticBuilder;
 } // namespace diag
 
+namespace il {
+   class Constant;
+} // namespace il
+
 class StaticEvaluator {
 public:
    explicit StaticEvaluator(ast::SemaPass &SP);
    ~StaticEvaluator();
 
    struct StaticExprResult {
-      StaticExprResult(Variant &&V)
+      StaticExprResult(il::Constant *V)
          : HadError(false), TypeDependent(false), ValueDependent(false),
-           Result(std::move(V))
+           Result(V)
       {}
 
       StaticExprResult(bool TypeDependent, bool ValueDependent)
-         : TypeDependent(TypeDependent),
-           ValueDependent(ValueDependent)
+         : HadError(false), TypeDependent(TypeDependent),
+           ValueDependent(ValueDependent), Result(nullptr)
       { }
 
       StaticExprResult()
-         : HadError(true)
+         : HadError(true), TypeDependent(false),
+           ValueDependent(false), Result(nullptr)
       { }
 
-      bool hadError() const
-      {
-         return HadError;
-      }
+      bool hadError() const { return HadError; }
+      bool isTypeDependent() const { return TypeDependent; }
+      bool isValueDependent() const { return ValueDependent; }
 
-      bool isTypeDependent() const
-      {
-         return TypeDependent;
-      }
-
-      bool isValueDependent() const
-      {
-         return ValueDependent;
-      }
-
-      Variant &getResult()
-      {
-         return Result;
-      }
+      il::Constant *getResult() { return Result; }
 
       operator bool() const
       {
@@ -72,7 +62,7 @@ public:
       bool TypeDependent  : 1;
       bool ValueDependent : 1;
 
-      Variant Result;
+      il::Constant *Result;
    };
 
    StaticExprResult evaluate(ast::Expression *Expr);

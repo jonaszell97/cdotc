@@ -9,18 +9,14 @@ namespace cdot {
 namespace il {
 
 Argument::Argument(ValueType type,
-                   bool vararg,
+                   Convention Conv,
                    BasicBlock *parent,
                    llvm::StringRef name)
    : Value(ArgumentID, type),
-     parent(parent), vararg(vararg)
+     parent(parent)
 {
-   new (&this->name) std::string(name.data(), name.size());
-}
-
-void Argument::setParent(BasicBlock *p)
-{
-   parent = p;
+   setConvention(Conv);
+   this->name = name.str();
 }
 
 } // namespace il

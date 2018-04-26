@@ -6,7 +6,9 @@
 #define CDOT_TEMPLATE_H
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/Support/TrailingObjects.h>
 #include <string>
+#include <Basic/DeclarationName.h>
 
 #include "AST/Type.h"
 #include "Lex/SourceLocation.h"
@@ -23,6 +25,10 @@ class Type;
 
 namespace diag {
    class DiagnosticBuilder;
+} // namespace diag
+
+namespace il {
+   class Constant;
 } // namespace diag
 
 namespace ast {
@@ -52,7 +58,7 @@ struct ResolvedTemplateArg {
                                 SourceLocation loc = {}) noexcept;
 
    ResolvedTemplateArg(ast::TemplateParamDecl *Param,
-                       Variant &&V,
+                       il::Constant *V,
                        SourceLocation loc = {}) noexcept;
 
    explicit
@@ -79,7 +85,7 @@ struct ResolvedTemplateArg {
    }
 
    QualType getValueType() const;
-   const Variant &getValue() const;
+   il::Constant *getValue() const { assert(isValue()); return V; }
 
    template<class ...Args>
    void emplace_back(Args&&... args)
@@ -132,7 +138,7 @@ private:
 
    union {
       mutable QualType Type;
-      std::unique_ptr<Variant> V;
+      il::Constant *V;
       std::vector<ResolvedTemplateArg> VariadicArgs;
    };
 
@@ -248,14 +254,16 @@ public:
    static void Profile(llvm::FoldingSetNodeID &ID,
                        TemplateArgList const& list);
 
-   void inferFromReturnType(QualType contextualType, QualType returnType) const;
+   void inferFromType(QualType contextualType, QualType returnType,
+                      bool IsLastVariadicParam = false) const;
+
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
                          llvm::ArrayRef<ast::FuncArgDecl*> neededArgs) const;
 
-   void resolveWith(ast::NamedDecl *R);
-
    bool isFullyInferred() const;
    bool isPartiallyInferred() const;
+
+   llvm::MutableArrayRef<ResolvedTemplateArg> getMutableArgs() const;
 
    bool isInferred() const
    {
@@ -265,14 +273,9 @@ public:
    TemplateArgListResult checkCompatibility() const;
    bool isStillDependent() const;
 
-   ResolvedTemplateArg* getNamedArg(llvm::StringRef name) const;
+   ResolvedTemplateArg* getNamedArg(DeclarationName Name) const;
    ResolvedTemplateArg* getArgForParam(TemplateParamDecl *P) const;
    TemplateParamDecl* getParameter(ResolvedTemplateArg *forArg) const;
-
-   bool insert(llvm::StringRef name, QualType ty);
-   bool insert(llvm::StringRef name, Variant &&V);
-   bool insert(llvm::StringRef name, bool isType,
-               std::vector<ResolvedTemplateArg> &&variadicArgs);
 
    bool insert(ResolvedTemplateArg &&arg);
 
@@ -284,7 +287,6 @@ public:
    const ResolvedTemplateArg &back() const;
 
    ast::NamedDecl *getTemplate() const;
-   llvm::ArrayRef<ast::Expression*> getOriginalArgs() const;
 
    void print(llvm::raw_ostream &OS,
               char begin = '[', char end = ']', bool showNames = false) const;
@@ -304,6 +306,68 @@ public:
 
 private:
    mutable TemplateArgListImpl *pImpl;
+};
+
+class FinalTemplateArgumentList final:
+         llvm::TrailingObjects<FinalTemplateArgumentList, ResolvedTemplateArg> {
+   FinalTemplateArgumentList(llvm::MutableArrayRef<ResolvedTemplateArg> Args,
+                             bool Dependent);
+
+   unsigned NumArgs : 28;
+   bool Dependent : 1;
+
+public:
+   static FinalTemplateArgumentList*
+   Create(ast::ASTContext &C, llvm::MutableArrayRef<ResolvedTemplateArg> Args);
+
+   static FinalTemplateArgumentList *Create(ast::ASTContext &C,
+                                            const TemplateArgList &list);
+
+   using arg_iterator = const ResolvedTemplateArg *;
+
+   arg_iterator begin()const {return getTrailingObjects<ResolvedTemplateArg>();}
+   arg_iterator end() const { return begin() + NumArgs; }
+
+   llvm::ArrayRef<ResolvedTemplateArg> getArguments() const
+   {
+      return { begin(), NumArgs };
+   }
+
+   bool empty() const { return !NumArgs; }
+   size_t size() const { return NumArgs; }
+
+   const ResolvedTemplateArg &operator[](size_t idx) const
+   {
+      assert(idx < NumArgs && "index out of bounds for template arg list");
+      return *(begin() + idx);
+   }
+
+   const ResolvedTemplateArg &front() const { return (*this)[0]; }
+   const ResolvedTemplateArg &back() const { return (*this)[NumArgs - 1]; }
+
+   void print(llvm::raw_ostream &OS,
+              char begin = '[', char end = ']',
+              bool showNames = false) const;
+
+   std::string toString(char begin = '[', char end = ']',
+                        bool showNames = false) const;
+
+   const ResolvedTemplateArg* getNamedArg(DeclarationName Name) const;
+   const ResolvedTemplateArg* getArgForParam(ast::TemplateParamDecl *P) const;
+   ast::TemplateParamDecl* getParameter(ResolvedTemplateArg *forArg) const;
+
+   bool isStillDependent() const { return Dependent; }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, *this);
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       FinalTemplateArgumentList const& list);
+
+   friend class ast::ASTContext;
+   friend TrailingObjects;
 };
 
 class MultiLevelTemplateArgList {
@@ -350,10 +414,10 @@ public:
       return false;
    }
 
-   ResolvedTemplateArg* getNamedArg(llvm::StringRef name) const
+   ResolvedTemplateArg* getNamedArg(DeclarationName Name) const
    {
       for (auto &list : ArgLists)
-         if (auto arg = list->getNamedArg(name))
+         if (auto arg = list->getNamedArg(Name))
             return arg;
 
       return nullptr;
@@ -377,9 +441,86 @@ public:
       return nullptr;
    }
 
-   void inferFromReturnType(QualType contextualType, QualType returnType);
+   void inferFromType(QualType contextualType, QualType returnType,
+                      bool IsLastVariadicParam = false);
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
                          llvm::ArrayRef<ast::FuncArgDecl*> neededArgs);
+
+   size_t size() const { return ArgLists.size(); }
+   bool empty() const { return ArgLists.empty(); }
+
+   VecTy::iterator begin() { return ArgLists.begin(); }
+   VecTy::iterator end()   { return ArgLists.end(); }
+
+   VecTy::const_iterator begin() const { return ArgLists.begin(); }
+   VecTy::const_iterator end()   const { return ArgLists.end(); }
+
+   void print(llvm::raw_ostream &OS) const;
+
+private:
+   VecTy ArgLists;
+};
+
+class MultiLevelFinalTemplateArgList {
+public:
+   using VecTy = llvm::SmallVector<const FinalTemplateArgumentList*, 0>;
+
+   using pointer   = const FinalTemplateArgumentList*;
+   using reference = const FinalTemplateArgumentList&;
+
+   MultiLevelFinalTemplateArgList() = default;
+
+   /*implicit*/
+   MultiLevelFinalTemplateArgList(reference list)
+      : ArgLists{ &list }
+   {}
+
+   /*implicit*/
+   MultiLevelFinalTemplateArgList(
+      llvm::ArrayRef<FinalTemplateArgumentList> lists)
+   {
+      for (auto &list : lists)
+         ArgLists.push_back(&list);
+   }
+
+   void addOuterList(reference list)
+   {
+      ArgLists.push_back(&list);
+   }
+
+   reference innermost() const { return *ArgLists.front(); }
+   reference outermost() const { return *ArgLists.back(); }
+
+   pointer pop_back_val() { return ArgLists.pop_back_val(); }
+
+   reference operator[](size_t idx) const { return *ArgLists[idx]; }
+
+   const ResolvedTemplateArg* getNamedArg(DeclarationName Name) const
+   {
+      for (auto &list : ArgLists)
+         if (auto arg = list->getNamedArg(Name))
+            return arg;
+
+      return nullptr;
+   }
+
+   const ResolvedTemplateArg* getArgForParam(ast::TemplateParamDecl *P) const
+   {
+      for (auto &list : ArgLists)
+         if (auto arg = list->getArgForParam(P))
+            return arg;
+
+      return nullptr;
+   }
+
+   ast::TemplateParamDecl* getParameter(ResolvedTemplateArg *forArg) const
+   {
+      for (auto &list : ArgLists)
+         if (auto param = list->getParameter(forArg))
+            return param;
+
+      return nullptr;
+   }
 
    size_t size() const { return ArgLists.size(); }
    bool empty() const { return ArgLists.empty(); }
@@ -402,7 +543,18 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 }
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     const FinalTemplateArgumentList &list) {
+   list.print(OS); return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                      const MultiLevelTemplateArgList &list) {
+   list.print(OS); return OS;
+}
+
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     const MultiLevelFinalTemplateArgList
+                                       &list) {
    list.print(OS); return OS;
 }
 

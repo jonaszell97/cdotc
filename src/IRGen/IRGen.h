@@ -27,6 +27,8 @@ namespace ast {
 
 namespace il {
 
+class ConstantClass;
+
 class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
    explicit IRGen(CompilationUnit &CU,
@@ -62,6 +64,7 @@ private:
 
    llvm::Type *getLlvmTypeImpl(QualType Ty);
 
+   llvm::Type *getGlobalType(QualType Ty);
    llvm::Type *getStorageType(QualType Ty);
    llvm::Type *getParameterType(QualType Ty);
 
@@ -69,11 +72,19 @@ private:
    llvm::Value *getLlvmValue(il::Value const* V);
    llvm::Value *getPotentiallyBoxedValue(il::Value const* V);
 
+   llvm::Value *applyBinaryOp(unsigned OpCode, QualType ty, llvm::Value *LHS,
+                              llvm::Value *RHS);
+
+   void buildConstantClass(llvm::SmallVectorImpl<llvm::Constant*> &Vec,
+                           const ConstantClass *Class);
+
    llvm::Constant *getConstantVal(il::Constant const* C);
-   llvm::Value *getBlockArg(il::Argument const* A);
 
    llvm::BasicBlock *getBasicBlock(llvm::StringRef name);
    llvm::BasicBlock *getBasicBlock(BasicBlock *BB);
+
+   llvm::Value *CreateCopy(il::Value *Val);
+   llvm::Value *CreateCopy(QualType Ty, llvm::Value *Val);
 
    llvm::Function *getFunction(il::Function *F);
    llvm::Value *getCurrentSRetValue();
@@ -95,8 +106,14 @@ private:
                                   size_t allocatedSize = 1,
                                   unsigned alignment = 0);
 
+   llvm::Value *InitEnum(ast::EnumDecl *E,
+                         ast::EnumCaseDecl *Case,
+                         llvm::ArrayRef<llvm::Value*> CaseVals,
+                         bool CanUseSRetValue = false);
+
    unsigned getFieldOffset(ast::StructDecl *S,
                            const DeclarationName &FieldName);
+   QualType getFieldType(ast::StructDecl *S, const DeclarationName &FieldName);
 
    llvm::Value *AccessField(ast::StructDecl *S,
                             Value *Val,
@@ -124,6 +141,8 @@ private:
    llvm::Constant *getMemCmpFn();
    llvm::Constant *getIntPowFn(QualType IntTy);
 
+   llvm::StructType *getEnumCaseTy(ast::EnumCaseDecl *Decl);
+
    void debugPrint(const llvm::Twine &str);
 
    CompilationUnit &CI;
@@ -144,6 +163,8 @@ private:
    llvm::DenseMap<QualType, llvm::Type*> TypeMap;
 
    const il::DebugLocalInst *ElidedDebugLocalInst = nullptr;
+
+   llvm::DenseMap<ast::EnumCaseDecl*, llvm::StructType*> EnumCaseTys;
 
    llvm::SmallVector<llvm::Function*, 4> GlobalInitFns;
    llvm::SmallVector<llvm::Function*, 4> GlobalDeinitFns;

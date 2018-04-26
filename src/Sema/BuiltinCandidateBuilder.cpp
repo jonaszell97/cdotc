@@ -7,6 +7,8 @@
 #include "AST/Expression.h"
 #include "SemaPass.h"
 
+using namespace cdot::support;
+
 namespace cdot {
 namespace ast {
 
@@ -24,6 +26,7 @@ static bool isIntFPOrPointerType(QualType ty, bool allowPtr = true)
 {
    switch (ty->getTypeID()) {
    case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
       return allowPtr;
    case Type::BuiltinTypeID:
       switch (ty->uncheckedAsBuiltinType()->getKind()) {
@@ -67,33 +70,41 @@ void BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
    }
 }
 
+static QualType getMutableReference(ast::ASTContext &Context, QualType Ty)
+{
+   if (Ty->isMutableReferenceType())
+      return Ty;
+
+   if (Ty->isReferenceType())
+      return Context.getMutableReferenceType(Ty->getReferencedType());
+
+   return Context.getMutableReferenceType(Ty);
+}
+
 BuiltinCandidateBuilder::BuiltinKindMap::iterator
 BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
                                    QualType lhsType,
                                    op::OperatorKind opKind) {
    auto &Context = SP.getContext();
-   prec::PrecedenceLevel prec = prec::Unknown;
-   Associativity assoc = Associativity::Left;
    
    CacheVec Vec;
 
    switch (opKind) {
    case op::Assign: {
-      if (!lhsType->isReferenceType())
-         break;
+      // add overloads anyway so we can issue better diagnostics
+      lhsType = getMutableReference(Context, lhsType);
 
       FunctionType *FnTy = Context.getFunctionType(
          Context.getVoidType(),
          { lhsType, lhsType->getReferencedType() });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                             Associativity::Right));
-
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::AddAssign: case op::SubAssign: case op::MulAssign: {
-      if (!lhsType->isReferenceType())
-         break;
+      // add overloads anyway so we can issue better diagnostics
+      lhsType = getMutableReference(Context, lhsType);
+
       if (!isIntFPOrPointerType(lhsType->getReferencedType()))
          break;
 
@@ -104,16 +115,14 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
             Context.getVoidType(),
             { lhsType, Context.getUIntTy() });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                                Associativity::Right));
+         Vec.emplace_back(FnTy);
 
          if (opKind == op::SubAssign) {
             FnTy = Context.getFunctionType(
                Context.getVoidType(),
                { lhsType, lhsType->getReferencedType() });
 
-            Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                                   Associativity::Left));
+            Vec.emplace_back(FnTy);
          }
       }
       else if (!lhsType->getReferencedType()->isPointerType()) {
@@ -121,15 +130,15 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
             Context.getVoidType(),
             { lhsType, lhsType->getReferencedType() });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                                Associativity::Right));
+         Vec.emplace_back(FnTy);
       }
 
       break;
    }
    case op::DivAssign: case op::ModAssign: case op::ExpAssign: {
-      if (!lhsType->isReferenceType())
-         break;
+      // add overloads anyway so we can issue better diagnostics
+      lhsType = getMutableReference(Context, lhsType);
+
       if (!isIntOrFPType(lhsType->getReferencedType()))
          break;
 
@@ -137,16 +146,15 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          Context.getVoidType(),
          { lhsType, lhsType->getReferencedType() });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                             Associativity::Right));
-
+      Vec.emplace_back(FnTy);
       break;
    }
       // Bitwise compound assignment
    case op::AndAssign: case op::OrAssign: case op::XorAssign:
    case op::ShlAssign: case op::LShrAssign: case op::AShrAssign: {
-      if (!lhsType->isReferenceType())
-         break;
+      // add overloads anyway so we can issue better diagnostics
+      lhsType = getMutableReference(Context, lhsType);
+
       if (!lhsType->getReferencedType()->isIntegerType())
          break;
 
@@ -154,19 +162,11 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          Context.getVoidType(),
          { lhsType, lhsType->getReferencedType() });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec::Assignment,
-                                             Associativity::Right));
-
+      Vec.emplace_back(FnTy);
       break;
    }
       // Addition, Subtraction, Multiplication
-   case op::Mul:
-      prec = prec::Multiplicative;
-      goto case_add_sub_mul;
-   case op::Add: case op::Sub:
-      prec = prec::Additive;
-      goto case_add_sub_mul;
-   case_add_sub_mul: {
+   case op::Mul: case op::Add: case op::Sub: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
 
@@ -178,48 +178,42 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          auto FnTy = Context.getFunctionType(
             lhsType, { lhsType, Context.getUIntTy() });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+         Vec.emplace_back(FnTy);
 
          if (opKind == op::Sub) {
             FnTy = Context.getFunctionType(
                Context.getUIntTy(), { lhsType, lhsType });
 
-            Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+            Vec.emplace_back(FnTy);
          }
       }
       else if (!lhsType->isPointerType()) {
          FunctionType *FnTy = Context.getFunctionType(
             lhsType, { lhsType, lhsType });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+         Vec.emplace_back(FnTy);
       }
 
       break;
    }
    // Division, Modulo, Exponentiation
    case op::Exp:
-      prec = prec::Exponentiation;
-      assoc = Associativity::Right;
-
       // floating point values also have an overload for integer types on the
       // right hand side
       if (lhsType->isFPType()) {
          FunctionType *FnTy =
             Context.getFunctionType(lhsType, { lhsType,Context.getu32Ty() });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
+         Vec.emplace_back(FnTy);
 
          FnTy = Context.getFunctionType(lhsType,
                                         { lhsType, Context.getu64Ty() });
 
-         Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
+         Vec.emplace_back(FnTy);
       }
 
-      goto case_div_mod_exp;
-   case op::Div: case op::Mod:
-      prec = prec::Multiplicative;
-      goto case_div_mod_exp;
-   case_div_mod_exp: {
+      LLVM_FALLTHROUGH;
+   case op::Div: case op::Mod:{
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
 
@@ -229,25 +223,12 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          lhsType, { lhsType, lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec, assoc));
+      Vec.emplace_back(FnTy);
       break;
    }
    // Bitwise Ops
-   case op::And:
-      prec = prec::BitwiseAnd;
-      goto case_bitwise;
-   case op::Or:
-      prec = prec::InclusiveOr;
-      goto case_bitwise;
-   case op::Xor:
-      prec = prec::ExclusiveOr;
-      goto case_bitwise;
-   case op::Shl:
-   case op::LShr:
-   case op::AShr:
-      prec = prec::Shift;
-      goto case_bitwise;
-   case_bitwise: {
+   case op::And: case op::Or: case op::Xor: case op::Shl: case op::LShr:
+   case op::AShr: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
 
@@ -257,19 +238,12 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          lhsType, { lhsType, lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+      Vec.emplace_back(FnTy);
       break;
    }
       // Comparison / Relational Ops
-   case op::CompGE: case op::CompLE:
-   case op::CompGT: case op::CompLT:
-   case op::Spaceship:
-      prec = prec::Relational;
-      goto case_eq_rel;
-   case op::CompEQ: case op::CompNE:
-      prec = prec::Equality;
-      goto case_eq_rel;
-   case_eq_rel: {
+   case op::CompGE: case op::CompLE: case op::CompGT: case op::CompLT:
+   case op::Spaceship: case op::CompEQ: case op::CompNE: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
 
@@ -278,7 +252,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
             FunctionType *FnTy = Context.getFunctionType(
                Context.getBoolTy(), { lhsType, Context.getUnknownAnyTy() });
 
-            Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+            Vec.emplace_back(FnTy);
          }
 
          break;
@@ -290,7 +264,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          Context.getBoolTy(), { lhsType, lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+      Vec.emplace_back(FnTy);
       break;
    }
       // reference equality
@@ -301,18 +275,12 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          Context.getBoolTy(), { lhsType, lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec::Equality,
-                                             Associativity::Left));
+      Vec.emplace_back(FnTy);
       break;
    }
       // Short-circuit ops
    case op::LAnd:
-      prec = prec::LogicalAnd;
-      goto case_land_lor;
-   case op::LOr:
-      prec = prec::LogicalOr;
-      goto case_land_lor;
-   case_land_lor: {
+   case op::LOr: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
       if (!lhsType->isInt1Ty())
@@ -321,7 +289,15 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          Context.getBoolTy(), { lhsType, lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup(prec, Associativity::Left));
+      Vec.emplace_back(FnTy);
+      break;
+   }
+   case op::As: case op::AsExclaim: case op::AsQuestion: {
+      FunctionType *FnTy = Context.getFunctionType(
+         Context.getUnknownAnyTy(),
+         { lhsType, Context.getUnknownAnyTy() });
+
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::UnaryPlus:
@@ -336,11 +312,11 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          // add this candidate for better diagnostics
          auto SignedTy = lhsType->getSignedOfSameWidth(SP.getContext());
          FunctionType *FnTy = Context.getFunctionType(SignedTy, { SignedTy });
-         Vec.emplace_back(FnTy, PrecedenceGroup());
+         Vec.emplace_back(FnTy);
       }
       else {
          FunctionType *FnTy = Context.getFunctionType(lhsType, { lhsType });
-         Vec.emplace_back(FnTy, PrecedenceGroup());
+         Vec.emplace_back(FnTy);
       }
 
       break;
@@ -352,19 +328,21 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          break;
 
       FunctionType *FnTy = Context.getFunctionType(lhsType, { lhsType });
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      Vec.emplace_back(FnTy);
 
       break;
    }
    case op::UnaryLNot: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
-      if (!lhsType->isInt1Ty())
+
+      if (!lhsType->isInt1Ty() && !lhsType->isPointerType())
          break;
 
-      FunctionType *FnTy = Context.getFunctionType(lhsType, { lhsType });
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      FunctionType *FnTy = Context.getFunctionType(Context.getBoolTy(),
+                                                   { lhsType });
 
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::PreDec:
@@ -374,10 +352,14 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       if (!isIntFPOrPointerType(lhsType->getReferencedType()))
          break;
 
-      FunctionType *FnTy = Context.getFunctionType(
-         lhsType->getReferencedType(), { lhsType });
+      QualType RefTy = lhsType;
+      if (!lhsType->isMutableReferenceType())
+         RefTy = Context.getMutableReferenceType(lhsType->getReferencedType());
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      FunctionType *FnTy = Context.getFunctionType(
+         lhsType->getReferencedType(), { RefTy });
+
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::PostInc:
@@ -387,35 +369,53 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       if (!isIntFPOrPointerType(lhsType->getReferencedType()))
          break;
 
-      FunctionType *FnTy = Context.getFunctionType(lhsType->getReferencedType(),
-                                                   { lhsType });
+      QualType RefTy = lhsType;
+      if (!lhsType->isMutableReferenceType())
+         RefTy = Context.getMutableReferenceType(lhsType->getReferencedType());
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      FunctionType *FnTy = Context.getFunctionType(lhsType->getReferencedType(),
+                                                   { RefTy });
+
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::Deref: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
-      if (!lhsType->isPointerType())
+
+      QualType ReferenceTy;
+      if (lhsType->isMutablePointerType()) {
+         ReferenceTy = Context.getMutableReferenceType(
+            lhsType->getPointeeType());
+      }
+      else if (lhsType->isPointerType()) {
+         ReferenceTy = Context.getReferenceType(lhsType->getPointeeType());
+      }
+      else {
          break;
+      }
 
-      FunctionType *FnTy = Context.getFunctionType(
-         Context.getReferenceType(lhsType->getPointeeType()),
-         { lhsType });
+      FunctionType *FnTy = Context.getFunctionType(ReferenceTy, { lhsType });
+      Vec.emplace_back(FnTy);
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
       break;
    }
    case op::AddrOf: {
-      if (!lhsType->isReferenceType())
+      QualType PointerTy;
+      if (lhsType->isMutableReferenceType()) {
+         PointerTy = Context.getMutablePointerType(
+            lhsType->getReferencedType());
+      }
+      else if (lhsType->isReferenceType()) {
+         PointerTy = Context.getPointerType(lhsType->getReferencedType());
+      }
+      else {
          break;
+      }
 
-      FunctionType *FnTy =
-         Context.getFunctionType(lhsType->getReferencedType()
-                                        ->getPointerTo(Context),
-                                 { lhsType });
+      FunctionType *FnTy = Context.getFunctionType(PointerTy, { lhsType });
+      Vec.emplace_back(FnTy);
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
       break;
    }
    case op::BlockAddrOf: {
@@ -425,7 +425,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          break;
 
       FunctionType *FnTy = Context.getFunctionType(lhsType, { lhsType });
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      Vec.emplace_back(FnTy);
 
       break;
    }
@@ -434,7 +434,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       FunctionType *FnTy = Context.getFunctionType(
          Context.getMetaType(lhsType), { lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::UnaryPtr: {
@@ -448,7 +448,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
                                              ->getUnderlyingType())),
             { lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      Vec.emplace_back(FnTy);
       break;
    }
    case op::UnaryOption: {
@@ -460,14 +460,50 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
             Context.getUInt8PtrTy(), // will never actually be used
             { lhsType });
 
-      Vec.emplace_back(FnTy, PrecedenceGroup());
+      Vec.emplace_back(FnTy);
       break;
    }
    default:
       llvm_unreachable("bad builtin operator kind!");;
    }
 
+   auto *PG = getPrecedenceGroup(opKind);
+   for (auto &Cand : Vec) {
+      Cand.PG = PG;
+   }
+
    return Map.emplace(opKind, move(Vec)).first;
+}
+
+static bool isInfix(op::OperatorKind Kind)
+{
+#  define Infix true
+#  define Postfix false
+#  define Prefix false
+
+   switch (Kind) {
+#  define CDOT_OPERATOR(Name, Spelling, Prec, Fix) case op::Name: return Fix;
+#  include "Basic/BuiltinOperators.def"
+   }
+
+#  undef Infix
+#  undef Prefix
+#  undef Postfix
+}
+
+ast::PrecedenceGroupDecl*
+BuiltinCandidateBuilder::getPrecedenceGroup(op::OperatorKind opKind)
+{
+   if (!isInfix(opKind))
+      return nullptr;
+
+   auto OpStr = op::toString(opKind);
+   auto &II = SP.getContext().getIdentifiers().get(OpStr);
+   auto OpName = SP.getContext().getDeclNameTable().getInfixOperatorName(II);
+   auto OpDecl = SP.getContext().getDeclNameTable().getOperatorDeclName(OpName);
+
+   return cast<ast::OperatorDecl>(SP.BuiltinDecls[OpDecl])
+      ->getPrecedenceGroup();
 }
 
 void BuiltinCandidateBuilder::getOpKindAndFix(DeclarationName op,

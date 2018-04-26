@@ -142,7 +142,7 @@ private:
       float f;
 
       Value* V;
-      il::Function const* F;
+      il::Function *F;
 
       llvm::APSInt *APS;
       llvm::APFloat *APF;
@@ -173,7 +173,7 @@ public:
    CDOT_VALUE_INIT(f, float)
 
    CDOT_VALUE_INIT(V, Value*)
-   CDOT_VALUE_INIT(F, il::Function const*)
+   CDOT_VALUE_INIT(F, il::Function*)
 
 #  undef CDOT_VALUE_INIT
 
@@ -202,7 +202,7 @@ public:
    CDOT_VALUE_GETTER(Float, f, float)
 
    CDOT_VALUE_GETTER(ValuePtr, V, Value const*)
-   CDOT_VALUE_GETTER(FuncPtr, F, il::Function const*)
+   CDOT_VALUE_GETTER(FuncPtr, F, il::Function*)
 
 #  undef CDOT_VALUE_GETTER
 

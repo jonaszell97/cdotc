@@ -5,11 +5,11 @@
 #ifndef CDOT_ASTCONTEXT_H
 #define CDOT_ASTCONTEXT_H
 
-#include "ParentMap.h"
-#include "Type.h"
-
 #include "Basic/DeclarationName.h"
 #include "Basic/TargetInfo.h"
+#include "ConformanceTable.h"
+#include "ParentMap.h"
+#include "Type.h"
 
 #include <llvm/Support/Allocator.h>
 #include <llvm/ADT/FoldingSet.h>
@@ -33,6 +33,7 @@ class CallableDecl;
 class RecordDecl;
 class AliasDecl;
 class ExtensionDecl;
+class PrecedenceGroupDecl;
 
 class ASTContext {
 public:
@@ -62,9 +63,14 @@ public:
       return DeclNames;
    }
 
-   ParentMap &getParentMap()
+   ParentMap &getParentMap() const
    {
       return parentMap;
+   }
+
+   ConformanceTable &getConformanceTable() const
+   {
+      return Conformances;
    }
 
    const TargetInfo &getTargetInfo() const { return TI; }
@@ -76,6 +82,7 @@ public:
 private:
    mutable llvm::BumpPtrAllocator Allocator;
    mutable ParentMap parentMap;
+   mutable ConformanceTable Conformances;
    mutable IdentifierTable Identifiers;
    mutable DeclarationNameTable DeclNames;
    mutable TargetInfo TI;
@@ -84,12 +91,19 @@ private:
    mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
    mutable llvm::DenseMap<const RecordDecl*, ExtensionVec*> ExtensionMap;
 
+   mutable llvm::DenseMap<const IdentifierInfo*,
+                          PrecedenceGroupDecl*> InfixOperators;
+   mutable llvm::DenseSet<const IdentifierInfo*> PrefixOperators;
+   mutable llvm::DenseSet<const IdentifierInfo*> PostfixOperators;
+
 #  define CDOT_BUILTIN_TYPE(Name)                              \
    alignas(TypeAlignment) mutable BuiltinType Name##Ty;
 #  include "Basic/BuiltinTypes.def"
 
    mutable llvm::FoldingSet<PointerType> PointerTypes;
+   mutable llvm::FoldingSet<MutablePointerType> MutablePointerTypes;
    mutable llvm::FoldingSet<ReferenceType> ReferenceTypes;
+   mutable llvm::FoldingSet<MutableReferenceType> MutableReferenceTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
@@ -102,12 +116,68 @@ private:
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
 
+   bool OpNamesInitialized   = false;
+
+   void initializeOpNames() const;
+
 public:
+   void registerInfixOperator(const IdentifierInfo *II) const
+   {
+      InfixOperators.try_emplace(II, nullptr);
+   }
+
+   void setInfixOperatorPrecedence(const IdentifierInfo *II,
+                                   PrecedenceGroupDecl *PG) const {
+      InfixOperators[II] = PG;
+   }
+
+   void registerPrefixOperator(const IdentifierInfo *II) const
+   {
+      PrefixOperators.insert(II);
+   }
+
+   void registerPostfixOperator(const IdentifierInfo *II) const
+   {
+      PostfixOperators.insert(II);
+   }
+
+   PrecedenceGroupDecl *getInfixOperator(const IdentifierInfo *II) const
+   {
+      auto It = InfixOperators.find(II);
+      if (It != InfixOperators.end())
+         return It->getSecond();
+
+      return nullptr;
+   }
+
+   bool isInfixOperator(const IdentifierInfo *II)
+   {
+      if (!OpNamesInitialized)
+         initializeOpNames();
+
+      return InfixOperators.find(II) != InfixOperators.end();
+   }
+
+   bool isPrefixOperator(const IdentifierInfo *II)
+   {
+      if (!OpNamesInitialized)
+         initializeOpNames();
+
+      return PrefixOperators.find(II) != PrefixOperators.end();
+   }
+
+   bool isPostfixOperator(const IdentifierInfo *II)
+   {
+      if (!OpNamesInitialized)
+         initializeOpNames();
+
+      return PostfixOperators.find(II) != PostfixOperators.end();
+   }
+
    BuiltinType *getAutoType() const { return &AutoTy; }
    BuiltinType *getVoidType() const { return &VoidTy; }
 
    BuiltinType *getInt1Ty() const { return &i1Ty; }
-   BuiltinType *getUInt1Ty() const { return &u1Ty; }
 
    BuiltinType *getBoolTy() const { return &i1Ty; }
 
@@ -171,7 +241,7 @@ public:
       }
       else {
          switch (bits) {
-            case 1: return &u1Ty;
+            case 1: return &i1Ty;
             case 8: return &u8Ty;
             case 16: return &u16Ty;
             case 32: return &u32Ty;
@@ -188,7 +258,10 @@ public:
    BuiltinType *getDoubleTy() const { return &f64Ty; }
 
    PointerType *getPointerType(QualType pointeeType) const;
+   MutablePointerType *getMutablePointerType(QualType pointeeType) const;
+
    ReferenceType *getReferenceType(QualType referencedType) const;
+   MutableReferenceType *getMutableReferenceType(QualType referencedType) const;
 
    FunctionType *getFunctionType(QualType returnType,
                                  llvm::ArrayRef<QualType> argTypes,
@@ -211,8 +284,8 @@ public:
    RecordType *getRecordType(RecordDecl *R) const;
 
    DependentRecordType* getDependentRecordType(
-                                          RecordDecl *R,
-                                          sema::TemplateArgList &&args) const;
+                                 RecordDecl *R,
+                                 sema::FinalTemplateArgumentList *args) const;
 
    AssociatedType *getAssociatedType(AssociatedTypeDecl *AT) const;
    GenericType *getTemplateArgType(TemplateParamDecl *Param) const;
@@ -225,16 +298,18 @@ public:
    mutable llvm::FoldingSet<RecordDecl>   RecordTemplateInstatiations;
    mutable llvm::FoldingSet<AliasDecl>    AliasTemplateInstatiations;
 
+   using TemplateArgs = sema::FinalTemplateArgumentList;
+
    CallableDecl *getFunctionTemplateInstantiation(CallableDecl *Template,
-                                                  sema::TemplateArgList&argList,
+                                                  TemplateArgs &argList,
                                                   void *&insertPos);
 
    RecordDecl *getRecordTemplateInstantiation(RecordDecl *Template,
-                                                sema::TemplateArgList &argList,
-                                                void *&insertPos);
+                                              TemplateArgs &argList,
+                                              void *&insertPos);
 
    AliasDecl *getAliasTemplateInstantiation(AliasDecl *Template,
-                                            sema::TemplateArgList &argList,
+                                            TemplateArgs &argList,
                                             void *&insertPos);
 
    void insertFunctionTemplateInstantiation(CallableDecl *Inst,

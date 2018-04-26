@@ -106,7 +106,7 @@ ParseResult Parser::parseExtension()
 
    auto next = lookahead();
    while (!next.is(tok::open_brace)) {
-      if (next.is(tok::kw_with)) {
+      if (next.is(Ident_with)) {
          advance();
          advance();
 
@@ -127,8 +127,8 @@ ParseResult Parser::parseExtension()
          advance();
          advance();
 
-         constraints.push_back(
-            StaticExpr::Create(Context, parseExprSequence().tryGetExpr()));
+         constraints.push_back(StaticExpr::Create(
+            Context, parseExprSequence(false, false, true, false).tryGetExpr()));
       }
       else {
          break;
@@ -256,6 +256,12 @@ ParseResult Parser::parseRecordLevelDecl()
    case tok::kw_internal:
       NextDecl = parseAccessSpecScope(false);
       break;
+   case tok::ident: {
+      if (currentTok().is(Ident_macro))
+         return parseMacro(accessSpec);
+
+      goto case_bad_token;
+   }
    case tok::kw_static:
       AccessValid = false;
       switch (lookahead().getKind()) {
@@ -267,6 +273,25 @@ ParseResult Parser::parseRecordLevelDecl()
          goto case_bad_token;
       }
 
+      break;
+   case tok::macro_name:
+      NextDecl = parseMacroExpansionDecl();
+      break;
+   case tok::macro_statement:
+   case tok::macro_expression: {
+      enum DiagKind {
+         Expression, Statement, Type, Decl,
+      };
+
+      SP.diagnose(err_bad_macro_variable_kind, currentTok().getSourceLoc(),
+                  currentTok().is(tok::macro_statement) ? Statement
+                                                        : Expression,
+                  Decl);
+
+      return ParseError();
+   }
+   case tok::macro_declaration:
+      NextDecl = currentTok().getDecl();
       break;
    case tok::kw_static_assert:
       AccessValid = false;
@@ -481,7 +506,7 @@ void Parser::parseClassHead(RecordHead &Head)
 
          Head.parentClass = parseType().get();
       }
-      else if (next.is(tok::kw_with)) {
+      else if (next.is(Ident_with)) {
          advance();
          advance();
 
@@ -502,8 +527,8 @@ void Parser::parseClassHead(RecordHead &Head)
          advance();
          advance();
 
-         Head.constraints.push_back(
-            StaticExpr::Create(Context, parseExprSequence().tryGetExpr()));
+         Head.constraints.push_back(StaticExpr::Create(
+            Context, parseExprSequence(false, false, true, false).tryGetExpr()));
       }
       else {
          break;
@@ -615,82 +640,147 @@ ParseResult Parser::parseFieldDecl(AccessSpecifier accessSpec,
 
    field->setVariadic(Variadic);
 
-   // getter and setter
-   bool getter = false;
-   bool setter = false;
+   if (lookahead().is(tok::open_brace)) {
+      AccessorInfo Info;
+      parseAccessor(Info);
 
-   bool hasDefinition = true;
+      if (Info.GetterAccess == AccessSpecifier::Default)
+         Info.GetterAccess = accessSpec;
 
-   next = lookahead();
-   if (next.is(tok::open_brace)) {
-      advance();
-      advance();
+      if (Info.SetterAccess == AccessSpecifier::Default)
+         Info.SetterAccess = accessSpec;
 
-      while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(Ident_get)) {
-            if (getter) {
-               SP.diagnose(err_duplicate_getter_setter,
-                           currentTok().getSourceLoc(), 0);
-            }
+      SourceRange SR(Loc, currentTok().getSourceLoc());
+      auto prop =
+         PropDecl::Create(Context, accessSpec, SR, fieldName,
+                          typeref, isStatic, Info.HasGetter, Info.HasSetter,
+                          Info.GetterAccess, Info.SetterAccess,
+                          Info.GetterBody.tryGetStatement<CompoundStmt>(),
+                          Info.SetterBody.tryGetStatement<CompoundStmt>(),
+                          Info.NewValName);
 
-            getter = true;
-
-            if (lookahead().is(tok::open_brace)) {
-               auto body = parseBlock().tryGetStatement<CompoundStmt>();
-               field->addGetter(body);
-
-               advance();
-            }
-            else {
-               hasDefinition = false;
-               field->addGetter();
-               advance();
-            }
-         }
-         else if (currentTok().is(Ident_set)) {
-            if (setter) {
-               SP.diagnose(err_duplicate_getter_setter,
-                           currentTok().getSourceLoc(), 1);
-            }
-
-            setter = true;
-
-            if (lexer->lookahead().is(tok::open_brace)) {
-               auto body = parseBlock().tryGetStatement<CompoundStmt>();
-               field->addSetter(move(body));
-
-               advance();
-            }
-            else {
-               hasDefinition = false;
-               field->addSetter();
-               advance();
-            }
-         }
-         else if (currentTok().is(tok::comma)) {
-            advance();
-         }
-         else {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                        currentTok().toString(), true, "'get' or 'set'");
-         }
-      }
-
-      next = lookahead();
+      prop->setSynthesized(true);
+      field->setAccessor(prop);
    }
 
    // optional default value
-   if (next.is(tok::equals)) {
+   if (lookahead().is(tok::equals)) {
       advance();
       advance();
-      field->setDefaultVal(parseExprSequence().tryGetExpr());
+      field->setValue(parseExprSequence().tryGetExpr());
    }
-
-   field->setHasDefinition(hasDefinition);
 
    SP.ActOnFieldDecl(field);
 
    return field;
+}
+
+void Parser::parseAccessor(AccessorInfo &Info)
+{
+   Token next = lookahead();
+   if (next.is(tok::open_brace)) {
+      advance();
+
+      AccessSpecifier AS = AccessSpecifier::Default;
+      bool SawGetOrSet = false;
+
+      next = lookahead();
+      while (!next.is(tok::close_brace)) {
+         switch (next.getKind()) {
+         case tok::kw_public: case tok::kw_private: case tok::kw_protected:
+         case tok::kw_fileprivate: case tok::kw_internal:
+            if (AS != AccessSpecifier::Default) {
+               SP.diagnose(err_duplicate_access_spec, next.getSourceLoc());
+            }
+
+            AS = tokenToAccessSpec(next.getKind());
+            break;
+         default:
+            break;
+         }
+
+         if (next.is(Ident_set)) {
+            advance();
+
+            if (Info.HasSetter) {
+               SP.diagnose(err_duplicate_getter_setter,
+                           currentTok().getSourceLoc(), 1);
+            }
+
+            SawGetOrSet = true;
+            Info.HasSetter = true;
+            Info.GetterAccess = AS;
+
+            if (lexer->lookahead().is(tok::open_paren)) {
+               advance();
+               advance();
+               if (currentTok().getKind() != tok::ident) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "identifier");
+
+                  skipUntilProbableEndOfStmt();
+                  return;
+               }
+
+               Info.NewValName = currentTok().getIdentifierInfo();
+               advance();
+
+               if (!currentTok().is(tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+               }
+            }
+
+            if (lexer->lookahead().is(tok::open_brace)) {
+               Info.SetterBody = parseBlock();
+            }
+         }
+         else if (next.is(Ident_get)) {
+            advance();
+
+            if (Info.HasGetter) {
+               SP.diagnose(err_duplicate_getter_setter,
+                           currentTok().getSourceLoc(), 0);
+            }
+
+            SawGetOrSet = true;
+            Info.HasGetter = true;
+            Info.SetterAccess = AS;
+
+            if (lexer->lookahead().is(tok::open_brace)) {
+               Info.GetterBody = parseBlock();
+            }
+         }
+         else if (!SawGetOrSet) {
+            assert(!Info.HasGetter && "found getter but didn't "
+                                      "update SawGetOrSet!");
+            assert(currentTok().is(tok::open_brace) && "shouldn't get here "
+                                                       "otherwise");
+
+            lexer->backtrack();
+
+            Info.HasGetter = true;
+            Info.GetterAccess = AS;
+            Info.GetterBody = parseBlock();
+
+            break;
+         }
+         else {
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                        currentTok().toString(), true, "'get' or 'set'");
+            break;
+         }
+
+         next = lookahead();
+         AS = AccessSpecifier::Default;
+      }
+
+      if (SawGetOrSet)
+         advance();
+   }
+
+   if (!Info.NewValName)
+      Info.NewValName = &Context.getIdentifiers().get("newVal");
 }
 
 ParseResult Parser::parsePropDecl(AccessSpecifier accessSpec,
@@ -706,126 +796,49 @@ ParseResult Parser::parsePropDecl(AccessSpecifier accessSpec,
    }
 
    IdentifierInfo *fieldName = currentTok().getIdentifierInfo();
-   bool hasDefinition = true;
-
    SourceType typeref;
    advance();
 
-   SourceLocation ColonLoc;
    if (!currentTok().is(tok::colon)) {
       SP.diagnose(err_prop_must_have_type, currentTok().getSourceLoc());
    }
    else {
-      ColonLoc = consumeToken();
+      advance();
       typeref = parseType().get();
    }
 
-   bool hasGetter = false;
-   bool hasSetter = false;
+   AccessorInfo Info;
+   parseAccessor(Info);
 
-   CompoundStmt* getter = nullptr;
-   CompoundStmt* setter = nullptr;
-
-   IdentifierInfo *newValName = nullptr;
-
-   Token next = lookahead();
-   if (next.is(tok::open_brace)) {
-      hasDefinition = true;
-
-      advance();
-      advance();
-
-      while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(Ident_get)) {
-            if (hasGetter) {
-               SP.diagnose(err_duplicate_getter_setter,
-                           currentTok().getSourceLoc(), 0);
-            }
-
-            hasGetter = true;
-
-            if (lexer->lookahead().is(tok::open_brace)) {
-               getter = parseBlock().tryGetStatement<CompoundStmt>();
-            }
-            else {
-               hasDefinition = false;
-            }
-
-            advance();
-         }
-         else if (currentTok().is(Ident_set)) {
-            if (hasSetter) {
-               SP.diagnose(err_duplicate_getter_setter,
-                           currentTok().getSourceLoc(), 1);
-            }
-
-            hasSetter = true;
-
-            if (lexer->lookahead().is(tok::open_paren)) {
-               advance();
-               advance();
-               if (currentTok().getKind() != tok::ident) {
-                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                              currentTok().toString(), true, "identifier");
-
-                  return skipUntilProbableEndOfStmt();
-               }
-
-               newValName = currentTok().getIdentifierInfo();
-               advance();
-
-               if (!currentTok().is(tok::close_paren)) {
-                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                              currentTok().toString(), true, "')'");
-               }
-            }
-
-            if (lexer->lookahead().is(tok::open_brace)) {
-               setter = parseBlock().tryGetStatement<CompoundStmt>();
-            }
-            else {
-               hasDefinition = false;
-            }
-
-            advance();
-         }
-         else if (currentTok().is(tok::comma)) {
-            advance();
-         }
-         else {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                        currentTok().toString(), true, "'get' or 'set'");
-         }
-      }
-
-      next = lexer->lookahead();
-   }
-
-   if (!newValName)
-      newValName = &Context.getIdentifiers().get("newVal");
-
-   if (!hasGetter && !hasSetter) {
+   if (!Info.HasGetter && !Info.HasSetter) {
       SP.diagnose(err_prop_must_have_get_or_set, BeginLoc);
    }
 
+   if (Info.GetterAccess == AccessSpecifier::Default)
+      Info.GetterAccess = accessSpec;
+
+   if (Info.SetterAccess == AccessSpecifier::Default)
+      Info.SetterAccess = accessSpec;
+
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
    auto prop = PropDecl::Create(Context, accessSpec, SR, fieldName,
-                                typeref, isStatic, hasDefinition,
-                                hasGetter, hasSetter, getter, setter,
-                                newValName);
-
-   prop->setHasDefinition(hasDefinition);
+                                typeref, isStatic,
+                                Info.HasGetter, Info.HasSetter,
+                                Info.GetterAccess, Info.SetterAccess,
+                                Info.GetterBody.tryGetStatement<CompoundStmt>(),
+                                Info.SetterBody.tryGetStatement<CompoundStmt>(),
+                                Info.NewValName);
 
    SP.addDeclToContext(SP.getDeclContext(), prop);
-
    return prop;
 }
 
 ParseResult Parser::parseAssociatedType()
 {
-   auto Loc = consumeToken(tok::kw_associatedType);
-   IdentifierInfo *protoSpecifier = nullptr;
+   auto Loc = currentTok().getSourceLoc();
+   consumeToken(tok::kw_associatedType);
 
+   IdentifierInfo *protoSpecifier = nullptr;
    while (lookahead().is(tok::period)) {
 //      if (!protoSpecifier.empty())
 //         protoSpecifier += '.';
@@ -854,8 +867,8 @@ ParseResult Parser::parseAssociatedType()
       advance();
       advance();
 
-      constraints.push_back(
-         StaticExpr::Create(Context, parseExprSequence().tryGetExpr()));
+      constraints.push_back(StaticExpr::Create(
+         Context, parseExprSequence(false, false, true, false).tryGetExpr()));
    }
 
    auto AT = AssociatedTypeDecl::Create(Context, Loc, protoSpecifier,
@@ -867,71 +880,58 @@ ParseResult Parser::parseAssociatedType()
    return AT;
 }
 
-DeclarationName Parser::parseOperatorName(OperatorInfo &Info,
+DeclarationName Parser::parseOperatorName(FixKind Fix,
                                           bool &isCastOp,
                                           SourceType &castTarget) {
    auto MakeDeclName = [&](llvm::StringRef Ident) {
-      if (Info.isInfix()) {
-         return SP.getContext().getDeclNameTable()
-                  .getInfixOperatorName(SP.getContext()
-                                          .getIdentifiers().get(Ident));
+      auto &II = Context.getIdentifiers().get(Ident);
+
+      if (Fix == FixKind::Infix) {
+         Context.registerInfixOperator(&II);
+         return Context.getDeclNameTable().getInfixOperatorName(II);
       }
-      else if (Info.isPrefix()) {
-         return SP.getContext().getDeclNameTable()
-                  .getPrefixOperatorName(SP.getContext()
-                                           .getIdentifiers().get(Ident));
+
+      if (Fix == FixKind::Prefix) {
+         Context.registerPrefixOperator(&II);
+         return Context.getDeclNameTable().getPrefixOperatorName(II);
       }
-      else {
-         return SP.getContext().getDeclNameTable()
-                  .getPostfixOperatorName(SP.getContext()
-                                            .getIdentifiers().get(Ident));
-      }
+
+      Context.registerPostfixOperator(&II);
+      return Context.getDeclNameTable().getPostfixOperatorName(II);
    };
 
-   if (Info.isPostfix() && currentTok().is(tok::open_paren)
+   if (Fix == FixKind ::Postfix && currentTok().is(tok::open_paren)
        && lexer->lookahead().is(tok::close_paren)) {
       advance();
 
       return MakeDeclName("()");
    }
-   else if (Info.isPostfix() && currentTok().is(tok::open_square)
+
+   if (Fix == FixKind ::Postfix && currentTok().is(tok::open_square)
             && lexer->lookahead().is(tok::close_square)) {
       advance();
 
       return MakeDeclName("[]");
    }
-   else if (Info.isPostfix() && currentTok().is(tok::as)) {
-      advance();
 
-      auto Ty = parseType();
-      if (Ty) {
-         castTarget = Ty.get();
+   if (currentTok().is(Ident_as)) {
+      if (lookahead(false, true).is(tok::question)) {
+         advance(false, true);
+         return MakeDeclName("as?");
+      }
+      if (lookahead(false, true).is(tok::exclaim)) {
+         advance(false, true);
+         return MakeDeclName("as!");
       }
 
-      isCastOp = true;
-      return DeclarationName();
+      return MakeDeclName("as");
    }
-   else if (currentTok().is_operator()) {
-      auto opKind = op::fromToken(currentTok().getKind());
-      Info.setPrecedenceGroup(
-         PrecedenceGroup(getOperatorPrecedence(opKind),
-                         getAssociativity(opKind)));
 
-      return MakeDeclName(op::toString(opKind));
+   if (currentTok().is_operator()) {
+      return MakeDeclName(currentTok().toString());
    }
-   else if (currentTok().oneOf(tok::ident, tok::op_ident)) {
-      auto builtinOp = op::fromString(Info.getFix(),
-                                      currentTok().getIdentifier());
 
-      if (builtinOp != op::UnknownOp) {
-         Info.setPrecedenceGroup(
-            PrecedenceGroup(getOperatorPrecedence(builtinOp),
-                            getAssociativity(builtinOp)));
-      }
-      else {
-         Info.setPrecedenceGroup(PrecedenceGroup(12, Associativity::Left));
-      }
-
+   if (currentTok().oneOf(tok::ident, tok::op_ident)) {
       return MakeDeclName(currentTok().getIdentifier());
    }
 
@@ -951,22 +951,6 @@ ParseResult Parser::parseMethodDecl(AccessSpecifier accessSpec,
    bool IsVirtual = false;
    bool IsOverride = false;
 
-   OperatorInfo OpInfo;
-   if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
-      switch (currentTok().getKind()) {
-         case tok::kw_infix: OpInfo.setFix(FixKind::Infix); break;
-         case tok::kw_prefix: OpInfo.setFix(FixKind::Prefix); break;
-         case tok::kw_postfix: OpInfo.setFix(FixKind::Postfix); break;
-         default:
-            llvm_unreachable("bad fix kind");
-      }
-
-      IsOperator = true;
-      OpInfo.setPrecedenceGroup(PrecedenceGroup(12, Associativity::Left));
-
-      advance();
-   }
-
    if (currentTok().is(Ident_virtual)) {
       IsVirtual = true;
       advance();
@@ -981,20 +965,26 @@ ParseResult Parser::parseMethodDecl(AccessSpecifier accessSpec,
       advance();
    }
 
+   FixKind Fix;
+   if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
+      switch (currentTok().getKind()) {
+         case tok::kw_infix: Fix = FixKind::Infix; break;
+         case tok::kw_prefix: Fix = FixKind::Prefix; break;
+         case tok::kw_postfix: Fix = FixKind::Postfix; break;
+         default:
+            llvm_unreachable("bad fix kind");
+      }
+
+      IsOperator = true;
+      advance();
+   }
+
    bool isConversionOp = false;
    SourceType returnType;
    DeclarationName methodName;
 
    if (IsOperator) {
-      methodName = parseOperatorName(OpInfo, isConversionOp, returnType);
-      if (isConversionOp) {
-         if (OpInfo.getFix() != FixKind::Infix) {
-            SP.diagnose(err_generic_error, currentTok().getSourceLoc(), 
-                        "cast operator must be infix");
-
-            OpInfo.setFix(FixKind::Infix);
-         }
-      }
+      methodName = parseOperatorName(Fix, isConversionOp, returnType);
    }
    else {
       methodName = currentTok().getIdentifierInfo();
@@ -1025,8 +1015,8 @@ ParseResult Parser::parseMethodDecl(AccessSpecifier accessSpec,
       advance();
       advance();
 
-      constraints.push_back(
-         StaticExpr::Create(Context, parseExprSequence().tryGetExpr()));
+      constraints.push_back(StaticExpr::Create(
+         Context, parseExprSequence(false, false, true, false).tryGetExpr()));
    }
 
    MethodDecl *methodDecl;
@@ -1035,13 +1025,6 @@ ParseResult Parser::parseMethodDecl(AccessSpecifier accessSpec,
                                                   returnType, move(args),
                                                   move(templateParams),
                                                   nullptr);
-   }
-   else if (OpInfo.getPrecedenceGroup().isValid()) {
-      methodDecl = MethodDecl::CreateOperator(Context, accessSpec, DefLoc,
-                                              methodName,
-                                              returnType, std::move(args),
-                                              move(templateParams),
-                                              nullptr, OpInfo, isStatic);
    }
    else {
       methodDecl = MethodDecl::Create(Context, accessSpec, DefLoc, methodName,

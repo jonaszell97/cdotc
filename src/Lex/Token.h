@@ -15,9 +15,15 @@ namespace llvm {
    class SmallString;
 
    class APInt;
+   class raw_ostream;
 } // namespace llvm
 
 namespace cdot {
+namespace ast {
+   class Expression;
+   class Statement;
+   class Decl;
+} // namespace ast
 
 class IdentifierInfo;
 struct Variant;
@@ -54,6 +60,21 @@ struct Token {
       assert(length < 4294967296 && "not enough space for length");
    }
 
+   Token(ast::Expression *E, SourceLocation Loc)
+      : kind(tok::macro_expression), loc(Loc),
+        Data(0), Ptr(E)
+   {}
+
+   Token(ast::Statement *S, SourceLocation Loc)
+      : kind(tok::macro_statement), loc(Loc),
+        Data(0), Ptr(S)
+   {}
+
+   Token(ast::Decl *D, SourceLocation Loc)
+      : kind(tok::macro_declaration), loc(Loc),
+        Data(0), Ptr(D)
+   {}
+
    enum SpaceToken { Space };
 
    Token(SpaceToken,
@@ -79,9 +100,13 @@ struct Token {
    template<unsigned N>
    void rawRepr(llvm::SmallString<N> &s) const;
 
+   void print(llvm::raw_ostream &OS) const;
+   void dump() const;
+
    tok::TokenType getKind()      const { return kind; }
    unsigned getOffset()          const { return loc.getOffset(); }
    SourceLocation getSourceLoc() const { return loc; }
+   SourceLocation getEndLoc() const;
 
    bool is(IdentifierInfo *II) const;
    bool is(tok::TokenType ty) const { return kind == ty; }
@@ -132,7 +157,9 @@ struct Token {
    llvm::StringRef getText() const
    {
       assert(oneOf(tok::charliteral, tok::stringliteral, tok::fpliteral,
-                   tok::integerliteral, tok::space) && "not a literal token");
+                   tok::integerliteral, tok::space, tok::closure_arg,
+                   tok::macro_name)
+             && "not a literal token");
       return llvm::StringRef((const char*)Ptr, Data);
    }
 
@@ -150,6 +177,24 @@ struct Token {
       return *reinterpret_cast<Variant*>(Ptr);
    }
 
+   ast::Expression *getExpr() const
+   {
+      assert(kind == tok::macro_expression);
+      return reinterpret_cast<ast::Expression*>(Ptr);
+   }
+
+   ast::Statement *getStmt() const
+   {
+      assert(kind == tok::macro_statement);
+      return reinterpret_cast<ast::Statement*>(Ptr);
+   }
+
+   ast::Decl *getDecl() const
+   {
+      assert(kind == tok::macro_declaration);
+      return reinterpret_cast<ast::Decl*>(Ptr);
+   }
+
 private:
    tok::TokenType kind : 8;
    SourceLocation loc;
@@ -158,11 +203,16 @@ private:
    void *Ptr;
 };
 
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                                     const cdot::lex::Token &Tok) {
+   Tok.print(OS);
+   return OS;
+}
+
 namespace tok {
    std::string tokenTypeToString(TokenType ty);
 } // namespace tok
 
 } // namespace lex
 } // namespace cdot
-
 #endif //CDOT_TOKEN_H

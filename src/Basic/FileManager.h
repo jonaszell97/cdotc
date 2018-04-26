@@ -90,6 +90,8 @@ public:
 
    size_t createSourceLocAlias(SourceLocation aliasedLoc);
 
+   unsigned createMacroExpansionID();
+
    void addFileInclude(size_t IncludedFromID, size_t IncludedFileID);
    bool wasIncludedFrom(size_t CurrentFile, size_t PossiblyIncludedFile);
 

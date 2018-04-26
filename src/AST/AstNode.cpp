@@ -20,10 +20,6 @@ AstNode::~AstNode()
 void AstNode::setContextualType(QualType ty)
 {
    contextualType = ty;
-
-   if (auto S = dyn_cast<StaticExpr>(this)) {
-      S->getExpr()->setContextualType(ty);
-   }
 }
 
 llvm::ArrayRef<Attr*> AstNode::getAttributes() const

@@ -29,6 +29,20 @@ private:
    ast::ILGenPass &ILGen;
 };
 
+class DefinitiveInitilizationPass:
+   public InstructionVisitor<DefinitiveInitilizationPass, void> {
+public:
+   DefinitiveInitilizationPass(ast::ILGenPass &ILGen)
+      : ILGen(ILGen)
+   { }
+
+   void visitModule(Module &M) override;
+   void visitInitializer(Initializer &F);
+
+private:
+   ast::ILGenPass &ILGen;
+};
+
 } // namespace il
 } // namespace cdot
 

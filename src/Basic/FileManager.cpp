@@ -155,6 +155,14 @@ size_t FileManager::createSourceLocAlias(SourceLocation aliasedLoc)
    return id;
 }
 
+unsigned FileManager::createMacroExpansionID()
+{
+   auto id = (unsigned)sourceIdOffsets.size();
+   sourceIdOffsets.push_back(sourceIdOffsets.back());
+
+   return id;
+}
+
 void FileManager::addFileInclude(size_t IncludedFromID, size_t IncludedFileID)
 {
    auto FromIt = IdFileMap.find(IncludedFromID);

@@ -50,6 +50,10 @@ def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.DeclContextUnionSynthProvider '
                            '-x "^cdot::ast::Decl::DeclContextUnion$"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l '
+                           'lldbDataFormatters.FinalTemplateArgumentListSynthProvider '
+                           '-x "^cdot::sema::FinalTemplateArgumentList"')
 
 # Pretty printer for llvm::SmallVector/llvm::SmallVectorImpl
 class SmallVectorSynthProvider:
@@ -529,3 +533,36 @@ class DeclContextUnionSynthProvider:
     def update(self):
         self.isMultiple = (self.rawValue & self.mask) != 0
         return False
+
+class FinalTemplateArgumentListSynthProvider:
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.normal_child_count = 2 # NumArgs, Dependent
+        self.update()
+
+    def num_children(self):
+        return self.child_count + self.normal_child_count
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normal_child_count:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normal_child_count) * self.type_size
+
+        name = '[' + str(index - self.normal_child_count) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.data_type)
+
+    def update(self):
+        self.data_type = self.valobj.GetFrame().GetModule() \
+            .FindFirstType("cdot::sema::ResolvedTemplateArg")
+        self.type_size = self.data_type.GetByteSize()
+        self.child_count = self.valobj.GetChildMemberWithName("NumArgs") \
+            .GetValueAsUnsigned(0)
+        return True

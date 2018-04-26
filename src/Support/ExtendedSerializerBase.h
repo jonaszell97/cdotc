@@ -56,6 +56,7 @@ protected:
          this->Writer.WriteByte(Ty->asBuiltinType()->getKind());
          break;
       case Type::PointerTypeID:
+      case Type::MutablePointerTypeID:
          WriteQualType(Ty->getPointeeType());
          break;
       case Type::ReferenceTypeID:
@@ -363,21 +364,6 @@ protected:
       default:
          llvm_unreachable("unimplemented type");
       }
-   }
-
-   sema::TemplateArgList ReadTemplateArgList()
-   {
-      auto numParams = this->ReadSize();
-      sema::TemplateArgList list(SP);
-
-      for (size_t i = 0; i < numParams; ++i) {
-         auto name = this->ReadString();
-         auto arg = ReadResolvedTemplateArg();
-
-         list.insert(name, move(arg));
-      }
-
-      return list;
    }
 
    sema::ResolvedTemplateArg ReadResolvedTemplateArg()

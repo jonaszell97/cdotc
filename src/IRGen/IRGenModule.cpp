@@ -95,26 +95,27 @@ void IRGen::linkAndEmit(CompilationUnit &CU)
 
    Module->setDataLayout(TargetMachine->createDataLayout());
    Module->setTargetTriple(TargetTriple.str());
+//   Module->print(llvm::outs(), new llvm::AssemblyAnnotationWriter);
 
    if (outputAsm) {
-      std::error_code EC;
-      llvm::legacy::PassManager pass;
-
-      llvm::SmallString<512> s;
-      llvm::raw_svector_ostream sstream(s);
-
-      auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
-      if (TargetMachine->addPassesToEmitFile(pass, sstream, FileType)) {
-         llvm::report_fatal_error(
-            "TargetMachine can't emit a file of this type\n", false);
-      }
-
-      pass.run(*Module);
-
-      auto asmFile = options.getOutFile(OutputKind::Asm);
-      llvm::raw_fd_ostream asmDest(asmFile, EC, llvm::sys::fs::F_RW);
-
-      asmDest << s.str();
+//      std::error_code EC;
+//      llvm::legacy::PassManager pass;
+//
+//      llvm::SmallString<512> s;
+//      llvm::raw_svector_ostream sstream(s);
+//
+//      auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
+//      if (TargetMachine->addPassesToEmitFile(pass, sstream, FileType)) {
+//         llvm::report_fatal_error(
+//            "TargetMachine can't emit a file of this type\n", false);
+//      }
+//
+//      pass.run(*Module);
+//
+//      auto asmFile = options.getOutFile(OutputKind::Asm);
+//      llvm::raw_fd_ostream asmDest(asmFile, EC, llvm::sys::fs::F_RW);
+//
+//      asmDest << s.str();
    }
 
    if (outputObj || outputExec) {

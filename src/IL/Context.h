@@ -5,13 +5,14 @@
 #ifndef CDOT_CONTEXT_H
 #define CDOT_CONTEXT_H
 
-#include "AST/Type.h"
+#include "IL/Constants.h"
 
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APSInt.h>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
-#include <llvm/ADT/APSInt.h>
-#include <llvm/ADT/APFloat.h>
-#include <llvm/ADT/DenseMap.h>
 
 namespace llvm {
 
@@ -72,11 +73,6 @@ namespace il {
 class Module;
 class Function;
 class GlobalVariable;
-class Value;
-class ConstantInt;
-class ConstantFloat;
-class ConstantString;
-class ConstantPointer;
 
 class Context final {
 public:
@@ -101,6 +97,15 @@ public:
    friend class ConstantFloat;   // for FPConstants
    friend class ConstantString;  // for StringConstants
    friend class ConstantPointer; // for NullConstants
+   friend class ConstantArray;
+   friend class ConstantTuple;
+   friend class ConstantStruct;
+   friend class ConstantClass;
+   friend class ConstantUnion;
+   friend class ConstantEnum;
+   friend class UndefValue;
+   friend class ConstantExpr;
+   friend class MagicConstant;
 
 private:
    llvm::SmallVector<Module*, 8> Modules;
@@ -115,11 +120,28 @@ private:
    using StringMapTy = llvm::StringMap<std::unique_ptr<ConstantString>>;
    using NullPtrMapTy = llvm::DenseMap<QualType,
                                        std::unique_ptr<ConstantPointer>>;
+   using UndefMapTy = llvm::DenseMap<QualType, std::unique_ptr<UndefValue>>;
 
    IntMapTy IntConstants;
    FPMapTy FPConstants;
    StringMapTy StringConstants;
    NullPtrMapTy NullConstants;
+   UndefMapTy UndefConstants;
+   il::MagicConstant *MagicConstants[4] = { nullptr };
+
+   llvm::FoldingSet<ConstantArray> ArrayConstants;
+   llvm::FoldingSet<ConstantTuple> TupleConstants;
+   llvm::FoldingSet<ConstantStruct> StructConstants;
+   llvm::FoldingSet<ConstantClass> ClassConstants;
+   llvm::FoldingSet<ConstantEnum> EnumConstants;
+   llvm::FoldingSet<ConstantUnion> UnionConstants;
+
+   llvm::FoldingSet<ConstantBitCastInst> BitCastConstants;
+   llvm::FoldingSet<ConstantAddrOfInst> AddrOfConstants;
+   llvm::FoldingSet<ConstantIntCastInst> IntCastConstants;
+   llvm::FoldingSet<ConstantOperatorInst> OperatorConstants;
+   llvm::FoldingSet<ConstantGEPInst> GEPConstants;
+   llvm::FoldingSet<ConstantLoadInst> LoadConstants;
 
    ConstantInt *TrueVal  = nullptr;
    ConstantInt *FalseVal = nullptr;

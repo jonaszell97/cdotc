@@ -37,6 +37,8 @@
       CDOT_STMT(DebugStmt)
       CDOT_STMT(NullStmt)
 
+      CDOT_STMT(MacroExpansionStmt)
+
       CDOT_STMT(StaticIfStmt)
       CDOT_STMT(StaticForStmt)
       CDOT_STMT(MixinStmt)
@@ -71,6 +73,7 @@
       CDOT_ABSTRACT(_lastIdentifiedExpr)
 
       CDOT_EXPR(CallExpr)
+      CDOT_EXPR(AnonymousCallExpr)
       CDOT_EXPR(SubscriptExpr)
       CDOT_EXPR(BuiltinExpr)
       CDOT_EXPR(TupleMemberExpr)
@@ -86,6 +89,7 @@
       CDOT_EXPR(ExprSequence)
       CDOT_EXPR(UnaryOperator)
       CDOT_EXPR(BinaryOperator)
+      CDOT_EXPR(AssignExpr)
       CDOT_EXPR(CastExpr)
       CDOT_EXPR(TypePredicateExpr)
 
@@ -96,6 +100,9 @@
       CDOT_EXPR(ConstraintExpr)
       CDOT_EXPR(TraitsExpr)
       CDOT_EXPR(MixinExpr)
+
+      CDOT_EXPR(MacroVariableExpr)
+      CDOT_EXPR(MacroExpansionExpr)
 
       CDOT_ABSTRACT(_firstTypeExpr)
          CDOT_TYPE_EXPR(TupleTypeExpr)

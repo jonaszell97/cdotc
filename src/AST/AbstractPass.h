@@ -73,7 +73,7 @@ public:
       collectDirectChildren(Children, Stmt);
 
       for (auto &Child : Children) {
-         if (!static_cast<SubClass*>(this)->visit(Child))
+         if (!static_cast<SubClass*>(this)->RecursiveASTVisitor::visit(Child))
             return false;
       }
 

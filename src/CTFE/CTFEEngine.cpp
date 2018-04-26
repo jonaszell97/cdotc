@@ -32,6 +32,8 @@
 
 #ifndef _WIN32
 #  include <unistd.h>
+#include <IL/Writer/ModuleWriter.h>
+
 #endif
 
 using std::string;
@@ -124,16 +126,26 @@ private:
    Exception thrownException;
 
    ctfe::Value getStruct(QualType ty, llvm::ArrayRef<Value> fieldValues);
+   ctfe::Value getClass(QualType ty,
+                        il::GlobalVariable *TI,
+                        llvm::ArrayRef<Value> fieldValues);
+
    ctfe::Value getArray(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getUnion(QualType ty, QualType initTy, Value Initializer);
    ctfe::Value getEnum(QualType ty, IdentifierInfo *caseName,
                        llvm::ArrayRef<Value> fieldValues);
+   ctfe::Value getEnum(QualType ty, EnumCaseDecl *Case,
+                       llvm::ArrayRef<Value> fieldValues);
+
    ctfe::Value getLambda(il::Function const* F,
                          llvm::ArrayRef<std::pair<QualType, Value>> captures);
 
    ctfe::Value getCtfeValue(il::Value const *V);
    ctfe::Value getConstantVal(il::Constant const* C);
+
+   void buildConstantClass(llvm::SmallVectorImpl<Value> &Vec,
+                           const ConstantClass *Class);
 
    ctfe::Value getStructElement(ctfe::Value &Val,
                                 QualType ty,
@@ -153,14 +165,24 @@ private:
    ctfe::Value getEnumCaseValue(ctfe::Value &Val, QualType ty,
                                 IdentifierInfo *caseName, size_t idx);
 
+   ctfe::Value getEnumCaseValue(ctfe::Value &Val, QualType ty,
+                                EnumCaseDecl *Case, size_t idx);
+
    void storeValue(ctfe::Value dst, ctfe::Value src, QualType Ty);
 
    std::string toString(ctfe::Value Val, QualType Ty);
+
    Variant toVariant(ctfe::Value Val, QualType Ty);
+   il::Constant *toConstant(ctfe::Value Val, QualType Ty);
 
    std::pair<bool, Value> checkBuiltinCall(il::Function const& F,
                                            llvm::ArrayRef<ctfe::Value> args,
                                            SourceLocation callerLoc);
+
+   ctfe::Value getIntegerCast(CastKind Kind, QualType From, QualType To,
+                              ctfe::Value Val);
+   ctfe::Value getFPCast(CastKind Kind, QualType From, QualType To,
+                         ctfe::Value Val);
 
    string simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
                          SourceLocation loc = {});
@@ -217,6 +239,11 @@ private:
    {
       return G.getParent()->getContext().getGlobalDefinition(G.getName());
    }
+
+   ctfe::Value applyBinaryOp(unsigned OpCode,
+                             QualType Ty,
+                             ctfe::Value LHS,
+                             ctfe::Value RHS);
 
    ctfe::Value getNullValue(QualType Ty);
 
@@ -418,6 +445,15 @@ ctfe::Value EngineImpl::getCtfeValue(il::Value const *V)
    return it->second;
 }
 
+void EngineImpl::buildConstantClass(llvm::SmallVectorImpl<Value> &Vec,
+                                    const ConstantClass *Class) {
+   if (auto Base = Class->getBase())
+      buildConstantClass(Vec, Base);
+
+   for (const auto &el : Class->getElements())
+      Vec.push_back(getConstantVal(el));
+}
+
 ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
 {
    if (auto Int = dyn_cast<ConstantInt>(C)) {
@@ -458,23 +494,55 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
       return getArray(A->getType(), fields);
    }
 
-   if (auto CS = dyn_cast<ConstantStruct>(C)) {
-      auto S = cast<StructDecl>(CS->getType()->getRecord());
-      auto Els = CS->getElements();
+   if (auto Tup = dyn_cast<ConstantTuple>(C)) {
+      auto Els = Tup->getVec();
 
       size_t i = 0;
       llvm::SmallVector<ctfe::Value, 8> fields;
 
-      for (auto F : S->getFields()) {
-         (void)F;
-
-         assert(i < Els.size());
-         fields.push_back(getConstantVal(Els[i]));
-
+      for (auto &El : Els) {
+         fields.push_back(getConstantVal(El));
          ++i;
       }
 
+      return getTuple(Tup->getType(), fields);
+   }
+
+   if (auto CS = dyn_cast<ConstantStruct>(C)) {
+      auto Els = CS->getElements();
+
+      llvm::SmallVector<ctfe::Value, 8> fields;
+      for (auto El : Els) {
+         fields.push_back(getConstantVal(El));
+      }
+
       return getStruct(CS->getType(), fields);
+   }
+
+   if (auto CS = dyn_cast<ConstantClass>(C)) {
+      llvm::SmallVector<ctfe::Value, 8> fields;
+      buildConstantClass(fields, CS);
+
+      return getClass(CS->getType(), CS->getTypeInfo(), fields);
+   }
+
+   if (auto U = dyn_cast<ConstantUnion>(C)) {
+      return getConstantVal(U->getInitVal());
+   }
+
+   if (auto E = dyn_cast<ConstantEnum>(C)) {
+      auto Case = E->getCase();
+      auto Enum = cast<EnumDecl>(Case->getRecord());
+
+      if (Enum->isRawEnum())
+         return getConstantVal(Case->getILValue());
+
+      llvm::SmallVector<ctfe::Value, 8> fields;
+      for (auto El : E->getCaseValues()) {
+         fields.push_back(getConstantVal(El));
+      }
+
+      return getEnum(E->getType(), Case, fields);
    }
 
    if (auto VT = dyn_cast<VTable>(C)) {
@@ -506,44 +574,23 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
    }
 
    if (auto G = dyn_cast<GlobalVariable>(C)) {
-      G = getGlobalDefinition(*G);
-      if (!G) {
-         diagnoseNoDefinition(G);
-         return {};
-      }
+      assert((G->getInitializer() || G->isLazilyInitialized())
+             && "undiagnosed external global!");
 
       auto it = GlobalMap.find(G);
-      if (it == GlobalMap.end()) {
-         ctfe::Value GlobalAlloc;
+      if (it != GlobalMap.end())
+         return it->getSecond();
 
-         auto Ty = G->getType()->getReferencedType();
-         if (Ty->isMetaType()) {
-            auto Alloc = Allocator.Allocate(MetaType::MemberCount
-                                            * sizeof(void*), alignof(void*));
+      auto GlobalTy = G->getType()->getReferencedType();
+      auto Alloc = Allocate(TI.getSizeOfType(GlobalTy),
+                            TI.getAlignOfType(GlobalTy));
 
-            GlobalAlloc = Value(Alloc);
-         }
-         else if (!Ty->needsStructReturn()) {
-            GlobalAlloc = Value::getPtr(nullptr, Allocator);
-         }
-         else {
-            GlobalAlloc = getNullValue(Ty);
-         }
-
-         if (auto Init = G->getInitializer()) {
-            auto val = getConstantVal(Init);
-            storeValue(GlobalAlloc, val, Ty);
-         }
-         else {
-            visitBasicBlock(*G->getInitBB(),
-                            llvm::ArrayRef<ctfe::Value>(), true);
-         }
-
-         GlobalMap[G] = GlobalAlloc;
-         return GlobalAlloc;
+      if (auto Init = G->getInitializer()) {
+         storeValue(Alloc, getConstantVal(Init), GlobalTy);
       }
 
-      return it->second;
+      GlobalMap[G] = Alloc;
+      return Alloc;
    }
 
    if (auto BC = dyn_cast<ConstantBitCastInst>(C)) {
@@ -555,6 +602,41 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
       return Value::getPreallocated(
          getConstantVal(AddrOf->getTarget()).getBuffer());
    }
+
+   if (auto Op = dyn_cast<ConstantOperatorInst>(C)) {
+      auto lhs = getCtfeValue(Op->getLHS());
+      auto rhs = getCtfeValue(Op->getRHS());
+      auto ty = Op->getLHS()->getType();
+
+      return applyBinaryOp(Op->getOpCode(), ty, lhs, rhs);
+   }
+
+   if (auto GEP = dyn_cast<ConstantGEPInst>(C)) {
+      auto ty = GEP->getTarget()->getType();
+      auto val = getCtfeValue(GEP->getTarget());
+      auto idx = getCtfeValue(GEP->getIdx()).getU64();
+
+      if (ty->isRecordType()) {
+         return getStructElement(val, ty, idx);
+      }
+      if (ty->isPointerType()) {
+         return getElementPtr(val, ty, idx);
+      }
+      if (ty->isArrayType()) {
+         return getArrayElement(val, ty, idx);
+      }
+
+      llvm_unreachable("bad gep operand");
+   }
+
+   if (auto Cast = dyn_cast<ConstantIntCastInst>(C)) {
+      return getIntegerCast(Cast->getKind(), Cast->getTarget()->getType(),
+                            Cast->getType(), getCtfeValue(Cast->getTarget()));
+   }
+
+   if (auto Undef = dyn_cast<UndefValue>(C))
+      return Allocate(TI.getSizeOfType(Undef->getType()),
+                      TI.getAlignOfType(Undef->getType()));
 
    llvm_unreachable("bad constant kind");
 }
@@ -571,85 +653,57 @@ Value EngineImpl::getNullValue(QualType ty)
 
       return Value::getInt(0);
    }
-   else if (ty->isFloatTy()) {
+   if (ty->isFloatTy()) {
       return Value::getFloat(0.0f);
    }
-   else if (ty->isDoubleTy()) {
+   if (ty->isDoubleTy()) {
       return Value::getDouble(0.0);
    }
-   else if (ty->isPointerType() || ty->isThinFunctionTy()
-            || ty->isReferenceType()) {
+   if (ty->isPointerType() || ty->isThinFunctionTy()
+       || ty->isReferenceType()) {
       return Value::getConstPtr(nullptr);
    }
-   else if (ty->isFunctionType()) {
-      auto buffer = Allocator.Allocate(sizeof(void*) * 2, alignof(void*));
 
-      auto env = Allocator.Allocate(sizeof(void*), alignof(void*));
-      *reinterpret_cast<uintptr_t*>(env) = 0;
-
-      *reinterpret_cast<void**>(buffer) = env;
-      *(reinterpret_cast<uintptr_t*>(buffer) + 1) = 0;
-
-      return Value::getPreallocated(buffer);
-   }
-   else if (auto ArrTy = ty->asArrayType()) {
-      auto buffer = Allocator.Allocate(
-         TI.getSizeOfType(ArrTy->getElementType()) * ArrTy->getNumElements(),
-         TI.getAlignOfType(ArrTy->getElementType()));
-
-      return Value::getPreallocated(buffer);
-   }
-   else if (auto TupleTy = ty->asTupleType()) {
-      size_t size = 0;
-      for (auto &cont : TupleTy->getContainedTypes())
-         size += TI.getSizeOfType(cont);
-
-      return Value::getPreallocated(Allocator.Allocate(size, 1));
-   }
-   else if (auto Obj = ty->asRecordType()) {
-      auto R = Obj->getRecord();
-
-      if (auto S = dyn_cast<StructDecl>(R)) {
-         size_t size = 0;
-         if (isa<ClassDecl>(R))
-            size += 3 * sizeof(void*);
-
-         for (auto F : S->getFields()) {
-            size += TI.getSizeOfType(F->getType());
-         }
-
-         return Value::getPreallocated(Allocator.Allocate(size, 1));
-      }
-      else if (auto U = dyn_cast<UnionDecl>(R)) {
-         return Value::getPreallocated(Allocator.Allocate(U->getSize(), 1));
-      }
-      else if (auto E = dyn_cast<EnumDecl>(R)) {
-         size_t size = TI.getSizeOfType(E->getRawType());
-         size += E->getMaxAssociatedTypes() * sizeof(void*);
-
-         return Value::getPreallocated(Allocator.Allocate(size, 1));
-      }
-   }
-
-   llvm_unreachable("bad value type");
+   return Allocate(TI.getAllocSizeOfType(ty), TI.getAllocAlignOfType(ty));
 }
 
 Value EngineImpl::getStruct(QualType ty, llvm::ArrayRef<Value> fieldValues)
 {
+   assert(!isa<ClassDecl>(ty->getRecord()) && "call getClass instead!");
+
    auto S = cast<StructDecl>(ty->getRecord());
    auto V = getNullValue(ty);
    auto ptr = V.getBuffer();
 
-   size_t i = 0;
-   if (isa<ClassDecl>(S)) {
-      auto UIntTy = SP.getContext().getUIntTy();
-      storeValue(fieldValues[0], Value(0), UIntTy);
-      storeValue(fieldValues[1], Value(0), UIntTy);
-      storeValue(fieldValues[2], Value(0), UIntTy);
+   unsigned i = 0;
+   for (auto F : S->getFields()) {
+      storeValue(Value(ptr), fieldValues[i], F->getType());
 
-      ptr += 3 * sizeof(void*);
+      ptr += TI.getSizeOfType(F->getType());
+      i++;
    }
 
+   return V;
+}
+
+ctfe::Value EngineImpl::getClass(QualType ty, GlobalVariable *TIVal,
+                                 llvm::ArrayRef<Value> fieldValues) {
+   auto S = cast<ClassDecl>(ty->getRecord());
+   auto V = getNullValue(ty);
+   auto ptr = V.getBuffer();
+
+   auto UIntTy = SP.getContext().getUIntTy();
+
+   storeValue(Value(ptr), Value(1), UIntTy);
+   ptr += sizeof(void*);
+
+   storeValue(Value(ptr), Value(0), UIntTy);
+   ptr += sizeof(void*);
+
+   storeValue(Value(ptr), getConstantVal(TIVal), UIntTy);
+   ptr += sizeof(void*);
+
+   unsigned i = 0;
    for (auto F : S->getFields()) {
       storeValue(Value(ptr), fieldValues[i], F->getType());
 
@@ -688,23 +742,46 @@ Value EngineImpl::getEnum(QualType ty, IdentifierInfo *caseName,
    auto E = cast<EnumDecl>(ty->getRecord());
    auto C = E->hasCase(caseName);
 
+   return getEnum(ty, C, fieldValues);
+}
+
+Value EngineImpl::getEnum(QualType ty,
+                          EnumCaseDecl *Case,
+                          llvm::ArrayRef<Value> CaseVals) {
+   auto E = cast<EnumDecl>(ty->getRecord());
+   if (E->getMaxAssociatedTypes() == 0)
+      return getCtfeValue(Case->getILValue());
+
    auto V = getNullValue(ty);
-   storeValue(V, Value::getInt(C->getRawValue()), E->getRawType());
+   storeValue(V, getCtfeValue(Case->getILValue()), E->getRawType());
 
-   auto buf = V.getBuffer() + TI.getSizeOfType(E->getRawType());
-   size_t i = 0;
+   auto RawSize = TI.getSizeOfType(E->getRawType());
 
-   void **ptr = (void**)buf;
-   for (auto &V : C->getArgs()) {
-      auto argTy = V->getType();
-      auto alloc = (char*)Allocator.Allocate(TI.getSizeOfType(argTy),
-                                             TI.getAlignOfType(argTy));
+   ctfe::Value ValuePtr = V.getBuffer() + RawSize;
+   ctfe::Value StoreDst;
+   ctfe::Value IndirectStorage;
 
-      storeValue(Value(alloc), fieldValues[i], argTy);
-      *ptr = alloc;
+   if (Case->isIndirect()) {
+      auto CaseSize = TI.getSizeOfType(ty) - RawSize;
+      StoreDst = Allocate(CaseSize, Case->getAlignment());
+      IndirectStorage = StoreDst;
+   }
+   else {
+      StoreDst = ValuePtr;
+   }
 
-      ptr += 1;
-      i += 1;
+   assert(Case->getArgs().size() == CaseVals.size() && "bad argument count!");
+
+   unsigned i = 0;
+   for (auto &Arg : Case->getArgs()) {
+      auto val = CaseVals[i];
+      storeValue(StoreDst, val, Arg->getType());
+
+      StoreDst = StoreDst.getBuffer() + TI.getSizeOfType(Arg->getType());
+   }
+
+   if (Case->isIndirect()) {
+      storeValue(ValuePtr, IndirectStorage, SP.getContext().getUInt8PtrTy());
    }
 
    return V;
@@ -729,7 +806,7 @@ Value EngineImpl::getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues)
 }
 
 Value EngineImpl::getLambda(il::Function const *F,
-                            llvm::ArrayRef<std::pair<QualType , Value>> captures) {
+                          llvm::ArrayRef<std::pair<QualType, Value>> captures) {
    auto buffer = Allocator.Allocate(2 * sizeof(void*), alignof(void*));
    auto env = (char*)Allocator.Allocate(captures.size() * sizeof(void*), 1);
 
@@ -752,6 +829,9 @@ Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type,
    auto S = cast<StructDecl>(type->getRecord());
    auto ptr = Val.getBuffer();
 
+   if (isa<ClassDecl>(S))
+      ptr += 3 * sizeof(void*);
+
    for (auto F : S->getFields()) {
       if (F->getIdentifierInfo() == fieldName) {
          break;
@@ -767,6 +847,9 @@ Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type, size_t idx)
 {
    auto S =cast<StructDecl>(type->getRecord());
    auto ptr = Val.getBuffer();
+
+   if (isa<ClassDecl>(S))
+      ptr += 3 * sizeof(void*);
 
    size_t i = 0;
    for (auto F : S->getFields()) {
@@ -793,11 +876,7 @@ Value EngineImpl::getArrayElement(ctfe::Value &Val, QualType type, size_t idx)
 {
    auto A = type->asArrayType();
    auto memberSize = TI.getSizeOfType(A->getElementType());
-   auto ty = A->getElementType();
    auto ptr = reinterpret_cast<Value*>(Val.getBuffer() + memberSize * idx);
-
-   if (ty->needsStructReturn())
-      return Value(ptr);
 
    return Value(ptr);
 }
@@ -829,10 +908,13 @@ Value EngineImpl::getLambdaEnvironment(ctfe::Value &Val)
 Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
 {
    auto rawType = cast<EnumDecl>(type->getRecord())->getRawType();
+   if (cast<EnumDecl>(type->getRecord())->isRawEnum())
+      return Val;
+
    auto bw = rawType->getBitwidth();
-   uint64_t caseVal;
    auto buffer = Val.getBuffer();
 
+   uint64_t caseVal;
    switch (bw) {
    case 1:
    case 8:
@@ -856,18 +938,30 @@ Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
 
 Value EngineImpl::getEnumCaseValue(ctfe::Value &Val, QualType type,
                                    IdentifierInfo *caseName, size_t idx) {
-   auto E = cast<EnumDecl>(type->getRecord());
-   auto C = E->hasCase(caseName);
-
-   assert(getEnumRawValue(Val, type).getU64() == C->getRawValue());
-   assert(idx < C->getArgs().size());
-
-   void **ptr = (void**)Val.getBuffer();
-   ptr += idx + 1;
-
-   return Value::getPreallocated(*reinterpret_cast<Value**>(ptr));
+   return getEnumCaseValue(Val, type,
+                           cast<EnumDecl>(type->getRecord())->hasCase(caseName),
+                           idx);
 }
 
+Value EngineImpl::getEnumCaseValue(ctfe::Value &Val, QualType type,
+                                   EnumCaseDecl *Case, size_t idx) {
+   assert(getEnumRawValue(Val, type).getU64() == Case->getRawValue());
+   assert(idx < Case->getArgs().size());
+
+   ctfe::Value BeginPtr = Val.getBuffer()
+      + TI.getSizeOfType(cast<EnumDecl>(Case->getRecord())->getRawType());
+
+   if (Case->isIndirect()) {
+      BeginPtr = BeginPtr.load(SP.getContext().getUInt8PtrTy());
+   }
+
+   auto Args = Case->getArgs();
+   for (unsigned i = 0; i < idx; ++i) {
+      BeginPtr = BeginPtr.getBuffer() + TI.getSizeOfType(Args[i]->getType());
+   }
+
+   return BeginPtr;
+}
 
 string EngineImpl::toString(ctfe::Value Val, QualType type)
 {
@@ -1056,9 +1150,24 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
           && R->getSpecializedTemplate() == SP.getArrayDecl();
 }
 
+static bool isArrayView(SemaPass &SP, QualType Ty)
+{
+   if (!Ty->isRecordType())
+      return false;
+
+   auto R = Ty->getRecord();
+   return R->isInstantiation()
+          && R->getSpecializedTemplate() == SP.getArrayViewDecl();
+}
+
 static bool isStdString(SemaPass &SP, QualType Ty)
 {
    return Ty->isRecordType() && Ty->getRecord() == SP.getStringDecl();
+}
+
+static bool isStringView(SemaPass &SP, QualType Ty)
+{
+   return Ty->isRecordType() && Ty->getRecord() == SP.getStringViewDecl();
 }
 
 Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
@@ -1142,8 +1251,7 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
    }
 
    if (isStdArray(SP, type)) {
-      auto ElementTy = type->getRecord()->getTemplateArgs().getNamedArg("T")
-                           ->getType();
+      auto ElementTy = type->getRecord()->getTemplateArgs().front().getType();
 
       auto ElementPtr = SP.getContext().getPointerType(ElementTy);
 
@@ -1234,9 +1342,307 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
    llvm_unreachable("bad value type");
 }
 
+il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
+{
+   if (type->isVoidType())
+      return nullptr;
+
+   auto &ILCtx = SP.getCompilationUnit().getILCtx();
+   auto buffer = Val.getBuffer();
+   ValueType ValTy(ILCtx, type);
+
+   if (type->isLargeInteger()) {
+      return ConstantInt::get(
+         ValTy,
+         llvm::APSInt(*reinterpret_cast<llvm::APSInt*>(Val.getBuffer())));
+   }
+
+   if (type->isIntegerType()) {
+      llvm::APInt Int(type->getBitwidth(), Val.getU64());
+      return ConstantInt::get(ValTy,
+                              llvm::APSInt(move(Int), type->isUnsigned()));
+   }
+
+   if (type->isLargeFP()) {
+      return ConstantFloat::get(
+         ValTy,
+         llvm::APFloat(*reinterpret_cast<llvm::APFloat*>(Val.getBuffer())));
+   }
+
+   if (type->isFloatTy()) {
+      return ConstantFloat::get(ValTy, Val.getFloat());
+   }
+
+   if (type->isDoubleTy()) {
+      return ConstantFloat::get(ValTy, Val.getDouble());
+   }
+
+   if (type->isPointerType() || type->isReferenceType()) {
+      llvm::APInt Int(sizeof(void*) * 8,
+                      reinterpret_cast<unsigned long long>(buffer));
+
+      auto ILVal = ConstantInt::get(ValueType(ILCtx,
+                                              SP.getContext().getUIntTy()),
+                                    llvm::APSInt(move(Int), true));
+
+      return ConstantExpr::getIntToPtr(ILVal, type);
+   }
+
+   if (type->isThinFunctionTy()) {
+      return Val.getFuncPtr();
+   }
+
+   if (type->isFunctionType()) {
+      llvm_unreachable("todo");
+   }
+
+   if (auto ArrTy = type->asArrayType()) {
+      llvm::SmallVector<il::Constant*, 8> vec;
+      auto elementTy = ArrTy->getElementType();
+
+      for (size_t i = 0; i < ArrTy->getNumElements(); ++i) {
+         auto V = getArrayElement(Val, type, i);
+         vec.push_back(toConstant(V.load(elementTy), elementTy));
+      }
+
+      return ConstantArray::get(ValTy, vec);
+   }
+
+   if (auto TupleTy = type->asTupleType()) {
+      unsigned i = 0;
+      llvm::SmallVector<il::Constant*, 8> vec;
+      for (auto &Ty : TupleTy->getContainedTypes()) {
+         auto V = getTupleElement(Val, type, i++);
+         vec.push_back(toConstant(V.load(Ty), Ty));
+      }
+
+      return ConstantTuple::get(ValueType(ILCtx, type), vec);
+   }
+
+   if (isStdString(SP, type)) {
+      enum : uint64_t {
+         SmallFlag      = 1llu << 63u,
+         SmallShift     = 63llu - 7u,
+         SmallSizeMask  = 0b0111'1111llu << SmallShift
+      };
+
+      auto chars = getStructElement(Val, type, 0).load(SP.getContext()
+                                                         .getUInt8PtrTy());
+
+      auto size = getStructElement(Val, type, 1).load(SP.getContext()
+                                                        .getUIntTy()).getU64();
+
+      auto cap = getStructElement(Val, type, 2).load(SP.getContext()
+                                               .getUIntTy()).getU64();
+
+      // check if the string is in SSO mode
+      if ((cap & SmallFlag) != 0) {
+         // the value itself is the string buffer
+         chars = getStructElement(Val, type, 0).getBuffer();
+         size = (cap & SmallSizeMask) >> SmallShift;
+      }
+
+      auto Str =  ConstantString::get(ILCtx,
+                                      llvm::StringRef(chars.getBuffer(), size));
+      auto Size = ConstantInt::get(ValueType(ILCtx,
+                                            SP.getContext().getUIntTy()), size);
+
+      auto &Builder = SP.getILGen().Builder;
+      return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
+                                      SP.getILGen().GetTypeInfo(type),
+                                      { Str, Size, Size });
+   }
+
+   if (isStringView(SP, type)) {
+      auto chars = getStructElement(Val, type, 0).load(SP.getContext()
+                                                         .getUInt8PtrTy());
+
+      auto size = getStructElement(Val, type, 1).load(SP.getContext()
+                                                        .getUIntTy()).getU64();
+
+      auto Str =  ConstantString::get(ILCtx,
+                                      llvm::StringRef(chars.getBuffer(), size));
+      auto Size = ConstantInt::get(ValueType(ILCtx,
+                                            SP.getContext().getUIntTy()), size);
+
+      auto &Builder = SP.getILGen().Builder;
+      return Builder.GetConstantStruct(cast<StructDecl>(type->getRecord()),
+                                       { Str, Size });
+   }
+
+   if (isStdArray(SP, type)) {
+      auto ElementTy = type->getRecord()->getTemplateArgs().front().getType();
+
+      auto ElementPtr = SP.getContext().getPointerType(ElementTy);
+
+      auto beginPtr = getStructElement(Val, type, 0).load(ElementPtr);
+      auto endPtr   = getStructElement(Val, type, 1).load(ElementPtr);
+
+      auto opaqueBegin = beginPtr.getU64();
+      auto opaqueEnd   = endPtr.getU64();
+
+      auto ElementSize = TI.getSizeOfType(ElementTy);
+      auto size = (opaqueEnd - opaqueBegin) / ElementSize;
+      char *ptr  = beginPtr.getBuffer();
+
+      llvm::SmallVector<il::Constant*, 8> vec;
+      for (size_t i = 0; i < size; ++i) {
+         auto V = Value(ptr);
+         vec.emplace_back(toConstant(V.load(ElementTy), ElementTy));
+
+         ptr += ElementSize;
+      }
+
+      assert(ptr == (char*)opaqueEnd);
+
+      ValTy = SP.getContext().getArrayType(ElementTy, vec.size());
+
+      auto &Builder = SP.getILGen().Builder;
+
+      auto ArrVal = ConstantArray::get(ValTy, vec);
+      auto GV = Builder.CreateGlobalVariable(ArrVal);
+
+      auto FstElementPtr = ConstantExpr::getBitCast(GV, ElementPtr);
+      auto PtrAsInt = ConstantExpr::getPtrToInt(FstElementPtr,
+                                                SP.getContext().getUIntTy());
+
+      auto SizeVal = Builder.GetConstantInt(SP.getContext().getUIntTy(),
+                                            vec.size());
+
+      auto EndPtrAsInt = ConstantExpr::getAdd(PtrAsInt, SizeVal);
+      auto EndPtr = ConstantExpr::getIntToPtr(EndPtrAsInt, ElementPtr);
+
+      return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
+                                      SP.getILGen().GetTypeInfo(type),
+                                      { FstElementPtr, EndPtr, EndPtr });
+   }
+
+   if (isArrayView(SP, type)) {
+      auto ElementTy = type->getRecord()->getTemplateArgs().front().getType();
+      auto ElementPtr = SP.getContext().getPointerType(ElementTy);
+
+      auto beginPtr = getStructElement(Val, type, 0).load(ElementPtr);
+      auto ElementSize = TI.getSizeOfType(ElementTy);
+
+      char *ptr = beginPtr.getBuffer();
+      auto size = getStructElement(Val, type, 1)
+         .load(SP.getContext().getUIntTy()).getU64();
+
+      llvm::SmallVector<il::Constant*, 8> vec;
+      for (size_t i = 0; i < size; ++i) {
+         auto V = Value(ptr);
+         vec.emplace_back(toConstant(V.load(ElementTy), ElementTy));
+
+         ptr += ElementSize;
+      }
+
+      auto ArrTy = SP.getContext().getArrayType(ElementTy, vec.size());
+      auto Arr = ConstantArray::get(ValueType(ILCtx, ArrTy), vec);
+      auto GV = new GlobalVariable(ArrTy, true, "",
+                                   SP.getILGen().Builder.getModule(), Arr);
+
+      auto Size = ConstantInt::get(
+         ValueType(ILCtx, SP.getContext().getUIntTy()), size);
+      auto *FirstElPtr = il::ConstantExpr::getBitCast(
+         GV, ElementTy->getPointerTo(SP.getContext()));
+
+      return ConstantStruct::get(ValueType(ILCtx, type), { FirstElPtr, Size });
+   }
+
+   if (auto Obj = type->asRecordType()) {
+      auto R = Obj->getRecord();
+      if (auto U = dyn_cast<UnionDecl>(R)) {
+         return ConstantUnion::get(
+            ValTy, toConstant(Val, U->getFields().front()->getType()));
+      }
+
+      if (auto C = dyn_cast<ClassDecl>(R)) {
+         llvm::SmallVector<ClassDecl*, 2> Bases;
+         while (C) {
+            Bases.push_back(C);
+            C = C->getParentClass();
+         }
+
+         unsigned i = 0;
+         ConstantClass *Curr = nullptr;
+         llvm::SmallVector<il::Constant*, 8> vec;
+
+         for (auto it = Bases.rbegin(), end_it = Bases.rend();
+               it != end_it; ++it) {
+            llvm::ArrayRef<FieldDecl*> Fields = (*it)->getFields();
+            for (auto F : Fields.drop_front(i)) {
+               auto V = getStructElement(Val, type, i++);
+               vec.emplace_back(toConstant(V.load(F->getType()), F->getType()));
+            }
+
+            ValueType Ty(ILCtx, SP.getContext().getRecordType(*it));
+
+            auto S = ConstantStruct::get(Ty, vec);
+            Curr = ConstantClass::get(S, SP.getILGen().GetTypeInfo(Ty), Curr);
+
+            vec.clear();
+         }
+
+         return Curr;
+      }
+
+      if (auto S = dyn_cast<StructDecl>(R)) {
+         llvm::SmallVector<il::Constant*, 8> vec;
+         unsigned i = 0;
+
+         auto Fields = S->getFields();
+         for (auto F : Fields) {
+            auto V = getStructElement(Val, type, i);
+            vec.emplace_back(toConstant(V.load(F->getType()), F->getType()));
+            ++i;
+         }
+
+         if (isa<ClassDecl>(S)) {
+            auto CS = ConstantStruct::get(ValTy, vec);
+            return ConstantClass::get(CS, SP.getILGen().GetTypeInfo(ValTy));
+         }
+         else {
+            return ConstantStruct::get(ValTy, vec);
+         }
+      }
+      if (auto E = dyn_cast<EnumDecl>(R)) {
+         uint64_t caseVal = getEnumRawValue(Val, type).getU64();
+
+         EnumCaseDecl *Case = nullptr;
+         std::vector<il::Constant*> vec;
+         for (auto C : E->getCases()) {
+            if (C->getRawValue() != caseVal)
+               continue;
+
+            Case = C;
+
+            if (!C->getArgs().empty()) {
+               unsigned i = 0;
+               for (auto &V : C->getArgs()) {
+                  auto val = getEnumCaseValue(
+                     Val, type, C->getDeclName().getIdentifierInfo(), i);
+                  vec.push_back(toConstant(val.load(V->getType()),
+                                           V->getType()));
+
+                  i++;
+               }
+            }
+         }
+
+         assert(Case && "enum case does not exist!");
+         return ConstantEnum::get(ILCtx, Case, vec);
+      }
+   }
+
+   if (type->isMetaType())
+      return UndefValue::get(ValueType(ILCtx, type));
+
+   llvm_unreachable("bad value type");
+}
+
 void EngineImpl::storeValue(ctfe::Value dst, ctfe::Value src,
                             QualType ty) {
-   if (ty->isIntegerType()) {
+   if (ty->isIntegerType() || ty->isRawEnum()) {
       switch (ty->getBitwidth()) {
       case 1:
       case 8:
@@ -1712,6 +2118,12 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
    case KnownFunction::llvm_ceil_f32:
       V = Value::getFloat(std::ceil(args[0].getFloat()));
       break;
+   case KnownFunction::llvm_ctlz_i32:
+      V = Value::getInt(__builtin_clz(args[0].getI32()));
+      break;
+   case KnownFunction::llvm_ctlz_i64:
+      V = Value::getInt(__builtin_clz(args[0].getI64()));
+      break;
    case KnownFunction::MemCpy: {
       auto dst = args[0];
       auto src = args[1];
@@ -1864,13 +2276,15 @@ ctfe::Value EngineImpl::visitEnumExtractInst(const EnumExtractInst &I)
    auto val = getCtfeValue(I.getOperand(0));
    auto idx = getCtfeValue(I.getCaseVal()).getU64();
 
-   auto *II = &SP.getContext().getIdentifiers().get(I.getCaseName());
-   return getEnumCaseValue(val, I.getOperand(0)->getType(), II, idx);
+   return getEnumCaseValue(val, I.getOperand(0)->getType(), I.getCase(), idx);
 }
 
 ctfe::Value EngineImpl::visitEnumRawValueInst(EnumRawValueInst const& I)
 {
    auto val = getCtfeValue(I.getOperand(0));
+   if (I.getOperand(0)->getType()->isRawEnum())
+      return val;
+
    return getEnumRawValue(val, I.getOperand(0)->getType());
 }
 
@@ -2025,6 +2439,8 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       auto val = getCtfeValue(I.getArgs()[0]);
       return getStructElement(val, I.getArgs()[0]->getType(), 2);
    }
+   case Intrinsic::indirect_case_ref:
+      llvm_unreachable("unimplemented");
    default:
       llvm_unreachable("unsupported ctfe intrinsic");
    }
@@ -2124,12 +2540,14 @@ ctfe::Value EngineImpl::visitUnionInitInst(UnionInitInst const& I)
 
 ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
 {
+   if (I.getType()->isRawEnum())
+      return getConstantVal(I.getCase()->getILValue());
+
    llvm::SmallVector<ctfe::Value, 8> values;
    for (auto &arg : I.getArgs())
       values.push_back(getCtfeValue(arg));
 
-   auto *II = &SP.getContext().getIdentifiers().get(I.getCaseName());
-   return getEnum(I.getType(), II, values);
+   return getEnum(I.getType(), I.getCase(), values);
 }
 
 Value EngineImpl::visitDeinitializeLocalInst(const DeinitializeLocalInst &I)
@@ -2197,20 +2615,17 @@ int64_t getSignedValue(QualType const &ty, ctfe::Value &V)
 
 } // anonymous namespace
 
-Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst &I)
-{
+ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
+                                      QualType ty,
+                                      Value lhs,
+                                      Value rhs) {
    using OP = BinaryOperatorInst::OpCode;
-   
-   auto lhs = getCtfeValue(I.getOperand(0));
-   auto rhs = getCtfeValue(I.getOperand(1));
-   auto ty = I.getOperand(0)->getType();
-   
-   switch (I.getOpCode()) {
+   switch ((OP)OpCode) {
    case OP::Add:
       if (ty->isLargeInteger()) {
          auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
          auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
-         
+
          return Value::getPreallocated(
             new(*this) llvm::APSInt(LhsInt + RhsInt));
       }
@@ -2492,8 +2907,14 @@ Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst &I)
             new(*this) llvm::APSInt(LhsInt.lshr(RhsInt), LhsInt.isUnsigned()));
       }
       else if (ty->isIntegerType()) {
-         return Value::getInt(
-            getUnsignedValue(ty, lhs) >> getUnsignedValue(ty, rhs));
+         if (ty->isUnsigned()) {
+            return Value::getInt(
+               getUnsignedValue(ty, lhs) >> getUnsignedValue(ty, rhs));
+         }
+         else {
+            return Value::getInt(
+               getSignedValue(ty, lhs) >> getSignedValue(ty, rhs));
+         }
       }
 
       llvm_unreachable("bad operand types");
@@ -2506,12 +2927,27 @@ Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst &I)
             new(*this) llvm::APSInt(LhsInt.ashr(RhsInt), LhsInt.isUnsigned()));
       }
       else if (ty->isIntegerType()) {
-         return Value::getInt(
-            getSignedValue(ty, lhs) << getSignedValue(ty, rhs));
+         if (ty->isUnsigned()) {
+            return Value::getInt(
+               getUnsignedValue(ty, lhs) >> getUnsignedValue(ty, rhs));
+         }
+         else {
+            return Value::getInt(
+               getSignedValue(ty, lhs) >> getSignedValue(ty, rhs));
+         }
       }
 
       llvm_unreachable("bad operand types");
    }
+}
+
+Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst &I)
+{
+   auto lhs = getCtfeValue(I.getOperand(0));
+   auto rhs = getCtfeValue(I.getOperand(1));
+   auto ty = I.getOperand(0)->getType();
+   
+   return applyBinaryOp(I.getOpCode(), ty, lhs, rhs);
 }
 
 Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
@@ -2778,135 +3214,187 @@ ctfe::Value EngineImpl::visitBitCastInst(BitCastInst const& I)
    return getCtfeValue(I.getOperand(0));
 }
 
+ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
+                                       QualType toTy, ctfe::Value val) {
+   switch (Kind) {
+   case CastKind::IntToFP:
+      if (fromTy->isLargeInteger()) {
+         auto &API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         if (toTy->isLargeFP()) {
+            auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble());
+            APF->convertFromAPInt(API, !fromTy->isUnsigned(),
+                                  llvm::APFloat::rmNearestTiesToEven);
+
+            return Value::getPreallocated(APF);
+         }
+
+         if (toTy->isFloatTy()) {
+            return Value::getFloat((float)API.roundToDouble());
+         }
+
+         assert(toTy->isDoubleTy());
+         return Value::getDouble(API.roundToDouble());
+      }
+
+      if (toTy->isLargeFP()) {
+         auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble(),
+                                             val.getU64());
+
+         return Value::getPreallocated(APF);
+      }
+
+      if (toTy->isFloatTy()) {
+         return Value::getFloat((float)val.getU64());
+      }
+
+      assert(toTy->isDoubleTy());
+      return Value::getDouble((double)val.getU64());
+   case CastKind::FPToInt: {
+      llvm::APFloat APF((llvm::APFloat::IEEEdouble()));
+
+      if (fromTy->isLargeFP()) {
+         APF = *reinterpret_cast<llvm::APFloat *>(val.getBuffer());
+      }
+      else if (fromTy->isFloatTy()) {
+         APF = llvm::APFloat(val.getFloat());
+      }
+      else if (fromTy->isDoubleTy()) {
+         APF = llvm::APFloat(val.getDouble());
+      }
+
+      llvm::APSInt APS;
+      APF.convertToInteger(APS, llvm::APFloat::rmNearestTiesToEven,
+                           nullptr);
+
+      if (toTy->isLargeInteger()) {
+         return Value::getPreallocated(new(*this) llvm::APSInt(move(APS)));
+      }
+
+      if (toTy->isUnsigned()) {
+         return Value::getInt(APS.getZExtValue());
+      }
+
+      return Value::getInt(APS.getSExtValue());
+   }
+   case CastKind::IntToPtr:
+      if (fromTy->isLargeInteger()) {
+         auto APS = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         return Value::getConstPtr((void*)APS.getZExtValue());
+      }
+
+      // no-op when working with untyped memory
+      return val;
+   case CastKind::PtrToInt:
+      if (toTy->isLargeInteger()) {
+         auto APS = new(*this)
+            llvm::APSInt(llvm::APInt(toTy->getBitwidth(), val.getU64(),
+                                     !toTy->isUnsigned()),
+                         toTy->isUnsigned());
+
+         return Value::getPreallocated(APS);
+      }
+
+      // no-op when working with untyped memory
+      return val;
+   case CastKind::Ext:
+   case CastKind::Trunc: {
+      llvm::APSInt From;
+      llvm::APSInt To;
+
+      if (fromTy->isLargeInteger()) {
+         From = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+      }
+      else {
+         From = llvm::APSInt(llvm::APInt(fromTy->getBitwidth(),
+                                         val.getU64(),
+                                         !fromTy->isUnsigned()),
+                             fromTy->isUnsigned());
+      }
+
+      if (toTy->isUnsigned()) {
+         To = From.zextOrTrunc(toTy->getBitwidth());
+      }
+      else {
+         To = From.sextOrTrunc(toTy->getBitwidth());
+      }
+
+      To.setIsUnsigned(toTy->isUnsigned());
+
+      if (toTy->isLargeInteger()) {
+         return Value::getPreallocated(
+            new(*this) llvm::APSInt(move(To)));
+      }
+
+      return Value::getInt(To.getZExtValue());
+   }
+   case CastKind::SignFlip:
+      if (fromTy->isLargeInteger()) {
+         auto API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         API.setIsUnsigned(toTy->isUnsigned());
+
+         return Value::getPreallocated(new(*this) llvm::APSInt(move(API)));
+      }
+
+      // also a noop
+      return val;
+   default:
+      llvm_unreachable("not an integer cast!");
+   }
+}
+
 ctfe::Value EngineImpl::visitIntegerCastInst(IntegerCastInst const& I)
 {
    auto val = getCtfeValue(I.getOperand(0));
    auto fromTy = I.getOperand(0)->getType();
    auto toTy = I.getType();
 
-   switch (I.getKind()) {
-      case CastKind::IntToFP:
-         if (fromTy->isLargeInteger()) {
-            auto &API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-            if (toTy->isLargeFP()) {
-               auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble());
-               APF->convertFromAPInt(API, !fromTy->isUnsigned(),
-                                     llvm::APFloat::rmNearestTiesToEven);
+   return getIntegerCast(I.getKind(), fromTy, toTy, val);
+}
 
-               return Value::getPreallocated(APF);
-            }
-
-            if (toTy->isFloatTy()) {
-               return Value::getFloat((float)API.roundToDouble());
-            }
-
-            assert(toTy->isDoubleTy());
-            return Value::getDouble(API.roundToDouble());
+ctfe::Value EngineImpl::getFPCast(CastKind Kind, QualType From,
+                                  QualType To, ctfe::Value Val) {
+   switch (Kind) {
+   case CastKind::FPTrunc:
+   case CastKind::FPExt: {
+      if (From->isLargeFP()) {
+         auto &APF = *reinterpret_cast<llvm::APFloat*>(Val.getBuffer());
+         if (To->isLargeFP()) {
+            return Value::getPreallocated(new(*this) llvm::APFloat(APF));
          }
 
-         if (toTy->isLargeFP()) {
-            auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble(),
-                                                val.getU64());
+         if (To->isFloatTy()) {
+            return Value::getFloat(APF.convertToFloat());
+         }
 
+         return Value::getDouble(APF.convertToDouble());
+      }
+
+      if (From->isFloatTy()) {
+         if (To->isLargeFP()) {
+            auto *APF = new(*this) llvm::APFloat(Val.getFloat());
             return Value::getPreallocated(APF);
          }
-
-         if (toTy->isFloatTy()) {
-            return Value::getFloat((float)val.getU64());
+         if (To->isDoubleTy()) {
+            return Value::getDouble((double)Val.getFloat());
          }
 
-         assert(toTy->isDoubleTy());
-         return Value::getDouble((double)val.getU64());
-      case CastKind::FPToInt: {
-         llvm::APFloat APF((llvm::APFloat::IEEEdouble()));
-
-         if (fromTy->isLargeFP()) {
-            APF = *reinterpret_cast<llvm::APFloat *>(val.getBuffer());
-         }
-         else if (fromTy->isFloatTy()) {
-            APF = llvm::APFloat(val.getFloat());
-         }
-         else if (fromTy->isDoubleTy()) {
-            APF = llvm::APFloat(val.getDouble());
-         }
-
-         llvm::APSInt APS;
-         APF.convertToInteger(APS, llvm::APFloat::rmNearestTiesToEven,
-                              nullptr);
-
-         if (toTy->isLargeInteger()) {
-            return Value::getPreallocated(new(*this) llvm::APSInt(move(APS)));
-         }
-
-         if (toTy->isUnsigned()) {
-            return Value::getInt(APS.getZExtValue());
-         }
-
-         return Value::getInt(APS.getSExtValue());
+         return Val;
       }
-      case CastKind::IntToPtr:
-         if (fromTy->isLargeInteger()) {
-            auto APS = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-            return Value::getConstPtr((void*)APS.getZExtValue());
+
+      if (From->isDoubleTy()) {
+         if (To->isLargeFP()) {
+            auto *APF = new(*this) llvm::APFloat(Val.getDouble());
+            return Value::getPreallocated(APF);
+         }
+         if (To->isFloatTy()) {
+            return Value::getFloat((float)Val.getDouble());
          }
 
-         // no-op when working with untyped memory
-         return val;
-      case CastKind::PtrToInt:
-         if (toTy->isLargeInteger()) {
-            auto APS = new(*this)
-               llvm::APSInt(llvm::APInt(toTy->getBitwidth(), val.getU64(),
-                                        !toTy->isUnsigned()),
-                            toTy->isUnsigned());
-
-            return Value::getPreallocated(APS);
-         }
-
-         // no-op when working with untyped memory
-         return val;
-      case CastKind::Ext:
-      case CastKind::Trunc: {
-         llvm::APSInt From;
-         llvm::APSInt To;
-
-         if (fromTy->isLargeInteger()) {
-            From = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-         }
-         else {
-            From = llvm::APSInt(llvm::APInt(fromTy->getBitwidth(),
-                                            val.getU64(),
-                                            !fromTy->isUnsigned()),
-                                fromTy->isUnsigned());
-         }
-
-         if (toTy->isUnsigned()) {
-            To = From.zextOrTrunc(toTy->getBitwidth());
-         }
-         else {
-            To = From.sextOrTrunc(toTy->getBitwidth());
-         }
-
-         To.setIsUnsigned(toTy->isUnsigned());
-
-         if (toTy->isLargeInteger()) {
-            return Value::getPreallocated(
-               new(*this) llvm::APSInt(move(To)));
-         }
-
-         return Value::getInt(To.getZExtValue());
+         return Val;
       }
-      case CastKind::SignFlip:
-         if (fromTy->isLargeInteger()) {
-            auto API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-            API.setIsUnsigned(toTy->isUnsigned());
-
-            return Value::getPreallocated(new(*this) llvm::APSInt(move(API)));
-         }
-
-         // also a noop
-         return val;
-      default:
-         llvm_unreachable("not an integer cast!");
+   }
+   default:
+      llvm_unreachable("not a fp cast");
    }
 }
 
@@ -2916,49 +3404,7 @@ ctfe::Value EngineImpl::visitFPCastInst(FPCastInst const& I)
    auto fromTy = I.getOperand(0)->getType();
    auto toTy = I.getType();
 
-   switch (I.getKind()) {
-      case CastKind::FPTrunc:
-      case CastKind::FPExt: {
-         if (fromTy->isLargeFP()) {
-            auto &APF = *reinterpret_cast<llvm::APFloat*>(val.getBuffer());
-            if (toTy->isLargeFP()) {
-               return Value::getPreallocated(new(*this) llvm::APFloat(APF));
-            }
-
-            if (toTy->isFloatTy()) {
-               return Value::getFloat(APF.convertToFloat());
-            }
-
-            return Value::getDouble(APF.convertToDouble());
-         }
-
-         if (fromTy->isFloatTy()) {
-            if (toTy->isLargeFP()) {
-               auto *APF = new(*this) llvm::APFloat(val.getFloat());
-               return Value::getPreallocated(APF);
-            }
-            if (toTy->isDoubleTy()) {
-               return Value::getDouble((double)val.getFloat());
-            }
-
-            return val;
-         }
-
-         if (fromTy->isDoubleTy()) {
-            if (toTy->isLargeFP()) {
-               auto *APF = new(*this) llvm::APFloat(val.getDouble());
-               return Value::getPreallocated(APF);
-            }
-            if (toTy->isFloatTy()) {
-               return Value::getFloat((float)val.getDouble());
-            }
-
-            return val;
-         }
-      }
-      default:
-         llvm_unreachable("not a fp cast");
-   }
+   return getFPCast(I.getKind(), fromTy, toTy, val);
 }
 
 ctfe::Value EngineImpl::visitIntToEnumInst(IntToEnumInst const& I)
@@ -3010,7 +3456,7 @@ CTFEResult CTFEEngine::evaluateFunction(il::Function *F,
       return CTFEError();
    }
 
-   return CTFEResult(pImpl->toVariant(val, F->getReturnType()));
+   return CTFEResult(pImpl->toConstant(val, F->getReturnType()));
 }
 
 CTFEEngine::~CTFEEngine()
@@ -3039,7 +3485,8 @@ Value CTFEEngine::CTFEValueFromVariant(Variant const &V, const QualType &Ty)
 
       return Value::getFloat(V.getFloat());
    }
-   case Type::PointerTypeID: {
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID: {
       if (Ty->getPointeeType()->isInt8Ty())
          return Value::getStr(V.getString(), Alloc);
 

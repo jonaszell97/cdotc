@@ -34,12 +34,12 @@ SourceLocation CandidateSet::Candidate::getSourceLoc() const
    return Func->getSourceLoc();
 }
 
-PrecedenceGroup CandidateSet::Candidate::getPrecedenceGroup() const
+ast::PrecedenceGroupDecl *CandidateSet::Candidate::getPrecedenceGroup() const
 {
-   if (!Func)
-      return BuiltinCandidate.precedenceGroup;
+   if (isBuiltinCandidate())
+      return precedenceGroup;
 
-   return Func->getOperator().getPrecedenceGroup();
+   return Func->getPrecedenceGroup();
 }
 
 static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
@@ -77,6 +77,143 @@ static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
    return FakeSourceLocation{ str.str() };
 }
 
+static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
+                                     llvm::ArrayRef<ast::Expression*> args) {
+   unsigned idx = Cand.Data1;
+   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+      ++idx;
+
+   if (!Cand.isBuiltinCandidate()) {
+      auto ArgDecls = Cand.Func->getArgs();
+
+      // variadic template arguments might create more arguments
+      if (ArgDecls.size() > idx) {
+         return ArgDecls[idx]->getSourceLoc();
+      }
+
+      if (!ArgDecls.empty())
+         return ArgDecls.back()->getSourceLoc();
+
+      return Cand.getSourceLoc();
+   }
+
+   return args[idx]->getSourceLoc();
+}
+
+static QualType getArgumentType(CandidateSet::Candidate &Cand)
+{
+   unsigned idx = Cand.Data1;
+   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+      ++idx;
+
+   if (!Cand.isBuiltinCandidate()) {
+      auto ArgDecls = Cand.Func->getArgs();
+
+      // variadic template arguments might create more arguments
+      if (ArgDecls.size() > idx) {
+         return ArgDecls[idx]->getType();
+      }
+
+      return ArgDecls.back()->getType();
+   }
+
+   return Cand.getFunctionType()->getParamTypes()[idx];
+}
+
+static QualType getArgumentType(CandidateSet::Candidate &Cand,
+                                llvm::ArrayRef<ast::Expression*> args) {
+   unsigned idx = Cand.Data1;
+   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+      ++idx;
+
+   // variadic template arguments might create more arguments
+   if (args.size() > idx) {
+      return args[idx]->getExprType();
+   }
+
+   return args.back()->getExprType();
+}
+
+static void diagnoseConstAssignment(SemaPass &SP,
+                                    Statement *DependentExpr,
+                                    SourceLocation EqualsLoc,
+                                    Expression *LHS) {
+   VarDecl *ConstDecl = nullptr;
+   SourceRange ConstExprLoc;
+
+   auto DeclRef = LHS;
+   while (DeclRef) {
+      auto Expr = DeclRef->ignoreParensAndImplicitCasts();
+      if (auto Ident = dyn_cast<IdentifierRefExpr>(Expr)) {
+         switch (Ident->getKind()) {
+         case IdentifierKind::LocalVar:
+         case IdentifierKind::GlobalVar:
+         case IdentifierKind::Field:
+         case IdentifierKind::StaticField:
+         case IdentifierKind::FunctionArg:
+            ConstDecl = Ident->getVarDecl();
+            ConstExprLoc = Expr->getSourceRange();
+
+            break;
+         default:
+            break;
+         }
+
+         if (ConstDecl && ConstDecl->isConst())
+            break;
+
+         DeclRef = Ident->getParentExpr();
+         continue;
+      }
+
+      if (auto Subscript = dyn_cast<SubscriptExpr>(Expr)) {
+         DeclRef = Subscript->getParentExpr();
+         continue;
+      }
+
+      if (auto Tup = dyn_cast<TupleMemberExpr>(Expr)) {
+         DeclRef = Tup->getParentExpr();
+         continue;
+      }
+
+      if (auto Self = dyn_cast<SelfExpr>(Expr)) {
+         if (ConstExprLoc) {
+            SP.diagnose(DependentExpr, err_cannot_assign_to_property,
+                        ConstExprLoc, EqualsLoc);
+         }
+         else {
+            SP.diagnose(DependentExpr, err_cannot_assign_to_self,
+                        Self->getSourceRange(),
+                        EqualsLoc);
+         }
+
+         SP.diagnose(note_mark_mutating, SP.getCurrentFun()->getSourceLoc());
+         return;
+      }
+
+      if (auto UnOp = dyn_cast<UnaryOperator>(Expr)) {
+         if (UnOp->getKind() == op::Deref) {
+            DeclRef = UnOp->getTarget();
+            continue;
+         }
+      }
+
+      break;
+   }
+
+   if (!ConstDecl) {
+      SP.diagnose(DependentExpr, err_reassign_constant, LHS->getSourceRange(),
+                  EqualsLoc);
+
+      return;
+   }
+
+   SP.diagnose(DependentExpr, err_reassign_constant, ConstExprLoc,
+               EqualsLoc);
+   SP.diagnose(note_declared_const_here, ConstDecl->getDeclName(),
+               ConstDecl->getSourceLoc());
+}
+
 void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
                                             DeclarationName funcName,
                                             llvm::ArrayRef<ast::Expression*> args,
@@ -89,16 +226,26 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       return;
    }
 
+   bool IgnoreBuiltinCandidates = false;
+
    if (OperatorLookup) {
       auto Kind = funcName.getDeclarationKind();
       if (Kind == DeclarationName::InfixOperatorName) {
          // diagnose '=' specially
          if (funcName.getInfixOperatorName()->isStr("=")) {
-            SP.diagnose(Caller, err_assign_type_mismatch,
-                        args[1]->getExprType(),
-                        args[0]->getExprType()->stripReference(),
-                        OpLoc ? OpLoc : Caller->getSourceLoc(),
-                        args[0]->getSourceRange(), args[1]->getSourceRange());
+            auto LHS = args[0];
+            if (LHS->getExprType()->isReferenceType()
+                && !LHS->getExprType()->isMutableReferenceType()) {
+               diagnoseConstAssignment(SP, Caller, OpLoc, LHS);
+               IgnoreBuiltinCandidates = true;
+            }
+            else {
+               SP.diagnose(Caller, err_assign_type_mismatch,
+                           args[1]->getExprType(), args[0]->getExprType(),
+                           OpLoc ? OpLoc : Caller->getSourceLoc(),
+                           args[0]->getSourceRange(),
+                           args[1]->getSourceRange());
+            }
          }
          else {
             SP.diagnose(Caller, err_binop_not_applicable,
@@ -112,8 +259,8 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
          SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
                      (IsPostfix
-                      ? funcName.getPostfixOperatorName()
-                      : funcName.getPrefixOperatorName())->getIdentifier(),
+                        ? funcName.getPostfixOperatorName()
+                        : funcName.getPrefixOperatorName())->getIdentifier(),
                      0, args[0]->getExprType(),
                      OpLoc ? OpLoc : Caller->getSourceLoc(),
                      args[0]->getSourceRange());
@@ -131,20 +278,24 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       if (Candidates.empty()) {
          SP.diagnose(Caller, err_func_not_found, Caller->getSourceRange(),
                      0, funcName);
+
+         return;
       }
-      else {
-         SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-                     0, funcName);
-      }
+
+      SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
+                  true, 0, funcName);
    }
 
    for (auto &Cand : Candidates) {
+      if (IgnoreBuiltinCandidates && Cand.isBuiltinCandidate())
+         continue;
+
       switch (Cand.FR) {
       case None: llvm_unreachable("found a matching call!");
       case IsInvalid:
       case IsDependent:
-         // diagnostics were already emitted for the invalid decl. we don't
-         // know whether this candidate would have been valid, had the
+         // diagnostics were already emitted for the invalid decl; we don't
+         // know whether this candidate would have been valid had the
          // declaration not contained errors
          break;
       case TooFewArguments: {
@@ -170,8 +321,9 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          auto &TemplateArgs = Cand.InnerTemplateArgs;
          if (TemplateArgs.isInferred()) {
             SP.diagnose(Caller, note_too_many_arguments_inferred,
+                        Cand.Data2, Cand.Data1,
                         TemplateArgs.toString('\0', '\0', true),
-                        Cand.Data2, Cand.Data1, Cand.getSourceLoc());
+                        Cand.getSourceLoc());
          }
          else if (Cand.isBuiltinCandidate()) {
             SP.diagnose(Caller, note_too_many_arguments, Cand.Data2,
@@ -188,26 +340,9 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       case IncompatibleArgument: {
          auto FTy = Cand.getFunctionType();
          auto neededTy = FTy->getParamTypes()[Cand.Data1];
-         auto givenTy = IncludesSelfArgument
-                           && dyn_cast_or_null<MethodDecl>(Cand.Func)
-                        ? args[Cand.Data1 + 1]->getExprType()
-                        : args[Cand.Data1]->getExprType();
 
-         SourceLocation loc;
-         if (Cand.Func) {
-            auto ArgDecls = Cand.Func->getArgs();
-
-            // variadic template arguments might create more arguments
-            if (ArgDecls.size() > Cand.Data1) {
-               loc = ArgDecls[Cand.Data1]->getSourceLoc();
-            }
-            else {
-               loc = ArgDecls.back()->getSourceLoc();
-            }
-         }
-         else {
-            loc = Cand.getSourceLoc();
-         }
+         QualType givenTy = getArgumentType(Cand, args);
+         SourceLocation loc = getArgumentLoc(Cand, args);
 
          auto &TemplateArgs = Cand.InnerTemplateArgs;
          if (TemplateArgs.isInferred()) {
@@ -227,6 +362,32 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
                         diag::opt::show_constness, givenTy,
                         neededTy, Cand.Data1 + 1, false, loc);
          }
+
+         break;
+      }
+      case ArgumentRequiresRef: {
+         SourceLocation loc = getArgumentLoc(Cand, args);
+         bool IsMutable = false;
+         bool IsPointer = false;
+
+         QualType Ty = getArgumentType(Cand);
+         if (Ty->isMutablePointerType()) {
+            IsMutable = true;
+            IsPointer = true;
+         }
+         else if (Ty->isMutableReferenceType()) {
+            IsMutable = true;
+         }
+
+         SP.diagnose(Caller, note_candidate_requires_ref, IsMutable, IsPointer,
+                     Cand.Data1 + 1, loc);
+
+         break;
+      }
+      case CouldNotInferArgumentType: {
+         SourceLocation loc = getArgumentLoc(Cand, args);
+         SP.diagnose(Caller, note_candidate_requires_context,
+                     Cand.Data1 + 1, loc);
 
          break;
       }
@@ -254,11 +415,11 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
             SP.diagnose(Caller, note_cand_failed_constraint_inferred,
                         Str.str(),
                         TemplateArgs.toString('\0', '\0', true),
-                        Caller->getSourceRange());
+                        Cand.getSourceLoc());
          }
          else {
             SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
-                        Caller->getSourceRange());
+                        Cand.getSourceLoc());
          }
 
          SP.diagnose(note_constraint_here, Constraint->getSourceRange());
@@ -275,8 +436,6 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          SP.diagnose(Caller, note_candidate_is_mutating, 0,
                      Cand.getSourceLoc());
 
-         SP.noteConstantDecl(args.front());
-
          break;
       }
       case MutatingOnRValueSelf: {
@@ -288,10 +447,7 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       case CouldNotInferTemplateArg: {
          auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
          SP.diagnose(Caller, note_could_not_infer_template_arg,
-                     TP->getName(), Cand.getSourceLoc());
-
-         SP.diagnose(Caller, note_template_parameter_here,
-                     TP->getSourceLoc());
+                     TP->getName(), TP->getSourceLoc());
 
          break;
       }
@@ -381,6 +537,9 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
                                      Statement *Caller) {
    assert(Candidates.size() == 1 && "not an anonymous call!");
 
+   SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
+               false);
+
    auto &Cand = Candidates.front();
    switch (Cand.FR) {
    default: llvm_unreachable("should not happen on anonymous call");
@@ -395,6 +554,25 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
       break;
    }
+   case ArgumentRequiresRef: {
+      SourceLocation loc = args[Cand.Data1]->getSourceLoc();
+      bool IsMutable = false;
+      bool IsPointer = false;
+
+      QualType Ty = getArgumentType(Cand, args);
+      if (Ty->isMutablePointerType()) {
+         IsMutable = true;
+         IsPointer = true;
+      }
+      else if (Ty->isMutableReferenceType()) {
+         IsMutable = true;
+      }
+
+      SP.diagnose(Caller, note_candidate_requires_ref, IsMutable, IsPointer,
+                  Cand.Data1 + 1, loc);
+
+      break;
+   }
    case IncompatibleArgument: {
       auto idx = Cand.Data1;
       auto givenTy = args[idx]->getExprType();
@@ -402,6 +580,12 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
       SP.diagnose(Caller, err_no_implicit_conv, givenTy, neededTy,
                   args[idx]->getSourceRange());
+
+      break;
+   }
+   case CouldNotInferArgumentType: {
+      SP.diagnose(Caller, note_candidate_requires_context, Cand.Data1 + 1,
+                  Cand.getSourceLoc());
 
       break;
    }
@@ -457,7 +641,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
    assert(Status != Success && "diagnosing successful candidate set!");
 
    SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-               2, AliasName);
+               true, 2, AliasName);
 
    for (auto &Cand : Candidates) {
       switch (Cand.FR) {
@@ -476,6 +660,8 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       case MustBeStatic:
       case MutatingOnConstSelf:
       case MutatingOnRValueSelf:
+      case CouldNotInferArgumentType:
+      case ArgumentRequiresRef:
          llvm_unreachable("should be impossible on alias candidate set!");
       case FailedConstraint: {
          llvm::SmallString<128> Str;
@@ -504,7 +690,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       case CouldNotInferTemplateArg: {
          auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
          SP.diagnose(Caller, note_could_not_infer_template_arg,
-                     TP->getName(), Cand.getSourceLoc());
+                     TP->getName(), TP->getSourceLoc());
 
          break;
       }
@@ -516,7 +702,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
             auto conflictingTy = QualType::getFromOpaquePtr(
                reinterpret_cast<void*>(Cand.Data1));
             auto templateArg =
-               Cand.InnerTemplateArgs.getNamedArg(Param->getName());
+               Cand.InnerTemplateArgs.getArgForParam(Param);
 
             string name = Param->getName();
             if (templateArg->isVariadic()) {
@@ -560,7 +746,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
 
          SP.diagnose(Caller, note_template_arg_kind_mismatch, select1,
                      select2, idx + 1,
-                     Cand.InnerTemplateArgs.getNamedArg(Param->getName())
+                     Cand.InnerTemplateArgs.getArgForParam(Param)
                          ->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,

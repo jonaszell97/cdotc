@@ -10,8 +10,6 @@ using namespace cdot::support;
 
 namespace cdot {
 
-unsigned long long BlockScope::lastID = 0;
-
 ast::CallableDecl* FunctionScope::getCallableDecl()
 {
    if (auto L = dyn_cast<LambdaScope>(this))

@@ -29,6 +29,8 @@ private:
    void handleReplacement(Value *with);
 };
 
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C);
+
 } // namespace il
 } // namespace cdot
 

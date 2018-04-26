@@ -5,22 +5,21 @@
 #ifndef CDOT_VALUE_H
 #define CDOT_VALUE_H
 
-#include <cassert>
-#include <string>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/ADT/SmallVector.h>
-
 #include "AST/Type.h"
 #include "Lex/SourceLocation.h"
 #include "Support/Casting.h"
-
 #include "Use.h"
 
-namespace cdot {
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
 
+#include <cassert>
+#include <string>
+
+namespace cdot {
 namespace ast {
    class ASTContext;
-}
+} // namespace ast
 
 class Type;
 
@@ -28,15 +27,13 @@ namespace il {
 
 class MDSet;
 class MetaData;
-enum MDKind : unsigned;
 class ValueSymbolTable;
-class MDLocation;
 class ILBuilder;
-
 class CallSite;
 class ImmutableCallSite;
-
 class Context;
+
+enum MDKind : unsigned;
 
 class ValueType {
 public:
@@ -98,46 +95,112 @@ protected:
 
    TypeID id : 8;
 
+   struct InstructionBits {
+      bool IsSanctionedSelfUse : 1;
+   };
+
    struct FunctionBits {
+      InstructionBits InstBits;
       bool Throws   : 1;
       bool Declared : 1;
       bool Static   : 1;
       bool SRet     : 1;
       bool Virtual  : 1;
       bool Vararg   : 1;
-      bool GlobalCtor : 1;
-      bool GlobalDtor : 1;
+      bool GlobalCtor   : 1;
+      bool GlobalDtor   : 1;
+      unsigned CtorKind : 2;
    };
 
    struct GlobalVariableBits {
       bool Const           : 1;
-      bool LateInitialized : 1;
-   };
-
-   struct InstructionBits {
-
+      bool LazilyInitialized : 1;
    };
 
    struct AllocaInstBits {
-      unsigned Alignment   : 28;
+      InstructionBits InstBits;
       bool Heap            : 1;
       bool CanUseSRetValue : 1;
       bool CanElideCopy    : 1;
       bool IsLocalVarDecl  : 1;
+      bool IsLet           : 1;
+   };
+
+   struct StoreInstBits {
+      InstructionBits InstBits;
+      bool IsInit : 1;
+   };
+
+   struct FieldRefInstBits {
+      InstructionBits InstBits;
+      bool IsLet : 1;
+   };
+
+   struct GEPInstBits {
+      InstructionBits InstBits;
+      bool IsLet : 1;
+   };
+
+   struct EnumInitInstBits {
+      InstructionBits InstBits;
+      bool CanUseSRetValue : 1;
+      bool IsIndirect      : 1;
+   };
+
+   struct EnumExtractInstBits {
+      InstructionBits InstBits;
+      unsigned ArgNo  : 16;
+      bool IsIndirect : 1;
+      bool IsLet : 1;
    };
 
    struct RetInstBits {
+      InstructionBits InstBits;
       bool CanUseSRetValue : 1;
+   };
+
+   struct ArgumentBits {
+      bool IsSelf : 1;
+      unsigned Convention : 4;
    };
 
    union {
       unsigned SubclassData = 0;
       FunctionBits FnBits;
-      GlobalVariableBits GVBits;
       InstructionBits InstBits;
+      GlobalVariableBits GVBits;
       AllocaInstBits AllocaBits;
+      EnumInitInstBits EnumInitBits;
+      EnumExtractInstBits EnumExtractBits;
+      StoreInstBits StoreBits;
+      FieldRefInstBits FieldRefBits;
+      GEPInstBits GEPBits;
       RetInstBits RetBits;
+      ArgumentBits ArgBits;
    };
+
+#  ifndef NDEBUG
+   struct SizeTest {
+      union {
+         unsigned SubclassData = 0;
+         FunctionBits FnBits;
+         InstructionBits InstBits;
+         GlobalVariableBits GVBits;
+         AllocaInstBits AllocaBits;
+         EnumInitInstBits EnumInitBits;
+         EnumExtractInstBits EnumExtractBits;
+         StoreInstBits StoreBits;
+         FieldRefInstBits FieldRefBits;
+         GEPInstBits GEPBits;
+         RetInstBits RetBits;
+         ArgumentBits ArgBits;
+      };
+   };
+
+   static_assert(sizeof(SizeTest) <= sizeof(unsigned),
+                 "bits don't fit into an unsigned!");
+
+#  endif
 
    SourceLocation loc;
 
@@ -181,6 +244,14 @@ public:
       return uses ? uses->const_end() : Use::const_iterator();
    }
 
+   Value *getSingleUser() const
+   {
+      if (getNumUses() != 1)
+         return nullptr;
+
+      return use_begin()->getUser();
+   }
+
    bool isLvalue() const;
    void setIsLvalue(bool ref);
 
@@ -202,8 +273,6 @@ public:
    void setName(llvm::StringRef name);
    bool hasName() const;
 
-   void setLocation(SourceLocation location);
-
    SourceLocation getSourceLoc() const;
 
    MDSet *getMetaData() const;
@@ -216,6 +285,7 @@ public:
    template<class T>
    T* getAs()
    {
+      assert(T::classof(this) && "casting to incompatible type!");
       return static_cast<T*>(this);
    }
 

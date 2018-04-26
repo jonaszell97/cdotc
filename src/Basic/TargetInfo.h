@@ -27,6 +27,8 @@ public:
    unsigned getAllocSizeOfType(QualType Ty) const;
    unsigned short getAllocAlignOfType(QualType Ty) const;
 
+   bool isTriviallyCopyable(QualType Ty) const;
+
    const llvm::Triple &getTriple() const { return T; }
    Type *getDefaultIntType() const { return DefaultIntType; }
 
@@ -35,6 +37,7 @@ public:
 private:
    unsigned calculateSizeOfType(QualType Ty) const;
    unsigned short calculateAlignOfType(QualType Ty) const;
+   bool calculateIsTriviallyCopyable(QualType Ty) const;
 
    llvm::Triple T;
 
@@ -44,6 +47,7 @@ private:
 
    mutable llvm::DenseMap<Type*, unsigned> TypeSizesInBytes;
    mutable llvm::DenseMap<Type*, unsigned short> TypeAlignInBytes;
+   mutable llvm::DenseMap<Type*, bool> TriviallyCopyable;
 
    bool HasFP128  : 1;
    bool BigEndian : 1;

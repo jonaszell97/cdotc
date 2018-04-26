@@ -59,6 +59,29 @@ bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
    return true;
 }
 
+bool SemaPass::prepareGlobalForCtfe(VarDecl *Decl)
+{
+   if (!prepareDeclForCtfe(*this, Decl))
+      return false;
+
+   if (!isVisited(Decl)) {
+      DeclScopeRAII declContextRAII(*this, Decl->getDeclContext());
+      ScopeResetRAII scopeResetRAII(*this);
+
+      auto Result = visitDecl(Decl);
+      if (!Result)
+         return false;
+   }
+
+   if (auto F = support::dyn_cast<FieldDecl>(Decl)) {
+      ILGen->DeclareField(F);
+   }
+
+   ILGen->visit(Decl);
+
+   return true;
+}
+
 DeclResult SemaPass::declareAndVisit(Decl *D)
 {
    if (!ensureDeclared(D))

@@ -69,7 +69,8 @@ bool SemaPass::implicitlyCastableTo(QualType fromTy, QualType toTy) const
       assert(fromRecord != toRecord && "should be the same type");
 
       if (auto P = dyn_cast<ProtocolDecl>(toRecord)) {
-         return toRecord->conformsTo(P);
+         auto &ConfTable = Context.getConformanceTable();
+         return ConfTable.conformsTo(toRecord, cast<ProtocolDecl>(P));
       }
 
       if (auto FromClass = dyn_cast<ClassDecl>(fromRecord)) {
@@ -142,8 +143,20 @@ static void FromFP(QualType from, QualType to, ConversionSequence &Seq)
    Seq.invalidate();
 }
 
-static void FromPtr(QualType from, QualType to, ConversionSequence &Seq)
-{
+static void FromPtr(const SemaPass &SP,
+                    QualType from, QualType to,
+                    ConversionSequence &Seq) {
+   if (from->isMutablePointerType() && to->isPointerType()) {
+      QualType FromRef = from->getPointeeType();
+      auto NextTy = SP.getContext().getPointerType(FromRef);
+
+      Seq.addStep(CastKind::MutPtrToPtr, NextTy, CastStrength::Implicit);
+      from = NextTy;
+   }
+
+   if (from == to)
+      return;
+
    // allow u8* -> void* implicit conversion as a special case for c++ interop
    if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
       auto fromPointee = from->getPointeeType();
@@ -163,8 +176,44 @@ static void FromPtr(QualType from, QualType to, ConversionSequence &Seq)
    Seq.invalidate();
 }
 
-static void FromReference(QualType from, QualType to, ConversionSequence &Seq)
-{
+static void FromThinFn(const SemaPass &SP, QualType from, QualType to,
+                       ConversionSequence &Seq) {
+   auto FromFn = from->asFunctionType();
+   if (to->isFunctionType()) {
+      auto ToFn = to->asFunctionType();
+      if (!FromFn->throws() && ToFn->throws()) {
+         auto WithoutThrows =
+            SP.getContext().getFunctionType(ToFn->getReturnType(),
+                                            ToFn->getParamTypes(),
+                                            ToFn->getRawFlags()
+                                               & ~FunctionType::Throws);
+
+         if (WithoutThrows == FromFn) {
+            return Seq.addStep(CastKind::NoThrowToThrows, to,
+                               CastStrength::Implicit);
+         }
+      }
+   }
+
+   FromPtr(SP, from, to, Seq);
+}
+
+static void FromReference(const SemaPass &SP,
+                          QualType from, QualType to,
+                          ConversionSequence &Seq) {
+   if (from->isMutableReferenceType() && to->isReferenceType()) {
+      QualType FromRef = from->getReferencedType();
+      auto NextTy = SP.getContext().getReferenceType(FromRef);
+
+      Seq.addStep(CastKind::MutRefToRef, NextTy,
+                  CastStrength::Implicit);
+
+      from = NextTy;
+   }
+
+   if (from == to)
+      return;
+
    if (to->isReferenceType()) {
       QualType FromRef = from->asReferenceType()->getReferencedType();
       QualType ToRef   = to->asReferenceType()->getReferencedType();
@@ -197,8 +246,9 @@ static void FromRecord(const SemaPass &SP, QualType from, QualType to,
 
    auto ToRec = to->getRecord();
    if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
-      if (FromRec->conformsTo(P))
-         return Seq.addStep(CastKind::NoOp, to, CastStrength::Implicit);
+      auto &ConfTable = SP.getContext().getConformanceTable();
+      if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P)))
+         return Seq.addStep(CastKind::ProtoWrap, to, CastStrength::Implicit);
 
       return Seq.invalidate();
    }
@@ -267,6 +317,9 @@ static void getConversionSequence(const SemaPass &SP,
    QualType from = fromTy.getCanonicalType();
    QualType to = toTy.getCanonicalType();
 
+   assert(!from->isDependentType() && !to->isDependentType()
+          && "don't call this on dependent types!");
+
    if (from->isReferenceType() && !to->isReferenceType()) {
       from = from->asReferenceType()->getReferencedType();
       Seq.addStep(CastKind::LValueToRValue, from);
@@ -308,10 +361,12 @@ static void getConversionSequence(const SemaPass &SP,
 
       break;
    case Type::PointerTypeID:
-      FromPtr(from, to, Seq);
+   case Type::MutablePointerTypeID:
+      FromPtr(SP, from, to, Seq);
       break;
    case Type::ReferenceTypeID:
-      FromReference(from, to, Seq);
+   case Type::MutableReferenceTypeID:
+      FromReference(SP, from, to, Seq);
       break;
    case Type::RecordTypeID:
       FromRecord(SP, from, to, Seq);
@@ -332,7 +387,7 @@ static void getConversionSequence(const SemaPass &SP,
       FromArray(SP, from->uncheckedAsArrayType(), to, Seq);
       break;
    case Type::FunctionTypeID:
-      FromPtr(from, to, Seq);
+      FromThinFn(SP, from, to, Seq);
       break;
    case Type::LambdaTypeID:
       Seq.invalidate();

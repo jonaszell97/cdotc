@@ -102,20 +102,20 @@ public:
                   const char *delim = ", ",
                   const char *end = ")",
                   bool skipIfEmpty = false) {
-      if (arr.empty() && skipIfEmpty)
+      auto it = arr.begin();
+      auto end_it = arr.end();
+
+      if (it == end_it && skipIfEmpty)
          return;
 
-      auto NumElements = arr.size();
-      size_t i = 0;
       out << begin;
-      for (const auto &el : arr) {
-         (static_cast<SubClass*>(this)->*write)(el);
-         if (i < NumElements - 1) {
-            out << delim;
-         }
 
-         ++i;
+      unsigned i = 0;
+      for (; it != end_it; ++it) {
+         if (i++ != 0) out << delim;
+         (static_cast<SubClass*>(this)->*write)(*it);
       }
+
       out << end;
    }
 

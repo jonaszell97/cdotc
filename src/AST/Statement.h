@@ -8,8 +8,10 @@
 #include "AST/AstNode.h"
 #include "AST/SourceType.h"
 #include "Basic/DeclarationName.h"
+#include "ContinuationPoint.h"
 
 #include <llvm/Support/TrailingObjects.h>
+#include <Lex/Token.h>
 
 namespace cdot {
 
@@ -122,6 +124,9 @@ public:
    {
       return getSourceRange().getStart();
    }
+
+   void print(llvm::raw_ostream &OS) const;
+   void dump() const;
 
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return true; }
@@ -817,17 +822,17 @@ public:
 };
 
 class StaticIfStmt: public Statement {
-public:
    StaticIfStmt(SourceLocation StaticLoc,
                 SourceLocation IfLoc,
                 StaticExpr *condition,
                 Statement *ifBranch,
                 Statement *elseBranch);
 
-   static bool classofKind(NodeType kind) { return kind == StaticIfStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+   StaticIfStmt(SourceLocation StaticLoc,
+                SourceLocation IfLoc,
+                StaticExpr *condition,
+                StaticIfStmt *Template);
 
-private:
    SourceLocation StaticLoc;
    SourceLocation IfLoc;
 
@@ -835,15 +840,29 @@ private:
    Statement *ifBranch;
    Statement *elseBranch;
 
+   StaticIfStmt *Template;
+   ContinuationPoint CP;
+
 public:
+   static StaticIfStmt *Create(ASTContext &C,
+                               SourceLocation StaticLoc,
+                               SourceLocation IfLoc,
+                               StaticExpr *condition,
+                               Statement *ifBranch,
+                               Statement *elseBranch);
+
+   static StaticIfStmt *Create(ASTContext &C,
+                               SourceLocation StaticLoc,
+                               SourceLocation IfLoc,
+                               StaticExpr *condition,
+                               StaticIfStmt *Template);
+
+   static bool classofKind(NodeType kind) { return kind == StaticIfStmtID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getIfLoc() const { return IfLoc; }
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(StaticLoc, elseBranch
-                                    ? elseBranch->getSourceRange().getEnd()
-                                    : ifBranch->getSourceRange().getEnd());
-   }
+   SourceRange getSourceRange() const;
 
    StaticExpr* getCondition() const { return condition; }
    Statement* getIfBranch() const { return ifBranch; }
@@ -852,20 +871,21 @@ public:
    void setCondition(StaticExpr *C) { condition = C; }
    void setIfBranch(Statement *If) { ifBranch = If; }
    void setElseBranch(Statement *Else) { elseBranch = Else; }
+
+   StaticIfStmt *getTemplate() const { return Template; }
+
+   const ContinuationPoint &getContinuationPoint() const { return CP; }
+   void setContinuationPoint(const ContinuationPoint &CP)
+   { StaticIfStmt::CP = CP; }
 };
 
 class StaticForStmt: public Statement {
-public:
    StaticForStmt(SourceLocation StaticLoc,
-                 SourceLocation IfLoc,
+                 SourceLocation ForLoc,
                  IdentifierInfo *elementName,
                  StaticExpr *range,
                  Statement *body);
 
-   static bool classofKind(NodeType kind) { return kind == StaticForStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-private:
    SourceLocation StaticLoc;
    SourceLocation ForLoc;
    IdentifierInfo *elementName;
@@ -873,6 +893,16 @@ private:
    Statement *body;
 
 public:
+   static StaticForStmt *Create(ASTContext &C,
+                                SourceLocation StaticLoc,
+                                SourceLocation ForLoc,
+                                IdentifierInfo *elementName,
+                                StaticExpr *range,
+                                Statement *body);
+
+   static bool classofKind(NodeType kind) { return kind == StaticForStmtID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getForLoc() const { return ForLoc; }
    SourceRange getSourceRange() const
@@ -886,6 +916,47 @@ public:
 
    void setRange(StaticExpr *R) { range = R; }
    void setBody(Statement *B) { body = B; }
+};
+
+class MacroExpansionStmt final:
+   public Statement,
+   llvm::TrailingObjects<MacroExpansionStmt, lex::Token>{
+public:
+   enum Delimiter {
+      Brace, Square, Paren,
+   };
+
+   friend TrailingObjects;
+
+private:
+   MacroExpansionStmt(SourceRange SR,
+                      DeclarationName MacroName,
+                      Delimiter Delim,
+                      llvm::ArrayRef<lex::Token> Toks);
+
+   SourceRange SR;
+   Delimiter Delim;
+   DeclarationName MacroName;
+   unsigned NumTokens;
+
+public:
+   static MacroExpansionStmt *Create(ASTContext &C,
+                                     SourceRange SR,
+                                     DeclarationName MacroName,
+                                     Delimiter Delim,
+                                     llvm::ArrayRef<lex::Token> Toks);
+
+   static bool classofKind(NodeType kind) {return kind == MacroExpansionStmtID;}
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   SourceRange getSourceRange() const { return SR; }
+   DeclarationName getMacroName() const { return MacroName; }
+   Delimiter getDelim() const { return Delim; }
+
+   llvm::ArrayRef<lex::Token> getTokens() const
+   {
+      return { getTrailingObjects<lex::Token>(), NumTokens };
+   }
 };
 
 } // namespace ast

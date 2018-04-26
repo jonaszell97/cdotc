@@ -18,9 +18,18 @@
    CDOT_OTHER_TOKEN(stringify_begin, "")
    CDOT_OTHER_TOKEN(preprocessor_value, "")
 
+   CDOT_OTHER_TOKEN(interpolation_begin, "")
+   CDOT_OTHER_TOKEN(interpolation_end, "")
+   
+   CDOT_OTHER_TOKEN(macro_expression, "")
+   CDOT_OTHER_TOKEN(macro_statement, "")
+   CDOT_OTHER_TOKEN(macro_declaration, "")
+
    CDOT_OTHER_TOKEN(ident, "")
    CDOT_OTHER_TOKEN(op_ident, "")
    CDOT_OTHER_TOKEN(dollar_ident, "")
+   CDOT_OTHER_TOKEN(closure_arg, "")
+   CDOT_OTHER_TOKEN(macro_name, "")
    CDOT_OTHER_TOKEN(percent_ident, "")
    CDOT_OTHER_TOKEN(dollar_dollar_ident, "")
    CDOT_OTHER_TOKEN(percent_percent_ident, "")
@@ -36,8 +45,6 @@
 #ifdef CDOT_KEYWORD_TOKEN
 #  define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
 
-   CDOT_KEYWORD_TOKEN(is, "is")
-   CDOT_KEYWORD_TOKEN(as, "as")
    CDOT_KEYWORD_TOKEN(underscore, "_")
 
    // semantically these are keywords as they can't appear in arbitrary
@@ -90,7 +97,6 @@
    CDOT_KEYWORD(static)
    CDOT_KEYWORD(abstract)
    CDOT_KEYWORD(prop)
-   CDOT_KEYWORD(with)
    CDOT_KEYWORD(where)
    CDOT_KEYWORD(continue)
    CDOT_KEYWORD(init)

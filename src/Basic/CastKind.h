@@ -17,6 +17,8 @@ enum class CastKind : unsigned char {
    FPExt, FPTrunc, FPBox, FPUnbox,
    DynCast, UpCast, ConversionOp, BitCast, ProtoWrap, ProtoUnwrap,
 
+   NoThrowToThrows, MutRefToRef, MutPtrToPtr,
+
    IntToEnum, EnumToInt
 };
 

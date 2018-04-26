@@ -94,6 +94,7 @@ public:
 
    il::Value *visitSubscriptExpr(SubscriptExpr *node);
    il::Value *visitCallExpr(CallExpr *Expr);
+   il::Value *visitAnonymousCallExpr(AnonymousCallExpr *Expr);
    il::Value *visitMemberRefExpr(MemberRefExpr *Expr);
    il::Value *visitTupleMemberExpr(TupleMemberExpr *node);
    il::Value *visitEnumCaseExpr(EnumCaseExpr *node);
@@ -138,6 +139,7 @@ public:
 
    il::Value *visitExprSequence(ExprSequence *node);
    il::Value *visitBinaryOperator(BinaryOperator *BinOp);
+   il::Value *visitAssignExpr(AssignExpr *Expr);
    il::Value *visitIfExpr(IfExpr *node);
    il::Value *visitUnaryOperator(UnaryOperator *UnOp);
 
@@ -172,6 +174,8 @@ public:
 
    void DeclareGlobalVariable(GlobalVarDecl *decl);
    void DeclareGlobalVariable(GlobalDestructuringDecl *decl);
+
+   il::Constant *MakeStringView(llvm::StringRef Str);
 
    struct ModuleRAII {
       ModuleRAII(ILGenPass &ILGen, CallableDecl *C);
@@ -258,6 +262,8 @@ public:
       TerminatorRAII(ILGenPass &ILGen);
       ~TerminatorRAII();
 
+      bool hasTerminator() const { return Term != nullptr; }
+
    private:
       il::ILBuilder &Builder;
       il::TerminatorInst *Term;
@@ -292,8 +298,11 @@ protected:
    void DefineFunction(il::Function *F,
                        CallableDecl* CD);
 
+   void DefineLazyGlobal(il::GlobalVariable *G,
+                         Expression *defaultVal);
+
    void DefineGlobal(il::GlobalVariable *G,
-                     Expression* const &defaultVal,
+                     Expression *defaultVal,
                      size_t ordering);
 
    void FinalizeGlobalInitFn();
@@ -310,7 +319,7 @@ public:
    il::Function *wrapNonLambdaFunction(il::Function *F);
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
 
-   il::Value *getDefaultValue(QualType Ty);
+   il::Constant *getDefaultValue(QualType Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);
 
    llvm::SmallVector<il::Argument*, 4> makeArgVec(
@@ -330,6 +339,8 @@ public:
    il::Instruction *CreateCall(CallableDecl *C,
                                llvm::ArrayRef<il::Value*> args,
                                Expression *Caller = nullptr);
+
+   il::Value *CreateCopy(il::Value *Val);
 
    il::Instruction *CreateAllocBox(QualType Ty);
 
@@ -363,9 +374,10 @@ public:
 
    void AppendDefaultDeinitializer(il::Method *M);
    void DefineDefaultInitializer(StructDecl *S);
-   void DefineMemberwiseInitializer(StructDecl *S);
+   void DefineMemberwiseInitializer(StructDecl *S, bool IsComplete = true);
    void DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R);
+   void DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitStringRepresentableConformance(MethodDecl *M,
                                                      RecordDecl *R);
 
@@ -483,8 +495,13 @@ private:
 
    std::vector<CtfeScope> CtfeScopeStack;
 
+   bool CanSynthesizeFunction(CallableDecl *C);
    void registerCalledFunction(CallableDecl *C, il::Function *F,
                                Expression *Caller);
+
+   void registerReferencedGlobal(VarDecl *Decl,
+                                 il::GlobalVariable *GV,
+                                 Expression *RefExpr);
 
    bool inCTFE() const { return !CtfeScopeStack.empty(); }
 };

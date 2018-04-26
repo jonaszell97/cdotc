@@ -18,6 +18,7 @@ namespace llvm {
 
 namespace cdot {
 
+enum class ConstructorKind : unsigned char;
 class DeclarationName;
 class CompilationUnit;
 class IdentifierInfo;
@@ -36,6 +37,7 @@ namespace ast {
    class UnionDecl;
    class ProtocolDecl;
    class ASTContext;
+   class EnumCaseDecl;
 } // namespace ast
 
 namespace il {
@@ -71,7 +73,7 @@ public:
    }
 
    void SetInsertPoint(iterator it);
-   void SetInsertPoint(BasicBlock *bb);
+   void SetInsertPoint(BasicBlock *bb, bool KeepDebugLoc = false);
 
    iterator &GetInsertPoint()
    {
@@ -167,7 +169,31 @@ public:
    ConstantString *GetConstantString(llvm::StringRef str);
 
    ConstantStruct *GetConstantStruct(ast::StructDecl *S,
-                                     llvm::ArrayRef<Constant *> elements);
+                                     llvm::ArrayRef<Constant*> elements);
+
+   ConstantClass *GetConstantClass(ast::ClassDecl *S,
+                                   GlobalVariable *TI,
+                                   llvm::ArrayRef<Constant*> elements,
+                                   ConstantClass *Base = nullptr);
+
+   ConstantClass *GetConstantClass(ConstantStruct *S,
+                                   GlobalVariable *TI,
+                                   ConstantClass *Base = nullptr);
+
+   ConstantClass *ForwardDeclareConstantClass(ast::ClassDecl *S,
+                                              GlobalVariable *TI);
+
+   ConstantClass *ReplaceForwardDecl(ConstantClass *ForwardDecl,
+                                     llvm::ArrayRef<Constant*> elements,
+                                     ConstantClass *Base = nullptr);
+
+   ConstantClass *ReplaceForwardDecl(ConstantClass *ForwardDecl,
+                                     ConstantStruct *StructVal,
+                                     ConstantClass *Base = nullptr);
+
+   ConstantUnion *GetConstantUnion(ast::UnionDecl *U, Constant *InitVal);
+   ConstantEnum *GetConstantEnum(ast::EnumCaseDecl *Case,
+                                 llvm::ArrayRef<Constant*> CaseVals);
 
    ConstantArray *GetConstantArray(QualType ArrTy,
                                    llvm::ArrayRef<Constant *> Arr);
@@ -175,14 +201,22 @@ public:
    ConstantArray *GetConstantArray(llvm::ArrayRef<Constant *> Arr);
    ConstantArray *GetConstantArray(QualType ty, size_t numElements);
 
+   ConstantTuple *GetConstantTuple(QualType TupleTy,
+                                   llvm::ArrayRef<Constant *> Arr);
+
+   ConstantTuple *GetConstantTuple(llvm::ArrayRef<Constant *> Arr);
+
    Constant *GetConstantPtr(QualType ty, uintptr_t val);
    Constant *GetConstantNull(QualType ty)
    {
       return GetConstantPtr(ty, 0);
    }
 
+   UndefValue *GetUndefValue(QualType Ty);
+   MagicConstant *GetMagicConstant(unsigned char Kind);
+
    Argument *CreateArgument(QualType type,
-                            bool vararg,
+                            unsigned Convention = 0,
                             BasicBlock *parent = nullptr,
                             llvm::StringRef name = "",
                             SourceLocation loc = {});
@@ -212,6 +246,7 @@ public:
                                   llvm::ArrayRef<Argument *> args,
                                   bool mightThrow,
                                   bool vararg,
+                                  ConstructorKind Kind,
                                   SourceLocation loc = {});
 
    GlobalVariable *CreateGlobalVariable(QualType type,
@@ -283,12 +318,14 @@ public:
    AllocaInst *CreateAlloca(QualType ofType,
                             unsigned align = 0,
                             bool heap = false,
+                            bool IsLet = false,
                             llvm::StringRef name = "");
 
    AllocaInst *CreateAlloca(QualType ofType,
                             size_t size,
                             unsigned align = 0,
                             bool heap = false,
+                            bool IsLet = false,
                             llvm::StringRef name = "");
 
    AllocBoxInst *CreateAllocBox(QualType Ty,
@@ -309,46 +346,52 @@ public:
 
    StoreInst *CreateStore(Value *val,
                           Value *ptr,
+                          bool IsInit = false,
                           llvm::StringRef name = "");
 
    FieldRefInst *CreateFieldRef(Value *val,
                                 const DeclarationName &fieldName,
+                                bool IsLet = false,
                                 llvm::StringRef name = "");
 
    GEPInst *CreateStructGEP(Value *val,
                             size_t idx,
+                            bool IsLet = false,
                             llvm::StringRef name = "");
 
    GEPInst *CreateGEP(Value *val,
                       size_t idx,
+                      bool IsLet = false,
                       llvm::StringRef name = "");
-
-   GEPInst *CreateGEP(Value *val,
-                      int idx,
-                      llvm::StringRef name = "") {
-      return CreateGEP(val, size_t(idx), name);
-   }
 
    Instruction *CreateExtractValue(Value *val,
                                    size_t idx,
+                                   bool IsLet = false,
                                    llvm::StringRef name = "");
 
-   GEPInst *CreateGEP(Value *val,
-                      Value *idx,
+   GEPInst *CreateGEP(Value *val, Value *idx, bool IsLet = false,
                       llvm::StringRef name = "");
 
    CaptureExtractInst *CreateCaptureExtract(size_t idx,
                                             llvm::StringRef name = "");
 
    TupleExtractInst *CreateTupleExtract(Value *val, size_t idx,
+                                        bool IsLet = false,
                                         llvm::StringRef name = "");
 
    EnumRawValueInst *CreateEnumRawValue(Value *Val,
                                         llvm::StringRef name = "");
 
    EnumExtractInst *CreateEnumExtract(Value *Val,
-                                      const IdentifierInfo *caseName,
+                                      ast::EnumCaseDecl *Case,
                                       size_t caseVal,
+                                      bool IsLet = false,
+                                      llvm::StringRef name = "");
+
+   EnumExtractInst *CreateEnumExtract(Value *Val,
+                                      const IdentifierInfo *CaseName,
+                                      size_t caseVal,
+                                      bool IsLet = false,
                                       llvm::StringRef name = "");
 
    LoadInst *CreateLoad(Value *val,
@@ -370,7 +413,7 @@ public:
                                   llvm::StringRef name = "");
 
    EnumInitInst *CreateEnumInit(ast::EnumDecl *EnumTy,
-                                const IdentifierInfo *caseName,
+                                ast::EnumCaseDecl *Case,
                                 llvm::ArrayRef<Value *> args,
                                 llvm::StringRef name = "");
 

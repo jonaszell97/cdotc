@@ -22,8 +22,9 @@ class DeclarationNameInfo: public llvm::FoldingSetNode {
 
    union {
       uintptr_t Data2;
-      const sema::TemplateArgList *ArgList;
+      const sema::FinalTemplateArgumentList *ArgList;
       BlockScope *Scope;
+      DeclarationName::AccessorKind AccKind;
    };
 
 public:
@@ -42,6 +43,7 @@ public:
       switch (Kind) {
       case DeclarationName::ConversionOperatorName:
       case DeclarationName::ExtensionName:
+      case DeclarationName::BaseConstructorName:
          return true;
       default:
          return false;
@@ -54,6 +56,8 @@ public:
       case DeclarationName::InfixOperatorName:
       case DeclarationName::PrefixOperatorName:
       case DeclarationName::PostfixOperatorName:
+      case DeclarationName::AccessorName:
+      case DeclarationName::MacroName:
          return true;
       default:
          return false;
@@ -66,6 +70,7 @@ public:
       case DeclarationName::InstantiationName:
       case DeclarationName::LocalVarName:
       case DeclarationName::PackExpansionName:
+      case DeclarationName::OperatorDeclName:
          return true;
       default:
          return false;
@@ -100,7 +105,7 @@ public:
       return DeclarationName::getFromOpaquePtr((void*)Data1);
    }
 
-   const sema::TemplateArgList *getArgList() const
+   const sema::FinalTemplateArgumentList *getArgList() const
    {
       assert(holdsTemplateArgs() && "does not hold template args!");
       return ArgList;
@@ -112,10 +117,22 @@ public:
       return (unsigned)Data2;
    }
 
+   unsigned getClosureArgumentIdx() const
+   {
+      assert(Kind == DeclarationName::ClosureArgumentName);
+      return (unsigned)Data1;
+   }
+
    BlockScope *getBlockScope() const
    {
       assert(Kind == DeclarationName::LocalVarName);
       return Scope;
+   }
+
+   DeclarationName::AccessorKind getAccessorKind() const
+   {
+      assert(Kind == DeclarationName::AccessorName);
+      return AccKind;
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID,
@@ -153,6 +170,18 @@ DeclarationName::DeclarationKind DeclarationName::getDeclarationKind() const
    }
 }
 
+QualType DeclarationName::getConstructorType() const
+{
+   if (getStoredKind() == StoredInitializerName)
+      return QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Val & ~PtrMask));
+
+   if (getDeclarationKind() == BaseConstructorName)
+      return getDeclInfo()->getType();
+
+   return QualType();
+}
+
 const IdentifierInfo* DeclarationName::getInfixOperatorName() const
 {
    if (getDeclarationKind() == InfixOperatorName)
@@ -177,6 +206,38 @@ const IdentifierInfo* DeclarationName::getPostfixOperatorName() const
    return nullptr;
 }
 
+const IdentifierInfo* DeclarationName::getAccessorName() const
+{
+   if (getDeclarationKind() == AccessorName)
+      return &getDeclInfo()->getIdentifierInfo();
+
+   return nullptr;
+}
+
+const IdentifierInfo* DeclarationName::getMacroName() const
+{
+   if (getDeclarationKind() == MacroName)
+      return &getDeclInfo()->getIdentifierInfo();
+
+   return nullptr;
+}
+
+DeclarationName::AccessorKind DeclarationName::getAccessorKind() const
+{
+   if (getDeclarationKind() == AccessorName)
+      return getDeclInfo()->getAccessorKind();
+
+   llvm_unreachable("not an accessor name!");
+}
+
+unsigned DeclarationName::getClosureArgumentIdx() const
+{
+   if (getDeclarationKind() == ClosureArgumentName)
+      return getDeclInfo()->getClosureArgumentIdx();
+
+   llvm_unreachable("not a closure argument name!");
+}
+
 DeclarationName DeclarationName::getInstantiationName() const
 {
    if (getDeclarationKind() == InstantiationName)
@@ -185,7 +246,8 @@ DeclarationName DeclarationName::getInstantiationName() const
    return nullptr;
 }
 
-const sema::TemplateArgList* DeclarationName::getInstantiationArgs() const
+const sema::FinalTemplateArgumentList*
+DeclarationName::getInstantiationArgs() const
 {
    if (getDeclarationKind() == InstantiationName)
       return getDeclInfo()->getArgList();
@@ -239,6 +301,14 @@ BlockScope* DeclarationName::getLocalVarScope() const
       return getDeclInfo()->getBlockScope();
 
    return nullptr;
+}
+
+DeclarationName DeclarationName::getDeclaredOperatorName() const
+{
+   if (getDeclarationKind() == OperatorDeclName)
+      return getDeclInfo()->getDeclName();
+
+   return DeclarationName();
 }
 
 int DeclarationName::compare(const DeclarationName &RHS) const
@@ -298,6 +368,7 @@ void DeclarationName::print(llvm::raw_ostream &OS) const
       OS << getExtendedType();
       break;
    case ConstructorName:
+   case BaseConstructorName:
       OS << "init";
       break;
    case DestructorName:
@@ -309,8 +380,34 @@ void DeclarationName::print(llvm::raw_ostream &OS) const
    case LocalVarName:
       OS << getLocalVarName();
       break;
+   case OperatorDeclName:
+      OS << getDeclaredOperatorName();
+      break;
+   case AccessorName: {
+      auto AccKind = getAccessorKind();
+      switch (AccKind) {
+      case Getter:
+         OS << "get ";
+         break;
+      case Setter:
+         OS << "set ";
+         break;
+      }
+
+      OS << getAccessorName()->getIdentifier();
+      break;
+   }
+   case ClosureArgumentName:
+      OS << "$" << getClosureArgumentIdx();
+      break;
+   case MacroName:
+      OS << getMacroName()->getIdentifier() << "!";
+      break;
    case InstantiationName:
       OS << getInstantiationName() << *getInstantiationArgs();
+      break;
+   case ErrorName:
+      OS << "<invalid name>";
       break;
    }
 }
@@ -320,14 +417,23 @@ DeclarationName DeclarationName::getManglingName() const
    if (getDeclarationKind() == InstantiationName)
       return getDeclInfo()->getDeclName();
 
+   if (getDeclarationKind() == OperatorDeclName)
+      return getDeclInfo()->getDeclName();
+
+   if (getDeclarationKind() == MacroName)
+      return getDeclInfo()->getIdentifierInfo();
+
    return *this;
 }
 
 using FoldingSetTy = llvm::FoldingSet<DeclarationNameInfo>;
 
-DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx) : Ctx(Ctx)
+DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx)
+   : FoldingSetPtr(new FoldingSetTy()),
+     Ctx(Ctx),
+     ErrorName(getSpecialName(DeclarationName::ErrorName, 0, 0))
 {
-   FoldingSetPtr = new FoldingSetTy();
+
 }
 
 DeclarationNameTable::~DeclarationNameTable()
@@ -342,15 +448,32 @@ DeclarationNameTable::getNormalIdentifier(const IdentifierInfo &II)
 }
 
 DeclarationName
-DeclarationNameTable::getConstructorName(QualType ConstructedType)
-{
-   return DeclarationName(ConstructedType, DeclarationName::ConstructorName);
+DeclarationNameTable::getConstructorName(QualType ConstructedType,
+                                         bool IsCompleteCtor) {
+   if (IsCompleteCtor)
+      return DeclarationName(ConstructedType,
+                             DeclarationName::ConstructorName);
+
+   return getSpecialName(DeclarationName::BaseConstructorName,
+                         (uintptr_t)ConstructedType.getAsOpaquePtr());
 }
 
 DeclarationName
 DeclarationNameTable::getDestructorName(QualType DestructedType)
 {
    return DeclarationName(DestructedType, DeclarationName::DestructorName);
+}
+
+DeclarationName
+DeclarationNameTable::getOperatorDeclName(DeclarationName OpName)
+{
+   return getSpecialName(DeclarationName::OperatorDeclName,
+                         (uintptr_t)OpName.getAsOpaquePtr());
+}
+
+DeclarationName DeclarationNameTable::getErrorName()
+{
+   return ErrorName;
 }
 
 DeclarationName
@@ -394,6 +517,13 @@ DeclarationNameTable::getPostfixOperatorName(const IdentifierInfo &II)
 }
 
 DeclarationName
+DeclarationNameTable::getMacroName(const IdentifierInfo &II)
+{
+   return getSpecialName(DeclarationName::MacroName,
+                         reinterpret_cast<uintptr_t>(&II));
+}
+
+DeclarationName
 DeclarationNameTable::getConversionOperatorName(QualType Ty)
 {
    return getSpecialName(DeclarationName::ConversionOperatorName,
@@ -404,6 +534,12 @@ DeclarationName DeclarationNameTable::getExtensionName(QualType ExtendedType)
 {
    return getSpecialName(DeclarationName::ExtensionName,
                          (uintptr_t)ExtendedType.getAsOpaquePtr());
+}
+
+DeclarationName DeclarationNameTable::getClosureArgumentName(unsigned ArgNo)
+{
+   return getSpecialName(DeclarationName::ClosureArgumentName,
+                         (uintptr_t)ArgNo);
 }
 
 DeclarationName DeclarationNameTable::getLocalVarName(DeclarationName Name,
@@ -421,8 +557,15 @@ DeclarationName DeclarationNameTable::getPackExpansionName(DeclarationName Name,
 }
 
 DeclarationName
+DeclarationNameTable::getAccessorName(const IdentifierInfo &II,
+                                      DeclarationName::AccessorKind Kind) {
+   return getSpecialName(DeclarationName::AccessorName, (uintptr_t)&II, Kind);
+}
+
+DeclarationName
 DeclarationNameTable::getInstantiationName(DeclarationName Name,
-                                           const sema::TemplateArgList&ArgList){
+                                           const sema::FinalTemplateArgumentList
+                                                                     &ArgList) {
    auto &FS = *reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
 
    llvm::FoldingSetNodeID ID;

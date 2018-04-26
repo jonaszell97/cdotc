@@ -357,8 +357,15 @@ void DiagnosticBuilder::finalize()
          break;
    }
 
-   llvm::StringRef ErrLine(Buf->getBufferStart() + newlineIndex + 1,
-                           lineEndIndex - newlineIndex - 1);
+   unsigned Len;
+   if (lineEndIndex == newlineIndex) {
+      Len = 0;
+   }
+   else {
+      Len = lineEndIndex - newlineIndex - 1;
+   }
+
+   llvm::StringRef ErrLine(Buf->getBufferStart() + newlineIndex + 1, Len);
 
    // show carets for any given single source location, and tildes for source
    // ranges (but only on the error line)
@@ -372,10 +379,16 @@ void DiagnosticBuilder::finalize()
       if (!SR.getStart())
          continue;
 
+      if (Engine.FileMgr->getSourceId(SR.getStart()) != ID)
+         continue;
+
       // single source location, show caret
       if (!SR.getEnd()) {
          unsigned offset = SR.getStart().getOffset() - File.BaseOffset;
-         assert(lineEndIndex > offset && "source loc not on error line!");
+         if (lineEndIndex <= offset || newlineIndex >= offset) {
+            // source location is on a different line
+            continue;
+         }
 
          unsigned offsetOnLine = offset - newlineIndex - 1;
          Markers[offsetOnLine] = '^';
@@ -388,8 +401,10 @@ void DiagnosticBuilder::finalize()
          unsigned EndOffsetOnLine   = std::min(EndOffset, lineEndIndex)
                                       - newlineIndex - 1;
 
+         if (EndOffsetOnLine > lineEndIndex)
+            continue;
+
          assert(EndOffsetOnLine >= BeginOffsetOnLine
-                && EndOffsetOnLine <= lineEndIndex
                 && "invalid source range!");
 
          while (1) {

@@ -90,6 +90,7 @@ private:
 
 namespace sema {
    class TemplateArgList;
+   class FinalTemplateArgumentList;
 } // namespace sema
 
 namespace ast {
@@ -173,7 +174,7 @@ public:
    bool isDependentType() const { return Bits.Dependent; }
    bool isUnpopulatedType() const;
 
-   sema::TemplateArgList const& getTemplateArgs() const;
+   sema::FinalTemplateArgumentList& getTemplateArgs() const;
    bool hasTemplateArgs() const;
 
    ast::RecordDecl *getRecord() const;
@@ -473,6 +474,11 @@ public:
       return *this;
    }
 
+   void Profile(llvm::FoldingSetNodeID &ID)
+   {
+      ID.AddPointer(getAsOpaquePtr());
+   }
+
    void *getAsOpaquePtr() const
    {
       return Value.getOpaqueValue();
@@ -563,17 +569,20 @@ template<> struct DenseMapInfo<::cdot::QualType> {
 namespace cdot {
 
 class PointerType: public Type, public llvm::FoldingSetNode {
-protected:
-   explicit PointerType(QualType pointee, Type *CanonicalType)
+private:
+   PointerType(QualType pointee, Type *CanonicalType)
       : Type(TypeID::PointerTypeID, CanonicalType, pointee->isDependentType()),
         pointeeType(pointee)
    {}
 
+protected:
+   PointerType(TypeID typeID, QualType pointee, Type *CanonicalType)
+      : Type(typeID, CanonicalType, pointee->isDependentType()),
+        pointeeType(pointee)
+   {}
+
 public:
-   QualType getPointeeType() const
-   {
-      return pointeeType;
-   }
+   QualType getPointeeType() const { return pointeeType; }
 
    size_t getSize() const
    {
@@ -600,7 +609,13 @@ public:
 
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::PointerTypeID;
+      switch (T->getTypeID()) {
+      case PointerTypeID:
+      case MutablePointerTypeID:
+         return true;
+      default:
+         return false;
+      }
    }
 
    friend class ast::ASTContext;
@@ -609,19 +624,34 @@ protected:
    QualType pointeeType;
 };
 
+class MutablePointerType: public PointerType {
+   MutablePointerType(QualType pointeeType, Type *CanonicalType);
+
+public:
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == MutablePointerTypeID;
+   }
+
+   friend class ast::ASTContext;
+};
+
 class ReferenceType: public Type, public llvm::FoldingSetNode {
-protected:
+private:
    ReferenceType(QualType referencedType, Type *CanonicalType)
       : Type(TypeID::ReferenceTypeID, CanonicalType,
              referencedType->isDependentType()),
         referencedType(referencedType)
    {}
 
+protected:
+   ReferenceType(TypeID typeID, QualType referencedType, Type *CanonicalType)
+      : Type(typeID, CanonicalType, referencedType->isDependentType()),
+        referencedType(referencedType)
+   {}
+
 public:
-   QualType getReferencedType() const
-   {
-      return referencedType;
-   }
+   QualType getReferencedType() const { return referencedType; }
 
    size_t getSize() const
    {
@@ -648,13 +678,31 @@ public:
 
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::ReferenceTypeID;
+      switch (T->getTypeID()) {
+      case ReferenceTypeID:
+      case MutableReferenceTypeID:
+         return true;
+      default:
+         return false;
+      }
    }
 
    friend class ast::ASTContext;
 
 protected:
    QualType referencedType;
+};
+
+class MutableReferenceType: public ReferenceType {
+   MutableReferenceType(QualType referencedType, Type *CanonicalType);
+
+public:
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == MutableReferenceTypeID;
+   }
+
+   friend class ast::ASTContext;
 };
 
 class ArrayType: public Type, public llvm::FoldingSetNode {
@@ -698,7 +746,7 @@ public:
    }
 
 protected:
-   ArrayType(QualType elementType, size_t numElements, Type *CanonicalType)
+   ArrayType(QualType elementType, unsigned numElements, Type *CanonicalType)
       : Type(TypeID::ArrayTypeID, CanonicalType,
              elementType->isDependentType()),
         elementType(elementType), numElements(numElements)
@@ -710,18 +758,11 @@ protected:
    {}
 
    QualType elementType;
-   size_t numElements;
+   unsigned numElements;
 
 public:
-   QualType getElementType() const
-   {
-      return elementType;
-   }
-
-   size_t getNumElements() const
-   {
-      return numElements;
-   }
+   QualType getElementType() const { return elementType; }
+   unsigned getNumElements() const { return numElements; }
 };
 
 class DependentSizeArrayType: public ArrayType {
@@ -793,7 +834,7 @@ public:
       None         = 0u,
       Vararg       = 1u,
       CStyleVararg = Vararg << 1u,
-      NoThrow      = CStyleVararg << 1u,
+      Throws       = CStyleVararg << 1u,
    };
 
 private:
@@ -841,7 +882,7 @@ public:
    bool isThinFunctionTy() const { return Bits.id == TypeID::FunctionTypeID; }
    bool isVararg()        const { return (FuncBits.flags & Vararg) != 0; }
    bool isCStyleVararg()  const { return (FuncBits.flags & CStyleVararg) != 0; }
-   bool isNoThrow()       const { return (FuncBits.flags & NoThrow) != 0; }
+   bool throws()          const { return (FuncBits.flags & Throws) != 0; }
 
    unsigned getRawFlags() const { return FuncBits.flags; }
 
@@ -936,7 +977,7 @@ public:
       return { type_begin(), NumTys };
    }
 
-   size_t getArity() const { return NumTys; }
+   unsigned getArity() const { return NumTys; }
 
    unsigned short getAlignment() const
    {
@@ -998,7 +1039,7 @@ protected:
 public:
    bool isRawEnum() const;
 
-   sema::TemplateArgList const& getTemplateArgs() const;
+   sema::FinalTemplateArgumentList& getTemplateArgs() const;
    bool hasTemplateArgs() const;
 
    ast::RecordDecl *getRecord() const
@@ -1045,10 +1086,10 @@ public:
 class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
-                       sema::TemplateArgList *templateArgs,
+                       sema::FinalTemplateArgumentList *templateArgs,
                        llvm::ArrayRef<QualType> TypeTemplateArgs);
 
-   sema::TemplateArgList *templateArgs;
+   mutable sema::FinalTemplateArgumentList *templateArgs;
 
 public:
    void Profile(llvm::FoldingSetNodeID &ID)
@@ -1058,7 +1099,7 @@ public:
 
    static void Profile(llvm::FoldingSetNodeID &ID,
                        ast::RecordDecl *R,
-                       sema::TemplateArgList* templateArgs);
+                       sema::FinalTemplateArgumentList* templateArgs);
 
    static bool classof (Type const* T)
    {
@@ -1067,7 +1108,7 @@ public:
 
    friend class ast::ASTContext;
 
-   const sema::TemplateArgList& getTemplateArgs() const
+   sema::FinalTemplateArgumentList& getTemplateArgs() const
    {
       return *templateArgs;
    }
