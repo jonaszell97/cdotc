@@ -23,10 +23,10 @@ class Class;
 namespace llvm {
 
 template <typename T>
-class PointerLikeTypeTraits;
+struct PointerLikeTypeTraits;
 
 template<>
-class PointerLikeTypeTraits< ::cdot::tblgen::Type*> {
+struct PointerLikeTypeTraits< ::cdot::tblgen::Type*> {
 public:
    static inline void *getAsVoidPointer(::cdot::tblgen::Type *P) { return P; }
    static inline ::cdot::tblgen::Type* getFromVoidPointer(void *P)
@@ -39,7 +39,7 @@ public:
 };
 
 template<>
-class PointerLikeTypeTraits< ::cdot::tblgen::Class*> {
+struct PointerLikeTypeTraits< ::cdot::tblgen::Class*> {
 public:
    static inline void *getAsVoidPointer(::cdot::tblgen::Class *P) { return P; }
    static inline ::cdot::tblgen::Class* getFromVoidPointer(void *P)

@@ -9,15 +9,14 @@
 #include "AST/SourceType.h"
 #include "Basic/DeclarationName.h"
 #include "ContinuationPoint.h"
+#include "Lex/Token.h"
+#include "Sema/ConversionSequence.h"
 
 #include <llvm/Support/TrailingObjects.h>
-#include <Lex/Token.h>
 
 namespace cdot {
 
-namespace module {
-   class Module;
-} // namespace module
+class BlockScope;
 
 namespace ast {
 
@@ -34,6 +33,8 @@ class StaticExpr;
 
 class LLVM_ALIGNAS(sizeof(void*)) Statement: public AstNode {
 public:
+   struct EmptyShell {};
+
    enum Flags: uint32_t {
       TypeDependent          = 1u,
       ValueDependent         = TypeDependent  << 1u,
@@ -41,6 +42,7 @@ public:
       SemanticallyChecked    = HadError << 1u,
       GlobalInitializer      = SemanticallyChecked  << 1u,
       ContainsUnexpandedPack = GlobalInitializer << 1u,
+      Ignored                = ContainsUnexpandedPack << 1u,
 
       StatusFlags       = TypeDependent | ValueDependent | HadError
                           | ContainsUnexpandedPack,
@@ -94,15 +96,11 @@ public:
       setFlag(GlobalInitializer, globalInit);
    }
 
-   bool isInvalid() const
-   {
-      return flagIsSet(HadError);
-   }
+   bool isInvalid() const { return flagIsSet(HadError); }
+   void setIsInvalid(bool error) { setFlag(HadError, error); }
 
-   void setIsInvalid(bool error)
-   {
-      setFlag(HadError, error);
-   }
+   bool isIgnored() const { return flagIsSet(Ignored); }
+   void setIgnored(bool b) { setFlag(Ignored, b); }
 
    bool isSemanticallyChecked() const { return flagIsSet(SemanticallyChecked); }
    void setSemanticallyChecked(bool chk = true)
@@ -140,6 +138,7 @@ protected:
 class DeclStmt: public Statement {
 public:
    static DeclStmt *Create(ASTContext &C, Decl *D);
+   DeclStmt(EmptyShell Empty);
 
    Decl *getDecl() const { return D; }
    void setDecl(Decl *D) { this->D = D; }
@@ -166,6 +165,8 @@ public:
                                  Statement *Stmt,
                                  llvm::ArrayRef<Attr*> Attrs);
 
+   static AttributedStmt *CreateEmpty(ASTContext &C, unsigned NumAttrs);
+
    llvm::ArrayRef<Attr*> getAttributes() const
    {
       return { getTrailingObjects<Attr*>(), NumAttrs };
@@ -180,6 +181,7 @@ public:
 
 private:
    AttributedStmt(Statement *Stmt, llvm::ArrayRef<Attr*> Attrs);
+   AttributedStmt(EmptyShell, unsigned N);
 
    Statement *Stmt;
    unsigned NumAttrs;
@@ -199,8 +201,12 @@ public:
    Expression *getMixinExpr() const { return Expr; }
    void setMixinExpr(Expression *E) { Expr = E; }
 
+   void setParens(const SourceRange &Parens) { MixinStmt::Parens = Parens; }
+
    static MixinStmt *Create(ASTContext &C, SourceRange Parens,
                             Expression *Expr);
+
+   MixinStmt(EmptyShell Empty);
 };
 
 class DebugStmt : public Statement {
@@ -210,7 +216,10 @@ public:
 
    }
 
+   DebugStmt(EmptyShell Empty);
+
    bool isUnreachable() const { return unreachable; }
+   void setLoc(const SourceLocation &Loc) { DebugStmt::Loc = Loc; }
 
 private:
    SourceLocation Loc;
@@ -237,8 +246,10 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static NullStmt *Create(ASTContext &C, SourceLocation Loc);
+   NullStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
+   void setLoc(const SourceLocation &Loc) { NullStmt::Loc = Loc; }
 };
 
 class CompoundStmt final: public Statement,
@@ -247,13 +258,17 @@ public:
    static CompoundStmt *Create(ASTContext &ASTCtx,
                                bool preserveScope,
                                SourceLocation LBraceLoc,
-                               SourceLocation RBraceLoc);
+                               SourceLocation RBraceLoc,
+                               bool Unsafe = false);
 
    static CompoundStmt *Create(ASTContext &ASTCtx,
                                llvm::ArrayRef<Statement*> stmts,
                                bool preserveScope,
                                SourceLocation LBraceLoc,
-                               SourceLocation RBraceLoc);
+                               SourceLocation RBraceLoc,
+                               bool Unsafe = false);
+
+   static CompoundStmt *CreateEmpty(ASTContext &C, unsigned N);
 
    using stmt_iterator        = Statement**;
    using iterator_range       = llvm::MutableArrayRef<Statement*>;
@@ -280,6 +295,18 @@ public:
    SourceLocation getLBraceLoc() const { return LBraceLoc; }
    SourceLocation getRBraceLoc() const { return RBraceLoc; }
 
+   void setLBraceLoc(SourceLocation Loc) { LBraceLoc = Loc; }
+   void setRBraceLoc(SourceLocation Loc) { RBraceLoc = Loc; }
+
+   bool isUnsafe() const { return Unsafe; }
+   void setUnsafe(bool Unsafe) { CompoundStmt::Unsafe = Unsafe; }
+
+   unsigned getScopeID() const { return ScopeID; }
+   void setScopeID(unsigned V) { ScopeID = V; }
+
+   bool containsDeclStmt() const { return ContainsDeclStmt; }
+   void setContainsDeclStmt(bool V) { ContainsDeclStmt = V; }
+
    static bool classofKind(NodeType kind) { return kind == CompoundStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
@@ -288,15 +315,23 @@ public:
 private:
    CompoundStmt(bool preservesScope,
                 SourceLocation LBraceLoc,
-                SourceLocation RBraceLoc);
+                SourceLocation RBraceLoc,
+                bool Unsafe);
 
    CompoundStmt(llvm::ArrayRef<Statement* > stmts,
                 bool preserveScope,
                 SourceLocation LBraceLoc,
-                SourceLocation RBraceLoc);
+                SourceLocation RBraceLoc,
+                bool Unsafe);
 
-   unsigned numStmts : 31;
-   bool preserveScope : 1;
+   CompoundStmt(EmptyShell Empty, unsigned N);
+
+   unsigned numStmts     : 30;
+   bool preserveScope    : 1;
+   bool Unsafe           : 1;
+   bool ContainsDeclStmt : 1;
+
+   unsigned ScopeID = 0;
 
    SourceLocation LBraceLoc;
    SourceLocation RBraceLoc;
@@ -312,8 +347,10 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static BreakStmt *Create(ASTContext &C, SourceLocation Loc);
+   BreakStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
+   void setLoc(SourceLocation L) { Loc = L; }
 };
 
 class ContinueStmt : public Statement {
@@ -326,8 +363,11 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static ContinueStmt *Create(ASTContext &C, SourceLocation Loc);
+   ContinueStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
+
+   void setLoc(SourceLocation L) { Loc = L; }
 };
 
 class GotoStmt: public Statement {
@@ -343,9 +383,14 @@ public:
    static GotoStmt *Create(ASTContext &C, SourceLocation Loc,
                            IdentifierInfo *label);
 
+   GotoStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const { return SourceRange(Loc); }
    IdentifierInfo *getLabel() const { return label; }
    llvm::StringRef getLabelName() const { return label->getIdentifier(); }
+
+   void setLoc(SourceLocation L) { Loc = L; }
+   void setLabel(IdentifierInfo *label) { GotoStmt::label = label; }
 };
 
 class LabelStmt : public Statement {
@@ -361,12 +406,17 @@ public:
    static LabelStmt *Create(ASTContext &C, SourceLocation Loc,
                             IdentifierInfo *label);
 
+   LabelStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const { return SourceRange(Loc); }
    IdentifierInfo *getLabel() const { return label; }
    llvm::StringRef getLabelName() const { return label->getIdentifier(); }
+
+   void setLoc(SourceLocation L) { Loc = L; }
+   void setLabel(IdentifierInfo *label) { LabelStmt::label = label; }
 };
 
-class IfStmt : public Statement {
+class IfStmt: public Statement {
    IfStmt(SourceLocation IfLoc,
           Expression* cond,
           Statement* body, Statement* elseBody);
@@ -386,12 +436,16 @@ public:
                          Expression* cond,
                          Statement* body, Statement* elseBody);
 
+   IfStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const
    {
       return SourceRange(IfLoc,
                          elseBranch ? elseBranch->getSourceRange().getEnd()
                                     : ifBranch->getSourceRange().getEnd());
    }
+
+   void setIfLoc(SourceLocation L) { IfLoc = L; }
 
    Expression* getCondition() const { return condition; }
    Statement* getIfBranch() const { return ifBranch; }
@@ -400,6 +454,102 @@ public:
    void setCondition(Expression *C) { condition = C; }
    void setIfBranch(Statement *If) { ifBranch = If; }
    void setElseBranch(Statement* Else) { elseBranch = Else; }
+};
+
+class IfLetStmt: public Statement {
+   IfLetStmt(SourceLocation IfLoc,
+             LocalVarDecl *VarDecl,
+             Statement *IfBranch,
+             Statement *ElseBranch);
+
+   SourceLocation IfLoc;
+   LocalVarDecl *VarDecl;
+   Statement *IfBranch;
+   Statement *ElseBranch;
+   ConversionSequence *ConvSeq = nullptr;
+
+public:
+   static bool classofKind(NodeType kind) { return kind == IfLetStmtID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   static IfLetStmt *Create(ASTContext &C,
+                            SourceLocation IfLoc,
+                            LocalVarDecl *VarDecl,
+                            Statement *IfBranch,
+                            Statement *ElseBranch);
+
+   IfLetStmt(EmptyShell Empty);
+   
+   SourceRange getSourceRange() const
+   {
+      return SourceRange(IfLoc,
+                         ElseBranch ? ElseBranch->getSourceRange().getEnd()
+                                    : IfBranch->getSourceRange().getEnd());
+   }
+
+   SourceLocation getIfLoc() const { return IfLoc; }
+   LocalVarDecl *getVarDecl() const { return VarDecl; }
+   Statement *getIfBranch() const { return IfBranch; }
+   Statement *getElseBranch() const { return ElseBranch; }
+
+   void setIfLoc(SourceLocation L) { IfLoc = L; }
+   void setVarDecl(LocalVarDecl *VarDecl) { IfLetStmt::VarDecl = VarDecl; }
+
+   void setIfBranch(Statement *IB) { IfBranch = IB; }
+   void setElseBranch(Statement *EB) { ElseBranch = EB; }
+
+   const ConversionSequence &getConvSeq() const { return *ConvSeq; }
+   void setConvSeq(ConversionSequence *CS) { ConvSeq = CS; }
+};
+
+class PatternExpr;
+
+class IfCaseStmt: public Statement {
+   IfCaseStmt(SourceLocation IfLoc,
+              PatternExpr *Pattern,
+              Expression *Val,
+              Statement *IfBranch,
+              Statement *ElseBranch);
+
+   SourceLocation IfLoc;
+   PatternExpr *Pattern;
+   Expression *Val;
+   Statement *IfBranch;
+   Statement *ElseBranch;
+
+public:
+   static bool classofKind(NodeType kind) { return kind == IfCaseStmtID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   static IfCaseStmt *Create(ASTContext &C,
+                             SourceLocation IfLoc,
+                             PatternExpr *Pattern,
+                             Expression *Val,
+                             Statement *IfBranch,
+                             Statement *ElseBranch);
+
+   IfCaseStmt(EmptyShell Empty);
+
+   SourceRange getSourceRange() const
+   {
+      return SourceRange(IfLoc,
+                         ElseBranch ? ElseBranch->getSourceRange().getEnd()
+                                    : IfBranch->getSourceRange().getEnd());
+   }
+
+   void setIfLoc(SourceLocation L) { IfLoc = L; }
+   void setPattern(PatternExpr *Pattern) { IfCaseStmt::Pattern = Pattern; }
+
+   SourceLocation getIfLoc() const { return IfLoc; }
+   PatternExpr *getPattern() const { return Pattern; }
+   Statement *getIfBranch() const { return IfBranch; }
+   Statement *getElseBranch() const { return ElseBranch; }
+
+   Expression *getVal() const { return Val; }
+   void setVal(Expression *Val) { IfCaseStmt::Val = Val; }
+
+   void setIfBranch(Statement *IB) { IfBranch = IB; }
+   void setElseBranch(Statement *EB) { ElseBranch = EB; }
 };
 
 class ForStmt: public Statement {
@@ -422,10 +572,14 @@ public:
                           Statement* init, Expression* term,
                           Statement* inc, Statement *body);
 
+   ForStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const
    {
       return SourceRange(ForLoc, body->getSourceRange().getEnd());
    }
+
+   void setForLoc(SourceLocation L) { ForLoc = L; }
 
    Statement* getInitialization() const { return initialization; }
    void setInitialization(Statement* Init) { initialization = Init; }
@@ -462,10 +616,14 @@ public:
                             SourceLocation ForLoc, LocalVarDecl* decl,
                             Expression* range, Statement* body);
 
+   ForInStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const
    {
       return SourceRange(ForLoc, body->getSourceRange().getEnd());
    }
+
+   void setForLoc(SourceLocation L) { ForLoc = L; }
 
    LocalVarDecl* getDecl() const { return decl; }
    Expression* getRangeExpr() const { return rangeExpr; }
@@ -502,26 +660,30 @@ public:
                             Expression* cond, Statement* body,
                             bool atLeastOnce = false);
 
+   WhileStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const
    {
       return SourceRange(WhileLoc, body->getSourceRange().getEnd());
    }
+
+   void setWhileLoc(SourceLocation L) { WhileLoc = L; }
 
    Expression* getCondition() const { return condition; }
    Statement* getBody() const { return body; }
 
    void setCondition(Expression *C) { condition = C; }
    void setBody(Statement *B) { body = B; }
+
    bool isAtLeastOnce() const { return atLeastOnce; }
+   void setAtLeastOnce(bool b) { atLeastOnce = b; }
 };
 
 class CaseStmt: public Statement {
-public:
    CaseStmt(SourceLocation CaseLoc,
             PatternExpr* pattern,
             Statement* body);
 
-protected:
    SourceLocation CaseLoc;
    PatternExpr* pattern;
    Statement* body;
@@ -534,10 +696,10 @@ public:
    static CaseStmt *Create(ASTContext &C, SourceLocation CaseLoc,
                            PatternExpr* pattern, Statement* body = nullptr);
 
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(CaseLoc, body->getSourceRange().getEnd());
-   }
+   CaseStmt(EmptyShell Empty);
+
+   SourceRange getSourceRange() const;
+   void setCaseLoc(SourceLocation L) { CaseLoc = L; }
 
    bool isDefault() const { return pattern == nullptr; }
    PatternExpr* getPattern() const { return pattern; }
@@ -556,6 +718,8 @@ class MatchStmt final: public Statement,
              SourceRange Braces,
              Expression* switchVal,
              llvm::ArrayRef<CaseStmt*> cases);
+
+   MatchStmt(EmptyShell Empty, unsigned N);
 
 protected:
    SourceLocation MatchLoc;
@@ -576,7 +740,13 @@ public:
                             Expression* switchVal,
                             llvm::ArrayRef<CaseStmt*> cases);
 
+   static MatchStmt *CreateEmpty(ASTContext &C, unsigned N);
+
    SourceLocation getMatchLoc() const { return MatchLoc; }
+   void setMatchLoc(SourceLocation L) { MatchLoc = L; }
+
+   void setBraces(const SourceRange &Braces) { MatchStmt::Braces = Braces; }
+
    SourceRange getBraceRange() const { return Braces; }
    SourceRange getSourceRange() const
    {
@@ -591,6 +761,11 @@ public:
       return { getTrailingObjects<CaseStmt*>(), NumCases };
    }
 
+   llvm::MutableArrayRef<CaseStmt*> getCases()
+   {
+      return { getTrailingObjects<CaseStmt*>(), NumCases };
+   }
+
    bool isHasDefault() const { return hasDefault; }
    void setHasDefault(bool hasDefault) { this->hasDefault = hasDefault; }
 };
@@ -601,6 +776,7 @@ class ReturnStmt : public Statement {
    SourceLocation RetLoc;
    Expression* returnValue;
    LocalVarDecl *NRVOCand = nullptr;
+   bool IsFallibleInitReturn = false;
 
 public:
    static bool classofKind(NodeType kind) { return kind == ReturnStmtID; }
@@ -609,61 +785,104 @@ public:
    static ReturnStmt *Create(ASTContext &C, SourceLocation RetLoc,
                              Expression* val = nullptr);
 
+   ReturnStmt(EmptyShell Empty);
+
    SourceRange getSourceRange() const;
+   void setRetLoc(SourceLocation Loc) { RetLoc = Loc; }
 
    Expression* getReturnValue() const { return returnValue; }
    void setReturnValue(Expression *Val) { returnValue = Val; }
 
    LocalVarDecl *getNRVOCand() const { return NRVOCand; }
    void setNRVOCand(LocalVarDecl *Cand) { NRVOCand = Cand; }
+
+   bool isFallibleInitReturn() const { return IsFallibleInitReturn; }
+   void setIsFallibleInitReturn(bool B) { IsFallibleInitReturn = B; }
+};
+
+class DiscardAssignStmt: public Statement {
+   DiscardAssignStmt(SourceLocation UnderscoreLoc,
+                     SourceLocation EqualsLoc,
+                     Expression *RHS);
+
+   DiscardAssignStmt(EmptyShell Empty);
+
+   SourceLocation UnderscoreLoc;
+   SourceLocation EqualsLoc;
+   Expression *RHS;
+
+public:
+   static DiscardAssignStmt *Create(ASTContext &C,
+                                    SourceLocation UnderscoreLoc,
+                                    SourceLocation EqualsLoc,
+                                    Expression *RHS);
+
+   static DiscardAssignStmt *CreateEmpty(ASTContext &C);
+
+   static bool classofKind(NodeType kind){ return kind == DiscardAssignStmtID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   SourceRange getSourceRange() const;
+
+   SourceLocation getUnderscoreLoc() const { return UnderscoreLoc; }
+   void setUnderscoreLoc(SourceLocation V) { UnderscoreLoc = V; }
+
+   SourceLocation getEqualsLoc() const { return EqualsLoc; }
+   void setEqualsLoc(SourceLocation V) { EqualsLoc = V; }
+
+   Expression* getRHS() const { return RHS; }
+   void setRHS(Expression* V) { RHS = V; }
 };
 
 struct CatchBlock {
-   CatchBlock(LocalVarDecl *varDecl, Statement* body)
+   CatchBlock(LocalVarDecl *varDecl, Statement* Body,
+              Expression *Cond = nullptr)
       : varDecl(varDecl),
-        body(body)
+        Body(Body),
+        Condition(Cond)
    { }
 
    CatchBlock() = default;
 
    LocalVarDecl *varDecl;
-   Statement* body;
+   Statement* Body;
+   Expression *Condition;
 };
 
-class TryStmt: public Statement {
+class DoStmt final: public Statement,
+                    llvm::TrailingObjects<DoStmt, CatchBlock> {
    SourceRange SR;
    Statement* body;
-   std::vector<CatchBlock> catchBlocks;
-   Statement* finallyBlock = nullptr;
+   unsigned NumCatchBlocks;
 
 public:
-   static bool classofKind(NodeType kind) { return kind == TryStmtID; }
+   static bool classofKind(NodeType kind) { return kind == DoStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   TryStmt(SourceRange SR, Statement* body);
-   TryStmt(SourceRange SR,
-           Statement* body,
-           std::vector<CatchBlock> &&catchBlocks,
-           Statement* finally);
+   friend TrailingObjects;
+
+   DoStmt(SourceRange SR, Statement* body);
+   DoStmt(SourceRange SR,
+          Statement* body,
+          ArrayRef<CatchBlock> catchBlocks);
+
+   DoStmt(EmptyShell Empty, unsigned N);
 
    SourceRange getSourceRange() const { return SR; }
+   void setSourceRange(SourceRange SR) { DoStmt::SR = SR; }
 
    Statement* getBody() const { return body; }
-   void setBody(Statement *body) { TryStmt::body = body; }
+   void setBody(Statement *body) { DoStmt::body = body; }
 
-   std::vector<CatchBlock> &getCatchBlocks() { return catchBlocks; }
-   std::vector<CatchBlock> const& getCatchBlocks() const
+   MutableArrayRef<CatchBlock> getCatchBlocks()
    {
-      return catchBlocks;
+      return { getTrailingObjects<CatchBlock>(), NumCatchBlocks };
    }
 
-   void addCatch(CatchBlock const& catchBlock)
+   ArrayRef<CatchBlock> getCatchBlocks() const
    {
-      catchBlocks.push_back(catchBlock);
+      return { getTrailingObjects<CatchBlock>(), NumCatchBlocks };
    }
-
-   void setFinally(Statement* FB) { finallyBlock = FB; }
-   Statement* getFinallyBlock() const { return finallyBlock; }
 };
 
 class ThrowStmt: public Statement {
@@ -677,8 +896,10 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    ThrowStmt(SourceLocation ThrowLoc, Expression* thrownVal);
+   ThrowStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const;
+   void setThrowLoc(SourceLocation Loc) { ThrowLoc = Loc; }
 
    Expression *getThrownVal() const { return thrownVal; }
    void setThrownVal(Expression *Val) { thrownVal = Val; }
@@ -688,137 +909,6 @@ public:
 
    MethodDecl *getDescFn() const { return descFn; }
    void setDescFn(MethodDecl *fn) { descFn = fn; }
-};
-
-class DestructuringDecl: public Statement {
-protected:
-   DestructuringDecl(NodeType typeID,
-                     SourceRange SR,
-                     unsigned NumDecls,
-                     AccessSpecifier access,
-                     bool isConst,
-                     SourceType type,
-                     Expression *value);
-
-   SourceRange SR;
-   AccessSpecifier access;
-   bool IsConst;
-
-   unsigned NumDecls;
-
-   SourceType type;
-   Expression *value;
-
-   CallableDecl *destructuringFn = nullptr;
-
-public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
-   static bool classofKind(NodeType kind)
-   {
-      switch (kind) {
-      case LocalDestructuringDeclID:
-      case GlobalDestructuringDeclID:
-         return true;
-      default:
-         return false;
-      }
-   }
-
-   SourceRange getSourceRange() const { return SR; }
-
-   AccessSpecifier getAccess() const { return access; }
-   void setAccess(AccessSpecifier A) { access = A; }
-
-   bool isConst() const { return IsConst; }
-
-   const SourceType &getType() const { return type; }
-   void setType(SourceType Ty) { type = Ty; }
-
-   Expression *getValue() const { return value; }
-   void setValue(Expression *V) { value = V; }
-
-   CallableDecl *getDestructuringFn() const { return destructuringFn; }
-   void setDestructuringFn(CallableDecl *fn) { destructuringFn = fn; }
-
-   unsigned getNumDecls() const { return NumDecls; }
-   llvm::ArrayRef<VarDecl*> getDecls() const;
-};
-
-class LocalDestructuringDecl final:
-   public DestructuringDecl,
-   llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
-private:
-   LocalDestructuringDecl(SourceRange SR,
-                          AccessSpecifier access,
-                          bool isConst,
-                          llvm::ArrayRef<VarDecl*> Decls,
-                          SourceType type,
-                          Expression *value);
-
-public:
-   friend TrailingObjects;
-
-   static LocalDestructuringDecl *Create(ASTContext &C,
-                                         SourceRange SR,
-                                         AccessSpecifier access,
-                                         bool isConst,
-                                         llvm::ArrayRef<VarDecl*> Decls,
-                                         SourceType type,
-                                         Expression *value);
-
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
-   static bool classofKind(NodeType kind)
-   {
-      return kind == LocalDestructuringDeclID;
-   }
-
-   llvm::ArrayRef<VarDecl*> getDecls() const
-   {
-      return { getTrailingObjects<VarDecl*>(), NumDecls };
-   }
-};
-
-class GlobalDestructuringDecl:
-   public DestructuringDecl,
-   llvm::TrailingObjects<LocalDestructuringDecl, VarDecl*> {
-private:
-   GlobalDestructuringDecl(SourceRange SR,
-                           AccessSpecifier access,
-                           bool isConst,
-                           llvm::ArrayRef<VarDecl*> Decls,
-                           SourceType type,
-                           Expression *value);
-
-   size_t globalOrdering = 0;
-
-public:
-   friend TrailingObjects;
-
-   static GlobalDestructuringDecl *Create(ASTContext &C,
-                                          SourceRange SR,
-                                          AccessSpecifier access,
-                                          bool isConst,
-                                          llvm::ArrayRef<VarDecl*> Decls,
-                                          SourceType type,
-                                          Expression *value);
-
-   static bool classof(AstNode const* T)
-   {
-      return classofKind(T->getTypeID());
-   }
-
-   static bool classofKind(NodeType kind)
-   {
-      return kind == GlobalDestructuringDeclID;
-   }
-
-   llvm::ArrayRef<VarDecl*> getDecls() const
-   {
-      return { getTrailingObjects<VarDecl*>(), NumDecls };
-   }
-
-   size_t getGlobalOrdering() const { return globalOrdering; }
-   void setGlobalOrdering(size_t GO) { globalOrdering = GO; }
 };
 
 class StaticIfStmt: public Statement {
@@ -857,12 +947,17 @@ public:
                                StaticExpr *condition,
                                StaticIfStmt *Template);
 
+   StaticIfStmt(EmptyShell Empty);
+
    static bool classofKind(NodeType kind) { return kind == StaticIfStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getIfLoc() const { return IfLoc; }
    SourceRange getSourceRange() const;
+
+   void setStaticLoc(SourceLocation Loc) { StaticLoc = Loc; }
+   void setIfLoc(SourceLocation Loc) { IfLoc = Loc; }
 
    StaticExpr* getCondition() const { return condition; }
    Statement* getIfBranch() const { return ifBranch; }
@@ -900,6 +995,8 @@ public:
                                 StaticExpr *range,
                                 Statement *body);
 
+   StaticForStmt(EmptyShell Empty);
+
    static bool classofKind(NodeType kind) { return kind == StaticForStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
@@ -910,10 +1007,14 @@ public:
       return SourceRange(StaticLoc, body->getSourceRange().getEnd());
    }
 
+   void setStaticLoc(SourceLocation Loc) { StaticLoc = Loc; }
+   void setForLoc(SourceLocation Loc) { ForLoc = Loc; }
+
    IdentifierInfo * getElementName() const { return elementName; }
    Statement* getBody() const { return body; }
    StaticExpr *getRange() const { return range; }
 
+   void setElementName(IdentifierInfo *EN) { elementName = EN; }
    void setRange(StaticExpr *R) { range = R; }
    void setBody(Statement *B) { body = B; }
 };
@@ -932,7 +1033,9 @@ private:
    MacroExpansionStmt(SourceRange SR,
                       DeclarationName MacroName,
                       Delimiter Delim,
-                      llvm::ArrayRef<lex::Token> Toks);
+                      ArrayRef<lex::Token> Toks);
+
+   MacroExpansionStmt(EmptyShell Empty, unsigned N);
 
    SourceRange SR;
    Delimiter Delim;
@@ -946,12 +1049,18 @@ public:
                                      Delimiter Delim,
                                      llvm::ArrayRef<lex::Token> Toks);
 
+   static MacroExpansionStmt *CreateEmpty(ASTContext &C, unsigned N);
+
    static bool classofKind(NodeType kind) {return kind == MacroExpansionStmtID;}
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const { return SR; }
    DeclarationName getMacroName() const { return MacroName; }
    Delimiter getDelim() const { return Delim; }
+
+   void setSourceRange(SourceRange SR) { MacroExpansionStmt::SR = SR; }
+   void setMacroName(DeclarationName Name) { MacroName = Name; }
+   void setDelim(Delimiter Delim) { MacroExpansionStmt::Delim = Delim; }
 
    llvm::ArrayRef<lex::Token> getTokens() const
    {

@@ -68,19 +68,19 @@ struct CandidateSet {
    struct Candidate {
       Candidate() = default;
 
-      explicit Candidate(ast::CallableDecl *Func)
-         : Func(Func), UFCS(NoUFCS), IsBuiltinCand(false)
+      explicit Candidate(ast::CallableDecl *Func, unsigned Distance = 0)
+         : Func(Func), UFCS(NoUFCS), IsBuiltinCand(false), Distance(Distance)
       {}
 
       explicit Candidate(FunctionType *FuncTy,
                          ast::PrecedenceGroupDecl *PG = nullptr,
                          op::OperatorKind OpKind = op::UnknownOp)
          : precedenceGroup(PG), BuiltinCandidate{ FuncTy, OpKind },
-           UFCS(NoUFCS), IsBuiltinCand(true)
+           UFCS(NoUFCS), IsBuiltinCand(true), Distance(0)
       {}
 
-      explicit Candidate(ast::AliasDecl *Alias)
-         : Alias(Alias), UFCS(NoUFCS), IsBuiltinCand(false)
+      explicit Candidate(ast::AliasDecl *Alias, unsigned Distance = 0)
+         : Alias(Alias), UFCS(NoUFCS), IsBuiltinCand(false), Distance(Distance)
       {}
 
       union {
@@ -99,6 +99,7 @@ struct CandidateSet {
       FailureReason FR = None;
       UFCSKind UFCS : 7;
       bool IsBuiltinCand : 1;
+      unsigned Distance : 8;
 
       union {
          uintptr_t ConversionPenalty = 0;
@@ -117,6 +118,9 @@ struct CandidateSet {
          return isValid();
       }
 
+      bool isAssignmentOperator();
+      bool isInitializerOrDeinitializer();
+
       void setFunctionType(FunctionType *FTy)
       {
          BuiltinCandidate.FuncTy = FTy;
@@ -125,6 +129,8 @@ struct CandidateSet {
       FunctionType *getFunctionType() const;
       SourceLocation getSourceLoc() const;
       ast::PrecedenceGroupDecl *getPrecedenceGroup() const;
+
+      unsigned getNumConstraints() const;
 
       bool isBuiltinCandidate() const
       {
@@ -145,10 +151,11 @@ struct CandidateSet {
          Data2 = expectedAtMost;
       }
 
-      void setHasIncompatibleArgument(uintptr_t argIndex)
+      void setHasIncompatibleArgument(uintptr_t argIndex, QualType GivenTy)
       {
          FR = IncompatibleArgument;
          Data1 = argIndex;
+         Data2 = reinterpret_cast<uintptr_t>(GivenTy.getAsOpaquePtr());
       }
 
       void setCouldNotInferArgumentType(uintptr_t argIndex)
@@ -245,7 +252,7 @@ struct CandidateSet {
 
    CandidateSet()
       : Status(NoMatch), IncludesSelfArgument(false), InvalidCand(false),
-        Dependent(false)
+        Dependent(false), MatchIdx((unsigned short)-1)
    {}
 
    CandidateSet(const CandidateSet&) = delete;
@@ -260,15 +267,15 @@ struct CandidateSet {
       return Candidates.back();
    }
 
-   Candidate &addCandidate(ast::CallableDecl *CD)
+   Candidate &addCandidate(ast::CallableDecl *CD, unsigned Distance = 0)
    {
-      Candidates.emplace_back(CD);
+      Candidates.emplace_back(CD, Distance);
       return Candidates.back();
    }
 
-   Candidate &addCandidate(ast::AliasDecl *Alias)
+   Candidate &addCandidate(ast::AliasDecl *Alias, unsigned Distance = 0)
    {
-      Candidates.emplace_back(Alias);
+      Candidates.emplace_back(Alias, Distance);
       return Candidates.back();
    }
 
@@ -340,14 +347,7 @@ struct CandidateSet {
                                     bool OperatorLookup = false,
                                     SourceLocation OpLoc = {});
 
-   Candidate &getBestMatch()
-   {
-      for (auto &C : Candidates)
-         if (C && C.ConversionPenalty == BestConversionPenalty)
-            return C;
-
-      llvm_unreachable("no match found!");
-   }
+   Candidate &getBestMatch() { return Candidates[MatchIdx]; }
 
    bool isDependent() const
    {
@@ -358,10 +358,10 @@ struct CandidateSet {
    bool IncludesSelfArgument : 1;
    bool InvalidCand          : 1;
    bool Dependent            : 1;
+   unsigned MatchIdx         : 16;
 
    uintptr_t BestConversionPenalty = uintptr_t(-1);
-   std::vector<ConversionSequence> Conversions;
-
+   std::vector<ConversionSequenceBuilder> Conversions;
    std::vector<Candidate> Candidates;
 };
 

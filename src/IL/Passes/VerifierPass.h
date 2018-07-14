@@ -5,19 +5,28 @@
 #ifndef CDOT_VERIFIERPASS_H
 #define CDOT_VERIFIERPASS_H
 
-#include <llvm/Support/raw_ostream.h>
 #include "InstructionVisitor.h"
+#include "Passes.h"
+
+#include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
 namespace il {
 
-class VerifierPass: public InstructionVisitor<VerifierPass, void>  {
+class VerifierPass: public FunctionPass,
+                    public InstructionVisitor<VerifierPass, void>  {
 public:
-   explicit VerifierPass()
+   explicit VerifierPass() : FunctionPass(PassKind::VerifierPassID)
    {}
 
-   void visitModule(Module& M) override;
-   void visitFunction(Function const& F);
+   void run() override;
+   bool isValid() const { return IsValid; }
+
+   void visitGlobals(Module& M);
+
+   friend InstructionVisitor;
+
+private:
    void visitBasicBlock(BasicBlock const& B);
    void visitGlobalVariable(GlobalVariable const &G);
 
@@ -25,9 +34,6 @@ public:
    void visit##Name(Name const& I);
 #  include "IL/Instructions.def"
 
-   bool isValid() const { return IsValid; }
-
-private:
    bool IsValid = true;
 
    void emitErrorMessage(llvm::StringRef msg);

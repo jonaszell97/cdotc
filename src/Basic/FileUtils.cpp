@@ -4,12 +4,24 @@
 
 #include "FileUtils.h"
 
-#include <system_error>
-
+#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
 #include <llvm/Support/Program.h>
+
+#include <cstdio>
+#include <system_error>
+
+#if defined(__APPLE__)
+#  include <pwd.h>
+#  include <unistd.h>
+#endif
+
+#ifdef _WIN32
+#  include <direct.h>
+#endif
 
 using std::string;
 
@@ -110,6 +122,25 @@ void createDirectories(llvm::StringRef fullPath)
    llvm::sys::fs::create_directories(fullPath);
 }
 
+int deleteDirectory(const llvm::Twine& Dir)
+{
+#ifdef _WIN32
+   return _rmdir(Dir.str().c_str());
+#else
+   return rmdir(Dir.str().c_str());
+#endif
+}
+
+int deleteFile(llvm::StringRef FileName)
+{
+   if (FileName.back() != '\0') {
+      return std::remove(FileName.str().data());
+   }
+   else {
+      return std::remove(FileName.data());
+   }
+}
+
 namespace {
 
 template<class iterator>
@@ -124,13 +155,12 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
    while (!ec) {
       auto &entry = *it;
 
-//      auto errOrStatus = entry.status();
-//      if (!errOrStatus)
-//         break;
-//
-//      auto &st = errOrStatus.get();
-      llvm::sys::fs::file_status st;
-      auto err = entry.status(st);
+      auto errOrStatus = entry.status();
+      if (!errOrStatus)
+         break;
+
+      auto &st = errOrStatus.get();
+      auto err = entry.status();
       if (err)
          break;
 
@@ -184,18 +214,11 @@ string findFileInDirectories(llvm::StringRef fileName,
       while (it != end_it) {
          auto &entry = *it;
 
-         // FIXME LLVM 7.0
-//         auto errOrStatus = entry.status();
-//         if (!errOrStatus)
-//            break;
-//
-//         auto &st = errOrStatus.get();
-
-         llvm::sys::fs::file_status st;
-         auto err = entry.status(st);
-         if (err)
+         auto errOrStatus = entry.status();
+         if (!errOrStatus)
             break;
 
+         auto &st = errOrStatus.get();
          switch (st.type()) {
             case Kind::regular_file:
             case Kind::symlink_file:
@@ -257,16 +280,11 @@ void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
    while (it != end_it) {
       auto &entry = *it;
 
-//      auto errOrStatus = entry.status();
-//      if (!errOrStatus)
-//         break;
-//
-//      auto &st = errOrStatus.get();
-      llvm::sys::fs::file_status st;
-      auto err = entry.status(st);
-      if (err)
+      auto errOrStatus = entry.status();
+      if (!errOrStatus)
          break;
 
+      auto &st = errOrStatus.get();
       switch (st.type()) {
          case Kind::regular_file:
          case Kind::symlink_file:
@@ -332,9 +350,113 @@ void getAllMatchingFiles(llvm::StringRef fileName,
    }
 }
 
+void deleteAllFilesInDirectory(const llvm::Twine &Dir)
+{
+   using it = llvm::sys::fs::recursive_directory_iterator;
+
+   llvm::SmallVector<string, 4> FilesToDelete;
+   iterateOverFilesInDirectory<it>(Dir.str(), [&](const string &file) {
+      FilesToDelete.push_back(file);
+   });
+
+   for (auto &File : FilesToDelete)
+      deleteFile(File);
+}
+
 std::error_code makeAbsolute(llvm::SmallVectorImpl<char> &Buf)
 {
    return llvm::sys::fs::make_absolute(Buf);
+}
+
+llvm::StringRef getLibraryDir()
+{
+   // FIXME
+   return "/usr/local/lib";
+}
+
+llvm::StringRef getIncludeDir()
+{
+   // FIXME
+   return "/usr/local/include";
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+std::string getApplicationDir()
+{
+#ifdef _WIN32
+   return getenv("APPDATA");
+#elif defined(__APPLE__)
+   const char *homeDir = getenv("HOME");
+
+   if (!homeDir) {
+      struct passwd* pwd = getpwuid(getuid());
+      if (pwd)
+      homeDir = pwd->pw_dir;
+   }
+
+   std::string str(homeDir);
+   str += "/Library/Application Support/cdotc";
+
+   return str;
+#elif defined(__linux__)
+   return "~/.config/cdotc"
+#else
+#  error "unsupported platform"
+#endif
+}
+
+#pragma clang diagnostic pop
+
+llvm::StringRef getDynamicLibraryExtension()
+{
+#if defined(_WIN32)
+   return "dll";
+#elif defined(__APPLE__)
+   return "dylib";
+#else
+   return "so";
+#endif
+}
+
+void appendToPath(llvm::SmallVectorImpl<char> &Path, llvm::StringRef Append)
+{
+   if (Path.empty() || Path.back() != PathSeperator)
+      Path.push_back(PathSeperator);
+
+   Path.append(Append.begin(), Append.end());
+}
+
+void appendToPath(llvm::SmallVectorImpl<char> &Path, const llvm::Twine &Append)
+{
+   appendToPath(Path, llvm::StringRef(Append.str()));
+}
+
+void appendToPath(std::string &Path, const llvm::Twine &Append)
+{
+   if (Path.empty() || Path.back() != PathSeperator)
+      Path.push_back(PathSeperator);
+
+   std::string append = Append.str();
+   Path.insert(Path.end(), append.begin(), append.end());
+}
+
+std::string getTmpFileName(llvm::StringRef Ext)
+{
+   llvm::SmallString<128> TmpFile;
+   auto EC = llvm::sys::fs::createUniqueFile("cdot-tmp-%%%%%%%%." + Ext,
+                                             TmpFile);
+
+   if (EC) {
+      llvm::report_fatal_error(EC.message());
+   }
+
+   llvm::SmallString<56> TmpDir;
+   llvm::sys::path::system_temp_directory(true, TmpDir);
+
+   TmpFile.insert(TmpFile.begin(), TmpDir.begin(), TmpDir.end());
+   return TmpFile.str();
 }
 
 } // namespace fs

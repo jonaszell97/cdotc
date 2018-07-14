@@ -16,6 +16,7 @@ TargetInfo::TargetInfo(const ast::ASTContext &Ctx, const llvm::Triple &T)
    DefaultIntType = Ctx.getIntegerTy(PointerSizeInBytes * 8, false);
    BigEndian = !T.isLittleEndian();
    HasFP128  = false;
+   DirectStructPassingFieldThreshold = 2;
 }
 
 unsigned TargetInfo::getSizeOfType(QualType Ty) const
@@ -62,12 +63,12 @@ unsigned TargetInfo::getAllocSizeOfType(QualType Ty) const
 {
    Ty = Ty->getCanonicalType();
 
-   auto it = TypeSizesInBytes.find(*Ty);
-   if (it != TypeSizesInBytes.end())
-      return it->getSecond();
+   auto &TI = TypeInfoMap[Ty];
+   if (TI.SizeInBytes.hasValue())
+      return TI.SizeInBytes.getValue();
 
    auto Size = calculateSizeOfType(Ty);
-   TypeSizesInBytes.try_emplace(*Ty, Size);
+   TI.SizeInBytes = Size;
 
    return Size;
 }
@@ -76,12 +77,12 @@ unsigned short TargetInfo::getAllocAlignOfType(QualType Ty) const
 {
    Ty = Ty->getCanonicalType();
 
-   auto it = TypeAlignInBytes.find(*Ty);
-   if (it != TypeAlignInBytes.end())
-      return it->getSecond();
+   auto &TI = TypeInfoMap[Ty];
+   if (TI.AlignInBytes.hasValue())
+      return TI.AlignInBytes.getValue();
 
    auto Align = calculateAlignOfType(Ty);
-   TypeAlignInBytes.try_emplace(*Ty, Align);
+   TI.AlignInBytes = Align;
 
    return Align;
 }
@@ -110,6 +111,7 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
    case Type::ReferenceTypeID:
    case Type::MutablePointerTypeID:
    case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
    case Type::FunctionTypeID:
    case Type::LambdaTypeID:
       return PointerSizeInBytes;
@@ -131,6 +133,8 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
    }
    case Type::MetaTypeID:
       return MetaType::MemberCount * PointerSizeInBytes;
+   case Type::BoxTypeID:
+      return BoxType::MemberCount * PointerSizeInBytes;
    default:
       llvm_unreachable("bad type kind!");
    }
@@ -147,9 +151,11 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
    case Type::LambdaTypeID:
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
+   case Type::BoxTypeID:
       return PointerAlignInBytes;
    case Type::ArrayTypeID:
       return getAlignOfType(Ty->uncheckedAsArrayType()->getElementType());
@@ -174,18 +180,20 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
 
 bool TargetInfo::isTriviallyCopyable(QualType Ty) const
 {
-   auto it = TriviallyCopyable.find(Ty);
-   if (it != TriviallyCopyable.end())
-      return it->getSecond();
+   auto &TI = TypeInfoMap[Ty];
+   if (TI.TriviallyCopyable.hasValue())
+      return TI.TriviallyCopyable.getValue();
 
    bool IsTrivial = calculateIsTriviallyCopyable(Ty);
-   TriviallyCopyable[Ty] = IsTrivial;
+   TI.TriviallyCopyable = IsTrivial;
 
    return IsTrivial;
 }
 
 bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
 {
+   Ty = Ty->getCanonicalType();
+
    switch (Ty->getTypeID()) {
    case Type::BuiltinTypeID:
       return true;
@@ -193,6 +201,7 @@ bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
       return true;
@@ -214,6 +223,58 @@ bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
 
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->isTriviallyCopyable();
+   }
+   default:
+      llvm_unreachable("bad type kind!");
+   }
+}
+
+unsigned TargetInfo::getNestedNumberOfFields(QualType Ty) const
+{
+   auto &TI = TypeInfoMap[Ty];
+   if (TI.NestedFieldCount.hasValue())
+      return TI.NestedFieldCount.getValue();
+
+   unsigned Cnt = calculateNestedNumberOfFields(Ty);
+   TI.NestedFieldCount = Cnt;
+
+   return Cnt;
+}
+
+unsigned TargetInfo::calculateNestedNumberOfFields(QualType Ty) const
+{
+   switch (Ty->getTypeID()) {
+   case Type::BuiltinTypeID:
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
+   case Type::FunctionTypeID:
+   case Type::MetaTypeID:
+   case Type::LambdaTypeID:
+      return 1;
+   case Type::ArrayTypeID: {
+      auto ArrTy = Ty->uncheckedAsArrayType();
+      return ArrTy->getNumElements()
+         * getNestedNumberOfFields(ArrTy->getElementType());
+   }
+   case Type::TupleTypeID: {
+      unsigned Cnt = 0;
+      for (auto &ElTy : Ty->uncheckedAsTupleType()->getContainedTypes()) {
+         Cnt += getNestedNumberOfFields(ElTy);
+      }
+
+      return Cnt;
+   }
+   case Type::RecordTypeID: {
+      unsigned Cnt = 0;
+      Ty->getRecord()->visitStoredTypes([&](QualType Ty) {
+         Cnt += getNestedNumberOfFields(Ty);
+         return true;
+      });
+
+      return Cnt;
    }
    default:
       llvm_unreachable("bad type kind!");

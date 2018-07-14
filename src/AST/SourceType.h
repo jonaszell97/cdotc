@@ -21,6 +21,10 @@ struct SourceType {
       : TypeExpr(nullptr), ResolvedType(ResolvedType)
    {}
 
+   SourceType(Expression *TypeExpr, QualType ResolvedType)
+      : TypeExpr(TypeExpr), ResolvedType(ResolvedType)
+   { }
+
    bool isValid() const
    {
       return TypeExpr != nullptr || !ResolvedType.isNull();
@@ -51,6 +55,7 @@ struct SourceType {
    QualType getResolvedType() const { return ResolvedType; }
 
    void setResolvedType(QualType Ty) const { ResolvedType = Ty; }
+   void setTypeExpr(Expression *E) const { TypeExpr = E; }
 
    bool operator==(QualType Q) const { return ResolvedType == Q; }
    bool operator!=(QualType Q) const { return !(*this == Q); }
@@ -61,7 +66,7 @@ struct SourceType {
    }
 
 private:
-   Expression *TypeExpr;
+   mutable Expression *TypeExpr;
    mutable QualType ResolvedType;
 };
 
@@ -84,7 +89,7 @@ template<> struct simplify_type<::cdot::ast::SourceType> {
 };
 
 template<>
-class PointerLikeTypeTraits<::cdot::ast::SourceType> {
+struct PointerLikeTypeTraits<::cdot::ast::SourceType> {
 public:
    static inline void *getAsVoidPointer(::cdot::ast::SourceType P)
    {

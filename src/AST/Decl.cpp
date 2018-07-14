@@ -9,134 +9,15 @@
 #include "AST/Statement.h"
 #include "Sema/Builtin.h"
 #include "Sema/SemaPass.h"
+#include "Serialization/ModuleFile.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
-
-Decl::Decl(DeclKind kind, unsigned flags)
-   : kind(kind), flags(flags)
-{}
-
-Decl::~Decl()
-{
-
-}
-
-void Decl::dumpFlags() const
-{
-   printFlags(llvm::errs());
-}
-
-void Decl::printFlags(llvm::raw_ostream &OS) const
-{
-   OS << "TypeDependent = " << (isTypeDependent() ? "true" : "false") << "\n";
-   OS << "ValueDependent = " << (isValueDependent() ? "true" : "false") << "\n";
-   OS << "IsInvalid = " << (isInvalid() ? "true" : "false") << "\n";
-   OS << "SemaChecked = "<<(isSemanticallyChecked() ? "true" : "false") << "\n";
-   OS << "Static = " << (isStatic() ? "true" : "false") << "\n";
-   OS << "Const = " << (isConst() ? "true" : "false") << "\n";
-   OS << "HasDefinition = " << (hasDefinition() ? "true" : "false") << "\n";
-   OS << "External = " << (isExternal() ? "true" : "false") << "\n";
-   OS << "WasDeclared = " << (wasDeclared() ? "true" : "false") << "\n";
-   OS << "Synthesized = " << (isSynthesized() ? "true" : "false") << "\n";
-   OS << "CheckedAttrs = " << (checkedAttrs() ? "true" : "false") << "\n";
-}
-
-DeclContext* Decl::getNonTransparentDeclContext() const
-{
-   for (auto *Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx())
-      if (!Ctx->isTransparent())
-         return Ctx;
-
-   llvm_unreachable("no non-transparent decl context?");
-}
-
-DeclContext* Decl::getDeclContext() const
-{
-   if (auto Ctx = ContextUnion.dyn_cast<DeclContext*>())
-      return Ctx;
-
-   return ContextUnion.get<MultipleDeclContext*>()->LogicalDC;
-}
-
-DeclContext* Decl::getLexicalContext() const
-{
-   if (auto Ctx = ContextUnion.dyn_cast<DeclContext*>())
-      return Ctx;
-
-   return ContextUnion.get<MultipleDeclContext*>()->LexicalDC;
-}
-
-void Decl::setLexicalContext(DeclContext *Ctx)
-{
-   if (ContextUnion.is<MultipleDeclContext*>()) {
-      ContextUnion.get<MultipleDeclContext*>()->LexicalDC = Ctx;
-   }
-   else {
-      ContextUnion = Ctx;
-   }
-
-   if (auto DC = dyn_cast<DeclContext>(this))
-      DC->setParentCtxUnchecked(Ctx);
-
-   assert((!isa<GlobalDeclContext>(Ctx) || isa<TranslationUnit>(this)));
-}
-
-void Decl::setLogicalContext(DeclContext *Ctx)
-{
-   if (ContextUnion.is<MultipleDeclContext*>()) {
-      ContextUnion.get<MultipleDeclContext*>()->LogicalDC = Ctx;
-   }
-   else {
-      auto Multiple = new (getASTCtx()) MultipleDeclContext;
-      Multiple->LogicalDC = Ctx;
-      Multiple->LexicalDC = getLexicalContext();
-
-      ContextUnion = Multiple;
-   }
-}
-
-void Decl::setLexicalContextUnchecked(DeclContext *Ctx)
-{
-   if (ContextUnion.is<MultipleDeclContext*>()) {
-      ContextUnion.get<MultipleDeclContext*>()->LexicalDC = Ctx;
-   }
-   else {
-      ContextUnion = Ctx;
-   }
-}
-
-SourceRange Decl::getSourceRange() const
-{
-   switch (kind) {
-#  define CDOT_DECL(SubClass)                                                 \
-   case SubClass##ID:                                                         \
-      static_assert(&Decl::getSourceRange != &SubClass::getSourceRange,       \
-                    "getSourceRange not implemented by " #SubClass);          \
-      return support::cast<SubClass>(this)->getSourceRange();
-#  include "AST/Decl.def"
-
-   default:
-      llvm_unreachable("not a decl");
-   }
-}
-
-NamedDecl::NamedDecl(DeclKind typeID,
-                     AccessSpecifier access,
-                     DeclarationName DN)
-   : Decl(typeID), access(access), Name(DN)
-{}
-
-llvm::ArrayRef<StaticExpr*> NamedDecl::getConstraints() const
-{
-   return getASTCtx().getConstraints(this);
-}
-
 
 UsingDecl::UsingDecl(SourceRange Loc,
                      AccessSpecifier Access,
@@ -165,44 +46,103 @@ UsingDecl* UsingDecl::Create(ASTContext &C,
                              wildCardImport);
 }
 
+UsingDecl::UsingDecl(EmptyShell, unsigned N)
+   : NamedDecl(UsingDeclID, AccessSpecifier::Default, DeclarationName()),
+     NumSpecifierNames(N), IsWildCard(false)
+{}
+
+UsingDecl *UsingDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(N),
+                           alignof(UsingDecl));
+    return new(Mem) UsingDecl(EmptyShell(), N);
+}
+
 ImportDecl::ImportDecl(SourceRange Loc,
                        AccessSpecifier Access,
-                       llvm::ArrayRef<IdentifierInfo *> moduleName)
-   : NamedDecl(ImportDeclID, Access, moduleName.back()),
-     Loc(Loc), NumNameQuals((unsigned)moduleName.size())
+                       llvm::ArrayRef<IdentifierInfo*> moduleName,
+                       llvm::ArrayRef<IdentifierInfo*> namedImports,
+                       bool IsWildcardImport)
+   : NamedDecl(ImportDeclID, Access,
+               !IsWildcardImport && namedImports.empty() ? moduleName.back()
+                                                         : DeclarationName()),
+     DeclContext(ImportDeclID),
+     Loc(Loc), WildcardImport(IsWildcardImport),
+     NumNameQuals((unsigned) moduleName.size()),
+     NumNamedImports((unsigned)namedImports.size())
 {
    std::copy(moduleName.begin(), moduleName.end(),
              getTrailingObjects<IdentifierInfo*>());
+
+   std::copy(namedImports.begin(), namedImports.end(),
+             getTrailingObjects<IdentifierInfo*>() + NumNameQuals);
 }
 
 ImportDecl* ImportDecl::Create(ASTContext &C, SourceRange Loc,
                                AccessSpecifier Access,
-                               llvm::ArrayRef<IdentifierInfo *> moduleName) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(moduleName.size()),
-                          alignof(ImportDecl));
+                               llvm::ArrayRef<IdentifierInfo*> moduleName,
+                               llvm::ArrayRef<IdentifierInfo*> namedImports,
+                               bool IsWildcardImport) {
+   void *Mem = C.Allocate(
+      totalSizeToAlloc<IdentifierInfo*>(moduleName.size()+namedImports.size()),
+      alignof(ImportDecl));
 
-   return new(Mem) ImportDecl(Loc, Access, moduleName);
+   return new(Mem) ImportDecl(Loc, Access, moduleName, namedImports,
+                              IsWildcardImport);
+}
+
+ImportDecl::ImportDecl(EmptyShell, unsigned N)
+   : NamedDecl(ImportDeclID, AccessSpecifier::Default, DeclarationName()),
+     DeclContext(ImportDeclID),
+     WildcardImport(false), NumNameQuals(N),
+     NumNamedImports(0)
+{}
+
+ImportDecl *ImportDecl::CreateEmpty(ASTContext &C, unsigned N) {
+    void *Mem = C.Allocate(
+       totalSizeToAlloc<IdentifierInfo*>(N),
+       alignof(ImportDecl));
+
+    return new(Mem) ImportDecl(EmptyShell(), N);
 }
 
 ModuleDecl::ModuleDecl(SourceRange Loc,
-                       AccessSpecifier Access,
-                       llvm::ArrayRef<IdentifierInfo *> moduleName)
-   : NamedDecl(ModuleDeclID, Access, moduleName.back()),
-     Loc(Loc), NumNameQuals((unsigned)moduleName.size())
+                       DeclarationName moduleName)
+   : NamedDecl(ModuleDeclID, AccessSpecifier::Public, moduleName),
+     DeclContext(ModuleDeclID),
+     Loc(Loc)
 {
-   std::copy(moduleName.begin(), moduleName.end(),
-             getTrailingObjects<IdentifierInfo*>());
+
 }
 
 ModuleDecl* ModuleDecl::Create(ASTContext &C, SourceRange Loc,
-                               AccessSpecifier Access,
-                               llvm::ArrayRef<IdentifierInfo *> moduleName) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(moduleName.size()),
-                          alignof(ModuleDecl));
-
-   return new(Mem) ModuleDecl(Loc, Access, moduleName);
+                               DeclarationName moduleName) {
+   return new(C) ModuleDecl(Loc, moduleName);
 }
 
+ModuleDecl::ModuleDecl(EmptyShell)
+   : NamedDecl(ModuleDeclID, AccessSpecifier::Default, DeclarationName()),
+     DeclContext(ModuleDeclID)
+{}
+
+ModuleDecl* ModuleDecl::CreateEmpty(ASTContext &C)
+{
+   return new(C) ModuleDecl(EmptyShell());
+}
+
+ModuleDecl *ModuleDecl::getPrimaryModule() const
+{
+   return cast<ModuleDecl>(primaryCtx);
+}
+
+ModuleDecl* ModuleDecl::getBaseModule() const
+{
+   auto Mod = const_cast<ModuleDecl*>(this);
+   while (auto Base = Mod->getParentModule())
+      Mod = Base;
+
+   return Mod->getPrimaryModule();
+}
 
 TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
                                      SourceType covariance,
@@ -259,6 +199,17 @@ TemplateParamDecl* TemplateParamDecl::Create(ASTContext &C,
                                    TypeNameOrValueLoc, NameLoc, EllipsisLoc);
 }
 
+TemplateParamDecl::TemplateParamDecl(EmptyShell)
+   : NamedDecl(TemplateParamDeclID, AccessSpecifier::Default, DeclarationName()),
+     covariance(nullptr), contravariance(nullptr),
+     typeName(false), defaultValue(nullptr), Index(0)
+{}
+
+TemplateParamDecl *TemplateParamDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) TemplateParamDecl(EmptyShell());
+}
+
 SourceRange TemplateParamDecl::getSourceRange() const
 {
    SourceLocation Begin;
@@ -295,7 +246,8 @@ VarDecl::VarDecl(DeclKind id,
    : NamedDecl(id, access, Name),
      VarOrLetLoc(VarOrLetLoc), ColonLoc(ColonLoc),
      type(type), value(value),
-     CanElideCopy(false), Variadic(false), Captured(false)
+     CanElideCopy(false), Variadic(false), Captured(false),
+     IsMovedFrom(false)
 {
    setDeclFlag(DeclFlags::DF_Const, isConst);
 }
@@ -325,7 +277,7 @@ LocalVarDecl::LocalVarDecl(AccessSpecifier access,
                            Expression* value)
    : VarDecl(LocalVarDeclID, access, VarOrLetLoc, ColonLoc,
              isConst, Name, type, value),
-     IsNRVOCand(false)
+     IsNRVOCand(false), InitIsMove(false)
 {}
 
 LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
@@ -338,6 +290,17 @@ LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
                                    Expression *value) {
    return new(C) LocalVarDecl(access, VarOrLetLoc, ColonLoc,
                               isConst, Name, type, value);
+}
+
+LocalVarDecl::LocalVarDecl(EmptyShell)
+   : VarDecl(LocalVarDeclID, AccessSpecifier::Default, {}, {}, false, 
+             DeclarationName(), SourceType(), nullptr),
+     IsNRVOCand(false), InitIsMove(false)
+{}
+
+LocalVarDecl *LocalVarDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) LocalVarDecl(EmptyShell());
 }
 
 GlobalVarDecl::GlobalVarDecl(AccessSpecifier access,
@@ -363,656 +326,110 @@ GlobalVarDecl* GlobalVarDecl::Create(ASTContext &C,
                                isConst, Name, type, value);
 }
 
-FuncArgDecl::FuncArgDecl(SourceLocation VarOrLetLoc,
+GlobalVarDecl::GlobalVarDecl(EmptyShell)
+   : VarDecl(GlobalVarDeclID, AccessSpecifier::Default, {}, {}, false,
+             DeclarationName(), SourceType(), nullptr)
+{}
+
+GlobalVarDecl *GlobalVarDecl::CreateEmpty(ASTContext &C)
+{
+   return new(C) GlobalVarDecl(EmptyShell());
+}
+
+DestructuringDecl::DestructuringDecl(SourceRange Parens,
+                                     ArrayRef<VarDecl *> Decls,
+                                     SourceType Type,
+                                     Expression *value)
+   : Decl(DestructuringDeclID),
+     Kind(Unknown), Parens(Parens), Type(Type), Val(value),
+     NumDecls((unsigned)Decls.size())
+{
+   std::copy(Decls.begin(), Decls.end(), getTrailingObjects<VarDecl*>());
+}
+
+DestructuringDecl::DestructuringDecl(EmptyShell, unsigned N)
+   : Decl(DestructuringDeclID),
+     Kind(Unknown), Parens(), Type(), Val(nullptr),
+     NumDecls(N)
+{
+
+}
+
+DestructuringDecl* DestructuringDecl::Create(ASTContext &C,
+                                             SourceRange Parens,
+                                             ArrayRef<VarDecl *> Decls,
+                                             SourceType Type,
+                                             Expression *value) {
+   void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(Decls.size()),
+                          alignof(DestructuringDecl));
+
+   return new(Mem) DestructuringDecl(Parens, Decls, Type, value);
+}
+
+DestructuringDecl* DestructuringDecl::CreateEmpty(ASTContext &C,
+                                                  unsigned N) {
+   void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(N),
+                          alignof(DestructuringDecl));
+
+   return new(Mem) DestructuringDecl(EmptyShell(), N);
+}
+
+FuncArgDecl::FuncArgDecl(SourceLocation OwnershipLoc,
                          SourceLocation ColonLoc,
                          DeclarationName Name,
+                         ArgumentConvention Conv,
                          SourceType argType,
                          Expression* defaultValue,
                          bool variadicArgPackExpansion,
-                         bool isConst,
-                         bool cstyleVararg)
-   : VarDecl(FuncArgDeclID, AccessSpecifier::Public, VarOrLetLoc, ColonLoc,
-             isConst, Name, argType, defaultValue),
+                         bool cstyleVararg,
+                         bool isSelf)
+   : VarDecl(FuncArgDeclID, AccessSpecifier::Public, OwnershipLoc, ColonLoc,
+             Conv != ArgumentConvention::MutablyBorrowed,
+             Name, argType, defaultValue),
      VariadicArgPackExpansion(variadicArgPackExpansion),
-     IsConst(isConst), Vararg(cstyleVararg), CstyleVararg(cstyleVararg),
-     Conv(Copied)
+     Vararg(cstyleVararg), CstyleVararg(cstyleVararg), IsSelf(isSelf),
+     Conv(Conv)
 {}
 
 FuncArgDecl* FuncArgDecl::Create(ASTContext &C,
-                                 SourceLocation VarOrLetLoc,
+                                 SourceLocation OwnershipLoc,
                                  SourceLocation ColonLoc,
                                  DeclarationName Name,
+                                 ArgumentConvention Conv,
                                  SourceType argType,
                                  Expression *defaultValue,
                                  bool variadicArgPackExpansion,
-                                 bool isConst, bool cstyleVararg) {
-   return new(C) FuncArgDecl(VarOrLetLoc, ColonLoc, Name, argType, defaultValue,
-                             variadicArgPackExpansion, isConst, cstyleVararg);
+                                 bool cstyleVararg,
+                                 bool isSelf) {
+   return new(C) FuncArgDecl(OwnershipLoc, ColonLoc, Name, Conv,
+                             argType, defaultValue, variadicArgPackExpansion,
+                             cstyleVararg, isSelf);
 }
 
-void DeclContext::addDecl(Decl *decl)
+FuncArgDecl::FuncArgDecl(EmptyShell)
+   : VarDecl(FuncArgDeclID, AccessSpecifier::Default, {}, {}, false,
+             DeclarationName(), SourceType(), nullptr)
+{}
+
+FuncArgDecl *FuncArgDecl::CreateEmpty(ASTContext &C)
 {
-   decl->setLexicalContext(this);
-   if (auto Ctx = support::dyn_cast<DeclContext>(decl))
-      Ctx->setParentCtx(this);
-
-   if (!firstDecl)
-      firstDecl = decl;
-
-   if (lastAddedDecl) {
-      assert(!lastAddedDecl->getNextDeclInContext());
-      lastAddedDecl->setNextDeclInContext(decl);
-   }
-
-   lastAddedDecl = decl;
+    return new(C) FuncArgDecl(EmptyShell());
 }
 
-DeclContext::AddDeclResultKind DeclContext::addDecl(NamedDecl *decl)
+SourceRange FuncArgDecl::getSourceRange() const
 {
-   return addDecl(decl->getDeclName(), decl);
+   return ColonLoc;
 }
 
-DeclContext::AddDeclResultKind DeclContext::addDecl(DeclarationName Name,
-                                                    NamedDecl *decl) {
-   AddDeclResultKind Result = ADR_Success;
-   if (Name) {
-      Result = makeDeclAvailable(Name, decl);
-   }
-
-   addDecl((Decl*)decl);
-   return Result;
-}
-
-LookupResult DeclContext::lookup(DeclarationName name) const
-{
-   auto res = lookupOwn(name);
-   if (res)
-      return res;
-
-   if (auto P = parentCtx) {
-      res = P->lookup(name);
-      if (res)
-         return res;
-   }
-
-   return {};
-}
-
-NamedDecl *DeclContext::lookupSingle(DeclarationName name) const
-{
-   auto res = lookup(name);
-   if (res.size() != 1)
-      return nullptr;
-
-   return res.front();
-}
-
-DeclContext::AddDeclResultKind DeclContext::makeDeclAvailable(NamedDecl *decl)
-{
-   return makeDeclAvailable(decl->getDeclName(), decl);
-}
-
-DeclContext::AddDeclResultKind
-DeclContext::makeDeclAvailable(DeclarationName Name,
-                               NamedDecl *decl) {
-   auto it = namedDecls.find(Name);
-   if (it == namedDecls.end()) {
-      namedDecls.try_emplace(Name, decl);
-   }
-   else {
-      auto lookup = it->getSecond().getAsLookupResult();
-      assert(!lookup.empty());
-
-      if (lookup.front()->getKind() != decl->getKind())
-         return ADR_DuplicateDifferentKind;
-
-      if (!lookup.front()->isOverloadable())
-         return ADR_Duplicate;
-
-      it->getSecond().appendDecl(decl);
-   }
-
-   if (isTransparent()) {
-      return parentCtx->makeDeclAvailable(Name, decl);
-   }
-
-   return ADR_Success;
-}
-
-bool DeclContext::isTransparent() const
-{
-   switch (declKind) {
-   case Decl::NamespaceDeclID:
-      return cast<NamespaceDecl>(this)->isAnonymousNamespace();
-   case Decl::CompoundDeclID:
-      return cast<CompoundDecl>(this)->isTransparent();
-   default:
-      return false;
-   }
-}
-
-bool DeclContext::isAnonymousNamespace() const
-{
-   auto NS = dyn_cast<NamespaceDecl>(this);
-   return NS && NS->isAnonymousNamespace();
-}
-
-ASTContext& Decl::getASTCtx() const
-{
-   DeclContext const* ctx;
-   if (isa<DeclContext>(this)) {
-      ctx = cast<DeclContext>(this);
-   }
-   else {
-      ctx = getDeclContext();
-   }
-
-   while (!isa<TranslationUnit>(ctx)) {
-      ctx = ctx->getParentCtx();
-      assert(ctx && "decl without a translation unit!");
-   }
-
-   return cast<TranslationUnit>(ctx)->getASTCtx();
-}
-
-llvm::ArrayRef<Attr*> Decl::getAttributes() const
-{
-   return getASTCtx().getAttributes(this);
-}
-
-void Decl::setAttributes(llvm::ArrayRef<Attr*> attrs) const
-{
-   return getASTCtx().setAttributes(this, attrs);
-}
-
-void Decl::addAttributes(llvm::ArrayRef<Attr *> attrs) const
-{
-   getASTCtx().addAttributes(this, attrs);
-}
-
-void Decl::addAttribute(Attr *A) const
-{
-   getASTCtx().addAttribute(this, A);
-}
-
-void Decl::copyStatusFlags(Statement *D)
-{
-   flags |= (D->getSubclassData() & StatusFlags);
-   if ((D->getSubclassData() & Statement::SemanticallyChecked) == 0)
-      flags &= ~DF_SemanticallyChecked;
-}
-
-void Decl::copyStatusFlags(Decl *D)
-{
-   flags |= (D->flags & StatusFlags);
-
-   if ((D->flags & DF_SemanticallyChecked) == 0)
-      flags &= ~DF_SemanticallyChecked;
-
-   if ((D->flags & DF_WasDeclared) == 0)
-      flags &= ~DF_WasDeclared;
-}
-
-bool Decl::isInStdNamespace() const
-{
-   auto NS = dyn_cast<NamespaceDecl>(getNonTransparentDeclContext());
-
-   return NS && isa<TranslationUnit>(NS->getParentCtx())
-      && !NS->isAnonymousNamespace()
-      && NS->getDeclName().isStr("std");
-}
-
-bool Decl::isInCompilerNamespace() const
-{
-   auto NS = dyn_cast<NamespaceDecl>(getNonTransparentDeclContext());
-
-   return NS && isa<TranslationUnit>(NS->getParentCtx())
-          && !NS->isAnonymousNamespace()
-          && NS->getDeclName().isStr("Compiler");
-}
-
-bool Decl::isInExtension() const
-{
-   auto Ctx = getNonTransparentDeclContext();
-   return isa<ExtensionDecl>(Ctx);
-}
-
-DeclContext* Decl::castToDeclContext(const Decl *D)
-{
-   switch (D->getKind()) {
-#  define CDOT_DECL_CONTEXT(Name)                               \
-      case Name##ID:                                            \
-         return static_cast<Name*>(const_cast<Decl*>(D));
-#  include "AST/Decl.def"
-
-   default:
-      llvm_unreachable("not a decl context");
-   }
-}
-
-Decl* Decl::castFromDeclContext(const DeclContext *Ctx)
-{
-   switch (Ctx->getDeclKind()) {
-#  define CDOT_DECL_CONTEXT(Name)                                   \
-      case Name##ID:                                                \
-         return static_cast<Name*>(const_cast<DeclContext*>(Ctx));
-#  include "AST/Decl.def"
-
-   default:
-      llvm_unreachable("not a decl");
-   }
-}
-
-RecordDecl* Decl::getRecord() const
-{
-   auto Ctx = getNonTransparentDeclContext();
-   if (auto R = dyn_cast<RecordDecl>(Ctx))
-      return R;
-
-   return nullptr;
-}
-
-bool NamedDecl::isExported() const
-{
-   if (access == AccessSpecifier::Private)
-      return false;
-
-   if (auto NS = support::dyn_cast<NamespaceDecl>(getDeclContext()))
-      return !NS->isAnonymousNamespace();
-
-   return true;
-}
-
-TranslationUnit* Decl::getTranslationUnit() const
-{
-   for (auto ctx = getDeclContext(); ctx; ctx = ctx->getParentCtx())
-      if (auto TU = dyn_cast<TranslationUnit>(ctx))
-         return TU;
-
-   llvm_unreachable("Decl without a translation unit!");
-}
-
-bool Decl::inAnonymousNamespace() const
-{
-   for (auto ctx = getDeclContext(); ctx; ctx = ctx->getParentCtx())
-      if (ctx->isAnonymousNamespace())
-         return true;
-
-   return false;
-}
-
-bool Decl::inStdNamespace() const
-{
-   for (auto ctx = getDeclContext(); ctx; ctx = ctx->getParentCtx())
-      if (auto NS = dyn_cast<NamespaceDecl>(ctx))
-         if (NS->getName() == "std" && isa<TranslationUnit>(NS->getParentCtx()))
-            return true;
-
-   return false;
-}
-
-bool Decl::isGlobalDecl() const
-{
-   return isa<TranslationUnit>(getDeclContext());
-}
-
-void NamedDecl::setAccessLoc(cdot::SourceLocation Loc)
-{
-   AccessLoc = Loc;
-}
-
-SourceRange NamedDecl::getAccessRange() const
-{
-   unsigned length = 0;
-   switch (access) {
-   case AccessSpecifier::Default:
-      break;
-   case AccessSpecifier::Public:
-      length += 5;
-      break;
-   case AccessSpecifier::Private:
-      length += 6;
-      break;
-   case AccessSpecifier::Internal:
-      length += 7;
-      break;
-   case AccessSpecifier::Protected:
-      length += 8;
-      break;
-   case AccessSpecifier::FilePrivate:
-      length += 10;
-      break;
-   }
-
-   return SourceRange(AccessLoc,
-                      SourceLocation(AccessLoc.getOffset() + length));
-}
-
-bool NamedDecl::isOverloadable() const
-{
-   switch (kind) {
-      case AliasDeclID:
-      case FunctionDeclID:
-      case MethodDeclID:
-      case InitDeclID:
-      case ExtensionDeclID:
-         return true;
-      default:
-         return false;
-   }
-}
-
-bool NamedDecl::isTemplate() const
-{
-   return !getTemplateParams().empty();
-}
-
-bool NamedDecl::inDependentContext() const
-{
-   if (isTemplate())
-      return true;
-
-   for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
-         if (ND->isTemplate() || isa<ExtensionDecl>(ND))
-            return true;
-      }
-   }
-
-   return false;
-}
-
-bool NamedDecl::isTemplateOrInTemplate() const
-{
-   if (isTemplate())
-      return true;
-
-   for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
-         if (ND->isTemplate())
-            return true;
-
-         if (auto Ext = dyn_cast<ExtensionDecl>(ND))
-            if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
-               return true;
-      }
-   }
-
-   return false;
-}
-
-llvm::ArrayRef<TemplateParamDecl*> NamedDecl::getTemplateParams() const
-{
-   switch (kind) {
-   case AliasDeclID:
-      return cast<AliasDecl>(this)->getTemplateParams();
-   case TypedefDeclID:
-      return cast<TypedefDecl>(this)->getTemplateParams();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-      return cast<RecordDecl>(this)->getTemplateParams();
-   case FunctionDeclID:
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-   case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getTemplateParams();
-   default:
-      return {};
-   }
-}
-
-sema::FinalTemplateArgumentList& NamedDecl::getTemplateArgs() const
-{
-   switch (kind) {
-   case AliasDeclID:
-      return cast<AliasDecl>(this)->getTemplateArgs();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-      return cast<RecordDecl>(this)->getTemplateArgs();
-   case FunctionDeclID:
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-   case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getTemplateArgs();
-   default:
-      llvm_unreachable("not a template instantiation!");
-   }
-}
-
-NamedDecl* NamedDecl::getSpecializedTemplate() const
-{
-   switch (kind) {
-   case AliasDeclID:
-      return cast<AliasDecl>(this)->getSpecializedTemplate();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-      return cast<RecordDecl>(this)->getSpecializedTemplate();
-   case FunctionDeclID:
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-   case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getSpecializedTemplate();
-   default:
-      return {};
-   }
-}
-
-SourceLocation NamedDecl::getInstantiatedFrom() const
-{
-   switch (kind) {
-   case AliasDeclID:
-      return cast<AliasDecl>(this)->getInstantiatedFrom();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-      return cast<RecordDecl>(this)->getInstantiatedFrom();
-   case FunctionDeclID:
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-   case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getInstantiatedFrom();
-   default:
-      return {};
-   }
-}
-
-NamedDecl* NamedDecl::getInstantiatedWithin() const
-{
-   switch (kind) {
-   case AliasDeclID:
-      return cast<AliasDecl>(this)->getInstantiatedWithin();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-      return cast<RecordDecl>(this)->getInstantiatedWithin();
-   case FunctionDeclID:
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-   case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getInstantiatedWithin();
-   default:
-      return {};
-   }
-}
-
-void DeclContext::setParentCtx(DeclContext *parent)
-{
-   assert(parent != this && "context is parent of itself?");
-   parentCtx = parent;
-
-   if (auto ND = dyn_cast<Decl>(this))
-      ND->setLexicalContextUnchecked(parent);
-
-   assert((!isa<GlobalDeclContext>(parent) || isa<TranslationUnit>(this)));
-}
-
-void DeclContext::setParentCtxUnchecked(cdot::ast::DeclContext *parent)
-{
-   assert(parent != this && "context is parent of itself?");
-   parentCtx = parent;
-}
-
-void DeclContext::replaceDecl(Decl *Orig, Decl *Rep)
-{
-   if (Orig == Rep)
-      return;
-
-   if (Orig == firstDecl) {
-      Rep->setNextDeclInContext(Orig->getNextDeclInContext());
-      firstDecl = Rep;
-
-      return;
-   }
-
-   bool found = false;
-   for (auto &D : getDecls()) {
-      if (D->getNextDeclInContext() == Orig) {
-         Rep->setNextDeclInContext(D->getNextDeclInContext()
-                                    ->getNextDeclInContext());
-         D->setNextDeclInContext(Rep);
-
-         found = true;
-         break;
-      }
-   }
-
-   assert(found && "original decl not found");
-
-   if (lastAddedDecl == Orig)
-      lastAddedDecl = Rep;
-}
-
-TranslationUnit* DeclContext::getTranslationUnit() const
-{
-   auto current = const_cast<DeclContext*>(this);
-   while (!isa<TranslationUnit>(current)) {
-      current = current->getParentCtx();
-      assert(current && "no translation unit!");
-   }
-
-   return cast<TranslationUnit>(current);
-}
-
-NamespaceDecl* DeclContext::getClosestNamespace() const
-{
-   auto current = const_cast<DeclContext*>(this);
-   while (current && !isa<NamespaceDecl>(current)) {
-      current = current->getParentCtx();
-   }
-
-   if (!current)
-      return nullptr;
-
-   return cast<NamespaceDecl>(current);
-}
-
-bool DeclContext::isGlobalDeclContext() const
-{
-   for (auto ctx = this; ctx; ctx = ctx->getParentCtx()) {
-      switch (ctx->getDeclKind()) {
-         case Decl::NamespaceDeclID:
-         case Decl::TranslationUnitID:
-         case Decl::CompoundDeclID:
-         case Decl::NotDecl:
-            break;
-         default:
-            return false;
-      }
-   }
-
-   return true;
-}
-
-std::string NamedDecl::getJoinedName(char join, bool includeFile) const
-{
-   std::string joinedName;
-   llvm::raw_string_ostream OS(joinedName);
-
-   auto *Ctx = getNonTransparentDeclContext();
-   if (isa<NamedDecl>(Ctx)) {
-      if (!isa<TranslationUnit>(Ctx) || includeFile) {
-         OS << cast<NamedDecl>(Ctx)->getJoinedName(join, includeFile);
-         OS << join;
-      }
-   }
-
-   OS << Name;
-   return OS.str();
-}
-
-size_t NamedDecl::getSpecifierForDiagnostic()
-{
-   switch (kind) {
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-   case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getSpecifierForDiagnostic();
-   case FunctionDeclID:
-      return 5;
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-      return 6;
-   case AliasDeclID:
-      return 7;
-   case NamespaceDeclID:
-      return 8;
-   case FieldDeclID:
-      return 9;
-   case PropDeclID:
-      return 10;
-   case TypedefDeclID:
-      return 11;
-   default:
-      llvm_unreachable("missing diagnostic specifier!");
-   }
-}
-
-TranslationUnit::TranslationUnit(ASTContext &ASTCtx,
-                                 IdentifierInfo *fileName,
-                                 size_t sourceId,
-                                 llvm::ArrayRef<ImportDecl*> imports)
-   : NamedDecl(TranslationUnitID, (AccessSpecifier)0, fileName),
-     DeclContext(TranslationUnitID),
-     ASTCtx(ASTCtx), sourceId(sourceId),
-     numImports(unsigned(imports.size()))
-{
-   std::copy(imports.begin(), imports.end(), import_begin());
-}
-
-TranslationUnit* TranslationUnit::Create(ASTContext &ASTCtx,
-                                         IdentifierInfo *fileName,
-                                         size_t sourceId,
-                                         llvm::ArrayRef<ImportDecl*> imports) {
-   void *Mem = ASTCtx.Allocate(totalSizeToAlloc<ImportDecl*>(imports.size()),
-                               alignof(TranslationUnit));
-
-   return new(Mem) TranslationUnit(ASTCtx, fileName, sourceId, imports);
-}
-
-GlobalDeclContext::GlobalDeclContext()
-   : DeclContext(Decl::NotDecl)
+GlobalDeclContext::GlobalDeclContext(CompilationUnit &CI)
+   : DeclContext(Decl::NotDecl),
+     CI(CI)
 {
 }
 
-GlobalDeclContext* GlobalDeclContext::Create(ASTContext &C)
-{
-   return new(C) GlobalDeclContext;
+GlobalDeclContext* GlobalDeclContext::Create(ASTContext &C,
+                                             CompilationUnit &CI) {
+   return new(C) GlobalDeclContext(CI);
 }
 
 NamespaceDecl::NamespaceDecl(SourceLocation NamespaceLoc,
@@ -1032,6 +449,16 @@ NamespaceDecl* NamespaceDecl::Create(ASTContext &C,
    return new(C) NamespaceDecl(NamespaceLoc, LBrace, Name);
 }
 
+NamespaceDecl::NamespaceDecl(EmptyShell)
+   : NamedDecl(NamespaceDeclID, AccessSpecifier::Default, DeclarationName()),
+     DeclContext(NamespaceDeclID)
+{}
+
+NamespaceDecl *NamespaceDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) NamespaceDecl(EmptyShell());
+}
+
 CompoundDecl::CompoundDecl(SourceLocation LBraceLoc,
                            bool Transparent)
    : Decl(CompoundDeclID), DeclContext(CompoundDeclID),
@@ -1044,6 +471,16 @@ CompoundDecl* CompoundDecl::Create(ASTContext &C,
    return new(C) CompoundDecl(LBraceLoc, Transparent);
 }
 
+CompoundDecl::CompoundDecl(EmptyShell)
+   : Decl(CompoundDeclID), DeclContext(CompoundDeclID),
+   Transparent(false)
+{}
+
+CompoundDecl *CompoundDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) CompoundDecl(EmptyShell());
+}
+
 CallableDecl::CallableDecl(DeclKind typeID,
                            AccessSpecifier am,
                            SourceLocation DefLoc,
@@ -1051,21 +488,16 @@ CallableDecl::CallableDecl(DeclKind typeID,
                            SourceType returnType,
                            llvm::ArrayRef<FuncArgDecl*> args,
                            Statement* body,
-                           std::vector<TemplateParamDecl*> &&templateParams)
+                           ASTVector<TemplateParamDecl*> &&templateParams)
    : NamedDecl(typeID, am, Name),
      DeclContext(typeID),
      DefLoc(DefLoc), returnType(returnType), NumArgs((unsigned)args.size()),
      body(body), templateParams(move(templateParams)),
      Flags(0)
 {
-   for (auto &arg : args) {
-      arg->setLexicalContext(this);
-      (void)makeDeclAvailable(arg);
-   }
-
    std::copy(args.begin(), args.end(), arg_begin());
 
-   switch (Name.getDeclarationKind()) {
+   switch (Name.getKind()) {
    case DeclarationName::InfixOperatorName:
    case DeclarationName::PrefixOperatorName:
    case DeclarationName::PostfixOperatorName:
@@ -1074,6 +506,18 @@ CallableDecl::CallableDecl(DeclKind typeID,
    default:
       break;
    }
+}
+
+CallableDecl::CallableDecl(EmptyShell E,
+                           DeclKind typeID,
+                           unsigned N)
+   : NamedDecl(typeID, AccessSpecifier::Default, {}),
+     DeclContext(typeID),
+     DefLoc(), returnType(), NumArgs(N),
+     body(nullptr), templateParams(),
+     Flags(0)
+{
+
 }
 
 CallableDecl::arg_iterator CallableDecl::arg_begin()
@@ -1145,8 +589,12 @@ void CallableDecl::createFunctionType(SemaPass &SP, unsigned flags, bool lambda)
    }
 
    llvm::SmallVector<QualType, 4> args;
-   for (auto &arg : getArgs())
+   llvm::SmallVector<FunctionType::ParamInfo, 4> paramInfo;
+
+   for (auto &arg : getArgs()) {
       args.push_back(arg->getType());
+      paramInfo.emplace_back(arg->getConvention());
+   }
 
    if (isVararg())
       flags |= FunctionType::Vararg;
@@ -1154,8 +602,14 @@ void CallableDecl::createFunctionType(SemaPass &SP, unsigned flags, bool lambda)
    if (isCstyleVararg())
       flags |= FunctionType::CStyleVararg;
 
-   functionType = SP.getContext().getFunctionType(retTy, args, flags,
-                                                  lambda);
+   if (throws())
+      flags |= FunctionType::Throws;
+
+   if (isAsync())
+      flags |= FunctionType::Async;
+
+   functionType = SP.getContext().getFunctionType(retTy, args, paramInfo,
+                                                  flags, lambda);
 }
 
 bool CallableDecl::isNonStaticMethod() const
@@ -1199,12 +653,12 @@ void CallableDecl::checkKnownFnKind()
       return;
    }
 
-   knownFnKind = llvm::StringSwitch<KnownFunction>(getName())
-      .Case("__cdot_malloc", KnownFunction::Malloc)
+   knownFnKind = StringSwitch<KnownFunction>(getName())
       .Case("malloc", KnownFunction::Malloc)
-      .Case("__cdot_free", KnownFunction::Free)
       .Case("free", KnownFunction::Free)
+      .Case("realloc", KnownFunction::Realloc)
       .Case("printf", KnownFunction::Printf)
+      .Case("putchar", KnownFunction::PutChar)
       .Case("memcpy", KnownFunction::MemCpy)
       .Case("memset", KnownFunction::MemSet)
       .Case("memcmp", KnownFunction::MemCmp)
@@ -1250,13 +704,18 @@ bool CallableDecl::isCaseOfTemplatedEnum() const
    return Case && Case->getRecord()->isTemplate();
 }
 
+bool CallableDecl::isFallibleInit() const
+{
+   return isa<InitDecl>(this) && cast<InitDecl>(this)->isFallible();
+}
+
 FunctionDecl::FunctionDecl(AccessSpecifier am,
                            SourceLocation DefLoc,
                            DeclarationName Name,
                            llvm::ArrayRef<FuncArgDecl*> args,
                            SourceType returnType,
                            Statement* body,
-                           std::vector<TemplateParamDecl*> &&templateParams)
+                           ASTVector<TemplateParamDecl*> &&templateParams)
    : CallableDecl(FunctionDeclID, am, DefLoc, Name, returnType,
                   move(args), body, move(templateParams))
 {
@@ -1270,7 +729,7 @@ FunctionDecl* FunctionDecl::Create(ASTContext &C,
                              llvm::ArrayRef<FuncArgDecl*> args,
                              SourceType returnType,
                              Statement *body,
-                             std::vector<TemplateParamDecl*> &&templateParams) {
+                             ASTVector<TemplateParamDecl*> &&templateParams) {
    void *Mem = C.Allocate(sizeof(FunctionDecl)
                              + args.size() * sizeof(FuncArgDecl*),
                           alignof(FunctionDecl));
@@ -1279,11 +738,67 @@ FunctionDecl* FunctionDecl::Create(ASTContext &C,
                                 move(templateParams));
 }
 
+FunctionDecl::FunctionDecl(EmptyShell E, unsigned N)
+   : CallableDecl(E, FunctionDeclID, N)
+{}
+
+FunctionDecl *FunctionDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(sizeof(FunctionDecl)
+                          + N * sizeof(FuncArgDecl*),
+                          alignof(FunctionDecl));
+   
+    return new(Mem) FunctionDecl(EmptyShell(), N);
+}
+
+MethodDecl::MethodDecl(EmptyShell E, unsigned N)
+   : CallableDecl(E, MethodDeclID, N)
+{}
+
+MethodDecl::MethodDecl(EmptyShell E, DeclKind typeID, unsigned N)
+   : CallableDecl(E, typeID, N)
+{}
+
+MethodDecl *MethodDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(sizeof(MethodDecl)
+                          + N * sizeof(FuncArgDecl*),
+                          alignof(MethodDecl));
+
+   return new(Mem) MethodDecl(EmptyShell(), N);
+}
+
+InitDecl::InitDecl(EmptyShell E, unsigned N)
+   : MethodDecl(E, InitDeclID, N)
+{}
+
+InitDecl *InitDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(sizeof(InitDecl)
+                          + N * sizeof(FuncArgDecl*),
+                          alignof(InitDecl));
+
+   return new(Mem) InitDecl(EmptyShell(), N);
+}
+
+DeinitDecl::DeinitDecl(EmptyShell E, unsigned N)
+   : MethodDecl(E, DeinitDeclID, N)
+{}
+
+DeinitDecl *DeinitDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(sizeof(DeinitDecl)
+                          + N * sizeof(FuncArgDecl*),
+                          alignof(DeinitDecl));
+
+   return new(Mem) DeinitDecl(EmptyShell(), N);
+}
+
 TypedefDecl::TypedefDecl(AccessSpecifier access,
                          SourceLocation Loc,
                          DeclarationName Name,
                          SourceType origin,
-                         std::vector<TemplateParamDecl*> &&templateParams)
+                         ASTVector<TemplateParamDecl*> &&templateParams)
    : NamedDecl(TypedefDeclID, access, Name),
      Loc(Loc), origin(origin), templateParams(move(templateParams))
 {}
@@ -1294,8 +809,17 @@ TypedefDecl::Create(ASTContext &C,
                     SourceLocation Loc,
                     DeclarationName Name,
                     SourceType origin,
-                    std::vector<TemplateParamDecl*> &&templateParams) {
+                    ASTVector<TemplateParamDecl*> &&templateParams) {
    return new(C) TypedefDecl(access, Loc, Name, origin, move(templateParams));
+}
+
+TypedefDecl::TypedefDecl(EmptyShell)
+   : NamedDecl(TypedefDeclID, AccessSpecifier::Default, DeclarationName())
+{}
+
+TypedefDecl *TypedefDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) TypedefDecl(EmptyShell());
 }
 
 AliasDecl::AliasDecl(SourceLocation Loc,
@@ -1303,7 +827,7 @@ AliasDecl::AliasDecl(SourceLocation Loc,
                      DeclarationName Name,
                      SourceType Type,
                      StaticExpr* aliasExpr,
-                     llvm::ArrayRef<TemplateParamDecl*> templateParams)
+                     ArrayRef<TemplateParamDecl*> templateParams)
    : NamedDecl(AliasDeclID, AccessSpec, Name),
      DeclContext(AliasDeclID),
      Loc(Loc), Type(Type), aliasExpr(aliasExpr),
@@ -1327,6 +851,19 @@ AliasDecl* AliasDecl::Create(ASTContext &C,
                              templateParams);
 }
 
+AliasDecl::AliasDecl(EmptyShell, unsigned N)
+   : NamedDecl(AliasDeclID, AccessSpecifier::Default, DeclarationName()),
+     DeclContext(AliasDeclID),
+     aliasExpr(nullptr), NumParams(N)
+{}
+
+AliasDecl *AliasDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<TemplateParamDecl*>(N),
+                           alignof(AliasDecl));
+    return new(Mem) AliasDecl(EmptyShell(), N);
+}
+
 SourceRange AliasDecl::getSourceRange() const
 {
    return SourceRange(Loc,
@@ -1338,39 +875,40 @@ RecordDecl::RecordDecl(DeclKind typeID,
                        AccessSpecifier access,
                        SourceLocation KeywordLoc,
                        DeclarationName Name,
-                       std::vector<SourceType> &&conformanceTypes,
-                       std::vector<TemplateParamDecl*> &&templateParams)
+                       ASTVector<SourceType> &&conformanceTypes,
+                       ASTVector<TemplateParamDecl*> &&templateParams)
    : NamedDecl(typeID, access, Name),
      DeclContext(typeID),
      KeywordLoc(KeywordLoc), conformanceTypes(move(conformanceTypes)),
      templateParams(move(templateParams)),
      manualAlignment(false), opaque(false),
      implicitlyEquatable(false), implicitlyHashable(false),
-     implicitlyCopyable(false), implicitlyStringRepresentable(false)
+     implicitlyCopyable(false), implicitlyStringRepresentable(false),
+     NeedsRetainOrRelease(false)
 {}
 
-void RecordDecl::addInnerRecord(RecordDecl *R)
+RecordDecl::RecordDecl(EmptyShell E,
+                       DeclKind typeID)
+   : NamedDecl(typeID, AccessSpecifier::Default, {}),
+     DeclContext(typeID),
+     KeywordLoc(), conformanceTypes(),
+     templateParams(),
+     manualAlignment(false), opaque(false),
+     implicitlyEquatable(false), implicitlyHashable(false),
+     implicitlyCopyable(false), implicitlyStringRepresentable(false),
+     NeedsRetainOrRelease(false)
 {
-   innerRecords.insert(R);
+
 }
 
 DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
 {
-   decl->setLexicalContext(this);
-
    switch (decl->getKind()) {
-   case InitDeclID: {
-      auto I = cast<InitDecl>(decl);
-      if (I->getArgs().empty())
-         if (auto S = dyn_cast<StructDecl>(this))
-            S->setParameterlessConstructor(I);
-
-      goto case_method;
-   }
    case DeinitDeclID:
       deinitializer = cast<DeinitDecl>(decl);
       goto case_method;
    case MethodDeclID:
+   case InitDeclID:
    case_method: {
       auto M = cast<MethodDecl>(decl);
       if (!M->getMethodID())
@@ -1380,7 +918,7 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
    }
    case FieldDeclID: {
       auto F = cast<FieldDecl>(decl);
-      if (!F->isStatic()) {
+      if (!F->isStatic() && isa<StructDecl>(this)) {
          auto S = cast<StructDecl>(this);
          S->StoredFields.push_back(F);
       }
@@ -1388,6 +926,9 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
       break;
    }
    case EnumCaseDeclID: {
+      if (!isa<EnumDecl>(this))
+         break;
+
       auto E = cast<EnumCaseDecl>(decl);
       auto EDecl = cast<EnumDecl>(this);
       EDecl->Unpopulated = false;
@@ -1397,13 +938,6 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
 
       break;
    }
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-   case ProtocolDeclID:
-      addInnerRecord(cast<RecordDecl>(decl));
-      break;
    default:
       break;
    }
@@ -1444,7 +978,7 @@ int RecordDecl::getNameSelector() const
 }
 
 AssociatedTypeDecl* RecordDecl::getAssociatedType(DeclarationName name,
-                                                  ProtocolDecl *P) const {
+                                                  ProtocolDecl *P) {
    auto AT = dyn_cast_or_null<AssociatedTypeDecl>(lookupSingle(name));
    if (AT) {
       if (!AT->getProto() || AT->getProto() == P)
@@ -1454,7 +988,7 @@ AssociatedTypeDecl* RecordDecl::getAssociatedType(DeclarationName name,
    return nullptr;
 }
 
-MethodDecl* RecordDecl::getConversionOperator(QualType toType) const
+MethodDecl* RecordDecl::getConversionOperator(QualType toType)
 {
    auto &Ctx = getASTCtx();
    auto DeclName = Ctx.getDeclNameTable().getConversionOperatorName(toType);
@@ -1462,7 +996,7 @@ MethodDecl* RecordDecl::getConversionOperator(QualType toType) const
    return lookupSingle<MethodDecl>(DeclName);
 }
 
-MethodDecl* RecordDecl::getComparisonOperator(QualType withType) const
+MethodDecl* RecordDecl::getComparisonOperator(QualType withType)
 {
    auto &Ctx = getASTCtx();
    auto *Name = &Ctx.getIdentifiers().get("==");
@@ -1515,14 +1049,32 @@ bool RecordDecl::hasMethodTemplate(DeclarationName name) const
    return false;
 }
 
-PropDecl* RecordDecl::getProperty(DeclarationName name) const
+PropDecl* RecordDecl::getProperty(DeclarationName name)
 {
-   return dyn_cast_or_null<PropDecl>(lookupSingle(name));
+   auto *Prop = dyn_cast_or_null<PropDecl>(lookupSingle(name));
+   if (!Prop) {
+      if (auto C = dyn_cast<ClassDecl>(this)) {
+         if (auto P = C->getParentClass()) {
+            return P->getProperty(name);
+         }
+      }
+   }
+
+   return Prop;
 }
 
-FieldDecl* RecordDecl::getField(DeclarationName name) const
+FieldDecl* RecordDecl::getField(DeclarationName name)
 {
-   return dyn_cast_or_null<FieldDecl>(lookupSingle(name));
+   auto *F = dyn_cast_or_null<FieldDecl>(lookupSingle(name));
+   if (!F) {
+      if (auto C = dyn_cast<ClassDecl>(this)) {
+         if (auto P = C->getParentClass()) {
+            return P->getField(name);
+         }
+      }
+   }
+
+   return F;
 }
 
 bool RecordDecl::isNonUnionStruct() const
@@ -1550,8 +1102,8 @@ StructDecl* RecordDecl::asNonUnionStruct() const
 StructDecl::StructDecl(AccessSpecifier access,
                        SourceLocation KeywordLoc,
                        DeclarationName Name,
-                       std::vector<SourceType> &&conformanceTypes,
-                       std::vector<TemplateParamDecl*> &&templateParams)
+                       ASTVector<SourceType> &&conformanceTypes,
+                       ASTVector<TemplateParamDecl*> &&templateParams)
    : RecordDecl(StructDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams))
 {}
@@ -1560,8 +1112,8 @@ StructDecl* StructDecl::Create(ASTContext &C,
                                AccessSpecifier access,
                                SourceLocation KeywordLoc,
                                DeclarationName Name,
-                               std::vector<SourceType> &&conformanceTypes,
-                               std::vector<TemplateParamDecl*>&&templateParams){
+                               ASTVector<SourceType> &&conformanceTypes,
+                               ASTVector<TemplateParamDecl*>&&templateParams){
    return new(C) StructDecl(access, KeywordLoc, Name, move(conformanceTypes),
                             move(templateParams));
 }
@@ -1570,33 +1122,57 @@ StructDecl::StructDecl(DeclKind typeID,
                        AccessSpecifier access,
                        SourceLocation KeywordLoc,
                        DeclarationName Name,
-                       std::vector<SourceType> &&conformanceTypes,
-                       std::vector<TemplateParamDecl*> &&templateParams)
+                       ASTVector<SourceType> &&conformanceTypes,
+                       ASTVector<TemplateParamDecl*> &&templateParams)
    : RecordDecl(typeID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams))
 {}
 
+StructDecl::StructDecl(EmptyShell E)
+   : RecordDecl(E, StructDeclID)
+{}
+
+StructDecl::StructDecl(EmptyShell E, DeclKind typeID)
+   : RecordDecl(E, typeID)
+{}
+
+StructDecl *StructDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) StructDecl(EmptyShell());
+}
+
 ClassDecl::ClassDecl(AccessSpecifier access,
                      SourceLocation KeywordLoc,
                      DeclarationName Name,
-                     std::vector<SourceType> &&conformanceTypes,
-                     std::vector<TemplateParamDecl*> &&templateParams,
+                     ASTVector<SourceType> &&conformanceTypes,
+                     ASTVector<TemplateParamDecl*> &&templateParams,
                      SourceType parentClass,
                      bool isAbstract)
    : StructDecl(ClassDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams)),
-     parentType(parentClass), IsAbstract(isAbstract)
-{}
+     parentType(parentClass)
+{
+   setAbstract(isAbstract);
+}
 
 ClassDecl* ClassDecl::Create(ASTContext &C,
                              AccessSpecifier access,
                              SourceLocation KeywordLoc,
                              DeclarationName Name,
-                             std::vector<SourceType> &&conformanceTypes,
-                             std::vector<TemplateParamDecl *> &&templateParams,
+                             ASTVector<SourceType> &&conformanceTypes,
+                             ASTVector<TemplateParamDecl*> &&templateParams,
                              SourceType parentClass, bool isAbstract) {
    return new(C) ClassDecl(access, KeywordLoc, Name, move(conformanceTypes),
                            move(templateParams), parentClass, isAbstract);
+}
+
+ClassDecl::ClassDecl(EmptyShell E)
+   : StructDecl(E, ClassDeclID)
+{}
+
+ClassDecl *ClassDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) ClassDecl(EmptyShell());
 }
 
 void ClassDecl::inherit(ast::ClassDecl *C)
@@ -1610,8 +1186,8 @@ void ClassDecl::inherit(ast::ClassDecl *C)
 EnumDecl::EnumDecl(AccessSpecifier access,
                    SourceLocation KeywordLoc,
                    DeclarationName Name,
-                   std::vector<SourceType> &&conformanceTypes,
-                   std::vector<TemplateParamDecl*> &&templateParams,
+                   ASTVector<SourceType> &&conformanceTypes,
+                   ASTVector<TemplateParamDecl*> &&templateParams,
                    SourceType rawType)
    : RecordDecl(EnumDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams)),
@@ -1622,11 +1198,26 @@ EnumDecl* EnumDecl::Create(ASTContext &C,
                            AccessSpecifier access,
                            SourceLocation KeywordLoc,
                            DeclarationName Name,
-                           std::vector<SourceType> &&conformanceTypes,
-                           std::vector<TemplateParamDecl *> &&templateParams,
+                           ASTVector<SourceType> &&conformanceTypes,
+                           ASTVector<TemplateParamDecl*> &&templateParams,
                            SourceType rawType) {
    return new(C) EnumDecl(access, KeywordLoc, Name, move(conformanceTypes),
                           move(templateParams), rawType);
+}
+
+EnumDecl::EnumDecl(EmptyShell E)
+   : RecordDecl(E, EnumDeclID)
+{}
+
+EnumDecl *EnumDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) EnumDecl(EmptyShell());
+}
+
+EnumCaseDecl *EnumDecl::getCase(StringRef Name)
+{
+   auto *II = &getASTCtx().getIdentifiers().get(Name);
+   return lookupSingle<EnumCaseDecl>(II);
 }
 
 EnumCaseDecl* EnumDecl::hasCase(DeclarationName name)
@@ -1637,8 +1228,8 @@ EnumCaseDecl* EnumDecl::hasCase(DeclarationName name)
 UnionDecl::UnionDecl(AccessSpecifier access,
                      SourceLocation KeywordLoc,
                      DeclarationName Name,
-                     std::vector<SourceType> &&conformanceTypes,
-                     std::vector<TemplateParamDecl*> &&templateParams)
+                     ASTVector<SourceType> &&conformanceTypes,
+                     ASTVector<TemplateParamDecl*> &&templateParams)
    : StructDecl(UnionDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams))
 {}
@@ -1647,17 +1238,26 @@ UnionDecl* UnionDecl::Create(ASTContext &C,
                              AccessSpecifier access,
                              SourceLocation KeywordLoc,
                              DeclarationName Name,
-                             std::vector<SourceType> &&conformanceTypes,
-                             std::vector<TemplateParamDecl*> &&templateParams) {
+                             ASTVector<SourceType> &&conformanceTypes,
+                             ASTVector<TemplateParamDecl*> &&templateParams) {
    return new(C) UnionDecl(access, KeywordLoc, Name, move(conformanceTypes),
                            move(templateParams));
+}
+
+UnionDecl::UnionDecl(EmptyShell Empty)
+   : StructDecl(Empty, UnionDeclID)
+{}
+
+UnionDecl *UnionDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) UnionDecl(EmptyShell());
 }
 
 ProtocolDecl::ProtocolDecl(AccessSpecifier access,
                            SourceLocation KeywordLoc,
                            DeclarationName Name,
-                           std::vector<SourceType> &&conformanceTypes,
-                           std::vector<TemplateParamDecl*> &&templateParams)
+                           ASTVector<SourceType> &&conformanceTypes,
+                           ASTVector<TemplateParamDecl*> &&templateParams)
    : RecordDecl(ProtocolDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams)),
      IsAny(false)
@@ -1667,11 +1267,20 @@ ProtocolDecl* ProtocolDecl::Create(ASTContext &C,
                                    AccessSpecifier access,
                                    SourceLocation KeywordLoc,
                                    DeclarationName Name,
-                                   std::vector<SourceType> &&conformanceTypes,
-                                   std::vector<TemplateParamDecl*>
+                                   ASTVector<SourceType> &&conformanceTypes,
+                                   ASTVector<TemplateParamDecl*>
                                                             &&templateParams) {
    return new(C) ProtocolDecl(access, KeywordLoc, Name, move(conformanceTypes),
                               move(templateParams));
+}
+
+ProtocolDecl::ProtocolDecl(EmptyShell Empty)
+   : RecordDecl(Empty, ProtocolDeclID)
+{}
+
+ProtocolDecl *ProtocolDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) ProtocolDecl(EmptyShell());
 }
 
 ExtensionDecl::ExtensionDecl(AccessSpecifier access,
@@ -1725,14 +1334,29 @@ ExtensionDecl *ExtensionDecl::Create(ASTContext &C,
    return new(Mem) ExtensionDecl(access, KeywordLoc, R, move(conformanceTypes));
 }
 
+ExtensionDecl::ExtensionDecl(EmptyShell, unsigned N)
+   : NamedDecl(ExtensionDeclID, AccessSpecifier::Default, DeclarationName()),
+     DeclContext(ExtensionDeclID),
+     ExtendedRecord(nullptr), NumConformances(N)
+{}
+
+ExtensionDecl *ExtensionDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<SourceType>(N), alignof(ExtensionDecl));
+    return new(Mem) ExtensionDecl(EmptyShell(), N);
+}
+
 MethodDecl* MethodDecl::Create(ASTContext &C,
                                AccessSpecifier access,
                                SourceLocation DefLoc,
                                DeclarationName Name,
                                SourceType returnType,
                                llvm::ArrayRef<FuncArgDecl*> args,
-                               std::vector<TemplateParamDecl*> &&templateParams,
+                               ASTVector<TemplateParamDecl*> &&templateParams,
                                Statement *body, bool isStatic) {
+   assert(isStatic || (!args.empty() && args.front()->isSelf())
+                      && "no self argument!");
+
    void *Mem = C.Allocate(sizeof(MethodDecl)
                           + args.size() * sizeof(FuncArgDecl*),
                           alignof(MethodDecl));
@@ -1746,12 +1370,11 @@ MethodDecl::MethodDecl(AccessSpecifier access,
                        DeclarationName OperatorName,
                        SourceType returnType,
                        llvm::ArrayRef<FuncArgDecl*> args,
-                       std::vector<TemplateParamDecl *> &&templateParams,
+                       ASTVector<TemplateParamDecl*> &&templateParams,
                        Statement *body,
                        bool isStatic)
    : CallableDecl(MethodDeclID, access, DefLoc, OperatorName, returnType,
                   move(args), body, move(templateParams)) {
-   setFlag(Abstract, !body);
    setDeclFlag(DF_Static, isStatic);
 }
 
@@ -1761,9 +1384,12 @@ MethodDecl* MethodDecl::CreateOperator(ASTContext &C,
                               DeclarationName OperatorName,
                               SourceType returnType,
                               llvm::ArrayRef<FuncArgDecl*> args,
-                              std::vector<TemplateParamDecl*> &&templateParams,
+                              ASTVector<TemplateParamDecl*> &&templateParams,
                               Statement *body,
                               bool isStatic) {
+   assert(isStatic || (!args.empty() && args.front()->isSelf())
+                      && "no self argument!");
+
    void *Mem = C.Allocate(sizeof(MethodDecl)
                           + args.size() * sizeof(FuncArgDecl*),
                           alignof(MethodDecl));
@@ -1777,11 +1403,10 @@ MethodDecl::MethodDecl(AccessSpecifier access,
                        SourceLocation DefLoc,
                        SourceType returnType,
                        llvm::ArrayRef<FuncArgDecl*> args,
-                       std::vector<TemplateParamDecl *> &&templateParams,
+                       ASTVector<TemplateParamDecl*> &&templateParams,
                        Statement *body)
    : CallableDecl(MethodDeclID, access, DefLoc, DeclarationName(),
                   returnType, move(args), body, move(templateParams)) {
-   setFlag(Abstract, !body);
    setFlag(ConvOp, true);
 }
 
@@ -1790,8 +1415,10 @@ MethodDecl* MethodDecl::CreateConversionOp(ASTContext &C,
                                SourceLocation DefLoc,
                                SourceType returnType,
                                llvm::ArrayRef<FuncArgDecl*> args,
-                               std::vector<TemplateParamDecl*> &&templateParams,
+                               ASTVector<TemplateParamDecl*> &&templateParams,
                                Statement *body) {
+   assert(!args.empty() && args.front()->isSelf() && "no self argument!");
+
    void *Mem = C.Allocate(sizeof(MethodDecl)
                           + args.size() * sizeof(FuncArgDecl*),
                           alignof(MethodDecl));
@@ -1806,18 +1433,18 @@ MethodDecl::MethodDecl(DeclKind typeID,
                        DeclarationName Name,
                        SourceType returnType,
                        llvm::ArrayRef<FuncArgDecl*> args,
-                       std::vector<TemplateParamDecl*> &&templateParams,
+                       ASTVector<TemplateParamDecl*> &&templateParams,
                        Statement *body)
    : CallableDecl(typeID, access, DefLoc, Name,
                   returnType, move(args), body, move(templateParams)) {
-   setFlag(Abstract, !body);
+
 }
 
 InitDecl::InitDecl(AccessSpecifier am,
                    SourceLocation Loc,
                    DeclarationName Name)
    : MethodDecl(InitDeclID, am, Loc, Name, SourceType(), {}, {}, {}),
-     Kind(Name.getDeclarationKind() == DeclarationName::BaseConstructorName
+     Kind(Name.getKind() == DeclarationName::BaseConstructorName
             ? ConstructorKind::Base : ConstructorKind::Complete),
      ExplicitMemberwise(true)
 {
@@ -1834,13 +1461,14 @@ InitDecl* InitDecl::CreateMemberwise(ASTContext &C,
 InitDecl::InitDecl(AccessSpecifier am,
                    SourceLocation Loc,
                    llvm::ArrayRef<FuncArgDecl*> args,
-                   std::vector<TemplateParamDecl *> &&templateParams,
-                   Statement *body, DeclarationName Name)
+                   ASTVector<TemplateParamDecl*> &&templateParams,
+                   Statement *body, DeclarationName Name,
+                   bool IsFallible)
    : MethodDecl(InitDeclID, am, Loc, Name, SourceType(), move(args),
                 move(templateParams), body),
-     Kind(Name.getDeclarationKind() == DeclarationName::BaseConstructorName
+     Kind(Name.getKind() == DeclarationName::BaseConstructorName
           ? ConstructorKind::Base : ConstructorKind::Complete),
-     ExplicitMemberwise(false)
+     ExplicitMemberwise(false), IsFallible(IsFallible)
 {
    setDeclFlag(DF_Static, true);
 }
@@ -1849,30 +1477,38 @@ InitDecl* InitDecl::Create(ASTContext &C,
                            AccessSpecifier am,
                            SourceLocation Loc,
                            llvm::ArrayRef<FuncArgDecl*> args,
-                           std::vector<TemplateParamDecl *> &&templateParams,
+                           ASTVector<TemplateParamDecl*> &&templateParams,
                            Statement *body,
-                           DeclarationName Name) {
+                           DeclarationName Name,
+                           bool IsFallible) {
    void *Mem = C.Allocate(sizeof(InitDecl)
-                          + args.size() * sizeof(FuncArgDecl*),
+                             + args.size() * sizeof(FuncArgDecl*),
                           alignof(InitDecl));
 
-   return new(Mem) InitDecl(am, Loc, args, move(templateParams), body, Name);
+   return new(Mem) InitDecl(am, Loc, args, move(templateParams), body, Name,
+                            IsFallible);
 }
 
 DeinitDecl::DeinitDecl(SourceLocation Loc,
                        Statement *body,
+                       llvm::ArrayRef<FuncArgDecl*> args,
                        DeclarationName Name)
    : MethodDecl(DeinitDeclID, AccessSpecifier::Public, Loc,
-                Name, SourceType(), {}, {}, body)
+                Name, SourceType(), args, {}, body)
 {
-   setDeclFlag(DF_Static, true);
+
 }
 
 DeinitDecl* DeinitDecl::Create(ASTContext &C,
                                SourceLocation Loc,
                                Statement *body,
+                               llvm::ArrayRef<FuncArgDecl*> args,
                                DeclarationName Name) {
-   return new(C) DeinitDecl(Loc, body, Name);
+   void *Mem = C.Allocate(sizeof(DeinitDecl)
+                          + args.size() * sizeof(FuncArgDecl*),
+                          alignof(DeinitDecl));
+
+   return new(Mem) DeinitDecl(Loc, body, args, Name);
 }
 
 FieldDecl::FieldDecl(AccessSpecifier Access,
@@ -1901,12 +1537,24 @@ FieldDecl* FieldDecl::Create(ASTContext &C,
                            IsConst, DefaultVal);
 }
 
+FieldDecl::FieldDecl(EmptyShell)
+   : VarDecl(FieldDeclID, AccessSpecifier::Default, {}, {}, false,
+             DeclarationName(), SourceType(), nullptr)
+{}
+
+FieldDecl *FieldDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) FieldDecl(EmptyShell());
+}
+
 AssociatedTypeDecl::AssociatedTypeDecl(SourceLocation Loc,
                                        IdentifierInfo *ProtoSpec,
                                        DeclarationName Name,
-                                       SourceType actualType)
+                                       SourceType actualType,
+                                       bool Implementation)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Public, Name),
-     Loc(Loc), protocolSpecifier(ProtoSpec), actualType(actualType)
+     Loc(Loc), protocolSpecifier(ProtoSpec), actualType(actualType),
+     Implementation(Implementation)
 {
 
 }
@@ -1915,13 +1563,21 @@ AssociatedTypeDecl* AssociatedTypeDecl::Create(ASTContext &C,
                                                SourceLocation Loc,
                                                IdentifierInfo *ProtoSpec,
                                                DeclarationName Name,
-                                               SourceType actualType) {
-   return new(C) AssociatedTypeDecl(Loc, ProtoSpec, Name, actualType);
+                                               SourceType actualType,
+                                               bool Implementation) {
+   return new(C) AssociatedTypeDecl(Loc, ProtoSpec, Name, actualType,
+                                    Implementation);
 }
 
-bool AssociatedTypeDecl::isImplementation() const
+AssociatedTypeDecl::AssociatedTypeDecl(EmptyShell)
+   : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Default,
+               DeclarationName()),
+     protocolSpecifier(nullptr), Implementation(false)
+{}
+
+AssociatedTypeDecl *AssociatedTypeDecl::CreateEmpty(ASTContext &C)
 {
-   return !isa<ProtocolDecl>(getNonTransparentDeclContext());
+    return new(C) AssociatedTypeDecl(EmptyShell());
 }
 
 PropDecl::PropDecl(AccessSpecifier access,
@@ -1960,6 +1616,68 @@ PropDecl* PropDecl::Create(ASTContext &C,
                           getter, setter, newValName);
 }
 
+PropDecl::PropDecl(EmptyShell)
+   : NamedDecl(PropDeclID, AccessSpecifier::Default, DeclarationName())
+{}
+
+PropDecl *PropDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) PropDecl(EmptyShell());
+}
+
+SubscriptDecl::SubscriptDecl(AccessSpecifier access,
+                             SourceRange Loc,
+                             DeclarationName Name,
+                             llvm::ArrayRef<FuncArgDecl*> Args,
+                             SourceType type,
+                             bool hasGetter, bool hasSetter,
+                             AccessSpecifier GetterAccess,
+                             AccessSpecifier SetterAccess,
+                             CompoundStmt *getter, CompoundStmt *setter,
+                             IdentifierInfo *newValName)
+   : NamedDecl(SubscriptDeclID, access, Name),
+     Loc(Loc), type(type), GetterAccess(GetterAccess),
+     SetterAccess(SetterAccess), getterBody(getter), setterBody(setter),
+     HasGetter(hasGetter), HasSetter(hasSetter), newValName(newValName),
+     NumArgs((unsigned)Args.size())
+{
+   std::copy(Args.begin(), Args.end(),
+             getTrailingObjects<FuncArgDecl*>());
+}
+
+SubscriptDecl* SubscriptDecl::Create(ASTContext &C,
+                                     AccessSpecifier access,
+                                     SourceRange Loc,
+                                     llvm::ArrayRef<FuncArgDecl*> Args,
+                                     SourceType type,
+                                     bool hasGetter,
+                                     bool hasSetter,
+                                     AccessSpecifier GetterAccess,
+                                     AccessSpecifier SetterAccess,
+                                     CompoundStmt *getter, CompoundStmt *setter,
+                                     IdentifierInfo *newValName) {
+   void *Mem = C.Allocate(totalSizeToAlloc<FuncArgDecl*>(Args.size()),
+                          alignof(SubscriptDecl));
+
+   return new(Mem) SubscriptDecl(access, Loc,
+                                 C.getDeclNameTable().getSubscriptName(
+                                    DeclarationName::SubscriptKind::General),
+                                 Args, type, hasGetter, hasSetter, GetterAccess,
+                                 SetterAccess, getter, setter, newValName);
+}
+
+SubscriptDecl::SubscriptDecl(EmptyShell, unsigned N)
+   : NamedDecl(SubscriptDeclID, AccessSpecifier::Default, DeclarationName()),
+     NumArgs(N)
+{}
+
+SubscriptDecl *SubscriptDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<FuncArgDecl*>(N),
+                           alignof(SubscriptDecl));
+    return new(Mem) SubscriptDecl(EmptyShell(), N);
+}
+
 EnumCaseDecl::EnumCaseDecl(AccessSpecifier AS,
                            SourceLocation CaseLoc,
                            SourceLocation IdentLoc,
@@ -1985,6 +1703,19 @@ EnumCaseDecl* EnumCaseDecl::Create(ASTContext &C,
                           alignof(EnumCaseDecl));
 
    return new(Mem) EnumCaseDecl(AS, CaseLoc, IdentLoc, Name, rawValue, args);
+}
+
+EnumCaseDecl::EnumCaseDecl(EmptyShell E, unsigned N)
+   : CallableDecl(E, EnumCaseDeclID, N)
+{}
+
+EnumCaseDecl *EnumCaseDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(sizeof(EnumCaseDecl)
+                          + N * sizeof(FuncArgDecl*),
+                          alignof(EnumCaseDecl));
+
+   return new(Mem) EnumCaseDecl(EmptyShell(), N);
 }
 
 StaticIfDecl::StaticIfDecl(SourceLocation StaticLoc,
@@ -2029,6 +1760,15 @@ StaticIfDecl* StaticIfDecl::Create(ASTContext &C,
    return new(C) StaticIfDecl(StaticLoc, RBRaceLoc, condition, Template);
 }
 
+StaticIfDecl::StaticIfDecl(EmptyShell)
+   : Decl(StaticIfDeclID)
+{}
+
+StaticIfDecl *StaticIfDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) StaticIfDecl(EmptyShell());
+}
+
 StaticForDecl::StaticForDecl(SourceLocation StaticLoc,
                              SourceLocation RBRaceLoc,
                              IdentifierInfo *elementName,
@@ -2051,21 +1791,39 @@ StaticForDecl* StaticForDecl::Create(ASTContext &C,
                                BodyDecl);
 }
 
+StaticForDecl::StaticForDecl(EmptyShell)
+   : Decl(StaticForDeclID)
+{}
+
+StaticForDecl *StaticForDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) StaticForDecl(EmptyShell());
+}
+
 StaticAssertStmt::StaticAssertStmt(SourceLocation Loc,
                                    SourceRange Parens,
                                    StaticExpr* expr,
-                                   std::string &&message)
+                                   StringRef message)
    : Decl(StaticAssertStmtID),
      Loc(Loc), Parens(Parens),
-     expr(expr), message(move(message))
+     expr(expr), message(message)
 {}
 
 StaticAssertStmt* StaticAssertStmt::Create(ASTContext &C,
                                            SourceLocation Loc,
                                            SourceRange Parens,
                                            StaticExpr *expr,
-                                           std::string &&message) {
-   return new(C) StaticAssertStmt(Loc, Parens, expr, move(message));
+                                           StringRef message) {
+   return new(C) StaticAssertStmt(Loc, Parens, expr, message);
+}
+
+StaticAssertStmt::StaticAssertStmt(EmptyShell)
+   : Decl(StaticAssertStmtID)
+{}
+
+StaticAssertStmt *StaticAssertStmt::CreateEmpty(ASTContext &C)
+{
+    return new(C) StaticAssertStmt(EmptyShell());
 }
 
 StaticPrintStmt::StaticPrintStmt(SourceLocation Loc,
@@ -2082,6 +1840,15 @@ StaticPrintStmt* StaticPrintStmt::Create(ASTContext &C,
    return new(C) StaticPrintStmt(Loc, Parens, E);
 }
 
+StaticPrintStmt::StaticPrintStmt(EmptyShell)
+   : Decl(StaticPrintStmtID)
+{}
+
+StaticPrintStmt *StaticPrintStmt::CreateEmpty(ASTContext &C)
+{
+    return new(C) StaticPrintStmt(EmptyShell());
+}
+
 MixinDecl::MixinDecl(SourceLocation Loc,
                      SourceRange Parens,
                      Expression *MixinExpr)
@@ -2096,15 +1863,25 @@ MixinDecl* MixinDecl::Create(ASTContext &C,
    return new(C) MixinDecl(Loc, Parens, MixinExpr);
 }
 
+MixinDecl::MixinDecl(EmptyShell)
+   : Decl(MixinDeclID)
+{}
+
+MixinDecl *MixinDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) MixinDecl(EmptyShell());
+}
+
 PrecedenceGroupDecl::PrecedenceGroupDecl(SourceRange SR,
                                          AccessSpecifier AS,
                                          DeclarationName DN,
                                          Associativity Assoc,
                                          const IdentifierInfo *HigherThanIdent,
-                                         const IdentifierInfo *LowerThanIdent)
+                                         const IdentifierInfo *LowerThanIdent,
+                                         bool IsAssignment)
    : NamedDecl(PrecedenceGroupDeclID, AS, DN),
-     SR(SR), Assoc(Assoc), HigherThanIdent(HigherThanIdent),
-     LowerThanIdent(LowerThanIdent)
+     SR(SR), Assoc(Assoc), IsAssignment(IsAssignment),
+     HigherThanIdent(HigherThanIdent), LowerThanIdent(LowerThanIdent)
 {
 
 }
@@ -2116,9 +1893,22 @@ PrecedenceGroupDecl::Create(ASTContext &C,
                             DeclarationName DN,
                             Associativity Assoc,
                             const IdentifierInfo *HigherThanIdent,
-                            const IdentifierInfo *LowerThanIdent) {
+                            const IdentifierInfo *LowerThanIdent,
+                            bool IsAssignment) {
    return new(C) PrecedenceGroupDecl(SR, AS, DN, Assoc, HigherThanIdent,
-                                     LowerThanIdent);
+                                     LowerThanIdent, IsAssignment);
+}
+
+PrecedenceGroupDecl::PrecedenceGroupDecl(EmptyShell)
+   : NamedDecl(PrecedenceGroupDeclID, AccessSpecifier::Default,
+               DeclarationName()),
+     SR(), Assoc(), IsAssignment(false),
+     HigherThanIdent(nullptr), LowerThanIdent(nullptr)
+{}
+
+PrecedenceGroupDecl *PrecedenceGroupDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) PrecedenceGroupDecl(EmptyShell());
 }
 
 static PrecedenceGroupDecl::Relationship
@@ -2182,6 +1972,17 @@ OperatorDecl* OperatorDecl::Create(ASTContext &C,
                                    const IdentifierInfo *PGIdent) {
    auto DN = C.getDeclNameTable().getOperatorDeclName(OperatorName);
    return new(C) OperatorDecl(SR, AS, DN, PGIdent);
+}
+
+OperatorDecl::OperatorDecl(EmptyShell)
+   : NamedDecl(OperatorDeclID, AccessSpecifier::Default, DeclarationName()),
+     SR(), OperatorName(),
+     PrecedenceGroupIdent(nullptr)
+{}
+
+OperatorDecl *OperatorDecl::CreateEmpty(ASTContext &C)
+{
+    return new(C) OperatorDecl(EmptyShell());
 }
 
 PatternFragment PatternFragment::ErrorState(Error);
@@ -2288,6 +2089,15 @@ ExpansionFragment::ExpansionFragment(SourceLocation Loc,
              reinterpret_cast<ExpansionFragment**>(this + 1));
 }
 
+ExpansionFragment::ExpansionFragment(SourceLocation Loc,
+                                     llvm::ArrayRef<ExpansionFragment*> Fragments)
+   : Kind(ConcatExpr), Loc(Loc),
+     RepData{ (unsigned)Fragments.size() }
+{
+   std::copy(Fragments.begin(), Fragments.end(),
+             reinterpret_cast<ExpansionFragment**>(this + 1));
+}
+
 ExpansionFragment* ExpansionFragment::Create(ASTContext &C,
                                          SourceLocation Loc,
                                          llvm::ArrayRef<lex::Token> Tokens) {
@@ -2316,10 +2126,22 @@ ExpansionFragment::Create(ASTContext &C,
    return new(Mem) ExpansionFragment(Loc, Fragments, ExpandedVariable);
 }
 
+ExpansionFragment*
+ExpansionFragment::Create(ASTContext &C,
+                          SourceLocation Loc,
+                          llvm::ArrayRef<ExpansionFragment*> Fragments) {
+   size_t Size = sizeof(ExpansionFragment)
+                 + sizeof(ExpansionFragment*) * Fragments.size();
+
+   void *Mem = C.Allocate(Size, alignof(ExpansionFragment));
+   return new(Mem) ExpansionFragment(Loc, Fragments);
+}
+
 MacroPattern::MacroPattern(SourceLocation Loc,
                            PatternFragment* Pattern,
-                           llvm::ArrayRef<ExpansionFragment *> Expansion)
-   : Loc(Loc), Pattern(Pattern),
+                           llvm::ArrayRef<ExpansionFragment *> Expansion,
+                           unsigned SourceLength)
+   : Loc(Loc), Pattern(Pattern), SourceLength(SourceLength),
      NumExpansionFragments((unsigned)Expansion.size())
 {
    std::copy(Expansion.begin(), Expansion.end(),
@@ -2329,12 +2151,13 @@ MacroPattern::MacroPattern(SourceLocation Loc,
 MacroPattern* MacroPattern::Create(ASTContext &C,
                                    SourceLocation Loc,
                                    PatternFragment* Pattern,
-                                   llvm::ArrayRef<ExpansionFragment*>Expansion){
+                                   llvm::ArrayRef<ExpansionFragment*>Expansion,
+                                   unsigned SourceLength){
    void *Mem = C.Allocate(sizeof(MacroPattern)
                           + sizeof(ExpansionFragment*) * Expansion.size(),
                           alignof(MacroPattern));
 
-   return new(Mem) MacroPattern(Loc, Pattern, Expansion);
+   return new(Mem) MacroPattern(Loc, Pattern, Expansion, SourceLength);
 }
 
 SourceRange MacroPattern::getSourceRange() const
@@ -2374,6 +2197,18 @@ MacroDecl* MacroDecl::Create(ASTContext &C,
    return new(Mem) MacroDecl(SR, AS, Name, Delim, Patterns);
 }
 
+MacroDecl::MacroDecl(EmptyShell, unsigned N)
+   : NamedDecl(MacroDeclID, AccessSpecifier::Default, DeclarationName()),
+     Delim(Delimiter::Paren), NumPatterns(N)
+{}
+
+MacroDecl *MacroDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<MacroPattern*>(N),
+                           alignof(MacroDecl));
+    return new(Mem) MacroDecl(EmptyShell(), N);
+}
+
 MacroExpansionDecl::MacroExpansionDecl(SourceRange SR,
                                        DeclarationName MacroName,
                                        Delimiter Delim,
@@ -2394,6 +2229,18 @@ MacroExpansionDecl* MacroExpansionDecl::Create(ASTContext &C,
                           alignof(MacroExpansionDecl));
 
    return new(Mem) MacroExpansionDecl(SR, MacroName, Delim, Toks);
+}
+
+MacroExpansionDecl::MacroExpansionDecl(EmptyShell, unsigned N)
+   : Decl(MacroExpansionDeclID),
+     Delim(Delimiter::Paren), NumTokens(N)
+{}
+
+MacroExpansionDecl *MacroExpansionDecl::CreateEmpty(ASTContext &C, unsigned N)
+{
+    void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(N),
+                           alignof(MacroExpansionDecl));
+    return new(Mem) MacroExpansionDecl(EmptyShell(), N);
 }
 
 } // namespace ast

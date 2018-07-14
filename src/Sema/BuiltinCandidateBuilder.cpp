@@ -81,6 +81,22 @@ static QualType getMutableReference(ast::ASTContext &Context, QualType Ty)
    return Context.getMutableReferenceType(Ty);
 }
 
+static FunctionType::ParamInfo AssignParamInfo[2] = {
+   // the left hand side is mutably borrowed
+   FunctionType::ParamInfo{ArgumentConvention::MutablyBorrowed},
+
+   // the right hand side is consumed by this operator
+   FunctionType::ParamInfo{ArgumentConvention::Owned}
+};
+
+static FunctionType::ParamInfo CompoundAssignParamInfo[2] = {
+   // the left hand side is mutably borrowed
+   FunctionType::ParamInfo{ArgumentConvention::MutablyBorrowed},
+
+   // the right hand side is immutably borrowed
+   FunctionType::ParamInfo{ArgumentConvention::Borrowed}
+};
+
 BuiltinCandidateBuilder::BuiltinKindMap::iterator
 BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
                                    QualType lhsType,
@@ -96,7 +112,8 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
 
       FunctionType *FnTy = Context.getFunctionType(
          Context.getVoidType(),
-         { lhsType, lhsType->getReferencedType() });
+         { lhsType, lhsType->getReferencedType() },
+         AssignParamInfo);
 
       Vec.emplace_back(FnTy);
       break;
@@ -113,14 +130,16 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
           && opKind != op::MulAssign) {
          auto FnTy = Context.getFunctionType(
             Context.getVoidType(),
-            { lhsType, Context.getUIntTy() });
+            { lhsType, Context.getUIntTy() },
+            CompoundAssignParamInfo);
 
          Vec.emplace_back(FnTy);
 
          if (opKind == op::SubAssign) {
             FnTy = Context.getFunctionType(
                Context.getVoidType(),
-               { lhsType, lhsType->getReferencedType() });
+               { lhsType, lhsType->getReferencedType() },
+               CompoundAssignParamInfo);
 
             Vec.emplace_back(FnTy);
          }
@@ -128,7 +147,8 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       else if (!lhsType->getReferencedType()->isPointerType()) {
          FunctionType *FnTy = Context.getFunctionType(
             Context.getVoidType(),
-            { lhsType, lhsType->getReferencedType() });
+            { lhsType, lhsType->getReferencedType() },
+            CompoundAssignParamInfo);
 
          Vec.emplace_back(FnTy);
       }
@@ -144,7 +164,8 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
 
       FunctionType *FnTy = Context.getFunctionType(
          Context.getVoidType(),
-         { lhsType, lhsType->getReferencedType() });
+         { lhsType, lhsType->getReferencedType() },
+         CompoundAssignParamInfo);
 
       Vec.emplace_back(FnTy);
       break;
@@ -160,7 +181,8 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
 
       FunctionType *FnTy = Context.getFunctionType(
          Context.getVoidType(),
-         { lhsType, lhsType->getReferencedType() });
+         { lhsType, lhsType->getReferencedType() },
+         CompoundAssignParamInfo);
 
       Vec.emplace_back(FnTy);
       break;
@@ -261,10 +283,17 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       if (!isIntFPOrPointerType(lhsType))
          break;
 
-      FunctionType *FnTy = Context.getFunctionType(
-         Context.getBoolTy(), { lhsType, lhsType });
+      QualType RetTy;
+      if (opKind == op::Spaceship) {
+         RetTy = Context.getIntTy();
+      }
+      else {
+         RetTy = Context.getBoolTy();
+      }
 
+      FunctionType *FnTy = Context.getFunctionType(RetTy, { lhsType, lhsType });
       Vec.emplace_back(FnTy);
+
       break;
    }
       // reference equality
@@ -295,7 +324,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
    case op::As: case op::AsExclaim: case op::AsQuestion: {
       FunctionType *FnTy = Context.getFunctionType(
          Context.getUnknownAnyTy(),
-         { lhsType, Context.getUnknownAnyTy() });
+         { lhsType->stripReference(), Context.getUnknownAnyTy() });
 
       Vec.emplace_back(FnTy);
       break;
@@ -401,19 +430,13 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       break;
    }
    case op::AddrOf: {
-      QualType PointerTy;
-      if (lhsType->isMutableReferenceType()) {
-         PointerTy = Context.getMutablePointerType(
-            lhsType->getReferencedType());
-      }
-      else if (lhsType->isReferenceType()) {
-         PointerTy = Context.getPointerType(lhsType->getReferencedType());
-      }
-      else {
-         break;
-      }
+      if (!lhsType->isMutableReferenceType())
+         lhsType = Context.getMutableReferenceType(lhsType->stripReference());
 
-      FunctionType *FnTy = Context.getFunctionType(PointerTy, { lhsType });
+      auto ResultTy = Context.getMutableBorrowType(
+         lhsType->getReferencedType());
+
+      FunctionType *FnTy = Context.getFunctionType(ResultTy, { lhsType });
       Vec.emplace_back(FnTy);
 
       break;
@@ -509,7 +532,7 @@ BuiltinCandidateBuilder::getPrecedenceGroup(op::OperatorKind opKind)
 void BuiltinCandidateBuilder::getOpKindAndFix(DeclarationName op,
                                               op::OperatorKind &opKind,
                                               FixKind &fix) {
-   auto Kind = op.getDeclarationKind();
+   auto Kind = op.getKind();
    switch (Kind) {
    case DeclarationName::InfixOperatorName:
       opKind = op::fromString(FixKind::Infix, op.getInfixOperatorName()

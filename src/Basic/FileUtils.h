@@ -32,13 +32,18 @@ llvm::StringRef withoutExtension(llvm::StringRef fullPath);
 std::string swapExtension(llvm::StringRef fileName,
                           llvm::StringRef newExt);
 
+int deleteFile(llvm::StringRef FileName);
+
 llvm::StringRef getFileNameAndExtension(llvm::StringRef fullPath);
 bool fileExists(llvm::StringRef name);
 
 void createDirectories(llvm::StringRef fullPath);
+int deleteDirectory(const llvm::Twine& Dir);
 
 std::vector<std::string> getAllFilesInDirectory(llvm::StringRef dirName,
                                                 bool recursive = false);
+
+void deleteAllFilesInDirectory(const llvm::Twine &Dir);
 
 std::string findFileInDirectories(llvm::StringRef fileName,
                                   llvm::ArrayRef<std::string> directories);
@@ -50,6 +55,18 @@ void getAllMatchingFiles(llvm::StringRef fileName,
                          llvm::SmallVectorImpl<std::string> &Out);
 
 std::error_code makeAbsolute(llvm::SmallVectorImpl<char> &Buf);
+
+llvm::StringRef getLibraryDir();
+llvm::StringRef getIncludeDir();
+std::string getApplicationDir();
+
+llvm::StringRef getDynamicLibraryExtension();
+
+void appendToPath(llvm::SmallVectorImpl<char> &Path, llvm::StringRef Append);
+void appendToPath(llvm::SmallVectorImpl<char> &Path, const llvm::Twine &Append);
+void appendToPath(std::string &Path, const llvm::Twine &Append);
+
+std::string getTmpFileName(llvm::StringRef Ext);
 
 } // namespace fs
 } // namespace cdot

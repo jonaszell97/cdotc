@@ -123,6 +123,8 @@ public:
                         ast::Statement* stmt,
                         sema::MultiLevelFinalTemplateArgList &&templateArgs);
 
+   ExprResult InstantiateTypeExpr(ast::RecordDecl *Rec, ast::Expression *E);
+
    DeclResult
    InstantiateDecl(SourceLocation instantiatedFrom,
                    ast::Decl* D,

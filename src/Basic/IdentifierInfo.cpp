@@ -10,11 +10,16 @@ namespace cdot {
 
 void IdentifierTable::addKeywords()
 {
+   if (KeywordsAdded)
+      return;
+
 #  define CDOT_KEYWORD_TOKEN(Name, Pattern)  \
    addKeyword(tok::Name, Pattern);
 #  define CDOT_POUND_KEYWORD(Name)           \
    addKeyword(tok::pound_##Name, "#" #Name);
 #  include "Lex/Tokens.def"
+
+   KeywordsAdded = true;
 }
 
 void IdentifierTable::addTblGenKeywords()

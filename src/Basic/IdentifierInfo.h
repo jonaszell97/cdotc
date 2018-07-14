@@ -115,6 +115,7 @@ public:
 
 private:
    MapTy IdentMap;
+   bool KeywordsAdded = false;
 
    void addKeyword(lex::tok::TokenType kind, llvm::StringRef kw);
 };

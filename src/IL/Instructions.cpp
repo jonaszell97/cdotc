@@ -22,7 +22,8 @@ AllocaInst::AllocaInst(ValueType ty,
                        BasicBlock *parent,
                        unsigned alignment,
                        bool heap)
-   : Instruction(AllocaInstID, ty, parent)
+   : Instruction(AllocaInstID, ty, parent),
+     allocSize(nullptr)
 {
    AllocaBits.Heap = heap;
    Alignment = alignment;
@@ -39,10 +40,11 @@ AllocaInst::AllocaInst(ValueType ty,
 AllocaInst::AllocaInst(ValueType ty,
                        bool IsLet,
                        BasicBlock *parent,
-                       size_t allocSize,
+                       Value *allocSize,
                        unsigned alignment,
                        bool heap)
-   : Instruction(AllocaInstID, ty, parent), allocSize(allocSize)
+   : Instruction(AllocaInstID, ty, parent),
+     allocSize(allocSize)
 {
    AllocaBits.Heap = heap;
    Alignment = alignment;
@@ -76,7 +78,9 @@ FieldRefInst::FieldRefInst(Value *val,
    assert(Field && "field does not exist on type!");
 
    FieldRefBits.IsLet = IsLet;
+   Offset = Field->getOffset();
    type = Field->getType();
+
    if (IsLet) {
       type = getASTCtx().getReferenceType(type);
    }
@@ -95,14 +99,15 @@ GEPInst::GEPInst(il::Value *val, size_t idx, bool IsLet, il::BasicBlock *parent)
                        ConstantInt::get(ValueType(val->getCtx(),
                                                   val->getASTCtx()
                                                      .getUIntTy()),
-                                        idx), nullptr, parent)
+                                        idx), nullptr, parent),
+    Offset(0)
 {
-   val->addUse(this);
-
    QualType valTy = val->getType()->stripReference();
 
    assert(valTy->isRecordType() && "struct GEP on non-record type!");
    auto R = cast<StructDecl>(valTy->getRecord());
+
+   auto &TI = getASTCtx().getTargetInfo();
 
    size_t i = 0;
    for (auto F : R->getFields()) {
@@ -110,24 +115,25 @@ GEPInst::GEPInst(il::Value *val, size_t idx, bool IsLet, il::BasicBlock *parent)
          type = F->getType();
          break;
       }
+
+      Offset += TI.getSizeOfType(F->getType());
    }
 
    GEPBits.IsLet = IsLet;
    if (IsLet) {
-      type = getASTCtx().getReferenceType(type);
+      type = getASTCtx().getReferenceType(type->stripReference());
    }
    else {
-      type = getASTCtx().getMutableReferenceType(type);
+      type = getASTCtx().getMutableReferenceType(type->stripReference());
    }
 }
 
 GEPInst::GEPInst(Value *val, Value *idx,
                  bool IsLet,
                  BasicBlock *parent)
-   : BinaryInstruction(GEPInstID, val, idx, nullptr, parent)
+   : BinaryInstruction(GEPInstID, val, idx, nullptr, parent),
+   Offset(0)
 {
-   val->addUse(this);
-
    QualType valTy = val->getType();
    QualType resultTy;
 
@@ -135,16 +141,35 @@ GEPInst::GEPInst(Value *val, Value *idx,
       valTy = valTy->getReferencedType();
    }
 
+   auto &TI = getASTCtx().getTargetInfo();
+
    if (valTy->isPointerType()) {
       resultTy = valTy->getPointeeType();
+
+      if (auto CI = dyn_cast<ConstantInt>(idx)) {
+         Offset += CI->getZExtValue() * TI.getPointerSizeInBytes();
+      }
    }
    else if (valTy->isTupleType()) {
       assert(isa<ConstantInt>(idx));
       resultTy = valTy->asTupleType()
                       ->getContainedType(cast<ConstantInt>(idx)->getZExtValue());
+
+      if (auto CI = dyn_cast<ConstantInt>(idx)) {
+         auto Cont = valTy->asTupleType()->getContainedTypes();
+         auto Idx = CI->getZExtValue();
+
+         for (unsigned i = 0; i < Idx; ++i) {
+            Offset += TI.getSizeOfType(Cont[i]);
+         }
+      }
    }
    else if (valTy->isArrayType()) {
       resultTy = valTy->asArrayType()->getElementType();
+
+      if (auto CI = dyn_cast<ConstantInt>(idx)) {
+         Offset += TI.getSizeOfType(resultTy) * CI->getZExtValue();
+      }
    }
    else {
       llvm_unreachable("cannot GEP on given type!");
@@ -175,6 +200,7 @@ ConstantInt* TupleExtractInst::getIdx() const
 }
 
 EnumRawValueInst::EnumRawValueInst(Value *Val,
+                                   bool LoadVal,
                                    BasicBlock *parent)
    : UnaryInstruction(EnumRawValueInstID, Val, nullptr, parent)
 {
@@ -182,6 +208,9 @@ EnumRawValueInst::EnumRawValueInst(Value *Val,
    assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
    type = ValueType(Val->getCtx(), cast<EnumDecl>(rec)->getRawType());
+
+   if (!LoadVal)
+      type = getASTCtx().getMutableReferenceType(type);
 }
 
 EnumExtractInst::EnumExtractInst(Value *Val,
@@ -283,14 +312,35 @@ RetInst::RetInst(Context &Ctx, BasicBlock *parent)
 
 }
 
-bool RetInst::isVoidReturn() const
+YieldInst::YieldInst(il::Value *yieldedValue,
+                     BasicBlock *ResumeDst,
+                     ArrayRef<Value*> ResumeArgs,
+                     bool FinalYield,
+                     il::BasicBlock *parent)
+   : TerminatorInst(YieldInstID, yieldedValue->getCtx(), parent),
+     MultiOperandInst(ResumeArgs),
+     ResumeDst(ResumeDst), yieldedValue(yieldedValue)
 {
-   return returnedValue == nullptr;
+   yieldedValue->addUse(this);
+   if (ResumeDst)
+      ResumeDst->addUse(this);
+
+   YieldBits.IsFinalYield = FinalYield;
 }
 
-Value *RetInst::getReturnedValue() const
+YieldInst::YieldInst(il::Context &Ctx,
+                     BasicBlock *ResumeDst,
+                     ArrayRef<Value*> ResumeArgs,
+                     bool FinalYield,
+                     il::BasicBlock *parent)
+   : TerminatorInst(YieldInstID, Ctx, parent),
+     MultiOperandInst(ResumeArgs),
+     ResumeDst(ResumeDst), yieldedValue(nullptr)
 {
-   return returnedValue;
+   if (ResumeDst)
+      ResumeDst->addUse(this);
+
+   YieldBits.IsFinalYield = FinalYield;
 }
 
 ThrowInst::ThrowInst(Value *thrownValue,
@@ -298,6 +348,15 @@ ThrowInst::ThrowInst(Value *thrownValue,
                      BasicBlock *parent)
    : TerminatorInst(ThrowInstID, thrownValue->getCtx(), parent),
      thrownValue(thrownValue), typeInfo(typeInfo)
+{
+   thrownValue->addUse(this);
+   typeInfo->addUse(this);
+}
+
+RethrowInst::RethrowInst(Value *thrownValue,
+                         BasicBlock *parent)
+   : TerminatorInst(RethrowInstID, thrownValue->getCtx(), parent),
+   thrownValue(thrownValue)
 {
    thrownValue->addUse(this);
 }
@@ -312,20 +371,21 @@ CallInst::CallInst(Function *func, llvm::ArrayRef<Value *> args,
                    BasicBlock *parent)
    : Instruction(CallInstID, ValueType(func->getCtx(), func->getReturnType()),
                  parent),
-     MultiOperandInst(args),
-     calledFunction(func)
+     MultiOperandInst(args, args.size() + 1)
 {
    func->addUse(this);
    for (const auto &arg : args) {
       arg->addUse(this);
    }
+
+   Operands[numOperands - 1] = func;
 }
 
 CallInst::CallInst(TypeID id, Context &Ctx,
                    llvm::ArrayRef<Value *> args,
                    BasicBlock *parent)
    : Instruction(id, ValueType(Ctx, Ctx.getASTCtx().getVoidType()), parent),
-     MultiOperandInst(args)
+     MultiOperandInst(args, args.size() + 1)
 {
    for (const auto &arg : args) {
       arg->addUse(this);
@@ -345,15 +405,36 @@ CallInst::CallInst(TypeID id, Value *func, llvm::ArrayRef<Value *> args,
                                func->getType()->asFunctionType()
                                    ->getReturnType()),
                  parent),
-     MultiOperandInst(args),
-     indirectFunction(func)
+     MultiOperandInst(args, args.size() + 1)
 {
+   Operands[numOperands - 1] = func;
+}
 
+Function *CallInst::getCalledFunction() const
+{
+   return support::dyn_cast<Function>(Operands[numOperands - 1]);
+}
+
+Method *CallInst::getCalledMethod() const
+{
+   return support::dyn_cast_or_null<Method>(getCalledFunction());
+}
+
+bool CallInst::isTaggedDeinit() const
+{
+   if (isTagged())
+      return true;
+
+   auto M = getCalledMethod();
+   if (!M)
+      return false;
+
+   return M->isDeinit() && getArgs().front()->isTagged();
 }
 
 llvm::ArrayRef<Value*> CallInst::getArgs() const
 {
-   return { Operands, numOperands };
+   return { Operands, numOperands - 1 };
 }
 
 IndirectCallInst::IndirectCallInst(Value *Func, llvm::ArrayRef<Value *> args,
@@ -371,28 +452,12 @@ LambdaCallInst::LambdaCallInst(Value *lambda,
 
 }
 
-ProtocolCallInst::ProtocolCallInst(Method *M,
-                                   llvm::ArrayRef<Value *> args,
-                                   BasicBlock *parent)
-   : CallInst(ProtocolCallInstID, M, args, parent)
-{
-
-}
-
-VirtualCallInst::VirtualCallInst(Method *M,
-                                 llvm::ArrayRef<Value *> args,
-                                 BasicBlock *parent)
-   : CallInst(VirtualCallInstID, M, args, parent)
-{
-
-}
-
 InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
                        BasicBlock *NormalContinuation, BasicBlock *LandingPad,
                        BasicBlock *parent)
    : TerminatorInst(InvokeInstID, func->getCtx(), parent),
-     MultiOperandInst(args),
-     calledFunction(func), NormalContinuation(NormalContinuation),
+     MultiOperandInst(args, args.size() + 1),
+     NormalContinuation(NormalContinuation),
      LandingPad(LandingPad)
 {
    NormalContinuation->addUse(this);
@@ -402,6 +467,8 @@ InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
    for (const auto &arg : args) {
       arg->addUse(this);
    }
+
+   Operands[numOperands - 1] = func;
 }
 
 InvokeInst::InvokeInst(TypeID id,
@@ -415,30 +482,19 @@ InvokeInst::InvokeInst(TypeID id,
    this->id = id;
 }
 
+Function *InvokeInst::getCalledFunction() const
+{
+   return support::cast<Function>(Operands[numOperands - 1]);
+}
+
+Method *InvokeInst::getCalledMethod() const
+{
+   return support::cast<Method>(Operands[numOperands - 1]);
+}
+
 llvm::ArrayRef<Value*> InvokeInst::getArgs() const
 {
-   return { Operands, numOperands };
-}
-
-ProtocolInvokeInst::ProtocolInvokeInst(Method *M,
-                                       llvm::ArrayRef<Value *> args,
-                                       BasicBlock *NormalContinuation,
-                                       BasicBlock *LandingPad,
-                                       BasicBlock *parent)
-   : InvokeInst(ProtocolInvokeInstID, M, args,
-                NormalContinuation, LandingPad, parent)
-{
-
-}
-
-VirtualInvokeInst::VirtualInvokeInst(Method *M,
-                                     llvm::ArrayRef<Value *> args,
-                                     BasicBlock *NormalContinuation,
-                                     BasicBlock *LandingPad, BasicBlock *parent)
-   : InvokeInst(VirtualInvokeInstID, M, args,
-                NormalContinuation, LandingPad, parent)
-{
-
+   return { Operands, numOperands - 1 };
 }
 
 IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
@@ -446,6 +502,19 @@ IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
                                      llvm::ArrayRef<Value *> args,
                                      BasicBlock *parent)
    : Instruction(IntrinsicCallInstID, returnType, parent),
+     MultiOperandInst(args),
+     calledIntrinsic(id)
+{
+   for (const auto &arg : args) {
+      arg->addUse(this);
+   }
+}
+
+LLVMIntrinsicCallInst::LLVMIntrinsicCallInst(IdentifierInfo *id,
+                                             ValueType returnType,
+                                             llvm::ArrayRef<Value *> args,
+                                             BasicBlock *parent)
+   : Instruction(LLVMIntrinsicCallInstID, returnType, parent),
      MultiOperandInst(args),
      calledIntrinsic(id)
 {
@@ -693,24 +762,32 @@ DynamicCastInst::DynamicCastInst(Value *target,
    setIsLvalue(true);
 }
 
-InitInst::InitInst(StructDecl *InitializedType,
-                   Method *Init,
-                   llvm::ArrayRef<Value *> args,
-                   BasicBlock *parent)
-   : CallInst(InitInstID, Init, args, parent),
+StructInitInst::StructInitInst(StructDecl *InitializedType,
+                               Method *Init,
+                               llvm::ArrayRef<Value *> args,
+                               bool Fallible,
+                               QualType FallibleTy,
+                               BasicBlock *parent)
+   : CallInst(StructInitInstID, Init, args, parent),
      InitializedType(InitializedType)
 {
-   type = getASTCtx().getRecordType(InitializedType);
+   if (FallibleTy)
+      type = FallibleTy;
+   else
+      type = getASTCtx().getRecordType(InitializedType);
+
+   AllocaBits.Heap = isa<ClassDecl>(InitializedType);
+   AllocaBits.FallibleInit = Fallible;
 }
 
 UnionInitInst::UnionInitInst(UnionDecl *UnionTy,
                              Value *InitializerVal,
                              BasicBlock *parent)
-   : CallInst(UnionInitInstID, InitializerVal->getCtx(), { InitializerVal },
-              parent),
+   : UnaryInstruction(UnionInitInstID, InitializerVal,
+                      InitializerVal->getASTCtx().getRecordType(UnionTy),
+                      parent),
      UnionTy(UnionTy)
 {
-   type = getASTCtx().getRecordType(UnionTy);
 }
 
 EnumInitInst::EnumInitInst(Context &Ctx,
@@ -718,10 +795,12 @@ EnumInitInst::EnumInitInst(Context &Ctx,
                            ast::EnumCaseDecl *Case,
                            llvm::ArrayRef<Value *> args,
                            BasicBlock *parent)
-   : CallInst(EnumInitInstID, Ctx, args, parent),
+   : Instruction(EnumInitInstID,
+                 ValueType(Ctx, Ctx.getASTCtx().getRecordType(EnumTy)),
+                 parent),
+     MultiOperandInst(args),
      EnumTy(EnumTy), Case(Case)
 {
-   type = getASTCtx().getRecordType(EnumTy);
    setIndirect(Case->isIndirect());
 }
 
@@ -742,73 +821,42 @@ LambdaInitInst::LambdaInitInst(il::Function *F,
 }
 
 DeallocInst::DeallocInst(il::Value *V, bool Heap, il::BasicBlock *P)
-   : Instruction(DeallocInstID,
-                 ValueType(V->getCtx(), V->getASTCtx().getVoidType()), P),
-     V(V)
+   : UnaryInstruction(DeallocInstID, V, V->getASTCtx().getVoidType(), P)
 {
    AllocaBits.Heap = Heap;
 }
 
 DeallocBoxInst::DeallocBoxInst(il::Value *V, il::BasicBlock *P)
-   : Instruction(DeallocBoxInstID,
-                 ValueType(V->getCtx(), V->getASTCtx().getVoidType()), P),
-     V(V)
+   : UnaryInstruction(DeallocBoxInstID, V, V->getASTCtx().getVoidType(), P)
 {
 
 }
 
-DeinitializeLocalInst::DeinitializeLocalInst(il::Value *RefcountedVal,
-                                             il::BasicBlock *Parent)
-   : Instruction(DeinitializeLocalInstID,
-                 ValueType(RefcountedVal->getCtx(),
-                           RefcountedVal->getASTCtx().getVoidType()), Parent),
-     Val(RefcountedVal), Deinitializer(nullptr)
+AssignInst::AssignInst(Value *dst, Value *src,
+                       BasicBlock *parent)
+   : BinaryInstruction(AssignInstID, dst, src,
+                       ValueType(dst->getCtx(), dst->getASTCtx().getVoidType()),
+                       parent)
 {
-   assert(RefcountedVal->isLvalue());
-}
-
-DeinitializeLocalInst::DeinitializeLocalInst(il::Function *DeinitFn,
-                                             il::Value *ValueToDeinit,
-                                             il::BasicBlock *Parent)
-   : Instruction(DeinitializeLocalInstID,
-                 ValueType(ValueToDeinit->getCtx(),
-                           ValueToDeinit->getASTCtx().getVoidType()), Parent),
-     Val(ValueToDeinit), Deinitializer(DeinitFn)
-{
-   assert(ValueToDeinit->isLvalue());
-}
-
-DeinitializeTemporaryInst::DeinitializeTemporaryInst(il::Value *RefcountedVal,
-                                                     il::BasicBlock *Parent)
-   : Instruction(DeinitializeTemporaryInstID,
-                 ValueType(RefcountedVal->getCtx(),
-                           RefcountedVal->getASTCtx().getVoidType()), Parent),
-     Val(RefcountedVal), Deinitializer(nullptr)
-{
-
-}
-
-DeinitializeTemporaryInst::DeinitializeTemporaryInst(il::Function *DeinitFn,
-                                                     il::Value *ValueToDeinit,
-                                                     il::BasicBlock *Parent)
-   : Instruction(DeinitializeTemporaryInstID,
-                 ValueType(ValueToDeinit->getCtx(),
-                           ValueToDeinit->getASTCtx().getVoidType()), Parent),
-     Val(ValueToDeinit), Deinitializer(DeinitFn)
-{
-
+   
 }
 
 StoreInst::StoreInst(Value *dst, Value *src,
-                     bool IsInit, BasicBlock *parent)
-   : BinaryInstruction(StoreInstID, dst, src, nullptr, parent)
+                     BasicBlock *parent)
+   : BinaryInstruction(StoreInstID, dst, src,
+                       ValueType(dst->getCtx(), dst->getASTCtx().getVoidType()),
+                       parent)
 {
-   StoreBits.IsInit = IsInit;
+
 }
 
-bool StoreInst::useMemCpy() const
+InitInst::InitInst(Value *dst, Value *src,
+                     BasicBlock *parent)
+   : BinaryInstruction(InitInstID, dst, src,
+                       ValueType(dst->getCtx(), dst->getASTCtx().getVoidType()),
+                       parent)
 {
-   return type->needsMemCpy();
+
 }
 
 LoadInst::LoadInst(Value *target,
@@ -856,6 +904,89 @@ PtrToLvalueInst::PtrToLvalueInst(Value *target, BasicBlock *parent)
                       parent)
 {
 
+}
+
+RefcountingInst::RefcountingInst(TypeID ID,
+                                 il::Value *Val,
+                                 il::BasicBlock *Parent)
+   : UnaryInstruction(ID, Val, Val->getASTCtx().getVoidType(), Parent)
+{
+   
+}
+
+RetainInst::RetainInst(TypeID ID,
+                       il::Value *Val,
+                       il::BasicBlock *Parent)
+   : RefcountingInst(ID, Val, Parent)
+{
+
+}
+
+ReleaseInst::ReleaseInst(TypeID ID,
+                         il::Value *Val,
+                         il::BasicBlock *Parent)
+   : RefcountingInst(ID, Val, Parent)
+{
+
+}
+
+StrongRetainInst::StrongRetainInst(il::Value *Val,
+                                   il::BasicBlock *Parent)
+   : RetainInst(StrongRetainInstID, Val, Parent)
+{
+   
+}
+
+StrongReleaseInst::StrongReleaseInst(il::Value *Val,
+                                     il::BasicBlock *Parent)
+   : ReleaseInst(StrongReleaseInstID, Val, Parent)
+{
+
+}
+
+WeakRetainInst::WeakRetainInst(il::Value *Val,
+                               il::BasicBlock *Parent)
+   : RetainInst(WeakRetainInstID, Val, Parent)
+{
+
+}
+
+WeakReleaseInst::WeakReleaseInst(il::Value *Val,
+                                 il::BasicBlock *Parent)
+   : ReleaseInst(WeakReleaseInstID, Val, Parent)
+{
+
+}
+
+MoveInst::MoveInst(il::Value *Target, il::BasicBlock *Parent)
+   : UnaryInstruction(MoveInstID, Target, Target->getType(), Parent)
+{
+
+}
+
+BeginBorrowInst::BeginBorrowInst(il::Value *Target,
+                                 SourceLocation BeginLoc,
+                                 SourceLocation EndLoc,
+                                 bool IsMutableBorrow,
+                                 il::BasicBlock *Parent)
+   : UnaryInstruction(BeginBorrowInstID, Target, Target->getType(), Parent),
+     BeginLoc(BeginLoc), EndLoc(EndLoc)
+{
+   assert(Target->isLvalue() && "cannot borrow rvalue!");
+   BorrowBits.IsMutableBorrow = IsMutableBorrow;
+}
+
+EndBorrowInst::EndBorrowInst(il::Value *Target,
+                             SourceLocation Loc,
+                             bool IsMutableBorrow,
+                             il::BasicBlock *Parent)
+   : UnaryInstruction(EndBorrowInstID, Target,
+                      ValueType(Target->getCtx(),
+                                Target->getASTCtx().getVoidType()),
+                      Parent),
+     Loc(Loc)
+{
+   BorrowBits.IsMutableBorrow = IsMutableBorrow;
 }
 
 DebugLocInst::DebugLocInst(SourceLocation Loc,

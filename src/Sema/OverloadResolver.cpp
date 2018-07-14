@@ -49,12 +49,11 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             result.push_back(DefaultType);
          }
          else {
-            if (TemplateArgs && IsVariadic)
-               TemplateArgs->inferFromType(GivenArg->getExprType(),
-                                           neededArgs.back(), true);
-
             result.push_back(GivenArg->getExprType());
          }
+
+         if (TemplateArgs && IsVariadic)
+            TemplateArgs->inferFromType(result.back(), neededArgs.back(), true);
 
          ++i;
          continue;
@@ -72,8 +71,11 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                if (LE->isInvalid()) {
                   Cand.setIsInvalid();
                }
+               else if (auto Def = SP.GetDefaultExprType(LE)) {
+                  Cand.setHasIncompatibleArgument(i, Def);
+               }
                else {
-                  Cand.setHasIncompatibleArgument(i);
+                  Cand.setCouldNotInferArgumentType(i);
                }
 
                return false;
@@ -89,15 +91,19 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             ++i;
             continue;
          }
-         else if (!SP.ExprCanReturn(GivenArg, NeededArg)) {
+
+         int CanReturn = SP.ExprCanReturn(GivenArg, NeededArg);
+         if (CanReturn == -1) {
             if (GivenArg->isInvalid()) {
                Cand.setIsInvalid();
             }
             else {
-               if (!SP.visitExpr(GivenArg))
-                  Cand.setIsInvalid();
-               else
-                  Cand.setHasIncompatibleArgument(i);
+               if (auto Def = SP.GetDefaultExprType(GivenArg)) {
+                  Cand.setHasIncompatibleArgument(i, Def);
+               }
+               else {
+                  Cand.setCouldNotInferArgumentType(i);
+               }
             }
 
             return false;
@@ -129,6 +135,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             }
          }
          else {
+            Cand.ConversionPenalty += CanReturn;
             result.push_back(NeededArg);
          }
       }
@@ -147,93 +154,21 @@ static bool resolveContextDependentArgs(SemaPass &SP,
    return true;
 }
 
-static bool dropFirstArgument(CandidateSet &CandSet,
-                              CandidateSet::Candidate &Cand) {
-   return Cand.Func && Cand.Func->isNonStaticMethod();
-//   return Cand.UFCS == CandidateSet::MethodCalledAsFunction;
-}
-
-static bool incompatibleSelf(SemaPass &SP,
-                             CandidateSet &CandSet,
-                             CandidateSet::Candidate &Cand,
-                             llvm::ArrayRef<Expression*> givenArgs) {
-   if (!dropFirstArgument(CandSet, Cand))
-      return false;
-
-   auto M = cast<MethodDecl>(Cand.Func);
-
-   if (M->isStatic())
-      return false;
-
-   // no `self` argument provided for a non static method
-   if (givenArgs.empty()) {
-      Cand.setMustBeStatic();
-      return true;
-   }
-
-   if (M->hasMutableSelf()) {
-      auto Self = givenArgs.front();
-
-      if (!Self->getExprType()->isMutableReferenceType()) {
-         Cand.setMutatingOnConstSelf();
-         return true;
-      }
-
-      if (!Self->isLValue()) {
-         Cand.setMutatingOnRValueSelf();
-         return true;
-      }
-   }
-
-   // method called with wrong type for `self` argument
-   QualType givenSelf = givenArgs.front()->getExprType();
-   if (!givenSelf) {
-      // if `self` is a context dependent expression, this overload would
-      // not have been added if it were the wrong type. Currently this
-      // means that `self` can only be of type `String`
-      return false;
-   }
-
-   givenSelf = givenSelf->stripReference();
-
-   bool result = false;
-   if (givenSelf->isRecordType()) {
-      auto GivenRec = givenSelf->getRecord();
-      auto NeededRec = M->getRecord();
-
-      if (auto Sub = dyn_cast<ClassDecl>(GivenRec)) {
-         auto Base = dyn_cast<ClassDecl>(NeededRec);
-         if (Base)
-            result = Sub == Base || Base->isBaseClassOf(Sub);
-      }
-      else {
-         result = GivenRec == NeededRec;
-      }
-   }
-
-   if (!result) {
-      Cand.setHasIncompatibleSelfArgument(SP.getContext()
-                                            .getRecordType(M->getRecord()),
-                                          givenSelf);
-
-      return true;
-   }
-
-   return false;
-}
-
 void OverloadResolver::resolve(CandidateSet &CandSet)
 {
-   llvm::SmallVector<ConversionSequence, 4> Conversions;
+   SmallVector<ConversionSequenceBuilder, 4> Conversions;
    bool foundMatch       = false;
    bool MatchIsDependent = false;
    bool Dependent        = false;
    bool ambiguous        = false;
 
-   for (auto &Cand : CandSet.Candidates) {
-      assert(Cand.isBuiltinCandidate() || Cand.Func->isTemplate()
-             || Cand.Func->getFunctionType()
-                && "function without function type");
+   unsigned BestMatch      = 0;
+   unsigned BestMatchDistance = 0;
+   unsigned MaxConstraints = 0;
+   unsigned NumCandidates  = (unsigned)CandSet.Candidates.size();
+
+   for (unsigned i = 0; i < NumCandidates; ++i) {
+      auto &Cand = CandSet.Candidates[i];
 
       if (Cand.Func) {
          if (!SP.ensureDeclared(Cand.Func) || Cand.Func->isInvalid()) {
@@ -243,13 +178,12 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
          }
       }
 
-      if (incompatibleSelf(SP, CandSet, Cand, givenArgs)) {
-         continue;
-      }
+      assert(Cand.isBuiltinCandidate() || Cand.Func->isTemplate()
+             || Cand.Func->getFunctionType()
+                && "function without function type");
 
-      // for non static method calls, check the signature without the implicit
-      // `self` argument, its type was already checked above
-      if (dropFirstArgument(CandSet, Cand)) {
+      if (!Cand.isBuiltinCandidate() && Cand.Func->isStatic()
+            && CandSet.IncludesSelfArgument) {
          resolve(CandSet, Cand, givenArgs.drop_front(1), Conversions);
       }
       else {
@@ -269,15 +203,17 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
       Dependent |= IsDependent;
 
       if (Cand || IsDependent) {
-         bool IsBetterMatch = CandSet.BestConversionPenalty
-                                 >= Cand.ConversionPenalty;
+         bool IsBetterMatch =
+            (!foundMatch || BestMatchDistance >= Cand.Distance)
+            && CandSet.BestConversionPenalty >= Cand.ConversionPenalty
+            && Cand.getNumConstraints() >= MaxConstraints;
 
-         if (foundMatch) {
+         if (foundMatch
+                && CandSet.BestConversionPenalty == Cand.ConversionPenalty
+                && Cand.getNumConstraints() == MaxConstraints) {
             // dependent candidates might not actually be valid at
             // instantiation time, so don't report an error
-            if (CandSet.BestConversionPenalty == Cand.ConversionPenalty
-                && Cand.FR != CandidateSet::IsDependent
-                && !MatchIsDependent) {
+            if (Cand.FR != CandidateSet::IsDependent && !MatchIsDependent) {
                ambiguous = true;
             }
          }
@@ -290,21 +226,29 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
             CandSet.Conversions.resize(Conversions.size());
             std::move(Conversions.begin(), Conversions.end(),
                       CandSet.Conversions.begin());
+
+            BestMatch = i;
+            MaxConstraints = Cand.getNumConstraints();
          }
 
          foundMatch = true;
+         BestMatchDistance = Cand.Distance;
          CandSet.maybeUpdateBestConversionPenalty(Cand.ConversionPenalty);
       }
 
       Conversions.clear();
    }
 
-   if (ambiguous)
+   if (ambiguous) {
       CandSet.Status = CandidateSet::Ambiguous;
-   else if (foundMatch)
+   }
+   else if (foundMatch) {
       CandSet.Status = CandidateSet::Success;
-   else if (Dependent)
+      CandSet.MatchIdx = BestMatch;
+   }
+   else if (Dependent) {
       CandSet.Dependent = true;
+   }
 }
 
 LLVM_ATTRIBUTE_UNUSED
@@ -323,12 +267,11 @@ static bool hasDependentSignature(CallableDecl *C)
 void OverloadResolver::resolve(CandidateSet &CandSet,
                                CandidateSet::Candidate &Cand,
                                llvm::ArrayRef<Expression*> givenArgs,
-                               llvm::SmallVectorImpl<ConversionSequence>
-                                                                 &Conversions) {
+                               ConvSeqVec &Conversions) {
    FunctionType *FuncTy = Cand.getFunctionType();
    llvm::SmallVector<QualType, 8> resolvedGivenArgs;
 
-   bool IsTemplate = Cand.Func
+   bool IsTemplate = !Cand.isBuiltinCandidate()
                      && (Cand.Func->isTemplate()
                          || Cand.Func->isInitializerOfTemplate()
                          || Cand.Func->isCaseOfTemplatedEnum());
@@ -356,9 +299,8 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
       // initializers and enum cases also need their containing records
       // template arguments specified (or inferred)
       if (NeedOuterTemplateParams) {
-         OuterTemplateArgs = TemplateArgList(
-            SP, cast<RecordDecl>(Cand.Func->getDeclContext()),
-            givenTemplateArgs, listLoc);
+         OuterTemplateArgs = TemplateArgList(SP, Cand.Func->getRecord(),
+                                             givenTemplateArgs, listLoc);
 
          TemplateArgs.addOuterList(OuterTemplateArgs);
       }
@@ -469,7 +411,7 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
 
 namespace {
 
-size_t castPenalty(const ConversionSequence &neededCast)
+size_t castPenalty(const ConversionSequenceBuilder &neededCast)
 {
    size_t penalty = 0;
 
@@ -477,9 +419,11 @@ size_t castPenalty(const ConversionSequence &neededCast)
    for (const auto &C : neededCast.getSteps()) {
       switch (C.getKind()) {
       case CastKind::NoOp:
-      case CastKind::MutPtrToPtr:
-      case CastKind::MutRefToRef:
+      case CastKind::Move:
+      case CastKind::Forward:
       case CastKind::LValueToRValue:
+      case CastKind::MutRefToRef:
+      case CastKind::RValueToConstRef:
       case CastKind::BitCast: // only u8* -> void* can appear as an
                               // implicit bitcast
          break;
@@ -488,6 +432,9 @@ size_t castPenalty(const ConversionSequence &neededCast)
       case CastKind::SignFlip:
       case CastKind::EnumToInt:
       case CastKind::IntToEnum:
+      case CastKind::Copy:
+      case CastKind::MutPtrToPtr:
+      case CastKind::IsNull:
          penalty += 1;
          break;
       case CastKind::ProtoWrap:
@@ -526,12 +473,13 @@ void OverloadResolver::isCallCompatible(CandidateSet &CandSet,
    if (numGivenArgs > numNeededArgs && !isVararg)
       return Cand.setHasTooManyArguments(numGivenArgs, numNeededArgs);
 
+   auto ParamInfo = FuncTy->getParamInfo();
+
    size_t i = 0;
-   for (auto &neededArg : neededArgs) {
-      auto& needed = neededArg;
+   for (auto NeededTy : neededArgs) {
       if (i < numGivenArgs) {
-         auto givenTy = givenArgs[i];
-         if (needed->isUnknownAnyType()) {
+         auto GivenTy = givenArgs[i];
+         if (NeededTy->isUnknownAnyType()) {
             assert((SP.isInDependentContext() || Cand.isBuiltinCandidate())
                    && "argument of UnknownAny type in non-dependent context!");
 
@@ -545,7 +493,7 @@ void OverloadResolver::isCallCompatible(CandidateSet &CandSet,
             continue;
          }
 
-         if (givenTy->isDependentType() || needed->isDependentType()) {
+         if (GivenTy->isDependentType() || NeededTy->isDependentType()) {
             Cand.setIsDependent();
             CandSet.Dependent = true;
 
@@ -553,21 +501,116 @@ void OverloadResolver::isCallCompatible(CandidateSet &CandSet,
             continue;
          }
 
-         if (needed->isReferenceType() && !givenTy->isReferenceType()) {
+         ConversionSequenceBuilder ConvSeq;
+         bool AddCopy = false;
+
+         // allow implicit conversion from mutable reference to mutable
+         // borrow for self argument
+         if (i == 0
+             && !Cand.isBuiltinCandidate()
+             && Cand.Func->isNonStaticMethod()
+             && NeededTy->isMutableBorrowType()
+             && GivenTy->isMutableReferenceType()) {
+            GivenTy = SP.getContext().getMutableBorrowType(
+               GivenTy->stripReference());
+
+            ConvSeq.addStep(CastKind::BitCast, GivenTy);
+         }
+
+         // check parameter passing convention
+         auto &NeededParamInfo = ParamInfo[i];
+         switch (NeededParamInfo.getConvention()) {
+         case ArgumentConvention::Default:
+            llvm_unreachable("didn't remove default convention!");
+         case ArgumentConvention::Borrowed:
+            if (GivenTy->isMutableBorrowType()) {
+               ++Cand.ConversionPenalty;
+            }
+
+            // if we're given a mutable reference, we need to pass an
+            // immutable one
+            if (GivenTy->isMutableReferenceType()) {
+               ConvSeq.addStep(CastKind::MutRefToRef,
+                               SP.getContext().getReferenceType(
+                                  GivenTy->getReferencedType()));
+            }
+
+            break;
+         case ArgumentConvention::MutablyBorrowed: {
+            // the left hand side of an assignment does not need to be
+            // explicitly borrowed
+            if (Cand.isAssignmentOperator() && i == 0) {
+               if (!NeededTy->isMutableReferenceType())
+                  NeededTy = SP.getContext()
+                               .getMutableReferenceType(
+                                  NeededTy->stripReference());
+            }
+            else if (!NeededTy->isMutableBorrowType()) {
+               NeededTy = SP.getContext()
+                            .getMutableBorrowType(NeededTy->stripReference());
+            }
+
+            break;
+         }
+         case ArgumentConvention::Owned: {
+            // requires passing ownership; for a temporary, this is a noop
+            // since we can forward, but for an lvalue it's a move
+
+            // if the type is implicitly copyable, pass a copy instead
+            if (GivenTy->isReferenceType()) {
+               QualType Deref = GivenTy->getReferencedType();
+               if (Deref->isRefcounted()) {
+                  // can't pass a non-mutable reference to an owned parameter
+//                  if (GivenTy->isNonMutableReferenceType()) {
+//                     Cand.setRequiresRef(i);
+//                     return;
+//                  }
+
+                  AddCopy = true;
+               }
+               else if (SP.IsImplicitlyCopyableType(Deref)) {
+                  AddCopy = true;
+               }
+               else {
+                  // can't pass a non-mutable reference to an owned parameter
+                  if (GivenTy->isNonMutableReferenceType()) {
+                     Cand.setRequiresRef(i);
+                     return;
+                  }
+
+                  ConvSeq.addStep(CastKind::Forward, GivenTy);
+               }
+            }
+            // if it's an rvalue, forward it
+            else {
+               ConvSeq.addStep(CastKind::Forward, GivenTy);
+            }
+
+            break;
+         }
+         }
+
+         // parameter requires a reference type
+         if (NeededTy->isReferenceType() && !GivenTy->isReferenceType()) {
             Cand.setRequiresRef(i);
             return;
          }
 
-         if (needed->isMutableReferenceType()
-             && !givenTy->isMutableReferenceType()) {
+         // parameter requires a mutable reference type
+         if (NeededTy->isMutableReferenceType()
+             && !GivenTy->isMutableReferenceType()) {
             Cand.setRequiresRef(i);
             return;
          }
 
-         auto ConvSeq = SP.getConversionSequence(givenTy, needed);
+         SP.getConversionSequence(ConvSeq, GivenTy, NeededTy);
          if (!ConvSeq.isImplicit()) {
-            return Cand.setHasIncompatibleArgument(i);
+            return Cand.setHasIncompatibleArgument(i, GivenTy);
          }
+
+         if (AddCopy)
+            ConvSeq.addStep(CastKind::Copy, ConvSeq.getSteps().back()
+                                                   .getResultType());
 
          Cand.ConversionPenalty += castPenalty(ConvSeq);
          Conversions.emplace_back(move(ConvSeq));
@@ -599,7 +642,7 @@ OverloadResolver::isVarargCallCompatible(CandidateSet &CandSet,
          auto &arg = givenArgs[i];
 
          Conversions.emplace_back();
-         ConversionSequence &ConvSeq = Conversions.back();
+         ConversionSequenceBuilder &ConvSeq = Conversions.back();
 
          // ...and only takes rvalues
          if (arg->isReferenceType()) {
@@ -622,7 +665,7 @@ OverloadResolver::isVarargCallCompatible(CandidateSet &CandSet,
 
       auto ConvSeq = SP.getConversionSequence(given, vaTy);
       if (!ConvSeq.isImplicit()) {
-         return Cand.setHasIncompatibleArgument(i);
+         return Cand.setHasIncompatibleArgument(i, given);
       }
       if (!vaTy.isNull() && given != vaTy) {
          Cand.ConversionPenalty += castPenalty(ConvSeq);

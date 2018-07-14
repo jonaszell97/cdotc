@@ -116,7 +116,6 @@ public:
    /*implicit*/ operator void*() const { return (void*) buffer; }
 
 private:
-#ifndef NDEBUG
    union {
       char *buffer;
       uint64_t u64;
@@ -147,11 +146,6 @@ private:
       llvm::APSInt *APS;
       llvm::APFloat *APF;
    };
-#else
-   char *buffer;
-#endif
-
-   void destroyValue(Type *type);
 
 public:
 #  define CDOT_VALUE_INIT(Field, Ty)        \

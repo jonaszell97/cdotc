@@ -7,7 +7,7 @@
 #include "AST/Decl.h"
 #include "Basic/CastKind.h"
 #include "Basic/DeclarationName.h"
-#include "Compiler.h"
+#include "Driver/Compiler.h"
 #include "IL/Context.h"
 #include "IL/Constants.h"
 #include "IL/Instructions.h"
@@ -28,8 +28,8 @@ namespace {
 
 class ModuleWriterImpl: public WriterBase<ModuleWriterImpl> {
 public:
-   ModuleWriterImpl(llvm::raw_ostream &out)
-      : WriterBase(out)
+   ModuleWriterImpl(llvm::raw_ostream &out, bool NoDebug = false)
+      : WriterBase(out), NoDebug(NoDebug)
    {
 
    }
@@ -38,6 +38,7 @@ public:
 
    void WriteGlobal(const GlobalVariable *G);
    void WriteInstruction(const Instruction *I);
+   void WriteInstructionImpl(const Instruction *I);
    void WriteBasicBlock(const BasicBlock *BB, bool first = false,
                         bool onlyDecl = false);
    void WriteFunction(const Function *F, bool onlyDecl = false);
@@ -45,6 +46,7 @@ public:
 
 private:
    llvm::DenseMap<ast::RecordDecl*, std::string> RecordNameCache;
+   bool NoDebug;
 
    enum class ValPrefix : unsigned char {
       None = '\0',
@@ -141,9 +143,11 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
    else if (ty->isVoidType()) {
       out << "void";
    }
+   else if (ty->isTokenType()) {
+      out << "token";
+   }
    else if (ty->isIntegerType()) {
-      out << (ty->isUnsigned() ? 'u' : 'i');
-      out << ty->getBitwidth();
+      out << (ty->isUnsigned() ? 'u' : 'i') << ty->getBitwidth();
    }
    else if (ty->isFPType()) {
       out << (ty->isFloatTy() ? "f32" : "f64");
@@ -187,6 +191,11 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
    else if (ty->isMetaType()) {
       out << "Meta[";
       WriteQualType(ty->asMetaType()->getUnderlyingType());
+      out << "]";
+   }
+   else if (ty->isBoxType()) {
+      out << "Box[";
+      WriteQualType(ty->getBoxedType());
       out << "]";
    }
    else {
@@ -461,6 +470,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       out << "null";
       break;
    }
+   case Value::ConstantTokenNoneID:
+      out << "none";
+      break;
    case Value::ConstantBitCastInstID:
       out << "bitcast (";
       WriteConstant(cast<ConstantBitCastInst>(C)->getTarget());
@@ -550,12 +562,15 @@ void ModuleWriterImpl::WriteArgument(const Argument &Arg)
 void ModuleWriterImpl::WriteArgumentNoName(const Argument &Arg)
 {
    switch (Arg.getConvention()) {
-   case Argument::Copied:
+   case ArgumentConvention::Default:
+      llvm_unreachable("didn't change default argument convention!");
+   case ArgumentConvention::MutablyBorrowed:
+      out << "[borrow_mut] ";
       break;
-   case Argument::Borrowed:
+   case ArgumentConvention::Borrowed:
       out << "[borrow] ";
       break;
-   case Argument::Owned:
+   case ArgumentConvention::Owned:
       out << "[owned] ";
       break;
    }
@@ -580,7 +595,9 @@ void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
 
    if (!G->hasInitializer()) {
       WriteQualType(G->getType()->getReferencedType());
-      out << " zeroinitializer";
+
+      if (G->isLazilyInitialized())
+         out << " zeroinitializer";
    }
    else {
       WriteConstant(G->getInitializer());
@@ -596,6 +613,13 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       out << " = ";
    }
 
+   WriteInstructionImpl(I);
+
+//   out << " !{ " << I->getSourceLoc().getOffset() << " }";
+}
+
+void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
+{
    if (auto DebugLoc = dyn_cast<DebugLocInst>(I)) {
       out << "debug_loc { line: " << DebugLoc->getLine()
           << ", col: " << DebugLoc->getCol()
@@ -620,11 +644,16 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       if (Alloca->isLet())
          out << "[let] ";
 
+      if (Alloca->isTagged())
+         out << "[tagged] ";
+
       WriteQualType(I->getType()->getReferencedType());
 
-      if (Alloca->getAllocSize() != 1) {
-         out << ", " << Alloca->getAllocSize();
+      if (Alloca->getAllocSize() != nullptr) {
+         out << ", ";
+         WriteValue(Alloca->getAllocSize());
       }
+
       if (auto align = Alloca->getAlignment()) {
          out << ", align " << align;
       }
@@ -659,22 +688,115 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    }
 
    if (auto Load = dyn_cast<LoadInst>(I)) {
+      if (Load->getMemoryOrder() != MemoryOrder::NotAtomic) {
+         out << Load->getMemoryOrder() << " ";
+      }
+
       out << "load ";
       WriteValue(Load->getTarget());
 
       return;
    }
 
+   if (auto Assign = dyn_cast<AssignInst>(I)) {
+      if (Assign->getMemoryOrder() != MemoryOrder::NotAtomic) {
+         out << Assign->getMemoryOrder() << " ";
+      }
+
+      out << "assign ";
+
+      if (Assign->getDst()->isTagged() || Assign->isTagged())
+         out << "[tagged] ";
+
+      WriteValue(Assign->getSrc());
+      out << ", ";
+      WriteValue(Assign->getDst());
+
+      return;
+   }
+   
    if (auto Store = dyn_cast<StoreInst>(I)) {
+      if (Store->getMemoryOrder() != MemoryOrder::NotAtomic) {
+         out << Store->getMemoryOrder() << " ";
+      }
+
       out << "store ";
-      if (Store->isInit())
-         out << "[init] ";
 
+      if (Store->getDst()->isTagged() || Store->isTagged())
+         out << "[tagged] ";
+      
       WriteValue(Store->getSrc());
-
       out << ", ";
       WriteValue(Store->getDst());
 
+      return;
+   }
+
+   if (auto Init = dyn_cast<InitInst>(I)) {
+      if (Init->getMemoryOrder() != MemoryOrder::NotAtomic) {
+         out << Init->getMemoryOrder() << " ";
+      }
+
+      out << "init ";
+
+      if (Init->getDst()->isTagged() || Init->isTagged())
+         out << "[tagged] ";
+
+      WriteValue(Init->getSrc());
+      out << ", ";
+      WriteValue(Init->getDst());
+
+      return;
+   }
+
+   if (auto Refc = dyn_cast<RefcountingInst>(I)) {
+      switch (Refc->getTypeID()) {
+      case Value::StrongRetainInstID:
+         out << "strong_retain ";
+         break;
+      case Value::StrongReleaseInstID:
+         out << "strong_release ";
+         break;
+      case Value::WeakRetainInstID:
+         out << "weak_retain ";
+         break;
+      case Value::WeakReleaseInstID:
+         out << "weak_release ";
+         break;
+      default:
+         break;
+      }
+
+      WriteValue(Refc->getTarget());
+      return;
+   }
+
+   if (auto Move = dyn_cast<MoveInst>(I)) {
+      out << "move ";
+
+      if (Move->getOperand(0)->isTagged())
+         out << "[tagged_src] ";
+
+      if (Move->isTagged())
+         out << "[tagged] ";
+
+      WriteValue(Move->getOperand(0));
+      return;
+   }
+
+   if (auto Borrow = dyn_cast<BeginBorrowInst>(I)) {
+      out << (Borrow->isMutableBorrow() ? "begin_mut_borrow" : "begin_borrow")
+          << " ";
+
+      WriteValue(Borrow->getOperand(0));
+      return;
+   }
+
+   if (auto Borrow = dyn_cast<EndBorrowInst>(I)) {
+      out << (Borrow->isMutableBorrow() ? "end_mut_borrow" : "end_borrow")
+          << " ";
+
+      WriteValue(Borrow->getOperand(0));
       return;
    }
 
@@ -751,8 +873,10 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       return;
    }
 
-   if (auto Init = dyn_cast<InitInst>(I)) {
-      out << "init ";
+   if (auto Init = dyn_cast<StructInitInst>(I)) {
+      out << "init_" << (Init->getType()->isClass() ? "class" : "struct")
+          << (Init->isFallible() ? "? " : " ");
+
       WriteRecordType(Init->getInitializedType());
 
       out << ", ";
@@ -763,7 +887,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    }
 
    if (auto Init = dyn_cast<UnionInitInst>(I)) {
-      out << "union_init ";
+      out << "init_union ";
       WriteRecordType(Init->getUnionTy());
 
       out << ", ";
@@ -772,7 +896,7 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    }
 
    if (auto Init = dyn_cast<EnumInitInst>(I)) {
-      out << "enum_init ";
+      out << "init_enum ";
       WriteRecordType(Init->getEnumTy());
 
       out << ", ";
@@ -790,45 +914,23 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    }
 
    if (auto Lambda = dyn_cast<LambdaInitInst>(I)) {
-      out << "lambda_init ";
+      out << "init_lambda ";
       WriteConstant(Lambda->getFunction());
 
       WriteList(Lambda->getOperands(), &ModuleWriterImpl::WriteValue);
       return;
    }
 
-   if (auto Deinit = dyn_cast<DeinitializeLocalInst>(I)) {
-      out << "deinit_local ";
-      WriteValue(Deinit->getVal());
-
-      if (auto Fn = Deinit->getDeinitializer()) {
-         out << ", ";
-         WriteConstant(Fn);
-      }
-
-      return;
-   }
-
-   if (auto Deinit = dyn_cast<DeinitializeTemporaryInst>(I)) {
-      out << "deinit_temporary ";
-      WriteValue(Deinit->getVal());
-
-      if (auto Fn = Deinit->getDeinitializer()) {
-         out << ", ";
-         WriteConstant(Fn);
-      }
-
-      return;
-   }
-
    if (auto Call = dyn_cast<CallInst>(I)) {
       out << "call ";
 
-      if (isa<ProtocolCallInst>(I))
+      if (Call->isProtocolCall())
          out << "proto_method ";
-
-      if (isa<VirtualCallInst>(I))
+      else if (Call->isVirtual())
          out << "virtual ";
+
+      if (Call->isTaggedDeinit())
+         out << "[tagged] ";
 
       if (auto LambdaCall = dyn_cast<LambdaCallInst>(Call)) {
          WriteValue(LambdaCall->getLambda());
@@ -848,11 +950,21 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    }
 
    if (auto ICall = dyn_cast<IntrinsicCallInst>(I)) {
-      out << "call intrinsic ";
+      out << "intrinsic ";
 
       WriteQualType(ICall->getType());
-      out << " " << ICall->getIntrinsicName() << " ";
+      out << " \"" << ICall->getIntrinsicName() << "\" ";
       WriteList(ICall->getArgs(), &ModuleWriterImpl::WriteValue);
+
+      return;
+   }
+
+   if (auto LLVMCall = dyn_cast<LLVMIntrinsicCallInst>(I)) {
+      out << "llvm_intrinsic ";
+
+      WriteQualType(LLVMCall->getType());
+      out << " \"" << LLVMCall->getIntrinsicName()->getIdentifier() << "\" ";
+      WriteList(LLVMCall->getArgs(), &ModuleWriterImpl::WriteValue);
 
       return;
    }
@@ -860,10 +972,9 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
    if (auto Invoke = dyn_cast<InvokeInst>(I)) {
       out << "invoke ";
 
-      if (isa<ProtocolInvokeInst>(I))
+      if (Invoke->isProtocolCall())
          out << "proto_method ";
-
-      if (isa<VirtualInvokeInst>(I))
+      else if (Invoke->isVirtual())
          out << "virtual ";
 
       WriteQualType(Invoke->getCalledFunction()->getReturnType());
@@ -903,9 +1014,38 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       return;
    }
 
+   if (auto Yield = dyn_cast<YieldInst>(I)) {
+      out << "yield ";
+      if (auto Val = Yield->getYieldedValue()) {
+         WriteValue(Val);
+      }
+      else {
+         out << "void";
+      }
+
+      if (auto *Dst = Yield->getResumeDst()) {
+         out << ", ";
+         WriteConstant(Yield->getResumeDst());
+
+         auto TargetArgs = Yield->getResumeArgs();
+         if (!TargetArgs.empty()) {
+            WriteList(TargetArgs, &ModuleWriterImpl::WriteValue);
+         }
+      }
+
+      return;
+   }
+
    if (auto Throw = dyn_cast<ThrowInst>(I)) {
       out << "throw ";
       WriteValue(Throw->getThrownValue());
+
+      return;
+   }
+
+   if (auto Rethrow = dyn_cast<RethrowInst>(I)) {
+      out << "rethrow ";
+      WriteValue(Rethrow->getThrownValue());
 
       return;
    }
@@ -1016,9 +1156,6 @@ void ModuleWriterImpl::WriteInstruction(const Instruction *I)
       else if (auto BC = dyn_cast<BitCastInst>(Cast)) {
          out << cdot::CastNames[(unsigned char)BC->getKind()];
       }
-      else if (isa<IntToEnumInst>(Cast)) {
-         out << "inttoenum";
-      }
       else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
          out << (ProtoCast->isWrap()
                  ? "proto_wrap" : "proto_unwrap");
@@ -1097,9 +1234,9 @@ void ModuleWriterImpl::WriteBasicBlock(const BasicBlock *BB, bool first,
       }
       else {
          size_t i = 0;
-         for (auto &Pred : Preds) {
+         for (const BasicBlock *Pred : Preds) {
             if (i++ != 0) out << ", ";
-            WriteConstant(&Pred);
+            WriteConstant(Pred);
          }
       }
       NewLine();
@@ -1116,6 +1253,16 @@ void ModuleWriterImpl::WriteBasicBlock(const BasicBlock *BB, bool first,
 
    NewLine();
    for (const auto &I : BB->getInstructions()) {
+      if (NoDebug) {
+         switch (I.getTypeID()) {
+         case Value::DebugLocInstID:
+         case Value::DebugLocalInstID:
+            continue;
+         default:
+            break;
+         }
+      }
+
       ApplyTab();
       WriteInstruction(&I);
 
@@ -1138,6 +1285,9 @@ void ModuleWriterImpl::WriteFunction(const Function *F, bool onlyDecl)
    if (F->getUnnamedAddr() != Function::UnnamedAddr::None) {
       out << UnnamedAddrNames[(int)F->getUnnamedAddr()] << " ";
    }
+
+   if (F->isAsync())
+      out << "coro ";
 
    WriteName(F->getName(), ValPrefix::Constant);
 
@@ -1248,40 +1398,60 @@ void ModuleWriterImpl::Write(Module const* M)
 
 } // anonymous namespace
 
+ModuleWriter::ModuleWriter(Function const* F)
+   : kind(Kind::Function), M(F->getParent()), F(F)
+{}
+
+ModuleWriter::ModuleWriter(GlobalVariable const* G)
+   : kind(Kind::GlobalVariable), M(G->getParent()), G(G)
+{}
+
+ModuleWriter::ModuleWriter(Instruction const* I)
+   : kind(Kind::Instruction), M(I->getParent()->getParent()->getParent()), I(I)
+{}
+
+ModuleWriter::ModuleWriter(BasicBlock const* BB)
+   : kind(Kind::BasicBlock), M(BB->getParent()->getParent()), BB(BB)
+{}
+
 void ModuleWriter::WriteTo(llvm::raw_ostream &out)
 {
+   bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
+   ModuleWriterImpl Writer(out, NoDebug);
+
    switch (kind) {
-      case Kind::Module:
-         ModuleWriterImpl(out).Write(M);
-         break;
-      case Kind::Function:
-         ModuleWriterImpl(out).WriteFunction(F);
-         break;
-      case Kind::Instruction:
-         ModuleWriterImpl(out).WriteInstruction(I);
-         break;
-      case Kind::GlobalVariable:
-         ModuleWriterImpl(out).WriteGlobal(G);
-         break;
-      case Kind::Type:
-         ModuleWriterImpl(out).WriteRecordDecl(R);
-         break;
-      case Kind::BasicBlock:
-         ModuleWriterImpl(out).WriteBasicBlock(BB);
-         break;
+   case Kind::Module:
+      Writer.Write(M);
+      break;
+   case Kind::Function:
+      Writer.WriteFunction(F);
+      break;
+   case Kind::Instruction:
+      Writer.WriteInstruction(I);
+      break;
+   case Kind::GlobalVariable:
+      Writer.WriteGlobal(G);
+      break;
+   case Kind::BasicBlock:
+      Writer.WriteBasicBlock(BB);
+      break;
    }
 }
 
 void ModuleWriter::WriteFunctionDeclTo(llvm::raw_ostream &out)
 {
    assert(kind == Kind::Function);
-   ModuleWriterImpl(out).WriteFunction(F, true);
+
+   bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
+   ModuleWriterImpl(out, NoDebug).WriteFunction(F, true);
 }
 
 void ModuleWriter::WriteBasicBlockDeclTo(llvm::raw_ostream &out)
 {
    assert(kind == Kind::BasicBlock);
-   ModuleWriterImpl(out).WriteBasicBlock(BB, true, true);
+
+   bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
+   ModuleWriterImpl(out, NoDebug).WriteBasicBlock(BB, true, true);
 }
 
 } // namespace il

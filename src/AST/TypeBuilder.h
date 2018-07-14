@@ -39,6 +39,11 @@ public:
       return T;
    }
 
+   QualType visitTokenType(TokenType *T)
+   {
+      return T;
+   }
+
    QualType visitPointerType(PointerType *T)
    {
       return Ctx.getPointerType(visit(T->getPointeeType()));
@@ -57,6 +62,11 @@ public:
    QualType visitMutableReferenceType(MutableReferenceType *T)
    {
       return Ctx.getMutableReferenceType(visit(T->getReferencedType()));
+   }
+
+   QualType visitMutableBorrowType(MutableBorrowType *T)
+   {
+      return Ctx.getMutableBorrowType(visit(T->getReferencedType()));
    }
 
    QualType visitMetaType(cdot::MetaType *T)
@@ -110,7 +120,8 @@ public:
    }
 
    sema::ResolvedTemplateArg
-   VisitTemplateArg(const sema::ResolvedTemplateArg &Arg) {
+   VisitTemplateArg(const sema::ResolvedTemplateArg &Arg)
+   {
       if (!Arg.isType())
          return Arg.clone();
 
@@ -123,8 +134,8 @@ public:
                                           Arg.getLoc());
       }
 
-      return sema::ResolvedTemplateArg(Arg.getParam(), visit(Arg.getType()),
-                                       Arg.getLoc());
+      QualType Ty = visit(Arg.getType());
+      return sema::ResolvedTemplateArg(Arg.getParam(), Ty, Arg.getLoc());
    }
 
    QualType visitRecordType(RecordType *T)
@@ -143,12 +154,13 @@ public:
          }
 
          auto FinalList = sema::FinalTemplateArgumentList::Create(
-            SP.getContext(), Args);
+            SP.getContext(), Args, !Dependent);
 
          if (Dependent)
             return Ctx.getDependentRecordType(R, FinalList);
 
-         auto Inst = SP.getInstantiator().InstantiateRecord(SOD, R, FinalList);
+         auto Inst = SP.getInstantiator().InstantiateRecord(
+            SOD, R->getSpecializedTemplate(), FinalList);
          if (Inst)
             return Ctx.getRecordType(Inst.getValue());
 
@@ -171,7 +183,8 @@ public:
       }
 
       auto FinalList = sema::FinalTemplateArgumentList::Create(SP.getContext(),
-                                                               Args);
+                                                               Args,
+                                                               !Dependent);
 
       if (Dependent)
          return Ctx.getDependentRecordType(T->getRecord(), FinalList);
@@ -198,6 +211,11 @@ public:
    QualType visitTypedefType(TypedefType *T)
    {
       return T;
+   }
+
+   QualType visitBoxType(BoxType *T)
+   {
+      return Ctx.getBoxType(visit(T->getBoxedType()));
    }
 };
 

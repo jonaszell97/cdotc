@@ -7,7 +7,7 @@
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
 #include "AST/Type.h"
-#include "Compiler.h"
+#include "Driver/Compiler.h"
 #include "Basic/FileUtils.h"
 #include "Basic/FileManager.h"
 #include "IL/Constants.h"
@@ -220,12 +220,36 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       break;
    }
    case Type::ReferenceTypeID:
-   case Type::MutableReferenceTypeID: {
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID: {
       MD = DI->createReferenceType(
          llvm::dwarf::DW_TAG_reference_type,
          getTypeDI(ty->getReferencedType()),
          TI.getPointerSizeInBytes() * 8u,
          TI.getPointerAlignInBytes()
+      );
+
+      break;
+   }
+   case Type::BoxTypeID: {
+      auto &ASTCtx = CI.getContext();
+      auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
+      auto UWordTy = getTypeDI(ASTCtx.getUIntTy());
+
+      llvm::Metadata *ContainedTys[] = {
+         UWordTy, UWordTy, Int8PtrTy, Int8PtrTy
+      };
+
+      MD = DI->createStructType(
+         ScopeStack.top(),
+         ty->toString(),
+         File,
+         0,
+         TI.getSizeOfType(ty) * 8u,
+         TI.getAlignOfType(ty) * 8u,
+         llvm::DINode::DIFlags::FlagZero,
+         nullptr,
+         DI->getOrCreateArray(ContainedTys)
       );
 
       break;
@@ -766,20 +790,41 @@ void IRGen::emitLocalVarDI(const il::DebugLocalInst &Inst,
    }
 
    auto DebugLoc = Builder.getCurrentDebugLocation();
+   if (!DebugLoc)
+      return;
 
+   auto DIVar = DI->createAutoVariable(
+      ScopeStack.top(),
+      Inst.getName()->getIdentifier(),
+      File,
+      DebugLoc->getLine(),
+      DIType
+   );
+
+   DIVarMap[ILVal] = DIVar;
    DI->insertDeclare(
       Val,
-      DI->createAutoVariable(
-         ScopeStack.top(),
-         Inst.getName()->getIdentifier(),
-         File,
-         DebugLoc->getLine(),
-         DIType
-      ),
+      DIVar,
       DI->createExpression(),
       DebugLoc,
       Builder.GetInsertBlock()
    );
+}
+
+void IRGen::emitDebugValue(il::Value *Val, llvm::Value *LLVMVal)
+{
+   auto It = DIVarMap.find(Val);
+   if (It == DIVarMap.end())
+      return;
+
+   auto DebugLoc = Builder.getCurrentDebugLocation();
+   if (!DebugLoc)
+      return;
+
+   auto DIVar = It->getSecond();
+   DI->insertDbgValueIntrinsic(
+      LLVMVal, DIVar, DI->createExpression(),
+      DebugLoc, Builder.GetInsertBlock());
 }
 
 llvm::MDNode* IRGen::emitGlobalVarDI(GlobalVariable const& G,

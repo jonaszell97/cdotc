@@ -10,9 +10,9 @@
 #include "IL/Constant.h"
 #include "Message/Diagnostics.h"
 #include "Support/Casting.h"
+#include "Support/StringSwitch.h"
 #include "TypeVisitor.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <sstream>
 
@@ -26,6 +26,21 @@ Type::~Type()
 {
 
 }
+
+#ifndef NDEBUG
+
+void Type::verifyID(TypeID ID)
+{
+   switch (ID) {
+#  define CDOT_TYPE(NAME, PARENT) case NAME##ID: break;
+#  include "Types.def"
+
+   default:
+      llvm_unreachable("bad type kind");
+   }
+}
+
+#endif
 
 #define CDOT_TYPE(Name, Parent)                                      \
 bool Type::is##Name() const                                          \
@@ -117,6 +132,14 @@ bool Type::isAutoType() const
 {
    if (BuiltinType* BI = asBuiltinType())
       return BI->isAutoTy();
+
+   return false;
+}
+
+bool Type::isEmptyTupleType() const
+{
+   if (TupleType* TT = asTupleType())
+      return TT->getArity() == 0;
 
    return false;
 }
@@ -268,6 +291,18 @@ QualType Type::getReferencedType() const
 {
    assert(this->isReferenceType() && "not a reference type");
    return this->uncheckedAsReferenceType()->getReferencedType();
+}
+
+QualType Type::getBorrowedType() const
+{
+   assert(this->isMutableBorrowType() && "not a borrow type");
+   return this->uncheckedAsMutableBorrowType()->getReferencedType();
+}
+
+QualType Type::getBoxedType() const
+{
+   assert(this->isBoxType() && "not a box type");
+   return this->uncheckedAsBoxType()->getBoxedType();
 }
 
 QualType Type::stripReference() const
@@ -567,29 +602,30 @@ bool Type::needsCleanup() const
 bool Type::needsStructReturn() const
 {
    switch (getTypeID()) {
-      case TypeID::TypedefTypeID:
-         return asRealTypedefType()->getAliasedType()->needsStructReturn();
-      case TypeID::RecordTypeID: {
-         auto rec = getRecord();
-         switch (rec->getKind()) {
-            case Decl::EnumDeclID:
-               return !cast<EnumDecl>(rec)->isRawEnum();
-            case Decl::StructDeclID:
-            case Decl::UnionDeclID:
-            case Decl::ProtocolDeclID:
-               return true;
-            case Decl::ClassDeclID:
-               return false;
-            default:
-               llvm_unreachable("bad record kind!");
-         }
+   case TypeID::TypedefTypeID:
+      return asRealTypedefType()->getAliasedType()->needsStructReturn();
+   case TypeID::RecordTypeID: {
+      auto rec = getRecord();
+      switch (rec->getKind()) {
+         case Decl::EnumDeclID:
+            return !cast<EnumDecl>(rec)->isRawEnum();
+         case Decl::StructDeclID:
+         case Decl::UnionDeclID:
+         case Decl::ProtocolDeclID:
+            return true;
+         case Decl::ClassDeclID:
+            return false;
+         default:
+            llvm_unreachable("bad record kind!");
       }
-      case TypeID::TupleTypeID:
-      case TypeID::ArrayTypeID:
-      case TypeID::MetaTypeID:
-         return true;
-      default:
-         return false;
+   }
+   case TypeID::TupleTypeID:
+   case TypeID::ArrayTypeID:
+   case TypeID::MetaTypeID:
+   case TypeID::BoxTypeID:
+      return true;
+   default:
+      return false;
    }
 }
 
@@ -630,12 +666,12 @@ protected:
 public:
    void visitTypedefType(const TypedefType *Ty)
    {
-      OS << Ty->asRealTypedefType()->getAliasName();
+      OS << Ty->getAliasName();
    }
 
    void visitBuiltinType(const BuiltinType *Ty)
    {
-      switch (Ty->asBuiltinType()->getKind()) {
+      switch (Ty->getKind()) {
 #        define CDOT_BUILTIN_TYPE(Name) \
             case BuiltinType::Name: OS << #Name; break;
 #        include "Basic/BuiltinTypes.def"
@@ -661,8 +697,11 @@ public:
       else if (Arg.isType()) {
          this->visit(Arg.getType());
       }
+      else if (auto Val = Arg.getValue()) {
+         OS << *Val;
+      }
       else {
-         OS << *Arg.getValue();
+         OS << "<null>";
       }
    }
 
@@ -671,14 +710,14 @@ public:
       auto R = Ty->getRecord();
       auto *Ctx = R->getNonTransparentDeclContext();
       if (isa<NamedDecl>(Ctx)) {
-         if (!isa<TranslationUnit>(Ctx)) {
+         if (!isa<ModuleDecl>(Ctx)) {
             OS << cast<NamedDecl>(Ctx)->getFullName();
             OS << '.';
          }
       }
 
       if (R->isInstantiation()) {
-         OS << R->getDeclName().getInstantiationName() << "[";
+         OS << R->getDeclName().getInstantiationName() << "<";
 
          auto &Args = *R->getDeclName().getInstantiationArgs();
          unsigned i = 0;
@@ -688,7 +727,7 @@ public:
             visitTemplateArg(Arg);
          }
 
-         OS << "]";
+         OS << ">";
       }
       else {
          OS << R->getDeclName();
@@ -700,13 +739,13 @@ public:
       auto R = Ty->getRecord();
       auto *Ctx = R->getNonTransparentDeclContext();
       if (isa<NamedDecl>(Ctx)) {
-         if (!isa<TranslationUnit>(Ctx)) {
+         if (!isa<ModuleDecl>(Ctx)) {
             OS << cast<NamedDecl>(Ctx)->getFullName();
             OS << '.';
          }
       }
 
-      OS << R->getDeclName() << "[";
+      OS << R->getDeclName() << "<";
 
       auto &Args = cast<DependentRecordType>(Ty)->getTemplateArgs();
       unsigned i = 0;
@@ -716,7 +755,7 @@ public:
          visitTemplateArg(Arg);
       }
 
-      OS << "]";
+      OS << ">";
    }
 
    void visitFunctionType(const FunctionType *Ty)
@@ -741,30 +780,38 @@ public:
       visitFunctionType(Ty);
    }
 
+   void visitTupleType(const TupleType *Ty)
+   {
+      OS << "(";
+
+      unsigned i = 0;
+      for (auto &Cont : Ty->getContainedTypes()) {
+         if (i++ != 0) OS << ", ";
+         OS << Cont;
+      }
+
+      OS << ")";
+   }
+
    void visitArrayType(const ArrayType *Ty)
    {
-      ArrayType *arr = Ty->uncheckedAsArrayType();
-      OS << "[" << arr->getElementType() << "; "
-         << arr->getNumElements() << "]";
+      OS << "[" << Ty->getElementType() << "; "
+         << Ty->getNumElements() << "]";
    }
 
    void visitDependentSizeArrayType(const DependentSizeArrayType *Ty)
    {
-      OS << "[" << Ty->uncheckedAsDependentSizeArrayType()->getElementType()
-         << "; ?]";
+      OS << "[" << Ty->getElementType() << "; ?]";
    }
 
    void visitInferredSizeArrayType(const InferredSizeArrayType *Ty)
    {
-      OS << "[" << Ty->uncheckedAsInferredSizeArrayType()->getElementType()
-         << "; ?]";
+      OS << "[" << Ty->getElementType() << "; ?]";
    }
 
    void visitMetaType(const MetaType *Ty)
    {
-      OS << "MetaType["
-         << Ty->uncheckedAsMetaType()->getUnderlyingType()
-         << "]";
+      OS << "MetaType<" << Ty->getUnderlyingType() << ">";
    }
 
    void visitGenericType(const GenericType *Ty)
@@ -783,7 +830,7 @@ public:
       if (pointee->isVoidType())
          OS << "UnsafeRawPtr";
       else
-         OS << "UnsafePtr[" << pointee << "]";
+         OS << "UnsafePtr<" << pointee << ">";
    }
 
    void visitMutablePointerType(const MutablePointerType *Ty)
@@ -792,12 +839,27 @@ public:
       if (pointee->isVoidType())
          OS << "UnsafeMutableRawPtr";
       else
-         OS << "UnsafeMutablePtr[" << pointee << "]";
+         OS << "UnsafeMutablePtr<" << pointee << ">";
    }
 
    void visitReferenceType(const ReferenceType *Ty)
    {
-      OS << "ref " << Ty->getReferencedType();
+      OS << "&" << Ty->getReferencedType();
+   }
+
+   void visitMutableBorrowType(const MutableBorrowType *Ty)
+   {
+      OS << "&mut " << Ty->getBorrowedType();
+   }
+
+   void visitBoxType(const BoxType *Ty)
+   {
+      OS << "Box<" << Ty->getBoxedType() << ">";
+   }
+
+   void visitTokenType(const TokenType *Ty)
+   {
+      OS << "token";
    }
 };
 
@@ -819,14 +881,14 @@ public:
       auto R = Ty->getRecord();
       auto *Ctx = R->getNonTransparentDeclContext();
       if (isa<NamedDecl>(Ctx)) {
-         if (!isa<TranslationUnit>(Ctx)) {
+         if (!isa<ModuleDecl>(Ctx)) {
             OS << cast<NamedDecl>(Ctx)->getFullName();
             OS << '.';
          }
       }
 
       if (R->isInstantiation()) {
-         OS << R->getDeclName().getInstantiationName() << "[";
+         OS << R->getDeclName().getInstantiationName() << "<";
 
          auto &Args = *R->getDeclName().getInstantiationArgs();
          unsigned i = 0;
@@ -836,7 +898,7 @@ public:
             visitTemplateArg(Arg);
          }
 
-         OS << "]";
+         OS << ">";
       }
       else {
          OS << R->getDeclName();
@@ -848,13 +910,13 @@ public:
       auto R = Ty->getRecord();
       auto *Ctx = R->getNonTransparentDeclContext();
       if (isa<NamedDecl>(Ctx)) {
-         if (!isa<TranslationUnit>(Ctx)) {
+         if (!isa<ModuleDecl>(Ctx)) {
             OS << cast<NamedDecl>(Ctx)->getFullName();
             OS << '.';
          }
       }
 
-      OS << R->getDeclName() << "[";
+      OS << R->getDeclName() << "<";
 
       auto &Args = cast<DependentRecordType>(Ty)->getTemplateArgs();
       unsigned i = 0;
@@ -864,7 +926,7 @@ public:
          visitTemplateArg(Arg);
       }
 
-      OS << "]";
+      OS << ">";
    }
 
    void visitGenericType(const GenericType *Ty)
@@ -873,33 +935,76 @@ public:
       OS << Ty->getGenericTypeName();
 
       if (!Cov->isUnknownAnyType()) {
-         OS << ": " << Cov;
+         OS << ": ";
+         visit(Cov);
       }
    }
 
    void visitTypedefType(const TypedefType *Ty)
    {
       auto TD = cast<TypedefType>(Ty)->getTypedef();
-      OS << TD->getDeclName() << " (aka " << TD->getOriginTy() << ")";
+      OS << TD->getDeclName() << " (aka ";
+      visit(TD->getOriginTy().getResolvedType());
+      OS << ")";
    }
 
    void visitAssociatedType(const AssociatedType *Ty)
    {
       auto AT = cast<AssociatedType>(Ty)->getDecl();
       OS << AT->getDeclName();
+
       if (AT->isImplementation()) {
-         OS << " (aka " << AT->getActualType() << ")";
+         OS << " (aka ";
+         visit(AT->getActualType().getResolvedType());
+         OS << ")";
       }
    }
 
    void visitReferenceType(const ReferenceType *Ty)
    {
-      OS << "ref " << Ty->getReferencedType();
+      OS << "&";
+      visit(Ty->getReferencedType());
    }
 
    void visitMutableReferenceType(const MutableReferenceType *Ty)
    {
-      OS << "mut ref " << Ty->getReferencedType();
+      OS << "&mut ";
+      visit(Ty->getReferencedType());
+   }
+
+   void visitFunctionType(const FunctionType *Ty)
+   {
+      if (!isa<LambdaType>(Ty))
+         OS << "@thin ";
+
+      auto argTypes = Ty->getParamTypes();
+      auto paramInfo = Ty->getParamInfo();
+
+      OS << "(";
+
+      size_t i = 0;
+      for (const auto& arg : argTypes) {
+         if (i != 0) OS << ", ";
+
+         switch (paramInfo[i].getConvention()) {
+         case ArgumentConvention::Owned: OS << "owned "; break;
+         case ArgumentConvention::Borrowed: OS << "borrow "; break;
+         case ArgumentConvention::MutablyBorrowed: OS << "ref "; break;
+         default:
+            llvm_unreachable("bad argument convention");
+         }
+
+         visit(arg);
+         ++i;
+      }
+
+      OS << ") -> ";
+      visit(Ty->getReturnType());
+   }
+
+   void visitLambdaType(const LambdaType *Ty)
+   {
+      visitFunctionType(Ty);
    }
 };
 
@@ -944,6 +1049,28 @@ MutableReferenceType::MutableReferenceType(QualType referencedType,
 
 }
 
+MutableReferenceType::MutableReferenceType(TypeID ID,
+                                           QualType referencedType,
+                                           Type *CanonicalType)
+   : ReferenceType(ID, referencedType, CanonicalType)
+{
+
+}
+
+MutableBorrowType::MutableBorrowType(QualType borrowedType,
+                                     Type *CanonicalType)
+   : MutableReferenceType(MutableBorrowTypeID, borrowedType, CanonicalType)
+{
+
+}
+
+BoxType::BoxType(QualType BoxedTy, Type *CanonicalTy)
+   : Type(BoxTypeID, CanonicalTy, BoxedTy->isDependentType()),
+     BoxedTy(BoxedTy)
+{
+
+}
+
 RecordType::RecordType(RecordDecl *record,
                        llvm::ArrayRef<QualType> TypeTemplateArgs)
    : Type(TypeID::RecordTypeID, nullptr,
@@ -956,13 +1083,11 @@ RecordType::RecordType(RecordDecl *record,
 
 RecordType::RecordType(TypeID typeID,
                        ast::RecordDecl *record,
-                       llvm::ArrayRef<QualType> TypeTemplateArgs,
                        bool Dependent)
    : Type(typeID, nullptr, Dependent),
-     Rec(record), NumTypeTemplateArgs((unsigned)TypeTemplateArgs.size())
+     Rec(record), NumTypeTemplateArgs(0)
 {
-   std::copy(TypeTemplateArgs.begin(), TypeTemplateArgs.end(),
-             const_cast<QualType*>(child_begin()));
+
 }
 
 Type::child_iterator RecordType::child_begin() const
@@ -979,11 +1104,12 @@ DependentRecordType::DependentRecordType(RecordDecl *record,
                                                                   *templateArgs,
                                          llvm::ArrayRef<QualType>
                                                                TypeTemplateArgs)
-   : RecordType(TypeID::DependentRecordTypeID, record,
-                TypeTemplateArgs, true),
+   : RecordType(TypeID::DependentRecordTypeID, record, true),
      templateArgs(templateArgs)
 {
-
+   NumTypeTemplateArgs = (unsigned)TypeTemplateArgs.size();
+   std::copy(TypeTemplateArgs.begin(), TypeTemplateArgs.end(),
+             reinterpret_cast<QualType*>(this + 1));
 }
 
 sema::FinalTemplateArgumentList& RecordType::getTemplateArgs() const
@@ -1023,34 +1149,61 @@ void DependentRecordType::Profile(llvm::FoldingSetNodeID &ID,
 FunctionType::FunctionType(TypeID typeID,
                            QualType returnType,
                            llvm::ArrayRef<QualType> argTypes,
+                           llvm::ArrayRef<ParamInfo> paramInfo,
                            ExtFlags flags,
                            Type *CanonicalType,
                            bool Dependent)
    : Type(typeID, CanonicalType, Dependent),
      NumParams((unsigned)argTypes.size()), returnType(returnType)
 {
+   assert(argTypes.size() == paramInfo.size() && "didn't provide parameter "
+                                                 "info for every parameter!");
+
    FuncBits.flags = flags;
    std::copy(argTypes.begin(), argTypes.end(),
              reinterpret_cast<QualType*>(this + 1));
 
    assert(&this->returnType + 1 == param_begin()
           && "bad function type layout!");
+
+   std::copy(paramInfo.begin(), paramInfo.end(),
+             reinterpret_cast<ParamInfo*>(
+                reinterpret_cast<QualType*>(this + 1) + NumParams));
 }
 
 FunctionType::FunctionType(QualType returnType,
                            llvm::ArrayRef<QualType> argTypes,
+                           llvm::ArrayRef<ParamInfo> paramInfo,
                            ExtFlags flags,
                            Type *CanonicalType,
                            bool Dependent)
    : Type(TypeID::FunctionTypeID, CanonicalType, Dependent),
      NumParams((unsigned)argTypes.size()), returnType(returnType)
 {
+   assert(argTypes.size() == paramInfo.size() && "didn't provide parameter "
+                                                 "info for every parameter!");
+
    FuncBits.flags = flags;
    std::copy(argTypes.begin(), argTypes.end(),
              reinterpret_cast<QualType*>(this + 1));
 
    assert(&this->returnType + 1 == param_begin()
           && "bad function type layout!");
+
+   std::copy(paramInfo.begin(), paramInfo.end(),
+             reinterpret_cast<ParamInfo*>(
+                reinterpret_cast<QualType*>(this + 1) + NumParams));
+}
+
+FunctionType::ParamInfo::ParamInfo()
+   : Conv(ArgumentConvention::Borrowed)
+{
+
+}
+
+void FunctionType::ParamInfo::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   ID.AddInteger((char)Conv);
 }
 
 TupleType::TupleType(llvm::ArrayRef<QualType> containedTypes,
@@ -1100,16 +1253,18 @@ bool GenericType::isVariadic() const
 }
 
 AssociatedType::AssociatedType(AssociatedTypeDecl *AT)
-   : Type(AssociatedTypeID, nullptr,
-          !AT->isImplementation()),
+   : Type(AssociatedTypeID, nullptr, !AT->isImplementation()),
      AT(AT)
 {
-
+   if (AT->isImplementation() && AT->getActualType().isResolved()) {
+      Bits.Dependent = AT->getActualType()->isDependentType();
+      this->CanonicalType = AT->getActualType().operator QualType();
+   }
 }
 
 void AssociatedType::setCanonicalType(QualType CanonicalType)
 {
-   this->CanonicalType = CanonicalType;
+   this->CanonicalType = CanonicalType.getBuiltinTy();
    Bits.Dependent = CanonicalType->isDependentType();
 }
 

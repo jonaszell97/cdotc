@@ -45,8 +45,6 @@
 #ifdef CDOT_KEYWORD_TOKEN
 #  define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
 
-   CDOT_KEYWORD_TOKEN(underscore, "_")
-
    // semantically these are keywords as they can't appear in arbitrary
    // expression context, even though they are lexed as operators
    CDOT_KEYWORD_TOKEN(arrow_single, "->")
@@ -74,6 +72,7 @@
   
    CDOT_KEYWORD(throw)
    CDOT_KEYWORD(try)
+   CDOT_KEYWORD(await)
    CDOT_KEYWORD(catch)
    CDOT_KEYWORD(finally)
 
@@ -100,7 +99,6 @@
    CDOT_KEYWORD(where)
    CDOT_KEYWORD(continue)
    CDOT_KEYWORD(init)
-   CDOT_KEYWORD(deinit)
    CDOT_KEYWORD(associatedType)
 
    CDOT_KEYWORD(break)
@@ -114,9 +112,6 @@
    CDOT_KEYWORD(module)
    CDOT_KEYWORD(import)
    CDOT_KEYWORD(using)
-
-   CDOT_KEYWORD(ref)
-   CDOT_KEYWORD(memberwise)
 
    CDOT_KEYWORD(static_if)
    CDOT_KEYWORD(static_for)
@@ -188,6 +183,7 @@
    CDOT_PUNCTUATOR_TOKEN(double_quote, '"')
    CDOT_PUNCTUATOR_TOKEN(backtick, '`')
    CDOT_PUNCTUATOR_TOKEN(dollar, '$')
+   CDOT_PUNCTUATOR_TOKEN(underscore, '_')
 #endif
 
 #ifdef CDOT_OPERATOR_TOKEN

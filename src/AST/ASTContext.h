@@ -8,6 +8,7 @@
 #include "Basic/DeclarationName.h"
 #include "Basic/TargetInfo.h"
 #include "ConformanceTable.h"
+#include "DeclDenseMapInfo.h"
 #include "ParentMap.h"
 #include "Type.h"
 
@@ -22,6 +23,7 @@ namespace sema {
 } // namespace sema
 
 class Attr;
+class CompilationUnit;
 
 namespace ast {
 
@@ -29,6 +31,8 @@ class Expression;
 class StaticExpr;
 class Statement;
 class Decl;
+class DeclContext;
+class NamedDecl;
 class CallableDecl;
 class RecordDecl;
 class AliasDecl;
@@ -39,6 +43,8 @@ class ASTContext {
 public:
    ASTContext();
    ~ASTContext() = default;
+
+   void cleanup(CompilationUnit &CI);
 
    void *Allocate(size_t size, size_t alignment = 8) const
    {
@@ -53,25 +59,11 @@ public:
 
    void Deallocate(void *Ptr) const {}
 
-   IdentifierTable &getIdentifiers() const
-   {
-      return Identifiers;
-   }
-
-   DeclarationNameTable &getDeclNameTable() const
-   {
-      return DeclNames;
-   }
-
-   ParentMap &getParentMap() const
-   {
-      return parentMap;
-   }
-
-   ConformanceTable &getConformanceTable() const
-   {
-      return Conformances;
-   }
+   llvm::BumpPtrAllocator &getAllocator() const { return Allocator; }
+   IdentifierTable &getIdentifiers() const { return Identifiers; }
+   DeclarationNameTable &getDeclNameTable() const { return DeclNames; }
+   ParentMap &getParentMap() const { return parentMap; }
+   ConformanceTable &getConformanceTable() const { return Conformances; }
 
    const TargetInfo &getTargetInfo() const { return TI; }
 
@@ -79,8 +71,10 @@ public:
    using ConstraintVec = llvm::SmallVector<StaticExpr*, 0>;
    using ExtensionVec  = llvm::SmallVector<ExtensionDecl*, 0>;
 
-private:
    mutable llvm::BumpPtrAllocator Allocator;
+   mutable llvm::BumpPtrAllocator TmpAllocator;
+
+private:
    mutable ParentMap parentMap;
    mutable ConformanceTable Conformances;
    mutable IdentifierTable Identifiers;
@@ -100,10 +94,15 @@ private:
    alignas(TypeAlignment) mutable BuiltinType Name##Ty;
 #  include "Basic/BuiltinTypes.def"
 
+   alignas(TypeAlignment) mutable TokenType TokenTy;
+   TupleType *EmptyTupleTy;
+
    mutable llvm::FoldingSet<PointerType> PointerTypes;
    mutable llvm::FoldingSet<MutablePointerType> MutablePointerTypes;
    mutable llvm::FoldingSet<ReferenceType> ReferenceTypes;
    mutable llvm::FoldingSet<MutableReferenceType> MutableReferenceTypes;
+   mutable llvm::FoldingSet<MutableBorrowType> MutableBorrowTypes;
+   mutable llvm::DenseMap<QualType, BoxType*> BoxTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
@@ -116,9 +115,16 @@ private:
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
 
+   /// Map from source IDs to declarations within that file, used for
+   /// incremental compilation.
+   mutable llvm::DenseMap<unsigned, SmallVector<Decl*, 0>> DeclsPerFile;
+
    bool OpNamesInitialized   = false;
 
    void initializeOpNames() const;
+
+   void cleanupDecl(Decl *D);
+   void cleanupDeclContext(DeclContext *DC);
 
 public:
    void registerInfixOperator(const IdentifierInfo *II) const
@@ -174,6 +180,17 @@ public:
       return PostfixOperators.find(II) != PostfixOperators.end();
    }
 
+   void registerDecl(unsigned SourceID, Decl *D)
+   {
+      DeclsPerFile[SourceID].push_back(D);
+   }
+
+   const llvm::DenseMap<unsigned int, SmallVector<Decl *, 0>>&
+   getDeclsPerFile() const
+   {
+      return DeclsPerFile;
+   }
+
    BuiltinType *getAutoType() const { return &AutoTy; }
    BuiltinType *getVoidType() const { return &VoidTy; }
 
@@ -193,6 +210,12 @@ public:
 
    BuiltinType *getInt64Ty() const { return &i64Ty; }
    BuiltinType *getUInt64Ty() const { return &u64Ty; }
+
+   BuiltinType *getInt128Ty() const { return &i128Ty; }
+   BuiltinType *getUInt128Ty() const { return &u128Ty; }
+
+   TokenType *getTokenType() const { return &TokenTy; }
+   TupleType *getEmptyTupleType() const { return EmptyTupleTy; }
 
 #  define CDOT_BUILTIN_TYPE(Name)                           \
    BuiltinType *get##Name##Ty() const { return &Name##Ty; }
@@ -231,22 +254,24 @@ public:
    {
       if (!isUnsigned) {
          switch (bits) {
-            case 1: return &i1Ty;
-            case 8: return &i8Ty;
-            case 16: return &i16Ty;
-            case 32: return &i32Ty;
-            case 64: return &i64Ty;
-            default: llvm_unreachable("bad bitwidth");
+         case 1: return &i1Ty;
+         case 8: return &i8Ty;
+         case 16: return &i16Ty;
+         case 32: return &i32Ty;
+         case 64: return &i64Ty;
+         case 128: return &i128Ty;
+         default: llvm_unreachable("bad bitwidth");
          }
       }
       else {
          switch (bits) {
-            case 1: return &i1Ty;
-            case 8: return &u8Ty;
-            case 16: return &u16Ty;
-            case 32: return &u32Ty;
-            case 64: return &u64Ty;
-            default: llvm_unreachable("bad bitwidth");
+         case 1: return &i1Ty;
+         case 8: return &u8Ty;
+         case 16: return &u16Ty;
+         case 32: return &u32Ty;
+         case 64: return &u64Ty;
+         case 128: return &u128Ty;
+         default: llvm_unreachable("bad bitwidth");
          }
       }
    }
@@ -262,6 +287,15 @@ public:
 
    ReferenceType *getReferenceType(QualType referencedType) const;
    MutableReferenceType *getMutableReferenceType(QualType referencedType) const;
+   MutableBorrowType *getMutableBorrowType(QualType borrowedType) const;
+
+   BoxType *getBoxType(QualType BoxedTy) const;
+
+   FunctionType *getFunctionType(QualType returnType,
+                              llvm::ArrayRef<QualType> argTypes,
+                              llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
+                              unsigned flags = 0,
+                              bool lambda = false) const;
 
    FunctionType *getFunctionType(QualType returnType,
                                  llvm::ArrayRef<QualType> argTypes,
@@ -271,9 +305,14 @@ public:
    LambdaType *getLambdaType(FunctionType *FnTy);
    LambdaType *getLambdaType(QualType returnType,
                              llvm::ArrayRef<QualType> argTypes,
+                             llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
                              unsigned flags = 0) const;
 
-   ArrayType *getArrayType(QualType elementType, size_t numElements) const;
+   LambdaType *getLambdaType(QualType returnType,
+                             llvm::ArrayRef<QualType> argTypes,
+                             unsigned flags = 0) const;
+
+   ArrayType *getArrayType(QualType elementType, unsigned numElements) const;
    DependentSizeArrayType *getValueDependentSizedArrayType(
                                              QualType elementType,
                                              StaticExpr* DependentExpr) const;
@@ -292,6 +331,9 @@ public:
 
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(TypedefDecl *TD) const;
+
+private:
+   mutable llvm::DenseMap<NamedDecl*, SmallVector<NamedDecl*, 0>> InstMap;
 
 public:
    mutable llvm::FoldingSet<CallableDecl> FunctionTemplateInstatiations;
@@ -312,6 +354,13 @@ public:
                                             TemplateArgs &argList,
                                             void *&insertPos);
 
+   NamedDecl *getTemplateInstantiation(NamedDecl *Template,
+                                       TemplateArgs &argList,
+                                       void *&insertPos);
+
+   ArrayRef<NamedDecl*> getInstantiationsOf(NamedDecl *Template);
+   void registerInstantiation(NamedDecl *Template, NamedDecl *Inst);
+
    void insertFunctionTemplateInstantiation(CallableDecl *Inst,
                                             void *insertPos);
 
@@ -320,6 +369,9 @@ public:
 
    void insertAliasTemplateInstantiation(AliasDecl *Inst,
                                          void *insertPos);
+
+   void insertTemplateInstantiation(NamedDecl *Inst,
+                                    void *insertPos);
 
    llvm::ArrayRef<Attr*> getAttributes(const Decl *D) const;
    void setAttributes(const Decl *D, llvm::ArrayRef<Attr*> attrs) const;

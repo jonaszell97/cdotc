@@ -16,6 +16,7 @@
 namespace llvm {
 
 class DIBuilder;
+class TargetMachine;
 
 } // namespace llvm;
 
@@ -33,8 +34,8 @@ class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
    explicit IRGen(CompilationUnit &CU,
                   llvm::LLVMContext &Ctx,
-                  llvm::Module *M,
                   bool emitDebugInfo);
+
    ~IRGen();
 
    void visitCompilationUnit(CompilationUnit &CU);
@@ -42,7 +43,22 @@ public:
    void visitFunction(Function &F);
    void visitBasicBlock(BasicBlock &B);
 
-   static void linkAndEmit(CompilationUnit &CU);
+   llvm::Module *linkModules(CompilationUnit &CI);
+
+   void prepareModuleForEmission(llvm::Module *Mod);
+   void linkAndEmit(CompilationUnit &CU);
+
+   void emitObjectFile(llvm::StringRef OutFile, llvm::Module *Module,
+                       bool KeepOpen = false, int *FD = nullptr,
+                       size_t *FileSize = nullptr);
+
+   void emitObjectFile(llvm::raw_ostream &OS, llvm::Module *Module);
+   void emitAsmFile(llvm::raw_ostream &OS, llvm::Module *Module);
+   void emitExecutable(StringRef OutFile, llvm::Module *Module);
+   void emitStaticLibrary(llvm::StringRef OutFile, llvm::Module *Module);
+   void emitDynamicLibrary(llvm::StringRef OutFile, llvm::Module *Module);
+
+   std::string createLinkedModuleTmpFile(StringRef Str);
 
 #  define CDOT_INSTRUCTION(Name) \
    llvm::Value *visit##Name(Name const& I);
@@ -58,6 +74,10 @@ private:
    void DeclareType(ast::RecordDecl *R);
 
    void finalize(const CompilationUnit &CU);
+   void runMandatoryPasses(llvm::Module *M);
+
+   bool NeedsStructReturn(QualType Ty);
+   bool PassStructDirectly(QualType Ty);
 
    llvm::StructType *getStructTy(QualType Ty);
    llvm::StructType *getStructTy(ast::RecordDecl *R);
@@ -71,6 +91,13 @@ private:
    llvm::Value *unboxValue(llvm::Value *V, QualType Ty);
    llvm::Value *getLlvmValue(il::Value const* V);
    llvm::Value *getPotentiallyBoxedValue(il::Value const* V);
+
+   void PrepareCallArgs(SmallVectorImpl<llvm::Value*> &Result,
+                        ArrayRef<il::Value*> Args,
+                        bool IsMethod = false);
+
+   llvm::Value *PrepareReturnedValue(const il::Value *ILVal,
+                                     llvm::Value *RetVal);
 
    llvm::Value *applyBinaryOp(unsigned OpCode, QualType ty, llvm::Value *LHS,
                               llvm::Value *RHS);
@@ -88,6 +115,7 @@ private:
 
    llvm::Function *getFunction(il::Function *F);
    llvm::Value *getCurrentSRetValue();
+   llvm::Value *getCurrentErrorValue();
 
    llvm::ConstantInt *wordSizedInt(uint64_t val);
    llvm::Value *toInt8Ptr(llvm::Value *V);
@@ -104,6 +132,14 @@ private:
 
    llvm::AllocaInst *CreateAlloca(QualType AllocatedType,
                                   size_t allocatedSize = 1,
+                                  unsigned alignment = 0);
+
+   llvm::AllocaInst *CreateAlloca(llvm::Type *AllocatedType,
+                                  il::Value *allocatedSize,
+                                  unsigned alignment = 0);
+
+   llvm::AllocaInst *CreateAlloca(QualType AllocatedType,
+                                  il::Value *allocatedSize,
                                   unsigned alignment = 0);
 
    llvm::Value *InitEnum(ast::EnumDecl *E,
@@ -136,6 +172,10 @@ private:
    llvm::Constant *getRetainLambdaFn();
    llvm::Constant *getReleaseBoxFn();
    llvm::Constant *getRetainBoxFn();
+   llvm::Constant *getTypeInfoCmpFn();
+   llvm::Constant *getPrintExceptionFn();
+   llvm::Constant *getCleanupExceptionFn();
+   llvm::Constant *getExitFn();
 
    llvm::Constant *getPrintfFn();
    llvm::Constant *getMemCmpFn();
@@ -143,7 +183,17 @@ private:
 
    llvm::StructType *getEnumCaseTy(ast::EnumCaseDecl *Decl);
 
-   void debugPrint(const llvm::Twine &str);
+   llvm::Function *getIntrinsic(llvm::Intrinsic::ID ID);
+
+   template<class ...Args>
+   void debugPrint(const llvm::Twine &str, Args&&... args)
+   {
+      Builder.CreateCall(getPrintfFn(),
+                         { toInt8Ptr(Builder.CreateGlobalString(str.str())),
+                            std::forward<Args&&>(args)... });
+   }
+
+   llvm::GlobalVariable *getOrCreateInitializedFlag(const il::Value *ForVal);
 
    CompilationUnit &CI;
    const TargetInfo &TI;
@@ -164,14 +214,27 @@ private:
 
    const il::DebugLocalInst *ElidedDebugLocalInst = nullptr;
 
-   llvm::DenseMap<ast::EnumCaseDecl*, llvm::StructType*> EnumCaseTys;
+   llvm::BasicBlock *AllocaBB = nullptr;
+   llvm::BasicBlock::iterator AllocaIt;
 
-   llvm::SmallVector<llvm::Function*, 4> GlobalInitFns;
-   llvm::SmallVector<llvm::Function*, 4> GlobalDeinitFns;
+   llvm::DenseMap<ast::EnumCaseDecl*, llvm::StructType*> EnumCaseTys;
+   llvm::DenseMap<IdentifierInfo*, llvm::Constant*> Intrinsics;
+
+   using FunctionPriorityPair = std::pair<llvm::Function*,unsigned short>;
+
+   llvm::SmallVector<FunctionPriorityPair, 4> GlobalInitFns;
+   llvm::SmallVector<FunctionPriorityPair, 4> GlobalDeinitFns;
+
+   llvm::DenseMap<const il::Value*, llvm::GlobalVariable*> InitializedFlagMap;
 
    llvm::LLVMContext &Ctx;
    llvm::Module *M;
    llvm::IRBuilder<> Builder;
+
+   SmallPtrSet<void*, 16> LinkedModuleLibs;
+   llvm::Module *LinkedModule = nullptr;
+   llvm::TargetMachine *TargetMachine = nullptr;
+   llvm::SmallPtrSet<llvm::Module*, 16> FinalizedModules;
 
    llvm::IntegerType *WordTy;
    llvm::IntegerType *Int1Ty;
@@ -181,9 +244,11 @@ private:
    llvm::Type *VoidTy;
 
    llvm::StructType *ProtocolTy;
+   llvm::StructType *ErrorTy;
    llvm::StructType *TypeInfoTy;
    llvm::StructType *BoxTy;
    llvm::StructType *LambdaTy;
+   llvm::Type *EmptyTupleTy;
 
    llvm::FunctionType *DeinitializerTy;
 
@@ -199,12 +264,23 @@ private:
    llvm::Constant *ReleaseBoxFn;
    llvm::Constant *PrintfFn;
    llvm::Constant *MemCmpFn;
-   llvm::Constant *IntPowFn;
+   llvm::Constant *TypeInfoCmpFn;
+   llvm::Constant *PrintExceptionFn;
+   llvm::Constant *CleanupExceptionFn;
+   llvm::Constant *ExitFn;
 
    llvm::Constant *WordOne;
    llvm::Constant *WordZero;
+   llvm::Constant *EmptyTuple;
 
    llvm::DenseMap<il::Value const*, llvm::Value*> ValueMap;
+   llvm::DenseMap<il::Value const*, llvm::DILocalVariable*> DIVarMap;
+
+   llvm::DenseMap<unsigned, llvm::Function*> IntrinsicDecls;
+
+   llvm::DenseMap<llvm::Function*, llvm::Value*> CoroHandleMap;
+   llvm::DenseMap<llvm::Function*, llvm::BasicBlock*> CoroCleanupMap;
+   llvm::DenseMap<llvm::Function*, llvm::BasicBlock*> CoroSuspendMap;
 
    llvm::MDNode *emitModuleDI();
 
@@ -225,6 +301,8 @@ private:
 
    void emitLocalVarDI(const il::DebugLocalInst &Inst,
                        llvm::Value *Val = nullptr);
+
+   void emitDebugValue(il::Value *Val, llvm::Value *LLVMVal);
 
    llvm::MDNode *emitGlobalVarDI(GlobalVariable const& G,
                                  llvm::GlobalVariable *var);

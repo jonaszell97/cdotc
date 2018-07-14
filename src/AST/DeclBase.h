@@ -1,0 +1,924 @@
+//
+// Created by Jonas Zell on 05.06.18.
+//
+
+#ifndef CDOT_DECLBASE_H
+#define CDOT_DECLBASE_H
+
+#include "Attr.h"
+#include "Basic/DeclarationName.h"
+#include "Type.h"
+
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/PointerUnion.h>
+
+namespace cdot {
+
+class Module;
+
+namespace serial {
+   class ModuleFile;
+   class LazyFunctionInfo;
+} // namespace serial
+
+enum class AccessSpecifier : unsigned char {
+   Default = 0,
+   Public,
+   Private,
+   Protected,
+   Internal,
+   FilePrivate,
+};
+
+namespace ast {
+
+class DeclContext;
+class ModuleDecl;
+class Statement;
+class NamedDecl;
+
+class LLVM_ALIGNAS(sizeof(void*)) Decl {
+public:
+   struct EmptyShell {};
+
+   enum DeclKind: unsigned char {
+      NotDecl = 0,
+
+#  define CDOT_DECL(Name)               \
+      Name##ID,
+#  define CDOT_ABSTRACT(Name)           \
+      Name##ID,
+#  include "AST/Decl.def"
+   };
+
+   enum DeclFlags : uint32_t {
+      DF_None                = 0u,
+      DF_TypeDependent       = 1u,
+      DF_ValueDependent      = DF_TypeDependent << 1u,
+      DF_IsInvalid           = DF_ValueDependent << 1u,
+      DF_SemanticallyChecked = DF_IsInvalid << 1u,
+      DF_Static              = DF_SemanticallyChecked << 1u,
+      DF_Const               = DF_Static << 1u,
+      DF_HasDefinition       = DF_Const << 1u,
+      DF_External            = DF_HasDefinition << 1u,
+      DF_WasDeclared         = DF_External << 1u,
+      DF_Synthesized         = DF_WasDeclared << 1u,
+      DF_CheckedAttrs        = DF_Synthesized << 1u,
+      DF_ExternC             = DF_CheckedAttrs << 1u,
+      DF_ExternCXX           = DF_ExternC << 1u,
+      DF_Instantiation       = DF_ExternCXX << 1u,
+      DF_Builtin             = DF_Instantiation << 1u,
+      DF_IndirectCase        = DF_Builtin << 1u,
+      DF_TriviallyCopyable   = DF_IndirectCase << 1u,
+      DF_ImportedFromModule  = DF_TriviallyCopyable << 1u,
+      DF_ImportedInstantiation = DF_ImportedFromModule << 1u,
+      DF_BeingEvaluated      = DF_ImportedInstantiation << 1u,
+      DF_LoadedFromCache     = DF_BeingEvaluated << 1u,
+      DF_Abstract            = DF_LoadedFromCache << 1u,
+      DF_Ignored             = DF_Abstract << 1u,
+      DF_ProtoDefaultImpl    = DF_Ignored << 1u,
+
+      DF_Last                = DF_Abstract,
+      StatusFlags            = DF_TypeDependent | DF_ValueDependent |
+                               DF_IsInvalid,
+   };
+
+   static_assert(DF_Last <= 1 << 24, "too many decl flags!");
+
+#ifndef NDEBUG
+   static void verifyID(DeclKind K);
+#endif
+
+   void dumpFlags() const;
+   void printFlags(llvm::raw_ostream &OS) const;
+
+   bool isStatic() const { return declFlagSet(DF_Static); }
+   bool isConst() const { return declFlagSet(DF_Const); }
+
+   bool hasDefinition() const { return declFlagSet(DF_HasDefinition); }
+   void setHasDefinition(bool def) { setDeclFlag(DF_HasDefinition, def); }
+
+   bool isExternal() const
+   {
+      return isImportedFromModule() || isLoadedFromCache();
+   }
+
+   bool isDependent() const
+   {
+      return isTypeDependent() || isValueDependent();
+   }
+
+   bool isTypeDependent() const { return declFlagSet(DF_TypeDependent); }
+   bool isValueDependent() const { return declFlagSet(DF_ValueDependent); }
+
+   void setIsTypeDependent(bool typeDependant)
+   {
+      setDeclFlag(DF_TypeDependent, typeDependant);
+   }
+
+   void setIsValueDependent(bool valueDependant)
+   {
+      setDeclFlag(DF_ValueDependent, valueDependant);
+   }
+
+   bool isInvalid() const { return declFlagSet(DF_IsInvalid); }
+   void setIsInvalid(bool error) { setDeclFlag(DF_IsInvalid, error); }
+
+   bool isSemanticallyChecked() const
+   {
+      return declFlagSet(DF_SemanticallyChecked);
+   }
+
+   void setSemanticallyChecked(bool chk = true)
+   {
+      setDeclFlag(DF_SemanticallyChecked, chk);
+   }
+
+   bool wasDeclared() const { return declFlagSet(DF_WasDeclared); }
+   void setDeclared(bool dec = true) { setDeclFlag(DF_WasDeclared, dec); }
+
+   bool checkedAttrs() const { return declFlagSet(DF_CheckedAttrs); }
+   void setCheckedAttrs(bool C) { setDeclFlag(DF_CheckedAttrs, C); }
+
+   bool isSynthesized() const { return declFlagSet(DF_Synthesized); }
+   void setSynthesized(bool synth = true){ setDeclFlag(DF_Synthesized, synth); }
+
+   bool isExternC() const { return declFlagSet(DF_ExternC); }
+   void setExternC(bool ext) { setDeclFlag(DF_ExternC, ext); }
+
+   bool isExternCXX() const { return declFlagSet(DF_ExternCXX); }
+   void setExternCXX(bool ext) { setDeclFlag(DF_ExternCXX, ext); }
+
+   bool isBuiltin() const { return declFlagSet(DF_Builtin); }
+   void setBuiltin(bool BI) { setDeclFlag(DF_Builtin, BI); }
+
+   bool isImportedFromModule()const{return declFlagSet(DF_ImportedFromModule);}
+   void setImportedFromModule(bool b) { setDeclFlag(DF_ImportedFromModule, b); }
+
+   bool isBeingEvaluated() const { return declFlagSet(DF_BeingEvaluated); }
+   void setBeingEvaluated(bool b) { setDeclFlag(DF_BeingEvaluated, b); }
+
+   bool isLoadedFromCache() const { return declFlagSet(DF_LoadedFromCache); }
+   void setLoadedFromCache(bool b) { setDeclFlag(DF_LoadedFromCache, b); }
+
+   bool isIgnored() const { return declFlagSet(DF_Ignored); }
+   void setIgnored(bool b) { setDeclFlag(DF_Ignored, b); }
+
+   bool isProtocolDefaultImpl() const
+   { return declFlagSet(DF_ProtoDefaultImpl); }
+   void setIsProtocolDefaultImpl(bool impl)
+   { setDeclFlag(DF_ProtoDefaultImpl, impl); }
+
+   bool instantiatedFromProtocolDefaultImpl() const;
+
+   bool isAbstract() const { return declFlagSet(DF_Abstract); }
+
+   bool isImportedInstantiation() const
+   { return declFlagSet(DF_ImportedInstantiation); }
+
+   void setImportedInstantiation(bool b)
+   { setDeclFlag(DF_ImportedInstantiation, b); }
+
+   bool isInstantiation() const { return declFlagSet(DF_Instantiation); }
+   bool hasTrailingObjects() const;
+
+   bool alreadyCheckedOrIsInvalid() const
+   {
+      static uint32_t mask = DF_IsInvalid | DF_SemanticallyChecked;
+      return (flags & mask) != 0;
+   }
+
+   void copyStatusFlags(Decl *D);
+   void copyStatusFlags(Statement *D);
+
+   bool declFlagSet(DeclFlags f) const { return (flags & f) != 0; }
+   void setDeclFlag(DeclFlags f, bool val)
+   {
+      if (val)
+         flags |= f;
+      else
+         flags &= ~f;
+   }
+
+   bool isInExtension() const;
+
+   template<class T>
+   bool hasAttribute() const
+   {
+      for (auto &Attr : getAttributes())
+         if (support::isa<T>(Attr))
+            return true;
+
+      return false;
+   }
+
+   template<class T>
+   T *getAttribute()
+   {
+      for (auto &Attr : getAttributes())
+         if (auto A = support::dyn_cast<T>(Attr))
+            return A;
+
+      return nullptr;
+   }
+
+   llvm::ArrayRef<Attr*> getAttributes() const;
+   void setAttributes(llvm::ArrayRef<Attr*> attrs) const;
+   void addAttributes(llvm::ArrayRef<Attr*> attrs) const;
+   void addAttribute(Attr *A) const;
+
+   ASTContext &getASTCtx() const;
+
+   SourceLocation getSourceLoc() const { return getSourceRange().getStart(); }
+   SourceRange getSourceRange() const;
+
+   DeclKind getKind() const { return kind; }
+   RecordDecl *getRecord() const;
+
+   DeclContext *getNonTransparentDeclContext() const;
+   DeclContext *getDeclContext() const;
+   DeclContext *getLexicalContext() const;
+
+   void setLexicalContext(DeclContext *ctx);
+   void setLogicalContext(DeclContext *Ctx);
+   void setLexicalContextUnchecked(DeclContext *ctx);
+
+   NamedDecl *getInstantiationScope() const;
+   NamedDecl *getProtocolDefaultImplScope() const;
+
+   Decl *getNextDeclInContext() const { return nextDeclInContext; }
+   void setNextDeclInContext(Decl *next) { nextDeclInContext = next; }
+
+   bool inAnonymousNamespace() const;
+   bool inStdNamespace() const;
+   bool isGlobalDecl() const;
+
+   unsigned int getFlags() const { return flags; }
+   void setFlags(unsigned flags) { this->flags = flags; }
+
+   ModuleDecl *getModule() const;
+
+   void dumpName() const;
+
+   static bool classofKind(DeclKind kind) { return kind != NotDecl; }
+   static bool classof(const Decl *T) { return classofKind(T->getKind()); }
+
+   static DeclContext *castToDeclContext(Decl const *D);
+   static Decl *castFromDeclContext(DeclContext const *Ctx);
+
+   friend class DeclContext;
+
+protected:
+   explicit Decl(DeclKind kind, unsigned flags = DF_None);
+
+#ifndef NDEBUG
+   virtual
+#endif
+   ~Decl();
+
+   DeclKind kind  : 8;
+   unsigned flags : 24;
+
+   Decl *nextDeclInContext = nullptr;
+
+   struct LLVM_ALIGNAS(8) MultipleDeclContext {
+      DeclContext *LogicalDC;
+      DeclContext *LexicalDC;
+   };
+
+   using DeclContextUnion = llvm::PointerUnion<DeclContext*,
+                                               MultipleDeclContext*>;
+
+   DeclContextUnion ContextUnion;
+};
+
+class NamedDecl: public Decl {
+public:
+   AccessSpecifier getAccess() const { return access; }
+   void setAccess(AccessSpecifier AS) { access = AS; }
+
+   SourceLocation getAccessLoc() const { return AccessLoc; }
+   void setAccessLoc(SourceLocation Loc);
+   SourceRange getAccessRange() const;
+
+   llvm::StringRef getName() const
+   {
+      assert(Name.isSimpleIdentifier() && "not a simple identifier");
+      return Name.getIdentifierInfo()->getIdentifier();
+   }
+
+   void setName(DeclarationName DN);
+
+   DeclarationName getDeclName() const { return Name; }
+   IdentifierInfo *getIdentifierInfo() const
+   {
+      return Name.getIdentifierInfo();
+   }
+
+   bool isOverloadable() const;
+   bool isRedeclarable() const;
+
+   llvm::ArrayRef<StaticExpr*> getConstraints() const;
+
+   bool isTemplate() const;
+   bool inDependentContext() const;
+   bool isTemplateOrInTemplate() const;
+
+   llvm::ArrayRef<TemplateParamDecl*> getTemplateParams() const;
+
+   void setIsInstantiation(bool I) { setDeclFlag(DF_Instantiation, I); }
+
+   sema::FinalTemplateArgumentList &getTemplateArgs() const;
+   NamedDecl *getSpecializedTemplate() const;
+   SourceLocation getInstantiatedFrom() const;
+
+   std::string getFullName() const { return getJoinedName('.'); }
+   std::string getJoinedName(char join, bool includeFile = false) const;
+
+   void dumpName() const;
+
+   size_t getSpecifierForDiagnostic();
+
+   bool isExported() const;
+
+   unsigned int getFlags() const { return flags; }
+   void setFlags(unsigned int flags) { NamedDecl::flags = flags; }
+
+   static bool classof(const Decl *T) { return classofKind(T->getKind()); }
+   static bool classofKind(DeclKind kind)
+   {
+      return kind > _firstNamedDeclID
+             && kind < _lastNamedDeclID;
+   }
+
+protected:
+   NamedDecl(DeclKind typeID,
+             AccessSpecifier access,
+             DeclarationName DN);
+
+   AccessSpecifier access;
+   SourceLocation AccessLoc;
+   DeclarationName Name;
+};
+
+template <class ToTy,
+   bool IsKnownSubtype = ::std::is_base_of<DeclContext, ToTy>::value>
+struct cast_convert_decl_context {
+   static const ToTy *doit(const DeclContext *Val) {
+      return static_cast<const ToTy*>(Decl::castFromDeclContext(Val));
+   }
+
+   static ToTy *doit(DeclContext *Val) {
+      return static_cast<ToTy*>(Decl::castFromDeclContext(Val));
+   }
+};
+
+// Specialization selected when ToTy is a known subclass of DeclContext.
+template <class ToTy>
+struct cast_convert_decl_context<ToTy, true> {
+   static const ToTy *doit(const DeclContext *Val) {
+      return static_cast<const ToTy*>(Val);
+   }
+
+   static ToTy *doit(DeclContext *Val) {
+      return static_cast<ToTy*>(Val);
+   }
+};
+
+class DeclContextLookupResult {
+public:
+   using ArrayTy = llvm::ArrayRef<NamedDecl*>;
+
+   DeclContextLookupResult() = default;
+
+   DeclContextLookupResult(NamedDecl *Single)
+      : Single(Single), Result(Single ? Single : ArrayTy())
+   {}
+
+   DeclContextLookupResult(ArrayTy Result)
+      : Result(Result)
+   {}
+
+private:
+   NamedDecl *Single = nullptr;
+   ArrayTy Result;
+
+public:
+   class iterator;
+
+   using IteratorBase =
+   llvm::iterator_adaptor_base<iterator, ArrayTy::iterator,
+                               std::random_access_iterator_tag,
+                               NamedDecl *const>;
+
+   class iterator: public IteratorBase {
+      value_type SingleElement;
+
+   public:
+      iterator() = default;
+
+      explicit iterator(pointer Pos, value_type Single = nullptr)
+         : IteratorBase(Pos), SingleElement(Single)
+      {}
+
+      reference operator*() const
+      {
+         return SingleElement ? SingleElement : IteratorBase::operator*();
+      }
+   };
+
+   using const_iterator = iterator;
+   using pointer        = iterator::pointer;
+   using reference      = iterator::reference;
+
+   iterator begin() const { return iterator(Result.begin(), Single); }
+   iterator end() const { return iterator(Result.end(), Single); }
+
+   bool empty() const { return Result.empty(); }
+   pointer data() const { return Single ? &Single : Result.data(); }
+   size_t size() const { return Single ? 1 : Result.size(); }
+   reference front() const { return Single ? Single : Result.front(); }
+   reference back() const { return Single ? Single : Result.back(); }
+   reference operator[](size_t N) const { return Single ? Single : Result[N]; }
+
+   operator bool() const { return !empty(); }
+};
+
+class DeclList {
+public:
+   using VecTy  = llvm::SmallVector<NamedDecl*, 4>;
+   using DataTy = llvm::PointerUnion<NamedDecl*, VecTy*>;
+
+   DeclList(NamedDecl *Decl)
+      : Data(Decl)
+   {}
+
+   DeclList(DeclList &&DL) noexcept : Data(DL.Data)
+   {
+      DL.Data = (NamedDecl*)nullptr;
+   }
+
+   DeclList &operator=(DeclList &&DL) noexcept
+   {
+      if (auto V = getAsVec())
+         delete V;
+
+      Data = DL.Data;
+      DL.Data = (NamedDecl*)nullptr;
+
+      return *this;
+   }
+
+   ~DeclList()
+   {
+      if (auto V = getAsVec())
+         delete V;
+   }
+
+   void appendDecl(NamedDecl *Decl)
+   {
+      if (auto Single = getAsDecl()) {
+         auto Vec = new VecTy{ Single, Decl };
+         Data = DataTy(Vec);
+      }
+      else {
+         getAsVec()->push_back(Decl);
+      }
+   }
+
+   bool isNull() const
+   {
+      return Data.isNull();
+   }
+
+   NamedDecl *getAsDecl() const
+   {
+      return Data.dyn_cast<NamedDecl*>();
+   }
+
+   VecTy *getAsVec() const
+   {
+      return Data.dyn_cast<VecTy*>();
+   }
+
+   DeclContextLookupResult getAsLookupResult() const
+   {
+      if (isNull())
+         return DeclContextLookupResult();
+
+      if (auto Single = getAsDecl())
+         return DeclContextLookupResult(Single);
+
+      return DeclContextLookupResult(*getAsVec());
+   }
+
+private:
+   DataTy Data;
+};
+
+class DeclContext {
+public:
+   enum AddDeclResultKind {
+      ADR_Success,
+      ADR_Duplicate,
+      ADR_DuplicateDifferentKind,
+   };
+
+   using DeclsMap = llvm::SmallDenseMap<DeclarationName, DeclList, 4>;
+
+   bool isTransparent() const;
+   bool isAnonymousNamespace() const;
+
+   void addDecl(Decl *decl);
+
+   [[nodiscard]]
+   AddDeclResultKind addDecl(NamedDecl *decl);
+
+   [[nodiscard]]
+   AddDeclResultKind addDecl(DeclarationName Name, NamedDecl *decl);
+
+   DeclContextLookupResult lookup(DeclarationName name);
+   NamedDecl *lookupSingle(DeclarationName name);
+
+   template<class T>
+   T* lookupSingle(DeclarationName name)
+   {
+      return support::dyn_cast_or_null<T>(lookupSingle(name));
+   }
+
+   const DeclsMap &getAllNamedDecls() const { return namedDecls; }
+
+   bool hasExternalStorage() const;
+
+   bool hasAnyDeclNamed(DeclarationName name) const
+   {
+      return namedDecls.find(name) != namedDecls.end();
+   }
+
+   template<class NodeType, class Fn>
+   void forEach(Fn const& fn)
+   {
+      for (auto &decl : getDecls()) {
+         if (auto N = support::dyn_cast<NodeType>(decl)) {
+            fn(N);
+         }
+      }
+   }
+
+   template<class NodeType, class Fn>
+   void forEachRecursive(Fn const& fn)
+   {
+      for (auto &decl : getDecls()) {
+         if (auto N = support::dyn_cast<NodeType>(decl)) {
+            fn(N);
+         }
+         if (auto Ctx = support::dyn_cast<DeclContext>(decl)) {
+            assert(Ctx != this);
+            Ctx->forEachRecursive<NodeType>(fn);
+         }
+      }
+   }
+
+   NamespaceDecl *getClosestNamespace() const;
+   ModuleDecl *getDeclModule() const;
+
+   bool isGlobalDeclContext() const;
+
+   template<class NodeType>
+   size_t count() const
+   {
+      size_t cnt = 0;
+      for (auto &decl : getDecls()) {
+         cnt += support::isa<NodeType>(decl);
+      }
+
+      return cnt;
+   }
+
+   template<class NodeType>
+   size_t countRecursive() const
+   {
+      size_t cnt = 0;
+      for (auto &decl : getDecls()) {
+         cnt += support::isa<NodeType>(decl);
+         if (auto Ctx = support::dyn_cast<DeclContext>(decl))
+            cnt += Ctx->countRecursive<NodeType>();
+      }
+
+      return cnt;
+   }
+
+   DeclContext *getParentCtx() const { return parentCtx; }
+   void setParentCtx(DeclContext *parent);
+   void setParentCtxUnchecked(DeclContext *parent);
+
+   DeclContext *lookThroughExtension() const;
+
+   DeclContext* getPrimaryCtx() const { return primaryCtx; }
+   void setPrimaryCtx(DeclContext* V);
+   bool isPrimaryCtx() const { return this == primaryCtx; }
+
+   serial::ModuleFile* getModFile() const;
+   void setModFile(serial::ModuleFile* V);
+
+   ArrayRef<Module*> getImportedModules() const;
+   void addImportedModule(Module *Mod);
+
+   struct ExternalStorage;
+
+   ExternalStorage* getExtStorage() const { return ExtStorage; }
+   void setExtStorage(ExternalStorage* V) { ExtStorage = V; }
+
+   void clear()
+   {
+      firstDecl = nullptr;
+      lastAddedDecl = nullptr;
+      namedDecls.clear();
+   }
+
+   [[nodiscard]]
+   AddDeclResultKind makeDeclAvailable(NamedDecl *decl);
+
+   [[nodiscard]]
+   AddDeclResultKind makeDeclAvailable(DeclarationName Name, NamedDecl *decl);
+
+   void replaceDecl(Decl *Orig, Decl *Rep);
+
+   ASTContext &getDeclASTContext() const;
+
+   Decl::DeclKind getDeclKind() const { return declKind; }
+
+   void dumpName() const;
+
+   static bool classofKind(Decl::DeclKind kind)
+   {
+      switch (kind) {
+#     define CDOT_DECL_CONTEXT(Name)         \
+      case Decl::Name##ID:
+#     include "AST/Decl.def"
+         return true;
+      default:
+         return false;
+      }
+   }
+
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+   static bool classof(DeclContext const* T) { return true; }
+
+   // For cleaning up namedDecls.
+   friend class ASTContext;
+
+protected:
+   explicit DeclContext(Decl::DeclKind typeID)
+      : declKind(typeID),
+        primaryCtx(this)
+   {}
+
+   Decl::DeclKind declKind;
+
+   DeclsMap namedDecls;
+   Decl *firstDecl = nullptr;
+   Decl *lastAddedDecl = nullptr;
+
+   DeclContext *primaryCtx = nullptr;
+   DeclContext *parentCtx = nullptr;
+
+public:
+   struct ExternalStorage {
+      /// The lookup table for external declarations.
+      serial::ModuleFile *ModFile = nullptr;
+
+      /// Modules that are fully imported in this context.
+      SmallVector<Module*, 0> ImportedModules;
+   };
+
+private:
+   /// Storage for possible external declarations.
+   ExternalStorage *ExtStorage = nullptr;
+
+public:
+   class decl_iterator {
+   public:
+      using value_type        = Decl *;
+      using reference         = const value_type &;
+      using pointer           = const value_type *;
+      using iterator_category = std::forward_iterator_tag;
+      using difference_type   = std::ptrdiff_t;
+
+      decl_iterator() = default;
+      explicit decl_iterator(value_type Ptr) : Current(Ptr) {}
+
+      reference operator*()    const { return Current; }
+      value_type operator->()  const { return Current; }
+
+      decl_iterator &operator++()
+      {
+         Current = Current->getNextDeclInContext();
+         return *this;
+      }
+
+      decl_iterator operator++(int)
+      {
+         auto tmp = decl_iterator(Current);
+         ++(*this);
+
+         return tmp;
+      }
+
+      bool operator==(decl_iterator const &it) const
+      {
+         return Current == it.Current;
+      }
+
+      bool operator!=(decl_iterator const &it) const
+      {
+         return !operator==(it);
+      }
+
+   private:
+      value_type Current = nullptr;
+   };
+
+   decl_iterator decl_begin() const { return decl_iterator(firstDecl); }
+   decl_iterator decl_end()   const { return decl_iterator(); }
+
+   bool decl_empty() const { return decl_begin() == decl_end(); }
+
+   using decl_range = llvm::iterator_range<decl_iterator>;
+
+   decl_range getDecls() const
+   {
+      return decl_range(decl_begin(), decl_end());
+   }
+
+   template<class SpecificDecl>
+   class specific_decl_iterator {
+   public:
+      using value_type        = SpecificDecl*;
+      using reference         = const value_type &;
+      using pointer           = const value_type *;
+      using iterator_category = std::forward_iterator_tag;
+      using difference_type   = std::ptrdiff_t;
+
+      specific_decl_iterator() = default;
+      explicit specific_decl_iterator(Decl *Ptr) : Current(Ptr)
+      {
+         skipToNext();
+      }
+
+      value_type operator*() const
+      {
+         return support::cast<SpecificDecl>(Current);
+      }
+
+      value_type operator->()  const { return **this; }
+
+      specific_decl_iterator &operator++()
+      {
+         Current = Current->getNextDeclInContext();
+         skipToNext();
+
+         return *this;
+      }
+
+      specific_decl_iterator operator++(int)
+      {
+         auto tmp = specific_decl_iterator(Current);
+         ++(*this);
+
+         return tmp;
+      }
+
+      bool operator==(specific_decl_iterator const &it) const
+      {
+         return Current == it.Current;
+      }
+
+      bool operator!=(specific_decl_iterator const &it) const
+      {
+         return !operator==(it);
+      }
+
+   private:
+      Decl *Current = nullptr;
+
+      void skipToNext()
+      {
+         while (Current && !support::isa<SpecificDecl>(Current))
+            Current = Current->getNextDeclInContext();
+      }
+   };
+
+   template<class SpecificDecl>
+   specific_decl_iterator<SpecificDecl> decl_begin() const
+   {
+      return specific_decl_iterator<SpecificDecl>(firstDecl);
+   }
+
+   template<class SpecificDecl>
+   specific_decl_iterator<SpecificDecl> decl_end() const
+   {
+      return specific_decl_iterator<SpecificDecl>();
+   }
+
+   template<class SpecificDecl>
+   bool decl_empty() const
+   {
+      return decl_begin<SpecificDecl>() == decl_end<SpecificDecl>();
+   }
+
+   template<class SpecificDecl>
+   using specific_decl_iterator_range
+   = llvm::iterator_range<specific_decl_iterator<SpecificDecl>>;
+
+   template<class SpecificDecl>
+   specific_decl_iterator_range<SpecificDecl> getDecls() const
+   {
+      return { decl_begin<SpecificDecl>(), decl_end<SpecificDecl>() };
+   }
+
+   template<class SpecificDecl, bool (SpecificDecl::*Predicate)() const>
+   class filtered_decl_iterator {
+   public:
+      using value_type        = SpecificDecl*;
+      using reference         = const value_type &;
+      using pointer           = const value_type *;
+      using iterator_category = std::forward_iterator_tag;
+      using difference_type   = std::ptrdiff_t;
+
+      filtered_decl_iterator() = default;
+      filtered_decl_iterator(Decl *Ptr) : Current(Ptr)
+      {
+         skipToNext();
+      }
+
+      value_type operator*() const
+      {
+         return support::cast<SpecificDecl>(Current);
+      }
+
+      value_type operator->()  const { return **this; }
+
+      filtered_decl_iterator &operator++()
+      {
+         Current = Current->getNextDeclInContext();
+         skipToNext();
+
+         return *this;
+      }
+
+      filtered_decl_iterator operator++(int)
+      {
+         auto tmp = filtered_decl_iterator(Current);
+         ++(*this);
+
+         return tmp;
+      }
+
+      bool operator==(filtered_decl_iterator const &it) const
+      {
+         return Current == it.Current;
+      }
+
+      bool operator!=(filtered_decl_iterator const &it) const
+      {
+         return !operator==(it);
+      }
+
+   private:
+      Decl *Current = nullptr;
+
+      void skipToNext()
+      {
+         while (Current
+                && (!support::isa<SpecificDecl>(Current)
+                    || !(support::cast<SpecificDecl>(Current)->*Predicate)()))
+            Current = Current->getNextDeclInContext();
+      }
+   };
+
+   template<class SpecificDecl, bool (SpecificDecl::*Predicate)() const>
+   filtered_decl_iterator<SpecificDecl, Predicate> decl_begin() const
+   {
+      return filtered_decl_iterator<SpecificDecl, Predicate>(firstDecl);
+   }
+
+   template<class SpecificDecl, bool (SpecificDecl::*Predicate)() const>
+   filtered_decl_iterator<SpecificDecl, Predicate> decl_end() const
+   {
+      return filtered_decl_iterator<SpecificDecl, Predicate>();
+   }
+
+   template<class SpecificDecl, bool (SpecificDecl::*Predicate)() const>
+   llvm::iterator_range<filtered_decl_iterator<SpecificDecl, Predicate>>
+   getDecls() const
+   {
+      return { decl_begin<SpecificDecl, Predicate>(),
+         decl_end<SpecificDecl, Predicate>() };
+   }
+};
+
+} // namespace ast
+} // namespace cdot
+
+#endif //CDOT_DECLBASE_H

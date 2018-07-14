@@ -7,30 +7,11 @@
 
 namespace cdot {
 
-enum class BuiltinFn : unsigned char {
-   None = 0,
-   DeclType,
-   MEMCPY,
-   MEMSET,
-   MemCmp,
-   ISNULL,
-   BuiltinSizeof,
-   CtfePrintStackTrace,
-
-   SIZEOF,
-   ALIGNOF,
-   NULLPTR,
-   DefaultVal,
-
-   STACK_ALLOC,
-   BITCAST
-};
-
 enum class KnownFunction: unsigned char {
    Unchecked = 0, None,
 
-   Malloc, Free, Printf, MemCpy, MemSet, MemCmp, Exit, Abort, System,
-   Srand, Rand, Time, Sleep,
+   Malloc, Free, Realloc, Printf, MemCpy, MemSet, MemCmp, Exit, Abort, System,
+   Srand, Rand, Time, Sleep, PutChar,
 
    IsAlpha, IsDigit, IsPrint,
 
@@ -43,7 +24,8 @@ enum class KnownFunction: unsigned char {
    llvm_floor_f64, llvm_ceil_f64,
    llvm_floor_f32, llvm_ceil_f32,
 
-   llvm_ctlz_i32, llvm_ctlz_i64
+   llvm_ctlz_i32, llvm_ctlz_i64,
+   llvm_cttz_i32, llvm_cttz_i64,
 };
 
 } // namespace cdot

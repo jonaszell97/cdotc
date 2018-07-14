@@ -42,12 +42,18 @@ CDOT_VALUE_OWNER(Function, BasicBlock);
 CDOT_VALUE_OWNER(BasicBlock, Argument);
 CDOT_VALUE_OWNER(BasicBlock, Instruction);
 
+#undef CDOT_VALUE_OWNER
+
+template<class NodeTy>
+struct SymbolTableListTraits: llvm::ilist_alloc_traits<NodeTy>,
+                              llvm::ilist_callback_traits<NodeTy> {};
+
 template <class T>
 class SymbolTableList {
 public:
    using OwnerType      = typename ValueOwner<T>::type;
    using ListTy         = llvm::iplist_impl<llvm::simple_ilist<T>,
-                                            llvm::ilist_traits<T>>;
+                                            SymbolTableListTraits<T>>;
    using iterator       = typename ListTy::iterator;
    using const_iterator = typename ListTy::const_iterator;
    using const_reference = typename ListTy::const_reference;
@@ -81,13 +87,9 @@ public:
       return *this;
    }
 
-   OwnerType *getOwner() const
-   { return Owner; }
-
-   std::shared_ptr<ValueSymbolTable> const& getSymTab() const
-   {
-      return SymTab;
-   }
+   OwnerType *getOwner() const { return Owner; }
+   std::shared_ptr<ValueSymbolTable> const& getSymTab() const { return SymTab; }
+   ListTy &getList() { return ilist; }
 
    void push_back(T *Val)
    {
@@ -112,25 +114,21 @@ public:
    iterator erase(T *Val)
    {
       SymTab->removeValue(Val);
-      for (auto it = ilist.begin(); it != ilist.end(); ++it) {
-         if (&*it == Val) {
-            return ilist.erase(it);
-         }
-      }
-
-      llvm_unreachable("value not in list");
+      return ilist.erase(Val->getIterator());
    }
 
-   void remove(T* Val)
-   {
-      SymTab->removeValue(Val);
-      ilist.remove(Val->getIterator());
-   }
-
-   void remove(iterator it)
+   iterator remove(iterator it)
    {
       SymTab->removeValue(&*it);
-      ilist.remove(it);
+      auto *Ptr = ilist.remove(it);
+      return Ptr ? Ptr->getIterator() : iterator();
+   }
+
+   iterator remove(T* Val)
+   {
+      SymTab->removeValue(Val);
+      auto *Ptr = ilist.remove(Val->getIterator());
+      return Ptr ? Ptr->getIterator() : iterator();
    }
 
    T *getNextNode(T &ptr)

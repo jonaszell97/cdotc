@@ -11,6 +11,7 @@
 
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
+#include <IL/Writer/ModuleWriter.h>
 
 using namespace cdot::support;
 
@@ -27,12 +28,7 @@ Function::Function(llvm::StringRef name,
 
    FnBits.Declared = true;
    FnBits.Throws = Canon->throws();
-   FnBits.SRet = Canon->getReturnType()->needsStructReturn();
    FnBits.Vararg = Canon->isCStyleVararg();
-
-   if (parent) {
-      parent->insertFunction(this);
-   }
 }
 
 Function::Function(TypeID id, FunctionType *Ty,
@@ -45,22 +41,29 @@ Function::Function(TypeID id, FunctionType *Ty,
 
    FnBits.Declared = true;
    FnBits.Throws = Canon->throws();
-   FnBits.SRet = Canon->getReturnType()->needsStructReturn();
    FnBits.Vararg = Canon->isCStyleVararg();
-
-   if (parent) {
-      parent->insertFunction(this);
-   }
 }
 
-Function::Function(const Function &other)
-   : GlobalObject(FunctionID, other.getType(), nullptr, other.name),
+Function::Function(const Function &other, Module &M)
+   : GlobalObject(FunctionID, other.getType(), &M, other.name),
      BasicBlocks(this)
 {
    metaData = other.metaData;
+   knownFnKind = other.knownFnKind;
    FnBits = other.FnBits;
    FnBits.Declared = true;
    loc = other.loc;
+   SourceLoc = other.SourceLoc;
+   LazyFnInfo = other.LazyFnInfo;
+
+   setLinkage(ExternalLinkage);
+
+   new BasicBlock(*other.getEntryBlock(), *this);
+}
+
+Function::~Function()
+{
+
 }
 
 llvm::StringRef Function::getUnmangledName() const
@@ -88,26 +91,41 @@ bool Function::isGlobalInitFn() const
    return this == parent->getGlobalInitFn();
 }
 
-Function* Function::getDeclarationIn(Module *M)
+Function* Function::getDeclarationIn(Module *Mod)
 {
-   if (parent == M)
+   if (parent == Mod)
       return this;
+
+   if (auto Fn = Mod->getOwnFunction(getName()))
+      return Fn;
 
    Function *f;
    if (auto Init = dyn_cast<Initializer>(this)) {
-      f = new Initializer(*Init);
+      f = new Initializer(*Init, *Mod);
    }
    else if (auto M = dyn_cast<Method>(this)) {
-      f = new Method(*M);
+      f = new Method(*M, *Mod);
+   }
+   else if (auto L = dyn_cast<Lambda>(this)) {
+      f = new Lambda(*L, *Mod);
    }
    else {
-      f = new Function(*this);
+      f = new Function(*this, *Mod);
    }
 
-   f->parent = M;
-   M->insertFunction(f);
-
+   Mod->insertFunction(f);
    return f;
+}
+
+void Function::dump() const
+{
+   print(llvm::outs());
+}
+
+void Function::print(llvm::raw_ostream &OS) const
+{
+   ModuleWriter Writer(this);
+   Writer.WriteTo(OS);
 }
 
 Lambda::Lambda(FunctionType *funcTy,
@@ -117,22 +135,32 @@ Lambda::Lambda(FunctionType *funcTy,
    setLinkage(InternalLinkage);
 }
 
+Lambda::Lambda(const il::Lambda &other, il::Module &M)
+   : Function(other, M)
+{
+
+}
+
 Method::Method(llvm::StringRef name,
                FunctionType *FuncTy,
                bool isStatic,
                bool isVirtual,
+               bool isDeinit,
                Module *parent)
    : Function(MethodID, FuncTy, name, parent),
      Self(nullptr)
 {
    FnBits.Static = isStatic;
    FnBits.Virtual = isVirtual;
+   FnBits.Deinit = isDeinit;
 }
 
-Method::Method(const Method &other)
-   : Function(other), Self(nullptr)
+Method::Method(const Method &other, Module &M)
+   : Function(other, M), Self(nullptr)
 {
    id = MethodID;
+   vtableOffset = other.vtableOffset;
+   ptableOffset = other.ptableOffset;
 }
 
 ast::RecordDecl* Method::getRecordType() const
@@ -141,24 +169,18 @@ ast::RecordDecl* Method::getRecordType() const
                      .front().getType()->stripReference()->getRecord();
 }
 
-Argument *Method::getSelf()
-{
-   assert(!BasicBlocks.empty());
-   return &BasicBlocks.front().getArgs().front();
-}
-
 Initializer::Initializer(llvm::StringRef methodName,
                          FunctionType *FuncTy,
                          ConstructorKind Kind,
                          Module *parent)
-   : Method(methodName, FuncTy, false, false, parent)
+   : Method(methodName, FuncTy, false, false, false, parent)
 {
    id = InitializerID;
    FnBits.CtorKind = (unsigned)Kind;
 }
 
-Initializer::Initializer(const Initializer &other)
-   : Method(other)
+Initializer::Initializer(const Initializer &other, Module &M)
+   : Method(other, M)
 {
    id = InitializerID;
 }

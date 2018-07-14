@@ -7,9 +7,9 @@
 #include "Sema/ExpressionResolver.h"
 #include "AST/Transform.h"
 #include "AST/Type.h"
+#include "Support/StringSwitch.h"
 
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 
@@ -134,6 +134,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
       break;
    }
 
+   Pred->getRHS()->setSemanticallyChecked(true);
    Pred->setIsCompileTimeCheck(CompileTimeCheck);
    Pred->setResult(result);
 
@@ -262,8 +263,12 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
    assert(TargetResult && "should not have built UnaryOperator!");
 
    auto target = UnOp->getTarget();
-   UnOp->setTarget(forceCast(target, UnOp->getFunctionType()->getParamTypes()
-                                         .front()));
+   if (!target->isTypeDependent()
+         && !UnOp->getFunctionType()->isDependentType()) {
+      UnOp->setTarget(forceCast(target,
+                                UnOp->getFunctionType()->getParamTypes()
+                                    .front()));
+   }
 
    if (UnOp->getKind() == op::TypeOf) {
       auto TI = getTypeInfoDecl();
@@ -289,7 +294,8 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 
    Expr->setCond(implicitCastIfNecessary(CondRes.get(), Context.getBoolTy()));
 
-   auto TrueValRes = visitExpr(Expr, Expr->getTrueVal());
+   auto TrueValRes = visitExpr(Expr, Expr->getTrueVal(),
+                               Expr->getContextualType());
    if (!TrueValRes)
       return ExprError();
 
@@ -299,7 +305,6 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
    Expr->setExprType(TrueType);
 
    auto FalseValRes = visitExpr(Expr, Expr->getFalseVal(), TrueType);
-
    if (!FalseValRes)
       return Expr; // recoverable since the type of the full expression is known
 
@@ -416,8 +421,7 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
       }
    }
 
-   Cast->setConvSeq(move(ConvSeq));
-
+   Cast->setConvSeq(ConversionSequence::Create(Context, ConvSeq));
    return Cast;
 }
 

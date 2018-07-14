@@ -56,18 +56,15 @@ void VerifierPass::emitError(BasicBlock const &B)
    Writer.WriteBasicBlockDeclTo(llvm::outs());
 }
 
-void VerifierPass::visitModule(Module& M)
+void VerifierPass::visitGlobals(il::Module &M)
 {
    for (const auto &G : M.getGlobalList())
       visitGlobalVariable(G);
 
-   for (const auto &F : M.getFuncList())
-      visitFunction(F);
-
    if (!IsValid) {
       std::error_code EC;
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
-                                 ".cdotil",
+                              ".cdotil",
                               EC, llvm::sys::fs::F_RW);
 
       M.writeTo(fd);
@@ -79,7 +76,10 @@ namespace {
 
 bool typesCompatible(const QualType &lhs, const QualType &rhs)
 {
-   return *lhs == *rhs;
+   if (lhs->isMutableReferenceType() && rhs->isMutableReferenceType())
+      return lhs->getReferencedType() == rhs->getReferencedType();
+
+   return lhs == rhs;
 }
 
 } // anonymous namespace
@@ -103,12 +103,9 @@ void VerifierPass::visitGlobalVariable(GlobalVariable const &G)
    }
 }
 
-void VerifierPass::visitFunction(Function const &F)
+void VerifierPass::run()
 {
-   if (F.isDeclared())
-      return;
-
-   for (const auto &BB : F.getBasicBlocks())
+   for (const auto &BB : F->getBasicBlocks())
       visitBasicBlock(BB);
 }
 
@@ -160,13 +157,30 @@ void VerifierPass::visitLambdaInitInst(LambdaInitInst const& I)
    
 }
 
+void VerifierPass::visitAssignInst(const AssignInst &I)
+{
+   auto dst = I.getDst()->getType();
+   auto src = I.getSrc()->getType();
+
+   if (dst->isReferenceType()) {
+      errorIf(!typesCompatible(dst->getReferencedType(), src),
+              "assigned operand must have the same type as destination", I);
+   }
+   else if (dst->isPointerType()) {
+      errorIf(!typesCompatible(dst->getPointeeType(), src),
+              "assigned operand must have the same type as destination", I);
+   }
+   else {
+      errorIf(true, "invalid assign target", I);
+   }
+}
+
 void  VerifierPass::visitStoreInst(StoreInst const& I)
 {
    auto dst = I.getDst()->getType();
    auto src = I.getSrc()->getType();
 
-   errorIf(!dst->isMutableReferenceType() && !I.isInit(),
-           "storing to constant reference", I);
+   errorIf(!dst->isMutableReferenceType(), "storing to constant reference", I);
 
    if (dst->isReferenceType()) {
       errorIf(!typesCompatible(dst->getReferencedType(), src),
@@ -179,6 +193,64 @@ void  VerifierPass::visitStoreInst(StoreInst const& I)
    else {
       errorIf(true, "invalid store target", I);
    }
+}
+
+void VerifierPass::visitInitInst(const InitInst &I)
+{
+   auto dst = I.getDst()->getType();
+   auto src = I.getSrc()->getType();
+
+   if (dst->isReferenceType()) {
+      errorIf(!typesCompatible(dst->getReferencedType(), src),
+              "stored operand must have the same type as destination", I);
+   }
+   else if (dst->isPointerType()) {
+      errorIf(!typesCompatible(dst->getPointeeType(), src),
+              "stored operand must have the same type as destination", I);
+   }
+   else {
+      errorIf(true, "invalid store target", I);
+   }
+}
+
+static bool isRetainable(Value *V)
+{
+   return V->getType()->isRefcounted() || V->getType()->isBoxType();
+}
+
+void VerifierPass::visitStrongRetainInst(const il::StrongRetainInst &I)
+{
+   errorIf(!isRetainable(I.getTarget()), "value is not retainable", I);
+}
+
+void VerifierPass::visitStrongReleaseInst(const il::StrongReleaseInst &I)
+{
+   errorIf(!isRetainable(I.getTarget()), "value is not releasable", I);
+}
+
+void VerifierPass::visitWeakRetainInst(const il::WeakRetainInst &I)
+{
+   errorIf(!isRetainable(I.getTarget()), "value is not retainable", I);
+}
+
+void VerifierPass::visitWeakReleaseInst(const il::WeakReleaseInst &I)
+{
+   errorIf(!isRetainable(I.getTarget()), "value is not releasable", I);
+}
+
+void VerifierPass::visitMoveInst(const il::MoveInst &I)
+{
+
+}
+
+void VerifierPass::visitBeginBorrowInst(const BeginBorrowInst &I)
+{
+
+}
+
+void VerifierPass::visitEndBorrowInst(const EndBorrowInst &I)
+{
+
 }
 
 void VerifierPass::visitGEPInst(GEPInst const& I)
@@ -242,7 +314,25 @@ void VerifierPass::visitRetInst(RetInst const& I)
    }
 }
 
+void VerifierPass::visitYieldInst(const il::YieldInst &I)
+{
+   auto func = I.getParent()->getParent();
+   if (auto Val = I.getYieldedValue()) {
+      errorIf(!typesCompatible(Val->getType(), func->getReturnType()),
+              "type of yielded value does not equal declared return type", I);
+   }
+   else {
+      errorIf(!func->getReturnType()->isVoidType(),
+              "type of yielded value does not equal declared return type", I);
+   }
+}
+
 void VerifierPass::visitThrowInst(ThrowInst const& I)
+{
+
+}
+
+void VerifierPass::visitRethrowInst(const il::RethrowInst &I)
 {
 
 }
@@ -406,23 +496,17 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    }
 }
 
-void VerifierPass::visitVirtualInvokeInst(const VirtualInvokeInst &I)
-{
-   errorIf(!I.getCalledMethod()->isVirtual(), "method is not virtual", I);
-   visitInvokeInst(I);
-}
-
-void VerifierPass::visitProtocolInvokeInst(const ProtocolInvokeInst &I)
-{
-   visitInvokeInst(I);
-}
-
 void VerifierPass::visitLandingPadInst(LandingPadInst const& I)
 {
 
 }
 
 void VerifierPass::visitIntrinsicCallInst(IntrinsicCallInst const& I)
+{
+
+}
+
+void VerifierPass::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
 {
 
 }
@@ -449,17 +533,6 @@ void VerifierPass::visitCallInst(CallInst const& I)
 
       ++i;
    }
-}
-
-void VerifierPass::visitVirtualCallInst(const VirtualCallInst &I)
-{
-   errorIf(!I.getCalledMethod()->isVirtual(), "method is not virtual", I);
-   visitCallInst(I);
-}
-
-void VerifierPass::visitProtocolCallInst(const ProtocolCallInst &I)
-{
-   visitCallInst(I);
 }
 
 void  VerifierPass::visitIndirectCallInst(IndirectCallInst const& I)
@@ -491,7 +564,7 @@ void  VerifierPass::visitLambdaCallInst(LambdaCallInst const& I)
 
 }
 
-void  VerifierPass::visitInitInst(InitInst const& I)
+void  VerifierPass::visitStructInitInst(StructInitInst const& I)
 {
    auto F = I.getCalledFunction();
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
@@ -542,6 +615,7 @@ bool hasValidBinOpType(Value const* V)
          return ty->isIntegerType() || ty->isFPType();
       case Type::PointerTypeID:
       case Type::MutablePointerTypeID:
+      case Type::FunctionTypeID:
          return true;
       default:
          return false;
@@ -660,6 +734,9 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
               "sign cast to different bitwidth", I);
 
       break;
+   case CastKind::IntToEnum:
+      errorIf(!to->isRawEnum(), "not a raw enum type", I);
+      break;
    default:
       llvm_unreachable("bad integer cast kind");
    }
@@ -692,22 +769,6 @@ void  VerifierPass::visitFPCastInst(FPCastInst const& I)
       default:
          llvm_unreachable("bad fp cast kind");
    }
-}
-
-void VerifierPass::visitIntToEnumInst(IntToEnumInst const& I)
-{
-   errorIf(!I.getType()->isRawEnum(), "cannot cast int to enum type with "
-      "associated values!", I);
-}
-
-void VerifierPass::visitDeinitializeLocalInst(
-                                           const il::DeinitializeLocalInst &I) {
-
-}
-
-void VerifierPass::visitDeinitializeTemporaryInst(
-                                       const il::DeinitializeTemporaryInst &I) {
-
 }
 
 void VerifierPass::visitUnionCastInst(UnionCastInst const& I)

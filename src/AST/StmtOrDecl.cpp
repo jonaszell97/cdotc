@@ -11,32 +11,37 @@ using namespace cdot::ast;
 
 namespace cdot {
 
-#define DISPATCH(METHOD) Union.is<Statement*>()   \
-   ? Union.get<Statement*>()->METHOD            \
-   : Union.get<Decl*>()->METHOD
+#define DISPATCH(METHOD, TYPE)                     \
+   Union.isNull() ? TYPE()                         \
+   : Union.is<Statement*>()                        \
+      ? Union.get<Statement*>()->METHOD            \
+      : Union.get<Decl*>()->METHOD
 
 SourceLocation StmtOrDecl::getSourceLoc() const
 {
-   return DISPATCH(getSourceLoc());
+   return DISPATCH(getSourceLoc(), SourceLocation);
 }
 
 SourceRange StmtOrDecl::getSourceRange() const
 {
-   return DISPATCH(getSourceRange());
+   return DISPATCH(getSourceRange(), SourceRange);
 }
 
 bool StmtOrDecl::isInvalid() const
 {
-   return DISPATCH(isInvalid());
+   return DISPATCH(isInvalid(), bool);
 }
 
 void StmtOrDecl::setIsInvalid(bool b) const
 {
-   return DISPATCH(setIsInvalid(b));
+   return DISPATCH(setIsInvalid(b), void);
 }
 
 void StmtOrDecl::copyStatusFlags(StmtOrDecl Other) const
 {
+   if (Union.isNull())
+      return;
+
    if (Union.is<Statement*>()) {
       if (Other.Union.is<Statement*>()) {
          Union.get<Statement*>()

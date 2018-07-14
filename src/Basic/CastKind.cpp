@@ -7,13 +7,16 @@
 namespace cdot {
 
 const char* CastNames[] = {
-   "<noop>", "<invalid>", "<lvalue_to_rvalue>",
-   "ibox", "iunbox", "inttofp", "fptoint", "ext",
-   "trunc", "ptrtoint", "inttoptr", "sign_cast",
-   "fpext", "fptrunc", "fpbox", "fpunbox",
-   "dyn_cast", "upcast", "<conv_op>", "bitcast", "proto_wrap", "proto_unwrap",
-   "nothrow_to_throw", "mut_ref_to_ref", "mut_ptr_to_ptr",
-   "<int_to_enum>", "<enum_to_int>"
+   "<noop>", "<lvalue_to_rvalue>",
+   "inttofp", "fptoint", "ext",
+   "trunc", "ptrtoint", "inttoptr", "sign_cast", "is_null",
+   "fpext", "fptrunc",
+   "dyn_cast", "upcast", "<conv_op>",
+   "bitcast", "proto_wrap", "proto_unwrap", "nothrow_to_throw",
+   "<forward>", "<move>", "<copy>",
+   "mut_ref_to_ref", "mut_ptr_to_ptr",
+   "<rvalue_to_const_ref>",
+   "int_to_enum", "enum_to_int"
 };
 
 } // namespace cdot

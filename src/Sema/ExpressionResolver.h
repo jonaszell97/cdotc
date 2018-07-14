@@ -18,7 +18,7 @@ class ExprSequence;
 class ExpressionResolver {
 public:
    explicit ExpressionResolver(SemaPass &SP) : SP(SP) {}
-   Expression *resolve(ExprSequence *expr, bool ignoreErrors = false);
+   Expression *resolve(ExprSequence *ExprSeq, bool ignoreErrors = false);
 
 private:
    SemaPass &SP;

@@ -9,8 +9,8 @@
 
 #include "Backend/TableGenBackends.h"
 #include "Basic/FileManager.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FileSystem.h>
 
@@ -85,7 +85,7 @@ Options parseOptions(DiagnosticsEngine &Diags, int argc, char **argv)
          }
          else {
             opts.backendName = arg;
-            opts.backend = llvm::StringSwitch<Backend>(opts.backendName)
+            opts.backend = StringSwitch<Backend>(opts.backendName)
                .Case("-print-records", B_PrintRecords)
                .Case("-emit-class-hierarchy", B_EmitClassHierarchy)
                .Default(B_Custom);

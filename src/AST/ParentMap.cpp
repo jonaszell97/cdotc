@@ -4,7 +4,6 @@
 
 #include "ParentMap.h"
 
-#include "AST/Traverse.h"
 #include "Statement.h"
 
 #include <llvm/ADT/DenseMap.h>
@@ -17,12 +16,12 @@ class ParentMapImpl {
 public:
    void updateParentMap(Statement *Stmt)
    {
-      visitDirectChildren(Stmt, [Stmt, this](Statement *Child) {
-         if (Child) {
-            Map[Child] = Stmt;
-            return updateParentMap(Child);
-         }
-      });
+//      visitDirectChildren(Stmt, [Stmt, this](Statement *Child) {
+//         if (Child) {
+//            Map[Child] = Stmt;
+//            return updateParentMap(Child);
+//         }
+//      });
    }
 
    Statement *getParent(Statement *Child)

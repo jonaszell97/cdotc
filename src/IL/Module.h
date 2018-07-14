@@ -2,8 +2,8 @@
 // Created by Jonas Zell on 16.11.17.
 //
 
-#ifndef CDOT_MODULE_H
-#define CDOT_MODULE_H
+#ifndef CDOT_ILMODULE_H
+#define CDOT_ILMODULE_H
 
 #include "AST/DeclDenseMapInfo.h"
 #include "IL/Function.h"
@@ -14,11 +14,15 @@
 #include <llvm/ADT/DenseSet.h>
 
 namespace llvm {
-   class raw_ostream;
    class MemoryBuffer;
+   class Module;
+   class raw_ostream;
 } // namespace llvm
 
 namespace cdot {
+namespace serial {
+   class ILModuleFile;
+} // namespace serial
 
 class CompilationUnit;
 
@@ -55,11 +59,17 @@ public:
                    llvm::StringRef fileName = {},
                    llvm::StringRef path = {});
 
-   Function *insertFunction(Function *func);
+   ~Module();
+
+   Function *insertFunction(Function *Fn,
+                            bool OverridePrevious = false,
+                            Function **Previous = nullptr);
    Function *getFunction(llvm::StringRef name);
    Function *getOwnFunction(llvm::StringRef name);
 
-   GlobalVariable *insertGlobal(GlobalVariable *global);
+   GlobalVariable *insertGlobal(GlobalVariable *G,
+                                bool OverridePrevious = false,
+                                GlobalVariable **Previous = nullptr);
    GlobalVariable *getGlobal(llvm::StringRef name);
    GlobalVariable *getOwnGlobal(llvm::StringRef name);
 
@@ -90,8 +100,11 @@ public:
 
    void dump() const;
    void writeTo(llvm::raw_ostream &out) const;
+   void writeToFile(const char *FileName) const;
 
-   void serializeTo(llvm::raw_ostream &out) const;
+   bool linkInModule(std::unique_ptr<Module> &&M,
+                     llvm::function_ref<void(GlobalObject*, GlobalObject*)>
+                        Callback = {});
 
    func_iterator begin() { return Functions.begin(); }
    func_iterator end() { return Functions.end(); }
@@ -118,20 +131,21 @@ public:
       return &Module::GlobalVariables;
    }
 
-   llvm::StringRef getFileName() const
-   {
-      return fileName;
-   }
+   llvm::StringRef getFileName() const { return fileName; }
+   llvm::StringRef getPath() const { return path; }
+   size_t getFileID() const { return fileID; }
 
-   llvm::StringRef getPath() const
-   {
-      return path;
-   }
+   llvm::Module* getLLVMModule() const { return LLVMMod; }
+   void setLLVMModule(llvm::Module* V) { LLVMMod = V; }
 
-   size_t getFileID() const
-   {
-      return fileID;
-   }
+   bool hasExternallyVisibleSymbols()const{return HasExternallyVisibleSymbols;}
+   void setHasExternallyVisibleSymbols(bool V){HasExternallyVisibleSymbols = V;}
+
+   bool isSynthesized() const { return Synthesized; }
+   void setSynthesized(bool V) { Synthesized = V; }
+
+   serial::ILModuleFile* getExternalLookup() const { return ExternalLookup; }
+   void setExternalLookup(serial::ILModuleFile* V) { ExternalLookup = V; }
 
 protected:
    FunctionList Functions;
@@ -148,11 +162,17 @@ protected:
    std::string fileName;
    std::string path;
 
+   serial::ILModuleFile *ExternalLookup = nullptr;
+
    Function *globalInitFn = nullptr;
+   llvm::Module *LLVMMod = nullptr;
+
+   bool Synthesized = false;
+   bool HasExternallyVisibleSymbols = false;
 };
 
 } // namespace il
 } // namespace cdot
 
 
-#endif //CDOT_MODULE_H
+#endif //CDOT_ILMODULE_H

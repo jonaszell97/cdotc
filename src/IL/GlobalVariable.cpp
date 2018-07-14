@@ -50,6 +50,20 @@ GlobalObject::GlobalObject(TypeID id,
    UnnamedAddrVal = 0;
 }
 
+bool GlobalObject::isExternallyVisible() const
+{
+   if (Visibility != DefaultVisibility)
+      return false;
+
+   switch (Linkage) {
+   default:
+      return true;
+   case InternalLinkage:
+   case PrivateLinkage:
+      return false;
+   }
+}
+
 GlobalVariable::GlobalVariable(QualType ty,
                                bool isConstant,
                                llvm::StringRef name,
@@ -58,6 +72,13 @@ GlobalVariable::GlobalVariable(QualType ty,
    : GlobalObject(GlobalVariableID, ty, module, name),
      initializer(initializer)
 {
+   if (initializer) {
+      initializer->addUse(this);
+   }
+   else {
+      GVBits.Declared = true;
+   }
+
    GVBits.Const = isConstant;
 
    if (isConstant) {
@@ -66,23 +87,34 @@ GlobalVariable::GlobalVariable(QualType ty,
    else {
       type = getASTCtx().getMutableReferenceType(ty);
    }
-
-   if (module)
-      module->insertGlobal(this);
 }
 
-GlobalVariable::GlobalVariable(const GlobalVariable &var)
-   : GlobalObject(GlobalVariableID, var.getType(), nullptr, var.name),
+GlobalVariable::GlobalVariable(const GlobalVariable &var, Module &M)
+   : GlobalObject(GlobalVariableID, var.getType(), &M, var.name),
      initializer(nullptr)
 {
-   setIsLvalue(true);
    loc = var.loc;
+   SourceLoc = var.SourceLoc;
    GVBits = var.GVBits;
+   LazyGlobalInfo = var.LazyGlobalInfo;
+
+   if (var.InitializedFlag)
+      InitializedFlag = var.InitializedFlag->getDeclarationIn(&M);
+
+   if (var.InitFn)
+      InitFn = var.InitFn->getDeclarationIn(&M);
+
+   setDeclared(true);
+   setLinkage(ExternalLinkage);
 }
 
 void GlobalVariable::setInitializer(Constant *initializer)
 {
    GlobalVariable::initializer = initializer;
+   if (initializer) {
+      initializer->addUse(this);
+      setDeclared(false);
+   }
 }
 
 void GlobalVariable::makeMutable()
@@ -93,9 +125,13 @@ void GlobalVariable::makeMutable()
 
 GlobalVariable* GlobalVariable::getDeclarationIn(Module *M)
 {
-   auto global = new GlobalVariable(*this);
+   if (M == parent)
+      return this;
 
-   global->parent = M;
+   if (auto G = M->getOwnGlobal(getName()))
+      return G;
+
+   auto global = new GlobalVariable(*this, *M);
    M->insertGlobal(global);
 
    return global;

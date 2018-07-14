@@ -5,11 +5,13 @@
 #ifndef CDOT_FORMAT_H
 #define CDOT_FORMAT_H
 
-#include <string>
-#include <cmath>
-#include <cassert>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <cassert>
+#include <cmath>
 #include <ctime>
+#include <string>
 
 namespace cdot {
 namespace support {
@@ -218,6 +220,19 @@ inline char escape_char(char c)
          return '\0';
       default:
          return c;
+   }
+}
+
+inline void WriteEscapedString(llvm::StringRef str, llvm::raw_ostream &OS)
+{
+   for (unsigned char c : str) {
+      if (isprint(c) && c != '\\' && c != '"') {
+         OS << c;
+      }
+      else {
+         OS << '\\' << support::hexdigit(c >> 4)
+            << support::hexdigit(c & 0x0Fu);
+      }
    }
 }
 

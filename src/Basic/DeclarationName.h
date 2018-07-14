@@ -14,7 +14,6 @@ namespace sema {
    class FinalTemplateArgumentList;
 } // namespace sema
 
-class BlockScope;
 class DeclarationNameTable;
 class DeclarationNameInfo;
 
@@ -38,11 +37,16 @@ public:
       AccessorName,
       ClosureArgumentName,
       MacroName,
+      SubscriptName,
       ErrorName,
    };
 
    enum AccessorKind : unsigned char {
       Getter, Setter,
+   };
+
+   enum class SubscriptKind : unsigned char {
+      Getter, Setter, General,
    };
 
    DeclarationName() : Val(0) {}
@@ -69,13 +73,7 @@ public:
       return isSimpleIdentifier() && getIdentifierInfo()->isStr(Str);
    }
 
-   IdentifierInfo *getIdentifierInfo() const
-   {
-      if (getStoredKind() == StoredIdentifier)
-         return reinterpret_cast<IdentifierInfo*>(Val);
-
-      return nullptr;
-   }
+   IdentifierInfo *getIdentifierInfo() const;
 
    QualType getConstructorType() const;
    QualType getDestructorType() const
@@ -94,6 +92,8 @@ public:
    const IdentifierInfo *getAccessorName() const;
    AccessorKind getAccessorKind() const;
 
+   SubscriptKind getSubscriptKind() const;
+
    unsigned getClosureArgumentIdx() const;
 
    DeclarationName getDeclaredOperatorName() const;
@@ -104,7 +104,7 @@ public:
    unsigned getPackExpansionIndex() const;
 
    DeclarationName getLocalVarName() const;
-   BlockScope *getLocalVarScope() const;
+   unsigned getLocalVarScope() const;
 
    DeclarationName getInstantiationName() const;
    const sema::FinalTemplateArgumentList *getInstantiationArgs() const;
@@ -112,9 +112,9 @@ public:
    QualType getConversionOperatorType() const;
    QualType getExtendedType() const;
 
-   bool isErrorName() const { return getDeclarationKind() == ErrorName; }
+   bool isErrorName() const { return getKind() == ErrorName; }
 
-   DeclarationKind getDeclarationKind() const;
+   DeclarationKind getKind() const;
 
    friend bool operator==(const DeclarationName &LHS,
                           const DeclarationName &RHS) {
@@ -257,6 +257,25 @@ struct DenseMapInfo<cdot::DeclarationName> {
    }
 };
 
+template <typename T>
+struct PointerLikeTypeTraits;
+
+template<>
+struct PointerLikeTypeTraits< ::cdot::DeclarationName> {
+public:
+   static inline void *getAsVoidPointer(::cdot::DeclarationName N)
+   {
+      return N.getAsOpaquePtr();
+   }
+
+   static inline ::cdot::DeclarationName getFromVoidPointer(void *P)
+   {
+      return ::cdot::DeclarationName::getFromOpaquePtr(P);
+   }
+
+   enum { NumLowBitsAvailable = 0 };
+};
+
 template <>
 struct isPodLike<cdot::DeclarationName> { static const bool value = true; };
 
@@ -273,6 +292,12 @@ class DeclarationNameTable {
 public:
    explicit DeclarationNameTable(ast::ASTContext &Ctx);
    ~DeclarationNameTable();
+
+   DeclarationName getIdentifiedName(DeclarationName::DeclarationKind Kind,
+                                     const IdentifierInfo &II);
+
+   DeclarationName getTypedName(DeclarationName::DeclarationKind Kind,
+                                QualType Ty);
 
    DeclarationName getNormalIdentifier(const IdentifierInfo &II);
    DeclarationName getConstructorName(QualType ConstructedType,
@@ -295,9 +320,10 @@ public:
    DeclarationName getClosureArgumentName(unsigned ArgNo);
 
    DeclarationName getLocalVarName(DeclarationName Name,
-                                   BlockScope *Scope);
+                                   unsigned ScopeID);
 
    DeclarationName getExtensionName(QualType ExtendedType);
+   DeclarationName getSubscriptName(DeclarationName::SubscriptKind Kind);
 
    DeclarationName getInstantiationName(
                               DeclarationName BaseName,

@@ -49,22 +49,49 @@ void Instruction::setParent(BasicBlock *parent)
 
 bool Instruction::isRetainOrRelease() const
 {
+   return isa<RefcountingInst>(this);
+}
+
+bool Instruction::isBeginUnsafe() const
+{
    if (auto I = dyn_cast<IntrinsicCallInst>(this))
-      return I->getCalledIntrinsic() == Intrinsic::retain
-          || I->getCalledIntrinsic() == Intrinsic::release;
+      return I->getCalledIntrinsic() == Intrinsic::begin_unsafe;
 
    return false;
+}
+
+bool Instruction::isEndUnsafe() const
+{
+   if (auto I = dyn_cast<IntrinsicCallInst>(this))
+      return I->getCalledIntrinsic() == Intrinsic::end_unsafe;
+
+   return false;
+}
+
+const MultiOperandInst* Instruction::asMultiOperandInst() const
+{
+   return const_cast<Instruction*>(this)->asMultiOperandInst();
+}
+
+MultiOperandInst* Instruction::asMultiOperandInst()
+{
+   switch (getTypeID()) {
+#  define CDOT_MULTI_OP_INST(NAME) case NAME##ID: return cast<NAME>(this);
+#  include "Instructions.def"
+
+   default:
+      return nullptr;
+   }
 }
 
 void Instruction::handleReplacement(Value *with)
 {
    for (auto it = op_begin(); it != op_end(); ++it) {
-      (*it)->removeUser(this);
-      (*it)->addUse(with);
+      (*it)->replaceUser(this, with);
    }
 
    if (auto Inst = dyn_cast<Instruction>(with)) {
-      Inst->setParent(parent);
+      getParent()->getInstructions().insert(getIterator(), Inst);
    }
 
    this->detachFromParent();
@@ -100,14 +127,7 @@ Value* Instruction::getOperand(unsigned idx) const
 void Instruction::setOperand(unsigned idx, Value *V)
 {
    assert(idx < getNumOperands());
-   auto it = op_begin();
-   while (idx) {
-      assert(it != op_end());
-      --idx;
-      ++it;
-   }
-
-   *it = V;
+   op_begin()[idx] = V;
 }
 
 Instruction::op_iterator Instruction::op_begin()

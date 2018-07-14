@@ -5,10 +5,9 @@
 #include "ExpressionResolver.h"
 #include "CandidateSet.h"
 #include "SemaPass.h"
-
 #include "Support/Casting.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 
@@ -154,6 +153,10 @@ public:
                               CandidateSet::Candidate &Cand,
                               Expression *LHS, Expression *RHS);
 
+   Expression *checkSubscript(PrecedenceResult &Res,
+                              CandidateSet::Candidate &Cand,
+                              Expression *LHS, Expression *RHS);
+
    Expression *buildCastExpr(PrecedenceResult &Res,
                              CandidateSet::Candidate &Cand,
                              Expression *LHS, Expression *RHS);
@@ -163,12 +166,16 @@ public:
          : Expr(nullptr)
       {}
 
+      UnaryOpResult(Expression *Expr, DeclarationName Op)
+         : Expr(Expr), Op(Op)
+      {}
+
       UnaryOpResult(CandidateSet &&CandSet,
                     DeclarationName Op,
                     SourceLocation OpLoc,
                     Expression *Expr = nullptr)
          : CandSet(move(CandSet)), Expr(Expr),
-           Op(move(Op)), OpLoc(OpLoc)
+           Op(Op), OpLoc(OpLoc)
       { }
 
       operator bool() const
@@ -383,9 +390,6 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
          TypeDependent = true;
          return nullptr;
       }
-
-      if (ExprElement)
-         ExprElement->setExpr(Target);
    }
 
    counter = savedCtr;
@@ -418,9 +422,6 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
                   return nullptr;
                }
 
-               if (ExprElement)
-                  ExprElement->setExpr(Target);
-
                advance();
             }
             else {
@@ -439,17 +440,17 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
 ExprResolverImpl::UnaryOpResult
 ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
                                       FixKind fix,
-                                      llvm::StringRef op,
+                                      StringRef op,
                                       SourceLocation loc) {
    auto &II = SP.getContext().getIdentifiers().get(op);
 
    // fast path if there exists no prefix / postfix operator with this name
    // in the whole program (which is the case most times when calling this)
    if (fix == FixKind::Prefix && !SP.getContext().isPrefixOperator(&II)) {
-      return UnaryOpResult();
+      return UnaryOpResult(Expr, II);
    }
    if (fix == FixKind::Postfix && !SP.getContext().isPostfixOperator(&II)) {
-      return UnaryOpResult();
+      return UnaryOpResult(Expr, II);
    }
 
    auto &NameTable = SP.getContext().getDeclNameTable();
@@ -463,7 +464,7 @@ ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
 
    if (CandSet.isDependent()) {
       TypeDependent = true;
-      return UnaryOpResult();
+      return UnaryOpResult(Expr, II);
    }
 
    if (!CandSet) {
@@ -514,12 +515,13 @@ Expression* ExprResolverImpl::buildUnaryOp(Expression *Expr,
             UnOp = Ptr;
          }
          else if (II->isStr("?")) {
-            static auto *Opt = &SP.getContext().getIdentifiers().get("Option");
-            auto OptTy = new(SP.getContext())
-               IdentifierRefExpr(SR, Opt, { Expr });
+            auto *Opt = &SP.getContext().getIdentifiers().get("Option");
+            auto OptTy = new(SP.getContext()) IdentifierRefExpr(SR, Opt);
+            auto *TAs = TemplateArgListExpr::Create(SP.getContext(), SR,
+                                                    OptTy, Expr);
 
             OptTy->setIsSynthesized(true);
-            UnOp = OptTy;
+            UnOp = TAs;
          }
          else {
             llvm_unreachable("bad meta type operator!");
@@ -532,9 +534,10 @@ Expression* ExprResolverImpl::buildUnaryOp(Expression *Expr,
       }
    }
    else {
+      ASTVector<Expression*> Args(SP.getContext(), Expr);
       UnOp = new(SP.getContext()) CallExpr(prefix ? OpLoc
                                                   : Expr->getSourceLoc(),
-                                           SR, { Expr }, Cand.Func);
+                                           SR, std::move(Args), Cand.Func);
    }
 
    return UnOp;
@@ -581,10 +584,37 @@ Expression* ExprResolverImpl::checkAccesssor(PrecedenceResult &Res,
    }
 
    // build a call to the appropriate accessor method
+   ASTVector<Expression*> Args(SP.getContext(), {LHS, RHS});
    return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        { LHS, RHS },
-                                        Ident->getAccessor()
-                                             ->getSetterMethod());
+                                        move(Args), Ident->getAccessor()
+                                                         ->getSetterMethod());
+}
+
+Expression* ExprResolverImpl::checkSubscript(PrecedenceResult &Res,
+                                             CandidateSet::Candidate &Cand,
+                                             Expression *LHS,
+                                             Expression *RHS) {
+   assert(Cand.BuiltinCandidate.OpKind == op::Assign);
+
+   // the subscript will have been transformed into a call
+   auto Call = dyn_cast<CallExpr>(LHS);
+   if (!Call)
+      return nullptr;
+
+   auto M = dyn_cast<MethodDecl>(Call->getFunc());
+   if (!M || !M->isSubscript())
+      return nullptr;
+
+   // build a call to the appropriate accessor method
+   ASTVector<Expression*> Args(SP.getContext(), Call->getArgs().size());
+   Args.insert(SP.getContext(), Args.end(), Call->getArgs().begin(),
+               Call->getArgs().end());
+
+   // replace the dummy default value
+   Args.back() = RHS;
+
+   return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
+                                        move(Args), M);
 }
 
 static CastStrength getCastStrength(op::OperatorKind Kind)
@@ -617,6 +647,7 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
    }
    
    auto &Cand = CandSet.getBestMatch();
+   SP.maybeInstantiate(CandSet, LHS);
 
    Expression *Exprs[2] = { LHS, RHS };
    SP.ApplyCasts(Exprs, ExprSeq, CandSet);
@@ -647,6 +678,9 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
          if (auto E = checkAccesssor(Res, Cand, LHS, RHS))
             return E;
 
+         if (auto E = checkSubscript(Res, Cand, LHS, RHS))
+            return E;
+
          return AssignExpr::Create(SP.getContext(), Res.OpLoc, LHS, RHS);
       case op::As: case op::AsQuestion: case op::AsExclaim:
          return buildCastExpr(Res, Cand, LHS, RHS);
@@ -658,8 +692,9 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
       }
    }
 
+   ASTVector<Expression*> Args(SP.getContext(), Exprs);
    return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        { LHS, RHS }, Cand.Func);
+                                        move(Args), Cand.Func);
 }
 
 ExprResolverImpl::PrecedenceResult
@@ -777,9 +812,10 @@ Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
       if (lookahead().isExpression()) {
          diagnoseUnexpectedExpr();
       }
-
-      SP.diagnose(ExprSeq, err_generic_error, lookahead().getLoc(),
-                  lookahead().asString() + " is not an operator");
+      else {
+         SP.diagnose(ExprSeq, err_generic_error, lookahead().getLoc(),
+                     lookahead().asString() + " is not an operator");
+      }
 
       return nullptr;
    }
@@ -835,28 +871,61 @@ void ExprResolverImpl::diagnoseUnexpectedExpr()
    SP.diagnose(ExprSeq, err_unexpected_expression, lookahead().getLoc());
 }
 
-Expression *ExpressionResolver::resolve(ExprSequence *expr, bool ignoreErrors)
+static void visitContextDependentExpr(SemaPass &SP, Expression *E)
 {
-   ExprResolverImpl Resolver(SP, expr, expr->getContextualType(), ignoreErrors);
+   switch (E->getTypeID()) {
+   case Statement::EnumCaseExprID: {
+      auto *EC = cast<EnumCaseExpr>(E);
+      EC->setIsTypeDependent(true);
+
+      for (auto *Arg : EC->getArgs()) {
+         (void) SP.visitExpr(EC, Arg);
+      }
+
+      break;
+   }
+   case Statement::LambdaExprID: {
+      auto *LE = cast<LambdaExpr>(E);
+      LE->setIsTypeDependent(true);
+
+      (void) SP.visitStmt(LE, LE->getBody());
+
+      break;
+   }
+   default:
+      break;
+   }
+}
+
+Expression *ExpressionResolver::resolve(ExprSequence *ExprSeq,
+                                        bool ignoreErrors) {
+   ExprResolverImpl Resolver(SP, ExprSeq, ExprSeq->getContextualType(),
+                             ignoreErrors);
+
    auto Result = Resolver.ParseExpression();
 
-   expr->setIsInvalid(Resolver.HadError);
-
-   // visit all expressions so they're ready for instantiation
-   // FIXME find a better way to do this
+   // Visit all expressions so they're ready for instantiation.
    if (Resolver.TypeDependent) {
-      expr->setIsTypeDependent(true);
+      ExprSeq->setIsTypeDependent(true);
 
-      for (auto &SeqEl : expr->getFragments()) {
+      for (auto &SeqEl : ExprSeq->getFragments()) {
          if (SeqEl.isExpression()) {
             auto E = SeqEl.getExpr();
-            if (!E->isContextDependent()) {
-               auto Res = SP.visitExpr(expr, E);
+            if (E->isContextDependent()) {
+               visitContextDependentExpr(SP, E);
+            }
+            else {
+               E->setIsTypeDependent(true);
+
+               auto Res = SP.visitExpr(ExprSeq, E);
                if (Res)
                   SeqEl.setExpr(Res.get());
             }
          }
       }
+   }
+   else {
+      ExprSeq->setIsInvalid(!Result || ExprSeq->isInvalid() || Resolver.HadError);
    }
 
    return Result;

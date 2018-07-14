@@ -22,14 +22,12 @@ namespace detail {
    enum { RecordDeclAlign = 2 };
 }
 
-template <typename T> class PointerLikeTypeTraits;
+template <typename T> struct PointerLikeTypeTraits;
 template<class T> struct DenseMapInfo;
 
-template <typename T>
-class PointerLikeTypeTraits;
 
 template<>
-class PointerLikeTypeTraits<::cdot::ast::Statement*> {
+struct PointerLikeTypeTraits<::cdot::ast::Statement*> {
 public:
    static inline void *getAsVoidPointer(::cdot::ast::Statement* P) { return P; }
 
@@ -42,7 +40,7 @@ public:
 };
 
 template<>
-class PointerLikeTypeTraits<::cdot::ast::Decl*> {
+struct PointerLikeTypeTraits<::cdot::ast::Decl*> {
 public:
    static inline void *getAsVoidPointer(::cdot::ast::Decl* P) { return P; }
 
@@ -55,7 +53,7 @@ public:
 };
 
 template<>
-class PointerLikeTypeTraits<::cdot::ast::RecordDecl*> {
+struct PointerLikeTypeTraits<::cdot::ast::RecordDecl*> {
 public:
    static inline void *getAsVoidPointer(::cdot::ast::RecordDecl*P) { return P; }
 
@@ -94,7 +92,7 @@ template<> struct DenseMapInfo<::cdot::ast::RecordDecl*> {
 };
 
 template<>
-class PointerLikeTypeTraits<::cdot::ast::ProtocolDecl*> {
+struct PointerLikeTypeTraits<::cdot::ast::ProtocolDecl*> {
 public:
    static inline void *getAsVoidPointer(::cdot::ast::ProtocolDecl*P)
    { return P; }

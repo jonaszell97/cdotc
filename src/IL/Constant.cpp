@@ -20,7 +20,105 @@ namespace il {
 
 void Constant::handleReplacement(Value *with)
 {
+   for (auto it = op_begin(); it != op_end(); ++it) {
+      (*it)->replaceUser(this, with);
+   }
+}
 
+unsigned Constant::getNumOperands() const
+{
+   switch (id) {
+#  define CDOT_CONSTANT(Name)                                           \
+      case Name##ID:                                                    \
+         return static_cast<const Name*>(this)->getNumOperandsImpl();
+#  include "Instructions.def"
+
+   default:
+      llvm_unreachable("bad inst kind");
+   }
+}
+
+Value* Constant::getOperand(unsigned idx) const
+{
+   assert(idx < getNumOperands());
+   auto it = op_begin();
+   while (idx) {
+      assert(it != op_end());
+      --idx;
+      ++it;
+   }
+
+   return *it;
+}
+
+void Constant::setOperand(unsigned idx, Constant *V)
+{
+   assert(idx < getNumOperands());
+   op_begin()[idx] = V;
+}
+
+Constant::op_iterator Constant::op_begin()
+{
+   switch (id) {
+#  define CDOT_CONSTANT(Name) \
+      case Name##ID: \
+         return static_cast<Name*>(this)->op_begin_impl();
+#  include "Instructions.def"
+
+   default:
+      llvm_unreachable("bad inst kind");
+   }
+}
+
+Constant::op_iterator Constant::op_end()
+{
+   switch (id) {
+#  define CDOT_CONSTANT(Name) \
+      case Name##ID: \
+         return static_cast<Name*>(this)->op_end_impl();
+#  include "Instructions.def"
+
+   default:
+      llvm_unreachable("bad inst kind");
+   }
+}
+
+Constant::op_const_iterator Constant::op_begin() const
+{
+   switch (id) {
+#  define CDOT_CONSTANT(Name) \
+      case Name##ID: \
+         return static_cast<Name*>(const_cast<Constant*>(this))->op_begin_impl();
+#  include "Instructions.def"
+
+   default:
+      llvm_unreachable("bad inst kind");
+   }
+}
+
+Constant::op_const_iterator Constant::op_end() const
+{
+   switch (id) {
+#  define CDOT_CONSTANT(Name) \
+      case Name##ID: \
+         return static_cast<const Name*>(this)->op_end_impl();
+#  include "Instructions.def"
+
+   default:
+      llvm_unreachable("bad inst kind");
+   }
+}
+
+void Constant::replaceOperand(Constant *Prev, Constant *New)
+{
+   unsigned idx = 0;
+   for (auto it = op_begin(); it != op_end(); ++it, ++idx) {
+      if (*it == Prev) {
+         return setOperand(idx, New);
+      }
+   }
+
+   llvm_unreachable("operand not found!");
 }
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)

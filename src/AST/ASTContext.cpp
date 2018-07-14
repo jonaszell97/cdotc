@@ -3,7 +3,10 @@
 //
 
 #include "ASTContext.h"
+
 #include "Decl.h"
+#include "Driver/Compiler.h"
+#include "Serialization/ModuleFile.h"
 #include "Support/Casting.h"
 
 using namespace cdot::support;
@@ -113,8 +116,14 @@ PointerType* ASTContext::getPointerType(QualType pointeeType) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!pointeeType.isCanonical())
+   if (!pointeeType.isCanonical()) {
       CanonicalTy = getPointerType(pointeeType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = PointerTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) PointerType(pointeeType, CanonicalTy);
 
@@ -133,8 +142,14 @@ ASTContext::getMutablePointerType(QualType pointeeType) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!pointeeType.isCanonical())
+   if (!pointeeType.isCanonical()) {
       CanonicalTy = getMutablePointerType(pointeeType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = MutablePointerTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment)
       MutablePointerType(pointeeType, CanonicalTy);
@@ -155,8 +170,14 @@ ReferenceType* ASTContext::getReferenceType(QualType referencedType) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!referencedType.isCanonical())
+   if (!referencedType.isCanonical()) {
       CanonicalTy = getReferenceType(referencedType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = ReferenceTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) ReferenceType(referencedType,
                                                        CanonicalTy);
@@ -178,25 +199,85 @@ ASTContext::getMutableReferenceType(QualType referencedType) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!referencedType.isCanonical())
+   if (!referencedType.isCanonical()) {
       CanonicalTy = getMutableReferenceType(referencedType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = MutableReferenceTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) MutableReferenceType(referencedType,
                                                               CanonicalTy);
 
    MutableReferenceTypes.InsertNode(New, insertPos);
+
+#ifndef NDEBUG
+   for (auto &Ty : MutableReferenceTypes) {
+      Type::verifyID(Ty.getTypeID());
+   }
+#endif
+
+   return New;
+}
+
+MutableBorrowType*
+ASTContext::getMutableBorrowType(QualType referencedType) const
+{
+   assert(!referencedType->isReferenceType() && "reference to reference type!");
+
+   llvm::FoldingSetNodeID ID;
+   MutableBorrowType::Profile(ID, referencedType);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = MutableBorrowTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   Type *CanonicalTy = nullptr;
+   if (!referencedType.isCanonical()) {
+      CanonicalTy = getMutableBorrowType(referencedType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = MutableBorrowTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
+
+   auto New = new (*this, TypeAlignment) MutableBorrowType(referencedType,
+                                                           CanonicalTy);
+
+   MutableBorrowTypes.InsertNode(New, insertPos);
+   return New;
+}
+
+BoxType* ASTContext::getBoxType(QualType BoxedTy) const
+{
+   auto It = BoxTypes.find(BoxedTy);
+   if (It != BoxTypes.end())
+      return It->getSecond();
+
+   Type *CanonicalTy = nullptr;
+   if (!BoxedTy.isCanonical()) {
+      CanonicalTy = getBoxType(BoxedTy.getCanonicalType());
+   }
+
+   auto New = new(*this, TypeAlignment) BoxType(BoxedTy, CanonicalTy);
+   BoxTypes.try_emplace(BoxedTy, New);
+
    return New;
 }
 
 FunctionType* ASTContext::getFunctionType(QualType returnType,
-                                          llvm::ArrayRef<QualType> argTypes,
-                                          unsigned flags,
-                                          bool lambda) const {
+                              llvm::ArrayRef<QualType> argTypes,
+                              llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
+                              unsigned flags,
+                              bool lambda) const {
    if (lambda)
-      return getLambdaType(returnType, argTypes, flags);
+      return getLambdaType(returnType, argTypes, paramInfo, flags);
 
    llvm::FoldingSetNodeID ID;
-   FunctionType::Profile(ID, returnType, argTypes, flags, false);
+   FunctionType::Profile(ID, returnType, argTypes, paramInfo, flags, false);
 
    void *insertPos = nullptr;
    if (FunctionType *Ptr = FunctionTypes.FindNodeOrInsertPos(ID, insertPos))
@@ -217,14 +298,21 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
          canonicalArgs.push_back(arg.getCanonicalType());
 
       CanonicalType = getFunctionType(returnType.getCanonicalType(),
-                                      canonicalArgs, flags, lambda);
+                                      canonicalArgs, paramInfo, flags,
+                                      lambda);
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = FunctionTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
    }
 
    size_t SizeToAlloc = sizeof(FunctionType)
-                        + sizeof(QualType) * argTypes.size();
+                        + sizeof(QualType) * argTypes.size()
+                        + sizeof(FunctionType::ParamInfo) * paramInfo.size();
 
    void *Mem = Allocate(SizeToAlloc, TypeAlignment);
-   auto FnTy = new(Mem) FunctionType(returnType, argTypes,
+   auto FnTy = new(Mem) FunctionType(returnType, argTypes, paramInfo,
                                      (FunctionType::ExtFlags)flags,
                                      CanonicalType, Dependent);
 
@@ -232,17 +320,28 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
    return FnTy;
 }
 
+FunctionType* ASTContext::getFunctionType(QualType returnType,
+                                          llvm::ArrayRef<QualType> argTypes,
+                                          unsigned flags,
+                                          bool lambda) const {
+   llvm::SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
+   ParamInfo.resize(argTypes.size());
+
+   return getFunctionType(returnType, argTypes, ParamInfo, flags, lambda);
+}
+
 LambdaType* ASTContext::getLambdaType(FunctionType *FnTy)
 {
    return getLambdaType(FnTy->getReturnType(), FnTy->getParamTypes(),
-                        FnTy->getRawFlags());
+                        FnTy->getParamInfo(), FnTy->getRawFlags());
 }
 
 LambdaType* ASTContext::getLambdaType(QualType returnType,
-                                      llvm::ArrayRef<QualType> argTypes,
-                                      unsigned int flags) const {
+                             llvm::ArrayRef<QualType> argTypes,
+                             llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
+                             unsigned int flags) const {
    llvm::FoldingSetNodeID ID;
-   FunctionType::Profile(ID, returnType, argTypes, flags, true);
+   FunctionType::Profile(ID, returnType, argTypes, paramInfo, flags, true);
 
    void *insertPos = nullptr;
    if (LambdaType *Ptr = LambdaTypes.FindNodeOrInsertPos(ID, insertPos))
@@ -263,14 +362,20 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
          canonicalArgs.push_back(arg.getCanonicalType());
 
       CanonicalType = getLambdaType(returnType.getCanonicalType(),
-                                    canonicalArgs, flags);
+                                    canonicalArgs, paramInfo, flags);
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = LambdaTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
    }
 
    size_t SizeToAlloc = sizeof(LambdaType)
-                        + sizeof(QualType) * argTypes.size();
+                        + sizeof(QualType) * argTypes.size()
+                        + sizeof(FunctionType::ParamInfo) * paramInfo.size();
 
    void *Mem = Allocate(SizeToAlloc, TypeAlignment);
-   auto New = new(Mem) LambdaType(returnType, argTypes,
+   auto New = new(Mem) LambdaType(returnType, argTypes, paramInfo,
                                   (FunctionType::ExtFlags)flags,
                                   CanonicalType, Dependent);
 
@@ -278,8 +383,17 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
    return New;
 }
 
+LambdaType* ASTContext::getLambdaType(QualType returnType,
+                                      llvm::ArrayRef<QualType> argTypes,
+                                      unsigned int flags) const {
+   llvm::SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
+   ParamInfo.resize(argTypes.size());
+
+   return getLambdaType(returnType, argTypes, ParamInfo, flags);
+}
+
 ArrayType* ASTContext::getArrayType(QualType elementType,
-                                    size_t numElements) const {
+                                    unsigned numElements) const {
    llvm::FoldingSetNodeID ID;
    ArrayType::Profile(ID, elementType, numElements);
 
@@ -288,8 +402,14 @@ ArrayType* ASTContext::getArrayType(QualType elementType,
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!elementType.isCanonical())
+   if (!elementType.isCanonical()) {
       CanonicalTy = getArrayType(elementType.getCanonicalType(), numElements);
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = ArrayTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) ArrayType(elementType, numElements,
                                                    CanonicalTy);
@@ -322,8 +442,14 @@ InferredSizeArrayType* ASTContext::getInferredSizeArrayType(QualType elTy) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!elTy.isCanonical())
+   if (!elTy.isCanonical()) {
       CanonicalTy = getInferredSizeArrayType(elTy.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = InferredSizeArrayTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) InferredSizeArrayType(elTy,
                                                                CanonicalTy);
@@ -357,6 +483,11 @@ ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes) const
          canonicalElements.push_back(arg.getCanonicalType());
 
       CanonicalType = getTupleType(canonicalElements);
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = TupleTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
    }
 
    size_t SizeToAlloc = sizeof(TupleType)
@@ -401,20 +532,7 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
    if (auto *Ptr = RecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   RecordType *New;
-   if (R->isInstantiation()) {
-      auto typeParams = getTypeTemplateParams(R->getTemplateArgs());
-
-      void *Mem = Allocate(sizeof(RecordType)
-                           + typeParams.size() * sizeof(QualType),
-                           TypeAlignment);
-
-      New = new(Mem) RecordType(R, typeParams);
-   }
-   else {
-      New = new(*this, TypeAlignment) RecordType(R, {});
-   }
-
+   RecordType *New = new(*this, TypeAlignment) RecordType(R, {});
    RecordTypes.InsertNode(New, insertPos);
 
    return New;
@@ -481,8 +599,14 @@ MetaType* ASTContext::getMetaType(QualType forType) const
       return Ptr;
 
    Type *CanonicalTy = nullptr;
-   if (!forType.isCanonical())
+   if (!forType.isCanonical()) {
       CanonicalTy = getMetaType(forType.getCanonicalType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = MetaTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
 
    auto New = new (*this, TypeAlignment) MetaType(forType, CanonicalTy);
    MetaTypes.InsertNode(New, insertPos);
@@ -535,19 +659,65 @@ ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
    return AliasTemplateInstatiations.FindNodeOrInsertPos(ID, insertPos);
 }
 
+NamedDecl* ASTContext::getTemplateInstantiation(NamedDecl *Template,
+                                                TemplateArgs &argList,
+                                                void *&insertPos) {
+   if (auto C = dyn_cast<CallableDecl>(Template)) {
+      return getFunctionTemplateInstantiation(C, argList, insertPos);
+   }
+   else if (auto R = dyn_cast<RecordDecl>(Template)) {
+      return getRecordTemplateInstantiation(R, argList, insertPos);
+   }
+   else if (auto A = dyn_cast<AliasDecl>(Template)) {
+      return getAliasTemplateInstantiation(A, argList, insertPos);
+   }
+
+   llvm_unreachable("not a template!");
+}
+
 void ASTContext::insertFunctionTemplateInstantiation(CallableDecl *Inst,
                                                      void *insertPos) {
+   registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    FunctionTemplateInstatiations.InsertNode(Inst, insertPos);
 }
 
 void ASTContext::insertRecordTemplateInstantiation(RecordDecl *Inst,
                                                    void *insertPos) {
+   registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    RecordTemplateInstatiations.InsertNode(Inst, insertPos);
 }
 
 void ASTContext::insertAliasTemplateInstantiation(AliasDecl *Inst,
                                                   void *insertPos) {
+   registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    AliasTemplateInstatiations.InsertNode(Inst, insertPos);
+}
+
+void ASTContext::insertTemplateInstantiation(NamedDecl *Inst,
+                                             void *insertPos) {
+   if (auto C = dyn_cast<CallableDecl>(Inst)) {
+      FunctionTemplateInstatiations.InsertNode(C, insertPos);
+   }
+   else if (auto R = dyn_cast<RecordDecl>(Inst)) {
+      RecordTemplateInstatiations.InsertNode(R, insertPos);
+   }
+   else if (auto A = dyn_cast<AliasDecl>(Inst)) {
+      AliasTemplateInstatiations.InsertNode(A, insertPos);
+   }
+}
+
+ArrayRef<NamedDecl*> ASTContext::getInstantiationsOf(NamedDecl *Template)
+{
+   auto It = InstMap.find(Template);
+   if (It == InstMap.end())
+      return {};
+
+   return It->getSecond();
+}
+
+void ASTContext::registerInstantiation(NamedDecl *Template, NamedDecl *Inst)
+{
+   InstMap[Template].push_back(Inst);
 }
 
 void ASTContext::initializeOpNames() const
@@ -563,6 +733,55 @@ void ASTContext::initializeOpNames() const
 #  undef Postfix
 }
 
+void ASTContext::cleanupDeclContext(DeclContext *DC)
+{
+   for (auto *D : DC->getDecls())
+      cleanupDecl(D);
+
+   if (auto *Ext = DC->ExtStorage) {
+      if (auto *MF = Ext->ModFile)
+         MF->~ModuleFile();
+
+      Ext->~ExternalStorage();
+   }
+
+   switch (DC->getDeclKind()) {
+   case Decl::StructDeclID:
+   case Decl::ClassDeclID: {
+      auto *R = cast<StructDecl>(DC);
+      R->StoredFields.~SmallVector();
+      break;
+   }
+   default:
+      break;
+   }
+
+   DC->namedDecls.~SmallDenseMap();
+}
+
+void ASTContext::cleanupDecl(Decl *D)
+{
+   if (auto *DC = dyn_cast<DeclContext>(D)) {
+      cleanupDeclContext(DC);
+   }
+}
+
+void ASTContext::cleanup(CompilationUnit &CI)
+{
+   // Walk the AST deleting DeclContext maps.
+   cleanupDeclContext(&CI.getGlobalDeclCtx());
+
+   for (auto &AttrPair : AttributeMap) {
+      AttrPair.second->~SmallVector();
+   }
+   for (auto &ConstraintPair : ConstraintMap) {
+      ConstraintPair.second->~SmallVector();
+   }
+   for (auto &ExtensionPair : ExtensionMap) {
+      ExtensionPair.second->~SmallVector();
+   }
+}
+
 ASTContext::ASTContext()
    : Allocator(), DeclNames(*this),
      TI(*this, llvm::Triple(llvm::sys::getDefaultTargetTriple())),
@@ -571,7 +790,7 @@ ASTContext::ASTContext()
 #  include "Basic/BuiltinTypes.def"
    PointerTypes{}
 {
-
+   EmptyTupleTy = getTupleType({});
 }
 
 } // namespace ast

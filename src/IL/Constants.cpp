@@ -109,6 +109,9 @@ ConstantArray::ConstantArray(ValueType ty,
 {
    assert(ty->isArrayType() && "ConstantArray must have array type!");
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
+
+   for (auto *C : vec)
+      C->addUse(this);
 }
 
 ConstantArray *ConstantArray::get(ValueType ty,
@@ -144,6 +147,9 @@ ConstantTuple::ConstantTuple(ValueType ty,
 {
    assert(ty->isTupleType() && "ConstantTuple must have tuple type!");
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
+
+   for (auto *C : vec)
+      C->addUse(this);
 }
 
 ConstantTuple* ConstantTuple::get(ValueType ty,
@@ -164,6 +170,18 @@ ConstantTuple* ConstantTuple::get(ValueType ty,
    Ctx.TupleConstants.InsertNode(Val, InsertPos);
 
    return Val;
+}
+
+ConstantTuple* ConstantTuple::getEmpty(il::Context &Ctx)
+{
+   if (Ctx.EmptyTuple)
+      return Ctx.EmptyTuple;
+
+   auto Ty = Ctx.getASTCtx().getTupleType({});
+   auto Tup = get(ValueType(Ctx, Ty), {});
+
+   Ctx.EmptyTuple = Tup;
+   return Tup;
 }
 
 void ConstantTuple::Profile(llvm::FoldingSetNodeID &ID,
@@ -187,6 +205,8 @@ ConstantStruct::ConstantStruct(TypeID id, ValueType Ty,
      NumElements((unsigned)vec.size())
 {
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
+   for (auto *C : vec)
+      C->addUse(this);
 }
 
 ConstantStruct* ConstantStruct::get(ValueType Ty,
@@ -221,17 +241,18 @@ ConstantClass::ConstantClass(ConstantStruct *StructVal,
                              GlobalVariable *TI,
                              ConstantClass *Base)
    : Constant(ConstantClassID, StructVal->getType()),
-     TI(TI), StructVal(StructVal), Base(Base)
+     Vals{ TI, StructVal, Base }
 {
-
+   for (auto Op : getOperands())
+      Op->addUse(this);
 }
 
 ConstantClass::ConstantClass(ValueType Ty,
                              GlobalVariable *TI)
    : Constant(ConstantClassID, Ty),
-     TI(TI), StructVal(nullptr), Base(nullptr)
+     Vals{ TI, nullptr, nullptr }
 {
-
+   TI->addUse(this);
 }
 
 ConstantClass* ConstantClass::ForwardDeclare(ValueType Ty,
@@ -275,11 +296,19 @@ ConstantClass::ReplaceForwardDecl(ConstantStruct *StructVal,
       return Val;
    }
 
-   this->StructVal = StructVal;
-   this->Base = Base;
+   Vals[ConstantClass::StructVal] = StructVal;
+   Vals[ConstantClass::Base] = Base;
+
+   StructVal->addUse(this);
+   Base->addUse(this);
 
    Ctx.ClassConstants.InsertNode(this, InsertPos);
    return this;
+}
+
+GlobalVariable *ConstantClass::getTypeInfo() const
+{
+   return support::cast<GlobalVariable>(Vals[TypeInfo]);
 }
 
 void ConstantClass::Profile(llvm::FoldingSetNodeID &ID,
@@ -294,7 +323,7 @@ ConstantUnion::ConstantUnion(ValueType Ty,
    : Constant(ConstantUnionID, Ty),
      InitVal(InitVal)
 {
-
+   InitVal->addUse(this);
 }
 
 ConstantUnion* ConstantUnion::get(ValueType Ty,
@@ -330,6 +359,9 @@ ConstantEnum::ConstantEnum(Context &Ctx,
      Case(Case), NumValues((unsigned)vec.size())
 {
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
+
+   for (auto *C : vec)
+      C->addUse(this);
 }
 
 ConstantEnum *ConstantEnum::get(Context &Ctx,
@@ -385,8 +417,16 @@ VTable::VTable(il::Context &Ctx,
 VTable* VTable::Create(il::Context &Ctx,
                        llvm::ArrayRef<il::Function *> Entries,
                        ast::ClassDecl *C) {
+   auto It = Ctx.VTableMap.find(C);
+   if (It != Ctx.VTableMap.end()) {
+      return It->getSecond();
+   }
+
    void *Mem = new char[sizeof(VTable) + Entries.size() * sizeof(Function*)];
-   return new(Mem) VTable(Ctx, Entries, C);
+   auto *VT = new(Mem) VTable(Ctx, Entries, C);
+
+   Ctx.VTableMap[C] = VT;
+   return VT;
 }
 
 TypeInfo::TypeInfo(Module *M, QualType forType,
@@ -408,7 +448,15 @@ TypeInfo::TypeInfo(Module *M, QualType forType,
 
 TypeInfo* TypeInfo::get(Module *M, QualType forType,
                         llvm::ArrayRef<il::Constant*> Vals) {
-   return new TypeInfo(M, forType, Vals);
+   auto &Map = M->getContext().TypeInfoMap;
+   auto It = Map.find(forType);
+   if (It != Map.end())
+      return It->getSecond();
+
+   auto *TI = new TypeInfo(M, forType, Vals);
+   Map.try_emplace(forType, TI);
+
+   return TI;
 }
 
 ConstantPointer::ConstantPointer(ValueType ty)
@@ -428,6 +476,22 @@ ConstantPointer* ConstantPointer::get(ValueType ty)
 
    Ctx.NullConstants.try_emplace(ty, std::unique_ptr<ConstantPointer>(Ptr));
    return Ptr;
+}
+
+ConstantTokenNone::ConstantTokenNone(Context &Ctx)
+   : Constant(ConstantTokenNoneID,
+              ValueType(Ctx, Ctx.getASTCtx().getTokenType()))
+{
+
+}
+
+ConstantTokenNone* ConstantTokenNone::get(il::Context &Ctx)
+{
+   if (!Ctx.TokNone) {
+      Ctx.TokNone = new ConstantTokenNone(Ctx);
+   }
+
+   return Ctx.TokNone;
 }
 
 UndefValue::UndefValue(ValueType Ty)
@@ -501,6 +565,7 @@ void ConstantBitCastInst::Profile(llvm::FoldingSetNodeID &ID,
    ID.AddPointer(Target);
 }
 
+LLVM_ATTRIBUTE_UNUSED
 static bool isBitCastable(QualType Ty)
 {
    switch (Ty->getTypeID()) {
@@ -600,7 +665,7 @@ ConstantOperatorInst::ConstantOperatorInst(OpCode OPC,
                                            Constant *LHS,
                                            Constant *RHS)
    : ConstantExpr(ConstantOperatorInstID, LHS->getType()),
-     OPC(OPC), LHS(LHS), RHS(RHS)
+     OPC(OPC), Ops{LHS, RHS}
 {
    LHS->addUse(this);
    RHS->addUse(this);
@@ -709,9 +774,6 @@ ConstantLoadInst::ConstantLoadInst(Constant *Target)
    else {
       type = Target->getType()->getPointeeType();
    }
-
-   assert(type->needsStructReturn()
-          && "can only constant load struct-like values!");
 }
 
 } // namespace il

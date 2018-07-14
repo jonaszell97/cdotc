@@ -5,11 +5,14 @@
 #ifndef CDOT_CONVERSIONSEQUENCE_H
 #define CDOT_CONVERSIONSEQUENCE_H
 
-#include "Basic/CastKind.h"
 #include "AST/Type.h"
+#include "Basic/CastKind.h"
+
+#include <llvm/Support/TrailingObjects.h>
 
 namespace cdot {
 namespace ast {
+   class ASTContext;
    class CallableDecl;
 } // namespace ast
 
@@ -37,12 +40,7 @@ public:
    CastKind getKind() const { return Kind; }
    bool isHalt() const { return Halt; }
 
-   QualType getResultType() const
-   {
-      assert(Kind != CastKind::ConversionOp && "does not store a result type!");
-      return QualType::getFromOpaquePtr(Data);
-   }
-
+   QualType getResultType() const;
    void setResultType(QualType Ty) const { Data = Ty.getAsOpaquePtr(); }
 
    ast::CallableDecl *getConversionOp() const
@@ -52,22 +50,20 @@ public:
    }
 };
 
-class ConversionSequence {
+class ConversionSequenceBuilder {
    CastStrength Strength;
    std::vector<ConversionStep> Steps;
 
-   ConversionSequence(const ConversionSequence&)            = default;
-   ConversionSequence &operator=(const ConversionSequence&) = default;
-
 public:
-   ConversionSequence()
+   ConversionSequenceBuilder()
       : Strength(CastStrength::Implicit)
    { }
 
-   ConversionSequence(ConversionSequence&&)            = default;
-   ConversionSequence &operator=(ConversionSequence&&) = default;
+   ConversionSequenceBuilder(ConversionSequenceBuilder&&)            = default;
+   ConversionSequenceBuilder &operator=(ConversionSequenceBuilder&&) = default;
 
-   ConversionSequence copy() const { return *this; }
+   ConversionSequenceBuilder(const ConversionSequenceBuilder&)            = delete;
+   ConversionSequenceBuilder &operator=(const ConversionSequenceBuilder&) = delete;
 
    void addStep(CastKind kind, QualType resultType)
    {
@@ -94,8 +90,10 @@ public:
    void updateStrength(CastStrength Strength)
    {
       if (Strength > this->Strength)
-         ConversionSequence::Strength = Strength;
+         this->Strength = Strength;
    }
+
+   void setStrength(CastStrength S) { Strength = S; }
 
    CastStrength getStrength() const { return Strength; }
    llvm::ArrayRef<ConversionStep> getSteps() const { return Steps; }
@@ -108,6 +106,59 @@ public:
          return false;
 
       for (auto &Step : Steps)
+         if (Step.getKind() != CastKind::NoOp)
+            return false;
+
+      return true;
+   }
+
+   bool isImplicit() const
+   {
+      if (!isValid())
+         return false;
+
+      return Strength == CastStrength::Implicit;
+   }
+};
+
+class ConversionSequence final: TrailingObjects<ConversionSequence,
+                                                ConversionStep> {
+   CastStrength Strength;
+   unsigned NumSteps;
+
+   ConversionSequence(const ConversionSequenceBuilder &Builder);
+   ConversionSequence(CastStrength Strength, ArrayRef<ConversionStep> Steps);
+
+public:
+   static ConversionSequence *Create(ast::ASTContext &C,
+                                     const ConversionSequenceBuilder &Builder);
+
+   static ConversionSequence *Create(ast::ASTContext &C,
+                                     CastStrength Strength,
+                                     ArrayRef<ConversionStep> Steps);
+
+   friend TrailingObjects;
+
+   ConversionSequence(ConversionSequence&&)            = delete;
+   ConversionSequence &operator=(ConversionSequence&&) = delete;
+
+   ConversionSequence(const ConversionSequence&)            = delete;
+   ConversionSequence &operator=(const ConversionSequence&) = delete;
+
+   CastStrength getStrength() const { return Strength; }
+   llvm::ArrayRef<ConversionStep> getSteps() const
+   {
+      return { getTrailingObjects<ConversionStep>(), NumSteps };
+   }
+
+   bool isValid() const { return NumSteps != 0; }
+
+   bool isNoOp() const
+   {
+      if (!isValid())
+         return false;
+
+      for (auto &Step : getSteps())
          if (Step.getKind() != CastKind::NoOp)
             return false;
 

@@ -21,6 +21,10 @@
 #  define CDOT_ABSTRACT(Name)
 #endif
 
+#ifndef CDOT_MULTI_OP_INST
+#  define CDOT_MULTI_OP_INST(NAME)
+#endif
+
 // --- Values ---
 
 #ifdef CDOT_OTHER_VALUE
@@ -32,6 +36,10 @@
 CDOT_ABSTRACT(_firstConstant)
 
 #ifdef CDOT_CONSTANT
+#  ifndef CDOT_CONSTEXPR
+#     define CDOT_CONSTEXPR(NAME) CDOT_CONSTANT(NAME)
+#  endif
+
    CDOT_CONSTANT(BasicBlock)
    CDOT_ABSTRACT(_firstGlobalValue)
       CDOT_CONSTANT(Function)
@@ -50,6 +58,7 @@ CDOT_ABSTRACT(_firstConstant)
    CDOT_CONSTANT(ConstantUnion)
    CDOT_CONSTANT(ConstantEnum)
    CDOT_CONSTANT(ConstantPointer)
+   CDOT_CONSTANT(ConstantTokenNone)
    CDOT_CONSTANT(UndefValue)
    CDOT_CONSTANT(MagicConstant)
    CDOT_CONSTANT(VTable)
@@ -79,7 +88,9 @@ CDOT_ABSTRACT(_firstInstruction)
    CDOT_MEM_INST(DeallocInst)
    CDOT_MEM_INST(DeallocBoxInst)
    CDOT_MEM_INST(LambdaInitInst)
+   CDOT_MEM_INST(AssignInst)
    CDOT_MEM_INST(StoreInst)
+   CDOT_MEM_INST(InitInst)
    CDOT_MEM_INST(GEPInst)
    CDOT_MEM_INST(FieldRefInst)
    CDOT_MEM_INST(TupleExtractInst)
@@ -89,26 +100,37 @@ CDOT_ABSTRACT(_firstInstruction)
    CDOT_MEM_INST(AddrOfInst)
    CDOT_MEM_INST(PtrToLvalueInst)
    CDOT_MEM_INST(CaptureExtractInst)
+
+   CDOT_MEM_INST(StrongRetainInst)
+   CDOT_MEM_INST(StrongReleaseInst)
+
+   CDOT_MEM_INST(WeakRetainInst)
+   CDOT_MEM_INST(WeakReleaseInst)
 #endif
 
 #ifdef CDOT_TERM_INST
    CDOT_ABSTRACT(_firstTerminator)
       CDOT_TERM_INST(RetInst)
+      CDOT_TERM_INST(YieldInst)
       CDOT_TERM_INST(ThrowInst)
+      CDOT_TERM_INST(RethrowInst)
       CDOT_TERM_INST(UnreachableInst)
       CDOT_TERM_INST(BrInst)
       CDOT_TERM_INST(SwitchInst)
       CDOT_TERM_INST(InvokeInst)
-      CDOT_TERM_INST(ProtocolInvokeInst)
-      CDOT_TERM_INST(VirtualInvokeInst)
    CDOT_ABSTRACT(_lastTerminator)
 #endif
 
 #ifdef CDOT_OTHER_INST
    CDOT_OTHER_INST(LandingPadInst)
    CDOT_OTHER_INST(IntrinsicCallInst)
-   CDOT_OTHER_INST(DeinitializeLocalInst)
-   CDOT_OTHER_INST(DeinitializeTemporaryInst)
+   CDOT_OTHER_INST(LLVMIntrinsicCallInst)
+   CDOT_OTHER_INST(MoveInst)
+   CDOT_OTHER_INST(BeginBorrowInst)
+   CDOT_OTHER_INST(EndBorrowInst)
+
+   CDOT_OTHER_INST(UnionInitInst)
+   CDOT_OTHER_INST(EnumInitInst)
 
    CDOT_OTHER_INST(DebugLocInst)
    CDOT_OTHER_INST(DebugLocalInst)
@@ -119,11 +141,7 @@ CDOT_ABSTRACT(_firstInstruction)
       CDOT_CALL_INST(CallInst)
       CDOT_CALL_INST(IndirectCallInst)
       CDOT_CALL_INST(LambdaCallInst)
-      CDOT_CALL_INST(ProtocolCallInst)
-      CDOT_CALL_INST(VirtualCallInst)
-      CDOT_CALL_INST(InitInst)
-      CDOT_CALL_INST(UnionInitInst)
-      CDOT_CALL_INST(EnumInitInst)
+      CDOT_CALL_INST(StructInitInst)
    CDOT_ABSTRACT(_lastCallInst)
 #endif
 
@@ -175,8 +193,6 @@ CDOT_ABSTRACT(_firstInstruction)
       CDOT_CAST_INST(BitCastInst)
       CDOT_CAST_INST(IntegerCastInst)
       CDOT_CAST_INST(FPCastInst)
-      CDOT_CAST_INST(IntToEnumInst)
-
       CDOT_CAST_INST(UnionCastInst)
 
       CDOT_CAST_INST(DynamicCastInst)
@@ -186,6 +202,18 @@ CDOT_ABSTRACT(_firstInstruction)
 #endif
 
 CDOT_ABSTRACT(_lastInstruction)
+
+CDOT_MULTI_OP_INST(CallInst)
+CDOT_MULTI_OP_INST(IndirectCallInst)
+CDOT_MULTI_OP_INST(IntrinsicCallInst)
+CDOT_MULTI_OP_INST(LLVMIntrinsicCallInst)
+CDOT_MULTI_OP_INST(LambdaCallInst)
+CDOT_MULTI_OP_INST(EnumInitInst)
+CDOT_MULTI_OP_INST(StructInitInst)
+CDOT_MULTI_OP_INST(LambdaInitInst)
+CDOT_MULTI_OP_INST(InvokeInst)
+CDOT_MULTI_OP_INST(BrInst)
+CDOT_MULTI_OP_INST(YieldInst)
 
 #undef CDOT_ALL
 #undef CDOT_ABSTRACT
@@ -204,3 +232,4 @@ CDOT_ABSTRACT(_lastInstruction)
 #undef CDOT_BINARY_OP
 #undef CDOT_UNARY_OP
 #undef CDOT_COMP_OP
+#undef CDOT_MULTI_OP_INST

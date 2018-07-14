@@ -4,12 +4,14 @@
 
 #include "TemplateInstantiator.h"
 
-#include "AST/AbstractPass.h"
 #include "AST/ASTContext.h"
 #include "AST/TypeBuilder.h"
 #include "IL/Constants.h"
+#include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
+#include "Module/Module.h"
 #include "SemaPass.h"
+#include "Serialization/ModuleFile.h"
 #include "Template.h"
 
 #include <sstream>
@@ -78,6 +80,22 @@ public:
                               cast<il::ConstantInt>(Arg->getValue())
                                  ->getZExtValue());
    }
+
+   QualType visitAssociatedType(AssociatedType *T)
+   {
+      if (!Self)
+         return T;
+
+      auto *AT = SP.LookupSingle<AssociatedTypeDecl>(*Self,
+         T->getDecl()->getDeclName());
+
+      if (AT && AT->isImplementation()) {
+         SP.ensureDeclared(AT);
+         return Ctx.getAssociatedType(AT);
+      }
+
+      return T;
+   }
 };
 
 class InstantiatorImpl {
@@ -88,14 +106,16 @@ public:
         templateArgs(move(templateArgs)),
         TypeVisitor(SP, this->templateArgs, SOD, nullptr)
    {
-
+      SourceID = SP.getCompilationUnit().getFileMgr()
+                   .getSourceId(SP.getCurrentDecl()->getSourceLoc());
    }
 
    InstantiatorImpl(SemaPass &SP, RecordDecl *R)
       : SP(SP), Context(SP.getContext()), InstScope(SP, &SP.getDeclContext()),
         TypeVisitor(SP, this->templateArgs, R, R)
    {
-
+      SourceID = SP.getCompilationUnit().getFileMgr()
+                   .getSourceId(SP.getCurrentDecl()->getSourceLoc());
    }
 
    InstantiatorImpl(SemaPass &SP,
@@ -106,7 +126,8 @@ public:
         templateArgs(move(templateArgs)), Template(Template),
         TypeVisitor(SP, this->templateArgs, Template, nullptr)
    {
-
+      SourceID = SP.getCompilationUnit().getFileMgr()
+                   .getSourceId(SP.getCurrentDecl()->getSourceLoc());
    }
 
    InstantiatorImpl(SemaPass &SP,
@@ -116,7 +137,8 @@ public:
         TypeVisitor(SP, this->templateArgs, nullptr, nullptr),
         ValueSubst{ SubstName, SubstVal }
    {
-
+      SourceID = SP.getCompilationUnit().getFileMgr()
+                   .getSourceId(SP.getCurrentDecl()->getSourceLoc());
    }
 
    RecordDecl *instantiateRecordDecl(RecordDecl *Decl);
@@ -164,6 +186,22 @@ public:
       return templateArgs;
    }
 
+   Decl *ActOnDecl(Decl *D, DeclContext *Ctx = nullptr)
+   {
+      if (!Ctx)
+         Ctx = &SP.getDeclContext();
+
+      SourceLocation Loc = D->getSourceLoc();
+      auto &FileMgr = SP.getCompilationUnit().getFileMgr();
+
+      while (auto *MacroInfo = FileMgr.getMacroExpansionLoc(Loc)) {
+         Loc = MacroInfo->ExpandedFrom;
+      }
+
+      SP.ActOnDecl(Ctx, D, SP.getCompilationUnit().getFileMgr().getSourceId(Loc));
+      return D;
+   }
+
 private:
    bool canElideInstantiation(Statement *Stmt)
    {
@@ -190,6 +228,13 @@ private:
       if (!E->getExprType() || E->getExprType()->isUnknownAnyType())
          return false;
 
+      if (auto Ident = dyn_cast<IdentifierRefExpr>(E)) {
+         if (Ident->getKind() != IdentifierKind::MetaType)
+            // property method arguments are always instantiated
+            if (auto D = Ident->getNamedDecl())
+               return !E->isDependent() && !D->isSynthesized();
+      }
+
       return !E->isDependent();
    }
 
@@ -204,8 +249,11 @@ private:
       if (isa<NamedDecl>(D)) {
          switch (D->getKind()) {
          case Decl::LocalVarDeclID:
-         case Decl::FuncArgDeclID:
+         case Decl::MacroDeclID:
+         case Decl::MacroExpansionDeclID:
             return true;
+         case Decl::FuncArgDeclID:
+            return !cast<FuncArgDecl>(D)->isSelf();
          default:
             return false;
          }
@@ -216,6 +264,9 @@ private:
 
    Expression* visit(Expression *expr)
    {
+      assert((expr->isSemanticallyChecked() || expr->isContextDependent())
+                && "instantiating unchecked expr");
+
       if (canElideInstantiation(expr))
          return expr;
 
@@ -239,6 +290,8 @@ private:
       if (auto E = dyn_cast<Expression>(stmt))
          return visit(E);
 
+      assert(stmt->isSemanticallyChecked() && "instantiating unchecked expr");
+
       if (canElideInstantiation(stmt))
          return stmt;
 
@@ -257,6 +310,8 @@ private:
    {
       if (auto ND = dyn_cast<NamedDecl>(D))
          return visit(ND);
+
+      assert(D->wasDeclared() && "instantiating unchecked decl");
 
       if (canElideInstantiation(D))
          return D;
@@ -280,6 +335,8 @@ private:
 
    NamedDecl *visit(NamedDecl *D)
    {
+      assert(D->wasDeclared() && "instantiating unchecked decl");
+
       if (canElideInstantiation(D))
          return D;
 
@@ -310,7 +367,8 @@ public:
          if (!ResolvedTy->isDependentType())
             return SourceType(ResolvedTy);
 
-         if (!ResolvedTy->isUnknownAnyType()) {
+         if (!(isa<BuiltinType>(*ResolvedTy)
+               && ResolvedTy->isUnknownAnyType())) {
             auto Inst = TypeVisitor.visit(ResolvedTy);
             if (Inst && !Inst->isDependentType())
                return SourceType(Inst);
@@ -337,11 +395,6 @@ private:
    CompoundDecl* visitCompoundDecl(CompoundDecl *D);
    CompoundStmt* visitCompoundStmt(CompoundStmt *node);
 
-   TranslationUnit* visitTranslationUnit(TranslationUnit*)
-   {
-      llvm_unreachable("can't instantiate translation unit!");
-   }
-
    PrecedenceGroupDecl *visitPrecedenceGroupDecl(PrecedenceGroupDecl*)
    {
       llvm_unreachable("precedence groups can't be dependent!");
@@ -367,22 +420,21 @@ private:
       llvm_unreachable("macros can't be dependent!");
    }
 
+   ModuleDecl* visitModuleDecl(ModuleDecl *node)
+   {
+      llvm_unreachable("module should not be instantiated!");
+   }
+
    MacroExpansionExpr *visitMacroExpansionExpr(MacroExpansionExpr *Expr);
    MacroExpansionStmt *visitMacroExpansionStmt(MacroExpansionStmt *Stmt);
    MacroExpansionDecl *visitMacroExpansionDecl(MacroExpansionDecl *Decl);
 
    UsingDecl* visitUsingDecl(UsingDecl *node);
-   ModuleDecl* visitModuleDecl(ModuleDecl *node);
    ImportDecl* visitImportDecl(ImportDecl *node);
 
    LocalVarDecl* visitLocalVarDecl(LocalVarDecl *node);
    GlobalVarDecl* visitGlobalVarDecl(GlobalVarDecl *node);
-
-   LocalDestructuringDecl*
-   visitLocalDestructuringDecl(LocalDestructuringDecl *node);
-
-   GlobalDestructuringDecl*
-   visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+   DestructuringDecl* visitDestructuringDecl(DestructuringDecl *Decl);
 
    FunctionDecl* visitFunctionDecl(FunctionDecl *F);
 
@@ -402,6 +454,7 @@ private:
 
    FieldDecl* visitFieldDecl(FieldDecl *Decl);
    PropDecl* visitPropDecl(PropDecl *Decl, bool IsFieldAccessor = false);
+   SubscriptDecl* visitSubscriptDecl(SubscriptDecl *Decl);
    AssociatedTypeDecl* visitAssociatedTypeDecl(AssociatedTypeDecl *node);
 
    MethodDecl* visitMethodDecl(MethodDecl *M);
@@ -427,11 +480,14 @@ private:
    Expression* visitMemberRefExpr(MemberRefExpr *node);
    EnumCaseExpr* visitEnumCaseExpr(EnumCaseExpr *node);
    TupleMemberExpr* visitTupleMemberExpr(TupleMemberExpr *node);
+   TemplateArgListExpr* visitTemplateArgListExpr(TemplateArgListExpr *Expr);
 
    ForStmt* visitForStmt(ForStmt *node);
    ForInStmt* visitForInStmt(ForInStmt *node);
    WhileStmt* visitWhileStmt(WhileStmt *node);
    IfStmt* visitIfStmt(IfStmt *node);
+   IfLetStmt* visitIfLetStmt(IfLetStmt *node);
+   IfCaseStmt* visitIfCaseStmt(IfCaseStmt *node);
    LabelStmt* visitLabelStmt(LabelStmt *node);
    GotoStmt* visitGotoStmt(GotoStmt *node);
 
@@ -445,6 +501,8 @@ private:
    ReturnStmt* visitReturnStmt(ReturnStmt *node);
    BreakStmt* visitBreakStmt(BreakStmt *node);
    ContinueStmt* visitContinueStmt(ContinueStmt *node);
+
+   DiscardAssignStmt *visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
 
    IntegerLiteral* visitIntegerLiteral(IntegerLiteral *node);
    FPLiteral* visitFPLiteral(FPLiteral *node);
@@ -487,8 +545,10 @@ private:
    AttributedStmt *visitAttributedStmt(AttributedStmt *S);
    AttributedExpr *visitAttributedExpr(AttributedExpr *E);
 
-   TryStmt* visitTryStmt(TryStmt *node);
-   ThrowStmt* visitThrowStmt(ThrowStmt *node);
+   DoStmt *visitDoStmt(DoStmt *node);
+   TryExpr *visitTryExpr(TryExpr *Expr);
+   AwaitExpr *visitAwaitExpr(AwaitExpr *Expr);
+   ThrowStmt *visitThrowStmt(ThrowStmt *node);
 
    LambdaExpr* visitLambdaExpr(LambdaExpr *node);
 
@@ -516,10 +576,16 @@ private:
    MultiLevelFinalTemplateArgList templateArgs;
    NamedDecl* Template = nullptr;
 
+   /// The record currently being instantiated.
+   RecordDecl *InstantiatingRecord = nullptr;
+
    DependencyResolver TypeVisitor;
    llvm::StringMap<ResolvedTemplateArg*> VariadicTemplateArgs;
 
    bool InUnevaluatedScope = false;
+
+   /// Source ID we're instantiating from.
+   unsigned SourceID = fs::InvalidID;
 
    struct {
       IdentifierInfo *Name;
@@ -582,6 +648,23 @@ private:
    };
 
    std::vector<SubstContext> SubstContexts;
+
+   struct InstantiatingRecordRAII {
+      InstantiatingRecordRAII(InstantiatorImpl &Inst, RecordDecl *R)
+         : Inst(Inst), Prev(Inst.InstantiatingRecord)
+      {
+         Inst.InstantiatingRecord = R;
+      }
+
+      ~InstantiatingRecordRAII()
+      {
+         Inst.InstantiatingRecord = Prev;
+      }
+
+   private:
+      InstantiatorImpl &Inst;
+      RecordDecl *Prev;
+   };
 
    DeclarationName getVariadicArgumentSubst(const IdentifierInfo *II)
    {
@@ -742,21 +825,15 @@ private:
       return cast<T>(visit(sp));
    }
 
-   template<class T, class U>
-   void copyTemplateArgs(const T& from, const U& to)
-   {
-      to->setTemplateArgs(copyExprList(from->getTemplateArgs()));
-   }
-
    template<class T>
-   std::vector<TemplateParamDecl*> copyTemplateParameters(T *from)
+   ASTVector<TemplateParamDecl*> copyTemplateParameters(const T *from)
    {
-      std::vector<TemplateParamDecl*> Params;
       auto OriginalParams = from->getTemplateParams();
+      ASTVector<TemplateParamDecl*> Params(Context, OriginalParams.size());
 
       for (auto &P : OriginalParams) {
          if (!hasTemplateArg(P->getDeclName()))
-            Params.push_back(clone(P));
+            Params.push_back(clone(P), Context);
       }
 
       return Params;
@@ -768,13 +845,22 @@ public:
                               llvm::SmallVectorImpl<FuncArgDecl*> &Variadics);
 
 private:
-
    template<class Container,
             class Expr = typename
                std::remove_reference<decltype(*Container().front())>::type>
    std::vector<Expr*> copyExprList(const Container &exprList);
 
    std::vector<SourceType> copyTypeList(llvm::ArrayRef<SourceType> Tys);
+   ASTVector<SourceType> copyConformances(llvm::ArrayRef<SourceType> Tys);
+
+   template<class T>
+   ASTVector<T> astvec(const std::vector<T> &Vec)
+   {
+      ASTVector<T> Copy(Context, Vec.size());
+      Copy.insert(Context, Copy.end(), Vec.begin(), Vec.end());
+
+      return Copy;
+   }
 
    class VariadicParamFinder: public RecursiveASTVisitor<VariadicParamFinder> {
    public:
@@ -808,7 +894,7 @@ private:
             }
          }
 
-         return visitChildren(Expr);
+         return true;
       }
 
    private:
@@ -816,11 +902,13 @@ private:
       llvm::SmallPtrSetImpl<IdentifierRefExpr*> &PackArguments;
    };
 
-   template<class Container,
-            class Element = typename
-               std::remove_pointer<typename
-                  std::remove_reference<decltype(Container().front())>
-                     ::type>::type>
+   template<class Container>
+   using element_type = typename
+      std::remove_pointer<typename
+                          std::remove_reference<decltype(Container().front())>
+                             ::type>::type;
+
+   template<class Container, class Element = element_type<Container>>
    bool expandVariadicArgument(Container &exprs,
                                Expression* variadicExpr) {
       if (!variadicExpr->isVariadicArgPackExpansion()) {
@@ -948,7 +1036,10 @@ private:
       auto GivenArg = hasTemplateArg(ParameterPack);
       if (!GivenArg) {
          // current context is still templated
-         visit(Decl);
+         auto Inst = visit(Decl);
+         if (Inst)
+            Vec.push_back(cast<FuncArgDecl>(Inst));
+
          return false;
       }
 
@@ -1014,7 +1105,7 @@ RecordDecl *InstantiatorImpl::instantiateRecordDecl(RecordDecl *Decl)
                     .getInstantiationName(Decl->getDeclName(),
                                           templateArgs.innermost());
 
-   auto conformances = copyTypeList(Decl->getConformanceTypes());
+   auto conformances = copyConformances(Decl->getConformanceTypes());
    auto constraints = cloneVector(Decl->getConstraints());
    auto templateParmams = copyTemplateParameters(Decl);
 
@@ -1058,6 +1149,11 @@ RecordDecl *InstantiatorImpl::instantiateRecordDecl(RecordDecl *Decl)
       llvm_unreachable("not a record decl!");
    }
 
+   // make sure to set the parent context before calling this
+   Inst->setParentCtx(&SP.getCompilationUnit().getGlobalDeclCtx());
+   if (auto MF = Decl->getModFile())
+      Inst->setModFile(MF->copy());
+
    Inst->setLastMethodID(Decl->getLastMethodID());
 
    Context.setConstraints(Inst, constraints);
@@ -1066,6 +1162,7 @@ RecordDecl *InstantiatorImpl::instantiateRecordDecl(RecordDecl *Decl)
 
 RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
                                                           RecordDecl *Inst) {
+   InstantiatingRecordRAII IRR(*this, Inst);
    {
       SemaPass::DeclContextRAII declContext(SP, Inst,
                                             SemaPass::SetParentContext);
@@ -1074,7 +1171,7 @@ RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
          if (isa<TemplateParamDecl>(namedDecl))
             continue;
 
-         if (namedDecl->isSynthesized() || namedDecl->isInExtension())
+         if (namedDecl->isSynthesized())
             continue;
 
          (void) visit(namedDecl);
@@ -1086,7 +1183,8 @@ RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
       if (!ExtInst)
          continue;
 
-      SP.declareExtensionDecl(ExtInst);
+      SP.registerExtension(ExtInst);
+      (void) SP.declareStmt(ExtInst);
    }
 
    return Inst;
@@ -1094,11 +1192,15 @@ RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
 
 RecordDecl *InstantiatorImpl::visitRecordCommon(RecordDecl *Template)
 {
+   if (auto *MF = Template->getModFile()) {
+      MF->LoadAllDecls(*Template);
+   }
+
    auto Inst = instantiateRecordDecl(Template);
 
    auto R = instantiateRecordDefinition(Template, Inst);
    if (R) {
-      SP.ActOnRecordDecl(R);
+      ActOnDecl(R);
    }
 
    return R;
@@ -1127,7 +1229,9 @@ EnumCaseDecl* InstantiatorImpl::visitEnumCaseDecl(EnumCaseDecl *node)
                                   copyOrNull(node->getRawValExpr()),
                                   cloneVector(node->getArgs()));
 
-   SP.addDeclToContext(SP.getDeclContext(), EC);
+   EC->setILValue(node->getILValue());
+
+   ActOnDecl(EC);
    return EC;
 }
 
@@ -1141,13 +1245,23 @@ ProtocolDecl* InstantiatorImpl::visitProtocolDecl(ProtocolDecl *node)
    return cast<ProtocolDecl>(visitRecordCommon(node));
 }
 
-ExtensionDecl* InstantiatorImpl::visitExtensionDecl(ExtensionDecl *Ext,
-                                                    RecordDecl *RecInst) {
+ExtensionDecl*
+InstantiatorImpl::visitExtensionDecl(ExtensionDecl *Ext, RecordDecl *RecInst)
+{
+   if (!SP.ensureDeclared(Ext))
+      return nullptr;
+
    assert(RecInst && "instantiating extension without instantiated record!");
 
-   AccessSpecifier access = Ext->getAccess();
-   auto conformances = copyTypeList(Ext->getConformanceTypes());
    auto constraints = cloneVector(Ext->getConstraints());
+
+   auto Result = SP.checkConstraints(RecInst, Ext, constraints, RecInst);
+   if (Result.getFailedConstraint()) {
+      return nullptr;
+   }
+
+   AccessSpecifier access = Ext->getAccess();
+   auto conformances = copyConformances(Ext->getConformanceTypes());
 
    auto Inst = ExtensionDecl::Create(Context, access, Ext->getExtLoc(),
                                      RecInst, conformances);
@@ -1167,6 +1281,8 @@ ExtensionDecl* InstantiatorImpl::visitExtensionDecl(ExtensionDecl *Ext,
    }
 
    Context.setConstraints(Inst, constraints);
+   Context.registerInstantiation(Ext, Inst);
+
    return Inst;
 }
 
@@ -1186,9 +1302,35 @@ PropDecl* InstantiatorImpl::visitPropDecl(PropDecl *Decl, bool IsFieldAccessor)
    Prop->setPropTemplate(Decl);
 
    if (!IsFieldAccessor)
-      SP.addDeclToContext(SP.getDeclContext(), Prop);
+      ActOnDecl(Prop);
 
    return Prop;
+}
+
+SubscriptDecl* InstantiatorImpl::visitSubscriptDecl(SubscriptDecl *Decl)
+{
+   llvm::SmallVector<FuncArgDecl*, 4> Args;
+   for (auto arg : Decl->getArgs()) {
+      if (!arg->isVariadicArgPackExpansion()) {
+         Args.push_back(clone(arg));
+      }
+      else {
+         expandVariadicDecl(arg, Args);
+      }
+   }
+
+   auto SD = SubscriptDecl::Create(Context, Decl->getAccess(),
+                                   Decl->getSourceRange(), Args,
+                                   visit(Decl->getType()),
+                                   Decl->hasGetter(), Decl->hasSetter(),
+                                   Decl->getGetterAccess(),
+                                   Decl->getSetterAccess(), nullptr, nullptr,
+                                   Decl->getNewValNameInfo());
+
+   SD->setTemplate(Decl);
+   ActOnDecl(SD);
+
+   return SD;
 }
 
 MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
@@ -1239,7 +1381,7 @@ MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
    VariadicTemplateArgs.clear();
 
    if (!IsMainTemplate)
-      SP.ActOnMethodDecl(Inst);
+      ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1250,10 +1392,11 @@ InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
    auto Inst = AssociatedTypeDecl::Create(Context, node->getSourceLoc(),
                                           node->getProtoSpecInfo(),
                                           node->getDeclName(),
-                                          visit(node->getActualType()));
+                                          visit(node->getActualType()),
+                                          node->isImplementation());
 
    Context.setConstraints(Inst, cloneVector(node->getConstraints()));
-   SP.addDeclToContext(SP.getDeclContext(), Inst);
+   ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1269,13 +1412,18 @@ TypedefDecl* InstantiatorImpl::visitTypedefDecl(TypedefDecl *TD)
                                    copyTemplateParameters(TD));
 
    if (!IsMainTemplate)
-      SP.addDeclToContext(SP.getDeclContext(), Inst);
+      ActOnDecl(Inst);
 
    return Inst;
 }
 
 AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
 {
+   SP.ensureVisited(Alias);
+
+   if (Alias->isInvalid())
+      return nullptr;
+
    bool IsMainTemplate = Alias == Template;
    DeclarationName Name = Alias->getDeclName();
    if (IsMainTemplate)
@@ -1292,7 +1440,7 @@ AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
    Context.setConstraints(Inst, cloneVector(Alias->getConstraints()));
 
    if (!IsMainTemplate)
-      SP.ActOnAliasDecl(Inst);
+      ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1323,7 +1471,7 @@ FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
       Inst->setAccessor(AccInst);
    }
 
-   SP.ActOnFieldDecl(Inst);
+   ActOnDecl(Inst);
    return Inst;
 }
 
@@ -1332,23 +1480,26 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
    bool IsMainTemplate = Decl == Template;
    bool SkipBody = !IsMainTemplate;
 
-   DeclarationName Name =
-      Context.getDeclNameTable()
-             .getConstructorName(
-                Context.getRecordType(cast<RecordDecl>(&SP.getDeclContext())));
+   RecordDecl *R = InstantiatingRecord;
+   if (!R) {
+      R = Decl->getRecord();
+   }
+
+   DeclarationName Name = Context.getDeclNameTable()
+                                 .getConstructorName(Context.getRecordType(R));
 
    if (IsMainTemplate)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Name, templateArgs.innermost());
 
-   llvm::SmallVector<FuncArgDecl*, 4> Args;
+   SmallVector<FuncArgDecl*, 4> Args;
    copyArgListAndFindVariadic(Decl, Args);
 
    auto templateParams = copyTemplateParameters(Decl);
    auto Inst = InitDecl::Create(Context, Decl->getAccess(),
                                 Decl->getSourceLoc(), Args,
                                 move(templateParams), nullptr,
-                                Name);
+                                Name, Decl->isFallible());
 
    if (SkipBody) {
       Inst->setBodyTemplate(Decl);
@@ -1367,7 +1518,7 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
    Inst->setFunctionFlags(Decl->getFunctionFlags());
 
    if (!IsMainTemplate)
-      SP.ActOnInitDecl(Inst);
+      ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1379,13 +1530,14 @@ DeinitDecl* InstantiatorImpl::visitDeinitDecl(DeinitDecl *Decl)
              .getDestructorName(
                 Context.getRecordType(cast<RecordDecl>(&SP.getDeclContext())));
 
-   auto Inst = DeinitDecl::Create(Context, Decl->getSourceLoc(), nullptr, Name);
+   auto Inst = DeinitDecl::Create(Context, Decl->getSourceLoc(),
+                                  nullptr, cloneVector(Decl->getArgs()), Name);
 
    Inst->setMethodID(Decl->getMethodID());
    Inst->setBodyTemplate(Decl);
    Inst->setFunctionFlags(Decl->getFunctionFlags());
 
-   SP.ActOnDeinitDecl(Inst);
+   ActOnDecl(Inst);
    return Inst;
 }
 
@@ -1417,7 +1569,7 @@ FunctionDecl* InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
    VariadicTemplateArgs.clear();
 
    if (!IsMainTemplate)
-      SP.ActOnFunctionDecl(Inst);
+      ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1454,7 +1606,10 @@ InstantiatorImpl::visitFunctionTypeExpr(FunctionTypeExpr *Expr)
    return FunctionTypeExpr::Create(Context, Expr->getSourceRange(),
                                    visit(Expr->getReturnType()),
                                    copyTypeList(Expr->getArgTypes()),
-                                   Expr->isMeta());
+                                   Expr->getParamInfo(),
+                                   Expr->isMeta(), Expr->isThin(),
+                                   Expr->throws(), Expr->isAsync(),
+                                   Expr->isUnsafe());
 }
 
 ArrayTypeExpr *InstantiatorImpl::visitArrayTypeExpr(ArrayTypeExpr *Expr)
@@ -1496,11 +1651,9 @@ OptionTypeExpr *InstantiatorImpl::visitOptionTypeExpr(OptionTypeExpr *Expr)
 
 Expression* InstantiatorImpl::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
-   assert(!node->isTypeDependent() && "type dependent implicit casts should "
-                                      "not be created!");
-
-   return ImplicitCastExpr::Create(Context, visit(node->getTarget()),
-                                   node->getConvSeq().copy());
+   return visit(node->getTarget());
+//   return ImplicitCastExpr::Create(Context, visit(node->getTarget()),
+//                                   node->getConvSeq().copy());
 }
 
 CompoundDecl* InstantiatorImpl::visitCompoundDecl(CompoundDecl *D)
@@ -1524,13 +1677,19 @@ CompoundStmt* InstantiatorImpl::visitCompoundStmt(CompoundStmt *node)
    for (auto &Stmt : node->getStatements())
       Stmts.push_back(visit(Stmt));
 
-   return CompoundStmt::Create(Context, Stmts, node->preservesScope(),
-                               node->getLBraceLoc(), node->getRBraceLoc());
+   auto *CS = CompoundStmt::Create(Context, Stmts, node->preservesScope(),
+                                   node->getLBraceLoc(), node->getRBraceLoc(),
+                                   node->isUnsafe());
+
+   CS->setScopeID(node->getScopeID());
+   CS->setContainsDeclStmt(node->containsDeclStmt());
+
+   return CS;
 }
 
 void InstantiatorImpl::copyArgListAndFindVariadic(
                                  CallableDecl *C,
-                                 llvm::SmallVectorImpl<FuncArgDecl*>&Variadics){
+                                 SmallVectorImpl<FuncArgDecl*> &Variadics){
    auto argList = C->getArgs();
    for (auto arg : argList) {
       if (!arg->isVariadicArgPackExpansion()) {
@@ -1574,6 +1733,28 @@ InstantiatorImpl::copyTypeList(llvm::ArrayRef<SourceType> Tys)
    return list;
 }
 
+ASTVector<SourceType>
+InstantiatorImpl::copyConformances(llvm::ArrayRef<SourceType> Tys)
+{
+   llvm::SmallVector<Expression*, 4> Exprs;
+   ASTVector<SourceType> list(Context, Tys.size());
+
+   for (const auto &Ty : Tys) {
+      if (Ty.getTypeExpr() && !canElideInstantiation(Ty.getTypeExpr())) {
+         expandVariadicArgument(Exprs, Ty.getTypeExpr());
+         for (auto &E : Exprs)
+            list.push_back(SourceType(E), Context);
+
+         Exprs.clear();
+      }
+      else {
+         list.push_back(Ty, Context);
+      }
+   }
+
+   return list;
+}
+
 FuncArgDecl*
 InstantiatorImpl::visitFuncArgDecl(FuncArgDecl *Decl)
 {
@@ -1587,13 +1768,13 @@ InstantiatorImpl::visitFuncArgDecl(FuncArgDecl *Decl)
       assert(!Decl->isVariadic() && "should be handled specially!");
    }
 
-   return FuncArgDecl::Create(Context, Decl->getVarOrLetLoc(),
+   return FuncArgDecl::Create(Context, Decl->getOwnershipLoc(),
                               Decl->getColonLoc(), DeclName,
-                              visit(Decl->getType()),
+                              Decl->getConvention(), visit(Decl->getType()),
                               copyOrNull(Decl->getDefaultVal()),
                               Decl->isVariadicArgPackExpansion()
                                   && !IsSubstitution,
-                              Decl->isConst(), Decl->isCstyleVararg());
+                              Decl->isCstyleVararg(), Decl->isSelf());
 }
 
 NullStmt *InstantiatorImpl::visitNullStmt(NullStmt *node)
@@ -1625,14 +1806,14 @@ IntegerLiteral *InstantiatorImpl::visitIntegerLiteral(IntegerLiteral *node)
 {
    return IntegerLiteral::Create(Context, node->getSourceRange(),
                                  node->getType(),
-                                 llvm::APSInt(node->getValue()),
+                                 node->getValue(),
                                  node->getSuffix());
 }
 
 FPLiteral *InstantiatorImpl::visitFPLiteral(FPLiteral *node)
 {
    return FPLiteral::Create(Context, node->getSourceRange(),
-                            node->getType(), llvm::APFloat(node->getValue()),
+                            node->getType(), node->getValue(),
                             node->getSuffix());
 }
 
@@ -1720,28 +1901,20 @@ GlobalVarDecl* InstantiatorImpl::visitGlobalVarDecl(GlobalVarDecl *node)
                                      visitOrAuto(node->getType()),
                                      copyOrNull(node->getValue()));
 
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
+   ActOnDecl(Decl);
    return Decl;
 }
 
-ast::LocalDestructuringDecl*
-InstantiatorImpl::visitLocalDestructuringDecl(LocalDestructuringDecl *node)
+DestructuringDecl*
+InstantiatorImpl::visitDestructuringDecl(DestructuringDecl *Decl)
 {
-   return LocalDestructuringDecl::Create(Context, node->getSourceRange(),
-                                         node->getAccess(), node->isConst(),
-                                         cloneVector(node->getDecls()),
-                                         visitOrAuto(node->getType()),
-                                         copyOrNull(node->getValue()));
-}
+   auto *Inst = DestructuringDecl::Create(Context, Decl->getParenRange(),
+                                          cloneVector(Decl->getDecls()),
+                                          visit(Decl->getType()),
+                                          visit(Decl->getValue()));
 
-ast::GlobalDestructuringDecl*
-InstantiatorImpl::visitGlobalDestructuringDecl(GlobalDestructuringDecl *node)
-{
-   return GlobalDestructuringDecl::Create(Context, node->getSourceRange(),
-                                          node->getAccess(), node->isConst(),
-                                          cloneVector(node->getDecls()),
-                                          visitOrAuto(node->getType()),
-                                          copyOrNull(node->getValue()));
+   ActOnDecl(Inst);
+   return Inst;
 }
 
 Expression* InstantiatorImpl::visitBuiltinExpr(BuiltinExpr *node)
@@ -1788,14 +1961,14 @@ Expression* InstantiatorImpl::makeLiteralExpr(Expression *Expr,
          break;
       default: {
          literal = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          valTy, llvm::APSInt(Val.getAPSInt()));
+                                          valTy, Val.getAPSInt());
          break;
       }
       }
    }
    else if (valTy->isFPType()) {
       literal = FPLiteral::Create(Context, Expr->getSourceRange(), valTy,
-                                  llvm::APFloat(Val.getAPFloat()));
+                                  Val.getAPFloat());
    }
    else if (valTy->isRecordType() && valTy->getRecord() == SP.getStringDecl()) {
       literal = StringLiteral::Create(Context, Expr->getSourceRange(),
@@ -1829,16 +2002,20 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          }
 
          return StaticExpr::Create(Context, Arg->getParam()->getValueType(),
+                                   Ident->getSourceRange(),
                                    Arg->getValue());
       }
 
       if (ValueSubst.Name == Ident->getIdentInfo()) {
          return StaticExpr::Create(Context, ValueSubst.SubstVal->getType(),
+                                   Ident->getSourceRange(),
                                    ValueSubst.SubstVal);
       }
    }
 
    DeclarationName DeclName;
+   DeclContext *Ctx = Ident->getDeclCtx();
+
    if (Ident->getKind() == IdentifierKind::FunctionArg) {
       if (Ident->getFuncArg()->isVariadicArgPackExpansion()) {
          DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
@@ -1850,24 +2027,30 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
       }
    }
+   else if (Ident->getKind() == IdentifierKind::AssociatedType) {
+      auto *AT = cast<AssociatedTypeDecl>(Ident->getNamedDecl());
+      if (isa<ProtocolDecl>(AT->getDeclContext())) {
+         Ctx = nullptr;
+      }
+   }
 
    if (!DeclName)
       DeclName = Ident->getDeclName();
 
    // only copy the context if it is not (in) a template, if it is it has to be
    // re-evaluated
-   DeclContext *Ctx = Ident->getDeclCtx();
-   if (auto ND = dyn_cast_or_null<NamedDecl>(Ctx))
-      if (ND->inDependentContext())
+   if (auto ND = dyn_cast_or_null<NamedDecl>(Ctx)) {
+      if (ND->inDependentContext()) {
          Ctx = nullptr;
+      }
+   }
 
-   auto Inst = new(Context)
-      IdentifierRefExpr(Ident->getSourceLoc(), DeclName,
-                        copyExprList(Ident->getTemplateArgs()),
-                        Ctx);
+   auto Inst = new(Context) IdentifierRefExpr(Ident->getSourceLoc(), DeclName,
+                                              Ctx);
 
+   Inst->setSelf(Ident->isSelf());
    Inst->setParentExpr(copyOrNull(Ident->getParentExpr()));
-   Inst->setPointerAccess(Ident->isPointerAccess());
+   Inst->setIsPointerAccess(Ident->isPointerAccess());
 
    return Inst;
 }
@@ -1885,7 +2068,6 @@ Expression* InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *node)
                                           copyOrNull(node->getParentExpr()),
                                           DeclName, node->isPointerAccess());
 
-   copyTemplateArgs(node, expr);
    return expr;
 }
 
@@ -1893,10 +2075,9 @@ EnumCaseExpr* InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr *node)
 {
    auto Inst = new(Context) EnumCaseExpr(node->getSourceLoc(),
                                          node->getIdentInfo(),
-                                         copyExprList(node->getArgs()));
+                                         astvec(copyExprList(node->getArgs())));
 
    if (!node->isTypeDependent()) {
-      Inst->setEnum(node->getEnum());
       Inst->setCase(node->getCase());
    }
 
@@ -1924,12 +2105,13 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 
    auto call = new(Context) CallExpr(node->getIdentLoc(), node->getParenRange(),
                                      copyOrNull(node->getParentExpr()),
-                                     copyExprList(node->getArgs()), ident,
-                                     node->isDotInit(), node->isDotDeinit());
-
-   copyTemplateArgs(node, call);
+                                     astvec(copyExprList(node->getArgs())),
+                                     ident, node->isDotInit(),
+                                     node->isDotDeinit());
 
    call->setContext(Ctx);
+   call->setIncludesSelf(node->includesSelf());
+   call->setDirectCall(node->isDirectCall());
    call->setIsPointerAccess(node->isPointerAccess());
 
    if (!node->isTypeDependent()) {
@@ -1941,7 +2123,7 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 
       switch (node->getKind()) {
       case CallKind::Builtin:
-         call->setBuiltinFnKind(node->getBuiltinFnKind());
+         call->setBuiltinKind(node->getBuiltinKind());
          break;
       case CallKind::NamedFunctionCall:
       case CallKind::MethodCall:
@@ -1985,6 +2167,14 @@ TupleMemberExpr* InstantiatorImpl::visitTupleMemberExpr(TupleMemberExpr *node)
                                         node->isPointerAccess());
 }
 
+TemplateArgListExpr*
+InstantiatorImpl::visitTemplateArgListExpr(TemplateArgListExpr *Expr)
+{
+   return TemplateArgListExpr::Create(Context, Expr->getSourceRange(),
+                                      visit(Expr->getParentExpr()),
+                                      copyExprList(Expr->getExprs()));
+}
+
 ReturnStmt* InstantiatorImpl::visitReturnStmt(ReturnStmt *node)
 {
    if (auto Val = node->getReturnValue()) {
@@ -1992,6 +2182,14 @@ ReturnStmt* InstantiatorImpl::visitReturnStmt(ReturnStmt *node)
    }
 
    return ReturnStmt::Create(Context, node->getSourceLoc());
+}
+
+DiscardAssignStmt*
+InstantiatorImpl::visitDiscardAssignStmt(DiscardAssignStmt *Stmt)
+{
+   return DiscardAssignStmt::Create(Context, Stmt->getUnderscoreLoc(),
+                                    Stmt->getEqualsLoc(),
+                                    visit(Stmt->getRHS()));
 }
 
 UnaryOperator *InstantiatorImpl::visitUnaryOperator(UnaryOperator *node)
@@ -2144,6 +2342,23 @@ IfStmt* InstantiatorImpl::visitIfStmt(IfStmt *node)
                          copyOrNull(node->getElseBranch()));
 }
 
+IfLetStmt* InstantiatorImpl::visitIfLetStmt(IfLetStmt *node)
+{
+   return IfLetStmt::Create(Context, node->getSourceLoc(),
+                            clone(node->getVarDecl()),
+                            visit(node->getIfBranch()),
+                            copyOrNull(node->getElseBranch()));
+}
+
+IfCaseStmt* InstantiatorImpl::visitIfCaseStmt(IfCaseStmt *node)
+{
+   return IfCaseStmt::Create(Context, node->getSourceLoc(),
+                             clone(node->getPattern()),
+                             visit(node->getVal()),
+                             visit(node->getIfBranch()),
+                             copyOrNull(node->getElseBranch()));
+}
+
 WhileStmt* InstantiatorImpl::visitWhileStmt(WhileStmt *node)
 {
    return WhileStmt::Create(Context, node->getSourceLoc(),
@@ -2202,11 +2417,10 @@ CasePattern* InstantiatorImpl::visitCasePattern(CasePattern *node)
    std::vector<CasePatternArgument> args;
    for (const auto &arg : node->getArgs()) {
       if (arg.isExpr()) {
-         args.emplace_back(visit(arg.getExpr()), arg.getSourceLoc());
+         args.emplace_back(visit(arg.getExpr()));
       }
       else {
-         args.emplace_back(arg.getIdentifier(), arg.isConst(),
-                           arg.getSourceLoc());
+         args.emplace_back(clone(arg.getDecl()));
       }
    }
 
@@ -2214,17 +2428,30 @@ CasePattern* InstantiatorImpl::visitCasePattern(CasePattern *node)
                               node->getCaseNameIdent(), args);
 }
 
-TryStmt* InstantiatorImpl::visitTryStmt(TryStmt *node)
+DoStmt* InstantiatorImpl::visitDoStmt(DoStmt *node)
 {
-   std::vector<CatchBlock> catchBlocks;
+   SmallVector<CatchBlock, 2> catchBlocks;
+   catchBlocks.reserve(node->getCatchBlocks().size());
+
    for (const auto &CB : node->getCatchBlocks()) {
       catchBlocks.emplace_back(visitLocalVarDecl(CB.varDecl),
-                               visit(CB.body));
+                               visit(CB.Body));
    }
 
-   return new(Context) TryStmt(node->getSourceRange(), visit(node->getBody()),
-                               move(catchBlocks),
-                               copyOrNull(node->getFinallyBlock()));
+   return new(Context) DoStmt(node->getSourceRange(), visit(node->getBody()),
+                              catchBlocks);
+}
+
+TryExpr *InstantiatorImpl::visitTryExpr(TryExpr *Expr)
+{
+   return TryExpr::Create(Context, Expr->getSourceLoc(), Expr->getKind(),
+                          visit(Expr->getExpr()));
+}
+
+AwaitExpr* InstantiatorImpl::visitAwaitExpr(AwaitExpr *Expr)
+{
+   return AwaitExpr::Create(Context, Expr->getAwaitLoc(),
+                            visit(Expr->getExpr()));
 }
 
 ThrowStmt* InstantiatorImpl::visitThrowStmt(ThrowStmt *node)
@@ -2238,21 +2465,16 @@ UsingDecl* InstantiatorImpl::visitUsingDecl(UsingDecl *node)
    return UsingDecl::Create(Context, node->getSourceRange(),
                             node->getAccess(), node->getDeclName(),
                             node->getNestedImportName(),
-                            node->isWildCardImport());
-}
-
-ModuleDecl* InstantiatorImpl::visitModuleDecl(ModuleDecl *node)
-{
-   return ModuleDecl::Create(Context, node->getSourceRange(),
-                             node->getAccess(),
-                             node->getQualifiedModuleName());
+                            node->isWildcardImport());
 }
 
 ImportDecl* InstantiatorImpl::visitImportDecl(ImportDecl *node)
 {
    return ImportDecl::Create(Context, node->getSourceRange(),
                              node->getAccess(),
-                             node->getQualifiedImportName());
+                             node->getQualifiedImportName(),
+                             node->getNamedImports(),
+                             node->isWildcardImport());
 }
 
 DeclStmt *InstantiatorImpl::visitDeclStmt(DeclStmt *Stmt)
@@ -2342,7 +2564,7 @@ MixinDecl* InstantiatorImpl::visitMixinDecl(MixinDecl *Decl)
                                  Decl->getParenRange(),
                                  visit(Decl->getMixinExpr()));
 
-   SP.addDeclToContext(SP.getDeclContext(), Inst);
+   ActOnDecl(Inst);
    return Inst;
 }
 
@@ -2371,7 +2593,7 @@ Decl* InstantiatorImpl::visitStaticIfDecl(StaticIfDecl *node)
                                     clone(node->getCondition()),
                                     Template);
 
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
+   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2383,7 +2605,7 @@ Decl* InstantiatorImpl::visitStaticForDecl(StaticForDecl *node)
                                      clone(node->getRange()),
                                      copyOrNull(node->getBodyDecl()));
 
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
+   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2419,9 +2641,9 @@ StaticAssertStmt*InstantiatorImpl::visitStaticAssertStmt(StaticAssertStmt *node)
    auto Decl = StaticAssertStmt::Create(Context, node->getStaticAssertLoc(),
                                         node->getParenRange(),
                                         visitStaticExpr(node->getExpr()),
-                                        string(node->getMessage()));
+                                        node->getMessage());
 
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
+   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2431,7 +2653,7 @@ StaticPrintStmt* InstantiatorImpl::visitStaticPrintStmt(StaticPrintStmt *node)
                                        node->getParenRange(),
                                        visit(node->getExpr()));
 
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
+   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2458,6 +2680,34 @@ public:
 static FinalTemplateArgumentList *MakeList(SemaPass &SP,
                                            const TemplateArgList &list) {
    return FinalTemplateArgumentList::Create(SP.getContext(), list);
+}
+
+template<class T>
+T *lookupExternalInstantiation(StringRef MangledName, ModuleDecl *Mod)
+{
+   if (auto MF = Mod->getModFile()) {
+      auto Inst = MF->LookupInstantiation(MangledName);
+      if (Inst)
+         return cast<T>(Inst);
+   }
+
+   for (auto *Import : Mod->getImportedModules()) {
+      auto *BaseMod = Import->getBaseModule()->getDecl();
+      if (BaseMod == Mod)
+         continue;
+
+      if (auto Inst = lookupExternalInstantiation<T>(MangledName, BaseMod))
+         return cast<T>(Inst);
+   }
+
+   return nullptr;
+}
+
+template<class T>
+T *lookupExternalInstantiation(StringRef MangledName, SemaPass &SP)
+{
+   auto *Mod = SP.getDeclContext().getDeclModule();
+   return lookupExternalInstantiation<T>(MangledName, Mod->getBaseModule());
 }
 
 RecordInstResult
@@ -2495,31 +2745,52 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
       return R;
    }
 
+   if (auto *MF = Template->getModFile())
+      MF->LoadAllDecls(*Template);
+
+   std::string MangledName;
+   {
+      llvm::raw_string_ostream OS(MangledName);
+      SP.getMangler().manglePrefix(Template, *templateArgs, OS);
+   }
+
+   if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
+      Inst->setImportedInstantiation(true);
+      SP.getContext().insertRecordTemplateInstantiation(Inst, insertPos);
+      return Inst;
+   }
+
    // create this beforehand so we don't accidentally use the template arg
    // list after moving it
    auto instInfo = new (SP.getContext()) InstantiationInfo<RecordDecl> {
-      POI.getSourceRange().getStart(), templateArgs, Template,
-      SP.getCurrentDecl()
+      POI.getSourceRange().getStart(), templateArgs, Template
    };
+
+   auto *InstScope = SP.getCurrentDecl();
+
+   bool AlreadyInstantiating = InstantiatingRecord;
+   InstantiatingRecord = true;
 
    InstantiatorImpl Instantiator(SP, *instInfo->templateArgs, Template);
    InstPrettyStackTraceEntry STE(Instantiator);
 
-   RecordDecl *Inst = Instantiator.instantiateRecordDecl(Template);
+   auto Inst = Instantiator.instantiateRecordDecl(Template);
+   if (!Inst)
+      return RecordInstResult();
+
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
 
-   bool DoingDeclarations = SP.getStage() == SemaPass::Stage::Declaration;
-
-   bool AlreadyInstantiating = InstantiatingRecord;
-   InstantiatingRecord = true;
+   bool DoingDeclarations = SP.getStage() <= SemaPass::Stage::Declaration;
 
    // avoid infinite recursion when this template is instantiated within its
    // own definition
    SP.getContext().insertRecordTemplateInstantiation(Inst, insertPos);
    Instantiator.instantiateRecordDefinition(Template, Inst);
 
-   SP.ActOnRecordDecl(Inst);
+   Instantiator.ActOnDecl(Inst);
+
+   SP.registerInstantiation(Inst, InstScope);
    SP.declareRecordInstantiation(POI, Inst);
 
    // there might be dependencies between nested instantiations, so we can't
@@ -2570,24 +2841,43 @@ TemplateInstantiator::InstantiateFunction(StmtOrDecl POI,
       return cast<FunctionDecl>(F);
    }
 
+   std::string MangledName;
+   {
+      llvm::raw_string_ostream OS(MangledName);
+      SP.getMangler().manglePrefix(Template, *templateArgs, OS);
+   }
+
+   if (auto Inst = lookupExternalInstantiation<FunctionDecl>(MangledName, SP)) {
+      Inst->setImportedInstantiation(true);
+
+      SP.getContext().insertFunctionTemplateInstantiation(Inst, insertPos);
+      return Inst;
+   }
+
+   auto *InstScope = SP.getCurrentDecl();
+
    InstantiatorImpl Instantiator(SP, *templateArgs, Template);
    InstPrettyStackTraceEntry STE(Instantiator);
 
    auto Inst = Instantiator.instantiateFunctionDecl(Template);
-
-   SemaPass::DeclScopeRAII raii(SP, Inst->getDeclContext());
-   SP.getContext().insertFunctionTemplateInstantiation(Inst, insertPos);
+   if (!Inst)
+      return FunctionInstResult();
 
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
-      POI.getSourceRange().getStart(), templateArgs, Template,
-      SP.getCurrentDecl()
+      POI.getSourceRange().getStart(), templateArgs, Template
    };
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
 
-   SP.ActOnFunctionDecl(Inst);
+   SemaPass::DeclScopeRAII raii(SP, Inst->getDeclContext());
+   SP.getContext().insertFunctionTemplateInstantiation(Inst, insertPos);
+
+   Instantiator.ActOnDecl(Inst);
+
+   SP.registerInstantiation(Inst, InstScope);
    SP.declareScoped(Inst);
+
    SP.registerDelayedInstantiation(Inst, POI);
 
    if (isNew)
@@ -2629,6 +2919,20 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
       return cast<MethodDecl>(M);
    }
 
+   if (auto BT = Template->getBodyTemplate()) {
+      if (auto Info = BT->getLazyFnInfo()) {
+         // if the function is a template, we also need it's body
+         Info->loadBody(BT);
+      }
+
+      SP.ensureVisited(BT);
+   }
+   else {
+      SP.ensureVisited(Template);
+   }
+
+   auto *InstScope = SP.getCurrentDecl();
+
    MultiLevelFinalTemplateArgList MultiLevelList(*templateArgs);
    if (Template->getRecord()->isInstantiation()) {
       MultiLevelList.addOuterList(Template->getRecord()->getTemplateArgs());
@@ -2648,18 +2952,22 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
       Inst = Instantiator.instantiateMethodDecl(Template);
    }
 
+   if (!Inst)
+      return MethodInstResult();
+
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
-      POI.getSourceRange().getStart(), templateArgs, Template,
-      SP.getCurrentDecl()
+      POI.getSourceRange().getStart(), templateArgs, Template
    };
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
 
-   SP.addDeclToContext(SP.getDeclContext(), Inst);
+   Instantiator.ActOnDecl(Inst);
    SP.getContext().insertFunctionTemplateInstantiation(Inst, insertPos);
 
+   SP.registerInstantiation(Inst, InstScope);
    SP.declareScoped(Inst);
+
    SP.registerDelayedInstantiation(Inst, POI);
 
    if (isNew)
@@ -2672,12 +2980,18 @@ MethodInstResult
 TemplateInstantiator::InstantiateProtocolDefaultImpl(SourceLocation POI,
                                                      RecordDecl *Rec,
                                                      MethodDecl *M) {
-   SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
-   InstantiatorImpl Instantiator(SP, Rec);
+   MethodDecl *decl;
+   {
+      SemaPass::DeclScopeRAII declScopeRAII(SP, M->getRecord());
+      InstantiatorImpl Instantiator(SP, Rec);
 
-   auto decl = Instantiator.instantiateMethodDecl(M);
-   if (SP.declareStmt(Rec, decl)) {
-      (void)SP.visitStmt(Rec, decl);
+      decl = Instantiator.instantiateMethodDecl(M);
+      decl->setLogicalContext(Rec);
+      SP.makeDeclAvailable(*Rec, decl);
+
+      if (SP.declareStmt(Rec, decl)) {
+         (void) SP.visitStmt(Rec, decl);
+      }
    }
 
    return decl;
@@ -2693,6 +3007,7 @@ FunctionType* TemplateInstantiator::InstantiateFunctionType(
    InstantiatorImpl Instantiator(SP, *FinalList, SOD);
 
    llvm::SmallVector<FuncArgDecl*, 4> Args;
+   llvm::SmallVector<FunctionType::ParamInfo, 4> paramInfo;
    Instantiator.copyArgListAndFindVariadic(Template, Args);
 
    llvm::SmallVector<QualType, 4> Tys;
@@ -2701,13 +3016,14 @@ FunctionType* TemplateInstantiator::InstantiateFunctionType(
          return nullptr;
 
       Tys.push_back(Arg->getType());
+      paramInfo.emplace_back(Arg->getConvention());
    }
 
    auto RetInst = Instantiator.visit(Template->getReturnType());
    if (!SP.visitSourceType(RetInst))
       return nullptr;
 
-   return SP.getContext().getFunctionType(RetInst, Tys,
+   return SP.getContext().getFunctionType(RetInst, Tys, paramInfo,
                                           Template->getFunctionType()
                                                   ->getRawFlags());
 }
@@ -2732,12 +3048,18 @@ TemplateInstantiator::InstantiateStatement(SourceLocation instantiatedFrom,
    return Instantiator.instantiateStatement(stmt);
 }
 
+ExprResult TemplateInstantiator::InstantiateTypeExpr(RecordDecl *Rec,
+                                                     Expression *E) {
+   InstantiatorImpl Instantiator(SP, Rec);
+   return cast<Expression>(Instantiator.instantiateStatement(E));
+}
+
 DeclResult
 TemplateInstantiator::InstantiateDecl(SourceLocation instantiatedFrom,
                                       Decl *D,
                                       MultiLevelFinalTemplateArgList
                                                                &&templateArgs) {
-   InstantiatorImpl Instantiator(SP, move(templateArgs));
+   InstantiatorImpl Instantiator(SP, move(templateArgs), D);
    return Instantiator.instantiateDecl(D);
 }
 
@@ -2754,11 +3076,8 @@ StmtResult TemplateInstantiator::InstantiateMethodBody(StmtOrDecl POI,
                                                        MethodDecl *Method) {
    SP.ensureVisited(Method->getBodyTemplate());
 
-   if (Method->getRecord()->isInstantiation()&&
-      Method->getRecord()->getSpecializedTemplate()->getDeclName().isStr
-                                                                     ("Option")
-       && Method->getDeclName().isStr("toString")) {
-      int i=3; //CBP
+   if (Method->getBodyTemplate()->isInvalid()) {
+      return StmtError();
    }
 
    MultiLevelFinalTemplateArgList ArgList;
@@ -2766,21 +3085,46 @@ StmtResult TemplateInstantiator::InstantiateMethodBody(StmtOrDecl POI,
       ArgList.addOuterList(Method->getRecord()->getTemplateArgs());
    }
 
+   bool IsExternallyLoaded = false;
+   if (auto LazyInfo = Method->getBodyTemplate()->getLazyFnInfo()) {
+      LazyInfo->loadBody(Method->getBodyTemplate());
+      IsExternallyLoaded = true;
+   }
+
+   auto *InstScope = SP.getCurrentDecl();
+
    InstantiatorImpl Instantiator(SP, move(ArgList), Method);
    auto Inst = Instantiator.instantiateStatement(Method->getBodyTemplate()
                                                        ->getBody());
 
    Method->setBody(Inst);
+   Method->setSemanticallyChecked(false);
    Method->setBodyInstantiationLoc(POI.getSourceLoc());
 
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
-      POI.getSourceLoc(), {}, Method, SP.getCurrentDecl()
+      POI.getSourceLoc(), {}, Method
    };
 
    Method->setInstantiationInfo(instInfo);
+   SP.registerInstantiation(Method, InstScope);
 
    SP.declareScoped(Method);
    SP.registerDelayedInstantiation(Method, POI);
+
+   if (auto I = dyn_cast<InitDecl>(Method)) {
+      if (I->isCompleteInitializer()) {
+         SP.registerInstantiation(I->getBaseInit(), InstScope);
+      }
+      else {
+         SP.registerInstantiation(I->getCompleteInit(), InstScope);
+      }
+   }
+
+   // ILGen would skip this decl since it's external, but we still need to
+   // define the body
+   if (IsExternallyLoaded) {
+      SP.getILGen().registerInstantiatedImportedMethod(Method);
+   }
 
    return Inst;
 }
@@ -2811,18 +3155,38 @@ TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
       return Inst;
    }
 
+   std::string MangledName;
+   {
+      llvm::raw_string_ostream OS(MangledName);
+      SP.getMangler().manglePrefix(Template, *templateArgs, OS);
+   }
+
+   if (auto Inst = lookupExternalInstantiation<AliasDecl>(MangledName, SP)) {
+      Inst->setImportedInstantiation(true);
+
+      SP.getContext().insertAliasTemplateInstantiation(Inst, insertPos);
+      return Inst;
+   }
+
+   auto *InstScope = SP.getCurrentDecl();
+
    auto *InstInfo = new(SP.getContext()) InstantiationInfo<AliasDecl>(
-      instantiatedFrom, move(templateArgs), Template, SP.getCurrentDecl()
+      instantiatedFrom, move(templateArgs), Template
    );
 
    InstantiatorImpl Instantiator(SP, *InstInfo->templateArgs, Template);
    InstPrettyStackTraceEntry STE(Instantiator);
 
    auto Inst = Instantiator.instantiateAliasDecl(Template);
+   if (!Inst)
+      return AliasInstResult();
+
    Inst->setInstantiationInfo(InstInfo);
    Inst->setIsInstantiation(true);
 
-   SP.ActOnAliasDecl(Inst);
+   Instantiator.ActOnDecl(Inst);
+   SP.registerInstantiation(Inst, InstScope);
+
    SP.getContext().insertAliasTemplateInstantiation(Inst, insertPos);
 
    return Inst;

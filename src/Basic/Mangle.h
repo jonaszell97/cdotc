@@ -16,10 +16,11 @@ namespace cdot {
 class QualType;
 
 namespace sema {
-   class TemplateArgList;
+   class FinalTemplateArgumentList;
 } // namespace sema
 
 namespace ast {
+   class DeclContext;
    class SemaPass;
    class CallableDecl;
    class FunctionDecl;
@@ -35,13 +36,24 @@ public:
    {}
 
    void mangle(const ast::NamedDecl *ND, llvm::raw_ostream &OS) const;
+   void manglePrefix(const ast::DeclContext *DC, llvm::raw_ostream &OS) const;
+   void manglePrefix(const ast::DeclContext *DC,
+                     const sema::FinalTemplateArgumentList &TemplateArgs,
+                     llvm::raw_ostream &OS) const;
+
    void mangleVTable(const ast::RecordDecl *R, llvm::raw_ostream &OS) const;
    void mangleTypeInfo(const QualType &T, llvm::raw_ostream &OS) const;
    void mangleTypeName(const QualType &T, llvm::raw_ostream &OS) const;
 
+   void mangleDefaultDeinitializer(ast::RecordDecl *R,
+                                   llvm::raw_ostream &OS) const;
+
+   llvm::StringRef getPrefix(const ast::DeclContext *DC) const;
+
 private:
    ast::SemaPass &SP;
    mutable llvm::DenseMap<const ast::Decl*, std::string> Cache;
+   mutable llvm::DenseMap<const ast::DeclContext*, std::string> PrefixCache;
 };
 
 } // namespace cdot

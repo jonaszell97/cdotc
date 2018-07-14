@@ -19,15 +19,16 @@
    CDOT_DECL(MixinDecl)
    CDOT_DECL(CompoundDecl)
    CDOT_DECL(MacroExpansionDecl)
+   CDOT_DECL(DestructuringDecl)
 #endif
 
 #ifdef CDOT_NAMED_DECL
    CDOT_ABSTRACT(_firstNamedDecl)
       CDOT_NAMED_DECL(AssociatedTypeDecl)
       CDOT_NAMED_DECL(PropDecl)
+      CDOT_NAMED_DECL(SubscriptDecl)
       CDOT_NAMED_DECL(TypedefDecl)
       CDOT_NAMED_DECL(NamespaceDecl)
-      CDOT_NAMED_DECL(TranslationUnit)
       CDOT_NAMED_DECL(AliasDecl)
 
       CDOT_NAMED_DECL(PrecedenceGroupDecl)
@@ -67,7 +68,12 @@
    CDOT_ABSTRACT(_lastNamedDecl)
 #endif
 
+CDOT_ABSTRACT(_lastDecl)
+
 #ifdef CDOT_DECL_CONTEXT
+   CDOT_DECL_CONTEXT(ModuleDecl)
+   CDOT_DECL_CONTEXT(ImportDecl)
+
    CDOT_DECL_CONTEXT(CompoundDecl)
 
    CDOT_DECL_CONTEXT(StructDecl)
@@ -78,7 +84,6 @@
    CDOT_DECL_CONTEXT(ExtensionDecl)
 
    CDOT_DECL_CONTEXT(NamespaceDecl)
-   CDOT_DECL_CONTEXT(TranslationUnit)
 
    CDOT_DECL_CONTEXT(FunctionDecl)
    CDOT_DECL_CONTEXT(InitDecl)

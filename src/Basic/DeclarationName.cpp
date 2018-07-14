@@ -18,12 +18,13 @@ class DeclarationNameInfo: public llvm::FoldingSetNode {
       QualType Ty;
       const IdentifierInfo *II;
       uintptr_t Data1;
+      DeclarationName::SubscriptKind SubKind;
    };
 
    union {
       uintptr_t Data2;
       const sema::FinalTemplateArgumentList *ArgList;
-      BlockScope *Scope;
+      unsigned Scope;
       DeclarationName::AccessorKind AccKind;
    };
 
@@ -58,6 +59,8 @@ public:
       case DeclarationName::PostfixOperatorName:
       case DeclarationName::AccessorName:
       case DeclarationName::MacroName:
+      case DeclarationName::OperatorDeclName:
+      case DeclarationName::LocalVarName:
          return true;
       default:
          return false;
@@ -123,7 +126,10 @@ public:
       return (unsigned)Data1;
    }
 
-   BlockScope *getBlockScope() const
+   uintptr_t getData1() const { return Data1; }
+   uintptr_t getData2() const { return Data2; }
+
+   unsigned getBlockScope() const
    {
       assert(Kind == DeclarationName::LocalVarName);
       return Scope;
@@ -133,6 +139,12 @@ public:
    {
       assert(Kind == DeclarationName::AccessorName);
       return AccKind;
+   }
+
+   DeclarationName::SubscriptKind getSubscriptKind() const
+   {
+      assert(Kind == DeclarationName::SubscriptName);
+      return SubKind;
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID,
@@ -156,7 +168,7 @@ DeclarationName::DeclarationName(DeclarationNameInfo *DNI)
    Val |= OtherStoredName;
 }
 
-DeclarationName::DeclarationKind DeclarationName::getDeclarationKind() const
+DeclarationName::DeclarationKind DeclarationName::getKind() const
 {
    switch (getStoredKind()) {
    case StoredIdentifier:
@@ -170,13 +182,34 @@ DeclarationName::DeclarationKind DeclarationName::getDeclarationKind() const
    }
 }
 
+IdentifierInfo* DeclarationName::getIdentifierInfo() const
+{
+   switch (getKind()) {
+   case DeclarationName::NormalIdentifier:
+      return reinterpret_cast<IdentifierInfo*>(Val);
+   case DeclarationName::InfixOperatorName:
+   case DeclarationName::PrefixOperatorName:
+   case DeclarationName::PostfixOperatorName:
+   case DeclarationName::MacroName:
+      return const_cast<IdentifierInfo*>(&getDeclInfo()->getIdentifierInfo());
+   case DeclarationName::LocalVarName:
+      return getLocalVarName().getIdentifierInfo();
+   case DeclarationName::OperatorDeclName:
+      return getDeclaredOperatorName().getIdentifierInfo();
+   case DeclarationName::InstantiationName:
+      return getInstantiationName().getIdentifierInfo();
+   default:
+      return nullptr;
+   }
+}
+
 QualType DeclarationName::getConstructorType() const
 {
    if (getStoredKind() == StoredInitializerName)
       return QualType::getFromOpaquePtr(
          reinterpret_cast<void*>(Val & ~PtrMask));
 
-   if (getDeclarationKind() == BaseConstructorName)
+   if (getKind() == BaseConstructorName)
       return getDeclInfo()->getType();
 
    return QualType();
@@ -184,7 +217,7 @@ QualType DeclarationName::getConstructorType() const
 
 const IdentifierInfo* DeclarationName::getInfixOperatorName() const
 {
-   if (getDeclarationKind() == InfixOperatorName)
+   if (getKind() == InfixOperatorName)
       return &getDeclInfo()->getIdentifierInfo();
 
    return nullptr;
@@ -192,7 +225,7 @@ const IdentifierInfo* DeclarationName::getInfixOperatorName() const
 
 const IdentifierInfo* DeclarationName::getPrefixOperatorName() const
 {
-   if (getDeclarationKind() == PrefixOperatorName)
+   if (getKind() == PrefixOperatorName)
       return &getDeclInfo()->getIdentifierInfo();
 
    return nullptr;
@@ -200,7 +233,7 @@ const IdentifierInfo* DeclarationName::getPrefixOperatorName() const
 
 const IdentifierInfo* DeclarationName::getPostfixOperatorName() const
 {
-   if (getDeclarationKind() == PostfixOperatorName)
+   if (getKind() == PostfixOperatorName)
       return &getDeclInfo()->getIdentifierInfo();
 
    return nullptr;
@@ -208,7 +241,7 @@ const IdentifierInfo* DeclarationName::getPostfixOperatorName() const
 
 const IdentifierInfo* DeclarationName::getAccessorName() const
 {
-   if (getDeclarationKind() == AccessorName)
+   if (getKind() == AccessorName)
       return &getDeclInfo()->getIdentifierInfo();
 
    return nullptr;
@@ -216,7 +249,7 @@ const IdentifierInfo* DeclarationName::getAccessorName() const
 
 const IdentifierInfo* DeclarationName::getMacroName() const
 {
-   if (getDeclarationKind() == MacroName)
+   if (getKind() == MacroName)
       return &getDeclInfo()->getIdentifierInfo();
 
    return nullptr;
@@ -224,15 +257,23 @@ const IdentifierInfo* DeclarationName::getMacroName() const
 
 DeclarationName::AccessorKind DeclarationName::getAccessorKind() const
 {
-   if (getDeclarationKind() == AccessorName)
+   if (getKind() == AccessorName)
       return getDeclInfo()->getAccessorKind();
 
    llvm_unreachable("not an accessor name!");
 }
 
+DeclarationName::SubscriptKind DeclarationName::getSubscriptKind() const
+{
+   if (getKind() == SubscriptName)
+      return getDeclInfo()->getSubscriptKind();
+
+   llvm_unreachable("not a subscript name!");
+}
+
 unsigned DeclarationName::getClosureArgumentIdx() const
 {
-   if (getDeclarationKind() == ClosureArgumentName)
+   if (getKind() == ClosureArgumentName)
       return getDeclInfo()->getClosureArgumentIdx();
 
    llvm_unreachable("not a closure argument name!");
@@ -240,7 +281,7 @@ unsigned DeclarationName::getClosureArgumentIdx() const
 
 DeclarationName DeclarationName::getInstantiationName() const
 {
-   if (getDeclarationKind() == InstantiationName)
+   if (getKind() == InstantiationName)
       return getDeclInfo()->getDeclName();
 
    return nullptr;
@@ -249,7 +290,7 @@ DeclarationName DeclarationName::getInstantiationName() const
 const sema::FinalTemplateArgumentList*
 DeclarationName::getInstantiationArgs() const
 {
-   if (getDeclarationKind() == InstantiationName)
+   if (getKind() == InstantiationName)
       return getDeclInfo()->getArgList();
 
    return nullptr;
@@ -257,7 +298,7 @@ DeclarationName::getInstantiationArgs() const
 
 QualType DeclarationName::getConversionOperatorType() const
 {
-   if (getDeclarationKind() == ConversionOperatorName)
+   if (getKind() == ConversionOperatorName)
       return getDeclInfo()->getType();
 
    return QualType();
@@ -265,7 +306,7 @@ QualType DeclarationName::getConversionOperatorType() const
 
 QualType DeclarationName::getExtendedType() const
 {
-   if (getDeclarationKind() == ExtensionName)
+   if (getKind() == ExtensionName)
       return getDeclInfo()->getType();
 
    return QualType();
@@ -273,7 +314,7 @@ QualType DeclarationName::getExtendedType() const
 
 DeclarationName DeclarationName::getPackExpansionName() const
 {
-   if (getDeclarationKind() == PackExpansionName)
+   if (getKind() == PackExpansionName)
       return getDeclInfo()->getDeclName();
 
    return DeclarationName();
@@ -281,7 +322,7 @@ DeclarationName DeclarationName::getPackExpansionName() const
 
 unsigned DeclarationName::getPackExpansionIndex() const
 {
-   if (getDeclarationKind() == PackExpansionName)
+   if (getKind() == PackExpansionName)
       return getDeclInfo()->getPackExpansionIndex();
 
    return unsigned(-1);
@@ -289,23 +330,23 @@ unsigned DeclarationName::getPackExpansionIndex() const
 
 DeclarationName DeclarationName::getLocalVarName() const
 {
-   if (getDeclarationKind() == LocalVarName)
+   if (getKind() == LocalVarName)
       return getDeclInfo()->getDeclName();
 
    return DeclarationName();
 }
 
-BlockScope* DeclarationName::getLocalVarScope() const
+unsigned DeclarationName::getLocalVarScope() const
 {
-   if (getDeclarationKind() == LocalVarName)
+   if (getKind() == LocalVarName)
       return getDeclInfo()->getBlockScope();
 
-   return nullptr;
+   return 0;
 }
 
 DeclarationName DeclarationName::getDeclaredOperatorName() const
 {
-   if (getDeclarationKind() == OperatorDeclName)
+   if (getKind() == OperatorDeclName)
       return getDeclInfo()->getDeclName();
 
    return DeclarationName();
@@ -313,13 +354,13 @@ DeclarationName DeclarationName::getDeclaredOperatorName() const
 
 int DeclarationName::compare(const DeclarationName &RHS) const
 {
-   auto OwnKind = getDeclarationKind();
-   auto OtherKind = RHS.getDeclarationKind();
+   auto OwnKind = getKind();
+   auto OtherKind = RHS.getKind();
 
    if (OwnKind != OtherKind)
       return (OwnKind < OtherKind) ? -1 : 1;
 
-   switch (getDeclarationKind()) {
+   switch (getKind()) {
    case NormalIdentifier:
       return getIdentifierInfo()->getIdentifier().compare(
          RHS.getIdentifierInfo()->getIdentifier());
@@ -335,8 +376,7 @@ int DeclarationName::compare(const DeclarationName &RHS) const
    case InstantiationName:
       return getInstantiationName().compare(RHS.getInstantiationName());
    default:
-      return (int)((uintptr_t)getDeclInfo()->getType().getAsOpaquePtr()
-                   - (uintptr_t)RHS.getDeclInfo()->getType().getAsOpaquePtr());
+      return (int)(getDeclInfo()->getData1() - RHS.getDeclInfo()->getData1());
    }
 }
 
@@ -347,8 +387,12 @@ void DeclarationName::dump() const
 
 void DeclarationName::print(llvm::raw_ostream &OS) const
 {
-   assert(*this && "invalid declaration name");
-   switch (getDeclarationKind()) {
+   if (!*this) {
+      OS << "<invalid name>";
+      return;
+   }
+
+   switch (getKind()) {
    case NormalIdentifier:
       OS << getIdentifierInfo()->getIdentifier();
       break;
@@ -409,18 +453,21 @@ void DeclarationName::print(llvm::raw_ostream &OS) const
    case ErrorName:
       OS << "<invalid name>";
       break;
+   case SubscriptName:
+      OS << "subscript";
+      break;
    }
 }
 
 DeclarationName DeclarationName::getManglingName() const
 {
-   if (getDeclarationKind() == InstantiationName)
+   if (getKind() == InstantiationName)
       return getDeclInfo()->getDeclName();
 
-   if (getDeclarationKind() == OperatorDeclName)
+   if (getKind() == OperatorDeclName)
       return getDeclInfo()->getDeclName();
 
-   if (getDeclarationKind() == MacroName)
+   if (getKind() == MacroName)
       return getDeclInfo()->getIdentifierInfo();
 
    return *this;
@@ -439,6 +486,43 @@ DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx)
 DeclarationNameTable::~DeclarationNameTable()
 {
    delete reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
+}
+
+DeclarationName
+DeclarationNameTable::getIdentifiedName(DeclarationName::DeclarationKind Kind,
+                                        const cdot::IdentifierInfo &II) {
+   switch (Kind) {
+   case DeclarationName::NormalIdentifier:
+      return getNormalIdentifier(II);
+   case DeclarationName::PrefixOperatorName:
+      return getPrefixOperatorName(II);
+   case DeclarationName::PostfixOperatorName:
+      return getPostfixOperatorName(II);
+   case DeclarationName::InfixOperatorName:
+      return getInfixOperatorName(II);
+   case DeclarationName::MacroName:
+      return getMacroName(II);
+   default:
+      llvm_unreachable("not an identified name");
+   }
+}
+
+DeclarationName
+DeclarationNameTable::getTypedName(DeclarationName::DeclarationKind Kind,
+                                   QualType Ty) {
+   switch (Kind) {
+   case DeclarationName::ConstructorName:
+   case DeclarationName::BaseConstructorName:
+      return getConstructorName(Ty, Kind == DeclarationName::ConstructorName);
+   case DeclarationName::DestructorName:
+      return getDestructorName(Ty);
+   case DeclarationName::ExtensionName:
+      return getExtensionName(Ty);
+   case DeclarationName::ConversionOperatorName:
+      return getConversionOperatorName(Ty);
+   default:
+      llvm_unreachable("not a typed name");
+   }
 }
 
 DeclarationName
@@ -536,6 +620,12 @@ DeclarationName DeclarationNameTable::getExtensionName(QualType ExtendedType)
                          (uintptr_t)ExtendedType.getAsOpaquePtr());
 }
 
+DeclarationName
+DeclarationNameTable::getSubscriptName(DeclarationName::SubscriptKind Kind)
+{
+   return getSpecialName(DeclarationName::SubscriptName, (uintptr_t)Kind);
+}
+
 DeclarationName DeclarationNameTable::getClosureArgumentName(unsigned ArgNo)
 {
    return getSpecialName(DeclarationName::ClosureArgumentName,
@@ -543,7 +633,7 @@ DeclarationName DeclarationNameTable::getClosureArgumentName(unsigned ArgNo)
 }
 
 DeclarationName DeclarationNameTable::getLocalVarName(DeclarationName Name,
-                                                      BlockScope *Scope) {
+                                                      unsigned Scope) {
    return getSpecialName(DeclarationName::LocalVarName,
                          (uintptr_t)Name.getAsOpaquePtr(),
                          (uintptr_t)Scope);

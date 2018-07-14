@@ -21,6 +21,8 @@
    CDOT_DECL_ATTR(Opaque, opaque)
    CDOT_DECL_ATTR(Align, align)
    CDOT_DECL_ATTR(DiscardableResult, discardableResult)
+   CDOT_DECL_ATTR(AutoClosure, autoclosure)
+   CDOT_DECL_ATTR(VersionDecl, version)
    CDOT_DECL_ATTR(_Builtin, _builtin)
    CDOT_ABSTRACT_ATTR(_lastDeclAttr)
 #endif
@@ -28,6 +30,7 @@
 
 #ifdef CDOT_STMT_ATTR
    CDOT_ABSTRACT_ATTR(_firstStmtAttr)
+   CDOT_STMT_ATTR(VersionStmt, version)
    CDOT_ABSTRACT_ATTR(_lastStmtAttr)
 #endif
 #undef CDOT_STMT_ATTR

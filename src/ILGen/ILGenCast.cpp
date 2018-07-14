@@ -18,67 +18,80 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-il::Value* ILGenPass::castTo(il::Value *V, QualType to)
-{
-   auto ConvSeq = SP.getConversionSequence(V->getType(), *to);
-   assert(ConvSeq.isValid() && "invalid conversion sequence");
-
-   return HandleCast(ConvSeq, V);
-}
-
 static il::Value *applySingleConversionStep(const ConversionStep &Step,
                                             il::Value *Val,
                                             ILGenPass &ILGen,
                                             bool forced) {
    auto &Builder = ILGen.Builder;
    switch (Step.getKind()) {
-      case CastKind::LValueToRValue:
-         return Builder.CreateLoad(Val);
-      case CastKind::IntToFP:
-      case CastKind::FPToInt:
-      case CastKind::IntToPtr:
-      case CastKind::PtrToInt:
-      case CastKind::Ext:
-      case CastKind::Trunc:
-      case CastKind::SignFlip:
-         return Builder.CreateIntegerCast(Step.getKind(), Val,
-                                         Step.getResultType());
-      case CastKind::EnumToInt:
-         return Builder.CreateEnumRawValue(Val);
-      case CastKind::FPTrunc:
-      case CastKind::FPExt:
-         return Builder.CreateFPCast(Step.getKind(), Val,
-                                    Step.getResultType());
-      case CastKind::DynCast: {
-         if (forced)
-            return Builder.CreateBitCast(Step.getKind(), Val,
-                                         Step.getResultType());
+   case CastKind::LValueToRValue:
+      return Builder.CreateLoad(Val);
+   case CastKind::RValueToConstRef: {
+      auto Alloc = Builder.CreateAlloca(Val->getType());
+      Builder.CreateStore(Val, Alloc);
 
-         auto Option = Step.getResultType()->getRecord();
-         auto WrappedTy = Option->getTemplateArgs().front().getType();
-
-         return Builder.CreateDynamicCast(
-            Val, cast<ClassDecl>(WrappedTy->getRecord()),
-            ILGen.getContext().getASTCtx().getRecordType(Option));
-      }
-      case CastKind::ProtoWrap:
-      case CastKind::ProtoUnwrap:
-         return Builder.CreateProtoCast(Val, Step.getResultType());
-      case CastKind::IntToEnum:
-         return Builder.CreateIntToEnum(Val, Step.getResultType());
-      case CastKind::BitCast:
-      case CastKind::UpCast:
-      case CastKind::NoThrowToThrows:
-      case CastKind::MutRefToRef:
-      case CastKind::MutPtrToPtr:
+      return Alloc;
+   }
+   case CastKind::IntToFP:
+   case CastKind::FPToInt:
+   case CastKind::IntToPtr:
+   case CastKind::PtrToInt:
+   case CastKind::Ext:
+   case CastKind::Trunc:
+   case CastKind::SignFlip:
+      return Builder.CreateIntegerCast(Step.getKind(), Val,
+                                       Step.getResultType());
+   case CastKind::IsNull: {
+      auto Null = Builder.GetConstantNull(Val->getType());
+      return Builder.CreateCompNE(Val, Null);
+   }
+   case CastKind::EnumToInt:
+      return Builder.CreateEnumRawValue(Val);
+   case CastKind::FPTrunc:
+   case CastKind::FPExt:
+      return Builder.CreateFPCast(Step.getKind(), Val,
+                                  Step.getResultType());
+   case CastKind::DynCast: {
+      if (forced)
          return Builder.CreateBitCast(Step.getKind(), Val,
                                       Step.getResultType());
-      case CastKind::ConversionOp:
-         return ILGen.CreateCall(Step.getConversionOp(), { Val });
-      case CastKind::NoOp:
+
+      auto Option = Step.getResultType()->getRecord();
+      auto WrappedTy = Option->getTemplateArgs().front().getType();
+
+      return Builder.CreateDynamicCast(
+         Val, cast<ClassDecl>(WrappedTy->getRecord()),
+         ILGen.getContext().getASTCtx().getRecordType(Option));
+   }
+   case CastKind::ProtoWrap:
+   case CastKind::ProtoUnwrap:
+      return Builder.CreateProtoCast(Val, Step.getResultType());
+   case CastKind::IntToEnum:
+      return Builder.CreateIntToEnum(Val, Step.getResultType());
+   case CastKind::BitCast:
+   case CastKind::UpCast:
+   case CastKind::NoThrowToThrows:
+   case CastKind::MutRefToRef:
+   case CastKind::MutPtrToPtr:
+      return Builder.CreateBitCast(Step.getKind(), Val,
+                                   Step.getResultType());
+   case CastKind::Move:
+      if (ILGen.getSema().IsImplicitlyCopyableType(Val->getType()))
          return Val;
-      default:
-         llvm_unreachable("bad cast kind!");
+
+      return Builder.CreateMove(Val);
+   case CastKind::Copy:
+      return ILGen.CreateCopy(Val);
+   case CastKind::Forward:
+      return ILGen.Forward(Val);
+   case CastKind::ConversionOp:
+      return ILGen.CreateCall(Step.getConversionOp(), { Val });
+   case CastKind::ToVoid:
+      return nullptr;
+   case CastKind::ToEmptyTuple:
+      return Builder.GetEmptyTuple();
+   case CastKind::NoOp:
+      return Val;
    }
 }
 
@@ -96,19 +109,10 @@ static il::Value *doTupleCast(const ConversionSequence &ConvSeq,
       if (Step.isHalt())
          break;
 
-      // until line halt, casts are meant for the entire tuple
-      switch (Step.getKind()) {
-         case CastKind::NoOp: break;
-         case CastKind::LValueToRValue:
-            Val = Builder.CreateLoad(Val);
-            break;
-         default:
-            llvm_unreachable("invalid tuple cast!");
-      }
+      Val = applySingleConversionStep(Step, Val, ILGen, forced);
    }
 
    size_t NumSteps = Steps.size();
-
    if (i == NumSteps)
       return Val;
 
@@ -154,6 +158,9 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
       case CastKind::NoOp: break;
       case CastKind::LValueToRValue:
          Val = Builder.CreateLoad(Val);
+         break;
+      case CastKind::Forward:
+         Val = ILGen.Forward(Val);
          break;
       default:
          llvm_unreachable("invalid function cast!");

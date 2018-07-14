@@ -17,6 +17,7 @@ namespace il {
 class Context;
 class Module;
 class BasicBlock;
+class MultiOperandInst;
 
 class Instruction: public Value,
                    public llvm::ilist_node_with_parent<Instruction, BasicBlock>{
@@ -36,10 +37,16 @@ public:
 
    void setParent(BasicBlock *parent);
    
-   bool isSanctionedSelfUse() const { return InstBits.IsSanctionedSelfUse; }
-   void setIsSanctionedSelfUse(bool b) { InstBits.IsSanctionedSelfUse = b; }
+   bool isSynthesized() const { return InstBits.Synthesized; }
+   void setSynthesized(bool b) { InstBits.Synthesized = b; }
 
    bool isRetainOrRelease() const;
+
+   bool isBeginUnsafe() const;
+   bool isEndUnsafe() const;
+
+   const MultiOperandInst *asMultiOperandInst() const;
+   MultiOperandInst *asMultiOperandInst();
 
    Value *getOperand(unsigned idx) const;
    unsigned getNumOperands() const;

@@ -55,7 +55,8 @@ public:
 protected:
    explicit Attr(AttrKind kind, SourceRange SR = SourceRange())
       : kind(kind), SourceLoc(SR)
-   {}
+   {
+   }
 
    AttrKind kind;
    SourceRange SourceLoc;
@@ -127,6 +128,27 @@ protected:
 
 #define CDOT_ATTR_DECL
 #include "Attr.inc"
+
+template<class SubClass, class RetTy = void, class ...ParamTys>
+class AttrVisitor {
+public:
+#  define CDOT_ATTR(NAME, SPELLING) RetTy visit##NAME##Attr(NAME##Attr*)   \
+   { return RetTy(); }
+#  include "Attributes.def"
+
+   RetTy visit(Attr *A)
+   {
+      switch (A->getKind()) {
+#     define CDOT_ATTR(NAME, SPELLING)                                     \
+      case AttrKind::NAME:                                                 \
+         return static_cast<SubClass*>(this)->visit##NAME##Attr(           \
+            static_cast<NAME##Attr*>(A));
+#     include "Attributes.def"
+      default:
+         llvm_unreachable("bad attr kind");
+      }
+   }
+};
 
 } // namespace cdot
 

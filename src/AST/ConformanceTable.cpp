@@ -11,6 +11,15 @@ using namespace cdot::ast;
 
 namespace cdot {
 
+ConformanceTable::~ConformanceTable()
+{
+   for (auto &Entry : TestMap) {
+      if (Entry.getSecond().is<ConformanceSet*>()) {
+         Entry.getSecond().get<ConformanceSet*>()->~DenseSet();
+      }
+   }
+}
+
 bool ConformanceTable::registerConformance(ast::ASTContext &C,
                                            RecordDecl *Rec,
                                            ProtocolDecl *P) {

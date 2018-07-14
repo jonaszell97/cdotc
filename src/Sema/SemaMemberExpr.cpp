@@ -27,7 +27,7 @@ void SemaPass::diagnoseCircularlyDependentGlobalVariables(Expression *Expr,
    Expr->setIsInvalid(true);
 
    diagnose(globalVar, err_circular_global_value, globalVar->getSourceLoc(),
-            globalVar->getName(), EvaluatingGlobalVar->getName());
+            globalVar->getDeclName(), EvaluatingGlobalVar->getDeclName());
    diagnose(note_dependent_global_here, EvaluatingGlobalVar->getSourceLoc());
 }
 
@@ -45,6 +45,14 @@ static bool checkImplicitSelf(SemaPass &SP,
    return SP.visitExpr(Ident, Self);
 }
 
+static void checkCapture(SemaPass &SP, Expression *Expr)
+{
+   if (!SP.getBoxDecl()) {
+      SP.diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
+                  /*Box*/ 10);
+   }
+}
+
 QualType SemaPass::getStaticForValue(IdentifierInfo *name) const
 {
    for (auto S = currentScope; S; S = S->getEnclosingScope()) {
@@ -57,103 +65,11 @@ QualType SemaPass::getStaticForValue(IdentifierInfo *name) const
    return QualType();
 }
 
-SemaPass::LocalLookupResult
-SemaPass::PerformLocalLookup(DeclarationName DeclName, DeclContext *Ctx)
-{
-   LocalLookupResult Result;
-
-   bool LocalLookup = Ctx == &getDeclContext();
-   auto &lookupResult = Result.lookupResult;
-   auto &lambdaScope = Result.lambdaScope;
-
-   // look for local variables and arguments in scope as these aren't found
-   // through normal lookup. Also checks if the found variable escapes the
-   // current lambda scope and needs to be captured.
-   if (LocalLookup && !lookupResult) {
-      DeclarationNameTable &NameTable = Context.getDeclNameTable();
-      for (auto S = currentScope; S; S = S->getEnclosingScope()) {
-         switch (S->getTypeID()) {
-         case Scope::LambdaScopeID: {
-            if (!lambdaScope)
-               lambdaScope = cast<LambdaScope>(S);
-
-            LLVM_FALLTHROUGH;
-         }
-         case Scope::FunctionScopeID:
-         case Scope::MethodScopeID: {
-            lookupResult = cast<FunctionScope>(S)
-               ->getCallableDecl()->lookupSingle<FuncArgDecl>(DeclName);
-
-            if (lookupResult) {
-               if (lambdaScope == S)
-                  lambdaScope = nullptr;
-
-               break;
-            }
-
-            LLVM_FALLTHROUGH;
-         }
-         case Scope::BlockScopeID:
-         case Scope::LoopScopeID: {
-            DeclarationName DN = NameTable.getLocalVarName(DeclName,
-                                                           cast<BlockScope>(S));
-
-            lookupResult = Ctx->lookup(DN);
-            break;
-         }
-         default:
-            break;
-         }
-
-         if (lookupResult)
-            break;
-      }
-   }
-
-   if (!lookupResult) {
-      lookupResult = Ctx->lookup(DeclName);
-
-      // nothing found through normal lookup, check builtin members or
-      // implicit self references
-      if (!lookupResult) {
-         if (LocalLookup) {
-            // implicit 'self'
-            if (auto R = getCurrentRecordCtx()) {
-               if (R->hasAnyDeclNamed(DeclName)) {
-                  return PerformLocalLookup(DeclName, R);
-               }
-            }
-         }
-      }
-   }
-
-   return Result;
-}
-
-static ExprResult checkTemplateArguments(SemaPass &SP, IdentifierRefExpr *Ident)
-{
-   bool Dependent = false;
-   for (auto &TA : Ident->getTemplateArgRef()) {
-      auto res = SP.visitExpr(Ident, TA);
-      if (!res)
-         return ExprError();
-
-      TA = res.get();
-      Dependent |= TA->isUnknownAny();
-   }
-
-   if (Dependent) {
-      Ident->setExprType(SP.getContext().getUnknownAnyTy());
-      return ExprError();
-   }
-
-   return Ident;
-}
-
 static IdentifierRefExpr* CheckBuiltinType(SemaPass &SP,
                                            IdentifierRefExpr *Ident,
                                            bool &IsBuiltin,
-                                           bool &UsedTemplateArgs) {
+                                           bool &UsedTemplateArgs,
+                                           ArrayRef<Expression*> TemplateArgs) {
    enum class Kind {
       MetaType = 0, UnsafePtr, UnsafeMutablePtr,
    };
@@ -163,14 +79,14 @@ static IdentifierRefExpr* CheckBuiltinType(SemaPass &SP,
    UsedTemplateArgs = false;
 
    if (DeclName.isStr("MetaType")) {
-      if (Ident->getTemplateArgs().size() != 1) {
+      if (TemplateArgs.size() != 1) {
          SP.diagnose(Ident, err_builtin_type_expects, (int)Kind::MetaType,
                      Ident->getSourceRange());
 
          return nullptr;
       }
 
-      auto ArgRes = SP.visitExpr(Ident, Ident->getTemplateArgs().front());
+      auto ArgRes = SP.visitExpr(Ident, TemplateArgs.front());
       if (!ArgRes)
          return nullptr;
 
@@ -198,14 +114,14 @@ static IdentifierRefExpr* CheckBuiltinType(SemaPass &SP,
    }
 
    if (DeclName.isStr("UnsafePtr")) {
-      if (Ident->getTemplateArgs().size() != 1) {
+      if (TemplateArgs.size() != 1) {
          SP.diagnose(Ident, err_builtin_type_expects, (int)Kind::UnsafePtr,
                      Ident->getSourceRange());
 
          return nullptr;
       }
 
-      auto ArgRes = SP.visitExpr(Ident, Ident->getTemplateArgs().front());
+      auto ArgRes = SP.visitExpr(Ident, TemplateArgs.front());
       if (!ArgRes)
          return nullptr;
 
@@ -234,14 +150,14 @@ static IdentifierRefExpr* CheckBuiltinType(SemaPass &SP,
    }
 
    if (DeclName.isStr("UnsafeMutablePtr")) {
-      if (Ident->getTemplateArgs().size() != 1) {
+      if (TemplateArgs.size() != 1) {
          SP.diagnose(Ident, err_builtin_type_expects,
                      (int)Kind::UnsafeMutablePtr, Ident->getSourceRange());
 
          return nullptr;
       }
 
-      auto ArgRes = SP.visitExpr(Ident, Ident->getTemplateArgs().front());
+      auto ArgRes = SP.visitExpr(Ident, TemplateArgs.front());
       if (!ArgRes)
          return nullptr;
 
@@ -297,37 +213,36 @@ static IdentifierRefExpr* CheckBuiltinType(SemaPass &SP,
    return Ident;
 }
 
-static ExprResult CheckIfSubscript(SemaPass &SP,
-                                   bool UsedTemplateParams,
-                                   IdentifierRefExpr *Ident) {
-   // probably meant to be a subscript
-   if (!UsedTemplateParams && !Ident->getTemplateArgs().empty()) {
-      auto Subscript = SubscriptExpr::Create(
-         SP.getContext(), Ident->getSourceRange(), Ident,
-         Ident->getTemplateArgs());
-
-      // clear template arguments so they don't accidentally get instantiated
-      Ident->getTemplateArgRef().clear();
-      Ident->setSemanticallyChecked(true);
-
-      Subscript->setIsLHSOfAssignment(Ident->isLHSOfAssignment());
-      Ident->setIsLHSOfAssignment(false);
-
-      SP.updateParent(Subscript, Ident);
-      return SP.visitExpr(Ident, Subscript);
+template<class ExprTy>
+void MakeDeref(SemaPass &SP, QualType ty, ExprTy *Expr)
+{
+   QualType RefTy;
+   if (ty->isMutablePointerType()) {
+      RefTy = SP.getContext().getMutableReferenceType(ty->getPointeeType());
+   }
+   else {
+      RefTy = SP.getContext().getReferenceType(ty->getPointeeType());
    }
 
-   return Ident;
+   auto ParentExpr = SP.castToRValue(Expr->getParentExpr());
+
+   FunctionType *DerefFnTy = SP.getContext().getFunctionType(RefTy, { ty });
+   auto Deref = UnaryOperator::Create(SP.getContext(), Expr->getSourceLoc(),
+                                      op::Deref, DerefFnTy, ParentExpr,
+                                      true);
+
+   auto Res = SP.visitExpr(Expr, Deref);
+   assert(Res && "invalid deref operator?");
+
+   Expr->setParentExpr(Res.get());
+   Expr->setIsPointerAccess(false);
 }
 
-ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
-{
-   if (!checkTemplateArguments(*this, Ident)) {
-      if (Ident->isDependent())
-         return Ident;
-
-      return ExprError();
-   }
+ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
+                                            TemplateArgListExpr *ArgExpr) {
+   MutableArrayRef<Expression*> TemplateArgs;
+   if (ArgExpr)
+      TemplateArgs = ArgExpr->getExprs();
 
    // can only happen in a template instantiation
    if (Ident->getParentExpr()) {
@@ -348,14 +263,20 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       if (CtxTy->isMetaType())
          CtxTy = CtxTy->asMetaType()->getUnderlyingType();
 
-      if (Ident->isPointerAccess())
+      if (Ident->isPointerAccess()) {
+         if (!Ident->isTypeDependent()) {
+            MakeDeref(*this, CtxTy, Ident);
+            Ident->setIsPointerAccess(false);
+         }
+
          CtxTy = CtxTy->getPointeeType();
+      }
 
       assert(CtxTy->stripReference()->isRecordType() && "bad context type");
       Ident->setDeclCtx(CtxTy->stripReference()->getRecord());
    }
 
-   LookupResult lookupResult;
+   MultiLevelLookupResult MultiLevelResult;
    bool UsedTemplateParams = false;
    auto DeclName = Ident->getDeclName();
    bool LocalLookup = !Ident->getDeclCtx()
@@ -379,25 +300,27 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
             return Ident;
          }
 
-         lookupResult = LookupResult(R);
          Ident->setIdent(R->getDeclName());
+         Ident->setSelf(true);
+
          DeclName = Ident->getDeclName();
+         MultiLevelResult.addResult(R);
       }
 
       Ident->setDeclCtx(&getDeclContext());
    }
 
-   LambdaScope *lambdaScope = nullptr;
-   if (!lookupResult) {
-      auto Result = PerformLocalLookup(DeclName, Ident->getDeclCtx());
+   if (!MultiLevelResult) {
+      MultiLevelResult = MultiLevelLookup(*Ident->getDeclCtx(), DeclName,
+                                          true, LocalLookup);
 
       // nothing found through normal lookup, check builtin members or
       // declarations
-      if (!Result.lookupResult) {
+      if (!MultiLevelResult) {
          if (LocalLookup) {
             bool IsBuiltin;
             auto BuiltinRes = CheckBuiltinType(*this, Ident, IsBuiltin,
-                                               UsedTemplateParams);
+                                               UsedTemplateParams,TemplateArgs);
 
             if (IsBuiltin) {
                Ident->setFoundResult(true);
@@ -409,7 +332,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
                   return ExprError();
                }
 
-               return CheckIfSubscript(*this, UsedTemplateParams, BuiltinRes);
+               return BuiltinRes;
             }
 
             if (DeclName.isSimpleIdentifier()) {
@@ -446,19 +369,19 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
             }
          }
       }
-
-      lookupResult = Result.lookupResult;
-      lambdaScope = Result.lambdaScope;
    }
 
    // nothing left to check, this identifier does not reference a declaration
    // in scope
-   if (!lookupResult) {
+   if (!MultiLevelResult) {
       if (currentScope && currentScope->hasUnresolvedStaticCond()) {
          // this identifier might have been introduced in a dependent
          // static if / for
          Ident->setIsTypeDependent(true);
          Ident->setExprType(UnknownAnyTy);
+
+         // For now, assume this identifier is valid.
+         Ident->setFoundResult(true);
 
          return Ident;
       }
@@ -508,17 +431,28 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
 
    Ident->setFoundResult(true);
 
-   NamedDecl *lookup = lookupResult.front();
-   QualType lookupTy;
+   LambdaScope *lambdaScope = MultiLevelResult.getLambdaScope();
 
-   if (auto Var = dyn_cast<LocalVarDecl>(lookup)) {
+   // We found something. Get the relevant declaration.
+   NamedDecl *FoundDecl = MultiLevelResult.front().front();
+   QualType ResultType;
+
+   if (FoundDecl->isInvalid()) {
+      Ident->setIsInvalid(true);
+      return ExprError();
+   }
+
+   if (auto Var = dyn_cast<LocalVarDecl>(FoundDecl)) {
       assert(LocalLookup && "found local variable through member lookup?");
 
       if (lambdaScope) {
          Var->setCaptured(true);
 
-         Ident->setCaptureIndex(lambdaScope->getLambdaExpr()->addCapture(Var));
          Ident->setIsCapture(true);
+         Ident->setCaptureIndex(lambdaScope->getLambdaExpr()
+              ->addCapture(Context, Var));
+
+         checkCapture(*this, Ident);
       }
 
       Ident->setLocalVar(Var);
@@ -526,32 +460,23 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       Ident->setIsTypeDependent(Var->isTypeDependent());
       Ident->setIsValueDependent(Var->isValueDependent());
 
-      lookupTy = Var->getType();
-      if (!lookupTy->isReferenceType()) {
+      ResultType = Var->getType();
+      if (!ResultType->isReferenceType()) {
          if (Var->isConst() && Var->getValue()) {
-            lookupTy = Context.getReferenceType(lookupTy);
+            ResultType = Context.getReferenceType(ResultType);
          }
          else {
-            lookupTy = Context.getMutableReferenceType(lookupTy);
+            ResultType = Context.getMutableReferenceType(ResultType);
          }
       }
    }
-   else if (auto G = dyn_cast<GlobalVarDecl>(lookup)) {
-      if (!G->getType() || G->getType()->isAutoType()) {
-         if (!VisitedGlobalDecls.insert(G).second) {
-            diagnoseCircularlyDependentGlobalVariables(Ident, G);
-            return ExprError();
-         }
-
-         DeclScopeRAII declScopeRAII(*this, G->getDeclContext());
-
-         auto Res = visitGlobalVarDecl(G);
-         if (!Res || G->isInvalid()) {
-            Ident->setIsInvalid(true);
-            return ExprError();
-         }
+   else if (auto G = dyn_cast<GlobalVarDecl>(FoundDecl)) {
+      if (G->isBeingEvaluated()) {
+         diagnoseCircularlyDependentGlobalVariables(Ident, G);
+         return ExprError();
       }
 
+      ensureVisited(G);
       checkAccessibility(G, Ident);
 
       Ident->setGlobalVar(G);
@@ -559,24 +484,27 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       Ident->setIsTypeDependent(G->isTypeDependent());
       Ident->setIsValueDependent(G->isValueDependent());
 
-      lookupTy = G->getType();
-      if (!lookupTy->isReferenceType()) {
+      ResultType = G->getType();
+      if (!ResultType->isReferenceType()) {
          if (G->isConst()) {
-            lookupTy = Context.getReferenceType(lookupTy);
+            ResultType = Context.getReferenceType(ResultType);
          }
          else {
-            lookupTy = Context.getMutableReferenceType(lookupTy);
+            ResultType = Context.getMutableReferenceType(ResultType);
          }
       }
    }
-   else if (auto Arg = dyn_cast<FuncArgDecl>(lookup)) {
+   else if (auto Arg = dyn_cast<FuncArgDecl>(FoundDecl)) {
       assert(LocalLookup && "found argument through member lookup?");
 
       if (lambdaScope) {
          Arg->setCaptured(true);
 
-         Ident->setCaptureIndex(lambdaScope->getLambdaExpr()->addCapture(Arg));
          Ident->setIsCapture(true);
+         Ident->setCaptureIndex(lambdaScope->getLambdaExpr()
+              ->addCapture(Context, Arg));
+
+         checkCapture(*this, Ident);
       }
 
       Ident->setFuncArg(Arg);
@@ -588,35 +516,36 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          Ident->setContainsUnexpandedParameterPack(true);
       }
 
-      lookupTy = Arg->getType();
-      if (!lookupTy->isReferenceType()) {
-         if (Arg->isConst()) {
-            lookupTy = Context.getReferenceType(lookupTy);
-         }
-         else {
-            lookupTy = Context.getMutableReferenceType(lookupTy);
-         }
+      if (Arg->hasAttribute<AutoClosureAttr>()) {
+         // auto closure argument is not an lvalue
+         ResultType = Arg->getType();
+      }
+      else if (Arg->getConvention() != ArgumentConvention::Borrowed) {
+         ResultType = Context.getMutableReferenceType(Arg->getType());
+      }
+      else {
+         ResultType = Context.getReferenceType(Arg->getType());
       }
    }
-   else if (auto Case = dyn_cast<EnumCaseDecl>(lookup)) {
+   else if (auto Case = dyn_cast<EnumCaseDecl>(FoundDecl)) {
       checkAccessibility(Case, Ident);
       return HandleEnumCase(Ident, cast<EnumDecl>(Case->getRecord()));
    }
-   else if (isa<CallableDecl>(lookup)) {
-      auto func = checkFunctionReference(Ident, Ident->getDeclCtx(),
-                                         DeclName,
-                                         Ident->getTemplateArgs());
+   else if (isa<CallableDecl>(FoundDecl)) {
+      auto func = checkFunctionReference(Ident, DeclName,
+                                         MultiLevelResult,
+                                         TemplateArgs);
 
-      if (!func)
+      if (!func) {
          return ExprError();
+      }
 
       checkAccessibility(func, Ident);
       UsedTemplateParams = func->isInstantiation();
 
       FunctionType *FTy = func->getFunctionType();
       if (auto M = dyn_cast<MethodDecl>(func)) {
-         auto R = cast<RecordDecl>(Ident->getDeclCtx());
-
+         auto R = M->getRecord();
          if (Ident->isStaticLookup()) {
             // function takes additional 'self' argument
             llvm::SmallVector<QualType, 8> argTypes;
@@ -640,12 +569,17 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          Ident->setCallable(func);
       }
 
-      lookupTy = FTy;
+      ResultType = FTy;
    }
-   else if (auto Alias = dyn_cast<AliasDecl>(lookup)) {
-      auto AliasRes = checkAlias(lookupResult, Ident->getTemplateArgs(),
-                                 Ident->getSourceLoc());
+   else if (auto Alias = dyn_cast<AliasDecl>(FoundDecl)) {
+      if (Alias->isBeingEvaluated() && !Alias->isTemplate()) {
+         diagnose(Ident, err_referenced_while_evaluating, 0 /*alias*/,
+                  Alias->getDeclName(), Ident->getSourceRange());
 
+         return ExprError();
+      }
+
+      auto AliasRes = checkAlias(MultiLevelResult, TemplateArgs, Ident);
       if (AliasRes.isTypeDependent() || AliasRes.isValueDependent()) {
          Ident->setIsTypeDependent(AliasRes.isTypeDependent());
          Ident->setIsValueDependent(AliasRes.isValueDependent());
@@ -656,7 +590,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
 
       if (!AliasRes) {
          AliasRes.getCandSet().diagnoseAlias(*this, Alias->getDeclName(),
-                                             Ident->getTemplateArgs(), Ident);
+                                             TemplateArgs, Ident);
 
          assert(Ident->isInvalid());
          return ExprError();
@@ -674,59 +608,69 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       Ident->setKind(IdentifierKind::Alias);
       Ident->setAlias(Alias);
 
-      if (Alias->isInCompilerNamespace()) {
+      if (isInReflectModule(Alias)) {
          return HandleReflectionAlias(Alias, Ident);
+      }
+      else if (isInBuiltinModule(Alias)) {
+         return HandleBuiltinAlias(Alias, Ident);
       }
 
       UsedTemplateParams = Alias->isInstantiation();
-      lookupTy = Alias->getType();
+      ResultType = Alias->getType();
    }
-   else if (auto NS = dyn_cast<NamespaceDecl>(lookup)) {
+   else if (auto NS = dyn_cast<NamespaceDecl>(FoundDecl)) {
       Ident->setKind(IdentifierKind::Namespace);
       Ident->setNamespaceDecl(NS);
 
-      lookupTy = UnknownAnyTy;
+      ResultType = UnknownAnyTy;
    }
-   else if (auto R = dyn_cast<RecordDecl>(lookup)) {
+   else if (auto I = dyn_cast<ImportDecl>(FoundDecl)) {
+      Ident->setImport(I);
+      ResultType = UnknownAnyTy;
+   }
+   else if (auto Mod = dyn_cast<ModuleDecl>(FoundDecl)) {
+      Ident->setModule(Mod);
+      ResultType = UnknownAnyTy;
+   }
+   else if (auto R = dyn_cast<RecordDecl>(FoundDecl)) {
       if (R->isTemplate()) {
-         TemplateArgList list(*this, R, Ident->getTemplateArgs());
+         TemplateArgList list(*this, R, TemplateArgs);
          UsedTemplateParams = true;
 
+         auto Compat = list.checkCompatibility();
+         if (!Compat) {
+            diagnoseTemplateArgErrors(R, Ident, list,
+                                      TemplateArgs, Compat);
+            return ExprError();
+         }
+
          if (list.isStillDependent()) {
-            auto FinalList = FinalTemplateArgumentList::Create(Context, list);
-            lookupTy = Context.getDependentRecordType(R, FinalList);
-         }
-         else {
-            auto Compat = list.checkCompatibility();
-            if (!Compat) {
-               diagnoseTemplateArgErrors(R, Ident, list,
-                                         Ident->getTemplateArgs(), Compat);
-               return ExprError();
-            }
+            auto FinalList = FinalTemplateArgumentList::Create(Context, list,
+                                                               false);
+
+            ResultType = Context.getDependentRecordType(R, FinalList);
          }
 
-         if (!lookupTy) {
-            auto MaybeInst = Instantiator.InstantiateRecord(Ident, R,
-                                                            move(list));
-
+         if (!ResultType) {
+            auto MaybeInst = Instantiator.InstantiateRecord(Ident, R, list);
             if (MaybeInst)
                R = MaybeInst.getValue();
 
-            lookupTy = Context.getRecordType(R);
+            ResultType = Context.getRecordType(R);
          }
       }
       else {
-         lookupTy = Context.getRecordType(R);
+         ResultType = Context.getRecordType(R);
       }
 
       checkAccessibility(R, Ident);
 
       Ident->setKind(IdentifierKind::MetaType);
-      Ident->setMetaType(Context.getMetaType(lookupTy));
+      Ident->setMetaType(Context.getMetaType(ResultType));
 
-      lookupTy = Ident->getMetaType();
+      ResultType = Ident->getMetaType();
    }
-   else if (auto TD = dyn_cast<TypedefDecl>(lookup)) {
+   else if (auto TD = dyn_cast<TypedefDecl>(FoundDecl)) {
       if (!ensureDeclared(TD)) {
          Ident->setIsInvalid(true);
          return ExprError();
@@ -737,9 +681,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       Ident->setKind(IdentifierKind::MetaType);
       Ident->setMetaType(Context.getMetaType(TD->getOriginTy()));
 
-      lookupTy = Ident->getMetaType();
+      ResultType = Ident->getMetaType();
    }
-   else if (auto F = dyn_cast<FieldDecl>(lookup)) {
+   else if (auto F = dyn_cast<FieldDecl>(FoundDecl)) {
       if (!checkImplicitSelf(*this, F, Ident))
          return ExprError();
 
@@ -762,13 +706,13 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          visitFieldDecl(F);
       }
 
-      auto Res = HandleFieldAccess(Ident, F);
+      auto Res = HandleFieldAccess(Ident, TemplateArgs, F);
       if (!Res)
          return Res;
 
-      lookupTy = Ident->getExprType();
+      ResultType = Ident->getExprType();
    }
-   else if (auto P = dyn_cast<PropDecl>(lookup)) {
+   else if (auto P = dyn_cast<PropDecl>(FoundDecl)) {
       if (!checkImplicitSelf(*this, P, Ident))
          return ExprError();
 
@@ -785,28 +729,31 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       if (!Res)
          return Res;
 
-      lookupTy = Ident->getExprType();
+      ResultType = Ident->getExprType();
    }
-   else if (auto AT = dyn_cast<AssociatedTypeDecl>(lookup)) {
+   else if (auto AT = dyn_cast<AssociatedTypeDecl>(FoundDecl)) {
       Ident->setKind(IdentifierKind::AssociatedType);
+      Ident->setNamedDecl(AT);
+
+      ensureDeclared(AT);
 
       if (AssociatedTypeSubst) {
-         auto SubstAT = AssociatedTypeSubst
-            ->lookupSingle<AssociatedTypeDecl>(AT->getDeclName());
+         auto SubstAT = LookupSingle<AssociatedTypeDecl>(*AssociatedTypeSubst,
+                                                         AT->getDeclName());
 
          if (SubstAT)
             AT = SubstAT;
       }
 
-      lookupTy = Context.getMetaType(Context.getAssociatedType(AT));
+      ResultType = Context.getMetaType(Context.getAssociatedType(AT));
    }
-   else if (auto Param = dyn_cast<TemplateParamDecl>(lookup)) {
+   else if (auto Param = dyn_cast<TemplateParamDecl>(FoundDecl)) {
       if (Param->isTypeName()) {
-         lookupTy = Context.getMetaType(Context.getTemplateArgType(Param));
+         ResultType = Context.getMetaType(Context.getTemplateArgType(Param));
          Ident->setIsTypeDependent(true);
       }
       else {
-         lookupTy = Param->getValueType();
+         ResultType = Param->getValueType();
          Ident->setIsValueDependent(true);
       }
 
@@ -821,12 +768,17 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
       llvm_unreachable("unhandled named decl");
    }
 
-   Ident->setExprType(lookupTy);
+   Ident->setExprType(ResultType);
 
-   if (lookupTy->isDependentType())
+   if (ResultType->isDependentType())
       Ident->setIsTypeDependent(true);
 
-   return CheckIfSubscript(*this, UsedTemplateParams, Ident);
+   if (!UsedTemplateParams && ArgExpr) {
+      diagnose(ArgExpr, err_generic_error, "unused template argument list",
+               ArgExpr->getAngleRange());
+   }
+
+   return Ident;
 }
 
 ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr *Ident)
@@ -837,8 +789,14 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr *Ident)
       default: llvm_unreachable("bad builtin ident!");
       case BuiltinIdentifier::NULLPTR: {
          if (Ident->getContextualType().isNull()) {
+            if (Ident->isDependent()) {
+               Ident->setExprType(UnknownAnyTy);
+               return Ident;
+            }
+
             diagnose(Ident, err_requires_contextual_type, Ident->getSourceLoc(),
                      "__nullptr");
+
             return ExprError();
          }
 
@@ -878,16 +836,68 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr *Ident)
    return Ident;
 }
 
-ExprResult SemaPass::visitSuperExpr(SuperExpr *Expr)
+template<class ExprTy>
+static ExprResult checkIfSelfCapture(SemaPass &SP, ExprTy *E)
 {
-   auto R = getCurrentRecordCtx();
-   if (!R) {
-      diagnose(Expr, err_self_outside_method, Expr->getSourceLoc(),
-               1 /*super*/);
+   LambdaExpr *LE = nullptr;
+   for (auto S = SP.getCurrentScope(); S; S = S->getEnclosingScope()) {
+      switch (S->getTypeID()) {
+      case Scope::LambdaScopeID:
+         LE = cast<LambdaScope>(S)->getLambdaExpr();
+         break;
+      case Scope::FunctionScopeID:
+      case Scope::MethodScopeID: {
+         auto Fn = cast<FunctionScope>(S)->getCallableDecl();
+         if (!isa<MethodDecl>(Fn)
+               || (cast<MethodDecl>(Fn)->isStatic() && !isa<InitDecl>(Fn))) {
+            SP.diagnose(E, err_self_outside_method, E->getSourceLoc(),
+                        isa<SuperExpr>(E));
 
-      return ExprError();
+            return ExprError();
+         }
+
+         auto R = Fn->getRecord();
+         if (R->isTemplateOrInTemplate() || isa<ProtocolDecl>(R)) {
+            E->setIsTypeDependent(true);
+         }
+
+         QualType SelfTy = SP.getContext().getRecordType(R);
+         if (Fn->hasMutableSelf() || R->isClass())
+            SelfTy = SP.getContext().getMutableReferenceType(SelfTy);
+         else
+            SelfTy = SP.getContext().getReferenceType(SelfTy);
+
+         E->setExprType(SelfTy);
+
+         if (!isa<InitDecl>(Fn) && !isa<DeinitDecl>(Fn)) {
+            auto Arg = Fn->getArgs().front();
+            E->setSelfArg(Arg);
+
+            if (LE) {
+               Arg->setCaptured(true);
+               E->setCaptureIndex(LE->addCapture(SP.getContext(), Arg));
+            }
+         }
+
+         return E;
+      }
+      default:
+         break;
+      }
    }
 
+   SP.diagnose(E, err_self_outside_method, E->getSourceLoc(),
+               isa<SuperExpr>(E));
+
+   return ExprError();
+}
+
+ExprResult SemaPass::visitSuperExpr(SuperExpr *Expr)
+{
+   if (!checkIfSelfCapture(*this, Expr))
+      return ExprError();
+
+   auto R = getCurrentRecordCtx();
    auto currentCl = dyn_cast<ClassDecl>(R);
    if (!currentCl || currentCl->getParentClass() == nullptr) {
       diagnose(Expr, err_super_without_base, Expr->getSourceLoc(),
@@ -896,30 +906,21 @@ ExprResult SemaPass::visitSuperExpr(SuperExpr *Expr)
       return ExprError();
    }
 
-   Expr->setExprType(Context.getRecordType(currentCl));
+   QualType SelfTy = Context.getRecordType(currentCl->getParentClass());
+   if (Expr->getExprType()->isMutableReferenceType())
+      SelfTy = Context.getMutableReferenceType(SelfTy);
+   else
+      SelfTy = Context.getReferenceType(SelfTy);
+
+   Expr->setExprType(SelfTy);
    return Expr;
 }
 
 ExprResult SemaPass::visitSelfExpr(SelfExpr *Expr)
 {
-   auto R = getCurrentRecordCtx();
-   if (!R) {
-      diagnose(Expr, err_self_outside_method, Expr->getSourceLoc(),
-               0 /*self*/);
-
+   if (!checkIfSelfCapture(*this, Expr))
       return ExprError();
-   }
 
-   QualType SelfTy = Context.getRecordType(R);
-   if (R->isTemplateOrInTemplate() || isa<ProtocolDecl>(R)) {
-      Expr->setIsTypeDependent(true);
-   }
-
-   auto fun = getCurrentFun();
-   if (fun->hasMutableSelf())
-      SelfTy = Context.getMutableReferenceType(SelfTy);
-
-   Expr->setExprType(SelfTy);
    return Expr;
 }
 
@@ -945,25 +946,30 @@ public:
 
 CallableDecl*
 SemaPass::checkFunctionReference(Expression *E,
-                                 DeclContext *Ctx,
                                  DeclarationName funcName,
+                                 MultiLevelLookupResult &MultiLevelResult,
                                  llvm::ArrayRef<Expression*> templateArgs) {
    CandidateSet CandSet;
-   auto lookup = Ctx->lookup(funcName);
+   for (auto &Lookup : MultiLevelResult) {
+      for (auto *ND : Lookup) {
+         if (auto *C = dyn_cast<CallableDecl>(ND))
+            CandSet.addCandidate(C);
+      }
+   }
 
-   for (auto ND : lookup)
-      if (auto fn = dyn_cast<CallableDecl>(ND))
-         CandSet.addCandidate(fn);
-
-   if (CandSet.Candidates.empty())
+   if (CandSet.Candidates.empty()) {
+      diagnose(E, err_func_not_found, 0, funcName, E->getSourceRange());
       return nullptr;
+   }
 
    if (CandSet.Candidates.size() == 1)
       return CandSet.Candidates.front().Func;
 
    auto CtxTy = E->getContextualType();
-   if (!CtxTy || !CtxTy->isFunctionType())
+   if (!CtxTy || !CtxTy->isFunctionType()) {
+      diagnose(E, err_ambiguous_call, 0, funcName, E->getSourceRange());
       return nullptr;
+   }
 
    auto FnTy = CtxTy->asFunctionType();
    PlaceholderExprBuilder Builder;
@@ -979,6 +985,7 @@ SemaPass::checkFunctionReference(Expression *E,
       CandSet.diagnoseAmbiguousCandidates(*this, funcName, ArgExprs,
                                           templateArgs, E);
 
+      E->setIsInvalid(true);
       return nullptr;
    }
 
@@ -986,60 +993,76 @@ SemaPass::checkFunctionReference(Expression *E,
 }
 
 SemaPass::AliasResult
-SemaPass::checkAlias(LookupResult &lookupResult,
+SemaPass::checkAlias(MultiLevelLookupResult &MultiLevelResult,
                      llvm::ArrayRef<Expression *> templateArgs,
-                     SourceLocation loc) {
+                     Expression *E) {
    size_t bestMatch    = 0;
+   unsigned BestMatchDistance = unsigned(-1);
    bool typeDependent  = false;
    bool valueDependent = false;
    AliasDecl *match    = nullptr;
 
+   SmallPtrSet<AliasDecl*, 8> Candidates;
    CandidateSet CandSet;
 
-   for (auto ND : lookupResult) {
-      auto alias = dyn_cast<AliasDecl>(ND);
-      if (!alias || alias->getConstraints().size() < bestMatch)
-         continue;
-
-      auto &Cand = CandSet.addCandidate(alias);
-
-      if (!templateArgs.empty() || alias->isTemplate()) {
-         TemplateArgList list(*this, alias, templateArgs);
-
-         if (list.isStillDependent()) {
-            Cand.setIsInvalid();
-            typeDependent = true;
+   unsigned Distance = 0;
+   for (auto &Lookup : MultiLevelResult) {
+      for (auto *ND : Lookup) {
+         AliasDecl *alias = dyn_cast<AliasDecl>(ND);
+         if (!alias || alias->getConstraints().size() < bestMatch)
             continue;
+         if (!Candidates.insert(alias).second)
+            continue;
+
+         auto &Cand = CandSet.addCandidate(alias);
+
+         if (!templateArgs.empty() || alias->isTemplate()) {
+            ensureVisited(alias);
+
+            TemplateArgList list(*this, alias, templateArgs);
+            if (auto Ctx = E->getContextualType()) {
+               list.inferFromType(Ctx, alias->getType());
+            }
+
+            if (list.isStillDependent()) {
+               Cand.setIsInvalid();
+               typeDependent = true;
+               continue;
+            }
+
+            auto comp = list.checkCompatibility();
+            if (!comp) {
+               Cand.setTemplateArgListFailure(comp);
+               continue;
+            }
+
+            auto FinalList = FinalTemplateArgumentList::Create(Context, list);
+            auto Inst = Instantiator.InstantiateAlias(alias, E->getSourceLoc(),
+                                                      FinalList);
+
+            if (Inst.hasValue()) {
+               alias = Inst.getValue();
+               Cand.Alias = alias;
+            }
+            else {
+               Cand.setIsInvalid();
+               continue;
+            }
          }
 
-         auto comp = list.checkCompatibility();
-         if (!comp) {
-            Cand.setTemplateArgListFailure(comp);
-            continue;
-         }
-
-         auto FinalList = FinalTemplateArgumentList::Create(Context, list);
-         auto Inst = Instantiator.InstantiateAlias(alias, loc, FinalList);
-
-         if (Inst.hasValue()) {
-            alias = Inst.getValue();
-            Cand.Alias = alias;
-         }
-         else {
-            Cand.setIsInvalid();
-            continue;
+         if (checkAlias(alias, Cand)) {
+            if (match && BestMatchDistance == Distance) {
+               CandSet.Status = CandidateSet::Ambiguous;
+            }
+            else if (Distance < BestMatchDistance) {
+               CandSet.Status = CandidateSet::Success;
+               match = alias;
+               BestMatchDistance = Distance;
+            }
          }
       }
 
-      if (checkAlias(alias, Cand)) {
-         if (match) {
-            CandSet.Status = CandidateSet::Ambiguous;
-         }
-         else {
-            CandSet.Status = CandidateSet::Success;
-            match = alias;
-         }
-      }
+      ++Distance;
    }
 
    if (!match) {
@@ -1062,6 +1085,9 @@ SemaPass::checkAlias(LookupResult &lookupResult,
 
 bool SemaPass::checkAlias(AliasDecl *Alias, CandidateSet::Candidate &Cand)
 {
+   DeclScopeRAII declScopeRAII(*this, cast<DeclContext>(Alias));
+   ScopeResetRAII scopeResetRAII(*this);
+
    for (auto &C : Alias->getConstraints()) {
       auto res = evaluateAsBool(Alias, C);
       if (res.hadError()) {
@@ -1084,14 +1110,14 @@ IdentifierRefExpr *SemaPass::wouldBeValidIdentifier(SourceLocation Loc,
                                                     bool LHSOfAssignment) {
    DiagnosticScopeRAII diagnosticScopeRAII(*this);
 
-   alignas(8) IdentifierRefExpr expr(Loc, maybeIdent);
-   expr.setIsLHSOfAssignment(LHSOfAssignment);
+   auto *expr = new(Context) IdentifierRefExpr(Loc, maybeIdent);
+   expr->setIsLHSOfAssignment(LHSOfAssignment);
 
-   (void)visitExpr(&expr);
-   if (!expr.foundResult())
+   (void)visitExpr(expr);
+   if (!expr->foundResult())
       return nullptr;
 
-   return new (getContext()) IdentifierRefExpr(move(expr));
+   return expr;
 }
 
 ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
@@ -1113,6 +1139,12 @@ ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
    if (auto Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
       if (Ident->getKind() == IdentifierKind::Namespace) {
          Ctx = Ident->getNamespaceDecl();
+      }
+      else if (Ident->getKind() == IdentifierKind::Import) {
+         Ctx = Ident->getImport();
+      }
+      else if (Ident->getKind() == IdentifierKind::Module) {
+         Ctx = Ident->getModule();
       }
    }
 
@@ -1136,8 +1168,12 @@ ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
    return Expr;
 }
 
-ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr)
-{
+ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr,
+                                        TemplateArgListExpr *ArgExpr) {
+   MutableArrayRef<Expression*> TemplateArgs;
+   if (ArgExpr)
+      TemplateArgs = ArgExpr->getExprs();
+
    if (getStaticForValue(Expr->getIdentInfo())) {
       Expr->setIsValueDependent(true);
       Expr->setIsTypeDependent(true);
@@ -1169,14 +1205,21 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr)
          return Expr;
       }
 
-      if (ty->isPointerType()) {
-         if (!Expr->isPointerAccess())
-            diagnose(Expr, err_access_member_on_pointer, Expr->getSourceLoc());
+      if (ty->isPointerType() && Expr->isPointerAccess()) {
+         if (!Expr->isTypeDependent()) {
+            MakeDeref(*this, ty, Expr);
 
-         ty = ty->getPointeeType();
+            ParentExpr = Expr->getParentExpr();
+            ty = ParentExpr->getExprType()->stripReference();
+         }
+         else {
+            ty = ty->getPointeeType();
+         }
       }
       else if (Expr->isPointerAccess()) {
-         diagnose(Expr, err_member_access_non_pointer, ty, Expr->getSourceLoc());
+         diagnose(Expr, err_member_access_non_pointer, ty,
+                  Expr->getSourceLoc());
+         Expr->setIsPointerAccess(false);
       }
 
       if (cdot::MetaType *Meta = ty->asMetaType()) {
@@ -1201,22 +1244,24 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr)
    assert(Ctx && "should have returned earlier!");
 
    auto *Ident = new(Context)
-      IdentifierRefExpr(Expr->getSourceLoc(), Expr->getIdentInfo(),
-                        move(Expr->getTemplateArgRef()), Ctx);
+      IdentifierRefExpr(Expr->getSourceLoc(), Expr->getIdentInfo(), Ctx);
 
    Ident->copyStatusFlags(Expr);
    Ident->setIsInvalid(false);
 
    Ident->setParentExpr(Expr->getParentExpr());
    Ident->setStaticLookup(isStatic);
-   Ident->setPointerAccess(Expr->isPointerAccess());
+   Ident->setIsPointerAccess(Expr->isPointerAccess());
    Ident->setIsLHSOfAssignment(Expr->isLHSOfAssignment());
 
    // do not move this to the top, otherwise the Ident expr will be marked
    // semantically evaluated
    Expr->setSemanticallyChecked(true);
 
-   return visitExpr(Expr, Ident);
+   auto Result = visitIdentifierRefExpr(Ident, ArgExpr);
+   Expr->copyStatusFlags(Ident);
+
+   return Result;
 }
 
 ExprResult SemaPass::HandleStaticTypeMember(MemberRefExpr *Expr, QualType Ty)
@@ -1224,13 +1269,20 @@ ExprResult SemaPass::HandleStaticTypeMember(MemberRefExpr *Expr, QualType Ty)
    if (Expr->getIdentInfo()->isStr("typeof")) {
       auto TI = getTypeInfoDecl();
       if (!TI) {
-         diagnose(Expr, err_no_builtin_decl, Expr->getSourceRange(), 10);
+         diagnose(Expr, err_no_builtin_decl, Expr->getSourceRange(), 9);
          return ExprError();
       }
 
       Expr->setExprType(Context.getReferenceType(Context.getRecordType(TI)));
       Expr->setMetaType(Ty);
       Expr->setKind(MemberKind::TypeOf);
+
+      return Expr;
+   }
+
+   if (Ty->isDependentType()) {
+      Expr->setIsTypeDependent(true);
+      Expr->setExprType(UnknownAnyTy);
 
       return Expr;
    }
@@ -1275,9 +1327,9 @@ ExprResult SemaPass::HandleEnumCase(IdentifierRefExpr *node, EnumDecl *E)
    if (E->hasCase(node->getIdentInfo())) {
       node->setSemanticallyChecked(true);
 
+      auto *Case = LookupSingle<EnumCaseDecl>(*E, node->getDeclName());
       auto enumCaseExpr = new(getContext()) EnumCaseExpr(node->getSourceLoc(),
-                                                         E,
-                                                         node->getIdentInfo());
+                                                         Case);
 
       enumCaseExpr->setContextualType(node->getContextualType());
       return visitEnumCaseExpr(enumCaseExpr);
@@ -1290,6 +1342,7 @@ ExprResult SemaPass::HandleEnumCase(IdentifierRefExpr *node, EnumDecl *E)
 }
 
 ExprResult SemaPass::HandleFieldAccess(IdentifierRefExpr *Ident,
+                                       MutableArrayRef<Expression*> TemplateArgs,
                                        FieldDecl *F) {
    ensureDeclared(F);
 
@@ -1307,7 +1360,7 @@ ExprResult SemaPass::HandleFieldAccess(IdentifierRefExpr *Ident,
    }
 
    if (F->isVariadic()) {
-      if (Ident->getTemplateArgs().empty()) {
+      if (TemplateArgs.empty()) {
          Ident->setContainsUnexpandedParameterPack(true);
          Ident->setIsTypeDependent(true);
          Ident->setExprType(F->getType());
@@ -1315,14 +1368,14 @@ ExprResult SemaPass::HandleFieldAccess(IdentifierRefExpr *Ident,
          return Ident;
       }
 
-      if (Ident->getTemplateArgs().size() != 1) {
+      if (TemplateArgs.size() != 1) {
          diagnose(Ident, err_variadic_field_single_index,
                   Ident->getSourceRange());
 
-         Ident->getTemplateArgRef().resize(1);
+         TemplateArgs = TemplateArgs.take_front(1);
       }
 
-      auto ArgRes = visitExpr(Ident, Ident->getTemplateArgs().front());
+      auto ArgRes = visitExpr(Ident, TemplateArgs.front());
       if (!ArgRes)
          return ExprError();
 
@@ -1343,7 +1396,7 @@ ExprResult SemaPass::HandleFieldAccess(IdentifierRefExpr *Ident,
          return ExprError();
       }
 
-      Ident->getTemplateArgRef().front() = ArgRes.get();
+      TemplateArgs.front() = ArgRes.get();
    }
 
    QualType ty(F->getType());
@@ -1365,8 +1418,14 @@ ExprResult SemaPass::HandleFieldAccess(IdentifierRefExpr *Ident,
    bool BeingInitialized = false;
 
    if (!F->isStatic()) {
-      ParentIsConst = !Ident->getParentExpr()->getExprType()
-         ->isMutableReferenceType();
+      if (Ident->getParentExpr()->getExprType()->isPointerType()) {
+         ParentIsConst = Ident->getParentExpr()->getExprType()
+                              ->isNonMutablePointerType();
+      }
+      else {
+         ParentIsConst = !Ident->getParentExpr()->getExprType()
+                               ->isMutableReferenceType();
+      }
 
       // field access in non mutating methods of a class returns a mutable
       // reference
@@ -1404,29 +1463,26 @@ ExprResult SemaPass::HandlePropAccess(IdentifierRefExpr *Ident,
    assert(P && "shouldn't be called otherwise");
    ensureDeclared(P);
 
-   // if there are still template arguments at this point, it means that the
-   // user probably meant a subscript, this will be resolved after this
-   // method. It also means, however, that this is not an accessor assignment
-   bool NotActuallySetter = !Ident->getTemplateArgs().empty();
-
    QualType ty;
    QualType SelfType;
    bool MutableSelf = false;
 
-   if (Ident->isLHSOfAssignment() && !NotActuallySetter) {
+   if (Ident->isLHSOfAssignment()) {
       if (!P->hasSetter()) {
          diagnose(Ident, err_prop_does_not_have, Ident->getSourceLoc(),
                   P->getName(), /*setter*/ 1);
-      }
-      else {
-         checkAccessibility(P->getSetterMethod(), Ident);
 
-         MutableSelf = P->getSetterMethod()->hasMutableSelf();
-         SelfType = P->getSetterMethod()->getSelfType();
-
-         if (!P->isSynthesized())
-            maybeInstantiateMemberFunction(P->getSetterMethod(), Ident);
+         Ident->setExprType(Context.getVoidType());
+         return Ident;
       }
+
+      checkAccessibility(P->getSetterMethod(), Ident);
+
+      MutableSelf = P->getSetterMethod()->hasMutableSelf();
+      SelfType = P->getSetterMethod()->getSelfType();
+
+      if (!P->isSynthesized())
+         maybeInstantiateMemberFunction(P->getSetterMethod(), Ident);
 
       // this path should only be taken when resolving an expression sequence
       // so this type is only used to get the correct `=` overloads; the
@@ -1437,16 +1493,18 @@ ExprResult SemaPass::HandlePropAccess(IdentifierRefExpr *Ident,
       if (!P->hasGetter()) {
          diagnose(Ident, err_prop_does_not_have, Ident->getSourceLoc(),
                   P->getName(), /*getter*/ 0);
-      }
-      else {
-         checkAccessibility(P->getGetterMethod(), Ident);
 
-         MutableSelf = P->getGetterMethod()->hasMutableSelf();
-         SelfType = P->getGetterMethod()->getSelfType();
-
-         if (!P->isSynthesized())
-            maybeInstantiateMemberFunction(P->getGetterMethod(), Ident);
+         Ident->setExprType(P->getType());
+         return Ident;
       }
+
+      checkAccessibility(P->getGetterMethod(), Ident);
+
+      MutableSelf = P->getGetterMethod()->hasMutableSelf();
+      SelfType = P->getGetterMethod()->getSelfType();
+
+      if (!P->isSynthesized())
+         maybeInstantiateMemberFunction(P->getGetterMethod(), Ident);
 
       ty = P->getType();
    }
@@ -1488,21 +1546,21 @@ ExprResult SemaPass::HandlePropAccess(IdentifierRefExpr *Ident,
 ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
 {
    auto ParentExpr = Expr->getParentExpr();
-   auto ParentResult = getRValue(Expr, ParentExpr);
+   auto ParentResult = visitExpr(Expr, ParentExpr);
    if (!ParentResult)
       return ExprError();
 
    ParentExpr = ParentResult.get();
    Expr->setParentExpr(ParentExpr);
 
-   if (ParentExpr->getExprType()->isUnknownAnyType()) {
+   if (ParentExpr->getExprType()->stripReference()->isUnknownAnyType()) {
       Expr->setIsTypeDependent(true);
       Expr->setExprType(UnknownAnyTy);
 
       return Expr;
    }
 
-   TupleType *tup = ParentExpr->getExprType()->asTupleType();
+   TupleType *tup = ParentExpr->getExprType()->stripReference()->asTupleType();
    if (!tup) {
       diagnose(Expr, err_not_tuple, Expr->getSourceLoc(),
                ParentExpr->getExprType());
@@ -1517,15 +1575,34 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
       return ExprError();
    }
 
-   QualType contained(tup->getContainedType(Expr->getIndex()));
-   Expr->setExprType(Context.getReferenceType(contained));
+   // if the expression that we're accessing the property on is constant,
+   // return an immutable reference
+   bool ParentIsConst = !Expr->getParentExpr()->getExprType()
+                             ->isMutableReferenceType();
 
+   // field access in non mutating methods of a class returns a mutable
+   // reference
+   if (auto Self = dyn_cast<SelfExpr>(Expr->getParentExpr())) {
+      ParentIsConst &= !Self->getExprType()->stripReference()->getRecord()
+                            ->isClass();
+   }
+
+   QualType contained(tup->getContainedType(Expr->getIndex()));
+   if (ParentIsConst) {
+      Expr->setExprType(Context.getReferenceType(contained));
+   }
+   else {
+      Expr->setExprType(Context.getMutableReferenceType(contained));
+   }
+
+   Expr->setParentExpr(castToRValue(Expr->getParentExpr()));
    return Expr;
 }
 
 ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 {
-   if (!Expr->getEnum()) {
+   EnumDecl *E = Expr->getEnum();
+   if (!E) {
       auto ty = Expr->getContextualType();
       if (!ty) {
          diagnose(Expr, err_requires_contextual_type, Expr->getSourceLoc(),
@@ -1547,10 +1624,9 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
          return ExprError();
       }
 
-      Expr->setEnum(cast<EnumDecl>(rec));
+      E = cast<EnumDecl>(rec);
    }
 
-   auto E = Expr->getEnum();
    if (!E->hasCase(Expr->getIdentInfo())) {
       diagnose(Expr, err_enum_case_not_found, Expr->getSourceLoc(),
                E->getName(), Expr->getIdent(), false);
@@ -1563,15 +1639,9 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
       if (!arg->isContextDependent()) {
          auto result = visitExpr(Expr, arg);
          if (!result)
-            return ExprError();
+            continue;
 
          arg = result.get();
-         if (arg->isUnknownAny()) {
-            Expr->setIsTypeDependent(true);
-            Expr->setExprType(UnknownAnyTy);
-
-            return Expr;
-         }
       }
    }
 
@@ -1604,7 +1674,6 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 
    E = cast<EnumDecl>(Case->getRecord());
 
-   Expr->setEnum(E);
    Expr->setCase(Case);
    Expr->setExprType(QualType(Context.getRecordType(E)));
 
@@ -1622,6 +1691,21 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
    Expr->setParentExpr(ParentExpr);
 
    QualType SubscriptedTy = ParentExpr->getExprType()->stripReference();
+   if (SubscriptedTy->isRecordType()) {
+      auto DeclName = Context.getDeclNameTable().getSubscriptName(
+         DeclarationName::SubscriptKind::General);
+
+      ASTVector<Expression*> Args(Context, Expr->getIndices());
+      auto call = new(getContext()) CallExpr(SourceLocation(),
+                                             Expr->getSourceRange(),
+                                             ParentExpr, move(Args),
+                                             DeclName);
+
+      call->setIsLHSOfAssignment(Expr->isLHSOfAssignment());
+
+      return visitExpr(Expr, call);
+   }
+
    for (auto &Idx : Expr->getIndices()) {
       if (!SubscriptedTy->isRecordType())
          Idx->setContextualType(Context.getIntTy());
@@ -1631,18 +1715,6 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
          return ExprError();
 
       Idx = indexResult.get();
-   }
-
-   if (SubscriptedTy->isRecordType()) {
-      auto *II = &Context.getIdentifiers().get("[]");
-      auto DeclName = Context.getDeclNameTable().getPostfixOperatorName(*II);
-      auto call = new(getContext()) CallExpr(SourceLocation(),
-                                             Expr->getSourceRange(),
-                                             ParentExpr,
-                                             Expr->getIndices().vec(),
-                                             DeclName);
-
-      return visitExpr(Expr, call);
    }
 
    if (SubscriptedTy->isDependentType()) {
@@ -1717,6 +1789,58 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
    return Expr;
 }
 
+ExprResult SemaPass::visitTemplateArgListExpr(TemplateArgListExpr *Expr)
+{
+   bool Dependent = false;
+   for (auto &TA : Expr->getExprs()) {
+      auto res = visitExpr(Expr, TA);
+      if (!res)
+         return ExprError();
+
+      TA = res.get();
+      Dependent |= TA->isUnknownAny();
+   }
+
+   Expression *ParentExpr = Expr->getParentExpr();
+   if (ParentExpr->isSemanticallyChecked()) {
+      Expr->setExprType(ParentExpr->getExprType());
+      return Expr;
+   }
+
+   ExprResult Res;
+   switch (ParentExpr->getTypeID()) {
+   case Expression::IdentifierRefExprID:
+      Res = visitIdentifierRefExpr(cast<IdentifierRefExpr>(ParentExpr), Expr);
+      break;
+   case Expression::MemberRefExprID:
+      Res = visitMemberRefExpr(cast<MemberRefExpr>(ParentExpr), Expr);
+      break;
+   case Expression::CallExprID:
+      Res = visitCallExpr(cast<CallExpr>(ParentExpr), Expr);
+      break;
+   default:
+      diagnose(Expr, err_generic_error, "template arguments not allowed here");
+      break;
+   }
+
+   if (!Res) {
+      Expr->copyStatusFlags(ParentExpr);
+      ParentExpr->setSemanticallyChecked(true);
+
+      return ExprError();
+   }
+
+   ParentExpr = Res.get();
+
+   Expr->copyStatusFlags(ParentExpr);
+   Expr->setParentExpr(ParentExpr);
+   Expr->setExprType(ParentExpr->getExprType());
+
+   ParentExpr->setSemanticallyChecked(true);
+
+   return Expr;
+}
+
 void SemaPass::diagnoseMemberNotFound(ast::DeclContext *Ctx,
                                       StmtOrDecl Subject,
                                       DeclarationName memberName,
@@ -1737,7 +1861,7 @@ void SemaPass::diagnoseMemberNotFound(ast::DeclContext *Ctx,
 
             return;
          }
-         case Decl::TranslationUnitID:
+         case Decl::ModuleDeclID:
             diagnose(Subject, msg, Subject.getSourceLoc(), memberName);
             break;
          default:
@@ -1792,11 +1916,9 @@ void SemaPass::diagnoseTemplateArgErrors(NamedDecl *Template,
       unsigned select1    = diagSelect & 0x3u;
       unsigned select2    = (diagSelect >> 2u) & 0x3u;
 
-      auto idx = Cand.Data2;
-      auto Param = Template->getTemplateParams()[idx];
-
+      auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
       diagnose(ErrorStmt, note_template_arg_kind_mismatch, select1,
-               select2, idx + 1,
+               select2, 0,
                list.getArgForParam(Param)->getLoc());
 
       diagnose(ErrorStmt, note_template_parameter_here,
@@ -1806,13 +1928,10 @@ void SemaPass::diagnoseTemplateArgErrors(NamedDecl *Template,
    }
    case sema::TemplateArgListResultKind::TLR_IncompatibleArgVal: {
       auto givenTy = reinterpret_cast<Type*>(Cand.Data1);
-      auto idx = Cand.Data2;
-
-      auto Param = Template->getTemplateParams()[idx];
-      auto neededTy = Param->getValueType();
+      auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
 
       diagnose(ErrorStmt, note_template_arg_type_mismatch, givenTy,
-               idx + 1, neededTy);
+               0, Param->getCovariance());
 
       diagnose(ErrorStmt, note_template_parameter_here,
                Param->getSourceLoc());
@@ -1837,7 +1956,7 @@ bool SemaPass::isAccessible(NamedDecl *ND)
       // only visible within the immediate context the symbol was defined in
       auto *Ctx = ND->getDeclContext();
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr == Ctx)
+         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return true;
       }
 
@@ -1849,7 +1968,7 @@ bool SemaPass::isAccessible(NamedDecl *ND)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
       auto *Ctx = ND->getDeclContext();
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr == Ctx)
+         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return true;
 
          auto SubClass = dyn_cast<ClassDecl>(Curr);
@@ -1859,10 +1978,18 @@ bool SemaPass::isAccessible(NamedDecl *ND)
 
       return false;
    }
-   case AccessSpecifier::FilePrivate:
-   case AccessSpecifier::Internal: // FIXME actually implement internal
-   {
-      return ND->getTranslationUnit() == getDeclContext().getTranslationUnit();
+   case AccessSpecifier::FilePrivate: {
+      // visible within the file it was declared
+      auto &FileMgr = compilationUnit->getFileMgr();
+      auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
+      auto CurrID = FileMgr.getSourceId(cast<Decl>(getDeclContext())
+                                                   .getSourceLoc());
+
+      return DeclID == CurrID || FileMgr.wasIncludedFrom(CurrID, DeclID);
+   }
+   case AccessSpecifier::Internal: {
+      return getDeclContext().getDeclModule()->getBaseModule()
+         == ND->getModule()->getBaseModule();
    }
    }
 }
@@ -1880,7 +2007,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, Expression *Expr)
       // only visible within the immediate context the symbol was defined in
       auto *Ctx = ND->getDeclContext();
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr == Ctx)
+         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return;
       }
 
@@ -1896,7 +2023,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, Expression *Expr)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
       auto *Ctx = ND->getDeclContext();
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr == Ctx)
+         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return;
 
          auto SubClass = dyn_cast<ClassDecl>(Curr);
@@ -1910,9 +2037,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, Expression *Expr)
 
       break;
    }
-   case AccessSpecifier::FilePrivate:
-   case AccessSpecifier::Internal: // FIXME actually implement internal
-   {
+   case AccessSpecifier::FilePrivate: {
       // visible within the file it was declared
       auto &FileMgr = compilationUnit->getFileMgr();
       auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
@@ -1924,6 +2049,19 @@ void SemaPass::checkAccessibility(NamedDecl *ND, Expression *Expr)
       // declaration is not accessible here
       diagnose(Expr, err_fileprivate_access, ND->getSpecifierForDiagnostic(),
                ND->getDeclName(), FileMgr.getFileName(DeclID),
+               Expr->getSourceRange());
+
+      break;
+   }
+   case AccessSpecifier::Internal: {
+      if (getDeclContext().getDeclModule()->getBaseModule()
+             == ND->getModule()->getBaseModule()) {
+         return;
+      }
+
+      diagnose(Expr, err_internal_access, ND->getSpecifierForDiagnostic(),
+               ND->getDeclName(),
+               ND->getModule()->getBaseModule()->getDeclName(),
                Expr->getSourceRange());
 
       break;

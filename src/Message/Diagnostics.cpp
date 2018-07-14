@@ -41,7 +41,6 @@ static llvm::StringRef getMessage(MessageKind msg)
    switch (msg) {
 #  define CDOT_MSG(Name, Msg)                   \
       case Name: return #Msg;
-
 #  include "Message/def/Diagnostics.def"
    }
 
@@ -69,13 +68,25 @@ DiagnosticBuilder::DiagnosticBuilder(DiagnosticsEngine &Engine,
                                        "other diagnostic!");
 }
 
+DiagnosticBuilder::~DiagnosticBuilder()
+{
+   if (Disabled) {
+      Engine.NumArgs = 0;
+      Engine.NumSourceRanges = 0;
+
+      return;
+   }
+
+   finalize();
+}
+
 string DiagnosticBuilder::prepareMessage(llvm::StringRef str)
 {
    auto buf = llvm::MemoryBuffer::getMemBuffer(str);
 
    IdentifierTable IT(16);
-   Lexer lex(IT, Engine, buf.get(), 0);
 
+   Lexer lex(IT, Engine, buf.get(), 0, 1, '$', false);
    lex.lexDiagnostic();
 
    unsigned short substituted = 0;
@@ -250,18 +261,6 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
    }
 }
 
-DiagnosticBuilder::~DiagnosticBuilder()
-{
-   if (Disabled) {
-      Engine.NumArgs = 0;
-      Engine.NumSourceRanges = 0;
-
-      return;
-   }
-
-   finalize();
-}
-
 static SeverityLevel getSeverity(MessageKind msg)
 {
    switch (msg) {
@@ -319,11 +318,22 @@ void DiagnosticBuilder::finalize()
 
       return;
    }
+   DeclarationName MacroName;
+   SourceLocation ExpandedFromLoc;
 
-   // source id of all given source ranges should be the same
    SourceLocation loc = Engine.SourceRanges[0].getStart();
-   if (auto AliasLoc = Engine.FileMgr->getAliasLoc(loc)) {
+   while (auto AliasLoc = Engine.FileMgr->getAliasLoc(loc)) {
       loc = AliasLoc;
+   }
+   while (auto Import = Engine.FileMgr->getImportForLoc(loc)) {
+      loc = Import->getSourceLoc();
+   }
+   while (auto Exp = Engine.FileMgr->getMacroExpansionLoc(loc)) {
+      ExpandedFromLoc = Exp->ExpandedFrom;
+      MacroName = Exp->MacroName;
+
+      auto diff = loc.getOffset() - Exp->BaseOffset;
+      loc = SourceLocation(Exp->PatternLoc.getOffset() + diff);
    }
 
    size_t ID = Engine.FileMgr->getSourceId(loc);
@@ -379,12 +389,33 @@ void DiagnosticBuilder::finalize()
       if (!SR.getStart())
          continue;
 
-      if (Engine.FileMgr->getSourceId(SR.getStart()) != ID)
-         continue;
+      auto Start = SR.getStart();
+      auto End   = SR.getEnd();
+
+      auto Diff = End.getOffset() - Start.getOffset();
+      while (auto AliasLoc = Engine.FileMgr->getAliasLoc(Start)) {
+         Start = AliasLoc;
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
+      while (auto Import = Engine.FileMgr->getImportForLoc(Start)) {
+         Start = Import->getSourceLoc();
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
+      while (auto Exp = Engine.FileMgr->getMacroExpansionLoc(Start)) {
+         auto diff = Start.getOffset() - Exp->BaseOffset;
+         Start = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
 
       // single source location, show caret
-      if (!SR.getEnd()) {
-         unsigned offset = SR.getStart().getOffset() - File.BaseOffset;
+      if (!End) {
+         unsigned offset = Start.getOffset() - File.BaseOffset;
          if (lineEndIndex <= offset || newlineIndex >= offset) {
             // source location is on a different line
             continue;
@@ -394,8 +425,8 @@ void DiagnosticBuilder::finalize()
          Markers[offsetOnLine] = '^';
       }
       else {
-         auto BeginOffset = SR.getStart().getOffset() - File.BaseOffset;
-         auto EndOffset   = SR.getEnd().getOffset() - File.BaseOffset;
+         auto BeginOffset = Start.getOffset() - File.BaseOffset;
+         auto EndOffset   = End.getOffset() - File.BaseOffset;
 
          unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
          unsigned EndOffsetOnLine   = std::min(EndOffset, lineEndIndex)
@@ -430,6 +461,12 @@ void DiagnosticBuilder::finalize()
        << std::string(LinePrefixSize, ' ') << Markers << "\n";
 
    Engine.finalizeDiag(out.str(), severity);
+
+   if ((int)severity >= (int)SeverityLevel::Error && ExpandedFromLoc) {
+      DiagnosticBuilder(Engine, diag::note_in_expansion)
+         << ExpandedFromLoc
+         << MacroName;
+   }
 }
 
 DiagnosticBuilder& DiagnosticBuilder::operator<<(int i)

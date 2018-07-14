@@ -6,6 +6,7 @@
 #define CDOT_BUILTIN_TYPE_H
 
 #include "Support/Casting.h"
+#include "Support/LLVM.h"
 
 #include <string>
 
@@ -29,10 +30,10 @@ class QualType;
 namespace llvm {
 
 template <typename T>
-class PointerLikeTypeTraits;
+struct PointerLikeTypeTraits;
 
 template<>
-class PointerLikeTypeTraits< ::cdot::Type*> {
+struct PointerLikeTypeTraits< ::cdot::Type*> {
 public:
    static inline void *getAsVoidPointer(::cdot::Type *P) { return P; }
 
@@ -46,6 +47,8 @@ public:
 
 template <>
 struct isPodLike<cdot::QualType> { static const bool value = true; };
+
+class raw_ostream;
 
 } // namespace llvm
 
@@ -114,6 +117,10 @@ public:
 #  include "Types.def"
    };
 
+#ifndef NDEBUG
+   static void verifyID(TypeID ID);
+#endif
+
    enum BuiltinKind : unsigned char {
 #  define CDOT_BUILTIN_TYPE(Name)   \
       Name,
@@ -142,11 +149,22 @@ public:
 #  define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name, "")
 #  include "Types.def"
 
+   bool isNonMutableReferenceType() const
+   {
+      return isReferenceType() && !isMutableReferenceType();
+   }
+
+   bool isNonMutablePointerType() const
+   {
+      return isPointerType() && !isMutablePointerType();
+   }
+
    bool isIntegerType() const;
    bool isFPType() const;
    bool isUnknownAnyType() const;
    bool isVoidType() const;
    bool isAutoType() const;
+   bool isEmptyTupleType() const;
 
    bool isLargeInteger() const { return isIntegerType() && getBitwidth() > 64; }
    bool isLargeFP() const { return isFPType() && getPrecision() > 64; }
@@ -183,6 +201,9 @@ public:
 
    QualType getPointeeType() const;
    QualType getReferencedType() const;
+   QualType getBorrowedType() const;
+   QualType getBoxedType() const;
+
    QualType stripReference() const;
 
    unsigned short getAlignment() const;
@@ -399,15 +420,11 @@ public:
       assert(quals == 0);
    }
 
-   bool operator==(const QualType& rhs) const
-   {
-      return Value == rhs.Value;
-   }
+   bool operator==(QualType rhs) const { return Value == rhs.Value; }
+   bool operator!=(QualType rhs) const { return !operator==(rhs); }
 
-   bool operator!=(const QualType& rhs) const
-   {
-      return !operator==(rhs);
-   }
+   bool operator==(Type *rhs) const { return Value.getPointer() == rhs; }
+   bool operator!=(Type *rhs) const { return !operator==(rhs); }
 
    QualType without(unsigned Quals) const
    {
@@ -426,42 +443,19 @@ public:
       return QualType((**this)->getCanonicalType(), Value.getInt());
    }
 
-   Type* operator->() const
-   {
-      return Value.getPointer();
-   }
+   Type *operator->() const { return Value.getPointer(); }
+   Type *operator *() const { return Value.getPointer(); }
 
-   Type* operator*() const
-   {
-      return Value.getPointer();
-   }
+   Type *getBuiltinTy() const { return Value.getPointer(); }
 
-   Type *getBuiltinTy() const
-   {
-      return Value.getPointer();
-   }
-
-   Qualifiers getQuals() const
-   {
-      return Qualifiers(Value.getInt());
-   }
+   Qualifiers getQuals() const { return Qualifiers(Value.getInt()); }
 
    QualType getPointerTo(ast::ASTContext &Ctx) const;
 
-   operator Type*()
-   {
-      return Value.getPointer();
-   }
+   operator Type*() const { return Value.getPointer(); }
+   operator bool()  const { return !isNull(); }
 
-   operator bool() const
-   {
-      return !isNull();
-   }
-
-   bool isNull() const
-   {
-      return Value.getPointer() == nullptr;
-   }
+   bool isNull() const { return Value.getPointer() == nullptr; }
 
    bool isUnknownAny() const
    {
@@ -525,7 +519,7 @@ template<> struct simplify_type<::cdot::QualType> {
 };
 
 template<>
-class PointerLikeTypeTraits<::cdot::QualType> {
+struct PointerLikeTypeTraits<::cdot::QualType> {
 public:
    static inline void *getAsVoidPointer(::cdot::QualType P)
    {
@@ -681,6 +675,7 @@ public:
       switch (T->getTypeID()) {
       case ReferenceTypeID:
       case MutableReferenceTypeID:
+      case MutableBorrowTypeID:
          return true;
       default:
          return false;
@@ -699,9 +694,61 @@ class MutableReferenceType: public ReferenceType {
 public:
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == MutableReferenceTypeID;
+      return T->getTypeID() == MutableReferenceTypeID
+             || T->getTypeID() == MutableBorrowTypeID;
    }
 
+   friend class ast::ASTContext;
+
+protected:
+   MutableReferenceType(TypeID ID,
+                        QualType referencedType,
+                        Type *CanonicalType);
+};
+
+class MutableBorrowType: public MutableReferenceType {
+   MutableBorrowType(QualType borrowedType, Type *CanonicalType);
+
+public:
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == MutableBorrowTypeID;
+   }
+
+   friend class ast::ASTContext;
+};
+
+class BoxType: public Type {
+   QualType BoxedTy;
+
+   BoxType(QualType BoxedTy, Type *CanonicalTy);
+
+public:
+   enum : unsigned { MemberCount = 4u };
+   enum : unsigned {
+      StrongRefcount = 0u,
+      WeakRefcount,
+      Deinitializer,
+      ObjPtr,
+   };
+
+   QualType getBoxedType() const { return BoxedTy; }
+
+   child_iterator child_begin() const { return &BoxedTy; }
+   child_iterator child_end()   const { return &BoxedTy + 1; }
+
+   static bool classof(Type const* T) { return T->getTypeID() == BoxTypeID; }
+   friend class ast::ASTContext;
+};
+
+class TokenType: public Type {
+   TokenType() : Type(TokenTypeID, this) {}
+
+public:
+   child_iterator child_begin() const { return nullptr; }
+   child_iterator child_end()   const { return nullptr; }
+
+   static bool classof(Type const* T) { return T->getTypeID() == TokenTypeID; }
    friend class ast::ASTContext;
 };
 
@@ -828,18 +875,39 @@ public:
    friend class ast::ASTContext;
 };
 
+enum class ArgumentConvention : unsigned char {
+   Owned, Borrowed, MutablyBorrowed, Default,
+};
+
 class FunctionType: public Type, public llvm::FoldingSetNode {
 public:
+   struct ParamInfo {
+      ParamInfo();
+      ParamInfo(ArgumentConvention Conv)
+         : Conv(Conv)
+      {}
+
+      ArgumentConvention getConvention() const { return Conv; }
+
+      void Profile(llvm::FoldingSetNodeID &ID) const;
+
+   private:
+      ArgumentConvention Conv : 2;
+   };
+
    enum ExtFlags : unsigned {
       None         = 0u,
       Vararg       = 1u,
       CStyleVararg = Vararg << 1u,
       Throws       = CStyleVararg << 1u,
+      Async        = Throws << 1u,
+      Unsafe       = Async << 1u,
    };
 
 private:
    FunctionType(QualType returnType,
                 llvm::ArrayRef<QualType> argTypes,
+                llvm::ArrayRef<ParamInfo> paramInfo,
                 ExtFlags flags,
                 Type *CanonicalType,
                 bool Dependent);
@@ -848,6 +916,7 @@ protected:
    FunctionType(TypeID typeID,
                 QualType returnType,
                 llvm::ArrayRef<QualType> argTypes,
+                llvm::ArrayRef<ParamInfo> paramInfo,
                 ExtFlags flags,
                 Type *CanonicalType,
                 bool Dependent);
@@ -861,7 +930,8 @@ public:
       return returnType;
    }
 
-   using iterator = const QualType*;
+   using iterator            = const QualType*;
+   using param_info_iterator = const ParamInfo*;
 
    iterator param_begin() const { return reinterpret_cast<iterator>(this + 1); }
    iterator param_end() const
@@ -874,6 +944,22 @@ public:
       return { param_begin(), NumParams };
    }
 
+   param_info_iterator param_info_begin() const
+   {
+      return reinterpret_cast<param_info_iterator>(
+         reinterpret_cast<iterator>(this + 1) + NumParams);
+   }
+
+   param_info_iterator param_info_end() const
+   {
+      return param_info_begin() + NumParams;
+   }
+
+   llvm::ArrayRef<ParamInfo> getParamInfo() const
+   {
+      return { param_info_begin(), NumParams };
+   }
+
    unsigned getNumParams() const { return NumParams; }
 
    child_iterator child_begin() const { return &returnType; }
@@ -883,6 +969,8 @@ public:
    bool isVararg()        const { return (FuncBits.flags & Vararg) != 0; }
    bool isCStyleVararg()  const { return (FuncBits.flags & CStyleVararg) != 0; }
    bool throws()          const { return (FuncBits.flags & Throws) != 0; }
+   bool isAsync()         const { return (FuncBits.flags & Async) != 0; }
+   bool isUnsafe()        const { return (FuncBits.flags & Unsafe) != 0; }
 
    unsigned getRawFlags() const { return FuncBits.flags; }
 
@@ -902,17 +990,21 @@ public:
 
    void Profile(llvm::FoldingSetNodeID &ID)
    {
-      Profile(ID, getReturnType(), getParamTypes(), FuncBits.flags,
-              Bits.id == TypeID::LambdaTypeID);
+      Profile(ID, getReturnType(), getParamTypes(), getParamInfo(),
+              FuncBits.flags, Bits.id == TypeID::LambdaTypeID);
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID, QualType returnType,
                        llvm::ArrayRef<QualType> argTypes,
+                       llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
                        unsigned flags, bool isLambda) {
       ID.AddPointer(returnType.getAsOpaquePtr());
-      for (auto ty : argTypes)
+      for (auto ty : argTypes) {
          ID.AddPointer(ty.getAsOpaquePtr());
-
+      }
+      for (auto &Info : paramInfo) {
+         Info.Profile(ID);
+      }
       ID.AddBoolean(isLambda);
       ID.AddInteger(flags);
    }
@@ -929,11 +1021,12 @@ public:
 class LambdaType: public FunctionType {
    LambdaType(QualType returnType,
               llvm::ArrayRef<QualType> argTypes,
+              llvm::ArrayRef<ParamInfo> paramInfo,
               ExtFlags flags,
               Type *CanonicalType,
               bool Dependent)
-      : FunctionType(TypeID::LambdaTypeID, returnType, argTypes, flags,
-                     CanonicalType, Dependent)
+      : FunctionType(TypeID::LambdaTypeID, returnType, argTypes, paramInfo,
+                     flags, CanonicalType, Dependent)
    {
 
    }
@@ -1030,7 +1123,6 @@ protected:
 
    RecordType(TypeID typeID,
               ast::RecordDecl *record,
-              llvm::ArrayRef<QualType> TypeTemplateArgs,
               bool Dependent);
 
    ast::RecordDecl *Rec;
@@ -1042,10 +1134,9 @@ public:
    sema::FinalTemplateArgumentList& getTemplateArgs() const;
    bool hasTemplateArgs() const;
 
-   ast::RecordDecl *getRecord() const
-   {
-      return Rec;
-   }
+   ast::RecordDecl *getRecord() const { return Rec; }
+
+   void setDependent(bool dep) { Bits.Dependent = dep; }
 
    unsigned short getAlignment() const;
    size_t getSize() const;

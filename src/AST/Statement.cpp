@@ -32,20 +32,12 @@ void Statement::copyStatusFlags(Statement *Stmt)
    // if any sub statement is dependent or had an error, this stmt is also
    // dependent (or had an error)
    SubclassData |= (Stmt->SubclassData & StatusFlags);
-
-   // if any sub statement was not fully semantically checked, this stmt
-   // was not fully checked either
-   if ((Stmt->SubclassData & SemanticallyChecked) == 0)
-      SubclassData &= ~SemanticallyChecked;
 }
 
 void Statement::copyStatusFlags(Decl *D)
 {
    static uint32_t mask = Decl::StatusFlags;
    SubclassData |= (D->getFlags() & mask);
-
-   if ((D->getFlags() & Decl::DF_SemanticallyChecked) == 0)
-      SubclassData &= ~SemanticallyChecked;
 }
 
 SourceRange Statement::getSourceRange() const
@@ -82,7 +74,14 @@ void Statement::dump() const
 
 DeclStmt::DeclStmt(Decl *D)
    : Statement(DeclStmtID), D(D)
-{}
+{
+}
+
+DeclStmt::DeclStmt(EmptyShell Empty)
+   : Statement(DeclStmtID), D(nullptr)
+{
+
+}
 
 DeclStmt* DeclStmt::Create(ASTContext &C, Decl *D)
 {
@@ -102,6 +101,13 @@ AttributedStmt::AttributedStmt(Statement *Stmt,
    std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attr*>());
 }
 
+AttributedStmt::AttributedStmt(EmptyShell, unsigned N)
+   : Statement(AttributedStmtID),
+     Stmt(nullptr), NumAttrs(N)
+{
+
+}
+
 AttributedStmt* AttributedStmt::Create(ASTContext &Ctx,
                                        Statement *Stmt,
                                        llvm::ArrayRef<Attr *> Attrs) {
@@ -111,8 +117,26 @@ AttributedStmt* AttributedStmt::Create(ASTContext &Ctx,
    return new(Mem) AttributedStmt(Stmt, Attrs);
 }
 
+AttributedStmt* AttributedStmt::CreateEmpty(ASTContext &C,
+                                            unsigned N) {
+   void *Mem = C.Allocate(totalSizeToAlloc<Attr*>(N),
+                          alignof(AttributedStmt));
+
+   return new(Mem) AttributedStmt(EmptyShell(), N);
+}
+
+DebugStmt::DebugStmt(EmptyShell)
+   : Statement(DebugStmtID)
+{}
+
 NullStmt::NullStmt(SourceLocation Loc)
    : Statement(NullStmtID), Loc(Loc)
+{
+
+}
+
+NullStmt::NullStmt(EmptyShell)
+   : Statement(NullStmtID)
 {
 
 }
@@ -124,38 +148,57 @@ NullStmt* NullStmt::Create(ASTContext &C, SourceLocation Loc)
 
 CompoundStmt::CompoundStmt(bool preservesScope,
                            SourceLocation LBraceLoc,
-                           SourceLocation RBraceLoc)
-   : CompoundStmt({}, preservesScope, LBraceLoc, RBraceLoc)
+                           SourceLocation RBraceLoc,
+                           bool Unsafe)
+   : CompoundStmt({}, preservesScope, LBraceLoc, RBraceLoc, Unsafe)
 {
 }
 
 CompoundStmt::CompoundStmt(llvm::ArrayRef<Statement* > stmts,
                            bool preserveScope,
                            SourceLocation LBraceLoc,
-                           SourceLocation RBraceLoc)
+                           SourceLocation RBraceLoc,
+                           bool Unsafe)
    : Statement(CompoundStmtID),
      numStmts(unsigned(stmts.size())), preserveScope(preserveScope),
+     Unsafe(Unsafe), ContainsDeclStmt(false),
      LBraceLoc(LBraceLoc), RBraceLoc(RBraceLoc)
 {
    std::copy(stmts.begin(), stmts.end(), begin());
 }
 
+CompoundStmt::CompoundStmt(EmptyShell, unsigned N)
+   : Statement(CompoundStmtID),
+   numStmts(N), preserveScope(false), Unsafe(false), ContainsDeclStmt(false)
+{}
+
 CompoundStmt* CompoundStmt::Create(ASTContext &ASTCtx,
                                    bool preserveScope,
                                    SourceLocation LBraceLoc,
-                                   SourceLocation RBraceLoc) {
-   return Create(ASTCtx, {}, preserveScope, LBraceLoc, RBraceLoc);
+                                   SourceLocation RBraceLoc,
+                                   bool Unsafe) {
+   return Create(ASTCtx, {}, preserveScope, LBraceLoc, RBraceLoc, Unsafe);
 }
 
 CompoundStmt* CompoundStmt::Create(ASTContext &ASTCtx,
                                    llvm::ArrayRef<Statement *> stmts,
                                    bool preserveScope,
                                    SourceLocation LBraceLoc,
-                                   SourceLocation RBraceLoc) {
+                                   SourceLocation RBraceLoc,
+                                   bool Unsafe) {
    void *Mem = ASTCtx.Allocate(totalSizeToAlloc<Statement*>(stmts.size()),
                                alignof(CompoundStmt));
 
-   return new(Mem) CompoundStmt(stmts, preserveScope, LBraceLoc, RBraceLoc);
+   return new(Mem) CompoundStmt(stmts, preserveScope, LBraceLoc, RBraceLoc,
+                                Unsafe);
+}
+
+CompoundStmt* CompoundStmt::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(totalSizeToAlloc<Statement*>(N),
+                          alignof(CompoundStmt));
+
+   return new(Mem) CompoundStmt(EmptyShell(), N);
 }
 
 BreakStmt::BreakStmt(SourceLocation Loc)
@@ -163,6 +206,10 @@ BreakStmt::BreakStmt(SourceLocation Loc)
 {
    
 }
+
+BreakStmt::BreakStmt(EmptyShell)
+   : Statement(BreakStmtID)
+{}
 
 BreakStmt* BreakStmt::Create(ASTContext &C, SourceLocation Loc)
 {
@@ -175,6 +222,10 @@ ContinueStmt::ContinueStmt(SourceLocation Loc)
 
 }
 
+ContinueStmt::ContinueStmt(EmptyShell)
+   : Statement(ContinueStmtID)
+{}
+
 ContinueStmt* ContinueStmt::Create(ASTContext &C, SourceLocation Loc)
 {
    return new(C) ContinueStmt(Loc);
@@ -185,6 +236,10 @@ GotoStmt::GotoStmt(SourceLocation Loc, IdentifierInfo *label)
 {
    
 }
+
+GotoStmt::GotoStmt(EmptyShell)
+   : Statement(GotoStmtID), label(nullptr)
+{}
 
 GotoStmt* GotoStmt::Create(ASTContext &C,
                            SourceLocation Loc,
@@ -197,6 +252,10 @@ LabelStmt::LabelStmt(SourceLocation Loc, IdentifierInfo *label)
 {
 
 }
+
+LabelStmt::LabelStmt(EmptyShell)
+   : Statement(LabelStmtID), label(nullptr)
+{}
 
 LabelStmt* LabelStmt::Create(ASTContext &C,
                              SourceLocation Loc,
@@ -215,10 +274,65 @@ IfStmt::IfStmt(SourceLocation IfLoc,
 
 }
 
+IfStmt::IfStmt(EmptyShell)
+   : Statement(IfStmtID),
+   condition(nullptr), ifBranch(nullptr), elseBranch(nullptr)
+{}
+
 IfStmt* IfStmt::Create(ASTContext &C, SourceLocation IfLoc,
                        Expression *cond, Statement *body,
                        Statement *elseBody) {
    return new(C) IfStmt(IfLoc, cond, body, elseBody);
+}
+
+IfLetStmt::IfLetStmt(SourceLocation IfLoc,
+                     LocalVarDecl *VarDecl,
+                     Statement *IfBranch,
+                     Statement *ElseBranch)
+   : Statement(IfLetStmtID),
+     IfLoc(IfLoc), VarDecl(VarDecl), IfBranch(IfBranch), ElseBranch(ElseBranch)
+{
+
+}
+
+IfLetStmt::IfLetStmt(EmptyShell)
+   : Statement(IfLetStmtID),
+     VarDecl(nullptr), IfBranch(nullptr), ElseBranch(nullptr)
+{}
+
+IfLetStmt* IfLetStmt::Create(ASTContext &C,
+                             SourceLocation IfLoc,
+                             LocalVarDecl *VarDecl,
+                             Statement *IfBranch,
+                             Statement *ElseBranch) {
+   return new(C) IfLetStmt(IfLoc, VarDecl, IfBranch, ElseBranch);
+}
+
+IfCaseStmt::IfCaseStmt(SourceLocation IfLoc,
+                       PatternExpr *Pattern,
+                       Expression *Val,
+                       Statement *IfBranch,
+                       Statement *ElseBranch)
+   : Statement(IfCaseStmtID),
+     IfLoc(IfLoc), Pattern(Pattern), Val(Val),
+     IfBranch(IfBranch), ElseBranch(ElseBranch)
+{
+
+}
+
+IfCaseStmt::IfCaseStmt(EmptyShell)
+   : Statement(IfCaseStmtID),
+     Pattern(nullptr), Val(nullptr),
+     IfBranch(nullptr), ElseBranch(nullptr)
+{}
+
+IfCaseStmt* IfCaseStmt::Create(ASTContext &C,
+                               SourceLocation IfLoc,
+                               PatternExpr *Pattern,
+                               Expression *Val,
+                               Statement *IfBranch,
+                               Statement *ElseBranch) {
+   return new(C) IfCaseStmt(IfLoc, Pattern, Val, IfBranch, ElseBranch);
 }
 
 ForStmt::ForStmt(SourceLocation ForLoc,
@@ -230,6 +344,12 @@ ForStmt::ForStmt(SourceLocation ForLoc,
 {
 
 }
+
+ForStmt::ForStmt(EmptyShell)
+   : Statement(ForStmtID),
+     initialization(nullptr), termination(nullptr),
+     increment(nullptr), body(nullptr)
+{}
 
 ForStmt* ForStmt::Create(ASTContext &C, SourceLocation ForLoc,
                          Statement *init, Expression *term, Statement *inc,
@@ -247,6 +367,11 @@ ForInStmt::ForInStmt(SourceLocation ForLoc,
 
 }
 
+ForInStmt::ForInStmt(EmptyShell)
+   : Statement(ForInStmtID),
+     decl(nullptr), rangeExpr(nullptr), body(nullptr)
+{}
+
 ForInStmt* ForInStmt::Create(ASTContext &C,
                              SourceLocation ForLoc,
                              LocalVarDecl *decl,
@@ -263,6 +388,11 @@ WhileStmt::WhileStmt(SourceLocation WhileLoc, Expression *cond,
 
 }
 
+WhileStmt::WhileStmt(EmptyShell)
+   : Statement(WhileStmtID),
+     condition(nullptr), body(nullptr), atLeastOnce(false)
+{}
+
 WhileStmt* WhileStmt::Create(ASTContext &C,
                              SourceLocation WhileLoc,
                              Expression *cond,
@@ -278,11 +408,24 @@ CaseStmt::CaseStmt(SourceLocation CaseLoc,
 
 }
 
+CaseStmt::CaseStmt(EmptyShell)
+   : Statement(CaseStmtID),
+   pattern(nullptr), body(nullptr)
+{}
+
 CaseStmt* CaseStmt::Create(ASTContext &C,
                            SourceLocation CaseLoc,
                            PatternExpr *pattern,
                            Statement *body) {
    return new(C) CaseStmt(CaseLoc, pattern, body);
+}
+
+SourceRange CaseStmt::getSourceRange() const
+{
+   if (!body)
+      return SourceRange(CaseLoc, pattern->getSourceRange().getEnd());
+
+   return SourceRange(CaseLoc, body->getSourceRange().getEnd());
 }
 
 MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
@@ -295,6 +438,11 @@ MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
    std::copy(cases.begin(), cases.end(), getTrailingObjects<CaseStmt*>());
 }
 
+MatchStmt::MatchStmt(EmptyShell, unsigned N)
+   : Statement(MatchStmtID),
+     switchValue(nullptr), NumCases(N)
+{}
+
 MatchStmt* MatchStmt::Create(ASTContext &C,
                              SourceLocation MatchLoc,
                              SourceRange Braces,
@@ -306,12 +454,25 @@ MatchStmt* MatchStmt::Create(ASTContext &C,
    return new(Mem) MatchStmt(MatchLoc, Braces, switchVal, cases);
 }
 
+MatchStmt* MatchStmt::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(totalSizeToAlloc<CaseStmt*>(N),
+                          alignof(MatchStmt));
+
+   return new(Mem) MatchStmt(EmptyShell(), N);
+}
+
 ReturnStmt::ReturnStmt(SourceLocation RetLoc, Expression *val)
    : Statement(ReturnStmtID),
      RetLoc(RetLoc), returnValue(val)
 {
 
 }
+
+ReturnStmt::ReturnStmt(EmptyShell)
+   : Statement(ReturnStmtID),
+   returnValue(nullptr)
+{}
 
 ReturnStmt* ReturnStmt::Create(ASTContext &C,
                                SourceLocation RetLoc,
@@ -326,23 +487,70 @@ SourceRange ReturnStmt::getSourceRange() const
           : SourceRange(RetLoc);
 }
 
-TryStmt::TryStmt(SourceRange SR, Statement* body)
-   : Statement(TryStmtID),
-     SR(SR), body(body)
+DiscardAssignStmt::DiscardAssignStmt(SourceLocation UnderscoreLoc,
+                                     SourceLocation EqualsLoc,
+                                     Expression *RHS)
+   : Statement(DiscardAssignStmtID),
+     UnderscoreLoc(UnderscoreLoc), EqualsLoc(EqualsLoc), RHS(RHS)
+{
+
+}
+
+DiscardAssignStmt::DiscardAssignStmt(EmptyShell)
+   : Statement(DiscardAssignStmtID),
+     UnderscoreLoc(), EqualsLoc(), RHS(nullptr)
+{
+
+}
+
+DiscardAssignStmt* DiscardAssignStmt::Create(ASTContext &C,
+                                             SourceLocation UnderscoreLoc,
+                                             SourceLocation EqualsLoc,
+                                             Expression *RHS) {
+   return new(C) DiscardAssignStmt(UnderscoreLoc, EqualsLoc, RHS);
+}
+
+DiscardAssignStmt* DiscardAssignStmt::CreateEmpty(ASTContext &C)
+{
+   return new(C) DiscardAssignStmt(EmptyShell());
+}
+
+SourceRange DiscardAssignStmt::getSourceRange() const
+{
+   if (!RHS)
+      return SourceRange(UnderscoreLoc, EqualsLoc);
+
+   return SourceRange(UnderscoreLoc, RHS->getSourceRange().getEnd());
+}
+
+DoStmt::DoStmt(SourceRange SR, Statement* body)
+   : Statement(DoStmtID),
+     SR(SR), body(body), NumCatchBlocks(0)
 {}
 
-TryStmt::TryStmt(SourceRange SR,
-                 Statement* body,
-                 std::vector<CatchBlock> &&catchBlocks,
-                 Statement* finally)
-   : Statement(TryStmtID),
+DoStmt::DoStmt(SourceRange SR,
+               Statement* body,
+               ArrayRef<CatchBlock> catchBlocks)
+   : Statement(DoStmtID),
      SR(SR), body(body),
-     catchBlocks(std::move(catchBlocks)), finallyBlock(finally)
+     NumCatchBlocks((unsigned)catchBlocks.size())
+{
+   std::copy(catchBlocks.begin(), catchBlocks.end(),
+             getTrailingObjects<CatchBlock>());
+}
+
+DoStmt::DoStmt(EmptyShell, unsigned N)
+   : Statement(DoStmtID), body(nullptr), NumCatchBlocks(N)
 {}
 
 ThrowStmt::ThrowStmt(SourceLocation ThrowLoc, Expression* thrownVal)
    : Statement(ThrowStmtID),
      ThrowLoc(ThrowLoc), thrownVal(thrownVal), thrownType(nullptr)
+{}
+
+ThrowStmt::ThrowStmt(EmptyShell)
+   : Statement(ThrowStmtID),
+   thrownVal(nullptr)
 {}
 
 SourceRange ThrowStmt::getSourceRange() const
@@ -358,84 +566,14 @@ MixinStmt::MixinStmt(SourceRange Parens, Expression *Expr)
 
 }
 
+MixinStmt::MixinStmt(EmptyShell)
+   : Statement(MixinStmtID), Expr(nullptr)
+{}
+
 MixinStmt* MixinStmt::Create(ASTContext &C,
                              SourceRange Parens,
                              Expression *Expr) {
    return new(C) MixinStmt(Parens, Expr);
-}
-
-llvm::ArrayRef<VarDecl*> DestructuringDecl::getDecls() const
-{
-   if (auto LG = support::dyn_cast<LocalDestructuringDecl>(this))
-      return LG->getDecls();
-
-   return support::cast<GlobalDestructuringDecl>(this)->getDecls();
-}
-
-DestructuringDecl::DestructuringDecl(NodeType typeID,
-                                     SourceRange SR,
-                                     unsigned NumDecls,
-                                     AccessSpecifier access,
-                                     bool isConst,
-                                     SourceType type,
-                                     Expression *value)
-   : Statement(typeID),
-     SR(SR), access(access), IsConst(isConst), NumDecls(NumDecls),
-     type(type), value(value)
-{}
-
-LocalDestructuringDecl::LocalDestructuringDecl(SourceRange SR,
-                                               AccessSpecifier access,
-                                               bool isConst,
-                                               llvm::ArrayRef<VarDecl*> Decls,
-                                               SourceType type,
-                                               Expression *value)
-   : DestructuringDecl(LocalDestructuringDeclID, SR, (unsigned)Decls.size(),
-                       access, isConst, type, value)
-{
-   std::copy(Decls.begin(), Decls.end(), getTrailingObjects<VarDecl*>());
-}
-
-LocalDestructuringDecl*
-LocalDestructuringDecl::Create(ASTContext &C,
-                               SourceRange SR,
-                               AccessSpecifier access,
-                               bool isConst,
-                               llvm::ArrayRef<VarDecl *> Decls,
-                               SourceType type,
-                               Expression *value) {
-   void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(Decls.size()),
-                          alignof(LocalDestructuringDecl));
-
-   return new(Mem) LocalDestructuringDecl(SR, access, isConst, Decls, type,
-                                          value);
-}
-
-GlobalDestructuringDecl::GlobalDestructuringDecl(SourceRange SR,
-                                                 AccessSpecifier access,
-                                                 bool isConst,
-                                                 llvm::ArrayRef<VarDecl*> Decls,
-                                                 SourceType type,
-                                                 Expression *value)
-   : DestructuringDecl(GlobalDestructuringDeclID, SR, (unsigned)Decls.size(),
-                       access, isConst, type, value)
-{
-   std::copy(Decls.begin(), Decls.end(), getTrailingObjects<VarDecl*>());
-}
-
-GlobalDestructuringDecl*
-GlobalDestructuringDecl::Create(ASTContext &C,
-                                SourceRange SR,
-                                AccessSpecifier access,
-                                bool isConst,
-                                llvm::ArrayRef<VarDecl*> Decls,
-                                SourceType type,
-                                Expression *value) {
-   void *Mem = C.Allocate(totalSizeToAlloc<VarDecl*>(Decls.size()),
-                          alignof(GlobalDestructuringDecl));
-
-   return new(Mem) GlobalDestructuringDecl(SR, access, isConst, Decls, type,
-                                           value);
 }
 
 StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,
@@ -446,6 +584,12 @@ StaticIfStmt::StaticIfStmt(SourceLocation StaticLoc,
    : Statement(StaticIfStmtID),
      StaticLoc(StaticLoc), IfLoc(IfLoc),
      condition(condition), ifBranch(ifBranch), elseBranch(elseBranch),
+     Template(nullptr)
+{}
+
+StaticIfStmt::StaticIfStmt(EmptyShell)
+   : Statement(StaticIfStmtID),
+     condition(nullptr), ifBranch(nullptr), elseBranch(nullptr),
      Template(nullptr)
 {}
 
@@ -499,6 +643,11 @@ StaticForStmt::StaticForStmt(SourceLocation StaticLoc,
      elementName(elementName), range(range), body(body)
 {}
 
+StaticForStmt::StaticForStmt(EmptyShell)
+   : Statement(StaticForStmtID),
+     range(nullptr), body(nullptr)
+{}
+
 StaticForStmt* StaticForStmt::Create(ASTContext &C,
                                      SourceLocation StaticLoc,
                                      SourceLocation IfLoc,
@@ -519,6 +668,11 @@ MacroExpansionStmt::MacroExpansionStmt(SourceRange SR,
    std::copy(Toks.begin(), Toks.end(), getTrailingObjects<lex::Token>());
 }
 
+MacroExpansionStmt::MacroExpansionStmt(EmptyShell, unsigned N)
+   : Statement(MacroExpansionStmtID),
+     Delim(Delimiter::Paren), NumTokens(N)
+{}
+
 MacroExpansionStmt* MacroExpansionStmt::Create(ASTContext &C,
                                                SourceRange SR,
                                                DeclarationName MacroName,
@@ -528,6 +682,14 @@ MacroExpansionStmt* MacroExpansionStmt::Create(ASTContext &C,
                           alignof(MacroExpansionStmt));
 
    return new(Mem) MacroExpansionStmt(SR, MacroName, Delim, Toks);
+}
+
+MacroExpansionStmt* MacroExpansionStmt::CreateEmpty(ASTContext &C,
+                                                    unsigned N) {
+   void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(N),
+                          alignof(MacroExpansionStmt));
+
+   return new(Mem) MacroExpansionStmt(EmptyShell(), N);
 }
 
 } // namespace ast

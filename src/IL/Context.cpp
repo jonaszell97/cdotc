@@ -3,18 +3,20 @@
 //
 
 #include "Context.h"
-#include "Module.h"
 
+#include "Driver/Compiler.h"
+#include "Module.h"
 #include "IL/Constants.h"
 #include "IL/Function.h"
 #include "IL/ValueSymbolTable.h"
+#include "Serialization/ModuleFile.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-Context::Context(ast::ASTContext &ASTCtx) : ASTCtx(ASTCtx)
+Context::Context(CompilationUnit &CI) : CI(CI)
 {
 
 }
@@ -22,12 +24,27 @@ Context::Context(ast::ASTContext &ASTCtx) : ASTCtx(ASTCtx)
 template<class T>
 void destroyFoldingSet(llvm::FoldingSet<T> &Set)
 {
-   for (T &Val : Set)
-      delete &Val;
+   // The nodes themselves are iterators, so be careful not to access the
+   // next pointer after freeing.
+   for (auto It = Set.begin(), End = Set.end(); It != End;) {
+      auto Copy = It;
+      ++Copy;
+
+      delete &*It;
+      It = Copy;
+   }
 }
 
 Context::~Context()
 {
+   // Modules remove themselves when deleted, so be careful not to invalidate
+   // iterators.
+   SmallVector<Module*, 4> Mods(Modules.begin(), Modules.end());
+   for (auto *Mod : Mods) {
+      delete Mod;
+   }
+
+   delete TokNone;
    delete TrueVal;
    delete FalseVal;
 
@@ -42,6 +59,20 @@ Context::~Context()
    destroyFoldingSet(LoadConstants);
    destroyFoldingSet(OperatorConstants);
    destroyFoldingSet(GEPConstants);
+
+   for (auto &Pair : TypeInfoMap)
+      delete Pair.second;
+
+   for (auto &Pair : VTableMap)
+      delete Pair.second;
+}
+
+void Context::registerModule(Module *M) { Modules.insert(M); }
+void Context::removeModule(Module *M) { Modules.erase(M); }
+
+ast::ASTContext& Context::getASTCtx() const
+{
+   return CI.getContext();
 }
 
 Function *Context::getFunction(llvm::StringRef name)
@@ -59,8 +90,12 @@ Function *Context::getFunctionDefinition(llvm::StringRef name)
 {
    for (const auto &M : Modules) {
       auto fun = M->getOwnFunction(name);
-      if (fun && !fun->isDeclared()) {
-         return fun;
+      if (fun) {
+         if (auto Inf = fun->getLazyFnInfo())
+            Inf->loadFunctionBody();
+
+         if (!fun->isDeclared())
+            return fun;
       }
    }
 
@@ -83,8 +118,12 @@ GlobalVariable *Context::getGlobalDefinition(llvm::StringRef name)
 {
    for (const auto &M : Modules) {
       auto glob = M->getOwnGlobal(name);
-      if (glob && !glob->isDeclared()) {
-         return glob;
+      if (glob) {
+         if (auto Inf = glob->getLazyGlobalInfo())
+            Inf->loadGlobalInitializer();
+
+         if (!glob->isDeclared())
+            return glob;
       }
    }
 

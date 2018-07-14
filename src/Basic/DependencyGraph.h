@@ -18,8 +18,9 @@ template <class T>
 class DependencyGraph {
 public:
    struct Vertex {
-      explicit Vertex(T Ptr)
-         : Ptr(std::move(Ptr)) {}
+      explicit Vertex(T &&Ptr)
+         : Ptr(std::move(Ptr))
+      {}
 
       Vertex(Vertex const&) = delete;
       Vertex &operator=(Vertex const&) = delete;
@@ -55,10 +56,20 @@ public:
          vert->Outgoing.erase(this);
       }
 
-      T getPtr()
+      void reset()
       {
-         return Ptr;
+         for (auto *Out : Outgoing) {
+            Out->Incoming.erase(this);
+         }
+         for (auto *In : Incoming) {
+            In->Outgoing.erase(this);
+         }
+
+         Outgoing.clear();
+         Incoming.clear();
       }
+
+      const T &getPtr() { return Ptr; }
 
       const llvm::SmallPtrSet<Vertex*, 4> &getOutgoing() const
       {
@@ -108,7 +119,7 @@ public:
          if (V->getPtr() == ptr)
             return *V;
 
-      Vertices.push_back(new Vertex(ptr));
+      Vertices.push_back(new Vertex(std::move(ptr)));
       return *Vertices.back();
    }
 
@@ -148,7 +159,7 @@ public:
       return Vertices;
    }
 
-   void erase(T t)
+   void erase(const T &t)
    {
       auto it = Vertices.begin();
       auto end_it = Vertices.end();
@@ -192,8 +203,8 @@ public:
       for (auto &Vert : Vertices) {
          if (i++ != 0) llvm::outs() << "\n\n";
          llvm::outs() << Fn(Vert->getPtr());
-         for (auto Out : Vert->getOutgoing()) {
-            llvm::outs() << "\n    -> " << Fn(Out->getPtr());
+         for (auto Out : Vert->getIncoming()) {
+            llvm::outs() << "\n    depends on " << Fn(Out->getPtr());
          }
       }
    }

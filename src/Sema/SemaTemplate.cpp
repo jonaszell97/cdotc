@@ -16,7 +16,7 @@ namespace ast {
 bool SemaPass::inTemplate()
 {
    for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto ND = dyn_cast<NamedDecl>(Ctx->lookThroughExtension())) {
          if (ND->isTemplate())
             return true;
       }
@@ -28,7 +28,7 @@ bool SemaPass::inTemplate()
 bool SemaPass::isInDependentContext()
 {
    for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto ND = dyn_cast<NamedDecl>(Ctx->lookThroughExtension())) {
          if (ND->inDependentContext() || isa<ProtocolDecl>(ND))
             return true;
       }
@@ -39,9 +39,22 @@ bool SemaPass::isInDependentContext()
 
 void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
 {
+   if (R->isInstantiation()) {
+      auto Deinit = R->getDeinitializer();
+      if (Deinit) {
+         maybeInstantiateMemberFunction(Deinit, R);
+      }
+   }
+
    checkProtocolConformance(R);
    if (R->isInvalid())
       return;
+
+   if (auto C = dyn_cast<ClassDecl>(R)) {
+      checkIfAbstractMethodsOverridden(C);
+      if (R->isInvalid())
+         return;
+   }
 
    getILGen().GenerateTypeInfo(R);
 }
@@ -61,11 +74,6 @@ void SemaPass::visitRecordInstantiation(StmtOrDecl DependentStmt,
                                         RecordDecl *Inst) {
    InstantiationRAII instRAII(*this, Inst->getDeclContext(), Inst);
    (void)visitStmt(DependentStmt, Inst);
-
-   // always instantiate the deinitializer
-   if (auto Deinit = Inst->getDeinitializer()) {
-      maybeInstantiateMemberFunction(Deinit, DependentStmt);
-   }
 }
 
 void SemaPass::visitFunctionInstantiation(StmtOrDecl DependentStmt,

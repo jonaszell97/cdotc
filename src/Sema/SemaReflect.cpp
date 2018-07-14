@@ -21,14 +21,18 @@ enum ReflectionIdent {
    sizeOf = 0, alignOf, line, column, fileName, sourceLocation,
    function, mangledFunction, targetInfo, RI_inCTFE,
 
-   reflect,
+   mirror,
 
    SourceLocation, TargetInfo,
    RI_AccessSpecifier, RI_Type, RI_NamedDecl, RI_RecordDecl, RI_FunctionDecl,
    RI_StructDecl, RI_ClassDecl, RI_EnumDecl, RI_UnionDecl, RI_EnumCaseDecl,
    RI_FieldDecl, RI_MethodDecl, RI_FuncArgDecl, RI_VarDecl,
 
+   RI_debug,
    Endianness, little, big,
+   OperatingSystem,
+
+   underlyingType, IsDefaultInitializable, defaultValue,
 
    _last
 };
@@ -49,7 +53,7 @@ void SemaPass::initReflectionIdents()
    ReflectionIdents[function] = &Idents.get("function");
    ReflectionIdents[mangledFunction] = &Idents.get("mangledFunction");
    ReflectionIdents[targetInfo] = &Idents.get("targetInfo");
-   ReflectionIdents[reflect] = &Idents.get("reflect");
+   ReflectionIdents[mirror] = &Idents.get("mirror");
    ReflectionIdents[RI_inCTFE] = &Idents.get("inCTFE");
 
    ReflectionIdents[SourceLocation] = &Idents.get("SourceLocation");
@@ -70,9 +74,16 @@ void SemaPass::initReflectionIdents()
    ReflectionIdents[RI_FuncArgDecl] = &Idents.get("Argument");
    ReflectionIdents[RI_VarDecl] = &Idents.get("VarDecl");
 
+   ReflectionIdents[RI_debug] = &Idents.get("debug");
+
    ReflectionIdents[Endianness] = &Idents.get("Endianness");
    ReflectionIdents[little] = &Idents.get("little");
    ReflectionIdents[big] = &Idents.get("big");
+
+   ReflectionIdents[OperatingSystem] = &Idents.get("OperatingSystem");
+   ReflectionIdents[underlyingType] = &Idents.get("underlyingType");
+   ReflectionIdents[IsDefaultInitializable] = &Idents.get("IsDefaultInitializable");
+   ReflectionIdents[defaultValue] = &Idents.get("defaultValue");
 
    ReflectionIdentsInitialized = true;
 }
@@ -139,9 +150,9 @@ private:
       return BuildType(Ty);
    }
 
-   il::GlobalVariable *MakeGlobal(il::Constant *C)
+   il::GlobalVariable *MakeGlobal(il::Constant *C, struct SourceLocation Loc)
    {
-      auto GV = Builder.CreateGlobalVariable(C, true);
+      auto GV = Builder.CreateGlobalVariable(C, true, StringRef(), Loc);
       GV->setLinkage(il::GlobalVariable::InternalLinkage);
       GV->setUnnamedAddr(il::GlobalVariable::UnnamedAddr::Global);
 
@@ -270,7 +281,7 @@ ReflectionBuilder::BuildArrayView(QualType ElementTy,
 
    auto *ArrTy = Context.getArrayType(ElementTy, Values.size());
    auto *Arr = Builder.GetConstantArray(ArrTy, Values);
-   auto *GV = Builder.CreateGlobalVariable(Arr, true);
+   auto *GV = Builder.CreateGlobalVariable(Arr, true, "", AV->getSourceLoc());
 
    auto *Size = Builder.GetConstantInt(Context.getUIntTy(), Values.size());
    auto *FirstElPtr = il::ConstantExpr::getBitCast(
@@ -860,6 +871,25 @@ il::ConstantClass* ReflectionBuilder::BuildEnumMirror(EnumDecl *E)
 
 ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 {
+   if (auto AE = Alias->getAliasExpr()) {
+      Expr->setExprType(AE->getExprType());
+      return Expr;
+   }
+
+   auto *ReflectMod = getReflectModule();
+   if (!ReflectMod) {
+      diagnose(Expr, err_compiler_ns_unknown_entity, Alias->getDeclName(),
+               Alias->getSourceRange());
+
+      return ExprError();
+   }
+
+   ensureDeclared(ReflectMod);
+
+   auto It = ReflectionValues.find(Alias);
+   if (It != ReflectionValues.end())
+      return It->getSecond();
+
    auto Name = Alias->getDeclName().getManglingName();
    if (!Name.isSimpleIdentifier()) {
       diagnose(Expr, err_compiler_ns_unknown_entity, Alias->getDeclName(),
@@ -876,9 +906,21 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
    else
       ReflBuilder->setExpr(Expr);
 
+   bool DoCache = false;
    Expression *ResultExpr = nullptr;
 
+   auto getReflectionDecl = [&](ReflectionIdent Ident) {
+      auto *II = ReflectionIdents[Ident];
+      (void)this->Lookup(*ReflectMod, II);
+
+      return BuiltinDecls[ReflectionIdents[Ident]];
+   };
+
    auto *II = Name.getIdentifierInfo();
+
+   // look the declaration up to make sure it's deserialized.
+   (void) Lookup(*ReflectMod, II);
+
    if (II == ReflectionIdents[sizeOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
                               || !Alias->getTemplateArgs().front().isType()) {
@@ -894,6 +936,11 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Expr->setExprType(Context.getUIntTy());
 
          return Expr;
+      }
+
+      if (Ty->isRecordType()) {
+         if (!ensureSizeKnown(Ty->getRecord(), Expr->getSourceLoc()))
+            return ExprError();
       }
 
       auto &TI = Context.getTargetInfo();
@@ -918,6 +965,11 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Expr->setExprType(Context.getUIntTy());
 
          return Expr;
+      }
+
+      if (Ty->isRecordType()) {
+         if (!ensureSizeKnown(Ty->getRecord(), Expr->getSourceLoc()))
+            return ExprError();
       }
 
       auto &TI = Context.getTargetInfo();
@@ -962,7 +1014,8 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
       il::Constant *CS = ILGen->MakeStringView(FileName);
 
-      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV), CS);
+      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
+                                      Expr->getSourceRange(), CS);
    }
    else if (II == ReflectionIdents[sourceLocation]) {
       if (Bits.InDefaultArgumentValue) {
@@ -972,9 +1025,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
       auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
 
-      auto SLDecl = dyn_cast_or_null<StructDecl>(
-         BuiltinDecls[ReflectionIdents[SourceLocation]]);
-
+      auto SLDecl = cast_or_null<StructDecl>(getReflectionDecl(SourceLocation));
       if (!SLDecl) {
          diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "SourceLocation");
@@ -996,7 +1047,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       });
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SLDecl),
-                                      ConstLoc);
+                                      Expr->getSourceRange(), ConstLoc);
    }
    else if (II == ReflectionIdents[function]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1017,7 +1068,8 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       auto FuncName = Fn->getFullName();
       il::Constant *CS = ILGen->MakeStringView(FuncName);
 
-      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV), CS);
+      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
+                                      Expr->getSourceRange(), CS);
    }
    else if (II == ReflectionIdents[mangledFunction]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1042,24 +1094,32 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       OS.flush();
 
       il::Constant *CS = ILGen->MakeStringView(MangledName);
-      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV), CS);
+      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
+                                      Expr->getSourceRange(), CS);
    }
    else if (II == ReflectionIdents[targetInfo]) {
-      auto TIDecl = dyn_cast_or_null<StructDecl>(
-         BuiltinDecls[ReflectionIdents[TargetInfo]]);
-
+      auto TIDecl = cast_or_null<StructDecl>(getReflectionDecl(TargetInfo));
       if (!TIDecl) {
          diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "TargetInfo");
          return ExprError();
       }
 
+      // 'Endianness' enum
       auto EndiannessDecl = dyn_cast_or_null<EnumDecl>(
          BuiltinDecls[ReflectionIdents[Endianness]]);
 
       if (!EndiannessDecl) {
          diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Endianness");
+         return ExprError();
+      }
+
+      // 'OperatingSystem' enum
+      auto OSDecl = cast_or_null<EnumDecl>(getReflectionDecl(OperatingSystem));
+      if (!OSDecl) {
+         diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
+                  "OperatingSystem");
          return ExprError();
       }
 
@@ -1080,14 +1140,40 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
             EndiannessDecl->hasCase(ReflectionIdents[big]), {});
       }
 
+      llvm::StringRef OSIdent;
+      switch (TI.getTriple().getOS()) {
+      case llvm::Triple::OSType::Darwin: OSIdent = "darwin"; break;
+      case llvm::Triple::OSType::DragonFly: OSIdent = "dragonFly"; break;
+      case llvm::Triple::OSType::FreeBSD: OSIdent = "freeBSD"; break;
+      case llvm::Triple::OSType::Fuchsia: OSIdent = "fuchsia"; break;
+      case llvm::Triple::OSType::IOS: OSIdent = "iOS"; break;
+      case llvm::Triple::OSType::KFreeBSD: OSIdent = "kFreeBSD"; break;
+      case llvm::Triple::OSType::Linux: OSIdent = "linux"; break;
+      case llvm::Triple::OSType::Lv2: OSIdent = "ps3"; break;
+      case llvm::Triple::OSType::MacOSX: OSIdent = "macOS"; break;
+      case llvm::Triple::OSType::NetBSD: OSIdent = "netBSD"; break;
+      case llvm::Triple::OSType::OpenBSD: OSIdent = "openBSD"; break;
+      case llvm::Triple::OSType::Solaris: OSIdent = "solaris"; break;
+      case llvm::Triple::OSType::Win32: OSIdent = "windows"; break;
+      case llvm::Triple::OSType::PS4: OSIdent = "PS4"; break;
+      case llvm::Triple::OSType::TvOS: OSIdent = "tvOS"; break;
+      case llvm::Triple::OSType::WatchOS: OSIdent = "watchOS"; break;
+      default: OSIdent = "unknownOS"; break;
+      }
+
+      il::Constant *OS = Builder.GetConstantEnum(
+         OSDecl->hasCase(Context.getIdentifiers().get(OSIdent)), {}
+      );
+
       il::Constant *InfoConstant = Builder.GetConstantStruct(TIDecl, {
-         PointerSize, PointerAlign, Endianness
+         PointerSize, PointerAlign, Endianness, OS
       });
 
+      DoCache = true;
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(TIDecl),
-                                      InfoConstant);
+                                      Expr->getSourceRange(), InfoConstant);
    }
-   else if (II == ReflectionIdents[reflect]) {
+   else if (II == ReflectionIdents[mirror]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
           || !Alias->getTemplateArgs().front().isType()) {
          diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
@@ -1108,11 +1194,93 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       if (!Result.first)
          return ExprError();
 
-      ResultExpr = StaticExpr::Create(Context, Result.second, Result.first);
+      ResultExpr = StaticExpr::Create(Context, Result.second,
+                                      Expr->getSourceRange(), Result.first);
    }
    else if (II == ReflectionIdents[RI_inCTFE]) {
+      DoCache = true;
       ResultExpr = StaticExpr::Create(Context, Context.getBoolTy(),
-         ILGen->Builder.GetMagicConstant(il::MagicConstant::__ctfe));
+                                      Expr->getSourceRange(),
+                                      ILGen->Builder.GetMagicConstant(
+                                         il::MagicConstant::__ctfe));
+   }
+   else if (II == ReflectionIdents[RI_debug]) {
+      DoCache = true;
+      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
+         Context.getBoolTy(), compilationUnit->getOptions().emitDebugInfo());
+   }
+   else if (II == ReflectionIdents[underlyingType]) {
+      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
+          || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType Ty = Alias->getTemplateArgs().front().getType();
+      if (Ty->isDependentType()) {
+         Expr->setIsTypeDependent(true);
+         Expr->setExprType(Context.getUIntTy());
+
+         return Expr;
+      }
+
+      if (!Ty->isEnum()) {
+         diagnose(Expr, err_generic_error,
+                  "underlyingType expects an enum type",
+                  Expr->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType UnderlyingTy = Context.getMetaType(
+         cast<EnumDecl>(Ty->getRecord())->getRawType());
+
+      ResultExpr = new(Context) IdentifierRefExpr(Expr->getSourceRange(),
+                                                  IdentifierKind::MetaType,
+                                                  UnderlyingTy);
+   }
+   else if (II == ReflectionIdents[IsDefaultInitializable]) {
+      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
+          || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType Ty = Alias->getTemplateArgs().front().getType();
+      if (Ty->isDependentType()) {
+         Expr->setIsTypeDependent(true);
+         Expr->setExprType(Context.getUIntTy());
+
+         return Expr;
+      }
+
+      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
+                                       Context.getBoolTy(),
+                                       hasDefaultValue(Ty));
+   }
+   else if (II == ReflectionIdents[defaultValue]) {
+      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
+          || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType Ty = Alias->getTemplateArgs().front().getType();
+      if (Ty->isDependentType()) {
+         Expr->setIsTypeDependent(true);
+         Expr->setExprType(Context.getUIntTy());
+
+         return Expr;
+      }
+
+      ResultExpr = StaticExpr::Create(Context, Ty, Expr->getSourceRange(),
+                                      ILGen->getDefaultValue(Ty));
    }
 
    if (!ResultExpr) {
@@ -1127,6 +1295,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       Expr->setExprType(Res.getValue()->getExprType());
       return Expr;
    }
+
+   if (DoCache)
+      ReflectionValues.try_emplace(Alias, Res.get());
 
    return Res;
 }

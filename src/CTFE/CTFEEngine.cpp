@@ -1,6 +1,3 @@
-//
-// Created by Jonas Zell on 02.01.18.
-//
 
 #include "CTFEEngine.h"
 
@@ -17,23 +14,23 @@
 #include "Message/Diagnostics.h"
 #include "Sema/SemaPass.h"
 #include "Sema/Builtin.h"
+#include "Serialization/ModuleFile.h"
 #include "Support/Format.h"
+#include "Support/StringSwitch.h"
 #include "Support/Various.h"
 #include "Value.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Allocator.h>
-#include <llvm/ADT/StringSwitch.h>
+
 #include <cmath>
-#include <stack>
-#include <sstream>
-#include <iomanip>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
+#include <stack>
 
 #ifndef _WIN32
 #  include <unistd.h>
-#include <IL/Writer/ModuleWriter.h>
-
 #endif
 
 using std::string;
@@ -227,16 +224,17 @@ private:
 
    il::Function const* getFunctionDefinition(il::Function const& F)
    {
-      auto def = F.getParent()->getContext().getFunctionDefinition(F.getName());
-      if (!def) {
-         return nullptr;
-      }
+      if (!F.isDeclared())
+         return &F;
 
-      return def;
+      return F.getParent()->getContext().getFunctionDefinition(F.getName());
    }
 
    il::GlobalVariable const* getGlobalDefinition(il::GlobalVariable const& G)
    {
+      if (G.hasInitializer())
+         return &G;
+
       return G.getParent()->getContext().getGlobalDefinition(G.getName());
    }
 
@@ -574,8 +572,10 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
    }
 
    if (auto G = dyn_cast<GlobalVariable>(C)) {
-      assert((G->getInitializer() || G->isLazilyInitialized())
-             && "undiagnosed external global!");
+      if (!G->hasInitializer())
+         G = getGlobalDefinition(*G);
+
+      assert(G && "undiagnosed declared global");
 
       auto it = GlobalMap.find(G);
       if (it != GlobalMap.end())
@@ -637,6 +637,15 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
    if (auto Undef = dyn_cast<UndefValue>(C))
       return Allocate(TI.getSizeOfType(Undef->getType()),
                       TI.getAlignOfType(Undef->getType()));
+
+   if (auto Magic = dyn_cast<MagicConstant>(C)) {
+      switch (Magic->getMagicConstantKind()) {
+      case MagicConstant::__ctfe:
+         return Value(
+            !CallStack.empty()
+            && CallStack.back().first->getName().substr(0, 9) != "__ctfe_fn");
+      }
+   }
 
    llvm_unreachable("bad constant kind");
 }
@@ -2019,6 +2028,17 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
 
       break;
    }
+   case KnownFunction::Realloc: {
+      auto data = args[0].getBuffer();
+      auto size = args[1].getU64();
+
+      auto newAlloc = (char*)Allocator.Allocate(size, 1);
+      if (data)
+         std::copy(data, data + size, newAlloc);
+
+      V = Value(newAlloc);
+      break;
+   }
    case KnownFunction::Free: {
       // all allocations are sandboxed
       break;
@@ -2028,6 +2048,10 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
       SP.diagnose(note_printf_ctfe, callerLoc, str);
       V = Value::getInt(str.length());
       break;
+   }
+   case KnownFunction::PutChar: {
+      V = putchar(args[0].getChar());
+      return { true, V };
    }
    case KnownFunction::Exit: {
       err(err_fn_called_during_ctfe, callerLoc, "exit", 0);
@@ -2118,12 +2142,30 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
    case KnownFunction::llvm_ceil_f32:
       V = Value::getFloat(std::ceil(args[0].getFloat()));
       break;
-   case KnownFunction::llvm_ctlz_i32:
-      V = Value::getInt(__builtin_clz(args[0].getI32()));
+   case KnownFunction::llvm_ctlz_i32: {
+      uint32_t val = args[0].getU32();
+      unsigned result = 0;
+
+      for (int i = 31; i >= 0; --i, ++result) {
+         if (val & (uint32_t(1) << i))
+            break;
+      }
+
+      V = result;
       break;
-   case KnownFunction::llvm_ctlz_i64:
-      V = Value::getInt(__builtin_clz(args[0].getI64()));
+   }
+   case KnownFunction::llvm_ctlz_i64: {
+      uint64_t val = args[0].getU64();
+      unsigned result = 0;
+
+      for (int i = 63; i >= 0; --i, ++result) {
+         if (val & (uint64_t(1) << i))
+            break;
+      }
+
+      V = result;
       break;
+   }
    case KnownFunction::MemCpy: {
       auto dst = args[0];
       auto src = args[1];
@@ -2165,7 +2207,7 @@ ctfe::Value EngineImpl::visitAllocaInst(AllocaInst const& I)
    auto Ty = I.getType()->getReferencedType();
    auto NV = getNullValue(Ty);
 
-   if (!Ty->needsStructReturn()) {
+   if (!SP.NeedsStructReturn(Ty)) {
       auto ptrAlloc = Allocator.Allocate(sizeof(void*), alignof(void*));
       auto lvalue  = Value::getPreallocated(ptrAlloc);
 
@@ -2182,7 +2224,7 @@ Value EngineImpl::visitAllocBoxInst(const AllocBoxInst &I)
    auto Ty = I.getType()->getReferencedType();
    auto NV = getNullValue(Ty);
 
-   if (!Ty->needsStructReturn()) {
+   if (!SP.NeedsStructReturn(Ty)) {
       auto ptrAlloc = Allocator.Allocate(sizeof(void*), alignof(void*));
       auto lvalue  = Value::getPreallocated(ptrAlloc);
 
@@ -2219,6 +2261,11 @@ ctfe::Value EngineImpl::visitLambdaInitInst(LambdaInitInst const& I)
    return getLambda(I.getFunction(), captures);
 }
 
+Value EngineImpl::visitAssignInst(const AssignInst &I)
+{
+   llvm_unreachable("didn't replace assign with store or init!");
+}
+
 ctfe::Value EngineImpl::visitStoreInst(StoreInst const& I)
 {
    auto src = getCtfeValue(I.getSrc());
@@ -2227,6 +2274,51 @@ ctfe::Value EngineImpl::visitStoreInst(StoreInst const& I)
    storeValue(dst, src, I.getSrc()->getType());
 
    return {};
+}
+
+Value EngineImpl::visitInitInst(const InitInst &I)
+{
+   auto src = getCtfeValue(I.getSrc());
+   auto dst = getCtfeValue(I.getDst());
+
+   storeValue(dst, src, I.getSrc()->getType());
+
+   return {};
+}
+
+Value EngineImpl::visitStrongRetainInst(const il::StrongRetainInst &I)
+{
+   return Value();
+}
+
+Value EngineImpl::visitStrongReleaseInst(const il::StrongReleaseInst &I)
+{
+   return Value();
+}
+
+Value EngineImpl::visitWeakRetainInst(const il::WeakRetainInst &I)
+{
+   return Value();
+}
+
+Value EngineImpl::visitWeakReleaseInst(const il::WeakReleaseInst &I)
+{
+   return Value();
+}
+
+Value EngineImpl::visitMoveInst(const MoveInst &I)
+{
+   return getCtfeValue(I.getOperand(0));
+}
+
+Value EngineImpl::visitBeginBorrowInst(const BeginBorrowInst &I)
+{
+   return getCtfeValue(I.getOperand(0));
+}
+
+Value EngineImpl::visitEndBorrowInst(const EndBorrowInst &I)
+{
+   return Value();
 }
 
 ctfe::Value EngineImpl::visitGEPInst(GEPInst const& I)
@@ -2285,7 +2377,10 @@ ctfe::Value EngineImpl::visitEnumRawValueInst(EnumRawValueInst const& I)
    if (I.getOperand(0)->getType()->isRawEnum())
       return val;
 
-   return getEnumRawValue(val, I.getOperand(0)->getType());
+   if (!I.getType()->isReferenceType())
+      return getEnumRawValue(val, I.getOperand(0)->getType());
+
+   return val;
 }
 
 ctfe::Value EngineImpl::visitLoadInst(LoadInst const& I)
@@ -2313,7 +2408,21 @@ ctfe::Value EngineImpl::visitRetInst(RetInst const& I)
    return {};
 }
 
+Value EngineImpl::visitYieldInst(const YieldInst &I)
+{
+   llvm_unreachable("nah");
+}
+
 ctfe::Value EngineImpl::visitThrowInst(ThrowInst const& I)
+{
+   thrownException.thrownVal = getCtfeValue(I.getThrownValue());
+   thrownException.thrownType = I.getThrownValue()->getType();
+   thrownException.thrownFrom = I.getSourceLoc();
+
+   return {};
+}
+
+Value EngineImpl::visitRethrowInst(const RethrowInst &I)
 {
    thrownException.thrownVal = getCtfeValue(I.getThrownValue());
    thrownException.thrownType = I.getThrownValue()->getType();
@@ -2362,16 +2471,6 @@ ctfe::Value EngineImpl::visitInvokeInst(InvokeInst const& I)
    llvm_unreachable("not yet");
 }
 
-ctfe::Value EngineImpl::visitVirtualInvokeInst(const VirtualInvokeInst &I)
-{
-   llvm_unreachable("not yet");
-}
-
-ctfe::Value EngineImpl::visitProtocolInvokeInst(const ProtocolInvokeInst &I)
-{
-   llvm_unreachable("not yet");
-}
-
 ctfe::Value EngineImpl::visitLandingPadInst(LandingPadInst const& I)
 {
    llvm_unreachable("NOT YET");
@@ -2409,10 +2508,8 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end:
-      return {};
-   case Intrinsic::retain:
-      return {};
-   case Intrinsic::release:
+   case Intrinsic::begin_unsafe:
+   case Intrinsic::end_unsafe:
       return {};
    case Intrinsic::__ctfe_stacktrace:
       printStackTrace();
@@ -2441,9 +2538,158 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
    case Intrinsic::indirect_case_ref:
       llvm_unreachable("unimplemented");
+   case Intrinsic::unbox: {
+      auto val = getCtfeValue(I.getArgs()[0]);
+      auto ptr = val.getBuffer();
+
+      ptr += sizeof(void*) * 3;
+      return Value(ptr);
+   }
+   case Intrinsic::print_runtime_error:
+      SP.diagnose(err_generic_error, "fatal error encountered during CTFE");
+      return {};
+   case Intrinsic::virtual_method: {
+      auto val = getCtfeValue(I.getArgs()[0]);
+      auto TI = getStructElement(val, I.getArgs()[0]->getType(), 2)
+         .load(SP.getContext().getInt8PtrTy());
+
+      auto VTOffset = sizeof(void*) * 2;
+      auto VT = Value(TI.getBuffer() + VTOffset);
+
+      auto Offset = getCtfeValue(I.getArgs()[1]).getU64();
+
+      return VT.getValuePtr()[Offset];
+   }
+   case Intrinsic::typeinfo_cmp:
+   case Intrinsic::excn_object_ref:
+   case Intrinsic::excn_typeinfo_ref:
+      llvm_unreachable("unimplemented!");
    default:
       llvm_unreachable("unsupported ctfe intrinsic");
    }
+}
+
+Value EngineImpl::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
+{
+   enum IntrinsicKind {
+      Unknown,
+
+#  define CDOT_LLVM_INTRINSIC(STR, NAME) NAME,
+#  include "IRGen/LLVMIntrinsics.def"
+   };
+
+   auto Kind = StringSwitch<IntrinsicKind>(I.getIntrinsicName()->getIdentifier())
+#  define CDOT_LLVM_INTRINSIC(STR, NAME) .Case(STR, NAME)
+#  include "IRGen/LLVMIntrinsics.def"
+      .Default(Unknown);
+
+   SmallVector<Value, 4> args;
+   for (auto &Arg : I.getArgs())
+      args.push_back(getCtfeValue(Arg));
+
+   Value V;
+   switch (Kind) {
+   case llvm_sqrt_f32:
+      V = Value::getFloat(std::sqrt(args.front().getFloat()));
+      break;
+   case llvm_sqrt_f64:
+      V = Value::getDouble(std::sqrt(args.front().getDouble()));
+      break;
+   case llvm_powi_f32:
+      V = Value::getFloat(support::pow(args[0].getFloat(),
+                                       args[1].getI32()));
+      break;
+   case llvm_powi_f64:
+      V = Value::getDouble(support::pow(args[0].getDouble(),
+                                        args[1].getI32()));
+      break;
+   case llvm_pow_f32:
+      V = Value::getFloat(std::pow(args[0].getFloat(),
+                                   args[1].getFloat()));
+      break;
+   case llvm_pow_f64:
+      V = Value::getDouble(std::pow(args[0].getDouble(),
+                                    args[1].getDouble()));
+      break;
+   case llvm_log10_f64:
+      V = Value::getDouble(std::log10(args[0].getDouble()));
+      break;
+   case llvm_log2_f64:
+      V = Value::getDouble(std::log2(args[0].getDouble()));
+      break;
+   case llvm_log_f64:
+      V = Value::getDouble(std::log(args[0].getDouble()));
+      break;
+   case llvm_floor_f64:
+      V = Value::getDouble(std::floor(args[0].getDouble()));
+      break;
+   case llvm_floor_f32:
+      V = Value::getFloat(std::floor(args[0].getFloat()));
+      break;
+   case llvm_ceil_f64:
+      V = Value::getDouble(std::ceil(args[0].getDouble()));
+      break;
+   case llvm_ceil_f32:
+      V = Value::getFloat(std::ceil(args[0].getFloat()));
+      break;
+   case llvm_ctlz_i32: {
+      uint32_t val = args[0].getU32();
+      unsigned result = 0;
+
+      for (int i = 31; i >= 0; --i, ++result) {
+         if (val & (uint32_t(1) << i))
+            break;
+      }
+
+      V = result;
+      break;
+   }
+   case llvm_ctlz_i64: {
+      uint64_t val = args[0].getU64();
+      unsigned result = 0;
+
+      for (int i = 63; i >= 0; --i, ++result) {
+         if (val & (uint64_t(1) << i))
+            break;
+      }
+
+      V = result;
+      break;
+   }
+   case llvm_cttz_i32: {
+      uint32_t val = args[0].getU32();
+      unsigned result = 0;
+
+      for (int i = 0; i < 32; ++i, ++result) {
+         if (val & (uint32_t(1) << i))
+            break;
+      }
+
+      V = result;
+      break;
+   }
+   case llvm_cttz_i64: {
+      uint64_t val = args[0].getU64();
+      unsigned result = 0;
+
+      for (int i = 64; i < 32; ++i, ++result) {
+         if (val & (uint64_t(1) << i))
+            break;
+      }
+
+      V = result;
+      break;
+   }
+   case llvm_ctpop_i64: {
+      uint64_t Val = args[0].getU64();
+      V = Value(__builtin_popcountll(Val));
+      break;
+   }
+   default:
+      llvm_unreachable("bad intrinsic kind");
+   }
+
+   return V;
 }
 
 ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
@@ -2451,6 +2697,13 @@ ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
    llvm::SmallVector<ctfe::Value, 8> args;
    for (auto &arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
+
+   if (I.isVirtual()) {
+      llvm_unreachable("unimplemented");
+   }
+   else if (I.isProtocolCall()) {
+      llvm_unreachable("unimplemented");
+   }
 
    auto fn = getFunctionDefinition(*I.getCalledFunction());
    if (!fn) {
@@ -2463,16 +2716,6 @@ ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
    }
 
    return visitFunction(*fn, args, I.getSourceLoc());
-}
-
-ctfe::Value EngineImpl::visitVirtualCallInst(const VirtualCallInst &I)
-{
-   llvm_unreachable("not yet");
-}
-
-ctfe::Value EngineImpl::visitProtocolCallInst(const ProtocolCallInst &I)
-{
-   llvm_unreachable("not yet");
 }
 
 ctfe::Value EngineImpl::visitIndirectCallInst(IndirectCallInst const& I)
@@ -2515,10 +2758,19 @@ ctfe::Value EngineImpl::visitLambdaCallInst(LambdaCallInst const& I)
    return visitFunction(*def, args, I.getSourceLoc());
 }
 
-ctfe::Value EngineImpl::visitInitInst(InitInst const& I)
+ctfe::Value EngineImpl::visitStructInitInst(StructInitInst const& I)
 {
    auto Val = getNullValue(I.getType()->stripReference());
-   llvm::SmallVector<ctfe::Value, 8> args{ Val };
+   ctfe::Value ArgVal = Val;
+
+//   if (I.getType()->stripReference()->isClass()) {
+//      Value Ref(Allocate(sizeof(void*), alignof(void*)));
+//      storeValue(Ref, Val, I.getType()->stripReference());
+//
+//      ArgVal = Ref;
+//   }
+
+   llvm::SmallVector<ctfe::Value, 8> args{ ArgVal };
    for (auto &arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
 
@@ -2548,28 +2800,6 @@ ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
       values.push_back(getCtfeValue(arg));
 
    return getEnum(I.getType(), I.getCase(), values);
-}
-
-Value EngineImpl::visitDeinitializeLocalInst(const DeinitializeLocalInst &I)
-{
-   if (auto Fn = I.getDeinitializer()) {
-      return visitFunction(*Fn,
-                           { getCtfeValue(I.getVal())
-                              .load(I.getVal()->getType()
-                                     ->getReferencedType()) },
-                           I.getSourceLoc());
-   }
-
-   return Value();
-}
-
-Value EngineImpl::visitDeinitializeTemporaryInst(
-                                          const DeinitializeTemporaryInst &I) {
-   if (auto Fn = I.getDeinitializer()) {
-      return visitFunction(*Fn, { getCtfeValue(I.getVal()) }, I.getSourceLoc());
-   }
-
-   return Value();
 }
 
 namespace {
@@ -3019,7 +3249,8 @@ Value EngineImpl::visitCompInst(const CompInst &I)
 
          return Value::getBool(LhsInt == RhsInt);
       }
-      else if (ty->isIntegerType() || ty->isPointerType()) {
+      else if (ty->isIntegerType() || ty->isPointerType()
+               || ty->isThinFunctionTy()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
             return Value::getBool(
                getUnsignedValue(ty, lhs) == getUnsignedValue(ty, rhs));
@@ -3051,7 +3282,8 @@ Value EngineImpl::visitCompInst(const CompInst &I)
 
          return Value::getBool(LhsInt != RhsInt);
       }
-      else if (ty->isIntegerType() || ty->isPointerType()) {
+      else if (ty->isIntegerType() || ty->isPointerType()
+               || ty->isThinFunctionTy()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
             return Value::getBool(
                getUnsignedValue(ty, lhs) != getUnsignedValue(ty, rhs));
@@ -3337,6 +3569,8 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
 
       // also a noop
       return val;
+   case CastKind::IntToEnum:
+      return val;
    default:
       llvm_unreachable("not an integer cast!");
    }
@@ -3407,11 +3641,6 @@ ctfe::Value EngineImpl::visitFPCastInst(FPCastInst const& I)
    return getFPCast(I.getKind(), fromTy, toTy, val);
 }
 
-ctfe::Value EngineImpl::visitIntToEnumInst(IntToEnumInst const& I)
-{
-   llvm_unreachable("not yet");
-}
-
 ctfe::Value EngineImpl::visitUnionCastInst(UnionCastInst const& I)
 {
    return Value::getPreallocated(getCtfeValue(I.getOperand(0)).getBuffer());
@@ -3451,6 +3680,9 @@ CTFEEngine::CTFEEngine(ast::SemaPass &SP)
 CTFEResult CTFEEngine::evaluateFunction(il::Function *F,
                                         llvm::ArrayRef<Value> args,
                                         SourceLocation loc) {
+   ILGenPass::ModuleRAII MR(pImpl->SP.getILGen(),
+                            pImpl->SP.getILGen().getCtfeModule());
+
    auto val = pImpl->visitFunction(*F, args, loc);
    if (pImpl->hadError()) {
       return CTFEError();

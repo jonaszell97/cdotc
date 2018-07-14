@@ -48,6 +48,7 @@ StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
    if (!Res)
       return StmtError();
 
+   Stmt->setStatement(Res.get());
    return Stmt;
 }
 
@@ -67,11 +68,20 @@ ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
       }
    }
 
+   if (E->isInvalid()) {
+      E->setExprType(UnknownAnyTy);
+      Expr->setIsInvalid(true);
+
+      return ExprError();
+   }
+
    auto Res = visitExpr(Expr, E);
-   if (!Res)
+   if (!Res || Res.get()->isInvalid())
       return ExprError();
 
-   Expr->setExprType(E->getExprType());
+   Expr->setExpr(Res.get());
+   Expr->setExprType(Res.get()->getExprType());
+
    return Expr;
 }
 
@@ -140,8 +150,8 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
 void SemaPass::checkImplicitAttr(Decl *D, ImplicitAttr*)
 {
    auto C = cast<CallableDecl>(D);
-   if (!isa<InitDecl>(C) && !C->isOperator()) {
-      return diagnose(D, err_implicit_attr_not_valid);
+   if (!isa<InitDecl>(C) && !C->isConversionOp()) {
+      return diagnose(C, err_implicit_attr_not_valid, C->getSourceLoc());
    }
 }
 
@@ -156,10 +166,27 @@ void SemaPass::checkThinAttr(Expression *E, ThinAttr *A)
             E->getSourceRange());
 }
 
-void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr*)
+void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr *A)
 {
    auto ND = cast<NamedDecl>(D);
-   BuiltinDecls[ND->getDeclName()] = ND;
+   ND->setAccess(AccessSpecifier::Public);
+
+   if (A->getBuiltinName().empty()) {
+      BuiltinDecls[ND->getDeclName()] = ND;
+   }
+   else {
+      BuiltinDecls[Context.getIdentifiers().get(A->getBuiltinName())] = ND;
+   }
+}
+
+void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*)
+{
+
+}
+
+void SemaPass::checkVersionDeclAttr(Decl*, VersionDeclAttr*)
+{
+
 }
 
 #define CDOT_ATTR_SEMA

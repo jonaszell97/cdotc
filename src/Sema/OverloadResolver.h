@@ -35,13 +35,13 @@ public:
                     llvm::ArrayRef<Expression*> givenTemplateArgs,
                     Statement *Caller = nullptr);
 
+   using ConvSeqVec = llvm::SmallVectorImpl<ConversionSequenceBuilder>;
+
    void resolve(CandidateSet &CandSet);
    void resolve(CandidateSet &CandSet,
                 CandidateSet::Candidate &Cand,
                 llvm::ArrayRef<Expression*> givenArgs,
-                llvm::SmallVectorImpl<ConversionSequence> &Conversions);
-
-   using ConvSeqVec = llvm::SmallVectorImpl<ConversionSequence>;
+                ConvSeqVec &Conversions);
 
    void isCallCompatible(CandidateSet &CandSet,
                          CandidateSet::Candidate &comp,

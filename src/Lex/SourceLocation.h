@@ -12,16 +12,16 @@ namespace cdot {
 
 struct SourceLocation {
    SourceLocation() : offset(0)  {}
-   explicit SourceLocation(uint64_t offset)
-      : offset(unsigned(offset))
+   explicit SourceLocation(uint32_t offset) : offset(offset)
    {
-      assert(offset != 0 && "0 should only be used as a sentinel offset");
-      assert(offset < 4294967296 && "not enough space for offset");
+
    }
 
-   unsigned offset;
+private:
+   uint32_t offset;
 
-   unsigned getOffset() const { return offset; }
+public:
+   uint32_t getOffset() const { return offset; }
 
    bool isValid() const { return offset > 0; }
    operator bool() const { return isValid(); }
@@ -96,6 +96,52 @@ private:
 };
 
 } // namespace cdot
+
+namespace llvm {
+
+template <typename T> struct PointerLikeTypeTraits;
+template<class T> struct DenseMapInfo;
+
+template<>
+struct PointerLikeTypeTraits<::cdot::SourceLocation> {
+public:
+   static inline void *getAsVoidPointer(::cdot::SourceLocation P)
+   {
+      return reinterpret_cast<void*>(P.getOffset());
+   }
+
+   static inline ::cdot::SourceLocation getFromVoidPointer(void *P)
+   {
+      return ::cdot::SourceLocation(
+         static_cast<uint32_t>(reinterpret_cast<uint64_t>(P)));
+   }
+
+   enum { NumLowBitsAvailable = 0 };
+};
+
+template<> struct DenseMapInfo<::cdot::SourceLocation> {
+   static ::cdot::SourceLocation getEmptyKey()
+   {
+      return ::cdot::SourceLocation(static_cast<uint32_t>(-1));
+   }
+
+   static ::cdot::SourceLocation getTombstoneKey()
+   {
+      return ::cdot::SourceLocation(static_cast<uint32_t>(-2));
+   }
+
+   static int getHashValue(const ::cdot::SourceLocation P)
+   {
+      return static_cast<int>(P.getOffset());
+   }
+
+   static bool isEqual(const ::cdot::SourceLocation LHS,
+                       const ::cdot::SourceLocation RHS) {
+      return LHS == RHS;
+   }
+};
+
+} // namespace llvm
 
 
 #endif //CDOT_SOURCELOCATION_H

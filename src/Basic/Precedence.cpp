@@ -3,9 +3,9 @@
 //
 
 #include "Precedence.h"
-#include "Lex/TokenKinds.h"
 
-#include <llvm/ADT/StringSwitch.h>
+#include "Lex/TokenKinds.h"
+#include "Support/StringSwitch.h"
 
 using namespace cdot::lex;
 using namespace cdot::prec;
@@ -15,8 +15,8 @@ namespace op {
 
 OperatorKind fromString(FixKind fix, llvm::StringRef str)
 {
-   auto Switch = llvm::StringSwitch<OperatorKind>(str);
-#  define CDOT_OPERATOR(Name, Symbol, PG, Fix)    \
+   auto Switch = StringSwitch<OperatorKind>(str);
+#  define CDOT_OPERATOR(Name, Symbol, PG, Fix)           \
    if (FixKind::Fix == fix) Switch.Case(Symbol, Name);
 #  include "BuiltinOperators.def"
 
@@ -25,7 +25,7 @@ OperatorKind fromString(FixKind fix, llvm::StringRef str)
 
 OperatorKind fromString(llvm::StringRef str)
 {
-   return llvm::StringSwitch<OperatorKind>(str)
+   return StringSwitch<OperatorKind>(str)
 #  define CDOT_OPERATOR(Name, Symbol, PG, Fix)    \
       .Case(Symbol, Name)
 #  include "BuiltinOperators.def"

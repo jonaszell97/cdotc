@@ -152,6 +152,87 @@ public:
    {}
 };
 
+class AutoClosureAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::AutoClosure; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   AutoClosureAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit AutoClosureAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::AutoClosure, SR)
+   {}
+};
+
+class VersionDeclAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::VersionDecl; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   VersionDeclAttr *clone(ast::ASTContext &Ctx) const;
+
+
+   enum VersionKind {
+      None,
+      Windows,
+      Darwin,
+      macOS,
+      Linux,
+      POSIX
+   };
+
+private:
+   VersionKind version;
+
+public:
+   VersionKind getVersion() const { return version; }
+
+public:
+   explicit VersionDeclAttr(VersionKind version, SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::VersionDecl, SR), version(version)
+   {}
+};
+
+class VersionStmtAttr: public StmtAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::VersionStmt; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   VersionStmtAttr *clone(ast::ASTContext &Ctx) const;
+
+
+   enum VersionKind {
+      None,
+      Windows,
+      Darwin,
+      macOS,
+      Linux,
+      POSIX
+   };
+
+private:
+   VersionKind version;
+
+public:
+   VersionKind getVersion() const { return version; }
+
+public:
+   explicit VersionStmtAttr(VersionKind version, SourceRange SR = SourceRange())
+      : StmtAttr(AttrKind::VersionStmt, SR), version(version)
+   {}
+};
+
 class _BuiltinAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -163,11 +244,14 @@ public:
 
 
 private:
-
+   std::string builtinName;
 
 public:
-   explicit _BuiltinAttr(SourceRange SR = SourceRange())
-      : DeclAttr(AttrKind::_Builtin, SR)
+   llvm::StringRef getBuiltinName() const { return builtinName; }
+
+public:
+   explicit _BuiltinAttr(llvm::StringRef builtinName = "", SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::_Builtin, SR), builtinName(builtinName)
    {}
 };
 #endif
@@ -185,9 +269,12 @@ public:
       return AfterDeclaration;
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
+   case AttrKind::AutoClosure:
       return Never;
    case AttrKind::Extern:
    case AttrKind::Thin:
+   case AttrKind::VersionDecl:
+   case AttrKind::VersionStmt:
    case AttrKind::_Builtin:
       return BeforeDeclaration;
 
@@ -291,14 +378,71 @@ DiscardableResultAttr *DiscardableResultAttr::clone(ast::ASTContext &Ctx) const 
 
 
 
-void _BuiltinAttr::printPretty(llvm::raw_ostream &out) const {
+void AutoClosureAttr::printPretty(llvm::raw_ostream &out) const {
 
    out << "@" << getSpelling();
 
 }
 
+AutoClosureAttr *AutoClosureAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) AutoClosureAttr(SourceLoc);
+}
+
+
+
+void VersionDeclAttr::printPretty(llvm::raw_ostream &out) const {
+llvm::StringRef versionStr;
+switch (version) {
+   case None: versionStr = "None"; break;
+   case Windows: versionStr = "Windows"; break;
+   case Darwin: versionStr = "Darwin"; break;
+   case macOS: versionStr = "macOS"; break;
+   case Linux: versionStr = "Linux"; break;
+   case POSIX: versionStr = "POSIX"; break;
+
+}
+   out << "@" << getSpelling();
+out << '(' << versionStr << ')';
+
+}
+
+VersionDeclAttr *VersionDeclAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) VersionDeclAttr(version, SourceLoc);
+}
+
+
+
+void VersionStmtAttr::printPretty(llvm::raw_ostream &out) const {
+llvm::StringRef versionStr;
+switch (version) {
+   case None: versionStr = "None"; break;
+   case Windows: versionStr = "Windows"; break;
+   case Darwin: versionStr = "Darwin"; break;
+   case macOS: versionStr = "macOS"; break;
+   case Linux: versionStr = "Linux"; break;
+   case POSIX: versionStr = "POSIX"; break;
+
+}
+   out << "@" << getSpelling();
+out << '(' << versionStr << ')';
+
+}
+
+VersionStmtAttr *VersionStmtAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) VersionStmtAttr(version, SourceLoc);
+}
+
+
+
+void _BuiltinAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+out << '(' << builtinName << ')';
+
+}
+
 _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
-   return new(Ctx) _BuiltinAttr(SourceLoc);
+   return new(Ctx) _BuiltinAttr(builtinName, SourceLoc);
 }
 
 
@@ -310,6 +454,7 @@ _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
 
 void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
 void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
+void SemaPass::checkAutoClosureAttr(Decl*, AutoClosureAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

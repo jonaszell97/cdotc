@@ -24,7 +24,7 @@ class Attr<let name: string> {
     let IgnoreFollowingParens: i1 = false
 }
 
-class DeclAttr<name: string, let Decls: list<Decl> > : Attr<name>
+class DeclAttr<name: string, let Decls: list<DeclClass> > : Attr<name>
 class TypeAttr<name: string> : Attr<name>
 class ExprAttr<name: string> : Attr<name>
 class StmtAttr<name: string> : Attr<name>
@@ -58,7 +58,22 @@ def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]> {
     Visit = Never
 }
 
+def AutoClosure : DeclAttr<"autoclosure", [FuncArgDecl]> {
+    Visit = Never
+}
+
+def VersionDecl : DeclAttr<"version", [Decl]> {
+    Visit = BeforeDeclaration
+    Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
+}
+
+def VersionStmt : StmtAttr<"version"> {
+    Visit = BeforeDeclaration
+    Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
+}
+
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = BeforeDeclaration
+    Args = [StringArg<"builtinName", true, "">]
 }

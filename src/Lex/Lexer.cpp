@@ -1,6 +1,3 @@
-//
-// Created by Jonas Zell on 18.06.17.
-//
 
 #include "Lexer.h"
 #include "Preprocessor.h"
@@ -12,7 +9,6 @@
 #include <regex>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
-
 
 using std::string;
 using cdot::lex::Token;
@@ -26,18 +22,18 @@ Lexer::Lexer(IdentifierTable &Idents,
              llvm::MemoryBuffer *buf,
              unsigned sourceId,
              unsigned offset,
-             const char InterpolationBegin)
+             const char InterpolationBegin,
+             bool primeLexer)
    : Idents(Idents), Diags(Diags),
      sourceId(sourceId),
      CurPtr(buf->getBufferStart()),
      BufStart(buf->getBufferStart()),
      BufEnd(buf->getBufferEnd()),
      InterpolationBegin(InterpolationBegin),
-     doneLexing(false),
-     isModuleLexer(false),
      offset(offset)
 {
-
+   if (primeLexer)
+      advance(false, true);
 }
 
 Lexer::Lexer(IdentifierTable &Idents,
@@ -45,14 +41,16 @@ Lexer::Lexer(IdentifierTable &Idents,
              llvm::ArrayRef<Token> Tokens,
              unsigned sourceId,
              unsigned int offset)
-   : Idents(Idents), Diags(Diags), tokens(Tokens.begin(), Tokens.end()),
-     sourceId(sourceId), tokenIndex(1),
-     CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
-     InterpolationBegin('$'), doneLexing(true), isModuleLexer(false),
-     offset(offset)
+   : Idents(Idents), Diags(Diags),
+     LookaheadVec(Tokens.begin(), Tokens.end()),
+     sourceId(sourceId), CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
+     InterpolationBegin('$'), offset(offset), IsTokenLexer(true)
 {
-   if (tokens.empty() || !tokens.back().is(tok::eof))
-      tokens.push_back(Token(tok::eof));
+   if (LookaheadVec.empty() || !LookaheadVec.back().is(tok::eof))
+      LookaheadVec.emplace_back(tok::eof);
+
+   CurTok = LookaheadVec.front();
+   LookaheadIdx = 1;
 }
 
 Token Lexer::makeEOF()
@@ -66,55 +64,19 @@ llvm::StringRef Lexer::getCurrentIdentifier() const
    return currentTok().getIdentifierInfo()->getIdentifier();
 }
 
-void Lexer::lex()
-{
-   if (doneLexing)
-      return;
-
-   do {
-      tokens.push_back(lex_next_token());
-   }
-   while (!tokens.back().is(tok::eof));
-
-//   TokenVec finalTokenVec;
-//   Preprocessor PP(finalTokenVec, Idents, Diags, tokens, sourceId);
-//   PP.doPreprocessing();
-//
-//   tokens     = std::move(finalTokenVec);
-   tokenIndex = 1;
-   doneLexing = true;
-}
-
 // RAII utility classes
 
 void Lexer::printTokensTo(llvm::raw_ostream &out)
 {
-   for (const auto& tok : tokens)
-      out << tok.rawRepr();
-
-   out << "\n";
-}
-
-Lexer::StateSaveGuard::StateSaveGuard(Lexer *lex)
-   : lex(lex), shrinkTo(lex->tokenIndex)
-{
-   assert(shrinkTo);
-}
-
-Lexer::StateSaveGuard::~StateSaveGuard()
-{
-   if (lex->tokens.size() < shrinkTo) {
-      return;
+   while (!eof()) {
+      advance();
+      CurTok.print(out);
    }
-
-   lex->tokenIndex = shrinkTo;
 }
 
-void Lexer::backtrack()
+void Lexer::dump()
 {
-   --tokenIndex;
-   if (currentTok().is(tok::space))
-      backtrack();
+   printTokensTo(llvm::outs());
 }
 
 char Lexer::escape_char(char c)
@@ -165,7 +127,7 @@ string Lexer::unescape_char(char c)
    }
 }
 
-Token Lexer::lex_next_token()
+Token Lexer::lexNextToken()
 {
    TokBegin = CurPtr++;
    tok::TokenType kind;
@@ -176,7 +138,7 @@ Token Lexer::lex_next_token()
          return makeEOF();
 
       // ignore embedded nul characters
-      return lex_next_token();
+      return lexNextToken();
    }
    // whitespace
    case ' ': {
@@ -205,55 +167,57 @@ Token Lexer::lex_next_token()
       return lexNumericLiteral();
    // preprocessing related tokens
    case '#': {
-      if (*CurPtr == '{') {
-         tokens.push_back(makeToken(tok::expr_begin));
-         lexPreprocessorExpr();
+//      if (*CurPtr == '{') {
+//         tokens.push_back(makeToken(tok::expr_begin));
+//         lexPreprocessorExpr();
+//
+//         return makeToken(tok::close_brace);
+//      }
+//      // stringify operator
+//      else if (*CurPtr == '#') {
+//         ++CurPtr;
+//
+//         if (*CurPtr == '{') {
+//            tokens.push_back(makeToken(tok::stringify_begin));
+//            lexPreprocessorExpr();
+//
+//            return makeToken(tok::close_brace);
+//         }
+//         else {
+//            Diags.Diag(err_generic_error)
+//               << "unexpected character after '##', expecting '{'"
+//               << SourceLocation(TokBegin - BufStart + offset);
+//         }
+//      }
+//      // directive
+//      else {
+//         while (*CurPtr >= 'a' && *CurPtr <= 'z')
+//            ++CurPtr;
+//
+//         auto &II = Idents.get(llvm::StringRef(TokBegin,
+//                                               CurPtr - TokBegin));
+//
+//         if (II.getKeywordTokenKind() == tok::sentinel) {
+//            Diags.Diag(err_generic_error)
+//               << "unknown directive " + II.getIdentifier()
+//               << SourceLocation(TokBegin - BufStart + offset);
+//         }
+//
+//         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+//                      II.getKeywordTokenKind());
+//      }
 
-         return makeToken(tok::close_brace);
-      }
-      // stringify operator
-      else if (*CurPtr == '#') {
-         ++CurPtr;
-
-         if (*CurPtr == '{') {
-            tokens.push_back(makeToken(tok::stringify_begin));
-            lexPreprocessorExpr();
-
-            return makeToken(tok::close_brace);
-         }
-         else {
-            Diags.Diag(err_generic_error)
-               << "unexpected character after '##', expecting '{'"
-               << SourceLocation(TokBegin - BufStart + offset);
-         }
-      }
-      // directive
-      else {
-         while (*CurPtr >= 'a' && *CurPtr <= 'z')
-            ++CurPtr;
-
-         auto &II = Idents.get(llvm::StringRef(TokBegin,
-                                               CurPtr - TokBegin));
-
-         if (II.getKeywordTokenKind() == tok::sentinel) {
-            Diags.Diag(err_generic_error)
-               << "unknown directive " + II.getIdentifier()
-               << SourceLocation(TokBegin - BufStart + offset);
-         }
-
-         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
-                      II.getKeywordTokenKind());
-      }
-
-      break;
+      llvm_unreachable("what preprocessor?");
    }
    // dollar identifier
    case '$': {
       if (::isdigit(*CurPtr))
          return lexClosureArgumentName();
 
-      if (isIdentifierContinuationChar(*CurPtr))
+      if (isIdentifierContinuationChar(*CurPtr)) {
+         ++TokBegin;
          return lexIdentifier(tok::dollar_ident);
+      }
 
       return tok::dollar;
    }
@@ -317,6 +281,11 @@ Token Lexer::lex_next_token()
 
       break;
    }
+   case '_':
+      if (isIdentifierContinuationChar(*CurPtr))
+         return lexIdentifier();
+
+      return makeToken(tok::underscore);
    case '`': {
       ++TokBegin;
 
@@ -331,7 +300,7 @@ Token Lexer::lex_next_token()
                auto Tok = makeEOF();
                Diags.Diag(err_generic_error)
                   << "unexpected end of file, expecting '`'"
-                  << Tok.getSourceLoc();
+                  << SourceLocation(Tok.getOffset() - 1);
 
                Diags.Diag(note_generic_note)
                   << "to match this"
@@ -555,24 +524,27 @@ Token Lexer::lexStringLiteral()
    while (1) {
       if (*CurPtr == '"')
          break;
-      else if (*CurPtr == '\0') {
+
+      if (*CurPtr == '\0') {
          if (CurPtr >= BufEnd) {
             Diags.Diag(err_generic_error)
                << "unexpected end of file, expecting '\"'"
-               << SourceLocation(currentIndex() + offset);
+               << SourceLocation(currentIndex() + offset - 1);
 
-            return makeToken(CurPtr - 1, 0, tok::eof);
+            --CurPtr;
+            return makeToken(TokBegin, CurPtr - TokBegin - 1,
+                             tok::stringliteral);
          }
       }
       else if (*CurPtr == '\\') {
-         if (!isModuleLexer) {
+//         if (!isModuleLexer) {
             // normal escape, e.g. "\n"
             ++CurPtr;
-         }
-         else {
-            // hex escape, e.g. "\0A"
-            CurPtr += 2;
-         }
+//         }
+//         else {
+//            // hex escape, e.g. "\0A"
+//            CurPtr += 2;
+//         }
       }
       else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
          if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
@@ -580,43 +552,11 @@ Token Lexer::lexStringLiteral()
             continue;
          }
 
-         tokens.emplace_back(makeToken(TokBegin, CurPtr - TokBegin,
-                                       tok::stringliteral));
+         TokBegin -= 1;
+         CurPtr = TokBegin + 1;
+         InInterpolation = true;
 
-         tokens.emplace_back(tok::interpolation_begin);
-
-         ++CurPtr;
-         if (*CurPtr == '{') {
-            ++CurPtr;
-
-            unsigned openParens = 1;
-            unsigned closeParens = 0;
-
-            while (1) {
-               auto tok = lex_next_token();
-               switch (tok.getKind()) {
-                  case tok::open_brace:
-                     ++openParens; break;
-                  case tok::close_brace:
-                     ++closeParens; break;
-                  default:
-                     break;
-               }
-
-               if (openParens == closeParens)
-                  break;
-
-               tokens.push_back(tok);
-            }
-         }
-         else {
-            tokens.push_back(lex_next_token());
-         }
-
-         tokens.emplace_back(tok::interpolation_end);
-         TokBegin = CurPtr;
-
-         continue;
+         return makeToken(nullptr, 0, tok::interpolation_begin);
       }
 
       ++CurPtr;
@@ -628,6 +568,93 @@ Token Lexer::lexStringLiteral()
    return makeToken(TokBegin, CurPtr - TokBegin - 1, tok::stringliteral);
 }
 
+void Lexer::lexStringInterpolation()
+{
+   assert(*TokBegin == '"');
+   ++TokBegin;
+
+   assert(InInterpolation && "not a string interpolation");
+   InInterpolation = false;
+
+   auto &Toks = LookaheadVec;
+   while (1) {
+      if (*CurPtr == '"')
+         break;
+
+      if (*CurPtr == '\0') {
+         if (CurPtr >= BufEnd) {
+            Diags.Diag(err_generic_error)
+               << "unexpected end of file, expecting '\"'"
+               << SourceLocation(currentIndex() + offset);
+
+            Toks.push_back(makeToken(CurPtr - 1, 0, tok::eof));
+         }
+      }
+      else if (*CurPtr == '\\') {
+//         if (!isModuleLexer) {
+         // normal escape, e.g. "\n"
+         ++CurPtr;
+//         }
+//         else {
+//            // hex escape, e.g. "\0A"
+//            CurPtr += 2;
+//         }
+      }
+      else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
+         if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
+            ++CurPtr;
+            continue;
+         }
+
+         Toks.emplace_back(makeToken(TokBegin, CurPtr - TokBegin,
+                                     tok::stringliteral));
+
+         Toks.emplace_back(tok::expr_begin, getSourceLoc());
+
+         ++CurPtr;
+         if (*CurPtr == '{') {
+            ++CurPtr;
+
+            unsigned openParens = 1;
+            unsigned closeParens = 0;
+
+            while (1) {
+               auto tok = lexNextToken();
+               switch (tok.getKind()) {
+               case tok::open_brace:
+                  ++openParens; break;
+               case tok::close_brace:
+                  ++closeParens; break;
+               default:
+                  break;
+               }
+
+               if (openParens == closeParens)
+                  break;
+
+               Toks.push_back(tok);
+            }
+         }
+         else {
+            Toks.push_back(lexNextToken());
+         }
+
+         Toks.emplace_back(tok::interpolation_end, getSourceLoc());
+         TokBegin = CurPtr;
+
+         continue;
+      }
+
+      ++CurPtr;
+   }
+
+   assert(*CurPtr == '"');
+   ++CurPtr;
+
+   Toks.push_back(makeToken(TokBegin, CurPtr - TokBegin - 1,
+                            tok::stringliteral));
+}
+
 void Lexer::lexDiagnostic()
 {
    TokBegin = CurPtr++;
@@ -635,6 +662,7 @@ void Lexer::lexDiagnostic()
       ++TokBegin;
    }
 
+   auto &Tokens = LookaheadVec;
    while (1) {
       if (*CurPtr == '"')
          break;
@@ -644,29 +672,29 @@ void Lexer::lexDiagnostic()
             break;
       }
       else if (*CurPtr == '\\') {
-         if (!isModuleLexer) {
+//         if (!isModuleLexer) {
             // normal escape, e.g. "\n"
             ++CurPtr;
-         }
-         else {
-            // hex escape, e.g. "\0A"
-            CurPtr += 2;
-         }
+//         }
+//         else {
+//            // hex escape, e.g. "\0A"
+//            CurPtr += 2;
+//         }
       }
       else if (*CurPtr == InterpolationBegin) {
          if (CurPtr[1] == InterpolationBegin) {
             ++CurPtr;
-            tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
+            Tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
                                 SourceLocation(CurPtr - BufStart + offset));
 
             TokBegin = ++CurPtr;
             continue;
          }
 
-         tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
+         Tokens.emplace_back(TokBegin, CurPtr - TokBegin, tok::stringliteral,
                              SourceLocation(CurPtr - BufStart + offset));
 
-         tokens.emplace_back(tok::sentinel);
+         Tokens.emplace_back(tok::sentinel);
 
          ++CurPtr;
          if (*CurPtr == '{') {
@@ -680,7 +708,7 @@ void Lexer::lexDiagnostic()
             unsigned closeBraces = 0;
 
             while (1) {
-               auto tok = lex_next_token();
+               auto tok = lexNextToken();
                switch (tok.getKind()) {
                case tok::open_brace:
                   ++openBraces;
@@ -690,7 +718,7 @@ void Lexer::lexDiagnostic()
                   break;
                // begin of the argument list
                case tok::open_paren: {
-                  tokens.push_back(tok);
+                  Tokens.push_back(tok);
 
                   unsigned openParens = 1;
                   unsigned closedParens = 0;
@@ -731,7 +759,7 @@ void Lexer::lexDiagnostic()
                            auto Str = makeToken(StrBegin, CurPtr - StrBegin - 1,
                                                 tok::stringliteral);
 
-                           tokens.push_back(Str);
+                           Tokens.push_back(Str);
                         }
 
                         // skip at most one whitespace after the comma
@@ -764,14 +792,14 @@ void Lexer::lexDiagnostic()
                if (openBraces == closeBraces)
                   break;
 
-               tokens.push_back(tok);
+               Tokens.push_back(tok);
             }
          }
          else {
-            tokens.push_back(lex_next_token());
+            Tokens.push_back(lexNextToken());
          }
 
-         tokens.emplace_back(tok::sentinel);
+         Tokens.emplace_back(tok::sentinel);
          TokBegin = CurPtr;
 
          continue;
@@ -785,11 +813,12 @@ void Lexer::lexDiagnostic()
       ++TokBegin;
    }
 
-   tokens.push_back(makeToken(TokBegin, diff, tok::stringliteral));
-   tokens.push_back(makeEOF());
+   Tokens.push_back(makeToken(TokBegin, diff, tok::stringliteral));
+   Tokens.push_back(makeEOF());
 
-   tokenIndex = 1;
-   doneLexing = true;
+   CurTok = Tokens.front();
+   LookaheadIdx = 1;
+   IsTokenLexer = true;
 }
 
 Token Lexer::lexCharLiteral()
@@ -979,70 +1008,53 @@ void Lexer::lexOperator()
 {
    --CurPtr;
 
+   bool First = true;
    while (1) {
       switch (*CurPtr) {
-         case '+':
-         case '-':
-         case '=':
-         case '<':
-         case '&':
-         case '|':
-         case '%':
-         case '!':
-         case '*':
-         case '/':
-         case '~':
-         case '^':
-         case '>':
-         case '?':
-         case ':':
-            break;
-         case '.':
-            // periods must occur in sequences of two or more
-            if (*(CurPtr + 1) != '.')
-               return;
-
+      case '<':
+         if (CurMode == Mode::ParsingTemplateParams) {
             ++CurPtr;
-            break;
-         default:
             return;
+         }
+
+         LLVM_FALLTHROUGH;
+      case '>':
+         if (CurMode == Mode::ParsingTemplateParams
+               || CurMode == Mode::ParsingTemplateArgs) {
+            if (First)
+               ++CurPtr;
+
+            return;
+         }
+
+         LLVM_FALLTHROUGH;
+      case '+':
+      case '-':
+      case '=':
+      case '&':
+      case '|':
+      case '%':
+      case '!':
+      case '*':
+      case '/':
+      case '~':
+      case '^':
+      case '?':
+      case ':':
+         break;
+      case '.':
+         // periods must occur in sequences of two or more
+         if (CurPtr[1] != '.')
+            return;
+
+         ++CurPtr;
+         break;
+      default:
+         return;
       }
 
       ++CurPtr;
-   }
-}
-
-void Lexer::lexPreprocessorExpr()
-{
-   assert(*CurPtr == '{');
-   ++CurPtr;
-
-   unsigned openedBraces = 1;
-   unsigned closedBraces = 0;
-
-   while (openedBraces != closedBraces) {
-      auto tok = lex_next_token();
-      switch (tok.getKind()) {
-         case tok::open_brace:
-            ++openedBraces;
-            break;
-         case tok::close_brace:
-            ++closedBraces;
-            if (openedBraces == closedBraces)
-               continue;
-
-            break;
-         case tok::eof:
-            Diags.Diag(err_generic_error)
-               << "unexpected end of file, expecting '{'"
-               << tok.getSourceLoc();
-
-            return;
-         default:
-            break;
-      }
-
-      tokens.push_back(tok);
+      First = false;
    }
 }
 
@@ -1051,7 +1063,7 @@ Token Lexer::skipSingleLineComment()
    while (*CurPtr != '\n' && *CurPtr != '\0')
       ++CurPtr;
 
-   return lex_next_token();
+   return lexNextToken();
 }
 
 Token Lexer::skipMultiLineComment()
@@ -1062,11 +1074,11 @@ Token Lexer::skipMultiLineComment()
    while (1) {
       switch (*CurPtr++) {
          case '\0':
-            return lex_next_token();
+            return lexNextToken();
          case '*':
             if (*CurPtr == '/') {
                ++CurPtr;
-               return lex_next_token();
+               return lexNextToken();
             }
 
             LLVM_FALLTHROUGH;
@@ -1087,79 +1099,100 @@ void Lexer::expect_impl(tok::TokenType ty)
    }
 }
 
-void Lexer::advance(bool ignore_newline, bool significantWhiteSpace)
+void Lexer::advance(bool ignoreNewline, bool significantWhiteSpace)
 {
-   assert(tokenIndex < tokens.size() && "advancing past the end of the file!");
+   assert(!CurTok.is(tok::eof) && "advancing past the end of the file!");
 
-   Token &t = tokens[tokenIndex++];
-   if ((t.is(tok::newline) && ignore_newline)
-       || (t.is(tok::space) && !significantWhiteSpace)
-       || t.is(tok::backslash)) {
-      return advance(ignore_newline, significantWhiteSpace);
+   /// Remember this token for backtracking.
+   LastTok = CurTok;
+
+   if (LookaheadIdx < LookaheadVec.size()) {
+      /// Get the next token from the lookahead vector.
+      CurTok = LookaheadVec[LookaheadIdx++];
+      if (LookaheadIdx == LookaheadVec.size()) {
+         LookaheadVec.clear();
+         LookaheadIdx = 0;
+         AtEOF |= IsTokenLexer;
+      }
+   }
+   else {
+      /// Lex the next token.
+      CurTok = lexNextToken();
+   }
+
+   switch (CurTok.getKind()) {
+   case tok::newline:
+      if (ignoreNewline) {
+         return advance(ignoreNewline, significantWhiteSpace);
+      }
+
+      break;
+   case tok::space:
+      if (!significantWhiteSpace) {
+         return advance(ignoreNewline, significantWhiteSpace);
+      }
+
+      break;
+   case tok::interpolation_begin:
+      if (InInterpolation) {
+         lexStringInterpolation();
+      }
+
+      break;
+   default:
+      break;
    }
 }
 
-Token Lexer::lookahead(bool ignore_newline, bool sw,
-                          size_t offset) {
-   if(tokenIndex + offset >= tokens.size())
-      return tokens.back();
+Token Lexer::lookahead(bool ignoreNewline, bool sw, size_t offset)
+{
+   assert(!CurTok.is(tok::eof) && "advancing past the end of the file!");
 
-   auto &tok = tokens[tokenIndex + offset];
-   if ((tok.is(tok::newline) && ignore_newline)
-       || (tok.is(tok::space) && !sw)
-       || tok.oneOf(tok::backslash)) {
-      return lookahead(ignore_newline, sw, offset + 1);
+   /// Lex as many tokens as necessary for the required lookahead.
+   while (LookaheadVec.size() <= LookaheadIdx + offset) {
+      LookaheadVec.push_back(lexNextToken());
    }
 
-   return tok;
+   // Check if the lookahead token is what we want.
+   Token LookaheadTok = LookaheadVec[LookaheadIdx + offset];
+   switch (LookaheadTok.getKind()) {
+   case tok::newline:
+      if (ignoreNewline) {
+         return lookahead(ignoreNewline, sw, offset + 1);
+      }
+
+      break;
+   case tok::space:
+      if (!sw) {
+         return lookahead(ignoreNewline, sw, offset + 1);
+      }
+
+      break;
+   case tok::interpolation_begin:
+      if (InInterpolation) {
+         lexStringInterpolation();
+      }
+
+      break;
+   default:
+      break;
+   }
+
+   return LookaheadTok;
 }
 
-void Lexer::skip_until_even(ParenKind kind)
+void Lexer::backtrack()
 {
-   tok::TokenType open;
-   tok::TokenType close;
-   switch (kind) {
-      case PAREN:
-         open = tok::open_paren;
-         close = tok::close_paren;
-         break;
-      case BRACE:
-         open = tok::open_brace;
-         close = tok::close_brace;
-         break;
-      case ANGLED:
-         open = tok::smaller;
-         close = tok::greater;
-         break;
-      case SQUARE:
-         open = tok::open_square;
-         close = tok::close_square;
-         break;
-   }
+   assert(LastTok && "can't backtrack by more than one token!");
 
-   if (!currentTok().is(open)) {
-      return;
-   }
+   // Put our current token in the lookahead vector.
+   LookaheadVec.insert(LookaheadVec.begin(), CurTok);
 
-   advance();
+   // Backtrack by one token.
+   CurTok = LastTok;
 
-   unsigned openCount = 1;
-   unsigned closeCount = 0;
-
-   for (;;) {
-      if (currentTok().is(open)) {
-         ++openCount;
-      }
-      else if (currentTok().is(close)) {
-         ++closeCount;
-      }
-
-      if (openCount == closeCount) {
-         break;
-      }
-
-      advance();
-   }
+   // Reset the last token to check that we only backtrack by one.
+   LastTok = Token();
 }
 
 } // namespace lex

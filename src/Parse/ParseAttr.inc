@@ -63,7 +63,8 @@ break;
                if (currentTok().is(tok::comma)) advance();
             }
          }
-
+         
+         
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -135,6 +136,20 @@ break;
                if (currentTok().is(tok::comma)) advance();
             }
          }
+         
+         
+         while (ArgNo < 1) {
+            switch (ArgNo) {
+            default: llvm_unreachable("no default argument");
+case 0: {
+level = InlineAttr::InlineAttr::LevelKind::hint;
+
+ArgNo++;
+break;
+}
+
+            }
+         }
 
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
@@ -181,7 +196,8 @@ unsigned NumNeededArgs = 0;
                if (currentTok().is(tok::comma)) advance();
             }
          }
-
+         
+         
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -231,7 +247,8 @@ unsigned NumNeededArgs = 0;
                if (currentTok().is(tok::comma)) advance();
             }
          }
-
+         
+         
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -284,7 +301,8 @@ break;
                if (currentTok().is(tok::comma)) advance();
             }
          }
-
+         
+         
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -330,7 +348,8 @@ unsigned NumNeededArgs = 0;
                if (currentTok().is(tok::comma)) advance();
             }
          }
-
+         
+         
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -339,7 +358,7 @@ unsigned NumNeededArgs = 0;
       auto EndLoc = currentTok().getSourceLoc();
 Attrs.push_back(new (Context) DiscardableResultAttr(SourceRange(AttrLoc, EndLoc)));
  break;}
-case AttrKind::_Builtin: {
+case AttrKind::AutoClosure: {
 unsigned NumNeededArgs = 0;
 
          unsigned ArgNo = 0;
@@ -376,6 +395,230 @@ unsigned NumNeededArgs = 0;
                if (currentTok().is(tok::comma)) advance();
             }
          }
+         
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) AutoClosureAttr(SourceRange(AttrLoc, EndLoc)));
+ break;}
+case AttrKind::VersionDecl: {
+VersionDeclAttr::VersionKind version;
+unsigned NumNeededArgs = 1;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               case 0: {
+   if (!currentTok().is(tok::ident)) {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "version ", 5 /*one of */,
+                  1, "None, Windows, Darwin, macOS, Linux, POSIX");
+
+      break;
+   }
+
+   auto Ident = currentTok().getIdentifier();
+VersionDeclAttr::VersionKind _enumKind;
+if (Ident=="None") { _enumKind = VersionDeclAttr::None; }
+else if (Ident=="Windows") { _enumKind = VersionDeclAttr::Windows; }
+else if (Ident=="Darwin") { _enumKind = VersionDeclAttr::Darwin; }
+else if (Ident=="macOS") { _enumKind = VersionDeclAttr::macOS; }
+else if (Ident=="Linux") { _enumKind = VersionDeclAttr::Linux; }
+else if (Ident=="POSIX") { _enumKind = VersionDeclAttr::POSIX; }
+
+   else {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "version", 5 /*one of */,
+                  1, "None, Windows, Darwin, macOS, Linux, POSIX");
+
+      break;
+   }
+version = _enumKind;
+break;
+}
+
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+         
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) VersionDeclAttr(std::move(version), SourceRange(AttrLoc, EndLoc)));
+ break;}
+case AttrKind::VersionStmt: {
+VersionStmtAttr::VersionKind version;
+unsigned NumNeededArgs = 1;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               case 0: {
+   if (!currentTok().is(tok::ident)) {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "version ", 5 /*one of */,
+                  1, "None, Windows, Darwin, macOS, Linux, POSIX");
+
+      break;
+   }
+
+   auto Ident = currentTok().getIdentifier();
+VersionStmtAttr::VersionKind _enumKind;
+if (Ident=="None") { _enumKind = VersionStmtAttr::None; }
+else if (Ident=="Windows") { _enumKind = VersionStmtAttr::Windows; }
+else if (Ident=="Darwin") { _enumKind = VersionStmtAttr::Darwin; }
+else if (Ident=="macOS") { _enumKind = VersionStmtAttr::macOS; }
+else if (Ident=="Linux") { _enumKind = VersionStmtAttr::Linux; }
+else if (Ident=="POSIX") { _enumKind = VersionStmtAttr::POSIX; }
+
+   else {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "version", 5 /*one of */,
+                  1, "None, Windows, Darwin, macOS, Linux, POSIX");
+
+      break;
+   }
+version = _enumKind;
+break;
+}
+
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+         
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) VersionStmtAttr(std::move(version), SourceRange(AttrLoc, EndLoc)));
+ break;}
+case AttrKind::_Builtin: {
+std::string builtinName;
+unsigned NumNeededArgs = 1;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               case 0: {
+   if (!currentTok().is(tok::stringliteral)) {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "_builtin", 2 /*string literal */,
+                  1);
+
+      break;
+   }
+builtinName = prepareStringLiteral(currentTok());
+break;
+}
+
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+         
+         
+         while (ArgNo < 1) {
+            switch (ArgNo) {
+            default: llvm_unreachable("no default argument");
+case 0: {
+builtinName = R"__()__";
+ArgNo++;
+break;
+}
+
+            }
+         }
 
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
@@ -383,35 +626,41 @@ unsigned NumNeededArgs = 0;
             break;
          }
       auto EndLoc = currentTok().getSourceLoc();
-Attrs.push_back(new (Context) _BuiltinAttr(SourceRange(AttrLoc, EndLoc)));
+Attrs.push_back(new (Context) _BuiltinAttr(std::move(builtinName), SourceRange(AttrLoc, EndLoc)));
  break;}
 #endif
 #undef CDOT_PARSE_ATTR_MAIN
 
 #ifdef CDOT_PARSE_ATTR_CHECK
-auto Decl = Result.getDecl();
+auto D = Result.getDecl();
 switch(A->getKind()) {
-case AttrKind::Extern: {if (isa<CallableDecl>(Decl)) break;
-if (isa<GlobalVarDecl>(Decl)) break;
+case AttrKind::Extern: {if (isa<CallableDecl>(D)) break;
+if (isa<GlobalVarDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "extern");
 }
-case AttrKind::Inline: {if (isa<CallableDecl>(Decl)) break;
+case AttrKind::Inline: {if (isa<CallableDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "inline");
 }
-case AttrKind::Implicit: {if (isa<CallableDecl>(Decl)) break;
+case AttrKind::Implicit: {if (isa<CallableDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "implicit");
 }
-case AttrKind::Opaque: {if (isa<RecordDecl>(Decl)) break;
+case AttrKind::Opaque: {if (isa<RecordDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "opaque");
 }
-case AttrKind::Align: {if (isa<RecordDecl>(Decl)) break;
-if (isa<VarDecl>(Decl)) break;
+case AttrKind::Align: {if (isa<RecordDecl>(D)) break;
+if (isa<VarDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "align");
 }
-case AttrKind::DiscardableResult: {if (isa<CallableDecl>(Decl)) break;
+case AttrKind::DiscardableResult: {if (isa<CallableDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "discardableResult");
 }
-case AttrKind::_Builtin: {if (isa<NamedDecl>(Decl)) break;
+case AttrKind::AutoClosure: {if (isa<FuncArgDecl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "autoclosure");
+}
+case AttrKind::VersionDecl: {if (isa<Decl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "version");
+}
+case AttrKind::_Builtin: {if (isa<NamedDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_builtin");
 }
 default: break; 

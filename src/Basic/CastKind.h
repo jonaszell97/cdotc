@@ -5,21 +5,22 @@
 #ifndef CDOT_CASTKIND_H
 #define CDOT_CASTKIND_H
 
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/ArrayRef.h>
-
 namespace cdot {
 
 enum class CastKind : unsigned char {
-   NoOp = 0, Invalid, LValueToRValue,
-   IBox, IUnbox, IntToFP, FPToInt, Ext, Trunc, PtrToInt, IntToPtr, SignFlip,
+   NoOp = 0, LValueToRValue,
+   IntToFP, FPToInt, Ext, Trunc, PtrToInt, IntToPtr, SignFlip, IsNull,
 
-   FPExt, FPTrunc, FPBox, FPUnbox,
-   DynCast, UpCast, ConversionOp, BitCast, ProtoWrap, ProtoUnwrap,
+   FPExt, FPTrunc,
+   DynCast, UpCast, ConversionOp,
+   BitCast, ProtoWrap, ProtoUnwrap,
 
-   NoThrowToThrows, MutRefToRef, MutPtrToPtr,
+   NoThrowToThrows,
 
-   IntToEnum, EnumToInt
+   Forward, Move, Copy,
+   MutRefToRef, MutPtrToPtr, RValueToConstRef,
+
+   IntToEnum, EnumToInt, ToVoid, ToEmptyTuple,
 };
 
 enum CastStrength : unsigned char {

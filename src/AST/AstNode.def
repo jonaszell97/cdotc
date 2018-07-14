@@ -25,17 +25,18 @@
       CDOT_STMT(GotoStmt)
       CDOT_STMT(ForStmt)
       CDOT_STMT(IfStmt)
+      CDOT_STMT(IfLetStmt)
+      CDOT_STMT(IfCaseStmt)
       CDOT_STMT(WhileStmt)
       CDOT_STMT(ForInStmt)
       CDOT_STMT(MatchStmt)
 
-      CDOT_STMT(LocalDestructuringDecl)
-      CDOT_STMT(GlobalDestructuringDecl)
-
-      CDOT_STMT(TryStmt)
+      CDOT_STMT(DoStmt)
       CDOT_STMT(ThrowStmt)
       CDOT_STMT(DebugStmt)
       CDOT_STMT(NullStmt)
+
+      CDOT_STMT(DiscardAssignStmt)
 
       CDOT_STMT(MacroExpansionStmt)
 
@@ -77,6 +78,7 @@
       CDOT_EXPR(SubscriptExpr)
       CDOT_EXPR(BuiltinExpr)
       CDOT_EXPR(TupleMemberExpr)
+      CDOT_EXPR(TemplateArgListExpr)
 
       CDOT_EXPR(SelfExpr)
       CDOT_EXPR(SuperExpr)
@@ -94,6 +96,8 @@
       CDOT_EXPR(TypePredicateExpr)
 
       CDOT_EXPR(IfExpr)
+      CDOT_EXPR(TryExpr)
+      CDOT_EXPR(AwaitExpr)
       CDOT_EXPR(ImplicitCastExpr)
 
       CDOT_EXPR(StaticExpr)
@@ -115,6 +119,8 @@
       CDOT_ABSTRACT(_lastTypeExpr)
    CDOT_ABSTRACT(_lastExpr)
 #endif
+
+CDOT_ABSTRACT(_lastASTNode)
 
 #undef CDOT_ASTNODE
 #undef CDOT_ABSTRACT

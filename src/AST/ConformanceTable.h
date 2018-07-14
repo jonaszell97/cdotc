@@ -60,6 +60,8 @@ class ConformanceTable {
    getFirstOfKind(ast::RecordDecl *R, ConformanceKind K) const;
 
 public:
+   ~ConformanceTable();
+
    ConformanceKind lookupConformance(ast::RecordDecl *Decl,
                                      ast::ProtocolDecl *P) const;
 

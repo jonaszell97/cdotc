@@ -33,9 +33,9 @@ namespace lex {
 namespace diag {
 
 enum class SeverityLevel {
+   Note,
    Warning,
    Error,
-   Note,
    Fatal,
 };
 

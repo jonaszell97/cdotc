@@ -15,6 +15,7 @@ class IdentifierInfo;
 
 namespace ast {
    class CallableDecl;
+   class CompoundStmt;
    class MethodDecl;
    class LambdaExpr;
    class RecordDecl;
@@ -87,38 +88,30 @@ protected:
 
 class BlockScope: public Scope {
 public:
-   explicit BlockScope(Scope *enclosingScope = nullptr)
-      : Scope(BlockScopeID, enclosingScope)
+   explicit BlockScope(unsigned ScopeID,
+                       ast::CompoundStmt *CS = nullptr,
+                       Scope *enclosingScope = nullptr)
+      : Scope(BlockScopeID, enclosingScope),
+        ScopeID(ScopeID), CS(CS)
    {}
 
-   static bool classofKind(TypeID id)
-   {
-      switch (id) {
-      case BlockScopeID:
-      case FunctionScopeID:
-      case MethodScopeID:
-      case LambdaScopeID:
-      case LoopScopeID:
-         return true;
-      default:
-         return false;
-      }
-   }
+   unsigned getScopeID() const { return ScopeID; }
+   ast::CompoundStmt *getCompoundStmt() const { return CS; }
 
+   static bool classofKind(TypeID id) { return id == BlockScopeID; }
    static bool classof(Scope const *S) { return classofKind(S->getTypeID()); }
 
-protected:
-   explicit BlockScope(TypeID id, Scope *enclosingScope = nullptr)
-      : Scope(id, enclosingScope)
-   {}
+private:
+   unsigned ScopeID;
+   ast::CompoundStmt *CS;
 };
 
-class FunctionScope: public BlockScope {
+class FunctionScope: public Scope {
 public:
    explicit FunctionScope(ast::CallableDecl *CD,
                           bool inferrableReturnType = false,
                           Scope *enclosingScope = nullptr)
-      : BlockScope(FunctionScopeID, enclosingScope),
+      : Scope(FunctionScopeID, enclosingScope),
         CD(CD), InferrableReturnType(inferrableReturnType)
    {}
 
@@ -148,7 +141,7 @@ protected:
                  ast::CallableDecl *CD,
                  bool inferrableReturnType = false,
                  Scope *enclosingScope = nullptr)
-      : BlockScope(typeID, enclosingScope),
+      : Scope(typeID, enclosingScope),
         CD(CD), InferrableReturnType(inferrableReturnType)
    {}
 
@@ -161,6 +154,7 @@ public:
    explicit MethodScope(ast::MethodDecl *M,
                         bool InferrableReturnType = false,
                         Scope *enclosingScope = nullptr);
+
    ast::MethodDecl *getMethodDecl() const;
 
    static bool classofKind(TypeID id) { return id == MethodScopeID; }
@@ -169,7 +163,8 @@ public:
 
 class LambdaScope: public FunctionScope {
 public:
-   explicit LambdaScope(ast::LambdaExpr *L, Scope *enclosingScope = nullptr);
+   explicit LambdaScope(ast::LambdaExpr *L,
+                        Scope *enclosingScope = nullptr);
 
    ast::LambdaExpr *getLambdaExpr() const
    {
@@ -183,14 +178,14 @@ private:
    ast::LambdaExpr *L;
 };
 
-class LoopScope: public BlockScope {
+class LoopScope: public Scope {
 public:
    LoopScope(bool continuable,
              bool breakable,
              bool lastCaseInMatch,
              bool nextCaseHasArgs,
              Scope *enclosingScope = nullptr)
-      : BlockScope(LoopScopeID, enclosingScope),
+      : Scope(LoopScopeID, enclosingScope),
         continuable(continuable),
         breakable(breakable),
         lastCaseInMatch(lastCaseInMatch),

@@ -21,7 +21,8 @@ ast::CallableDecl* FunctionScope::getCallableDecl()
 MethodScope::MethodScope(ast::MethodDecl *M,
                          bool InferrableReturnType,
                          Scope *enclosingScope)
-   : FunctionScope(MethodScopeID, M, InferrableReturnType, enclosingScope)
+   : FunctionScope(MethodScopeID, M, InferrableReturnType,
+                   enclosingScope)
 {
 
 }
@@ -31,7 +32,8 @@ ast::MethodDecl* MethodScope::getMethodDecl() const
    return cast<ast::MethodDecl>(CD);
 }
 
-LambdaScope::LambdaScope(ast::LambdaExpr *L, Scope *enclosingScope)
+LambdaScope::LambdaScope(ast::LambdaExpr *L,
+                         Scope *enclosingScope)
    : FunctionScope(LambdaScopeID, L->getFunc(), true, enclosingScope),
      L(L)
 {

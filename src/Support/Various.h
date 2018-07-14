@@ -23,6 +23,13 @@ BaseTy pow(BaseTy b, ExpTy exp)
    return result;
 }
 
+template <class HashTy, class T>
+inline void hash_combine(HashTy& seed, const T& v)
+{
+   std::hash<T> hasher;
+   seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+}
+
 } // namespace support
 } // namespace cdot
 

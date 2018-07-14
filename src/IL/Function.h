@@ -20,6 +20,10 @@ namespace cdot {
 enum class KnownFunction   : unsigned char;
 enum class ConstructorKind : unsigned char;
 
+namespace serial {
+   class LazyILFunctionInfo;
+} // namespace serial
+
 namespace il {
 
 class BasicBlock;
@@ -36,6 +40,8 @@ public:
    Function(llvm::StringRef name,
             FunctionType *funcTy,
             Module *parent);
+
+   ~Function();
 
    llvm::StringRef getUnmangledName() const;
 
@@ -54,7 +60,12 @@ public:
    bool mightThrow() const { return FnBits.Throws; }
    bool isCStyleVararg() const { return FnBits.Vararg; }
    bool isLambda() const;
+
    bool hasStructReturn() const { return FnBits.SRet; }
+   void setStructReturn(bool V) { FnBits.SRet = V; }
+
+   bool isAsync() const { return FnBits.Async; }
+   void setAsync(bool V) { FnBits.Async = V; }
 
    bool isGlobalCtor() const { return FnBits.GlobalCtor; }
    bool isGlobalDtor() const { return FnBits.GlobalDtor; }
@@ -63,6 +74,11 @@ public:
    void setGlobalDtor(bool dtor) { FnBits.GlobalDtor = dtor; }
 
    void addDefinition() { FnBits.Declared = false; }
+   void setDeclared(bool b) { FnBits.Declared = b; }
+
+   bool isInvalid() const { return FnBits.Invalid; }
+   void setInvalid(bool V) { FnBits.Invalid = V; }
+
    Function *getDeclarationIn(Module *M);
 
    ValueSymbolTable* getSymTab() const
@@ -76,22 +92,44 @@ public:
    const_iterator begin() const { return BasicBlocks.begin(); }
    const_iterator end() const { return BasicBlocks.end(); }
 
+   const il::BasicBlock& front() const { return BasicBlocks.front(); }
+   il::BasicBlock& front() { return BasicBlocks.front(); }
+
+   const il::BasicBlock& back() const { return BasicBlocks.back(); }
+   il::BasicBlock& back() { return BasicBlocks.back(); }
+
+   unsigned size() const { return (unsigned)BasicBlocks.size(); }
+
    bool isGlobalInitFn() const;
+   uint16_t getPriority() const { return Priority; }
+   void setPriority(uint16_t Priority) { Function::Priority = Priority; }
 
    KnownFunction getKnownFnKind() const { return knownFnKind; }
    void setKnownFnKind(KnownFunction kind) { knownFnKind = kind; }
+
+   serial::LazyILFunctionInfo* getLazyFnInfo() const { return LazyFnInfo; }
+   void setLazyFnInfo(serial::LazyILFunctionInfo* V) { LazyFnInfo = V; }
+
+   bool overridePreviousDefinition() const { return FnBits.OverridePrevious; }
+   void setOverridePreviousDefinition(bool b) { FnBits.OverridePrevious = b; }
 
    static BasicBlockList Function::*getSublistAccess(BasicBlock*)
    {
       return &Function::BasicBlocks;
    }
 
+   void dump() const;
+   void print(llvm::raw_ostream &OS) const;
+
 protected:
    Module *parent;
    BasicBlockList BasicBlocks;
    KnownFunction knownFnKind = KnownFunction(0);
+   uint16_t Priority = 1;
 
-   Function(const Function &other);
+   serial::LazyILFunctionInfo *LazyFnInfo = nullptr;
+
+   Function(const Function &other, Module &M);
 
    Function(TypeID id,
             FunctionType *Ty,
@@ -132,7 +170,11 @@ public:
       return T->getTypeID() == LambdaID;
    }
 
+   friend class Function; // for copy init
+
 private:
+   Lambda(const Lambda &other, Module &M);
+
    std::vector<QualType> captures;
 };
 
@@ -144,14 +186,17 @@ public:
           FunctionType *FuncTy,
           bool isStatic,
           bool isVirtual,
+          bool isDeinit,
           Module *parent);
 
    ast::RecordDecl *getRecordType() const;
 
    bool isStatic() const { return FnBits.Static; }
    bool isVirtual() const { return FnBits.Virtual; }
+   bool isDeinit() const { return FnBits.Deinit; }
 
-   Argument *getSelf();
+   il::Value *getSelf() const { return Self; }
+   void setSelf(il::Value *S) { Self = S; }
 
    unsigned getVtableOffset() const { return vtableOffset; }
    void setVtableOffset(unsigned offset) { vtableOffset = offset; }
@@ -160,12 +205,12 @@ public:
    void setPtableOffset(unsigned offset) { ptableOffset = offset; }
 
 protected:
-   Argument *Self;
+   il::Value *Self;
 
    unsigned vtableOffset = 0;
    unsigned ptableOffset = 0;
 
-   Method(const Method &other);
+   Method(const Method &other, Module &M);
 
 public:
    static inline bool classof(Value const* T) {
@@ -194,7 +239,7 @@ public:
    }
 
 protected:
-   Initializer(const Initializer &other);
+   Initializer(const Initializer &other, Module &M);
 
 public:
    static inline bool classof(Value const* T) {

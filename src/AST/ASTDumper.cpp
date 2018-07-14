@@ -4,10 +4,10 @@
 
 #include "ASTDumper.h"
 
+#include "AST/ASTVisitor.h"
 #include "AST/Decl.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"
-#include "AST/Traverse.h"
 
 #include "Support/Format.h"
 #include "Support/WriterBase.h"
@@ -18,7 +18,8 @@ using namespace cdot::ast;
 namespace cdot {
 namespace {
 
-class DumperImpl: public WriterBase<DumperImpl, 3> {
+class DumperImpl: public WriterBase<DumperImpl, 3>,
+                  public RecursiveASTVisitor<DumperImpl> {
 public:
    using Options = ASTDumper::Options;
 
@@ -42,21 +43,7 @@ public:
       TabGuard guard(this);
       WriteStmtCommon(node);
 
-      bool writeChildren = true;
-      switch (node->getTypeID()) {
-#     define CDOT_STMT(Name)                                \
-         case AstNode::Name##ID:                            \
-            writeChildren = visit##Name(static_cast<Name*>(node)); break;
-#     include "AST/AstNode.def"
-
-         default:
-            llvm_unreachable("not a stmt");
-      }
-
-      if (writeChildren)
-         visitDirectChildren(node, [&](Statement *Child) {
-            visit(Child);
-         });
+      RecursiveASTVisitor::visit(node);
    }
 
    void visit(Expression* node)
@@ -67,21 +54,7 @@ public:
       TabGuard guard(this);
       WriteExprCommon(node);
 
-      bool writeChildren = true;
-      switch (node->getTypeID()) {
-#     define CDOT_EXPR(Name)                                \
-         case AstNode::Name##ID:                            \
-            writeChildren = visit##Name(static_cast<Name*>(node)); break;
-#     include "AST/AstNode.def"
-
-         default:
-            llvm_unreachable("not an expr");
-      }
-
-      if (writeChildren)
-         visitDirectChildren(node, [&](Statement *Child) {
-            visit(Child);
-         });
+      RecursiveASTVisitor::visit(node);
    }
 
    void visitExpr(Expression* expr)
@@ -122,8 +95,7 @@ private:
          visitExpr(A.getExpr());
       }
       else {
-         out << (A.isConst() ? "let " : "var ");
-         out << A.getIdentifier();
+//         visit(A.getDecl());
       }
    }
 
@@ -188,11 +160,6 @@ bool DumperImpl::visitCompoundStmt(CompoundStmt* stmt)
    return true;
 }
 
-bool DumperImpl::visitTranslationUnit(TranslationUnit *stmt)
-{
-   return true;
-}
-
 bool DumperImpl::visitTemplateParamDecl(TemplateParamDecl *stmt)
 {
    out << "[" << stmt->getName() << "]";
@@ -236,6 +203,16 @@ bool DumperImpl::visitIfStmt(IfStmt* stmt)
    return true;
 }
 
+bool DumperImpl::visitIfLetStmt(IfLetStmt* stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitIfCaseStmt(IfCaseStmt* stmt)
+{
+   return true;
+}
+
 bool DumperImpl::visitWhileStmt(WhileStmt* stmt)
 {
    return true;
@@ -267,14 +244,7 @@ bool DumperImpl::visitGlobalVarDecl(GlobalVarDecl* stmt)
    return visitVarDecl(stmt);
 }
 
-bool DumperImpl::visitLocalDestructuringDecl(
-   LocalDestructuringDecl *stmt)
-{
-   return true;
-}
-
-bool DumperImpl::visitGlobalDestructuringDecl(
-   GlobalDestructuringDecl *stmt)
+bool DumperImpl::visitDestructuringDecl(DestructuringDecl *decl)
 {
    return true;
 }
@@ -341,6 +311,12 @@ bool DumperImpl::visitFieldDecl(FieldDecl* stmt)
 bool DumperImpl::visitPropDecl(PropDecl* stmt)
 {
    WriteNamedDeclCommon(stmt);
+   return true;
+}
+
+bool DumperImpl::visitSubscriptDecl(SubscriptDecl *decl)
+{
+   WriteNamedDeclCommon(decl);
    return true;
 }
 
@@ -422,7 +398,17 @@ bool DumperImpl::visitDebugStmt(DebugStmt* stmt)
    return true;
 }
 
-bool DumperImpl::visitTryStmt(TryStmt* stmt)
+bool DumperImpl::visitDoStmt(DoStmt* stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitTryExpr(TryExpr *expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitAwaitExpr(AwaitExpr *expr)
 {
    return true;
 }
@@ -433,6 +419,11 @@ bool DumperImpl::visitThrowStmt(ThrowStmt* stmt)
 }
 
 bool DumperImpl::visitReturnStmt(ReturnStmt* stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitDiscardAssignStmt(DiscardAssignStmt *stmt)
 {
    return true;
 }
@@ -624,6 +615,11 @@ bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
 }
 
 bool DumperImpl::visitSubscriptExpr(SubscriptExpr* expr)
+{
+   return true;
+}
+
+bool DumperImpl::visitTemplateArgListExpr(TemplateArgListExpr *expr)
 {
    return true;
 }

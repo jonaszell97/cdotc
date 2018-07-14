@@ -2,267 +2,163 @@
 // Created by Jonas Zell on 28.11.17.
 //
 
-#ifndef CDOT_MODULE2_H
-#define CDOT_MODULE2_H
+#ifndef CDOT_MODULE_H
+#define CDOT_MODULE_H
 
-#include "IdentifierTable.h"
+#include "Basic/IdentifierInfo.h"
 #include "Lex/SourceLocation.h"
+#include "Support/LLVM.h"
 
-#include <string>
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
-
-namespace ast {
-   class NamedDecl;
-   class CompoundStmt;
-} // namespace ast
-
 namespace il {
    class Module;
 } // namespace il
 
-namespace module {
-
-class IdentifierTable;
+namespace ast {
+   class ASTContext;
+   class NamedDecl;
+   class ModuleDecl;
+} // namespace ast
 
 class Module {
+   Module(IdentifierInfo *Name,
+          SourceRange Loc,
+          Module *ParentModule = nullptr);
+
+   Module(IdentifierInfo *ModulePath,
+          Module *ImportedFrom,
+          IdentifierInfo *Name,
+          SourceRange Loc,
+          Module *ParentModule = nullptr);
+
+   /// The name of this module.
+   IdentifierInfo *Name;
+
+   /// The location this module was first encountered
+   SourceRange Loc;
+
+   /// The time (in milliseconds) any file in this module was last modified
+   long long LastModified = 0;
+
+   /// The path to the module file this was loaded from, or null if this
+   /// module was created in this compilation.
+   IdentifierInfo *ModulePath = nullptr;
+
+   /// The parent module of this module, or null if it is a base module.
+   Module *ParentModule = nullptr;
+
+   /// The submodules of this module.
+   SmallVector<Module*, 0> SubModules;
+
+   /// The primary module declaration of this module.
+   ast::ModuleDecl *Decl = nullptr;
+
+   /// The corresponding IL module.
+   il::Module *ILMod = nullptr;
+
+   /// The modules directly imported by this module.
+   SmallPtrSet<Module*, 8> Imports;
+
+   /// The module that this module was imported from.
+   Module *ImportedFrom = nullptr;
+
+   /// If false, this module contains new declarations from this compilation.
+   bool ContainsNewDecls = false;
+
 public:
-   explicit Module(std::string &&name, Module *parentModule = nullptr)
-      : parentModule(parentModule), name(move(name)), deserialized(false)
-   {
+   struct SourceFileInfo {
+      /// The time (in milliseconds) this file was last modified
+      long long LastModified = 0;
 
-   }
+      /// Source ID assigned during original compilation.
+      unsigned OriginalSourceID = 0;
 
-   struct File {
-   public:
-      File(size_t originalSourceId, std::string &&fileName)
-         : originalSourceId(originalSourceId), fileName(move(fileName))
-      { }
-
-      size_t getOriginalSourceId() const
-      {
-         return originalSourceId;
-      }
-
-      const std::string &getFileName() const
-      {
-         return fileName;
-      }
-
-      void setSourceId(size_t id) const
-      {
-         originalSourceId = id;
-      }
-
-   private:
-      mutable size_t originalSourceId;
-      std::string fileName;
+      /// Base offset assigned during original compilation.
+      unsigned OriginalOffset = 0;
    };
-
-   struct Declaration {
-      Declaration(unsigned offset)
-         : decl(nullptr), deserialized(false), offset(offset)
-      {}
-
-      Declaration(ast::NamedDecl *decl)
-         : decl(decl), deserialized(true), offset(0)
-      {}
-
-      ast::NamedDecl *getDecl() const
-      {
-         return decl;
-      }
-
-      bool isDeserialized() const
-      {
-         return deserialized;
-      }
-
-      unsigned int getOffset() const
-      {
-         return offset;
-      }
-
-      void setDecl(ast::NamedDecl *decl)
-      {
-         Declaration::decl = decl;
-      }
-
-      void setDeserialized(bool deserialized)
-      {
-         Declaration::deserialized = deserialized;
-      }
-
-   private:
-      ast::NamedDecl *decl;
-
-      bool deserialized : 1;
-      unsigned offset   : 31;
-   };
-
-   Module *getParentModule() const { return parentModule; }
-   const std::string &getName() const { return name; }
-   
-   std::string getFullName() const { return getJoinedName('.'); }
-   std::string getJoinedName(char seperator) const;
-
-   const std::vector<File> &getContainedFiles() const
-   { return containedFiles; }
-
-   ast::CompoundStmt* getDeclRoot() const
-   { return declRoot; }
-
-   void addFile(size_t id, std::string &&fileName)
-   { containedFiles.emplace_back(id, move(fileName)); }
-
-   void addFile(std::string &&fileName)
-   { containedFiles.emplace_back(0, move(fileName)); }
-
-   void setDeclRoot(ast::CompoundStmt* declRoot)
-   { Module::declRoot = declRoot; }
-
-   const std::string &getBaseFile() const { return baseFile; }
-
-   void setBaseFile(std::string &&baseFile)
-   { Module::baseFile = move(baseFile); }
-
-   const std::string &getModuleMapFile() const { return moduleMapFile; }
-
-   void setModuleMapFile(std::string &&moduleMapFile);
-
-   il::Module *getILModule() const { return ILModule; }
-   void setILModule(il::Module *ILModule) { Module::ILModule = ILModule; }
-
-   const std::vector<std::unique_ptr<Module>> &getSubModules() const
-   { return SubModules; }
-
-   long long int getTimestamp() const { return timestamp; }
-
-   void setTimestamp(long long int timestamp)
-   {
-      Module::timestamp = timestamp;
-   }
-
-   SourceLocation getSourceLoc() const { return sourceLoc; }
-
-   void setSourceLoc(SourceLocation sourceLoc)
-   {
-      Module::sourceLoc = sourceLoc;
-   }
-
-   Module *getSubModule(llvm::StringRef name) const
-   {
-      for (auto &M : SubModules)
-         if (name.equals(M->getName()))
-            return M.get();
-
-      return nullptr;
-   }
-
-   Module *getBaseModule()
-   {
-      auto base = this;
-      while (auto parent = base->getParentModule())
-         base = parent;
-
-      return base;
-   }
-
-   void addSubModule(std::unique_ptr<Module> &&Sub)
-   {
-      SubModules.emplace_back(move(Sub));
-   }
-
-   void addBuildOption(std::string &&opt)
-   {
-      buildOptions.emplace_back(move(opt));
-   }
-
-   const std::vector<std::string> &getBuildOptions() const
-   { return buildOptions; }
-
-   void setBuildOptions(std::vector<std::string> &&buildOptions)
-   {
-      Module::buildOptions = move(buildOptions);
-   }
-
-   void setContainedFiles(std::vector<File> &&files)
-   {
-      containedFiles = move(files);
-   }
-
-   bool isDeserialized() const
-   {
-      return deserialized;
-   }
-
-   void setDeserialized(bool deserialized)
-   {
-      Module::deserialized = deserialized;
-   }
-
-   const llvm::StringMap<Declaration> &getDeclarations() const
-   {
-      return declarations;
-   }
-
-   void addDecl(llvm::StringRef key, unsigned offset)
-   {
-      declarations.try_emplace(key, offset);
-   }
-
-   void addDecl(llvm::StringRef key, ast::NamedDecl *decl)
-   {
-      declarations.try_emplace(key, decl);
-   }
-
-   void addDecl(ast::NamedDecl *decl);
-
-   Declaration *getDecl(llvm::StringRef key)
-   {
-      auto it = declarations.find(key);
-      if (it == declarations.end())
-         return nullptr;
-
-      return &it->second;
-   }
-
-   IdentifierTable &getIdentifierTable()
-   {
-      assert(identifierTable != nullptr);
-      return *identifierTable;
-   }
-
-   void setIdentifierTable(std::unique_ptr<IdentifierTable> &&table)
-   {
-      identifierTable = move(table);
-   }
 
 private:
-   Module *parentModule = nullptr;
-   std::vector<std::unique_ptr<Module>> SubModules;
+   /// The source files used to create this module.
+   llvm::StringMap<SourceFileInfo> SourceFiles;
 
-   std::string name;
-   std::vector<File> containedFiles;
+public:
+   /// Create a new module.
+   static Module *Create(ast::ASTContext &C,
+                         IdentifierInfo *Name,
+                         SourceRange Loc,
+                         Module *ParentModule = nullptr);
 
-   std::string moduleMapFile;
-   std::string baseFile;
+   /// Create a new imported module.
+   static Module *Create(ast::ASTContext &C,
+                         IdentifierInfo *ModulePath,
+                         Module *ImportedFrom,
+                         IdentifierInfo *Name,
+                         SourceRange Loc,
+                         Module *ParentModule = nullptr);
 
-   std::unique_ptr<IdentifierTable> identifierTable;
-   llvm::StringMap<Declaration> declarations;
-   ast::CompoundStmt* declRoot = nullptr;
-   il::Module *ILModule = nullptr;
+   /// \return the name of this module.
+   IdentifierInfo *getName() const { return Name; }
+   std::string getFullName() const;
 
-   SourceLocation sourceLoc;
-   long long timestamp = -1;
-   std::vector<std::string> buildOptions;
+   /// \return the location this module was first encountered.
+   SourceRange getSourceRange() const { return Loc; }
 
-   bool deserialized : 1;
+   /// \return the location this module was first encountered.
+   SourceLocation getSourceLoc() const { return Loc.getStart(); }
+
+   /// \return the modules base module.
+   Module *getBaseModule() const;
+
+   /// \return the modules parent module.
+   Module *getParentModule() const { return ParentModule; }
+
+   /// \return a sub module with the given name, or null if none exists.
+   Module *getSubModule(IdentifierInfo *Name) const;
+
+   /// \return the modules sub modules.
+   ArrayRef<Module*> getSubModules() const { return SubModules; }
+
+   /// \return true iff this module was imported.
+   bool isImported() const { return getBaseModule()->ImportedFrom != nullptr; }
+
+   /// \return the modules corresponding IL module.
+   il::Module *getILModule() const { return getBaseModule()->ILMod; }
+   void setILModule(il::Module *M) { getBaseModule()->ILMod = M; }
+
+   /// \return the AST declaration of this module.
+   ast::ModuleDecl *getDecl() const { return Decl; }
+   void setDecl(ast::ModuleDecl *Decl) { this->Decl = Decl; }
+
+   /// \return the time any file in this module was last modified.
+   long long getLastModified() const { return LastModified; }
+   void setLastModified(long long T) { LastModified = T; }
+
+   IdentifierInfo *getModulePath() const { return ModulePath; }
+   void setModulePath(IdentifierInfo *P) { ModulePath = P; }
+
+   bool containsNewDecls() const { return ContainsNewDecls; }
+   void setContainsNewDecls(bool V) { ContainsNewDecls = V; }
+
+   const SmallPtrSetImpl<Module*> &getImports() { return Imports; }
+   void addImport(Module *D);
+
+   Module* getImportedFrom() const { return ImportedFrom; }
+   void setImportedFrom(Module* V) { ImportedFrom = V; }
+
+   bool isBaseModule() const { return !ParentModule; }
+
+   const SourceFileInfo *lookupSourceFile(StringRef Name);
+   const llvm::StringMap<SourceFileInfo> &getSourceFiles() {return SourceFiles;}
+   bool addSourceFile(StringRef FileName, SourceFileInfo Info);
+
+   bool importsModule(Module *D);
+   bool importsModuleDirectly(Module *D);
 };
 
-} // namespace module
 } // namespace cdot
 
-#endif //CDOT_MODULE2_H
+#endif //CDOT_MODULE_H

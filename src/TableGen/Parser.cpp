@@ -7,13 +7,11 @@
 #include "Record.h"
 #include "TableGen.h"
 #include "Value.h"
-
 #include "Basic/Precedence.h"
-
 #include "Support/Casting.h"
 #include "Support/LiteralParser.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 
 using namespace cdot::lex;
@@ -37,7 +35,6 @@ Parser::Parser(TableGen &TG,
      RK(GlobalRK.get())
 {
    TG.getIdents().addTblGenKeywords();
-   lex.lex();
 }
 
 Parser::~Parser()
@@ -675,12 +672,12 @@ void Parser::parseForEach()
    expect(tok::open_brace);
    advance();
 
-   auto SafePoint = lex.makeSavePoint();
+//   auto SafePoint = lex.makeSavePoint();
 
    if (auto L = dyn_cast<ListLiteral>(Range)) {
       for (auto &V : L->getValues()) {
          ForEachScope scope(*this, name, V);
-         SafePoint.reset();
+//         SafePoint.reset();
 
          while (!currentTok().is(tok::close_brace)) {
             parseNextDecl();
@@ -691,7 +688,7 @@ void Parser::parseForEach()
    else if (auto D = dyn_cast<DictLiteral>(Range)) {
       for (auto &V : D->getValues()) {
          ForEachScope scope(*this, name, V.getValue());
-         SafePoint.reset();
+//         SafePoint.reset();
 
          while (!currentTok().is(tok::close_brace)) {
             parseNextDecl();
@@ -730,7 +727,7 @@ Type* Parser::parseType()
    if ((ident.size() == 2 || ident.size() == 3)
        && (ident[0] == 'i' || ident[0] == 'u')) {
       auto isUnsigned = ident[0] == 'u';
-      auto bw = llvm::StringSwitch<unsigned>(ident.substr(1))
+      auto bw = StringSwitch<unsigned>(ident.substr(1))
          .Case("1", 1).Case("8", 8).Case("16", 16).Case("32", 32)
          .Case("64", 64).Default(0);
 
@@ -1106,7 +1103,7 @@ Value* Parser::parseFunction(Type *contextualTy)
    };
 
    auto func = tryParseIdentifier();
-   auto kind = llvm::StringSwitch<FuncKind>(func)
+   auto kind = StringSwitch<FuncKind>(func)
       .Case("allof", AllOf)
       .Case("push", Push)
       .Case("pop", Pop)

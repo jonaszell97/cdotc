@@ -8,6 +8,7 @@
 #include "ConformanceChecker.h"
 #include "Message/Diagnostics.h"
 #include "SemaPass.h"
+#include "Serialization/ModuleFile.h"
 #include "TemplateInstantiator.h"
 
 using namespace cdot::support;
@@ -32,10 +33,15 @@ public:
       SOD = Rec;
    }
 
+   RecordDecl *getRecord() const { return R; }
+
    QualType visitAssociatedType(AssociatedType *Ty)
    {
-      if (auto AT = R->getAssociatedType(Ty->getDecl()->getDeclName())) {
-         return SP.getContext().getAssociatedType(AT);
+      auto Lookup = SP.Lookup(*R, Ty->getDecl()->getDeclName());
+      for (auto *D : Lookup) {
+         auto *AT = dyn_cast<AssociatedTypeDecl>(D);
+         if (AT)
+            return SP.getContext().getAssociatedType(AT);
       }
 
       return Ty;
@@ -71,6 +77,7 @@ public:
 
 private:
    SemaPass &SP;
+   RecordDecl *Rec = nullptr;
 
    AssociatedTypeSubstVisitor TypeSubstVisitor;
    llvm::SmallVector<NamedDecl*, 0> DelayedChecks;
@@ -82,7 +89,8 @@ private:
    void checkSingleDecl(RecordDecl *Rec, ProtocolDecl *Proto, NamedDecl *decl,
                         bool IsFirstTry = false);
 
-   bool checkTypeCompatibility(QualType given, QualType &needed);
+   bool maybeInstantiateType(SourceType &needed);
+   bool checkTypeCompatibility(QualType given, SourceType &needed);
 
    bool checkIfImplicitConformance(RecordDecl *Rec,
                                    ProtocolDecl *Proto,
@@ -91,6 +99,9 @@ private:
    bool checkIfProtocolDefaultImpl(RecordDecl *Rec,
                                    ProtocolDecl *Proto,
                                    MethodDecl& M);
+
+   template<class T>
+   bool checkIfProtocolDefaultImpl(RecordDecl *Rec, T *D);
 
    void genericError(RecordDecl *Rec, ProtocolDecl *P);
 };
@@ -105,8 +116,39 @@ void ConformanceCheckerImpl::genericError(RecordDecl *Rec, ProtocolDecl *P)
                Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
 }
 
+bool ConformanceCheckerImpl::maybeInstantiateType(SourceType &needed)
+{
+   if (!needed.isResolved() || needed->isUnknownAnyType()) {
+      assert(needed.getTypeExpr() && needed.getTypeExpr()->isDependent());
+
+      auto *TE = needed.getTypeExpr();
+      auto &Instantiator = SP.getInstantiator();
+
+      SemaPass::DeclScopeRAII DSR(SP, Rec);
+      auto Inst = Instantiator.InstantiateTypeExpr(Rec, TE);
+
+      if (!Inst.hasValue()) {
+         return true;
+      }
+
+      SourceType ST(Inst.getValue());
+
+      auto Res = SP.visitSourceType(ST);
+      if (!Res) {
+         return true;
+      }
+
+      needed.setResolvedType(Res.get());
+   }
+
+   return false;
+}
+
 bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
-                                                    QualType &needed) {
+                                                    SourceType &needed) {
+   if (maybeInstantiateType(needed))
+      return true;
+
    if (needed->isDependentType()) {
       needed = TypeSubstVisitor.visit(needed);
    }
@@ -116,24 +158,32 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
 
 void ConformanceCheckerImpl::checkConformance(RecordDecl *Rec)
 {
-   if (isa<ProtocolDecl>(Rec))
+   if (isa<ProtocolDecl>(Rec)) {
+      SP.registerImplicitAndInheritedConformances(Rec);
       return;
+   }
+
+   this->Rec = Rec;
 
    SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
+
+   auto *Prev = TypeSubstVisitor.getRecord();
    TypeSubstVisitor.setRecord(Rec);
 
    auto Conformances = SP.getContext().getConformanceTable()
-                         .getExplicitConformances(Rec);
+                         .getAllConformances(Rec);
 
    for (auto Conf : Conformances) {
-      checkRecordCommon(Rec, Conf);
+      if (Conf->getKind() != ConformanceKind::Inherited) {
+         checkRecordCommon(Rec, Conf->getProto());
+      }
    }
 
    size_t i = 0;
    while (i < DelayedChecks.size()) {
       auto Next = DelayedChecks[i];
       checkSingleDecl(Rec,
-                      cast<ProtocolDecl>(Next->getNonTransparentDeclContext()),
+                      cast<ProtocolDecl>(Next->getLexicalContext()),
                       Next, false);
 
       ++i;
@@ -142,7 +192,8 @@ void ConformanceCheckerImpl::checkConformance(RecordDecl *Rec)
    CheckedConformanceSet.clear();
    DelayedChecks.clear();
 
-   SP.registerImplicitAndInheritedConformances(Rec);
+   this->Rec = nullptr;
+   TypeSubstVisitor.setRecord(Prev);
 }
 
 bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
@@ -177,7 +228,7 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
       }
    }
    else if (Proto == SP.getHashableDecl()) {
-      if (M.getDeclName().isStr("hashValue") && M.getArgs().empty()) {
+      if (M.getDeclName().isStr("hashValue") && M.getArgs().size() == 1) {
          SP.addImplicitConformance(Rec, ImplicitConformanceKind::Hashable);
          return true;
       }
@@ -194,7 +245,21 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
       }
    }
    else if (Proto == SP.getCopyableDecl()) {
-      if (M.getDeclName().isStr("copy") && M.getArgs().empty()) {
+      if (M.getDeclName().isStr("copy") && M.getArgs().size() == 1) {
+         for (auto F : Rec->getDecls<FieldDecl>()) {
+            if (F->isStatic())
+               continue;
+
+            if (!SP.IsCopyableType(F->getType())) {
+               SP.diagnose(M.getRecord(),
+                           err_implicit_conformance_cannot_be_declared,
+                           3 /*Copyable*/, F->getDeclName(),
+                           F->getSourceLoc());
+
+               return false;
+            }
+         }
+
          SP.addImplicitConformance(Rec, ImplicitConformanceKind::Copyable);
          return true;
       }
@@ -206,11 +271,39 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
 bool ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec,
                                                         ProtocolDecl*,
                                                         MethodDecl& M) {
-   if (!M.getBody())
+   if (auto *LazyFn = M.getLazyFnInfo())
+      LazyFn->loadBody(&M);
+
+   auto *Impl = M.getProtocolDefaultImpl();
+   if (!Impl)
       return false;
 
    SP.getInstantiator().InstantiateProtocolDefaultImpl(Rec->getSourceLoc(),
-                                                       Rec, &M);
+                                                       Rec, Impl);
+
+   return true;
+}
+
+template<class T>
+bool ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec, T *D)
+{
+   NamedDecl *Impl = D->getProtocolDefaultImpl();
+   if (!Impl)
+      return false;
+
+   SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
+   DeclResult Inst = SP.getInstantiator().InstantiateDecl(Rec->getSourceLoc(),
+                                                          Impl, {});
+
+   if (!Inst)
+      return true;
+
+   auto *decl = cast<NamedDecl>(Inst.get());
+   decl->setLogicalContext(Rec);
+
+   if (SP.declareStmt(Rec, decl)) {
+      (void) SP.visitStmt(Rec, decl);
+   }
 
    return true;
 }
@@ -220,6 +313,12 @@ static void issueDiagnostics(
                llvm::ArrayRef<ConformanceCheckerImpl::MethodCandidate> Cands) {
    for (auto &Cand : Cands) {
       switch (Cand.Msg) {
+      case diag::note_incorrect_protocol_impl_attr:
+         SP.diagnose(Cand.Msg, Cand.Data1, Cand.SR);
+         break;
+      case diag::note_incorrect_protocol_impl_fallible:
+         SP.diagnose(Cand.Msg, Cand.SR);
+         break;
       case diag::note_incorrect_protocol_impl_method_num_args:
          SP.diagnose(Cand.Msg, Cand.Data1, Cand.Data2, Cand.Data3, Cand.SR);
          break;
@@ -232,7 +331,7 @@ static void issueDiagnostics(
                      QualType::getFromOpaquePtr((void*)Cand.Data2), Cand.SR);
          break;
       default:
-         llvm_unreachable("bad diagnostic kind!");
+         llvm_unreachable("bad diag kind");
       }
    }
 }
@@ -242,7 +341,18 @@ void ConformanceCheckerImpl::checkRecordCommon(RecordDecl *Rec,
    if (!CheckedConformanceSet.insert(Proto).second)
       return;
 
+   // We need all declarations in order to check them.
+   if (auto *MF = Proto->getModFile())
+      MF->LoadAllDecls(*Proto);
+
    for (auto &decl : Proto->getDecls()) {
+      // not a protocol requirement.
+      if (decl->getDeclContext() != Proto)
+         continue;
+
+      if (decl->isSynthesized())
+         continue;
+
       auto ND = dyn_cast<NamedDecl>(decl);
       if (!ND)
          continue;
@@ -251,10 +361,6 @@ void ConformanceCheckerImpl::checkRecordCommon(RecordDecl *Rec,
    }
 
    IssuedError = false;
-   for (auto Conf : SP.getContext().getConformanceTable()
-                      .getExplicitConformances(Proto)) {
-      checkRecordCommon(Rec, Conf);
-   }
 }
 
 void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
@@ -262,16 +368,37 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
                                              NamedDecl *decl,
                                              bool IsFirstTry) {
    if (auto AT = dyn_cast<AssociatedTypeDecl>(decl)) {
-      auto Impl = Rec->getAssociatedType(AT->getDeclName(), Proto);
+      AssociatedTypeDecl *Impl = nullptr;
+      auto Impls = SP.Lookup(*Rec, AT->getDeclName());
+
+      for (auto *D : Impls) {
+         auto *ATImpl = dyn_cast<AssociatedTypeDecl>(D);
+         if (!ATImpl || (ATImpl->getProto() && ATImpl->getProto() != Proto))
+            continue;
+
+         Impl = ATImpl;
+         break;
+      }
+
       if (!Impl) {
          if (AT->getActualType()) {
+            SourceType ActualType = AT->getActualType();
+            if (maybeInstantiateType(ActualType))
+               return;
+
             auto ATDecl =
                AssociatedTypeDecl::Create(SP.getContext(),
                                           AT->getSourceLoc(), nullptr,
                                           AT->getIdentifierInfo(),
-                                          AT->getActualType());
+                                          AT->getActualType(), true);
+
+            SP.getContext().getAssociatedType(ATDecl)
+               ->setCanonicalType(ATDecl->getActualType());
 
             SP.addDeclToContext(*Rec, ATDecl);
+            return;
+         }
+         if (checkIfProtocolDefaultImpl(Rec, AT)) {
             return;
          }
 
@@ -281,14 +408,16 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
          return;
       }
-
-      SP.visitScoped(Impl);
    }
    else if (auto Prop = dyn_cast<PropDecl>(decl)) {
-      auto FoundProp = Rec->getProperty(Prop->getDeclName());
+      auto FoundProp = SP.LookupSingle<PropDecl>(*Rec, Prop->getDeclName());
       if (!FoundProp) {
+         if (checkIfProtocolDefaultImpl(Rec, Prop)) {
+            return;
+         }
+
          genericError(Rec, Proto);
-         SP.diagnose(note_incorrect_protocol_impl_prop,
+         SP.diagnose(note_incorrect_protocol_impl_prop, 1 /*property*/,
                      Prop->getDeclName(), 0 /*is missing*/,
                      Prop->getSourceLoc());
 
@@ -297,11 +426,11 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       auto GivenTy = FoundProp->getType().getResolvedType();
 
-      QualType NeededTy = Prop->getType();
+      SourceType NeededTy = Prop->getType();
       if (!checkTypeCompatibility(GivenTy, NeededTy)) {
          genericError(Rec, Proto);
-         SP.diagnose(note_incorrect_protocol_impl_prop_type,
-                     Prop->getDeclName(), GivenTy, NeededTy,
+         SP.diagnose(note_incorrect_protocol_impl_prop_type, 1 /*property*/,
+                     Prop->getDeclName(), NeededTy, GivenTy,
                      Rec->getSourceLoc());
 
          return;
@@ -309,7 +438,7 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       if (Prop->hasGetter() && !FoundProp->hasGetter()) {
          genericError(Rec, Proto);
-         SP.diagnose(note_incorrect_protocol_impl_prop,
+         SP.diagnose(note_incorrect_protocol_impl_prop, 1 /*property*/,
                      Prop->getDeclName(), 1 /*requires getter*/,
                      Prop->getSourceLoc());
 
@@ -318,23 +447,91 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       if (Prop->hasSetter() && !FoundProp->hasSetter()) {
          genericError(Rec, Proto);
-         SP.diagnose(note_incorrect_protocol_impl_prop,
+         SP.diagnose(note_incorrect_protocol_impl_prop, 1 /*property*/,
                      Prop->getDeclName(), 2 /*requires setter*/,
                      Prop->getSourceLoc());
 
          return;
       }
    }
-   else if (auto F = dyn_cast<FieldDecl>(decl)) {
-      //TODO
+   else if (auto S = dyn_cast<SubscriptDecl>(decl)) {
+      auto FoundSub = SP.LookupSingle<SubscriptDecl>(*Rec, S->getDeclName());
+      if (!FoundSub) {
+         if (checkIfProtocolDefaultImpl(Rec, S)) {
+            return;
+         }
+
+         genericError(Rec, Proto);
+         SP.diagnose(note_incorrect_protocol_impl_prop, 0 /*subscript*/,
+                     S->getDeclName(), 0 /*is missing*/,
+                     S->getSourceLoc());
+
+         return;
+      }
+
+      auto GivenTy = FoundSub->getType().getResolvedType();
+
+      SourceType NeededTy = S->getType();
+      if (!checkTypeCompatibility(GivenTy, NeededTy)) {
+         if (checkIfProtocolDefaultImpl(Rec, S)) {
+            return;
+         }
+
+         genericError(Rec, Proto);
+         SP.diagnose(note_incorrect_protocol_impl_prop_type, 0 /*subscript*/,
+                     S->getDeclName(), NeededTy, GivenTy,
+                     Rec->getSourceLoc());
+
+         return;
+      }
+
+      if (S->hasGetter() && !FoundSub->hasGetter()) {
+         if (checkIfProtocolDefaultImpl(Rec, S)) {
+            return;
+         }
+
+         genericError(Rec, Proto);
+         SP.diagnose(note_incorrect_protocol_impl_prop, 0 /*subscript*/,
+                     S->getDeclName(), 1 /*requires getter*/,
+                     S->getSourceLoc());
+
+         return;
+      }
+
+      if (S->hasSetter() && !FoundSub->hasSetter()) {
+         if (checkIfProtocolDefaultImpl(Rec, S)) {
+            return;
+         }
+
+         genericError(Rec, Proto);
+         SP.diagnose(note_incorrect_protocol_impl_prop, 0 /*subscript*/,
+                     S->getDeclName(), 2 /*requires setter*/,
+                     S->getSourceLoc());
+
+         return;
+      }
    }
    else if (auto Init = dyn_cast<InitDecl>(decl)) {
+      // Make sure all initializers are deserialized.
+      auto InitName = SP.getContext().getDeclNameTable()
+                        .getConstructorName(SP.getContext().getRecordType(Rec));
+      (void) SP.Lookup(*Rec, InitName);
+
       auto Impls = Rec->getDecls<InitDecl>();
 
       MethodDecl *MethodImpl = nullptr;
       std::vector<MethodCandidate> Candidates;
 
       for (auto Impl : Impls) {
+         if (Impl->isFallible() && !Init->isFallible()) {
+            auto &Cand = Candidates.emplace_back();
+
+            Cand.Msg = diag::note_incorrect_protocol_impl_fallible;
+            Cand.SR = Impl->getSourceLoc();
+
+            continue;
+         }
+
          auto GivenArgs = Impl->getArgs();
          auto NeededArgs = Init->getArgs();
 
@@ -354,19 +551,17 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
          }
 
          bool ArgsValid = true;
-         size_t i = 0;
+         unsigned i = 0;
 
-         for (auto &Given : Impl->getArgs()) {
-            QualType Needed = NeededArgs[i]->getType();
-            if (!checkTypeCompatibility(Given->getType(),
-                                        Needed)) {
+         for (; i < NumGiven; ++i) {
+            QualType Given = GivenArgs[i]->getType();
+            SourceType Needed = NeededArgs[i]->getType();
+            if (!checkTypeCompatibility(Given, Needed)) {
                auto &Cand = Candidates.emplace_back();
 
                Cand.Msg = note_incorrect_protocol_impl_method_return_type;
-               Cand.Data1 = (uintptr_t)Needed.getAsOpaquePtr();
-               Cand.Data2 = (uintptr_t)Given->getType()
-                                            .getResolvedType()
-                                            .getAsOpaquePtr();
+               Cand.Data1 = (uintptr_t)Needed.getResolvedType().getAsOpaquePtr();
+               Cand.Data2 = (uintptr_t)Given.getAsOpaquePtr();
                Cand.SR = Impl->getSourceLoc();
 
                ArgsValid = false;
@@ -393,7 +588,8 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
       MethodImpl->setIsProtocolMethod(true);
    }
    else if (auto Method = dyn_cast<MethodDecl>(decl)) {
-      auto MethodImpls = Rec->lookup(Method->getDeclName());
+      // Make sure all methods with this name are deserialized.
+      auto MethodImpls = SP.Lookup(*Rec, Method->getDeclName());
 
       MethodDecl *MethodImpl = nullptr;
       std::vector<MethodCandidate> Candidates;
@@ -402,6 +598,28 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
          auto Impl = dyn_cast<MethodDecl>(Decl);
          if (!Impl)
             continue;
+
+         if (Impl->throws() && !Method->throws()) {
+            auto &Cand = Candidates.emplace_back();
+            Cand.Msg = diag::note_incorrect_protocol_impl_attr;
+            Cand.Data1 = 0;
+            Cand.SR = Impl->getSourceLoc();
+            continue;
+         }
+         else if (Impl->isUnsafe() && !Method->isUnsafe()) {
+            auto &Cand = Candidates.emplace_back();
+            Cand.Msg = diag::note_incorrect_protocol_impl_attr;
+            Cand.Data1 = 1;
+            Cand.SR = Impl->getSourceLoc();
+            continue;
+         }
+         else if (Impl->isAsync() && !Method->isAsync()) {
+            auto &Cand = Candidates.emplace_back();
+            Cand.Msg = diag::note_incorrect_protocol_impl_attr;
+            Cand.Data1 = 2;
+            Cand.SR = Impl->getSourceLoc();
+            continue;
+         }
 
          auto GivenArgs = Impl->getArgs();
          auto NeededArgs = Method->getArgs();
@@ -421,12 +639,12 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
             continue;
          }
 
-         QualType NeededRet = Method->getReturnType();
+         SourceType NeededRet = Method->getReturnType();
          if (!checkTypeCompatibility(Impl->getReturnType(), NeededRet)) {
             auto &Cand = Candidates.emplace_back();
 
             Cand.Msg = note_incorrect_protocol_impl_method_return_type;
-            Cand.Data1 = (uintptr_t)NeededRet.getAsOpaquePtr();
+            Cand.Data1 = (uintptr_t)NeededRet.getResolvedType().getAsOpaquePtr();
             Cand.Data2 = (uintptr_t)Impl->getReturnType()
                                         .getResolvedType()
                                         .getAsOpaquePtr();
@@ -437,19 +655,17 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
          }
 
          bool ArgsValid = true;
-         size_t i = 0;
+         unsigned i = 1;
 
-         for (auto &Given : Impl->getArgs()) {
-            QualType Needed = NeededArgs[i]->getType();
-            if (!checkTypeCompatibility(Given->getType(),
-                                        Needed)) {
+         for (; i < NumGiven; ++i) {
+            QualType Given = GivenArgs[i]->getType();
+            SourceType Needed = NeededArgs[i]->getType();
+            if (!checkTypeCompatibility(Given, Needed)) {
                auto &Cand = Candidates.emplace_back();
 
                Cand.Msg = note_incorrect_protocol_impl_method_return_type;
-               Cand.Data1 = (uintptr_t)Needed.getAsOpaquePtr();
-               Cand.Data2 = (uintptr_t)Given->getType()
-                                            .getResolvedType()
-                                            .getAsOpaquePtr();
+               Cand.Data1 = (uintptr_t)Needed.getResolvedType().getAsOpaquePtr();
+               Cand.Data2 = (uintptr_t)Given.getAsOpaquePtr();
                Cand.SR = Impl->getSourceLoc();
 
                ArgsValid = false;
@@ -471,7 +687,7 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
          if (IsFirstTry) {
             // put this requirement at the end of the worklist, there might be
             // another protocol that provides a default implementation for it
-            DelayedChecks.push_back(decl);
+            DelayedChecks.push_back(Method);
             return;
          }
          if (checkIfImplicitConformance(Rec, Proto, *Method)) {

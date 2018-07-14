@@ -39,11 +39,6 @@ uint8_t LiteralParser::getIntegerRadix()
    return 8;
 }
 
-//static const char *BinaryDigits  = "01";
-//static const char *OctalDigits   = "01234567";
-//static const char *DecimalDigits = "0123456789";
-//static const char *HexDigits     = "0123456789ABCDEF";
-
 uint8_t getDigitValue(char c, uint8_t radix)
 {
    switch (radix) {
@@ -57,7 +52,7 @@ uint8_t getDigitValue(char c, uint8_t radix)
          return (uint8_t)(c - '0');
       }
       else {
-         return (uint8_t)(::toupper(c) - 'A');
+         return (uint8_t)(::toupper(c) - 'A') + uint8_t(10);
       }
    default:
       llvm_unreachable("bad radix!");

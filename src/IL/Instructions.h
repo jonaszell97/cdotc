@@ -31,8 +31,74 @@ class ConstantInt;
 class Function;
 class Method;
 
+class MultiOperandInst {
+public:
+   static bool classof(Value const *T)
+   {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(Value::TypeID ID)
+   {
+      switch (ID) {
+#  define CDOT_MULTI_OP_INST(NAME) case Value::NAME##ID: return true;
+#  include "Instructions.def"
+
+      default:
+         return false;
+      }
+   }
+
+   unsigned int getMultiNumOperands() const { return numOperands; }
+
+   llvm::ArrayRef<Value*> getMultiOperands() const
+   {
+      return { Operands, numOperands };
+   }
+
+   friend class Instruction;
+
+protected:
+   explicit MultiOperandInst(llvm::ArrayRef<Value*> operands)
+      : numOperands((unsigned)operands.size()),
+        Operands(new Value*[operands.empty() ? 1 : operands.size()])
+   {
+
+      unsigned i = 0;
+      for (const auto &op : operands) {
+         Operands[i] = op;
+         ++i;
+      }
+   }
+
+   MultiOperandInst(llvm::ArrayRef<Value*> operands, unsigned numOperands)
+      : numOperands(numOperands),
+        Operands(new Value*[numOperands])
+   {
+      assert(numOperands >= operands.size());
+
+      unsigned i = 0;
+      for (const auto &op : operands) {
+         Operands[i] = op;
+         ++i;
+      }
+   }
+
+   explicit MultiOperandInst(unsigned NumOperands)
+      : numOperands(NumOperands), Operands(new Value*[NumOperands])
+   {}
+
+   ~MultiOperandInst() {
+      delete[] Operands;
+   }
+
+   unsigned numOperands;
+   Value **Operands;
+};
+
+
 class AllocaInst: public Instruction {
-   size_t allocSize = 1;
+   Value *allocSize;
    unsigned Alignment = 0;
 
 public:
@@ -45,7 +111,7 @@ public:
    AllocaInst(ValueType ty,
               bool IsLet,
               BasicBlock *parent,
-              size_t allocSize,
+              Value *allocSize = nullptr,
               unsigned alignment = 0,
               bool heap = false);
 
@@ -61,7 +127,7 @@ public:
    bool isInitializer() const { return AllocaBits.IsLocalVarDecl; }
    void setIsInitializer(bool b) { AllocaBits.IsLocalVarDecl = b; }
 
-   size_t getAllocSize() const { return allocSize; }
+   Value *getAllocSize() const { return allocSize; }
    bool isLet() const { return AllocaBits.IsLet; }
 
    static inline bool classof(Value const* T)
@@ -109,8 +175,8 @@ public:
 
    RetInst(Context &Ctx, BasicBlock *parent);
 
-   Value *getReturnedValue() const;
-   bool isVoidReturn() const;
+   Value *getReturnedValue() const { return returnedValue; }
+   bool isVoidReturn() const { return !returnedValue; }
 
    bool canUseSRetValue() const { return RetBits.CanUseSRetValue; }
    void setCanUseSRetValue() { RetBits.CanUseSRetValue = true; }
@@ -122,14 +188,53 @@ public:
 
    size_t getNumSuccessorsImpl() const { return 0; }
 
+   bool IsFallibleInitNoneRet() const { return RetBits.IsFallibleInitNoneRet; }
+   void setIsFallibleInitNoneRet(bool B) { RetBits.IsFallibleInitNoneRet = B; }
+
 protected:
    Value *returnedValue;
 
 public:
-   static bool classof(Value const* T)
+   static bool classof(Value const* T) { return T->getTypeID() == RetInstID; }
+};
+
+class YieldInst: public TerminatorInst, public MultiOperandInst {
+public:
+   YieldInst(Value *yieldedValue,
+             BasicBlock *ResumeDst,
+             ArrayRef<Value*> ResumeArgs,
+             bool FinalYield,
+             BasicBlock *parent);
+
+   YieldInst(Context &Ctx,
+             BasicBlock *ResumeDst,
+             ArrayRef<Value*> ResumeArgs,
+             bool FinalYield,
+             BasicBlock *parent);
+
+   Value *getYieldedValue() const { return yieldedValue; }
+   bool isVoidYield() const { return !yieldedValue; }
+
+   ArrayRef<Value*> getResumeArgs() const { return {Operands, numOperands}; }
+
+   BasicBlock* getResumeDst() const { return ResumeDst; }
+
+   bool isFinalYield() const { return YieldBits.IsFinalYield; }
+
+   BasicBlock *getSuccessorAtImpl(size_t i) const
    {
-      return T->getTypeID() == RetInstID;
+      assert(i == 0);
+      return ResumeDst;
    }
+
+   size_t getNumSuccessorsImpl() const { return ResumeDst ? 1 : 0; }
+
+protected:
+   BasicBlock *ResumeDst;
+   Value *yieldedValue;
+
+public:
+   static bool classof(Value const* T) { return T->getTypeID() == YieldInstID; }
 };
 
 class ThrowInst: public TerminatorInst {
@@ -148,15 +253,41 @@ public:
       return typeInfo;
    }
 
-   Function *getDescFn() const
+   Function *getCleanupFn() const { return cleanupFn; }
+   void setCleanupFn(Function *descFn) { ThrowInst::cleanupFn = descFn; }
+
+   BasicBlock *getSuccessorAtImpl(size_t) const
    {
-      return descFn;
+      llvm_unreachable("ThrowInst has no successors!");
    }
 
-   void setDescFn(Function *descFn)
+   size_t getNumSuccessorsImpl() const { return 0; }
+
+   op_iterator op_begin_impl() { return &thrownValue; }
+   op_iterator op_end_impl() { return &thrownValue + 2; }
+   op_const_iterator op_begin_impl() const { return &thrownValue; }
+   op_const_iterator op_end_impl() const { return &thrownValue + 2; }
+   unsigned getNumOperandsImpl() const { return 2; }
+
+protected:
+   Value *thrownValue;
+   GlobalVariable *typeInfo;
+
+   Function *cleanupFn = nullptr;
+
+public:
+   static bool classof(Value const* T)
    {
-      ThrowInst::descFn = descFn;
+      return T->getTypeID() == ThrowInstID;
    }
+};
+
+class RethrowInst: public TerminatorInst {
+public:
+   RethrowInst(Value *thrownValue,
+               BasicBlock *parent);
+
+   Value *getThrownValue() const { return thrownValue; }
 
    BasicBlock *getSuccessorAtImpl(size_t) const
    {
@@ -167,14 +298,11 @@ public:
 
 protected:
    Value *thrownValue;
-   GlobalVariable *typeInfo;
-
-   Function *descFn = nullptr;
 
 public:
    static bool classof(Value const* T)
    {
-      return T->getTypeID() == ThrowInstID;
+      return T->getTypeID() == RethrowInstID;
    }
 };
 
@@ -277,46 +405,6 @@ public:
    }
 };
 
-class MultiOperandInst {
-public:
-   static bool classof(Value const *T)
-   {
-      switch (T->getTypeID()) {
-      case Value::CallInstID:
-      case Value::InvokeInstID:
-         return true;
-      default:
-         return false;
-      }
-   }
-
-   friend class Instruction;
-
-protected:
-   explicit MultiOperandInst(llvm::ArrayRef<Value*> operands)
-      : numOperands((unsigned)operands.size()),
-        Operands(new Value*[operands.empty() ? 1 : operands.size()])
-   {
-
-      unsigned i = 0;
-      for (const auto &op : operands) {
-         Operands[i] = op;
-         ++i;
-      }
-   }
-
-   explicit MultiOperandInst(unsigned NumOperands)
-      : numOperands(NumOperands), Operands(new Value*[NumOperands])
-   {}
-
-   ~MultiOperandInst() {
-      delete[] Operands;
-   }
-
-   unsigned numOperands;
-   Value **Operands;
-};
-
 class CallSite;
 class ImmutableCallSite;
 
@@ -326,8 +414,9 @@ public:
             llvm::ArrayRef<Value*> args,
             BasicBlock *parent);
 
-   Function *getCalledFunction() const { return calledFunction; }
-   Method *getCalledMethod() const { return calledMethod; }
+   Function *getCalledFunction() const;
+   Method *getCalledMethod() const;
+
    Value *getSelf() const { return Operands[0]; }
 
    llvm::ArrayRef<Value*> getArgs() const;
@@ -341,6 +430,14 @@ public:
 
    CallSite getAsCallSite();
    ImmutableCallSite getAsImmutableCallSite() const;
+
+   bool isVirtual() const { return CallBits.IsVirtual; }
+   void setVirtual(bool V) { CallBits.IsVirtual = V; }
+
+   bool isProtocolCall() const { return CallBits.IsProtocolCall; }
+   void setProtocolCall(bool P) { CallBits.IsProtocolCall = P; }
+
+   bool isTaggedDeinit() const;
 
 protected:
    CallInst(TypeID id,
@@ -358,12 +455,6 @@ protected:
             llvm::ArrayRef<Value*> args,
             BasicBlock *parent);
 
-   union {
-      Function *calledFunction;
-      Method *calledMethod;
-      Value *indirectFunction;
-   };
-
 public:
    static bool classof(Value const* T)
    {
@@ -378,7 +469,7 @@ public:
                     llvm::ArrayRef<Value*> args,
                     BasicBlock *parent);
 
-   Value const *getCalledFunction() const { return indirectFunction; }
+   Value const *getCalledFunction() const { return Operands[numOperands - 1]; }
 
    static bool classof(Value const *T)
    {
@@ -392,36 +483,11 @@ public:
                   llvm::ArrayRef<Value*> args,
                   BasicBlock *parent);
 
-   Value const* getLambda() const { return indirectFunction; }
+   Value const* getLambda() const { return Operands[numOperands - 1]; }
 
    static bool classof(Value const *T)
    {
       return T->getTypeID() == LambdaCallInstID;
-   }
-};
-
-class ProtocolCallInst: public CallInst {
-public:
-   ProtocolCallInst(Method *M,
-                    llvm::ArrayRef<Value *> args,
-                    BasicBlock *parent);
-
-   static bool classof(Value const *T)
-   {
-      return T->getTypeID() == ProtocolCallInstID;
-   }
-};
-
-class VirtualCallInst: public CallInst {
-public:
-   VirtualCallInst(Method *M,
-                   llvm::ArrayRef<Value *> args,
-                   BasicBlock *parent);
-
-public:
-   static bool classof(Value const *T)
-   {
-      return T->getTypeID() == VirtualCallInstID;
    }
 };
 
@@ -435,8 +501,10 @@ public:
 
    BasicBlock *getNormalContinuation() const { return NormalContinuation; }
    BasicBlock *getLandingPad() const { return LandingPad; }
-   Function *getCalledFunction() const { return calledFunction; }
-   Method *getCalledMethod() const { return calledMethod; }
+
+   Function *getCalledFunction() const;
+   Method *getCalledMethod() const;
+
    Value *getSelf() const { return Operands[0]; }
 
    llvm::ArrayRef<Value*> getArgs() const;
@@ -450,6 +518,12 @@ public:
 
    CallSite getAsCallSite();
    ImmutableCallSite getAsImmutableCallSite() const;
+
+   bool isVirtual() const { return InvokeBits.IsVirtual; }
+   void setVirtual(bool V) { InvokeBits.IsVirtual = V; }
+
+   bool isProtocolCall() const { return InvokeBits.IsProtocolCall; }
+   void setProtocolCall(bool P) { InvokeBits.IsProtocolCall = P; }
 
    BasicBlock *getSuccessorAtImpl(size_t idx) const
    {
@@ -470,11 +544,6 @@ protected:
               BasicBlock *LandingPad,
               BasicBlock *parent);
 
-   union {
-      Function *calledFunction;
-      Method *calledMethod;
-   };
-
    BasicBlock *NormalContinuation;
    BasicBlock *LandingPad;
 
@@ -485,42 +554,15 @@ public:
    }
 };
 
-class ProtocolInvokeInst: public InvokeInst {
-public:
-   ProtocolInvokeInst(Method *M,
-                      llvm::ArrayRef<Value *> args,
-                      BasicBlock *NormalContinuation,
-                      BasicBlock *LandingPad,
-                      BasicBlock *parent);
-
-public:
-   static bool classof(Value const *T)
-   {
-      return T->getTypeID() == ProtocolInvokeInstID;
-   }
-};
-
-class VirtualInvokeInst: public InvokeInst {
-public:
-   VirtualInvokeInst(Method *M,
-                     llvm::ArrayRef<Value *> args,
-                     BasicBlock *NormalContinuation,
-                     BasicBlock *LandingPad,
-                     BasicBlock *parent);
-
-   static bool classof(Value const *T)
-   {
-      return T->getTypeID() == VirtualInvokeInstID;
-   }
-};
-
 enum class Intrinsic : unsigned char {
-#define CDOT_INTRINSIC(Name, Spelling) \
+#define CDOT_INTRINSIC(Name, Spelling)    \
    Name,
 #include "Intrinsics.def"
 };
 
 class IntrinsicCallInst: public Instruction, public MultiOperandInst {
+   Intrinsic calledIntrinsic;
+
 public:
    IntrinsicCallInst(Intrinsic id,
                      ValueType returnType,
@@ -547,12 +589,38 @@ public:
       }
    }
 
-protected:
-   Intrinsic calledIntrinsic;
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == IntrinsicCallInstID;
+   }
+
+   enum FatalErrorKind : unsigned char {
+      UnexpectedThrownError,
+   };
+};
+
+class LLVMIntrinsicCallInst: public Instruction, public MultiOperandInst {
+   IdentifierInfo *calledIntrinsic;
 
 public:
-   static bool classof(Value const* T) {
-      return T->getTypeID() == IntrinsicCallInstID;
+   LLVMIntrinsicCallInst(IdentifierInfo *id,
+                         ValueType returnType,
+                         llvm::ArrayRef<Value*> args,
+                         BasicBlock *parent);
+
+   llvm::ArrayRef<Value*> getArgs() const { return { Operands, numOperands }; }
+
+   op_iterator op_begin_impl() { return &Operands[0]; }
+   op_iterator op_end_impl() { return Operands + numOperands; }
+   op_const_iterator op_begin_impl() const { return &Operands[0]; }
+   op_const_iterator op_end_impl() const { return Operands + numOperands; }
+
+   unsigned getNumOperandsImpl() const { return numOperands; }
+   IdentifierInfo *getIntrinsicName() const { return calledIntrinsic; }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == LLVMIntrinsicCallInstID;
    }
 };
 
@@ -560,56 +628,48 @@ template<class CallInstTy, class InvokeInstTy, class InstTy>
 class CallSiteBase {
 protected:
    explicit CallSiteBase(CallInstTy *C)
-      : Val(C, true)
+      : Val(C)
    {}
 
    explicit CallSiteBase(InvokeInstTy *I)
-      : Val(I, false)
+      : Val(I)
+   {}
+
+   explicit CallSiteBase(std::nullptr_t)
+      : Val(nullptr)
    {}
 
 public:
    operator bool() const
    {
-      return Val.getPointer() != nullptr;
+      return Val != nullptr;
    }
 
-   bool isCallInst() const
-   {
-      return Val.getInt();
-   }
+   bool isCallInst() const { return support::isa<CallInst>(Val); }
+   bool isInvokeInst() const { return support::isa<InvokeInst>(Val); }
 
-   CallInstTy const* getAsCallInst() const
+   CallInstTy *getAsCallInst() const
    {
       assert(isCallInst() && "not a CallInst");
-      return reinterpret_cast<CallInstTy*>(Val.getPointer());
+      return reinterpret_cast<CallInstTy*>(Val);
    }
 
-   InvokeInstTy const* getAsInvokeInst() const
+   InvokeInstTy *getAsInvokeInst() const
    {
       assert(!isCallInst() && "not an InvokeInst");
-      return reinterpret_cast<InvokeInstTy*>(Val.getPointer());
+      return reinterpret_cast<InvokeInstTy*>(Val);
    }
 
-   CallInstTy* getAsCallInst()
-   {
-      assert(isCallInst() && "not a CallInst");
-      return reinterpret_cast<CallInstTy*>(Val.getPointer());
-   }
+   InstTy *getInstruction() const { return Val; }
 
-   InvokeInstTy* getAsInvokeInst()
-   {
-      assert(!isCallInst() && "not an InvokeInst");
-      return reinterpret_cast<InvokeInstTy*>(Val.getPointer());
-   }
+   using op_iterator       = Instruction::op_iterator;
+   using op_const_iterator = Instruction::op_const_iterator;
 
-   using op_iterator = CallInst::op_iterator;
-   using op_const_iterator = CallInst::op_const_iterator;
-
-#  define DISPATCH_CALLSITE_VALUE(METHOD)  \
+#  define DISPATCH_CALLSITE_VALUE(METHOD)                                \
    isCallInst() ? getAsCallInst()->METHOD : getAsInvokeInst()->METHOD
 
-#  define DISPATCH_CALLSITE_VOID(METHOD)   \
-   if (isCallInst()) { getAsCallInst()->METHOD } \
+#  define DISPATCH_CALLSITE_VOID(METHOD)                                 \
+   if (isCallInst()) { getAsCallInst()->METHOD }                         \
    else { getAsInvokeInst()->METHOD }
 
    op_iterator op_begin()
@@ -642,7 +702,7 @@ public:
       return DISPATCH_CALLSITE_VALUE(getTypeID());
    }
 
-   QualType getType() const
+   ValueType getType() const
    {
       return DISPATCH_CALLSITE_VALUE(getType());
    }
@@ -656,22 +716,22 @@ public:
 #  undef DISPATCH_CALLSITE_VOID
 
 private:
-   llvm::PointerIntPair<InstTy*, 1, bool> Val;
+   InstTy *Val;
 };
 
-class CallSite : CallSiteBase<CallInst, InvokeInst, Instruction> {
+class CallSite: public CallSiteBase<CallInst, InvokeInst, Instruction> {
 public:
    explicit CallSite(CallInst* C) : CallSiteBase(C) {}
    explicit CallSite(InvokeInst* C) : CallSiteBase(C) {}
-   explicit CallSite() : CallSiteBase((CallInst*)nullptr) {}
+   explicit CallSite() : CallSiteBase(nullptr) {}
 };
 
 class ImmutableCallSite:
-   CallSiteBase<CallInst const, InvokeInst const, Instruction const> {
+   public CallSiteBase<CallInst const, InvokeInst const, Instruction const> {
 public:
    explicit ImmutableCallSite(CallInst const* C) : CallSiteBase(C) {}
    explicit ImmutableCallSite(InvokeInst const* C) : CallSiteBase(C) {}
-   explicit ImmutableCallSite() : CallSiteBase((CallInst*)nullptr) {}
+   explicit ImmutableCallSite() : CallSiteBase(nullptr) {}
 };
 
 inline CallSite CallInst::getAsCallSite()
@@ -829,12 +889,19 @@ protected:
 public:
    static bool classof(Value const *T)
    {
-      switch(T->getTypeID()) {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(TypeID ID)
+   {
+      switch (ID) {
       case TypeID::BinaryOperatorInstID:
       case TypeID::CompInstID:
-      case TypeID::StoreInstID:
       case TypeID::GEPInstID:
       case TypeID::TupleExtractInstID:
+      case InitInstID:
+      case AssignInstID:
+      case StoreInstID:
          return true;
       default:
          return false;
@@ -878,10 +945,15 @@ protected:
 public:
    static bool classof(Value const *T)
    {
-      switch (T->getTypeID()) {
+      return classofKind(T->getTypeID());
+   }
+
+   static bool classofKind(TypeID ID)
+   {
+      switch (ID) {
 #     define CDOT_UNARY_INST(Name) \
       case Name##ID:
-#     define CDOT_CAST_INST(Name) \
+#     define CDOT_CAST_INST(Name)  \
       case Name##ID:
 
 #     include "Instructions.def"
@@ -890,9 +962,19 @@ public:
       case TypeID::FieldRefInstID:
       case TypeID::EnumExtractInstID:
       case TypeID::EnumRawValueInstID:
+      case TypeID::UnionInitInstID:
       case TypeID::CaptureExtractInstID:
       case TypeID::PtrToLvalueInstID:
       case TypeID::AddrOfInstID:
+      case TypeID::DeallocInstID:
+      case TypeID::DeallocBoxInstID:
+      case TypeID::WeakRetainInstID:
+      case TypeID::WeakReleaseInstID:
+      case TypeID::StrongRetainInstID:
+      case TypeID::StrongReleaseInstID:
+      case TypeID::BeginBorrowInstID:
+      case TypeID::EndBorrowInstID:
+      case TypeID::MoveInstID:
          return true;
       default:
          return false;
@@ -985,6 +1067,7 @@ public:
    ast::StructDecl *getAccessedType() const;
 
    bool isLet() const { return FieldRefBits.IsLet; }
+   unsigned getOffset() const { return Offset; }
 
    static bool classof(Value const* T)
    {
@@ -992,10 +1075,13 @@ public:
    }
 
 private:
+   unsigned Offset;
    DeclarationName fieldName;
 };
 
 class GEPInst: public BinaryInstruction {
+   unsigned Offset;
+
 public:
    GEPInst(Value *val,
            size_t idx,
@@ -1011,6 +1097,7 @@ public:
    Value *getVal() const    { return Operands[0]; }
 
    bool isLet() const { return GEPBits.IsLet; }
+   unsigned getOffset() const { return Offset; }
 
    static bool classof(Value const* T)
    {
@@ -1042,6 +1129,7 @@ public:
 class EnumRawValueInst: public UnaryInstruction {
 public:
    EnumRawValueInst(Value *Val,
+                    bool LoadVal,
                     BasicBlock *parent);
 
    Value *getValue() { return Operand; }
@@ -1133,20 +1221,6 @@ public:
    static bool classof(Value const* T)
    {
       return T->getTypeID() == IntegerCastInstID;
-   }
-};
-
-class IntToEnumInst: public CastInst {
-public:
-   IntToEnumInst(Value *target,
-                 QualType toType,
-                 BasicBlock *parent)
-      : CastInst(IntToEnumInstID, target, toType, parent)
-   {}
-
-   static bool classof(Value const* T)
-   {
-      return T->getTypeID() == IntToEnumInstID;
    }
 };
 
@@ -1252,27 +1326,38 @@ public:
    }
 };
 
-class InitInst: public CallInst {
+class StructInitInst: public CallInst {
 public:
-   InitInst(ast::StructDecl *InitializedType,
-            Method *Init,
-            llvm::ArrayRef<Value *> args,
-            BasicBlock *parent);
+   StructInitInst(ast::StructDecl *InitializedType,
+                  Method *Init,
+                  llvm::ArrayRef<Value *> args,
+                  bool Fallible,
+                  QualType FallibleTy,
+                  BasicBlock *parent);
 
-   Method *getInit() const { return calledMethod; }
+   Method *getInit() const { return getCalledMethod(); }
    ast::StructDecl *getInitializedType() const { return InitializedType; }
 
    bool canUseSRetValue() const { return AllocaBits.CanUseSRetValue; }
    void setCanUseSRetValue() { AllocaBits.CanUseSRetValue = true; }
 
+   bool isHeapAllocated() const { return AllocaBits.Heap; }
+   void setHeapAllocated(bool H) { AllocaBits.Heap = H; }
+
+   bool isFallible() const { return AllocaBits.FallibleInit; }
+
+   ast::EnumCaseDecl* getSomeCase() const { return SomeCase; }
+   void setSomeCase(ast::EnumCaseDecl* V) { SomeCase = V; }
+
 protected:
    ast::StructDecl *InitializedType;
+   ast::EnumCaseDecl *SomeCase = nullptr;
 
 public:
-   static bool classof(InitInst const* T) { return true; }
+   static bool classof(StructInitInst const* T) { return true; }
    static inline bool classof(Value const* T) {
       switch(T->getTypeID()) {
-      case InitInstID:
+      case StructInitInstID:
          return true;
       default:
          return false;
@@ -1280,7 +1365,7 @@ public:
    }
 };
 
-class UnionInitInst: public CallInst {
+class UnionInitInst: public UnaryInstruction {
 public:
    UnionInitInst(ast::UnionDecl *UnionTy,
                  Value *InitializerVal,
@@ -1290,7 +1375,7 @@ public:
    void setCanUseSRetValue() { AllocaBits.CanUseSRetValue = true; }
 
    ast::UnionDecl *getUnionTy() const { return UnionTy; }
-   Value *getInitializerVal() const { return Operands[0]; }
+   Value *getInitializerVal() const { return Operand; }
 
 protected:
    ast::UnionDecl *UnionTy;
@@ -1302,13 +1387,18 @@ public:
    }
 };
 
-class EnumInitInst: public CallInst {
+class EnumInitInst: public Instruction, public MultiOperandInst {
 public:
    EnumInitInst(Context &Ctx,
                 ast::EnumDecl *EnumTy,
                 ast::EnumCaseDecl *Case,
                 llvm::ArrayRef<Value *> args,
                 BasicBlock *parent);
+
+   llvm::ArrayRef<Value*> getArgs() const
+   {
+      return {Operands, numOperands};
+   }
 
    bool canUseSRetValue() const { return EnumInitBits.CanUseSRetValue; }
    void setCanUseSRetValue() { EnumInitBits.CanUseSRetValue = true; }
@@ -1360,15 +1450,13 @@ public:
    }
 };
 
-class DeallocInst: public Instruction {
-   Value *V;
-
+class DeallocInst: public UnaryInstruction {
 public:
    DeallocInst(Value *V,
                bool Heap,
                BasicBlock *P);
 
-   Value *getValue() const { return V; }
+   Value *getValue() const { return Operand; }
 
    bool isHeap() const { return AllocaBits.Heap; }
    void setHeap(bool H) { AllocaBits.Heap = H; }
@@ -1379,13 +1467,11 @@ public:
    }
 };
 
-class DeallocBoxInst: public Instruction {
-   Value *V;
-
+class DeallocBoxInst: public UnaryInstruction {
 public:
    DeallocBoxInst(Value *V, BasicBlock *P);
 
-   Value *getValue() const { return V; }
+   Value *getValue() const { return Operand; }
 
    static bool classof(Value const* T)
    {
@@ -1393,94 +1479,62 @@ public:
    }
 };
 
-class DeinitializeLocalInst: public Instruction {
+class AssignInst: public BinaryInstruction {
 public:
-   DeinitializeLocalInst(Value *RefcountedVal, BasicBlock *Parent);
-   DeinitializeLocalInst(Function *DeinitFn,
-                         Value *ValueToDeinit,
-                         BasicBlock *Parent);
+   AssignInst(Value *dst,
+              Value *src,
+              BasicBlock *parent);
 
-   Value *getVal() const { return Val; }
-   Function *getDeinitializer() const { return Deinitializer; }
+   Value *getDst() const { return Operands[0]; }
+   Value *getSrc() const { return Operands[1]; }
 
-   static bool classof(Value const* T)
-   {
-      return T->getTypeID() == DeinitializeLocalInstID;
-   }
+   MemoryOrder getMemoryOrder() const { return StoreBits.memoryOrder; }
+   void setMemoryOrder(MemoryOrder V) { StoreBits.memoryOrder = V; }
 
-private:
-   Value *Val;
-   Function *Deinitializer;
-};
-
-class DeinitializeTemporaryInst: public Instruction {
-public:
-   DeinitializeTemporaryInst(Value *RefcountedVal, BasicBlock *Parent);
-   DeinitializeTemporaryInst(Function *DeinitFn,
-                             Value *ValueToDeinit,
-                             BasicBlock *Parent);
-
-   Value *getVal() const { return Val; }
-   Function *getDeinitializer() const { return Deinitializer; }
-
-   static bool classof(Value const* T)
-   {
-      return T->getTypeID() == DeinitializeTemporaryInstID;
-   }
-
-private:
-   Value *Val;
-   Function *Deinitializer;
+   static bool classof(Value const* T) {return T->getTypeID() == AssignInstID;}
 };
 
 class StoreInst: public BinaryInstruction {
 public:
    StoreInst(Value *dst,
              Value *src,
-             bool IsInit,
              BasicBlock *parent);
-
-   bool useMemCpy() const;
 
    Value *getDst() const { return Operands[0]; }
    Value *getSrc() const { return Operands[1]; }
 
-   bool isInit() const { return StoreBits.IsInit; }
-   void setIsInit(bool I) { StoreBits.IsInit = I; }
+   MemoryOrder getMemoryOrder() const { return StoreBits.memoryOrder; }
+   void setMemoryOrder(MemoryOrder V) { StoreBits.memoryOrder = V; }
 
-   op_iterator op_begin_impl() { return Operands; }
-   op_iterator op_end_impl()   { return Operands + 2; }
+   static bool classof(Value const* T) { return T->getTypeID() == StoreInstID; }
+};
 
-   op_const_iterator op_begin_impl() const { return Operands; }
-   op_const_iterator op_end_impl()   const { return Operands + 2; }
-
-   unsigned getNumOperandsImpl() const { return 2; }
-
+class InitInst: public BinaryInstruction {
 public:
-   static bool classof(Value const* T)
-   {
-      return T->getTypeID() == StoreInstID;
-   }
+   InitInst(Value *dst,
+            Value *src,
+            BasicBlock *parent);
+
+   Value *getDst() const { return Operands[0]; }
+   Value *getSrc() const { return Operands[1]; }
+
+   MemoryOrder getMemoryOrder() const { return StoreBits.memoryOrder; }
+   void setMemoryOrder(MemoryOrder V) { StoreBits.memoryOrder = V; }
+
+   static bool classof(Value const* T) { return T->getTypeID() == InitInstID; }
 };
 
 class LoadInst: public UnaryInstruction {
 public:
-   explicit LoadInst(Value *target,
-                     BasicBlock *parent);
+   LoadInst(Value *target,
+            BasicBlock *parent);
 
-   op_iterator op_begin_impl() { return &Operand; }
-   op_iterator op_end_impl()   { return &Operand + 1; }
-
-   op_const_iterator op_begin_impl() const { return &Operand; }
-   op_const_iterator op_end_impl()   const { return &Operand + 1; }
+   MemoryOrder getMemoryOrder() const { return LoadBits.memoryOrder; }
+   void setMemoryOrder(MemoryOrder V) { LoadBits.memoryOrder = V; }
 
    Value *getTarget() const { return Operand; }
 
-public:
-   static bool classof(Value const* T)
-   {
-      return T->getTypeID() == LoadInstID;
-   }
+   static bool classof(Value const* T) { return T->getTypeID() == LoadInstID; }
 };
 
 class AddrOfInst: public UnaryInstruction {
@@ -1502,6 +1556,137 @@ public:
    {
       return T->getTypeID() == PtrToLvalueInstID;
    }
+};
+
+class RefcountingInst: public UnaryInstruction {
+protected:
+   RefcountingInst(TypeID ID, Value *Val, BasicBlock *Parent);
+
+public:
+   Value *getTarget() const { return Operand; }
+
+   static bool classof(const Value *T)
+   {
+      switch (T->getTypeID()) {
+      case StrongRetainInstID:
+      case StrongReleaseInstID:
+      case WeakRetainInstID:
+      case WeakReleaseInstID:
+         return true;
+      default:
+         return false;
+      }
+   }
+};
+
+class RetainInst: public RefcountingInst {
+protected:
+   RetainInst(TypeID ID, Value *Val, BasicBlock *Parent);
+
+public:
+   static bool classof(const Value *T)
+   {
+      switch (T->getTypeID()) {
+      case StrongRetainInstID:
+      case WeakRetainInstID:
+         return true;
+      default:
+         return false;
+      }
+   }
+};
+
+class ReleaseInst: public RefcountingInst {
+protected:
+   ReleaseInst(TypeID ID, Value *Val, BasicBlock *Parent);
+
+public:
+   static bool classof(const Value *T)
+   {
+      switch (T->getTypeID()) {
+      case StrongReleaseInstID:
+      case WeakReleaseInstID:
+         return true;
+      default:
+         return false;
+      }
+   }
+};
+
+class StrongRetainInst: public RetainInst {
+public:
+   StrongRetainInst(Value *Val, BasicBlock *Parent);
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == StrongRetainInstID; }
+};
+
+class StrongReleaseInst: public ReleaseInst {
+public:
+   StrongReleaseInst(Value *Val, BasicBlock *Parent);
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == StrongReleaseInstID; }
+};
+
+class WeakRetainInst: public RetainInst {
+public:
+   WeakRetainInst(Value *Val, BasicBlock *Parent);
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == WeakRetainInstID; }
+};
+
+class WeakReleaseInst: public ReleaseInst {
+public:
+   WeakReleaseInst(Value *Val, BasicBlock *Parent);
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == WeakReleaseInstID; }
+};
+
+class MoveInst: public UnaryInstruction {
+public:
+   MoveInst(Value *Target, BasicBlock *Parent);
+
+   static bool classof(const Value *V) { return V->getTypeID() == MoveInstID; }
+};
+
+class EndBorrowInst;
+
+class BeginBorrowInst: public UnaryInstruction {
+   SourceLocation BeginLoc;
+   SourceLocation EndLoc;
+
+public:
+   BeginBorrowInst(Value *Target,
+                   SourceLocation BeginLoc,
+                   SourceLocation EndLoc,
+                   bool IsMutableBorrow,
+                   BasicBlock *Parent);
+
+   bool isMutableBorrow() const { return BorrowBits.IsMutableBorrow; }
+   SourceLocation getBeginBorrowLoc() const { return BeginLoc; }
+   SourceLocation getEndBorrowLoc() const { return EndLoc; }
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == BeginBorrowInstID; }
+};
+
+class EndBorrowInst: public UnaryInstruction {
+   SourceLocation Loc;
+
+public:
+   EndBorrowInst(Value *Target,
+                 SourceLocation Loc,
+                 bool IsMutableBorrow,
+                 BasicBlock *Parent);
+
+   bool isMutableBorrow() const { return BorrowBits.IsMutableBorrow; }
+   SourceLocation getEndBorrowLoc() const { return Loc; }
+
+   static bool classof(const Value *V)
+   { return V->getTypeID() == EndBorrowInstID; }
 };
 
 class DebugLocInst: public Instruction {

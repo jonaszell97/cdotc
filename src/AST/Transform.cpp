@@ -300,7 +300,7 @@
 //      return false;
 //   }
 //
-//   bool replaceFromTryStmt(TryStmt *stmt)
+//   bool replaceFromDoStmt(DoStmt *stmt)
 //   {
 //      REPLACE(body)
 //      for (auto &C : stmt->catchBlocks) {

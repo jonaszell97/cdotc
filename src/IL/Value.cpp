@@ -2,6 +2,7 @@
 // Created by Jonas Zell on 16.11.17.
 //
 
+#include <llvm/Support/raw_ostream.h>
 #include "Value.h"
 
 #include "AST/ASTContext.h"
@@ -17,6 +18,19 @@ using namespace cdot::support;
 
 namespace cdot {
 namespace il {
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, MemoryOrder MO)
+{
+   switch (MO) {
+   case MemoryOrder::NotAtomic: return OS << "<not atomic>";
+   case MemoryOrder::Relaxed: return OS << "relaxed";
+   case MemoryOrder::Consume: return OS << "consume";
+   case MemoryOrder::Acquire: return OS << "acquire";
+   case MemoryOrder::Release: return OS << "release";
+   case MemoryOrder::AcquireRelease: return OS << "acq_rel";
+   case MemoryOrder::SequentiallyConsistent: return OS << "seq_cst";
+   }
+}
 
 ValueType::ValueType(il::Context &Ctx, Type *ty)
    : Ty(ty ? ty->getCanonicalType() : nullptr),
@@ -54,7 +68,18 @@ Value::Value(TypeID id, ValueType ty)
 
 Value::~Value()
 {
+   if (uses) {
+      uses->Delete();
+   }
+}
 
+StringRef Value::getValueKindDescription(TypeID ID)
+{
+   switch (ID) {
+#     define CDOT_ALL(NAME) case NAME##ID: return #NAME;
+#     define CDOT_ABSTRACT(NAME) case NAME: return #NAME;
+#     include "Instructions.def"
+   }
 }
 
 void Value::deleteValue()
@@ -71,11 +96,35 @@ void Value::deleteValue()
 
 bool Value::isSelf() const
 {
+   Function *Fn = nullptr;
    if (auto Arg = dyn_cast<Argument>(this)) {
-      return Arg->isSelf();
+      Fn = Arg->getParent()->getParent();
+   }
+   else if (auto Inst = dyn_cast<Instruction>(this)) {
+      Fn = Inst->getParent()->getParent();
+   }
+
+   if (Fn) {
+      auto M = dyn_cast<Method>(Fn);
+      if (!M)
+         return false;
+
+      return this == M->getSelf();
    }
 
    return false;
+}
+
+bool Value::isIndexingInstruction() const
+{
+   switch (getTypeID()) {
+   case GEPInstID:
+   case FieldRefInstID:
+   case TupleExtractInstID:
+      return true;
+   default:
+      return false;
+   }
 }
 
 ast::ASTContext& Value::getASTCtx() const
@@ -143,12 +192,23 @@ void Value::detachFromParent()
    }
 }
 
+void Value::eraseValue()
+{
+   assert(!getNumUses() && "can't erase value with multiple users");
+
+   if (auto I = dyn_cast<Instruction>(this)) {
+      for (auto op : I->getOperands()) {
+         op->removeUser(I);
+      }
+   }
+
+   deleteValue();
+}
+
 void Value::detachAndErase()
 {
    detachFromParent();
-   assert(!getNumUses() && "can't erase value with multiple users");
-
-   deleteValue();
+   eraseValue();
 }
 
 void Value::addUse(Value *User)
@@ -158,6 +218,10 @@ void Value::addUse(Value *User)
    }
 
    uses->addUseAtEnd(new Use(User));
+
+#ifndef NDEBUG
+   uses->verify();
+#endif
 }
 
 void Value::removeUser(Value *User)
@@ -170,16 +234,29 @@ void Value::removeUser(Value *User)
             uses = nullptr;
          }
          else {
-            use->remove();
-         }
+            if (use == uses)
+               uses = use->getNext();
 
-         checkIfStillInUse();
+            use->remove();
+
+#ifndef NDEBUG
+            uses->verify();
+#endif
+         }
 
          return;
       }
    }
+}
 
-   llvm_unreachable("user not found");
+void Value::replaceUser(cdot::il::Value *User, il::Value *ReplaceWith)
+{
+   for (auto *use : *uses) {
+      if (use->getUser() == User) {
+         use->setUser(ReplaceWith);
+         return;
+      }
+   }
 }
 
 void Value::checkIfStillInUse()
@@ -217,25 +294,38 @@ void Value::replaceAllUsesWith(Value *V)
    assert(type == V->getType() && "replacement value must be of same type");
    if (uses) {
       for (auto *use : *uses) {
-         cast<Instruction>(use->getUser())->replaceOperand(this, V);
-      }
-   }
+         if (auto I = dyn_cast<Instruction>(use->getUser()))
+            I->replaceOperand(this, V);
+         else if (auto C = dyn_cast<Constant>(use->getUser()))
+            C->replaceOperand(cast<Constant>(this), cast<Constant>(V));
+         else
+            llvm_unreachable("bad value kind");
 
-   V->uses = uses;
-   uses = nullptr;
+         V->addUse(use->getUser());
+      }
+
+      uses->Delete();
+      uses = nullptr;
+   }
 
    if (auto Inst = dyn_cast<Instruction>(this)) {
       Inst->handleReplacement(V);
    }
-   if (auto Const = dyn_cast<Constant>(this)) {
+   else if (auto Const = dyn_cast<Constant>(this)) {
       Const->handleReplacement(V);
    }
 
    if (hasName() && !isa<Constant>(V)) {
       V->setName(name);
    }
+}
 
-   checkIfStillInUse();
+il::Value *Value::ignoreBitCast()
+{
+   if (auto BC = dyn_cast<BitCastInst>(this))
+      return BC->getOperand(0);
+
+   return this;
 }
 
 llvm::StringRef Value::getName() const
@@ -273,26 +363,6 @@ void Value::setName(llvm::StringRef name)
 bool Value::hasName() const
 {
    return !name.empty();
-}
-
-SourceLocation Value::getSourceLoc() const
-{
-   if (auto I = dyn_cast<Instruction>(this)) {
-      while (I) {
-         if (auto DL = dyn_cast<DebugLocInst>(I))
-            return DL->getLoc();
-
-         I = I->getPrevNode();
-      }
-   }
-
-   if (auto GO = dyn_cast<GlobalObject>(this))
-      return GO->getSourceLoc();
-
-   if (auto Arg = dyn_cast<Argument>(this))
-      return Arg->getSourceLoc();
-
-   return SourceLocation();
 }
 
 MDSet *Value::getMetaData() const

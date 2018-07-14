@@ -29,6 +29,11 @@ public:
    RetTy visit##Name(const Name *T) { return DISPATCH(Parent); }
 #  include "Types.def"
 
+   RetTy visit(QualType Ty)
+   {
+      return visit((const Type*)Ty.getBuiltinTy());
+   }
+
    RetTy visitType(const Type*) { return RetTy(); }
 };
 

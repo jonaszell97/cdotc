@@ -27,17 +27,31 @@ bool SemaPass::ensureDeclared(Decl *D)
 
 bool SemaPass::ensureVisited(Decl *D)
 {
-   if (VisitedDecls.find((uintptr_t)D) != VisitedDecls.end())
+   if (isVisited(D))
       return true;
 
    DeclScopeRAII declContextRAII(*this, D->getDeclContext());
    ScopeResetRAII scopeResetRAII(*this);
 
-   return visitDecl(D).isValid();
+   if (!D->wasDeclared()) {
+      (void) declareStmt(D);
+      if (D->isInvalid())
+         return false;
+   }
+
+   (void) visitDecl(D);
+   return !D->isInvalid();
 }
 
 bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
 {
+   if (Fn->isBeingEvaluated()) {
+      diagnose(Fn, diag::err_referenced_while_evaluating, 1 /*function*/,
+               Fn->getDeclName(), Fn->getSourceLoc());
+
+      return false;
+   }
+
    if (auto M = support::dyn_cast<MethodDecl>(Fn)) {
       if (!prepareDeclForCtfe(*this, M->getRecord()))
          return false;

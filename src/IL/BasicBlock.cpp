@@ -3,14 +3,16 @@
 //
 
 #include "BasicBlock.h"
-#include "Function.h"
-#include "Argument.h"
 
 #include "AST/ASTContext.h"
+#include "Argument.h"
 #include "Context.h"
+#include "Function.h"
 #include "IL/Utils/BlockIterator.h"
+#include "Writer/ModuleWriter.h"
 
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::support;
 using std::string;
@@ -31,6 +33,40 @@ BasicBlock::BasicBlock(Function *parent)
    if (parent) {
       parent->getBasicBlocks().push_back(this);
    }
+}
+
+BasicBlock::BasicBlock(const il::BasicBlock &BB, il::Function &F)
+   : Constant(BasicBlockID, BB.getType()),
+     parent(&F),
+     Instructions(parent && !parent->getBasicBlocks().empty()
+                  ? std::move(InstList(this, parent->getBasicBlocks().front()
+                                                   .getInstructions().getSymTab()))
+                  : std::move(InstList(this))),
+     Args(this, Instructions.getSymTab())
+{
+   InstBits = BB.InstBits;
+   setName(BB.getName());
+
+   for (auto &Arg : BB.getArgs()) {
+      Args.push_back(new Argument(Arg, *this));
+   }
+
+   F.getBasicBlocks().push_back(this);
+}
+
+BasicBlock::~BasicBlock()
+{
+
+}
+
+void BasicBlock::print(llvm::raw_ostream &OS) const
+{
+   ModuleWriter(this).WriteTo(OS);
+}
+
+void BasicBlock::dump() const
+{
+   print(llvm::outs());
 }
 
 TerminatorInst const* BasicBlock::getTerminator() const
@@ -120,20 +156,24 @@ bool BasicBlock::isExitBlock() const
    switch (Term->getTypeID()) {
    case RetInstID:
    case ThrowInstID:
+   case RethrowInstID:
+   case InvokeInstID:
       return true;
    default:
       return false;
    }
 }
 
-void BasicBlock::addBlockArg(QualType ty, llvm::StringRef name)
+Argument *BasicBlock::addBlockArg(QualType ty, llvm::StringRef name)
 {
-   Args.push_back(new Argument(ValueType(getCtx(), ty), Argument::Owned,
-                               this));
+   Args.push_back(new Argument(ValueType(getCtx(), ty),
+                               ArgumentConvention::Owned, this));
 
    if (!name.empty()) {
       Args.back().setName(name);
    }
+
+   return &Args.back();
 }
 
 } // namespace il

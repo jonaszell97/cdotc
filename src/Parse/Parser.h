@@ -27,6 +27,8 @@ namespace llvm {
 
 namespace cdot {
 
+class Module;
+
 namespace lex {
    class Lexer;
    struct Token;
@@ -49,11 +51,6 @@ namespace ast {
    enum class CallKind : unsigned int;
    enum class ExternKind : unsigned char;
 } // namespace ast
-
-namespace module {
-   class Module;
-   class ParserImpl;
-} // namespace module
 
 namespace parse {
 
@@ -220,6 +217,12 @@ public:
       DeclContextRAII(Parser &P, DeclContext *Ctx);
       ~DeclContextRAII();
 
+      DeclContextRAII(DeclContextRAII &&Other) noexcept;
+      DeclContextRAII &operator=(DeclContextRAII &&Other) = delete;
+
+      DeclContextRAII(const DeclContextRAII&) = delete;
+      DeclContextRAII &operator=(const DeclContextRAII&) = delete;
+
    private:
       Parser &P;
       bool PrevInRecordDecl;
@@ -234,18 +237,18 @@ public:
       return source_id;
    }
 
-   void parseImports(llvm::SmallVectorImpl<ImportDecl*> &stmts);
-   void parse(llvm::SmallVectorImpl<Statement*> &stmts);
+   ModuleDecl *parseModule(bool &IgnoreSourceFile);
+   void parse();
+   void parseMainFile();
 
    ParseResult parseFunctionDecl();
    ParseResult parseGlobalCtor();
    ParseResult parseGlobalDtor();
 
    DeclarationName parseOperatorName(FixKind Fix,
-                                     bool &isCastOp,
-                                     SourceType &castType);
+                                     bool &isCastOp);
 
-   ParseResult parseMethodDecl(AccessSpecifier accessSpec, bool isStatic);
+   ParseResult parseMethodDecl();
 
    void skipAttribute();
 
@@ -311,7 +314,9 @@ public:
                                  bool stopAtColon = false,
                                  bool stopAtNewline = true,
                                  bool AllowBraceClosure = true,
-                                 bool parsingType = false);
+                                 bool parsingType = false,
+                                 bool AllowTry = true,
+                                 bool stopAtGreater = false);
 
    void parseStmts(llvm::SmallVectorImpl<Statement*> &Stmts);
 
@@ -347,7 +352,10 @@ private:
    unsigned source_id;
 
    bool InRecordScope = false;
+   bool ParsingProtocol = false;
+
    bool isModuleParser;
+   bool DiscardDecls = false;
 
    lex::Lexer *lexer;
    SemaPass &SP;
@@ -359,22 +367,33 @@ private:
    IdentifierInfo *Ident_in;
    IdentifierInfo *Ident_as;
    IdentifierInfo *Ident_is;
+   IdentifierInfo *Ident_do;
    IdentifierInfo *Ident_then;
    IdentifierInfo *Ident_default;
+   IdentifierInfo *Ident_deinit;
    IdentifierInfo *Ident_typename;
-   IdentifierInfo *Ident_value;
    IdentifierInfo *Ident_sizeof;
    IdentifierInfo *Ident_decltype;
+   IdentifierInfo *Ident_subscript;
+   IdentifierInfo *Ident_memberwise;
    IdentifierInfo *Ident_get;
    IdentifierInfo *Ident_set;
    IdentifierInfo *Ident_virtual;
    IdentifierInfo *Ident_override;
    IdentifierInfo *Ident_with;
+   IdentifierInfo *Ident_throws;
+   IdentifierInfo *Ident_async;
+   IdentifierInfo *Ident_unsafe;
    IdentifierInfo *Ident_precedenceGroup;
    IdentifierInfo *Ident_higherThan;
    IdentifierInfo *Ident_lowerThan;
    IdentifierInfo *Ident_associativity;
+   IdentifierInfo *Ident_assignment;
    IdentifierInfo *Ident_macro;
+   IdentifierInfo *Ident_owned;
+   IdentifierInfo *Ident_borrow;
+   IdentifierInfo *Ident_ref;
+   IdentifierInfo *Ident_from;
    IdentifierInfo *Ident___traits;
    IdentifierInfo *Ident___nullptr;
    IdentifierInfo *Ident___func__;
@@ -388,6 +407,27 @@ private:
 
    std::stack<ClosureScope> UnnamedClosureArgumentStack;
    std::stack<bool> AllowTrailingClosureStack;
+
+   struct DeclAttrs {
+      DeclAttrs() : Access(AccessSpecifier::Default),
+                    Abstract(false),
+                    Sealed(false), Final(false)
+      {}
+
+      AccessSpecifier Access = AccessSpecifier::Default;
+      SourceLocation AccessLoc;
+
+      SourceLocation StaticLoc;
+
+      bool Abstract : 1;
+      bool Sealed   : 1;
+      bool Final    : 1;
+   };
+
+   DeclAttrs CurDeclAttrs;
+
+   DeclAttrs pushDeclAttrs();
+   void popDeclAttrs(DeclAttrs Prev) { CurDeclAttrs = Prev; }
 
    bool AllowBraceClosure()
    {
@@ -434,11 +474,65 @@ private:
       ~StateSaveRAII();
 
       void disable() { enabled = false; }
+      void advance(bool ignoreNewline = true,
+                   bool significantWhitespace = false);
 
    private:
       Parser &P;
-      unsigned idx : 31;
-      bool enabled : 1;
+      bool enabled;
+      lex::Token SavedCurTok;
+      lex::Token SavedLastTok;
+      SmallVector<lex::Token, 8> Tokens;
+   };
+
+   struct RecordScopeRAII {
+      RecordScopeRAII(Parser &P, bool AtRecordScope)
+         : P(P), Prev(P.InRecordScope)
+      {
+         P.InRecordScope = AtRecordScope;
+      }
+
+      ~RecordScopeRAII()
+      {
+         P.InRecordScope = Prev;
+      }
+
+   private:
+      Parser &P;
+      bool Prev;
+   };
+
+   struct ParsingProtocolRAII {
+      ParsingProtocolRAII(Parser &P, bool ParsingProtocol)
+         : P(P), Prev(P.ParsingProtocol)
+      {
+         P.ParsingProtocol = ParsingProtocol;
+      }
+
+      ~ParsingProtocolRAII()
+      {
+         P.ParsingProtocol = Prev;
+      }
+
+   private:
+      Parser &P;
+      bool Prev;
+   };
+
+   struct DiscardRAII {
+      DiscardRAII(Parser &P) : P(P), Prev(P.DiscardDecls)
+      {
+         P.DiscardDecls = true;
+      }
+
+      ~DiscardRAII()
+      {
+         P.DiscardDecls = Prev;
+      }
+
+   private:
+      Parser &P;
+      bool Prev;
    };
 
    bool inGlobalDeclContext() const;
@@ -457,7 +551,7 @@ private:
 
    void skipWhitespace();
 
-   ParseResult parseTopLevelDecl(const lex::Token *Tok = nullptr);
+   ParseResult parseTopLevelDecl();
    ParseResult parseRecordLevelDecl();
 
    Statement *parseStmts();
@@ -466,12 +560,27 @@ private:
 
    bool isAtRecordLevel() const { return InRecordScope; }
 
-   void parseAttributes(llvm::SmallVectorImpl<Attr*> &Attrs);
+   enum class AttrClass {
+      Decl, Stmt, Expr, Type,
+   };
+
+   void discardDecl();
+   void discardStmt();
+
+   void parseAttributes(llvm::SmallVectorImpl<Attr*> &Attrs, AttrClass AC,
+                        bool *FoundVersionAttr = nullptr);
+
+   bool versionSatisfied(unsigned Version);
+
+   ParseResult parseVersionDeclAttr(ArrayRef<Attr*> Attrs);
+   ParseResult parseVersionStmtAttr(ArrayRef<Attr*> Attrs);
 
    ParseResult parseAttributedDecl();
    ParseTypeResult parseAttributedType();
    ParseResult parseAttributedStmt();
    ParseResult parseAttributedExpr();
+
+   ParseResult ActOnDecl(Decl *D);
 
    void checkAttrApplicability(ParseResult Result, Attr *A);
 
@@ -504,45 +613,56 @@ private:
       return Loc;
    }
 
-   void maybeParseAccessModifier(AccessSpecifier &AS,
-                                 SourceLocation &AccessLoc);
+   void maybeParseConvention(ArgumentConvention &Conv,
+                             SourceLocation &Loc);
 
-   ParseResult parseMacro(AccessSpecifier AS = AccessSpecifier::Default);
+   ParseResult parseMacro();
 
    ParseResult parseTrailingClosure();
 
    ParseResult parseNextDecl();
-   ParseResult parseNextStmt();
+   ParseResult parseNextStmt(bool AllowBracedBlock = true);
 
    ParseResult parseNamespaceDecl();
    ParseResult parseUsingDecl();
    ParseResult parseModuleDecl();
    ParseResult parseImportDecl();
 
-   ParseResult parseAccessSpecScope(bool TopLevel);
+   ParseResult parseCompoundDecl(bool TopLevel, bool Transparent = true);
 
-   ParseResult parseVarDecl();
-   ParseResult parseDestructuringDecl(AccessSpecifier access, bool isLet);
+   ParseResult parseVarDecl(bool allowTrailingClosure = true,
+                            bool skipKeywords = false);
+
+   ParseResult parseDestructuringDecl(bool isLet);
 
    ParseResult parseKeyword();
 
-   ParseResult parseBlock(bool preserveTopLevel = false,
-                          bool noOpenBrace = false);
+   ParseResult parseCompoundStmt(bool preserveTopLevel = false,
+                                 bool noOpenBrace = false,
+                                 bool isUnsafe = false);
+
+   ParseResult parseDoStmt();
 
    ParseResult parseCollectionLiteral();
 
    std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc);
+   void parseFuncArgs(SourceLocation &varargLoc,
+                      std::vector<FuncArgDecl*> &Vec);
 
    ParseResult parseLambdaExpr();
-   ParseResult parseFunctionCall(bool allowLet = false,
+   ParseResult parseLambdaExpr(SourceLocation LParenLoc,
+                               SmallVectorImpl<FuncArgDecl*> &Args);
+
+   ParseResult parseFunctionCall(bool skipName = false,
                                  Expression *ParentExpr = nullptr,
-                                 bool pointerAccess = false);
+                                 bool pointerAccess = false,
+                                 DeclarationName Name = {});
 
    ParseResult parseEnumCaseExpr();
 
    struct ArgumentList {
       std::vector<std::string> labels;
-      std::vector<Expression*> args;
+      ASTVector<Expression*> args;
    };
 
    ArgumentList parseCallArguments();
@@ -564,31 +684,25 @@ private:
    struct RecordHead {
       RecordHead() : enumRawType() {}
 
-      AccessSpecifier access;
-      SourceLocation AccessLoc;
-
-      IdentifierInfo *recordName;
-      std::vector<SourceType> conformances;
+      DeclarationName recordName;
+      ASTVector<SourceType> conformances;
       std::vector<StaticExpr*> constraints;
-      std::vector<TemplateParamDecl*> templateParams;
+      ASTVector<TemplateParamDecl*> templateParams;
 
       union {
          SourceType enumRawType;
          SourceType parentClass;
       };
 
-      bool isAbstract = false;
       bool hasDefinition = false;
    };
 
    void parseClassHead(RecordHead &Head);
 
-   ParseResult parseAnyRecord(lex::tok::TokenType kind,
-                              RecordDecl *outer = nullptr);
-
+   ParseResult parseAnyRecord(lex::tok::TokenType kind);
    ParseResult parseExtension();
 
-   ParseResult parseConstrDecl(AccessSpecifier access);
+   ParseResult parseConstrDecl();
    ParseResult parseDestrDecl();
 
    struct AccessorInfo {
@@ -602,17 +716,18 @@ private:
       IdentifierInfo *NewValName = nullptr;
    };
 
-   void parseAccessor(AccessorInfo &Info);
+   void parseAccessor(AccessorInfo &Info, bool IsProperty);
 
-   ParseResult parsePropDecl(AccessSpecifier accessSpec, bool isStatic);
-   ParseResult parseFieldDecl(AccessSpecifier accessSpec, bool isStatic);
+   ParseResult parsePropDecl();
+   ParseResult parseFieldDecl();
+   ParseResult parseSubscriptDecl();
 
    ParseResult parseEnumCase();
    ParseResult parseAssociatedType();
 
    ParseResult parsePattern();
 
-   std::vector<TemplateParamDecl*> tryParseTemplateParameters();
+   ASTVector<TemplateParamDecl*> tryParseTemplateParameters();
 
    void parseClassInner();
 
@@ -624,17 +739,27 @@ private:
                                  bool InTypePosition,
                                  bool AllowMissingTemplateArguments);
 
-   ParseResult parseTypedef(AccessSpecifier AS = AccessSpecifier::Default);
-   ParseResult parseAlias(AccessSpecifier AS = AccessSpecifier::Default);
+   ParseTypeResult parseFunctionType(SourceLocation BeginLoc,
+                                     ArrayRef<SourceType> ParamTys,
+                                     ArrayRef<FunctionType::ParamInfo>ParamInfo,
+                                     bool InTypePosition);
 
-   ParseResult parsePrecedenceGroup(AccessSpecifier AS
-                                       = AccessSpecifier::Default);
+   ParseResult parseTypedef();
+   ParseResult parseAlias();
+
+   ParseResult parsePrecedenceGroup();
    ParseResult parseOperatorDecl();
 
    ParseResult parseIdentifierExpr(bool parsingType = false,
-                                   bool parseSubExpr = true);
+                                   bool parseSubExpr = true,
+                                   DeclarationName Ident = {},
+                                   SourceLocation BeginLoc = {});
+
    ParseResult maybeParseSubExpr(Expression *ParentExpr,
                                  bool parsingType = false);
+
+   ParseResult parseTemplateArgListExpr(Expression *ParentExpr,
+                                        bool parsingType);
 
    string prepareStringLiteral(lex::Token const& tok);
    ParseResult parseUnaryExpr();
@@ -648,7 +773,6 @@ private:
 
    ParseResult parseDeclareStmt();
 
-   ParseResult parseTryStmt();
    ParseResult parseThrowStmt();
 
    ParseResult parseReturnStmt();

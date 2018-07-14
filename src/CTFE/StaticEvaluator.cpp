@@ -4,17 +4,18 @@
 
 #include "StaticEvaluator.h"
 
-#include "AST/AbstractPass.h"
+#include "AST/ASTVisitor.h"
 #include "CTFE/CTFEEngine.h"
 #include "CTFE/Value.h"
 #include "ILGen/ILGenPass.h"
 #include "Sema/SemaPass.h"
 #include "Sema/Builtin.h"
 #include "Support/Format.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <Support/Various.h>
+#include <Basic/Builtins.h>
 
 using namespace cdot::ast;
 using namespace cdot::diag;
@@ -72,17 +73,6 @@ public:
          auto Call = cast<CallExpr>(Stmt);
          
          switch (Call->getKind()) {
-         case CallKind::Builtin:
-            switch (Call->getBuiltinFnKind()) {
-            default:
-               UseCTFE = true;
-               return false;
-            case BuiltinFn::SIZEOF:
-            case BuiltinFn::BuiltinSizeof:
-            case BuiltinFn::ALIGNOF:
-            case BuiltinFn::ISNULL:
-               return visitChildren(Call);
-         }
          case CallKind::NamedFunctionCall: {
             switch (Call->getFunc()->getKnownFnKind()) {
             case KnownFunction::llvm_sqrt_f32:
@@ -128,7 +118,7 @@ public:
    bool UseCTFE = false;
 };
 
-class EvaluatorImpl: public AbstractPass<EvaluatorImpl, Variant> {
+class EvaluatorImpl: public ASTVisitor<EvaluatorImpl, Variant> {
 public:
    explicit EvaluatorImpl(SemaPass &SP)
       : SP(SP), Engine(SP)
@@ -165,7 +155,7 @@ public:
                                 .getConstantVal(Expr->getExprType(), V));
    }
 
-   friend class AbstractPass<EvaluatorImpl, Variant>;
+   friend class ASTVisitor<EvaluatorImpl, Variant>;
 
 private:
    SemaPass &SP;
@@ -194,7 +184,6 @@ private:
    Variant visitIdentifierRefExpr(IdentifierRefExpr* expr);
    Variant visitBuiltinIdentExpr(BuiltinIdentExpr *Expr);
 
-   Variant handleBuiltinCall(CallExpr *expr);
    Variant visitCallExpr(CallExpr *expr);
 
    Variant visitMemberRefExpr(MemberRefExpr *Expr);
@@ -296,39 +285,6 @@ Variant EvaluatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *Expr)
    }
 }
 
-Variant EvaluatorImpl::handleBuiltinCall(CallExpr *expr)
-{
-   switch (expr->getBuiltinFnKind()) {
-   default:
-      llvm_unreachable("bad builtin");
-   case BuiltinFn::SIZEOF:
-   case BuiltinFn::BuiltinSizeof: {
-      auto Ty =  expr->getTemplateArgs().front()->getExprType()
-                     ->asMetaType()->getUnderlyingType();
-
-      auto &TI = SP.getContext().getTargetInfo();
-      auto Bits = TI.getDefaultIntType()->getBitwidth();
-      auto Size = TI.getSizeOfType(Ty);
-
-      llvm::APSInt I(llvm::APInt(Bits, (uint64_t)Size, false), true);
-      return Variant(move(I));
-   }
-   case BuiltinFn::ALIGNOF: {
-      auto Ty =  expr->getTemplateArgs().front()->getExprType()
-                     ->asMetaType()->getUnderlyingType();
-
-      auto &TI = SP.getContext().getTargetInfo();
-      auto Bits = TI.getDefaultIntType()->getBitwidth();
-      auto Align = TI.getAlignOfType(Ty);
-
-      llvm::APSInt I(llvm::APInt(Bits, (uint64_t)Align, false), true);
-      return Variant(move(I));
-   }
-   case BuiltinFn::ISNULL:
-      return visit(expr->getArgs().front()).getZExtValue() == 0;
-   }
-}
-
 Variant EvaluatorImpl::visitCallExpr(CallExpr *expr)
 {
    auto &args = expr->getArgs();
@@ -341,8 +297,6 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *expr)
          return Variant();
       else
          return visit(expr->getArgs().front());
-   case CallKind::Builtin:
-      return handleBuiltinCall(expr);
    case CallKind::NamedFunctionCall:
       switch (expr->getFunc()->getKnownFnKind()) {
       case KnownFunction::llvm_sqrt_f32:

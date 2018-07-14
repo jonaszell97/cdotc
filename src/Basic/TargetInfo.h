@@ -29,8 +29,15 @@ public:
 
    bool isTriviallyCopyable(QualType Ty) const;
 
+   unsigned getNestedNumberOfFields(QualType Ty) const;
+
    const llvm::Triple &getTriple() const { return T; }
    Type *getDefaultIntType() const { return DefaultIntType; }
+
+   unsigned getDirectStructPassingFieldThreshold() const
+   { return DirectStructPassingFieldThreshold; }
+   void setDirectStructPassingFieldThreshold(unsigned V)
+   { DirectStructPassingFieldThreshold = V; }
 
    friend class ast::ASTContext; // populates these
 
@@ -38,6 +45,7 @@ private:
    unsigned calculateSizeOfType(QualType Ty) const;
    unsigned short calculateAlignOfType(QualType Ty) const;
    bool calculateIsTriviallyCopyable(QualType Ty) const;
+   unsigned calculateNestedNumberOfFields(QualType Ty) const;
 
    llvm::Triple T;
 
@@ -45,9 +53,16 @@ private:
    unsigned short PointerAlignInBytes;
    Type *DefaultIntType;
 
-   mutable llvm::DenseMap<Type*, unsigned> TypeSizesInBytes;
-   mutable llvm::DenseMap<Type*, unsigned short> TypeAlignInBytes;
-   mutable llvm::DenseMap<Type*, bool> TriviallyCopyable;
+   unsigned DirectStructPassingFieldThreshold;
+
+   struct TypeInfo {
+      llvm::Optional<unsigned> SizeInBytes;
+      llvm::Optional<unsigned short> AlignInBytes;
+      llvm::Optional<bool> TriviallyCopyable;
+      llvm::Optional<unsigned> NestedFieldCount;
+   };
+
+   mutable llvm::DenseMap<Type*, TypeInfo> TypeInfoMap;
 
    bool HasFP128  : 1;
    bool BigEndian : 1;

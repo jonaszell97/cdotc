@@ -11,7 +11,7 @@
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
-#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/StringMap.h>
 
 namespace llvm {
@@ -66,6 +66,7 @@ namespace ast {
    class Decl;
 } // namespace ast
 
+class CompilationUnit;
 class Type;
 
 namespace il {
@@ -76,14 +77,14 @@ class GlobalVariable;
 
 class Context final {
 public:
-   using ModuleList         = llvm::SmallVector<Module*, 8>;
-   using mod_iterator       = ModuleList::iterator;
-   using mod_const_iterator = ModuleList::const_iterator;
+   using ModuleList         = llvm::SmallPtrSet<Module*, 4>;
 
-   explicit Context(ast::ASTContext &ASTCtx);
+   explicit Context(CompilationUnit &CU);
    ~Context();
 
-   void registerModule(Module *M) { Modules.push_back(M); }
+   void registerModule(Module *M);
+   void removeModule(Module *M);
+   const llvm::SmallPtrSetImpl<Module*> &getModules() const { return Modules; }
 
    Function *getFunction(llvm::StringRef name);
    Function *getFunctionDefinition(llvm::StringRef name);
@@ -91,7 +92,8 @@ public:
    GlobalVariable *getGlobal(llvm::StringRef name);
    GlobalVariable *getGlobalDefinition(llvm::StringRef name);
 
-   ast::ASTContext &getASTCtx() const { return ASTCtx; }
+   ast::ASTContext &getASTCtx() const;
+   CompilationUnit &getCompilation() const { return CI; }
 
    friend class ConstantInt;     // for IntConstants
    friend class ConstantFloat;   // for FPConstants
@@ -106,10 +108,13 @@ public:
    friend class UndefValue;
    friend class ConstantExpr;
    friend class MagicConstant;
+   friend class ConstantTokenNone;
+   friend class TypeInfo;
+   friend class VTable;
 
 private:
-   llvm::SmallVector<Module*, 8> Modules;
-   ast::ASTContext &ASTCtx;
+   CompilationUnit &CI;
+   ModuleList Modules;
 
    using IntMapTy = llvm::DenseMap<llvm::APSInt, std::unique_ptr<ConstantInt>,
                                    llvm::DenseMapAPIntKeyInfo>;
@@ -143,8 +148,13 @@ private:
    llvm::FoldingSet<ConstantGEPInst> GEPConstants;
    llvm::FoldingSet<ConstantLoadInst> LoadConstants;
 
+   llvm::DenseMap<QualType, TypeInfo*> TypeInfoMap;
+   llvm::DenseMap<void*, VTable*> VTableMap;
+
+   ConstantTokenNone *TokNone = nullptr;
    ConstantInt *TrueVal  = nullptr;
    ConstantInt *FalseVal = nullptr;
+   ConstantTuple *EmptyTuple = nullptr;
 };
 
 } // namespace il

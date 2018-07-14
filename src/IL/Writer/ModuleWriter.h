@@ -26,34 +26,18 @@ public:
       Module,
       Function,
       GlobalVariable,
-      Type,
       Instruction,
       BasicBlock
    };
 
    explicit ModuleWriter(Module const* M)
-      : kind(Kind::Module), M(M)
+      : kind(Kind::Module), M(M), F(nullptr)
    {}
 
-   explicit ModuleWriter(Function const* F)
-      : kind(Kind::Function), F(F)
-   {}
-
-   explicit ModuleWriter(ast::RecordDecl *R)
-      : kind(Kind::Type), R(R)
-   {}
-
-   explicit ModuleWriter(GlobalVariable const* G)
-      : kind(Kind::GlobalVariable), G(G)
-   {}
-
-   explicit ModuleWriter(Instruction const* I)
-      : kind(Kind::Instruction), I(I)
-   {}
-
-   explicit ModuleWriter(BasicBlock const* BB)
-      : kind(Kind::BasicBlock), BB(BB)
-   {}
+   explicit ModuleWriter(Function const* F);
+   explicit ModuleWriter(GlobalVariable const* G);
+   explicit ModuleWriter(Instruction const* I);
+   explicit ModuleWriter(BasicBlock const* BB);
 
 
    void WriteTo(llvm::raw_ostream &out);
@@ -63,10 +47,9 @@ public:
 protected:
    Kind kind;
 
+   Module const* M;
    union {
-      Module const* M;
       Function const* F;
-      ast::RecordDecl *R;
       GlobalVariable const* G;
       Instruction const* I;
       BasicBlock const *BB;

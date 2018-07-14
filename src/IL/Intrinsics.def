@@ -3,21 +3,50 @@
    CDOT_INTRINSIC(memcpy, "__builtin_memcpy")
    CDOT_INTRINSIC(memset, "__builtin_memset")
    CDOT_INTRINSIC(memcmp, "__builtin_memcmp")
-   CDOT_INTRINSIC(retain, "__builtin_retain")
-   CDOT_INTRINSIC(release, "__builtin_release")
    CDOT_INTRINSIC(lifetime_begin, "__builtin_lifetime_begin")
    CDOT_INTRINSIC(lifetime_end, "__builtin_lifetime_end")
    CDOT_INTRINSIC(__ctfe_stacktrace, "__ctfe_stacktrace")
 
+   CDOT_INTRINSIC(begin_unsafe, "")
+   CDOT_INTRINSIC(end_unsafe, "")
+
    CDOT_INTRINSIC(get_lambda_env, "__get_lambda_env")
    CDOT_INTRINSIC(get_lambda_funcptr, "__get_lambda_funcptr")
+
+   CDOT_INTRINSIC(unbox, "__unbox")
 
    CDOT_INTRINSIC(strong_refcount, "__get_strong_refcount")
    CDOT_INTRINSIC(weak_refcount, "__get_weak_refcount")
    CDOT_INTRINSIC(vtable_ref, "__get_vtable_ref")
+   CDOT_INTRINSIC(virtual_method, "__virtual_method")
    CDOT_INTRINSIC(typeinfo_ref, "__get_typeinfo")
 
    CDOT_INTRINSIC(indirect_case_ref, "__indirect_case_ref")
+
+   CDOT_INTRINSIC(typeinfo_cmp, "__typeinfo_cmp")
+   CDOT_INTRINSIC(excn_typeinfo_ref, "")
+   CDOT_INTRINSIC(excn_object_ref, "")
+   CDOT_INTRINSIC(print_exception, "")
+   CDOT_INTRINSIC(print_runtime_error, "")
+   CDOT_INTRINSIC(cleanup_exception, "")
+   CDOT_INTRINSIC(terminate, "")
+
+   // Atomic intrinsics
+   CDOT_INTRINSIC(atomic_cmpxchg, "")
+   CDOT_INTRINSIC(atomic_rmw, "")
+
+   // Coroutine intrinsics
+   CDOT_INTRINSIC(coro_id, "")
+   CDOT_INTRINSIC(coro_save, "")
+   CDOT_INTRINSIC(coro_size, "")
+   CDOT_INTRINSIC(coro_alloc, "")
+   CDOT_INTRINSIC(coro_free, "")
+   CDOT_INTRINSIC(coro_destroy, "")
+   CDOT_INTRINSIC(coro_begin, "")
+   CDOT_INTRINSIC(coro_end, "")
+   CDOT_INTRINSIC(coro_suspend, "")
+   CDOT_INTRINSIC(coro_resume, "")
+   CDOT_INTRINSIC(coro_return, "")
 #endif
 
 #undef CDOT_INTRINSIC

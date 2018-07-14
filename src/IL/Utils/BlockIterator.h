@@ -31,7 +31,7 @@ public:
    }
 
    using value_type = decltype(*Ptr());
-   using reference  = value_type&;
+   using reference  = Ptr;
 
    bool operator==(const PredIterator &it) const { return It == it.It; }
    bool operator!=(const PredIterator &it) const { return !operator==(it); }
@@ -52,13 +52,13 @@ public:
       auto cpy = *this; ++*this; return cpy;
    }
 
-   reference operator*() const
+   Ptr operator*() const
    {
       assert(!It.atEnd() && "dereferencing end iterator");
-      return *support::cast<TerminatorInst>(It->getUser())->getParent();
+      return support::cast<TerminatorInst>(It->getUser())->getParent();
    }
 
-   Ptr operator->() const { return &operator*(); }
+   Ptr operator->() const { return operator*(); }
 
 private:
    UseIt It;
@@ -131,7 +131,7 @@ public:
    }
 
    using value_type = decltype(*Ptr());
-   using reference  = value_type&;
+   using reference  = Ptr;
 
    bool operator==(const SuccIterator &it) const
    {
@@ -139,25 +139,14 @@ public:
    }
    bool operator!=(const SuccIterator &it) const { return !operator==(it); }
 
-   SuccIterator &operator++()
-   {
-      ++idx;
-      return *this;
-   }
+   SuccIterator &operator++() { ++idx; return *this; }
+   SuccIterator operator++(int) { auto cpy = *this; ++idx; return cpy; }
 
-   SuccIterator operator++(int)
-   {
-      auto cpy = *this;
-      ++idx;
-      return cpy;
-   }
+   SuccIterator &operator--() { --idx; return *this; }
+   SuccIterator operator--(int) { auto cpy = *this; --idx; return cpy; }
 
-   reference operator*() const
-   {
-      return *TermInst->getSuccessorAt(idx);
-   }
-
-   Ptr operator->() const { return &operator*(); }
+   Ptr operator*()  const { return TermInst->getSuccessorAt(idx); }
+   Ptr operator->() const { return operator*(); }
 
 private:
    Term TermInst;

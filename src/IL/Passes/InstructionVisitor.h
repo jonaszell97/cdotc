@@ -20,7 +20,7 @@ public:
    virtual void visitModule(il::Module &M) {}
 };
 
-template<class SubClass, typename RetType = void>
+template<class SubClass, typename RetType = void, class ...Args>
 class InstructionVisitor: public InstVisitorBase {
 public:
 
@@ -41,18 +41,23 @@ public:
    void visit(Module *M) { visit(*M); }
    void visit(Function *F) { visit(*F); }
    void visit(BasicBlock *B) { visit(*B); }
-   RetType visit(Instruction *I) { return visit(*I); }
 
-   RetType visit(Instruction &I)
+   RetType visit(Instruction *I, Args&&... args)
+   {
+      return visit(*I, std::forward<Args&&>(args)...);
+   }
+
+   RetType visit(Instruction &I, Args&&... args)
    {
       static_assert(std::is_base_of<InstructionVisitor, SubClass>::value,
                     "Must pass the derived type to this template!");
 
       switch (I.getTypeID()) {
-#     define CDOT_INSTRUCTION(Name)                                            \
-         case Value::Name##ID:                                                 \
-            return static_cast<SubClass*>(this)                                \
-                      ->visit##Name(static_cast<Name&>(I));
+#     define CDOT_INSTRUCTION(Name)                                  \
+         case Value::Name##ID:                                       \
+            return static_cast<SubClass*>(this)                      \
+                      ->visit##Name(static_cast<Name&>(I),           \
+                                    std::forward<Args&&>(args)...);
 
 #     include "IL/Instructions.def"
 
@@ -61,18 +66,22 @@ public:
       }
    }
 
-   RetType visit(Instruction const* I) { return visit(*I); }
+   RetType visit(Instruction const* I, Args&&... args)
+   {
+      return visit(*I, std::forward<Args&&>(args)...);
+   }
 
-   RetType visit(Instruction const& I)
+   RetType visit(Instruction const& I, Args&&... args)
    {
       static_assert(std::is_base_of<InstructionVisitor, SubClass>::value,
                     "Must pass the derived type to this template!");
 
       switch (I.getTypeID()) {
-#     define CDOT_INSTRUCTION(Name)                                            \
-         case Value::Name##ID:                                                 \
-            return static_cast<SubClass*>(this)                                \
-                      ->visit##Name(static_cast<Name const&>(I));
+#     define CDOT_INSTRUCTION(Name)                                   \
+         case Value::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                       \
+                      ->visit##Name(static_cast<Name const&>(I),      \
+                                    std::forward<Args&&>(args)...);
 
 #     include "IL/Instructions.def"
 
@@ -86,12 +95,69 @@ public:
    void visitFunction  (Function &F) {}
    void visitBasicBlock(BasicBlock &BB) {}
 
-#  define CDOT_INSTRUCTION(Name) \
-   RetType visit##Name(Name& I) {}
+   void visitGlobalVariable(GlobalVariable &GV) {}
+   void visitGlobalVariable(const GlobalVariable &GV) {}
+
+   void visitArgument(Argument &A) {}
+   void visitArgument(const Argument &A) {}
+
+   void visit(Value *V) { return visit(*V); }
+   void visit(Value &V)
+   {
+      static_assert(std::is_base_of<InstructionVisitor, SubClass>::value,
+                    "Must pass the derived type to this template!");
+
+      switch (V.getTypeID()) {
+#     define CDOT_INSTRUCTION(Name)                                   \
+         case Value::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                       \
+                      ->visit##Name(static_cast<Name&>(V));
+
+#     include "IL/Instructions.def"
+      case Value::ArgumentID:
+         static_cast<SubClass*>(this)->visitArgument(static_cast<Argument&>(V));
+         break;
+      case Value::GlobalVariableID:
+         static_cast<SubClass*>(this)
+            ->visitGlobalVariable(static_cast<GlobalVariable&>(V));
+         break;
+      default:
+         llvm_unreachable("bad instruction kind");
+      }
+   }
+
+   void visit(const Value *V) { return visit(*V); }
+   void visit(const Value &V)
+   {
+      static_assert(std::is_base_of<InstructionVisitor, SubClass>::value,
+                    "Must pass the derived type to this template!");
+
+      switch (V.getTypeID()) {
+#     define CDOT_INSTRUCTION(Name)                                   \
+         case Value::Name##ID:                                        \
+            return static_cast<SubClass*>(this)                       \
+                      ->visit##Name(static_cast<Name const&>(V));
+
+#     include "IL/Instructions.def"
+      case Value::ArgumentID:
+         static_cast<SubClass*>(this)
+            ->visitArgument(static_cast<const Argument&>(V));
+         break;
+      case Value::GlobalVariableID:
+         static_cast<SubClass*>(this)
+            ->visitGlobalVariable(static_cast<const GlobalVariable&>(V));
+         break;
+      default:
+         llvm_unreachable("bad instruction kind");
+      }
+   }
+
+#  define CDOT_INSTRUCTION(Name)                                           \
+   RetType visit##Name(Name& I, Args&&...) { return RetType(); }
 #  include "IL/Instructions.def"
 
-#  define CDOT_INSTRUCTION(Name) \
-   RetType visit##Name(Name const& I) {}
+#  define CDOT_INSTRUCTION(Name)                                           \
+   RetType visit##Name(Name const& I, Args&&...) { return RetType(); }
 #  include "IL/Instructions.def"
 
 protected:

@@ -5,6 +5,7 @@
 #ifndef CDOT_USE_H
 #define CDOT_USE_H
 
+#include <cassert>
 #include <cstddef>
 #include <iterator>
 
@@ -22,6 +23,8 @@ public:
 
    void addUseAtEnd(Use *use)
    {
+      assert(use != this && "adding use to itself");
+
       auto next = this;
       while (next->Next) {
          next = next->Next;
@@ -146,23 +149,30 @@ public:
    iterator end() { return {}; }
    const_iterator const_end() const { return {}; }
 
-   Value *getUser()
-   {
-      return User;
-   }
 
-   Value* getUser() const
-   {
-      return User;
-   }
+   Value* getUser() const { return User; }
+   void setUser(Value *V) { User = V; }
 
-   operator Value*()
-   {
-      return User;
-   }
+   operator Value*() { return User; }
 
    bool hasNext() const { return Next != nullptr; }
    bool hasPrev() const { return Prev != nullptr; }
+
+   Use *getNext() const { return Next; }
+   Use *getPrev() const { return Prev; }
+
+   void Delete()
+   {
+      if (Next) {
+         Next->Delete();
+      }
+
+      delete this;
+   }
+
+#ifndef NDEBUG
+   void verify();
+#endif
 
 protected:
    Value *User;

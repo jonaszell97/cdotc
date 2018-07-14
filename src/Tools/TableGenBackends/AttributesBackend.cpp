@@ -6,15 +6,17 @@
 #include "TableGen/Value.h"
 #include "TableGen/Type.h"
 #include "Support/Casting.h"
+#include "Support/StringSwitch.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
 
 #include <unordered_map>
-#include <llvm/ADT/StringSwitch.h>
 
 using namespace cdot::tblgen;
 using namespace cdot::support;
+
+using std::string;
 
 namespace {
 
@@ -657,7 +659,7 @@ void AttrClassEmitter::emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs)
          continue;
 
       auto BaseName = Attr->getBases().front().getBase()->getName();
-      llvm::StringRef Kind = llvm::StringSwitch<llvm::StringRef>(BaseName)
+      llvm::StringRef Kind = cdot::StringSwitch<llvm::StringRef>(BaseName)
          .Case("DeclAttr", "Decl")
          .Case("ExprAttr", "Expression")
          .Case("TypeAttr", "Expression")
@@ -702,6 +704,20 @@ public:
                      CurrentArgInfo &ArgInfo,
                      llvm::StringRef EnumOwner,
                      llvm::ArrayRef<Value*> Cases);
+
+   void readStringDefault(llvm::raw_ostream &out,
+                          std::pair<std::string, std::string> &TypeAndName,
+                          Value *DefaultVal);
+   void readIntDefault(llvm::raw_ostream &out,
+                       std::pair<std::string, std::string> &TypeAndName,
+                       Value *DefaultVal);
+   void readFloatDefault(llvm::raw_ostream &out,
+                         std::pair<std::string, std::string> &TypeAndName,
+                         Value *DefaultVal);
+   void readEnumDefault(llvm::raw_ostream &out,
+                        std::pair<std::string, std::string> &TypeAndName,
+                        llvm::StringRef EnumOwner,
+                        Value *DefaultVal);
 
 private:
    llvm::raw_ostream &out;
@@ -802,6 +818,67 @@ void AttrParseEmitter::emit()
 
       Switch.flush();
 
+      llvm::SmallVector<Value*, 4> DefaultVals;
+      unsigned FirstDefault = unsigned(-1);
+      unsigned i = 0;
+
+      for (auto &Arg : Args) {
+         auto Optional = cast<IntegerLiteral>(cast<RecordVal>(Arg)->getRecord()
+            ->getFieldValue("optional"))->getVal().getBoolValue();
+
+         if (Optional) {
+            if (FirstDefault == -1)
+               FirstDefault = i;
+
+            DefaultVals.push_back(cast<RecordVal>(Arg)
+               ->getRecord()->getFieldValue("defaultVal"));
+         }
+
+         ++i;
+      }
+
+      std::string DefaultStr;
+      if (FirstDefault != -1) {
+         llvm::raw_string_ostream OS(DefaultStr);
+         OS << R"__(
+         while (ArgNo < )__" << (FirstDefault + 1) << R"__() {
+            switch (ArgNo) {
+            default: llvm_unreachable("no default argument");
+)__";
+
+         unsigned j = FirstDefault;
+         while (j < Args.size()) {
+            auto &Arg = Args[j];
+            auto &ArgInfo = NeededArgVals[j];
+            auto *DefaultVal = DefaultVals[j - FirstDefault];
+
+            OS << "case " << j++ << ": {\n";
+
+            auto C = cast<RecordVal>(Arg)->getRecord()
+                                         ->getBases().front().getBase();
+
+            if (C->getName() == "IntArg")
+               readIntDefault(OS, ArgInfo, DefaultVal);
+            else if (C->getName() == "FloatArg")
+               readFloatDefault(OS, ArgInfo, DefaultVal);
+            else if (C->getName() == "StringArg")
+               readStringDefault(OS, ArgInfo, DefaultVal);
+            else {
+               std::string Namespace = Attr->getName();
+               Namespace += "Attr";
+
+               readEnumDefault(OS, ArgInfo, Namespace, DefaultVal);
+            }
+
+            OS << "\nArgNo++;\nbreak;\n}\n";
+         }
+
+         OS << R"__(
+            }
+         }
+)__";
+      }
+
       bool SkipArgs = cast<IntegerLiteral>(
          Attr->getFieldValue("IgnoreFollowingParens"))->getVal().getBoolValue();
 
@@ -834,6 +911,7 @@ void AttrParseEmitter::emit()
             }
          }
 
+         )__" << DefaultStr << R"__(
          if (ArgNo != NumNeededArgs) {
             SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
                         NumNeededArgs, ArgNo);
@@ -845,7 +923,7 @@ void AttrParseEmitter::emit()
       out << "auto EndLoc = currentTok().getSourceLoc();\n"
           << "Attrs.push_back(new (Context) " << Attr->getName() << "Attr(";
 
-      unsigned i = 0;
+      i = 0;
       for (auto &Arg : NeededArgVals) {
          if (i++ != 0) out << ", ";
          out << "std::move(" << Arg.second << ")";
@@ -876,7 +954,7 @@ void AttrParseEmitter::emit()
 
       for (auto &D : Decls) {
          Switch << "if (isa<" << cast<RecordVal>(D)->getRecord()->getName()
-                              << ">(Decl)) break;\n";
+                              << ">(D)) break;\n";
       }
 
       Switch << "SP.diagnose(err_attribute_not_valid_here,"
@@ -890,7 +968,7 @@ void AttrParseEmitter::emit()
    Switch << "default: break; \n}\n";
    Switch.flush();
 
-   out << "auto Decl = Result.getDecl();\n";
+   out << "auto D = Result.getDecl();\n";
    out << SwitchStr;
 
    out << "#endif\n#undef CDOT_PARSE_ATTR_CHECK\n\n";
@@ -1057,6 +1135,49 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
 )__";
 
    out << ArgInfo.TypeAndName.second << " = _enumKind;\n";
+}
+
+void AttrParseEmitter::readStringDefault(llvm::raw_ostream &out,
+                                         std::pair<string, string> &TypeAndName,
+                                         Value *DefaultVal) {
+   auto *Val = cast<StringLiteral>(DefaultVal);
+   out << TypeAndName.second << " = R\"__(" << Val->getVal() << ")__\";";
+}
+
+void AttrParseEmitter::readIntDefault(llvm::raw_ostream &out,
+                                      std::pair<string, string> &TypeAndName,
+                                      Value *DefaultVal) {
+   auto *Val = cast<IntegerLiteral>(DefaultVal);
+   out << TypeAndName.second << " = ";
+   if (Val->getVal().getBitWidth() <= 64) {
+      out << "llvm::APSInt(llvm::APInt(" << Val->getVal().getBitWidth() << ", "
+          << Val->getVal().getZExtValue() << ", "
+          << Val->getVal().isSigned() << ")";
+   }
+   else {
+      out << "llvm::APSInt(llvm::APInt(" << Val->getVal().getBitWidth() << ", "
+          << "R\"__(" << Val->getVal().getZExtValue() << ")__\", "
+          << Val->getVal().isSigned() << ")";
+   }
+
+   out << ";\n";
+}
+
+void AttrParseEmitter::readFloatDefault(llvm::raw_ostream &out,
+                                        std::pair<string, string> &TypeAndName,
+                                        Value *DefaultVal) {
+   out << TypeAndName.second << " = llvm::APFloat(";
+   cast<FPLiteral>(DefaultVal)->getVal().print(out);
+   out << ");\n";
+}
+
+void AttrParseEmitter::readEnumDefault(llvm::raw_ostream &out,
+                                       std::pair<string, string> &TypeAndName,
+                                       llvm::StringRef EnumOwner,
+                                       Value *DefaultVal) {
+   out << TypeAndName.second << " = " << EnumOwner << "::"
+       << TypeAndName.first << "::" << cast<StringLiteral>(DefaultVal)->getVal()
+       << ";\n";
 }
 
 extern "C" {

@@ -47,7 +47,8 @@ public:
          llvm::MemoryBuffer *buf,
          unsigned sourceId,
          unsigned offset = 1,
-         const char InterpolationBegin = '$');
+         const char InterpolationBegin = '$',
+         bool primeLexer = true);
 
    Lexer(IdentifierTable &Idents,
          DiagnosticsEngine &Diags,
@@ -60,21 +61,36 @@ public:
 #endif
    ~Lexer() = default;
 
-   void lex();
    void lexDiagnostic();
+   void lexStringInterpolation();
 
    llvm::StringRef getCurrentIdentifier() const;
 
-   // RAII utility classes
+   enum class Mode : int {
+      /// No special lexing required.
+      Normal,
 
-   class StateSaveGuard {
-   public:
-      StateSaveGuard(Lexer *lex);
-      ~StateSaveGuard();
+      /// Always lex '<' and '>' as single tokens.
+      ParsingTemplateParams,
 
-   protected:
-      Lexer *lex;
-      size_t shrinkTo;
+      /// Always lex '>' as a single token.
+      ParsingTemplateArgs,
+   };
+
+   struct ModeRAII {
+      ModeRAII(Lexer &L, Mode M) : L(L), Prev(L.CurMode)
+      {
+         L.CurMode = M;
+      }
+
+      ~ModeRAII()
+      {
+         L.CurMode = Prev;
+      }
+
+   private:
+      Lexer &L;
+      Mode Prev;
    };
 
    template<class ...Rest>
@@ -115,67 +131,37 @@ public:
       return false;
    }
 
-   void advance(bool ignoreNewLine = true, bool significantWhitespace = false);
+   void advance(bool ignoreNewline = true, bool significantWhitespace = false);
    Token lookahead(bool ignoreNewline = true, bool sw = false, size_t i = 0);
    void backtrack();
-
-   bool isOperatorContinuationChar(char c);
 
    static char escape_char(char);
    static std::string unescape_char(char);
 
-   const char* getSrc()
-   {
-      return BufStart;
-   }
+   const char* getSrc() { return BufStart; }
+   const char* getBuffer() { return CurPtr; }
+   unsigned int getSourceId() const { return sourceId; }
 
-   const char* getBuffer()
-   {
-      return CurPtr;
-   }
+   unsigned currentIndex() const { return unsigned(CurPtr - BufStart); }
 
-   unsigned currentIndex() const
-   {
-      return unsigned(CurPtr - BufStart);
-   }
-
-   Token const& currentTok() const
-   {
-      return tokens[tokenIndex - 1];
-   }
-
-   SourceLocation getSourceLoc() const
-   {
-      if (doneLexing) return currentTok().getSourceLoc();
-      return SourceLocation(currentIndex() + offset);
-   }
-
-   IdentifierTable &getIdents() const
-   {
-      return Idents;
-   }
-
-   struct SavePoint {
-      SavePoint(Lexer &lex, size_t idx)
-         : lex(lex), idx(idx)
-      {}
-
-      void reset()
-      {
-         lex.tokenIndex = idx;
-      }
-
-   private:
-      Lexer &lex;
-      size_t idx;
-   };
-
-   SavePoint makeSavePoint()
-   {
-      return SavePoint(*this, tokenIndex);
-   }
+   Token const& currentTok() const { return CurTok; }
+   SourceLocation getSourceLoc() const { return CurTok.getSourceLoc(); }
+   IdentifierTable &getIdents() const { return Idents; }
 
    void printTokensTo(llvm::raw_ostream &out);
+   void dump();
+
+   bool eof() const { return AtEOF; }
+   bool interpolation() const { return InInterpolation; }
+
+   void insertLookaheadTokens(llvm::ArrayRef<Token> Toks)
+   {
+      LookaheadVec.append(Toks.begin(), Toks.end());
+   }
+
+   void setCurTok(Token CurTok) { this->CurTok = CurTok; }
+   void setLastTok(Token LastTok) { this->LastTok = LastTok; }
+   Token getLastTok() const { return LastTok; }
 
    enum ParenKind {
       PAREN = '(',
@@ -183,15 +169,6 @@ public:
       ANGLED = '<',
       SQUARE = '['
    };
-
-   void skip_until_even(ParenKind kind);
-
-   std::vector<Token> &getTokens()
-   {
-      return tokens;
-   }
-
-   unsigned int getSourceId() const { return sourceId; }
 
    friend diag::DiagnosticBuilder& operator<<(diag::DiagnosticBuilder &builder,
                                               Lexer* const& lex) {
@@ -230,24 +207,55 @@ protected:
    IdentifierTable &Idents;
    DiagnosticsEngine &Diags;
 
-   TokenVec tokens;
-   unsigned sourceId = 0;
-   size_t tokenIndex = 0;
+   /// The current lexing mode, used to lex certain characters differently in
+   /// different situations.
+   Mode CurMode = Mode::Normal;
 
+   /// The previous token, backtracking by one token is supported.
+   Token LastTok;
+
+   /// The current token.
+   Token CurTok;
+
+   /// Index into the lookahead vector.
+   unsigned LookaheadIdx = 0;
+
+   /// Vector for tokens that we already lexed via lookahead or some other
+   /// operation.
+   llvm::SmallVector<Token, 16> LookaheadVec;
+
+   /// ID of the source file we're lexing.
+   unsigned sourceId = 0;
+
+   /// Pointer to the current character.
    const char *CurPtr;
+
+   /// Pointer to the beginning of the token we're currently lexing.
    const char *TokBegin;
 
+   /// Pointer to the beginning of the buffer.
    const char *BufStart;
+
+   /// Pointer to the end of the buffer.
    const char *BufEnd;
 
+   /// Character that starts a string interpolation, or NUL if interpolation
+   /// is disabled.
    const char InterpolationBegin;
 
-   bool doneLexing : 1;
-   bool isModuleLexer : 1;
+   /// True once we reached the end of the file.
+   bool AtEOF = false;
 
+   /// Base offset of the source file.
    unsigned offset = 0;
 
-   Token lex_next_token();
+   /// True if this lexer is operating on a prelexed list of tokens.
+   bool IsTokenLexer = false;
+
+   /// True if we're currently parsing a string interpolation.
+   bool InInterpolation = false;
+
+   Token lexNextToken();
 };
 
 } // namespace lex

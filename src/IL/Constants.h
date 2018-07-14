@@ -95,6 +95,18 @@ public:
    }
 };
 
+class ConstantTokenNone: public Constant {
+   ConstantTokenNone(Context &Ctx);
+
+public:
+   static ConstantTokenNone *get(Context &Ctx);
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ConstantTokenNoneID;
+   }
+};
+
 class UndefValue: public Constant {
    UndefValue(ValueType Ty);
 
@@ -173,6 +185,12 @@ public:
       return type->asArrayType()->getElementType();
    }
 
+   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
+   op_const_iterator op_begin_impl() const
+   { return reinterpret_cast<Constant* const*>(this + 1); }
+
+   unsigned getNumOperandsImpl() const { return NumElements; }
+
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
       Profile(ID, getElementType(), getVec());
@@ -195,6 +213,7 @@ class ConstantTuple final: public Constant, public llvm::FoldingSetNode {
 
 public:
    static ConstantTuple *get(ValueType ty, llvm::ArrayRef<Constant*> vec);
+   static ConstantTuple *getEmpty(il::Context &Ctx);
 
    llvm::ArrayRef<Constant*> getVec() const
    {
@@ -202,6 +221,12 @@ public:
    }
 
    unsigned getNumElements() const { return NumElements; }
+
+   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
+   op_const_iterator op_begin_impl() const
+   { return reinterpret_cast<Constant* const*>(this + 1); }
+
+   unsigned getNumOperandsImpl() const { return NumElements; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -239,6 +264,12 @@ public:
       return { reinterpret_cast<Constant* const*>(this + 1), NumElements };
    }
 
+   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
+   op_const_iterator op_begin_impl() const
+   { return reinterpret_cast<Constant* const*>(this + 1); }
+
+   unsigned getNumOperandsImpl() const { return NumElements; }
+
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
       Profile(ID, getType(), getElements());
@@ -261,9 +292,11 @@ class ConstantClass final: public Constant, public llvm::FoldingSetNode {
 
    ConstantClass(ValueType Ty, GlobalVariable *TI);
 
-   GlobalVariable *TI;
-   ConstantStruct *StructVal;
-   ConstantClass *Base;
+   enum {
+      TypeInfo = 0, StructVal, Base,
+   };
+
+   Constant *Vals[3];
 
 public:
    static ConstantClass *get(ConstantStruct *StructVal,
@@ -276,15 +309,25 @@ public:
    ConstantClass *ReplaceForwardDecl(ConstantStruct *Value,
                                      ConstantClass *Base = nullptr);
 
-   GlobalVariable *getTypeInfo() const { return TI; }
-   ConstantClass *getBase() const { return Base; }
-   ConstantStruct *getStructVal() const { return StructVal; }
+   GlobalVariable *getTypeInfo() const;
+   ConstantClass *getBase() const
+   {
+      return support::cast_or_null<ConstantClass>(Vals[Base]);
+   }
+
+   ConstantStruct *getStructVal() const
+   {
+      return support::cast_or_null<ConstantStruct>(Vals[StructVal]);
+   }
 
    llvm::ArrayRef<Constant*> getElements() const
    {
       assert(!isForwardDecl() && "forward declared ConstantClass!");
-      return StructVal->getElements();
+      return getStructVal()->getElements();
    }
+
+   op_iterator op_begin_impl() { return Vals; }
+   unsigned getNumOperandsImpl() const { return Vals[Base] ? 3 : 2; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -310,6 +353,9 @@ public:
    static ConstantUnion *get(ValueType Ty, Constant *InitVal);
 
    Constant *getInitVal() const { return InitVal; }
+
+   op_iterator op_begin_impl(){ return &InitVal; }
+   unsigned getNumOperandsImpl() const { return 1; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -348,6 +394,9 @@ public:
       return { reinterpret_cast<Constant* const*>(this + 1), NumValues };
    }
 
+   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
+   unsigned getNumOperandsImpl() const { return NumValues; }
+
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
       Profile(ID, getCase(), getCaseValues());
@@ -384,6 +433,9 @@ public:
       return { reinterpret_cast<Function *const*>(this + 1), NumFunctions };
    }
 
+   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
+   unsigned getNumOperandsImpl() const { return NumFunctions; }
+
    static inline bool classof(Value const* T)
    {
       return T->getTypeID() == VTableID;
@@ -401,10 +453,7 @@ public:
    static TypeInfo *get(Module *M, QualType forType,
                         llvm::ArrayRef<il::Constant*> Vals);
 
-   llvm::ArrayRef<Constant*> getValues() const
-   {
-      return Vals;
-   }
+   llvm::ArrayRef<Constant*> getValues() const { return Vals; }
 
    il::Constant* getParentClass() const { return Vals[MetaType::BaseClass]; }
    il::Constant* getVTable() const { return Vals[MetaType::VTable]; }
@@ -414,6 +463,9 @@ public:
    il::Constant* getConformances() const {return Vals[MetaType::Conformances];}
 
    QualType getForType() const { return forType; }
+
+   op_iterator op_begin_impl(){ return Vals; }
+   unsigned getNumOperandsImpl() const { return MetaType::MemberCount; }
 
    static inline bool classof(Value const* T)
    {
@@ -532,10 +584,11 @@ private:
 public:
    friend class ConstantExpr;
 
-   Constant *getTarget() const
-   {
-      return target;
-   }
+   Constant *getTarget() const { return target; }
+
+   op_iterator op_begin_impl() { return &target; }
+   op_const_iterator op_begin_impl() const { return &target; }
+   unsigned getNumOperandsImpl() const { return 1; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -561,10 +614,11 @@ private:
 public:
    friend class ConstantExpr;
 
-   Constant *getTarget() const
-   {
-      return target;
-   }
+   Constant *getTarget() const { return target; }
+
+   op_iterator op_begin_impl() { return &target; }
+   op_const_iterator op_begin_impl() const { return &target; }
+   unsigned getNumOperandsImpl() const { return 1; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -593,6 +647,10 @@ public:
 
    Constant *getTarget() const { return Target; }
    CastKind getKind() const { return Kind; }
+
+   op_iterator op_begin_impl() { return &Target; }
+   op_const_iterator op_begin_impl() const { return &Target; }
+   unsigned getNumOperandsImpl() const { return 1; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -624,15 +682,18 @@ private:
                         Constant *RHS);
 
    OpCode OPC;
-   Constant *LHS;
-   Constant *RHS;
+   Constant *Ops[2];
 
 public:
    friend class ConstantExpr;
 
    OpCode getOpCode() const { return OPC; }
-   Constant *getLHS() const { return LHS; }
-   Constant *getRHS() const { return RHS; }
+   Constant *getLHS() const { return Ops[0]; }
+   Constant *getRHS() const { return Ops[1]; }
+
+   op_iterator op_begin_impl() { return &Ops[0]; }
+   op_const_iterator op_begin_impl() const { return &Ops[0]; }
+   unsigned getNumOperandsImpl() const { return 2; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -689,6 +750,10 @@ public:
    friend class ConstantExpr;
 
    Constant *getTarget() const { return Target; }
+
+   op_iterator op_begin_impl() { return &Target; }
+   op_const_iterator op_begin_impl() const { return &Target; }
+   unsigned getNumOperandsImpl() const { return 1; }
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {

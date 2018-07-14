@@ -60,6 +60,10 @@ struct Token {
       assert(length < 4294967296 && "not enough space for length");
    }
 
+   Token(const Token &Tok, SourceLocation Loc)
+      : kind(Tok.kind), loc(Loc), Data(Tok.Data), Ptr(Tok.Ptr)
+   {}
+
    Token(ast::Expression *E, SourceLocation Loc)
       : kind(tok::macro_expression), loc(Loc),
         Data(0), Ptr(E)
@@ -94,6 +98,9 @@ struct Token {
    std::string toString() const;
    std::string rawRepr() const;
 
+   /// Returns false if this was a default constructed token.
+   operator bool() const { return kind != tok::sentinel  || loc; }
+
    template<unsigned N>
    void toString(llvm::SmallString<N> &s) const;
 
@@ -107,6 +114,8 @@ struct Token {
    unsigned getOffset()          const { return loc.getOffset(); }
    SourceLocation getSourceLoc() const { return loc; }
    SourceLocation getEndLoc() const;
+
+   unsigned getLength() const { return getEndLoc().getOffset() - getOffset(); }
 
    bool is(IdentifierInfo *II) const;
    bool is(tok::TokenType ty) const { return kind == ty; }

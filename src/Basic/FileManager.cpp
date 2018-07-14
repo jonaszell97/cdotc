@@ -4,6 +4,8 @@
 
 #include "FileManager.h"
 
+#include "AST/Decl.h"
+
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/ErrorOr.h>
@@ -12,20 +14,17 @@ using std::string;
 
 namespace cdot {
 namespace fs {
-namespace {
 
-std::unordered_map<size_t, size_t> FileAliases;
-
-} // anonymous namespace
+SourceID InvalidID = SourceID(-1);
 
 FileManager::FileManager() : sourceIdOffsets{ 1 }
 {
 
 }
 
-OpenFile FileManager::openFile(const llvm::Twine &fileName)
+OpenFile FileManager::openFile(const llvm::Twine &fileName, bool CreateSourceID)
 {
-   llvm::StringRef name = fileName.str();
+   std::string name = fileName.str();
 
    auto it = MemBufferCache.find(name);
    if (it != MemBufferCache.end()) {
@@ -39,20 +38,33 @@ OpenFile FileManager::openFile(const llvm::Twine &fileName)
       return OpenFile();
    }
 
-   auto previous = sourceIdOffsets.back();
-   auto id = sourceIdOffsets.size();
+   SourceID id;
+   SourceID previous;
+   llvm::MemoryBuffer *ptr = Buf.get().get();
 
-   auto ptr = Buf.get().get();
-   auto offset = unsigned(previous + ptr->getBufferSize());
+   llvm::StringMap<CachedFile>::iterator Entry;
+   if (CreateSourceID) {
+      previous = sourceIdOffsets.back();
+      id = (unsigned)sourceIdOffsets.size();
 
-   auto Entry = MemBufferCache.try_emplace(name, name.str(),
-                                           id, previous,
-                                           move(Buf.get())).first;
+      auto offset = unsigned(previous + ptr->getBufferSize());
 
-   IdFileMap.try_emplace(id, &*Entry);
-   sourceIdOffsets.push_back(offset);
+      Entry = MemBufferCache.try_emplace(name, string(name),
+                                         id, previous,
+                                         move(Buf.get())).first;
 
-   return OpenFile(Entry->getValue().FileName, unsigned(id), previous, ptr);
+      IdFileMap.try_emplace(id, &*Entry);
+      sourceIdOffsets.push_back(offset);
+   }
+   else {
+      previous = 0;
+      id = 0;
+
+      Entry = MemBufferCache.try_emplace(name, string(name),
+                                         0, 0, move(Buf.get())).first;
+   }
+
+   return OpenFile(Entry->getValue().FileName, id, previous, ptr);
 }
 
 OpenFile FileManager::getBufferForString(llvm::StringRef Str)
@@ -77,29 +89,23 @@ OpenFile FileManager::getBufferForString(llvm::StringRef Str)
    return OpenFile(Entry->getValue().FileName, (unsigned)id, previous, ptr);
 }
 
-OpenFile FileManager::getOpenedFile(size_t sourceId)
+OpenFile FileManager::getOpenedFile(SourceID sourceId)
 {
-   auto index = IdFileMap.find(sourceId);
-   if (index == IdFileMap.end()) {
-      auto aliasIt = FileAliases.find(sourceId);
-      assert(aliasIt != FileAliases.end());
+   sourceId = getReplacementID(sourceId);
 
-      return getOpenedFile(aliasIt->second);
-   }
+   auto index = IdFileMap.find(sourceId);
+   assert(index != IdFileMap.end());
 
    auto &F = index->getSecond()->getValue();
    return OpenFile(F.FileName, F.SourceId, F.BaseOffset, F.Buf.get());
 }
 
-llvm::MemoryBuffer *FileManager::getBuffer(size_t sourceId)
+llvm::MemoryBuffer *FileManager::getBuffer(SourceID sourceId)
 {
-   auto index = IdFileMap.find(sourceId);
-   if (index == IdFileMap.end()) {
-      auto aliasIt = FileAliases.find(sourceId);
-      assert(aliasIt != FileAliases.end());
+   sourceId = getReplacementID(sourceId);
 
-      return getBuffer(aliasIt->second);
-   }
+   auto index = IdFileMap.find(sourceId);
+   assert(index != IdFileMap.end());
 
    return index->getSecond()->getValue().Buf.get();
 }
@@ -117,6 +123,9 @@ unsigned FileManager::getSourceId(SourceLocation loc)
    unsigned R = (unsigned)sourceIdOffsets.size() - 1;
    unsigned m;
 
+   if (needle > sourceIdOffsets.back())
+      return (unsigned)sourceIdOffsets.size() - 1;
+
    while (true) {
       m = (L + R) / 2u;
       if (L > R || sourceIdOffsets[m] == needle)
@@ -131,40 +140,84 @@ unsigned FileManager::getSourceId(SourceLocation loc)
    return m + 1;
 }
 
-llvm::StringRef FileManager::getFileName(size_t sourceId)
+SourceID FileManager::getLexicalSourceId(SourceLocation loc)
 {
-   auto index = IdFileMap.find(sourceId);
-   if (index == IdFileMap.end()) {
-      auto aliasIt = FileAliases.find(sourceId);
-      assert(aliasIt != FileAliases.end());
-
-      return getFileName(aliasIt->second);
+   while (auto *Exp = getMacroExpansionLoc(loc)) {
+      loc = Exp->ExpandedFrom;
    }
 
+   return getSourceId(loc);
+}
+
+llvm::StringRef FileManager::getFileName(SourceID sourceId)
+{
+   sourceId = getReplacementID(sourceId);
+
+   auto index = IdFileMap.find(sourceId);
    if (index->getSecond()->getValue().IsMixin)
       return "<mixin expression>";
 
    return index->getSecond()->getKey();
 }
 
-size_t FileManager::createSourceLocAlias(SourceLocation aliasedLoc)
+SourceLocation
+FileManager::createModuleImportLoc(ast::ImportDecl *I)
 {
-   auto id = 69;
-   aliases.emplace(id, aliasedLoc);
+   auto previous = sourceIdOffsets.back();
+   auto id = static_cast<SourceID>(sourceIdOffsets.size());
+   auto offset = previous + 1;
 
-   return id;
+   sourceIdOffsets.push_back(offset);
+   Imports[id] = I;
+
+   return SourceLocation(previous);
 }
 
-unsigned FileManager::createMacroExpansionID()
+ast::ImportDecl *FileManager::getImportForLoc(SourceLocation Loc)
 {
-   auto id = (unsigned)sourceIdOffsets.size();
-   sourceIdOffsets.push_back(sourceIdOffsets.back());
+   auto It = Imports.find(getSourceId(Loc));
+   if (It != Imports.end())
+      return It->getSecond();
 
-   return id;
+   return nullptr;
 }
 
-void FileManager::addFileInclude(size_t IncludedFromID, size_t IncludedFileID)
+ast::ImportDecl *FileManager::getImportForID(SourceID ID)
 {
+   auto It = Imports.find(ID);
+   if (It != Imports.end())
+      return It->getSecond();
+
+   return nullptr;
+}
+
+SourceLocation FileManager::getReplacementLocation(SourceLocation Loc)
+{
+   if (auto Import = getImportForID(getSourceId(Loc))) {
+      return getReplacementLocation(Import->getSourceLoc());
+   }
+   if (auto *Exp = getMacroExpansionLoc(Loc)) {
+      return getReplacementLocation(Exp->PatternLoc);
+   }
+
+   return Loc;
+}
+
+SourceID FileManager::getReplacementID(SourceID ID)
+{
+   if (auto Import = getImportForID(ID)) {
+      return getReplacementID(getSourceId(Import->getSourceLoc()));
+   }
+
+   auto It = MacroExpansionLocs.find(ID);
+   if (It != MacroExpansionLocs.end())
+      return getReplacementID(getSourceId(It->getSecond().PatternLoc));
+
+   return ID;
+}
+
+void FileManager::addFileInclude(SourceID IncludedFromID,
+                                 SourceID IncludedFileID) {
    auto FromIt = IdFileMap.find(IncludedFromID);
    assert(FromIt != IdFileMap.end() && "file does not exist!");
 
@@ -174,8 +227,8 @@ void FileManager::addFileInclude(size_t IncludedFromID, size_t IncludedFileID)
    IncIt->getSecond()->getValue().IncludedFrom = FromIt->getSecond();
 }
 
-bool FileManager::wasIncludedFrom(size_t CurrentFile,
-                                  size_t PossiblyIncludedFile) {
+bool FileManager::wasIncludedFrom(SourceID CurrentFile,
+                                  SourceID PossiblyIncludedFile) {
    auto FromIt = IdFileMap.find(CurrentFile);
    assert(FromIt != IdFileMap.end() && "file does not exist!");
 
@@ -195,13 +248,40 @@ bool FileManager::wasIncludedFrom(size_t CurrentFile,
    return BaseFileFromCurrent == BaseFileFromIncluded;
 }
 
-SourceLocation FileManager::getAliasLoc(size_t sourceId)
+SourceLocation FileManager::getAliasLoc(SourceID sourceId)
 {
    auto it = aliases.find(sourceId);
    if (it == aliases.end())
       return SourceLocation();
 
    return it->second;
+}
+
+SourceOffset FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
+                                               SourceLocation PatternLoc,
+                                               unsigned SourceLength,
+                                               DeclarationName MacroName) {
+   auto previous = sourceIdOffsets.back();
+   SourceID id = sourceIdOffsets.size();
+
+   sourceIdOffsets.push_back(previous + SourceLength);
+
+   MacroExpansionLoc Loc(ExpansionLoc, PatternLoc, previous, MacroName);
+   MacroExpansionLocs.try_emplace(id, Loc);
+
+   return previous;
+}
+
+FileManager::MacroExpansionLoc*
+FileManager::getMacroExpansionLoc(SourceLocation Loc)
+{
+   auto ID = getSourceId(Loc);
+   auto It = MacroExpansionLocs.find(ID);
+
+   if (It != MacroExpansionLocs.end())
+      return &It->getSecond();
+
+   return nullptr;
 }
 
 LineColPair FileManager::getLineAndCol(SourceLocation loc)
@@ -249,8 +329,10 @@ LineColPair FileManager::getLineAndCol(SourceLocation loc,
    return { m + 1, needle - closestOffset + 1 };
 }
 
-llvm::ArrayRef<unsigned> FileManager::getLineOffsets(size_t sourceID)
+llvm::ArrayRef<unsigned> FileManager::getLineOffsets(SourceID sourceID)
 {
+   sourceID = getReplacementID(sourceID);
+
    auto it = LineOffsets.find(sourceID);
    if (it == LineOffsets.end()) {
       return collectLineOffsetsForFile(sourceID, getBuffer(sourceID));
@@ -260,7 +342,7 @@ llvm::ArrayRef<unsigned> FileManager::getLineOffsets(size_t sourceID)
 }
 
 const std::vector<unsigned>&
-FileManager::collectLineOffsetsForFile(size_t sourceId,
+FileManager::collectLineOffsetsForFile(SourceID sourceId,
                                        llvm::MemoryBuffer *Buf) {
    std::vector<unsigned> newLines{ 0 };
 

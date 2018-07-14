@@ -40,6 +40,7 @@ namespace ast {
    class FuncArgDecl;
    class TemplateParamDecl;
    class NamedDecl;
+   class StaticExpr;
 } // namespace ast
 
 namespace sema {
@@ -58,7 +59,7 @@ struct ResolvedTemplateArg {
                                 SourceLocation loc = {}) noexcept;
 
    ResolvedTemplateArg(ast::TemplateParamDecl *Param,
-                       il::Constant *V,
+                       ast::StaticExpr *Expr,
                        SourceLocation loc = {}) noexcept;
 
    explicit
@@ -78,14 +79,9 @@ struct ResolvedTemplateArg {
       return Type;
    }
 
-   void setType(QualType Ty) const
-   {
-      assert(isType());
-      Type = Ty;
-   }
-
    QualType getValueType() const;
-   il::Constant *getValue() const { assert(isValue()); return V; }
+   il::Constant *getValue() const;
+   ast::StaticExpr *getValueExpr() const { assert(isValue()); return Expr; }
 
    template<class ...Args>
    void emplace_back(Args&&... args)
@@ -108,7 +104,7 @@ struct ResolvedTemplateArg {
 
    ast::TemplateParamDecl *getParam() const { return Param; }
 
-   ResolvedTemplateArg clone() const;
+   ResolvedTemplateArg clone(bool Canonicalize = false) const;
 
    bool isVariadic() const { return IsVariadic; }
    bool isType()     const { return IsType; }
@@ -138,7 +134,7 @@ private:
 
    union {
       mutable QualType Type;
-      il::Constant *V;
+      ast::StaticExpr *Expr;
       std::vector<ResolvedTemplateArg> VariadicArgs;
    };
 
@@ -162,7 +158,7 @@ struct TemplateArgListResult {
       return ResultKind == TLR_Success;
    }
 
-   void setCouldNotInfer(ast::TemplateParamDecl const *Param)
+   void setCouldNotInfer(const ast::TemplateParamDecl *Param)
    {
       ResultKind = TLR_CouldNotInfer;
       Data1 = reinterpret_cast<uintptr_t >(Param);
@@ -176,25 +172,24 @@ struct TemplateArgListResult {
    }
 
    void setHasIncompatibleKind(unsigned diagSelect,
-                               size_t idx)
-   {
+                               const ast::TemplateParamDecl *P) {
       ResultKind = TLR_IncompatibleArgKind;
       Data1 = diagSelect;
-      Data2 = idx;
+      Data2 = reinterpret_cast<uintptr_t>(P);
    }
 
-   void setHasIncompatibleType(QualType given, size_t idx)
+   void setHasIncompatibleType(QualType given, const ast::TemplateParamDecl *P)
    {
       ResultKind = TLR_IncompatibleArgVal;
       Data1 = reinterpret_cast<uintptr_t>(given.getAsOpaquePtr());
-      Data2 = idx;
+      Data2 = reinterpret_cast<uintptr_t>(P);
    }
 
-   void setHasConflict(QualType conflicting, size_t idx)
+   void setHasConflict(QualType conflicting, const ast::TemplateParamDecl *P)
    {
       ResultKind = TLR_ConflictingInferredArg;
       Data1 = reinterpret_cast<uintptr_t>(conflicting.getAsOpaquePtr());
-      Data2 = idx;
+      Data2 = reinterpret_cast<uintptr_t>(P);
    }
 
    TemplateArgListResultKind ResultKind = TLR_Success;
@@ -289,8 +284,8 @@ public:
    ast::NamedDecl *getTemplate() const;
 
    void print(llvm::raw_ostream &OS,
-              char begin = '[', char end = ']', bool showNames = false) const;
-   std::string toString(char begin = '[', char end = ']',
+              char begin = '<', char end = '>', bool showNames = false) const;
+   std::string toString(char begin = '<', char end = '>',
                         bool showNames = false) const;
 
    using arg_iterator       = ResolvedTemplateArg *;
@@ -311,17 +306,21 @@ private:
 class FinalTemplateArgumentList final:
          llvm::TrailingObjects<FinalTemplateArgumentList, ResolvedTemplateArg> {
    FinalTemplateArgumentList(llvm::MutableArrayRef<ResolvedTemplateArg> Args,
-                             bool Dependent);
+                             bool Dependent,
+                             bool Canonicalize);
 
    unsigned NumArgs : 28;
    bool Dependent : 1;
 
 public:
    static FinalTemplateArgumentList*
-   Create(ast::ASTContext &C, llvm::MutableArrayRef<ResolvedTemplateArg> Args);
+   Create(ast::ASTContext &C,
+          llvm::MutableArrayRef<ResolvedTemplateArg> Args,
+          bool Canonicalize = true);
 
    static FinalTemplateArgumentList *Create(ast::ASTContext &C,
-                                            const TemplateArgList &list);
+                                            const TemplateArgList &list,
+                                            bool Canonicalize = true);
 
    using arg_iterator = const ResolvedTemplateArg *;
 
@@ -346,10 +345,10 @@ public:
    const ResolvedTemplateArg &back() const { return (*this)[NumArgs - 1]; }
 
    void print(llvm::raw_ostream &OS,
-              char begin = '[', char end = ']',
+              char begin = '<', char end = '>',
               bool showNames = false) const;
 
-   std::string toString(char begin = '[', char end = ']',
+   std::string toString(char begin = '<', char end = '>',
                         bool showNames = false) const;
 
    const ResolvedTemplateArg* getNamedArg(DeclarationName Name) const;

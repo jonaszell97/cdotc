@@ -11,6 +11,10 @@
 #include <llvm/ADT/ilist_node.h>
 
 namespace cdot {
+namespace serial {
+   class LazyILGlobalInfo;
+} // namespace serial
+
 namespace il {
 
 class Module;
@@ -73,6 +77,8 @@ public:
    LinkageTypes getLinkage() const { return (LinkageTypes)Linkage; }
    void setLinkage(LinkageTypes L) { Linkage = L; }
 
+   bool isExternallyVisible() const;
+
    VisibilityTypes getVisibility() const { return (VisibilityTypes)Visibility; }
    void setVisibility(VisibilityTypes V) { Visibility = V; }
 
@@ -103,31 +109,40 @@ public:
    Function *getInitFn() const { return InitFn; }
    void setInitFn(Function *InitFn) { GlobalVariable::InitFn = InitFn; }
 
-   BasicBlock *getInitBB() const { return InitBB; }
-   void setInitBB(BasicBlock *BB) { InitBB = BB; }
-
    GlobalVariable *getInitializedFlag() const { return InitializedFlag; }
    void setInitializedFlag(GlobalVariable *F) { InitializedFlag = F; }
 
+   bool needsDeinit() const { return GVBits.NeedsDeinit; }
+   void setNeedsDeinit(bool B) { GVBits.NeedsDeinit = B; }
+
+   serial::LazyILGlobalInfo* getLazyGlobalInfo() const{ return LazyGlobalInfo; }
+   void setLazyGlobalInfo(serial::LazyILGlobalInfo* V) { LazyGlobalInfo = V; }
+
    void makeMutable();
+
+   bool overridePreviousDefinition() const { return GVBits.OverridePrevious; }
+   void setOverridePreviousDefinition(bool b) { GVBits.OverridePrevious = b; }
+
+   op_iterator op_begin_impl() { return &initializer; }
+   op_const_iterator op_begin_impl() const { return &initializer; }
+   unsigned getNumOperandsImpl() const { return initializer ? 1 : 0; }
 
 protected:
    Constant *initializer;
    GlobalVariable *InitializedFlag = nullptr;
-
-   union {
-      Function *InitFn = nullptr;
-      BasicBlock *InitBB;
-   };
+   Function *InitFn = nullptr;
+   serial::LazyILGlobalInfo *LazyGlobalInfo = nullptr;
 
 public:
-   bool isDeclared() const { return initializer == nullptr; }
+   bool isDeclared() const { return GVBits.Declared; }
+   void setDeclared(bool b) { GVBits.Declared = b; }
+
    bool isConstant() const { return GVBits.Const; }
    bool isLazilyInitialized() const { return GVBits.LazilyInitialized; }
    void setIsLazilyInitialized() { GVBits.LazilyInitialized = true; }
 
 private:
-   GlobalVariable(const GlobalVariable &var);
+   GlobalVariable(const GlobalVariable &var, Module &M);
 
 public:
    static inline bool classof(Value const* T)

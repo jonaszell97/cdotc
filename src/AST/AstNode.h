@@ -121,16 +121,10 @@ protected:
    }
 
 public:
-   uint32_t getSubclassData() const
-   {
-      return SubclassData;
-   }
+   uint32_t getSubclassData() const { return SubclassData; }
+   void setSubclassData(uint32_t D) { SubclassData = D; }
 
-public:
-   QualType getContextualType()
-   {
-      return contextualType;
-   }
+   QualType getContextualType() { return contextualType; }
 };
 
 } // namespace ast

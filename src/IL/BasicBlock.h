@@ -36,6 +36,10 @@ public:
    BasicBlock(const BasicBlock&) = delete;
    const BasicBlock &operator=(const BasicBlock&) = delete;
 
+   BasicBlock(const BasicBlock &BB, Function &F);
+
+   ~BasicBlock();
+
    Function *getParent() const;
    void setParent(Function *p) { parent = p; }
 
@@ -69,7 +73,7 @@ public:
    bool isEntryBlock() const;
    bool isExitBlock() const;
 
-   void addBlockArg(QualType ty, llvm::StringRef name = {});
+   Argument *addBlockArg(QualType ty, llvm::StringRef name = {});
 
    iterator begin() { return Instructions.begin(); }
    iterator end() { return Instructions.end(); }
@@ -80,6 +84,11 @@ public:
    arg_iterator arg_end() { return Args.end(); }
    const_arg_iterator arg_begin() const { return Args.begin(); }
    const_arg_iterator arg_end() const { return Args.end(); }
+
+   // needed for llvm::GenericDomTree
+   void printAsOperand(llvm::raw_ostream &OS, bool = true) { print(OS); }
+   void print(llvm::raw_ostream &OS) const;
+   void dump() const;
 
    static InstList BasicBlock::*getSublistAccess(Instruction*)
    {

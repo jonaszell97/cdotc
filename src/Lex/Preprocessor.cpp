@@ -12,10 +12,9 @@
 #include "Basic/Variant.h"
 #include "Basic/IdentifierInfo.h"
 #include "Basic/Precedence.h"
-
 #include "Message/DiagnosticsEngine.h"
+#include "Support/StringSwitch.h"
 
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/StringSet.h>
@@ -667,7 +666,7 @@ private:
 
    BuiltinMacro getBuiltinMacro(llvm::StringRef name)
    {
-      return llvm::StringSwitch<BuiltinMacro>(name)
+      return StringSwitch<BuiltinMacro>(name)
          .Case("__LINE__", BuiltinMacro::LINE)
          .Case("__FILE__", BuiltinMacro::FILE)
 
@@ -918,38 +917,38 @@ void PreprocessorImpl::handle_for()
 
 void PreprocessorImpl::handle_include()
 {
-   if (!expect(tok::stringliteral))
-      return skipToEndOfDirective();
-
-   llvm::SmallVector<std::string, 4> includeDirs;
-   includeDirs.push_back(
-      fs::getPath(Diags.getFileMgr()->getFileName(sourceId).str()));
-
-   auto fileName = currentTok().getText();
-
-   auto realFile = fs::findFileInDirectories(fileName, includeDirs);
-   if (realFile.empty()) {
-      Diags.Diag(err_generic_error)
-         << "file " + fileName + " not found"
-         << currentTok().getSourceLoc();
-
-      return;
-   }
-
-   auto File = Diags.getFileMgr()->openFile(realFile);
-   Diags.getFileMgr()->addFileInclude(sourceId, File.SourceId);
-
-   Lexer lexer(Idents, Diags, File.Buf, File.SourceId,
-               File.BaseOffset);
-
-   lexer.lex();
-   assert(lexer.getTokens().back().is(tok::eof) && "no EOF token!");
-
-   lexer.getTokens().pop_back();
-
-   dst.insert(dst.end(),
-              std::make_move_iterator(lexer.getTokens().begin()),
-              std::make_move_iterator(lexer.getTokens().end()));
+//   if (!expect(tok::stringliteral))
+//      return skipToEndOfDirective();
+//
+//   llvm::SmallVector<std::string, 4> includeDirs;
+//   includeDirs.push_back(
+//      fs::getPath(Diags.getFileMgr()->getFileName(sourceId).str()));
+//
+//   auto fileName = currentTok().getText();
+//
+//   auto realFile = fs::findFileInDirectories(fileName, includeDirs);
+//   if (realFile.empty()) {
+//      Diags.Diag(err_generic_error)
+//         << "file " + fileName + " not found"
+//         << currentTok().getSourceLoc();
+//
+//      return;
+//   }
+//
+//   auto File = Diags.getFileMgr()->openFile(realFile);
+//   Diags.getFileMgr()->addFileInclude(sourceId, File.SourceId);
+//
+//   Lexer lexer(Idents, Diags, File.Buf, File.SourceId,
+//               File.BaseOffset);
+//
+//   lexer.lex();
+//   assert(lexer.getTokens().back().is(tok::eof) && "no EOF token!");
+//
+//   lexer.getTokens().pop_back();
+//
+//   dst.insert(dst.end(),
+//              std::make_move_iterator(lexer.getTokens().begin()),
+//              std::make_move_iterator(lexer.getTokens().end()));
 }
 
 void PreprocessorImpl::parse_lisp_macro()

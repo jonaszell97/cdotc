@@ -5,15 +5,20 @@
 #ifndef CDOT_ILGENPASS_H
 #define CDOT_ILGENPASS_H
 
-#include <stack>
-#include <llvm/ADT/DenseSet.h>
-#include <unordered_map>
-#include <Basic/Precedence.h>
-
-#include "AST/ASTVisitor.h"
-
-#include "IL/ILBuilder.h"
+#include "AST/Decl.h"
+#include "AST/EmptyASTVisitor.h"
+#include "AST/Expression.h"
+#include "AST/Statement.h"
 #include "Basic/CastKind.h"
+#include "Basic/Precedence.h"
+#include "IL/ILBuilder.h"
+#include "IL/Passes/PassManager.h"
+#include "ILGen/Cleanup.h"
+
+#include <stack>
+#include <unordered_map>
+
+#include <llvm/ADT/DenseSet.h>
 
 namespace cdot {
 
@@ -31,12 +36,10 @@ class VarDecl;
 class Decl;
 class TypeExpr;
 
-class ILGenPass: public ASTVisitor<il::Value*, void> {
+class ILGenPass: public EmptyASTVisitor<il::Value*, void> {
 public:
    explicit ILGenPass(il::Context &Ctx, SemaPass &SP);
    bool run();
-
-   void outputIL();
 
    il::Value *visit(Expression *expr);
    il::Value *evaluateAsConstant(Expression *expr);
@@ -50,17 +53,20 @@ public:
    void ForwardDeclareRecord(RecordDecl* R);
    void GenerateTypeInfo(RecordDecl *R, bool innerDecls = false);
 
+   void visitDeclContext(DeclContext *Ctx);
+
    void visitCompoundStmt(CompoundStmt *node);
    void visitNamespaceDecl(NamespaceDecl *node);
 
    void visitCompoundDecl(CompoundDecl *D);
 
    void visitDeclStmt(DeclStmt *Stmt);
+   void visitModuleDecl(ModuleDecl *Decl);
+
    void visitLocalVarDecl(LocalVarDecl *Decl);
    void visitGlobalVarDecl(GlobalVarDecl *node);
 
-   void visitLocalDestructuringDecl(LocalDestructuringDecl *node);
-   void visitGlobalDestructuringDecl(GlobalDestructuringDecl *node);
+   void visitDestructuringDecl(DestructuringDecl *D);
 
    void visitFunctionDecl(FunctionDecl *node);
    void visitCallableDecl(CallableDecl *node);
@@ -70,6 +76,7 @@ public:
    void visitClassDecl(ClassDecl *node);
    void visitStructDecl(StructDecl *node);
    void visitExtensionDecl(ExtensionDecl *node);
+   void visitProtocolDecl(ProtocolDecl *node);
    void visitEnumDecl(EnumDecl *node);
    void visitUnionDecl(UnionDecl *node);
 
@@ -98,11 +105,13 @@ public:
    il::Value *visitMemberRefExpr(MemberRefExpr *Expr);
    il::Value *visitTupleMemberExpr(TupleMemberExpr *node);
    il::Value *visitEnumCaseExpr(EnumCaseExpr *node);
+   il::Value *visitTemplateArgListExpr(TemplateArgListExpr *Expr);
 
    void visitForStmt(ForStmt *node);
    void visitForInStmt(ForInStmt *Stmt);
    void visitWhileStmt(WhileStmt *node);
    void visitIfStmt(IfStmt *node);
+   void visitIfLetStmt(IfLetStmt *node);
    void visitLabelStmt(LabelStmt *node);
    void visitGotoStmt(GotoStmt *node);
 
@@ -120,6 +129,7 @@ public:
    il::Value *visitCasePattern(CasePattern *node);
    il::Value *visitIsPattern(IsPattern *node);
 
+   void visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
    void visitReturnStmt(ReturnStmt *Stmt);
    void visitBreakStmt(BreakStmt *node);
    void visitContinueStmt(ContinueStmt *node);
@@ -155,8 +165,11 @@ public:
    il::Value *visitReferenceTypeExpr(ReferenceTypeExpr *Expr);
    il::Value *visitOptionTypeExpr(OptionTypeExpr *Expr);
 
-   void visitTryStmt(TryStmt *node);
-   void visitThrowStmt(ThrowStmt *node);
+   void visitDoStmt(DoStmt *node);
+   il::Value *visitTryExpr(TryExpr *Expr);
+   void visitThrowStmt(ThrowStmt *Stmt);
+
+   il::Value *visitAwaitExpr(AwaitExpr *Expr);
 
    il::Value *visitLambdaExpr(LambdaExpr *Expr);
    il::Value *visitImplicitCastExpr(ImplicitCastExpr *node);
@@ -167,13 +180,13 @@ public:
    il::Value *visitTraitsExpr(TraitsExpr *node);
 
    il::Function* DeclareFunction(CallableDecl *C);
+   void notifyFunctionCalledInTemplate(CallableDecl *C);
 
    void DeclareDeclContext(DeclContext *Ctx);
    void DeclareRecord(RecordDecl *R);
    void declareRecordInstantiation(RecordDecl *Inst);
 
    void DeclareGlobalVariable(GlobalVarDecl *decl);
-   void DeclareGlobalVariable(GlobalDestructuringDecl *decl);
 
    il::Constant *MakeStringView(llvm::StringRef Str);
 
@@ -194,13 +207,18 @@ public:
       ReverseDeclMap[Val] = Decl;
    }
 
-   il::Value *getValueForDecl(NamedDecl *Stmt)
+   il::Value *getValueForDecl(const NamedDecl *D)
    {
-      auto It = DeclMap.find(Stmt);
+      auto It = DeclMap.find(const_cast<NamedDecl*>(D));
       if (It == DeclMap.end())
          return nullptr;
 
       return It->second;
+   }
+
+   NamedDecl *getDeclForValue(const il::Value *V)
+   {
+      return getDeclForValue(const_cast<il::Value*>(V));
    }
 
    NamedDecl *getDeclForValue(il::Value *V)
@@ -216,46 +234,51 @@ public:
 
    struct InsertPointRAII {
       InsertPointRAII(ILGenPass &ILGen)
-         : ILGen(ILGen), IP(ILGen.Builder.saveIP()),
-           temporaries(std::move(ILGen.temporaries)),
-           locals(std::move(ILGen.locals))
+         : ILGen(ILGen), MR(ILGen, ILGen.Builder.getModule()),
+           Cleanups(std::move(ILGen.Cleanups)),
+           SavedLastCleanupScope(ILGen.LastCleanupScope),
+           IP(ILGen.Builder.saveIP())
       {
-         ILGen.temporaries.clear();
-         while (!ILGen.locals.empty()) ILGen.locals.pop();
+         new(&ILGen.Cleanups) CleanupStack(ILGen);
+         ILGen.LastCleanupScope = nullptr;
       }
 
-      InsertPointRAII(ILGenPass &ILGen, il::BasicBlock *IB)
-         : ILGen(ILGen), IP(ILGen.Builder.saveIP()),
-           temporaries(std::move(ILGen.temporaries)),
-           locals(std::move(ILGen.locals))
+      InsertPointRAII(ILGenPass &ILGen, il::BasicBlock *IB,
+                      bool KeepDebugLoc = false)
+         : ILGen(ILGen), MR(ILGen, IB->getParent()->getParent()),
+           Cleanups(std::move(ILGen.Cleanups)),
+           SavedLastCleanupScope(ILGen.LastCleanupScope),
+           IP(ILGen.Builder.saveIP())
       {
-         ILGen.Builder.SetInsertPoint(IB);
-         ILGen.temporaries.clear();
-         while (!ILGen.locals.empty()) ILGen.locals.pop();
+         ILGen.Builder.SetInsertPoint(IB, KeepDebugLoc);
+         new(&ILGen.Cleanups) CleanupStack(ILGen);
+         ILGen.LastCleanupScope = nullptr;
       }
 
       InsertPointRAII(ILGenPass &ILGen, il::BasicBlock::iterator IB)
-         : ILGen(ILGen), IP(ILGen.Builder.saveIP()),
-           temporaries(std::move(ILGen.temporaries)),
-           locals(std::move(ILGen.locals))
+         : ILGen(ILGen), MR(ILGen, IB->getParent()->getParent()->getParent()),
+           Cleanups(std::move(ILGen.Cleanups)),
+           SavedLastCleanupScope(ILGen.LastCleanupScope),
+           IP(ILGen.Builder.saveIP())
       {
          ILGen.Builder.SetInsertPoint(IB);
-         ILGen.temporaries.clear();
-         while (!ILGen.locals.empty()) ILGen.locals.pop();
+         new(&ILGen.Cleanups) CleanupStack(ILGen);
+         ILGen.LastCleanupScope = nullptr;
       }
 
       ~InsertPointRAII()
       {
          ILGen.Builder.restoreIP(IP);
-         ILGen.temporaries = std::move(temporaries);
-         ILGen.locals = std::move(locals);
+         ILGen.Cleanups = std::move(Cleanups);
+         ILGen.LastCleanupScope = SavedLastCleanupScope;
       }
 
    private:
       ILGenPass &ILGen;
+      ModuleRAII MR;
+      CleanupStack Cleanups;
+      CleanupScope *SavedLastCleanupScope;
       il::ILBuilder::InsertPoint IP;
-      llvm::SmallPtrSet<il::Value*, 8> temporaries;
-      std::stack<std::vector<il::Value*>> locals;
    };
 
    struct TerminatorRAII {
@@ -263,6 +286,7 @@ public:
       ~TerminatorRAII();
 
       bool hasTerminator() const { return Term != nullptr; }
+      il::TerminatorInst *getTerminator() const { return Term; }
 
    private:
       il::ILBuilder &Builder;
@@ -295,19 +319,15 @@ protected:
    void DeclareProperty(PropDecl *P);
    void DefineProperty(PropDecl *P);
 
-   void DefineFunction(il::Function *F,
-                       CallableDecl* CD);
+   void DefineFunction(CallableDecl* CD);
 
    void DefineLazyGlobal(il::GlobalVariable *G,
                          Expression *defaultVal);
 
-   void DefineGlobal(il::GlobalVariable *G,
-                     Expression *defaultVal,
-                     size_t ordering);
-
    void FinalizeGlobalInitFn();
-
-   void doDestructure(DestructuringDecl *node);
+   void FinalizeGlobalDeinitFn();
+   void VisitPotentiallyLazyGlobals();
+   void VisitImportedInstantiations();
 
 public:
    il::Context &getContext();
@@ -315,6 +335,9 @@ public:
    il::Function *getCurrentFn();
 
    il::Function *getPrintf();
+   il::Module *getCtfeModule();
+
+   il::Module *getModuleFor(NamedDecl *ND);
 
    il::Function *wrapNonLambdaFunction(il::Function *F);
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
@@ -325,8 +348,9 @@ public:
    llvm::SmallVector<il::Argument*, 4> makeArgVec(
       llvm::ArrayRef<QualType> from);
 
+   il::Value *LookThroughLoad(il::Value *V);
+
 public:
-   il::Value *castTo(il::Value *V, QualType to);
    il::Value *HandleCast(const ConversionSequence &res,
                          il::Value *Val,
                          bool forced = false);
@@ -336,11 +360,13 @@ public:
    il::Value *CreateLogicalAnd(il::Value *lhs, Expression *rhsNode);
    il::Value *CreateLogicalOr(il::Value *lhs, Expression *rhsNode);
 
-   il::Instruction *CreateCall(CallableDecl *C,
-                               llvm::ArrayRef<il::Value*> args,
-                               Expression *Caller = nullptr);
+   il::Value *CreateCall(CallableDecl *C,
+                         llvm::ArrayRef<il::Value*> args,
+                         Expression *Caller = nullptr,
+                         bool DirectCall = false);
 
    il::Value *CreateCopy(il::Value *Val);
+   il::Value *Forward(il::Value *Val);
 
    il::Instruction *CreateAllocBox(QualType Ty);
 
@@ -370,10 +396,9 @@ public:
    il::Value *CreateTupleComp(il::Value *lhs, il::Value *rhs);
    il::Value *CreateEnumComp(il::Value *lhs, il::Value *rhs);
 
-   void deinitializeValue(il::Value *Val);
-
    void AppendDefaultDeinitializer(il::Method *M);
    void DefineDefaultInitializer(StructDecl *S);
+   void DefineAbstractMethod(MethodDecl *M);
    void DefineMemberwiseInitializer(StructDecl *S, bool IsComplete = true);
    void DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R);
@@ -381,9 +406,13 @@ public:
    void DefineImplicitStringRepresentableConformance(MethodDecl *M,
                                                      RecordDecl *R);
 
+   void EmitCoroutinePrelude(CallableDecl *C, il::Function &F);
+   il::Value *EmitCoroutineAwait(il::Value *Awaitable);
+   il::Value *EmitCoroutineReturn(il::Value *Value);
+
    void SynthesizeGetterAndSetter(FieldDecl *F);
 
-   void visitTemplateInstantiations();
+   void VisitTemplateInstantiations();
 
    il::Value *HandleUnsafeTupleGet(il::Value *tup, il::Value *idx,
                                    TupleType *Ty);
@@ -393,16 +422,16 @@ public:
    il::TypeInfo *CreateTypeInfo(QualType ty);
    il::GlobalVariable *GetTypeInfo(QualType ty);
 
-   void deinitializeTemporaries();
-   void deinitializeLocals();
-   void declareLocal(il::Value *V);
-
-   il::StoreInst *CreateStore(il::Value *src, il::Value *dst,
-                              bool IsInitialization = false);
+   il::Instruction *CreateStore(il::Value *src, il::Value *dst,
+                                bool IsInitialization = false);
 
    const TargetInfo &getTargetInfo() const;
 
-   void setEmitDebugInfo(bool Emit) { emitDI = Emit; }
+   void setEmitDebugInfo(bool Emit)
+   {
+      emitDI = Emit;
+      Builder.SetEmitDebugInfo(Emit);
+   }
 
 private:
    llvm::SmallDenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
@@ -422,6 +451,8 @@ private:
    il::Constant *WordZero;
    il::Constant *WordOne;
 
+   il::Module *CTFEModule = nullptr;
+
    const IdentifierInfo *SelfII;
 
    llvm::StringMap<llvm::StringRef> BuiltinFns;
@@ -429,6 +460,7 @@ private:
    struct BreakContinueScope {
       il::BasicBlock *BreakTarget;
       il::BasicBlock *ContinueTarget;
+      CleanupsDepth CleanupUntil;
    };
 
    std::stack<BreakContinueScope> BreakContinueStack;
@@ -441,27 +473,81 @@ private:
    std::stack<llvm::SmallVector<UnresolvedGoto, 2>> UnresolvedGotos;
    llvm::StringMap<il::BasicBlock*> Labels;
 
-   llvm::SmallPtrSet<il::Value*, 8> temporaries;
-   std::stack<std::vector<il::Value*>> locals;
-
    std::unordered_map<NamedDecl*, il::Value*> DeclMap;
    std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;
-
    std::unordered_map<size_t, il::BasicBlock*> GlobalInitBBs;
+
+   std::stack<CompoundStmt*> CompoundStmtStack;
+
+   CleanupStack Cleanups;
+   bool emitDI;
+
+   llvm::SmallPtrSet<il::GlobalVariable*, 16> NonTrivialGlobals;
+   llvm::SmallPtrSet<ast::GlobalVarDecl*, 16> PotentiallyLazyGlobals;
+   llvm::SmallPtrSet<MethodDecl*, 4> InstantiatedImportedMethods;
+
+   struct CoroutineInfo {
+      /// The Promise value (not the LLVM notion of promise!)
+      il::Value *Awaitable = nullptr;
+
+      /// The coroutine ID token.
+      il::Value *ID = nullptr;
+
+      /// The coroutine handle.
+      il::Value *Handle = nullptr;
+
+      /// The coroutine end basic block.
+      il::BasicBlock *EndBB = nullptr;
+
+      /// The coroutine cleanup basic block (non-final).
+      il::BasicBlock *CleanupBB = nullptr;
+   };
+
+   llvm::DenseMap<il::Function*, CoroutineInfo> CoroInfoMap;
+
+   il::PassManager MandatoryPassManager;
 
 public:
    il::ILBuilder Builder;
 
+   il::PassManager &getMandatoryPassManager();
+
+   void registerInstantiatedImportedMethod(MethodDecl *M)
+   {
+      InstantiatedImportedMethods.insert(M);
+   }
+
+   void CreateEndCleanupBlocks(CoroutineInfo &Info);
+
 private:
    struct EHScope {
-      il::LandingPadInst *LandingPad;
+      EHScope(il::BasicBlock *LandingPad, bool EmitCleanups = true)
+         : LandingPad(LandingPad), EmitCleanups(EmitCleanups)
+      { }
+
+      il::BasicBlock *LandingPad;
+      bool EmitCleanups;
    };
 
-   bool emitDI;
-
-   std::stack<EHScope> EHStack;
+   std::vector<EHScope> EHStack;
    llvm::DenseSet<uintptr_t> VisitedDecls;
-   llvm::SmallDenseMap<size_t, il::Module*> Modules;
+
+   struct EHScopeRAII {
+      EHScopeRAII(ILGenPass &ILGen, il::BasicBlock *LP,
+                  bool EmitCleanups = true)
+         : ILGen(ILGen)
+      {
+         ILGen.EHStack.emplace_back(LP, EmitCleanups);
+      }
+
+      ~EHScopeRAII()
+      {
+         ILGen.EHStack.pop_back();
+      }
+
+   private:
+      ILGenPass &ILGen;
+   };
 
    template<class T>
    bool alreadyVisited(T *ptr)
@@ -470,7 +556,8 @@ private:
    }
 
    struct CtfeScope {
-      CtfeScope(CallableDecl *CurrentFn) : HadError(false), CurrentFn(CurrentFn)
+      explicit CtfeScope(CallableDecl *CurrentFn)
+         : HadError(false), CurrentFn(CurrentFn)
       {}
 
       bool HadError;
@@ -492,6 +579,77 @@ private:
    private:
       ILGenPass &ILGen;
    };
+
+   CleanupScope *LastCleanupScope = nullptr;
+
+   struct CleanupRAII: public CleanupScope {
+      CleanupRAII(ILGenPass &ILGen)
+         : CleanupScope(ILGen.Cleanups),
+           ILGen(ILGen), SavedCleanupScope(ILGen.LastCleanupScope)
+      {
+         ILGen.LastCleanupScope = this;
+      }
+
+      CleanupScope *getOuterCleanupScope()
+      {
+         return SavedCleanupScope;
+      }
+
+      ~CleanupRAII()
+      {
+         ILGen.LastCleanupScope = SavedCleanupScope;
+      }
+
+      CleanupsDepth getDepth() const { return depth; }
+
+   private:
+      ILGenPass &ILGen;
+      CleanupScope *SavedCleanupScope;
+   };
+
+   struct ExprCleanupRAII: public ExprCleanupScope {
+      ExprCleanupRAII(ILGenPass &ILGen)
+         : ExprCleanupScope(ILGen.Cleanups),
+           ILGen(ILGen), SavedCleanupScope(ILGen.LastCleanupScope)
+      {
+         ILGen.LastCleanupScope = this;
+      }
+
+      ~ExprCleanupRAII()
+      {
+         ILGen.LastCleanupScope = SavedCleanupScope;
+      }
+
+   private:
+      ILGenPass &ILGen;
+      CleanupScope *SavedCleanupScope;
+   };
+
+   struct CompoundStmtRAII {
+      CompoundStmtRAII(ILGenPass &ILGen, CompoundStmt *S) : ILGen(ILGen)
+      {
+         ILGen.CompoundStmtStack.push(S);
+      }
+
+      ~CompoundStmtRAII()
+      {
+         ILGen.CompoundStmtStack.pop();
+      }
+
+   private:
+      ILGenPass &ILGen;
+   };
+
+   bool eraseTemporaryCleanup(il::Value *Tmp)
+   {
+      assert(LastCleanupScope && "no cleanup scope!");
+      return LastCleanupScope->ignoreValue(Tmp);
+   }
+
+   void pushDefaultCleanup(il::Value *Val)
+   {
+      Cleanups.pushCleanup<DefaultCleanup>(Val);
+   }
 
    std::vector<CtfeScope> CtfeScopeStack;
 

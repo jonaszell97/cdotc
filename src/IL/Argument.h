@@ -16,20 +16,18 @@ class BasicBlock;
 class Argument: public Value,
                 public llvm::ilist_node_with_parent<Argument, BasicBlock> {
 public:
-   enum Convention {
-      Copied, Owned, Borrowed,
-   };
-
    Argument(ValueType type,
-            Convention Conv,
+            ArgumentConvention Conv,
             BasicBlock *parent,
             llvm::StringRef name = "");
+
+   Argument(const Argument &Arg, BasicBlock &Parent);
 
    BasicBlock *getParent() const { return parent; }
    void setParent(BasicBlock *p) { parent = p; }
 
-   Convention getConvention() const { return (Convention)ArgBits.Convention; }
-   void setConvention(Convention C) { ArgBits.Convention = C; }
+   void setConvention(ArgumentConvention C) { ArgBits.Convention = C; }
+   ArgumentConvention getConvention() const { return ArgBits.Convention; }
 
    bool isSelf() const { return ArgBits.IsSelf; }
    void setSelf(bool self) { ArgBits.IsSelf = self; }
