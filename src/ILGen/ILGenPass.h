@@ -58,6 +58,8 @@ public:
    void visitCompoundStmt(CompoundStmt *node);
    void visitNamespaceDecl(NamespaceDecl *node);
 
+   void visitUnittestDecl(UnittestDecl *D);
+
    void visitCompoundDecl(CompoundDecl *D);
 
    void visitDeclStmt(DeclStmt *Stmt);
@@ -180,6 +182,11 @@ public:
    il::Value *visitTraitsExpr(TraitsExpr *node);
 
    il::Function* DeclareFunction(CallableDecl *C);
+
+   void VerifyFunction(il::Function *F);
+   void CanonicalizeFunction(il::Function *F);
+   void OptimizeFunction(il::PassManager &PM, il::Function *F);
+
    void notifyFunctionCalledInTemplate(CallableDecl *C);
 
    void DeclareDeclContext(DeclContext *Ctx);
@@ -336,6 +343,7 @@ public:
 
    il::Function *getPrintf();
    il::Module *getCtfeModule();
+   il::Module *getUnittestModule();
 
    il::Module *getModuleFor(NamedDecl *ND);
 
@@ -420,6 +428,9 @@ public:
    il::Function *getBuiltin(llvm::StringRef name);
 
    il::TypeInfo *CreateTypeInfo(QualType ty);
+
+   void SetTypeInfo(QualType Ty, il::GlobalVariable *GV);
+   il::GlobalVariable *GetOrCreateTypeInfo(QualType ty);
    il::GlobalVariable *GetTypeInfo(QualType ty);
 
    il::Instruction *CreateStore(il::Value *src, il::Value *dst,
@@ -432,6 +443,8 @@ public:
       emitDI = Emit;
       Builder.SetEmitDebugInfo(Emit);
    }
+
+   il::Function *CreateUnittestFun();
 
 private:
    llvm::SmallDenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
@@ -452,6 +465,7 @@ private:
    il::Constant *WordOne;
 
    il::Module *CTFEModule = nullptr;
+   il::Module *UnittestModule = nullptr;
 
    const IdentifierInfo *SelfII;
 
@@ -506,6 +520,9 @@ private:
    llvm::DenseMap<il::Function*, CoroutineInfo> CoroInfoMap;
 
    il::PassManager MandatoryPassManager;
+
+   /// Map from unit test declarations to their respective function.
+   SmallVector<UnittestDecl*, 0> Unittests;
 
 public:
    il::ILBuilder Builder;

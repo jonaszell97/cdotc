@@ -18,6 +18,7 @@
 #include "Sema/SemaPass.h"
 #include "Serialization/IncrementalCompilation.h"
 #include "Support/StringSwitch.h"
+#include "Support/Timer.h"
 
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
@@ -55,6 +56,9 @@ static cl::list<string> LinkerInput("l", cl::ZeroOrMore, cl::Prefix,
 
 /// If given, debug info will be emitted.
 static cl::opt<bool> EmitDebugInfo("g",  cl::desc("emit debug info"));
+
+/// If given, debug info will be emitted.
+static cl::opt<bool> RunUnitTests("test",  cl::desc("run unit tests"));
 
 /// If given, IL will be emitted without debug info even if it is created.
 static cl::opt<bool> NoDebugIL("fno-debug-il", cl::desc("emit IL without "
@@ -127,13 +131,17 @@ static cl::opt<bool> ClearCaches("fclear-caches",
                                  cl::desc("clears incremental compilation "
                                           "caches"));
 
-
 /// If given, print various statistics during compilation.
 static cl::opt<bool> PrintStats("print-stats",
                                 cl::desc("print statistics during "
                                          "compilation"));
 
-CompilationUnit::CompilationUnit(CompilerOptions &&options)
+/// If given, print various statistics during compilation.
+static cl::opt<bool> PrintPhases("print-phases",
+                                cl::desc("print duration of compilation "
+                                         "phases"));
+
+CompilerInstance::CompilerInstance(CompilerOptions &&options)
    : options(std::move(options)),
      FileMgr(std::make_unique<fs::FileManager>()),
      Context(std::make_unique<ASTContext>()),
@@ -147,7 +155,7 @@ CompilationUnit::CompilationUnit(CompilerOptions &&options)
 
 }
 
-CompilationUnit::CompilationUnit(int argc, char **argv)
+CompilerInstance::CompilerInstance(int argc, char **argv)
    : FileMgr(std::make_unique<fs::FileManager>()),
      Context(std::make_unique<ASTContext>()),
      GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
@@ -220,6 +228,7 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
    }
    if (IsStdLib) {
       options.setFlag(CompilerOptions::F_IsStdLib, true);
+      options.setFlag(CompilerOptions::F_NoPrelude, true);
    }
    if (EmitModules) {
       options.setFlag(CompilerOptions::F_EmitModules, true);
@@ -236,11 +245,22 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
    if (PrintStats) {
       options.setFlag(CompilerOptions::F_PrintStats, true);
    }
+   if (RunUnitTests) {
+      options.setFlag(CompilerOptions::F_RunUnitTests, true);
+   }
    if (EmitIL != "-") {
       options.setFlag(CompilerOptions::F_EmitIL, true);
+
+      if (!EmitIL.empty() && EmitIL.getValue().back() != fs::PathSeperator) {
+         EmitIL.getValue() += fs::PathSeperator;
+      }
    }
    if (EmitIR != "-") {
       options.setFlag(CompilerOptions::F_EmitIR, true);
+
+      if (!EmitIR.empty() && EmitIR.getValue().back() != fs::PathSeperator) {
+         EmitIR.getValue() += fs::PathSeperator;
+      }
    }
    if (ClearCaches) {
       serial::IncrementalCompilationManager::clearCaches();
@@ -276,7 +296,7 @@ CompilationUnit::CompilationUnit(int argc, char **argv)
    }
 }
 
-CompilationUnit::~CompilationUnit()
+CompilerInstance::~CompilerInstance()
 {
    for (auto *Job : Jobs)
       delete Job;
@@ -322,7 +342,7 @@ void CompilerOptions::addOutput(std::string &&fileName)
    outFiles.emplace(kind, std::move(fileName));
 }
 
-int CompilationUnit::compile()
+int CompilerInstance::compile()
 {
    llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
 
@@ -332,7 +352,7 @@ int CompilationUnit::compile()
    return runJobs();
 }
 
-int CompilationUnit::setupJobs()
+int CompilerInstance::setupJobs()
 {
    SmallString<128> MainFile;
 
@@ -346,11 +366,19 @@ int CompilationUnit::setupJobs()
       addJob<ParseJob>(Input);
    }
 
-   if (IncMgr)
+   addJob<PrintUsedMemoryJob>(Jobs.back());
+
+   {
+      support::Timer Timer(*this, "Parsing");
+      if (auto EC = runJobs())
+         return EC;
+   }
+
+   if (IncMgr) {
       addJob<LoadCacheJob>();
+   }
 
    // Setup the file independent pipeline.
-   addJob<PrintUsedMemoryJob>(Jobs.back());
    addJob<SemaJob>();
    addJob<PrintUsedMemoryJob>(Jobs.back());
 
@@ -361,6 +389,10 @@ int CompilationUnit::setupJobs()
       return 0;
 
    addJob<ILGenJob>();
+   addJob<ILVerifyJob>();
+   addJob<ILCanonicalizeJob>();
+   addJob<ILOptimizeJob>();
+
    addJob<PrintUsedMemoryJob>(Jobs.back());
 
    SmallVector<Job*, 4> IRGenJobs;
@@ -370,6 +402,9 @@ int CompilationUnit::setupJobs()
    if (options.emitModules()) {
       addJob<IRGenJob>(*Mod->getILModule());
       IRGenJobs.push_back(Jobs.back());
+
+      if (RunUnitTests)
+         addJob<UnittestJob>();
 
       addEmitJobs(IRGenJobs);
       addJob<EmitModuleJob>(*Mod);
@@ -382,6 +417,9 @@ int CompilationUnit::setupJobs()
       addEmitJobs(IRGenJobs);
 
       auto *IRLinkJob = addJob<LinkIRJob>(IRGenJobs);
+
+      if (RunUnitTests)
+         addJob<UnittestJob>();
 
       // Only emit assembly files.
       if (options.textOutputOnly()) {
@@ -409,10 +447,13 @@ int CompilationUnit::setupJobs()
    if (!NoIncremental)
       addJob<CacheJob>();
 
+   if (PrintPhases)
+      addJob<PrintPhasesJob>();
+
    return 0;
 }
 
-void CompilationUnit::addEmitJobs(ArrayRef<Job*> IRGenJobs)
+void CompilerInstance::addEmitJobs(ArrayRef<Job*> IRGenJobs)
 {
    auto *Mod = getCompilationModule();
 
@@ -456,7 +497,7 @@ void CompilationUnit::addEmitJobs(ArrayRef<Job*> IRGenJobs)
    }
 }
 
-int CompilationUnit::runJobs()
+int CompilerInstance::runJobs()
 {
    for (auto *Job : Jobs) {
       Job->run();
@@ -471,7 +512,7 @@ int CompilationUnit::runJobs()
    return 0;
 }
 
-void CompilationUnit::createIRGen()
+void CompilerInstance::createIRGen()
 {
    if (IRGen)
       return;
@@ -479,26 +520,44 @@ void CompilationUnit::createIRGen()
    IRGen = std::make_unique<il::IRGen>(*this, *LLVMCtx, options.emitDebugInfo());
 }
 
-ast::ILGenPass& CompilationUnit::getILGen() const
+ast::ILGenPass& CompilerInstance::getILGen() const
 {
    return Sema->getILGen();
 }
 
-SourceLocation CompilationUnit::getSourceLoc() const
+SourceLocation CompilerInstance::getSourceLoc() const
 {
    return MainFileLoc;
 }
 
-void CompilationUnit::reportInternalCompilerError()
+void CompilerInstance::reportInternalCompilerError()
 {
    llvm::errs()
       << "\033[21;31merror:\033[0m an internal compiler error occurred\n";
 }
 
-void CompilationUnit::reportBackendFailure(llvm::StringRef msg)
+void CompilerInstance::reportBackendFailure(llvm::StringRef msg)
 {
    Sema->diagnose(err_llvm_backend, msg);
    Sema->issueDiagnostics();
+}
+
+void CompilerInstance::addPhaseDuration(StringRef PhaseName,
+                                        long long DurationMillis) {
+   PhaseDurations.emplace_back(PhaseName, DurationMillis);
+}
+
+void CompilerInstance::displayPhaseDurations(llvm::raw_ostream &OS) const
+{
+   long long Total = 0;
+   OS << "Timings:\n";
+
+   for (auto &Dur : PhaseDurations) {
+      OS << "   - " << Dur.first << ": " << Dur.second << "ms\n";
+      Total += Dur.second;
+   }
+
+   OS << "Total elapsed time: " << Total << "ms.\n";
 }
 
 } // namespace cdot

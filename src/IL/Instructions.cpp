@@ -318,14 +318,15 @@ YieldInst::YieldInst(il::Value *yieldedValue,
                      bool FinalYield,
                      il::BasicBlock *parent)
    : TerminatorInst(YieldInstID, yieldedValue->getCtx(), parent),
-     MultiOperandInst(ResumeArgs),
-     ResumeDst(ResumeDst), yieldedValue(yieldedValue)
+     MultiOperandInst(ResumeArgs, ResumeArgs.size() + 2)
 {
    yieldedValue->addUse(this);
    if (ResumeDst)
       ResumeDst->addUse(this);
 
    YieldBits.IsFinalYield = FinalYield;
+   Operands[numOperands - 2] = yieldedValue;
+   Operands[numOperands - 1] = ResumeDst;
 }
 
 YieldInst::YieldInst(il::Context &Ctx,
@@ -334,13 +335,19 @@ YieldInst::YieldInst(il::Context &Ctx,
                      bool FinalYield,
                      il::BasicBlock *parent)
    : TerminatorInst(YieldInstID, Ctx, parent),
-     MultiOperandInst(ResumeArgs),
-     ResumeDst(ResumeDst), yieldedValue(nullptr)
+     MultiOperandInst(ResumeArgs)
 {
    if (ResumeDst)
       ResumeDst->addUse(this);
 
    YieldBits.IsFinalYield = FinalYield;
+   Operands[numOperands - 2] = nullptr;
+   Operands[numOperands - 1] = ResumeDst;
+}
+
+BasicBlock *YieldInst::getResumeDst() const
+{
+   return cast<BasicBlock>(Operands[numOperands - 1]);
 }
 
 ThrowInst::ThrowInst(Value *thrownValue,

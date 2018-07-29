@@ -119,8 +119,10 @@ void ILWriter::AddDeclRef(const ast::Decl *D, RecordDataImpl &Record)
 void ILWriter::AddDeclToBeWritten(const ast::NamedDecl *D, unsigned ID)
 {
    auto *V = ILGen.getValueForDecl(D);
-   if (V)
+   if (V && isa<GlobalObject>(V)) {
       GetOrCreateValueID(V);
+      GlobalValues.push_back(cast<GlobalObject>(V));
+   }
 
    FileLocations.insert(ID);
 }
@@ -174,29 +176,15 @@ void ILWriter::writeModuleCache(const il::Module &M)
 {
    this->ILMod = &M;
 
-//   auto &FileMgr = Writer.getWriter().getCompilerInstance().getFileMgr();
-//   for (auto &G : M.getGlobalList()) {
-//      auto ID = FileMgr.getSourceId(G.getSourceLoc());
-//      if (FileLocations.find(ID) == FileLocations.end())
-//         continue;
-//
-//      GlobalValues.push_back(&G);
-//      (void)GetOrCreateValueID(&G);
-//   }
-//
-//   auto FileName =Writer.getWriter().getCompilerInstance().getFileMgr()
-//      .getFileName(SourceID);
-//
-//   for (auto &Fn : M.getFuncList()) {
-//      auto ID = FileMgr.getSourceId(Fn.getSourceLoc());
-//      if (FileLocations.find(ID) == FileLocations.end())
-//         continue;
-//
-//      llvm::outs()<<"writing "<<Fn.getName()<<" to "<<FileName<<"\n";
-//
-//      GlobalValues.push_back(&Fn);
-//      (void)GetOrCreateValueID(&Fn);
-//   }
+   for (auto &G : M.getGlobalList()) {
+      GlobalValues.push_back(&G);
+      (void)GetOrCreateValueID(&G);
+   }
+
+   for (auto &Fn : M.getFuncList()) {
+      GlobalValues.push_back(&Fn);
+      (void)GetOrCreateValueID(&Fn);
+   }
 
    Stream.EnterSubblock(IL_MODULE_BLOCK_ID, 4);
       writeMetadataBlock();
@@ -296,12 +284,15 @@ void ILWriter::writeValueBlock()
 //   Stream.ExitBlock();
 }
 
-void ILWriter::WriteValueOffsets()
+void ILWriter::WriteValueOffsets(unsigned Offset)
 {
+   ArrayRef<uint32_t> Offsets = ValueOffsets;
+   Offsets = Offsets.drop_front(Offset);
+
    RecordData::value_type Record[] = {IL_VALUE_OFFSETS,
-      ValueOffsets.size(), 1};
+      Offsets.size(), 1};
    Stream.EmitRecordWithBlob(Writer.ValueOffsetAbbrev, Record,
-                             bytes(ValueOffsets));
+                             bytes(Offsets));
 }
 
 namespace {
@@ -386,6 +377,8 @@ void ILWriter::writeSymbolTableBlock()
 
    RecordData::value_type Data[] = {IL_SYMBOL_TABLE, Offset};
    Stream.EmitRecordWithBlob(SymTabAbbrev, Data, bytes(Str));
+
+   GlobalValues.clear();
 }
 
 void ILWriter::writeGlobalVariable(const GlobalVariable &G)
@@ -409,6 +402,7 @@ void ILWriter::writeGlobalVariable(const GlobalVariable &G)
    Writer.AddValue(G.getInitializer());
    Writer.AddValue(G.getInitializedFlag());
    Writer.AddValue(G.getInitFn());
+   Writer.AddValue(G.getDeinitFn());
 
    Stream.EmitRecord(G.getTypeID(), Record);
 }

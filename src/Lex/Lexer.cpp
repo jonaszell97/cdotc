@@ -347,170 +347,174 @@ tok::TokenType Lexer::getBuiltinOperator(llvm::StringRef str)
    tok::TokenType kind = tok::sentinel;
    
    switch (str.size()) {
-      case 1:
-         switch (str.front()) {
-            case '+': kind = tok::plus; break;
-            case '-': kind = tok::minus; break;
-            case '*': kind = tok::times; break;
-            case '/': kind = tok::div; break;
-            case '=': kind = tok::equals; break;
-            case '<': kind = tok::smaller; break;
-            case '>': kind = tok::greater; break;
-            case '&': kind = tok::op_and; break;
-            case '|': kind = tok::op_or; break;
-            case '!': kind = tok::exclaim; break;
-            case '~': kind = tok::tilde; break;
-            case '^': kind = tok::caret; break;
-            case '.': kind = tok::period; break;
-            case ':': kind = tok::colon; break;
-            case '?': kind = tok::question; break;
+   case 1:
+      switch (str.front()) {
+      case '+': kind = tok::plus; break;
+      case '-': kind = tok::minus; break;
+      case '*': kind = tok::times; break;
+      case '/': kind = tok::div; break;
+      case '=': kind = tok::equals; break;
+      case '<': kind = tok::smaller; break;
+      case '>': kind = tok::greater; break;
+      case '&': kind = tok::op_and; break;
+      case '|': kind = tok::op_or; break;
+      case '!': kind = tok::exclaim; break;
+      case '~': kind = tok::tilde; break;
+      case '^': kind = tok::caret; break;
+      case '.': kind = tok::period; break;
+      case ':': kind = tok::colon; break;
+      case '?': kind = tok::question; break;
+      default: break;
+      }
+
+      break;
+   case 2:
+      switch (*ptr++) {
+      case '+':
+         switch (*ptr) {
+            case '+': kind = tok::plus_plus; break;
+            case '=': kind = tok::plus_equals; break;
             default: break;
          }
-         
+
          break;
-      case 2:
-         switch (*ptr++) {
-            case '+':
-               switch (*ptr) {
-                  case '+': kind = tok::plus_plus; break;
-                  case '=': kind = tok::plus_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '-':
-               switch (*ptr) {
-                  case '-': kind = tok::minus_minus; break;
-                  case '>': kind = tok::arrow_single; break;
-                  case '=': kind = tok::minus_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '*':
-               switch (*ptr) {
-                  case '*': kind = tok::times_times; break;
-                  case '=': kind = tok::times_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '/':
-               switch (*ptr) {
-                  case '=': kind = tok::div_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '%':
-               switch (*ptr) {
-                  case '=': kind = tok::mod_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '=':
-               switch (*ptr) {
-                  case '=': kind = tok::double_equals; break;
-                  case '>': kind = tok::arrow_double; break;
-                  default: break;
-               }
-
-               break;
-            case '!':
-               if (*ptr == '=')
-                  kind = tok::exclaim_equals;
-
-               break;
-            case '<':
-               switch (*ptr) {
-                  case '=': kind = tok::smaller_equals; break;
-                  case '<': kind = tok::shl; break;
-                  default: break;
-               }
-
-               break;
-            case '>':
-               switch (*ptr) {
-                  case '=': kind = tok::greater_equals; break;
-                  case '>': kind = tok::ashr; break;
-                  default: break;
-               }
-
-               break;
-            case '^':
-               switch (*ptr) {
-                  case '=': kind = tok::xor_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '&':
-               switch (*ptr) {
-                  case '&': kind = tok::logical_and; break;
-                  case '=': kind = tok::and_equals; break;
-                  default: break;
-               }
-
-               break;
-            case '|':
-               switch (*ptr) {
-                  case '|': kind = tok::logical_or; break;
-                  case '=': kind = tok::or_equals; break;
-                  default: break;
-               }
-
-               break;
-            default:
-               break;
+      case '-':
+         switch (*ptr) {
+            case '-': kind = tok::minus_minus; break;
+            case '>': kind = tok::arrow_single; break;
+            case '=': kind = tok::minus_equals; break;
+            default: break;
          }
 
          break;
-      case 3:
-         switch (*ptr++) {
-            case '=':
-               if (*ptr++ == '=')
-                  if (*ptr == '=')
-                     kind = tok::triple_equals;
-
-               break;
-            case '!':
-               if (*ptr++ == '=')
-                  if (*ptr == '=')
-                     kind = tok::exclaim_double_equals;
-
-               break;
-            case '.':
-               if (*ptr++ == '.')
-                  if (*ptr == '.')
-                     kind = tok::triple_period;
-
-               break;
-            case '>':
-               if (*ptr++ == '>') {
-                  if (*ptr == '>')
-                     kind = tok::lshr;
-                  else if (*ptr == '=')
-                     kind = tok::ashr_equals;
-               }
-
-               break;
-            case '<':
-               if (*ptr++ == '<')
-                  if (*ptr == '=')
-                     kind = tok::shl_equals;
-
-               break;
-            default:
-               break;
+      case '*':
+         switch (*ptr) {
+            case '*': kind = tok::times_times; break;
+            case '=': kind = tok::times_equals; break;
+            default: break;
          }
-      case 4:
-         if (str == ">>>=")
-            kind = tok::lshr_equals;
+
+         break;
+      case '/':
+         switch (*ptr) {
+            case '=': kind = tok::div_equals; break;
+            default: break;
+         }
+
+         break;
+      case '%':
+         switch (*ptr) {
+            case '=': kind = tok::mod_equals; break;
+            default: break;
+         }
+
+         break;
+      case '=':
+         switch (*ptr) {
+            case '=': kind = tok::double_equals; break;
+            case '>': kind = tok::arrow_double; break;
+            default: break;
+         }
+
+         break;
+      case '!':
+         if (*ptr == '=')
+            kind = tok::exclaim_equals;
+
+         break;
+      case '<':
+         switch (*ptr) {
+            case '=': kind = tok::smaller_equals; break;
+            case '<': kind = tok::shl; break;
+            default: break;
+         }
+
+         break;
+      case '>':
+         switch (*ptr) {
+            case '=': kind = tok::greater_equals; break;
+            case '>': kind = tok::ashr; break;
+            default: break;
+         }
+
+         break;
+      case '^':
+         switch (*ptr) {
+            case '=': kind = tok::xor_equals; break;
+            default: break;
+         }
+
+         break;
+      case '&':
+         switch (*ptr) {
+            case '&': kind = tok::logical_and; break;
+            case '=': kind = tok::and_equals; break;
+            default: break;
+         }
+
+         break;
+      case '|':
+         switch (*ptr) {
+            case '|': kind = tok::logical_or; break;
+            case '=': kind = tok::or_equals; break;
+            default: break;
+         }
 
          break;
       default:
          break;
+      }
+
+      break;
+   case 3:
+      switch (*ptr++) {
+      case '=':
+         if (*ptr++ == '=')
+            if (*ptr == '=')
+               kind = tok::triple_equals;
+
+         break;
+      case '!':
+         if (ptr[0] == '=')
+            if (ptr[1] == '=')
+               kind = tok::exclaim_double_equals;
+
+         if (ptr[0] == 'i')
+            if (ptr[1] == 's')
+               kind = tok::exclaim_is;
+
+         break;
+      case '.':
+         if (*ptr++ == '.')
+            if (*ptr == '.')
+               kind = tok::triple_period;
+
+         break;
+      case '>':
+         if (*ptr++ == '>') {
+            if (*ptr == '>')
+               kind = tok::lshr;
+            else if (*ptr == '=')
+               kind = tok::ashr_equals;
+         }
+
+         break;
+      case '<':
+         if (*ptr++ == '<')
+            if (*ptr == '=')
+               kind = tok::shl_equals;
+
+         break;
+      default:
+         break;
+      }
+   case 4:
+      if (str == ">>>=")
+         kind = tok::lshr_equals;
+
+      break;
+   default:
+      break;
    }
 
    return kind;
@@ -825,13 +829,32 @@ Token Lexer::lexCharLiteral()
 {
    assert(*TokBegin == '\'');
 
-   switch (*CurPtr) {
-      case '\\':
+   if (*CurPtr++ == '\\') {
+      if (*CurPtr == 'x') {
          ++CurPtr;
-         LLVM_FALLTHROUGH;
-      default:
+
+         for (int i = 0; i < 2; ++i) {
+            if (!::ishexnumber(*CurPtr++)) {
+               Diags.Diag(err_generic_error)
+                  << "expected hexadecimal digit"
+                  << SourceLocation(currentIndex() + offset);
+            }
+         }
+      }
+      else if (*CurPtr == 'u') {
          ++CurPtr;
-         break;
+
+         for (int i = 0; i < 4; ++i) {
+            if (!::ishexnumber(*CurPtr++)) {
+               Diags.Diag(err_generic_error)
+                  << "expected hexadecimal digit"
+                  << SourceLocation(currentIndex() + offset);
+            }
+         }
+      }
+      else {
+         ++CurPtr;
+      }
    }
 
    if (*CurPtr != '\'')
@@ -1004,6 +1027,18 @@ Token Lexer::lexIdentifier(tok::TokenType identifierKind)
                 identifierKind);
 }
 
+static bool isSeperatorChar(char c)
+{
+   switch (c) {
+   case '\n':
+   case ' ':
+   case '\r':
+      return true;
+   default:
+      return false;
+   }
+}
+
 void Lexer::lexOperator()
 {
    --CurPtr;
@@ -1027,14 +1062,22 @@ void Lexer::lexOperator()
             return;
          }
 
-         LLVM_FALLTHROUGH;
+         break;
+      case '!':
+         if (CurPtr[1] == 'i'
+               && CurPtr[2] == 's'
+               && isSeperatorChar(CurPtr[3])) {
+            CurPtr += 3;
+            return;
+         }
+
+         break;
       case '+':
       case '-':
       case '=':
       case '&':
       case '|':
       case '%':
-      case '!':
       case '*':
       case '/':
       case '~':

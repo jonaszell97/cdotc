@@ -118,22 +118,24 @@ char hexdigit(unsigned i);
 inline char unescape_char(char c)
 {
    switch (c) {
-      case '\n':
-         return 'n';
-      case '\a':
-         return 'a';
-      case '\r':
-         return 'r';
-      case '\v':
-         return 'v';
-      case '\t':
-         return 't';
-      case '\b':
-         return 'b';
-      case '\0':
-         return '0';
-      default:
-         return c;
+   case '\n':
+      return 'n';
+   case '\a':
+      return 'a';
+   case '\r':
+      return 'r';
+   case '\v':
+      return 'v';
+   case '\t':
+      return 't';
+   case '\b':
+      return 'b';
+   case 0x1B:
+      return 'e';
+   case '\0':
+      return '0';
+   default:
+      return c;
    }
 }
 
@@ -141,28 +143,30 @@ template <class Stream>
 inline Stream& unescape_char(char c, Stream &out)
 {
    switch (c) {
-      case '\n':
-         return out << "\\n";
-      case '\a':
-         return out << "\\a";
-      case '\r':
-         return out << "\\r";
-      case '\v':
-         return out << "\\v";
-      case '\t':
-         return out << "\\t";
-      case '\b':
-         return out << "\\b";
-      case '\0':
-         return out << "\\0";
-      default:
-         if (!::isprint(c)) {
-            return out << '\\'
-                       << hexdigit((c & 0b11110000) >> 4)
-                       << hexdigit(c & 0b1111);
-         }
-         else
-            return out << c;
+   case '\n':
+      return out << "\\n";
+   case '\a':
+      return out << "\\a";
+   case '\r':
+      return out << "\\r";
+   case '\v':
+      return out << "\\v";
+   case '\t':
+      return out << "\\t";
+   case '\b':
+      return out << "\\b";
+   case 0x1B:
+      return out << "\\e";
+   case '\0':
+      return out << "\\0";
+   default:
+      if (!::isprint(c)) {
+         return out << '\\'
+                    << hexdigit((c & 0b11110000) >> 4)
+                    << hexdigit(c & 0b1111);
+      }
+      else
+         return out << c;
    }
 }
 
@@ -170,56 +174,60 @@ template<unsigned N>
 inline llvm::SmallString<N> &unescape_char(char c, llvm::SmallString<N> &out)
 {
    switch (c) {
-      case '\n':
-         return out += "\\n";
-      case '\a':
-         return out += "\\a";
-      case '\r':
-         return out += "\\r";
-      case '\v':
-         return out += "\\v";
-      case '\t':
-         return out += "\\t";
-      case '\b':
-         return out += "\\b";
-      case '\0':
-         return out += "\\0";
-      default:
-         if (!::isprint(c)) {
-            out += '\\';
-            out += hexdigit((c & 0b11110000) >> 4);
-            out += hexdigit(c & 0b1111);
+   case '\n':
+      return out += "\\n";
+   case '\a':
+      return out += "\\a";
+   case '\r':
+      return out += "\\r";
+   case '\v':
+      return out += "\\v";
+   case '\t':
+      return out += "\\t";
+   case '\b':
+      return out += "\\b";
+   case 0x1B:
+      return out += "\\e";
+   case '\0':
+      return out += "\\0";
+   default:
+      if (!::isprint(c)) {
+         out += '\\';
+         out += hexdigit((c & 0b11110000) >> 4);
+         out += hexdigit(c & 0b1111);
 
-            return out;
-         }
-         else
-            return out += c;
+         return out;
+      }
+      else
+         return out += c;
    }
 }
 
 inline char escape_char(char c)
 {
    switch (c) {
-      case 'n':
-         return '\n';
-      case 'a':
-         return '\a';
-      case 'r':
-         return '\r';
-      case 'v':
-         return '\v';
-      case 't':
-         return '\t';
-      case 'b':
-         return '\b';
-      case '"':
-         return '\"';
-      case '\'':
-         return '\'';
-      case '0':
-         return '\0';
-      default:
-         return c;
+   case 'n':
+      return '\n';
+   case 'a':
+      return '\a';
+   case 'r':
+      return '\r';
+   case 'v':
+      return '\v';
+   case 't':
+      return '\t';
+   case 'b':
+      return '\b';
+   case 'e':
+      return 0x1B;
+   case '"':
+      return '\"';
+   case '\'':
+      return '\'';
+   case '0':
+      return '\0';
+   default:
+      return c;
    }
 }
 

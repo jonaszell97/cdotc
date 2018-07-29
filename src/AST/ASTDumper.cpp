@@ -378,6 +378,11 @@ bool DumperImpl::visitNamespaceDecl(NamespaceDecl* stmt)
    return true;
 }
 
+bool DumperImpl::visitUnittestDecl(UnittestDecl *decl)
+{
+   return true;
+}
+
 bool DumperImpl::visitUsingDecl(UsingDecl* stmt)
 {
    return true;
@@ -394,6 +399,11 @@ bool DumperImpl::visitImportDecl(ImportDecl *stmt)
 }
 
 bool DumperImpl::visitDebugStmt(DebugStmt* stmt)
+{
+   return true;
+}
+
+bool DumperImpl::visitDebugDecl(DebugDecl *decl)
 {
    return true;
 }

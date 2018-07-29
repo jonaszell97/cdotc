@@ -9,7 +9,7 @@
 
 #define DISPATCH(Name)                                  \
   static_cast<SubClass*>(this)->                        \
-           visit##Name(support::cast<Name>(T))
+           visit##Name(static_cast<Name*>(*T))
 
 namespace cdot {
 
@@ -101,22 +101,18 @@ public:
 
    QualType visitFunctionType(FunctionType *T)
    {
-      llvm::SmallVector<QualType, 4> ParamTys;
+      SmallVector<QualType, 4> ParamTys;
       for (QualType Cont : T->getParamTypes())
          ParamTys.push_back(visit(Cont));
 
       return Ctx.getFunctionType(visit(T->getReturnType()), ParamTys,
-                                 T->getRawFlags());
+                                 T->getParamInfo(), T->getRawFlags(),
+                                 T->isLambdaType());
    }
 
    QualType visitLambdaType(LambdaType *T)
    {
-      llvm::SmallVector<QualType, 4> ParamTys;
-      for (auto &Cont : T->getParamTypes())
-         ParamTys.push_back(visit(Cont));
-
-      return Ctx.getLambdaType(visit(T->getReturnType()), ParamTys,
-                               T->getRawFlags());
+      return visitFunctionType(T);
    }
 
    sema::ResolvedTemplateArg
@@ -138,41 +134,9 @@ public:
       return sema::ResolvedTemplateArg(Arg.getParam(), Ty, Arg.getLoc());
    }
 
-   QualType visitRecordType(RecordType *T)
-   {
-      auto  R = T->getRecord();
-      if (R->isInstantiation()) {
-         auto &TemplateArgs = T->getTemplateArgs();
-         llvm::SmallVector<sema::ResolvedTemplateArg, 0> Args;
-
-         bool Dependent = false;
-         for (auto &Arg : TemplateArgs) {
-            auto Copy = VisitTemplateArg(Arg);
-            Dependent |= Copy.isStillDependent();
-
-            Args.emplace_back(move(Copy));
-         }
-
-         auto FinalList = sema::FinalTemplateArgumentList::Create(
-            SP.getContext(), Args, !Dependent);
-
-         if (Dependent)
-            return Ctx.getDependentRecordType(R, FinalList);
-
-         auto Inst = SP.getInstantiator().InstantiateRecord(
-            SOD, R->getSpecializedTemplate(), FinalList);
-         if (Inst)
-            return Ctx.getRecordType(Inst.getValue());
-
-      }
-
-      return T;
-   }
-
-   QualType visitDependentRecordType(DependentRecordType *T)
-   {
-      auto &TemplateArgs = T->getTemplateArgs();
-      llvm::SmallVector<sema::ResolvedTemplateArg, 0> Args;
+   QualType visitRecordTypeCommon(QualType T, ast::RecordDecl *R,
+                          const sema::FinalTemplateArgumentList &TemplateArgs) {
+      SmallVector<sema::ResolvedTemplateArg, 0> Args;
 
       bool Dependent = false;
       for (auto &Arg : TemplateArgs) {
@@ -182,20 +146,35 @@ public:
          Args.emplace_back(move(Copy));
       }
 
-      auto FinalList = sema::FinalTemplateArgumentList::Create(SP.getContext(),
-                                                               Args,
-                                                               !Dependent);
+      auto FinalList = sema::FinalTemplateArgumentList::Create(
+         SP.getContext(), Args, !Dependent);
 
       if (Dependent)
-         return Ctx.getDependentRecordType(T->getRecord(), FinalList);
+         return Ctx.getDependentRecordType(R, FinalList);
 
-      auto Inst = SP.getInstantiator().InstantiateRecord(SOD, T->getRecord(),
+      auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
+      auto Inst = SP.getInstantiator().InstantiateRecord(SOD, Template,
                                                          FinalList);
 
       if (Inst)
          return Ctx.getRecordType(Inst.getValue());
 
-      return Ctx.getDependentRecordType(T->getRecord(), FinalList);
+      return T;
+   }
+
+   QualType visitRecordType(RecordType *T)
+   {
+      auto  R = T->getRecord();
+      if (R->isInstantiation()) {
+         return visitRecordTypeCommon(T, R, R->getTemplateArgs());
+      }
+
+      return T;
+   }
+
+   QualType visitDependentRecordType(DependentRecordType *T)
+   {
+      return visitRecordTypeCommon(T, T->getRecord(), T->getTemplateArgs());
    }
 
    QualType visitGenericType(GenericType *T)

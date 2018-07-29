@@ -203,9 +203,17 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
    }
 
    if (funcName == "select") {
-      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
+      unsigned val;
+      if (Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer) {
+         val = (unsigned) Engine.OtherArgs[idx];
+      }
+      else if (Engine.ArgKinds[idx] == DiagnosticsEngine::ak_string) {
+         val = (unsigned)!Engine.StringArgs[idx].empty();
+      }
+      else {
+         llvm_unreachable("bad arg kind");
+      }
 
-      auto val = Engine.OtherArgs[idx];
       assert(args.size() > val && "too few options for index");
 
       auto &str = args[val];
@@ -254,9 +262,20 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
       assert(args.size() == 1 && "if expects 1 arg");
       assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
 
-      auto val = Engine.OtherArgs[idx];
-      if (val) {
-         msg += prepareMessage(args.front());
+      if (Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer) {
+         auto val = Engine.OtherArgs[idx];
+         if (val) {
+            msg += prepareMessage(args.front());
+         }
+      }
+      else if (Engine.ArgKinds[idx] == DiagnosticsEngine::ak_string) {
+         auto val = Engine.StringArgs[idx];
+         if (!val.empty()) {
+            msg += prepareMessage(args.front());
+         }
+      }
+      else {
+         llvm_unreachable("bad arg kind");
       }
    }
 }

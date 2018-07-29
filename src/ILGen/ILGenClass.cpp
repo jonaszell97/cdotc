@@ -148,10 +148,6 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S)
                      .getAllocSizeOfType(SP.getContext().getRecordType(S));
 
    assert(TypeSize && "uncalculated record size");
-   auto size = Builder.GetConstantInt(SP.getContext().getIntTy(),
-                                      TypeSize);
-
-   Builder.CreateIntrinsicCall(Intrinsic::lifetime_begin, { Self, size });
 
    if (auto C = dyn_cast<ClassDecl>(S)) {
       auto strongRefcnt = Builder.GetStrongRefcount(Self);
@@ -289,10 +285,6 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M)
          Builder.SetInsertPoint(MergeBB);
       }
 
-      auto size = Builder.GetConstantInt(SP.getContext().getIntTy(),
-                                         R->getSize());
-
-      Builder.CreateIntrinsicCall(Intrinsic::lifetime_end, { Self, size });
       Builder.CreateRetVoid();
    }
 
@@ -522,11 +514,15 @@ void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
       auto Getter = getFunc(Acc->getGetterMethod());
       if (Getter->isDeclared()) {
          Getter->addDefinition();
+         Getter->setVerified(true);
+         Getter->setCanonicalized(true);
 
          Builder.SetInsertPoint(Getter->getEntryBlock());
          CleanupRAII CR(*this);
 
          il::Value *Self = &*Getter->getEntryBlock()->arg_begin();
+         Getter->setSelf(Self);
+
          if (Self->isLvalue())
             Self = Builder.CreateLoad(Self);
 
@@ -548,11 +544,15 @@ void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
       auto Setter = getFunc(Acc->getSetterMethod());
       if (Setter->isDeclared()) {
          Setter->addDefinition();
+         Setter->setVerified(true);
+         Setter->setCanonicalized(true);
 
          Builder.SetInsertPoint(Setter->getEntryBlock());
          CleanupRAII CR(*this);
 
          il::Value *Self = &*Setter->getEntryBlock()->arg_begin();
+         Setter->setSelf(Self);
+
          if (Self->isLvalue())
             Self = Builder.CreateLoad(Self);
 
@@ -653,6 +653,8 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
       return;
 
    Fn->addDefinition();
+   Fn->setVerified(true);
+   Fn->setCanonicalized(true);
 
    auto EntryBB = Fn->getEntryBlock();
    InsertPointRAII insertPointRAII(*this, EntryBB);
@@ -666,6 +668,8 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
    auto arg_it = EntryBB->arg_begin();
 
    il::Value *Self = &*arg_it++;
+   Fn->setSelf(Self);
+
    if (Self->isLvalue())
       Self = Builder.CreateLoad(Self);
 
@@ -722,12 +726,17 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
       return;
 
    InsertPointRAII insertPointRAII(*this);
+
    fun->addDefinition();
+   fun->setVerified(true);
+   fun->setCanonicalized(true);
 
    CleanupRAII CR(*this);
 
    auto Self = fun->getEntryBlock()->getBlockArg(0);
    auto Other = fun->getEntryBlock()->getBlockArg(1);
+
+   fun->setSelf(Self);
 
    il::Value *res;
    Builder.SetInsertPoint(fun->getEntryBlock());
@@ -798,11 +807,15 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R)
       return;
 
    InsertPointRAII insertPointRAII(*this);
+
    fun->addDefinition();
+   fun->setVerified(true);
+   fun->setCanonicalized(true);
 
    CleanupRAII CR(*this);
 
    auto Self = fun->getEntryBlock()->getBlockArg(0);
+   fun->setSelf(Self);
 
    il::Value *Res;
    Builder.SetInsertPoint(fun->getEntryBlock());
@@ -828,7 +841,7 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R)
          auto Src = Builder.CreateStructGEP(Self, i);
 
          auto Cpy = CreateCopy(Builder.CreateLoad(Src));
-         CreateStore(Cpy, Dst);
+         Builder.CreateInit(Cpy, Dst);
       }
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
@@ -877,8 +890,6 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R)
    auto Ret = Builder.CreateRet(Res);
    if (CanUseSRet)
       Ret->setCanUseSRetValue();
-
-   MandatoryPassManager.runPassesOnFunction(*fun);
 }
 
 void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
@@ -888,7 +899,11 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
       return;
 
    InsertPointRAII insertPointRAII(*this);
+
    fun->addDefinition();
+   fun->setVerified(true);
+   fun->setCanonicalized(true);
+
    Builder.SetInsertPoint(fun->getEntryBlock(), false);
 
    CleanupRAII CR(*this);
@@ -898,6 +913,8 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
    }
 
    auto Self = fun->getEntryBlock()->getBlockArg(0);
+   fun->setSelf(Self);
+
    auto PlusEquals = getFunc(SP.getStringPlusEqualsString());
 
    if (auto StructTy = dyn_cast<StructDecl>(R)) {
@@ -976,6 +993,25 @@ il::GlobalVariable* ILGenPass::GetTypeInfo(QualType ty)
       return GV;
    }
 
+   return nullptr;
+}
+
+void ILGenPass::SetTypeInfo(QualType Ty, il::GlobalVariable *GV)
+{
+   TypeInfoMap[Ty] = GV;
+}
+
+il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
+{
+   auto it = TypeInfoMap.find(ty);
+   if (it != TypeInfoMap.end()) {
+      auto *GV = it->getSecond();
+      if (auto M = Builder.getModule())
+         return GV->getDeclarationIn(M);
+
+      return GV;
+   }
+
    il::Module *Mod;
    SourceLocation Loc;
 
@@ -1017,12 +1053,12 @@ il::TypeInfo *ILGenPass::CreateTypeInfo(QualType ty)
 
    if (auto Obj = ty->asRecordType()) {
       auto R = Obj->getRecord();
-      if (R->isExternal() || R->isInvalid())
+      if (R->isImportedFromModule() || R->isInvalid())
          return nullptr;
 
       if (auto C = dyn_cast<ClassDecl>(R)) {
          if (auto P = C->getParentClass()) {
-            auto TI = GetTypeInfo(SP.getContext().getRecordType(P));
+            auto TI = GetOrCreateTypeInfo(SP.getContext().getRecordType(P));
             Data[MetaType::BaseClass] = ConstantExpr::getAddrOf(TI);
          }
          if (auto VT = getModule()->getVTable(C)) {
@@ -1052,7 +1088,7 @@ il::TypeInfo *ILGenPass::CreateTypeInfo(QualType ty)
       if (auto Any = SP.getAnyDecl()) {
          QualType AnyTy = SP.getContext().getRecordType(Any);
          if (AnyTy != ty) {
-            auto AnyTI = GetTypeInfo(AnyTy);
+            auto AnyTI = GetOrCreateTypeInfo(AnyTy);
             auto BC = ConstantExpr::getBitCast(AnyTI, Int8PtrTy);
 
             Conformances.push_back(BC);
@@ -1061,7 +1097,8 @@ il::TypeInfo *ILGenPass::CreateTypeInfo(QualType ty)
 
       for (const auto &Conf : SP.getContext().getConformanceTable()
                                 .getAllConformances(R)) {
-         auto TI = GetTypeInfo(SP.getContext().getRecordType(Conf->getProto()));
+         auto TI = GetOrCreateTypeInfo(
+            SP.getContext().getRecordType(Conf->getProto()));
          auto BC = ConstantExpr::getBitCast(TI, Int8PtrTy);
 
          Conformances.push_back(BC);

@@ -1,0 +1,27 @@
+
+struct Test {
+    init {}
+
+    def method() {}
+    static def staticMethod() {}
+}
+
+def free(_ t: Test) {}
+def Free(_ t: MetaType<Test>) {}
+
+var t = Test()
+
+t.method()
+method(t)
+
+Test.staticMethod()
+staticMethod(Test)
+
+t.staticMethod()
+staticMethod(t)
+
+free(t)
+t.free()
+
+Free(Test)
+Test.Free()

@@ -29,12 +29,33 @@ using namespace cdot::serial;
 using namespace cdot::support;
 using namespace cdot::serial::reader;
 
-ModuleReader::ModuleReader(cdot::CompilationUnit &CI,
+ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
                            SourceRange ImportLoc,
                            SourceLocation DiagLoc,
                            llvm::BitstreamCursor Cursor)
    : CI(CI), ImportLoc(ImportLoc), DiagLoc(DiagLoc), Mod(nullptr),
      ASTReader(*this),
+     ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
+     Stream(Cursor)
+{
+
+}
+
+ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
+                           llvm::BitstreamCursor Cursor)
+   : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr),
+     ASTReader(*this),
+     ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
+     Stream(Cursor)
+{
+
+}
+
+ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
+                           llvm::BitstreamCursor Cursor,
+                           ModuleReader &MainReader)
+   : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr),
+     ASTReader(*this, MainReader.ASTReader),
      ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
      Stream(Cursor)
 {
@@ -185,7 +206,7 @@ ModuleReader::ReadOptionsBlock()
    }
 }
 
-ReadResult ModuleReader::ReadControlBlock()
+ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
 {
    ReadResult Result = Success;
 
@@ -207,7 +228,7 @@ ReadResult ModuleReader::ReadControlBlock()
       case llvm::BitstreamEntry::SubBlock:
          switch (Entry.ID) {
          case MODULE_BLOCK_ID:
-            Mod = ReadModuleBlock();
+            Mod = ReadModuleBlock(Stream);
             continue;
          default:
             if (Stream.SkipBlock()) {
@@ -224,8 +245,8 @@ ReadResult ModuleReader::ReadControlBlock()
    }
 }
 
-Module* ModuleReader::ReadModuleBlock(Module *ParentModule)
-{
+Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
+                                      Module *ParentModule) {
    if (ReadBlockAbbrevs(Stream, MODULE_BLOCK_ID)) {
       Error("malformed block record in AST file");
       return nullptr;
@@ -246,7 +267,7 @@ Module* ModuleReader::ReadModuleBlock(Module *ParentModule)
       case llvm::BitstreamEntry::SubBlock:
          switch (Entry.ID) {
          case MODULE_BLOCK_ID: {
-            ReadModuleBlock(Mod);
+            ReadModuleBlock(Stream, Mod);
             continue;
          }
          default:
@@ -272,15 +293,30 @@ Module* ModuleReader::ReadModuleBlock(Module *ParentModule)
          auto *II = &CI.getContext().getIdentifiers().get(Record.readString());
 
          if (ParentModule) {
-            Mod = CI.getModuleMgr().CreateModule(ImportLoc, II, ParentModule);
+            if (auto *SubMod = ParentModule->getSubModule(II)) {
+               Mod = SubMod;
+            }
+            else {
+               Mod = CI.getModuleMgr().CreateSubModule(ImportLoc, II,
+                                                       ParentModule, false);
+            }
          }
          else {
-            Mod = CI.getModuleMgr().CreateModule(ImportLoc, II);
+            auto *MainMod = CI.getModuleMgr().getMainModule();
+            if (MainMod && MainMod->getName() == II) {
+               Mod = MainMod;
+            }
+            else {
+               Mod = CI.getModuleMgr().CreateModule(ImportLoc, II, false);
+               if (!MainMod) {
+                  CI.getModuleMgr().setMainModule(Mod);
+               }
+            }
+
+            ILReader.ILMod = Mod->getILModule();
          }
 
          Modules[ID] = Mod;
-         ILReader.ILMod = Mod->getILModule();
-
          break;
       }
       case MODULE_DIRECTORY: {
@@ -333,7 +369,7 @@ Module* ModuleReader::ReadModuleBlock(Module *ParentModule)
                // calculate the offset we need to add / subtract to get to
                // the correct location.
                int NewOffset = NewFile.BaseOffset - BaseOffset;
-               SourceIDSubstitutions[SourceID] = NewOffset;
+               SourceIDSubstitutionOffsets[SourceID] = NewOffset;
             }
          }
 
@@ -342,6 +378,85 @@ Module* ModuleReader::ReadModuleBlock(Module *ParentModule)
       case MODULE_DECL: {
          auto ID = Record.readDeclID();
          ModuleDeclMap[Mod] = ID;
+
+         break;
+      }
+      default:
+         break;
+      }
+   }
+}
+
+ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
+{
+   if (ReadBlockAbbrevs(Stream, FILE_MANAGER_BLOCK_ID)) {
+      Error("malformed block record in AST file");
+      return Failure;
+   }
+
+   auto &FileMgr = CI.getFileMgr();
+
+   // Read all of the records and blocks in the control block.
+   while (true) {
+      llvm::BitstreamEntry Entry = Stream.advance();
+
+      switch (Entry.Kind) {
+      case llvm::BitstreamEntry::Error:
+         Error("malformed block record in AST file");
+         return Failure;
+      case llvm::BitstreamEntry::EndBlock:
+         return Success;
+      case llvm::BitstreamEntry::SubBlock:
+         if (Stream.SkipBlock()) {
+            Error("malformed block record in AST file");
+            return Failure;
+         }
+
+         continue;
+      case llvm::BitstreamEntry::Record:
+         // The interesting case.
+         break;
+      }
+
+      ASTRecordReader Record(this->ASTReader);
+      auto Kind = Record.readRecord(Stream, Entry.ID);
+
+      switch ((FileManagerRecordTypes)Kind) {
+      case SOURCE_FILES: {
+         auto NumFiles = Record.readInt();
+         while (NumFiles--) {
+            auto FileName = Record.readString();
+            auto SourceID = (unsigned) Record.readInt();
+            auto BaseOffset = (unsigned) Record.readInt();
+
+            auto OpenFile = FileMgr.openFile(FileName);
+            SourceIDSubstitutionOffsets[SourceID]
+               = OpenFile.BaseOffset - BaseOffset;
+         }
+
+         break;
+      }
+      case MACRO_EXPANSIONS: {
+         auto &Idents = CI.getContext().getIdentifiers();
+         auto &DeclNames = CI.getContext().getDeclNameTable();
+
+         auto NumExpansions = Record.readInt();
+         while (NumExpansions--) {
+            auto ID = (unsigned)Record.readInt();
+            auto Offset = (unsigned)Record.readInt();
+            auto Length = (unsigned)Record.readInt();
+            auto ExpansionLoc = Record.readSourceLocation();
+            auto PatternLoc = Record.readSourceLocation();
+            auto MacroName = Record.readString();
+
+            auto &II = Idents.get(MacroName);
+            auto Loc = FileMgr.createMacroExpansion(ExpansionLoc, PatternLoc,
+                                                    Length,
+                                                    DeclNames.getMacroName(II));
+
+            SourceIDSubstitutions[ID] = Loc.SourceID;
+            SourceIDSubstitutionOffsets[ID] = Loc.BaseOffset - Offset;
+         }
 
          break;
       }
@@ -389,7 +504,7 @@ ReadResult ModuleReader::ReadCacheControlBlock()
       case CACHE_FILE: {
          // calculate the offset we need to add / subtract to get to
          // the correct location.
-         SourceIDSubstitutions[SourceID] = static_cast<unsigned>(Record[0]);
+         SourceIDSubstitutionOffsets[SourceID] = static_cast<unsigned>(Record[0]);
          break;
       }
       case IMPORTS: {
@@ -414,6 +529,48 @@ bool ModuleReader::ParseLanguageOptions(const RecordData &Record, bool Complain,
 bool ModuleReader::ParseTargetOptions(const RecordData &Record, bool Complain,
                                       bool AllowCompatibleDifferences) {
    return false;
+}
+
+ReadResult ModuleReader::ReadOffsetRangeBlock(llvm::BitstreamCursor &Stream,
+                                              IncrementalCompilationManager &Mgr,
+                                              StringRef FileName) {
+   ReadResult Result = Success;
+
+   if (ReadBlockAbbrevs(Stream, OFFSET_RANGE_BLOCK_ID)) {
+      Error("malformed block record in AST file");
+      return Failure;
+   }
+
+   // Read all of the records and blocks in the control block.
+   while (true) {
+      llvm::BitstreamEntry Entry = Stream.advance();
+
+      switch (Entry.Kind) {
+      case llvm::BitstreamEntry::Error:
+         Error("malformed block record in AST file");
+         return Failure;
+      case llvm::BitstreamEntry::EndBlock:
+         return Result;
+      case llvm::BitstreamEntry::SubBlock:
+         if (Stream.SkipBlock()) {
+            Error("malformed block record in AST file");
+            return Failure;
+         }
+
+         continue;
+      case llvm::BitstreamEntry::Record:
+         // The interesting case.
+         break;
+      }
+
+      ASTRecordReader Record(this->ASTReader);
+      auto Kind = Record.readRecord(Stream, Entry.ID);
+
+      switch ((OffsetRangeRecordTypes)Kind) {
+      default:
+         break;
+      }
+   }
 }
 
 IdentifierInfo* ModuleReader::get(llvm::StringRef Name)
@@ -459,7 +616,7 @@ IdentifierInfo* ModuleReader::DecodeIdentifierInfo(unsigned ID)
    return IdentifiersLoaded[ID];
 }
 
-ReadResult ModuleReader::ReadIdentifierBlock()
+ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
 {
    if (Stream.EnterSubBlock(IDENTIFIER_BLOCK_ID)) {
       Error("malformed block record in module file");
@@ -532,7 +689,7 @@ ReadResult ModuleReader::ReadIdentifierBlock()
    }
 }
 
-ReadResult ModuleReader::ReadDeclsTypesValuesBlock()
+ReadResult ModuleReader::ReadDeclsTypesValuesBlock(llvm::BitstreamCursor &Stream)
 {
    ASTReader.DeclsCursor = Stream;
 
@@ -546,8 +703,7 @@ ReadResult ModuleReader::ReadDeclsTypesValuesBlock()
    return Success;
 }
 
-CDOT_NO_SANITIZE(address)
-ReadResult ModuleReader::ReadOffsetsBlock()
+ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
 {
    if (ReadBlockAbbrevs(Stream, OFFSET_BLOCK_ID)) {
       Error("malformed block record in module file");
@@ -717,6 +873,18 @@ void ModuleReader::LoadModuleImports()
    SourceLocation Loc = Mod->getSourceLoc();
    SourceRange SR = Mod->getSourceRange();
 
+   auto MainModuleDeclID = ModuleDeclMap[Mod];
+   Mod->setDecl(cast<ModuleDecl>(ASTReader.GetDecl(MainModuleDeclID)));
+
+   for (auto &ModPair : ModuleDeclMap) {
+      if (ModPair.getFirst() == Mod)
+         continue;
+
+      auto *D = cast_or_null<ModuleDecl>(ASTReader.GetDecl(ModPair.getSecond()));
+      if (D)
+         ModPair.getFirst()->setDecl(D->getPrimaryModule());
+   }
+
    for (auto IdentID : ImportedModuleIdents) {
       auto *II = getLocalIdentifier(IdentID);
       assert(II != Mod->getName());
@@ -727,10 +895,23 @@ void ModuleReader::LoadModuleImports()
 
       Mod->addImport(Import);
    }
+}
 
-   for (auto &ModPair : ModuleDeclMap) {
-      ModPair.getFirst()->setDecl(
-         cast_or_null<ModuleDecl>(ASTReader.GetDecl(ModPair.getSecond())));
+void ModuleReader::LoadModuleImports(StringRef FileName)
+{
+   auto &Mgr = CI.getModuleMgr();
+   SourceLocation Loc = Mod->getSourceLoc();
+   SourceRange SR = Mod->getSourceRange();
+
+   for (auto IdentID : ImportedModuleIdents) {
+      auto *II = getLocalIdentifier(IdentID);
+      assert(II != Mod->getName());
+
+      auto *Import = Mgr.LookupModule(SR, Loc, II);
+      if (!Import)
+         continue;
+
+      Mod->addImport(Import);
    }
 }
 
@@ -790,19 +971,15 @@ Module *ModuleReader::ReadModule()
       return nullptr;
    }
 
-   serial::ModuleFile *ModFile = nullptr;
-
    while (true) {
       if (Stream.AtEndOfStream()) {
          LoadModuleImports();
 
-         auto *ModDecl = Mod->getDecl();
-         ModDecl->setModFile(ModFile);
-
-         ASTReader.ReadOperatorPrecedenceGroups();
+         auto *ModFile = Mod->getDecl()->getModFile();
          ModFile->setInstantiationTable(ASTReader.InstantiationTable);
 
-         ILReader.ReadILModule();
+         ASTReader.ReadOperatorPrecedenceGroups();
+         ILReader.ReadILModule(ILReader.Stream);
 
          if (CI.getOptions().printStats())
             printStatistics();
@@ -824,8 +1001,15 @@ Module *ModuleReader::ReadModule()
 
       switch ((BlockIDs)Entry.ID) {
       case CONTROL_BLOCK_ID: {
-         auto ControlRes = ReadControlBlock();
+         auto ControlRes = ReadControlBlock(Stream);
          if (ControlRes != Success)
+            return nullptr;
+
+         break;
+      }
+      case FILE_MANAGER_BLOCK_ID: {
+         auto FileMgrRes = ReadFileManagerBlock(Stream);
+         if (FileMgrRes != Success)
             return nullptr;
 
          break;
@@ -835,18 +1019,17 @@ Module *ModuleReader::ReadModule()
          if (ASTRes != Success)
             return nullptr;
 
-         ModFile = new(CI.getContext()) ModuleFile(*this, ModTbl);
          break;
       }
       case IDENTIFIER_BLOCK_ID: {
-         auto IdentRes = ReadIdentifierBlock();
+         auto IdentRes = ReadIdentifierBlock(Stream);
          if (IdentRes != Success)
             return nullptr;
 
          break;
       }
       case DECL_TYPES_BLOCK_ID: {
-         auto Res = ReadDeclsTypesValuesBlock();
+         auto Res = ReadDeclsTypesValuesBlock(Stream);
          if (Res != Success)
             return nullptr;
 
@@ -862,7 +1045,7 @@ Module *ModuleReader::ReadModule()
          break;
       }
       case OFFSET_BLOCK_ID: {
-         auto Res = ReadOffsetsBlock();
+         auto Res = ReadOffsetsBlock(Stream);
          if (Res != Success)
             return nullptr;
 
@@ -893,131 +1076,16 @@ Module *ModuleReader::ReadModule()
    }
 }
 
-static bool startsWithCacheFileMagic(llvm::BitstreamCursor &Stream)
-{
-   return Stream.canSkipToPos(4) &&
-          Stream.Read(8) == 'C' &&
-          Stream.Read(8) == 'I' &&
-          Stream.Read(8) == 'N' &&
-          Stream.Read(8) == 'C';
-}
-
-ReadResult ModuleReader::ReadCacheFile(IncrementalCompilationManager &Mgr,
-                                       Module *Mod, unsigned SourceID,
-                                       StringRef FileName) {
-   ModuleReaderStackTraceEntry MRST(FileName);
-
-   this->IncMgr = &Mgr;
-   this->Mod = Mod;
-   this->SourceID = SourceID;
-   StartTime = getCurrentTimeMillis();
-
-   if (!startsWithCacheFileMagic(Stream)) {
-      Error("unexpected cache file format");
-      return Failure;
-   }
-
-   while (true) {
-      if (Stream.AtEndOfStream()) {
-         return Success;
-      }
-
-      llvm::BitstreamEntry Entry = Stream.advance();
-      switch (Entry.Kind) {
-      case llvm::BitstreamEntry::Error:
-      case llvm::BitstreamEntry::Record:
-      case llvm::BitstreamEntry::EndBlock:
-         Error("invalid record at top-level of AST file");
-         return Failure;
-
-      case llvm::BitstreamEntry::SubBlock:
-         break;
-      }
-
-      switch (Entry.ID) {
-      case CONTROL_BLOCK_ID: {
-         auto ControlRes = ReadCacheControlBlock();
-         if (ControlRes != Success)
-            return ControlRes;
-
-         break;
-      }
-      case AST_BLOCK_ID: {
-         auto ASTRes = this->ASTReader.ReadASTBlock(Stream);
-         if (ASTRes != Success)
-            return ASTRes;
-
-         break;
-      }
-      case IDENTIFIER_BLOCK_ID: {
-         auto IdentRes = ReadIdentifierBlock();
-         if (IdentRes != Success)
-            return IdentRes;
-
-         break;
-      }
-      case DECL_TYPES_BLOCK_ID: {
-         auto Res = ReadDeclsTypesValuesBlock();
-         if (Res != Success)
-            return Res;
-
-         break;
-      }
-      case OFFSET_BLOCK_ID: {
-         auto Res = ReadOffsetsBlock();
-         if (Res != Success)
-            return Res;
-
-         break;
-      }
-      case CONFORMANCE_BLOCK_ID: {
-         auto Res = ASTReader.ReadConformanceBlock(Stream);
-         if (Res != Success)
-            return Res;
-
-         break;
-      }
-      case IL_MODULE_BLOCK_ID: {
-         ILReader.Stream = Stream;
-         if (Stream.SkipBlock()) {
-            Error("malformed block record in module file");
-            return Failure;
-         }
-
-         TmpMod = std::make_unique<il::Module>(CI.getILCtx());
-         ILReader.setModule(TmpMod.get());
-//         ILReader.setModule(Mod->getILModule());
-
-         break;
-      }
-      default:
-         if (Stream.SkipBlock()) {
-            Error("malformed block record in module file");
-            return Failure;
-         }
-
-         break;
-      }
-   }
-}
-
 void ModuleReader::FinalizeCacheFile(IncrementalCompilationManager &Mgr,
                                      Module *Mod,
                                      StringRef FileName) {
    this->IncMgr = &Mgr;
    this->Mod = Mod;
 
-   LoadModuleImports();
-
-   auto *ModDecl = cast<ModuleDecl>(ASTReader.GetDecl(ASTReader.MainModuleID));
-   Mod->setDecl(ModDecl);
-   ModDecl->setModFile(new(CI.getContext()) ModuleFile(*this, ModTbl));
-
-   ASTReader.ReadOperatorPrecedenceGroups();
-   ASTReader.ReadDeclsEager();
+   LoadModuleImports(FileName);
+   ASTReader.finalizeUnfinishedDecls();
 
    ILReader.ReadILModuleEager();
-   Mod->getILModule()->linkInModule(move(TmpMod));
 
    if (CI.getOptions().printStats())
       printStatistics();

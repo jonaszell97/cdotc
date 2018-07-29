@@ -64,10 +64,13 @@ public:
    op_const_iterator op_end() const;
 
    op_iterator op_begin_impl() { return nullptr; }
-   op_iterator op_end_impl()  { return nullptr; }
+   op_iterator op_end_impl()  { return op_begin() + getNumOperands(); }
 
-   op_const_iterator op_begin_impl() const  { return nullptr; }
-   op_const_iterator op_end_impl() const  { return nullptr; }
+   op_const_iterator op_begin_impl() const { return nullptr; }
+   op_const_iterator op_end_impl() const
+   {
+      return op_begin() + getNumOperands();
+   }
 
    iterator_range getOperands()
    {

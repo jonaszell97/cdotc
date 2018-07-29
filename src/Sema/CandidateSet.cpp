@@ -65,6 +65,26 @@ unsigned CandidateSet::Candidate::getNumConstraints() const
    return (unsigned)Func->getConstraints().size();
 }
 
+CandidateSet::Candidate*
+CandidateSet::addCandidate(ast::CallableDecl *CD, unsigned Distance)
+{
+   if (!CandidateFns.insert(CD).second)
+      return nullptr;
+
+   Candidates.emplace_back(CD, Distance);
+   return &Candidates.back();
+}
+
+CandidateSet::Candidate*
+CandidateSet::addCandidate(ast::AliasDecl *Alias, unsigned Distance)
+{
+   if (!CandidateFns.insert(Alias).second)
+      return nullptr;
+
+   Candidates.emplace_back(Alias, Distance);
+   return &Candidates.back();
+}
+
 static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
                                    Expression *Expr) {
    llvm::raw_svector_ostream sstream(Str);
@@ -111,11 +131,20 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
 
       // variadic template arguments might create more arguments
       if (ArgDecls.size() > idx) {
-         return ArgDecls[idx]->getSourceLoc();
+         auto *D = ArgDecls[idx];
+         if (D->getType().getTypeExpr())
+            return D->getType().getTypeExpr()->getSourceLoc();
+
+         return D->getSourceLoc();
       }
 
-      if (!ArgDecls.empty())
-         return ArgDecls.back()->getSourceLoc();
+      if (!ArgDecls.empty()) {
+         auto *D = ArgDecls.back();
+         if (D->getType().getTypeExpr())
+            return D->getType().getTypeExpr()->getSourceLoc();
+
+         return D->getSourceLoc();
+      }
 
       return Cand.getSourceLoc();
    }
@@ -147,7 +176,7 @@ static QualType getArgumentType(CandidateSet::Candidate &Cand)
 }
 
 static QualType getArgumentType(CandidateSet::Candidate &Cand,
-                                llvm::ArrayRef<ast::Expression*> args) {
+                                ArrayRef<Expression*> args) {
    unsigned idx = Cand.Data1;
    if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
       ++idx;
@@ -313,6 +342,16 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       if (IgnoreBuiltinCandidates && Cand.isBuiltinCandidate())
          continue;
 
+      bool IncludesSelf = false;
+      if (!Cand.isBuiltinCandidate()) {
+         if (auto *I = dyn_cast<InitDecl>(Cand.Func)) {
+            IncludesSelf = I->isBaseInitializer();
+         }
+         else if (isa<MethodDecl>(Cand.Func)) {
+            IncludesSelf = true;
+         }
+      }
+
       switch (Cand.FR) {
       case None: llvm_unreachable("found a matching call!");
       case IsInvalid:
@@ -323,40 +362,48 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          break;
       case TooFewArguments: {
          auto &TemplateArgs = Cand.InnerTemplateArgs;
+
+         auto GivenArgAmt = Cand.Data1;
+         auto NeededArgAmt = Cand.Data2;
+
          if (TemplateArgs.isInferred()) {
             SP.diagnose(Caller, note_too_few_arguments_inferred,
-                        Cand.Data2, Cand.Data1,
+                        NeededArgAmt, GivenArgAmt,
                         TemplateArgs.toString('\0', '\0', true),
                         Cand.getSourceLoc());
          }
          else if (Cand.isBuiltinCandidate()) {
             SP.diagnose(Caller, note_too_few_arguments,
-                        Cand.Data2, Cand.Data1, Cand.getSourceLoc(),
+                        NeededArgAmt, GivenArgAmt, Cand.getSourceLoc(),
                         true, makeFakeSourceLoc(*this, funcName, Cand));
          }
          else {
-            SP.diagnose(Caller, note_too_few_arguments, Cand.Data2,
-                        Cand.Data1, Cand.getSourceLoc(), false);
+            SP.diagnose(Caller, note_too_few_arguments, NeededArgAmt,
+                        GivenArgAmt, Cand.getSourceLoc(), false);
          }
 
          break;
       }
       case TooManyArguments: {
          auto &TemplateArgs = Cand.InnerTemplateArgs;
+
+         auto GivenArgAmt = Cand.Data1;
+         auto NeededArgAmt = Cand.Data2;
+
          if (TemplateArgs.isInferred()) {
             SP.diagnose(Caller, note_too_many_arguments_inferred,
-                        Cand.Data2, Cand.Data1,
+                        NeededArgAmt, GivenArgAmt,
                         TemplateArgs.toString('\0', '\0', true),
                         Cand.getSourceLoc());
          }
          else if (Cand.isBuiltinCandidate()) {
-            SP.diagnose(Caller, note_too_many_arguments, Cand.Data2,
-                        Cand.Data1, Cand.getSourceLoc(),
+            SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
+                        GivenArgAmt, Cand.getSourceLoc(),
                         true, makeFakeSourceLoc(*this, funcName, Cand));
          }
          else {
-            SP.diagnose(Caller, note_too_many_arguments, Cand.Data2,
-                        Cand.Data1, Cand.getSourceLoc(), false);
+            SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
+                        GivenArgAmt, Cand.getSourceLoc(), false);
          }
 
          break;
@@ -370,23 +417,48 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          SourceLocation loc = getArgumentLoc(Cand, args);
 
          auto &TemplateArgs = Cand.InnerTemplateArgs;
+         neededTy = SP.resolveDependencies(neededTy, TemplateArgs, Caller);
+
+         auto ArgNo = Cand.Data1 + 1;
+         if (IncludesSelf)
+            --ArgNo;
+
          if (TemplateArgs.isInferred()) {
             SP.diagnose(Caller, note_cand_no_implicit_conv_inferred,
                         diag::opt::show_constness,
-                        givenTy, neededTy, Cand.Data1 + 1,
+                        givenTy, neededTy, ArgNo,
                         TemplateArgs.toString('\0', '\0', true), loc);
          }
          else if (Cand.isBuiltinCandidate()) {
             SP.diagnose(Caller, note_cand_no_implicit_conv,
                         diag::opt::show_constness, givenTy,
-                        neededTy, Cand.Data1 + 1, true,
+                        neededTy, ArgNo, true,
                         makeFakeSourceLoc(*this, funcName, Cand));
          }
          else {
             SP.diagnose(Caller, note_cand_no_implicit_conv,
                         diag::opt::show_constness, givenTy, neededTy,
-                        Cand.Data1 + 1, false, loc);
+                        ArgNo, false, loc);
          }
+
+         break;
+      }
+      case IncompatibleLabel: {
+         auto ArgIdx = Cand.Data1;
+         auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
+
+         SourceLocation loc = getArgumentLoc(Cand, args);
+         auto ArgNo = ArgIdx + 1;
+         if (IncludesSelf)
+            --ArgNo;
+
+         IdentifierInfo *NeededLabel = nullptr;
+         if (!Cand.isBuiltinCandidate() && ArgIdx < Cand.Func->getArgs().size()){
+            NeededLabel = Cand.Func->getArgs()[ArgIdx]->getLabel();
+         }
+
+         SP.diagnose(Caller, note_cand_label, NeededLabel, ArgNo,
+                     GivenLabel, loc);
 
          break;
       }
@@ -404,15 +476,23 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
             IsMutable = true;
          }
 
+         auto ArgNo = Cand.Data1 + 1;
+         if (IncludesSelf)
+            --ArgNo;
+
          SP.diagnose(Caller, note_candidate_requires_ref, IsMutable, IsPointer,
-                     Cand.Data1 + 1, loc);
+                     ArgNo, loc);
 
          break;
       }
       case CouldNotInferArgumentType: {
          SourceLocation loc = getArgumentLoc(Cand, args);
+         auto ArgNo = Cand.Data1 + 1;
+         if (IncludesSelf)
+            --ArgNo;
+
          SP.diagnose(Caller, note_candidate_requires_context,
-                     Cand.Data1 + 1, loc);
+                     ArgNo, loc);
 
          break;
       }
@@ -593,6 +673,16 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
       break;
    }
+   case IncompatibleLabel: {
+      auto ArgIdx = Cand.Data1;
+      auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
+
+      IdentifierInfo *NeededLabel = nullptr;
+      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgIdx + 1,
+                  GivenLabel, args[ArgIdx]->getSourceRange());
+
+      break;
+   }
    case IncompatibleArgument: {
       auto idx = Cand.Data1;
       auto givenTy = args[idx]->getExprType();
@@ -682,6 +772,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       case MutatingOnRValueSelf:
       case CouldNotInferArgumentType:
       case ArgumentRequiresRef:
+      case IncompatibleLabel:
          llvm_unreachable("should be impossible on alias candidate set!");
       case FailedConstraint: {
          llvm::SmallString<128> Str;

@@ -77,13 +77,16 @@ public:
       DF_Abstract            = DF_LoadedFromCache << 1u,
       DF_Ignored             = DF_Abstract << 1u,
       DF_ProtoDefaultImpl    = DF_Ignored << 1u,
+      DF_ProtoRequirement    = DF_ProtoDefaultImpl << 1u,
+      DF_Finalized           = DF_ProtoRequirement << 1u,
+      DF_InstantiatedFromProtoImpl = DF_Finalized << 1u,
 
-      DF_Last                = DF_Abstract,
+      DF_Last                = DF_InstantiatedFromProtoImpl,
       StatusFlags            = DF_TypeDependent | DF_ValueDependent |
                                DF_IsInvalid,
    };
 
-   static_assert(DF_Last <= 1 << 24, "too many decl flags!");
+   static_assert(DF_Last < 1 << 31, "too many decl flags!");
 
 #ifndef NDEBUG
    static void verifyID(DeclKind K);
@@ -164,12 +167,28 @@ public:
    bool isIgnored() const { return declFlagSet(DF_Ignored); }
    void setIgnored(bool b) { setDeclFlag(DF_Ignored, b); }
 
+   bool isFinalized() const { return declFlagSet(DF_Finalized); }
+   void setFinalized(bool b) { setDeclFlag(DF_Finalized, b); }
+
    bool isProtocolDefaultImpl() const
    { return declFlagSet(DF_ProtoDefaultImpl); }
    void setIsProtocolDefaultImpl(bool impl)
    { setDeclFlag(DF_ProtoDefaultImpl, impl); }
 
-   bool instantiatedFromProtocolDefaultImpl() const;
+   bool isProtocolRequirement() const
+   { return declFlagSet(DF_ProtoRequirement); }
+   void setIsProtocolRequirement(bool impl)
+   { setDeclFlag(DF_ProtoRequirement, impl); }
+
+   bool instantiatedFromProtocolDefaultImpl() const
+   {
+      return declFlagSet(DF_InstantiatedFromProtoImpl);
+   }
+
+   void setInstantiatedFromProtocolDefaultImpl(bool b)
+   {
+      setDeclFlag(DF_InstantiatedFromProtoImpl, b);
+   }
 
    bool isAbstract() const { return declFlagSet(DF_Abstract); }
 
@@ -277,7 +296,7 @@ protected:
    ~Decl();
 
    DeclKind kind  : 8;
-   unsigned flags : 24;
+   unsigned flags;
 
    Decl *nextDeclInContext = nullptr;
 
@@ -407,15 +426,17 @@ public:
    class iterator;
 
    using IteratorBase =
-   llvm::iterator_adaptor_base<iterator, ArrayTy::iterator,
-                               std::random_access_iterator_tag,
-                               NamedDecl *const>;
+      llvm::iterator_adaptor_base<iterator, ArrayTy::iterator,
+                                  std::random_access_iterator_tag,
+                                  NamedDecl *>;
 
    class iterator: public IteratorBase {
       value_type SingleElement;
 
    public:
       iterator() = default;
+      iterator(const iterator &) = default;
+      iterator &operator=(const iterator&) = default;
 
       explicit iterator(pointer Pos, value_type Single = nullptr)
          : IteratorBase(Pos), SingleElement(Single)
@@ -546,7 +567,12 @@ public:
       return support::dyn_cast_or_null<T>(lookupSingle(name));
    }
 
-   const DeclsMap &getAllNamedDecls() const { return namedDecls; }
+   const DeclsMap &getAllNamedDecls() const
+   {
+      return primaryCtx->namedDecls;
+   }
+
+   const DeclsMap &getOwnNamedDecls() const { return namedDecls; }
 
    bool hasExternalStorage() const;
 

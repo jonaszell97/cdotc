@@ -202,6 +202,8 @@ bool Expression::isContextDependent() const
       return cast<FPLiteral>(this)->getSuffix() == FPLiteral::Suffix::None;
    case StringLiteralID:
    case LambdaExprID:
+   case CharLiteralID:
+   case BoolLiteralID:
       return true;
    case ParenExprID:
    case AttributedExprID:
@@ -720,24 +722,26 @@ SourceRange AssignExpr::getSourceRange() const
 TypePredicateExpr::TypePredicateExpr(SourceLocation IsLoc,
                                      SourceRange SR,
                                      Expression *LHS,
-                                     ConstraintExpr *RHS)
+                                     ConstraintExpr *RHS,
+                                     bool Negated)
    : Expression(TypePredicateExprID),
      IsLoc(IsLoc), SR(SR), LHS(LHS), RHS(RHS),
-     Result(false), CompileTimeCheck(false)
+     Result(false), CompileTimeCheck(false), Negated(Negated)
 { }
 
 TypePredicateExpr::TypePredicateExpr(EmptyShell)
    : Expression(TypePredicateExprID),
      LHS(nullptr), RHS(nullptr),
-     Result(false), CompileTimeCheck(false)
+     Result(false), CompileTimeCheck(false), Negated(false)
 {}
 
 TypePredicateExpr* TypePredicateExpr::Create(ASTContext &C,
                                              SourceLocation IsLoc,
                                              SourceRange SR,
                                              Expression *LHS,
-                                             ConstraintExpr *RHS) {
-   return new(C) TypePredicateExpr(IsLoc, SR, LHS, RHS);
+                                             ConstraintExpr *RHS,
+                                             bool Negated) {
+   return new(C) TypePredicateExpr(IsLoc, SR, LHS, RHS, Negated);
 }
 
 CastExpr::CastExpr(SourceLocation AsLoc,
@@ -1261,7 +1265,31 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      Loc(Loc), DeclCtx(DeclCtx), staticLookup(false),
      pointerAccess(false), FoundResult(false), InTypePosition(InTypePos),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+{
+   IdentifierInfo *II = nullptr;
+   if (Name.isSimpleIdentifier())
+      II = Name.getIdentifierInfo();
+   else if (Name.getKind() == DeclarationName::LocalVarName)
+      II = Name.getLocalVarName().getIdentifierInfo();
+   else if (Name.getKind() == DeclarationName::PackExpansionName)
+      II = Name.getPackExpansionName().getIdentifierInfo();
+
+   if (II && !Loc.getEnd())
+      this->Loc = SourceRange(Loc.getStart(),
+                              SourceLocation(Loc.getStart().getOffset()
+                                             + II->getIdentifier().size() - 1));
+}
+
+IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
+                                     Expression *ParentExpr,
+                                     DeclarationName Name,
+                                     bool IsPointerAccess)
+   : IdentifiedExpr(IdentifierRefExprID, Name),
+     Loc(Loc), ParentExpr(ParentExpr), DeclCtx(nullptr), staticLookup(false),
+     pointerAccess(IsPointerAccess), FoundResult(false), InTypePosition(false),
+     IsSynthesized(false), IsCapture(false), IsSelf(false),
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
 {
    IdentifierInfo *II = nullptr;
    if (Name.isSimpleIdentifier())
@@ -1283,7 +1311,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc, IdentifierKind kind,
      Loc(Loc), kind(kind), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
 {
    setSemanticallyChecked(true);
    this->exprType = exprType;
@@ -1297,7 +1325,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      Loc(Loc), kind(kind), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
 {
    setSemanticallyChecked(true);
    this->ND = ND;
@@ -1309,20 +1337,28 @@ IdentifierRefExpr::IdentifierRefExpr(EmptyShell)
      Loc(), kind(IdentifierKind::Unknown), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
 {}
 
-SelfExpr::SelfExpr(SourceLocation Loc)
-   : Expression(SelfExprID), Loc(Loc)
+SourceRange IdentifierRefExpr::getSourceRange() const
+{
+   if (!ParentExpr)
+      return Loc;
+
+   return SourceRange(ParentExpr->getSourceRange().getStart(), Loc.getEnd());
+}
+
+SelfExpr::SelfExpr(SourceLocation Loc, bool Uppercase)
+   : Expression(SelfExprID), Loc(Loc), Uppercase(Uppercase)
 {}
 
 SelfExpr::SelfExpr(EmptyShell)
    : Expression(SelfExprID)
 {}
 
-SelfExpr* SelfExpr::Create(ASTContext &C, SourceLocation Loc)
+SelfExpr* SelfExpr::Create(ASTContext &C, SourceLocation Loc, bool Uppercase)
 {
-   return new(C) SelfExpr(Loc);
+   return new(C) SelfExpr(Loc, Uppercase);
 }
 
 SuperExpr::SuperExpr(SourceLocation Loc)
@@ -1448,40 +1484,76 @@ EnumDecl* EnumCaseExpr::getEnum() const
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    ASTVector<Expression* > &&args,
+                   ArrayRef<IdentifierInfo*> Labels,
                    DeclarationName Name,
                    bool IsDotInit,
                    bool IsDotDeinit)
    : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     ident(Name), args(std::move(args)),
+     ident(Name), NumLabels((unsigned)Labels.size()),
+     args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
      BuiltinKind(0)
 {
+   std::copy(Labels.begin(), Labels.end(),
+             getTrailingObjects<IdentifierInfo*>());
+}
 
+CallExpr* CallExpr::Create(ASTContext &C,
+                           SourceLocation IdentLoc,
+                           SourceRange ParenRange,
+                           ASTVector<Expression *> &&args,
+                           ArrayRef<IdentifierInfo *> Labels,
+                           DeclarationName Name,
+                           bool IsDotInit, bool IsDotDeinit) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(Labels.size()),
+                          alignof(CallExpr));
+
+   return new(Mem) CallExpr(IdentLoc, ParenRange, std::move(args), Labels, Name,
+                            IsDotInit, IsDotDeinit);
 }
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    Expression *ParentExpr,
                    ASTVector<Expression *> &&args,
+                   ArrayRef<IdentifierInfo*> Labels,
                    DeclarationName Name,
                    bool IsDotInit,
                    bool IsDotDeinit)
    : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     ident(Name), ParentExpr(ParentExpr), args(std::move(args)),
+     ident(Name),  NumLabels((unsigned)Labels.size()),
+     ParentExpr(ParentExpr), args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
      BuiltinKind(0)
 {
+   std::copy(Labels.begin(), Labels.end(),
+             getTrailingObjects<IdentifierInfo*>());
+}
 
+CallExpr* CallExpr::Create(ASTContext &C,
+                           SourceLocation IdentLoc,
+                           SourceRange ParenRange,
+                           Expression *ParentExpr,
+                           ASTVector<Expression *> &&args,
+                           ArrayRef<IdentifierInfo *> Labels,
+                           DeclarationName Name,
+                           bool IsDotInit, bool IsDotDeinit) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(Labels.size()),
+                          alignof(CallExpr));
+
+   return new(Mem) CallExpr(IdentLoc, ParenRange, ParentExpr,
+                            std::move(args), Labels, Name,
+                            IsDotInit, IsDotDeinit);
 }
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    ASTVector<Expression *> &&args, CallableDecl *C)
    : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     args(std::move(args)),
+     NumLabels(0), args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(false),
      IsDotDeinit(false), IncludesSelf(false), DirectCall(false),
      BuiltinKind(0)
@@ -1504,12 +1576,36 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
    }
 }
 
-CallExpr::CallExpr(EmptyShell)
+CallExpr * CallExpr::Create(ASTContext &C, SourceLocation IdentLoc,
+                            SourceRange ParenRange,
+                            ASTVector<Expression *> &&args,
+                            CallableDecl *CD) {
+   return new(C) CallExpr(IdentLoc, ParenRange, std::move(args), CD);
+}
+
+CallExpr::CallExpr(EmptyShell, unsigned N)
    : Expression(CallExprID),
-     PointerAccess(false), IsUFCS(false), IsDotInit(false),
+     NumLabels(N), PointerAccess(false), IsUFCS(false), IsDotInit(false),
      IsDotDeinit(false), IncludesSelf(false), DirectCall(false),
      BuiltinKind(0)
 {}
+
+CallExpr* CallExpr::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(N),
+                          alignof(CallExpr));
+
+   return new(Mem) CallExpr(EmptyShell(), N);
+}
+
+SourceRange CallExpr::getSourceRange() const
+{
+   if (!ParentExpr)
+      return SourceRange(IdentLoc, ParenRange.getEnd());
+
+   return SourceRange(ParentExpr->getSourceRange().getStart(),
+                      ParenRange.getEnd());
+}
 
 bool CallExpr::isKnownFunctionCall()
 {
@@ -1521,22 +1617,29 @@ bool CallExpr::isKnownFunctionCall()
 
 AnonymousCallExpr::AnonymousCallExpr(SourceRange ParenRange,
                                      Expression *ParentExpr,
-                                     ArrayRef<Expression*> Args)
+                                     ArrayRef<Expression*> Args,
+                                     ArrayRef<IdentifierInfo*> Labels)
    : Expression(AnonymousCallExprID),
      ParenRange(ParenRange), ParentExpr(ParentExpr), FnTy(nullptr),
      NumArgs((unsigned)Args.size()), IsPrimitiveInit(false)
 {
    std::copy(Args.begin(), Args.end(), getTrailingObjects<Expression*>());
+
+   std::memset(getTrailingObjects<IdentifierInfo*>(), 0,
+               sizeof(IdentifierInfo*) * Args.size());
+   std::copy(Labels.begin(), Labels.end(), getTrailingObjects<IdentifierInfo*>());
 }
 
 AnonymousCallExpr* AnonymousCallExpr::Create(ASTContext &C,
                                              SourceRange ParenRange,
                                              Expression *ParentExpr,
-                                             llvm::ArrayRef<Expression*> Args) {
-   void *Mem = C.Allocate(totalSizeToAlloc<Expression*>(Args.size()),
+                                             llvm::ArrayRef<Expression*> Args,
+                                             ArrayRef<IdentifierInfo*> Labels) {
+   void *Mem = C.Allocate(totalSizeToAlloc<Expression*, IdentifierInfo*>(
+                             Args.size(), Args.size()),
                           alignof(AnonymousCallExpr));
 
-   return new(Mem) AnonymousCallExpr(ParenRange, ParentExpr, Args);
+   return new(Mem) AnonymousCallExpr(ParenRange, ParentExpr, Args, Labels);
 }
 
 AnonymousCallExpr::AnonymousCallExpr(EmptyShell, unsigned N)
@@ -1546,8 +1649,9 @@ AnonymousCallExpr::AnonymousCallExpr(EmptyShell, unsigned N)
 
 AnonymousCallExpr *AnonymousCallExpr::CreateEmpty(ASTContext &C, unsigned N)
 {
-    void *Mem = C.Allocate(totalSizeToAlloc<Expression*>(N),
+    void *Mem = C.Allocate(totalSizeToAlloc<Expression*, IdentifierInfo*>(N, N),
                            alignof(AnonymousCallExpr));
+
     return new(Mem) AnonymousCallExpr(EmptyShell(), N);
 }
 
@@ -1580,6 +1684,12 @@ SubscriptExpr *SubscriptExpr::CreateEmpty(ASTContext &C, unsigned N)
     void *Mem = C.Allocate(totalSizeToAlloc<Expression*>(N),
                            alignof(SubscriptExpr));
     return new(Mem) SubscriptExpr(EmptyShell(), N);
+}
+
+SourceRange SubscriptExpr::getSourceRange() const
+{
+   return SourceRange(ParentExpr->getSourceRange().getStart(),
+                      SquareRange.getEnd());
 }
 
 TemplateArgListExpr::TemplateArgListExpr(SourceRange AngleRange,

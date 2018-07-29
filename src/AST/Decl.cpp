@@ -377,6 +377,7 @@ DestructuringDecl* DestructuringDecl::CreateEmpty(ASTContext &C,
 FuncArgDecl::FuncArgDecl(SourceLocation OwnershipLoc,
                          SourceLocation ColonLoc,
                          DeclarationName Name,
+                         IdentifierInfo *Label,
                          ArgumentConvention Conv,
                          SourceType argType,
                          Expression* defaultValue,
@@ -384,9 +385,9 @@ FuncArgDecl::FuncArgDecl(SourceLocation OwnershipLoc,
                          bool cstyleVararg,
                          bool isSelf)
    : VarDecl(FuncArgDeclID, AccessSpecifier::Public, OwnershipLoc, ColonLoc,
-             Conv != ArgumentConvention::MutablyBorrowed,
+             Conv != ArgumentConvention::MutableRef,
              Name, argType, defaultValue),
-     VariadicArgPackExpansion(variadicArgPackExpansion),
+     Label(Label), VariadicArgPackExpansion(variadicArgPackExpansion),
      Vararg(cstyleVararg), CstyleVararg(cstyleVararg), IsSelf(isSelf),
      Conv(Conv)
 {}
@@ -395,13 +396,14 @@ FuncArgDecl* FuncArgDecl::Create(ASTContext &C,
                                  SourceLocation OwnershipLoc,
                                  SourceLocation ColonLoc,
                                  DeclarationName Name,
+                                 IdentifierInfo *Label,
                                  ArgumentConvention Conv,
                                  SourceType argType,
                                  Expression *defaultValue,
                                  bool variadicArgPackExpansion,
                                  bool cstyleVararg,
                                  bool isSelf) {
-   return new(C) FuncArgDecl(OwnershipLoc, ColonLoc, Name, Conv,
+   return new(C) FuncArgDecl(OwnershipLoc, ColonLoc, Name, Label, Conv,
                              argType, defaultValue, variadicArgPackExpansion,
                              cstyleVararg, isSelf);
 }
@@ -418,17 +420,21 @@ FuncArgDecl *FuncArgDecl::CreateEmpty(ASTContext &C)
 
 SourceRange FuncArgDecl::getSourceRange() const
 {
+   if (!ColonLoc && type.getTypeExpr()) {
+      return type.getTypeExpr()->getSourceRange();
+   }
+
    return ColonLoc;
 }
 
-GlobalDeclContext::GlobalDeclContext(CompilationUnit &CI)
+GlobalDeclContext::GlobalDeclContext(CompilerInstance &CI)
    : DeclContext(Decl::NotDecl),
      CI(CI)
 {
 }
 
 GlobalDeclContext* GlobalDeclContext::Create(ASTContext &C,
-                                             CompilationUnit &CI) {
+                                             CompilerInstance &CI) {
    return new(C) GlobalDeclContext(CI);
 }
 
@@ -709,6 +715,22 @@ bool CallableDecl::isFallibleInit() const
    return isa<InitDecl>(this) && cast<InitDecl>(this)->isFallible();
 }
 
+bool CallableDecl::isCompleteInitializer() const
+{
+   if (auto *I = dyn_cast<InitDecl>(this))
+      return I->isCompleteInitializer();
+
+   return false;
+}
+
+bool CallableDecl::isBaseInitializer() const
+{
+   if (auto *I = dyn_cast<InitDecl>(this))
+      return I->isBaseInitializer();
+
+   return false;
+}
+
 FunctionDecl::FunctionDecl(AccessSpecifier am,
                            SourceLocation DefLoc,
                            DeclarationName Name,
@@ -941,6 +963,9 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
    default:
       break;
    }
+
+   if (isa<ProtocolDecl>(this))
+      decl->setIsProtocolRequirement(true);
 
    return DeclContext::addDecl(decl);
 }
@@ -1178,9 +1203,6 @@ ClassDecl *ClassDecl::CreateEmpty(ASTContext &C)
 void ClassDecl::inherit(ast::ClassDecl *C)
 {
    parentClass = C;
-   StoredFields.insert(StoredFields.begin(),
-                       C->StoredFields.begin(),
-                       C->StoredFields.end());
 }
 
 EnumDecl::EnumDecl(AccessSpecifier access,
@@ -2241,6 +2263,63 @@ MacroExpansionDecl *MacroExpansionDecl::CreateEmpty(ASTContext &C, unsigned N)
     void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(N),
                            alignof(MacroExpansionDecl));
     return new(Mem) MacroExpansionDecl(EmptyShell(), N);
+}
+
+UnittestDecl::UnittestDecl(SourceLocation KeywordLoc,
+                           SourceRange BraceRange,
+                           IdentifierInfo *Name,
+                           Statement *Body)
+   : Decl(UnittestDeclID), DeclContext(UnittestDeclID),
+     KeywordLoc(KeywordLoc), BraceRange(BraceRange), Name(Name), Body(Body)
+{
+
+}
+
+UnittestDecl::UnittestDecl()
+   : Decl(UnittestDeclID), DeclContext(UnittestDeclID),
+     KeywordLoc(), BraceRange(), Name(nullptr), Body(nullptr)
+{
+
+}
+
+UnittestDecl* UnittestDecl::Create(ASTContext &C,
+                                   SourceLocation KeywordLoc,
+                                   SourceRange BraceRange,
+                                   IdentifierInfo *Name,
+                                   Statement *Body) {
+   return new(C) UnittestDecl(KeywordLoc, BraceRange, Name, Body);
+}
+
+UnittestDecl* UnittestDecl::CreateEmpty(ASTContext &C)
+{
+   return new(C) UnittestDecl;
+}
+
+SourceRange UnittestDecl::getSourceRange() const
+{
+   return SourceRange(KeywordLoc, BraceRange.getEnd());
+}
+
+DebugDecl::DebugDecl(SourceLocation Loc)
+   : Decl(DebugDeclID),
+     Loc(Loc)
+{
+
+}
+
+DebugDecl* DebugDecl::Create(ASTContext &C, SourceLocation Loc)
+{
+   return new(C) DebugDecl(Loc);
+}
+
+DebugDecl* DebugDecl::CreateEmpty(ASTContext &C)
+{
+   return new(C) DebugDecl(SourceLocation());
+}
+
+SourceRange DebugDecl::getSourceRange() const
+{
+   return SourceRange(Loc, SourceLocation(Loc.getOffset() + 7));
 }
 
 } // namespace ast

@@ -65,6 +65,14 @@ public:
    ConversionSequenceBuilder(const ConversionSequenceBuilder&)            = delete;
    ConversionSequenceBuilder &operator=(const ConversionSequenceBuilder&) = delete;
 
+   static ConversionSequenceBuilder MakeNoop()
+   {
+      ConversionSequenceBuilder Seq;
+      Seq.addStep(CastKind::NoOp, QualType());
+
+      return Seq;
+   }
+
    void addStep(CastKind kind, QualType resultType)
    {
       Steps.emplace_back(kind, resultType);

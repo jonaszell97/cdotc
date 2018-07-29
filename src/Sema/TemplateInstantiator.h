@@ -150,6 +150,25 @@ public:
 private:
    ast::SemaPass &SP;
    bool InstantiatingRecord = false;
+   unsigned InstantiationDepth = 0;
+
+   struct InstantiationDepthRAII {
+      InstantiationDepthRAII(TemplateInstantiator &Inst)
+         : Inst(Inst)
+      {
+         ++Inst.InstantiationDepth;
+      }
+
+      ~InstantiationDepthRAII()
+      {
+         --Inst.InstantiationDepth;
+      }
+
+   private:
+      TemplateInstantiator &Inst;
+   };
+
+   bool checkInstantiationDepth(ast::NamedDecl *Inst);
 };
 
 } // namespace cdot

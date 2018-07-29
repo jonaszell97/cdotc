@@ -66,7 +66,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
    for (auto &F : M->getFuncList()) {
       // Only include functions that are definitions, and which have not
       // been intentionally excluded from optimization.
-      if (!F.isDeclared())
+      if (!F.isDeclared() && !F.isInvalid())
          FunctionWorklist.emplace_back(&F);
    }
 

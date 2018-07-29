@@ -13,6 +13,7 @@
 #include "ModuleFile.h"
 #include "ModuleReader.h"
 #include "Module/Module.h"
+#include "Module/ModuleManager.h"
 #include "Sema/SemaPass.h"
 
 #include <llvm/ADT/StringExtras.h>
@@ -179,7 +180,11 @@ bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext *DC)
    for (unsigned i = 0; i < NumDecls; ++i) {
       auto NextDeclID = *IDs++;
       if (IsDeclLoaded(NextDeclID)) {
-         addDeclToContext(GetDecl(NextDeclID), DC);
+         auto *D = GetDecl(NextDeclID);
+         if (!D)
+            continue;
+
+         addDeclToContext(D, DC);
       }
       else {
          DeclContextMap[NextDeclID] = DC;
@@ -193,6 +198,13 @@ bool ASTReader::ReadVisibleDeclContextStorage(uint64_t Offset,
                                               ast::DeclContext *DC,
                                               unsigned ID) {
    assert(Offset != 0);
+
+   if (!DC->isPrimaryCtx()) {
+      assert(isa<ModuleDecl>(DC) && "non-primary context with lookup!");
+      DC = DC->getPrimaryCtx();
+   }
+
+   assert(!DC->getModFile() && "duplicate module file");
 
    SavedStreamPosition SavedPosition(DeclsCursor);
    DeclsCursor.JumpToBit(Offset);
@@ -216,26 +228,10 @@ bool ASTReader::ReadVisibleDeclContextStorage(uint64_t Offset,
                                  ASTDeclContextNameLookupTrait(*this));
 
    Lookups[DC].Table = Tbl;
-   if (DC == Reader.Mod->getDecl())
+   DC->setModFile(new(Sema.getContext()) ModuleFile(Reader, Tbl));
+
+   if (DC == Reader.Mod->getDecl()) {
       Reader.ModTbl = Tbl;
-
-   // If this is a cache file, load all declarations immediately.
-   if (Reader.IncMgr) {
-      auto it = Tbl->data_begin();
-      auto end = Tbl->data_end();
-
-      while (it != end) {
-         for (unsigned NextID : *it) {
-            auto *D = Reader.ASTReader.GetDecl(NextID);
-            if (D)
-               (void)DC->makeDeclAvailable(cast<NamedDecl>(D));
-         }
-
-         ++it;
-      }
-   }
-   else {
-      DC->setModFile(new(Sema.getContext()) ModuleFile(Reader, Tbl));
    }
 
    return false;
@@ -294,13 +290,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       }
 
       auto *AD = ReadDeclAs<AssociatedTypeDecl>(Record, Idx);
-      auto Ty = Context.getAssociatedType(AD);
-
-      if (AD->isImplementation()) {
-         Ty->setCanonicalType(AD->getActualType());
-      }
-
-      return Ty;
+      return Context.getAssociatedType(AD);
    }
    case Type::BoxTypeID: {
       if (Record.size() != 1) {
@@ -359,10 +349,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       }
 
       auto *PD = ReadDeclAs<TemplateParamDecl>(Record, Idx);
-      auto Ty =  Context.getTemplateArgType(PD);
-      Ty->setCanonicalType(PD->getCovariance());
-
-      return Ty;
+      return Context.getTemplateArgType(PD);
    }
    case Type::InferredSizeArrayTypeID: {
       if (Record.size() != 1) {
@@ -425,6 +412,9 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       }
 
       auto *RD = ReadDeclAs<RecordDecl>(Record, Idx);
+      if (!RD)
+         return QualType();
+
       return Context.getRecordType(RD);
    }
    case Type::ReferenceTypeID: {
@@ -721,7 +711,7 @@ ReadResult ASTReader::ReadInstantiationTable(RecordDataImpl &Record,
    return Success;
 }
 
-ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor Stream)
+ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
 {
    if (ModuleReader::ReadBlockAbbrevs(Stream, AST_BLOCK_ID)) {
       Error("malformed block record in AST file");
@@ -814,10 +804,23 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor Stream)
    }
 }
 
-void ASTReader::ReadDeclsEager()
+void ASTReader::ReadDeclsEager(ArrayRef<unsigned> Decls)
 {
-   for (unsigned ID = 0; ID < LocalNumDecls; ++ID) {
-      GetDecl(ID);
+   for (auto ID : Decls) {
+      auto *NextDecl = GetDecl(ID);
+      if (auto Op = dyn_cast<OperatorDecl>(NextDecl)) {
+         Sema.ActOnOperatorDecl(Op);
+      }
+      else if (auto PG = dyn_cast<PrecedenceGroupDecl>(NextDecl)) {
+         Sema.ActOnPrecedenceGroupDecl(PG);
+      }
+      else if (auto *DC = dyn_cast<DeclContext>(NextDecl)) {
+         auto *MF = DC->getModFile();
+         if (MF) {
+            MF->LoadAllDecls(*DC, true);
+            DC->setModFile(nullptr);
+         }
+      }
    }
 
    while (!LazyFnInfos.empty()) {
@@ -937,7 +940,20 @@ Scope* ASTRecordReader::ReadScope()
 
 Module* ASTRecordReader::readModule()
 {
-   return Reader->GetModule((unsigned)readInt());
+   auto ID = (unsigned)readInt();
+   if (ID) {
+      return Reader->GetModule(ID);
+   }
+
+   class SmallVector<IdentifierInfo*, 4> ModuleName;
+   auto NameSize = readInt();
+
+   while (NameSize--) {
+      ModuleName.push_back(getIdentifierInfo());
+   }
+
+   return Reader->getReader().getCompilerInstance().getModuleMgr()
+                .GetModule(ModuleName);
 }
 
 Scope* ASTReader::ReadScope(const RecordDataImpl &Record, unsigned &Idx)
@@ -1085,7 +1101,7 @@ ASTReader::ReadTemplateArgumentList(const RecordData &Record, unsigned &Idx)
       Args.push_back(ReadTemplateArgument(Record, Idx));
    }
 
-   return sema::FinalTemplateArgumentList::Create(Context, Args);
+   return sema::FinalTemplateArgumentList::Create(Context, Args, false);
 }
 
 SourceLocation ASTReader::ReadSourceLocation(const RecordDataImpl &Record,
@@ -1098,8 +1114,10 @@ SourceLocation ASTReader::ReadSourceLocation(const RecordDataImpl &Record,
    if (!Offset)
       return SourceLocation();
 
-   if (auto AddOffset = Reader.SourceIDSubstitutions[SourceID])
-      return SourceLocation(Offset + AddOffset);
+   auto It = Reader.SourceIDSubstitutionOffsets.find(SourceID);
+   if (It != Reader.SourceIDSubstitutionOffsets.end()) {
+      return SourceLocation(Offset + It->getSecond());
+   }
 
    if (Reader.DiagLoc)
       return Reader.DiagLoc;
@@ -1151,6 +1169,13 @@ std::string ASTReader::ReadString(const RecordData &Record, unsigned &Idx)
 ASTReader::ASTReader(ModuleReader &Reader)
    : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
      FileMgr(*Sema.getDiags().getFileMgr())
+{
+
+}
+
+ASTReader::ASTReader(ModuleReader &Reader, ASTReader &DeclReader)
+   : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
+     FileMgr(*Sema.getDiags().getFileMgr()), DeclReader(&DeclReader)
 {
 
 }

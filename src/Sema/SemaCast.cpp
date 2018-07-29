@@ -96,12 +96,9 @@ static void FromPtr(SemaPass &SP,
    if (from == to)
       return;
 
-   // allow u8* -> void* implicit conversion as a special case for c++ interop
+   // Implicit conversion from any pointer to void*.
    if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
-      auto fromPointee = from->getPointeeType();
-      if (fromPointee->isBuiltinType()
-          && fromPointee->asBuiltinType()->isu8Ty())
-         return Seq.addStep(CastKind::BitCast, to, CastStrength::Implicit);
+      return Seq.addStep(CastKind::BitCast, to, CastStrength::Implicit);
    }
 
    if (to->isPointerType() || to->isClass() || to->isThinFunctionTy()) {
@@ -213,10 +210,11 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
             return FromInteger(SP,
                                cast<EnumDecl>(FromRec)->getRawType(), to, Seq);
 
-         if (to == cast<EnumDecl>(FromRec)->getRawType()) {
-            Seq.addStep(CastKind::EnumToInt, to, CastStrength::Normal);
-            return;
-         }
+         Seq.addStep(CastKind::EnumToInt,
+                     cast<EnumDecl>(FromRec)->getRawType(),
+                     CastStrength::Normal);
+
+         return FromInteger(SP, cast<EnumDecl>(FromRec)->getRawType(), to, Seq);
       }
 
       return Seq.invalidate();
@@ -327,10 +325,23 @@ static void getConversionSequence(SemaPass &SP,
       return;
    }
 
-   // look for an implicit initializer.
+   // expr -> MetaType<decltype(expr)>
+   if (to->isMetaType() && to->asMetaType()->getUnderlyingType() == from) {
+      Seq.addStep(CastKind::ToMetaType, to, CastStrength::Implicit);
+      return;
+   }
+
+   // Look for an implicit initializer.
    if (to->isRecordType()) {
       auto *R = to->getRecord();
-      for (auto *I : R->getDecls<InitDecl>()) {
+
+      // Load all external declarations.
+      auto DN = SP.getContext().getDeclNameTable()
+                  .getConstructorName(R->getType());
+
+      auto Initializers = SP.MultiLevelLookup(*R, DN);
+      for (auto *D : Initializers.allDecls()) {
+         auto *I = cast<InitDecl>(D);
          if (!I->hasAttribute<ImplicitAttr>())
             continue;
 
@@ -422,37 +433,6 @@ void SemaPass::getConversionSequence(ConversionSequenceBuilder &Seq,
                                      QualType from,
                                      QualType to) {
    ast::getConversionSequence(*this, from, to, Seq);
-}
-
-int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
-{
-   auto Args1 = C1->getArgs();
-   auto Args2 = C2->getArgs();
-
-   unsigned NumArgs = (unsigned)Args1.size();
-   if (Args1.size() != Args2.size())
-      return 0; // incompatible signature
-
-   if (C1->getReturnType() != C2->getReturnType())
-      return 1; // incompatible return type
-
-   unsigned i = 0;
-   if (isa<MethodDecl>(C1)) {
-      ++i;
-   }
-
-   for (; i < NumArgs; ++i) {
-      auto &Arg = Args1[i];
-      auto &Other = Args2[i];
-      if (Arg->getType() != Other->getType())
-         return 0; // incompatible signature
-   }
-
-   if (C1->throws())
-      if (!C2->throws())
-         return 2; // incompatible 'throws'
-
-   return -1; // valid
 }
 
 } // namespace ast

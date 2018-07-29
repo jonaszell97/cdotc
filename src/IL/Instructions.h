@@ -191,6 +191,10 @@ public:
    bool IsFallibleInitNoneRet() const { return RetBits.IsFallibleInitNoneRet; }
    void setIsFallibleInitNoneRet(bool B) { RetBits.IsFallibleInitNoneRet = B; }
 
+   op_iterator op_begin_impl() { return &returnedValue; }
+   op_const_iterator op_begin_impl() const { return &returnedValue; }
+   unsigned getNumOperandsImpl() const { return returnedValue ? 1 : 0; }
+
 protected:
    Value *returnedValue;
 
@@ -212,26 +216,25 @@ public:
              bool FinalYield,
              BasicBlock *parent);
 
-   Value *getYieldedValue() const { return yieldedValue; }
-   bool isVoidYield() const { return !yieldedValue; }
+   Value *getYieldedValue() const { return Operands[numOperands - 2]; }
+   bool isVoidYield() const { return !getYieldedValue(); }
 
-   ArrayRef<Value*> getResumeArgs() const { return {Operands, numOperands}; }
+   ArrayRef<Value*> getResumeArgs() const
+   {
+      return { Operands, numOperands - 2 };
+   }
 
-   BasicBlock* getResumeDst() const { return ResumeDst; }
+   BasicBlock* getResumeDst() const;
 
    bool isFinalYield() const { return YieldBits.IsFinalYield; }
 
    BasicBlock *getSuccessorAtImpl(size_t i) const
    {
       assert(i == 0);
-      return ResumeDst;
+      return getResumeDst();
    }
 
-   size_t getNumSuccessorsImpl() const { return ResumeDst ? 1 : 0; }
-
-protected:
-   BasicBlock *ResumeDst;
-   Value *yieldedValue;
+   size_t getNumSuccessorsImpl() const { return getResumeDst() ? 1 : 0; }
 
 public:
    static bool classof(Value const* T) { return T->getTypeID() == YieldInstID; }

@@ -19,7 +19,7 @@ namespace cdot {
 struct SourceLocation;
 class Type;
 struct Argument;
-struct CompilationUnit;
+struct CompilerInstance;
 
 namespace ast {
 
@@ -35,7 +35,7 @@ namespace codegen {
 
    class DebugInfo {
    public:
-      explicit DebugInfo(const CompilationUnit &CU, llvm::IRBuilder<> &Builder);
+      explicit DebugInfo(const CompilerInstance &CU, llvm::IRBuilder<> &Builder);
 
       llvm::DIScope *getCurrentScope()
       {

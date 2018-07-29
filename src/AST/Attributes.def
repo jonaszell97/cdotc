@@ -22,6 +22,7 @@
    CDOT_DECL_ATTR(Align, align)
    CDOT_DECL_ATTR(DiscardableResult, discardableResult)
    CDOT_DECL_ATTR(AutoClosure, autoclosure)
+   CDOT_DECL_ATTR(Testable, testable)
    CDOT_DECL_ATTR(VersionDecl, version)
    CDOT_DECL_ATTR(_Builtin, _builtin)
    CDOT_ABSTRACT_ATTR(_lastDeclAttr)

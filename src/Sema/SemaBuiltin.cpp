@@ -8,6 +8,7 @@
 #include "IL/Constants.h"
 #include "IL/ILBuilder.h"
 #include "ILGen/ILGenPass.h"
+#include "Module/Module.h"
 
 using namespace cdot::builtin;
 using namespace cdot::diag;
@@ -29,6 +30,7 @@ void SemaPass::initBuiltinIdents()
    BuiltinIdents[unsafeConstCast] = &Idents.get("unsafeConstCast");
    BuiltinIdents[loadFromPointer] = &Idents.get("loadFromPointer");
    BuiltinIdents[storeToPointer] = &Idents.get("storeToPointer");
+   BuiltinIdents[constructInPlace] = &Idents.get("constructInPlace");
    BuiltinIdents[copy] = &Idents.get("copy");
    BuiltinIdents[deinit] = &Idents.get("deinit");
    BuiltinIdents[retainValue] = &Idents.get("retainValue");
@@ -152,7 +154,7 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    auto *II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   (void) Lookup(*BuiltinMod, II);
+   (void) Lookup(*BuiltinMod->getDecl(), II);
 
    bool DoCache = true;
    Expression *ResultExpr = nullptr;

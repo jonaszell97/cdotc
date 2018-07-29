@@ -57,6 +57,9 @@ class Module {
    /// The primary module declaration of this module.
    ast::ModuleDecl *Decl = nullptr;
 
+   /// All declarations of this module.
+   SmallVector<ast::ModuleDecl*, 0> AllDecls;
+
    /// The corresponding IL module.
    il::Module *ILMod = nullptr;
 
@@ -136,6 +139,15 @@ public:
    /// \return the time any file in this module was last modified.
    long long getLastModified() const { return LastModified; }
    void setLastModified(long long T) { LastModified = T; }
+
+   ArrayRef<ast::ModuleDecl*> getDecls() const { return AllDecls; }
+   void addDecl(ast::ModuleDecl *D)
+   {
+      if (!Decl)
+         Decl = D;
+
+      AllDecls.push_back(D);
+   }
 
    IdentifierInfo *getModulePath() const { return ModulePath; }
    void setModulePath(IdentifierInfo *P) { ModulePath = P; }

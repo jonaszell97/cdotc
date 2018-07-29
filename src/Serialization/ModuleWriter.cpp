@@ -8,6 +8,7 @@
 #include "ILWriter.h"
 #include "Lex/Token.h"
 #include "Module/Module.h"
+#include "Module/ModuleManager.h"
 #include "Sema/SemaPass.h"
 #include "IncrementalCompilation.h"
 
@@ -24,15 +25,28 @@ using namespace cdot::ast;
 using namespace cdot::sema;
 using namespace cdot::serial;
 
-ModuleWriter::ModuleWriter(CompilationUnit &CI, llvm::BitstreamWriter &Stream,
+ModuleWriter::ModuleWriter(CompilerInstance &CI, llvm::BitstreamWriter &Stream,
                            unsigned SourceID,
                            IncrementalCompilationManager *IncMgr)
    : CI(CI), Stream(Stream),
      ASTWriter(*this), ILWriter(ASTWriter, Stream, CI.getILCtx()),
-     SourceID(SourceID), IncMgr(IncMgr)
+     SourceID(SourceID), Mod(CI.getCompilationModule()),
+     IncMgr(IncMgr)
 {
    ASTWriter.SourceID = SourceID;
    ILWriter.SourceID = SourceID;
+}
+
+ModuleWriter::ModuleWriter(CompilerInstance &CI, llvm::BitstreamWriter &Stream,
+                           ModuleWriter &MainWriter,
+                           IncrementalCompilationManager *IncMgr)
+   : CI(CI), Stream(Stream),
+     ASTWriter(*this, MainWriter.ASTWriter),
+     ILWriter(ASTWriter, Stream, CI.getILCtx()),
+     Mod(CI.getCompilationModule()),
+     IncMgr(IncMgr)
+{
+
 }
 
 static void EmitBlockID(unsigned ID, const char *Name,
@@ -97,6 +111,10 @@ void ModuleWriter::WriteBlockInfoBlock()
       RECORD(IMPORTS);
       RECORD(MODULE_DECL);
 
+   BLOCK(FILE_MANAGER_BLOCK);
+      RECORD(MACRO_EXPANSIONS);
+      RECORD(SOURCE_FILES);
+
    BLOCK(AST_BLOCK);
       RECORD(GLOBAL_DECL_CONTEXT);
       RECORD(OPERATOR_PRECEDENCE_DECLS);
@@ -124,6 +142,9 @@ void ModuleWriter::WriteBlockInfoBlock()
       RECORD(SCOPE_OFFSET);
       RECORD(TYPE_OFFSET);
       RECORD(IL_VALUE_OFFSETS);
+
+   BLOCK(OFFSET_RANGE_BLOCK);
+      RECORD(OFFSET_RANGES);
 
    BLOCK(CONFORMANCE_BLOCK);
       RECORD(CONFORMANCE_TABLE);
@@ -269,11 +290,58 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
    Stream.ExitBlock(); // MODULE_BLOCK_ID
 }
 
+void ModuleWriter::WriteFileManagerBlock()
+{
+   auto &FileMgr = CI.getFileMgr();
+
+   Stream.EnterSubblock(FILE_MANAGER_BLOCK_ID, 4);
+
+   RecordData Data;
+   ASTRecordWriter Record(this->ASTWriter, Data);
+
+   // Source files.
+   {
+      auto &SourceFiles = FileMgr.getSourceFiles();
+      Record.push_back(SourceFiles.size());
+
+      for (auto &FilePair : SourceFiles) {
+         Record.AddString(FilePair.getKey());
+         Record.push_back(FilePair.getValue().SourceId);
+         Record.push_back(FilePair.getValue().BaseOffset);
+      }
+
+      Record.Emit(SOURCE_FILES);
+   }
+
+   // Macro expansions.
+   {
+      Record.clear();
+
+      auto &Expansions = FileMgr.getMacroExpansionLocs();
+      Record.push_back(Expansions.size());
+
+      for (auto &ExpPair : Expansions) {
+         auto &Exp = ExpPair.getSecond();
+
+         Record.push_back(Exp.SourceID);
+         Record.push_back(Exp.BaseOffset);
+         Record.push_back(Exp.Length);
+         Record.AddSourceLocation(Exp.ExpandedFrom);
+         Record.AddSourceLocation(Exp.PatternLoc);
+         Record.AddString(Exp.MacroName.getMacroName()->getIdentifier());
+      }
+
+      Record.Emit(MACRO_EXPANSIONS);
+   }
+
+   Stream.ExitBlock();
+}
+
 void ModuleWriter::WriteCacheControlBlock()
 {
    using namespace llvm;
 
-   Stream.EnterSubblock(CONTROL_BLOCK_ID, 5);
+   Stream.EnterSubblock(CACHE_CONTROL_BLOCK_ID, 5);
    RecordData Record;
 
    {
@@ -417,11 +485,34 @@ void ModuleWriter::WriteValuesTypesAndDecls()
       else if (Next.isDecl()) {
          ASTWriter.WriteDecl(CI.getContext(), Next);
       }
-      else if (Next.isScope()) {
-         ASTWriter.WriteScope(Next);
-      }
       else {
          ILWriter.writeValue(Next);
+      }
+   }
+
+   Stream.ExitBlock(); // DECLS_BLOCK_ID
+   DoneWriting = true;
+}
+
+void ModuleWriter::WriteValuesAndTypes()
+{
+   // Keep writing declarations until we've emitted all of them.
+   Stream.EnterSubblock(DECL_TYPES_BLOCK_ID, /*bits for abbreviations*/5);
+
+   ASTWriter.WriteTypeAbbrevs();
+
+   while (!ValuesToEmit.empty()) {
+      auto Next = ValuesToEmit.front();
+      ValuesToEmit.pop();
+
+      if (Next.isType()) {
+         ASTWriter.WriteType(Next);
+      }
+      else if (Next.isILValue()) {
+         ILWriter.writeValue(Next);
+      }
+      else {
+         llvm_unreachable("Decl got queued for a cache writer!");
       }
    }
 
@@ -567,6 +658,9 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
    // Write the control block
    WriteControlBlock(CI.getContext());
 
+   // Write the file manager block.
+   WriteFileManagerBlock();
+
    // Write the AST
    ASTWriter.WriteAST(Mod->getDecl());
 
@@ -584,7 +678,6 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
       ASTWriter.WriteOffsetAbbrevs();
       ASTWriter.WriteDeclOffsets();
       ASTWriter.WriteTypeOffsets();
-      ASTWriter.WriteScopeOffsets();
       ILWriter.WriteValueOffsets();
    Stream.ExitBlock();
 
@@ -599,6 +692,14 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
 
    // emit identifiers
    WriteIdentifierBlock();
+
+   if (CI.getOptions().emitModules()) {
+      auto Length = Stream.GetCurrentBitNo();
+      assert(Length % 8 == 0 && "invalid byte count");
+
+      StringRef Str(CI.getModuleMgr().getModuleBuffer()->data(), Length / 8);
+      CI.getIncMgr()->setSerializedModule(Str);
+   }
 
    // emit static library if necessary
    if (LibBuf) {
@@ -609,26 +710,29 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
       printStatistics();
 }
 
-void ModuleWriter::WriteCacheFile(Module *Mod, IdentifierInfo *FileName)
+void ModuleWriter::WriteCacheFile()
 {
-   ModuleWriterStackTraceEntry MRST(FileName);
-
-   this->Mod = Mod;
-   assert(IncMgr && "not an incremental compilation writer!");
+   Mod = CI.getCompilationModule();
 
    // Emit the file header.
    Stream.Emit((unsigned)'C', 8);
-   Stream.Emit((unsigned)'I', 8);
-   Stream.Emit((unsigned)'N', 8);
-   Stream.Emit((unsigned)'C', 8);
+   Stream.Emit((unsigned)'A', 8);
+   Stream.Emit((unsigned)'S', 8);
+   Stream.Emit((unsigned)'T', 8);
+
+   // Write the block-info block
+   WriteBlockInfoBlock();
 
    // Write the control block
-   WriteCacheControlBlock();
+   WriteControlBlock(CI.getContext());
+
+   // Write the file manager block.
+   WriteFileManagerBlock();
 
    // Write the AST
-   ASTWriter.WriteASTCache(Mod->getDecl());
+   ASTWriter.WriteAST(Mod->getDecl());
 
-   // Write the IL
+   // Write the IL module info and symbol table
    ILWriter.writeModuleCache(*Mod->getILModule());
 
    // Emit the actual values
@@ -638,15 +742,12 @@ void ModuleWriter::WriteCacheFile(Module *Mod, IdentifierInfo *FileName)
    sanityCheck();
 
    // Emit the offset tables
-   Stream.EnterSubblock(OFFSET_BLOCK_ID, 4);
+   Stream.EnterSubblock(OFFSET_BLOCK_ID, 5);
       ASTWriter.WriteOffsetAbbrevs();
       ASTWriter.WriteDeclOffsets();
       ASTWriter.WriteTypeOffsets();
-      ASTWriter.WriteScopeOffsets();
       ILWriter.WriteValueOffsets();
    Stream.ExitBlock();
-
-   DoneWriting = true;
 
    // Emit the module's conformance table
    Stream.EnterSubblock(CONFORMANCE_BLOCK_ID, 4);
@@ -657,22 +758,12 @@ void ModuleWriter::WriteCacheFile(Module *Mod, IdentifierInfo *FileName)
 
    // emit identifiers
    WriteIdentifierBlock();
-
-   if (CI.getOptions().printStats())
-      printStatistics();
 }
 
-unsigned ModuleWriter::getSourceIDForDecl(const Decl *D)
+unsigned ModuleWriter::getSourceIDForDecl(const Decl *ConstDecl)
 {
-   if (auto *Inst = D->getInstantiationScope()) {
-      return CI.getFileMgr().getLexicalSourceId(
-         CI.getSema().getInstantiationScope(Inst)->getSourceLoc());
-   }
-   if (auto *Def = D->getProtocolDefaultImplScope()) {
-      return getSourceIDForDecl(support::cast<Decl>(Def->getDeclContext()));
-   }
-
-   return CI.getFileMgr().getLexicalSourceId(D->getSourceLoc());
+   auto *D = const_cast<Decl*>(ConstDecl);
+   return CI.getSema().getSerializationFile(D);
 }
 
 void ModuleWriter::sanityCheck()

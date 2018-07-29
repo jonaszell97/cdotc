@@ -40,7 +40,7 @@
 //
 //using namespace cl;
 //
-//DebugInfo::DebugInfo(const CompilationUnit &CU, llvm::IRBuilder<> &Builder)
+//DebugInfo::DebugInfo(const CompilerInstance &CU, llvm::IRBuilder<> &Builder)
 //   : DI(*CU.Module), Builder(Builder), Module(CU.Module)
 //{
 //   File = DI.createFile(

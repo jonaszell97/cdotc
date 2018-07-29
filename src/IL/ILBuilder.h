@@ -20,7 +20,7 @@ namespace cdot {
 
 enum class ConstructorKind : unsigned char;
 class DeclarationName;
-class CompilationUnit;
+class CompilerInstance;
 class IdentifierInfo;
 
 namespace fs {

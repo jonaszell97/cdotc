@@ -3,7 +3,9 @@
 //
 
 #include "SemaPass.h"
+
 #include "ILGen/ILGenPass.h"
+#include "Module/Module.h"
 
 namespace cdot {
 namespace ast {
@@ -41,6 +43,26 @@ bool SemaPass::ensureVisited(Decl *D)
 
    (void) visitDecl(D);
    return !D->isInvalid();
+}
+
+bool SemaPass::ensureDeclared(class Module *M)
+{
+   for (auto *D : M->getDecls()) {
+      if (!ensureDeclared(D))
+         return false;
+   }
+
+   return true;
+}
+
+bool SemaPass::ensureVisited(class Module *M)
+{
+   for (auto *D : M->getDecls()) {
+      if (!ensureVisited(D))
+         return false;
+   }
+
+   return true;
 }
 
 bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)

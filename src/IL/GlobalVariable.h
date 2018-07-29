@@ -87,6 +87,18 @@ public:
 
    SourceLocation getSourceLoc() const { return SourceLoc; }
    void setSourceLoc(SourceLocation Loc) { SourceLoc = Loc; }
+
+   bool wasDeserialized() const { return InstBits.Deserialized; }
+   void setDeserialized(bool b) { InstBits.Deserialized = b; }
+
+   bool isVerified() const { return InstBits.Verified; }
+   void setVerified(bool V) { InstBits.Verified = V; }
+
+   bool isCanonicalized() const { return InstBits.Canonicalized; }
+   void setCanonicalized(bool V) { InstBits.Canonicalized = V; }
+
+   bool isOptimized() const { return InstBits.Optimized; }
+   void setOptimized(bool V) { InstBits.Optimized = V; }
 };
 
 class GlobalVariable: public GlobalObject,
@@ -109,6 +121,9 @@ public:
    Function *getInitFn() const { return InitFn; }
    void setInitFn(Function *InitFn) { GlobalVariable::InitFn = InitFn; }
 
+   Function *getDeinitFn() const { return DeinitFn; }
+   void setDeinitFn(Function *V) { DeinitFn = V; }
+
    GlobalVariable *getInitializedFlag() const { return InitializedFlag; }
    void setInitializedFlag(GlobalVariable *F) { InitializedFlag = F; }
 
@@ -130,8 +145,10 @@ public:
 protected:
    Constant *initializer;
    GlobalVariable *InitializedFlag = nullptr;
-   Function *InitFn = nullptr;
    serial::LazyILGlobalInfo *LazyGlobalInfo = nullptr;
+
+   Function *InitFn = nullptr;
+   Function *DeinitFn = nullptr;
 
 public:
    bool isDeclared() const { return GVBits.Declared; }

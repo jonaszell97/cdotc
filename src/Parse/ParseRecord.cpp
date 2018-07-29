@@ -295,6 +295,9 @@ ParseResult Parser::parseRecordLevelDecl()
       AccessValid = false;
       NextDecl = parseAssociatedType();
       break;
+   case tok::kw___debug:
+      NextDecl = DebugDecl::Create(Context, currentTok().getSourceLoc());
+      break;
    case tok::kw_module:
       SP.diagnose(err_module_must_be_first, currentTok().getSourceLoc());
       (void)parseModuleDecl();
@@ -784,7 +787,7 @@ ParseResult Parser::parseSubscriptDecl()
    advance();
 
    SourceLocation varargLoc;
-   auto Args = parseFuncArgs(varargLoc);
+   auto Args = parseFuncArgs(varargLoc, true);
 
    if (varargLoc.isValid()) {
       SP.diagnose(err_vararg_not_valid, varargLoc, 0 /*subscript*/);
@@ -991,16 +994,14 @@ ParseResult Parser::parseMethodDecl()
    advance();
 
    std::vector<FuncArgDecl*> args;
-   if (!CurDeclAttrs.StaticLoc) {
-      args.push_back(
-         FuncArgDecl::Create(Context, SourceLocation(), DefLoc,
-                             DeclarationName(Ident_self),
-                             ArgumentConvention::Default, SourceType(),
-                             nullptr, false, false,/*isSelf=*/true));
-   }
+   args.push_back(
+      FuncArgDecl::Create(Context, SourceLocation(), DefLoc,
+                          DeclarationName(Ident_self), nullptr,
+                          ArgumentConvention::Default, SourceType(),
+                          nullptr, false, false, /*isSelf=*/true));
 
    SourceLocation varargLoc;
-   parseFuncArgs(varargLoc, args);
+   parseFuncArgs(varargLoc, args, IsOperator);
 
    bool Throws = false;
    bool Async = false;
@@ -1113,7 +1114,7 @@ ParseResult Parser::parseEnumCase()
       advance();
 
       SourceLocation varargLoc;
-      associatedTypes = parseFuncArgs(varargLoc);
+      associatedTypes = parseFuncArgs(varargLoc, /*FIXME*/ true);
    }
 
    EnumCaseDecl* caseDecl;

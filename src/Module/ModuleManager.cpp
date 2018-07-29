@@ -23,7 +23,7 @@ using namespace cdot::support;
 
 using std::string;
 
-ModuleManager::ModuleManager(CompilationUnit &CI)
+ModuleManager::ModuleManager(CompilerInstance &CI)
    : CI(CI)
 { }
 
@@ -40,50 +40,41 @@ ModuleManager::~ModuleManager()
       Pair.getSecond()->~Module();
 }
 
-Module* ModuleManager::CreateModule(ast::ModuleDecl *Decl,
-                                    IdentifierInfo *Name) {
-   auto Mod = CreateModule(Decl->getSourceRange(), Name);
-
-   Mod->setDecl(Decl);
-   Decl->setModule(Mod);
-
-   if (!CI.getOptions().noPrelude()) {
-      this->ImportPrelude(Mod);
-   }
-
-   return Mod;
-}
-
 Module* ModuleManager::CreateModule(SourceRange Loc,
-                                    IdentifierInfo *Name) {
+                                    IdentifierInfo *Name,
+                                    bool CreateDecl) {
    auto Mod = Module::Create(CI.getContext(), Name, Loc, nullptr);
 
    auto File = CI.getFileMgr().getOpenedFile(Loc.getStart());
    Mod->setILModule(
       new il::Module(CI.getILCtx(), File.SourceId, File.FileName));
 
-   return Mod;
-}
+   if (CreateDecl) {
+      auto *D = ModuleDecl::Create(CI.getContext(), Loc, Name);
+      CI.getSema().addDeclToContext(CI.getGlobalDeclCtx(), D);
 
-Module* ModuleManager::CreateModule(ast::ModuleDecl *Decl,
-                                    IdentifierInfo *Name,
-                                    Module *ParentModule) {
-   auto Mod = CreateModule(Decl->getSourceRange(), Name, ParentModule);
-
-   Mod->setDecl(Decl);
-   Decl->setModule(Mod);
-
-   if (!CI.getOptions().noPrelude()) {
-      this->ImportPrelude(Mod);
+      D->setModule(Mod);
+      Mod->addDecl(D);
    }
 
    return Mod;
 }
 
-Module* ModuleManager::CreateModule(SourceRange Loc,
-                                    IdentifierInfo *Name,
-                                    Module *ParentModule) {
-   return Module::Create(CI.getContext(), Name, Loc, ParentModule);
+Module* ModuleManager::CreateSubModule(SourceRange Loc,
+                                       IdentifierInfo *Name,
+                                       Module *ParentModule,
+                                       bool CreateDecl) {
+   auto *Mod = Module::Create(CI.getContext(), Name, Loc, ParentModule);
+
+   if (CreateDecl) {
+      auto *D = ModuleDecl::Create(CI.getContext(), Loc, Name);
+      CI.getSema().addDeclToContext(*ParentModule->getDecl(), D);
+
+      D->setModule(Mod);
+      Mod->addDecl(D);
+   }
+
+   return Mod;
 }
 
 Module* ModuleManager::LookupModule(SourceRange Loc,
@@ -135,15 +126,14 @@ ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
    auto *Decl = ModuleDecl::Create(CI.getContext(), Loc, Name.front());
    Sema.addDeclToContext(*Ctx, Decl);
 
-   if (auto *Prev = Ctx->lookupSingle<ModuleDecl>(Name.front())) {
-      Decl->setPrimaryCtx(Prev);
-   }
-
    if (!MainModule) {
-      MainModule = CreateModule(Decl, Name.front());
+      MainModule = CreateModule(Loc, Name.front());
    }
 
+   MainModule->addDecl(Decl);
    Decl->setModule(MainModule);
+   Decl->setPrimaryCtx(MainModule->getDecl());
+
    Ctx = Decl;
 
    // Now look for or create the necessary submodules.
@@ -153,24 +143,41 @@ ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
       auto *SubDecl = ModuleDecl::Create(CI.getContext(), Loc, SubName);
       Sema.addDeclToContext(*Ctx, SubDecl);
 
-      if (auto *Prev = Ctx->lookupSingle<ModuleDecl>(SubName)) {
-         SubDecl->setPrimaryCtx(Prev);
-      }
-
       auto *SubMod = CurrentMod->getSubModule(SubName);
       if (!SubMod) {
-         SubMod = CreateModule(SubDecl, SubName, CurrentMod);
-      }
-      else if (!SubMod->getDecl()) {
-         SubMod->setDecl(SubDecl);
+         SubMod = CreateSubModule(Loc, SubName, CurrentMod);
       }
 
+      SubMod->addDecl(SubDecl);
       SubDecl->setModule(SubMod);
+      SubDecl->setPrimaryCtx(SubMod->getDecl());
+
       CurrentMod = SubMod;
       Ctx = SubDecl;
    }
 
    return cast<ModuleDecl>(Ctx);
+}
+
+Module *ModuleManager::GetModule(ArrayRef<IdentifierInfo *> Name)
+{
+   assert(!Name.empty() && "empty module name!");
+
+   auto Loc = CI.getMainFileLoc();
+
+   auto *Mod = LookupModule(Loc, Loc, Name.front());
+   if (!Mod)
+      return nullptr;
+
+   for (auto *SubName : Name.drop_front(1)) {
+      auto *SubMod = Mod->getSubModule(SubName);
+      if (!SubMod)
+         return nullptr;
+
+      Mod = SubMod;
+   }
+
+   return Mod;
 }
 
 void ModuleManager::EmitModules()
@@ -184,7 +191,6 @@ void ModuleManager::EmitModule(Module *Mod)
 {
    std::error_code EC;
    SmallString<128> OutFile;
-   SmallString<1024> Buffer;
 
    fs::appendToPath(OutFile, fs::getLibraryDir());
    if (OutFile.back() != fs::PathSeperator)
@@ -229,33 +235,31 @@ void ModuleManager::EmitModule(Module *Mod)
    }
 
    {
-      llvm::BitstreamWriter BS(Buffer);
-      serial::ModuleWriter Writer(CI, BS);
+      Buffer = new (CI.getContext()) SmallString<0>();
+
+      llvm::BitstreamWriter BS(*Buffer);
+      Writer = new (CI.getContext()) serial::ModuleWriter(CI, BS);
 
       if (EmitStaticLib) {
          auto MaybeBuf = llvm::MemoryBuffer::getFile(TmpFile);
          if (!MaybeBuf)
             llvm::report_fatal_error("failed opening archive");
 
-         Writer.WriteModule(Mod, MaybeBuf.get().get());
+         Writer->WriteModule(Mod, MaybeBuf.get().get());
          fs::deleteFile(TmpFile.str());
       }
       else {
-         Writer.WriteModule(Mod);
+         Writer->WriteModule(Mod);
       }
    }
 
-   OS << Buffer;
+   OS << *Buffer;
 }
 
 void ModuleManager::ImportPrelude(Module *IntoMod)
 {
    auto &Sema = CI.getSema();
-   Module *Prelude = nullptr;
-
-   if (auto PreludeDecl = Sema.getPreludeModule()) {
-      Prelude = PreludeDecl->getModule();
-   }
+   class Module *Prelude = Sema.getPreludeModule();
 
    if (!Prelude) {
       auto *StdII = &CI.getContext().getIdentifiers().get("std");
@@ -292,7 +296,9 @@ void ModuleManager::ImportPrelude(Module *IntoMod)
       }
    }
 
-   if (IntoMod == Prelude || IntoMod->importsModule(Prelude))
+   if (IntoMod == Prelude
+         || IntoMod->importsModule(Prelude)
+         || IntoMod->getBaseModule() == Prelude->getBaseModule())
       return;
 
    IntoMod->getDecl()->addImportedModule(Prelude);

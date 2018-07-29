@@ -43,10 +43,14 @@ public:
       GlobalInitializer      = SemanticallyChecked  << 1u,
       ContainsUnexpandedPack = GlobalInitializer << 1u,
       Ignored                = ContainsUnexpandedPack << 1u,
+      Unsafe                 = Ignored << 1u,
 
+      _lastFlag         = Unsafe,
       StatusFlags       = TypeDependent | ValueDependent | HadError
                           | ContainsUnexpandedPack,
    };
+
+   static_assert(_lastFlag <= (1 << 7), "too many flags!");
 
    void dumpFlags() const;
    void printFlags(llvm::raw_ostream &OS) const;
@@ -98,6 +102,9 @@ public:
 
    bool isInvalid() const { return flagIsSet(HadError); }
    void setIsInvalid(bool error) { setFlag(HadError, error); }
+
+   bool isUnsafe() const { return flagIsSet(Unsafe); }
+   void setUnsafe(bool unsafe) { setFlag(Unsafe, unsafe); }
 
    bool isIgnored() const { return flagIsSet(Ignored); }
    void setIgnored(bool b) { setFlag(Ignored, b); }
@@ -258,15 +265,13 @@ public:
    static CompoundStmt *Create(ASTContext &ASTCtx,
                                bool preserveScope,
                                SourceLocation LBraceLoc,
-                               SourceLocation RBraceLoc,
-                               bool Unsafe = false);
+                               SourceLocation RBraceLoc);
 
    static CompoundStmt *Create(ASTContext &ASTCtx,
                                llvm::ArrayRef<Statement*> stmts,
                                bool preserveScope,
                                SourceLocation LBraceLoc,
-                               SourceLocation RBraceLoc,
-                               bool Unsafe = false);
+                               SourceLocation RBraceLoc);
 
    static CompoundStmt *CreateEmpty(ASTContext &C, unsigned N);
 
@@ -298,9 +303,6 @@ public:
    void setLBraceLoc(SourceLocation Loc) { LBraceLoc = Loc; }
    void setRBraceLoc(SourceLocation Loc) { RBraceLoc = Loc; }
 
-   bool isUnsafe() const { return Unsafe; }
-   void setUnsafe(bool Unsafe) { CompoundStmt::Unsafe = Unsafe; }
-
    unsigned getScopeID() const { return ScopeID; }
    void setScopeID(unsigned V) { ScopeID = V; }
 
@@ -315,20 +317,17 @@ public:
 private:
    CompoundStmt(bool preservesScope,
                 SourceLocation LBraceLoc,
-                SourceLocation RBraceLoc,
-                bool Unsafe);
+                SourceLocation RBraceLoc);
 
    CompoundStmt(llvm::ArrayRef<Statement* > stmts,
                 bool preserveScope,
                 SourceLocation LBraceLoc,
-                SourceLocation RBraceLoc,
-                bool Unsafe);
+                SourceLocation RBraceLoc);
 
    CompoundStmt(EmptyShell Empty, unsigned N);
 
    unsigned numStmts     : 30;
    bool preserveScope    : 1;
-   bool Unsafe           : 1;
    bool ContainsDeclStmt : 1;
 
    unsigned ScopeID = 0;
@@ -726,7 +725,9 @@ protected:
    SourceRange Braces;
    Expression* switchValue;
    unsigned NumCases;
+
    bool hasDefault = false;
+   bool HasMutableCaseArg = false;
 
 public:
    static bool classofKind(NodeType kind) { return kind == MatchStmtID; }
@@ -768,6 +769,9 @@ public:
 
    bool isHasDefault() const { return hasDefault; }
    void setHasDefault(bool hasDefault) { this->hasDefault = hasDefault; }
+
+   bool hasMutableCaseArg() const { return HasMutableCaseArg; }
+   void setHasMutableCaseArg(bool V) { HasMutableCaseArg = V; }
 };
 
 class ReturnStmt : public Statement {
@@ -931,7 +935,6 @@ class StaticIfStmt: public Statement {
    Statement *elseBranch;
 
    StaticIfStmt *Template;
-   ContinuationPoint CP;
 
 public:
    static StaticIfStmt *Create(ASTContext &C,
@@ -968,10 +971,6 @@ public:
    void setElseBranch(Statement *Else) { elseBranch = Else; }
 
    StaticIfStmt *getTemplate() const { return Template; }
-
-   const ContinuationPoint &getContinuationPoint() const { return CP; }
-   void setContinuationPoint(const ContinuationPoint &CP)
-   { StaticIfStmt::CP = CP; }
 };
 
 class StaticForStmt: public Statement {

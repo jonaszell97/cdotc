@@ -51,7 +51,7 @@ class TemplateArgList;
 struct ResolvedTemplateArg {
    ResolvedTemplateArg()
       : IsType(false), IsVariadic(false), IsNull(true), Dependent(false),
-        ManuallySpecifiedVariadicArgs(0), Param(nullptr)
+        Frozen(false), ManuallySpecifiedVariadicArgs(0), Param(nullptr)
    {}
 
    explicit ResolvedTemplateArg(ast::TemplateParamDecl *Param,
@@ -102,6 +102,11 @@ struct ResolvedTemplateArg {
       return VariadicArgs;
    }
 
+   /// Mark this variadic argument as final to avoid any more types being
+   // inferred for it.
+   void freeze();
+   bool isFrozen() const { return Frozen; }
+
    ast::TemplateParamDecl *getParam() const { return Param; }
 
    ResolvedTemplateArg clone(bool Canonicalize = false) const;
@@ -125,6 +130,7 @@ private:
    bool IsVariadic : 1;
    bool IsNull     : 1;
    bool Dependent  : 1;
+   bool Frozen     : 1;
 
    // number of variadic arguments that were manually specified, only when
    // this becomes 0 we begin adding inferred ones
@@ -249,7 +255,7 @@ public:
    static void Profile(llvm::FoldingSetNodeID &ID,
                        TemplateArgList const& list);
 
-   void inferFromType(QualType contextualType, QualType returnType,
+   bool inferFromType(QualType contextualType, QualType returnType,
                       bool IsLastVariadicParam = false) const;
 
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
@@ -440,10 +446,8 @@ public:
       return nullptr;
    }
 
-   void inferFromType(QualType contextualType, QualType returnType,
+   bool inferFromType(QualType contextualType, QualType returnType,
                       bool IsLastVariadicParam = false);
-   void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
-                         llvm::ArrayRef<ast::FuncArgDecl*> neededArgs);
 
    size_t size() const { return ArgLists.size(); }
    bool empty() const { return ArgLists.empty(); }

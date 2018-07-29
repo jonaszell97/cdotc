@@ -576,6 +576,7 @@ bool Type::isRefcounted() const
 {
    switch (getTypeID()) {
    case TypeID::LambdaTypeID:
+   case TypeID::BoxTypeID:
       return true;
    case TypeID::RecordTypeID:
       return getRecord()->isClass();
@@ -707,44 +708,12 @@ public:
 
    void visitRecordType(const RecordType *Ty)
    {
-      auto R = Ty->getRecord();
-      auto *Ctx = R->getNonTransparentDeclContext();
-      if (isa<NamedDecl>(Ctx)) {
-         if (!isa<ModuleDecl>(Ctx)) {
-            OS << cast<NamedDecl>(Ctx)->getFullName();
-            OS << '.';
-         }
-      }
-
-      if (R->isInstantiation()) {
-         OS << R->getDeclName().getInstantiationName() << "<";
-
-         auto &Args = *R->getDeclName().getInstantiationArgs();
-         unsigned i = 0;
-
-         for (auto &Arg : Args) {
-            if (i++ != 0) OS << ", ";
-            visitTemplateArg(Arg);
-         }
-
-         OS << ">";
-      }
-      else {
-         OS << R->getDeclName();
-      }
+      OS << Ty->getRecord()->getDeclName();
    }
 
    void visitDependentRecordType(const DependentRecordType *Ty)
    {
       auto R = Ty->getRecord();
-      auto *Ctx = R->getNonTransparentDeclContext();
-      if (isa<NamedDecl>(Ctx)) {
-         if (!isa<ModuleDecl>(Ctx)) {
-            OS << cast<NamedDecl>(Ctx)->getFullName();
-            OS << '.';
-         }
-      }
-
       OS << R->getDeclName() << "<";
 
       auto &Args = cast<DependentRecordType>(Ty)->getTemplateArgs();
@@ -772,7 +741,17 @@ public:
          OS << arg.toString();
       }
 
-      OS << ") -> " << Ty->getReturnType().toString();
+
+      OS << ") ";
+
+      if (Ty->isUnsafe())
+         OS << "unsafe ";
+      if (Ty->isAsync())
+         OS << "async";
+      if (Ty->throws())
+         OS << "throws ";
+
+      OS << "-> " << Ty->getReturnType().toString();
    }
 
    void visitLambdaType(const LambdaType *Ty)
@@ -817,6 +796,8 @@ public:
    void visitGenericType(const GenericType *Ty)
    {
       OS << Ty->getParam()->getDeclName();
+      if (Ty->isVariadic())
+         OS << "...";
    }
 
    void visitAssociatedType(const AssociatedType *Ty)
@@ -875,59 +856,6 @@ public:
    explicit DiagTypePrinter(llvm::raw_ostream &OS)
       : TypePrinterBase(OS)
    { }
-
-   void visitRecordType(const RecordType *Ty)
-   {
-      auto R = Ty->getRecord();
-      auto *Ctx = R->getNonTransparentDeclContext();
-      if (isa<NamedDecl>(Ctx)) {
-         if (!isa<ModuleDecl>(Ctx)) {
-            OS << cast<NamedDecl>(Ctx)->getFullName();
-            OS << '.';
-         }
-      }
-
-      if (R->isInstantiation()) {
-         OS << R->getDeclName().getInstantiationName() << "<";
-
-         auto &Args = *R->getDeclName().getInstantiationArgs();
-         unsigned i = 0;
-
-         for (auto &Arg : Args) {
-            if (i++ != 0) OS << ", ";
-            visitTemplateArg(Arg);
-         }
-
-         OS << ">";
-      }
-      else {
-         OS << R->getDeclName();
-      }
-   }
-
-   void visitDependentRecordType(const DependentRecordType *Ty)
-   {
-      auto R = Ty->getRecord();
-      auto *Ctx = R->getNonTransparentDeclContext();
-      if (isa<NamedDecl>(Ctx)) {
-         if (!isa<ModuleDecl>(Ctx)) {
-            OS << cast<NamedDecl>(Ctx)->getFullName();
-            OS << '.';
-         }
-      }
-
-      OS << R->getDeclName() << "<";
-
-      auto &Args = cast<DependentRecordType>(Ty)->getTemplateArgs();
-      unsigned i = 0;
-
-      for (auto &Arg : Args) {
-         if (i++ != 0) OS << ", ";
-         visitTemplateArg(Arg);
-      }
-
-      OS << ">";
-   }
 
    void visitGenericType(const GenericType *Ty)
    {
@@ -989,7 +917,8 @@ public:
          switch (paramInfo[i].getConvention()) {
          case ArgumentConvention::Owned: OS << "owned "; break;
          case ArgumentConvention::Borrowed: OS << "borrow "; break;
-         case ArgumentConvention::MutablyBorrowed: OS << "ref "; break;
+         case ArgumentConvention::MutableRef: OS << "mut ref "; break;
+         case ArgumentConvention::ImmutableRef: OS << "ref "; break;
          default:
             llvm_unreachable("bad argument convention");
          }
@@ -998,7 +927,15 @@ public:
          ++i;
       }
 
-      OS << ") -> ";
+      OS << ") ";
+      if (Ty->isUnsafe())
+         OS << "unsafe ";
+      if (Ty->isAsync())
+         OS << "async";
+      if (Ty->throws())
+         OS << "throws ";
+
+      OS << "-> ";
       visit(Ty->getReturnType());
    }
 
@@ -1224,7 +1161,7 @@ GenericType::GenericType(TemplateParamDecl *Param)
 
 void GenericType::setCanonicalType(QualType CanonicalType)
 {
-   this->CanonicalType = CanonicalType;
+   this->CanonicalType = CanonicalType->getCanonicalType();
 }
 
 llvm::StringRef GenericType::getGenericTypeName() const
@@ -1264,7 +1201,7 @@ AssociatedType::AssociatedType(AssociatedTypeDecl *AT)
 
 void AssociatedType::setCanonicalType(QualType CanonicalType)
 {
-   this->CanonicalType = CanonicalType.getBuiltinTy();
+   this->CanonicalType = CanonicalType->getCanonicalType();
    Bits.Dependent = CanonicalType->isDependentType();
 }
 

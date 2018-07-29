@@ -34,18 +34,22 @@ public:
    using RecordDataImpl = SmallVectorImpl<uint64_t>;
    using RecordDataRef  = ArrayRef<uint64_t>;
 
-   explicit ModuleWriter(CompilationUnit &CI, llvm::BitstreamWriter &Stream,
+   explicit ModuleWriter(CompilerInstance &CI, llvm::BitstreamWriter &Stream,
                          unsigned SourceID = unsigned(-1),
+                         IncrementalCompilationManager *IncMgr = nullptr);
+
+   explicit ModuleWriter(CompilerInstance &CI,
+                         llvm::BitstreamWriter &Stream,
+                         ModuleWriter &MainWriter,
                          IncrementalCompilationManager *IncMgr = nullptr);
 
    struct ValueToEmit {
       enum Kind : unsigned {
-         Type, Decl, ILValue, Scope,
+         Type, Decl, ILValue,
       };
 
       ValueToEmit(QualType Ty) : Val(Ty.getAsOpaquePtr()), K(Type) {}
       ValueToEmit(ast::Decl *D) : Val(D), K(Decl) {}
-      ValueToEmit(cdot::Scope *S) : Val(S), K(Scope) {}
       ValueToEmit(const il::Value *V)
          : Val(const_cast<il::Value*>(V)), K(ILValue)
       {}
@@ -53,7 +57,6 @@ public:
       bool isType() const { return K == Type; }
       bool isILValue() const { return K == ILValue; }
       bool isDecl() const { return K == Decl; }
-      bool isScope() const { return K == Scope; }
 
       operator QualType() const
       {
@@ -73,12 +76,6 @@ public:
          return reinterpret_cast<il::Value*>(Val);
       }
 
-      operator cdot::Scope *() const
-      {
-         assert(isScope());
-         return reinterpret_cast<cdot::Scope*>(Val);
-      }
-
    private:
       void *Val;
       Kind K : 2;
@@ -91,17 +88,19 @@ public:
 
 private:
    /// The compiler instance
-   CompilationUnit &CI;
+   CompilerInstance &CI;
 
    /// The BitstreamWriter that is being written to
    llvm::BitstreamWriter &Stream;
 
+public:
    /// The AST writer
    serial::ASTWriter ASTWriter;
 
    /// The IL writer
    serial::ILWriter ILWriter;
 
+private:
    /// The source ID of the cache file being written, if applicable.
    unsigned SourceID = unsigned(-1);
 
@@ -153,7 +152,9 @@ private:
    void WriteCacheControlBlock();
    void WriteIdentifierBlock();
    void WriteValuesTypesAndDecls();
+   void WriteValuesAndTypes();
    void WriteStaticLibraryData(llvm::MemoryBuffer *Buf);
+   void WriteFileManagerBlock();
 
    /// Emit a reference to an identifier.
    void AddIdentifierRef(const IdentifierInfo *II, RecordDataImpl &Record);
@@ -165,14 +166,16 @@ public:
    /// Main entry point to emit a module to a file.
    void WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf = nullptr);
 
-   /// Write a cache file for the given module and source ID.
-   void WriteCacheFile(Module *Mod, IdentifierInfo *FileName);
+   /// Write a cache file.
+   void WriteCacheFile();
 
    void printStatistics() const;
 
    void sanityCheck();
 
-   CompilationUnit &getCompilerInstance() const { return CI; }
+   bool incremental() const { return IncMgr != nullptr; }
+
+   CompilerInstance &getCompilerInstance() const { return CI; }
    unsigned int getSourceID() const { return SourceID; }
 
    unsigned getSourceIDForDecl(const ast::Decl *D);

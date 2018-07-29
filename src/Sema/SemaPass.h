@@ -55,15 +55,15 @@ public:
    using TemplateArgList = cdot::sema::TemplateArgList;
    using MultiLevelTemplateArgList = sema::MultiLevelTemplateArgList;
 
-   explicit SemaPass(CompilationUnit &compilationUnit);
+   explicit SemaPass(CompilerInstance &compilationUnit);
    ~SemaPass();
 
    Type *getBuiltinType(DeclarationName typeName);
 
    DiagnosticsEngine &getDiags() { return Diags; }
 
-   CompilationUnit &getCompilationUnit() const { return *compilationUnit; }
-   void setCompilationUnit(CompilationUnit &CU) { compilationUnit = &CU; }
+   CompilerInstance &getCompilationUnit() const { return *compilationUnit; }
+   void setCompilationUnit(CompilerInstance &CU) { compilationUnit = &CU; }
 
    ASTContext& getContext() const { return compilationUnit->getContext(); }
 
@@ -123,11 +123,18 @@ public:
    MultiLevelLookupResult MultiLevelLookup(DeclContext &Ctx,
                                            DeclarationName Name,
                                            bool ExternalLookup = true,
-                                           bool LocalLookup = true);
+                                           bool LocalLookup = true,
+                                           bool LookInExtensions = true);
 
    DeclContextLookupResult Lookup(DeclContext &Ctx,
                                   DeclarationName Name,
-                                  bool ExternalLookup = true);
+                                  bool ExternalLookup = true,
+                                  bool LookInExtensions = true);
+
+   DeclContextLookupResult LookupOwn(DeclContext &Ctx,
+                                     DeclarationName Name,
+                                     bool ExternalLookup = true,
+                                     bool LookInExtensions = true);
 
    template <class T>
    T *LookupSingle(DeclContext &Ctx,
@@ -281,6 +288,8 @@ public:
 
    void transferDecls(DeclContext *From, DeclContext *To);
 
+   DeclResult declareDebugDecl(DebugDecl *D);
+
    DeclResult declareImportDecl(ImportDecl *Decl);
    DeclResult declareModuleDecl(ModuleDecl *Decl);
 
@@ -293,6 +302,7 @@ public:
    DeclResult declareOperatorDecl(OperatorDecl *Decl);
 
    DeclResult declareNamespaceDecl(NamespaceDecl *NS);
+   DeclResult declareUnittestDecl(UnittestDecl *D);
    DeclResult declareUsingDecl(UsingDecl *UD);
 
    DeclResult declareTemplateParamDecl(TemplateParamDecl *decl);
@@ -356,7 +366,11 @@ public:
    
    // Sema pass
 
+   DeclResult visitDebugDecl(DebugDecl *D);
+
    DeclResult visitNamespaceDecl(NamespaceDecl *node);
+   DeclResult visitUnittestDecl(UnittestDecl *D);
+
    StmtResult visitCompoundStmt(CompoundStmt *Stmt);
 
    StmtResult visitAttributedStmt(AttributedStmt *Stmt);
@@ -516,9 +530,11 @@ public:
 
    void registerExplicitConformances(RecordDecl *Rec);
    void registerExplicitConformances(RecordDecl *Rec,
-                                     llvm::ArrayRef<SourceType> ConfTypes);
+                                     ArrayRef<SourceType> ConfTypes);
 
    void registerImplicitAndInheritedConformances(RecordDecl *Rec);
+   void registerImplicitAndInheritedConformances(RecordDecl *Rec,
+                                                ArrayRef<SourceType> ConfTypes);
 
    // disallow passing an rvalue as second parameter
    template<class T>
@@ -710,8 +726,6 @@ public:
    void diagnose(diag::MessageKind msg, Args const&...args)
    {
       if (diag::isError(msg)) {
-         EncounteredError = true;
-
          if (currentScope)
             currentScope->setHadError(true);
       }
@@ -733,6 +747,8 @@ public:
                                   llvm::ArrayRef<Expression*> OriginalArgs,
                                   sema::TemplateArgListResult &Cand);
 
+   bool equivalent(TemplateParamDecl *p1, TemplateParamDecl *p2);
+
    void visitRecordInstantiation(StmtOrDecl DependentStmt, RecordDecl *Inst);
    void declareRecordInstantiation(StmtOrDecl DependentStmt, RecordDecl *Inst);
    void finalizeRecordInstantiation(RecordDecl *Inst);
@@ -748,10 +764,7 @@ public:
       InstScopeMap[Inst] = Scope;
    }
 
-   NamedDecl *getInstantiationScope(NamedDecl *Inst)
-   {
-      return InstScopeMap[Inst];
-   }
+   NamedDecl *getInstantiationScope(NamedDecl *Inst);
 
    void visitDelayedDecl(Decl *ND);
    void checkVirtualOrOverrideMethod(MethodDecl *M);
@@ -1056,11 +1069,13 @@ public:
    void resizeDiags(size_t toSize);
 
    bool encounteredError() const { return EncounteredError; }
+   void setEncounteredError(bool b) { EncounteredError = b; }
+
    size_t getNumGlobals() const { return numGlobals; }
 
 private:
    /// Pointer to the compiler instance this Sema object belongs to.
-   CompilationUnit *compilationUnit;
+   CompilerInstance *compilationUnit;
 
    /// Current diagnostic consumer. Default behaviour is to store the
    /// diagnostics and emit them when Sema is destructed.
@@ -1139,9 +1154,6 @@ private:
    /// Instantiator instance.
    mutable TemplateInstantiator Instantiator;
 
-   /// Conformance checker instance.
-   sema::ConformanceChecker ConformanceChecker;
-
    /// Function declarations marked extern C with a particular name.
    llvm::DenseMap<IdentifierInfo*, CallableDecl*> ExternCFuncs;
 
@@ -1210,6 +1222,21 @@ public:
 
    private:
       Decl *D;
+   };
+
+   struct UnittestRAII {
+      explicit UnittestRAII(SemaPass &SP) : SP(SP)
+      {
+         SP.Bits.InUnitTest = true;
+      }
+
+      ~UnittestRAII()
+      {
+         SP.Bits.InUnitTest = false;
+      }
+
+   private:
+      SemaPass &SP;
    };
 
    struct CoroutineInfo {
@@ -1289,6 +1316,7 @@ private:
       bool AllowUnexpandedParameterPack : 1;
       bool AllowIncompleteTemplateTypes : 1;
       bool InDefaultArgumentValue       : 1;
+      bool InUnitTest                   : 1;
    };
 
    union {
@@ -1307,12 +1335,12 @@ private:
 
    /// Builtin declarations.
 
-   ModuleDecl *StdModule = nullptr;
-   ModuleDecl *PreludeModule = nullptr;
-   ModuleDecl *BuiltinModule = nullptr;
-   ModuleDecl *ReflectModule = nullptr;
-   ModuleDecl *SysModule     = nullptr;
-   ModuleDecl *AsyncModule   = nullptr;
+   Module *StdModule = nullptr;
+   Module *PreludeModule = nullptr;
+   Module *BuiltinModule = nullptr;
+   Module *ReflectModule = nullptr;
+   Module *SysModule     = nullptr;
+   Module *AsyncModule   = nullptr;
 
    FunctionDecl *PureVirtual = nullptr;
 
@@ -1356,12 +1384,12 @@ private:
    llvm::DenseMap<NamedDecl*, NamedDecl*> InstScopeMap;
 
 public:
-   ModuleDecl *getStdModule();
-   ModuleDecl *getPreludeModule();
-   ModuleDecl *getBuiltinModule();
-   ModuleDecl *getReflectModule();
-   ModuleDecl *getSysModule();
-   ModuleDecl *getAsyncModule();
+   Module *getStdModule();
+   Module *getPreludeModule();
+   Module *getBuiltinModule();
+   Module *getReflectModule();
+   Module *getSysModule();
+   Module *getAsyncModule();
 
    FunctionDecl *getPureVirtualDecl();
 
@@ -1451,14 +1479,20 @@ public:
 
    bool ensureSizeKnown(QualType Ty, SourceLocation loc);
    bool ensureSizeKnown(RecordDecl *R, SourceLocation loc);
+
    bool ensureDeclared(Decl *D);
    bool ensureVisited(Decl *D);
+
+   bool ensureDeclared(Module *M);
+   bool ensureVisited(Module *M);
+
    bool prepareFunctionForCtfe(CallableDecl *Fn);
    bool prepareGlobalForCtfe(VarDecl *Decl);
 
    DeclResult declareAndVisit(Decl *D);
 
    void registerExtension(ExtensionDecl *D);
+   void makeExtensionVisible(ExtensionDecl *D);
 
 private:
    template<class T, class ...Args>
@@ -1570,8 +1604,19 @@ public:
    CandidateSet
    lookupFunction(DeclContext *Ctx,
                   DeclarationName name,
-                  llvm::ArrayRef<Expression*> args,
-                  llvm::ArrayRef<Expression*> templateArgs = {},
+                  ArrayRef<Expression*> args,
+                  ArrayRef<Expression*> templateArgs = {},
+                  ArrayRef<IdentifierInfo*> labels = {},
+                  Statement *Caller = nullptr,
+                  bool suppressDiags = false);
+
+   CandidateSet
+   lookupFunction(DeclContext *Ctx,
+                  DeclarationName name,
+                  Expression *SelfArg,
+                  ArrayRef<Expression*> args,
+                  ArrayRef<Expression*> templateArgs = {},
+                  ArrayRef<IdentifierInfo*> labels = {},
                   Statement *Caller = nullptr,
                   bool suppressDiags = false);
 
@@ -1579,29 +1624,50 @@ public:
    lookupFunction(DeclarationName name,
                   llvm::ArrayRef<Expression*> args,
                   llvm::ArrayRef<Expression*> templateArgs = {},
+                  ArrayRef<IdentifierInfo*> labels = {},
+                  Statement *Caller = nullptr,
+                  bool suppressDiags = false);
+
+   CandidateSet
+   lookupFunction(DeclarationName name,
+                  Expression *SelfArg,
+                  ArrayRef<Expression*> args,
+                  ArrayRef<Expression*> templateArgs = {},
+                  ArrayRef<IdentifierInfo*> labels = {},
                   Statement *Caller = nullptr,
                   bool suppressDiags = false);
 
    CandidateSet getCandidates(DeclarationName name,
                               Expression *SelfExpr);
 
-   CandidateSet
-   lookupCase(DeclarationName name,
-              EnumDecl *E,
-              llvm::ArrayRef<Expression*> args,
-              llvm::ArrayRef<Expression*> templateArgs = {},
-              Statement *Caller = nullptr,
-              bool suppressDiags = false);
+   CandidateSet lookupCase(DeclarationName name,
+                           EnumDecl *E,
+                           ArrayRef<Expression*> args,
+                           ArrayRef<Expression*> templateArgs = {},
+                           ArrayRef<IdentifierInfo*> labels = {},
+                           Statement *Caller = nullptr,
+                           bool suppressDiags = false);
 
    void lookupFunction(CandidateSet &CandSet,
                        DeclarationName name,
-                       llvm::ArrayRef<Expression*> args,
-                       llvm::ArrayRef<Expression*> templateArgs = {},
+                       ArrayRef<Expression*> args,
+                       ArrayRef<Expression*> templateArgs = {},
+                       ArrayRef<IdentifierInfo*> labels = {},
+                       Statement *Expr = nullptr,
+                       bool suppressDiags = false);
+
+   void lookupFunction(CandidateSet &CandSet,
+                       DeclarationName name,
+                       Expression *SelfArg,
+                       ArrayRef<Expression*> args,
+                       ArrayRef<Expression*> templateArgs = {},
+                       ArrayRef<IdentifierInfo*> labels = {},
                        Statement *Expr = nullptr,
                        bool suppressDiags = false);
 
    CandidateSet checkAnonymousCall(FunctionType *FTy,
-                                   llvm::ArrayRef<Expression*> args,
+                                   ArrayRef<Expression*> args,
+                                   ArrayRef<IdentifierInfo*> labels,
                                    Statement *Caller = nullptr);
 
    /// -1 indicates that the type cannot be returned, other values are the
@@ -1609,6 +1675,8 @@ public:
    int ExprCanReturn(Expression *E, QualType Ty);
    QualType ResolveContextualLambdaExpr(LambdaExpr *E, QualType Ty);
    QualType GetDefaultExprType(Expression *E);
+
+   void visitTypeDependentContextualExpr(Expression *E);
 
    void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
    bool maybeInstantiateRecord(CandidateSet::Candidate &Cand,
@@ -1756,8 +1824,8 @@ private:
       LambdaScope *lambdaScope = nullptr;
    };
 
-   ExprResult HandleBuiltinTypeMember(MemberRefExpr *Expr, QualType Ty);
-   ExprResult HandleStaticTypeMember(MemberRefExpr *Expr, QualType Ty);
+   ExprResult HandleBuiltinTypeMember(IdentifierRefExpr *Expr, QualType Ty);
+   ExprResult HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty);
 
    ExprResult HandleFieldAccess(IdentifierRefExpr *Ident,
                                 MutableArrayRef<Expression*> TemplateArgs,
@@ -1783,7 +1851,7 @@ private:
                                  = diag::err_undeclared_identifer);
 
    bool isAccessible(NamedDecl *ND);
-   void checkAccessibility(NamedDecl *ND, Expression* Expr);
+   void checkAccessibility(NamedDecl *ND, StmtOrDecl SOD);
 
    StmtOrDecl checkMacroCommon(StmtOrDecl SOD,
                                DeclarationName MacroName,
@@ -1792,18 +1860,13 @@ private:
                                llvm::ArrayRef<lex::Token> Tokens,
                                unsigned Kind);
 
-   FuncArgDecl *MakeSelfArg();
+   FuncArgDecl *MakeSelfArg(SourceLocation Loc);
 
 public:
-   void ApplyCasts(llvm::MutableArrayRef<Expression*> args,
-                   Expression *DependentExpr,
-                   CandidateSet &CandSet,
-                   bool IsDotInit = false);
+   void addDependency(Decl *ReferencedDecl);
+   void addDependency(NamedDecl *DependentDecl, Decl *ReferencedDecl);
 
-   void PrepareCallArgs(CandidateSet::Candidate &Cand,
-                        ASTVector<Expression*> &args,
-                        Expression *Expr,
-                        CallableDecl *C);
+   unsigned getSerializationFile(Decl *D);
 
    void calculateRecordSize(RecordDecl *R);
    bool finalizeRecordDecls();
@@ -1822,6 +1885,12 @@ public:
       return It->getSecond();
    }
 
+   template <class T, std::size_t StrLen>
+   T *getBuiltinDecl(const char (&Str)[StrLen])
+   {
+      return support::cast_or_null<T>(getBuiltinDecl(Str));
+   }
+
 private:
    // Builtin namespace
    const IdentifierInfo *BuiltinIdents[64];
@@ -1838,9 +1907,9 @@ private:
 
    void initReflectionIdents();
 
+public:
    ExprResult HandleReflectionAlias(AliasDecl *Al, Expression *Expr);
    ExprResult HandleReflectionCall(CallableDecl *C);
-
    ExprResult HandleBuiltinAlias(AliasDecl *Al, Expression *Expr);
 
    friend class ReflectionBuilder;

@@ -24,7 +24,7 @@ namespace serial {
    class ILModuleFile;
 } // namespace serial
 
-class CompilationUnit;
+class CompilerInstance;
 
 namespace il {
 
@@ -141,6 +141,9 @@ public:
    bool hasExternallyVisibleSymbols()const{return HasExternallyVisibleSymbols;}
    void setHasExternallyVisibleSymbols(bool V){HasExternallyVisibleSymbols = V;}
 
+   bool containsDeserializedValues() const { return ContainsDeserializedValues;}
+   void setContainsDeserializedValues(bool V) { ContainsDeserializedValues = V;}
+
    bool isSynthesized() const { return Synthesized; }
    void setSynthesized(bool V) { Synthesized = V; }
 
@@ -168,6 +171,7 @@ protected:
    llvm::Module *LLVMMod = nullptr;
 
    bool Synthesized = false;
+   bool ContainsDeserializedValues = false;
    bool HasExternallyVisibleSymbols = false;
 };
 

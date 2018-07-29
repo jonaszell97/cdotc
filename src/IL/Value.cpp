@@ -46,6 +46,12 @@ ValueType::ValueType(il::Context &Ctx, QualType ty)
 
 }
 
+ValueType &ValueType::operator=(QualType const& that)
+{
+   Ty = that ? that.getCanonicalType() : nullptr;
+   return *this;
+}
+
 ValueType ValueType::getPointerTo() const
 {
    return ValueType(*Ctx, Ctx->getASTCtx().getPointerType(Ty));

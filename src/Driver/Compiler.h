@@ -81,7 +81,7 @@ enum class OptimizationLevel : unsigned char {
    O3,
 };
 
-class CompilationUnit;
+class CompilerInstance;
 class Job;
 
 struct CompilerOptions {
@@ -98,11 +98,12 @@ struct CompilerOptions {
       F_PrintStats      = F_IsStdLib << 1,
       F_StaticModuleLib = F_PrintStats << 1,
       F_NoDebugIL       = F_StaticModuleLib << 1,
+      F_RunUnitTests    = F_NoDebugIL << 1,
    };
 
    CompilerOptions() {}
 
-   friend class CompilationUnit;
+   friend class CompilerInstance;
 
 private:
    std::vector<std::string> includePaths;
@@ -167,6 +168,7 @@ public:
    bool printStats() const { return flagIsSet(F_PrintStats); }
    bool emitStaticModuleLib() const { return flagIsSet(F_StaticModuleLib); }
    bool noDebugIL() const { return flagIsSet(F_NoDebugIL); }
+   bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
 
    bool flagIsSet(Flag F) const
    {
@@ -182,18 +184,18 @@ public:
    }
 };
 
-class CompilationUnit {
+class CompilerInstance {
 public:
-   CompilationUnit(int argc, char *argv[]);
-   explicit CompilationUnit(CompilerOptions &&options);
+   CompilerInstance(int argc, char *argv[]);
+   explicit CompilerInstance(CompilerOptions &&options);
 
-   ~CompilationUnit();
+   ~CompilerInstance();
 
-   CompilationUnit(CompilationUnit &&CU) = delete;
-   CompilationUnit& operator=(CompilationUnit &&CU) = delete;
+   CompilerInstance(CompilerInstance &&CU) = delete;
+   CompilerInstance& operator=(CompilerInstance &&CU) = delete;
 
-   CompilationUnit(CompilationUnit const &CU) = delete;
-   CompilationUnit& operator=(CompilationUnit const &CU) = delete;
+   CompilerInstance(CompilerInstance const &CU) = delete;
+   CompilerInstance& operator=(CompilerInstance const &CU) = delete;
 
    int compile();
 
@@ -232,21 +234,29 @@ public:
    SourceLocation getMainFileLoc() const { return MainFileLoc; }
    void setMainFileLoc(SourceLocation V) { MainFileLoc = V; }
 
+   StringRef getMainSourceFile() const { return MainSourceFile; }
+   void setMainSourceFile(StringRef V) { MainSourceFile = V; }
+
    Module* getCompilationModule() const { return CompilationModule; }
    void setCompilationModule(Module* V) { CompilationModule = V; }
 
    ast::FunctionDecl* getMainFn() const { return MainFn; }
    void setMainFn(ast::FunctionDecl* V) { MainFn = V; }
 
-   void addModuleSource(unsigned SourceID, Module *Mod)
+   void addModuleSource(unsigned SourceID, ast::ModuleDecl *Mod)
    {
       SourceModuleMap[SourceID] = Mod;
    }
 
-   Module *getModuleForSource(unsigned SourceID)
+   ast::ModuleDecl *getModuleForSource(unsigned SourceID)
    {
       return SourceModuleMap[SourceID];
    }
+
+   void addPhaseDuration(StringRef PhaseName,
+                         long long DurationMillis);
+
+   void displayPhaseDurations(llvm::raw_ostream &OS) const;
 
 private:
    /// The options for this compilation.
@@ -255,6 +265,9 @@ private:
    /// The first source location in the first source file.
    SourceLocation MainFileLoc;
 
+   /// The file name and path of the main source file.
+   StringRef MainSourceFile;
+
    /// Job queue needed for completing the compilation.
    std::vector<Job*> Jobs;
 
@@ -262,7 +275,7 @@ private:
    std::unique_ptr<fs::FileManager> FileMgr;
 
    /// Mapping from source IDs to the module they (partly) define.
-   llvm::DenseMap<unsigned, Module*> SourceModuleMap;
+   llvm::DenseMap<unsigned, ast::ModuleDecl*> SourceModuleMap;
 
    /// The compilation's AST context
    std::unique_ptr<ast::ASTContext> Context;
@@ -287,6 +300,9 @@ private:
 
    /// Manager for incremental compilation
    std::unique_ptr<serial::IncrementalCompilationManager> IncMgr;
+
+   /// Duration of compilation phases.
+   SmallVector<std::pair<StringRef, long long>, 0> PhaseDurations;
 
    /// The base module for this compilation.
    Module *CompilationModule = nullptr;

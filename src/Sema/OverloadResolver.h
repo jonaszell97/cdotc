@@ -5,6 +5,7 @@
 #ifndef CDOT_OVERLOADRESOLVER_H
 #define CDOT_OVERLOADRESOLVER_H
 
+#include "AST/StmtOrDecl.h"
 #include "Sema/CandidateSet.h"
 
 #include <vector>
@@ -31,45 +32,29 @@ class Statement;
 class OverloadResolver {
 public:
    OverloadResolver(SemaPass &SP,
-                    llvm::ArrayRef<Expression*> givenArgs,
-                    llvm::ArrayRef<Expression*> givenTemplateArgs,
+                    Expression *SelfArg,
+                    ArrayRef<Expression*> givenArgs,
+                    ArrayRef<Expression*> givenTemplateArgs,
+                    ArrayRef<IdentifierInfo*> givenLabels,
                     Statement *Caller = nullptr);
 
-   using ConvSeqVec = llvm::SmallVectorImpl<ConversionSequenceBuilder>;
+   using ConvSeqVec = SmallVectorImpl<ConversionSequenceBuilder>;
+   using ArgVec     = SmallVectorImpl<StmtOrDecl>;
 
    void resolve(CandidateSet &CandSet);
    void resolve(CandidateSet &CandSet,
                 CandidateSet::Candidate &Cand,
                 llvm::ArrayRef<Expression*> givenArgs,
-                ConvSeqVec &Conversions);
-
-   void isCallCompatible(CandidateSet &CandSet,
-                         CandidateSet::Candidate &comp,
-                         llvm::ArrayRef<QualType> givenArgs,
-                         FunctionType *FuncTy,
-                         ConvSeqVec &Conversions,
-                         size_t firstDefaultArg = size_t(-1));
-
-   llvm::ArrayRef<Expression *> getGivenArgs()
-   {
-      return givenArgs;
-   }
+                ConvSeqVec &Conversions,
+                ArgVec &ArgExprs);
 
 protected:
    SemaPass &SP;
-   llvm::ArrayRef<Expression*> givenArgs;
-   llvm::ArrayRef<Expression*> givenTemplateArgs;
+   Expression *SelfArg;
+   ArrayRef<Expression*> givenArgs;
+   ArrayRef<Expression*> givenTemplateArgs;
+   ArrayRef<IdentifierInfo*> givenLabels;
    Statement *Caller;
-
-   void resolveTemplateArgs(std::vector<QualType> &resolvedArgs,
-                            llvm::ArrayRef<FuncArgDecl*> neededArgs,
-                            const sema::MultiLevelTemplateArgList&templateArgs);
-
-   void isVarargCallCompatible(CandidateSet &CandSet,
-                               CandidateSet::Candidate &comp,
-                               llvm::ArrayRef<QualType> givenArgs,
-                               FunctionType *FuncTy,
-                               ConvSeqVec &Conversions);
 };
 
 } // namespace ast

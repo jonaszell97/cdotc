@@ -10,9 +10,11 @@
 #include "ConversionSequence.h"
 #include "Template.h"
 
+#include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/Support/ErrorHandling.h>
+
 #include <cstdint>
 #include <vector>
-#include <llvm/Support/ErrorHandling.h>
 
 namespace cdot {
 namespace ast {
@@ -39,6 +41,7 @@ struct CandidateSet {
       TooFewArguments,
       TooManyArguments,
       IncompatibleArgument,
+      IncompatibleLabel,
       IncompatibleSelfArgument,
       CouldNotInferArgumentType,
       ArgumentRequiresRef,
@@ -158,6 +161,13 @@ struct CandidateSet {
          Data2 = reinterpret_cast<uintptr_t>(GivenTy.getAsOpaquePtr());
       }
 
+      void setHasIncompatibleLabel(uintptr_t argIndex, IdentifierInfo *Label)
+      {
+         FR = IncompatibleLabel;
+         Data1 = argIndex;
+         Data2 = reinterpret_cast<uintptr_t>(Label);
+      }
+
       void setCouldNotInferArgumentType(uintptr_t argIndex)
       {
          FR = CouldNotInferArgumentType;
@@ -267,17 +277,8 @@ struct CandidateSet {
       return Candidates.back();
    }
 
-   Candidate &addCandidate(ast::CallableDecl *CD, unsigned Distance = 0)
-   {
-      Candidates.emplace_back(CD, Distance);
-      return Candidates.back();
-   }
-
-   Candidate &addCandidate(ast::AliasDecl *Alias, unsigned Distance = 0)
-   {
-      Candidates.emplace_back(Alias, Distance);
-      return Candidates.back();
-   }
+   Candidate *addCandidate(ast::CallableDecl *CD, unsigned Distance = 0);
+   Candidate *addCandidate(ast::AliasDecl *Alias, unsigned Distance = 0);
 
    Candidate &addCandidate(FunctionType *FuncTy,
                            ast::PrecedenceGroupDecl *PG = nullptr,
@@ -361,8 +362,10 @@ struct CandidateSet {
    unsigned MatchIdx         : 16;
 
    uintptr_t BestConversionPenalty = uintptr_t(-1);
-   std::vector<ConversionSequenceBuilder> Conversions;
+   std::vector<ast::Expression*> ResolvedArgs;
+
    std::vector<Candidate> Candidates;
+   SmallPtrSet<ast::NamedDecl*, 8> CandidateFns;
 };
 
 } // namespace cdot

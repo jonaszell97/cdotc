@@ -50,7 +50,8 @@ void ModuleFile::PerformExternalLookup(DeclContext &Ctx, DeclarationName Name)
 
    for (auto ID : IDs) {
       auto ReadDecl = Reader.ASTReader.GetDecl(ID);
-      LoadedDecl(Ctx, ReadDecl);
+      if (ReadDecl)
+         LoadedDecl(Ctx, ReadDecl);
    }
 }
 
@@ -70,7 +71,7 @@ static bool isInInstantiation(DeclContext &CtxRef,
    return false;
 }
 
-void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl)
+void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl, bool IgnoreInst)
 {
    // these decls are immediately made visible
    switch (ReadDecl->getKind()) {
@@ -79,7 +80,6 @@ void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl)
    case Decl::FieldDeclID:
    case Decl::EnumCaseDeclID:
    case Decl::FuncArgDeclID:
-   case Decl::ModuleDeclID:
    case Decl::TemplateParamDeclID:
       return;
    default:
@@ -96,7 +96,7 @@ void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl)
    // if this context is an instantiation, we need to instantiate the decl
    // first
    NamedDecl *Inst = nullptr;
-   if (isInInstantiation(Ctx, Inst)) {
+   if (!IgnoreInst && isInInstantiation(Ctx, Inst)) {
       if (Inst->isImportedInstantiation()) {
          addDeclToContext(Sema, Ctx, ReadDecl);
          return;
@@ -125,7 +125,7 @@ void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl)
    addDeclToContext(Sema, Ctx, ReadDecl);
 }
 
-void ModuleFile::LoadAllDecls(DeclContext &Ctx)
+void ModuleFile::LoadAllDecls(DeclContext &Ctx, bool IgnoreInst)
 {
    if (LoadedAllDecls)
       return;
@@ -139,12 +139,16 @@ void ModuleFile::LoadAllDecls(DeclContext &Ctx)
    while (it != end) {
       for (unsigned ID : *it) {
          auto *D = Reader.ASTReader.GetDecl(ID);
+         if (!D) {
+            continue;
+         }
+
          if (auto *ND = dyn_cast<NamedDecl>(D)) {
             if (AlreadyLookedUp.find(ND->getDeclName())!= AlreadyLookedUp.end())
                continue;
          }
 
-         LoadedDecl(Ctx, D);
+         LoadedDecl(Ctx, D, IgnoreInst);
       }
 
       ++it;

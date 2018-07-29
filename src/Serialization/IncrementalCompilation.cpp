@@ -7,12 +7,17 @@
 #include "ModuleReader.h"
 #include "ModuleWriter.h"
 #include "Module/Module.h"
+#include "Module/ModuleManager.h"
 #include "Support/Casting.h"
 #include "Sema/SemaPass.h"
 
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/OnDiskHashTable.h>
 #include <llvm/Support/FileSystem.h>
+
+#include "IL/Module.h"
+#include "IL/GlobalVariable.h"
+#include "IL/Function.h"
 
 #define DEBUG_TYPE "incremental-compilation"
 
@@ -23,265 +28,342 @@ using namespace cdot::support;
 
 using FileInfo = IncrementalCompilationManager::FileInfo;
 
-enum BitCodes {
-   INFO_TABLE_BLOCK_ID = llvm::bitc::FIRST_APPLICATION_BLOCKID,
-};
-
-enum InfoTableBlockRecordTypes {
-   INFO_TABLE_DATA = 0,
-   DEPENDENCY_DATA = 1,
-};
-
-namespace {
-
-class InfoTableWriteLookupTrait {
-public:
-   using key_type     = StringRef;
-   using key_type_ref = key_type;
-
-   using data_type     = FileInfo;
-   using data_type_ref = const FileInfo&;
-
-   using hash_value_type = unsigned;
-   using offset_type     = unsigned;
-
-   static bool EqualKey(key_type_ref a, key_type_ref b)
-   {
-      return a == b;
-   }
-
-   static hash_value_type ComputeHash(key_type_ref a)
-   {
-      return llvm::HashString(a);
-   }
-
-   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream &Out,
-                                                   key_type_ref Name,
-                                                   data_type_ref File) {
-      using namespace llvm::support;
-
-      size_t KeyLen = Name.size() + 1;
-
-      size_t DataLen = File.FileNameOnDisk.size() + 1;
-      DataLen += 4; // ID
-      DataLen += 8; // last modified time
-
-      endian::Writer<little> LE(Out);
-
-      assert((uint16_t)DataLen == DataLen && (uint16_t)KeyLen == KeyLen);
-      LE.write<uint16_t>(static_cast<uint16_t>(DataLen));
-      LE.write<uint16_t>(static_cast<uint16_t>(KeyLen));
-
-      return std::make_pair(KeyLen, DataLen);
-   }
-
-   void EmitKey(llvm::raw_ostream &Out, key_type_ref Name, unsigned KeyLen)
-   {
-      Out.write(Name.begin(), KeyLen);
-   }
-
-   void EmitData(llvm::raw_ostream& Out, key_type_ref Name,
-                 data_type_ref File, unsigned DataLen) {
-      using namespace llvm::support;
-
-      Out.write(File.FileNameOnDisk.data(), File.FileNameOnDisk.size() + 1);
-
-      endian::Writer<little> LE(Out);
-      LE.write<uint32_t>(File.ID);
-      LE.write<int64_t>(File.LastModified);
-   }
-};
-
-class InfoTableReadLookupTrait {
-public:
-   using external_key_type = StringRef;
-   using internal_key_type = StringRef;
-
-   using data_type         = FileInfo;
-
-   using hash_value_type   = unsigned;
-   using offset_type       = unsigned;
-
-   static bool EqualKey(const internal_key_type& a, const internal_key_type& b)
-   {
-      return a == b;
-   }
-
-   static internal_key_type GetInternalKey(const external_key_type &Key)
-   {
-      return Key;
-   }
-
-   static external_key_type GetExternalKey(const internal_key_type &Key)
-   {
-      return Key;
-   }
-
-   static hash_value_type ComputeHash(const internal_key_type& a)
-   {
-      return llvm::HashString(a);
-   }
-
-   static std::pair<unsigned, unsigned>
-   ReadKeyDataLength(const unsigned char*& d) {
-      using namespace llvm::support;
-
-      unsigned DataLen = endian::readNext<uint16_t, little, unaligned>(d);
-      unsigned KeyLen = endian::readNext<uint16_t, little, unaligned>(d);
-
-      return std::make_pair(KeyLen, DataLen);
-   }
-
-   static internal_key_type ReadKey(const unsigned char* d, unsigned n)
-   {
-      assert(n >= 2 && d[n-1] == '\0');
-      return StringRef((const char*) d, n-1);
-   }
-
-   data_type ReadData(const internal_key_type& k,
-                      const unsigned char* d,
-                      unsigned n) {
-      using namespace llvm::support;
-
-      auto Name = StringRef((const char*) d);
-      d += Name.size() + 1;
-
-      auto ID = endian::readNext<uint32_t, little, unaligned>(d);
-      auto LastModified = endian::readNext<int64_t, little, unaligned>(d);
-
-      return data_type { ID, Name, LastModified };
-   }
-};
-
-} // anonymous namespace
-
-IncrementalCompilationManager::IncrementalCompilationManager(CompilationUnit &CI)
-   : CI(CI)
+static unsigned getCompilationHash(CompilerInstance &CI)
 {
-   InfoFileName = fs::getApplicationDir();
-   InfoFileName += "/cache";
-   fs::createDirectories(InfoFileName);
+   auto &Opts = CI.getOptions();
 
-   InfoFileName += "/incremental_cache.b";
+   llvm::FoldingSetNodeID ID;
+   ID.AddString(CI.getMainSourceFile());
+
+   uint64_t Flags = 0;
+   Flags |= Opts.emitModules();
+   Flags |= Opts.emitDebugInfo() << 1;
+
+   ID.AddInteger(Flags);
+   ID.AddString(CI.getContext().getTargetInfo().getTriple().str());
+
+   return ID.ComputeHash();
+}
+
+IncrementalCompilationManager::IncrementalCompilationManager(CompilerInstance &CI)
+   : CI(CI), InfoFileBuf(nullptr), InfoFileReader(nullptr)
+{
+
 }
 
 IncrementalCompilationManager::~IncrementalCompilationManager()
 {
-   FileDependency.print([](const IdentifierInfo *II) {
-      return II->getIdentifier();
+   FileDependency.print([&](unsigned ID) {
+      return IDFileMap[ID]->getValue().FileName;
    });
+
+   llvm::outs() << "\n\n";
 }
 
-void IncrementalCompilationManager::ReadInfoTable(RecordDataRef Record,
-                                                  StringRef Blob) {
-   auto TblOffset = Record[0];
-   auto *Data = (const unsigned char*)Blob.data();
+static bool startsWithCacheFileMagic(llvm::BitstreamCursor &Stream)
+{
+   return Stream.canSkipToPos(4) &&
+          Stream.Read(8) == 'C' &&
+          Stream.Read(8) == 'A' &&
+          Stream.Read(8) == 'S' &&
+          Stream.Read(8) == 'T';
+}
 
-   auto Buckets = Data + TblOffset;
+ReadResult IncrementalCompilationManager::ReadInfoFile()
+{
+   assert(!DidReadInfoFile && "already read!");
+   DidReadInfoFile = true;
 
-   using Table = llvm::OnDiskIterableChainedHashTable<InfoTableReadLookupTrait>;
-   auto *Tbl = Table::Create(Buckets, Data + 1, Data,
-                             InfoTableReadLookupTrait());
+   InfoFileName = fs::getApplicationDir();
+   InfoFileName += "/cache/";
+   fs::createDirectories(InfoFileName);
 
-   auto key_it = Tbl->key_begin();
-   auto key_end = Tbl->key_end();
-   auto data_it = Tbl->data_begin();
+   InfoFileName += std::to_string(getCompilationHash(CI));
 
-   for (; key_it != key_end; ++key_it, ++data_it) {
-      auto FI = *data_it;
-      if (FI.ID >= NextFileID)
-         NextFileID = FI.ID + 1;
+   auto BufOrError = llvm::MemoryBuffer::getFile(InfoFileName);
+   if (!BufOrError)
+      return Failure;
 
-      FileInfoMap[*key_it] = FI;
-      IDFileInfoMap.try_emplace(FI.ID, &*FileInfoMap.find(*key_it));
+   InfoFileBuf = move(BufOrError.get());
+
+   SourceRange MainFileLoc = CI.getMainFileLoc();
+
+   llvm::BitstreamCursor Stream(InfoFileBuf->getBuffer());
+   InfoFileReader = std::make_unique<ModuleReader>(CI, MainFileLoc,
+                                                   MainFileLoc.getStart(),
+                                                   Stream);
+
+   InfoFileReader->IncMgr = this;
+
+   if (!startsWithCacheFileMagic(Stream)) {
+      Error("invalid cache info file");
+      return Failure;
    }
 
-   FileInfoTbl = Tbl;
+   while (true) {
+      if (Stream.AtEndOfStream()) {
+         return Success;
+      }
+
+      llvm::BitstreamEntry Entry = Stream.advance();
+      switch (Entry.Kind) {
+      case llvm::BitstreamEntry::Error:
+      case llvm::BitstreamEntry::Record:
+      case llvm::BitstreamEntry::EndBlock:
+         Error("invalid record at top-level of AST file");
+         return Failure;
+
+      case llvm::BitstreamEntry::SubBlock:
+         break;
+      }
+
+      switch ((BlockIDs)Entry.ID) {
+      case CONTROL_BLOCK_ID: {
+         auto ControlRes = InfoFileReader->ReadControlBlock(Stream);
+         if (ControlRes != Success)
+            return ControlRes;
+
+         break;
+      }
+      case CACHE_CONTROL_BLOCK_ID: {
+         auto CacheControlRes = ReadCacheControlBlock(Stream);
+         if (CacheControlRes != Success)
+            return CacheControlRes;
+
+         break;
+      }
+      case FILE_MANAGER_BLOCK_ID: {
+         auto FileMgrRes = InfoFileReader->ReadFileManagerBlock(Stream);
+         if (FileMgrRes != Success)
+            return FileMgrRes;
+
+         break;
+      }
+      case OFFSET_BLOCK_ID: {
+         auto OffsetRes = InfoFileReader->ReadOffsetsBlock(Stream);
+         if (OffsetRes != Success)
+            return OffsetRes;
+
+         break;
+      }
+      case DECL_TYPES_BLOCK_ID: {
+         InfoFileReader->ASTReader.DeclsCursor = Stream;
+
+         if (Stream.SkipBlock() ||  // Skip with the main cursor.
+             // Read the abbrevs.
+             ModuleReader::ReadBlockAbbrevs(
+                InfoFileReader->ASTReader.DeclsCursor, DECL_TYPES_BLOCK_ID)) {
+            Error("malformed block record in module file");
+            return Failure;
+         }
+
+         break;
+      }
+      case AST_BLOCK_ID: {
+         auto ASTRes = InfoFileReader->ASTReader.ReadASTBlock(Stream);
+         if (ASTRes != Success)
+            return ASTRes;
+
+         break;
+      }
+      case IL_MODULE_BLOCK_ID: {
+         auto ILRes = InfoFileReader->ILReader.ReadILModule(Stream);
+         if (ILRes != Success)
+            return ILRes;
+
+         break;
+      }
+      case CONFORMANCE_BLOCK_ID: {
+         auto ConfRes = InfoFileReader->ASTReader.ReadConformanceBlock(Stream);
+         if (ConfRes != Success)
+            return ConfRes;
+
+         break;
+      }
+      case IDENTIFIER_BLOCK_ID: {
+         auto IdentRes = InfoFileReader->ReadIdentifierBlock(Stream);
+         if (IdentRes != Success)
+            return IdentRes;
+
+         break;
+      }
+      default:
+         if (Stream.SkipBlock()) {
+            Error("malformed block record in cache file");
+            return Failure;
+         }
+
+         break;
+      }
+   }
 }
 
-void IncrementalCompilationManager::ReadDependencies(RecordDataRef Record,
+ReadResult
+IncrementalCompilationManager::ReadCacheControlBlock(llvm::BitstreamCursor &Stream)
+{
+   if (ModuleReader::ReadBlockAbbrevs(Stream, CACHE_CONTROL_BLOCK_ID)) {
+      Error("invalid cache info file");
+      return Failure;
+   }
+
+   RecordData Record;
+   while (true) {
+      llvm::BitstreamEntry Entry = Stream.advance();
+      switch (Entry.Kind) {
+      case llvm::BitstreamEntry::Error:
+      case llvm::BitstreamEntry::EndBlock:
+         CheckIfRecompilationNeeded();
+         return Success;
+      case llvm::BitstreamEntry::SubBlock:
+         switch (Entry.ID) {
+         case CACHE_FILE_BLOCK_ID: {
+            if (!Stream.SkipBlock()) {
+               continue;
+            }
+
+            break;
+         }
+         default:
+            break;
+         }
+
+         Error("invalid record at top-level of cache file");
+         return Failure;
+      case llvm::BitstreamEntry::Record:
+         break;
+      }
+
+      Record.clear();
+
+      StringRef Blob;
+      auto RecordType = Stream.readRecord(Entry.ID, Record, &Blob);
+
+      switch ((ControlRecordTypes)RecordType) {
+      case CACHE_FILE: {
+         unsigned Idx = 0;
+         unsigned FileID = (unsigned)Record[Idx++];
+
+         if (FileID >= NextFileID)
+            NextFileID = FileID + 1;
+
+         FileInfo FI;
+         FI.FileID = FileID;
+
+         auto LastModified = Record[Idx] | (Record[Idx + 1] << 32);
+         Idx += 2;
+
+         FI.ModuleID = (unsigned)Record[Idx++];
+         FI.ModuleDeclID = (unsigned)Record[Idx++];
+         FI.OriginalSourceID = (unsigned)Record[Idx++];
+         FI.OriginalSourceOffset = (unsigned)Record[Idx++];
+
+         auto FileNameLen = Record[Idx++];
+         auto FileName = Blob.take_front(FileNameLen);
+         FI.FileName = FileName;
+
+         auto RealLastMod = fs::getLastModifiedTime(FileName);
+         if (LastModified < RealLastMod) {
+            FI.CheckedIfRecompilationNeeded = true;
+            FI.NeedsRecompilation = true;
+         }
+
+         FI.LastModified = RealLastMod;
+
+         auto DeclsBlob = Blob.drop_front(FileNameLen);
+         ReadFileDecls(FI, DeclsBlob);
+
+         auto Entry = FileInfoMap.try_emplace(FileName, move(FI)).first;
+         IDFileMap[FileID] = &*Entry;
+
+         break;
+      }
+      case DEPENDENCY_DATA: {
+         ReadDependencies(Record, Blob);
+         break;
+      }
+      default:
+         if (Stream.SkipBlock()) {
+            Error("malformed block record in module file");
+            return Failure;
+         }
+
+         break;
+      }
+   }
+}
+
+void IncrementalCompilationManager::CheckIfRecompilationNeeded()
+{
+   SmallPtrSet<FileInfo*, 16> Visited;
+
+   for (auto &Entry : FileInfoMap) {
+      auto &FI = Entry.getValue();
+      FI.CheckedIfRecompilationNeeded = true;
+
+      if (!FI.NeedsRecompilation) {
+         continue;
+      }
+
+      SmallPtrSet<FileInfo*, 16> Worklist;
+
+      auto &Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
+      for (auto *Dependency : Vert.getOutgoing()) {
+         Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+      }
+
+      while (!Worklist.empty()) {
+         auto &OtherFI = **Worklist.begin();
+         Worklist.erase(&OtherFI);
+
+         if (!Visited.insert(&OtherFI).second)
+            continue;
+
+         OtherFI.NeedsRecompilation = true;
+
+         auto &OtherVert = ReadFileDependency.getOrAddVertex(OtherFI.FileID);
+         for (auto *Dependency : OtherVert.getOutgoing()) {
+            Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+         }
+      }
+   }
+}
+
+void IncrementalCompilationManager::ReadFileDecls(FileInfo &FI, StringRef Blob)
+{
+   using namespace llvm::support;
+
+   auto *Ptr = Blob.data();
+   auto NumDecls = endian::readNext<uint32_t, little, unaligned>(Ptr);
+
+   while (NumDecls--) {
+      auto ID = endian::readNext<uint32_t, little, unaligned>(Ptr);
+      FI.DeclIDs.push_back(ID);
+   }
+}
+
+void IncrementalCompilationManager::ReadDependencies(RecordDataRef,
                                                      StringRef Blob) {
    auto *Ptr = reinterpret_cast<const uint32_t*>(Blob.data());
    auto NumNodes = *Ptr++;
 
    while (NumNodes--) {
-      auto &FI = IDFileInfoMap[*Ptr++];
-      auto *Vert = getDependencyVert(FI->getKey());
+      auto &FI = IDFileMap[*Ptr++];
+      auto &Vert = ReadFileDependency.getOrAddVertex(FI->getValue().FileID);
       auto NumDeps = *Ptr++;
 
       while (NumDeps--) {
-         auto &OtherFI = IDFileInfoMap[*Ptr++];
-         auto *OtherVert = getDependencyVert(OtherFI->getKey());
+         auto *OtherFI = IDFileMap[*Ptr++];
+         auto &OtherVert = ReadFileDependency.getOrAddVertex(
+            OtherFI->getValue().FileID);
 
-         Vert->addOutgoing(OtherVert);
+         Vert.addOutgoing(&OtherVert);
       }
    }
 }
 
 void
-IncrementalCompilationManager::WriteUpdatedTable(llvm::BitstreamWriter &Stream)
-{
-   using namespace llvm;
-
-   llvm::OnDiskChainedHashTableGenerator<InfoTableWriteLookupTrait> Gen;
-   InfoTableWriteLookupTrait Trait;
-
-   SmallString<256> TblData;
-   TblData.push_back('\0'); // needs a byte of padding
-
-   for (auto &FI : FileInfoMap) {
-      Gen.insert(FI.getKey(), FI.getValue(), Trait);
-   }
-
-   uint64_t Offset;
-   {
-      llvm::raw_svector_ostream SS(TblData);
-      Offset = Gen.Emit(SS);
-   }
-
-   auto Abv = std::make_shared<BitCodeAbbrev>();
-   Abv->Add(BitCodeAbbrevOp(INFO_TABLE_DATA));
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // table offset
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
-
-   unsigned AbbrevID = Stream.EmitAbbrev(move(Abv));
-   uint64_t Data[] = {INFO_TABLE_DATA, Offset};
-
-   Stream.EmitRecordWithBlob(AbbrevID, Data, bytes(TblData));
-}
-
-void IncrementalCompilationManager::WriteFileInfo()
-{
-   using namespace llvm;
-
-   std::error_code EC;
-   llvm::raw_fd_ostream FS(InfoFileName, EC, llvm::sys::fs::F_RW);
-   if (EC) {
-      llvm::report_fatal_error(EC.message());
-   }
-
-   SmallString<256> Str;
-   {
-      BitstreamWriter Stream(Str);
-
-      // Emit the file header.
-      Stream.Emit((unsigned)'C', 8);
-      Stream.Emit((unsigned)'I', 8);
-      Stream.Emit((unsigned)'N', 8);
-      Stream.Emit((unsigned)'C', 8);
-
-      Stream.EnterSubblock(INFO_TABLE_BLOCK_ID, 4);
-      WriteUpdatedTable(Stream);
-      WriteDependencies(Stream);
-      Stream.ExitBlock();
-   }
-
-   FS << Str.str();
-}
-
-void
-IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream)
-{
+IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream,
+                                                 ModuleWriter&) {
    using namespace llvm;
 
    auto Abv = std::make_shared<BitCodeAbbrev>();
@@ -297,14 +379,14 @@ IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream)
    for (auto &Node : FileDependency.getVertices()) {
       ++NumNodes;
 
-      Vec.push_back(FileInfoMap[Node->getPtr()->getIdentifier()].ID);
+      Vec.push_back(Node->getPtr());
 
       auto Idx = Vec.size();
       Vec.emplace_back(); // number of outgoing edges, fill in later
 
       unsigned NumDeps = 0;
       for (auto *Edge : Node->getOutgoing()) {
-         Vec.push_back(FileInfoMap[Edge->getPtr()->getIdentifier()].ID);
+         Vec.push_back(Edge->getPtr());
          ++NumDeps;
       }
 
@@ -317,323 +399,329 @@ IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream)
    Stream.EmitRecordWithBlob(AbbrevID, Data, bytes(Vec));
 }
 
-static bool startsWithInfoFileMagic(llvm::BitstreamCursor &Stream)
-{
-   return Stream.canSkipToPos(4) &&
-          Stream.Read(8) == 'C' &&
-          Stream.Read(8) == 'I' &&
-          Stream.Read(8) == 'N' &&
-          Stream.Read(8) == 'C';
-}
+LLVM_ATTRIBUTE_UNUSED
+static void writeDeclsPerFile(StringRef FileName, fs::FileManager &FileMgr,
+                llvm::DenseMap<unsigned, SmallVector<Decl*, 0>> &DeclsPerFile) {
+   std::string Path = "/Users/Jonas/Downloads/";
+   Path += FileName;
 
-ReadResult IncrementalCompilationManager::ReadFileInfo()
-{
-   auto MaybeBuf = llvm::MemoryBuffer::getFile(InfoFileName);
-   if (!MaybeBuf)
-      return Failure;
+   std::error_code EC;
+   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
 
-   auto &&Buf = MaybeBuf.get();
-   llvm::BitstreamCursor Stream(*Buf);
-
-   if (!startsWithInfoFileMagic(Stream)) {
-      Error("unexpected module file format");
-      return Failure;
+   SmallVector<StringRef, 16> FileNames;
+   for (auto &Pair : DeclsPerFile) {
+      FileNames.push_back(FileMgr.getFileName(Pair.getFirst()));
    }
 
-   // Read all of the records and blocks for the AST file.
-   RecordData Record;
+   std::stable_sort(FileNames.begin(), FileNames.end());
 
-   while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+   SmallVector<string, 64> DeclNames;
+   unsigned i = 0;
+   for (auto File : FileNames) {
+      if (i++ != 0) OS << "\n\n";
+      OS << File << "\n";
 
-      switch (Entry.Kind) {
-      case llvm::BitstreamEntry::Error:
-         Error("error at end of module block in module file");
-         return Failure;
-      case llvm::BitstreamEntry::EndBlock:
-         return Success;
-      case llvm::BitstreamEntry::SubBlock:
-         switch (Entry.ID) {
-         case INFO_TABLE_BLOCK_ID: {
-            if (ModuleReader::ReadBlockAbbrevs(Stream, INFO_TABLE_BLOCK_ID)) {
-               return Failure;
-            }
-
-            continue;
+      auto ID = FileMgr.openFile(File).SourceId;
+      for (auto *D : DeclsPerFile[ID]) {
+         if (auto *ND = dyn_cast<NamedDecl>(D)) {
+            DeclNames.push_back(ND->getFullName());
          }
-         default:
-            if (Stream.SkipBlock()) {
-               Error("malformed block record in module file");
-               return Failure;
-            }
-         }
-
-         continue;
-      case llvm::BitstreamEntry::Record:
-         // The interesting case.
-         break;
       }
 
-      // Read and process a record.
-      Record.clear();
-      StringRef Blob;
+      std::stable_sort(DeclNames.begin(), DeclNames.end());
 
-      auto RecordType =
-         (InfoTableBlockRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      for (auto &Name : DeclNames)
+         OS << "   " << Name << "\n";
 
-      switch (RecordType) {
-      default:  // Default behavior: ignore.
-         break;
-      case INFO_TABLE_DATA:
-         ReadInfoTable(Record, Blob);
-         break;
-      case DEPENDENCY_DATA:
-         ReadDependencies(Record, Blob);
-         break;
-      }
+      DeclNames.clear();
+   }
+}
+
+LLVM_ATTRIBUTE_UNUSED
+static void writeILVals(StringRef FileName, il::Module &M)
+{
+   SmallVector<std::pair<std::string, bool>, 0> Names;
+
+   for (auto &G : M.getGlobalList()) {
+      Names.emplace_back(G.getName(), G.isDeclared());
+   }
+   for (auto &F : M.getFuncList()) {
+      Names.emplace_back(F.getName(), F.isDeclared());
+   }
+
+   std::stable_sort(Names.begin(), Names.end(),
+      [](const std::pair<std::string, bool> &LHS,
+         const std::pair<std::string, bool> &RHS) {
+         return LHS.first > RHS.first;
+      });
+
+   std::string Path = "/Users/Jonas/Downloads/";
+   Path += FileName;
+
+   std::error_code EC;
+   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
+
+   for (auto &Name : Names) {
+      OS << Name.first << " " << Name.second << "\n";
+   }
+}
+
+void IncrementalCompilationManager::WriteFileInfo()
+{
+   using namespace llvm;
+
+   SmallString<256> Str;
+   llvm::raw_svector_ostream OS(Str);
+   BitstreamWriter Stream(Str);
+
+   ModuleWriter *MW;
+   std::unique_ptr<ModuleWriter> WriterPtr;
+
+   if (CI.getOptions().emitModules()) {
+      MW = CI.getModuleMgr().getModuleWriter();
+   }
+   else {
+      WriterPtr = std::make_unique<ModuleWriter>(CI, Stream, fs::InvalidID,
+                                                 this);
+
+      MW = WriterPtr.get();
+   }
+
+   auto &FileMgr = CI.getFileMgr();
+   SmallVector<unsigned, 32> ModuleDeclIDs;
+
+   for (auto &Entry : FileInfoMap) {
+      auto SourceID = FileMgr.openFile(Entry.getKey()).SourceId;
+      auto ModID = CI.getModuleForSource(SourceID);
+
+      ModuleDeclIDs.push_back(MW->ASTWriter.GetDeclRef(ModID));
+   }
+
+   // Emit offsets and common tables.
+   if (CI.getOptions().emitModules()) {
+      OS << SerializedModule;
+   }
+   else {
+      MW->WriteCacheFile();
+   }
+
+   Stream.EnterSubblock(CACHE_CONTROL_BLOCK_ID, 4);
+
+   auto Abv = std::make_shared<BitCodeAbbrev>();
+   Abv->Add(BitCodeAbbrevOp(CACHE_FILE));
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // file ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // last modified 1
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // last modified 2
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // module ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // module decl ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // source ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // source offset
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // file name length
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));        // file name
+   auto CacheFileAbbrevID = Stream.EmitAbbrev(move(Abv));
+
+   SmallVector<unsigned, 4> SourceIDs;
+
+   // Emit the source file table.
+   unsigned i = 0;
+   SmallString<256> DeclsTable;
+   for (auto &FI : FileInfoMap) {
+      auto SourceID = FileMgr.openFile(FI.getKey()).SourceId;
+      auto ModuleDeclID = ModuleDeclIDs[i];
+      auto *Mod = CI.getModuleForSource(SourceID);
+
+      uint64_t LastMod = (uint64_t)FI.getValue().LastModified;
+      RecordData::value_type Data[] = {
+         CACHE_FILE,
+         FI.getValue().FileID,
+         (uint32_t)LastMod,
+         (uint32_t)(LastMod >> 32),
+         Mod ? MW->ModuleIDs[Mod->getModule()] : 0,
+         ModuleDeclID,
+         SourceID,
+         FileMgr.getOpenedFile(SourceID).BaseOffset,
+         FI.getKeyLength()
+      };
+
+      DeclsTable += FI.getKey();
+      WriteFileDecls(DeclsTable, DeclsPerFile[SourceID], *MW);
+
+      Stream.EmitRecordWithBlob(CacheFileAbbrevID, Data, bytes(DeclsTable));
+
+      ++i;
+      DeclsTable.clear();
+   }
+
+   WriteDependencies(Stream, *MW);
+   Stream.ExitBlock();
+
+   std::error_code EC;
+   llvm::raw_fd_ostream FS(InfoFileName, EC, llvm::sys::fs::F_RW);
+   if (EC) {
+      llvm::report_fatal_error(EC.message());
+   }
+
+   FS << Str.str();
+}
+
+void
+IncrementalCompilationManager::WriteFileDecls(SmallVectorImpl<char> &Vec,
+                                              SmallVectorImpl<Decl*> &Decls,
+                                              ModuleWriter &MW) {
+   using namespace llvm::support;
+
+   auto &ASTWriter = MW.ASTWriter;
+
+   auto size = Vec.size();
+   Vec.resize(Vec.size() + 4);
+
+   auto *Ptr = Vec.data() + size;
+   endian::write<uint32_t, little, unaligned>(Ptr, (unsigned)Decls.size());
+
+   for (auto *D : Decls) {
+      auto ID = ASTWriter.GetDeclRef(D);
+      size = Vec.size();
+      Vec.resize(Vec.size() + 4);
+
+      Ptr = Vec.data() + size;
+      endian::write<uint32_t, little, unaligned>(Ptr, ID);
    }
 }
 
 bool IncrementalCompilationManager::fileNeedsRecompilation(fs::OpenFile &File)
 {
+   FileNameMap[File.SourceId] =
+      &CI.getContext().getIdentifiers().get(File.FileName);
+
+   auto result = fileNeedsRecompilation(File.FileName);
+   llvm::outs() << "file " << File.FileName << " needs recompilation: "
+                << result << "\n";
+
    auto &FI = FileInfoMap[File.FileName];
-   if (FI.CheckedIfRecompilationNeeded)
-      return FI.NeedsRecompilation;
-
-   auto *II = &CI.getContext().getIdentifiers().get(File.FileName);
-
-   (void)FileDependency.getOrAddVertex(II);
-   FileNameMap[File.SourceId] = II;
-
-   auto Result = fileNeedsRecompilationImpl(File, FI);
-   if (!Result)
-      Result |= readCacheFile(File, FI);
-
-   llvm::outs() << File.FileName << " needs recompilation: " << Result << "\n";
-
-   if (Result) {
-      auto now = fs::getLastModifiedTime(File.FileName);
-      FI.LastModified = now;
+   if (result) {
+      RecompiledDecls.insert(FI.DeclIDs.begin(), FI.DeclIDs.end());
    }
    else {
-      FilesToDeserialize.push_back(File.FileName);
+      // Copy the deserialized dependencies to our real dependency graph.
+      auto &ReadVert = ReadFileDependency.getOrAddVertex(FI.FileID);
+      auto &OtherVert = FileDependency.getOrAddVertex(FI.FileID);
+
+      for (auto *Incoming : ReadVert.getIncoming()) {
+         OtherVert.addIncoming(
+            &FileDependency.getOrAddVertex(Incoming->getPtr()));
+      }
    }
 
-   FI.CheckedIfRecompilationNeeded = true;
-   FI.NeedsRecompilation = Result;
+   return result;
+}
 
-   return Result;
+bool IncrementalCompilationManager::fileNeedsRecompilation(StringRef File)
+{
+   if (!DidReadInfoFile) {
+      ReadInfoFile();
+   }
+
+   auto It = FileInfoMap.find(File);
+   if (It == FileInfoMap.end()) {
+      It = FileInfoMap.try_emplace(File).first;
+      auto &FI = It->getValue();
+
+      // This is a new source file.
+      FI.IsNewFile = true;
+      FI.FileID = NextFileID++;
+      FI.FileName = It->getKey();
+      FI.CheckedIfRecompilationNeeded = true;
+      FI.NeedsRecompilation = true;
+      FI.LastModified = fs::getLastModifiedTime(File);
+
+      IDFileMap[FI.FileID] = &*It;
+      return true;
+   }
+
+   auto &FI = It->getValue();
+   assert(FI.CheckedIfRecompilationNeeded);
+
+   return FI.NeedsRecompilation;
 }
 
 bool
-IncrementalCompilationManager::fileNeedsRecompilationImpl(fs::OpenFile &File,
+IncrementalCompilationManager::fileNeedsRecompilationImpl(StringRef File,
                                                           FileInfo &FI) {
-   StringRef FileName = File.FileName;
-   if (!FileInfoTbl) {
-      auto Result = ReadFileInfo();
-      if (Result != Success)
-         return true;
-   }
+   assert(!FI.CheckedIfRecompilationNeeded && "duplicate check");
+   FI.BeingChecked = true;
 
-   auto LastMod = fs::getLastModifiedTime(FileName);
-   if (LastMod > FI.LastModified)
-      return true;
-
-   return false;
-}
-
-bool IncrementalCompilationManager::readCacheFile(fs::OpenFile &File,
-                                                  FileInfo &FI) {
-   if (ReaderCache.find(File.FileName) != ReaderCache.end())
-      return false;
-
-   auto *Vert = getDependencyVert(File.FileName);
-   for (auto *OtherVert : Vert->getOutgoing()) {
-      auto &OtherFI = FileInfoMap[OtherVert->getPtr()->getIdentifier()];
-      auto DepFile = CI.getFileMgr()
-                       .openFile(OtherVert->getPtr()->getIdentifier());
-
-      if (OtherFI.CheckedIfRecompilationNeeded) {
-         if (OtherFI.NeedsRecompilation)
-            return true;
+   auto &Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
+   for (auto *Dep : Vert.getIncoming()) {
+      if (fileNeedsRecompilation(IDFileMap[Dep->getPtr()]->getValue().FileName)) {
+         FI.NeedsRecompilation = true;
+         break;
       }
-      else if (fileNeedsRecompilationImpl(DepFile, OtherFI))
-         return true;
    }
 
-   return false;
+   FI.BeingChecked = false;
+   FI.CheckedIfRecompilationNeeded = true;
+   return FI.NeedsRecompilation;
 }
 
-void IncrementalCompilationManager::loadFiles()
+void IncrementalCompilationManager::finalizeCacheFiles()
 {
-   for (auto &FileName : FilesToDeserialize) {
-      auto File = CI.getFileMgr().openFile(FileName);
-      auto &FI = FileInfoMap[FileName];
-
-      // load the cache file
-      auto MaybeBuf = CI.getFileMgr().openFile(FI.FileNameOnDisk, false);
-      if (!MaybeBuf.Buf) {
-         llvm::report_fatal_error("cache file does not exist");
-      }
-
-      auto *Mod = CI.getModuleForSource(File.SourceId);
-
-      llvm::BitstreamCursor Stream(*MaybeBuf.Buf);
-      auto Reader = std::make_unique<ModuleReader>(CI, SourceLocation(),
-                                                   SourceLocation(), Stream);
-
-      auto Result = Reader->ReadCacheFile(*this, Mod, File.SourceId,
-                                          File.FileName);
-
-      ReaderCache.try_emplace(FileName, move(Reader));
-
-      if (Result != Success)
-         llvm::report_fatal_error("invalid cache file");
-   }
-
-   for (auto &FileName : FilesToDeserialize) {
-      auto File = CI.getFileMgr().openFile(FileName);
-
-      auto *Mod = CI.getModuleForSource(File.SourceId);
-      ReaderCache[FileName]->FinalizeCacheFile(*this, Mod, File.FileName);
+   for (auto &FI : FileInfoMap) {
+      if (!FI.getValue().NeedsRecompilation)
+         finalizeCacheFile(FI.getValue());
    }
 }
 
-void addDecls(Decl *D, ASTContext &Ctx, ModuleWriter &MW,
-              fs::FileManager &FileMgr, unsigned ThisSourceID,
-              llvm::DenseMap<unsigned, SmallVector<Decl*, 0>> &DeclsPerFile) {
-   if (D->instantiatedFromProtocolDefaultImpl()) {
-      auto OtherID = MW.getSourceIDForDecl(D);
-      ThisSourceID = OtherID;
-   }
-
-   DeclsPerFile[ThisSourceID].push_back(D);
-
-   if (auto *ND = dyn_cast<NamedDecl>(D)) {
-      if (ND->isTemplate()) {
-         auto Instantiations = Ctx.getInstantiationsOf(ND);
-         for (auto *Inst : Instantiations) {
-            auto OtherID = MW.getSourceIDForDecl(Inst);
-            addDecls(Inst, Ctx, MW, FileMgr, OtherID, DeclsPerFile);
-         }
-      }
-   }
-
-   if (auto *DC = dyn_cast<DeclContext>(D)) {
-      for (auto *SubDecl : DC->getDecls()) {
-         if (SubDecl->isInstantiation())
-            continue;
-
-         addDecls(SubDecl, Ctx, MW, FileMgr, ThisSourceID, DeclsPerFile);
-      }
-   }
-}
-
-void IncrementalCompilationManager::WriteUpdatedFiles()
+ModuleDecl* IncrementalCompilationManager::readFile(FileInfo &FI)
 {
-   SmallVector<std::unique_ptr<SmallString<0>>, 4> StrVec;
-   SmallVector<std::unique_ptr<llvm::BitstreamWriter>, 4> WriterVec;
+   for (auto &ModPair : InfoFileReader->ModuleDeclMap) {
+      auto *D = cast_or_null<ModuleDecl>(
+         InfoFileReader->ASTReader.GetDecl(ModPair.getSecond()));
 
-   llvm::DenseMap<unsigned, ModuleWriter*> ModuleWriters;
-   llvm::DenseMap<unsigned, SmallVector<Decl*, 0>> DeclsPerFile;
-
-   auto &FileMgr = CI.getFileMgr();
-
-   for (auto &Entry : FileInfoMap) {
-      auto &FI = Entry.getValue();
-      if (!FI.NeedsRecompilation)
-         continue;
-
-      // clear the dependencies.
-      auto *Vert = getDependencyVert(Entry.getKey());
-      Vert->reset();
-
-      StrVec.emplace_back(std::make_unique<SmallString<0>>());
-      WriterVec.emplace_back(std::make_unique<llvm::BitstreamWriter>(
-         *StrVec.back()));
-
-      auto SourceID = FileMgr.openFile(Entry.getKey()).SourceId;
-      auto MW = std::make_unique<ModuleWriter>(CI, *WriterVec.back(),
-                                               SourceID, this);
-
-      ModuleWriters.try_emplace(SourceID, MW.get());
-      WriterCache.try_emplace(Entry.getKey(), move(MW));
+      if (D)
+         ModPair.getFirst()->setDecl(D->getPrimaryModule());
    }
+
+   return cast_or_null<ModuleDecl>(
+      InfoFileReader->ASTReader.GetDecl(FI.ModuleDeclID));
+}
+
+void IncrementalCompilationManager::finalizeCacheFile(FileInfo &FI)
+{
+   assert(!FI.NeedsRecompilation && "file does not need recompilation!");
+
+   if (!FI.ModuleID) {
+      // Module is ignored.
+      return;
+   }
+
+   SmallVector<il::GlobalObject*, 16> Globals;
+   auto *Mod = InfoFileReader->Modules[FI.ModuleID];
+   ILReader::EagerRAII Eager(InfoFileReader->ILReader, Globals);
+
+   InfoFileReader->ILReader.setModule(Mod->getILModule());
+   InfoFileReader->ASTReader.ReadDeclsEager(FI.DeclIDs);
 
    unsigned i = 0;
-   for (auto &Entry : FileInfoMap) {
-      auto &FI = Entry.getValue();
-      if (!FI.NeedsRecompilation)
-         continue;
-
-      auto SourceID = FileMgr.openFile(Entry.getKey()).SourceId;
-      auto *MW = ModuleWriters[SourceID];
-
-      auto *Mod = CI.getModuleForSource(SourceID);
-      addDecls(Mod->getDecl(), CI.getContext(), *MW, CI.getFileMgr(), SourceID,
-               DeclsPerFile);
+   while (i != Globals.size()) {
+      InfoFileReader->ILReader.readLazyGlobal(*Globals[i++]);
    }
 
-   for (auto &Entry : DeclsPerFile) {
-      auto *MW = ModuleWriters[Entry.getFirst()];
-      for (auto *D : Entry.getSecond()) {
-         MW->ASTWriter.GetDeclRef(D);
-         if (auto *ND = dyn_cast<NamedDecl>(D))
-            MW->ILWriter.AddDeclToBeWritten(ND, Entry.getFirst());
-      }
-   }
-
-   i = 0;
-   for (auto &Entry : FileInfoMap) {
-      auto &FI = Entry.getValue();
-      if (!FI.NeedsRecompilation)
-         continue;
-
-      auto &MW = WriterCache[Entry.getKey()];
-      WriteUpdatedFile(FI, *MW, *StrVec[i++]);
-   }
-
-   WriterCache.clear();
+   InfoFileReader->FinalizeCacheFile(*this, Mod, FI.FileName);
 }
 
-void IncrementalCompilationManager::WriteUpdatedFile(FileInfo &FI,
-                                                     ModuleWriter &MW,
-                                                     SmallString<0> &Str) {
-   std::unique_ptr<llvm::raw_fd_ostream> OS = nullptr;
-   std::error_code EC;
+FileInfo& IncrementalCompilationManager::getFile(StringRef FileName)
+{
+   auto It = FileInfoMap.find(FileName);
+   assert(It != FileInfoMap.end());
 
-   if (FI.FileNameOnDisk.empty()) {
-      SmallString<128> Dir;
-      Dir += fs::getApplicationDir();
-      Dir += "/cache/";
-
-      SmallString<64> Tmp;
-      EC = llvm::sys::fs::createUniqueFile("cdot-cache-%%%%%%%%%%%%%", Tmp);
-      if (EC)
-         llvm::report_fatal_error(EC.message());
-
-      Dir += Tmp;
-      OS.reset(new llvm::raw_fd_ostream(Dir, EC, llvm::sys::fs::F_RW));
-
-      FI.FileNameOnDisk = Dir.str();
-      FI.ID = NextFileID++;
-   }
-   else {
-      OS.reset(new llvm::raw_fd_ostream(FI.FileNameOnDisk,
-                                        EC, llvm::sys::fs::F_RW));
-   }
-
-   if (EC)
-      llvm::report_fatal_error(EC.message());
-
-   auto ID = MW.getSourceID();
-   MW.WriteCacheFile(CI.getModuleForSource(ID), FileNameMap[ID]);
-
-   (*OS) << Str;
+   return It->getValue();
 }
 
 void IncrementalCompilationManager::addDependency(unsigned DependentFile,
                                                   unsigned OtherFile) {
+   if (DependentFile == OtherFile)
+      return;
+
    auto It = FileNameMap.find(DependentFile);
    if (It == FileNameMap.end())
       return;
@@ -642,8 +730,16 @@ void IncrementalCompilationManager::addDependency(unsigned DependentFile,
    if (It2 == FileNameMap.end())
       return;
 
-   auto &ThisVert = FileDependency.getOrAddVertex(It->getSecond());
-   auto &OtherVert = FileDependency.getOrAddVertex(It2->getSecond());
+//   if (It->getSecond()->getIdentifier().find("BigUInt")!=string::npos
+//      &&It2->getSecond()->getIdentifier().find("XString")!=string::npos) {
+//       int i=3; //CBP
+//   }
+
+   auto ThisID = FileInfoMap[It->getSecond()->getIdentifier()].FileID;
+   auto OtherID = FileInfoMap[It2->getSecond()->getIdentifier()].FileID;
+
+   auto &ThisVert = FileDependency.getOrAddVertex(ThisID);
+   auto &OtherVert = FileDependency.getOrAddVertex(OtherID);
 
    OtherVert.addOutgoing(&ThisVert);
 }
@@ -669,13 +765,6 @@ ModuleWriter* IncrementalCompilationManager::getWriterForFile(StringRef File)
       return nullptr;
 
    return It->getValue().get();
-}
-
-DependencyGraph<IdentifierInfo *>::Vertex*
-IncrementalCompilationManager::getDependencyVert(StringRef File)
-{
-   auto *II = &CI.getContext().getIdentifiers().get(File);
-   return &FileDependency.getOrAddVertex(II);
 }
 
 void IncrementalCompilationManager::Error(llvm::StringRef Msg) const

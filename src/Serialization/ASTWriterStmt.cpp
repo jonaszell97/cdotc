@@ -241,6 +241,7 @@ void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
    Record.AddSourceLocation(S->getMatchLoc());
    Record.AddSourceRange(S->getBraceRange());
    Record.AddStmt(S->getSwitchValue());
+   Record.push_back(S->hasMutableCaseArg());
 }
 
 static void WriteCatchBlock(ASTRecordWriter &Record, CatchBlock &CB)
@@ -306,9 +307,6 @@ void ASTStmtWriter::visitStaticIfStmt(StaticIfStmt *S)
    Record.AddStmt(S->getCondition());
    Record.AddStmt(S->getIfBranch());
    Record.AddStmt(S->getElseBranch());
-
-   Record.AddDeclRef(cast_or_null<Decl>(S->getContinuationPoint().Ctx));
-   Record.AddScopeRef(cast_or_null<BlockScope>(S->getContinuationPoint().S));
 }
 
 void ASTStmtWriter::visitStaticForStmt(StaticForStmt *S)
@@ -505,6 +503,7 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    Flags |= (S->isCapture() << 5);
    Flags |= (S->isSelf() << 6);
    Flags |= (S->allowIncompleteTemplateArgs() << 7);
+   Flags |= (S->allowNamespaceRef() << 8);
 
    Record.push_back(Flags);
    Record.push_back(S->getCaptureIndex());
@@ -542,6 +541,12 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
 {
    visitExpr(S);
 
+   auto Labels = S->getLabels();
+   Record.push_back(Labels.size());
+
+   for (auto &Label : Labels)
+      Record.AddIdentifierRef(Label);
+
    Record.AddSourceLocation(S->getIdentLoc());
    Record.AddSourceRange(S->getParenRange());
 
@@ -576,6 +581,12 @@ void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr *S)
 
    for (auto Arg : Args)
       Record.AddStmt(Arg);
+
+   auto Labels = S->getLabels();
+   Record.push_back(Labels.size());
+
+   for (auto &Label : Labels)
+      Record.AddIdentifierRef(Label);
 
    Record.AddSourceRange(S->getParenRange());
    Record.push_back(S->isPrimitiveInit());
@@ -635,6 +646,7 @@ void ASTStmtWriter::visitSelfExpr(SelfExpr *S)
    Record.AddSourceLocation(S->getSourceLoc());
    Record.AddDeclRef(S->getSelfArg());
    Record.push_back(S->getCaptureIndex());
+   Record.push_back(S->isUppercase());
 }
 
 void ASTStmtWriter::visitSuperExpr(SuperExpr *S)
@@ -813,8 +825,12 @@ void ASTStmtWriter::visitTypePredicateExpr(TypePredicateExpr *S)
    Record.AddStmt(S->getLHS());
    Record.AddStmt(S->getRHS());
 
-   Record.push_back(S->getResult());
-   Record.push_back(S->isCompileTimeCheck());
+   uint8_t Flags = 0;
+   Flags |= S->getResult();
+   Flags |= (S->isCompileTimeCheck() << 1);
+   Flags |= (S->isNegated() << 2);
+
+   Record.push_back(Flags);
 }
 
 void ASTStmtWriter::visitIfExpr(IfExpr *S)
@@ -1051,108 +1067,4 @@ void ASTRecordWriter::FlushSubStmts()
    }
 
    StmtsToEmit.clear();
-}
-
-namespace {
-
-class ASTScopeWriter {
-   ASTRecordWriter &Record;
-   unsigned Code = 0;
-
-#  define CDOT_SCOPE(NAME)    \
-   void visit##NAME(NAME *S);
-#  include "Sema/Scope/Scopes.def"
-
-   void visitScope(Scope *S);
-
-public:
-   ASTScopeWriter(ASTRecordWriter &Record)
-      : Record(Record)
-   {}
-
-   void visit(Scope *S)
-   {
-      switch (S->getTypeID()) {
-#     define CDOT_SCOPE(NAME) \
-      case Scope::NAME##ID: return visit##NAME(cast<NAME>(S));
-#     include "Sema/Scope/Scopes.def"
-      }
-   }
-
-   uint64_t Emit()
-   {
-      return Record.Emit(Code);
-   }
-};
-
-} // anonymous namespace
-
-void ASTScopeWriter::visitScope(Scope *S)
-{
-   Code = S->getTypeID();
-   Record.AddScopeRef(S->getEnclosingScope());
-   Record.push_back(S->hadError());
-   Record.push_back(S->hasUnresolvedStaticCond());
-}
-
-void ASTScopeWriter::visitBlockScope(BlockScope *S)
-{
-   visitScope(S);
-   Record.push_back(S->getScopeID());
-}
-
-void ASTScopeWriter::visitFunctionScope(FunctionScope *S)
-{
-   visitScope(S);
-   Record.AddDeclRef(S->getCallableDecl());
-   Record.push_back(S->hasInferrableReturnType());
-}
-
-void ASTScopeWriter::visitMethodScope(MethodScope *S)
-{
-   visitFunctionScope(S);
-}
-
-void ASTScopeWriter::visitLambdaScope(LambdaScope *S)
-{
-   visitFunctionScope(S);
-}
-
-void ASTScopeWriter::visitLoopScope(LoopScope *S)
-{
-   visitScope(S);
-
-   uint8_t Flags = 0;
-   Flags |= (S->isBreakable());
-   Flags |= (S->isContinuable() << 1);
-   Flags |= (S->isLastCaseInMatch() << 2);
-   Flags |= (S->nextCaseHasArguments() << 3);
-
-   Record.push_back(Flags);
-}
-
-void ASTScopeWriter::visitStaticForScope(StaticForScope *S)
-{
-   visitScope(S);
-
-   Record.AddIdentifierRef(S->getElementName());
-   Record.AddTypeRef(S->getElementTy());
-}
-
-void ASTWriter::WriteScope(Scope *S)
-{
-   RecordData Data;
-   ASTRecordWriter Record(*this, Data);
-   ASTScopeWriter Writer(Record);
-
-   Writer.visit(S);
-   auto Offset = Writer.Emit();
-
-   auto ID = ScopeIDs[S];
-   unsigned Index = IndexForID(ID);
-   if (ScopeOffsets.size() < Index + 1) {
-      ScopeOffsets.resize(Index + 1);
-   }
-
-   ScopeOffsets[Index] = Offset;
 }

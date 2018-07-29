@@ -83,7 +83,7 @@ static QualType getMutableReference(ast::ASTContext &Context, QualType Ty)
 
 static FunctionType::ParamInfo AssignParamInfo[2] = {
    // the left hand side is mutably borrowed
-   FunctionType::ParamInfo{ArgumentConvention::MutablyBorrowed},
+   FunctionType::ParamInfo{ArgumentConvention::MutableRef},
 
    // the right hand side is consumed by this operator
    FunctionType::ParamInfo{ArgumentConvention::Owned}
@@ -91,7 +91,7 @@ static FunctionType::ParamInfo AssignParamInfo[2] = {
 
 static FunctionType::ParamInfo CompoundAssignParamInfo[2] = {
    // the left hand side is mutably borrowed
-   FunctionType::ParamInfo{ArgumentConvention::MutablyBorrowed},
+   FunctionType::ParamInfo{ArgumentConvention::MutableRef},
 
    // the right hand side is immutably borrowed
    FunctionType::ParamInfo{ArgumentConvention::Borrowed}

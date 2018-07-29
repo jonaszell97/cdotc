@@ -132,15 +132,17 @@ il::GlobalObject* ILReader::GetGlobalObject(llvm::StringRef Name)
                                             It.getDataLen()));
 }
 
-ReadResult ILReader::ReadILModule()
+ReadResult ILReader::ReadILModule(llvm::BitstreamCursor &Stream)
 {
-   if (Stream.EnterSubBlock(IL_MODULE_BLOCK_ID)) {
+   if (ModuleReader::ReadBlockAbbrevs(Stream, IL_MODULE_BLOCK_ID)) {
       Reader.Error("malformed IL block");
       return Failure;
    }
 
    Builder.SetModule(ILMod);
    Builder.setOverrideSymbols(true);
+
+   ILMod->setContainsDeserializedValues(true);
 
    llvm::StringRef ValueSymTabBlob;
    uint32_t ValueSymTabOffset = 0;
@@ -199,15 +201,9 @@ ReadResult ILReader::ReadILModuleEager()
 {
    Builder.SetModule(ILMod);
 
-   auto Result = ReadILModule();
-   if (Result != Success)
-      return Result;
-
-   auto data_it = SymTab->data_begin();
-   auto end = SymTab->data_end();
-
-   while (data_it != end) {
-      Value *Val = *data_it++;
+   unsigned i = 0;
+   while (i < ReadGlobals->size()) {
+      auto *Val = (*ReadGlobals)[i++];
       if (auto F = dyn_cast<Function>(Val)) {
          if (auto Inf = F->getLazyFnInfo())
             Inf->loadFunctionBody();
@@ -217,6 +213,21 @@ ReadResult ILReader::ReadILModuleEager()
             Inf->loadGlobalInitializer();
       }
    }
+
+//   auto data_it = SymTab->data_begin();
+//   auto end = SymTab->data_end();
+//
+//   while (data_it != end) {
+//      Value *Val = *data_it++;
+//      if (auto F = dyn_cast<Function>(Val)) {
+//         if (auto Inf = F->getLazyFnInfo())
+//            Inf->loadFunctionBody();
+//      }
+//      else if (auto G = dyn_cast<GlobalVariable>(Val)) {
+//         if (auto Inf = G->getLazyGlobalInfo())
+//            Inf->loadGlobalInitializer();
+//      }
+//   }
 
    return Success;
 }
@@ -312,6 +323,7 @@ il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader &Record)
    auto InitID = static_cast<unsigned>(Record.readInt());
    auto InitFlag = Record.readValueAs<GlobalVariable>();
    auto InitFn = Record.readValueAs<Function>();
+   auto DeinitFn = Record.readValueAs<Function>();
 
    auto GV = Builder.CreateGlobalVariable(Type, false, nullptr, Name, Loc);
    GV->setRawBits(RawBits);
@@ -321,13 +333,20 @@ il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader &Record)
    GV->setOverridePreviousDefinition(true);
    GV->setInitializedFlag(InitFlag);
    GV->setInitFn(InitFn);
+   GV->setDeinitFn(DeinitFn);
+   GV->setDeserialized(true);
 
-   if (!GV->isDeclared())
+   if (!GV->isDeclared()) {
+      if (ReadGlobals)
+         ReadGlobals->push_back(GV);
+
       GV->setLazyGlobalInfo(
-         new (Reader.getContext()) LazyILGlobalInfo(Reader.Reader, *GV,
-                                                    InitID, Linkage));
+         new(Reader.getContext()) LazyILGlobalInfo(Reader.Reader, *GV,
+                                                   InitID, Linkage));
 
-   GV->setDeclared(false);
+      GV->setDeclared(false);
+   }
+
    return GV;
 }
 
@@ -510,6 +529,7 @@ il::Function* ILReader::readFunction(ILRecordReader &Record,
    Func->setUnnamedAddr(UnnamedAddr);
    Func->setKnownFnKind(KnownKind);
    Func->setOverridePreviousDefinition(true);
+   Func->setDeserialized(true);
 
    if (!WroteDefinition)
       Func->setDeclared(true);
@@ -543,13 +563,18 @@ il::Function* ILReader::readFunction(ILRecordReader &Record,
       BlockIDs.push_back((unsigned)NextID);
    }
 
-   if (!Func->isDeclared())
+   if (!Func->isDeclared()) {
+      if (ReadGlobals)
+         ReadGlobals->push_back(Func);
+
       Func->setLazyFnInfo(
          new(Reader.getContext()) LazyILFunctionInfo(Reader.Reader, *Func,
-                                                 move(BlockIDs),
-                                                 move(EntryInstIDs), Linkage));
+                                                     move(BlockIDs),
+                                                     move(EntryInstIDs),
+                                                     Linkage));
 
-   Func->setDeclared(true);
+      Func->setDeclared(true);
+   }
 
    Builder.restoreIP(IP);
    Builder.SetModule(M);
@@ -689,6 +714,16 @@ void ILReader::readGlobalInitializer(GlobalVariable &G,
                                      unsigned Linkage) {
    G.setInitializer(cast_or_null<Constant>(GetValue(InitID)));
    G.setLinkage(static_cast<Function::LinkageTypes>(Linkage));
+}
+
+void ILReader::readLazyGlobal(il::GlobalObject &GO)
+{
+   if (auto *Fn = dyn_cast<Function>(&GO)) {
+      Fn->getLazyFnInfo()->loadFunctionBody();
+   }
+   else {
+      cast<GlobalVariable>(GO).getLazyGlobalInfo()->loadGlobalInitializer();
+   }
 }
 
 il::Argument* ILReader::readArgument(ILRecordReader &Record)

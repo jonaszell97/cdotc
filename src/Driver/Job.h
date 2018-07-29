@@ -26,7 +26,7 @@ namespace il {
 } // namespace il
 
 using ast::ModuleDecl;
-class CompilationUnit;
+class CompilerInstance;
 
 class Job {
 public:
@@ -51,7 +51,7 @@ public:
    virtual ~Job();
 
 protected:
-   Job(Kind K, Job *PreviousJob, CompilationUnit &CI)
+   Job(Kind K, Job *PreviousJob, CompilerInstance &CI)
       : K(K), Done(false), HadError(false),
         PreviousJob(PreviousJob), CI(CI)
    {}
@@ -61,14 +61,14 @@ protected:
    bool HadError : 1;
 
    Job *PreviousJob;
-   CompilationUnit &CI;
+   CompilerInstance &CI;
 };
 
 class InputJob: public Job {
    StringRef FileName;
 
 public:
-   InputJob(StringRef FileName, CompilationUnit &CI);
+   InputJob(StringRef FileName, CompilerInstance &CI);
 
    StringRef getFileName() const { return FileName; }
 
@@ -78,7 +78,7 @@ public:
 
 class ParseJob: public Job {
 public:
-   ParseJob(Job *PreviousJob, CompilationUnit &CI);
+   ParseJob(Job *PreviousJob, CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == ParseJobID; }
@@ -86,7 +86,7 @@ public:
 
 class LoadCacheJob: public Job {
 public:
-   LoadCacheJob(CompilationUnit &CI);
+   LoadCacheJob(CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == LoadCacheJobID; }
@@ -94,7 +94,7 @@ public:
 
 class SemaJob: public Job {
 public:
-   explicit SemaJob(CompilationUnit &CI);
+   explicit SemaJob(CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == SemaJobID; }
@@ -102,17 +102,41 @@ public:
 
 class ILGenJob: public Job {
 public:
-   explicit ILGenJob(CompilationUnit &CI);
+   explicit ILGenJob(CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == ILGenJobID; }
+};
+
+class ILVerifyJob: public Job {
+public:
+   explicit ILVerifyJob(CompilerInstance &CI);
+
+   void run() override;
+   static bool classof(const Job *J) { return J->getKind() == ILVerifyJobID; }
+};
+
+class ILCanonicalizeJob: public Job {
+public:
+   explicit ILCanonicalizeJob(CompilerInstance &CI);
+
+   void run() override;
+   static bool classof(const Job *J){return J->getKind() == ILCanonicalizeJobID;}
+};
+
+class ILOptimizeJob: public Job {
+public:
+   explicit ILOptimizeJob(CompilerInstance &CI);
+
+   void run() override;
+   static bool classof(const Job *J) { return J->getKind() == ILOptimizeJobID; }
 };
 
 class IRGenJob: public Job {
    il::Module &M;
 
 public:
-   explicit IRGenJob(il::Module &M, CompilationUnit &CI);
+   explicit IRGenJob(il::Module &M, CompilerInstance &CI);
 
    il::Module &getModule() const { return M; }
 
@@ -126,7 +150,7 @@ class EmitAssemblyJob: public Job {
 public:
    explicit EmitAssemblyJob(StringRef OutFile,
                             Job *PreviousJob,
-                            CompilationUnit &CI);
+                            CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -141,7 +165,7 @@ class EmitObjectJob: public Job {
 public:
    explicit EmitObjectJob(StringRef OutFile,
                           Job *PreviousJob,
-                          CompilationUnit &CI);
+                          CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -155,7 +179,7 @@ class EmitStaticLibraryJob: public Job {
 public:
    explicit EmitStaticLibraryJob(StringRef OutFile,
                                  Job *PreviousJob,
-                                 CompilationUnit &CI);
+                                 CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -170,7 +194,7 @@ class EmitDynamicLibraryJob: public Job {
 public:
    explicit EmitDynamicLibraryJob(StringRef OutFile,
                                   Job *PreviousJob,
-                                  CompilationUnit &CI);
+                                  CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -185,7 +209,7 @@ class EmitExecutableJob: public Job {
 public:
    explicit EmitExecutableJob(StringRef OutFile,
                               Job *PreviousJob,
-                              CompilationUnit &CI);
+                              CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -199,7 +223,7 @@ class EmitModuleJob: public Job {
 
 public:
    explicit EmitModuleJob(Module &Mod,
-                          CompilationUnit &CI);
+                          CompilerInstance &CI);
 
    void run() override;
 
@@ -214,7 +238,7 @@ class EmitILJob: public Job {
 public:
    explicit EmitILJob(il::Module &M,
                       StringRef OutFile,
-                      CompilationUnit &CI);
+                      CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -228,7 +252,7 @@ class EmitIRJob: public Job {
 public:
    explicit EmitIRJob(Job *PreviousJob,
                       StringRef OutFile,
-                      CompilationUnit &CI);
+                      CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -243,7 +267,7 @@ class LinkJob: public Job {
 public:
    LinkJob(ArrayRef<Job*> Inputs,
            StringRef OutFile,
-           CompilationUnit &CI);
+           CompilerInstance &CI);
 
    void run() override;
    StringRef getOutFile() const { return OutFile; }
@@ -257,7 +281,7 @@ class LinkIRJob: public Job {
 
 public:
    LinkIRJob(ArrayRef<Job*> Inputs,
-             CompilationUnit &CI);
+             CompilerInstance &CI);
 
    void run() override;
    llvm::Module *getLinkedModule() const { return LinkedModule; }
@@ -267,16 +291,32 @@ public:
 
 class PrintUsedMemoryJob: public Job {
 public:
-   PrintUsedMemoryJob(Job *PreviousJob, CompilationUnit &CI);
+   PrintUsedMemoryJob(Job *PreviousJob, CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J)
    { return J->getKind() == PrintUsedMemoryJobID; }
 };
 
+class PrintPhasesJob: public Job {
+public:
+   PrintPhasesJob(CompilerInstance &CI);
+
+   void run() override;
+   static bool classof(const Job *J){ return J->getKind() == PrintPhasesJobID; }
+};
+
+class UnittestJob: public Job {
+public:
+   UnittestJob(CompilerInstance &CI);
+
+   void run() override;
+   static bool classof(const Job *J) { return J->getKind() == UnittestJobID; }
+};
+
 class CacheJob: public Job {
 public:
-   CacheJob(CompilationUnit &CI);
+   CacheJob(CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == CacheJobID; }

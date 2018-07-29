@@ -235,6 +235,8 @@
    CDOT_OPERATOR_TOKEN(percent, "%")
    CDOT_OPERATOR_TOKEN(times_times, "**")
    CDOT_OPERATOR_TOKEN(triple_period, "...")
+   
+   CDOT_OPERATOR_TOKEN(exclaim_is, "!is")
 #endif
 
 #undef CDOT_TOKEN

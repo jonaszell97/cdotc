@@ -24,7 +24,7 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
                                          QualType type,
                                          SourceLocation loc) noexcept
    : IsType(true), IsVariadic(false), IsNull(false),
-     Dependent(type->isDependentType()),
+     Dependent(type->isDependentType()), Frozen(false),
      ManuallySpecifiedVariadicArgs(0),
      Param(Param), Type(), Loc(loc)
 {
@@ -40,7 +40,7 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
                                          ast::StaticExpr *Expr,
                                          SourceLocation loc) noexcept
    : IsType(false), IsVariadic(false), IsNull(false),
-     Dependent(Expr && Expr->isDependent()),
+     Dependent(Expr && Expr->isDependent()), Frozen(false),
      ManuallySpecifiedVariadicArgs(0),
      Param(Param), Expr(Expr), Loc(loc)
 {
@@ -53,7 +53,7 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
                                                                &&variadicArgs,
                                          SourceLocation loc)
    : IsType(isType), IsVariadic(true), IsNull(false), Dependent(false),
-     ManuallySpecifiedVariadicArgs(0),
+     Frozen(false), ManuallySpecifiedVariadicArgs(0),
      Param(Param), VariadicArgs(move(variadicArgs)), Loc(loc)
 {
    for (auto &VA: this->VariadicArgs) {
@@ -66,7 +66,7 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
 
 ResolvedTemplateArg::ResolvedTemplateArg(ResolvedTemplateArg &&other) noexcept
    : IsType(other.IsType), IsVariadic(other.IsVariadic), IsNull(other.IsNull),
-     Dependent(other.Dependent),
+     Dependent(other.Dependent), Frozen(false),
      ManuallySpecifiedVariadicArgs(other.ManuallySpecifiedVariadicArgs),
      Param(other.Param), Loc(other.Loc)
 {
@@ -118,6 +118,13 @@ il::Constant* ResolvedTemplateArg::getValue() const
 {
    assert(isValue() && "not a value template argument");
    return Expr ? Expr->getEvaluatedExpr() : nullptr;
+}
+
+void ResolvedTemplateArg::freeze()
+{
+   assert(isVariadic());
+   Frozen = true;
+   ManuallySpecifiedVariadicArgs = (unsigned)VariadicArgs.size();
 }
 
 bool ResolvedTemplateArg::isStillDependent() const
@@ -287,7 +294,7 @@ public:
 
             VA.VariadicArgs = move(variadicArgs);
             VA.Loc = loc;
-            VA.ManuallySpecifiedVariadicArgs =numVariadics;
+            VA.freeze();
 
             break;
          }
@@ -343,6 +350,9 @@ public:
             return false;
          }
 
+         if (ty->isProtocol())
+            StillDependent = true;
+
          Out = ResolvedTemplateArg(P, ty, TA->getSourceLoc());
       }
       else if (ty->isMetaType()) {
@@ -351,9 +361,11 @@ public:
             return false;
          }
 
-         Out = ResolvedTemplateArg(
-            P, cast<MetaType>(ty)->getUnderlyingType(),
-            TA->getSourceLoc());
+         QualType RealTy = cast<MetaType>(ty)->getUnderlyingType();
+         if (RealTy->isDependentType() || RealTy->isProtocol())
+            StillDependent = true;
+
+         Out = ResolvedTemplateArg(P, RealTy, TA->getSourceLoc());
       }
       else {
          if (P->isTypeName()) {
@@ -430,7 +442,7 @@ public:
       return &ResolvedArgs[idx];
    }
 
-   void inferFromReturnType(QualType contextualType, QualType returnType,
+   bool inferFromReturnType(QualType contextualType, QualType returnType,
                             bool IsLastVariadicParam);
    void inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
                          llvm::ArrayRef<FuncArgDecl*> neededArgs);
@@ -600,25 +612,26 @@ private:
    }
 };
 
-void TemplateArgListImpl::inferFromReturnType(QualType contextualType,
+bool TemplateArgListImpl::inferFromReturnType(QualType contextualType,
                                               QualType returnType,
                                               bool IsLastVariadicParam) {
    if (contextualType->isAutoType())
-      return;
+      return true;
 
-   inferTemplateArg(contextualType, returnType);
+   bool Result = inferTemplateArg(contextualType, returnType);
 
-   if (IsLastVariadicParam)
-      return;
+   if (!IsLastVariadicParam)
+      return Result;
 
    // update variadic arguments so we don't infer them again
    for (auto &Arg : ResolvedArgs) {
       if (!Arg.isVariadic())
          continue;
 
-      Arg.ManuallySpecifiedVariadicArgs
-         = (unsigned)Arg.VariadicArgs.size();
+      Arg.freeze();
    }
+
+   return Result;
 }
 
 void
@@ -643,8 +656,7 @@ TemplateArgListImpl::inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
                if (!Arg.isVariadic())
                   continue;
 
-               Arg.ManuallySpecifiedVariadicArgs
-                  = (unsigned)Arg.VariadicArgs.size();
+               Arg.freeze();
             }
          }
 
@@ -661,13 +673,82 @@ TemplateArgListImpl::inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
 
 bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
 {
-   if (given->isDependentType()) {
+   if (given->isDependentType() || given->isProtocol()) {
       StillDependent = true;
       return true;
    }
 
    if (given->isReferenceType() && !needed->isReferenceType()) {
       given = given->getReferencedType();
+   }
+
+   if (GenericType *neededGen = dyn_cast<GenericType>(needed)) {
+      auto parameters = getParameters();
+      auto idx = getIndexFor(neededGen->getParam());
+
+      if (idx >= parameters.size())
+         return true;
+
+      auto &Arg = ResolvedArgs[idx];
+      auto Param = Arg.getParam();
+      assert(Param->isTypeName()
+             && "allowed Value parameter to be used as argument type!");
+
+
+      if (Arg.isNull()) {
+         if (Param->isVariadic()) {
+            std::vector<ResolvedTemplateArg> variadicArgs;
+            variadicArgs.emplace_back(Param, given);
+
+            emplace(Param, Param, true, move(variadicArgs), ListLoc);
+         }
+         else {
+            emplace(Param, Param, given, ListLoc);
+         }
+      }
+      else {
+         // invalid argument kind, ignore for now
+         if (!Arg.isType()) {
+            return false;
+         }
+
+         if (Arg.isVariadic()) {
+            if (!Arg.Frozen) {
+               Arg.emplace_back(Param, given);
+            }
+            else {
+               auto variadicIdx =
+                  Arg.VariadicArgs.size() - Arg.ManuallySpecifiedVariadicArgs;
+               auto &ManuallySpecifiedTA =
+                  Arg.VariadicArgs[variadicIdx];
+
+               if (ManuallySpecifiedTA.getType() != given) {
+                  while (Arg.VariadicArgs.size()
+                         > Arg.ManuallySpecifiedVariadicArgs + 1) {
+                     Arg.VariadicArgs.pop_back();
+                  }
+
+                  Res.setHasConflict(given, Param);
+                  return false;
+               }
+
+               --Arg.ManuallySpecifiedVariadicArgs;
+               if (Arg.ManuallySpecifiedVariadicArgs == 0)
+                  Arg.Frozen = false;
+            }
+         }
+         else {
+            // ensure that both inferred types are the same
+            QualType ty = Arg.getType();
+            if (ty != given) {
+               Res.setHasConflict(given, Param);
+               return false;
+            }
+         }
+      }
+
+      PartiallyInferred = true;
+      return true;
    }
 
    if (needed->isPointerType()) {
@@ -711,16 +792,30 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       if (!inferTemplateArg(givenRet, neededRet))
          return false;
 
-      size_t i = 0;
       auto neededArgs = neededFunc->getParamTypes();
-      for (auto &givenArg : givenFunc->getParamTypes()) {
-         auto neededTy = neededArgs.size() > i ? neededArgs[i]
-                                               : neededArgs.back();
+      auto givenArgs = givenFunc->getParamTypes();
 
-         if (!inferTemplateArg(givenArg, neededTy))
+      unsigned i = 0;
+      for (auto &NeededTy : neededArgs) {
+         bool IsVariadic = false;
+         if (auto *TA = NeededTy->asGenericType()) {
+            IsVariadic = TA->isVariadic();
+         }
+
+         if (IsVariadic) {
+            while (i < givenArgs.size()) {
+               if (!inferTemplateArg(givenArgs[i++], NeededTy))
+                  return false;
+            }
+
+            auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+            Arg->freeze();
+
+            return true;
+         }
+
+         if (!inferTemplateArg(givenArgs[i++], NeededTy))
             return false;
-
-         ++i;
       }
 
       return true;
@@ -734,17 +829,30 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       auto givenTuple = cast<TupleType>(given);
       auto neededTuple = cast<TupleType>(needed);
 
-      size_t i = 0;
-
+      auto givenTys = givenTuple->getContainedTypes();
       auto neededTys = neededTuple->getContainedTypes();
-      for (auto &givenEl : givenTuple->getContainedTypes()) {
-         auto &neededTy = neededTys.size() > i ? neededTys[i]
-                                               : neededTys.back();
 
-         if (!inferTemplateArg(givenEl, neededTy))
+      unsigned i = 0;
+      for (auto &NeededTy : neededTys) {
+         bool IsVariadic = false;
+         if (auto *TA = NeededTy->asGenericType()) {
+            IsVariadic = TA->isVariadic();
+         }
+
+         if (IsVariadic) {
+            while (i < givenTys.size()) {
+               if (!inferTemplateArg(givenTys[i++], NeededTy))
+                  return false;
+            }
+
+            auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+            Arg->freeze();
+
+            return true;
+         }
+
+         if (!inferTemplateArg(givenTys[i++], NeededTy))
             return false;
-
-         ++i;
       }
 
       return true;
@@ -824,89 +932,18 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       return true;
    }
 
-   if (!isa<GenericType>(needed)) {
-      return true;
-   }
-
-   GenericType *neededGen = cast<GenericType>(needed);
-   auto parameters = getParameters();
-   auto idx = getIndexFor(neededGen->getParam());
-
-   if (idx >= parameters.size())
-      return true;
-
-   auto &Arg = ResolvedArgs[idx];
-   auto Param = Arg.getParam();
-   assert(Param->isTypeName()
-          && "allowed Value parameter to be used as argument type!");
-
-
-   if (Arg.isNull()) {
-      if (Param->isVariadic()) {
-         std::vector<ResolvedTemplateArg> variadicArgs;
-         variadicArgs.emplace_back(Param, given);
-
-         emplace(Param, Param, true, move(variadicArgs), ListLoc);
-      }
-      else {
-         emplace(Param, Param, given, ListLoc);
-      }
-   }
-   else {
-      // invalid argument kind, ignore for now
-      if (!Arg.isType()) {
-         return false;
-      }
-
-      if (Arg.isVariadic()) {
-         if (!Arg.ManuallySpecifiedVariadicArgs) {
-            Arg.emplace_back(Param, given);
-         }
-         else {
-            auto variadicIdx =
-               Arg.VariadicArgs.size() - Arg.ManuallySpecifiedVariadicArgs;
-            auto &ManuallySpecifiedTA =
-               Arg.VariadicArgs[variadicIdx];
-
-            if (ManuallySpecifiedTA.getType() != given) {
-               while (Arg.VariadicArgs.size()
-                      > Arg.ManuallySpecifiedVariadicArgs + 1) {
-                  Arg.VariadicArgs.pop_back();
-               }
-
-               Res.setHasConflict(given, Param);
-               return false;
-            }
-
-            --Arg.ManuallySpecifiedVariadicArgs;
-         }
-      }
-      else {
-         // ensure that both inferred types are the same
-         QualType ty = Arg.getType();
-         if (ty != given) {
-            Res.setHasConflict(given, Param);
-            return false;
-         }
-      }
-   }
-
-   PartiallyInferred = true;
    return true;
 }
 
-void MultiLevelTemplateArgList::inferFromType(QualType contextualType,
+bool MultiLevelTemplateArgList::inferFromType(QualType contextualType,
                                               QualType returnType,
                                               bool IsLastVariadicParam) {
-   for (auto &list : *this)
-      list->inferFromType(contextualType, returnType, IsLastVariadicParam);
-}
+   for (auto &list : *this) {
+      if (!list->inferFromType(contextualType, returnType, IsLastVariadicParam))
+         return false;
+   }
 
-void MultiLevelTemplateArgList::inferFromArgList(
-                                    llvm::ArrayRef<QualType> givenArgs,
-                                    llvm::ArrayRef<FuncArgDecl *> neededArgs) {
-   for (auto &list : *this)
-      list->inferFromArgList(givenArgs, neededArgs);
+   return true;
 }
 
 bool
@@ -1058,11 +1095,12 @@ void TemplateArgList::Profile(llvm::FoldingSetNodeID &ID,
       arg.Profile(ID);
 }
 
-void TemplateArgList::inferFromType(QualType contextualType,
+bool TemplateArgList::inferFromType(QualType contextualType,
                                     QualType returnType,
                                     bool IsLastVariadicParam) const {
    assert(pImpl && "incomplete argument list!");
-   pImpl->inferFromReturnType(contextualType, returnType, IsLastVariadicParam);
+   return pImpl->inferFromReturnType(contextualType, returnType,
+                                     IsLastVariadicParam);
 }
 
 void

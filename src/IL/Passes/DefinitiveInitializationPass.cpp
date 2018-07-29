@@ -331,12 +331,14 @@ void DefinitiveInitializationPass::visitAssignInst(il::AssignInst &I,
    if (!Var)
       return;
 
-   if (SecondPass && !Gen.test(Var->BitVectorIdx)) {
-      // this assign is an initilization
-      InitAssigns.insert(&I);
+   if (!Gen.test(Var->BitVectorIdx)) {
+      if (SecondPass) {
+         // this assign is an initilization
+         InitAssigns.insert(&I);
+      }
 
       // whitelist all instructions along the access path
-      for (auto Val : AccessPath(I.getDst())) {
+      for (auto Val : AccessPath(I.getDst(), true)) {
          auto Inst = dyn_cast<Instruction>(Val);
          if (!Inst)
             continue;
@@ -365,6 +367,17 @@ void DefinitiveInitializationPass::visitInitInst(il::InitInst &I,
    auto *Var = lookupLocal(Loc);
    if (!Var)
       return;
+
+   if (!Gen.test(Var->BitVectorIdx)) {
+      // whitelist all instructions along the access path
+      for (auto Val : AccessPath(I.getDst(), true)) {
+         auto Inst = dyn_cast<Instruction>(Val);
+         if (!Inst)
+            continue;
+
+         Whitelist.insert(Inst);
+      }
+   }
 
    Var->initializeAll(Gen);
    Var->uninitializeAll(Kill);
@@ -438,6 +451,15 @@ void DefinitiveInitializationPass::visitCallInst(il::CallInst &I,
    if (auto Init = dyn_cast_or_null<Initializer>(I.getCalledFunction())) {
       if (Init->getCtorKind() == ConstructorKind::Base) {
          Whitelist.insert(&I);
+
+         // whitelist all instructions along the access path
+         for (auto Val : AccessPath(I.getArgs().front(), true)) {
+            auto Inst = dyn_cast<Instruction>(Val);
+            if (!Inst)
+               continue;
+
+            Whitelist.insert(Inst);
+         }
 
          auto *SelfTy = Init->getRecordType();
          auto *Fn =cast_or_null<ast::CallableDecl>(ILGen.getDeclForValue(Init));
@@ -606,9 +628,12 @@ void DefinitiveInitializationPass::run()
       }
 
       if (SelfVal) {
+         auto Term = dyn_cast_or_null<RetInst>(B.getTerminator());
+         if (!Term)
+            continue;
+
          // an early return in a fallible init may leave things uninitialized
-         auto Term = B.getTerminator();
-         if (isa<RetInst>(Term) && cast<RetInst>(Term)->IsFallibleInitNoneRet())
+         if (Term->IsFallibleInitNoneRet())
             continue;
 
          auto State = SelfVal->getInitializationState(MustGen, MayGen);
@@ -648,6 +673,9 @@ void DefinitiveInitializationPass::run()
 
       Assign->replaceAllUsesWith(Init);
       Assign->detachAndErase();
+
+      ILGen.Builder.SetInsertPoint(Init->getIterator());
+      ILGen.Builder.CreateLifetimeBegin(Assign->getDst());
    }
 
    for (auto I : InstsToRemove) {
@@ -701,9 +729,17 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction &I,
       break;
    case LocalVariable::NotInitialized:
    case LocalVariable::MaybeUninitialized:
+      if (I.isUnused()) {
+         break;
+      }
+
       IsValidUse = false;
       break;
    case LocalVariable::PartiallyInitialized: {
+      if (I.isUnused()) {
+         break;
+      }
+
       // a partially initialized value may only be indexed further
       auto Use = I.getSingleUser();
       if (!Use) {

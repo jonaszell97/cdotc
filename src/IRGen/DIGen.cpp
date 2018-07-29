@@ -511,17 +511,19 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       for (const auto &field : S->getFields()) {
          OS << field->getDeclName();
 
-         auto size = TI.getSizeOfType(field->getType()) * 8;
+         QualType Ty = field->getType()->getCanonicalType();
+
+         auto size = TI.getSizeOfType(Ty) * 8;
          auto member = DI->createMemberType(
             forwardDecl,
             OS.str(),
             File,
             LineAndCol.line,
             size,
-            TI.getAlignOfType(field->getType()) * (unsigned short)8,
+            TI.getAlignOfType(Ty) * (unsigned short)8,
             offset,
             flags,
-            getTypeDI(field->getType())
+            getTypeDI(Ty)
          );
 
          offset += size;
@@ -626,9 +628,10 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
             llvm::SmallVector<llvm::Metadata*, 4> CaseTypes{ LocalDiscrim };
             for (auto &Val : Case->getArgs()) {
-               unsigned Size = TI.getSizeOfType(Val->getType()) * 8;
-               unsigned short Align = TI.getAlignOfType(Val->getType())
-                                      * (unsigned short)8;
+               QualType Ty = Val->getType()->getCanonicalType();
+
+               unsigned Size = TI.getSizeOfType(Ty) * 8;
+               unsigned short Align = TI.getAlignOfType(Ty) * (unsigned short)8;
 
                OS << Val->getDeclName();
                CaseTypes.push_back(
@@ -641,7 +644,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
                      Align,
                      LocalOffset,
                      flags,
-                     getTypeDI(Val->getType())
+                     getTypeDI(Ty)
                   ));
 
                LocalOffset += Size;

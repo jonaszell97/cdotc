@@ -165,13 +165,16 @@ public:
       auto end_it = Vertices.end();
 
       for (; it != end_it; ++it) {
-         auto &V = *it;
+         Vertex *&V = *it;
          if (V->getPtr() == t) {
-            for (auto Out : V->getOutgoing())
+            while (!V->getOutgoing().empty()) {
+               Vertex *Out = *V->getOutgoing().begin();
                Out->removeIncoming(V);
-
-            for (auto In : V->getIncoming())
+            }
+            while (!V->getIncoming().empty()) {
+               Vertex *In = *V->getIncoming().begin();
                In->removeOutgoing(V);
+            }
 
             Vertices.erase(it);
             delete V;

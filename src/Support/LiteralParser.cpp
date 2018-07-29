@@ -4,7 +4,9 @@
 
 #include "LiteralParser.h"
 
-namespace cdot {
+#include "Support/Format.h"
+
+using namespace cdot;
 
 LiteralParser::FPResult LiteralParser::parseFloating()
 {
@@ -39,7 +41,7 @@ uint8_t LiteralParser::getIntegerRadix()
    return 8;
 }
 
-uint8_t getDigitValue(char c, uint8_t radix)
+static uint8_t getDigitValue(char c, uint8_t radix)
 {
    switch (radix) {
    case 2:
@@ -112,4 +114,29 @@ LiteralParser::IntResult LiteralParser::parseInteger(unsigned int bitwidth,
    return IntResult{ llvm::APSInt(std::move(API), !isSigned), false };
 }
 
-} // namespace cdot
+LiteralParser::CharResult LiteralParser::parseCharacter()
+{
+   if (Str.size() == 1) {
+      return {static_cast<uint32_t>(Str.front()), false};
+   }
+
+   assert(Str.front() == '\\' && "malformed character literal");
+
+   uint32_t Val = 0;
+
+   // Hex literal.
+   if (Str[1] == 'x') {
+      assert(Str.size() == 4 && "malformed hex character literal!");
+      Val += getDigitValue(Str[2], 16) * 16;
+      Val += getDigitValue(Str[3], 16);
+   }
+   else if (Str[1] == 'u') {
+      llvm_unreachable("TODO!");
+   }
+   else {
+      assert(Str.size() == 2 && "malformed hex character literal!");
+      Val = static_cast<uint32_t>(support::escape_char(Str[1]));
+   }
+
+   return {Val, false};
+}

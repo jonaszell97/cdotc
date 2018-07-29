@@ -23,7 +23,7 @@ namespace sema {
 } // namespace sema
 
 class Attr;
-class CompilationUnit;
+class CompilerInstance;
 
 namespace ast {
 
@@ -44,7 +44,7 @@ public:
    ASTContext();
    ~ASTContext() = default;
 
-   void cleanup(CompilationUnit &CI);
+   void cleanup(CompilerInstance &CI);
 
    void *Allocate(size_t size, size_t alignment = 8) const
    {
@@ -84,6 +84,10 @@ private:
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
    mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
    mutable llvm::DenseMap<const RecordDecl*, ExtensionVec*> ExtensionMap;
+
+   mutable llvm::DenseMap<const ProtocolDecl*,
+                          llvm::DenseMap<const NamedDecl*, NamedDecl*>>
+                              ProtocolDefaultImplMap;
 
    mutable llvm::DenseMap<const IdentifierInfo*,
                           PrecedenceGroupDecl*> InfixOperators;
@@ -179,6 +183,15 @@ public:
 
       return PostfixOperators.find(II) != PostfixOperators.end();
    }
+
+   void addProtocolDefaultImpl(const ProtocolDecl *P, const NamedDecl *Req,
+                               NamedDecl *Impl);
+
+   NamedDecl *getProtocolDefaultImpl(const ProtocolDecl *P,
+                                     const NamedDecl *Req);
+
+   const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+   getProtocolDefaultImpls(const ProtocolDecl *P);
 
    void registerDecl(unsigned SourceID, Decl *D)
    {

@@ -363,6 +363,7 @@ private:
    IdentifierTable &Idents;
 
    IdentifierInfo *Ident_self;
+   IdentifierInfo *Ident_Self;
    IdentifierInfo *Ident_super;
    IdentifierInfo *Ident_in;
    IdentifierInfo *Ident_as;
@@ -393,7 +394,9 @@ private:
    IdentifierInfo *Ident_owned;
    IdentifierInfo *Ident_borrow;
    IdentifierInfo *Ident_ref;
+   IdentifierInfo *Ident_mut;
    IdentifierInfo *Ident_from;
+   IdentifierInfo *Ident_unittest;
    IdentifierInfo *Ident___traits;
    IdentifierInfo *Ident___nullptr;
    IdentifierInfo *Ident___func__;
@@ -589,6 +592,7 @@ private:
                              lex::tok::TokenType expected);
 
    AccessSpecifier tokenToAccessSpec(lex::tok::TokenType kind);
+   FixKind tokenToFix(lex::tok::TokenType kind);
 
    lex::Token lookahead(bool ignoreNewline = true, bool sw = false);
    void advance(bool ignoreNewline = true, bool sw = false);
@@ -618,7 +622,7 @@ private:
 
    ParseResult parseMacro();
 
-   ParseResult parseTrailingClosure();
+   ParseResult parseTrailingClosure(bool ParseSubExpr);
 
    ParseResult parseNextDecl();
    ParseResult parseNextStmt(bool AllowBracedBlock = true);
@@ -627,6 +631,8 @@ private:
    ParseResult parseUsingDecl();
    ParseResult parseModuleDecl();
    ParseResult parseImportDecl();
+
+   ParseResult parseUnittestDecl();
 
    ParseResult parseCompoundDecl(bool TopLevel, bool Transparent = true);
 
@@ -638,16 +644,17 @@ private:
    ParseResult parseKeyword();
 
    ParseResult parseCompoundStmt(bool preserveTopLevel = false,
-                                 bool noOpenBrace = false,
-                                 bool isUnsafe = false);
+                                 bool noOpenBrace = false);
 
    ParseResult parseDoStmt();
 
    ParseResult parseCollectionLiteral();
 
-   std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc);
+   std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc,
+                                           bool ImplicitUnderscores = false);
    void parseFuncArgs(SourceLocation &varargLoc,
-                      std::vector<FuncArgDecl*> &Vec);
+                      std::vector<FuncArgDecl*> &Vec,
+                      bool ImplicitUnderscores = false);
 
    ParseResult parseLambdaExpr();
    ParseResult parseLambdaExpr(SourceLocation LParenLoc,
@@ -661,7 +668,7 @@ private:
    ParseResult parseEnumCaseExpr();
 
    struct ArgumentList {
-      std::vector<std::string> labels;
+      std::vector<IdentifierInfo*> labels;
       ASTVector<Expression*> args;
    };
 

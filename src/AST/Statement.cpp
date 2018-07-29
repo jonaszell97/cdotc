@@ -148,20 +148,18 @@ NullStmt* NullStmt::Create(ASTContext &C, SourceLocation Loc)
 
 CompoundStmt::CompoundStmt(bool preservesScope,
                            SourceLocation LBraceLoc,
-                           SourceLocation RBraceLoc,
-                           bool Unsafe)
-   : CompoundStmt({}, preservesScope, LBraceLoc, RBraceLoc, Unsafe)
+                           SourceLocation RBraceLoc)
+   : CompoundStmt({}, preservesScope, LBraceLoc, RBraceLoc)
 {
 }
 
 CompoundStmt::CompoundStmt(llvm::ArrayRef<Statement* > stmts,
                            bool preserveScope,
                            SourceLocation LBraceLoc,
-                           SourceLocation RBraceLoc,
-                           bool Unsafe)
+                           SourceLocation RBraceLoc)
    : Statement(CompoundStmtID),
      numStmts(unsigned(stmts.size())), preserveScope(preserveScope),
-     Unsafe(Unsafe), ContainsDeclStmt(false),
+     ContainsDeclStmt(false),
      LBraceLoc(LBraceLoc), RBraceLoc(RBraceLoc)
 {
    std::copy(stmts.begin(), stmts.end(), begin());
@@ -169,28 +167,25 @@ CompoundStmt::CompoundStmt(llvm::ArrayRef<Statement* > stmts,
 
 CompoundStmt::CompoundStmt(EmptyShell, unsigned N)
    : Statement(CompoundStmtID),
-   numStmts(N), preserveScope(false), Unsafe(false), ContainsDeclStmt(false)
+   numStmts(N), preserveScope(false), ContainsDeclStmt(false)
 {}
 
 CompoundStmt* CompoundStmt::Create(ASTContext &ASTCtx,
                                    bool preserveScope,
                                    SourceLocation LBraceLoc,
-                                   SourceLocation RBraceLoc,
-                                   bool Unsafe) {
-   return Create(ASTCtx, {}, preserveScope, LBraceLoc, RBraceLoc, Unsafe);
+                                   SourceLocation RBraceLoc) {
+   return Create(ASTCtx, {}, preserveScope, LBraceLoc, RBraceLoc);
 }
 
 CompoundStmt* CompoundStmt::Create(ASTContext &ASTCtx,
                                    llvm::ArrayRef<Statement *> stmts,
                                    bool preserveScope,
                                    SourceLocation LBraceLoc,
-                                   SourceLocation RBraceLoc,
-                                   bool Unsafe) {
+                                   SourceLocation RBraceLoc) {
    void *Mem = ASTCtx.Allocate(totalSizeToAlloc<Statement*>(stmts.size()),
                                alignof(CompoundStmt));
 
-   return new(Mem) CompoundStmt(stmts, preserveScope, LBraceLoc, RBraceLoc,
-                                Unsafe);
+   return new(Mem) CompoundStmt(stmts, preserveScope, LBraceLoc, RBraceLoc);
 }
 
 CompoundStmt* CompoundStmt::CreateEmpty(ASTContext &C, unsigned N)

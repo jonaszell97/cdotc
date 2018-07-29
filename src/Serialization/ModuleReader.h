@@ -44,7 +44,7 @@ public:
 
 private:
    /// The current compiler instance
-   CompilationUnit &CI;
+   CompilerInstance &CI;
 
    /// The location this module was loaded from
    SourceRange ImportLoc;
@@ -63,6 +63,10 @@ private:
 
    /// The IL Reader
    serial::ILReader ILReader;
+
+   /// The module reader for identifiers and types, if this is a cache file
+   /// reader.
+   ModuleReader *IdentTypeReader = nullptr;
 
    /// The hash table of the loaded module.
    reader::HashTable *ModTbl = nullptr;
@@ -90,7 +94,8 @@ private:
 
    /// Substitutions for source ids that are deserialized. These are used if
    /// we can find the files used to create this module on disk.
-   llvm::DenseMap<unsigned, int> SourceIDSubstitutions;
+   llvm::DenseMap<unsigned, int> SourceIDSubstitutionOffsets;
+   llvm::DenseMap<unsigned, unsigned> SourceIDSubstitutions;
 
    /// A vector containing identifiers that have already been
    /// loaded.
@@ -155,17 +160,23 @@ private:
    /// Time during construction of this reader.
    long long StartTime = 0;
 
-   ReadResult ReadControlBlock();
-   Module *ReadModuleBlock(Module *ParentModule = nullptr);
+   ReadResult ReadControlBlock(llvm::BitstreamCursor &Stream);
+   Module *ReadModuleBlock(llvm::BitstreamCursor &Stream,
+                           Module *ParentModule = nullptr);
 
    ReadResult ReadCacheControlBlock();
+   ReadResult ReadFileManagerBlock(llvm::BitstreamCursor &Stream);
    ReadResult ReadOptionsBlock();
-   ReadResult ReadIdentifierBlock();
-   ReadResult ReadOffsetsBlock();
-   ReadResult ReadDeclsTypesValuesBlock();
+   ReadResult ReadIdentifierBlock(llvm::BitstreamCursor &Cursor);
+   ReadResult ReadOffsetsBlock(llvm::BitstreamCursor &Stream);
+   ReadResult ReadDeclsTypesValuesBlock(llvm::BitstreamCursor &Stream);
    ReadResult ReadStaticLibBlock();
+   ReadResult ReadOffsetRangeBlock(llvm::BitstreamCursor &Stream,
+                                   IncrementalCompilationManager &Mgr,
+                                   StringRef FileName);
 
    void LoadModuleImports();
+   void LoadModuleImports(StringRef FileName);
 
    static bool ParseLanguageOptions(const RecordData &Record, bool Complain,
                                     bool AllowCompatibleDifferences);
@@ -198,10 +209,17 @@ private:
    IdentifierInfo *get(StringRef Name);
 
 public:
-   ModuleReader(CompilationUnit &CI,
+   ModuleReader(CompilerInstance &CI,
                 SourceRange ImportLoc,
                 SourceLocation DiagLoc,
                 llvm::BitstreamCursor Cursor);
+
+   ModuleReader(CompilerInstance &CI,
+                llvm::BitstreamCursor Cursor);
+
+   ModuleReader(CompilerInstance &CI,
+                llvm::BitstreamCursor Cursor,
+                ModuleReader &MainReader);
 
    ~ModuleReader();
 
@@ -213,12 +231,6 @@ public:
 
    Module *ReadModule();
 
-   /// Read a cache file for the given module and source ID.
-   ReadResult ReadCacheFile(IncrementalCompilationManager &Mgr,
-                            Module *Mod,
-                            unsigned SourceID,
-                            StringRef FileName);
-
    /// Finalize the read cache file.
    void FinalizeCacheFile(IncrementalCompilationManager &Mgr,
                           Module *Mod,
@@ -226,6 +238,8 @@ public:
 
    /// Print statistics about the module being read.
    void printStatistics() const;
+
+   bool incremental() const { return IncMgr != nullptr; }
 
    /// Returns the ID a declaration was loaded with, or 0 if it is not from
    /// this module.
@@ -239,7 +253,24 @@ public:
       return static_cast<unsigned>(IdentifiersLoaded.size());
    }
 
-   CompilationUnit &getCompilerInstance() const { return CI; }
+   CompilerInstance &getCompilerInstance() const { return CI; }
+
+   struct IdentTypeReaderRAII {
+      IdentTypeReaderRAII(ModuleReader &R, ModuleReader &IdentReader)
+         : R(R), Previous(R.IdentTypeReader)
+      {
+         R.IdentTypeReader = &IdentReader;
+      }
+
+      ~IdentTypeReaderRAII()
+      {
+         R.IdentTypeReader = Previous;
+      }
+
+   private:
+      ModuleReader &R;
+      ModuleReader *Previous;
+   };
 };
 
 } // namespace serial

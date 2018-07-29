@@ -53,11 +53,7 @@ public:
    ValueType(Context &Ctx, Type *ty);
    ValueType(Context &Ctx, QualType ty);
 
-   ValueType &operator=(QualType const& that)
-   {
-      Ty = that;
-      return *this;
-   }
+   ValueType &operator=(QualType const& that);
 
    Context &getCtx() const
    {
@@ -119,6 +115,10 @@ protected:
       bool Synthesized : 1;
       bool MayBeMoved : 1;
       bool IsTagged : 1;
+      bool Deserialized : 1;
+      bool Verified : 1;
+      bool Canonicalized : 1;
+      bool Optimized : 1;
    };
 
    struct FunctionBits {

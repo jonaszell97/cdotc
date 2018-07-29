@@ -10,9 +10,10 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-AccessPathIterator::AccessPathIterator(il::Value *V) : V(V)
+AccessPathIterator::AccessPathIterator(il::Value *V, bool RvaluePath)
+   : V(V), RvaluePath(RvaluePath)
 {
-   if (!V->isLvalue())
+   if (!V->isLvalue() && !RvaluePath)
       moveNext();
 }
 
@@ -33,22 +34,27 @@ static il::Value *LookThroughLoad(il::Value *V)
 
 void AccessPathIterator::moveNext()
 {
-   V = LookThroughLoad(V);
+   if (!RvaluePath)
+      V = LookThroughLoad(V);
+
    if (auto Load = dyn_cast<LoadInst>(V)) {
       V = Load->getTarget();
    }
    else if (auto GEP = dyn_cast<GEPInst>(V)) {
-      V = LookThroughLoad(GEP->getOperand(0));
+      V = GEP->getOperand(0);
    }
    else if (auto FieldRef = dyn_cast<FieldRefInst>(V)) {
-      V = LookThroughLoad(FieldRef->getOperand(0));
+      V = FieldRef->getOperand(0);
    }
    else if (auto TupleExtract = dyn_cast<TupleExtractInst>(V)) {
-      V = LookThroughLoad(TupleExtract->getOperand(0));
+      V = TupleExtract->getOperand(0);
    }
    else {
       V = nullptr;
    }
+
+   if (!RvaluePath && V)
+      V = LookThroughLoad(V);
 }
 
 } // namespace il

@@ -66,7 +66,7 @@ namespace ast {
    class Decl;
 } // namespace ast
 
-class CompilationUnit;
+class CompilerInstance;
 class Type;
 
 namespace il {
@@ -79,7 +79,7 @@ class Context final {
 public:
    using ModuleList         = llvm::SmallPtrSet<Module*, 4>;
 
-   explicit Context(CompilationUnit &CU);
+   explicit Context(CompilerInstance &CU);
    ~Context();
 
    void registerModule(Module *M);
@@ -93,7 +93,7 @@ public:
    GlobalVariable *getGlobalDefinition(llvm::StringRef name);
 
    ast::ASTContext &getASTCtx() const;
-   CompilationUnit &getCompilation() const { return CI; }
+   CompilerInstance &getCompilation() const { return CI; }
 
    friend class ConstantInt;     // for IntConstants
    friend class ConstantFloat;   // for FPConstants
@@ -113,7 +113,7 @@ public:
    friend class VTable;
 
 private:
-   CompilationUnit &CI;
+   CompilerInstance &CI;
    ModuleList Modules;
 
    using IntMapTy = llvm::DenseMap<llvm::APSInt, std::unique_ptr<ConstantInt>,

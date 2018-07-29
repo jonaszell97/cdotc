@@ -19,6 +19,7 @@ namespace llvm {
    template<typename T> class Optional;
    template <typename PT1, typename PT2> class PointerUnion;
    template <typename BaseTy, typename... TrailingTys> class TrailingObjects;
+   template <typename EltTy> class TinyPtrVector;
 
    class raw_ostream;
    class APInt;
@@ -38,6 +39,7 @@ using llvm::StringRef;
 using llvm::ArrayRef;
 using llvm::MutableArrayRef;
 using llvm::TrailingObjects;
+using llvm::TinyPtrVector;
 
 using llvm::MemoryBuffer;
 using llvm::APInt;

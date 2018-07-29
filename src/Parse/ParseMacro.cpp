@@ -1372,7 +1372,7 @@ public:
       ExpansionOffset = SP.getCompilationUnit().getFileMgr()
                      .createMacroExpansion(ExpandedFrom, Pat->getSourceLoc(),
                                            Pat->getSourceLength() + 1,
-                                           M->getDeclName());
+                                           M->getDeclName()).BaseOffset;
    }
 
    ParseResult expand();

@@ -40,12 +40,16 @@ void UnsafeAnalysisInfo::computeFn(il::Function &F, DominanceAnalysis *DA)
                                                "instructions");
 #endif
 
-            llvm::SmallPtrSet<BasicBlock*, 8> Worklist{ I.getParent() };
+            SmallPtrSet<BasicBlock*, 8> Visited;
+            SmallPtrSet<BasicBlock*, 8> Worklist{ I.getParent() };
             Instruction *Inst = &I;
 
             while (!Worklist.empty()) {
                auto *BB = *Worklist.begin();
                Worklist.erase(BB);
+
+               if (!Visited.insert(BB).second)
+                  continue;
 
                if (!Inst)
                   Inst = &BB->getInstructions().back();

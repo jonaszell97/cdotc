@@ -564,8 +564,11 @@ void ModuleWriterImpl::WriteArgumentNoName(const Argument &Arg)
    switch (Arg.getConvention()) {
    case ArgumentConvention::Default:
       llvm_unreachable("didn't change default argument convention!");
-   case ArgumentConvention::MutablyBorrowed:
-      out << "[borrow_mut] ";
+   case ArgumentConvention::MutableRef:
+      out << "[mut ref] ";
+      break;
+   case ArgumentConvention::ImmutableRef:
+      out << "[ref] ";
       break;
    case ArgumentConvention::Borrowed:
       out << "[borrow] ";

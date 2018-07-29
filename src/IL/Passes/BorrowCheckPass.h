@@ -31,13 +31,13 @@ class BorrowCheckPass: public FunctionPass,
 
    /// Memory uses that are interesting for borrow checking, i.e. moves and
    /// (immutable) borrows
-   llvm::SmallVector<MemoryUse, 8> MemoryUses;
+   SmallVector<MemoryUse, 8> MemoryUses;
 
    /// Mapping from instructions back to the memory use they cause
    llvm::DenseMap<const il::Instruction*, unsigned> InstUseMap;
 
    /// Mapping from memory locations back to their memory uses
-   llvm::DenseMap<MemoryLocation, unsigned> LocUseMap;
+   llvm::DenseMap<MemoryLocation, SmallVector<unsigned, 0>> LocUseMap;
 
    /// Mapping from MemoryLocations to the NamedDecl that they access
    llvm::DenseMap<MemoryLocation, ast::NamedDecl*> MemDeclMap;
@@ -82,8 +82,8 @@ class BorrowCheckPass: public FunctionPass,
    void checkOverlappingMemoryUse(const Instruction &I,
                                   const llvm::BitVector &Gen);
 
-   void visitInitInst(const InitInst &I, llvm::BitVector &Gen,
-                      llvm::BitVector &Kill);
+   void visitIntrinsicCallInst(const IntrinsicCallInst &I, llvm::BitVector &Gen,
+                               llvm::BitVector &Kill);
    void visitMoveInst(const MoveInst &I, llvm::BitVector &Gen,
                       llvm::BitVector &Kill);
    void visitBeginBorrowInst(const BeginBorrowInst &I, llvm::BitVector &Gen,

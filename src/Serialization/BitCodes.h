@@ -31,6 +31,15 @@ enum BlockIDs {
       /// Block containing information about a (sub-)module.
       MODULE_BLOCK_ID,
 
+   /// The block containing information about the file manager of the module.
+   FILE_MANAGER_BLOCK_ID,
+
+   /// Control block of a cache file.
+   CACHE_CONTROL_BLOCK_ID,
+
+      /// Block containing the declarations of a cache file.
+      CACHE_FILE_BLOCK_ID,
+
    /// The AST block, which acts as a container around the
    /// full AST block.
    AST_BLOCK_ID,
@@ -41,6 +50,9 @@ enum BlockIDs {
 
    /// The block containing the type, value and decl offsets
    OFFSET_BLOCK_ID,
+
+   /// The block containing offset ranges for a cache file.
+   OFFSET_RANGE_BLOCK_ID,
 
    /// The block containing the modules conformances,
    CONFORMANCE_BLOCK_ID,
@@ -65,10 +77,23 @@ enum StaticLibRecordTypes {
 
 /// Record types that occur within the control block.
 enum ControlRecordTypes {
-   /// Information about the cached file.
+   /// Information about a cached file.
    CACHE_FILE = 0,
+
+   /// Information about file dependencies.
+   DEPENDENCY_DATA = 1,
 };
 
+/// Record types that occur within the file manager block.
+enum FileManagerRecordTypes {
+   /// The macro expansion locations of the file manager.
+   MACRO_EXPANSIONS = 0,
+
+   /// Information about the source files used to create the module.
+   SOURCE_FILES,
+};
+
+/// Record types that occur within the module block.
 enum ModuleBlockRecordTypes {
    /// module file metadata, including the module file version number
    /// and information about the compiler used to build this module file.
@@ -162,6 +187,11 @@ enum OffsetBlockRecordTypes {
 
    /// Offsets of all emitted values, indexed by their ID
    IL_VALUE_OFFSETS,
+};
+
+enum OffsetRangeRecordTypes {
+   /// Offset ranges.
+   OFFSET_RANGES = 0,
 };
 
 enum StmtKinds {

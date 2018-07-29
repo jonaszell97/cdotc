@@ -47,7 +47,8 @@ class ModuleFile {
    bool LoadedAllDecls = false;
 
    /// Act on a loaded declaration.
-   void LoadedDecl(ast::DeclContext &Ctx, ast::Decl *ReadDecl);
+   void LoadedDecl(ast::DeclContext &Ctx, ast::Decl *ReadDecl,
+                   bool IgnoreInst = false);
 
 public:
    ModuleFile(ModuleReader &Reader, void *HashTablePtr);
@@ -59,7 +60,7 @@ public:
    void setInstantiationTable(void *Tbl) { InstantiationTable = Tbl; }
    ast::NamedDecl *LookupInstantiation(StringRef MangledName);
 
-   void LoadAllDecls(ast::DeclContext &Ctx);
+   void LoadAllDecls(ast::DeclContext &Ctx, bool IgnoreInst = false);
 
    ModuleFile *copy() const;
 };

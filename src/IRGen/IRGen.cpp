@@ -35,7 +35,7 @@ using namespace cdot::fs;
 namespace cdot {
 namespace il {
 
-IRGen::IRGen(CompilationUnit &CI,
+IRGen::IRGen(CompilerInstance &CI,
              llvm::LLVMContext &Ctx,
              bool emitDebugInfo)
    : CI(CI), TI(CI.getContext().getTargetInfo()), emitDebugInfo(emitDebugInfo),
@@ -91,7 +91,7 @@ IRGen::IRGen(CompilationUnit &CI,
       WordTy,                   // strong refcount
       WordTy,                   // weak refcount
       Int8PtrTy,                // deinitializer
-      Int8PtrTy                 // data
+      Builder.getInt8Ty()       // data
    };
 
    BoxTy = llvm::StructType::create(Ctx, boxContainedTypes, "cdot.Box");
@@ -115,16 +115,13 @@ IRGen::~IRGen()
    delete TargetMachine;
 }
 
-void IRGen::visitCompilationUnit(CompilationUnit &CU)
+void IRGen::visitCompilationUnit(CompilerInstance &CU)
 {
    visitModule(*CU.getCompilationModule()->getILModule());
 }
 
 void IRGen::visitModule(Module& ILMod)
 {
-   if (ILMod.isSynthesized())
-      return;
-
    M = new llvm::Module(ILMod.getFileName(), Ctx);
    ILMod.setLLVMModule(M);
 
@@ -246,6 +243,7 @@ void IRGen::visitModule(Module& ILMod)
    IntrinsicDecls.clear();
    GlobalInitFns.clear();
    GlobalDeinitFns.clear();
+   ValueMap.clear();
 
    finalize(CI);
 
@@ -678,7 +676,7 @@ void IRGen::DeclareFunction(il::Function const* F)
 {
    auto funcTy = F->getType()->asFunctionType();
 
-   llvm::SmallVector<llvm::Type*, 8> argTypes;
+   SmallVector<llvm::Type*, 8> argTypes;
    llvm::Type *retType;
 
    bool sret = false;
@@ -898,7 +896,7 @@ void IRGen::DeclareType(ast::RecordDecl *R)
    if (Ty->getStructNumElements())
       return;
 
-   llvm::SmallVector<llvm::Type*, 8> ContainedTypes;
+   SmallVector<llvm::Type*, 8> ContainedTypes;
 
    if (auto U = dyn_cast<UnionDecl>(R)) {
       auto *ArrTy = llvm::ArrayType::get(Builder.getInt8Ty(), U->getSize());
@@ -912,7 +910,7 @@ void IRGen::DeclareType(ast::RecordDecl *R)
       }
 
       for (auto F : S->getFields()) {
-         auto fieldTy = getStorageType(F->getType());
+         auto fieldTy = getStorageType(F->getType()->getCanonicalType());
          ContainedTypes.push_back(fieldTy);
       }
    }
@@ -927,7 +925,7 @@ void IRGen::DeclareType(ast::RecordDecl *R)
    if (ContainedTypes.empty())
       ContainedTypes.push_back(Int8PtrTy);
 
-   Ty->setBody(ContainedTypes);
+   Ty->setBody(ContainedTypes, true);
 }
 
 void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
@@ -1024,6 +1022,7 @@ void IRGen::visitFunction(Function &F)
 
    // Allocate structs that were passed destructured.
    Builder.SetInsertPoint(AllocaBB);
+
    for (auto &Arg : F.getEntryBlock()->getArgs()) {
       if (Arg.isSelf())
          continue;
@@ -1096,6 +1095,8 @@ void IRGen::visitFunction(Function &F)
       }
    }
 
+   Builder.SetCurrentDebugLocation(llvm::DebugLoc());
+
    if (!F.isAsync()) {
       Builder.SetInsertPoint(AllocaBB);
       Builder.CreateBr(getBasicBlock(F.getEntryBlock()));
@@ -1105,8 +1106,6 @@ void IRGen::visitFunction(Function &F)
       emitArgumentDI(F, func);
       endScope();
    }
-
-   Builder.SetCurrentDebugLocation(llvm::DebugLoc());
 
    AllocaIt = llvm::BasicBlock::iterator();
    this->AllocaBB = nullptr;
@@ -1236,6 +1235,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
                                       size_t allocatedSize,
                                       unsigned int alignment) {
    auto IP = Builder.saveIP();
+   auto Loc = Builder.getCurrentDebugLocation();
+   Builder.SetCurrentDebugLocation(nullptr);
+
    Builder.SetInsertPoint(AllocaBB, AllocaIt);
 
    if (!alignment)
@@ -1245,8 +1247,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
                          alignment);
 
    Builder.restoreIP(IP);
-   AllocaIt = A->getIterator();
+   Builder.SetCurrentDebugLocation(Loc);
 
+   AllocaIt = A->getIterator();
    return A;
 }
 
@@ -1254,6 +1257,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
                                       il::Value *allocatedSize,
                                       unsigned int alignment) {
    auto IP = Builder.saveIP();
+
+   auto Loc = Builder.getCurrentDebugLocation();
+   Builder.SetCurrentDebugLocation(nullptr);
 
    if (!allocatedSize || isa<Constant>(allocatedSize))
       Builder.SetInsertPoint(AllocaBB, AllocaIt);
@@ -1265,6 +1271,8 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
                          alignment);
 
    Builder.restoreIP(IP);
+   Builder.SetCurrentDebugLocation(Loc);
+
    if (!allocatedSize || isa<Constant>(allocatedSize))
       AllocaIt = A->getIterator();
 
@@ -1275,6 +1283,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
                                       il::Value *allocatedSize,
                                       unsigned int alignment) {
    auto IP = Builder.saveIP();
+
+   auto Loc = Builder.getCurrentDebugLocation();
+   Builder.SetCurrentDebugLocation(nullptr);
 
    if (!allocatedSize || isa<Constant>(allocatedSize))
       Builder.SetInsertPoint(AllocaBB, AllocaIt);
@@ -1289,6 +1300,8 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
    alloca->setAlignment(alignment);
 
    Builder.restoreIP(IP);
+   Builder.SetCurrentDebugLocation(Loc);
+
    if (!allocatedSize || isa<Constant>(allocatedSize))
       AllocaIt = alloca->getIterator();
 
@@ -1299,6 +1312,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
                                       size_t allocatedSize,
                                       unsigned alignment) {
    auto IP = Builder.saveIP();
+
+   auto Loc = Builder.getCurrentDebugLocation();
+   Builder.SetCurrentDebugLocation(nullptr);
 
    Builder.SetInsertPoint(AllocaBB, AllocaIt);
 
@@ -1311,8 +1327,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
    alloca->setAlignment(alignment);
 
    Builder.restoreIP(IP);
-   AllocaIt = alloca->getIterator();
+   Builder.SetCurrentDebugLocation(Loc);
 
+   AllocaIt = alloca->getIterator();
    return alloca;
 }
 
@@ -1635,7 +1652,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    }
 
    if (auto Undef = dyn_cast<UndefValue>(C)) {
-      return llvm::UndefValue::get(getStorageType(Undef->getType()));
+      return llvm::UndefValue::get(getParameterType(Undef->getType()));
    }
 
    if (auto G = dyn_cast<GlobalVariable>(C)) {
@@ -1886,7 +1903,6 @@ llvm::Value *IRGen::visitAllocaInst(AllocaInst const& I)
          }
 
          auto buff = Builder.CreateCall(getMallocFn(), { size });
-
          V = Builder.CreateBitCast(buff, allocatedType->getPointerTo());
       }
       else {
@@ -1938,6 +1954,11 @@ llvm::Value *IRGen::visitAssignInst(const AssignInst&)
    llvm_unreachable("didn't replace assign with store or init!");
 }
 
+static unsigned short getMemCpyAlign(QualType Ty)
+{
+   return 1;
+}
+
 llvm::Value *IRGen::visitStoreInst(StoreInst const& I)
 {
    auto Dst = getLlvmValue(I.getDst());
@@ -1986,8 +2007,8 @@ llvm::Value *IRGen::visitStoreInst(StoreInst const& I)
       emitDebugValue(I.getDst(), Src);
 
    if (Ty->needsStructReturn()) {
-      return Builder.CreateMemCpy(Dst, Src, TI.getSizeOfType(Ty),
-                                  alignment);
+      return Builder.CreateMemCpy(Dst, Src, TI.getAllocSizeOfType(Ty),
+                                  getMemCpyAlign(Ty));
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
@@ -2048,8 +2069,8 @@ llvm::Value *IRGen::visitInitInst(const InitInst &I)
       emitDebugValue(I.getDst(), Src);
 
    if (Ty->needsStructReturn()) {
-      return Builder.CreateMemCpy(Dst, Src, TI.getSizeOfType(Ty),
-                                  alignment);
+      return Builder.CreateMemCpy(Dst, Src, TI.getAllocSizeOfType(Ty),
+                                  getMemCpyAlign(Ty));
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
@@ -2271,9 +2292,8 @@ llvm::Value* IRGen::visitRetInst(RetInst const& I)
             ++argIt;
 
          auto sretVal = &*argIt;
-         Builder.CreateMemCpy(sretVal, retVal,
-                              TI.getSizeOfType(V->getType()),
-                              TI.getAlignOfType(V->getType()));
+         Builder.CreateMemCpy(sretVal, retVal, TI.getSizeOfType(V->getType()),
+                              getMemCpyAlign(V->getType()));
       }
       else {
          return Builder.CreateRet(retVal);
@@ -2340,7 +2360,6 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
 {
    QualType ThrownTy = I.getThrownValue()->getType();
    unsigned TypeSize = TI.getAllocSizeOfType(ThrownTy);
-   unsigned short TypeAlign = TI.getAllocAlignOfType(ThrownTy);
 
    auto thrownVal = getLlvmValue(I.getThrownValue());
    auto ErrVal = getCurrentErrorValue();
@@ -2363,7 +2382,8 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
 
    auto *ObjPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 2);
    if (ThrownTy->needsStructReturn()) {
-      Builder.CreateMemCpy(ObjPtr, thrownVal, TypeSize, TypeAlign);
+      Builder.CreateMemCpy(ObjPtr, thrownVal, TypeSize,
+                           getMemCpyAlign(ThrownTy));
    }
    else {
       Builder.CreateStore(
@@ -2572,15 +2592,31 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
 
       return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
    }
-   case Intrinsic::lifetime_begin:
-      return Builder.CreateLifetimeStart(getLlvmValue(I.getArgs()[0]),
-                      cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
-   case Intrinsic::lifetime_end: {
-      auto Self = getLlvmValue(I.getArgs()[0]);
-      Builder.CreateLifetimeEnd(Self,
-                      cast<llvm::ConstantInt>(getLlvmValue(I.getArgs()[1])));
+   case Intrinsic::lifetime_begin: {
+      auto *Val = I.getArgs().front();
+      auto *LLVMVal = getLlvmValue(Val);
+      QualType Ty = Val->getType()->stripReference();
 
-      return nullptr;
+      if (Ty->isClass()) {
+         LLVMVal = Builder.CreateLoad(LLVMVal);
+      }
+
+      return Builder.CreateLifetimeStart(
+         LLVMVal,
+         Builder.getInt64(TI.getAllocSizeOfType(Ty)));
+   }
+   case Intrinsic::lifetime_end: {
+      auto *Val = I.getArgs().front();
+      auto *LLVMVal = getLlvmValue(Val);
+      QualType Ty = Val->getType()->stripReference();
+
+      if (Ty->isClass()) {
+         LLVMVal = Builder.CreateLoad(LLVMVal);
+      }
+
+      return Builder.CreateLifetimeEnd(
+         LLVMVal,
+         Builder.getInt64(TI.getAllocSizeOfType(Ty)));
    }
    case Intrinsic::get_lambda_env: {
       auto lambda = getLlvmValue(I.getArgs()[0]);
@@ -3169,7 +3205,7 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
       auto val = CaseVals[i];
       if (Arg->getType()->needsStructReturn()) {
          Builder.CreateMemCpy(GEP, val, TI.getSizeOfType(Arg->getType()),
-                              TI.getAlignOfType(Arg->getType()));
+                              getMemCpyAlign(Arg->getType()));
       }
       else {
          Builder.CreateStore(val, GEP);

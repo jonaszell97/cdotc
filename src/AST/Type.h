@@ -876,7 +876,11 @@ public:
 };
 
 enum class ArgumentConvention : unsigned char {
-   Owned, Borrowed, MutablyBorrowed, Default,
+   Owned,
+   Borrowed,
+   ImmutableRef,
+   MutableRef,
+   Default,
 };
 
 class FunctionType: public Type, public llvm::FoldingSetNode {
@@ -892,7 +896,7 @@ public:
       void Profile(llvm::FoldingSetNodeID &ID) const;
 
    private:
-      ArgumentConvention Conv : 2;
+      ArgumentConvention Conv : 4;
    };
 
    enum ExtFlags : unsigned {

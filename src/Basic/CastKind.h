@@ -20,7 +20,7 @@ enum class CastKind : unsigned char {
    Forward, Move, Copy,
    MutRefToRef, MutPtrToPtr, RValueToConstRef,
 
-   IntToEnum, EnumToInt, ToVoid, ToEmptyTuple,
+   IntToEnum, EnumToInt, ToVoid, ToEmptyTuple, ToMetaType,
 };
 
 enum CastStrength : unsigned char {

@@ -33,6 +33,13 @@ public:
 
    FPResult parseFloating();
 
+   struct CharResult {
+      uint32_t Char;
+      bool Malformed;
+   };
+
+   CharResult parseCharacter();
+
 private:
    llvm::StringRef Str;
 

@@ -16,7 +16,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-Context::Context(CompilationUnit &CI) : CI(CI)
+Context::Context(CompilerInstance &CI) : CI(CI)
 {
 
 }

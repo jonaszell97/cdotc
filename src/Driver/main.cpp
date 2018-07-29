@@ -115,7 +115,7 @@ static void ensureSufficientStack() {}
 static void LLVMErrorHandler(void *UserData,
                              const std::string &Message,
                              bool GenCrashDiag) {
-   auto &CU = *static_cast<CompilationUnit*>(UserData);
+   auto &CU = *static_cast<CompilerInstance*>(UserData);
    CU.reportBackendFailure(Message);
 
    // Run the interrupt handlers to make sure any special cleanups get done, in
@@ -131,7 +131,7 @@ static void LLVMErrorHandler(void *UserData,
 LLVM_ATTRIBUTE_UNUSED
 static void showICEDiag(void *Data)
 {
-   auto &CU = *static_cast<CompilationUnit*>(Data);
+   auto &CU = *static_cast<CompilerInstance*>(Data);
    CU.reportInternalCompilerError();
 }
 
@@ -142,7 +142,7 @@ int cdot_main(int argc, char* argv[])
 
    llvm::PrettyStackTraceProgram Prog((argc), argv);
 
-   CompilationUnit compilationUnit(argc, argv);
+   CompilerInstance compilationUnit(argc, argv);
 
    llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
    llvm::EnablePrettyStackTrace();

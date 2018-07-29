@@ -32,21 +32,21 @@ class ConstantClass;
 
 class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
-   explicit IRGen(CompilationUnit &CU,
+   explicit IRGen(CompilerInstance &CU,
                   llvm::LLVMContext &Ctx,
                   bool emitDebugInfo);
 
    ~IRGen();
 
-   void visitCompilationUnit(CompilationUnit &CU);
+   void visitCompilationUnit(CompilerInstance &CU);
    void visitModule(Module &M);
    void visitFunction(Function &F);
    void visitBasicBlock(BasicBlock &B);
 
-   llvm::Module *linkModules(CompilationUnit &CI);
+   llvm::Module *linkModules(CompilerInstance &CI);
 
    void prepareModuleForEmission(llvm::Module *Mod);
-   void linkAndEmit(CompilationUnit &CU);
+   void linkAndEmit(CompilerInstance &CU);
 
    void emitObjectFile(llvm::StringRef OutFile, llvm::Module *Module,
                        bool KeepOpen = false, int *FD = nullptr,
@@ -54,7 +54,9 @@ public:
 
    void emitObjectFile(llvm::raw_ostream &OS, llvm::Module *Module);
    void emitAsmFile(llvm::raw_ostream &OS, llvm::Module *Module);
-   void emitExecutable(StringRef OutFile, llvm::Module *Module);
+   void emitExecutable(StringRef OutFile, llvm::Module *Module,
+                       ArrayRef<StringRef> AdditionalFilesToLink = {});
+
    void emitStaticLibrary(llvm::StringRef OutFile, llvm::Module *Module);
    void emitDynamicLibrary(llvm::StringRef OutFile, llvm::Module *Module);
 
@@ -73,7 +75,7 @@ private:
    void ForwardDeclareType(ast::RecordDecl *R);
    void DeclareType(ast::RecordDecl *R);
 
-   void finalize(const CompilationUnit &CU);
+   void finalize(const CompilerInstance &CU);
    void runMandatoryPasses(llvm::Module *M);
 
    bool NeedsStructReturn(QualType Ty);
@@ -195,7 +197,7 @@ private:
 
    llvm::GlobalVariable *getOrCreateInitializedFlag(const il::Value *ForVal);
 
-   CompilationUnit &CI;
+   CompilerInstance &CI;
    const TargetInfo &TI;
    il::Module *ILMod;
 

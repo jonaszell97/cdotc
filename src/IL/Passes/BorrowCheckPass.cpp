@@ -77,7 +77,7 @@ void BorrowCheckPass::buildMemoryUse(il::MoveInst &I)
                  llvm::ArrayRef<MemoryRestriction>(Mem, Restrictions.size()));
 
    InstUseMap.try_emplace(&I, MemoryUses.size());
-   LocUseMap.try_emplace(Loc, MemoryUses.size());
+   LocUseMap[Loc].push_back(MemoryUses.size());
 
    MemoryUses.push_back(Use);
 }
@@ -115,7 +115,7 @@ void BorrowCheckPass::buildMemoryUse(il::BeginBorrowInst &I)
          InstUseMap.try_emplace(End, MemoryUses.size());
    }
 
-   LocUseMap.try_emplace(Loc, MemoryUses.size());
+   LocUseMap[Loc].push_back(MemoryUses.size());
    MemoryUses.push_back(Use);
 }
 
@@ -184,18 +184,30 @@ BorrowCheckPass::buildRestrictions(il::Value *V,
    }
 }
 
-void BorrowCheckPass::visitInitInst(const il::InitInst &I, BitVector &Gen,
-                                    BitVector &Kill) {
-   auto Loc = MemoryLocation::get(I.getDst());
-   if (!Loc)
-      return;
+void BorrowCheckPass::visitIntrinsicCallInst(const IntrinsicCallInst &I,
+                                             BitVector &Gen, BitVector &Kill) {
+   switch (I.getCalledIntrinsic()) {
+   case Intrinsic::lifetime_begin:
+   case Intrinsic::lifetime_end: {
+      auto Loc = MemoryLocation::get(I.getArgs().front());
+      if (!Loc)
+         return;
 
-   auto IdxIt = LocUseMap.find(Loc);
-   if (IdxIt == LocUseMap.end())
-      return;
+      auto IdxIt = LocUseMap.find(Loc);
+      if (IdxIt == LocUseMap.end())
+         return;
 
-   Gen.reset(IdxIt->getSecond());
-   Kill.reset(IdxIt->getSecond());
+      // Lifetime markers void all memory uses.
+      for (auto UseIdx : IdxIt->getSecond()) {
+         Gen.reset(UseIdx);
+         Kill.set(UseIdx);
+      }
+
+      break;
+   }
+   default:
+      break;
+   }
 }
 
 void BorrowCheckPass::visitMoveInst(const il::MoveInst &I, BitVector &Gen,
@@ -390,13 +402,14 @@ void BorrowCheckPass::run()
                               visit(I, Gen, Kill);
                           }, false);
 
-//   if (F->getName()=="_CN10DictionaryI6StringlE5eraseES1_6String") {
+//   if (F->getName()=="_CNW4mainE6_startEv") {
+//      int i = 2;
 //      for (auto &B : *F) {
 //         llvm::outs()<<B.getName()<<"\n";
-//         llvm::outs()<<"   IN = "<<InMap[&B][5]<<"\n";
-//         llvm::outs()<<"   OUT = "<<OutMap[&B][5]<<"\n";
-//         llvm::outs()<<"   GEN = "<<GenMap[&B][5]<<"\n";
-//         llvm::outs()<<"   KILL = "<<KillMap[&B][5]<<"\n";
+//         llvm::outs()<<"   IN = "<<InMap[&B][i]<<"\n";
+//         llvm::outs()<<"   OUT = "<<OutMap[&B][i]<<"\n";
+//         llvm::outs()<<"   GEN = "<<GenMap[&B][i]<<"\n";
+//         llvm::outs()<<"   KILL = "<<KillMap[&B][i]<<"\n";
 //      }
 //   }
 

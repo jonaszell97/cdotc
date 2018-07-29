@@ -108,6 +108,9 @@ private:
    unsigned LocalNumDecls = 0;
    unsigned BaseValueIndex = 0;
 
+   /// A vector to add read globals to, if not null.
+   SmallVectorImpl<il::GlobalObject*> *ReadGlobals = nullptr;
+
    /* Statistics */
 
    /// Number of global variables read from the module file
@@ -174,11 +177,16 @@ public:
    void readGlobalInitializer(il::GlobalVariable &G, unsigned InitID,
                               unsigned Linkage);
 
+   /// Lazily read a function or global variable.
+   void readLazyGlobal(il::GlobalObject &GO);
+
    HashTable *getSymbolTable() const { return SymTab; }
+
+   il::Module *getModule() { return ILMod; }
    void setModule(il::Module *M);
 
    /// Main entry point to deserialize the IL module
-   ReadResult ReadILModule();
+   ReadResult ReadILModule(llvm::BitstreamCursor &Stream);
 
    /// Main entry point to deserialize the IL module, eagerly deserializing
    /// globals and functions
@@ -229,6 +237,23 @@ public:
    {
       Idx += Record[Idx] + 1;
    }
+
+   struct EagerRAII {
+      EagerRAII(ILReader &R, SmallVectorImpl<il::GlobalObject*> &ReadGlobals)
+         : R(R), Previous(R.ReadGlobals)
+      {
+         R.ReadGlobals = &ReadGlobals;
+      }
+
+      ~EagerRAII()
+      {
+         R.ReadGlobals = Previous;
+      }
+
+   private:
+      ILReader &R;
+      SmallVectorImpl<il::GlobalObject*> *Previous;
+   };
 };
 
 /// An object for streaming information from a record.

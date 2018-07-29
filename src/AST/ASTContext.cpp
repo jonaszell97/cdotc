@@ -106,6 +106,32 @@ void ASTContext::addExtension(const RecordDecl *R,
    }
 }
 
+void ASTContext::addProtocolDefaultImpl(const ProtocolDecl *P,
+                                        const NamedDecl *Req,
+                                        NamedDecl *Impl) {
+   ProtocolDefaultImplMap[P][Req] = Impl;
+}
+
+NamedDecl*
+ASTContext::getProtocolDefaultImpl(const ProtocolDecl *P,const NamedDecl *Req)
+{
+   auto It = ProtocolDefaultImplMap.find(P);
+   if (It == ProtocolDefaultImplMap.end())
+      return nullptr;
+
+   return It->getSecond()[Req];
+}
+
+const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+ASTContext::getProtocolDefaultImpls(const ProtocolDecl *P)
+{
+   auto It = ProtocolDefaultImplMap.find(P);
+   if (It == ProtocolDefaultImplMap.end())
+      return nullptr;
+
+   return &It->getSecond();
+}
+
 PointerType* ASTContext::getPointerType(QualType pointeeType) const
 {
    llvm::FoldingSetNodeID ID;
@@ -665,10 +691,10 @@ NamedDecl* ASTContext::getTemplateInstantiation(NamedDecl *Template,
    if (auto C = dyn_cast<CallableDecl>(Template)) {
       return getFunctionTemplateInstantiation(C, argList, insertPos);
    }
-   else if (auto R = dyn_cast<RecordDecl>(Template)) {
+   if (auto R = dyn_cast<RecordDecl>(Template)) {
       return getRecordTemplateInstantiation(R, argList, insertPos);
    }
-   else if (auto A = dyn_cast<AliasDecl>(Template)) {
+   if (auto A = dyn_cast<AliasDecl>(Template)) {
       return getAliasTemplateInstantiation(A, argList, insertPos);
    }
 
@@ -677,18 +703,27 @@ NamedDecl* ASTContext::getTemplateInstantiation(NamedDecl *Template,
 
 void ASTContext::insertFunctionTemplateInstantiation(CallableDecl *Inst,
                                                      void *insertPos) {
+   assert(((uintptr_t)Inst & 1) == 0);
+   assert(!Inst->getNextInBucket());
+
    registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    FunctionTemplateInstatiations.InsertNode(Inst, insertPos);
 }
 
 void ASTContext::insertRecordTemplateInstantiation(RecordDecl *Inst,
                                                    void *insertPos) {
+   assert(((uintptr_t)Inst & 1) == 0);
+   assert(!Inst->getNextInBucket());
+
    registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    RecordTemplateInstatiations.InsertNode(Inst, insertPos);
 }
 
 void ASTContext::insertAliasTemplateInstantiation(AliasDecl *Inst,
                                                   void *insertPos) {
+   assert(((uintptr_t)Inst & 1) == 0);
+   assert(!Inst->getNextInBucket());
+
    registerInstantiation(Inst->getSpecializedTemplate(), Inst);
    AliasTemplateInstatiations.InsertNode(Inst, insertPos);
 }
@@ -766,7 +801,7 @@ void ASTContext::cleanupDecl(Decl *D)
    }
 }
 
-void ASTContext::cleanup(CompilationUnit &CI)
+void ASTContext::cleanup(CompilerInstance &CI)
 {
    // Walk the AST deleting DeclContext maps.
    cleanupDeclContext(&CI.getGlobalDeclCtx());

@@ -54,7 +54,7 @@ def err_virt_method_outside_class : Error<"method marked ${ 0 | select(virtual,o
 def err_overriding_decl_requires_override : Error<"overriding declaration requires 'override' keyword">
 
 def err_override_no_matching_method : Error<"method marked 'override' does not correspond to any ${ 0 | if(overridable ) }declaration in a base class">
-def note_override_cand_not_viable : Note<"base method not viable because of ${ 0 | select(incompatible signature, incompatible return type, incompatible 'throws' attributes) }">
+def note_override_cand_not_viable : Note<"base method not viable because of ${ 0 | select(incompatible signature, incompatible return type, incompatible 'throws' specification, incompatible 'unsafe' specification, incompatible 'async' specification, incompatible label) }">
 
 def err_overriden_method_not_virtual : Error<"cannot override non-virtual method '$0'">
 def note_declared_here : Note<"declared here">
@@ -256,7 +256,7 @@ def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implici
 def note_cand_failed_constraint : Note<"candidate not viable because of failed constraint: $0">
 def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: $0 (with template arguments inferred as [$1])">
 def note_cand_invalid_self : Note<"candidate not viable: 'self' argument has type '$0', '$1' given">
-
+def note_cand_label : Note<"candidate not viable: expected ${ 0 | select(no label, label '$0')} for ${ 1 | ordinal } argument, ${ 2 | select(none, label '$2')} given">
 def note_too_few_arguments : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_many_arguments : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_few_arguments_inferred : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as [$2])">
@@ -271,7 +271,7 @@ def note_template_parameter_here : Note<"template parameter declared here">
 def note_too_many_template_args : Note<"candidate not viable: expected at most $0 ${ 0 | plural_s(template argument) }, $1 given">
 
 def note_method_must_be_static : Note<"candidate method not viable: not declared 'static'">
-def note_candidate_is_mutating : Note<"candidate method not viable: is 'mutating', but self parameter is ${ 0 | select(`let` constant, not an lvalue) }">
+def note_candidate_is_mutating : Note<"candidate method not viable: 'mutating' method cannot be called on a ${ 0 | select(`let` constant, temporary) }">
 
 def note_candidate_requires_ref : Note<"candidate function not viable: requires ${ 0 | if(mutable ) }${ 1 | select(reference, pointer) } for ${ 2 | ordinal } argument">
 
@@ -402,7 +402,9 @@ def note_incorrect_protocol_impl_method_missing : Note<"required method '$0' is 
 def note_incorrect_protocol_impl_method_num_args : Note<"candidate has incorrect number of arguments, expected ${ 0 | select(at least, at most) } $1, $2 given">
 def note_incorrect_protocol_impl_method_signature : Note<"candidate has incomaptible signature ('$0' expected for ${ 1 | ordinal } argument, found '$2')">
 def note_incorrect_protocol_impl_method_return_type : Note<"candidate has incomaptible return type ('$0' expected, found '$1')">
-def note_incorrect_protocol_impl_attr : Note<"${ 0 | select(throwing, unsafe, async) } function cannot satisfy non-${ 0 | select(throwing, unsafe, async) } protocol requirement">
+def note_incorrect_protocol_impl_method_label : Note<"expected label '$0' for ${ 1 | ordinal } argument, ${ 2 | select(none, '$3') } given">
+def note_incorrect_protocol_impl_method_no_label : Note<"expected no label for ${ 0 | ordinal } argument, '$1' given">
+def note_incorrect_protocol_impl_attr : Note<"${ 0 | select(throwing, unsafe, async, mutating) } function cannot satisfy non-${ 0 | select(throwing, unsafe, async, mutating) } protocol requirement">
 def note_incorrect_protocol_impl_fallible : Note<"candidate is fallible, non-fallible init required">
 
 def err_circular_conformance : Error<"circular protocol conformance between '$0' and '$1'">

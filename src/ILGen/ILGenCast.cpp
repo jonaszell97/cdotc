@@ -90,6 +90,8 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       return nullptr;
    case CastKind::ToEmptyTuple:
       return Builder.GetEmptyTuple();
+   case CastKind::ToMetaType:
+      return Builder.GetUndefValue(Step.getResultType());
    case CastKind::NoOp:
       return Val;
    }

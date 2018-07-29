@@ -39,7 +39,7 @@ using std::string;
 namespace cdot {
 namespace il {
 
-void IRGen::finalize(const CompilationUnit &CU)
+void IRGen::finalize(const CompilerInstance &CU)
 {
    if (DI)
       emitModuleDI();
@@ -61,7 +61,7 @@ void IRGen::finalize(const CompilationUnit &CU)
    }
 }
 
-llvm::Module *IRGen::linkModules(CompilationUnit &CI)
+llvm::Module *IRGen::linkModules(CompilerInstance &CI)
 {
    if (LinkedModule)
       return LinkedModule;
@@ -236,8 +236,8 @@ static void addModuleLib(IRGen &IRG,
       addModuleLib(IRG, Imp, args, VisitedModules);
 }
 
-void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module)
-{
+void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
+                           ArrayRef<StringRef> AdditionalFilesToLink) {
    prepareModuleForEmission(Module);
 
    auto &options = CI.getOptions();
@@ -271,6 +271,9 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module)
    for (auto &file : options.getLinkerInput()) {
       args.push_back(file);
    }
+   for (auto &file : AdditionalFilesToLink) {
+      args.push_back(file);
+   }
 
    auto *Mod = CI.getCompilationModule();
    addModuleLib(*this, Mod, args);
@@ -293,7 +296,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module)
       if (!DsymPath.getError()) {
          string dsymArgs[] = {
             DsymPath.get(),
-            options.getOutFile(OutputKind::Executable)
+            OutFile,
          };
 
          fs::executeCommand(DsymPath.get(), dsymArgs);

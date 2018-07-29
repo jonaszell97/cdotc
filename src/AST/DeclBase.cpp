@@ -254,12 +254,6 @@ void Decl::copyStatusFlags(Decl *D)
    flags |= (D->flags & StatusFlags);
 }
 
-bool Decl::instantiatedFromProtocolDefaultImpl() const
-{
-   return isa<ProtocolDecl>(getLexicalContext()->lookThroughExtension())
-      && !isa<ProtocolDecl>(getDeclContext());
-}
-
 bool Decl::isInExtension() const
 {
    auto Ctx = getNonTransparentDeclContext();
@@ -300,8 +294,13 @@ RecordDecl* Decl::getRecord() const
 
 ModuleDecl* Decl::getModule() const
 {
-   for (auto ctx = getDeclContext(); ctx; ctx = ctx->getParentCtx())
-      if (auto Mod = dyn_cast<ModuleDecl>(ctx))
+   DeclContext *Ctx = dyn_cast<DeclContext>(const_cast<Decl*>(this));
+   if (!Ctx) {
+      Ctx = getDeclContext();
+   }
+
+   for (; Ctx; Ctx = Ctx->getParentCtx())
+      if (auto Mod = dyn_cast<ModuleDecl>(Ctx))
          return Mod;
 
    llvm_unreachable("Decl without a module!");
@@ -390,6 +389,17 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
 
       for (auto *Arg : C->getArgs()) {
          if (i++ != 0) OS << ", ";
+
+         if (Arg->getLabel()) {
+            if (!Arg->getDeclName().isSimpleIdentifier() ||
+                    Arg->getLabel() != Arg->getDeclName().getIdentifierInfo()) {
+               OS << Arg->getLabel()->getIdentifier() << " ";
+            }
+         }
+         else {
+            OS << "_ ";
+         }
+
          OS << Arg->getDeclName() << ": ";
          OS << Arg->getType();
       }
@@ -500,12 +510,12 @@ bool NamedDecl::isTemplate() const
 
 bool NamedDecl::inDependentContext() const
 {
-   if (isTemplate())
+   if (isTemplate() || isa<ExtensionDecl>(this) || isa<ProtocolDecl>(this))
       return true;
 
    for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
       if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
-         if (ND->isTemplate() || isa<ExtensionDecl>(ND))
+         if (ND->isTemplate() || isa<ExtensionDecl>(ND) || isa<ProtocolDecl>(ND))
             return true;
       }
    }
@@ -543,6 +553,7 @@ llvm::ArrayRef<TemplateParamDecl*> NamedDecl::getTemplateParams() const
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
+   case ProtocolDeclID:
       return cast<RecordDecl>(this)->getTemplateParams();
    case FunctionDeclID:
    case MethodDeclID:
@@ -564,6 +575,7 @@ sema::FinalTemplateArgumentList& NamedDecl::getTemplateArgs() const
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
+   case ProtocolDeclID:
       return cast<RecordDecl>(this)->getTemplateArgs();
    case FunctionDeclID:
    case MethodDeclID:
@@ -585,6 +597,7 @@ NamedDecl* NamedDecl::getSpecializedTemplate() const
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
+   case ProtocolDeclID:
       return cast<RecordDecl>(this)->getSpecializedTemplate();
    case FunctionDeclID:
    case MethodDeclID:
@@ -606,6 +619,7 @@ SourceLocation NamedDecl::getInstantiatedFrom() const
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
+   case ProtocolDeclID:
       return cast<RecordDecl>(this)->getInstantiatedFrom();
    case FunctionDeclID:
    case MethodDeclID:
@@ -760,8 +774,11 @@ void DeclContext::setParentCtxUnchecked(cdot::ast::DeclContext *parent)
 
 DeclContext* DeclContext::lookThroughExtension() const
 {
-   if (auto *Ext = dyn_cast<ExtensionDecl>(this))
-      return Ext->getExtendedRecord();
+   if (auto *Ext = dyn_cast<ExtensionDecl>(this)) {
+      auto *R = Ext->getExtendedRecord();
+      if (R)
+         return R;
+   }
 
    return const_cast<DeclContext*>(this);
 }

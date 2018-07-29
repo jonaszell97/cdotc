@@ -171,6 +171,25 @@ public:
    {}
 };
 
+class TestableAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::Testable; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   TestableAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit TestableAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::Testable, SR)
+   {}
+};
+
 class VersionDeclAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -264,13 +283,14 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
-   case AttrKind::Inline:
-   case AttrKind::Implicit:
-      return AfterDeclaration;
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
+   case AttrKind::Testable:
       return Never;
+   case AttrKind::Inline:
+   case AttrKind::Implicit:
+      return AfterDeclaration;
    case AttrKind::Extern:
    case AttrKind::Thin:
    case AttrKind::VersionDecl:
@@ -390,6 +410,18 @@ AutoClosureAttr *AutoClosureAttr::clone(ast::ASTContext &Ctx) const {
 
 
 
+void TestableAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+TestableAttr *TestableAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) TestableAttr(SourceLoc);
+}
+
+
+
 void VersionDeclAttr::printPretty(llvm::raw_ostream &out) const {
 llvm::StringRef versionStr;
 switch (version) {
@@ -455,6 +487,7 @@ _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
 void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
 void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
 void SemaPass::checkAutoClosureAttr(Decl*, AutoClosureAttr*) {}
+void SemaPass::checkTestableAttr(Decl*, TestableAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

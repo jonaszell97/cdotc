@@ -47,6 +47,8 @@ void FinalizeFunctionPass::run()
       Store->setMemoryOrder(Assign->getMemoryOrder());
 
       Builder.restoreIP(IP);
+
+      Assign->replaceAllUsesWith(Store);
       Assign->detachAndErase();
    }
 }

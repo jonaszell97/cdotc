@@ -31,8 +31,7 @@ class Statement;
 
 class AstNode {
 public:
-
-   enum NodeType {
+   enum NodeType : uint8_t {
 #  define CDOT_ASTNODE(Name)              \
       Name##ID,
 #  define CDOT_ABSTRACT(Name)             \
@@ -98,16 +97,10 @@ protected:
    ~AstNode();
 
    NodeType typeID;
-   uint32_t SubclassData;
-
+   unsigned SubclassData : 8;
    QualType contextualType;
 
-   void toggleFlag(uint32_t flag)
-   {
-      SubclassData ^= flag;
-   }
-
-   void setFlag(uint32_t flag, bool set)
+   void setFlag(unsigned flag, bool set)
    {
       if (set)
          SubclassData |= flag;
@@ -115,14 +108,14 @@ protected:
          SubclassData &= ~flag;
    }
 
-   bool flagIsSet(uint32_t flag) const
+   bool flagIsSet(unsigned flag) const
    {
       return (SubclassData & flag) != 0;
    }
 
 public:
-   uint32_t getSubclassData() const { return SubclassData; }
-   void setSubclassData(uint32_t D) { SubclassData = D; }
+   unsigned getSubclassData() const { return SubclassData; }
+   void setSubclassData(unsigned D) { SubclassData = D; }
 
    QualType getContextualType() { return contextualType; }
 };

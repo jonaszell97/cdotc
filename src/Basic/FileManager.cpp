@@ -257,19 +257,21 @@ SourceLocation FileManager::getAliasLoc(SourceID sourceId)
    return it->second;
 }
 
-SourceOffset FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
-                                               SourceLocation PatternLoc,
-                                               unsigned SourceLength,
-                                               DeclarationName MacroName) {
+FileManager::MacroExpansionLoc
+FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
+                                  SourceLocation PatternLoc,
+                                  unsigned SourceLength,
+                                  DeclarationName MacroName) {
    auto previous = sourceIdOffsets.back();
    SourceID id = sourceIdOffsets.size();
 
    sourceIdOffsets.push_back(previous + SourceLength);
 
-   MacroExpansionLoc Loc(ExpansionLoc, PatternLoc, previous, MacroName);
-   MacroExpansionLocs.try_emplace(id, Loc);
+   MacroExpansionLoc Loc(ExpansionLoc, PatternLoc, previous, SourceLength, id,
+                         MacroName);
 
-   return previous;
+   MacroExpansionLocs.try_emplace(id, Loc);
+   return Loc;
 }
 
 FileManager::MacroExpansionLoc*

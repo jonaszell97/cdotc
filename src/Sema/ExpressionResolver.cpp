@@ -269,6 +269,7 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
       return Expr;
    }
 
+   IdentifierRefExpr *Ident = nullptr;
    auto beginIdx = counter;
 
    // there are only two ways an accessor can appear on the LHS of an
@@ -299,10 +300,10 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
             break;
          }
          case SequenceElement::EF_PossibleOperator:
-            if (auto I = SP.wouldBeValidIdentifier(current().getLoc(),
+            if ((Ident = SP.wouldBeValidIdentifier(current().getLoc(),
                                                    current().getOp(),
-                                                   IsAssignment)) {
-               Target = I;
+                                                   IsAssignment))) {
+               Target = Ident;
             }
             else if (possibleIdentLoc == string::npos) {
                possibleIdentLoc = counter;
@@ -336,8 +337,14 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
    assert(Target && "no target for unary expression!");
 
    auto SemaRes = SP.visitExpr(ExprSeq, Target, ContextualType);
-   if (!SemaRes)
+   if (!SemaRes) {
+      if (Ident) {
+         SP.diagnose(ExprSeq, err_undeclared_identifer, Ident->getIdentInfo(),
+                     Ident->getSourceLoc());
+      }
+
       return nullptr;
+   }
 
    Target = SemaRes.get();
 
@@ -382,8 +389,9 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
       }
 
       SemaRes = SP.visitExpr(ExprSeq, UnOp.Expr, ContextualType);
-      if (!SemaRes)
+      if (!SemaRes) {
          return nullptr;
+      }
 
       Target = SemaRes.get();
       if (Target->isTypeDependent()) {
@@ -459,7 +467,7 @@ ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
         ? NameTable.getPrefixOperatorName(II)
         : NameTable.getPostfixOperatorName(II);
 
-   auto CandSet = SP.lookupFunction(DeclName, { Expr }, {}, ExprSeq,
+   auto CandSet = SP.lookupFunction(DeclName, { Expr }, {}, {}, ExprSeq,
                                     /*suppressDiags=*/ true);
 
    if (CandSet.isDependent()) {
@@ -535,9 +543,9 @@ Expression* ExprResolverImpl::buildUnaryOp(Expression *Expr,
    }
    else {
       ASTVector<Expression*> Args(SP.getContext(), Expr);
-      UnOp = new(SP.getContext()) CallExpr(prefix ? OpLoc
+      UnOp = CallExpr::Create(SP.getContext(), prefix ? OpLoc
                                                   : Expr->getSourceLoc(),
-                                           SR, std::move(Args), Cand.Func);
+                              SR, std::move(Args), Cand.Func);
    }
 
    return UnOp;
@@ -585,7 +593,7 @@ Expression* ExprResolverImpl::checkAccesssor(PrecedenceResult &Res,
 
    // build a call to the appropriate accessor method
    ASTVector<Expression*> Args(SP.getContext(), {LHS, RHS});
-   return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
+   return CallExpr::Create(SP.getContext(), Res.OpLoc, SourceRange(Res.OpLoc),
                                         move(Args), Ident->getAccessor()
                                                          ->getSetterMethod());
 }
@@ -605,16 +613,11 @@ Expression* ExprResolverImpl::checkSubscript(PrecedenceResult &Res,
    if (!M || !M->isSubscript())
       return nullptr;
 
-   // build a call to the appropriate accessor method
-   ASTVector<Expression*> Args(SP.getContext(), Call->getArgs().size());
-   Args.insert(SP.getContext(), Args.end(), Call->getArgs().begin(),
-               Call->getArgs().end());
-
    // replace the dummy default value
-   Args.back() = RHS;
+   Call->getArgs().back() = RHS;
+   Call->setExprType(SP.getContext().getVoidType());
 
-   return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        move(Args), M);
+   return Call;
 }
 
 static CastStrength getCastStrength(op::OperatorKind Kind)
@@ -640,17 +643,20 @@ Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult &Res,
 Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
                                             Expression *LHS,
                                             Expression *RHS) {
-   auto CandSet = SP.lookupFunction(Res.OpName, { LHS, RHS }, {}, ExprSeq);
+   auto CandSet = SP.lookupFunction(Res.OpName, { LHS, RHS }, {}, {}, ExprSeq);
    if (!CandSet) {
       HadError = true;
+      return nullptr;
+   }
+   if (CandSet.isDependent()) {
+      TypeDependent = true;
       return nullptr;
    }
    
    auto &Cand = CandSet.getBestMatch();
    SP.maybeInstantiate(CandSet, LHS);
 
-   Expression *Exprs[2] = { LHS, RHS };
-   SP.ApplyCasts(Exprs, ExprSeq, CandSet);
+   Expression *Exprs[2] = { CandSet.ResolvedArgs[0], CandSet.ResolvedArgs[1] };
 
    LHS = Exprs[0];
    RHS = Exprs[1];
@@ -693,8 +699,8 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
    }
 
    ASTVector<Expression*> Args(SP.getContext(), Exprs);
-   return new(SP.getContext()) CallExpr(Res.OpLoc, SourceRange(Res.OpLoc),
-                                        move(Args), Cand.Func);
+   return CallExpr::Create(SP.getContext(), Res.OpLoc, SourceRange(Res.OpLoc),
+                           move(Args), Cand.Func);
 }
 
 ExprResolverImpl::PrecedenceResult

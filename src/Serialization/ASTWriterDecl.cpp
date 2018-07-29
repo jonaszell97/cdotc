@@ -6,6 +6,7 @@
 #include "ASTReaderInternals.h"
 #include "AST/ASTVisitor.h"
 #include "Driver/Compiler.h"
+#include "IL/Module.h"
 #include "ILGen/ILGenPass.h"
 #include "IncrementalCompilation.h"
 #include "ModuleReader.h"
@@ -109,6 +110,31 @@ void ASTDeclWriter::visit(Decl *D)
          Record.AddIdentifierRef(nullptr);
       }
    }
+   else if (auto *R = dyn_cast<RecordDecl>(D)) {
+      auto &CI = Writer.getWriter().getCompilerInstance();
+      auto &Sema = CI.getSema();
+
+      auto *TI =Sema.getILGen().GetTypeInfo(Sema.getContext().getRecordType(R));
+      Record.AddILConstant(TI);
+
+      auto *VT = CI.getCompilationModule()->getILModule()->getVTable(R);
+      Record.AddILConstant(VT);
+
+      if (auto *P = dyn_cast<ProtocolDecl>(D)) {
+         auto *DefaultImpls = Writer.getWriter().getCompilerInstance().getSema()
+                                    .getContext().getProtocolDefaultImpls(P);
+
+         if (!DefaultImpls)
+            return Record.push_back(0);
+
+         Record.push_back(DefaultImpls->size());
+
+         for (auto &Impl : *DefaultImpls) {
+            Record.AddDeclRef(Impl.getFirst());
+            Record.AddDeclRef(Impl.getSecond());
+         }
+      }
+   }
 }
 
 void ASTDeclWriter::visitDecl(Decl *D)
@@ -161,6 +187,12 @@ void ASTDeclWriter::visitDeclContext(DeclContext *Ctx)
    }
 }
 
+void ASTDeclWriter::visitDebugDecl(DebugDecl *D)
+{
+   visitDecl(D);
+   Record.AddSourceLocation(D->getSourceLoc());
+}
+
 void ASTDeclWriter::visitStaticAssertStmt(StaticAssertStmt *D)
 {
    visitDecl(D);
@@ -189,9 +221,6 @@ void ASTDeclWriter::visitStaticIfDecl(StaticIfDecl *D)
    Record.AddStmt(D->getCondition());
    Record.AddDeclRef(D->getIfDecl());
    Record.AddDeclRef(D->getElseDecl());
-
-   Record.AddDeclRef(cast_or_null<Decl>(D->getContinuationPoint().Ctx));
-   Record.AddScopeRef(cast_or_null<BlockScope>(D->getContinuationPoint().S));
 }
 
 void ASTDeclWriter::visitStaticForDecl(StaticForDecl *D)
@@ -312,6 +341,16 @@ void ASTDeclWriter::visitNamespaceDecl(NamespaceDecl *D)
    Record.AddSourceRange(D->getBraceRange());
 }
 
+void ASTDeclWriter::visitUnittestDecl(UnittestDecl *D)
+{
+   visitDecl(D);
+
+   Record.AddSourceLocation(D->getKeywordLoc());
+   Record.AddSourceRange(D->getBraceRange());
+   Record.AddIdentifierRef(D->getName());
+   Record.AddStmt(D->getBody());
+}
+
 void ASTDeclWriter::visitAliasDecl(AliasDecl *D)
 {
    visitNamedDecl(D);
@@ -350,6 +389,7 @@ void ASTDeclWriter::visitOperatorDecl(OperatorDecl *D)
 {
    visitNamedDecl(D);
 
+   Record.AddSourceRange(D->getSourceRange());
    Record.AddIdentifierRef(D->getPrecedenceGroupIdent());
    Record.AddDeclRef(D->getPrecedenceGroup());
 }
@@ -520,6 +560,7 @@ void ASTDeclWriter::visitMacroDecl(MacroDecl *D)
       WriteMacroPattern(Record, Pat);
 
    Record.push_back(D->getDelim());
+   Record.AddSourceRange(D->getSourceRange());
 }
 
 void ASTDeclWriter::visitModuleDecl(ModuleDecl *D)
@@ -613,6 +654,7 @@ void ASTDeclWriter::visitFuncArgDecl(FuncArgDecl *D)
 {
    visitVarDecl(D);
 
+   Record.AddIdentifierRef(D->getLabel());
    Record.push_back(D->isVariadicArgPackExpansion());
    Record.push_back(D->isVararg());
    Record.push_back(D->isCstyleVararg());
@@ -713,6 +755,7 @@ void ASTDeclWriter::visitStructDecl(StructDecl *D)
 void ASTDeclWriter::visitClassDecl(ClassDecl *D)
 {
    visitStructDecl(D);
+
 
    Record.AddTypeRef(D->getParentType());
    Record.AddDeclRef(D->getParentClass());
@@ -910,32 +953,10 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D)
       return;
    }
 
-   if (SourceID != fs::InvalidID) {
-      auto &FileMgr = Writer.CI.getFileMgr();
-      auto OtherID = Writer.getSourceIDForDecl(D);
-      if (OtherID && OtherID != SourceID) {
-         auto FileName = FileMgr.getFileName(OtherID);
-
-         ASTRecordWriter RW(*this, Record);
-         RW.AddIdentifierRef(&Writer.CI.getContext().getIdentifiers()
-                                    .get(FileName));
-
-         if (auto *MW = Writer.IncMgr->getWriterForFile(FileName)) {
-            RW.push_back(MW->ASTWriter.GetDeclRef(D));
-            Writer.IncMgr->addDependency(SourceID, OtherID);
-         }
-         else if (auto *MR = Writer.IncMgr->getReaderForFile(FileName)) {
-            RW.push_back(MR->GetDeclID(D));
-         }
-
-         auto Offset = RW.Emit(DECL_CACHED);
-         unsigned Index = IndexForID(ID);
-         if (DeclOffsets.size() < Index + 1) {
-            DeclOffsets.resize(Index + 1);
-         }
-
-         DeclOffsets[Index] = Offset;
-         return;
+   if (auto *IncMgr = Writer.CI.getIncMgr()) {
+      if (!isa<ModuleDecl>(D) || !cast<ModuleDecl>(D)->isPrimaryCtx()) {
+         auto SourceID = Writer.getSourceIDForDecl(D);
+         IncMgr->addDeclToFile(SourceID, D);
       }
    }
 

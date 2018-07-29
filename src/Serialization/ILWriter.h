@@ -111,14 +111,14 @@ public:
 
    void writeModule(const il::Module &M);
    void writeModuleCache(const il::Module &M);
+   void writeSymbolTableBlock();
 
-   void WriteValueOffsets();
+   void WriteValueOffsets(unsigned Offset = 0);
 
    friend class ILRecordWriter;
 
 private:
    void writeMetadataBlock();
-   void writeSymbolTableBlock();
    void writeValueBlock();
 
    void writeGlobalVariable(const il::GlobalVariable &G);

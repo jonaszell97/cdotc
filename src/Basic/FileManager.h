@@ -95,7 +95,6 @@ public:
    SourceLocation getAliasLoc(SourceID sourceId);
 
    SourceLocation createModuleImportLoc(ast::ImportDecl *I);
-   SourceOffset createMacroExpansionID();
 
    ast::ImportDecl *getImportForLoc(SourceLocation Loc);
    ast::ImportDecl *getImportForID(SourceID ID);
@@ -123,14 +122,20 @@ public:
       llvm::StringMapEntry<CachedFile> *IncludedFrom = nullptr;
    };
 
+   const llvm::StringMap<CachedFile> &getSourceFiles() const
+   { return MemBufferCache; }
+
    struct MacroExpansionLoc {
       /// C'tor.
       MacroExpansionLoc(SourceLocation ExpandedFrom,
                         SourceLocation PatternLoc,
-                        unsigned BaseOffset,
+                        SourceOffset BaseOffset,
+                        unsigned Length,
+                        SourceID ID,
                         DeclarationName MacroName)
          : ExpandedFrom(ExpandedFrom), PatternLoc(PatternLoc),
-           BaseOffset(BaseOffset), MacroName(MacroName)
+           BaseOffset(BaseOffset), Length(Length), SourceID(ID),
+           MacroName(MacroName)
       { }
 
       /// The location this macro was expanded from.
@@ -140,18 +145,27 @@ public:
       SourceLocation PatternLoc;
 
       /// The base offset of this macro location.
-      unsigned BaseOffset;
+      SourceOffset BaseOffset;
+
+      /// The length of this macro expansion.
+      unsigned Length;
+
+      /// The source ID of this macro expansion location.
+      SourceID SourceID;
 
       /// The name of the expanded macro.
       DeclarationName MacroName;
    };
 
-   SourceOffset createMacroExpansion(SourceLocation ExpansionLoc,
-                                     SourceLocation PatternLoc,
-                                     unsigned SourceLength,
-                                     DeclarationName MacroName);
+   MacroExpansionLoc createMacroExpansion(SourceLocation ExpansionLoc,
+                                          SourceLocation PatternLoc,
+                                          unsigned SourceLength,
+                                          DeclarationName MacroName);
 
    MacroExpansionLoc *getMacroExpansionLoc(SourceLocation Loc);
+
+   const llvm::DenseMap<SourceID, MacroExpansionLoc>&
+   getMacroExpansionLocs() const { return MacroExpansionLocs; }
 
    SourceLocation getReplacementLocation(SourceLocation Loc);
    SourceID getReplacementID(SourceID ID);

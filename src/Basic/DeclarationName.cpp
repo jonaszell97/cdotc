@@ -690,5 +690,9 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
    return builder << s;
 }
 
+diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
+                                    IdentifierInfo *II) {
+   return builder << (II ? II->getIdentifier() : "");
+}
 
 } // namespace cdot

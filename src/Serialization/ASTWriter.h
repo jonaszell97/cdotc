@@ -48,6 +48,9 @@ private:
    /// The module writer
    ModuleWriter &Writer;
 
+   /// The writer for declarations, if we are writing a cache file.
+   ASTWriter *DeclWriter = nullptr;
+
    /// The source ID of the cache file we're writing, if applicable.
    unsigned SourceID = unsigned(-1);
 
@@ -75,15 +78,6 @@ private:
    /// just after the stmt record.
    llvm::DenseMap<ast::Statement*, uint64_t> SubStmtEntries;
 
-   /// Mapping from emitted scopes to unique IDs.
-   llvm::DenseMap<Scope*, unsigned> ScopeIDs;
-
-   /// Scope offsets.
-   std::vector<uint32_t> ScopeOffsets;
-
-   /// Next scope ID to assign.
-   unsigned NextScopeID = 1;
-
    /// Written record declarations, used for emitting conformances.
    SmallPtrSet<ast::RecordDecl*, 16> EmittedRecordDecls;
 
@@ -101,9 +95,6 @@ private:
 
    /// Abbreviation for type offsets.
    unsigned TypeOffsetAbbrev = 0;
-
-   /// Abbreviation for scope offsets.
-   unsigned ScopeOffsetAbbrev = 0;
 
    /// Abbreviation for IL value offsets.
    unsigned ValueOffsetAbbrev = 0;
@@ -127,15 +118,13 @@ private:
 
    void WriteTypeAbbrevs();
    void WriteType(QualType Ty);
-   void WriteTypeOffsets();
-
-   void WriteScope(Scope *S);
-   void WriteScopeOffsets();
+   void WriteTypeOffsets(unsigned Offset = 0);
 
    unsigned IndexForID(unsigned ID) { return ID - 1; }
 
 public:
    explicit ASTWriter(ModuleWriter &Writer);
+   ASTWriter(ModuleWriter &Writer, ASTWriter &DeclWriter);
 
    /// Write the full AST of the given module.
    void WriteAST(ast::ModuleDecl *M);
@@ -151,7 +140,7 @@ public:
    uint64_t WriteDeclContextVisibleBlock(ast::ASTContext &Context,
                                          ast::DeclContext *DC);
 
-   void WriteDeclOffsets();
+   void WriteDeclOffsets(unsigned Offset = 0);
 
    /// Generate an on-disk hash table for the declarations in the given context.
    uint32_t GenerateNameLookupTable(ast::DeclContext *DC,
@@ -182,9 +171,6 @@ public:
 
    /// Determine the type ID of an already-emitted type.
    unsigned getTypeID(QualType T) const;
-
-   /// Force a type to be emitted and get its ID.
-   unsigned GetOrCreateScopeID(Scope *S);
 
    /// Get the ID for a module.
    unsigned GetModuleID(Module *M);
@@ -408,9 +394,6 @@ public:
 
    /// Emit a reference to an IL constant.
    void AddILConstant(il::Constant *C);
-
-   /// Emit a reference to a scope.
-   void AddScopeRef(Scope *S);
 
    /// Emit a reference to a module.
    void AddModuleRef(Module *M);

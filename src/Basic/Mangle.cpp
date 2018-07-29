@@ -518,7 +518,11 @@ void ItaniumLikeMangler::mangleLocalName(const NamedDecl *D)
 
    OS << 'E';
 
-   if (auto RD = GetLocalClassDecl(D)) {
+   if (D->isInstantiation()) {
+      mangleTemplatePrefix(D, true);
+      mangleTemplateArgs(D);
+   }
+   else if (auto RD = GetLocalClassDecl(D)) {
       // Mangle the name relative to the closest enclosing function.
       // equality ok because RD derived from ND above
       if (D == RD)  {
@@ -766,7 +770,7 @@ void ItaniumLikeMangler::mangleType(const FunctionType *T)
 
 void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
                                                 bool MangleReturnType,
-                                                const CallableDecl*) {
+                                                const CallableDecl *CD) {
    // <bare-function-type> ::= <signature type>+
    if (MangleReturnType) {
       mangleType(FT->getReturnType());
@@ -778,8 +782,30 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
       return;
    }
 
+   unsigned NumParams = 0;
    for (auto &Param : FT->getParamTypes()) {
       mangleType(Param);
+      ++NumParams;
+   }
+
+   if (CD) {
+      auto Args = CD->getArgs();
+      for (unsigned i = 0; i < NumParams; ++i) {
+         IdentifierInfo *Label;
+         if (i < Args.size()) {
+            Label = Args[i]->getLabel();
+         }
+         else {
+            Label = nullptr;
+         }
+
+         if (Label) {
+            OS << 'L' << Label->getLength() << Label->getIdentifier();
+         }
+         else {
+            OS << "L0";
+         }
+      }
    }
 
    // <builtin-type>      ::= z  # ellipsis
@@ -864,7 +890,7 @@ void ItaniumLikeMangler::mangleType(const BoxType *T)
    mangleType(T->getBoxedType());
 }
 
-void ItaniumLikeMangler::mangleType(const cdot::TokenType *T)
+void ItaniumLikeMangler::mangleType(const TokenType *T)
 {
    OS << "To";
 }

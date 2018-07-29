@@ -31,6 +31,9 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
    auto &Builder = ILGen.Builder;
    auto ty = Val->getType()->stripReference();
 
+   if (Val->isLvalue())
+      Builder.CreateLifetimeEnd(Val);
+
    auto &Sema = ILGen.getSema();
    if (!Sema.NeedsDeinitilization(ty))
       return;

@@ -221,6 +221,10 @@ bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
       if (support::isa<ast::ClassDecl>(Ty->getRecord()))
          return false;
 
+      if (Ty->getRecord()->getCopyFn()
+            && !Ty->getRecord()->getCopyFn()->isSynthesized())
+         return false;
+
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->isTriviallyCopyable();
    }

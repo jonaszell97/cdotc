@@ -629,10 +629,7 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
       break;
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end:
-      assert(args.size() == 2);
-      assert(args[0]->getType()->isRecordType()
-             || args[0]->getType()->isPointerType());
-      assert(args[1]->getType()->isIntegerType());
+      assert(args.size() == 1);
       break;
    case Intrinsic::unbox:
       assert(args.size() == 1);

@@ -16,7 +16,7 @@ const char* CastNames[] = {
    "<forward>", "<move>", "<copy>",
    "mut_ref_to_ref", "mut_ptr_to_ptr",
    "<rvalue_to_const_ref>",
-   "int_to_enum", "enum_to_int"
+   "int_to_enum", "enum_to_int", "<to_void>", "<to_()>", "<to_meta_type>"
 };
 
 } // namespace cdot

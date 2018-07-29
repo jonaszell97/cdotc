@@ -92,6 +92,12 @@ ASTWriter::ASTWriter(cdot::serial::ModuleWriter &Writer)
 
 }
 
+ASTWriter::ASTWriter(cdot::serial::ModuleWriter &Writer, ASTWriter &DWriter)
+   : Stream(Writer.Stream), Writer(Writer), DeclWriter(&DWriter)
+{
+
+}
+
 namespace {
 
 class InstantiationTableLookupTrait {
@@ -159,36 +165,18 @@ void ASTWriter::WriteInstantiationTable()
 
    llvm::OnDiskChainedHashTableGenerator<InstantiationTableLookupTrait> Gen;
    for (auto &Inst : Ctx.RecordTemplateInstatiations) {
-      if (SourceID != fs::InvalidID) {
-         auto OtherID = Writer.getSourceIDForDecl(&Inst);
-         if (OtherID && OtherID != SourceID)
-            continue;
-      }
-
       auto Pref = Mangle.getPrefix(&Inst);
       auto *II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
    }
 
    for (auto &Inst : Ctx.FunctionTemplateInstatiations) {
-      if (SourceID != fs::InvalidID) {
-         auto OtherID = Writer.getSourceIDForDecl(&Inst);
-         if (OtherID && OtherID != SourceID)
-            continue;
-      }
-
       auto Pref = Mangle.getPrefix(&Inst);
       auto *II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
    }
 
    for (auto &Inst : Ctx.AliasTemplateInstatiations) {
-      if (SourceID != fs::InvalidID) {
-         auto OtherID = Writer.getSourceIDForDecl(&Inst);
-         if (OtherID && OtherID != SourceID)
-            continue;
-      }
-
       auto Pref = Mangle.getPrefix(&Inst);
       auto *II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
@@ -227,14 +215,6 @@ void ASTWriter::WriteOffsetAbbrevs()
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // types block
    TypeOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
 
-   // Write the scope offsets array
-   Abbrev = std::make_shared<BitCodeAbbrev>();
-   Abbrev->Add(BitCodeAbbrevOp(SCOPE_OFFSET));
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // # of types
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // base scope ID
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // scopes block
-   ScopeOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
-
    // Write the type offsets array
    Abbrev = std::make_shared<BitCodeAbbrev>();
    Abbrev->Add(BitCodeAbbrevOp(IL_VALUE_OFFSETS));
@@ -244,13 +224,16 @@ void ASTWriter::WriteOffsetAbbrevs()
    ValueOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
 }
 
-void ASTWriter::WriteDeclOffsets()
+void ASTWriter::WriteDeclOffsets(unsigned Offset)
 {
+   ArrayRef<uint32_t> Offsets = DeclOffsets;
+   Offsets = Offsets.drop_front(Offset);
+
    RecordData::value_type Record[] = {
-      DECL_OFFSET, DeclOffsets.size(), 1
+      DECL_OFFSET, Offsets.size(), 1
    };
 
-   Stream.EmitRecordWithBlob(DeclOffsetAbbrev, Record, bytes(DeclOffsets));
+   Stream.EmitRecordWithBlob(DeclOffsetAbbrev, Record, bytes(Offsets));
 }
 
 void ASTWriter::AddDeclRef(const Decl *D, RecordDataImpl &Record)
@@ -287,20 +270,6 @@ unsigned serial::ASTWriter::getDeclID(const Decl *D)
    return It->getSecond();
 }
 
-unsigned ASTWriter::GetOrCreateScopeID(Scope *S)
-{
-   if (!S)
-      return 0;
-
-   auto &IDRef = ScopeIDs[S];
-   if (!IDRef) {
-      IDRef = NextScopeID++;
-      Writer.ValuesToEmit.emplace(S);
-   }
-
-   return IDRef;
-}
-
 unsigned ASTWriter::GetModuleID(Module *M)
 {
    auto It = Writer.ModuleIDs.find(M);
@@ -309,16 +278,13 @@ unsigned ASTWriter::GetModuleID(Module *M)
    return It->getSecond();
 }
 
-void ASTWriter::WriteScopeOffsets()
+void ASTWriter::WriteTypeOffsets(unsigned Offset)
 {
-   RecordData::value_type Record[] = {SCOPE_OFFSET, ScopeOffsets.size(), 1};
-   Stream.EmitRecordWithBlob(ScopeOffsetAbbrev, Record, bytes(ScopeOffsets));
-}
+   ArrayRef<uint32_t> Offsets = TypeOffsets;
+   Offsets = Offsets.drop_front(Offset);
 
-void ASTWriter::WriteTypeOffsets()
-{
-   RecordData::value_type Record[] = {TYPE_OFFSET, TypeOffsets.size(), 1};
-   Stream.EmitRecordWithBlob(TypeOffsetAbbrev, Record, bytes(TypeOffsets));
+   RecordData::value_type Record[] = {TYPE_OFFSET, Offsets.size(), 1};
+   Stream.EmitRecordWithBlob(TypeOffsetAbbrev, Record, bytes(Offsets));
 }
 
 void ASTWriter::AddTypeRef(QualType T, RecordDataImpl &Record)
@@ -729,6 +695,11 @@ void ASTAttrWriter::visitAutoClosureAttr(AutoClosureAttr *A)
 
 }
 
+void ASTAttrWriter::visitTestableAttr(TestableAttr *A)
+{
+
+}
+
 void ASTAttrWriter::visitDiscardableResultAttr(DiscardableResultAttr *A)
 {
 
@@ -785,14 +756,27 @@ void ASTRecordWriter::AddILConstant(il::Constant *C)
    push_back(Writer->Writer.ILWriter.GetOrCreateValueID(C));
 }
 
-void ASTRecordWriter::AddScopeRef(Scope *S)
+void ASTRecordWriter::AddModuleRef(Module *M)
 {
-   push_back(Writer->GetOrCreateScopeID(S));
-}
+   if (M->getBaseModule() == Writer->getWriter().getCompilerInstance()
+                                                .getCompilationModule()) {
+      return push_back(Writer->GetModuleID(M));
+   }
 
-void ASTRecordWriter::AddModuleRef(cdot::Module *M)
-{
-   push_back(Writer->GetModuleID(M));
+   push_back(0);
+
+   // Write the module identifier.
+   SmallVector<IdentifierInfo*, 4> FullModuleName;
+   while (M) {
+      FullModuleName.push_back(M->getName());
+      M = M->getParentModule();
+   }
+
+   push_back(FullModuleName.size());
+   for (auto it = FullModuleName.rbegin(), end = FullModuleName.rend();
+        it != end; ++it) {
+      AddIdentifierRef(*it);
+   }
 }
 
 void ASTRecordWriter::AddToken(const lex::Token &Tok)
@@ -837,13 +821,6 @@ uint64_t ASTWriter::WriteDeclContextLexicalBlock(ASTContext&,
    uint64_t Offset = Stream.GetCurrentBitNo();
    llvm::SmallVector<uint32_t, 128> DeclIDs;
    for (const auto *D : DC->getDecls()) {
-      if (SourceID != fs::InvalidID) {
-         // Add only the decls that are in the given source file.
-         auto ID = this->Writer.getSourceIDForDecl(D);
-         if (ID != SourceID)
-            continue;
-      }
-
       auto ID = GetDeclRef(D);
       if (ID)
          DeclIDs.push_back(ID);
@@ -859,9 +836,11 @@ uint64_t ASTWriter::WriteDeclContextLexicalBlock(ASTContext&,
 uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
                                                  DeclContext *DC) {
    uint64_t Offset = Stream.GetCurrentBitNo();
-   auto &Map = DC->getAllNamedDecls();
+   auto &Map = DC->getOwnNamedDecls();
    if (Map.empty())
       return 0;
+
+   assert(DC->isPrimaryCtx() && "non-primary context with lookup!");
 
    // Create the on-disk hash table in a buffer.
    llvm::SmallString<4096> LookupTable;
@@ -911,9 +890,6 @@ public:
    {
       unsigned Start = DeclIDs.size();
       for (NamedDecl *D : Decls) {
-         if (D->instantiatedFromProtocolDefaultImpl())
-            continue;
-
          auto ID = Writer.GetDeclRef(D);
          if (ID)
             DeclIDs.push_back(ID);
@@ -1115,12 +1091,6 @@ void ASTWriter::addOperatorsPrecedenceGroups(ModuleDecl *M,
          case Decl::OperatorDeclID:
          case Decl::PrecedenceGroupDeclID:
          case Decl::ImportDeclID:
-            if (SourceID != fs::InvalidID) {
-               auto OtherID = this->Writer.getSourceIDForDecl(D);
-               if (OtherID != SourceID)
-                  continue;
-            }
-
             Vec.push_back(GetDeclRef(D));
             break;
          default:
@@ -1288,6 +1258,11 @@ void ASTWriter::WriteAST(ModuleDecl *M)
    // Write the declaration table of the module.
    uint64_t Data[] = { MainModuleID };
    Stream.EmitRecord(GLOBAL_DECL_CONTEXT, Data);
+
+   // Add all declarations to be written.
+   for (auto &File : Writer.CI.getFileMgr().getSourceFiles()) {
+      GetDeclRef(Writer.CI.getModuleForSource(File.getValue().SourceId));
+   }
 
    // Write the instantiation table
    WriteInstantiationTable();

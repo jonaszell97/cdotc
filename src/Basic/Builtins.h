@@ -16,6 +16,7 @@ enum Builtin : unsigned {
 
    loadFromPointer, storeToPointer,
    reinterpretCast, unsafeConstCast,
+   constructInPlace,
 
    copy, deinit, retainValue, releaseValue,
 

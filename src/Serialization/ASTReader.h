@@ -38,6 +38,7 @@ namespace reader {
 
 class ASTRecordReader;
 class ILReader;
+class IncrementalCompilationManager;
 class ModuleReader;
 class LazyFunctionInfo;
 
@@ -51,6 +52,7 @@ public:
    friend class ASTDeclReader;
    friend class ASTRecordReader;
    friend class ILReader;
+   friend class IncrementalCompilationManager;
    friend class ModuleReader;
    friend class reader::ConformanceLookupTrait;
 
@@ -58,9 +60,17 @@ private:
    /// The module reader object.
    ModuleReader &Reader;
 
+   /// The Sema instance.
    ast::SemaPass &Sema;
+
+   /// The AST Context.
    ast::ASTContext &Context;
+
+   /// The source file manager.
    fs::FileManager &FileMgr;
+
+   /// The reader for declarations, if we're reading a cache file.
+   ASTReader *DeclReader = nullptr;
 
    /// The location where the module file will be considered as
    /// imported from. For non-module AST types it should be invalid.
@@ -234,7 +244,7 @@ public:
 
    void addUnfinishedDecl(ast::NamedDecl *ND, RecordData &&Record, unsigned Idx)
    {
-      UnfinishedDecls.emplace_back(ND, std::move(Record), Idx);
+      UnfinishedDecls.emplace(ND, std::move(Record), Idx);
    }
 
    void registerInstantiationScope(ast::NamedDecl *Inst, unsigned ID)
@@ -262,7 +272,7 @@ private:
    /// Declarations that still need some deserialization done on them, for
    /// example templates or instantiations that need their declarations
    /// deserialized immediately.
-   SmallVector<UnfinishedDecl, 0> UnfinishedDecls;
+   std::queue<UnfinishedDecl> UnfinishedDecls;
 
    /// When reading a Stmt tree, Stmt operands are placed in this stack.
    SmallVector<ast::Statement*, 16> StmtStack;
@@ -298,8 +308,8 @@ private:
       ~ReadingKindTracker() { Reader.ReadingKind = PrevKind; }
    };
 
-   ReadResult ReadASTBlock(llvm::BitstreamCursor Stream);
-   void ReadDeclsEager();
+   ReadResult ReadASTBlock(llvm::BitstreamCursor &Stream);
+   void ReadDeclsEager(ArrayRef<unsigned> Decls);
 
    void ReadOperatorPrecedenceGroups();
 
@@ -333,7 +343,9 @@ private:
               StringRef Arg2 = StringRef()) const;
 
 public:
-   ASTReader(ModuleReader &Reader);
+   explicit ASTReader(ModuleReader &Reader);
+   ASTReader(ModuleReader &Reader, ASTReader &DeclReader);
+
    ~ASTReader();
 
    ModuleReader &getReader() const { return Reader; }
@@ -537,6 +549,7 @@ public:
    }
 
    ASTReader *getReader() const { return Reader; }
+   RecordData &getRecordData() { return Record; }
 
    /// Reads a record with id AbbrevID from Cursor, resetting the
    /// internal state.

@@ -20,6 +20,9 @@
    CDOT_DECL(CompoundDecl)
    CDOT_DECL(MacroExpansionDecl)
    CDOT_DECL(DestructuringDecl)
+   CDOT_DECL(UnittestDecl)
+
+   CDOT_DECL(DebugDecl)
 #endif
 
 #ifdef CDOT_NAMED_DECL
@@ -92,6 +95,7 @@ CDOT_ABSTRACT(_lastDecl)
    CDOT_DECL_CONTEXT(EnumCaseDecl)
 
    CDOT_DECL_CONTEXT(AliasDecl)
+   CDOT_DECL_CONTEXT(UnittestDecl)
 #endif
 
 #undef CDOT_DECL

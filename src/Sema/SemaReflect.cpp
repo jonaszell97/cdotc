@@ -9,6 +9,7 @@
 #include "IL/Function.h"
 #include "IL/GlobalVariable.h"
 #include "ILGen/ILGenPass.h"
+#include "Module/Module.h"
 
 using namespace cdot::diag;
 using namespace cdot::sema;
@@ -234,7 +235,7 @@ private:
 
    il::GlobalVariable *GetTypeInfo(RecordDecl *R)
    {
-      return SP.getILGen().GetTypeInfo(SP.getContext().getRecordType(R));
+      return SP.getILGen().GetOrCreateTypeInfo(SP.getContext().getRecordType(R));
    }
 };
 
@@ -911,15 +912,15 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 
    auto getReflectionDecl = [&](ReflectionIdent Ident) {
       auto *II = ReflectionIdents[Ident];
-      (void)this->Lookup(*ReflectMod, II);
+      (void)this->Lookup(*ReflectMod->getDecl(), II);
 
-      return BuiltinDecls[ReflectionIdents[Ident]];
+      return BuiltinDecls[II];
    };
 
    auto *II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   (void) Lookup(*ReflectMod, II);
+   (void) Lookup(*ReflectMod->getDecl(), II);
 
    if (II == ReflectionIdents[sizeOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1

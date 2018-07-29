@@ -339,10 +339,8 @@ public:
 diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
                                     const DeclarationName &DN);
 
-inline diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
-                                           IdentifierInfo *II) {
-   return builder << DeclarationName(II);
-}
+diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
+                                    IdentifierInfo *II);
 
 } // namespace cdot
 

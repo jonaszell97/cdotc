@@ -14,24 +14,19 @@ namespace diag {
 } // namespace diag
 
 namespace ast {
+   class ExtensionDecl;
+   class ProtocolDecl;
    class RecordDecl;
    class SemaPass;
 } // namespace ast
 
 namespace sema {
 
-class ConformanceCheckerImpl;
-
-class ConformanceChecker {
-public:
-   explicit ConformanceChecker(ast::SemaPass &SP);
-   ~ConformanceChecker();
-
-   void checkConformance(ast::RecordDecl *Rec);
-
-private:
-   ConformanceCheckerImpl *pImpl;
-};
+void checkConformance(ast::SemaPass &SP, ast::RecordDecl *Rec);
+void checkConformanceToProtocol(ast::SemaPass &SP,
+                                ast::RecordDecl *Rec,
+                                ast::ProtocolDecl *Proto,
+                                ast::ExtensionDecl *Ext);
 
 } // namespace sema
 } // namespace cdot

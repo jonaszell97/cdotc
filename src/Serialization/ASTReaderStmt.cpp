@@ -265,12 +265,15 @@ void ASTStmtReader::visitMatchStmt(MatchStmt *S)
    auto NumCases = Record.readInt();
    unsigned i = 0;
 
-   while (NumCases--)
-      Cases[i++] = cast<CaseStmt>(Record.readSubStmt());
+   while (NumCases--) {
+      auto *NextCase = cast<CaseStmt>(Record.readSubStmt());
+      Cases[i++] = NextCase;
+   }
 
    S->setMatchLoc(Record.readSourceLocation());
    S->setBraces(Record.readSourceRange());
    S->setSwitchValue(Record.readSubExpr());
+   S->setHasMutableCaseArg(Record.readBool());
 }
 
 void ASTStmtReader::visitDoStmt(DoStmt *S)
@@ -338,11 +341,6 @@ void ASTStmtReader::visitStaticIfStmt(StaticIfStmt *S)
    S->setCondition(cast<StaticExpr>(Record.readSubExpr()));
    S->setIfBranch(Record.readSubStmt());
    S->setElseBranch(Record.readSubStmt());
-
-   auto *Ctx = Record.readDeclAs<DeclContext>();
-   auto *Sc = Record.ReadScope();
-
-   S->setContinuationPoint(ContinuationPoint(Sc, Ctx));
 }
 
 void ASTStmtReader::visitStaticForStmt(StaticForStmt *S)
@@ -457,11 +455,10 @@ void ASTStmtReader::visitLambdaExpr(LambdaExpr *S)
 {
    visitExpr(S);
 
-   SmallVector<FuncArgDecl*, 4> Args;
+   auto *ArgPtr = S->arg_begin();
    auto NumArgs = Record.readInt();
-
    while (NumArgs--)
-      Args.push_back(Record.readDeclAs<FuncArgDecl>());
+      *ArgPtr++ = Record.readDeclAs<FuncArgDecl>();
 
    auto NumCaptures = Record.readInt();
    while (NumCaptures--)
@@ -550,6 +547,7 @@ void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
    S->setIsCapture((Flags & (1 << 5)) != 0);
    S->setSelf((Flags & (1 << 6)) != 0);
    S->setAllowIncompleteTemplateArgs((Flags & (1 << 7)) != 0);
+   S->setAllowNamespaceRef((Flags & (1 << 8)) != 0);
 
    S->setCaptureIndex(Record.readInt());
    S->setParentExpr(Record.readSubExpr());
@@ -587,6 +585,12 @@ void ASTStmtReader::visitCallExpr(CallExpr *S)
 {
    visitExpr(S);
 
+   auto *LabelPtr = S->getLabels().data();
+   auto NumLabels = Record.readInt();
+
+   while (NumLabels--)
+      *LabelPtr++ = Record.getIdentifierInfo();
+
    S->setIdentLoc(Record.readSourceLocation());
    S->setParenRange(Record.readSourceRange());
 
@@ -623,6 +627,12 @@ void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr *S)
       Args.push_back(Record.readSubExpr());
 
    std::copy(Args.begin(), Args.end(), S->getArgs().data());
+
+   auto *LabelPtr = S->getLabels().data();
+   auto NumLabels = Record.readInt();
+
+   while (NumLabels--)
+      *LabelPtr++ = Record.getIdentifierInfo();
 
    S->setParenRange(Record.readSourceRange());
    S->setIsPrimitiveInit(Record.readBool());
@@ -684,6 +694,7 @@ void ASTStmtReader::visitSelfExpr(SelfExpr *S)
    S->setLoc(Record.readSourceLocation());
    S->setSelfArg(Record.readDeclAs<FuncArgDecl>());
    S->setCaptureIndex(Record.readInt());
+   S->setUppercase(Record.readBool());
 }
 
 void ASTStmtReader::visitSuperExpr(SuperExpr *S)
@@ -863,8 +874,10 @@ void ASTStmtReader::visitTypePredicateExpr(TypePredicateExpr *S)
    S->setLHS(Record.readSubExpr());
    S->setRHS(cast<ConstraintExpr>(Record.readSubExpr()));
 
-   S->setResult(Record.readBool());
-   S->setIsCompileTimeCheck(Record.readBool());
+   uint64_t Flags = Record.readInt();
+   S->setResult((Flags & 1) != 0);
+   S->setIsCompileTimeCheck((Flags & (1 << 1)) != 0);
+   S->setNegated((Flags & (1 << 2)) != 0);
 }
 
 void ASTStmtReader::visitIfExpr(IfExpr *S)
@@ -1267,7 +1280,7 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          S = new(C) EnumCaseExpr(Empty);
          break;
       case Statement::CallExprID:
-         S = new(C) CallExpr(Empty);
+         S = CallExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::AnonymousCallExprID:
          S = AnonymousCallExpr::CreateEmpty(C,

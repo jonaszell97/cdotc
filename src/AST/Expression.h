@@ -700,7 +700,8 @@ public:
 
 class TypePredicateExpr: public Expression {
    TypePredicateExpr(SourceLocation IsLoc, SourceRange SR,
-                     Expression *LHS, ConstraintExpr *RHS);
+                     Expression *LHS, ConstraintExpr *RHS,
+                     bool Negated);
 
    SourceLocation IsLoc;
    SourceRange SR;
@@ -709,6 +710,7 @@ class TypePredicateExpr: public Expression {
 
    bool Result           : 1;
    bool CompileTimeCheck : 1;
+   bool Negated          : 1;
 
 public:
    static bool classofKind(NodeType kind){ return kind == TypePredicateExprID; }
@@ -716,7 +718,8 @@ public:
 
    static TypePredicateExpr *Create(ASTContext &C,
                                     SourceLocation IsLoc, SourceRange SR,
-                                    Expression *LHS, ConstraintExpr *RHS);
+                                    Expression *LHS, ConstraintExpr *RHS,
+                                    bool Negated);
 
    TypePredicateExpr(EmptyShell Empty);
 
@@ -737,6 +740,9 @@ public:
 
    bool isCompileTimeCheck() const { return CompileTimeCheck; }
    void setIsCompileTimeCheck(bool Comp) { CompileTimeCheck = Comp; }
+
+   bool isNegated() const { return Negated; }
+   void setNegated(bool V) { Negated = V; }
 };
 
 class CastExpr: public Expression {
@@ -1428,10 +1434,13 @@ public:
    unsigned getNumArgs() const { return NumArgs; }
 
    const SourceType &getReturnType() const { return returnType; }
-   llvm::ArrayRef<FuncArgDecl* > getArgs() const
+
+   llvm::ArrayRef<FuncArgDecl*> getArgs() const
    {
       return { getTrailingObjects<FuncArgDecl*>(), NumArgs };
    }
+
+   FuncArgDecl **arg_begin() { return getTrailingObjects<FuncArgDecl*>(); }
 
    void setReturnType(SourceType Ty) { returnType = Ty; }
 
@@ -1669,6 +1678,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    bool IsCapture       : 1;
    bool IsSelf          : 1;
    bool AllowIncompleteTemplateArgs : 1;
+   bool AllowNamespaceRef : 1;
 
    size_t captureIndex = 0;
 
@@ -1676,10 +1686,15 @@ public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind){ return kind == IdentifierRefExprID; }
 
-   explicit IdentifierRefExpr(SourceRange Loc,
-                              DeclarationName Name,
-                              DeclContext *DeclCtx = nullptr,
-                              bool InTypePos = false);
+   IdentifierRefExpr(SourceRange Loc,
+                     DeclarationName Name,
+                     DeclContext *DeclCtx = nullptr,
+                     bool InTypePos = false);
+
+   IdentifierRefExpr(SourceRange Loc,
+                     Expression *ParentExpr,
+                     DeclarationName Name,
+                     bool IsPointerAccess = false);
 
    IdentifierRefExpr(SourceRange Loc,
                      IdentifierKind kind,
@@ -1694,7 +1709,7 @@ public:
 
    IdentifierRefExpr(EmptyShell Empty);
 
-   SourceRange getSourceRange() const { return Loc; }
+   SourceRange getSourceRange() const;
    void setLoc(const SourceRange &Loc) { IdentifierRefExpr::Loc = Loc; }
 
    Expression *getParentExpr() const { return ParentExpr; }
@@ -1810,6 +1825,9 @@ public:
       AllowIncompleteTemplateArgs = allow;
    }
 
+   bool allowNamespaceRef() const { return AllowNamespaceRef; }
+   void setAllowNamespaceRef(bool V) { AllowNamespaceRef = V; }
+
    bool isCapture() const { return IsCapture; }
    void setIsCapture(bool C) { IsCapture = C; }
 
@@ -1829,22 +1847,27 @@ public:
 };
 
 class SelfExpr: public Expression {
-   explicit SelfExpr(SourceLocation Loc);
+   explicit SelfExpr(SourceLocation Loc, bool Uppercase);
 
    SourceLocation Loc;
    FuncArgDecl *SelfArg = nullptr;
+
+   bool Uppercase;
    unsigned CaptureIdx = unsigned(-1);
 
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == SelfExprID; }
 
-   static SelfExpr *Create(ASTContext &C, SourceLocation Loc);
+   static SelfExpr *Create(ASTContext &C, SourceLocation Loc, bool Uppercase);
    SelfExpr(EmptyShell Empty);
 
    unsigned int getCaptureIndex() const { return CaptureIdx; }
    void setCaptureIndex(unsigned int Idx) { CaptureIdx = Idx; }
    bool isCapture() const { return CaptureIdx != -1; }
+
+   bool isUppercase() const { return Uppercase; }
+   void setUppercase(bool V) { Uppercase = V; }
 
    FuncArgDecl *getSelfArg() const { return SelfArg; }
    void setSelfArg(FuncArgDecl *SelfArg) { SelfExpr::SelfArg = SelfArg; }
@@ -2082,7 +2105,6 @@ public:
 class EnumCaseExpr: public IdentifiedExpr {
    SourceLocation PeriodLoc;
    ASTVector<Expression*> args;
-
    EnumCaseDecl *Case;
 
 public:
@@ -2134,11 +2156,33 @@ enum class CallKind: unsigned {
    LocalVariableCall,
 };
 
-class CallExpr: public Expression {
+class CallExpr final: public Expression,
+                      TrailingObjects<CallExpr, IdentifierInfo*> {
+   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
+            ASTVector<Expression* > &&args,
+            ArrayRef<IdentifierInfo*> Labels,
+            DeclarationName Name = DeclarationName(),
+            bool IsDotInit = false,
+            bool IsDotDeinit = false);
+
+   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
+            Expression *ParentExpr,
+            ASTVector<Expression* > &&args,
+            ArrayRef<IdentifierInfo*> Labels,
+            DeclarationName Name = DeclarationName(),
+            bool IsDotInit = false,
+            bool IsDotDeinit = false);
+
+   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
+            ASTVector<Expression* > &&args, CallableDecl *C);
+
+   CallExpr(EmptyShell Empty, unsigned N);
+
    SourceLocation IdentLoc;
    SourceRange ParenRange;
 
    DeclarationName ident;
+   unsigned NumLabels = 0;
 
    CallKind kind = CallKind::Unknown;
    Expression *ParentExpr = nullptr;
@@ -2165,35 +2209,34 @@ public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == CallExprID; }
 
-   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
-            ASTVector<Expression* > &&args,
-            DeclarationName Name = DeclarationName(),
-            bool IsDotInit = false,
-            bool IsDotDeinit = false);
+   friend TrailingObjects;
 
-   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
-            Expression *ParentExpr,
-            ASTVector<Expression* > &&args,
-            DeclarationName Name = DeclarationName(),
-            bool IsDotInit = false,
-            bool IsDotDeinit = false);
+   static CallExpr *Create(ASTContext &C,
+                           SourceLocation IdentLoc, SourceRange ParenRange,
+                           ASTVector<Expression*> &&args,
+                           ArrayRef<IdentifierInfo*> Labels,
+                           DeclarationName Name = DeclarationName(),
+                           bool IsDotInit = false,
+                           bool IsDotDeinit = false);
 
-   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
-            ASTVector<Expression* > &&args, CallableDecl *C);
+   static CallExpr *Create(ASTContext &C,
+                           SourceLocation IdentLoc, SourceRange ParenRange,
+                           Expression *ParentExpr,
+                           ASTVector<Expression* > &&args,
+                           ArrayRef<IdentifierInfo*> Labels,
+                           DeclarationName Name = DeclarationName(),
+                           bool IsDotInit = false,
+                           bool IsDotDeinit = false);
 
-   CallExpr(const CallExpr &) = default;
+   static CallExpr *Create(ASTContext &C,
+                           SourceLocation IdentLoc, SourceRange ParenRange,
+                           ASTVector<Expression*> &&args, CallableDecl *CD);
 
-   CallExpr(EmptyShell Empty);
+   static CallExpr *CreateEmpty(ASTContext &C, unsigned N);
 
    SourceLocation getIdentLoc() const { return IdentLoc; }
    SourceRange getParenRange() const { return ParenRange; }
-   SourceRange getSourceRange() const
-   {
-      if (IdentLoc)
-         return { IdentLoc, ParenRange.getEnd() };
-
-      return ParenRange;
-   }
+   SourceRange getSourceRange() const;
 
    void setIdentLoc(const SourceLocation &IdentLoc)
    {
@@ -2203,6 +2246,16 @@ public:
    void setParenRange(const SourceRange &ParenRange)
    {
       CallExpr::ParenRange = ParenRange;
+   }
+
+   ArrayRef<IdentifierInfo*> getLabels() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumLabels };
+   }
+
+   MutableArrayRef<IdentifierInfo*> getLabels()
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumLabels };
    }
 
    DeclarationName getDeclName() const { return ident; }
@@ -2259,12 +2312,16 @@ public:
 
 class AnonymousCallExpr final: public Expression,
                                llvm::TrailingObjects<AnonymousCallExpr,
-                                                     Expression*> {
+                                                     Expression*,
+                                                     IdentifierInfo*> {
    AnonymousCallExpr(SourceRange ParenRange,
                      Expression *ParentExpr,
-                     llvm::ArrayRef<Expression*> Args);
+                     ArrayRef<Expression*> Args,
+                     ArrayRef<IdentifierInfo*> Labels);
 
    AnonymousCallExpr(EmptyShell Empty, unsigned N);
+
+   size_t numTrailingObjects(OverloadToken<Expression*>) const {return NumArgs;}
 
    SourceRange ParenRange;
 
@@ -2283,7 +2340,8 @@ public:
    static AnonymousCallExpr *Create(ASTContext &C,
                                     SourceRange ParenRange,
                                     Expression *ParentExpr,
-                                    llvm::ArrayRef<Expression*> Args);
+                                    ArrayRef<Expression*> Args,
+                                    ArrayRef<IdentifierInfo*> Labels);
 
    static AnonymousCallExpr *CreateEmpty(ASTContext &C, unsigned N);
 
@@ -2301,6 +2359,16 @@ public:
    llvm::MutableArrayRef<Expression*> getArgs()
    {
       return { getTrailingObjects<Expression*>(), NumArgs };
+   }
+
+   ArrayRef<IdentifierInfo*> getLabels() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumArgs };
+   }
+
+   MutableArrayRef<IdentifierInfo*> getLabels()
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NumArgs };
    }
 
    bool isPrimitiveInit() const { return IsPrimitiveInit; }
@@ -2331,7 +2399,7 @@ public:
 
    static SubscriptExpr *CreateEmpty(ASTContext &C, unsigned N);
 
-   SourceRange getSourceRange() const { return SquareRange; }
+   SourceRange getSourceRange() const;
    void setSquareRange(SourceRange SR) { SquareRange = SR; }
 
    Expression *getParentExpr() const { return ParentExpr; }

@@ -13,7 +13,7 @@
 
 namespace cdot {
 
-class CompilationUnit;
+class CompilerInstance;
 class IdentifierInfo;
 
 namespace ast {
@@ -28,6 +28,7 @@ namespace fs {
 
 namespace serial {
    class ModuleReader;
+   class ModuleWriter;
    class IncrementalCompilationManager;
 } // namespace serial
 
@@ -35,7 +36,7 @@ namespace module {
 
 class ModuleManager {
    /// Reference to the current compiler instance.
-   CompilationUnit &CI;
+   CompilerInstance &CI;
 
    /// The main module of this compilation.
    Module *MainModule = nullptr;
@@ -46,33 +47,37 @@ class ModuleManager {
    /// Map from modules to the reader that deserialized them
    llvm::DenseMap<Module*, serial::ModuleReader*> ReaderMap;
 
+   /// The main module writer.
+   serial::ModuleWriter *Writer = nullptr;
+
+   /// Pointer to the buffer used for writing the main module.
+   SmallString<0> *Buffer = nullptr;
+
 public:
-   explicit ModuleManager(CompilationUnit &CI);
+   explicit ModuleManager(CompilerInstance &CI);
    ~ModuleManager();
 
    Module* getMainModule() const { return MainModule; }
    void setMainModule(Module* V) { MainModule = V; }
 
+   serial::ModuleWriter *getModuleWriter() const { return Writer; }
+   SmallString<0> *getModuleBuffer() const { return Buffer; }
+
    ast::ModuleDecl *GetOrCreateModule(SourceRange Loc,
                                       ArrayRef<IdentifierInfo*> Name);
 
-   /// Create a base module.
-   Module *CreateModule(ast::ModuleDecl *Decl,
-                        IdentifierInfo *Name);
+   Module *GetModule(ArrayRef<IdentifierInfo*> Name);
 
    /// Create a base module.
    Module *CreateModule(SourceRange Loc,
-                        IdentifierInfo *Name);
+                        IdentifierInfo *Name,
+                        bool CreateDecl = true);
 
    /// Create a sub module.
-   Module *CreateModule(ast::ModuleDecl *Decl,
-                        IdentifierInfo *Name,
-                        Module *ParentModule);
-
-   /// Create a sub module.
-   Module *CreateModule(SourceRange Loc,
-                        IdentifierInfo *Name,
-                        Module *ParentModule);
+   Module *CreateSubModule(SourceRange Loc,
+                           IdentifierInfo *Name,
+                           Module *ParentModule,
+                           bool CreateDecl = true);
 
    Module *LookupModule(SourceRange Loc,
                         SourceLocation DiagLoc,

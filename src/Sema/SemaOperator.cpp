@@ -78,6 +78,9 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          auto Self = TypeToCheck->getRecord();
          auto Other = rhs->getRecord();
 
+         ensureDeclared(Self);
+         ensureDeclared(Other);
+
          if (Self->isClass() && Other->isClass()) {
             auto SelfClass = cast<ClassDecl>(Self);
             auto OtherClass = cast<ClassDecl>(Other);
@@ -136,7 +139,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
 
    Pred->getRHS()->setSemanticallyChecked(true);
    Pred->setIsCompileTimeCheck(CompileTimeCheck);
-   Pred->setResult(result);
+   Pred->setResult(Pred->isNegated() ? !result : result);
 
    return Pred;
 }
@@ -241,6 +244,11 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
 
    (void)RhsResult;
    assert(RhsResult && "should not have built AssignExpr!");
+
+   if (isa<SelfExpr>(lhs) && lhs->getExprType()->stripReference()->isClass()) {
+      diagnose(Expr, err_generic_error, "cannot assign to 'self' in a class",
+               Expr->getSourceRange());
+   }
 
    assert(lhs->getExprType()->isMutableReferenceType()
           && "assigning to non-reference");

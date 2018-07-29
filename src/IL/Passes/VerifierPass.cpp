@@ -107,6 +107,11 @@ void VerifierPass::run()
 {
    for (const auto &BB : F->getBasicBlocks())
       visitBasicBlock(BB);
+
+   if (!IsValid)
+      F->setInvalid(true);
+
+   F->setVerified(true);
 }
 
 void VerifierPass::visitBasicBlock(BasicBlock const &B)

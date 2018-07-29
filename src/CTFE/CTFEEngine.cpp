@@ -12,6 +12,7 @@
 #include "IL/Passes/VerifierPass.h"
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
+#include "Module/Module.h"
 #include "Sema/SemaPass.h"
 #include "Sema/Builtin.h"
 #include "Serialization/ModuleFile.h"
@@ -917,29 +918,47 @@ Value EngineImpl::getLambdaEnvironment(ctfe::Value &Val)
 Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
 {
    auto rawType = cast<EnumDecl>(type->getRecord())->getRawType();
-   if (cast<EnumDecl>(type->getRecord())->isRawEnum())
-      return Val;
-
    auto bw = rawType->getBitwidth();
-   auto buffer = Val.getBuffer();
 
    uint64_t caseVal;
-   switch (bw) {
-   case 1:
-   case 8:
-      caseVal = *reinterpret_cast<uint8_t*>(buffer);
-      break;
-   case 16:
-      caseVal = *reinterpret_cast<uint16_t*>(buffer);
-      break;
-   case 32:
-      caseVal = *reinterpret_cast<uint32_t*>(buffer);
-      break;
-   case 64:
-      caseVal = *reinterpret_cast<uint64_t*>(buffer);
-      break;
-   default:
-      llvm_unreachable("bad bitwidth");
+   if (cast<EnumDecl>(type->getRecord())->isRawEnum()) {
+      switch (bw) {
+      case 1:
+      case 8:
+         caseVal = Val.getU8();
+         break;
+      case 16:
+         caseVal = Val.getU16();
+         break;
+      case 32:
+         caseVal = Val.getU32();
+         break;
+      case 64:
+         caseVal = Val.getU64();
+         break;
+      default:
+         llvm_unreachable("bad bitwidth");
+      }
+   }
+   else {
+      auto buffer = Val.getBuffer();
+      switch (bw) {
+      case 1:
+      case 8:
+         caseVal = *reinterpret_cast<uint8_t*>(buffer);
+         break;
+      case 16:
+         caseVal = *reinterpret_cast<uint16_t*>(buffer);
+         break;
+      case 32:
+         caseVal = *reinterpret_cast<uint32_t*>(buffer);
+         break;
+      case 64:
+         caseVal = *reinterpret_cast<uint64_t*>(buffer);
+         break;
+      default:
+         llvm_unreachable("bad bitwidth");
+      }
    }
 
    return Value::getInt(caseVal);
@@ -1360,6 +1379,10 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
    auto buffer = Val.getBuffer();
    ValueType ValTy(ILCtx, type);
 
+   auto &Builder = SP.getILGen().Builder;
+   Builder.SetModule(SP.getCompilationUnit().getCompilationModule()
+                       ->getILModule());
+
    if (type->isLargeInteger()) {
       return ConstantInt::get(
          ValTy,
@@ -1456,9 +1479,8 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       auto Size = ConstantInt::get(ValueType(ILCtx,
                                             SP.getContext().getUIntTy()), size);
 
-      auto &Builder = SP.getILGen().Builder;
       return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
-                                      SP.getILGen().GetTypeInfo(type),
+                                      SP.getILGen().GetOrCreateTypeInfo(type),
                                       { Str, Size, Size });
    }
 
@@ -1522,7 +1544,7 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       auto EndPtr = ConstantExpr::getIntToPtr(EndPtrAsInt, ElementPtr);
 
       return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
-                                      SP.getILGen().GetTypeInfo(type),
+                                      SP.getILGen().GetOrCreateTypeInfo(type),
                                       { FstElementPtr, EndPtr, EndPtr });
    }
 
@@ -1587,7 +1609,7 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
             ValueType Ty(ILCtx, SP.getContext().getRecordType(*it));
 
             auto S = ConstantStruct::get(Ty, vec);
-            Curr = ConstantClass::get(S, SP.getILGen().GetTypeInfo(Ty), Curr);
+            Curr = ConstantClass::get(S, SP.getILGen().GetOrCreateTypeInfo(Ty), Curr);
 
             vec.clear();
          }
@@ -1608,7 +1630,8 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
 
          if (isa<ClassDecl>(S)) {
             auto CS = ConstantStruct::get(ValTy, vec);
-            return ConstantClass::get(CS, SP.getILGen().GetTypeInfo(ValTy));
+            return ConstantClass::get(CS,
+                                      SP.getILGen().GetOrCreateTypeInfo(ValTy));
          }
          else {
             return ConstantStruct::get(ValTy, vec);
@@ -2792,8 +2815,9 @@ ctfe::Value EngineImpl::visitUnionInitInst(UnionInitInst const& I)
 
 ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
 {
-   if (I.getType()->isRawEnum())
+   if (I.getType()->isRawEnum()) {
       return getConstantVal(I.getCase()->getILValue());
+   }
 
    llvm::SmallVector<ctfe::Value, 8> values;
    for (auto &arg : I.getArgs())

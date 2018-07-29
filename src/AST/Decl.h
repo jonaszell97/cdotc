@@ -21,7 +21,7 @@
 
 namespace cdot {
 
-class CompilationUnit;
+class CompilerInstance;
 class FunctionType;
 class Module;
 
@@ -424,6 +424,7 @@ class FuncArgDecl: public VarDecl {
    FuncArgDecl(SourceLocation OwnershipLoc,
                SourceLocation ColonLoc,
                DeclarationName Name,
+               IdentifierInfo *Label,
                ArgumentConvention Conv,
                SourceType argType,
                Expression* defaultValue,
@@ -433,6 +434,7 @@ class FuncArgDecl: public VarDecl {
 
    FuncArgDecl(EmptyShell Empty);
 
+   IdentifierInfo *Label = nullptr;
    bool VariadicArgPackExpansion : 1;
    bool Vararg : 1;
    bool CstyleVararg : 1;
@@ -444,6 +446,7 @@ public:
                               SourceLocation OwnershipLoc,
                               SourceLocation ColonLoc,
                               DeclarationName Name,
+                              IdentifierInfo *Label,
                               ArgumentConvention Conv,
                               SourceType argType,
                               Expression* defaultValue,
@@ -465,6 +468,9 @@ public:
    void setVararg(bool V) { Vararg = V; }
    void setCstyleVararg(bool V) { CstyleVararg = V; }
    void setSelf(bool V) { IsSelf = V; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 
    SourceRange getSourceRange() const;
    SourceLocation getOwnershipLoc() const { return VarDecl::VarOrLetLoc; }
@@ -515,14 +521,14 @@ public:
 };
 
 class GlobalDeclContext: public DeclContext {
-   GlobalDeclContext(CompilationUnit &CI);
+   GlobalDeclContext(CompilerInstance &CI);
 
-   CompilationUnit &CI;
+   CompilerInstance &CI;
 
 public:
-   static GlobalDeclContext *Create(ASTContext &C, CompilationUnit &CI);
+   static GlobalDeclContext *Create(ASTContext &C, CompilerInstance &CI);
 
-   CompilationUnit &getCompilerInstance() const { return CI; }
+   CompilerInstance &getCompilerInstance() const { return CI; }
 
    specific_decl_iterator_range<ModuleDecl> getModules()
    {
@@ -803,6 +809,9 @@ public:
    KnownFunction getKnownFnKind();
 
    void setKnownFnKind(KnownFunction F) { knownFnKind = F; }
+
+   bool isBaseInitializer() const;
+   bool isCompleteInitializer() const;
 
    using arg_iterator       = FuncArgDecl**;
    using const_arg_iterator = FuncArgDecl* const*;
@@ -1214,6 +1223,7 @@ protected:
 
    DeinitDecl *deinitializer = nullptr;
 
+   QualType RecordType;
    unsigned occupiedBytes = 0;
    unsigned short alignment = 1;
 
@@ -1304,6 +1314,9 @@ public:
    unsigned getLastMethodID() const { return lastMethodID; }
    unsigned getAndIncrementLastMethodID() { return lastMethodID++; }
    void setLastMethodID(unsigned ID) { lastMethodID = ID; }
+
+   QualType getType() const { return RecordType; }
+   void setType(QualType V) { RecordType = V; }
 
    void setSize(unsigned s) { occupiedBytes = s; }
    void setAlignment(unsigned short al) { alignment = al; }
@@ -2384,7 +2397,6 @@ class StaticIfDecl: public Decl {
    CompoundDecl *ElseDecl;
 
    StaticIfDecl *Template;
-   ContinuationPoint CP;
 
 public:
    static StaticIfDecl *Create(ASTContext &C,
@@ -2426,10 +2438,6 @@ public:
    void setRBRaceLoc(SourceLocation Loc) { RBRaceLoc = Loc; }
 
    StaticIfDecl *getTemplate() const { return Template; }
-
-   const ContinuationPoint &getContinuationPoint() const { return CP; }
-   void setContinuationPoint(const ContinuationPoint &CP)
-   { StaticIfDecl::CP = CP; }
 };
 
 class StaticForDecl: public Decl {
@@ -3157,6 +3165,70 @@ public:
    }
 
    using TrailingObjects::getTrailingObjects;
+};
+
+class UnittestDecl: public Decl, public DeclContext {
+   UnittestDecl(SourceLocation KeywordLoc,
+                SourceRange BraceRange,
+                IdentifierInfo *Name,
+                Statement *Body);
+
+   UnittestDecl();
+
+   SourceLocation KeywordLoc;
+   SourceRange BraceRange;
+
+   IdentifierInfo *Name;
+   Statement *Body;
+
+   ClassDecl *TestClass = nullptr;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == UnittestDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static UnittestDecl *Create(ASTContext &C,
+                               SourceLocation KeywordLoc,
+                               SourceRange BraceRange,
+                               IdentifierInfo *Name,
+                               Statement *Body);
+
+   static UnittestDecl *CreateEmpty(ASTContext &C);
+
+   SourceRange getSourceRange() const;
+
+   SourceLocation getKeywordLoc() const { return KeywordLoc; }
+   void setKeywordLoc(SourceLocation V) { KeywordLoc = V; }
+
+   SourceRange getBraceRange() const { return BraceRange; }
+   void setBraceRange(SourceRange V) { BraceRange = V; }
+
+   IdentifierInfo* getName() const { return Name; }
+   void setName(IdentifierInfo* V) { Name = V; }
+
+   Statement* getBody() const { return Body; }
+   void setBody(Statement* V) { Body = V; }
+
+   ClassDecl* getTestClass() const { return TestClass; }
+   void setTestClass(ClassDecl* V) { TestClass = V; }
+};
+
+class DebugDecl: public Decl {
+   DebugDecl(SourceLocation Loc);
+
+   SourceLocation Loc;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == DebugDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static DebugDecl *Create(ASTContext &C, SourceLocation Loc);
+   static DebugDecl *CreateEmpty(ASTContext &C);
+
+   SourceRange getSourceRange() const;
+
+   SourceLocation getLoc() const { return Loc; }
+   void setLoc(SourceLocation V) { Loc = V; }
 };
 
 template<class FnTy>
