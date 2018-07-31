@@ -78,6 +78,9 @@ private:
    /// Mapping from values to their assigned IDs
    llvm::DenseMap<const il::Value*, ValueID> ValueIDMap;
 
+   /// Set of functions whose body we need to emit.
+   llvm::DenseSet<const il::Value*> ExternallyVisibleFunctions;
+
    /// Next value ID to assign
    unsigned NextValueID = 1;
 
@@ -143,6 +146,9 @@ public:
 
    /// Add a declaration to be written in this file.
    void AddDeclToBeWritten(const ast::NamedDecl *D, unsigned ID);
+
+   /// Mark a function as needing to be written.
+   void AddExternallyVisibleValue(il::Value *Val);
 
 private:
    /// Emit a reference to a type.

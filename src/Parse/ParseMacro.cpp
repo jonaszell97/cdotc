@@ -118,7 +118,7 @@ PatternFragment *MacroParser::parsePattern()
    return Begin;
 }
 
-static void diagnoseInvalidSeperator(SemaPass &SP,
+static void diagnoseInvalidSeparator(SemaPass &SP,
                                      PatternFragment *Previous,
                                      const lex::Token &Tok) {
    if (!Previous)
@@ -126,6 +126,15 @@ static void diagnoseInvalidSeperator(SemaPass &SP,
 
    bool DoCheck = false;
    if (Previous->isVariable()) {
+      // If the previous segment has unconditional transitions,
+      // backpatch them.
+      for (auto &Trans : Previous->getTransitions()) {
+         if (Trans.Next && !Trans.Tok && Trans.NeedsBackpatching) {
+            Trans.Tok = Tok;
+            Trans.NeedsBackpatching = false;
+         }
+      }
+
       switch (Previous->getVarKind()) {
       case PatternFragment::Expr:
       case PatternFragment::Stmt:
@@ -195,8 +204,7 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
          unsigned InnerOpenSquare = 0;
          bool innerDone = false;
 
-         diagnoseInvalidSeperator(SP, FragmentForSeperatorCheck, currentTok());
-
+         bool DiagnosedSeparator = false;
          while (true) {
             switch (currentTok().getKind()) {
             case tok::close_brace:
@@ -242,6 +250,12 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
                break;
             default:
                break;
+            }
+
+            if (!done && !DiagnosedSeparator) {
+               DiagnosedSeparator = true;
+               diagnoseInvalidSeparator(SP, FragmentForSeperatorCheck,
+                                        currentTok());
             }
 
             if (innerDone)
@@ -351,8 +365,7 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
          advance();
          auto LastInRepetition = parseInnerPattern(Previous, false);
 
-         PatternFragment::FragmentKind Kind = PatternFragment::Star;
-         bool GotKind = false;
+         PatternFragment::FragmentKind Kind;
          lex::Token Delim;
 
          advance();
@@ -360,15 +373,12 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
          while (true) {
             switch (currentTok().getKind()) {
             case tok::times:
-               GotKind = true;
                Kind = PatternFragment::Star;
                break;
             case tok::plus:
-               GotKind = true;
                Kind = PatternFragment::Plus;
                break;
             case tok::question:
-               GotKind = true;
                Kind = PatternFragment::Question;
                break;
             default:
@@ -394,7 +404,9 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             break;
          }
 
-         auto Merge = PatternFragment::Create(SP.getContext());
+         auto &Ctx = SP.getContext();
+
+         auto Merge = PatternFragment::Create(Ctx);
          switch (Kind) {
          case PatternFragment::Star: {
             // if the repetition can happen zero times (as with '*' and '?')
@@ -404,35 +416,64 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             // if there's a delimiter, add a transition for it
             if (Delim.getKind() != tok::sentinel) {
                LastInRepetition->addTransition(Delim, Previous);
-               LastInRepetition->addTransition(Token(), Merge);
+               LastInRepetition->addTransition(Token(), Merge, true);
             }
-            // otherwise, only eof gets you to the end
+            // Check if a distinct token gets you back in the repetition,
+            // otherwise only eof gets you to the end.
             else {
-               LastInRepetition->addTransition(Token(), Previous);
-               LastInRepetition->addTransition(Token(tok::eof), Merge);
+               lex::Token FirstTokInRepetition =
+                  Previous->getTransitions().front().Tok;
+
+               lex::Token MergeTok = FirstTokInRepetition ? Token()
+                                                          : Token(tok::eof);
+
+               LastInRepetition->addTransition(FirstTokInRepetition, Previous,
+                                               /*IsConsuming=*/false);
+               LastInRepetition->addTransition(MergeTok, Merge);
             }
 
             break;
          }
          case PatternFragment::Plus: {
             // has to happen at least once, transition to error if not
-            Previous->addTransition(Token(), PatternFragment::GetErrorState());
+            Previous->addTransition(Token(),
+                                    PatternFragment::GetErrorState());
 
             // create a new state with the same transitions as LastInRep,
             // except that now it works like the '*' qualfiier
-            auto ZeroOrMoreState = PatternFragment::Create(SP.getContext());
-            LastInRepetition->addTransition(Token(), ZeroOrMoreState);
+            auto ZeroOrMoreState = PatternFragment::Create(Ctx);
 
             // after one successful iteration, go either to merge or back to
             // the beginning
             if (Delim.getKind() != tok::sentinel) {
+               LastInRepetition->addTransition(Delim, ZeroOrMoreState,
+                                               /*IsConsuming=*/false);
+               LastInRepetition->addUnconditionalTransition(Merge,
+                                                   /*IsConsuming=*/true,
+                                                   /*NeedsBackpatching=*/true);
+
                ZeroOrMoreState->addTransition(Delim, Previous);
                ZeroOrMoreState->addTransition(Token(), Merge);
             }
-               // otherwise, only eof gets you to the end
+            // Check if a distinct token gets you back in the repetition,
+            // otherwise only eof gets you to the end.
             else {
-               LastInRepetition->addTransition(Token(), Previous);
-               LastInRepetition->addTransition(Token(tok::eof), Merge);
+               lex::Token FirstTokInRepetition =
+                  Previous->getTransitions().front().Tok;
+
+               lex::Token MergeTok = FirstTokInRepetition ? Token()
+                                                          : Token(tok::eof);
+
+               LastInRepetition->addTransition(FirstTokInRepetition,
+                                               ZeroOrMoreState,
+                                               /*IsConsuming=*/false);
+               LastInRepetition->addTransition(MergeTok, Merge,
+                                               /*IsConsuming=*/true,
+                                               /*NeedsBackpatching=*/true);
+
+               ZeroOrMoreState->addTransition(FirstTokInRepetition, Previous,
+                                              /*IsConsuming=*/false);
+               ZeroOrMoreState->addTransition(MergeTok, Merge);
             }
 
             break;
@@ -1121,28 +1162,115 @@ class PatternMatcher {
    VariableMap &VarMap;
    PatternFragment *State;
 
+   struct MatchFailureReason {
+      MatchFailureReason(MessageKind msg,
+                         SourceLocation PatternLoc,
+                         const Token &ExpectedTok1, const Token &ExpectedTok2,
+                         const Token &GivenTok)
+         : msg(msg), PatternLoc(PatternLoc),
+           ExpectedTok1(ExpectedTok1), ExpectedTok2(ExpectedTok2),
+           GivenTok(GivenTok)
+      { }
+
+      MatchFailureReason() : msg(diag::_first_err) {}
+
+      diag::MessageKind msg;
+      SourceLocation PatternLoc;
+
+      Token ExpectedTok1;
+      Token ExpectedTok2;
+      Token GivenTok;
+   };
+
+   /// Reasons for failed pattern matches.
+   std::vector<MatchFailureReason> FailureReasons;
+
    bool compatibleTokens(const Token &Given, const Token &Needed);
    bool moveNext();
 
 public:
-   PatternMatcher(Parser &parser, MacroPattern *Pat, VariableMap &VarMap)
+   PatternMatcher(Parser &parser, VariableMap &VarMap)
       : parser(parser), VarMap(VarMap),
-        State(Pat->getPattern())
+        State(nullptr)
    {
       parser.skipWhitespace();
    }
 
-   bool match();
+   bool match(MacroPattern *Pat);
+   void diagnose(MacroDecl *D);
 };
 
-bool PatternMatcher::match()
+bool PatternMatcher::match(MacroPattern *Pat)
 {
+   State = Pat->getPattern();
+
    while (!State->isEndState()) {
       if (!moveNext())
          return false;
    }
 
    return !State->isErrorState();
+}
+
+static void printTok(const Token &Tok, llvm::raw_ostream &OS)
+{
+   if (!Tok)
+      return;
+
+   if (Tok.is(tok::ident)) {
+      if (Tok.getIdentifierInfo()) {
+         OS << "identifier '" << Tok.getIdentifier() << "'";
+      }
+      else {
+         OS << "identifier";
+      }
+   }
+   else if (Tok.is(tok::eof)) {
+      OS << "end of file";
+   }
+   else {
+      OS << "'";
+      Tok.print(OS);
+      OS << "'";
+   }
+}
+
+void PatternMatcher::diagnose(MacroDecl *D)
+{
+   assert(FailureReasons.size() == D->getNumPatterns());
+
+   std::string Tok1;
+   std::string Tok2;
+   std::string GivenTok;
+
+   llvm::raw_string_ostream GivenOS(GivenTok);
+   llvm::raw_string_ostream Tok1OS(Tok1);
+   llvm::raw_string_ostream Tok2OS(Tok2);
+
+   for (auto &Reason : FailureReasons) {
+      if (!Reason.PatternLoc)
+         continue;
+
+      switch (Reason.msg) {
+      case diag::note_pattern_not_viable_expected_tok: {
+         printTok(Reason.GivenTok, GivenOS);
+         printTok(Reason.ExpectedTok1, Tok1OS);
+         printTok(Reason.ExpectedTok2, Tok2OS);
+
+         parser.SP.diagnose(Reason.msg, Reason.GivenTok.getSourceLoc(),
+                            Tok1OS.str(), Tok2OS.str(), GivenOS.str());
+
+         parser.SP.diagnose(diag::note_pattern_here, Reason.PatternLoc);
+         break;
+      }
+      default:
+         llvm_unreachable("unexpected message kind!");
+      }
+
+      GivenTok.clear();
+      Tok1.clear();
+      Tok2.clear();
+   }
 }
 
 bool PatternMatcher::compatibleTokens(const Token &Given, const Token &Needed)
@@ -1185,7 +1313,9 @@ bool PatternMatcher::moveNext()
       }
       else if (compatibleTokens(parser.currentTok(), Trans.Tok)) {
          NextState = Trans.Next;
-         parser.advance();
+
+         if (Trans.IsConsuming)
+            parser.advance();
 
          break;
       }
@@ -1199,6 +1329,11 @@ bool PatternMatcher::moveNext()
          NextState = UnconditionalTransition;
       }
       else {
+         FailureReasons.emplace_back(
+            diag::note_pattern_not_viable_expected_tok,
+            State->getLoc(), State->getTransitions()[0].Tok,
+            State->getTransitions()[1].Tok, parser.currentTok());
+
          return false;
       }
    }
@@ -1218,10 +1353,10 @@ bool PatternMatcher::moveNext()
          break;
       case PatternFragment::Ident: {
          if (!parser.currentTok().oneOf(tok::ident, tok::op_ident)) {
-            parser.SP.diagnose(err_unexpected_token,
-                               parser.currentTok().getSourceLoc(),
-                               parser.currentTok().toString(), true,
-                               "identifier");
+            FailureReasons.emplace_back(
+               diag::note_pattern_not_viable_expected_tok,
+               NextState->getLoc(), Token(tok::ident),
+               Token(), parser.currentTok());
 
             return false;
          }
@@ -1303,18 +1438,23 @@ bool PatternMatcher::moveNext()
          llvm_unreachable("unimplemented!");
       }
 
-      if (!Result)
+      if (!Result) {
+         FailureReasons.emplace_back();
          return false;
+      }
 
       parser.advance();
 
       StmtOrDecl SOD;
-      if (Result.holdsDecl())
+      if (Result.holdsDecl()) {
          SOD = Result.getDecl();
-      else if (Result.holdsExpr())
+      }
+      else if (Result.holdsExpr()) {
          SOD = Result.getExpr();
-      else
+      }
+      else {
          SOD = Result.getStatement();
+      }
 
       auto It = VarMap.find(NextState->getVariableName());
       if (It == VarMap.end()) {
@@ -1327,6 +1467,10 @@ bool PatternMatcher::moveNext()
    else if (NextState->getKind() == PatternFragment::Tokens) {
       for (auto &Tok : NextState->getTokens().drop_front(1)) {
          if (!compatibleTokens(parser.currentTok(), Tok)) {
+            FailureReasons.emplace_back(
+               diag::note_pattern_not_viable_expected_tok,
+               NextState->getLoc(), Tok, Token(), parser.currentTok());
+
             return false;
          }
 
@@ -1338,16 +1482,12 @@ bool PatternMatcher::moveNext()
    return true;
 }
 
-static bool matchPattern(Parser &parser, MacroPattern *Pat, VariableMap &VarMap)
-{
-   return PatternMatcher(parser, Pat, VarMap).match();
-}
-
 class MacroExpander {
    SemaPass &SP;
    MacroPattern *Pat;
    VariableMap &VarMap;
    Parser::ExpansionKind Kind;
+   MacroDecl *M;
 
    /// The source location where this macro was expanded.
    SourceLocation ExpandedFrom;
@@ -1376,14 +1516,14 @@ public:
                  SourceLocation ExpandedFrom,
                  MacroDecl *M)
       : SP(SP), Pat(Pat), VarMap(VarMap), Kind(Kind),
-        ExpandedFrom(ExpandedFrom)
+        M(M), ExpandedFrom(ExpandedFrom)
    {
       auto &FileMgr = SP.getCompilationUnit().getFileMgr();
       BaseOffset = Pat->getSourceLoc().getOffset();
       ExpansionOffset = FileMgr
                      .createMacroExpansion(ExpandedFrom, Pat->getSourceLoc(),
                                            Pat->getSourceLength() + 1,
-                                           M->getDeclName()).BaseOffset;
+                                           this->M->getDeclName()).BaseOffset;
    }
 
    ParseResult expand();
@@ -1559,8 +1699,9 @@ ParseResult Parser::expandMacro(SemaPass &SP,
    lex::Lexer Lexer(Context.getIdentifiers(), SP.getDiags(), Tokens, 0);
    parse::Parser parser(Context, &Lexer, SP);
 
+   PatternMatcher Matcher(parser, VarMap);
    for (auto &Pat : Macro->getPatterns()) {
-      if (matchPattern(parser, Pat, VarMap)) {
+      if (Matcher.match(Pat)) {
          Match = Pat;
          break;
       }
@@ -1572,6 +1713,7 @@ ParseResult Parser::expandMacro(SemaPass &SP,
       SP.diagnose(SOD, err_could_not_match_pattern, Macro->getDeclName(),
                   SOD.getSourceRange());
 
+      Matcher.diagnose(Macro);
       return ParseError();
    }
 

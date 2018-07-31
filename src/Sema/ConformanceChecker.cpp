@@ -498,6 +498,9 @@ void ConformanceCheckerImpl::checkRecordCommon(RecordDecl *Rec,
             continue;
          }
 
+         if (Rec->isInvalid())
+            return;
+
          // not a protocol requirement.
          if (decl->getDeclContext() != Proto)
             continue;
@@ -536,7 +539,12 @@ void ConformanceCheckerImpl::checkExtension(RecordDecl *Rec,
    auto ConstraintRes = SP.checkConstraints(Rec, Ext, TemplateArgList(),
                                             Rec);
 
-   assert(!ConstraintRes.isDependent() && "dependent extension constraint!");
+   if (ConstraintRes.isDependent()) {
+      // FIXME ErrorType
+//   assert(!ConstraintRes.isDependent() && "dependent extension constraint!");
+      assert(SP.encounteredError());
+      return;
+   }
 
    if (ConstraintRes.getFailedConstraint())
       return;
@@ -556,6 +564,9 @@ void ConformanceCheckerImpl::checkExtension(RecordDecl *Rec,
          else if (!CheckedAssociatedTypes) {
             continue;
          }
+
+         if (Rec->isInvalid())
+            return;
 
          if (decl->isSynthesized())
             continue;

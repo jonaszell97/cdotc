@@ -475,7 +475,7 @@ void SemaPass::noteInstantiationContext()
    auto D = getCurrentDecl();
    while (D) {
       if (!D->isInstantiation()) {
-         D = dyn_cast<NamedDecl>(D->getDeclContext());
+         D = dyn_cast_or_null<NamedDecl>(D->getDeclContext());
          continue;
       }
 
@@ -918,10 +918,20 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
       return;
    }
 
-   if (auto R = dyn_cast<RecordDecl>(ND->getNonTransparentDeclContext())) {
-      if (isa<ProtocolDecl>(R)) {
+   auto *Ctx = ND->getNonTransparentDeclContext();
+   if (isa<RecordDecl>(Ctx) || isa<ExtensionDecl>(Ctx)) {
+      if (isa<ProtocolDecl>(Ctx)) {
          ND->setAccess(AccessSpecifier::Public);
          return;
+      }
+
+      auto *CtxDecl = dyn_cast<NamedDecl>(Ctx);
+      AccessSpecifier MinVisibility;
+      if (CtxDecl->getAccess() != AccessSpecifier::Default) {
+         MinVisibility = CtxDecl->getAccess();
+      }
+      else {
+         MinVisibility = AccessSpecifier::Public;
       }
 
       switch (ND->getKind()) {
@@ -929,7 +939,7 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
       case Decl::MethodDeclID:
       case Decl::InitDeclID:
       case Decl::EnumCaseDeclID:
-         ND->setAccess(AccessSpecifier::Public);
+         ND->setAccess(MinVisibility);
          break;
       case Decl::FieldDeclID:
       case Decl::StructDeclID:
@@ -937,16 +947,16 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
       case Decl::EnumDeclID:
       case Decl::UnionDeclID:
       case Decl::ProtocolDeclID:
-         if (isa<StructDecl>(R) && !isa<ClassDecl>(R)) {
-            ND->setAccess(AccessSpecifier::Public);
+         if (isa<StructDecl>(Ctx) && !isa<ClassDecl>(Ctx)) {
+            ND->setAccess(MinVisibility);
          }
          else {
-            ND->setAccess(AccessSpecifier::Private);
+            ND->setAccess(AccessSpecifier::Internal);
          }
 
          break;
       default:
-         ND->setAccess(AccessSpecifier::Private);
+         ND->setAccess(AccessSpecifier::Internal);
          break;
       }
    }
@@ -1278,6 +1288,26 @@ static void checkMainSignature(SemaPass &SP, CallableDecl *F)
       SP.diagnose(F, err_bad_main_sig, F->getSourceLoc());
 }
 
+static bool checkCompileTimeEvaluable(DeclContext *Ctx)
+{
+   while (Ctx) {
+      if (auto *D = dyn_cast<Decl>(Ctx)) {
+         if (D->hasAttribute<CompileTimeAttr>()) {
+            return true;
+         }
+         if (auto *Ext = dyn_cast<ExtensionDecl>(Ctx)) {
+            if (checkCompileTimeEvaluable(Ext->getExtendedRecord())) {
+               return true;
+            }
+         }
+      }
+
+      Ctx = Ctx->getParentCtx();
+   }
+
+   return false;
+}
+
 DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
 {
    // an error occured while parsing this function
@@ -1315,6 +1345,11 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
             diagnose(note_previous_decl, OtherFn->getSourceLoc());
          }
       }
+   }
+
+   // Check if this function is callable at compile time.
+   if (!F->isCompileTimeEvaluable() && checkCompileTimeEvaluable(F)) {
+      F->setCompileTimeEvaluable(true);
    }
 
    DeclContextRAII declContextRAII(*this, F);
@@ -1928,10 +1963,6 @@ void SemaPass::registerImplicitAndInheritedConformances(RecordDecl *Rec)
 DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 {
    DeclPrettyStackTraceEntry STE(Rec);
-
-   if (Rec->getFullName()=="std.prelude.EnumeratedSequence<Range<i64>>.EnumeratedIterator") {
-       int i=3; //CBP
-   }
 
    Rec->setType(Context.getRecordType(Rec));
    Rec->setOpaque(Rec->hasAttribute<OpaqueAttr>());
@@ -3436,6 +3467,15 @@ DeclResult SemaPass::declareMacroExpansionDecl(MacroExpansionDecl *Decl)
       return DeclError();
    }
 
+   if (stage == Stage::Declaration) {
+      ensureDeclared(Result.getDecl());
+      return Result.getDecl();
+   }
+   if (stage >= Stage::Sema) {
+      ensureVisited(Result.getDecl());
+      return Result.getDecl();
+   }
+
    return Result.getDecl();
 }
 
@@ -3504,7 +3544,15 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
       return StmtError();
    }
 
-   return visitStmt(Stmt, Result.getStatement());
+   auto StmtRes = visitStmt(Stmt, Result.getStatement());
+   if (!StmtRes)
+      return StmtError();
+
+   if (stage >= Stage::Sema) {
+      finalizeRecordDecls();
+   }
+
+   return StmtRes;
 }
 
 StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD,

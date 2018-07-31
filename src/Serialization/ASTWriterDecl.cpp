@@ -76,6 +76,29 @@ void ASTDeclWriter::WriteInstantiationInfo(ASTRecordWriter &Record,
                            .getInstantiationScope(Inst));
 }
 
+static CallableDecl *EmitFunctionBody(Decl *D)
+{
+   auto *Fn = dyn_cast<CallableDecl>(D);
+   if (!Fn)
+      return nullptr;
+
+   if (Fn->isCompileTimeEvaluable() || Fn->isInstantiation())
+      return Fn;
+
+   if (Fn->isProtocolDefaultImpl()
+         && Fn->getRecord()->getAccess() == AccessSpecifier::Public) {
+      return Fn;
+   }
+
+   if (Fn->isTemplateOrInTemplate()
+         && (Fn->isCalledFromTemplate()
+            || Fn->getAccess() == AccessSpecifier::Public)) {
+      return Fn;
+   }
+
+   return nullptr;
+}
+
 void ASTDeclWriter::visit(Decl *D)
 {
    ASTVisitor::visit(D);
@@ -94,7 +117,9 @@ void ASTDeclWriter::visit(Decl *D)
    if (auto Ctx = dyn_cast<DeclContext>(D))
       visitDeclContext(Ctx);
 
-   if (auto Fn = dyn_cast<CallableDecl>(D)) {
+   bool ExternallyVisibleFunction = false;
+   if (auto Fn = EmitFunctionBody(D)) {
+      ExternallyVisibleFunction = true;
       Record.AddStmt(Fn->getBody());
    }
 
@@ -105,6 +130,9 @@ void ASTDeclWriter::visit(Decl *D)
       if (ILVal) {
          Record.AddIdentifierRef(
             &CI.getContext().getIdentifiers().get(ILVal->getName()));
+
+         if (ExternallyVisibleFunction)
+            Writer.getWriter().ILWriter.AddExternallyVisibleValue(ILVal);
       }
       else {
          Record.AddIdentifierRef(nullptr);
@@ -419,6 +447,7 @@ static void WriteStateTransition(ASTRecordWriter &Record,
                                  std::queue<PatternFragment*> &Q) {
    Record.AddToken(ST.Tok);
    Record.push_back(getOrAssignID(IDMap, Q, ST.Next));
+   Record.push_back(ST.IsConsuming);
 }
 
 static void WritePatternFragment(ASTRecordWriter &Record,
@@ -475,7 +504,16 @@ static void WriteExpansionFragment(ASTRecordWriter &Record,
    Record.AddSourceLocation(EF->getLoc());
 
    switch (EF->getKind()) {
-   case ExpansionFragment::Expansion:
+   case ExpansionFragment::Expansion: {
+      auto Frags = EF->getRepetitionFragments();
+      Record.push_back(Frags.size());
+
+      for (auto F : Frags)
+         Record.push_back(getOrAssignID(IDMap, Q, F));
+
+      Record.AddIdentifierRef(EF->getExpandedVariable());
+      break;
+   }
    case ExpansionFragment::ConcatExpr: {
       auto Frags = EF->getRepetitionFragments();
       Record.push_back(Frags.size());
@@ -554,6 +592,9 @@ static void WriteMacroPattern(ASTRecordWriter &Record, MacroPattern *Pat)
 void ASTDeclWriter::visitMacroDecl(MacroDecl *D)
 {
    visitNamedDecl(D);
+
+   if (D->getAccess() != AccessSpecifier::Public)
+      return;
 
    auto Patterns = D->getPatterns();
    Record[0] = Patterns.size();

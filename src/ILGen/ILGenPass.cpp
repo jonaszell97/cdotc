@@ -1261,7 +1261,8 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl *C)
    return false;
 }
 
-void ILGenPass::registerCalledFunction(CallableDecl *C, il::Function *F,
+void ILGenPass::registerCalledFunction(CallableDecl *C,
+                                       il::Function *F,
                                        Expression *Caller) {
    if (!inCTFE())
       return;
@@ -1296,6 +1297,24 @@ void ILGenPass::registerCalledFunction(CallableDecl *C, il::Function *F,
       OS << " -> " << C->getFullName();
       return OS.str();
    };
+
+   // Check if the function is marked @compiletime.
+   if (!C->isCompileTimeEvaluable()) {
+      SP.diagnose(Caller, err_not_compiletime_evaluable, C->getDeclName(),
+                  C->getSourceLoc());
+
+      auto s = prepareCallChain();
+      if (s.empty()) {
+         SP.diagnose(note_called_here, Caller->getSourceLoc());
+      }
+      else {
+         SP.diagnose(note_call_chain, prepareCallChain(),
+                     Caller->getSourceLoc());
+      }
+
+      CtfeScopeStack.back().HadError = true;
+      return;
+   }
 
    if (!C->willHaveDefinition() && !CanSynthesizeFunction(C)) {
       SP.diagnose(C, err_no_definition, C->getFullName(), C->getSourceLoc());
@@ -1383,7 +1402,12 @@ il::Value* ILGenPass::CreateCall(CallableDecl *C,
    registerCalledFunction(C, F, Caller);
 
    F = getFunc(C);
-   assert(F && "function not declared!");
+
+   if (!F) {
+      // Some kind of error must have occured, return a dummy value.
+      assert(SP.encounteredError() && "undeclared function without error?");
+      return Builder.GetUndefValue(C->getReturnType());
+   }
 
    NoReturnRAII noReturnRAII(Builder, C->isNoReturn());
 

@@ -109,6 +109,8 @@ def err_macro_must_form : Error<"macro in ${ 0 | select(expression,statement,typ
 def err_invalid_seperator_token : Error<"a valid seperator token (e.g. ';' or ',') must follow a${ 0 | select(_, n 'expr', 'stmt', 'decl', 'type',) } variable in a macro pattern">
 def err_leftover_tokens_after_parsing : Error<"unexpected leftover tokens after parsing ${ 0 | select(expression,statement,type,declaration) }">
 def err_could_not_match_pattern : Error<"could not match given arguments against any pattern of macro '$0'">
+def note_pattern_not_viable_expected_tok : Note<"pattern not viable: expected $0 ${ 1 | if(or $1) }, found $2">
+def note_pattern_here : Note<"pattern declared here">
 def err_bad_macro_variable_kind : Error<"unexpected ${ 0 | select(expression,statement,type,declaration) } after expanding macro variable, expecting ${ 1 | select(expression,statement,type,declaration) }">
 
 def note_in_expansion : Note<"in expansion of macro '$0' here">
@@ -324,6 +326,7 @@ def note_called_here : Note<"called from here">
 def err_maximum_recursion_depth : Error<"maximum recursion depth of $0 exceeded while evaluating function '$1'">
 def err_maximum_branch_depth : Error<"maximum branching depth of $0 exceeded while evaluating function '$1'">
 def err_no_definition : Error<"declared function '$0' cannot be evaluated at compile time">
+def err_not_compiletime_evaluable : Error<"function '$0' cannot be evaluated at compile time, use @compiletime to make it evaluable">
 def note_call_chain : Note<"call chain: $0">
 def err_fn_called_during_ctfe : Error<"'$0' ${ 1 | select(was called, cannot be called) } during compile time function evaluation">
 def err_unreachable_during_ctfe : Error<"'unreachable' instruction encountered during compile time function evaluation">

@@ -190,6 +190,25 @@ public:
    {}
 };
 
+class CompileTimeAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::CompileTime; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   CompileTimeAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit CompileTimeAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::CompileTime, SR)
+   {}
+};
+
 class VersionDeclAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -281,16 +300,17 @@ public:
    Attr::VisitationPoint Attr::getVisitationPoint() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::Align:
-      return AfterSema;
-   case AttrKind::Opaque:
+         case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
    case AttrKind::Testable:
+   case AttrKind::CompileTime:
       return Never;
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
+   case AttrKind::Align:
+      return AfterSema;
    case AttrKind::Extern:
    case AttrKind::Thin:
    case AttrKind::VersionDecl:
@@ -422,6 +442,18 @@ TestableAttr *TestableAttr::clone(ast::ASTContext &Ctx) const {
 
 
 
+void CompileTimeAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+CompileTimeAttr *CompileTimeAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) CompileTimeAttr(SourceLoc);
+}
+
+
+
 void VersionDeclAttr::printPretty(llvm::raw_ostream &out) const {
 llvm::StringRef versionStr;
 switch (version) {
@@ -488,6 +520,7 @@ void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
 void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
 void SemaPass::checkAutoClosureAttr(Decl*, AutoClosureAttr*) {}
 void SemaPass::checkTestableAttr(Decl*, TestableAttr*) {}
+void SemaPass::checkCompileTimeAttr(Decl*, CompileTimeAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

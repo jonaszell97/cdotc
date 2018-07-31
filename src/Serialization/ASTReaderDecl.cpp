@@ -456,8 +456,9 @@ static StateTransition ReadStateTransition(ASTRecordReader &Reader)
 {
    auto Tok = Reader.readToken();
    auto NextID = reinterpret_cast<PatternFragment*>(Reader.readInt());
+   auto IsConsuming = Reader.readBool();
 
-   return StateTransition(Tok, NextID);
+   return StateTransition(Tok, NextID, IsConsuming);
 }
 
 static PatternFragment *ReadPatternFragment(
@@ -510,8 +511,8 @@ static PatternFragment *ReadPatternFragment(
    }
    }
 
-   PF->addTransition(Trans1.Tok, Trans1.Next);
-   PF->addTransition(Trans2.Tok, Trans2.Next);
+   PF->addTransition(Trans1.Tok, Trans1.Next, Trans1.IsConsuming);
+   PF->addTransition(Trans2.Tok, Trans2.Next, Trans2.IsConsuming);
 
    PatIDMap[ID] = PF;
    return PF;
@@ -527,7 +528,19 @@ static ExpansionFragment *ReadExpansionFragment(
 
    ExpansionFragment *EF;
    switch (Kind) {
-   case ExpansionFragment::Expansion:
+   case ExpansionFragment::Expansion: {
+      SmallVector<ExpansionFragment*, 4> ExpFrags;
+      auto NumFragments = Record.readInt();
+
+      while (NumFragments--)
+         ExpFrags.push_back(
+            reinterpret_cast<ExpansionFragment*>(Record.readInt()));
+
+      auto *Var = Record.getIdentifierInfo();
+
+      EF = ExpansionFragment::Create(C, Loc, ExpFrags, Var);
+      break;
+   }
    case ExpansionFragment::ConcatExpr: {
       SmallVector<ExpansionFragment*, 4> ExpFrags;
       auto NumFragments = Record.readInt();
@@ -560,9 +573,19 @@ static ExpansionFragment *ReadExpansionFragment(
    return EF;
 }
 
-template<class T>
-static void Backpatch(llvm::DenseMap<unsigned, T*> &IDMap, T *&Val)
-{
+static void Backpatch(llvm::DenseMap<unsigned, PatternFragment*> &IDMap,
+                      PatternFragment *&Val) {
+   if (!Val)
+      return;
+
+   auto It = IDMap.find(static_cast<unsigned>(reinterpret_cast<uintptr_t>(Val)));
+   assert (It != IDMap.end());
+
+   Val = It->getSecond();
+}
+
+static void Backpatch(llvm::DenseMap<unsigned, ExpansionFragment*> &IDMap,
+                      ExpansionFragment *&Val) {
    if (!Val)
       return;
 
@@ -571,20 +594,24 @@ static void Backpatch(llvm::DenseMap<unsigned, T*> &IDMap, T *&Val)
 
 static void BackpatchPatternFragment(
                            PatternFragment *F,
+                           SmallPtrSetImpl<PatternFragment*> &Visited,
                            llvm::DenseMap<unsigned, PatternFragment*> &IDMap) {
+   if (!Visited.insert(F).second)
+      return;
+
    for (auto &Trans : F->getTransitions()) {
       Backpatch(IDMap, Trans.Next);
       if (Trans.Next) {
-         BackpatchPatternFragment(Trans.Next, IDMap);
+         BackpatchPatternFragment(Trans.Next, Visited, IDMap);
       }
    }
 
    if (F->isRepetition()) {
       Backpatch(IDMap, F->getRepetitionBeginState());
-      BackpatchPatternFragment(F->getRepetitionBeginState(), IDMap);
+      BackpatchPatternFragment(F->getRepetitionBeginState(), Visited, IDMap);
 
       Backpatch(IDMap, F->getRepetitionEndState());
-      BackpatchPatternFragment(F->getRepetitionEndState(), IDMap);
+      BackpatchPatternFragment(F->getRepetitionEndState(), Visited, IDMap);
    }
 }
 
@@ -636,7 +663,9 @@ static MacroPattern *ReadMacroPattern(ASTRecordReader &Record, ASTContext &C)
    for (auto ExpID : ExpFragIDs)
       ExpFrags.push_back(ExpIDMap[ExpID]);
 
-   BackpatchPatternFragment(Pat, PatIDMap);
+   SmallPtrSet<PatternFragment*, 8> Visited;
+   BackpatchPatternFragment(Pat, Visited, PatIDMap);
+
    for (auto F : ExpFrags)
       BackpatchExpansionFragment(F, ExpIDMap);
 
@@ -646,6 +675,9 @@ static MacroPattern *ReadMacroPattern(ASTRecordReader &Record, ASTContext &C)
 void ASTDeclReader::visitMacroDecl(MacroDecl *D)
 {
    visitNamedDecl(D);
+
+   if (D->getAccess() != AccessSpecifier::Public)
+      return;
 
    auto *Ptr = D->getTrailingObjects<MacroPattern*>();
    while (NumTrailingObjects--)
@@ -1158,6 +1190,11 @@ AlignAttr *ASTAttrReader::readAlignAttr(SourceRange SR)
 AutoClosureAttr *ASTAttrReader::readAutoClosureAttr(SourceRange SR)
 {
    return new(C) AutoClosureAttr(SR);
+}
+
+CompileTimeAttr *ASTAttrReader::readCompileTimeAttr(SourceRange SR)
+{
+   return new(C) CompileTimeAttr(SR);
 }
 
 TestableAttr *ASTAttrReader::readTestableAttr(SourceRange SR)

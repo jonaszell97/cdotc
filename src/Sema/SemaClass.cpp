@@ -383,9 +383,6 @@ DeclResult SemaPass::visitProtocolDecl(ProtocolDecl *P)
 
 void SemaPass::calculateRecordSize(RecordDecl *R)
 {
-   if (R->getFullName()=="Option<String>") {
-       int i=3; //CBP
-   }
    if (R->isInvalid())
       return;
 
@@ -562,6 +559,9 @@ static bool diagnoseCircularConformance(SemaPass &SP,
 
 bool SemaPass::finalizeRecordDecls()
 {
+   if (EncounteredError)
+      return true;
+
    auto ConformanceOrder = ConformanceDependency.constructOrderedList();
    if (!ConformanceOrder.second)
       return diagnoseCircularConformance(*this, ConformanceDependency);

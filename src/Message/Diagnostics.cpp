@@ -260,7 +260,6 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
    }
    else if (funcName == "if") {
       assert(args.size() == 1 && "if expects 1 arg");
-      assert(Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer);
 
       if (Engine.ArgKinds[idx] == DiagnosticsEngine::ak_integer) {
          auto val = Engine.OtherArgs[idx];

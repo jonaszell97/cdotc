@@ -2443,7 +2443,9 @@ ParseResult Parser::parseExprSequence(bool stopAtThen,
       case tok::kw_static_assert: case tok::kw_static_print:
       case tok::kw___debug: case tok::kw___unreachable:
       case tok::interpolation_end: case tok::expr_begin:
-         lexer->backtrack();
+         if (!frags.empty())
+            lexer->backtrack();
+
          done = true;
          break;
       case tok::kw_try:
@@ -5524,9 +5526,9 @@ ModuleDecl *Parser::parseModule(bool &IgnoreSourceFile)
    while (currentTok().oneOf(tok::newline, tok::space, tok::semicolon))
       advance();
 
+   SmallVector<Attr*, 4> Attrs;
    if (currentTok().is(tok::at)) {
       bool FoundVersionAttr;
-      SmallVector<Attr*, 4> Attrs;
       parseAttributes(Attrs, AttrClass::Decl, &FoundVersionAttr);
 
       VersionDeclAttr::VersionKind V = VersionDeclAttr::Windows;
@@ -5555,6 +5557,7 @@ ModuleDecl *Parser::parseModule(bool &IgnoreSourceFile)
 
       if (Mod) {
          Mod->getModule()->setContainsNewDecls(true);
+         Context.setAttributes(Mod, Attrs);
       }
 
       return Mod;

@@ -353,6 +353,7 @@ void ASTStmtWriter::visitIntegerLiteral(IntegerLiteral *S)
    Record.AddTypeRef(S->getType());
    Record.AddAPSInt(S->getValue());
    Record.push_back(static_cast<unsigned char>(S->getSuffix()));
+   Record.AddDeclRef(S->getExpressibleByInit());
 }
 
 void ASTStmtWriter::visitFPLiteral(FPLiteral *S)
@@ -363,6 +364,7 @@ void ASTStmtWriter::visitFPLiteral(FPLiteral *S)
    Record.AddTypeRef(S->getType());
    Record.AddAPFloat(S->getValue());
    Record.push_back(static_cast<unsigned char>(S->getSuffix()));
+   Record.AddDeclRef(S->getExpressibleByInit());
 }
 
 void ASTStmtWriter::visitBoolLiteral(BoolLiteral *S)
@@ -372,6 +374,7 @@ void ASTStmtWriter::visitBoolLiteral(BoolLiteral *S)
    Record.AddSourceLocation(S->getSourceLoc());
    Record.AddTypeRef(S->getType());
    Record.push_back(S->getValue());
+   Record.AddDeclRef(S->getExpressibleByInit());
 }
 
 void ASTStmtWriter::visitCharLiteral(CharLiteral *S)
@@ -381,6 +384,7 @@ void ASTStmtWriter::visitCharLiteral(CharLiteral *S)
    Record.AddSourceRange(S->getSourceRange());
    Record.AddTypeRef(S->getType());
    Record.push_back(S->getWide());
+   Record.AddDeclRef(S->getExpressibleByInit());
 }
 
 void ASTStmtWriter::visitNoneLiteral(NoneLiteral *S)
@@ -396,6 +400,7 @@ void ASTStmtWriter::visitStringLiteral(StringLiteral *S)
 
    Record.AddSourceRange(S->getSourceRange());
    Record.AddString(S->getValue());
+   Record.AddDeclRef(S->getExpressibleByInit());
 }
 
 void ASTStmtWriter::visitStringInterpolation(StringInterpolation *S)

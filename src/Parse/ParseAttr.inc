@@ -452,6 +452,53 @@ unsigned NumNeededArgs = 0;
       auto EndLoc = currentTok().getSourceLoc();
 Attrs.push_back(new (Context) TestableAttr(SourceRange(AttrLoc, EndLoc)));
  break;}
+case AttrKind::CompileTime: {
+unsigned NumNeededArgs = 0;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+         
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) CompileTimeAttr(SourceRange(AttrLoc, EndLoc)));
+ break;}
 case AttrKind::VersionDecl: {
 VersionDeclAttr::VersionKind version;
 unsigned NumNeededArgs = 1;
@@ -706,6 +753,9 @@ SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "autoc
 }
 case AttrKind::Testable: {if (isa<Decl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "testable");
+}
+case AttrKind::CompileTime: {if (isa<Decl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "compiletime");
 }
 case AttrKind::VersionDecl: {if (isa<Decl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "version");

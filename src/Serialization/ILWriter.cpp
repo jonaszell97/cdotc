@@ -127,6 +127,11 @@ void ILWriter::AddDeclToBeWritten(const ast::NamedDecl *D, unsigned ID)
    FileLocations.insert(ID);
 }
 
+void ILWriter::AddExternallyVisibleValue(il::Value *Val)
+{
+   ExternallyVisibleFunctions.insert(Val);
+}
+
 void ILWriter::AddValueRef(const il::Value *V, RecordDataImpl &Record)
 {
    Record.push_back(GetOrCreateValueID(V));
@@ -579,13 +584,8 @@ void ILWriter::writeFunction(const il::Function &F)
    Writer.AddIdentifierRef(
       &ILCtx.getASTCtx().getIdentifiers().get(F.getName()));
 
-   bool WriteDefinition = true;
-   if (SourceID != fs::InvalidID) {
-      auto &FileMgr = this->Writer.Writer.CI.getFileMgr();
-      auto OtherID = FileMgr.getLexicalSourceId(F.getSourceLoc());
-
-      WriteDefinition &= OtherID == SourceID;
-   }
+   bool WriteDefinition =
+      ExternallyVisibleFunctions.find(&F) != ExternallyVisibleFunctions.end();
 
    Writer.AddTypeRef(F.getType());
    Writer.push_back(F.getRawBits());

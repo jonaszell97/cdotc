@@ -2154,9 +2154,20 @@ bool SemaPass::isAccessible(NamedDecl *ND)
    case AccessSpecifier::Private: {
       // only visible within the immediate context the symbol was defined in
       auto *Ctx = ND->getDeclContext();
+
+      // All extensions within the same file can access private declarations.
+      bool SameFile = ND->getModule() == getDeclContext().getDeclModule();
+
+      if (SameFile)
+         Ctx = Ctx->lookThroughExtension();
+
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
+         if (SameFile && Curr->lookThroughExtension() == Ctx) {
             return true;
+         }
+         if (Curr == Ctx) {
+            return true;
+         }
       }
 
       return false;
@@ -2209,9 +2220,20 @@ void SemaPass::checkAccessibility(NamedDecl *ND, StmtOrDecl SOD)
    case AccessSpecifier::Private: {
       // only visible within the immediate context the symbol was defined in
       auto *Ctx = ND->getDeclContext();
+
+      // All extensions within the same file can access private declarations.
+      bool SameFile = ND->getModule() == getDeclContext().getDeclModule();
+
+      if (SameFile)
+         Ctx = Ctx->lookThroughExtension();
+
       for (auto *Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
+         if (SameFile && Curr->lookThroughExtension() == Ctx) {
             return;
+         }
+         if (Curr == Ctx) {
+            return;
+         }
       }
 
       // declaration is not accessible here

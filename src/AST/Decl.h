@@ -765,9 +765,10 @@ protected:
       Unsafe     = Async << 1u,
       ImplicitFutureReturn = Unsafe << 1u,
       CalledFromTemplate = ImplicitFutureReturn << 1u,
+      CompileTime = CalledFromTemplate << 1u,
 
       // method flags
-      Alias            = CalledFromTemplate << 1u,
+      Alias            = CompileTime << 1u,
       MutableSelf      = Alias << 1u,
       ProtoMethod      = MutableSelf << 1u,
       Virtual          = ProtoMethod << 1u,
@@ -777,7 +778,11 @@ protected:
       DefaultInit      = MemberwiseInit << 1u,
       ProtoDefaultImpl = DefaultInit << 1u,
       Subscript = ProtoDefaultImpl << 1u,
+
+      _lastFlag = Subscript,
    };
+
+   static_assert(_lastFlag <= (1 << 31), "flags require too much space!");
 
    uint32_t Flags;
 
@@ -908,6 +913,9 @@ public:
 
    bool isImplicitFutureReturn() const { return getFlag(ImplicitFutureReturn); }
    void setImplicitFutureReturn(bool u) { setFlag(ImplicitFutureReturn, u); }
+
+   bool isCompileTimeEvaluable() const { return getFlag(CompileTime); }
+   void setCompileTimeEvaluable(bool u) { setFlag(CompileTime, u); }
 
    bool isInitializerOfTemplate() const;
    bool isCaseOfTemplatedEnum() const;
@@ -2716,9 +2724,12 @@ public:
 class PatternFragment;
 
 struct StateTransition {
-   StateTransition(const lex::Token &Tok, PatternFragment *Next)
-      : Tok(Tok), Next(Next)
-   { }
+   StateTransition(const lex::Token &Tok, PatternFragment *Next,
+                   bool IsConsuming = true,
+                   bool NeedsBackpatching = false)
+      : Tok(Tok), Next(Next),
+        IsConsuming(IsConsuming), NeedsBackpatching(NeedsBackpatching)
+   {}
 
    StateTransition() = default;
 
@@ -2737,8 +2748,19 @@ struct StateTransition {
       return Tok.getKind() == lex::tok::eof;
    }
 
+   /// The token that takes this transition, or tok::sentinel if it is
+   /// unconditional.
    lex::Token Tok;
+
+   /// The state this transition leads to.
    PatternFragment *Next = nullptr;
+
+   /// True iff the transition token should be consumed.
+   bool IsConsuming = true;
+
+   /// True iff this transition needs backpatching of the token, for example
+   /// because it immediately follows a variable pattern.
+   bool NeedsBackpatching = false;
 };
 
 class PatternFragment {
@@ -2908,14 +2930,31 @@ public:
       return RepData.EndState;
    }
 
-   void addTransition(const lex::Token &Tok, PatternFragment *Next)
-   {
+   void addTransition(const lex::Token &Tok, PatternFragment *Next,
+                      bool IsConsuming = true,
+                      bool NeedsBackpatching = false) {
       if (!Transitions[0]) {
-         Transitions[0] = StateTransition(Tok, Next);
+         Transitions[0] = StateTransition(Tok, Next, IsConsuming,
+                                          NeedsBackpatching);
       }
       else {
          assert(!Transitions[1] && "more than 2 transitions needed!");
-         Transitions[1] = StateTransition(Tok, Next);
+         Transitions[1] = StateTransition(Tok, Next, IsConsuming,
+                                          NeedsBackpatching);
+      }
+   }
+
+   void addUnconditionalTransition(PatternFragment *Next,
+                                   bool IsConsuming = true,
+                                   bool NeedsBackpatching = false) {
+      if (!Transitions[0]) {
+         Transitions[0] = StateTransition(lex::Token(), Next, IsConsuming,
+                                          NeedsBackpatching);
+      }
+      else {
+         assert(!Transitions[1] && "more than 2 transitions needed!");
+         Transitions[1] = StateTransition(lex::Token(), Next, IsConsuming,
+                                          NeedsBackpatching);
       }
    }
 };

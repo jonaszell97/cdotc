@@ -511,6 +511,10 @@ lex::Token ASTReader::ReadToken(const RecordDataImpl &Record, unsigned &Idx)
       auto *II = getLocalIdentifier(Record[Idx++]);
       return Token(II, Loc, Kind);
    }
+   case tok::space: {
+      auto NumSpaces = Record[Idx++];
+      return Token(Token::Space, NumSpaces, Loc);
+   }
    case tok::charliteral:
    case tok::stringliteral:
    case tok::fpliteral:

@@ -392,6 +392,7 @@ void ASTStmtReader::visitIntegerLiteral(IntegerLiteral *S)
    S->setType(Record.readType());
    S->setValue(Record.getReader()->getContext(), Record.readAPSInt());
    S->setSuffix(Record.readEnum<IntegerLiteral::Suffix>());
+   S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
 void ASTStmtReader::visitFPLiteral(FPLiteral *S)
@@ -403,6 +404,7 @@ void ASTStmtReader::visitFPLiteral(FPLiteral *S)
    S->setValue(Record.getReader()->getContext(),
                Record.readAPFloat(llvm::APFloat::IEEEdouble()));
    S->setSuffix(Record.readEnum<FPLiteral::Suffix>());
+   S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
 void ASTStmtReader::visitBoolLiteral(BoolLiteral *S)
@@ -412,6 +414,7 @@ void ASTStmtReader::visitBoolLiteral(BoolLiteral *S)
    S->setSourceLocation(Record.readSourceLocation());
    S->setType(Record.readType());
    S->setValue(Record.readBool());
+   S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
 void ASTStmtReader::visitCharLiteral(CharLiteral *S)
@@ -421,6 +424,7 @@ void ASTStmtReader::visitCharLiteral(CharLiteral *S)
    S->setSourceRange(Record.readSourceRange());
    S->setType(Record.readType());
    S->setWide(Record.readInt());
+   S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
 void ASTStmtReader::visitNoneLiteral(NoneLiteral *S)
@@ -435,6 +439,7 @@ void ASTStmtReader::visitStringLiteral(StringLiteral *S)
 
    S->setSourceRange(Record.readSourceRange());
    S->setValue(Record.readString());
+   S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
 void ASTStmtReader::visitStringInterpolation(StringInterpolation *S)

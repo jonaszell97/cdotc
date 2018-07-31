@@ -695,6 +695,11 @@ void ASTAttrWriter::visitAutoClosureAttr(AutoClosureAttr *A)
 
 }
 
+void ASTAttrWriter::visitCompileTimeAttr(CompileTimeAttr *A)
+{
+
+}
+
 void ASTAttrWriter::visitTestableAttr(TestableAttr *A)
 {
 
@@ -792,7 +797,10 @@ void ASTRecordWriter::AddToken(const lex::Token &Tok)
    case tok::dollar_ident:
    case tok::macro_name:
       AddIdentifierRef(Tok.getIdentifierInfo());
-      return;
+      break;
+   case tok::space:
+      push_back(Tok.getNumSpaces());
+      break;
    case tok::charliteral:
    case tok::stringliteral:
    case tok::fpliteral:
