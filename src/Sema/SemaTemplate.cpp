@@ -46,10 +46,6 @@ void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
       }
    }
 
-   checkProtocolConformance(R);
-   if (R->isInvalid())
-      return;
-
    if (auto C = dyn_cast<ClassDecl>(R)) {
       checkIfAbstractMethodsOverridden(C);
       if (R->isInvalid())

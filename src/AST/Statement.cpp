@@ -654,29 +654,31 @@ StaticForStmt* StaticForStmt::Create(ASTContext &C,
 
 MacroExpansionStmt::MacroExpansionStmt(SourceRange SR,
                                        DeclarationName MacroName,
+                                       Expression *ParentExpr,
                                        Delimiter Delim,
                                        llvm::ArrayRef<lex::Token> Toks)
    : Statement(MacroExpansionStmtID),
      SR(SR), Delim(Delim), MacroName(MacroName),
-     NumTokens((unsigned)Toks.size())
+     NumTokens((unsigned)Toks.size()), ParentExpr(ParentExpr)
 {
    std::copy(Toks.begin(), Toks.end(), getTrailingObjects<lex::Token>());
 }
 
 MacroExpansionStmt::MacroExpansionStmt(EmptyShell, unsigned N)
    : Statement(MacroExpansionStmtID),
-     Delim(Delimiter::Paren), NumTokens(N)
+     Delim(Delimiter::Paren), NumTokens(N), ParentExpr(nullptr)
 {}
 
 MacroExpansionStmt* MacroExpansionStmt::Create(ASTContext &C,
                                                SourceRange SR,
                                                DeclarationName MacroName,
+                                               Expression *ParentExpr,
                                                Delimiter Delim,
                                                llvm::ArrayRef<lex::Token> Toks){
    void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(Toks.size()),
                           alignof(MacroExpansionStmt));
 
-   return new(Mem) MacroExpansionStmt(SR, MacroName, Delim, Toks);
+   return new(Mem) MacroExpansionStmt(SR, MacroName, ParentExpr, Delim, Toks);
 }
 
 MacroExpansionStmt* MacroExpansionStmt::CreateEmpty(ASTContext &C,

@@ -170,6 +170,9 @@ public:
    SourceLocation getReplacementLocation(SourceLocation Loc);
    SourceID getReplacementID(SourceID ID);
 
+   void dumpSourceLine(SourceLocation Loc);
+   void dumpSourceRange(SourceRange Loc);
+
 private:
    std::vector<SourceOffset> sourceIdOffsets;
    llvm::StringMap<CachedFile> MemBufferCache;

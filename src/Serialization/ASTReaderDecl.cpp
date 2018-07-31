@@ -283,6 +283,7 @@ void ASTDeclReader::visitMacroExpansionDecl(MacroExpansionDecl *D)
    D->setSourceRange(ReadSourceRange());
    D->setMacroName(Record.readDeclarationName());
    D->setDelim(Record.readEnum<MacroExpansionDecl::Delimiter>());
+   D->setParentExpr(Record.readExpr());
 }
 
 void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
@@ -611,6 +612,7 @@ static MacroPattern *ReadMacroPattern(ASTRecordReader &Record, ASTContext &C)
    llvm::DenseMap<unsigned, ExpansionFragment*> ExpIDMap;
 
    auto Loc = Record.readSourceLocation();
+   auto ExpansionLoc = Record.readSourceLocation();
    auto Len = (unsigned)Record.readInt();
    auto PatID = Record.readInt();
 
@@ -638,7 +640,7 @@ static MacroPattern *ReadMacroPattern(ASTRecordReader &Record, ASTContext &C)
    for (auto F : ExpFrags)
       BackpatchExpansionFragment(F, ExpIDMap);
 
-   return MacroPattern::Create(C, Loc, Pat, ExpFrags, Len);
+   return MacroPattern::Create(C, Loc, Pat, ExpansionLoc, ExpFrags, Len);
 }
 
 void ASTDeclReader::visitMacroDecl(MacroDecl *D)

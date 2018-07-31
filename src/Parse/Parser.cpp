@@ -1196,6 +1196,11 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
          return maybeParseSubExpr(Expr, parsingType);
       }
 
+      // Macro expansion
+      if (currentTok().is(tok::macro_name)) {
+         return parseMacroExpansionExpr(ParentExpr);
+      }
+
       if (!currentTok().is(tok::ident)) {
          SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "identifier");
@@ -4487,6 +4492,40 @@ ParseResult Parser::parseTopLevelDecl()
       if (Tok.is(Ident_macro))
          return parseMacro();
 
+      // This might be a macro expansion with a nested name.
+      if (lookahead().is(tok::period)) {
+         SourceRange SR(Tok.getSourceLoc(), Tok.getEndLoc());
+
+         // Create the first expression
+         auto *Ident = new(Context) IdentifierRefExpr(SR,
+                                                      Tok.getIdentifierInfo());
+
+         advance();
+         advance();
+
+         while (true) {
+            Tok = currentTok();
+            SR = SourceRange(Tok.getSourceLoc(), Tok.getEndLoc());
+
+            if (Tok.is(tok::ident)) {
+               Ident = new(Context) IdentifierRefExpr(SR, Ident,
+                                                      Tok.getIdentifierInfo());
+
+               if (lookahead().is(tok::period)) {
+                  advance();
+                  advance();
+               }
+            }
+            else if (currentTok().is(tok::macro_name)) {
+               return parseMacroExpansionDecl(Ident);
+            }
+            else {
+               errorUnexpectedToken(currentTok(), tok::period);
+               return ParseError();
+            }
+         }
+      }
+
       goto case_bad_token;
    }
    case tok::macro_statement:
@@ -5021,6 +5060,9 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
 
       return Stmt;
    }
+
+   if (currentTok().is(Ident_macro))
+      return parseMacro();
 
    ParseResult stmt;
 

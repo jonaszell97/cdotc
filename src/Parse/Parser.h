@@ -796,8 +796,8 @@ private:
    ParseResult parseTraitsExpr();
 
    ParseResult parseMacroExpansionExpr(Expression *ParentExpr = nullptr);
-   ParseResult parseMacroExpansionStmt();
-   ParseResult parseMacroExpansionDecl();
+   ParseResult parseMacroExpansionStmt(Expression *ParentExpr = nullptr);
+   ParseResult parseMacroExpansionDecl(Expression *ParentExpr = nullptr);
 
    bool modifierFollows(char c);
    Expression *parseNumericLiteral();

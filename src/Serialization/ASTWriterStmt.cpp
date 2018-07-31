@@ -296,6 +296,7 @@ void ASTStmtWriter::visitMacroExpansionStmt(MacroExpansionStmt *S)
    Record.AddSourceRange(S->getSourceRange());
    Record.AddDeclarationName(S->getMacroName());
    Record.push_back(S->getDelim());
+   Record.AddStmt(S->getParentExpr());
 }
 
 void ASTStmtWriter::visitStaticIfStmt(StaticIfStmt *S)

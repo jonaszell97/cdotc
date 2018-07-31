@@ -693,7 +693,7 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
    // emit identifiers
    WriteIdentifierBlock();
 
-   if (CI.getOptions().emitModules()) {
+   if (CI.getOptions().emitModules() && CI.getIncMgr()) {
       auto Length = Stream.GetCurrentBitNo();
       assert(Length % 8 == 0 && "invalid byte count");
 

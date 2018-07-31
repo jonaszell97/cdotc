@@ -7,6 +7,7 @@
 #include "AST/ASTContext.h"
 #include "Basic/FileUtils.h"
 #include "Basic/FileManager.h"
+#include "ClangImporter/ClangImporter.h"
 #include "IL/Context.h"
 #include "IL/Module.h"
 #include "ILGen/ILGenPass.h"
@@ -344,6 +345,7 @@ void CompilerOptions::addOutput(std::string &&fileName)
 
 int CompilerInstance::compile()
 {
+   support::Timer Timer(*this, "Compilation", PrintPhases);
    llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
 
    if (auto EC = setupJobs())
@@ -447,9 +449,6 @@ int CompilerInstance::setupJobs()
    if (!NoIncremental)
       addJob<CacheJob>();
 
-   if (PrintPhases)
-      addJob<PrintPhasesJob>();
-
    return 0;
 }
 
@@ -520,6 +519,15 @@ void CompilerInstance::createIRGen()
    IRGen = std::make_unique<il::IRGen>(*this, *LLVMCtx, options.emitDebugInfo());
 }
 
+ClangImporter &CompilerInstance::getClangImporter()
+{
+   if (ClangImporter)
+      return *ClangImporter;
+
+   ClangImporter = std::make_unique<cdot::ClangImporter>(*this);
+   return *ClangImporter;
+}
+
 ast::ILGenPass& CompilerInstance::getILGen() const
 {
    return Sema->getILGen();
@@ -542,22 +550,9 @@ void CompilerInstance::reportBackendFailure(llvm::StringRef msg)
    Sema->issueDiagnostics();
 }
 
-void CompilerInstance::addPhaseDuration(StringRef PhaseName,
-                                        long long DurationMillis) {
-   PhaseDurations.emplace_back(PhaseName, DurationMillis);
-}
-
 void CompilerInstance::displayPhaseDurations(llvm::raw_ostream &OS) const
 {
-   long long Total = 0;
-   OS << "Timings:\n";
-
-   for (auto &Dur : PhaseDurations) {
-      OS << "   - " << Dur.first << ": " << Dur.second << "ms\n";
-      Total += Dur.second;
-   }
-
-   OS << "Total elapsed time: " << Total << "ms.\n";
+   OS << TimerStr;
 }
 
 } // namespace cdot

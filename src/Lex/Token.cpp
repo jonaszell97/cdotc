@@ -80,6 +80,7 @@ SourceLocation Token::getEndLoc() const
    case tok::interpolation_end: Length = 1; break;
    case tok::ident:
    case tok::op_ident:
+   case tok::macro_name:
       Length = (unsigned)getIdentifierInfo()->getIdentifier().size();
       break;
    default:
@@ -164,7 +165,7 @@ void Token::print(llvm::raw_ostream &OS) const
       OS << getText();
       return;
    case tok::macro_name:
-      OS << getText() << "!";
+      OS << getIdentifier() << "!";
       break;
    case tok::macro_expression:
       OS << "<expr " << getExpr() << ">";

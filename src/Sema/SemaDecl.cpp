@@ -182,20 +182,23 @@ void SemaPass::registerExtension(ExtensionDecl *Ext)
    makeExtensionVisible(Ext);
 
    bool IsProto = isa<ProtocolDecl>(ExtendedRec);
-   if (IsProto)
-      return;
+   if (!IsProto) {
+      registerExplicitConformances(ExtendedRec, Ext->getConformanceTypes());
+      registerImplicitAndInheritedConformances(ExtendedRec,
+                                               Ext->getConformanceTypes());
 
-   registerExplicitConformances(ExtendedRec, Ext->getConformanceTypes());
-   registerImplicitAndInheritedConformances(ExtendedRec,
-                                            Ext->getConformanceTypes());
-
-   auto &R = *ExtendedRec;
-   for (auto *D : Ext->getDecls()) {
-      if (auto *M = dyn_cast<MethodDecl>(D)) {
-         if (!M->getMethodID()) {
-            M->setMethodID(R.getAndIncrementLastMethodID());
+      auto &R = *ExtendedRec;
+      for (auto *D : Ext->getDecls()) {
+         if (auto *M = dyn_cast<MethodDecl>(D)) {
+            if (!M->getMethodID()) {
+               M->setMethodID(R.getAndIncrementLastMethodID());
+            }
          }
       }
+   }
+
+   if (ExtendedRec->wasDeclared()) {
+      ensureDeclared(Ext);
    }
 }
 
@@ -608,6 +611,7 @@ void SemaPass::ActOnDecl(DeclContext *Ctx, Decl *D, bool Global)
    case Decl::PropDeclID:
    case Decl::NamespaceDeclID:
    case Decl::ModuleDeclID:
+   case Decl::MacroDeclID:
       addDeclToContext(*Ctx, cast<NamedDecl>(D));
       checkDefaultAccessibility(cast<NamedDecl>(D));
       break;
@@ -1925,6 +1929,10 @@ DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 {
    DeclPrettyStackTraceEntry STE(Rec);
 
+   if (Rec->getFullName()=="std.prelude.EnumeratedSequence<Range<i64>>.EnumeratedIterator") {
+       int i=3; //CBP
+   }
+
    Rec->setType(Context.getRecordType(Rec));
    Rec->setOpaque(Rec->hasAttribute<OpaqueAttr>());
 
@@ -1947,6 +1955,10 @@ DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 
    auto *Ty = Context.getRecordType(Rec);
    Ty->setDependent(Ty->isDependentType() || Rec->isTemplateOrInTemplate());
+
+   if (!Rec->isTemplateOrInTemplate()) {
+      checkProtocolConformance(Rec);
+   }
 
    return Rec;
 }
@@ -2260,6 +2272,9 @@ DeclResult SemaPass::declareEnumDecl(EnumDecl *E)
       // every enum is dependent on its cases
       EnumVert.addIncoming(&CaseVert);
 
+      bool AllEquatable = true;
+      bool AllCopyable  = true;
+
       for (const auto &assoc : Case->getArgs()) {
          auto res = declareStmt(Case, assoc);
          if (!res)
@@ -2275,7 +2290,28 @@ DeclResult SemaPass::declareEnumDecl(EnumDecl *E)
             addDependencies(assoc->getType(), LayoutDependency, CaseVert);
          }
 
+         AllEquatable &= IsEquatableType(assoc->getType());
+         AllCopyable &= IsCopyableType(assoc->getType());
+
          NoAssociatedValues = false;
+      }
+
+      if (AllEquatable) {
+         if (auto Equatable = getEquatableDecl()) {
+            Context.getConformanceTable()
+                   .addExplicitConformance(Context, E, Equatable);
+
+            addDependency(E, Equatable);
+         }
+      }
+
+      if (AllCopyable) {
+         if (auto Copyable = getCopyableDecl()) {
+            Context.getConformanceTable()
+                   .addExplicitConformance(Context, E, Copyable);
+
+            addDependency(E, Copyable);
+         }
       }
 
       (void)declareStmt(E, Case);
@@ -3371,7 +3407,23 @@ DeclResult SemaPass::declareEnumCaseDecl(EnumCaseDecl *Case)
 
 DeclResult SemaPass::declareMacroExpansionDecl(MacroExpansionDecl *Decl)
 {
-   auto Result = checkMacroCommon(Decl, Decl->getMacroName(), getDeclContext(),
+   if (!checkNamespaceRef(Decl))
+      return DeclError();
+
+   DeclContext *Ctx = &getDeclContext();
+   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Decl->getParentExpr())) {
+      if (Ident->getKind() == IdentifierKind::Namespace) {
+         Ctx = Ident->getNamespaceDecl();
+      }
+      else if (Ident->getKind() == IdentifierKind::Import) {
+         Ctx = Ident->getImport();
+      }
+      else if (Ident->getKind() == IdentifierKind::Module) {
+         Ctx = Ident->getModule();
+      }
+   }
+
+   auto Result = checkMacroCommon(Decl, Decl->getMacroName(), *Ctx,
                                   (MacroDecl::Delimiter )Decl->getDelim(),
                                   Decl->getTokens(),
                                   (unsigned)parse::Parser::ExpansionKind::Decl);
@@ -3389,7 +3441,23 @@ DeclResult SemaPass::declareMacroExpansionDecl(MacroExpansionDecl *Decl)
 
 ExprResult SemaPass::visitMacroExpansionExpr(MacroExpansionExpr *Expr)
 {
-   auto Result = checkMacroCommon(Expr, Expr->getMacroName(), getDeclContext(),
+   if (!checkNamespaceRef(Expr))
+      return ExprError();
+
+   DeclContext *Ctx = &getDeclContext();
+   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Expr->getParentExpr())) {
+      if (Ident->getKind() == IdentifierKind::Namespace) {
+         Ctx = Ident->getNamespaceDecl();
+      }
+      else if (Ident->getKind() == IdentifierKind::Import) {
+         Ctx = Ident->getImport();
+      }
+      else if (Ident->getKind() == IdentifierKind::Module) {
+         Ctx = Ident->getModule();
+      }
+   }
+
+   auto Result = checkMacroCommon(Expr, Expr->getMacroName(), *Ctx,
                                   (MacroDecl::Delimiter)Expr->getDelim(),
                                   Expr->getTokens(),
                                   (unsigned)parse::Parser::ExpansionKind::Expr);
@@ -3407,7 +3475,23 @@ ExprResult SemaPass::visitMacroExpansionExpr(MacroExpansionExpr *Expr)
 
 StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
 {
-   auto Result = checkMacroCommon(Stmt, Stmt->getMacroName(), getDeclContext(),
+   if (!checkNamespaceRef(Stmt))
+      return StmtError();
+
+   DeclContext *Ctx = &getDeclContext();
+   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Stmt->getParentExpr())) {
+      if (Ident->getKind() == IdentifierKind::Namespace) {
+         Ctx = Ident->getNamespaceDecl();
+      }
+      else if (Ident->getKind() == IdentifierKind::Import) {
+         Ctx = Ident->getImport();
+      }
+      else if (Ident->getKind() == IdentifierKind::Module) {
+         Ctx = Ident->getModule();
+      }
+   }
+
+   auto Result = checkMacroCommon(Stmt, Stmt->getMacroName(), *Ctx,
                                   (MacroDecl::Delimiter )Stmt->getDelim(),
                                   Stmt->getTokens(),
                                   (unsigned)parse::Parser::ExpansionKind::Stmt);

@@ -1031,6 +1031,7 @@ public:
 private:
    MacroExpansionStmt(SourceRange SR,
                       DeclarationName MacroName,
+                      Expression *ParentExpr,
                       Delimiter Delim,
                       ArrayRef<lex::Token> Toks);
 
@@ -1041,10 +1042,13 @@ private:
    DeclarationName MacroName;
    unsigned NumTokens;
 
+   Expression *ParentExpr;
+
 public:
    static MacroExpansionStmt *Create(ASTContext &C,
                                      SourceRange SR,
                                      DeclarationName MacroName,
+                                     Expression *ParentExpr,
                                      Delimiter Delim,
                                      llvm::ArrayRef<lex::Token> Toks);
 
@@ -1060,6 +1064,9 @@ public:
    void setSourceRange(SourceRange SR) { MacroExpansionStmt::SR = SR; }
    void setMacroName(DeclarationName Name) { MacroName = Name; }
    void setDelim(Delimiter Delim) { MacroExpansionStmt::Delim = Delim; }
+
+   Expression* getParentExpr() const { return ParentExpr; }
+   void setParentExpr(Expression* V) { ParentExpr = V; }
 
    llvm::ArrayRef<lex::Token> getTokens() const
    {

@@ -140,3 +140,34 @@ LiteralParser::CharResult LiteralParser::parseCharacter()
 
    return {Val, false};
 }
+
+LiteralParser::StringResult LiteralParser::parseString()
+{
+   std::string str;
+   str.reserve(Str.size());
+
+   bool escaped = false;
+
+   const char *ptr  = Str.data();
+   unsigned Len = (unsigned)Str.size();
+
+   for (unsigned i = 0; i < Len; ++ptr, ++i) {
+      char c = *ptr;
+
+      if (escaped) {
+         str += support::escape_char(c);
+         escaped = false;
+      }
+      else if (c == '\\') {
+         escaped = true;
+      }
+      else if (c == '$' && ptr[1] == '$') {
+         // ignore this '$', append the next one
+      }
+      else {
+         str += c;
+      }
+   }
+
+   return { move(str), false };
+}

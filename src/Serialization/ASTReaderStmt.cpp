@@ -330,6 +330,7 @@ void ASTStmtReader::visitMacroExpansionStmt(MacroExpansionStmt *S)
    S->setSourceRange(Record.readSourceRange());
    S->setMacroName(Record.readDeclarationName());
    S->setDelim(Record.readEnum<MacroExpansionStmt::Delimiter>());
+   S->setParentExpr(Record.readExpr());
 }
 
 void ASTStmtReader::visitStaticIfStmt(StaticIfStmt *S)

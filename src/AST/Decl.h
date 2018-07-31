@@ -3032,10 +3032,13 @@ class MacroPattern final: llvm::TrailingObjects<MacroPattern,
                                                 ExpansionFragment*> {
    MacroPattern(SourceLocation Loc,
                 PatternFragment* Pattern,
+                SourceLocation ExpansionLoc,
                 llvm::ArrayRef<ExpansionFragment*> Expansion,
                 unsigned SourceLength);
 
    SourceLocation Loc;
+   SourceLocation ExpansionLoc;
+
    PatternFragment* Pattern;
 
    /// Length of the parsed expansion pattern in bytes.
@@ -3046,11 +3049,15 @@ public:
    static MacroPattern *Create(ASTContext &C,
                                SourceLocation Loc,
                                PatternFragment* Pattern,
+                               SourceLocation ExpansionLoc,
                                llvm::ArrayRef<ExpansionFragment*> Expansion,
                                unsigned SourceLength);
 
    SourceLocation getSourceLoc() const { return Loc; }
    SourceRange getSourceRange() const;
+
+   SourceLocation getExpansionLoc() { return ExpansionLoc; }
+   void setExpansionLoc(SourceLocation L) { ExpansionLoc = L; }
 
    PatternFragment* getPattern() const { return Pattern; }
    llvm::ArrayRef<ExpansionFragment*> getExpansion() const
@@ -3129,6 +3136,7 @@ public:
 private:
    MacroExpansionDecl(SourceRange SR,
                       DeclarationName MacroName,
+                      Expression *ParentExpr,
                       Delimiter Delim,
                       llvm::ArrayRef<lex::Token> Toks);
 
@@ -3139,10 +3147,13 @@ private:
    DeclarationName MacroName;
    unsigned NumTokens;
 
+   Expression *ParentExpr;
+
 public:
    static MacroExpansionDecl *Create(ASTContext &C,
                                      SourceRange SR,
                                      DeclarationName MacroName,
+                                     Expression *ParentExpr,
                                      Delimiter Delim,
                                      llvm::ArrayRef<lex::Token> Toks);
 
@@ -3158,6 +3169,9 @@ public:
    void setSourceRange(SourceRange R) { SR = R; }
    void setDelim(Delimiter Delim) { MacroExpansionDecl::Delim = Delim; }
    void setMacroName(DeclarationName N) { MacroName = N; }
+
+   Expression* getParentExpr() const { return ParentExpr; }
+   void setParentExpr(Expression* V) { ParentExpr = V; }
 
    llvm::ArrayRef<lex::Token> getTokens() const
    {

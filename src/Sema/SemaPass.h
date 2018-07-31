@@ -777,6 +777,7 @@ public:
       Parsing = 0,
       Declaration,
       Sema,
+      Finalization,
       ILGen,
    };
 
@@ -1816,6 +1817,10 @@ private:
    // checks whether the parent expression of the given expression refers to
    // a namespace rather than a value and adjusts the expression appropriately
    ExprResult checkNamespaceRef(Expression *Expr);
+
+   ExprResult checkNamespaceRef(MacroExpansionExpr *Expr);
+   StmtResult checkNamespaceRef(MacroExpansionStmt *Stmt);
+   DeclResult checkNamespaceRef(MacroExpansionDecl *D);
 
    // MemberRef
 

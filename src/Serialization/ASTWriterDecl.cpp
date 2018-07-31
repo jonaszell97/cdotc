@@ -261,6 +261,7 @@ void ASTDeclWriter::visitMacroExpansionDecl(MacroExpansionDecl *D)
    Record.AddSourceRange(D->getSourceRange());
    Record.AddDeclarationName(D->getMacroName());
    Record.push_back(D->getDelim());
+   Record.AddStmt(D->getParentExpr());
 }
 
 void ASTDeclWriter::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
@@ -508,6 +509,7 @@ static void WriteMacroPattern(ASTRecordWriter &Record, MacroPattern *Pat)
    std::queue<ExpansionFragment*> EFQueue;
 
    Record.AddSourceLocation(Pat->getSourceLoc());
+   Record.AddSourceLocation(Pat->getExpansionLoc());
    Record.push_back(Pat->getSourceLength());
 
    auto PatID = getOrAssignID(PFMap, PFQueue, Pat->getPattern());

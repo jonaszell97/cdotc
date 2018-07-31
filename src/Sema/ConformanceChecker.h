@@ -25,6 +25,9 @@ namespace sema {
 void checkConformance(ast::SemaPass &SP, ast::RecordDecl *Rec);
 void checkConformanceToProtocol(ast::SemaPass &SP,
                                 ast::RecordDecl *Rec,
+                                ast::ProtocolDecl *Proto);
+void checkConformanceToProtocol(ast::SemaPass &SP,
+                                ast::RecordDecl *Rec,
                                 ast::ProtocolDecl *Proto,
                                 ast::ExtensionDecl *Ext);
 

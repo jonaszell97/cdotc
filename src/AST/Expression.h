@@ -106,7 +106,7 @@ public:
    inline Expression *ignoreParens() const;
    inline Expression *ignoreParensAndImplicitCasts() const;
 
-   Expression *maybeGetParentExpr() const;
+   Expression *getParentExpr() const;
    void setParentExpr(Expression *E);
 
    bool warnOnUnusedResult() const;
@@ -2122,12 +2122,7 @@ public:
    EnumCaseExpr(EmptyShell Empty);
 
    SourceLocation getSourceLoc() const { return PeriodLoc; }
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(PeriodLoc,
-                         SourceLocation(PeriodLoc.getOffset()
-                                        + getIdent().size()));
-   }
+   SourceRange getSourceRange() const;
 
    void setPeriodLoc(SourceLocation Loc) { PeriodLoc = Loc; }
 

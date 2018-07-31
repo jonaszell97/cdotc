@@ -15,13 +15,14 @@ namespace cdot {
 namespace support {
 
 struct Timer {
-   Timer(CompilerInstance &CI, StringRef PhaseName);
+   Timer(CompilerInstance &CI, StringRef PhaseName, bool Enable = true);
    ~Timer();
 
 private:
-   StringRef PhaseName;
+   std::string PhaseName;
    CompilerInstance &CI;
    long long StartTime;
+   bool Enable;
 };
 
 } // namespace support

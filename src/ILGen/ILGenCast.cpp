@@ -84,8 +84,23 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       return ILGen.CreateCopy(Val);
    case CastKind::Forward:
       return ILGen.Forward(Val);
-   case CastKind::ConversionOp:
-      return ILGen.CreateCall(Step.getConversionOp(), { Val });
+   case CastKind::ConversionOp: {
+      auto *M = Step.getConversionOp();
+      if (auto *I = dyn_cast<InitDecl>(M)) {
+         if (isa<EnumDecl>(I->getRecord())) {
+            auto *Alloc = Builder.CreateLoad(Builder.CreateAlloca(
+               I->getRecord()->getType()));
+
+            ILGen.CreateCall(I, { Alloc, Val });
+            return Alloc;
+         }
+
+         return Builder.CreateStructInit(cast<StructDecl>(I->getRecord()),
+                                         ILGen.getFunc(I), Val);
+      }
+
+      return ILGen.CreateCall(Step.getConversionOp(), Val);
+   }
    case CastKind::ToVoid:
       return nullptr;
    case CastKind::ToEmptyTuple:

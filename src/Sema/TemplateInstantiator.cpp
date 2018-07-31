@@ -1205,7 +1205,6 @@ RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
          continue;
 
       SP.registerExtension(ExtInst);
-      (void) SP.declareStmt(ExtInst);
    }
 
    return Inst;
@@ -2660,16 +2659,18 @@ MacroExpansionStmt*
 InstantiatorImpl::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
 {
    return MacroExpansionStmt::Create(Context, Stmt->getSourceRange(),
-                                     Stmt->getMacroName(), Stmt->getDelim(),
-                                     Stmt->getTokens());
+                                     Stmt->getMacroName(),
+                                     copyOrNull(Stmt->getParentExpr()),
+                                     Stmt->getDelim(), Stmt->getTokens());
 }
 
 MacroExpansionDecl*
 InstantiatorImpl::visitMacroExpansionDecl(MacroExpansionDecl *Decl)
 {
    return MacroExpansionDecl::Create(Context, Decl->getSourceRange(),
-                                     Decl->getMacroName(), Decl->getDelim(),
-                                     Decl->getTokens());
+                                     Decl->getMacroName(),
+                                     copyOrNull(Decl->getParentExpr()),
+                                     Decl->getDelim(), Decl->getTokens());
 }
 
 MixinExpr* InstantiatorImpl::visitMixinExpr(MixinExpr *Expr)
@@ -2896,10 +2897,14 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
 
    assert(!Template->isInstantiation() && "only instantiate base template!");
 
+   // Check if we are already instantiating a record.
+   bool AlreadyInstantiating = InstantiationDepth > 0;
+
    InstantiationDepthRAII IDR(*this);
    if (checkInstantiationDepth(Template))
       return RecordInstResult();
 
+   // Check if this instantiation exists within our current compilation.
    void *insertPos;
    if (auto R = SP.getContext().getRecordTemplateInstantiation(Template,
                                                                *templateArgs,
@@ -2911,6 +2916,7 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
       return R;
    }
 
+   // Check if this instantiation exists in an external module.
    if (auto *MF = Template->getModFile())
       MF->LoadAllDecls(*Template);
 
@@ -2933,9 +2939,7 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
 
    auto *InstScope = SP.getCurrentDecl();
 
-   bool AlreadyInstantiating = InstantiatingRecord;
-   InstantiatingRecord = true;
-
+   // Instantiate the record interface.
    InstantiatorImpl Instantiator(SP, *instInfo->templateArgs, Template);
    InstPrettyStackTraceEntry STE(Instantiator);
 
@@ -2947,8 +2951,6 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
    Inst->setIsInstantiation(true);
    SP.registerInstantiation(Inst, InstScope);
 
-   bool DoingDeclarations = SP.getStage() <= SemaPass::Stage::Declaration;
-
    // avoid infinite recursion when this template is instantiated within its
    // own definition
    SP.getContext().insertRecordTemplateInstantiation(Inst, insertPos);
@@ -2956,15 +2958,27 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
 
    Instantiator.ActOnDecl(Inst);
 
-   SP.declareRecordInstantiation(POI, Inst);
+   // Enqueue the instantiation for declaration and sema checking.
+   PendingInstantiations.push(Inst);
+   SP.registerDelayedInstantiation(Inst, POI);
 
    // there might be dependencies between nested instantiations, so we can't
    // calculate record sizes until we are not nested anymore
-   if (!AlreadyInstantiating && !DoingDeclarations && !SP.encounteredError()) {
-      SP.finalizeRecordDecls();
-   }
+   if (!AlreadyInstantiating && !SP.encounteredError()) {
+      while (!PendingInstantiations.empty()) {
+         auto *Next = PendingInstantiations.front();
+         PendingInstantiations.pop();
 
-   InstantiatingRecord = AlreadyInstantiating;
+         SP.ensureDeclared(Next);
+      }
+
+      IDR.pop();
+
+      if (SP.getStage() > SemaPass::Stage::Declaration
+            && SP.getStage() < SemaPass::Stage::Finalization) {
+         SP.finalizeRecordDecls();
+      }
+   }
 
    if (isNew)
       *isNew = true;

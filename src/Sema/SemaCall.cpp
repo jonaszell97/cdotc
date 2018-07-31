@@ -311,7 +311,7 @@ static MethodDecl *getEquivalentMethod(SemaPass &SP,
       if (!M)
          continue;
 
-      if (M->getBodyTemplate() == Orig)
+      if (M->getMethodID() == Orig->getMethodID())
          return M;
    }
 
@@ -708,12 +708,22 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
 
          break;
       }
+      case Decl::AliasDeclID: {
+         auto *Alias = cast<AliasDecl>(ND);
+         if (Alias->getType()->isMetaType()) {
+            auto UnderlyingTy = Alias->getType()->asMetaType()
+               ->getUnderlyingType();
+
+            return HandleStaticTypeCall(Call, TemplateArgs, UnderlyingTy);
+         }
+
+         LLVM_FALLTHROUGH;
+      }
       case Decl::FuncArgDeclID:
       case Decl::LocalVarDeclID:
       case Decl::GlobalVarDeclID:
       case Decl::FieldDeclID:
       case Decl::PropDeclID:
-      case Decl::AliasDeclID:
       case Decl::AssociatedTypeDeclID:
       case Decl::TemplateParamDeclID: {
          // this is semantically an anonymous call that happens to be spelled
@@ -869,6 +879,8 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
       }
 
       Call->setKind(CallKind::PrimitiveInitializer);
+      Call->setExprType(Ty);
+
       return Call;
    }
 
@@ -878,6 +890,8 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
 
    if (Call->getArgs().empty() && hasDefaultValue(Ty)) {
       Call->setKind(CallKind::PrimitiveInitializer);
+      Call->setExprType(Ty);
+
       return Call;
    }
 

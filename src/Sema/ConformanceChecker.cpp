@@ -116,7 +116,7 @@ private:
    void checkRecordCommon(RecordDecl *Rec, ProtocolDecl *Proto);
    void checkSingleDecl(RecordDecl *Rec, ProtocolDecl *Proto, NamedDecl *decl);
 
-   bool maybeInstantiateType(SourceType &needed);
+   bool maybeInstantiateType(SourceType &needed, NamedDecl *LookupDecl);
    bool checkTypeCompatibility(QualType given, SourceType &needed,
                                NamedDecl *LookupDecl);
 
@@ -146,15 +146,19 @@ void ConformanceCheckerImpl::genericError(RecordDecl *Rec, ProtocolDecl *P)
                Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
 }
 
-bool ConformanceCheckerImpl::maybeInstantiateType(SourceType &needed)
-{
-   if (!needed.isResolved() || needed->isUnknownAnyType()) {
+bool ConformanceCheckerImpl::maybeInstantiateType(SourceType &needed,
+                                                  NamedDecl *LookupDecl) {
+   if (!needed.isResolved() || needed->isDependentType()) {
       assert(needed.getTypeExpr() && needed.getTypeExpr()->isDependent());
 
       auto *TE = needed.getTypeExpr();
       auto &Instantiator = SP.getInstantiator();
 
-      SemaPass::DeclScopeRAII DSR(SP, Rec);
+      DeclContext *Ctx = dyn_cast<DeclContext>(LookupDecl);
+      if (!Ctx)
+         Ctx = Rec;
+
+      SemaPass::DeclScopeRAII DCR(SP, Ctx);
       auto Inst = Instantiator.InstantiateTypeExpr(Rec, TE);
 
       if (!Inst.hasValue()) {
@@ -177,7 +181,7 @@ bool ConformanceCheckerImpl::maybeInstantiateType(SourceType &needed)
 bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
                                                     SourceType &needed,
                                                     NamedDecl *LookupDecl) {
-   if (maybeInstantiateType(needed))
+   if (maybeInstantiateType(needed, LookupDecl))
       return true;
 
    if (needed->isDependentType()) {
@@ -594,17 +598,17 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
       if (!Impl) {
          if (AT->getActualType()) {
             SourceType ActualType = AT->getActualType();
-            if (maybeInstantiateType(ActualType))
+            if (maybeInstantiateType(ActualType, Rec))
                return;
 
             auto ATDecl =
                AssociatedTypeDecl::Create(SP.getContext(),
                                           AT->getSourceLoc(), nullptr,
                                           AT->getIdentifierInfo(),
-                                          AT->getActualType(), true);
+                                          ActualType, true);
 
             SP.getContext().getAssociatedType(ATDecl)
-               ->setCanonicalType(ATDecl->getActualType());
+               ->setCanonicalType(ActualType);
 
             SP.addDeclToContext(*Rec, ATDecl);
             return;
@@ -622,7 +626,7 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
    }
    else if (auto Prop = dyn_cast<PropDecl>(decl)) {
       auto FoundProp = SP.LookupSingle<PropDecl>(*Rec, Prop->getDeclName());
-      if (!FoundProp) {
+      if (!FoundProp || FoundProp->getRecord() != Rec) {
          if (checkIfProtocolDefaultImpl(Rec, Proto, Prop)) {
             return;
          }
@@ -673,6 +677,9 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       for (auto *D : Subscripts.allDecls()) {
          auto *FoundSub = cast<SubscriptDecl>(D);
+         if (FoundSub->getRecord() != Rec)
+            continue;
+
          auto GivenTy = FoundSub->getType().getResolvedType();
 
          SourceType NeededTy = S->getType();
@@ -740,6 +747,9 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       for (auto *D : Impls.allDecls()) {
          auto *Impl = cast<InitDecl>(D);
+         if (Impl->getRecord() != Rec)
+            continue;
+
          if (Impl->isFallible() && !Init->isFallible()) {
             auto &Cand = Candidates.emplace_back();
 
@@ -782,7 +792,7 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
                ArgsValid = false;
                break;
             }
-            else if (GivenArgs[i]->getLabel() != NeededArgs[i]->getLabel()) {
+            if (GivenArgs[i]->getLabel() != NeededArgs[i]->getLabel()) {
                auto &Cand = Candidates.emplace_back();
 
                Cand.Msg = note_incorrect_protocol_impl_method_label;
@@ -839,7 +849,7 @@ void ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
 
       for (auto Decl : MethodImpls.allDecls()) {
          auto Impl = dyn_cast<MethodDecl>(Decl);
-         if (!Impl)
+         if (!Impl || Impl->getRecord() != Rec)
             continue;
 
          if (Impl->throws() && !Method->throws()) {
@@ -996,9 +1006,14 @@ void checkConformance(SemaPass &SP, RecordDecl *Rec)
 }
 
 void checkConformanceToProtocol(SemaPass &SP, RecordDecl *Rec,
+                                ProtocolDecl *P) {
+   ConformanceCheckerImpl Checker(SP);
+   Checker.checkSingleConformance(Rec, P);
+}
+
+void checkConformanceToProtocol(SemaPass &SP, RecordDecl *Rec,
                                 ProtocolDecl *P,
-                                ExtensionDecl *Ext)
-{
+                                ExtensionDecl *Ext) {
    ConformanceCheckerImpl Checker(SP, Ext);
    Checker.checkSingleConformance(Rec, P);
 }

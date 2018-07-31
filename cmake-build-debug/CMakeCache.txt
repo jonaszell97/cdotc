@@ -20,6 +20,96 @@ CDot_BINARY_DIR:STATIC=/Users/Jonas/CDot/cmake-build-debug
 //Value Computed by CMake
 CDot_SOURCE_DIR:STATIC=/Users/Jonas/CDot
 
+//Path to a library.
+CLANG_clangARCMigrate_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangARCMigrate.a
+
+//Path to a library.
+CLANG_clangASTMatchers_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangASTMatchers.a
+
+//Path to a library.
+CLANG_clangAST_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangAST.a
+
+//Path to a library.
+CLANG_clangAnalysis_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangAnalysis.a
+
+//Path to a library.
+CLANG_clangApplyReplacements_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangApplyReplacements.a
+
+//Path to a library.
+CLANG_clangBasic_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangBasic.a
+
+//Path to a library.
+CLANG_clangChangeNamespace_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangChangeNamespace.a
+
+//Path to a library.
+CLANG_clangChecker_LIB:FILEPATH=CLANG_clangChecker_LIB-NOTFOUND
+
+//Path to a library.
+CLANG_clangCodeGen_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangCodeGen.a
+
+//Path to a library.
+CLANG_clangCrossTU_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangCrossTU.a
+
+//Path to a library.
+CLANG_clangDaemon_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangDaemon.a
+
+//Path to a library.
+CLANG_clangDriver_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangDriver.a
+
+//Path to a library.
+CLANG_clangDynamicASTMatchers_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangDynamicASTMatchers.a
+
+//Path to a library.
+CLANG_clangEdit_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangEdit.a
+
+//Path to a library.
+CLANG_clangFormat_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangFormat.a
+
+//Path to a library.
+CLANG_clangFrontendTool_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangFrontendTool.a
+
+//Path to a library.
+CLANG_clangFrontend_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangFrontend.a
+
+//Path to a library.
+CLANG_clangHandleCXX_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangHandleCXX.a
+
+//Path to a library.
+CLANG_clangIncludeFixerPlugin_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangIncludeFixerPlugin.a
+
+//Path to a library.
+CLANG_clangIncludeFixer_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangIncludeFixer.a
+
+//Path to a library.
+CLANG_clangIndex_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangIndex.a
+
+//Path to a library.
+CLANG_clangLex_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangLex.a
+
+//Path to a library.
+CLANG_clangMove_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangMove.a
+
+//Path to a library.
+CLANG_clangParse_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangParse.a
+
+//Path to a library.
+CLANG_clangQuery_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangQuery.a
+
+//Path to a library.
+CLANG_clangReorderFields_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangReorderFields.a
+
+//Path to a library.
+CLANG_clangRewriteFrontend_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangRewriteFrontend.a
+
+//Path to a library.
+CLANG_clangRewrite_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangRewrite.a
+
+//Path to a library.
+CLANG_clangSema_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangSema.a
+
+//Path to a library.
+CLANG_clangSerialization_LIB:FILEPATH=/usr/local/Cellar/llvm/6.0.0/lib/libclangSerialization.a
+
 //Path to a program.
 CMAKE_AR:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar
 
@@ -195,6 +285,9 @@ CMAKE_STRIP:FILEPATH=/Applications/Xcode.app/Contents/Developer/Toolchains/Xcode
 // during the make.  This is useful for debugging only. With Visual
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
+
+//The directory containing a CMake configuration file for Clang.
+Clang_DIR:PATH=/usr/local/Cellar/llvm/6.0.0/lib/cmake/clang
 
 //Path to a program.
 ProcessorCount_cmd_sysctl:FILEPATH=/usr/sbin/sysctl

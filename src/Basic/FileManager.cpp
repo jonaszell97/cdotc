@@ -5,6 +5,7 @@
 #include "FileManager.h"
 
 #include "AST/Decl.h"
+#include "FileUtils.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
@@ -366,6 +367,155 @@ FileManager::collectLineOffsetsForFile(SourceID sourceId,
    }
 
    return LineOffsets.emplace(sourceId, move(newLines)).first->second;
+}
+
+static bool isNewline(const char *str)
+{
+   switch (str[0]) {
+   case '\n': case '\r':
+      return true;
+   default:
+      return false;
+   }
+}
+
+void FileManager::dumpSourceLine(SourceLocation Loc)
+{
+   return dumpSourceRange(Loc);
+}
+
+void FileManager::dumpSourceRange(SourceRange SR)
+{
+   auto &out = llvm::outs();
+
+   auto loc = SR.getStart();
+   while (auto AliasLoc = getAliasLoc(loc)) {
+      loc = AliasLoc;
+   }
+   while (auto Import = getImportForLoc(loc)) {
+      loc = Import->getSourceLoc();
+   }
+
+   while (auto Exp = getMacroExpansionLoc(loc)) {
+      auto diff = loc.getOffset() - Exp->BaseOffset;
+      loc = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+   }
+
+   size_t ID = getSourceId(loc);
+   auto File = getOpenedFile(ID);
+
+   llvm::MemoryBuffer *Buf = File.Buf;
+   size_t srcLen = Buf->getBufferSize();
+   const char *src = Buf->getBufferStart();
+
+   // show file name, line number and column
+   auto lineAndCol = getLineAndCol(loc, Buf);
+   out << "(" << fs::getFileNameAndExtension(File.FileName)
+       << ":" << lineAndCol.line << ":" << lineAndCol.col << ")\n";
+
+   unsigned errLineNo = lineAndCol.line;
+
+   // only source ranges that are on the same line as the "main index" are shown
+   unsigned errIndex     = loc.getOffset() - File.BaseOffset;
+   unsigned newlineIndex = errIndex;
+
+   // find offset of first newline before the error index
+   for (; newlineIndex > 0; --newlineIndex) {
+      if (isNewline(src + newlineIndex))
+         break;
+   }
+
+   // find offset of first newline after error index
+   unsigned lineEndIndex = errIndex;
+   for (; lineEndIndex < srcLen; ++lineEndIndex) {
+      if (isNewline(src + lineEndIndex))
+         break;
+   }
+
+   unsigned Len;
+   if (lineEndIndex == newlineIndex) {
+      Len = 0;
+   }
+   else {
+      Len = lineEndIndex - newlineIndex - 1;
+   }
+
+   llvm::StringRef ErrLine(Buf->getBufferStart() + newlineIndex + 1, Len);
+
+   // show carets for any given single source location, and tildes for source
+   // ranges (but only on the error line)
+   std::string Markers;
+
+   Markers.resize(ErrLine.size());
+   std::fill(Markers.begin(), Markers.end(), ' ');
+
+   auto Start = SR.getStart();
+   auto End   = SR.getEnd();
+
+   do {
+      auto Diff = End.getOffset() - Start.getOffset();
+      while (auto AliasLoc = getAliasLoc(Start)) {
+         Start = AliasLoc;
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
+      while (auto Import = getImportForLoc(Start)) {
+         Start = Import->getSourceLoc();
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
+      while (auto Exp = getMacroExpansionLoc(Start)) {
+         auto diff = Start.getOffset() - Exp->BaseOffset;
+         Start = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+
+         if (End)
+            End = SourceLocation(Start.getOffset() + Diff);
+      }
+
+      // single source location, show caret
+      if (!End) {
+         unsigned offset = Start.getOffset() - File.BaseOffset;
+         if (lineEndIndex <= offset || newlineIndex >= offset) {
+            // source location is on a different line
+            break;
+         }
+
+         unsigned offsetOnLine = offset - newlineIndex - 1;
+         Markers[offsetOnLine] = '^';
+      }
+      else {
+         auto BeginOffset = Start.getOffset() - File.BaseOffset;
+         auto EndOffset = End.getOffset() - File.BaseOffset;
+
+         unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
+         unsigned EndOffsetOnLine = std::min(EndOffset, lineEndIndex)
+                                    - newlineIndex - 1;
+
+         if (EndOffsetOnLine > lineEndIndex)
+            break;
+
+         assert(EndOffsetOnLine >= BeginOffsetOnLine
+                && "invalid source range!");
+
+         while (1) {
+            Markers[EndOffsetOnLine] = '~';
+            if (EndOffsetOnLine-- == BeginOffsetOnLine)
+               break;
+         }
+
+         Markers[BeginOffsetOnLine] = '^';
+      }
+   } while(0);
+
+   // display line number to the left of the source
+   std::string LinePrefix;
+   LinePrefix += std::to_string(errLineNo);
+   LinePrefix += " | ";
+
+   out << LinePrefix << ErrLine << "\n"
+       << std::string(LinePrefix.size(), ' ') << Markers << "\n";
 }
 
 } // namespace fs

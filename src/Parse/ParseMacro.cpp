@@ -5,6 +5,7 @@
 #include "Parser.h"
 
 #include "Basic/FileUtils.h"
+#include "ClangImporter/ClangImporter.h"
 #include "Lex/Lexer.h"
 #include "Sema/SemaPass.h"
 #include "Support/StringSwitch.h"
@@ -714,6 +715,7 @@ MacroPattern* MacroParser::parseMacroPattern()
          return nullptr;
    }
 
+   SourceLocation ExpansionLoc = currentTok().getSourceLoc();
    advance(false, true);
 
    unsigned Begin = currentTok().getOffset();
@@ -725,8 +727,9 @@ MacroPattern* MacroParser::parseMacroPattern()
    MacroVarDecls.clear();
 
    unsigned End = P.currentTok().getOffset() + P.currentTok().getLength();
-   return MacroPattern::Create(SP.getContext(), Loc,
-                               Pattern, ExpansionFragments,
+   return MacroPattern::Create(SP.getContext(),
+                               Loc, Pattern,
+                               ExpansionLoc, ExpansionFragments,
                                End - Begin);
 }
 
@@ -800,9 +803,7 @@ ParseResult Parser::parseMacro()
                                  MacroName, Delim, Patterns);
 
    Decl->setAccessLoc(CurDeclAttrs.AccessLoc);
-   SP.addDeclToContext(SP.getDeclContext(), Decl);
-
-   return Decl;
+   return ActOnDecl(Decl);
 }
 
 ParseResult Parser::parseMacroExpansionExpr(Expression *ParentExpr)
@@ -872,7 +873,7 @@ ParseResult Parser::parseMacroExpansionExpr(Expression *ParentExpr)
                                      ParentExpr);
 }
 
-ParseResult Parser::parseMacroExpansionStmt()
+ParseResult Parser::parseMacroExpansionStmt(Expression *ParentExpr)
 {
    auto BeginLoc = currentTok().getSourceLoc();
    DeclarationName MacroName =
@@ -935,10 +936,11 @@ ParseResult Parser::parseMacroExpansionStmt()
    Toks.emplace_back(tok::eof);
 
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
-   return MacroExpansionStmt::Create(Context, SR, MacroName, Delim, Toks);
+   return MacroExpansionStmt::Create(Context, SR, MacroName, ParentExpr,
+                                     Delim, Toks);
 }
 
-ParseResult Parser::parseMacroExpansionDecl()
+ParseResult Parser::parseMacroExpansionDecl(Expression *ParentExpr)
 {
    auto BeginLoc = currentTok().getSourceLoc();
    DeclarationName MacroName =
@@ -1001,7 +1003,9 @@ ParseResult Parser::parseMacroExpansionDecl()
    Toks.emplace_back(tok::eof);
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
 
-   auto Decl = MacroExpansionDecl::Create(Context, SR, MacroName, Delim, Toks);
+   auto Decl = MacroExpansionDecl::Create(Context, SR, MacroName, ParentExpr,
+                                          Delim, Toks);
+
    return ActOnDecl(Decl);
 }
 
@@ -1345,8 +1349,13 @@ class MacroExpander {
    VariableMap &VarMap;
    Parser::ExpansionKind Kind;
 
+   /// The source location where this macro was expanded.
    SourceLocation ExpandedFrom;
+
+   /// The base offset of the macro pattern.
    unsigned BaseOffset;
+
+   /// The assigned artificial offset for this macro expansion.
    unsigned ExpansionOffset;
 
    bool expandInto(ExpansionFragment *Frag,
@@ -1364,12 +1373,14 @@ class MacroExpander {
 public:
    MacroExpander(SemaPass &SP, MacroPattern *Pat, VariableMap &VarMap,
                  Parser::ExpansionKind Kind,
-                 SourceLocation ExpandedFrom, MacroDecl *M)
+                 SourceLocation ExpandedFrom,
+                 MacroDecl *M)
       : SP(SP), Pat(Pat), VarMap(VarMap), Kind(Kind),
         ExpandedFrom(ExpandedFrom)
    {
+      auto &FileMgr = SP.getCompilationUnit().getFileMgr();
       BaseOffset = Pat->getSourceLoc().getOffset();
-      ExpansionOffset = SP.getCompilationUnit().getFileMgr()
+      ExpansionOffset = FileMgr
                      .createMacroExpansion(ExpandedFrom, Pat->getSourceLoc(),
                                            Pat->getSourceLength() + 1,
                                            M->getDeclName()).BaseOffset;
@@ -1420,19 +1431,24 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
             }
          }
          else {
-            Vec.emplace_back(SOD.getDecl(), makeSourceLoc(Frag->getLoc()));
+            Vec.emplace_back(SOD.getDecl(),
+                             makeSourceLoc(Frag->getLoc()));
          }
 
          break;
       }
       case MacroVariable::TokenTree: {
          auto &Toks = Var.getTokens()[idx];
+         auto VarLoc = makeSourceLoc(Frag->getLoc());
+
          for (auto &Tok : Toks)
-            Vec.emplace_back(Tok, makeSourceLoc(Tok.getSourceLoc()));
+            Vec.emplace_back(Tok, VarLoc);
 
          break;
       }
       case MacroVariable::Identifier: {
+         auto VarLoc = makeSourceLoc(Frag->getLoc());
+
          // concatenate immediately adjacent identifiers
          if (!Vec.empty() && Vec.back().oneOf(tok::ident, tok::op_ident)) {
             auto LastTok = Vec.back();
@@ -1443,12 +1459,11 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
             auto *II = &SP.getContext().getIdentifiers().get(concat);
             Vec.pop_back();
 
-            Vec.emplace_back(II, makeSourceLoc(LastTok.getSourceLoc()),
-                             LastTok.getKind());
+            Vec.emplace_back(II, VarLoc, LastTok.getKind());
          }
          else {
             auto &Tok = Var.getIdents()[idx];
-            Vec.emplace_back(Tok, makeSourceLoc(Tok.getSourceLoc()));
+            Vec.emplace_back(Tok, VarLoc);
          }
 
          break;
@@ -1560,12 +1575,21 @@ ParseResult Parser::expandMacro(SemaPass &SP,
       return ParseError();
    }
 
-   return MacroExpander(SP, Match, VarMap, Kind, SOD.getSourceLoc(), Macro)
-      .expand();
+   return MacroExpander(SP, Match, VarMap, Kind,
+                        SOD.getSourceLoc(), Macro).expand();
 }
 
 enum class BuiltinMacro {
-   none, stringify, include_str, include,
+   none,
+
+   // Utility
+   stringify,
+
+   // Text inclusion
+   include_str, include,
+
+   // Clang inclusion
+   include_c, include_cxx, include_system_header,
 };
 
 std::pair<ParseResult, bool>
@@ -1579,6 +1603,9 @@ Parser::checkBuiltinMacro(SemaPass &SP,
          .Case("stringify", BuiltinMacro::stringify)
          .Case("include_str", BuiltinMacro::include_str)
          .Case("include", BuiltinMacro::include)
+         .Case("include_c", BuiltinMacro::include_c)
+         .Case("include_cxx", BuiltinMacro::include_cxx)
+         .Case("include_system_header", BuiltinMacro::include_system_header)
          .Default(BuiltinMacro::none);
 
    switch (MacroKind) {
@@ -1652,11 +1679,34 @@ Parser::checkBuiltinMacro(SemaPass &SP,
 
       return { parser.parseWithKind(SOD.getSourceLoc(), Kind, true), true };
    }
+   case BuiltinMacro::include_c:
+   case BuiltinMacro::include_cxx:
+   case BuiltinMacro::include_system_header: {
+      ClangImporter &Importer = SP.getCompilationUnit().getClangImporter();
+
+      if (Tokens.size() != 2 || !Tokens.front().is(tok::stringliteral)) {
+         SP.diagnose(err_generic_error, "expected string literal");
+         return { ParseError(), true };
+      }
+
+      auto FileName = Tokens.front().getText();
+      if (MacroKind == BuiltinMacro::include_c) {
+         Importer.importCModule(FileName, &SP.getDeclContext());
+      }
+      else if (MacroKind == BuiltinMacro::include_system_header) {
+         Importer.importSystemHeader(FileName, &SP.getDeclContext());
+      }
+      else {
+         Importer.importCXXModule(FileName, &SP.getDeclContext());
+      }
+
+      return { ParseError(), true };
+   }
    }
 }
 
-ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind,
-                                  bool IsIncludeMacro) {
+ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind, bool)
+{
    ParseResult Result;
    switch (Kind) {
    case Parser::ExpansionKind::Expr:
@@ -1665,7 +1715,7 @@ ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind,
       advance();
       if (!currentTok().is(tok::eof))
          SP.diagnose(err_leftover_tokens_after_parsing,
-                     currentTok().getSourceLoc(), (int)Kind);
+                     Loc, (int)Kind);
 
       break;
    case Parser::ExpansionKind::Stmt: {

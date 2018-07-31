@@ -28,7 +28,7 @@ SourceRange Expression::getEllipsisRange() const
    return SourceRange(EllipsisLoc, SourceLocation(EllipsisLoc.getOffset() + 2));
 }
 
-Expression* Expression::maybeGetParentExpr() const
+Expression* Expression::getParentExpr() const
 {
    switch (typeID) {
    case IdentifierRefExprID:
@@ -1467,12 +1467,29 @@ EnumCaseExpr::EnumCaseExpr(SourceLocation PeriodLoc,
                            ASTVector<Expression*> &&args)
    : IdentifiedExpr(EnumCaseExprID, Case->getDeclName()),
      PeriodLoc(PeriodLoc), args(std::move(args)), Case(Case)
-{}
+{
+
+}
 
 EnumCaseExpr::EnumCaseExpr(EmptyShell)
    : IdentifiedExpr(EnumCaseExprID, nullptr),
      Case(nullptr)
 {}
+
+SourceRange EnumCaseExpr::getSourceRange() const
+{
+   unsigned Length;
+   if (Case) {
+      Length = Case->getDeclName().getIdentifierInfo()->getLength();
+   }
+   else {
+      Length = getIdentInfo()->getLength();
+   }
+
+   return SourceRange(PeriodLoc,
+                      SourceLocation(PeriodLoc.getOffset()
+                                     + Length));
+}
 
 EnumDecl* EnumCaseExpr::getEnum() const
 {

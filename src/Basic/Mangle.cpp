@@ -788,7 +788,7 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
       ++NumParams;
    }
 
-   if (CD) {
+   if (CD && !CD->isExternC() && !CD->isExternCXX()) {
       auto Args = CD->getArgs();
       for (unsigned i = 0; i < NumParams; ++i) {
          IdentifierInfo *Label;

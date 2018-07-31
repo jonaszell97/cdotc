@@ -383,6 +383,9 @@ DeclResult SemaPass::visitProtocolDecl(ProtocolDecl *P)
 
 void SemaPass::calculateRecordSize(RecordDecl *R)
 {
+   if (R->getFullName()=="Option<String>") {
+       int i=3; //CBP
+   }
    if (R->isInvalid())
       return;
 
@@ -460,9 +463,6 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
       unsigned maxSize = 0;
       unsigned short maxAlign = 1;
 
-      bool AllEquatable = true;
-      bool AllCopyable  = true;
-
       for (auto C : E->getCases()) {
          unsigned caseSize = 0;
          unsigned short caseAlign = 1;
@@ -483,9 +483,6 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
 
             NeedsRetainOrRelease |= this->NeedsRetainOrRelease(ty);
             trivialLayout &= TI.isTriviallyCopyable(ty);
-
-            AllEquatable &= IsEquatableType(Val->getType());
-            AllCopyable &= IsCopyableType(Val->getType());
          }
 
          C->setSize(caseSize);
@@ -502,24 +499,6 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
       occupiedBytes += maxSize;
 
       alignment = std::max(TI.getAlignOfType(E->getRawType()), maxAlign);
-
-      if (AllEquatable) {
-         if (auto Equatable = getEquatableDecl()) {
-            Context.getConformanceTable()
-                   .addExplicitConformance(Context, E, Equatable);
-
-            addDependency(E, Equatable);
-         }
-      }
-
-      if (AllCopyable) {
-         if (auto Copyable = getCopyableDecl()) {
-            Context.getConformanceTable()
-                   .addExplicitConformance(Context, E, Copyable);
-
-            addDependency(E, Copyable);
-         }
-      }
    }
 
    if (!occupiedBytes) {

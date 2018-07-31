@@ -303,7 +303,13 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
          return HandleBuiltinTypeMember(Ident, CtxTy);
       }
 
-      Ident->setDeclCtx(CtxTy->stripReference()->getRecord());
+      auto *R = CtxTy->stripReference()->getRecord();
+      if (!ensureDeclared(R)) {
+         Ident->setExprType(Context.getRecordType(R));
+         return Ident;
+      }
+
+      Ident->setDeclCtx(R);
    }
 
    MultiLevelLookupResult MultiLevelResult;
@@ -1174,20 +1180,21 @@ IdentifierRefExpr *SemaPass::wouldBeValidIdentifier(SourceLocation Loc,
    return expr;
 }
 
-ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
+template<class T>
+static bool checkNamespaceRefCommon(SemaPass &SP, T *Expr)
 {
-   Expression *ParentExpr = Expr->maybeGetParentExpr();
+   Expression *ParentExpr = Expr->getParentExpr();
    if (!ParentExpr)
-      return Expr;
+      return false;
 
    if (auto *Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
       Ident->setAllowNamespaceRef(true);
    }
 
-   auto SemaRes = visitExpr(ParentExpr);
+   auto SemaRes = SP.visitExpr(ParentExpr);
    if (!SemaRes) {
       Expr->copyStatusFlags(ParentExpr);
-      return ExprError();
+      return true;
    }
 
    ParentExpr = SemaRes.get();
@@ -1208,7 +1215,7 @@ ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
 
    if (!Ctx) {
       Expr->copyStatusFlags(ParentExpr);
-      return Expr;
+      return false;
    }
 
    if (auto Ident = dyn_cast<IdentifierRefExpr>(Expr)) {
@@ -1223,7 +1230,84 @@ ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
       Expr->copyStatusFlags(ParentExpr);
    }
 
+   return false;
+}
+
+ExprResult SemaPass::checkNamespaceRef(Expression *Expr)
+{
+   if (checkNamespaceRefCommon(*this, Expr))
+      return ExprError();
+
    return Expr;
+}
+
+ExprResult SemaPass::checkNamespaceRef(MacroExpansionExpr *Expr)
+{
+   Expression *ParentExpr = Expr->getParentExpr();
+   if (!ParentExpr)
+      return Expr;
+
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
+      Ident->setAllowNamespaceRef(true);
+   }
+
+   auto SemaRes = visitExpr(ParentExpr);
+   if (!SemaRes) {
+      Expr->copyStatusFlags(ParentExpr);
+      return ExprError();
+   }
+
+   ParentExpr = SemaRes.get();
+   Expr->setParentExpr(ParentExpr);
+   Expr->copyStatusFlags(ParentExpr);
+
+   return Expr;
+}
+
+StmtResult SemaPass::checkNamespaceRef(MacroExpansionStmt *Stmt)
+{
+   Expression *ParentExpr = Stmt->getParentExpr();
+   if (!ParentExpr)
+      return Stmt;
+
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
+      Ident->setAllowNamespaceRef(true);
+   }
+
+   auto SemaRes = visitExpr(ParentExpr);
+   if (!SemaRes) {
+      Stmt->copyStatusFlags(ParentExpr);
+      return StmtError();
+   }
+
+   ParentExpr = SemaRes.get();
+   Stmt->setParentExpr(ParentExpr);
+   Stmt->copyStatusFlags(ParentExpr);
+
+   return Stmt;
+}
+
+DeclResult SemaPass::checkNamespaceRef(MacroExpansionDecl *D)
+{
+   Expression *ParentExpr = D->getParentExpr();
+   if (!ParentExpr)
+      return D;
+
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
+      Ident->setAllowNamespaceRef(true);
+   }
+
+   auto SemaRes = visitExpr(ParentExpr);
+   if (!SemaRes) {
+      D->copyStatusFlags(ParentExpr);
+      return DeclError();
+   }
+
+   ParentExpr = SemaRes.get();
+   D->setParentExpr(ParentExpr);
+   D->copyStatusFlags(ParentExpr);
+
+   return D;
 }
 
 ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr,
@@ -1664,6 +1748,10 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
 ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 {
    EnumDecl *E = Expr->getEnum();
+   if (E) {
+      ensureDeclared(E);
+   }
+
    if (!E) {
       auto ty = Expr->getContextualType();
       if (!ty) {

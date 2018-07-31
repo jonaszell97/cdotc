@@ -2581,6 +2581,20 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr)
       V = HandleIntrinsic(Expr);
       return V;
    }
+   if (Expr->getKind() == CallKind::PrimitiveInitializer) {
+      if (Expr->getReturnType()->isVoidType()) {
+         // Sema should have made sure that the value is never used
+         V = nullptr;
+      }
+      else if (Expr->getArgs().empty()) {
+         V = getDefaultValue(Expr->getExprType());
+      }
+      else {
+         V = visit(Expr->getArgs().front());
+      }
+
+      return V;
+   }
 
    ExprCleanupRAII CleanupScope(*this);
    class SmallVector<Value*, 4> args;
@@ -2658,75 +2672,62 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr)
    Builder.SetDebugLoc(Expr->getSourceLoc());
 
    switch (Expr->getKind()) {
-      case CallKind::Unknown:
-      default:
-         llvm_unreachable("bad call kind!");
-      case CallKind::PrimitiveInitializer:
-         if (Expr->getReturnType()->isVoidType()) {
-            // Sema should have made sure that the value is never used
-            V = nullptr;
-         }
-         else if (args.empty()) {
-            V = getDefaultValue(Expr->getExprType());
-         }
-         else {
-            V = args.front();
+   case CallKind::Unknown:
+   default:
+      llvm_unreachable("bad call kind!");
+   case CallKind::UnsafeTupleGet: {
+      auto tup = visit(Expr->getParentExpr());
+      auto idx = args.front();
+
+      V = HandleUnsafeTupleGet(tup, idx,
+                               Expr->getReturnType()->asTupleType());
+
+      break;
+   }
+   case CallKind::InitializerCall: {
+      auto method = cast<InitDecl>(Expr->getFunc());
+      auto R = method->getRecord();
+
+      auto Init = getFunc(method);
+      assert(isa<il::Method>(Init));
+
+      if (Expr->isDotInit()) {
+         if (method->isFallible()) {
+            args[0] = &getCurrentFn()->getEntryBlock()->getArgs().front();
          }
 
-         break;
-      case CallKind::UnsafeTupleGet: {
-         auto tup = visit(Expr->getParentExpr());
-         auto idx = args.front();
-
-         V = HandleUnsafeTupleGet(tup, idx,
-                                  Expr->getReturnType()->asTupleType());
-
-         break;
+         V = CreateCall(method, args, Expr);
       }
-      case CallKind::InitializerCall: {
-         auto method = cast<InitDecl>(Expr->getFunc());
-         auto R = method->getRecord();
+      else if (auto *E = dyn_cast<EnumDecl>(R)) {
+         auto *Alloc= Builder.CreateLoad(Builder.CreateAlloca(E->getType()));
+         args.insert(args.begin(), Alloc);
 
-         auto Init = getFunc(method);
-         assert(isa<il::Method>(Init));
+         CreateCall(method, args, Expr);
 
-         if (Expr->isDotInit()) {
-            if (method->isFallible()) {
-               args[0] = &getCurrentFn()->getEntryBlock()->getArgs().front();
-            }
-
-            V = CreateCall(method, args, Expr);
-         }
-         else if (auto *E = dyn_cast<EnumDecl>(R)) {
-            auto *Alloc= Builder.CreateLoad(Builder.CreateAlloca(E->getType()));
-            args.insert(args.begin(), Alloc);
-
-            CreateCall(method, args, Expr);
-
-            V = Alloc;
-         }
-         else {
-            V = Builder.CreateStructInit(cast<StructDecl>(R),
-                                         cast<il::Method>(Init),
-                                         args, method->isFallible(),
-                                         method->getOptionTy());
-         }
-
-         break;
+         V = Alloc;
       }
-      case CallKind::UnionInitializer: {
-         assert(args.size() == 1);
+      else {
+         V = Builder.CreateStructInit(cast<StructDecl>(R),
+                                      cast<il::Method>(Init),
+                                      args, method->isFallible(),
+                                      method->getOptionTy());
+      }
 
-         V = Builder.CreateUnionInit(Expr->getUnion(), args.front());
-         break;
-      }
-      case CallKind::MethodCall:
-      case CallKind::NamedFunctionCall:
-      case CallKind::StaticMethodCall:
-      case CallKind::CallOperator: {
-         V = CreateCall(Expr->getFunc(), args, Expr, Expr->isDirectCall());
-         break;
-      }
+      break;
+   }
+   case CallKind::UnionInitializer: {
+      assert(args.size() == 1);
+
+      V = Builder.CreateUnionInit(Expr->getUnion(), args.front());
+      break;
+   }
+   case CallKind::MethodCall:
+   case CallKind::NamedFunctionCall:
+   case CallKind::StaticMethodCall:
+   case CallKind::CallOperator: {
+      V = CreateCall(Expr->getFunc(), args, Expr, Expr->isDirectCall());
+      break;
+   }
    }
 
    CleanupScope.pop();

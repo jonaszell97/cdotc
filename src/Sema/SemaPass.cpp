@@ -202,10 +202,10 @@ bool SemaPass::doDeclarations()
 
 bool SemaPass::doSema()
 {
-   if (stage >= Stage::Sema)
+   if (stage >= Stage::Finalization)
       return false;
 
-   stage = Stage::Sema;
+   stage = Stage::Finalization;
 
    // look for circular dependencies in struct layouts and global variable
    // values, abort if any are found
@@ -214,6 +214,8 @@ bool SemaPass::doSema()
 
    if (finalizeRecordDecls())
       return true;
+
+   stage = Stage::Sema;
 
    visitDeclContext(&getCompilationUnit().getGlobalDeclCtx());
    return visitDelayedInstantiations();

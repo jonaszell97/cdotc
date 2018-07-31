@@ -26,6 +26,7 @@ namespace cdot {
 
 using std::move;
 
+class ClangImporter;
 class Module;
 
 namespace ast {
@@ -50,6 +51,10 @@ namespace module {
 namespace serial {
    class IncrementalCompilationManager;
 } // namespace serial
+
+namespace support {
+   struct Timer;
+} // namespace support
 
 enum class OutputKind : unsigned char {
    Executable,
@@ -227,6 +232,8 @@ public:
    fs::FileManager &getFileMgr() const { return *FileMgr; }
    module::ModuleManager &getModuleMgr() { return *ModuleManager; }
 
+   ClangImporter &getClangImporter();
+
    bool doIncrementalCompilation() const { return IncMgr != nullptr; }
    serial::IncrementalCompilationManager *getIncMgr() const
    { return IncMgr.get(); }
@@ -253,10 +260,9 @@ public:
       return SourceModuleMap[SourceID];
    }
 
-   void addPhaseDuration(StringRef PhaseName,
-                         long long DurationMillis);
-
    void displayPhaseDurations(llvm::raw_ostream &OS) const;
+
+   friend struct support::Timer;
 
 private:
    /// The options for this compilation.
@@ -286,6 +292,9 @@ private:
    /// The compilation's module manager
    std::unique_ptr<module::ModuleManager> ModuleManager;
 
+   /// The importer for clang modules.
+   std::unique_ptr<cdot::ClangImporter> ClangImporter;
+
    /// The compilation's LLVM-IR generator
    std::unique_ptr<il::IRGen> IRGen;
 
@@ -301,8 +310,11 @@ private:
    /// Manager for incremental compilation
    std::unique_ptr<serial::IncrementalCompilationManager> IncMgr;
 
-   /// Duration of compilation phases.
-   SmallVector<std::pair<StringRef, long long>, 0> PhaseDurations;
+   /// Number of currently active timers.
+   unsigned NumTimers = 0;
+
+   /// String representation of phase durations.
+   std::string TimerStr;
 
    /// The base module for this compilation.
    Module *CompilationModule = nullptr;

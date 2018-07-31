@@ -40,6 +40,13 @@ public:
 
    CharResult parseCharacter();
 
+   struct StringResult {
+      std::string Str;
+      bool Malformed;
+   };
+
+   StringResult parseString();
+
 private:
    llvm::StringRef Str;
 

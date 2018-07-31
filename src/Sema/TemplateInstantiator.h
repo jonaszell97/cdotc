@@ -13,6 +13,8 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
+#include <queue>
+
 namespace cdot {
 
 struct Variant;
@@ -149,8 +151,8 @@ public:
 
 private:
    ast::SemaPass &SP;
-   bool InstantiatingRecord = false;
    unsigned InstantiationDepth = 0;
+   std::queue<ast::NamedDecl*> PendingInstantiations;
 
    struct InstantiationDepthRAII {
       InstantiationDepthRAII(TemplateInstantiator &Inst)
@@ -161,11 +163,20 @@ private:
 
       ~InstantiationDepthRAII()
       {
+         if (!Popped)
+            pop();
+      }
+
+      void pop()
+      {
+         assert(!Popped && "popping twice!");
+         Popped = true;
          --Inst.InstantiationDepth;
       }
 
    private:
       TemplateInstantiator &Inst;
+      bool Popped = false;
    };
 
    bool checkInstantiationDepth(ast::NamedDecl *Inst);

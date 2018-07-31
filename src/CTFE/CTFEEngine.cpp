@@ -2764,6 +2764,8 @@ ctfe::Value EngineImpl::visitIndirectCallInst(IndirectCallInst const& I)
 
 ctfe::Value EngineImpl::visitLambdaCallInst(LambdaCallInst const& I)
 {
+   llvm::outs()<<"FIXME!\n";
+   return ctfe::Value();
    auto lambda = getCtfeValue(I.getLambda());
    auto fn = getLambdaFuncPtr(lambda);
    auto env = getLambdaEnvironment(lambda);

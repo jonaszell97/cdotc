@@ -430,8 +430,12 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
             auto BaseOffset = (unsigned) Record.readInt();
 
             auto OpenFile = FileMgr.openFile(FileName);
-            SourceIDSubstitutionOffsets[SourceID]
-               = OpenFile.BaseOffset - BaseOffset;
+
+            // Check if the file doesn't exist on disk anymore.
+            if (OpenFile.Buf) {
+               SourceIDSubstitutionOffsets[SourceID]
+                  = OpenFile.BaseOffset - BaseOffset;
+            }
          }
 
          break;

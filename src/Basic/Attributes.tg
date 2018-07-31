@@ -66,6 +66,10 @@ def Testable : DeclAttr<"testable", [Decl]> {
     Visit = Never
 }
 
+def CompileTime : DeclAttr<"compiletime", [Decl]> {
+    Visit = Never
+}
+
 def VersionDecl : DeclAttr<"version", [Decl]> {
     Visit = BeforeDeclaration
     Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]

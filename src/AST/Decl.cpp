@@ -2161,9 +2161,11 @@ ExpansionFragment::Create(ASTContext &C,
 
 MacroPattern::MacroPattern(SourceLocation Loc,
                            PatternFragment* Pattern,
+                           SourceLocation ExpansionLoc,
                            llvm::ArrayRef<ExpansionFragment *> Expansion,
                            unsigned SourceLength)
-   : Loc(Loc), Pattern(Pattern), SourceLength(SourceLength),
+   : Loc(Loc), ExpansionLoc(ExpansionLoc),
+     Pattern(Pattern), SourceLength(SourceLength),
      NumExpansionFragments((unsigned)Expansion.size())
 {
    std::copy(Expansion.begin(), Expansion.end(),
@@ -2173,13 +2175,15 @@ MacroPattern::MacroPattern(SourceLocation Loc,
 MacroPattern* MacroPattern::Create(ASTContext &C,
                                    SourceLocation Loc,
                                    PatternFragment* Pattern,
+                                   SourceLocation ExpansionLoc,
                                    llvm::ArrayRef<ExpansionFragment*>Expansion,
                                    unsigned SourceLength){
    void *Mem = C.Allocate(sizeof(MacroPattern)
                           + sizeof(ExpansionFragment*) * Expansion.size(),
                           alignof(MacroPattern));
 
-   return new(Mem) MacroPattern(Loc, Pattern, Expansion, SourceLength);
+   return new(Mem) MacroPattern(Loc, Pattern, ExpansionLoc, Expansion,
+                                SourceLength);
 }
 
 SourceRange MacroPattern::getSourceRange() const
@@ -2233,11 +2237,12 @@ MacroDecl *MacroDecl::CreateEmpty(ASTContext &C, unsigned N)
 
 MacroExpansionDecl::MacroExpansionDecl(SourceRange SR,
                                        DeclarationName MacroName,
+                                       Expression *ParentExpr,
                                        Delimiter Delim,
                                        llvm::ArrayRef<lex::Token> Toks)
    : Decl(MacroExpansionDeclID),
      SR(SR), Delim(Delim), MacroName(MacroName),
-     NumTokens((unsigned)Toks.size())
+     NumTokens((unsigned)Toks.size()), ParentExpr(ParentExpr)
 {
    std::copy(Toks.begin(), Toks.end(), getTrailingObjects<lex::Token>());
 }
@@ -2245,17 +2250,18 @@ MacroExpansionDecl::MacroExpansionDecl(SourceRange SR,
 MacroExpansionDecl* MacroExpansionDecl::Create(ASTContext &C,
                                                SourceRange SR,
                                                DeclarationName MacroName,
+                                               Expression *ParentExpr,
                                                Delimiter Delim,
                                                llvm::ArrayRef<lex::Token> Toks){
    void *Mem = C.Allocate(totalSizeToAlloc<lex::Token>(Toks.size()),
                           alignof(MacroExpansionDecl));
 
-   return new(Mem) MacroExpansionDecl(SR, MacroName, Delim, Toks);
+   return new(Mem) MacroExpansionDecl(SR, MacroName, ParentExpr, Delim, Toks);
 }
 
 MacroExpansionDecl::MacroExpansionDecl(EmptyShell, unsigned N)
    : Decl(MacroExpansionDeclID),
-     Delim(Delimiter::Paren), NumTokens(N)
+     Delim(Delimiter::Paren), NumTokens(N), ParentExpr(nullptr)
 {}
 
 MacroExpansionDecl *MacroExpansionDecl::CreateEmpty(ASTContext &C, unsigned N)
