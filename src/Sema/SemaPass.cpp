@@ -1549,8 +1549,6 @@ DeclResult SemaPass::visitCallableDecl(CallableDecl *CD)
    }
 
    if (auto Body = CD->getBody()) {
-      labels.clear();
-
       EvaluatingRAII ER(CD);
 
       auto res = visitStmt(CD, Body);
@@ -1558,14 +1556,6 @@ DeclResult SemaPass::visitCallableDecl(CallableDecl *CD)
          return DeclError();
 
       CD->setBody(res.get());
-
-      if (!UnresolvedGotos.empty()) {
-         diagnose(UnresolvedGotos.begin()->second, err_label_not_found,
-                  UnresolvedGotos.begin()->first().str(),
-                  UnresolvedGotos.begin()->second->getSourceLoc());
-
-         UnresolvedGotos.clear();
-      }
    }
 
    return CD;
@@ -2905,7 +2895,7 @@ StmtResult SemaPass::visitIfCaseStmt(IfCaseStmt *Stmt)
    CaseStmt *Cases[] = { DefaultCase, PatternCase };
    auto Match = MatchStmt::Create(Context, Stmt->getSourceLoc(),
                                   Stmt->getSourceRange(), Stmt->getVal(),
-                                  Cases);
+                                  Cases, nullptr);
 
    return visitStmt(Stmt, Match);
 }
@@ -3357,33 +3347,6 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
 
    Expr->setExprType(Context.getRecordType(E));
    return Expr;
-}
-
-StmtResult SemaPass::visitLabelStmt(LabelStmt *Stmt)
-{
-   auto labelIt = labels.find(Stmt->getLabelName());
-   if (labelIt != labels.end()) {
-      diagnose(Stmt, err_duplicate_label, Stmt->getSourceRange(),
-               Stmt->getLabelName());
-
-      return Stmt;
-   }
-
-   auto it = UnresolvedGotos.find(Stmt->getLabelName());
-   if (it != UnresolvedGotos.end())
-      UnresolvedGotos.erase(it);
-
-   labels.insert(Stmt->getLabelName());
-
-   return Stmt;
-}
-
-StmtResult SemaPass::visitGotoStmt(GotoStmt *Stmt)
-{
-   if (labels.find(Stmt->getLabelName()) == labels.end())
-      UnresolvedGotos.try_emplace(Stmt->getLabelName(), Stmt);
-
-   return Stmt;
 }
 
 DeclResult SemaPass::visitFuncArgDecl(FuncArgDecl *Decl)

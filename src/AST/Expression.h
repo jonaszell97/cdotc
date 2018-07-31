@@ -48,7 +48,6 @@ class UnionDecl;
 class EnumDecl;
 class GlobalVarDecl;
 class LocalVarDecl;
-class MemberRefExpr;
 class GlobalVarDecl;
 class AssociatedTypeDecl;
 class NamespaceDecl;
@@ -1679,6 +1678,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    bool IsSelf          : 1;
    bool AllowIncompleteTemplateArgs : 1;
    bool AllowNamespaceRef : 1;
+   bool LeadingDot      : 1;
 
    size_t captureIndex = 0;
 
@@ -1831,6 +1831,9 @@ public:
    bool isCapture() const { return IsCapture; }
    void setIsCapture(bool C) { IsCapture = C; }
 
+   bool hasLeadingDot() const { return LeadingDot; }
+   void setLeadingDot(bool V) { LeadingDot = V; }
+
    MethodDecl *getPartiallyAppliedMethod() const
    {
       return partiallyAppliedMethod;
@@ -1962,111 +1965,6 @@ enum class MemberKind : unsigned {
    AssociatedType,
    Function,
    TypeOf,
-};
-
-class MemberRefExpr: public IdentifiedExpr {
-   SourceLocation Loc;
-   MemberKind kind = MemberKind::Unknown;
-   Expression *ParentExpr = nullptr;
-   DeclContext *Context = nullptr;
-   RecordDecl *record = nullptr;
-   QualType fieldType;
-
-   bool pointerAccess : 1;
-
-   union {
-      Type *metaType = nullptr;
-      CallableDecl *callable;
-      VarDecl *globalVar;
-      FieldDecl *staticFieldDecl;
-      FieldDecl *fieldDecl;
-      Variant *aliasVal;
-      MethodDecl *accessorMethod;
-   };
-
-public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
-   static bool classofKind(NodeType kind) { return kind == MemberRefExprID; }
-
-   MemberRefExpr(SourceLocation Loc,
-                 DeclarationName Name,
-                 bool pointerAccess = false);
-
-   MemberRefExpr(SourceLocation Loc,
-                 Expression *ParentExpr,
-                 DeclarationName Name,
-                 bool pointerAccess = false);
-
-   MemberRefExpr(EmptyShell Empty);
-
-   SourceLocation getSourceLoc() const { return Loc; }
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(Loc, SourceLocation(Loc.getOffset()
-                                             + getIdent().size() - 1));
-   }
-
-   void setLoc(const SourceLocation &Loc) { MemberRefExpr::Loc = Loc; }
-
-   Expression *getParentExpr() const { return ParentExpr; }
-   void setParentExpr(Expression *Expr) { ParentExpr = Expr; }
-
-   DeclContext *getContext() const { return Context; }
-   void setContext(DeclContext *C) { Context = C; }
-
-   RecordDecl *getRecord() const { return record; }
-   void setRecord(RecordDecl *R) { record = R; }
-
-   const Variant &getAliasVal() const
-   {
-      assert(aliasVal && "not an alias");
-      return *aliasVal;
-   }
-
-   void setAliasVal(Variant *aliasVal)
-   {
-      this->aliasVal = aliasVal;
-      kind = MemberKind::Alias;
-   }
-
-   MemberKind getKind() const { return kind; }
-   void setKind(MemberKind MK) { kind = MK; }
-
-   CallableDecl *getCallable() const { return callable; }
-   void setCallable(CallableDecl *C) { callable = C; }
-
-   QualType getFieldType() const { return fieldType; }
-   void setFieldType(QualType Ty) { fieldType = Ty; }
-
-   bool isPointerAccess() const { return pointerAccess; }
-   void setIsPointerAccess(bool PA) { this->pointerAccess = PA; }
-
-   Type *getMetaType() const { return metaType; }
-   void setMetaType(Type *Ty) { metaType = Ty; }
-
-   VarDecl *getGlobalVar() const { return globalVar; }
-   void setGlobalVar(VarDecl *globalVar)
-   {
-      kind = MemberKind::GlobalVariable;
-      MemberRefExpr::globalVar = globalVar;
-   }
-
-   FieldDecl *getStaticFieldDecl() const { return staticFieldDecl; }
-   void setGlobalFieldDecl(FieldDecl *staticFieldDecl)
-   {
-      kind = MemberKind::StaticField;
-      MemberRefExpr::staticFieldDecl = staticFieldDecl;
-   }
-
-   FieldDecl *getFieldDecl() const { return fieldDecl; }
-   void setFieldDecl(FieldDecl *fieldDecl)
-   {
-      kind = MemberKind::Field;
-      MemberRefExpr::fieldDecl = fieldDecl;
-   }
-
-   MethodDecl *getAccessorMethod() const { return accessorMethod; }
-   void setAccessorMethod(MethodDecl *AM) { accessorMethod = AM; }
 };
 
 class TupleMemberExpr: public Expression {

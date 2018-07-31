@@ -143,12 +143,14 @@ void ASTStmtReader::visitBreakStmt(BreakStmt *S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitContinueStmt(ContinueStmt *S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitReturnStmt(ReturnStmt *S)
@@ -177,22 +179,6 @@ void ASTStmtReader::visitCaseStmt(CaseStmt *S)
    S->setBody(Record.readSubStmt());
 }
 
-void ASTStmtReader::visitLabelStmt(LabelStmt *S)
-{
-   visitStmt(S);
-
-   S->setLoc(Record.readSourceLocation());
-   S->setLabel(Record.getIdentifierInfo());
-}
-
-void ASTStmtReader::visitGotoStmt(GotoStmt *S)
-{
-   visitStmt(S);
-
-   S->setLoc(Record.readSourceLocation());
-   S->setLabel(Record.getIdentifierInfo());
-}
-
 void ASTStmtReader::visitForStmt(ForStmt *S)
 {
    visitStmt(S);
@@ -202,6 +188,7 @@ void ASTStmtReader::visitForStmt(ForStmt *S)
    S->setTermination(Record.readSubExpr());
    S->setIncrement(Record.readSubStmt());
    S->setBody(Record.readSubStmt());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitIfStmt(IfStmt *S)
@@ -212,6 +199,7 @@ void ASTStmtReader::visitIfStmt(IfStmt *S)
    S->setCondition(Record.readSubExpr());
    S->setIfBranch(Record.readSubStmt());
    S->setElseBranch(Record.readSubStmt());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitIfLetStmt(IfLetStmt *S)
@@ -242,6 +230,7 @@ void ASTStmtReader::visitWhileStmt(WhileStmt *S)
    S->setCondition(Record.readSubExpr());
    S->setBody(Record.readSubStmt());
    S->setAtLeastOnce(Record.readBool());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitForInStmt(ForInStmt *S)
@@ -255,6 +244,7 @@ void ASTStmtReader::visitForInStmt(ForInStmt *S)
 
    S->setGetIteratorFn(Record.readDeclAs<MethodDecl>());
    S->setNextFn(Record.readDeclAs<MethodDecl>());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitMatchStmt(MatchStmt *S)
@@ -274,6 +264,7 @@ void ASTStmtReader::visitMatchStmt(MatchStmt *S)
    S->setBraces(Record.readSourceRange());
    S->setSwitchValue(Record.readSubExpr());
    S->setHasMutableCaseArg(Record.readBool());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitDoStmt(DoStmt *S)
@@ -292,6 +283,7 @@ void ASTStmtReader::visitDoStmt(DoStmt *S)
 
    S->setSourceRange(Record.readSourceRange());
    S->setBody(Record.readSubStmt());
+   S->setLabel(Record.getIdentifierInfo());
 }
 
 void ASTStmtReader::visitThrowStmt(ThrowStmt *S)
@@ -554,20 +546,11 @@ void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
    S->setSelf((Flags & (1 << 6)) != 0);
    S->setAllowIncompleteTemplateArgs((Flags & (1 << 7)) != 0);
    S->setAllowNamespaceRef((Flags & (1 << 8)) != 0);
+   S->setLeadingDot((Flags & (1 << 9)) != 0);
 
    S->setCaptureIndex(Record.readInt());
    S->setParentExpr(Record.readSubExpr());
    S->setDeclCtx(Record.readDeclAs<DeclContext>());
-}
-
-void ASTStmtReader::visitMemberRefExpr(MemberRefExpr *S)
-{
-   visitExpr(S);
-
-   S->setLoc(Record.readSourceLocation());
-   S->setIdent(Record.readDeclarationName());
-   S->setKind(Record.readEnum<MemberKind>());
-   S->setParentExpr(Record.readSubExpr());
 }
 
 void ASTStmtReader::visitEnumCaseExpr(EnumCaseExpr *S)
@@ -1182,12 +1165,6 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
       case Statement::CaseStmtID:
          S = new(C) CaseStmt(Empty);
          break;
-      case Statement::LabelStmtID:
-         S = new(C) LabelStmt(Empty);
-         break;
-      case Statement::GotoStmtID:
-         S = new(C) GotoStmt(Empty);
-         break;
       case Statement::ForStmtID:
          S = new(C) ForStmt(Empty);
          break;
@@ -1278,9 +1255,6 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          break;
       case Statement::IdentifierRefExprID:
          S = new(C) IdentifierRefExpr(Empty);
-         break;
-      case Statement::MemberRefExprID:
-         S = new(C) MemberRefExpr(Empty);
          break;
       case Statement::EnumCaseExprID:
          S = new(C) EnumCaseExpr(Empty);

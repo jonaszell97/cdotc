@@ -716,39 +716,6 @@ src/AST/StmtOrDecl.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/StmtOrDecl.cpp.s
 .PHONY : src/AST/StmtOrDecl.cpp.s
 
-src/AST/Transform.o: src/AST/Transform.cpp.o
-
-.PHONY : src/AST/Transform.o
-
-# target to build an object file
-src/AST/Transform.cpp.o:
-	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/AST/Transform.cpp.o
-	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/AST/Transform.cpp.o
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Transform.cpp.o
-.PHONY : src/AST/Transform.cpp.o
-
-src/AST/Transform.i: src/AST/Transform.cpp.i
-
-.PHONY : src/AST/Transform.i
-
-# target to preprocess a source file
-src/AST/Transform.cpp.i:
-	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/AST/Transform.cpp.i
-	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/AST/Transform.cpp.i
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Transform.cpp.i
-.PHONY : src/AST/Transform.cpp.i
-
-src/AST/Transform.s: src/AST/Transform.cpp.s
-
-.PHONY : src/AST/Transform.s
-
-# target to generate assembly for a file
-src/AST/Transform.cpp.s:
-	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/AST/Transform.cpp.s
-	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/AST/Transform.cpp.s
-	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/AST/Transform.cpp.s
-.PHONY : src/AST/Transform.cpp.s
-
 src/AST/Type.o: src/AST/Type.cpp.o
 
 .PHONY : src/AST/Type.o
@@ -5062,9 +5029,6 @@ help:
 	@echo "... src/AST/StmtOrDecl.o"
 	@echo "... src/AST/StmtOrDecl.i"
 	@echo "... src/AST/StmtOrDecl.s"
-	@echo "... src/AST/Transform.o"
-	@echo "... src/AST/Transform.i"
-	@echo "... src/AST/Transform.s"
 	@echo "... src/AST/Type.o"
 	@echo "... src/AST/Type.i"
 	@echo "... src/AST/Type.s"

@@ -422,8 +422,6 @@ public:
    ExprResult visitCallExpr(CallExpr *Call,
                             TemplateArgListExpr *TemplateArgs = nullptr);
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Call);
-   ExprResult visitMemberRefExpr(MemberRefExpr *Expr,
-                                 TemplateArgListExpr *TemplateArgs = nullptr);
    ExprResult visitEnumCaseExpr(EnumCaseExpr *Expr);
    ExprResult visitTemplateArgListExpr(TemplateArgListExpr *Expr);
 
@@ -435,8 +433,6 @@ public:
    StmtResult visitIfStmt(IfStmt *Stmt);
    StmtResult visitIfLetStmt(IfLetStmt *Stmt);
    StmtResult visitIfCaseStmt(IfCaseStmt *Stmt);
-   StmtResult visitLabelStmt(LabelStmt *Stmt);
-   StmtResult visitGotoStmt(GotoStmt *Stmt);
 
    StmtResult visitMatchStmt(MatchStmt *Stmt);
    StmtResult visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match = nullptr);
@@ -1139,12 +1135,8 @@ private:
    /// lowerThan relationships
    DependencyGraph<UnresolvedPredecenceGroup> PrecedenceDependency;
 
-   /// FIXME remove goto
-   llvm::StringMap<GotoStmt*> UnresolvedGotos;
-
    /// Symbol mangler instance.
    SymbolMangler mangle;
-   llvm::StringSet<> labels;
 
    /// Static expression evaluator instance.
    StaticEvaluator Evaluator;
@@ -1822,12 +1814,6 @@ private:
    StmtResult checkNamespaceRef(MacroExpansionStmt *Stmt);
    DeclResult checkNamespaceRef(MacroExpansionDecl *D);
 
-   // MemberRef
-
-   struct LocalLookupResult {
-      DeclContextLookupResult lookupResult;
-      LambdaScope *lambdaScope = nullptr;
-   };
 
    ExprResult HandleBuiltinTypeMember(IdentifierRefExpr *Expr, QualType Ty);
    ExprResult HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty);

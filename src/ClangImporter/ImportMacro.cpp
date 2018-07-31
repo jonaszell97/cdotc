@@ -159,7 +159,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    KEYWORD_ID(extern);
    KEYWORD_ID(float);
    KEYWORD(for);
-   KEYWORD(goto);
+   KEYWORD_ID(goto);
    KEYWORD(if);
    KEYWORD_ID(inline);
    KEYWORD_ID(int);

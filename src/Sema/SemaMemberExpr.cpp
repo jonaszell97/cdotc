@@ -4,7 +4,6 @@
 
 #include "SemaPass.h"
 
-#include "AST/Transform.h"
 #include "AST/Type.h"
 #include "IL/Constants.h"
 #include "IL/Function.h"
@@ -1310,99 +1309,6 @@ DeclResult SemaPass::checkNamespaceRef(MacroExpansionDecl *D)
    return D;
 }
 
-ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr,
-                                        TemplateArgListExpr *ArgExpr) {
-   llvm_unreachable("nah");
-//   if (getStaticForValue(Expr->getIdentInfo())) {
-//      Expr->setIsValueDependent(true);
-//      Expr->setIsTypeDependent(true);
-//      Expr->setExprType(UnknownAnyTy);
-//
-//      return Expr;
-//   }
-//
-//   if (!checkNamespaceRef(Expr))
-//      return ExprError();
-//
-//   DeclContext *Ctx = Expr->getContext();
-//   bool isStatic = true;
-//
-//   if (!Ctx) {
-//      auto ParentExpr = Expr->getParentExpr();
-//      auto ParentResult = visitExpr(Expr, ParentExpr);
-//      if (!ParentResult)
-//         return ExprError();
-//
-//      ParentExpr = ParentResult.get();
-//      Expr->setParentExpr(ParentExpr);
-//
-//      auto ty = ParentExpr->getExprType()->stripReference();
-//      if (ty->isUnknownAnyType()) {
-//         Expr->setIsTypeDependent(true);
-//         Expr->setExprType(UnknownAnyTy);
-//
-//         return Expr;
-//      }
-//
-//      if (ty->isPointerType() && Expr->isPointerAccess()) {
-//         if (!Expr->isTypeDependent()) {
-//            MakeDeref(*this, ty, Expr);
-//
-//            ParentExpr = Expr->getParentExpr();
-//            ty = ParentExpr->getExprType()->stripReference();
-//         }
-//         else {
-//            ty = ty->getPointeeType();
-//         }
-//      }
-//      else if (Expr->isPointerAccess()) {
-//         diagnose(Expr, err_member_access_non_pointer, ty,
-//                  Expr->getSourceLoc());
-//         Expr->setIsPointerAccess(false);
-//      }
-//
-//      if (cdot::MetaType *Meta = ty->asMetaType()) {
-//         auto underlying = Meta->getUnderlyingType();
-//
-//         if (underlying->isRecordType()) {
-//            Ctx = underlying->getRecord();
-//         }
-//         else {
-//            return HandleStaticTypeMember(Expr, *underlying);
-//         }
-//      }
-//      else if (ty->isRecordType()) {
-//         Ctx = ty->getRecord();
-//         isStatic = false;
-//      }
-//      else {
-//         return HandleBuiltinTypeMember(Expr, ty);
-//      }
-//   }
-//
-//   assert(Ctx && "should have returned earlier!");
-//
-//   auto *Ident = new(Context)
-//      IdentifierRefExpr(Expr->getSourceLoc(), Expr->getIdentInfo(), Ctx);
-//
-//   Ident->copyStatusFlags(Expr);
-//   Ident->setIsInvalid(false);
-//
-//   Ident->setParentExpr(Expr->getParentExpr());
-//   Ident->setStaticLookup(isStatic);
-//   Ident->setIsPointerAccess(Expr->isPointerAccess());
-//   Ident->setIsLHSOfAssignment(Expr->isLHSOfAssignment());
-//
-//   // do not move this to the top, otherwise the Ident expr will be marked
-//   // semantically evaluated
-//   Expr->setSemanticallyChecked(true);
-//
-//   auto Result = visitIdentifierRefExpr(Ident, ArgExpr);
-//   Expr->copyStatusFlags(Ident);
-//
-//   return Result;
-}
-
 ExprResult SemaPass::HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty)
 {
    if (Expr->getIdentInfo()->isStr("typeof")) {
@@ -1962,9 +1868,6 @@ ExprResult SemaPass::visitTemplateArgListExpr(TemplateArgListExpr *Expr)
    switch (ParentExpr->getTypeID()) {
    case Expression::IdentifierRefExprID:
       Res = visitIdentifierRefExpr(cast<IdentifierRefExpr>(ParentExpr), Expr);
-      break;
-   case Expression::MemberRefExprID:
-      Res = visitMemberRefExpr(cast<MemberRefExpr>(ParentExpr), Expr);
       break;
    case Expression::CallExprID:
       Res = visitCallExpr(cast<CallExpr>(ParentExpr), Expr);

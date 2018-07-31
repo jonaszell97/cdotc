@@ -269,6 +269,7 @@
    CDOT_ERROR(err_return_outside_func, "keyword 'return' is only allowed in function bodies", false)
    CDOT_ERROR(err_return_ref, "cannot return value of reference type '$0'${ 1 | if(, did you mean to make a copy?) }", false)
    CDOT_ERROR(err_loop_keyword_outside_loop, "keyword '${ 0 | select(continue, break) }' is only valid in loop bodies", false)
+   CDOT_ERROR(err_loop_label, "no loop with label '$0' is in scope", false)
    CDOT_ERROR(err_no_type_after_as, "expected type after 'as'", false)
    CDOT_ERROR(err_duplicate_label, "duplicate label '$0'", false)
    CDOT_ERROR(err_label_not_found, "no label $0 to go to", false)

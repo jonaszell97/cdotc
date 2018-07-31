@@ -337,94 +337,63 @@ private:
 };
 
 class BreakStmt : public Statement {
-   explicit BreakStmt(SourceLocation Loc);
+   explicit BreakStmt(SourceLocation Loc, IdentifierInfo *Label);
 
    SourceLocation Loc;
+   IdentifierInfo *Label;
 
 public:
    static bool classofKind(NodeType kind) { return kind == BreakStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   static BreakStmt *Create(ASTContext &C, SourceLocation Loc);
+   static BreakStmt *Create(ASTContext &C, SourceLocation Loc,
+                            IdentifierInfo *Label);
+
    BreakStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
    void setLoc(SourceLocation L) { Loc = L; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class ContinueStmt : public Statement {
-   explicit ContinueStmt(SourceLocation Loc);
+   explicit ContinueStmt(SourceLocation Loc, IdentifierInfo *Label);
 
    SourceLocation Loc;
+   IdentifierInfo *Label;
 
 public:
    static bool classofKind(NodeType kind) { return kind == ContinueStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   static ContinueStmt *Create(ASTContext &C, SourceLocation Loc);
+   static ContinueStmt *Create(ASTContext &C, SourceLocation Loc,
+                               IdentifierInfo *Label);
+
    ContinueStmt(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
-
    void setLoc(SourceLocation L) { Loc = L; }
-};
 
-class GotoStmt: public Statement {
-   GotoStmt(SourceLocation Loc, IdentifierInfo *label);
-
-   SourceLocation Loc;
-   IdentifierInfo* label;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == GotoStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static GotoStmt *Create(ASTContext &C, SourceLocation Loc,
-                           IdentifierInfo *label);
-
-   GotoStmt(EmptyShell Empty);
-
-   SourceRange getSourceRange() const { return SourceRange(Loc); }
-   IdentifierInfo *getLabel() const { return label; }
-   llvm::StringRef getLabelName() const { return label->getIdentifier(); }
-
-   void setLoc(SourceLocation L) { Loc = L; }
-   void setLabel(IdentifierInfo *label) { GotoStmt::label = label; }
-};
-
-class LabelStmt : public Statement {
-   LabelStmt(SourceLocation Loc, IdentifierInfo *label);
-
-   SourceLocation Loc;
-   IdentifierInfo* label;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == LabelStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static LabelStmt *Create(ASTContext &C, SourceLocation Loc,
-                            IdentifierInfo *label);
-
-   LabelStmt(EmptyShell Empty);
-
-   SourceRange getSourceRange() const { return SourceRange(Loc); }
-   IdentifierInfo *getLabel() const { return label; }
-   llvm::StringRef getLabelName() const { return label->getIdentifier(); }
-
-   void setLoc(SourceLocation L) { Loc = L; }
-   void setLabel(IdentifierInfo *label) { LabelStmt::label = label; }
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class IfStmt: public Statement {
    IfStmt(SourceLocation IfLoc,
           Expression* cond,
-          Statement* body, Statement* elseBody);
+          Statement* body,
+          Statement* elseBody,
+          IdentifierInfo *Label);
 
    SourceLocation IfLoc;
 
    Expression* condition;
    Statement* ifBranch;
    Statement* elseBranch;
+
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == IfStmtID; }
@@ -433,7 +402,9 @@ public:
    static IfStmt *Create(ASTContext &C,
                          SourceLocation IfLoc,
                          Expression* cond,
-                         Statement* body, Statement* elseBody);
+                         Statement* body,
+                         Statement* elseBody,
+                         IdentifierInfo *Label);
 
    IfStmt(EmptyShell Empty);
 
@@ -453,6 +424,9 @@ public:
    void setCondition(Expression *C) { condition = C; }
    void setIfBranch(Statement *If) { ifBranch = If; }
    void setElseBranch(Statement* Else) { elseBranch = Else; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class IfLetStmt: public Statement {
@@ -466,6 +440,7 @@ class IfLetStmt: public Statement {
    Statement *IfBranch;
    Statement *ElseBranch;
    ConversionSequence *ConvSeq = nullptr;
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == IfLetStmtID; }
@@ -499,6 +474,9 @@ public:
 
    const ConversionSequence &getConvSeq() const { return *ConvSeq; }
    void setConvSeq(ConversionSequence *CS) { ConvSeq = CS; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class PatternExpr;
@@ -553,14 +531,18 @@ public:
 
 class ForStmt: public Statement {
    ForStmt(SourceLocation ForLoc,
-           Statement* init, Expression* term,
-           Statement* inc, Statement *body);
+           Statement* init,
+           Expression* term,
+           Statement* inc,
+           Statement *body,
+           IdentifierInfo *Label);
 
    SourceLocation ForLoc;
    Statement* initialization;
    Expression* termination;
    Statement* increment;
    Statement* body;
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == ForStmtID; }
@@ -569,7 +551,8 @@ public:
    static ForStmt *Create(ASTContext &C,
                           SourceLocation ForLoc,
                           Statement* init, Expression* term,
-                          Statement* inc, Statement *body);
+                          Statement* inc, Statement *body,
+                          IdentifierInfo *Label);
 
    ForStmt(EmptyShell Empty);
 
@@ -591,13 +574,17 @@ public:
 
    Statement* getBody() const { return body; }
    void setBody(Statement *S) { body = S; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class ForInStmt: public Statement {
    ForInStmt(SourceLocation ForLoc,
              LocalVarDecl* decl,
              Expression* range,
-             Statement* body);
+             Statement* body,
+             IdentifierInfo *Label);
 
    SourceLocation ForLoc;
    LocalVarDecl* decl;
@@ -607,13 +594,16 @@ class ForInStmt: public Statement {
    CallableDecl *getIteratorFn = nullptr;
    CallableDecl *nextFn = nullptr;
 
+   IdentifierInfo *Label = nullptr;
+
 public:
    static bool classofKind(NodeType kind) { return kind == ForInStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static ForInStmt *Create(ASTContext &C,
                             SourceLocation ForLoc, LocalVarDecl* decl,
-                            Expression* range, Statement* body);
+                            Expression* range, Statement* body,
+                            IdentifierInfo *Label);
 
    ForInStmt(EmptyShell Empty);
 
@@ -637,18 +627,23 @@ public:
 
    CallableDecl *getNextFn() const { return nextFn; }
    void setNextFn(CallableDecl *fn) { nextFn = fn; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class WhileStmt: public Statement {
    WhileStmt(SourceLocation WhileLoc,
              Expression* cond,
              Statement* body,
+             IdentifierInfo *Label,
              bool atLeastOnce);
 
    SourceLocation WhileLoc;
    Expression* condition;
    Statement* body;
    bool atLeastOnce;
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == WhileStmtID; }
@@ -657,6 +652,7 @@ public:
    static WhileStmt *Create(ASTContext &C,
                             SourceLocation WhileLoc,
                             Expression* cond, Statement* body,
+                            IdentifierInfo *Label,
                             bool atLeastOnce = false);
 
    WhileStmt(EmptyShell Empty);
@@ -676,6 +672,9 @@ public:
 
    bool isAtLeastOnce() const { return atLeastOnce; }
    void setAtLeastOnce(bool b) { atLeastOnce = b; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class CaseStmt: public Statement {
@@ -716,7 +715,8 @@ class MatchStmt final: public Statement,
    MatchStmt(SourceLocation MatchLoc,
              SourceRange Braces,
              Expression* switchVal,
-             llvm::ArrayRef<CaseStmt*> cases);
+             llvm::ArrayRef<CaseStmt*> cases,
+             IdentifierInfo *Label);
 
    MatchStmt(EmptyShell Empty, unsigned N);
 
@@ -728,6 +728,7 @@ protected:
 
    bool hasDefault = false;
    bool HasMutableCaseArg = false;
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == MatchStmtID; }
@@ -739,7 +740,8 @@ public:
                             SourceLocation MatchLoc,
                             SourceRange Braces,
                             Expression* switchVal,
-                            llvm::ArrayRef<CaseStmt*> cases);
+                            llvm::ArrayRef<CaseStmt*> cases,
+                            IdentifierInfo *Label);
 
    static MatchStmt *CreateEmpty(ASTContext &C, unsigned N);
 
@@ -772,6 +774,9 @@ public:
 
    bool hasMutableCaseArg() const { return HasMutableCaseArg; }
    void setHasMutableCaseArg(bool V) { HasMutableCaseArg = V; }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class ReturnStmt : public Statement {
@@ -858,6 +863,7 @@ class DoStmt final: public Statement,
    SourceRange SR;
    Statement* body;
    unsigned NumCatchBlocks;
+   IdentifierInfo *Label = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == DoStmtID; }
@@ -865,10 +871,11 @@ public:
 
    friend TrailingObjects;
 
-   DoStmt(SourceRange SR, Statement* body);
+   DoStmt(SourceRange SR, Statement* body, IdentifierInfo *Label);
    DoStmt(SourceRange SR,
           Statement* body,
-          ArrayRef<CatchBlock> catchBlocks);
+          ArrayRef<CatchBlock> catchBlocks,
+          IdentifierInfo *Label);
 
    DoStmt(EmptyShell Empty, unsigned N);
 
@@ -887,6 +894,9 @@ public:
    {
       return { getTrailingObjects<CatchBlock>(), NumCatchBlocks };
    }
+
+   IdentifierInfo* getLabel() const { return Label; }
+   void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
 class ThrowStmt: public Statement {

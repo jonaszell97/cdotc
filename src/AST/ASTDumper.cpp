@@ -176,18 +176,6 @@ bool DumperImpl::visitContinueStmt(ContinueStmt* stmt)
    return true;
 }
 
-bool DumperImpl::visitLabelStmt(LabelStmt* stmt)
-{
-   out << "[" << stmt->getLabelName() << "]";
-   return true;
-}
-
-bool DumperImpl::visitGotoStmt(GotoStmt* stmt)
-{
-   out << "[" << stmt->getLabelName() << "]";
-   return true;
-}
-
 bool DumperImpl::visitForStmt(ForStmt* stmt)
 {
    return true;
@@ -593,12 +581,6 @@ bool DumperImpl::visitSelfExpr(SelfExpr *expr)
 
 bool DumperImpl::visitSuperExpr(SuperExpr *expr)
 {
-   return true;
-}
-
-bool DumperImpl::visitMemberRefExpr(MemberRefExpr* expr)
-{
-   out << "[" << DeclarationName(expr->getIdentInfo()) << "]";
    return true;
 }
 

@@ -2435,7 +2435,7 @@ ParseResult Parser::parseExprSequence(bool stopAtThen,
       case tok::kw_protected: case tok::kw_static: case tok::kw_abstract:
       case tok::kw_prop: case tok::kw_where:
       case tok::kw_continue: case tok::kw_init:
-      case tok::kw_associatedType: case tok::kw_break: case tok::kw_goto:
+      case tok::kw_associatedType: case tok::kw_break:
       case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
       case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
       case tok::kw_import: case tok::kw_using:
@@ -3535,7 +3535,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
    return params;
 }
 
-ParseResult Parser::parseIfStmt()
+ParseResult Parser::parseIfStmt(IdentifierInfo *Label)
 {
    auto IfLoc = currentTok().getSourceLoc();
    advance();
@@ -3594,7 +3594,8 @@ ParseResult Parser::parseIfStmt()
                                 ifBranch, elseBranch);
    }
 
-   return IfStmt::Create(Context, IfLoc, Condition, ifBranch, elseBranch);
+   return IfStmt::Create(Context, IfLoc, Condition, ifBranch, elseBranch,
+                         Label);
 }
 
 ParseResult Parser::parseStaticIf()
@@ -4052,7 +4053,7 @@ void Parser::parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases)
    }
 }
 
-ParseResult Parser::parseMatchStmt()
+ParseResult Parser::parseMatchStmt(IdentifierInfo *Label)
 {
    auto MatchLoc = currentTok().getSourceLoc();
    advance();
@@ -4075,10 +4076,10 @@ ParseResult Parser::parseMatchStmt()
    parseCaseStmts(Cases);
 
    SourceRange Braces(LBraceLoc, currentTok().getSourceLoc());
-   return MatchStmt::Create(Context, MatchLoc, Braces, matchVal, Cases);
+   return MatchStmt::Create(Context, MatchLoc, Braces, matchVal, Cases, Label);
 }
 
-ParseResult Parser::parseWhileStmt(bool conditionBefore)
+ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
 {
    auto WhileLoc = currentTok().getSourceLoc();
    advance();
@@ -4100,11 +4101,11 @@ ParseResult Parser::parseWhileStmt(bool conditionBefore)
    if (!cond)
       cond = BoolLiteral::Create(Context, WhileLoc, Context.getBoolTy(), true);
 
-   return WhileStmt::Create(Context, WhileLoc, cond, body,
+   return WhileStmt::Create(Context, WhileLoc, cond, body, Label,
                             !conditionBefore);
 }
 
-ParseResult Parser::parseForStmt()
+ParseResult Parser::parseForStmt(IdentifierInfo *Label)
 {
    auto ForLoc = currentTok().getSourceLoc();
    advance();
@@ -4158,7 +4159,7 @@ ParseResult Parser::parseForStmt()
                      initDecl->getSourceLoc());
       }
 
-      return ForInStmt::Create(Context, ForLoc, InitDecl, range, body);
+      return ForInStmt::Create(Context, ForLoc, InitDecl, range, body, Label);
    }
 
    if (initDecl) {
@@ -4200,7 +4201,8 @@ ParseResult Parser::parseForStmt()
    }
 
    return ForStmt::Create(Context, ForLoc, init, term, inc,
-                          parseNextStmt().tryGetStatement());
+                          parseNextStmt().tryGetStatement(),
+                          Label);
 }
 
 ParseResult Parser::parseDeclareStmt()
@@ -4372,19 +4374,25 @@ ParseResult Parser::parseKeyword()
       return parseIfStmt();
    case tok::kw_while:
    case tok::kw_loop:
-      return parseWhileStmt(kind == tok::kw_while);
+      return parseWhileStmt(nullptr, kind == tok::kw_while);
    case tok::kw_match:
       return parseMatchStmt();
    case tok::kw_for:
       return parseForStmt();
    case tok::kw_continue:
    case tok::kw_break: {
+      IdentifierInfo *Label = nullptr;
+      if (lookahead(false).is(tok::ident)) {
+         advance();
+         Label = currentTok().getIdentifierInfo();
+      }
+
       Statement* stmt;
       if (kind == tok::kw_continue) {
-         stmt = ContinueStmt::Create(Context, BeginLoc);
+         stmt = ContinueStmt::Create(Context, BeginLoc, Label);
       }
       else {
-         stmt = BreakStmt::Create(Context, BeginLoc);
+         stmt = BreakStmt::Create(Context, BeginLoc, Label);
       }
 
       return stmt;
@@ -4393,10 +4401,6 @@ ParseResult Parser::parseKeyword()
       return parseReturnStmt();
    case tok::kw_throw:
       return parseThrowStmt();
-   case tok::kw_goto:
-      advance();
-      return GotoStmt::Create(Context, BeginLoc,
-                              currentTok().getIdentifierInfo());
    case tok::kw_mixin: {
       auto loc = currentTok().getSourceLoc();
       if (!expect(tok::open_paren)) {
@@ -4858,7 +4862,7 @@ ParseResult Parser::parseCompoundStmt(bool preserveTopLevel, bool noOpenBrace)
                                currentTok().getSourceLoc());
 }
 
-ParseResult Parser::parseDoStmt()
+ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
 {
    assert(currentTok().is(Ident_do) && "not a do stmt!");
    auto DoLoc = currentTok().getSourceLoc();
@@ -4987,7 +4991,7 @@ ParseResult Parser::parseDoStmt()
       SP.diagnose(err_catch_all_must_be_alone, CatchAllLoc);
    }
 
-   return new(Context) DoStmt(SourceRange(DoLoc), CS, CatchBlocks);
+   return new(Context) DoStmt(SourceRange(DoLoc), CS, CatchBlocks, Label);
 }
 
 Parser::DeclAttrs Parser::pushDeclAttrs()
@@ -5128,11 +5132,23 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
    }
    case tok::ident:
       if (lookahead(false, true).is(tok::colon)) {
-         auto label = currentTok().getIdentifierInfo();
+         auto *Label = currentTok().getIdentifierInfo();
+         advance();
          advance();
 
-         stmt = LabelStmt::Create(Context, currentTok().getSourceLoc(), label);
-         break;
+         if (currentTok().is(Ident_do))
+            return parseDoStmt(Label);
+
+         switch (currentTok().getKind()) {
+         case tok::kw_if: return parseIfStmt(Label);
+         case tok::kw_for: return parseForStmt(Label);
+         case tok::kw_match: return parseMatchStmt(Label);
+         default:
+            SP.diagnose(err_generic_error, "expected loop after label",
+                        currentTok().getSourceLoc());
+
+            return parseNextStmt();
+         }
       }
 
       LLVM_FALLTHROUGH;

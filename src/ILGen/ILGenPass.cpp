@@ -912,8 +912,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    func->addDefinition();
 
    InsertPointRAII insertPointRAII(*this, func->getEntryBlock());
-   UnresolvedGotos.emplace();
-
    CleanupRAII CS(*this);
    Builder.SetDebugLoc(CD->getSourceLoc());
 
@@ -1076,12 +1074,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    }
 
    visit(CD->getBody());
-
-   for (const auto &Goto : UnresolvedGotos.top()) {
-      Goto.Inst->setTargetBranch(Labels.find(Goto.labelName)->second);
-   }
-
-   UnresolvedGotos.pop();
 
    if (Builder.GetInsertBlock()->hasNoPredecessors()) {
       Builder.GetInsertBlock()->detachAndErase();
@@ -3132,29 +3124,6 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
    }
 }
 
-il::Value *ILGenPass::visitMemberRefExpr(MemberRefExpr *Expr)
-{
-   Value *V = nullptr;
-
-   switch (Expr->getKind()) {
-   default:
-      llvm_unreachable("bad member kind!");
-   case MemberKind::EnumRawValue:
-      V = Builder.CreateEnumRawValue(visit(Expr->getParentExpr()));
-      break;
-   case MemberKind::TypeOf: {
-      V = GetOrCreateTypeInfo(Expr->getMetaType());
-      V = Builder.CreateBitCast(CastKind::BitCast,
-                                Builder.CreateLoad(V),
-                                Expr->getExprType());
-
-      break;
-   }
-   }
-
-   return V;
-}
-
 il::Value* ILGenPass::visitTupleMemberExpr(TupleMemberExpr *node)
 {
    auto tup = visit(node->getParentExpr());
@@ -3213,7 +3182,7 @@ void ILGenPass::visitForStmt(ForStmt *node)
    }
 
    CleanupRAII CS(*this);
-   BreakContinueStack.push({ MergeBB, IncBB, CS.getDepth() });
+   BreakContinueStack.emplace_back(MergeBB, IncBB, CS.getDepth(), node->getLabel());
 
    Builder.SetInsertPoint(BodyBB);
    if (auto Body = node->getBody()) {
@@ -3233,7 +3202,7 @@ void ILGenPass::visitForStmt(ForStmt *node)
 
    Builder.CreateBr(CondBB);
 
-   BreakContinueStack.pop();
+   BreakContinueStack.pop_back();
    Builder.SetInsertPoint(MergeBB);
 }
 
@@ -3324,10 +3293,11 @@ void ILGenPass::visitForInStmt(ForInStmt *Stmt)
 
    {
       CleanupRAII CS(*this);
-      BreakContinueStack.push({ MergeBB, NextBB, CS.getDepth() });
+      BreakContinueStack.emplace_back(MergeBB, NextBB, CS.getDepth(),
+                                 Stmt->getLabel());
 
       visit(Stmt->getBody());
-      BreakContinueStack.pop();
+      BreakContinueStack.pop_back();
    }
 
    // cleanup the option value.
@@ -3359,7 +3329,7 @@ void ILGenPass::visitWhileStmt(WhileStmt *node)
    Builder.SetInsertPoint(BodyBB);
 
    CleanupRAII CS(*this);
-   BreakContinueStack.push({ MergeBB, CondBB, CS.getDepth() });
+   BreakContinueStack.emplace_back(MergeBB, CondBB, CS.getDepth(), node->getLabel());
 
    if (auto Body = node->getBody()) {
       visit(Body);
@@ -3369,7 +3339,7 @@ void ILGenPass::visitWhileStmt(WhileStmt *node)
       Builder.CreateBr(CondBB);
    }
 
-   BreakContinueStack.pop();
+   BreakContinueStack.pop_back();
    Builder.SetInsertPoint(MergeBB);
 }
 
@@ -3394,6 +3364,10 @@ void ILGenPass::visitIfStmt(IfStmt *node)
 
       FalseBB = ElseBranch;
 
+      CleanupRAII CS(*this);
+      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                 node->getLabel());
+      
       visit(Else);
       if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
@@ -3405,8 +3379,14 @@ void ILGenPass::visitIfStmt(IfStmt *node)
 
    Builder.CreateCondBr(Condition, IfBranch, FalseBB, {}, {});
 
-   Builder.SetInsertPoint(IfBranch);
-   visit(node->getIfBranch());
+   {
+      CleanupRAII CS(*this);
+      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                 node->getLabel());
+
+      Builder.SetInsertPoint(IfBranch);
+      visit(node->getIfBranch());
+   }
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
       Builder.CreateBr(MergeBB);
@@ -3435,6 +3415,10 @@ void ILGenPass::visitIfLetStmt(IfLetStmt *node)
 
       FalseBB = ElseBranch;
 
+      CleanupRAII CS(*this);
+      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                 node->getLabel());
+
       visit(Else);
       if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
@@ -3446,8 +3430,14 @@ void ILGenPass::visitIfLetStmt(IfLetStmt *node)
 
    Builder.CreateCondBr(Condition, IfBranch, FalseBB, {}, {});
 
-   Builder.SetInsertPoint(IfBranch);
-   visit(node->getIfBranch());
+   {
+      CleanupRAII CS(*this);
+      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                 node->getLabel());
+
+      Builder.SetInsertPoint(IfBranch);
+      visit(node->getIfBranch());
+   }
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
       Builder.CreateBr(MergeBB);
@@ -3598,15 +3588,16 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
          Builder.SetInsertPoint(BodyBB);
 
          if (i < CaseBlocks.size() - 1) {
-            BreakContinueStack.push(
-               { MergeBB, CaseBlocks[i + 1], CS.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, CaseBlocks[i + 1],
+                                       CS.getDepth(), node->getLabel());
          }
          else {
-            BreakContinueStack.push({ MergeBB, nullptr, CS.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                       node->getLabel());
          }
 
          visit(Body);
-         BreakContinueStack.pop();
+         BreakContinueStack.pop_back();
 
          if (!Builder.GetInsertBlock()->getTerminator()) {
             Builder.CreateBr(MergeBB);
@@ -3673,16 +3664,16 @@ void ILGenPass::HandleIntegralSwitch(MatchStmt *node,
          Builder.SetInsertPoint(Cases[i]);
 
          if (i < Cases.size() - 1) {
-            BreakContinueStack.push(
-               { MergeBB, Cases[i + 1], CS.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, Cases[i + 1], CS.getDepth(),
+                                       node->getLabel());
          }
          else {
-            BreakContinueStack.push(
-               { MergeBB, nullptr, CS.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
+                                       node->getLabel());
          }
 
          visit(Body);
-         BreakContinueStack.pop();
+         BreakContinueStack.pop_back();
 
          if (!Builder.GetInsertBlock()->getTerminator()) {
             Builder.CreateBr(MergeBB);
@@ -3865,15 +3856,16 @@ void ILGenPass::HandlePatternSwitch(MatchStmt *node)
          CleanupRAII CR(*this);
 
          if (i < node->getCases().size() - 1) {
-            BreakContinueStack.push(
-               { MergeBB, BodyBBs[i + 1], CR.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, BodyBBs[i + 1], CR.getDepth(),
+                                       node->getLabel());
          }
          else {
-            BreakContinueStack.push({ MergeBB, nullptr, CR.getDepth() });
+            BreakContinueStack.emplace_back(MergeBB, nullptr, CR.getDepth(),
+                                       node->getLabel());
          }
 
          visit(Body);
-         BreakContinueStack.pop();
+         BreakContinueStack.pop_back();
 
          auto Term = Builder.GetInsertBlock()->getTerminator();
          if (!Term) {
@@ -3936,30 +3928,6 @@ il::Value* ILGenPass::visitCasePattern(CasePattern *node)
 il::Value* ILGenPass::visitIsPattern(IsPattern *node)
 {
    return nullptr;
-}
-
-void ILGenPass::visitLabelStmt(LabelStmt *node)
-{
-   auto BB = Builder.CreateBasicBlock(node->getLabelName());
-   Builder.CreateBr(BB);
-   Builder.SetInsertPoint(BB);
-
-   Labels.try_emplace(node->getLabelName(), BB);
-}
-
-void ILGenPass::visitGotoStmt(GotoStmt *node)
-{
-   auto it = Labels.find(node->getLabelName());
-   if (it == Labels.end()) {
-      auto UnresolvedBr = Builder.CreateUnresolvedBr();
-
-      assert(!UnresolvedGotos.empty());
-      UnresolvedGotos.top().emplace_back(
-         UnresolvedGoto{ UnresolvedBr, node->getLabelName() });
-   }
-   else {
-      Builder.CreateBr(it->second);
-   }
 }
 
 void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
@@ -4076,23 +4044,47 @@ void ILGenPass::visitDiscardAssignStmt(DiscardAssignStmt *Stmt)
 void ILGenPass::visitBreakStmt(BreakStmt *node)
 {
    assert(!BreakContinueStack.empty() && "no target for break");
-   auto &top = BreakContinueStack.top();
 
-   Cleanups.emitUntilWithoutPopping(top.CleanupUntil);
+   for (auto it = BreakContinueStack.rbegin(), end = BreakContinueStack.rend();
+        it != end; ++it) {
+      auto &S = *it;
 
-   assert(top.BreakTarget && "no target for break");
-   Builder.CreateBr(top.BreakTarget);
+      if (!node->getLabel() || S.Label == node->getLabel()) {
+         if (!S.BreakTarget) {
+            continue;
+         }
+
+         Cleanups.emitUntilWithoutPopping(S.CleanupUntil);
+         Builder.CreateBr(S.BreakTarget);
+         return;
+      }
+   }
+
+   SP.diagnose(node, err_loop_label, node->getLabel()->getIdentifier(),
+               node->getSourceLoc());
 }
 
-void ILGenPass::visitContinueStmt(ContinueStmt*)
+void ILGenPass::visitContinueStmt(ContinueStmt *node)
 {
-   assert(!BreakContinueStack.empty() && "no target for continue");
-   auto &top = BreakContinueStack.top();
+   assert(!BreakContinueStack.empty() && "no target for break");
 
-   Cleanups.emitUntilWithoutPopping(top.CleanupUntil);
+   for (auto it = BreakContinueStack.rbegin(), end = BreakContinueStack.rend();
+        it != end; ++it) {
+      auto &S = *it;
 
-   assert(top.ContinueTarget && "no target for continue");
-   Builder.CreateBr(top.ContinueTarget);
+      if (!node->getLabel() || S.Label == node->getLabel()) {
+         if (!S.ContinueTarget) {
+            continue;
+         }
+
+         Cleanups.emitUntilWithoutPopping(S.CleanupUntil);
+         Builder.CreateBr(S.ContinueTarget);
+         return;
+      }
+   }
+
+   SP.diagnose(node, err_loop_label, node->getLabel()->getIdentifier(),
+               node->getSourceLoc());
 }
 
 il::Value *ILGenPass::visitDictionaryLiteral(DictionaryLiteral *Expr)

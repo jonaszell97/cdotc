@@ -566,16 +566,6 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Transform.cpp">
-			<Option target="cdotc_asan"/>
-			<Option target="cdotc_ubsan"/>
-			<Option target="cdotc"/>
-		</Unit>
-		<Unit filename="/Users/Jonas/CDot/src/AST/Transform.h">
-			<Option target="cdotc_asan"/>
-			<Option target="cdotc_ubsan"/>
-			<Option target="cdotc"/>
-		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/Type.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>

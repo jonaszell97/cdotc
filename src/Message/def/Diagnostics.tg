@@ -481,6 +481,7 @@ def err_return_outside_func : Error<"keyword 'return' is only allowed in functio
 def err_return_ref : Error<"cannot return value of reference type '$0'${ 1 | if(, did you mean to make a copy?) }">
 
 def err_loop_keyword_outside_loop : Error<"keyword '${ 0 | select(continue, break) }' is only valid in loop bodies">
+def err_loop_label : Error<"no loop with label '$0' is in scope">
 
 def err_no_type_after_as : Error<"expected type after 'as'">
 def err_duplicate_label : Error<"duplicate label '$0'">

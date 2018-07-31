@@ -104,7 +104,6 @@ public:
    il::Value *visitSubscriptExpr(SubscriptExpr *node);
    il::Value *visitCallExpr(CallExpr *Expr);
    il::Value *visitAnonymousCallExpr(AnonymousCallExpr *Expr);
-   il::Value *visitMemberRefExpr(MemberRefExpr *Expr);
    il::Value *visitTupleMemberExpr(TupleMemberExpr *node);
    il::Value *visitEnumCaseExpr(EnumCaseExpr *node);
    il::Value *visitTemplateArgListExpr(TemplateArgListExpr *Expr);
@@ -114,8 +113,6 @@ public:
    void visitWhileStmt(WhileStmt *node);
    void visitIfStmt(IfStmt *node);
    void visitIfLetStmt(IfLetStmt *node);
-   void visitLabelStmt(LabelStmt *node);
-   void visitGotoStmt(GotoStmt *node);
 
    void visitMatchStmt(MatchStmt *node);
    void HandleSwitch(MatchStmt *node);
@@ -472,20 +469,21 @@ private:
    llvm::StringMap<llvm::StringRef> BuiltinFns;
 
    struct BreakContinueScope {
+      BreakContinueScope(il::BasicBlock *BreakTarget,
+                         il::BasicBlock *ContinueTarget = nullptr,
+                         const CleanupsDepth &CleanupUntil = CleanupsDepth(),
+                         IdentifierInfo *Label = nullptr)
+         : BreakTarget(BreakTarget), ContinueTarget(ContinueTarget),
+           CleanupUntil(CleanupUntil), Label(Label)
+      { }
+
       il::BasicBlock *BreakTarget;
       il::BasicBlock *ContinueTarget;
       CleanupsDepth CleanupUntil;
+      IdentifierInfo *Label;
    };
 
-   std::stack<BreakContinueScope> BreakContinueStack;
-
-   struct UnresolvedGoto {
-      il::BrInst *Inst;
-      llvm::StringRef labelName;
-   };
-
-   std::stack<llvm::SmallVector<UnresolvedGoto, 2>> UnresolvedGotos;
-   llvm::StringMap<il::BasicBlock*> Labels;
+   std::vector<BreakContinueScope> BreakContinueStack;
 
    std::unordered_map<NamedDecl*, il::Value*> DeclMap;
    std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;

@@ -5,7 +5,6 @@
 #include "SemaPass.h"
 
 #include "Sema/ExpressionResolver.h"
-#include "AST/Transform.h"
 #include "AST/Type.h"
 #include "Support/StringSwitch.h"
 

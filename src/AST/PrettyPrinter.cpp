@@ -157,16 +157,6 @@ void PrettyPrinterImpl::visitContinueStmt(ContinueStmt* stmt)
    out << "continue";
 }
 
-void PrettyPrinterImpl::visitLabelStmt(LabelStmt* stmt)
-{
-   out << stmt->getLabelName() << ":";
-}
-
-void PrettyPrinterImpl::visitGotoStmt(GotoStmt* stmt)
-{
-   out << "goto " << stmt->getLabelName();
-}
-
 void PrettyPrinterImpl::visitForStmt(ForStmt* stmt)
 {
    out << "for ";
@@ -691,12 +681,6 @@ void PrettyPrinterImpl::visitSelfExpr(SelfExpr *expr)
 void PrettyPrinterImpl::visitSuperExpr(SuperExpr *expr)
 {
    out << "super";
-}
-
-void PrettyPrinterImpl::visitMemberRefExpr(MemberRefExpr* expr)
-{
-   out << (expr->isPointerAccess() ? "->" : ".")
-       << DeclarationName(expr->getIdentInfo());
 }
 
 void PrettyPrinterImpl::visitTupleMemberExpr(ast::TupleMemberExpr *expr)

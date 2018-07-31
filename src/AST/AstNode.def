@@ -21,8 +21,6 @@
       CDOT_STMT(ContinueStmt)
       CDOT_STMT(ReturnStmt)
       CDOT_STMT(CaseStmt)
-      CDOT_STMT(LabelStmt)
-      CDOT_STMT(GotoStmt)
       CDOT_STMT(ForStmt)
       CDOT_STMT(IfStmt)
       CDOT_STMT(IfLetStmt)
@@ -69,7 +67,6 @@
 
       CDOT_ABSTRACT(_firstIdentifiedExpr)
          CDOT_EXPR(IdentifierRefExpr)
-         CDOT_EXPR(MemberRefExpr)
          CDOT_EXPR(EnumCaseExpr)
       CDOT_ABSTRACT(_lastIdentifiedExpr)
 

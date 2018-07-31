@@ -196,8 +196,8 @@ CompoundStmt* CompoundStmt::CreateEmpty(ASTContext &C, unsigned N)
    return new(Mem) CompoundStmt(EmptyShell(), N);
 }
 
-BreakStmt::BreakStmt(SourceLocation Loc)
-   : Statement(BreakStmtID), Loc(Loc)
+BreakStmt::BreakStmt(SourceLocation Loc, IdentifierInfo *Label)
+   : Statement(BreakStmtID), Loc(Loc), Label(Label)
 {
    
 }
@@ -206,13 +206,13 @@ BreakStmt::BreakStmt(EmptyShell)
    : Statement(BreakStmtID)
 {}
 
-BreakStmt* BreakStmt::Create(ASTContext &C, SourceLocation Loc)
-{
-   return new(C) BreakStmt(Loc);
+BreakStmt* BreakStmt::Create(ASTContext &C, SourceLocation Loc,
+                             IdentifierInfo *Label) {
+   return new(C) BreakStmt(Loc, Label);
 }
 
-ContinueStmt::ContinueStmt(SourceLocation Loc)
-   : Statement(ContinueStmtID), Loc(Loc)
+ContinueStmt::ContinueStmt(SourceLocation Loc, IdentifierInfo *Label)
+   : Statement(ContinueStmtID), Loc(Loc), Label(Label)
 {
 
 }
@@ -221,50 +221,20 @@ ContinueStmt::ContinueStmt(EmptyShell)
    : Statement(ContinueStmtID)
 {}
 
-ContinueStmt* ContinueStmt::Create(ASTContext &C, SourceLocation Loc)
-{
-   return new(C) ContinueStmt(Loc);
-}
-
-GotoStmt::GotoStmt(SourceLocation Loc, IdentifierInfo *label)
-   : Statement(GotoStmtID), Loc(Loc), label(label)
-{
-   
-}
-
-GotoStmt::GotoStmt(EmptyShell)
-   : Statement(GotoStmtID), label(nullptr)
-{}
-
-GotoStmt* GotoStmt::Create(ASTContext &C,
-                           SourceLocation Loc,
-                           IdentifierInfo *label) {
-   return new(C) GotoStmt(Loc, label);
-}
-
-LabelStmt::LabelStmt(SourceLocation Loc, IdentifierInfo *label)
-   : Statement(LabelStmtID), Loc(Loc), label(label)
-{
-
-}
-
-LabelStmt::LabelStmt(EmptyShell)
-   : Statement(LabelStmtID), label(nullptr)
-{}
-
-LabelStmt* LabelStmt::Create(ASTContext &C,
-                             SourceLocation Loc,
-                             IdentifierInfo *label) {
-   return new(C) LabelStmt(Loc, label);
+ContinueStmt* ContinueStmt::Create(ASTContext &C, SourceLocation Loc,
+                                   IdentifierInfo *Label) {
+   return new(C) ContinueStmt(Loc, Label);
 }
 
 IfStmt::IfStmt(SourceLocation IfLoc,
                Expression* cond,
                Statement* body,
-               Statement* elseBody)
+               Statement* elseBody,
+               IdentifierInfo *Label)
    : Statement(IfStmtID),
      IfLoc(IfLoc),
-     condition(cond), ifBranch(body), elseBranch(elseBody)
+     condition(cond), ifBranch(body), elseBranch(elseBody),
+     Label(Label)
 {
 
 }
@@ -276,8 +246,9 @@ IfStmt::IfStmt(EmptyShell)
 
 IfStmt* IfStmt::Create(ASTContext &C, SourceLocation IfLoc,
                        Expression *cond, Statement *body,
-                       Statement *elseBody) {
-   return new(C) IfStmt(IfLoc, cond, body, elseBody);
+                       Statement *elseBody,
+                       IdentifierInfo *Label) {
+   return new(C) IfStmt(IfLoc, cond, body, elseBody, Label);
 }
 
 IfLetStmt::IfLetStmt(SourceLocation IfLoc,
@@ -332,10 +303,12 @@ IfCaseStmt* IfCaseStmt::Create(ASTContext &C,
 
 ForStmt::ForStmt(SourceLocation ForLoc,
                  Statement* init, Expression* term,
-                 Statement* inc, Statement* body)
+                 Statement* inc, Statement* body,
+                 IdentifierInfo *Label)
    : Statement(ForStmtID),
      ForLoc(ForLoc),
-     initialization(init), termination(term), increment(inc), body(body)
+     initialization(init), termination(term), increment(inc), body(body),
+     Label(Label)
 {
 
 }
@@ -348,16 +321,18 @@ ForStmt::ForStmt(EmptyShell)
 
 ForStmt* ForStmt::Create(ASTContext &C, SourceLocation ForLoc,
                          Statement *init, Expression *term, Statement *inc,
-                         Statement *body) {
-   return new(C) ForStmt(ForLoc, init, term, inc, body);
+                         Statement *body,
+                         IdentifierInfo *Label) {
+   return new(C) ForStmt(ForLoc, init, term, inc, body, Label);
 }
 
 ForInStmt::ForInStmt(SourceLocation ForLoc,
                      LocalVarDecl* decl,
                      Expression* range,
-                     Statement* body)
+                     Statement* body,
+                     IdentifierInfo *Label)
    : Statement(ForInStmtID),
-     ForLoc(ForLoc), decl(decl), rangeExpr(range), body(body)
+     ForLoc(ForLoc), decl(decl), rangeExpr(range), body(body), Label(Label)
 {
 
 }
@@ -371,14 +346,19 @@ ForInStmt* ForInStmt::Create(ASTContext &C,
                              SourceLocation ForLoc,
                              LocalVarDecl *decl,
                              Expression *range,
-                             Statement *body) {
-   return new(C) ForInStmt(ForLoc, decl, range, body);
+                             Statement *body,
+                             IdentifierInfo *Label) {
+   return new(C) ForInStmt(ForLoc, decl, range, body, Label);
 }
 
 WhileStmt::WhileStmt(SourceLocation WhileLoc, Expression *cond,
-                     Statement *body, bool atLeastOnce)
+                     Statement *body,
+                     IdentifierInfo *Label,
+                     bool atLeastOnce)
    : Statement(WhileStmtID),
-     WhileLoc(WhileLoc), condition(cond), body(body), atLeastOnce(atLeastOnce)
+     WhileLoc(WhileLoc), condition(cond),
+     body(body), atLeastOnce(atLeastOnce),
+     Label(Label)
 {
 
 }
@@ -391,8 +371,10 @@ WhileStmt::WhileStmt(EmptyShell)
 WhileStmt* WhileStmt::Create(ASTContext &C,
                              SourceLocation WhileLoc,
                              Expression *cond,
-                             Statement *body, bool atLeastOnce) {
-   return new(C) WhileStmt(WhileLoc, cond, body, atLeastOnce);
+                             Statement *body,
+                             IdentifierInfo *Label,
+                             bool atLeastOnce) {
+   return new(C) WhileStmt(WhileLoc, cond, body, Label, atLeastOnce);
 }
 
 CaseStmt::CaseStmt(SourceLocation CaseLoc,
@@ -425,10 +407,12 @@ SourceRange CaseStmt::getSourceRange() const
 
 MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
                      Expression *switchVal,
-                     llvm::ArrayRef<CaseStmt*> cases)
+                     llvm::ArrayRef<CaseStmt*> cases,
+                     IdentifierInfo *Label)
    : Statement(MatchStmtID),
      MatchLoc(MatchLoc), Braces(Braces),
-     switchValue(switchVal), NumCases((unsigned)cases.size())
+     switchValue(switchVal), NumCases((unsigned)cases.size()),
+     Label(Label)
 {
    std::copy(cases.begin(), cases.end(), getTrailingObjects<CaseStmt*>());
 }
@@ -442,11 +426,12 @@ MatchStmt* MatchStmt::Create(ASTContext &C,
                              SourceLocation MatchLoc,
                              SourceRange Braces,
                              Expression *switchVal,
-                             llvm::ArrayRef<CaseStmt *> cases) {
+                             llvm::ArrayRef<CaseStmt *> cases,
+                             IdentifierInfo *Label) {
    void *Mem = C.Allocate(totalSizeToAlloc<CaseStmt*>(cases.size()),
                           alignof(MatchStmt));
 
-   return new(Mem) MatchStmt(MatchLoc, Braces, switchVal, cases);
+   return new(Mem) MatchStmt(MatchLoc, Braces, switchVal, cases, Label);
 }
 
 MatchStmt* MatchStmt::CreateEmpty(ASTContext &C, unsigned N)
@@ -518,17 +503,20 @@ SourceRange DiscardAssignStmt::getSourceRange() const
    return SourceRange(UnderscoreLoc, RHS->getSourceRange().getEnd());
 }
 
-DoStmt::DoStmt(SourceRange SR, Statement* body)
+DoStmt::DoStmt(SourceRange SR, Statement* body,
+               IdentifierInfo *Label)
    : Statement(DoStmtID),
-     SR(SR), body(body), NumCatchBlocks(0)
+     SR(SR), body(body), NumCatchBlocks(0), Label(Label)
 {}
 
 DoStmt::DoStmt(SourceRange SR,
                Statement* body,
-               ArrayRef<CatchBlock> catchBlocks)
+               ArrayRef<CatchBlock> catchBlocks,
+               IdentifierInfo *Label)
    : Statement(DoStmtID),
      SR(SR), body(body),
-     NumCatchBlocks((unsigned)catchBlocks.size())
+     NumCatchBlocks((unsigned)catchBlocks.size()),
+     Label(Label)
 {
    std::copy(catchBlocks.begin(), catchBlocks.end(),
              getTrailingObjects<CatchBlock>());

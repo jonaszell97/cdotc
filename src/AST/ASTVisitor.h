@@ -193,9 +193,6 @@ protected:
       return true;
    }
 
-   bool visitLabelStmt(LabelStmt*) { return true; }
-   bool visitGotoStmt(GotoStmt*) { return true; }
-
    bool visitForStmt(ForStmt* Stmt)
    {
       if (!visit(Stmt->getInitialization()))
@@ -409,14 +406,6 @@ protected:
    bool visitBuiltinIdentExpr(BuiltinIdentExpr*) { return true; }
    bool visitSelfExpr(SelfExpr*) { return true; }
    bool visitSuperExpr(SuperExpr*) { return true; }
-
-   bool visitMemberRefExpr(MemberRefExpr* Stmt)
-   {
-      if (auto E = Stmt->getParentExpr())
-         visit(E);
-
-      return true;
-   }
 
    bool visitTupleMemberExpr(TupleMemberExpr* Stmt)
    {

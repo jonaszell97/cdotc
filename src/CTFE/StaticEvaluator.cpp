@@ -186,8 +186,6 @@ private:
 
    Variant visitCallExpr(CallExpr *expr);
 
-   Variant visitMemberRefExpr(MemberRefExpr *Expr);
-
    Variant visitUnaryOperator(UnaryOperator *UnOp);
    Variant visitBinaryOperator(BinaryOperator *BinOp);
 
@@ -333,11 +331,6 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *expr)
          llvm_unreachable("bad known function kind");
       }
    }
-}
-
-Variant EvaluatorImpl::visitMemberRefExpr(MemberRefExpr *Expr)
-{
-   llvm_unreachable("bad member kind");
 }
 
 Variant EvaluatorImpl::visitUnaryOperator(UnaryOperator* UnOp)

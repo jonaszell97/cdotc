@@ -115,6 +115,7 @@ void ASTStmtWriter::visitBreakStmt(BreakStmt *S)
    visitStmt(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitContinueStmt(ContinueStmt *S)
@@ -122,6 +123,7 @@ void ASTStmtWriter::visitContinueStmt(ContinueStmt *S)
    visitStmt(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitReturnStmt(ReturnStmt *S)
@@ -150,22 +152,6 @@ void ASTStmtWriter::visitCaseStmt(CaseStmt *S)
    Record.AddStmt(S->getBody());
 }
 
-void ASTStmtWriter::visitLabelStmt(LabelStmt *S)
-{
-   visitStmt(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddIdentifierRef(S->getLabel());
-}
-
-void ASTStmtWriter::visitGotoStmt(GotoStmt *S)
-{
-   visitStmt(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddIdentifierRef(S->getLabel());
-}
-
 void ASTStmtWriter::visitForStmt(ForStmt *S)
 {
    visitStmt(S);
@@ -175,6 +161,7 @@ void ASTStmtWriter::visitForStmt(ForStmt *S)
    Record.AddStmt(S->getTermination());
    Record.AddStmt(S->getIncrement());
    Record.AddStmt(S->getBody());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitIfStmt(IfStmt *S)
@@ -185,6 +172,7 @@ void ASTStmtWriter::visitIfStmt(IfStmt *S)
    Record.AddStmt(S->getCondition());
    Record.AddStmt(S->getIfBranch());
    Record.AddStmt(S->getElseBranch());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitIfLetStmt(IfLetStmt *S)
@@ -215,6 +203,7 @@ void ASTStmtWriter::visitWhileStmt(WhileStmt *S)
    Record.AddStmt(S->getCondition());
    Record.AddStmt(S->getBody());
    Record.push_back(S->isAtLeastOnce());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitForInStmt(ForInStmt *S)
@@ -228,6 +217,7 @@ void ASTStmtWriter::visitForInStmt(ForInStmt *S)
 
    Record.AddDeclRef(S->getGetIteratorFn());
    Record.AddDeclRef(S->getNextFn());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
@@ -242,6 +232,7 @@ void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
    Record.AddSourceRange(S->getBraceRange());
    Record.AddStmt(S->getSwitchValue());
    Record.push_back(S->hasMutableCaseArg());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 static void WriteCatchBlock(ASTRecordWriter &Record, CatchBlock &CB)
@@ -261,6 +252,7 @@ void ASTStmtWriter::visitDoStmt(DoStmt *S)
 
    Record.AddSourceRange(S->getSourceRange());
    Record.AddStmt(S->getBody());
+   Record.AddIdentifierRef(S->getLabel());
 }
 
 void ASTStmtWriter::visitThrowStmt(ThrowStmt *S)
@@ -510,21 +502,12 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    Flags |= (S->isSelf() << 6);
    Flags |= (S->allowIncompleteTemplateArgs() << 7);
    Flags |= (S->allowNamespaceRef() << 8);
+   Flags |= (S->hasLeadingDot() << 8);
 
    Record.push_back(Flags);
    Record.push_back(S->getCaptureIndex());
    Record.AddStmt(S->getParentExpr());
    Record.AddDeclRef(support::cast_or_null<Decl>(S->getDeclCtx()));
-}
-
-void ASTStmtWriter::visitMemberRefExpr(MemberRefExpr *S)
-{
-   visitExpr(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddDeclarationName(S->getDeclName());
-   Record.push_back(static_cast<uintptr_t>(S->getKind()));
-   Record.AddStmt(S->getParentExpr());
 }
 
 void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr *S)

@@ -646,7 +646,7 @@ private:
    ParseResult parseCompoundStmt(bool preserveTopLevel = false,
                                  bool noOpenBrace = false);
 
-   ParseResult parseDoStmt();
+   ParseResult parseDoStmt(IdentifierInfo *Label = nullptr);
 
    ParseResult parseCollectionLiteral();
 
@@ -773,10 +773,11 @@ private:
 
    void parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases);
 
-   ParseResult parseIfStmt();
-   ParseResult parseWhileStmt(bool conditionBefore = true);
-   ParseResult parseForStmt();
-   ParseResult parseMatchStmt();
+   ParseResult parseIfStmt(IdentifierInfo *Label = nullptr);
+   ParseResult parseWhileStmt(IdentifierInfo *Label = nullptr,
+                              bool conditionBefore = true);
+   ParseResult parseForStmt(IdentifierInfo *Label = nullptr);
+   ParseResult parseMatchStmt(IdentifierInfo *Label = nullptr);
 
    ParseResult parseDeclareStmt();
 

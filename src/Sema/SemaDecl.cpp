@@ -5,7 +5,6 @@
 #include "Driver/Compiler.h"
 
 #include "AST/Decl.h"
-#include "AST/Transform.h"
 #include "AST/TypeBuilder.h"
 #include "AST/TypeVisitor.h"
 #include "Basic/FileManager.h"

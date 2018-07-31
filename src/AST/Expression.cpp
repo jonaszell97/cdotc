@@ -33,8 +33,6 @@ Expression* Expression::getParentExpr() const
    switch (typeID) {
    case IdentifierRefExprID:
       return cast<IdentifierRefExpr>(this)->getParentExpr();
-   case MemberRefExprID:
-      return cast<MemberRefExpr>(this)->getParentExpr();
    case SubscriptExprID:
       return cast<SubscriptExpr>(this)->getParentExpr();
    case TupleMemberExprID:
@@ -55,8 +53,6 @@ void Expression::setParentExpr(Expression *E)
    switch (typeID) {
    case IdentifierRefExprID:
       return cast<IdentifierRefExpr>(this)->setParentExpr(E);
-   case MemberRefExprID:
-      return cast<MemberRefExpr>(this)->setParentExpr(E);
    case SubscriptExprID:
       return cast<SubscriptExpr>(this)->setParentExpr(E);
    case TupleMemberExprID:
@@ -1265,7 +1261,8 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      Loc(Loc), DeclCtx(DeclCtx), staticLookup(false),
      pointerAccess(false), FoundResult(false), InTypePosition(InTypePos),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
+     LeadingDot(false)
 {
    IdentifierInfo *II = nullptr;
    if (Name.isSimpleIdentifier())
@@ -1289,7 +1286,8 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      Loc(Loc), ParentExpr(ParentExpr), DeclCtx(nullptr), staticLookup(false),
      pointerAccess(IsPointerAccess), FoundResult(false), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
+     LeadingDot(false)
 {
    IdentifierInfo *II = nullptr;
    if (Name.isSimpleIdentifier())
@@ -1311,7 +1309,8 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc, IdentifierKind kind,
      Loc(Loc), kind(kind), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
+     LeadingDot(false)
 {
    setSemanticallyChecked(true);
    this->exprType = exprType;
@@ -1325,7 +1324,8 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      Loc(Loc), kind(kind), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
+     LeadingDot(false)
 {
    setSemanticallyChecked(true);
    this->ND = ND;
@@ -1337,7 +1337,8 @@ IdentifierRefExpr::IdentifierRefExpr(EmptyShell)
      Loc(), kind(IdentifierKind::Unknown), staticLookup(false),
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
-     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false)
+     AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
+     LeadingDot(false)
 {}
 
 SourceRange IdentifierRefExpr::getSourceRange() const
@@ -1411,32 +1412,6 @@ BuiltinExpr BuiltinExpr::CreateTemp(QualType Ty)
    alignas(alignof(BuiltinExpr)) BuiltinExpr Expr(Ty);
    return Expr;
 }
-
-MemberRefExpr::MemberRefExpr(SourceLocation Loc,
-                             DeclarationName Name,
-                             bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, Name),
-     Loc(Loc), pointerAccess(pointerAccess)
-{
-
-}
-
-MemberRefExpr::MemberRefExpr(SourceLocation Loc,
-                             Expression *ParentExpr,
-                             DeclarationName Name,
-                             bool pointerAccess)
-   : IdentifiedExpr(MemberRefExprID, Name),
-     Loc(Loc), ParentExpr(ParentExpr),
-     pointerAccess(pointerAccess)
-{
-
-}
-
-MemberRefExpr::MemberRefExpr(EmptyShell)
-   : IdentifiedExpr(MemberRefExprID, nullptr),
-     ParentExpr(nullptr),
-     pointerAccess(false)
-{}
 
 TupleMemberExpr::TupleMemberExpr(SourceLocation Loc,
                                  Expression *ParentExpr,

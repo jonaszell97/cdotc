@@ -4,7 +4,6 @@
 
 #include "SemaPass.h"
 
-#include "AST/Transform.h"
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
 #include "Sema/OverloadResolver.h"

@@ -487,7 +487,6 @@ private:
    SubscriptExpr* visitSubscriptExpr(SubscriptExpr *node);
    Expression* visitCallExpr(CallExpr *node);
    Expression* visitAnonymousCallExpr(AnonymousCallExpr *Expr);
-   Expression* visitMemberRefExpr(MemberRefExpr *node);
    EnumCaseExpr* visitEnumCaseExpr(EnumCaseExpr *node);
    TupleMemberExpr* visitTupleMemberExpr(TupleMemberExpr *node);
    TemplateArgListExpr* visitTemplateArgListExpr(TemplateArgListExpr *Expr);
@@ -498,8 +497,6 @@ private:
    IfStmt* visitIfStmt(IfStmt *node);
    IfLetStmt* visitIfLetStmt(IfLetStmt *node);
    IfCaseStmt* visitIfCaseStmt(IfCaseStmt *node);
-   LabelStmt* visitLabelStmt(LabelStmt *node);
-   GotoStmt* visitGotoStmt(GotoStmt *node);
 
    MatchStmt* visitMatchStmt(MatchStmt *node);
    CaseStmt* visitCaseStmt(CaseStmt *node);
@@ -509,8 +506,16 @@ private:
    CasePattern* visitCasePattern(CasePattern *node);
 
    ReturnStmt* visitReturnStmt(ReturnStmt *node);
-   BreakStmt* visitBreakStmt(BreakStmt *node);
-   ContinueStmt* visitContinueStmt(ContinueStmt *node);
+
+   BreakStmt* visitBreakStmt(BreakStmt *node)
+   {
+      llvm_unreachable("should not be dependent!");
+   }
+
+   ContinueStmt* visitContinueStmt(ContinueStmt *node)
+   {
+      llvm_unreachable("should not be dependent!");
+   }
 
    DiscardAssignStmt *visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
 
@@ -567,7 +572,10 @@ private:
    DebugStmt* visitDebugStmt(DebugStmt *node);
    DebugDecl* visitDebugDecl(DebugDecl *D);
 
-   NullStmt* visitNullStmt(NullStmt *node);
+   NullStmt* visitNullStmt(NullStmt *node)
+   {
+      llvm_unreachable("should not be dependent!");
+   }
 
    MixinExpr *visitMixinExpr(MixinExpr *Expr);
    MixinStmt *visitMixinStmt(MixinStmt *Stmt);
@@ -1869,31 +1877,6 @@ InstantiatorImpl::visitFuncArgDecl(FuncArgDecl *Decl)
                               Decl->isCstyleVararg(), Decl->isSelf());
 }
 
-NullStmt *InstantiatorImpl::visitNullStmt(NullStmt *node)
-{
-   return NullStmt::Create(Context, node->getSourceLoc());
-}
-
-BreakStmt *InstantiatorImpl::visitBreakStmt(BreakStmt *node)
-{
-   return BreakStmt::Create(Context, node->getSourceLoc());
-}
-
-ContinueStmt *InstantiatorImpl::visitContinueStmt(ContinueStmt *node)
-{
-   return ContinueStmt::Create(Context, node->getSourceLoc());
-}
-
-GotoStmt *InstantiatorImpl::visitGotoStmt(GotoStmt *node)
-{
-   return GotoStmt::Create(Context, node->getSourceLoc(), node->getLabel());
-}
-
-LabelStmt *InstantiatorImpl::visitLabelStmt(LabelStmt *node)
-{
-   return LabelStmt::Create(Context, node->getSourceLoc(), node->getLabel());
-}
-
 IntegerLiteral *InstantiatorImpl::visitIntegerLiteral(IntegerLiteral *node)
 {
    return IntegerLiteral::Create(Context, node->getSourceRange(),
@@ -2157,16 +2140,6 @@ BuiltinIdentExpr*InstantiatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *node)
 {
    return BuiltinIdentExpr::Create(Context, node->getSourceLoc(),
                                    node->getIdentifierKind());
-}
-
-Expression* InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *node)
-{
-   DeclarationName DeclName = node->getDeclName();
-   auto expr = new(Context) MemberRefExpr(node->getSourceLoc(),
-                                          copyOrNull(node->getParentExpr()),
-                                          DeclName, node->isPointerAccess());
-
-   return expr;
 }
 
 EnumCaseExpr* InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr *node)
@@ -2458,7 +2431,8 @@ IfStmt* InstantiatorImpl::visitIfStmt(IfStmt *node)
    return IfStmt::Create(Context, node->getSourceLoc(),
                          visit(node->getCondition()),
                          visit(node->getIfBranch()),
-                         copyOrNull(node->getElseBranch()));
+                         copyOrNull(node->getElseBranch()),
+                         node->getLabel());
 }
 
 IfLetStmt* InstantiatorImpl::visitIfLetStmt(IfLetStmt *node)
@@ -2482,7 +2456,7 @@ WhileStmt* InstantiatorImpl::visitWhileStmt(WhileStmt *node)
 {
    return WhileStmt::Create(Context, node->getSourceLoc(),
                             visit(node->getCondition()),
-                            visit(node->getBody()),
+                            visit(node->getBody()), node->getLabel(),
                             node->isAtLeastOnce());
 }
 
@@ -2492,7 +2466,8 @@ ForStmt* InstantiatorImpl::visitForStmt(ForStmt *node)
                           copyOrNull(node->getInitialization()),
                           copyOrNull(node->getTermination()),
                           copyOrNull(node->getIncrement()),
-                          copyOrNull(node->getBody()));
+                          copyOrNull(node->getBody()),
+                          node->getLabel());
 }
 
 ForInStmt* InstantiatorImpl::visitForInStmt(ForInStmt *node)
@@ -2500,7 +2475,8 @@ ForInStmt* InstantiatorImpl::visitForInStmt(ForInStmt *node)
    return ForInStmt::Create(Context, node->getSourceLoc(),
                             clone<LocalVarDecl>(node->getDecl()),
                             visit(node->getRangeExpr()),
-                            visit(node->getBody()));
+                            visit(node->getBody()),
+                            node->getLabel());
 }
 
 MatchStmt* InstantiatorImpl::visitMatchStmt(MatchStmt *node)
@@ -2508,7 +2484,8 @@ MatchStmt* InstantiatorImpl::visitMatchStmt(MatchStmt *node)
    return MatchStmt::Create(Context, node->getMatchLoc(),
                             node->getBraceRange(),
                             visit(node->getSwitchValue()),
-                            cloneVector(node->getCases()));
+                            cloneVector(node->getCases()),
+                            node->getLabel());
 }
 
 CaseStmt* InstantiatorImpl::visitCaseStmt(CaseStmt *node)
@@ -2558,7 +2535,7 @@ DoStmt* InstantiatorImpl::visitDoStmt(DoStmt *node)
    }
 
    return new(Context) DoStmt(node->getSourceRange(), visit(node->getBody()),
-                              catchBlocks);
+                              catchBlocks, node->getLabel());
 }
 
 TryExpr *InstantiatorImpl::visitTryExpr(TryExpr *Expr)
