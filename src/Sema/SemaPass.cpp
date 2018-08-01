@@ -2163,13 +2163,10 @@ StmtResult SemaPass::visitForInStmt(ForInStmt *Stmt)
 
 StmtResult SemaPass::visitWhileStmt(WhileStmt *Stmt)
 {
-   auto CondExpr = Stmt->getCondition();
+   ScopeGuard BodyScope(*this);
+   visitIfConditions(Stmt, Stmt->getConditions());
 
-   auto Cond = getAsOrCast(Stmt, CondExpr, Context.getBoolTy());
-   if (Cond)
-      Stmt->setCondition(Cond.get());
-
-   ScopeGuard scope(*this, true, true);
+   ScopeGuard LoopScope(*this, true, true);
    auto BodyRes = visitStmt(Stmt, Stmt->getBody());
    if (BodyRes)
       Stmt->setBody(BodyRes.get());
@@ -2788,80 +2785,105 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation *Expr)
 
 StmtResult SemaPass::visitBreakStmt(BreakStmt *Stmt)
 {
-   auto LS = getLoopScope();
-   if (!LS || !LS->isBreakable())
-      diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
-               /*break*/ 1);
+   for (auto *S = getCurrentScope(); S; S = S->getEnclosingScope()) {
+      auto *LS = dyn_cast<LoopScope>(S);
+      if (!LS || !LS->isBreakable())
+         continue;
+
+      return Stmt;
+   }
+
+   diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
+            /*break*/ 1);
 
    return Stmt;
 }
 
 StmtResult SemaPass::visitContinueStmt(ContinueStmt *Stmt)
 {
-   auto LS = getLoopScope();
-   if (!LS || !LS->isContinuable()) {
-      diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
-               /*continue*/ 0);
+   for (auto *S = getCurrentScope(); S; S = S->getEnclosingScope()) {
+      auto *LS = dyn_cast<LoopScope>(S);
+      if (!LS || !LS->isContinuable())
+         continue;
+
+      if (LS->isLastCaseInMatch()) {
+         diagnose(Stmt, err_continue_from_last_case,
+                  Stmt->getSourceRange());
+
+      }
+      else if (LS->nextCaseHasArguments()) {
+         diagnose(Stmt, err_continue_case_with_bound_vals,
+                  Stmt->getSourceRange());
+      }
+
+      return Stmt;
    }
-   else if (LS->isLastCaseInMatch())
-      diagnose(Stmt, err_continue_from_last_case,
-               Stmt->getSourceRange());
-   else if (LS->nextCaseHasArguments())
-      diagnose(Stmt, err_continue_case_with_bound_vals,
-               Stmt->getSourceRange());
+
+   diagnose(Stmt, err_loop_keyword_outside_loop, Stmt->getSourceRange(),
+            /*continue*/ 0);
 
    return Stmt;
+}
+
+void SemaPass::visitIfConditions(Statement *Stmt,
+                                 MutableArrayRef<IfCondition> Conditions) {
+   for (auto &C : Conditions) {
+      switch (C.K) {
+      case IfCondition::Expr: {
+         // if the condition contains a declaration, it only lives in the
+         // 'if' block
+         auto CondExpr = C.ExprData.Cond;
+
+         // error here does not affect the stmt body
+         auto CondRes = getAsOrCast(Stmt, CondExpr, Context.getBoolTy());
+         if (CondRes)
+            C.ExprData.Cond = CondRes.get();
+
+         break;
+      }
+      case IfCondition::Binding: {
+         auto Res = visitStmt(Stmt, C.BindingData.Decl);
+         if (!Res)
+            continue;
+
+         auto CondExpr = C.BindingData.Decl->getValue();
+         if (!CondExpr->isDependent()) {
+            auto ConvSeq = getConversionSequence(CondExpr->getExprType(),
+                                                 Context.getBoolTy());
+
+            if (!ConvSeq.isValid()) {
+               diagnose(CondExpr, err_if_let_val_must_be_boolean,
+                        CondExpr->getSourceRange());
+            }
+
+            auto *Seq = ConversionSequence::Create(Context, ConvSeq);
+            C.BindingData.ConvSeq = Seq;
+         }
+
+         break;
+      }
+      case IfCondition::Pattern: {
+         auto ExprRes = visitExpr(Stmt, C.PatternData.Expr);
+         if (!ExprRes)
+            continue;
+
+         C.PatternData.Expr = ExprRes.get();
+
+         visitPatternExpr(C.PatternData.Pattern, C.PatternData.Expr);
+         break;
+      }
+      }
+   }
 }
 
 StmtResult SemaPass::visitIfStmt(IfStmt *Stmt)
 {
    {
-      // if the condition contains a declaration, it only lives in the
-      // 'if' block
-      auto CondExpr = Stmt->getCondition();
+      ScopeGuard IfScope(*this);
+      visitIfConditions(Stmt, Stmt->getConditions());
 
-      // error here does not affect the stmt body
-      auto CondRes = getAsOrCast(Stmt, CondExpr, Context.getBoolTy());
-      if (CondRes)
-         Stmt->setCondition(CondRes.get());
-
-      ScopeGuard scope(*this);
-      auto IfRes = visitStmt(Stmt, Stmt->getIfBranch());
-      if (IfRes)
-         Stmt->setIfBranch(IfRes.get());
-   }
-
-   if (auto Else = Stmt->getElseBranch()) {
-      ScopeGuard scope(*this);
-      auto ElseRes = visitStmt(Stmt, Else);
-      if (ElseRes)
-         Stmt->setElseBranch(ElseRes.get());
-   }
-
-   return Stmt;
-}
-
-StmtResult SemaPass::visitIfLetStmt(IfLetStmt *Stmt)
-{
-   {
-      ScopeGuard scope(*this);
-      auto Res = visitStmt(Stmt, Stmt->getVarDecl());
-      if (!Res)
-         return StmtError();
-
-      auto CondExpr = Stmt->getVarDecl()->getValue();
-      if (!CondExpr->isDependent()) {
-         auto ConvSeq = getConversionSequence(CondExpr->getExprType(),
-                                              Context.getBoolTy());
-
-         if (!ConvSeq.isValid()) {
-            diagnose(CondExpr, err_if_let_val_must_be_boolean,
-                     CondExpr->getSourceRange());
-         }
-
-         auto *Seq = ConversionSequence::Create(Context, ConvSeq);
-         Stmt->setConvSeq(Seq);
-      }
+      // 'break' is allowed in labeled if statements.
+      ScopeGuard LS(*this, false, Stmt->getLabel() != nullptr);
 
       auto IfRes = visitStmt(Stmt, Stmt->getIfBranch());
       if (IfRes)
@@ -2869,35 +2891,16 @@ StmtResult SemaPass::visitIfLetStmt(IfLetStmt *Stmt)
    }
 
    if (auto Else = Stmt->getElseBranch()) {
-      ScopeGuard scope(*this);
+      // 'break' is allowed in labeled if statements.
+      ScopeGuard LS(*this, false, Stmt->getLabel() != nullptr);
+      ScopeGuard ElseScope(*this);
+
       auto ElseRes = visitStmt(Stmt, Else);
       if (ElseRes)
          Stmt->setElseBranch(ElseRes.get());
    }
 
    return Stmt;
-}
-
-StmtResult SemaPass::visitIfCaseStmt(IfCaseStmt *Stmt)
-{
-   Statement *DefaultStmt = Stmt->getElseBranch()
-      ? Stmt->getElseBranch()
-      : NullStmt::Create(Context, Stmt->getSourceLoc());
-
-   CaseStmt *DefaultCase = CaseStmt::Create(Context, Stmt->getSourceLoc(),
-                                            nullptr, DefaultStmt);
-
-   CaseStmt *PatternCase = CaseStmt::Create(Context,
-                                            Stmt->getPattern()->getSourceLoc(),
-                                            Stmt->getPattern(),
-                                            Stmt->getIfBranch());
-
-   CaseStmt *Cases[] = { DefaultCase, PatternCase };
-   auto Match = MatchStmt::Create(Context, Stmt->getSourceLoc(),
-                                  Stmt->getSourceRange(), Stmt->getVal(),
-                                  Cases, nullptr);
-
-   return visitStmt(Stmt, Match);
 }
 
 static bool checkDuplicatesForInt(SemaPass &SP, MatchStmt *Stmt)
@@ -3154,25 +3157,14 @@ StmtResult SemaPass::visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match)
    auto pattern = Stmt->getPattern();
    pattern->setContextualType(matchType);
 
-   auto caseValRes = getRValue(Stmt, pattern);
-   if (!isa<ExpressionPattern>(pattern) || !caseValRes)
+   visitPatternExpr(pattern, matchExpr);
+   if (!isa<ExpressionPattern>(pattern) || pattern->isInvalid())
       return Stmt;
 
    if (matchType->isUnknownAnyType())
       return Stmt;
 
-   auto caseVal = caseValRes.get()->getExprType();
-
-   if (matchType->isEnum() && caseVal->isEnum()) {
-      auto needed = matchType->getRecord();
-      auto given = caseVal->getRecord();
-
-      if (given != needed)
-         diagnose(Stmt, err_invalid_match, Stmt->getSourceRange(),
-                  needed->getFullName(), given->getFullName());
-
-      return Stmt;
-   }
+   auto caseVal = cast<ExpressionPattern>(pattern)->getExpr()->getExprType();
 
    auto *II = &Context.getIdentifiers().get("~=");
    auto DeclName = Context.getDeclNameTable().getInfixOperatorName(*II);
@@ -3222,9 +3214,28 @@ StmtResult SemaPass::visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match)
    return Stmt;
 }
 
-ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr)
-{
-   Expr->getExpr()->setContextualType(Expr->getContextualType());
+void SemaPass::visitPatternExpr(PatternExpr *E,
+                                Expression *MatchVal) {
+   switch (E->getTypeID()) {
+   case Expression::CasePatternID:
+      visitCasePattern(cast<CasePattern>(E), MatchVal);
+      break;
+   case Expression::IsPatternID:
+      visitIsPattern(cast<IsPattern>(E), MatchVal);
+      break;
+   case Expression::ExpressionPatternID:
+      visitExpressionPattern(cast<ExpressionPattern>(E), MatchVal);
+      break;
+   default:
+      llvm_unreachable("not a pattern!");
+   }
+
+   E->setSemanticallyChecked(true);
+}
+
+ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr,
+                                            Expression *MatchVal) {
+   Expr->getExpr()->setContextualType(MatchVal->getExprType());
 
    auto result = getRValue(Expr, Expr->getExpr());
    if (!result)
@@ -3236,14 +3247,14 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr)
    return Expr;
 }
 
-ExprResult SemaPass::visitIsPattern(IsPattern *node)
-{
+ExprResult SemaPass::visitIsPattern(IsPattern *node,
+                                    Expression *MatchVal) {
    llvm_unreachable("TODO!");
 }
 
-ExprResult SemaPass::visitCasePattern(CasePattern *Expr)
+ExprResult SemaPass::visitCasePattern(CasePattern *Expr, Expression *MatchVal)
 {
-   auto contextual = Expr->getContextualType();
+   auto contextual = MatchVal->getExprType()->stripReference();
    if (contextual->isUnknownAnyType()) {
       assert(EncounteredError && "set type to UnknownAny without erroring");
       Expr->setIsInvalid(true);

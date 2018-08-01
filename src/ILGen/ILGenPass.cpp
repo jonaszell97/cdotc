@@ -89,6 +89,22 @@ ILGenPass::TerminatorRAII::~TerminatorRAII()
       Builder.GetInsertBlock()->getInstructions().push_back(Term);
 }
 
+ILGenPass::BreakContinueRAII::BreakContinueRAII(ILGenPass &ILGen,
+                                                il::BasicBlock *BreakTarget,
+                                                il::BasicBlock *ContinueTarget,
+                                                const CleanupsDepth &CleanupUntil,
+                                                IdentifierInfo *Label)
+                                                   : ILGen(ILGen)
+{
+   ILGen.BreakContinueStack.emplace_back(BreakTarget, ContinueTarget,
+                                         CleanupUntil, Label);
+}
+
+ILGenPass::BreakContinueRAII::~BreakContinueRAII()
+{
+   ILGen.BreakContinueStack.pop_back();
+}
+
 const TargetInfo& ILGenPass::getTargetInfo() const
 {
    return SP.getContext().getTargetInfo();
@@ -3182,7 +3198,7 @@ void ILGenPass::visitForStmt(ForStmt *node)
    }
 
    CleanupRAII CS(*this);
-   BreakContinueStack.emplace_back(MergeBB, IncBB, CS.getDepth(), node->getLabel());
+   BreakContinueRAII BR(*this, MergeBB, IncBB, CS.getDepth(), node->getLabel());
 
    Builder.SetInsertPoint(BodyBB);
    if (auto Body = node->getBody()) {
@@ -3201,8 +3217,6 @@ void ILGenPass::visitForStmt(ForStmt *node)
    }
 
    Builder.CreateBr(CondBB);
-
-   BreakContinueStack.pop_back();
    Builder.SetInsertPoint(MergeBB);
 }
 
@@ -3293,11 +3307,10 @@ void ILGenPass::visitForInStmt(ForInStmt *Stmt)
 
    {
       CleanupRAII CS(*this);
-      BreakContinueStack.emplace_back(MergeBB, NextBB, CS.getDepth(),
-                                 Stmt->getLabel());
+      BreakContinueRAII BR(*this, MergeBB, NextBB, CS.getDepth(),
+                           Stmt->getLabel());
 
       visit(Stmt->getBody());
-      BreakContinueStack.pop_back();
    }
 
    // cleanup the option value.
@@ -3311,132 +3324,131 @@ void ILGenPass::visitForInStmt(ForInStmt *Stmt)
 
 void ILGenPass::visitWhileStmt(WhileStmt *node)
 {
-   auto CondBB = Builder.CreateBasicBlock("while.cond");
-
-   Builder.CreateBr(CondBB);
-   Builder.SetInsertPoint(CondBB);
-
-   il::Value *Condition;
-   {
-      ExprCleanupRAII CS(*this);
-      Condition = visit(node->getCondition());
-   }
-
    auto BodyBB = Builder.CreateBasicBlock("while.body");
    auto MergeBB = Builder.CreateBasicBlock("while.merge");
 
-   Builder.CreateCondBr(Condition, BodyBB, MergeBB);
+   BasicBlock *ContinueBB;
+   if (node->getConditions().empty()) {
+      ContinueBB = BodyBB;
+      Builder.CreateBr(BodyBB);
+   }
+   else {
+      ContinueBB = visitIfConditions(node->getConditions(), BodyBB, MergeBB);
+   }
+
    Builder.SetInsertPoint(BodyBB);
 
    CleanupRAII CS(*this);
-   BreakContinueStack.emplace_back(MergeBB, CondBB, CS.getDepth(), node->getLabel());
+   BreakContinueRAII BR(*this, MergeBB, ContinueBB,
+                        CS.getDepth(), node->getLabel());
 
    if (auto Body = node->getBody()) {
       visit(Body);
    }
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
-      Builder.CreateBr(CondBB);
+      Builder.CreateBr(ContinueBB);
    }
 
-   BreakContinueStack.pop_back();
    Builder.SetInsertPoint(MergeBB);
+}
+
+il::BasicBlock *ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
+                                             il::BasicBlock *TrueBB,
+                                             il::BasicBlock *FalseBB) {
+   BasicBlock *LastCondBB = Builder.CreateBasicBlock("if.cond");
+   Builder.CreateBr(LastCondBB);
+
+   BasicBlock *FirstBB = LastCondBB;
+
+   unsigned i = 0;
+   unsigned NumConditions = (unsigned)Conditions.size();
+
+   for (auto &C : Conditions) {
+      ExprCleanupRAII CS(*this);
+      Builder.SetInsertPoint(LastCondBB);
+
+      il::Value *NextConditionVal;
+      il::BasicBlock *NextBB;
+      if (i++ == NumConditions - 1) {
+         NextBB = TrueBB;
+      }
+      else {
+         NextBB = Builder.CreateBasicBlock("if.cond");
+      }
+
+      switch (C.K) {
+      case IfCondition::Expr: {
+         Builder.SetDebugLoc(C.ExprData.Cond->getSourceLoc());
+         NextConditionVal = visit(C.ExprData.Cond);
+
+         break;
+      }
+      case IfCondition::Binding: {
+         auto *VarDecl = C.BindingData.Decl;
+         Builder.SetDebugLoc(VarDecl->getSourceLoc());
+
+         visit(VarDecl);
+
+         auto CondExpr = Builder.CreateLoad(getValueForDecl(VarDecl));
+         NextConditionVal = HandleCast(*C.BindingData.ConvSeq, CondExpr);
+
+         break;
+      }
+      case IfCondition::Pattern: {
+         auto *Pat = C.PatternData.Pattern;
+         auto *E = C.PatternData.Expr;
+
+         visitPatternExpr(Pat, visit(E), NextBB, FalseBB);
+
+         LastCondBB = NextBB;
+         continue;
+      }
+      }
+
+      Builder.CreateCondBr(NextConditionVal, NextBB, FalseBB);
+      LastCondBB = NextBB;
+   }
+
+   return FirstBB;
 }
 
 void ILGenPass::visitIfStmt(IfStmt *node)
 {
-   Builder.SetDebugLoc(node->getCondition()->getSourceLoc());
-
-   il::Value *Condition;
-   {
-      ExprCleanupRAII CS(*this);
-      Condition = visit(node->getCondition());
-   }
-
    auto IfBranch = Builder.CreateBasicBlock("if.body");
    auto MergeBB = Builder.CreateBasicBlock("if.merge");
 
-   il::BasicBlock *FalseBB;
+   il::BasicBlock *ElseBranch = nullptr;
    if (auto Else = node->getElseBranch()) {
-      auto Guard = Builder.MakeInsertPointGuard();
-      auto ElseBranch = Builder.CreateBasicBlock("if.else");
-      Builder.SetInsertPoint(ElseBranch);
-
-      FalseBB = ElseBranch;
-
-      CleanupRAII CS(*this);
-      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                 node->getLabel());
-      
-      visit(Else);
-      if (!Builder.GetInsertBlock()->getTerminator()) {
-         Builder.CreateBr(MergeBB);
-      }
+      ElseBranch = Builder.CreateBasicBlock("if.else");
    }
    else {
-      FalseBB = MergeBB;
+      ElseBranch = MergeBB;
    }
 
-   Builder.CreateCondBr(Condition, IfBranch, FalseBB, {}, {});
+   visitIfConditions(node->getConditions(), IfBranch, ElseBranch);
 
    {
       CleanupRAII CS(*this);
-      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                 node->getLabel());
+      BreakContinueRAII BR(*this, node->getLabel() ? MergeBB : nullptr,
+                           nullptr, CS.getDepth(), node->getLabel());
 
       Builder.SetInsertPoint(IfBranch);
       visit(node->getIfBranch());
    }
 
-   if (!Builder.GetInsertBlock()->getTerminator()) {
-      Builder.CreateBr(MergeBB);
-   }
-
-   Builder.SetInsertPoint(MergeBB);
-}
-
-void ILGenPass::visitIfLetStmt(IfLetStmt *node)
-{
-   Builder.SetDebugLoc(node->getVarDecl()->getSourceLoc());
-
-   visit(node->getVarDecl());
-
-   auto CondExpr = Builder.CreateLoad(getValueForDecl(node->getVarDecl()));
-   auto Condition = HandleCast(node->getConvSeq(), CondExpr);
-
-   auto IfBranch = Builder.CreateBasicBlock("if.body");
-   auto MergeBB = Builder.CreateBasicBlock("if.merge");
-
-   il::BasicBlock *FalseBB;
    if (auto Else = node->getElseBranch()) {
       auto Guard = Builder.MakeInsertPointGuard();
-      auto ElseBranch = Builder.CreateBasicBlock("if.else");
       Builder.SetInsertPoint(ElseBranch);
 
-      FalseBB = ElseBranch;
-
       CleanupRAII CS(*this);
-      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                 node->getLabel());
+      BreakContinueRAII BR(*this, node->getLabel() ? MergeBB : nullptr,
+                           nullptr, CS.getDepth(), node->getLabel());
 
       visit(Else);
       if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
       }
-   }
-   else {
-      FalseBB = MergeBB;
-   }
-
-   Builder.CreateCondBr(Condition, IfBranch, FalseBB, {}, {});
-
-   {
-      CleanupRAII CS(*this);
-      BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                 node->getLabel());
-
-      Builder.SetInsertPoint(IfBranch);
-      visit(node->getIfBranch());
    }
 
    if (!Builder.GetInsertBlock()->getTerminator()) {
@@ -3509,11 +3521,33 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
       Builder.SetInsertPoint(CompBlocks[i]);
 
-      auto val = visit(C->getPattern());
-      if (!isa<ConstantInt>(val))
-         isIntegralSwitch = false;
+      switch (C->getPattern()->getTypeID()) {
+      case Expression::ExpressionPatternID: {
+         auto val = visit(cast<ExpressionPattern>(C->getPattern())->getExpr());
+         if (!isa<ConstantInt>(val))
+            isIntegralSwitch = false;
 
-      CaseVals.push_back(val);
+         CaseVals.push_back(val);
+         break;
+      }
+      case Expression::IsPatternID: {
+         llvm_unreachable("nah");
+      }
+      case Expression::CasePatternID: {
+         auto *CP = cast<CasePattern>(C->getPattern());
+         if (!CP->getArgs().empty()) {
+            isIntegralSwitch = false;
+         }
+         else {
+            CaseVals.push_back(CP->getCaseDecl()->getILValue());
+         }
+
+         break;
+      }
+      default:
+         llvm_unreachable("not a pattern");
+      }
+
       ++i;
    }
 
@@ -3589,11 +3623,11 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
 
          if (i < CaseBlocks.size() - 1) {
             BreakContinueStack.emplace_back(MergeBB, CaseBlocks[i + 1],
-                                       CS.getDepth(), node->getLabel());
+                                            CS.getDepth(), node->getLabel());
          }
          else {
             BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                       node->getLabel());
+                                            node->getLabel());
          }
 
          visit(Body);
@@ -3915,14 +3949,78 @@ void ILGenPass::visitCaseStmt(CaseStmt *node)
 
 }
 
+void ILGenPass::visitPatternExpr(PatternExpr *E,
+                                 il::Value *MatchVal,
+                                 il::BasicBlock *MatchBB,
+                                 il::BasicBlock *NoMatchBB,
+                                 ArrayRef<Value*> MatchArgs,
+                                 ArrayRef<Value*> NoMatchArgs) {
+   switch (E->getTypeID()) {
+   case Expression::CasePatternID:
+      visitCasePattern(cast<CasePattern>(E), MatchVal, MatchBB, NoMatchBB,
+                       MatchArgs, NoMatchArgs);
+
+      return;
+   default:
+      llvm_unreachable("not a pattern!");
+   }
+}
+
 il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern *node)
 {
    return visit(node->getExpr());
 }
 
-il::Value* ILGenPass::visitCasePattern(CasePattern *node)
-{
-   return node->getCaseDecl()->getILValue();
+il::Value* ILGenPass::visitCasePattern(CasePattern *node,
+                                       il::Value *MatchVal,
+                                       il::BasicBlock *MatchBB,
+                                       il::BasicBlock *NoMatchBB,
+                                       ArrayRef<Value*> MatchArgs,
+                                       ArrayRef<Value*> NoMatchArgs) {
+   assert(MatchVal && "no value to match!");
+
+   if (MatchVal->isLvalue())
+      MatchVal = Builder.CreateLoad(MatchVal);
+
+   unsigned i = 0;
+   auto *Case = node->getCaseDecl();
+
+   // Check if the raw values are equal.
+   auto *GivenRawVal = Builder.CreateEnumRawValue(MatchVal);
+   auto *NeededRawVal = Case->getILValue();
+
+   il::BasicBlock *LastCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
+   Builder.CreateCondBr(Builder.CreateCompEQ(GivenRawVal, NeededRawVal),
+                        LastCmpBB, NoMatchBB, {}, NoMatchArgs);
+
+   for (auto &Arg : node->getArgs()) {
+      Builder.SetInsertPoint(LastCmpBB);
+
+      il::BasicBlock *NextCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
+      if (Arg.isExpr()) {
+         // Compare with the next extracted enum value.
+         auto *GivenVal = Builder.CreateEnumExtract(MatchVal, Case, i, true);
+         auto *NeededVal = visit(Arg.getExpr());
+
+         auto *Eq = CreateEqualityComp(GivenVal, NeededVal);
+         Builder.CreateCondBr(Eq, NextCmpBB, NoMatchBB, {}, NoMatchArgs);
+      }
+      else {
+         // Bind the declaration to the case value.
+         auto *GivenVal = Builder.CreateEnumExtract(MatchVal, Case, i, true);
+         addDeclValuePair(Arg.getDecl(), GivenVal);
+
+         Builder.CreateBr(NextCmpBB);
+      }
+
+      LastCmpBB = NextCmpBB;
+      ++i;
+   }
+
+   Builder.SetInsertPoint(LastCmpBB);
+   Builder.CreateBr(MatchBB, MatchArgs);
+
+   return nullptr;
 }
 
 il::Value* ILGenPass::visitIsPattern(IsPattern *node)

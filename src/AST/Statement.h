@@ -380,16 +380,60 @@ public:
    void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
-class IfStmt: public Statement {
+struct IfCondition {
+   enum Kind {
+      Expr,
+      Binding,
+      Pattern,
+   };
+
+   IfCondition(Expression *E)
+      : K(Expr), ExprData{ E }
+   {}
+
+   IfCondition(LocalVarDecl *D, ConversionSequence *ConvSeq)
+      : K(Binding), BindingData{ D, ConvSeq }
+   {}
+
+   IfCondition(PatternExpr *Pat, Expression *E)
+      : K(Pattern), PatternData{ Pat, E }
+   {}
+
+   Kind K;
+
+   struct ExprDataType {
+      Expression *Cond = nullptr;
+   };
+
+   struct BindingDataType {
+      LocalVarDecl *Decl = nullptr;
+      ConversionSequence *ConvSeq = nullptr;
+   };
+
+   struct PatternDataType {
+      PatternExpr *Pattern = nullptr;
+      Expression *Expr = nullptr;
+   };
+
+   union {
+      ExprDataType ExprData;
+      BindingDataType BindingData;
+      PatternDataType PatternData;
+   };
+};
+
+class IfStmt final: public Statement, TrailingObjects<IfStmt, IfCondition> {
    IfStmt(SourceLocation IfLoc,
-          Expression* cond,
+          ArrayRef<IfCondition> Conditions,
           Statement* body,
           Statement* elseBody,
           IdentifierInfo *Label);
 
+   IfStmt(EmptyShell Empty, unsigned N);
+
    SourceLocation IfLoc;
 
-   Expression* condition;
+   unsigned NumConditions;
    Statement* ifBranch;
    Statement* elseBranch;
 
@@ -399,14 +443,16 @@ public:
    static bool classofKind(NodeType kind) { return kind == IfStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
+   friend TrailingObjects;
+
    static IfStmt *Create(ASTContext &C,
                          SourceLocation IfLoc,
-                         Expression* cond,
+                         ArrayRef<IfCondition> Conditions,
                          Statement* body,
                          Statement* elseBody,
                          IdentifierInfo *Label);
 
-   IfStmt(EmptyShell Empty);
+   static IfStmt *CreateEmpty(ASTContext &C, unsigned N);
 
    SourceRange getSourceRange() const
    {
@@ -417,116 +463,82 @@ public:
 
    void setIfLoc(SourceLocation L) { IfLoc = L; }
 
-   Expression* getCondition() const { return condition; }
    Statement* getIfBranch() const { return ifBranch; }
    Statement* getElseBranch() const { return elseBranch; }
 
-   void setCondition(Expression *C) { condition = C; }
    void setIfBranch(Statement *If) { ifBranch = If; }
    void setElseBranch(Statement* Else) { elseBranch = Else; }
 
+   ArrayRef<IfCondition> getConditions() const
+   {
+      return { getTrailingObjects<IfCondition>(), NumConditions };
+   }
+
+   MutableArrayRef<IfCondition> getConditions()
+   {
+      return { getTrailingObjects<IfCondition>(), NumConditions };
+   }
+
    IdentifierInfo* getLabel() const { return Label; }
    void setLabel(IdentifierInfo* V) { Label = V; }
 };
 
-class IfLetStmt: public Statement {
-   IfLetStmt(SourceLocation IfLoc,
-             LocalVarDecl *VarDecl,
-             Statement *IfBranch,
-             Statement *ElseBranch);
+class WhileStmt final: public Statement,
+                       TrailingObjects<WhileStmt, IfCondition> {
+   WhileStmt(SourceLocation WhileLoc,
+             ArrayRef<IfCondition> Conditions,
+             Statement* body,
+             IdentifierInfo *Label,
+             bool atLeastOnce);
 
-   SourceLocation IfLoc;
-   LocalVarDecl *VarDecl;
-   Statement *IfBranch;
-   Statement *ElseBranch;
-   ConversionSequence *ConvSeq = nullptr;
+   WhileStmt(EmptyShell Empty, unsigned N);
+
+   SourceLocation WhileLoc;
+   unsigned NumConditions;
+   Statement* body;
+   bool atLeastOnce;
    IdentifierInfo *Label = nullptr;
 
 public:
-   static bool classofKind(NodeType kind) { return kind == IfLetStmtID; }
+   static bool classofKind(NodeType kind) { return kind == WhileStmtID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
-   static IfLetStmt *Create(ASTContext &C,
-                            SourceLocation IfLoc,
-                            LocalVarDecl *VarDecl,
-                            Statement *IfBranch,
-                            Statement *ElseBranch);
+   friend TrailingObjects;
 
-   IfLetStmt(EmptyShell Empty);
-   
+   static WhileStmt *Create(ASTContext &C,
+                            SourceLocation WhileLoc,
+                            ArrayRef<IfCondition> Conditions,
+                            Statement* body,
+                            IdentifierInfo *Label,
+                            bool atLeastOnce = false);
+
+   static WhileStmt *CreateEmpty(ASTContext &C, unsigned N);
+
    SourceRange getSourceRange() const
    {
-      return SourceRange(IfLoc,
-                         ElseBranch ? ElseBranch->getSourceRange().getEnd()
-                                    : IfBranch->getSourceRange().getEnd());
+      return SourceRange(WhileLoc, body->getSourceRange().getEnd());
    }
 
-   SourceLocation getIfLoc() const { return IfLoc; }
-   LocalVarDecl *getVarDecl() const { return VarDecl; }
-   Statement *getIfBranch() const { return IfBranch; }
-   Statement *getElseBranch() const { return ElseBranch; }
+   void setWhileLoc(SourceLocation L) { WhileLoc = L; }
 
-   void setIfLoc(SourceLocation L) { IfLoc = L; }
-   void setVarDecl(LocalVarDecl *VarDecl) { IfLetStmt::VarDecl = VarDecl; }
+   Statement* getBody() const { return body; }
+   void setBody(Statement *B) { body = B; }
 
-   void setIfBranch(Statement *IB) { IfBranch = IB; }
-   void setElseBranch(Statement *EB) { ElseBranch = EB; }
+   bool isAtLeastOnce() const { return atLeastOnce; }
+   void setAtLeastOnce(bool b) { atLeastOnce = b; }
 
-   const ConversionSequence &getConvSeq() const { return *ConvSeq; }
-   void setConvSeq(ConversionSequence *CS) { ConvSeq = CS; }
+   ArrayRef<IfCondition> getConditions() const
+   {
+      return { getTrailingObjects<IfCondition>(), NumConditions };
+   }
+
+   MutableArrayRef<IfCondition> getConditions()
+   {
+      return { getTrailingObjects<IfCondition>(), NumConditions };
+   }
 
    IdentifierInfo* getLabel() const { return Label; }
    void setLabel(IdentifierInfo* V) { Label = V; }
-};
-
-class PatternExpr;
-
-class IfCaseStmt: public Statement {
-   IfCaseStmt(SourceLocation IfLoc,
-              PatternExpr *Pattern,
-              Expression *Val,
-              Statement *IfBranch,
-              Statement *ElseBranch);
-
-   SourceLocation IfLoc;
-   PatternExpr *Pattern;
-   Expression *Val;
-   Statement *IfBranch;
-   Statement *ElseBranch;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == IfCaseStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static IfCaseStmt *Create(ASTContext &C,
-                             SourceLocation IfLoc,
-                             PatternExpr *Pattern,
-                             Expression *Val,
-                             Statement *IfBranch,
-                             Statement *ElseBranch);
-
-   IfCaseStmt(EmptyShell Empty);
-
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(IfLoc,
-                         ElseBranch ? ElseBranch->getSourceRange().getEnd()
-                                    : IfBranch->getSourceRange().getEnd());
-   }
-
-   void setIfLoc(SourceLocation L) { IfLoc = L; }
-   void setPattern(PatternExpr *Pattern) { IfCaseStmt::Pattern = Pattern; }
-
-   SourceLocation getIfLoc() const { return IfLoc; }
-   PatternExpr *getPattern() const { return Pattern; }
-   Statement *getIfBranch() const { return IfBranch; }
-   Statement *getElseBranch() const { return ElseBranch; }
-
-   Expression *getVal() const { return Val; }
-   void setVal(Expression *Val) { IfCaseStmt::Val = Val; }
-
-   void setIfBranch(Statement *IB) { IfBranch = IB; }
-   void setElseBranch(Statement *EB) { ElseBranch = EB; }
 };
 
 class ForStmt: public Statement {
@@ -627,51 +639,6 @@ public:
 
    CallableDecl *getNextFn() const { return nextFn; }
    void setNextFn(CallableDecl *fn) { nextFn = fn; }
-
-   IdentifierInfo* getLabel() const { return Label; }
-   void setLabel(IdentifierInfo* V) { Label = V; }
-};
-
-class WhileStmt: public Statement {
-   WhileStmt(SourceLocation WhileLoc,
-             Expression* cond,
-             Statement* body,
-             IdentifierInfo *Label,
-             bool atLeastOnce);
-
-   SourceLocation WhileLoc;
-   Expression* condition;
-   Statement* body;
-   bool atLeastOnce;
-   IdentifierInfo *Label = nullptr;
-
-public:
-   static bool classofKind(NodeType kind) { return kind == WhileStmtID; }
-   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
-
-   static WhileStmt *Create(ASTContext &C,
-                            SourceLocation WhileLoc,
-                            Expression* cond, Statement* body,
-                            IdentifierInfo *Label,
-                            bool atLeastOnce = false);
-
-   WhileStmt(EmptyShell Empty);
-
-   SourceRange getSourceRange() const
-   {
-      return SourceRange(WhileLoc, body->getSourceRange().getEnd());
-   }
-
-   void setWhileLoc(SourceLocation L) { WhileLoc = L; }
-
-   Expression* getCondition() const { return condition; }
-   Statement* getBody() const { return body; }
-
-   void setCondition(Expression *C) { condition = C; }
-   void setBody(Statement *B) { body = B; }
-
-   bool isAtLeastOnce() const { return atLeastOnce; }
-   void setAtLeastOnce(bool b) { atLeastOnce = b; }
 
    IdentifierInfo* getLabel() const { return Label; }
    void setLabel(IdentifierInfo* V) { Label = V; }

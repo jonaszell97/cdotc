@@ -191,16 +191,6 @@ bool DumperImpl::visitIfStmt(IfStmt* stmt)
    return true;
 }
 
-bool DumperImpl::visitIfLetStmt(IfLetStmt* stmt)
-{
-   return true;
-}
-
-bool DumperImpl::visitIfCaseStmt(IfCaseStmt* stmt)
-{
-   return true;
-}
-
 bool DumperImpl::visitWhileStmt(WhileStmt* stmt)
 {
    return true;

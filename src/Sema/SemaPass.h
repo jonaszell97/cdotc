@@ -430,15 +430,21 @@ public:
    StmtResult visitForStmt(ForStmt *Stmt);
    StmtResult visitForInStmt(ForInStmt *Stmt);
    StmtResult visitWhileStmt(WhileStmt *Stmt);
+
+   void visitIfConditions(Statement *Stmt,
+                          MutableArrayRef<IfCondition> Conditions);
    StmtResult visitIfStmt(IfStmt *Stmt);
-   StmtResult visitIfLetStmt(IfLetStmt *Stmt);
-   StmtResult visitIfCaseStmt(IfCaseStmt *Stmt);
 
    StmtResult visitMatchStmt(MatchStmt *Stmt);
    StmtResult visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match = nullptr);
-   ExprResult visitExpressionPattern(ExpressionPattern *node);
-   ExprResult visitCasePattern(CasePattern *Expr);
-   ExprResult visitIsPattern(IsPattern *node);
+
+   void visitPatternExpr(PatternExpr *E, Expression *MatchVal);
+   ExprResult visitExpressionPattern(ExpressionPattern *node,
+                                     Expression *MatchVal = nullptr);
+   ExprResult visitCasePattern(CasePattern *Expr,
+                               Expression *MatchVal = nullptr);
+   ExprResult visitIsPattern(IsPattern *node,
+                             Expression *MatchVal = nullptr);
 
    StmtResult visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
 

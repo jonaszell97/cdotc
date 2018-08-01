@@ -108,11 +108,14 @@ public:
    il::Value *visitEnumCaseExpr(EnumCaseExpr *node);
    il::Value *visitTemplateArgListExpr(TemplateArgListExpr *Expr);
 
+   il::BasicBlock* visitIfConditions(ArrayRef<IfCondition> Conditions,
+                                     il::BasicBlock *TrueBB,
+                                     il::BasicBlock *FalseBB);
+
    void visitForStmt(ForStmt *node);
    void visitForInStmt(ForInStmt *Stmt);
    void visitWhileStmt(WhileStmt *node);
    void visitIfStmt(IfStmt *node);
-   void visitIfLetStmt(IfLetStmt *node);
 
    void visitMatchStmt(MatchStmt *node);
    void HandleSwitch(MatchStmt *node);
@@ -124,8 +127,20 @@ public:
 
    void visitCaseStmt(CaseStmt *node);
 
+   void visitPatternExpr(PatternExpr *E,
+                         il::Value *MatchVal,
+                         il::BasicBlock *MatchBB,
+                         il::BasicBlock *NoMatchBB,
+                         ArrayRef<il::Value*> MatchArgs = {},
+                         ArrayRef<il::Value*> NoMatchArgs = {});
+
    il::Value *visitExpressionPattern(ExpressionPattern *node);
-   il::Value *visitCasePattern(CasePattern *node);
+   il::Value *visitCasePattern(CasePattern *node,
+                               il::Value *MatchVal = nullptr,
+                               il::BasicBlock *MatchBB = nullptr,
+                               il::BasicBlock *NoMatchBB = nullptr,
+                               ArrayRef<il::Value*> MatchArgs = {},
+                               ArrayRef<il::Value*> NoMatchArgs = {});
    il::Value *visitIsPattern(IsPattern *node);
 
    void visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
@@ -481,6 +496,19 @@ private:
       il::BasicBlock *ContinueTarget;
       CleanupsDepth CleanupUntil;
       IdentifierInfo *Label;
+   };
+
+   struct BreakContinueRAII {
+      BreakContinueRAII(ILGenPass &ILGen,
+                        il::BasicBlock *BreakTarget,
+                        il::BasicBlock *ContinueTarget = nullptr,
+                        const CleanupsDepth &CleanupUntil = CleanupsDepth(),
+                        IdentifierInfo *Label = nullptr);
+
+      ~BreakContinueRAII();
+
+   private:
+      ILGenPass &ILGen;
    };
 
    std::vector<BreakContinueScope> BreakContinueStack;

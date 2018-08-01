@@ -210,34 +210,25 @@ protected:
 
    bool visitIfStmt(IfStmt* Stmt)
    {
-      if (!visit(Stmt->getCondition()))
-         return true;
+      for (auto &C : Stmt->getConditions()) {
+         switch (C.K) {
+         case IfCondition::Expr:
+            if (!visit(C.ExprData.Cond))
+               return true;
 
-      if (!visit(Stmt->getIfBranch()))
-         return true;
+            break;
+         case IfCondition::Binding:
+            break;
+         case IfCondition::Pattern:
+            if (!visit(C.PatternData.Pattern))
+               return true;
+            if (!visit(C.PatternData.Expr))
+               return true;
 
-      if (auto Else = Stmt->getElseBranch())
-         visit(Else);
+            break;
+         }
+      }
 
-      return true;
-   }
-
-   bool visitIfLetStmt(IfLetStmt* Stmt)
-   {
-      if (!visit(Stmt->getIfBranch()))
-         return true;
-
-      if (auto Else = Stmt->getElseBranch())
-         visit(Else);
-
-      return true;
-   }
-
-   bool visitIfCaseStmt(IfCaseStmt* Stmt)
-   {
-      if (!visit(Stmt->getPattern()))
-         return true;
-      
       if (!visit(Stmt->getIfBranch()))
          return true;
 
@@ -249,8 +240,24 @@ protected:
 
    bool visitWhileStmt(WhileStmt* Stmt)
    {
-      if (!visit(Stmt->getCondition()))
-         return true;
+      for (auto &C : Stmt->getConditions()) {
+         switch (C.K) {
+         case IfCondition::Expr:
+            if (!visit(C.ExprData.Cond))
+               return true;
+
+            break;
+         case IfCondition::Binding:
+            break;
+         case IfCondition::Pattern:
+            if (!visit(C.PatternData.Pattern))
+               return true;
+            if (!visit(C.PatternData.Expr))
+               return true;
+
+            break;
+         }
+      }
 
       if (auto Body = Stmt->getBody())
          visit(Body);

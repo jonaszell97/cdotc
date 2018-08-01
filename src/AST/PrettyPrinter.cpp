@@ -185,33 +185,6 @@ void PrettyPrinterImpl::visitForInStmt(ForInStmt* stmt)
 void PrettyPrinterImpl::visitIfStmt(IfStmt* stmt)
 {
    out << "if ";
-   visitExpr(stmt->getCondition());
-
-   visitStmt(stmt->getIfBranch());
-
-   if (auto Else = stmt->getElseBranch()) {
-      out << " else ";
-      visitStmt(Else);
-   }
-}
-
-void PrettyPrinterImpl::visitIfLetStmt(IfLetStmt* stmt)
-{
-   out << "if ";
-   visitDecl(stmt->getVarDecl());
-
-   visitStmt(stmt->getIfBranch());
-
-   if (auto Else = stmt->getElseBranch()) {
-      out << " else ";
-      visitStmt(Else);
-   }
-}
-
-void PrettyPrinterImpl::visitIfCaseStmt(IfCaseStmt* stmt)
-{
-   out << "if ";
-   visitExpr(stmt->getPattern());
 
    visitStmt(stmt->getIfBranch());
 
@@ -224,7 +197,6 @@ void PrettyPrinterImpl::visitIfCaseStmt(IfCaseStmt* stmt)
 void PrettyPrinterImpl::visitWhileStmt(WhileStmt* stmt)
 {
    out << "while ";
-   visitExpr(stmt->getCondition());
    visitStmt(stmt->getBody());
 }
 

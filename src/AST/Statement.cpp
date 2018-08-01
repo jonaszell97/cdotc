@@ -227,78 +227,78 @@ ContinueStmt* ContinueStmt::Create(ASTContext &C, SourceLocation Loc,
 }
 
 IfStmt::IfStmt(SourceLocation IfLoc,
-               Expression* cond,
+               ArrayRef<IfCondition> Conditions,
                Statement* body,
                Statement* elseBody,
                IdentifierInfo *Label)
    : Statement(IfStmtID),
      IfLoc(IfLoc),
-     condition(cond), ifBranch(body), elseBranch(elseBody),
+     NumConditions(Conditions.size()), ifBranch(body), elseBranch(elseBody),
      Label(Label)
 {
+   std::copy(Conditions.begin(), Conditions.end(),
+             getTrailingObjects<IfCondition>());
+}
+
+IfStmt::IfStmt(EmptyShell, unsigned N)
+   : Statement(IfStmtID),
+     NumConditions(N), ifBranch(nullptr), elseBranch(nullptr)
+{
 
 }
 
-IfStmt::IfStmt(EmptyShell)
-   : Statement(IfStmtID),
-   condition(nullptr), ifBranch(nullptr), elseBranch(nullptr)
-{}
+IfStmt* IfStmt::CreateEmpty(ASTContext &C, unsigned N)
+{
+   void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(N), alignof(IfStmt));
+   return new(Mem) IfStmt(EmptyShell(), N);
+}
 
 IfStmt* IfStmt::Create(ASTContext &C, SourceLocation IfLoc,
-                       Expression *cond, Statement *body,
+                       ArrayRef<IfCondition> Conditions,
+                       Statement *body,
                        Statement *elseBody,
                        IdentifierInfo *Label) {
-   return new(C) IfStmt(IfLoc, cond, body, elseBody, Label);
+   void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(Conditions.size()),
+                                                        alignof(IfStmt));
+
+   return new(Mem) IfStmt(IfLoc, Conditions, body, elseBody, Label);
 }
 
-IfLetStmt::IfLetStmt(SourceLocation IfLoc,
-                     LocalVarDecl *VarDecl,
-                     Statement *IfBranch,
-                     Statement *ElseBranch)
-   : Statement(IfLetStmtID),
-     IfLoc(IfLoc), VarDecl(VarDecl), IfBranch(IfBranch), ElseBranch(ElseBranch)
+WhileStmt::WhileStmt(SourceLocation WhileLoc,
+                     ArrayRef<IfCondition> Conditions,
+                     Statement *body,
+                     IdentifierInfo *Label,
+                     bool atLeastOnce)
+   : Statement(WhileStmtID),
+     WhileLoc(WhileLoc), NumConditions((unsigned)Conditions.size()),
+     body(body), atLeastOnce(atLeastOnce),
+     Label(Label)
 {
-
+   std::copy(Conditions.begin(), Conditions.end(),
+             getTrailingObjects<IfCondition>());
 }
 
-IfLetStmt::IfLetStmt(EmptyShell)
-   : Statement(IfLetStmtID),
-     VarDecl(nullptr), IfBranch(nullptr), ElseBranch(nullptr)
+WhileStmt::WhileStmt(EmptyShell, unsigned N)
+   : Statement(WhileStmtID),
+     NumConditions(N), body(nullptr), atLeastOnce(false)
 {}
 
-IfLetStmt* IfLetStmt::Create(ASTContext &C,
-                             SourceLocation IfLoc,
-                             LocalVarDecl *VarDecl,
-                             Statement *IfBranch,
-                             Statement *ElseBranch) {
-   return new(C) IfLetStmt(IfLoc, VarDecl, IfBranch, ElseBranch);
-}
-
-IfCaseStmt::IfCaseStmt(SourceLocation IfLoc,
-                       PatternExpr *Pattern,
-                       Expression *Val,
-                       Statement *IfBranch,
-                       Statement *ElseBranch)
-   : Statement(IfCaseStmtID),
-     IfLoc(IfLoc), Pattern(Pattern), Val(Val),
-     IfBranch(IfBranch), ElseBranch(ElseBranch)
+WhileStmt* WhileStmt::CreateEmpty(ASTContext &C, unsigned N)
 {
-
+   void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(N), alignof(WhileStmt));
+   return new(Mem) WhileStmt(EmptyShell(), N);
 }
 
-IfCaseStmt::IfCaseStmt(EmptyShell)
-   : Statement(IfCaseStmtID),
-     Pattern(nullptr), Val(nullptr),
-     IfBranch(nullptr), ElseBranch(nullptr)
-{}
+WhileStmt* WhileStmt::Create(ASTContext &C,
+                             SourceLocation WhileLoc,
+                             ArrayRef<IfCondition> Conditions,
+                             Statement *body,
+                             IdentifierInfo *Label,
+                             bool atLeastOnce) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(Conditions.size()),
+                          alignof(WhileStmt));
 
-IfCaseStmt* IfCaseStmt::Create(ASTContext &C,
-                               SourceLocation IfLoc,
-                               PatternExpr *Pattern,
-                               Expression *Val,
-                               Statement *IfBranch,
-                               Statement *ElseBranch) {
-   return new(C) IfCaseStmt(IfLoc, Pattern, Val, IfBranch, ElseBranch);
+   return new(Mem) WhileStmt(WhileLoc, Conditions, body, Label, atLeastOnce);
 }
 
 ForStmt::ForStmt(SourceLocation ForLoc,
@@ -349,32 +349,6 @@ ForInStmt* ForInStmt::Create(ASTContext &C,
                              Statement *body,
                              IdentifierInfo *Label) {
    return new(C) ForInStmt(ForLoc, decl, range, body, Label);
-}
-
-WhileStmt::WhileStmt(SourceLocation WhileLoc, Expression *cond,
-                     Statement *body,
-                     IdentifierInfo *Label,
-                     bool atLeastOnce)
-   : Statement(WhileStmtID),
-     WhileLoc(WhileLoc), condition(cond),
-     body(body), atLeastOnce(atLeastOnce),
-     Label(Label)
-{
-
-}
-
-WhileStmt::WhileStmt(EmptyShell)
-   : Statement(WhileStmtID),
-     condition(nullptr), body(nullptr), atLeastOnce(false)
-{}
-
-WhileStmt* WhileStmt::Create(ASTContext &C,
-                             SourceLocation WhileLoc,
-                             Expression *cond,
-                             Statement *body,
-                             IdentifierInfo *Label,
-                             bool atLeastOnce) {
-   return new(C) WhileStmt(WhileLoc, cond, body, Label, atLeastOnce);
 }
 
 CaseStmt::CaseStmt(SourceLocation CaseLoc,

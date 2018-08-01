@@ -52,6 +52,53 @@ public:
 
 } // anonymous namespace
 
+static void WriteConvSeq(ASTRecordWriter &Record,
+                         const ConversionSequence &Seq) {
+   Record.push_back(Seq.getStrength());
+   Record.push_back(Seq.getSteps().size());
+
+   for (auto &Step : Seq.getSteps()) {
+      Record.push_back(Step.isHalt());
+      if (Step.isHalt())
+         continue;
+
+      Record.push_back(static_cast<uint64_t>(Step.getKind()));
+
+      if (Step.getKind() == CastKind::ConversionOp) {
+         Record.AddDeclRef(Step.getConversionOp());
+      }
+      else {
+         Record.AddTypeRef(Step.getResultType());
+      }
+   }
+}
+
+static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
+{
+   Record.push_back(C.K);
+   switch (C.K) {
+   case IfCondition::Expr:
+      Record.AddStmt(C.ExprData.Cond);
+      break;
+   case IfCondition::Binding:
+      Record.AddDeclRef(C.BindingData.Decl);
+
+      if (C.BindingData.ConvSeq) {
+         Record.push_back(true);
+         WriteConvSeq(Record, *C.BindingData.ConvSeq);
+      }
+      else {
+         Record.push_back(false);
+      }
+
+      break;
+   case IfCondition::Pattern:
+      Record.AddStmt(C.PatternData.Pattern);
+      Record.AddStmt(C.PatternData.Expr);
+      break;
+   }
+}
+
 void ASTStmtWriter::visit(Statement *S)
 {
    ASTVisitor::visit(S);
@@ -168,39 +215,25 @@ void ASTStmtWriter::visitIfStmt(IfStmt *S)
 {
    visitStmt(S);
 
+   Record.push_back(S->getConditions().size());
+   for (auto &C : S->getConditions())
+      WriteIfCondition(C, Record);
+
    Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddStmt(S->getCondition());
    Record.AddStmt(S->getIfBranch());
    Record.AddStmt(S->getElseBranch());
    Record.AddIdentifierRef(S->getLabel());
-}
-
-void ASTStmtWriter::visitIfLetStmt(IfLetStmt *S)
-{
-   visitStmt(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddDeclRef(S->getVarDecl());
-   Record.AddStmt(S->getIfBranch());
-   Record.AddStmt(S->getElseBranch());
-}
-
-void ASTStmtWriter::visitIfCaseStmt(IfCaseStmt *S)
-{
-   visitStmt(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddStmt(S->getPattern());
-   Record.AddStmt(S->getIfBranch());
-   Record.AddStmt(S->getElseBranch());
 }
 
 void ASTStmtWriter::visitWhileStmt(WhileStmt *S)
 {
    visitStmt(S);
 
+   Record.push_back(S->getConditions().size());
+   for (auto &C : S->getConditions())
+      WriteIfCondition(C, Record);
+
    Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddStmt(S->getCondition());
    Record.AddStmt(S->getBody());
    Record.push_back(S->isAtLeastOnce());
    Record.AddIdentifierRef(S->getLabel());
@@ -771,27 +804,6 @@ void ASTStmtWriter::visitAssignExpr(AssignExpr *S)
    Record.AddStmt(S->getLhs());
    Record.AddStmt(S->getRhs());
    Record.push_back(S->isInitialization());
-}
-
-static void WriteConvSeq(ASTRecordWriter &Record,
-                         const ConversionSequence &Seq) {
-   Record.push_back(Seq.getStrength());
-   Record.push_back(Seq.getSteps().size());
-
-   for (auto &Step : Seq.getSteps()) {
-      Record.push_back(Step.isHalt());
-      if (Step.isHalt())
-         continue;
-
-      Record.push_back(static_cast<uint64_t>(Step.getKind()));
-
-      if (Step.getKind() == CastKind::ConversionOp) {
-         Record.AddDeclRef(Step.getConversionOp());
-      }
-      else {
-         Record.AddTypeRef(Step.getResultType());
-      }
-   }
 }
 
 void ASTStmtWriter::visitCastExpr(CastExpr *S)

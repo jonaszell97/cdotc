@@ -495,8 +495,6 @@ private:
    ForInStmt* visitForInStmt(ForInStmt *node);
    WhileStmt* visitWhileStmt(WhileStmt *node);
    IfStmt* visitIfStmt(IfStmt *node);
-   IfLetStmt* visitIfLetStmt(IfLetStmt *node);
-   IfCaseStmt* visitIfCaseStmt(IfCaseStmt *node);
 
    MatchStmt* visitMatchStmt(MatchStmt *node);
    CaseStmt* visitCaseStmt(CaseStmt *node);
@@ -746,6 +744,8 @@ private:
 
       return templateArgs.getNamedArg(P->getDeclName());
    }
+
+   IfCondition visitIfCondition(const IfCondition &C);
 
    Expression *makeLiteralExpr(Expression *Expr,
                                QualType Ty,
@@ -2426,36 +2426,40 @@ ArrayLiteral* InstantiatorImpl::visitArrayLiteral(ArrayLiteral *node)
                                cloneVector(node->getValues()));
 }
 
+IfCondition InstantiatorImpl::visitIfCondition(const IfCondition &C)
+{
+   switch (C.K) {
+   case IfCondition::Expr:
+      return IfCondition(visit(C.ExprData.Cond));
+   case IfCondition::Binding:
+      return IfCondition(clone(C.BindingData.Decl), C.BindingData.ConvSeq);
+   case IfCondition::Pattern:
+      return IfCondition(clone(C.PatternData.Pattern),
+                         visit(C.PatternData.Expr));
+   }
+}
+
 IfStmt* InstantiatorImpl::visitIfStmt(IfStmt *node)
 {
+   SmallVector<IfCondition, 2> Conditions;
+   for (auto &C : node->getConditions()) {
+      Conditions.push_back(visitIfCondition(C));
+   }
+
    return IfStmt::Create(Context, node->getSourceLoc(),
-                         visit(node->getCondition()),
-                         visit(node->getIfBranch()),
+                         Conditions, visit(node->getIfBranch()),
                          copyOrNull(node->getElseBranch()),
                          node->getLabel());
 }
 
-IfLetStmt* InstantiatorImpl::visitIfLetStmt(IfLetStmt *node)
-{
-   return IfLetStmt::Create(Context, node->getSourceLoc(),
-                            clone(node->getVarDecl()),
-                            visit(node->getIfBranch()),
-                            copyOrNull(node->getElseBranch()));
-}
-
-IfCaseStmt* InstantiatorImpl::visitIfCaseStmt(IfCaseStmt *node)
-{
-   return IfCaseStmt::Create(Context, node->getSourceLoc(),
-                             clone(node->getPattern()),
-                             visit(node->getVal()),
-                             visit(node->getIfBranch()),
-                             copyOrNull(node->getElseBranch()));
-}
-
 WhileStmt* InstantiatorImpl::visitWhileStmt(WhileStmt *node)
 {
-   return WhileStmt::Create(Context, node->getSourceLoc(),
-                            visit(node->getCondition()),
+   SmallVector<IfCondition, 2> Conditions;
+   for (auto &C : node->getConditions()) {
+      Conditions.push_back(visitIfCondition(C));
+   }
+
+   return WhileStmt::Create(Context, node->getSourceLoc(), Conditions,
                             visit(node->getBody()), node->getLabel(),
                             node->isAtLeastOnce());
 }

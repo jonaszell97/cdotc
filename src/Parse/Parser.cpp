@@ -3535,41 +3535,52 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
    return params;
 }
 
+void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
+                               tok::TokenType StopAt) {
+   while (!currentTok().is(StopAt)) {
+      if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
+         auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
+
+         if (VD && !VD->getValue()) {
+            SP.diagnose(err_if_let_must_have_value, VD->getSourceLoc());
+         }
+
+         Conditions.emplace_back(VD, nullptr);
+      }
+      else if (currentTok().is(tok::kw_case)) {
+         advance();
+         auto *Pat = parsePattern().tryGetExpr<PatternExpr>();
+
+         expect(tok::equals);
+         advance();
+
+         auto *CaseVal = parseExprSequence(false, false, true, false)
+            .tryGetExpr();
+
+         Conditions.emplace_back(Pat, CaseVal);
+      }
+      else {
+         Conditions.emplace_back(
+            parseExprSequence(false, false, true, false).tryGetExpr());
+      }
+
+      advance();
+      if (currentTok().is(tok::comma)) {
+         advance();
+         continue;
+      }
+
+      break;
+   }
+}
+
 ParseResult Parser::parseIfStmt(IdentifierInfo *Label)
 {
    auto IfLoc = currentTok().getSourceLoc();
    advance();
 
-   bool IsLet = currentTok().oneOf(tok::kw_var, tok::kw_let);
-   bool IsCase = currentTok().is(tok::kw_case);
-
-   Expression *Condition = nullptr;
-   LocalVarDecl *VD = nullptr;
-
-   PatternExpr *Pat = nullptr;
-   Expression *CaseVal = nullptr;
-
-   if (IsLet) {
-      VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
-
-      if (VD && !VD->getValue()) {
-         SP.diagnose(err_if_let_must_have_value, VD->getSourceLoc());
-      }
-   }
-   else if (IsCase) {
-      advance();
-      Pat = parsePattern().tryGetExpr<PatternExpr>();
-
-      expect(tok::equals);
-      advance();
-
-      CaseVal = parseExprSequence(false, false, true, false).tryGetExpr();
-   }
-   else {
-      Condition = parseExprSequence(false, false, true, false).tryGetExpr();
-   }
-
-   advance();
+   SmallVector<IfCondition, 2> Conditions;
+   parseIfConditions(Conditions, tok::open_brace);
 
    auto ifBranch = parseNextStmt().tryGetStatement();
    Statement* elseBranch = nullptr;
@@ -3585,16 +3596,7 @@ ParseResult Parser::parseIfStmt(IdentifierInfo *Label)
       elseBranch = NullStmt::Create(Context, currentTok().getSourceLoc());
    }
 
-   if (IsLet) {
-      return IfLetStmt::Create(Context, IfLoc, VD, ifBranch, elseBranch);
-   }
-
-   if (IsCase) {
-      return IfCaseStmt::Create(Context, IfLoc, Pat, CaseVal,
-                                ifBranch, elseBranch);
-   }
-
-   return IfStmt::Create(Context, IfLoc, Condition, ifBranch, elseBranch,
+   return IfStmt::Create(Context, IfLoc, Conditions, ifBranch, elseBranch,
                          Label);
 }
 
@@ -4084,10 +4086,9 @@ ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
    auto WhileLoc = currentTok().getSourceLoc();
    advance();
 
-   Expression* cond = nullptr;
+   SmallVector<IfCondition, 2> Conditions;
    if (conditionBefore) {
-      cond = parseExprSequence(false, false, true, false).tryGetExpr();
-      advance();
+      parseIfConditions(Conditions, tok::open_brace);
    }
 
    auto body = parseNextStmt().tryGetStatement();
@@ -4095,13 +4096,10 @@ ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
       advance();
       advance();
 
-      cond = parseExprSequence(false, false, true, false).tryGetExpr();
+      parseIfConditions(Conditions, tok::semicolon);
    }
 
-   if (!cond)
-      cond = BoolLiteral::Create(Context, WhileLoc, Context.getBoolTy(), true);
-
-   return WhileStmt::Create(Context, WhileLoc, cond, body, Label,
+   return WhileStmt::Create(Context, WhileLoc, Conditions, body, Label,
                             !conditionBefore);
 }
 

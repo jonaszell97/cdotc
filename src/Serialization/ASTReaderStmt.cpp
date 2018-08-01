@@ -73,6 +73,7 @@ public:
    void visitTypeExpr(TypeExpr *E);
 
    ConversionSequence *ReadConvSeq();
+   IfCondition ReadIfCondition();
 
 #  define CDOT_STMT(NAME) void visit##NAME(NAME *S);
 #  include "AST/AstNode.def"
@@ -195,39 +196,29 @@ void ASTStmtReader::visitIfStmt(IfStmt *S)
 {
    visitStmt(S);
 
+   auto *Ptr = S->getConditions().data();
+   auto NumConditions = Record.readInt();
+   while (NumConditions--) {
+      *Ptr++ = ReadIfCondition();
+   }
+
    S->setIfLoc(Record.readSourceLocation());
-   S->setCondition(Record.readSubExpr());
    S->setIfBranch(Record.readSubStmt());
    S->setElseBranch(Record.readSubStmt());
    S->setLabel(Record.getIdentifierInfo());
-}
-
-void ASTStmtReader::visitIfLetStmt(IfLetStmt *S)
-{
-   visitStmt(S);
-
-   S->setIfLoc(Record.readSourceLocation());
-   S->setVarDecl(Record.readDeclAs<LocalVarDecl>());
-   S->setIfBranch(Record.readSubStmt());
-   S->setElseBranch(Record.readSubStmt());
-}
-
-void ASTStmtReader::visitIfCaseStmt(IfCaseStmt *S)
-{
-   visitStmt(S);
-
-   S->setIfLoc(Record.readSourceLocation());
-   S->setPattern(cast<PatternExpr>(Record.readSubExpr()));
-   S->setIfBranch(Record.readSubStmt());
-   S->setElseBranch(Record.readSubStmt());
 }
 
 void ASTStmtReader::visitWhileStmt(WhileStmt *S)
 {
    visitStmt(S);
 
+   auto *Ptr = S->getConditions().data();
+   auto NumConditions = Record.readInt();
+   while (NumConditions--) {
+      *Ptr++ = ReadIfCondition();
+   }
+
    S->setWhileLoc(Record.readSourceLocation());
-   S->setCondition(Record.readSubExpr());
    S->setBody(Record.readSubStmt());
    S->setAtLeastOnce(Record.readBool());
    S->setLabel(Record.getIdentifierInfo());
@@ -843,6 +834,30 @@ ConversionSequence* ASTStmtReader::ReadConvSeq()
                                      Strength, Steps);
 }
 
+IfCondition ASTStmtReader::ReadIfCondition()
+{
+   auto K = Record.readEnum<IfCondition::Kind>();
+   switch (K) {
+   case IfCondition::Expr:
+      return IfCondition(Record.readExpr());
+   case IfCondition::Binding: {
+      auto *D = Record.readDeclAs<LocalVarDecl>();
+
+      ConversionSequence *Seq = nullptr;
+      if (Record.readBool())
+         Seq = ReadConvSeq();
+
+      return IfCondition(D, Seq);
+   }
+   case IfCondition::Pattern: {
+      auto *Pat = cast<PatternExpr>(Record.readExpr());
+      auto *E = Record.readExpr();
+
+      return IfCondition(Pat, E);
+   }
+   }
+}
+
 void ASTStmtReader::visitCastExpr(CastExpr *S)
 {
    visitExpr(S);
@@ -1169,16 +1184,10 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          S = new(C) ForStmt(Empty);
          break;
       case Statement::IfStmtID:
-         S = new(C) IfStmt(Empty);
-         break;
-      case Statement::IfLetStmtID:
-         S = new(C) IfLetStmt(Empty);
-         break;
-      case Statement::IfCaseStmtID:
-         S = new(C) IfCaseStmt(Empty);
+         S = IfStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::WhileStmtID:
-         S = new(C) WhileStmt(Empty);
+         S = WhileStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::ForInStmtID:
          S = new(C) ForInStmt(Empty);

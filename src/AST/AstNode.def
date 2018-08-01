@@ -23,8 +23,6 @@
       CDOT_STMT(CaseStmt)
       CDOT_STMT(ForStmt)
       CDOT_STMT(IfStmt)
-      CDOT_STMT(IfLetStmt)
-      CDOT_STMT(IfCaseStmt)
       CDOT_STMT(WhileStmt)
       CDOT_STMT(ForInStmt)
       CDOT_STMT(MatchStmt)

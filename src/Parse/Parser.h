@@ -773,6 +773,9 @@ private:
 
    void parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases);
 
+   void parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
+                          lex::tok::TokenType StopAt);
+
    ParseResult parseIfStmt(IdentifierInfo *Label = nullptr);
    ParseResult parseWhileStmt(IdentifierInfo *Label = nullptr,
                               bool conditionBefore = true);
