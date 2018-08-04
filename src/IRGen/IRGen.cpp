@@ -480,6 +480,11 @@ llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
                                     llvmTy, { llvmTy, llvmTy }, false));
 }
 
+void IRGen::addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal)
+{
+   ValueMap[ILVal] = LLVMVal;
+}
+
 bool IRGen::NeedsStructReturn(QualType Ty)
 {
    return CI.getSema().NeedsStructReturn(Ty);
@@ -557,13 +562,20 @@ llvm::Type* IRGen::getLlvmTypeImpl(QualType Ty)
          case BuiltinType::Void: return VoidTy;
 #           define CDOT_BUILTIN_INT(Name, BW, isUnsigned)                     \
          case BuiltinType::Name: return Builder.getIntNTy(BW);
-#           define CDOT_BUILTIN_FP(Name, Prec)                                \
-         case BuiltinType::Name: return Prec == 32 ? Builder.getFloatTy()     \
-                                                   : Builder.getDoubleTy();
 #           include "Basic/BuiltinTypes.def"
 
-         default:
-            llvm_unreachable("bad builtin type");
+      case BuiltinType::f16:
+         return Builder.getHalfTy();
+      case BuiltinType::f32:
+         return Builder.getFloatTy();
+      case BuiltinType::f64:
+         return Builder.getDoubleTy();
+      case BuiltinType::f80:
+         return llvm::Type::getX86_FP80Ty(Ctx);
+      case BuiltinType::f128:
+         return llvm::Type::getFP128Ty(Ctx);
+      default:
+         llvm_unreachable("bad builtin type");
       }
    case Type::PointerTypeID:
    case Type::MutablePointerTypeID: {
@@ -824,10 +836,10 @@ void IRGen::DeclareFunction(il::Function const* F)
       assert(il_arg_it != F->getEntryBlock()->arg_end());
       assert(llvm_arg_it != fn->arg_end());
 
-      ValueMap[&*il_arg_it++] = &*llvm_arg_it;
+      addMappedValue(&*il_arg_it++, &*llvm_arg_it);
    }
 
-   ValueMap[F] = fn;
+   addMappedValue(F, fn);
 }
 
 llvm::Value* IRGen::getCurrentSRetValue()
@@ -941,7 +953,7 @@ void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
    GV->setUnnamedAddr((llvm::GlobalVariable::UnnamedAddr)G->getUnnamedAddr());
    GV->setVisibility((llvm::GlobalVariable::VisibilityTypes)G->getVisibility());
 
-   ValueMap[G] = GV;
+   addMappedValue(G, GV);
 }
 
 void IRGen::DeclareGlobal(il::GlobalVariable const *G)
@@ -959,7 +971,7 @@ void IRGen::DeclareGlobal(il::GlobalVariable const *G)
          glob->replaceAllUsesWith(NewGlobal);
          glob->eraseFromParent();
 
-         ValueMap[G] = NewGlobal;
+         addMappedValue(G, NewGlobal);
       }
       else {
          glob->setInitializer(InitVal);
@@ -1006,11 +1018,11 @@ void IRGen::visitFunction(Function &F)
             if (ty->isStructTy())
                ty = ty->getPointerTo();
 
-            ValueMap[&arg] = Builder.CreatePHI(ty, 0);
+            addMappedValue(&arg, Builder.CreatePHI(ty, 0));
          }
       }
 
-      ValueMap[&BB] = B;
+      addMappedValue(&BB, B);
    }
 
    if (!AllocaBB) {
@@ -1043,7 +1055,7 @@ void IRGen::visitFunction(Function &F)
             Builder.CreateStore(&*arg_it++, GEP);
          }
 
-         ValueMap[&Arg] = Alloc;
+         addMappedValue(&Arg, Alloc);
       }
    }
 
@@ -1153,11 +1165,11 @@ void IRGen::visitBasicBlock(BasicBlock &B)
    for (auto const& I : B.getInstructions()) {
       auto val = visit(I);
       if (I.getType()->isEmptyTupleType()) {
-         ValueMap[&I] = EmptyTuple;
+         addMappedValue(&I, EmptyTuple);
          continue;
       }
 
-      ValueMap[&I] = val;
+      addMappedValue(&I, val);
       if (dyn_cast_or_null<llvm::TerminatorInst>(val))
          break;
    }
@@ -1441,7 +1453,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       auto V = llvm::ConstantInt::get(getStorageType(Int->getType()),
                                       Int->getValue());
 
-      ValueMap[Int] = V;
+      addMappedValue(Int, V);
       return V;
    }
 
@@ -1455,7 +1467,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
          return cast<llvm::ConstantFP>(it->getSecond());
 
       auto V = llvm::ConstantFP::get(Builder.getDoubleTy(), F->getDoubleVal());
-      ValueMap[F] = V;
+      addMappedValue(F, V);
 
       return V;
    }
@@ -1476,7 +1488,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 
       auto V = llvm::ConstantExpr::getBitCast(GV, Int8PtrTy);
-      ValueMap[S] = V;
+      addMappedValue(S, V);
 
       return V;
    }
@@ -1486,49 +1498,60 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       if (it != ValueMap.end())
          return cast<llvm::Constant>(it->getSecond());
 
-      bool NeedStructTy = false;
-      llvm::Type *ElementTy = getStorageType(A->getElementType());
-      llvm::SmallVector<llvm::Constant*, 8> Els;
-
-      for (const auto &el : A->getVec()) {
-         auto V = getConstantVal(el);
-         if (!ElementTy) {
-            ElementTy = V->getType();
-         }
-         else if (V->getType() != ElementTy) {
-            // can happen with a constant enum element type
-            NeedStructTy = true;
-         }
-
-         Els.push_back(V);
-      }
-
       llvm::Constant *V;
-      if (NeedStructTy) {
-         V = llvm::ConstantStruct::getAnon(Els);
+      if (A->isAllZerosValue()) {
+         V = llvm::ConstantAggregateZero::get(getStorageType(A->getType()));
       }
       else {
-         auto ArrTy = llvm::ArrayType::get(ElementTy, Els.size());
-         V = llvm::ConstantArray::get(ArrTy, Els);
+         bool NeedStructTy = false;
+         llvm::Type *ElementTy = getStorageType(A->getElementType());
+
+         SmallVector<llvm::Constant *, 8> Els;
+         for (const auto &el : A->getVec()) {
+            auto V = getConstantVal(el);
+            if (!ElementTy) {
+               ElementTy = V->getType();
+            }
+            else if (V->getType() != ElementTy) {
+               // can happen with a constant enum element type
+               NeedStructTy = true;
+            }
+
+            Els.push_back(V);
+         }
+
+         if (NeedStructTy) {
+            V = llvm::ConstantStruct::getAnon(Els);
+         }
+         else {
+            auto ArrTy = llvm::ArrayType::get(ElementTy, Els.size());
+            V = llvm::ConstantArray::get(ArrTy, Els);
+         }
       }
 
-      ValueMap[A] = V;
+      addMappedValue(A, V);
       return V;
    }
 
    if (auto S = dyn_cast<ConstantStruct>(C)) {
       auto it = ValueMap.find(S);
       if (it != ValueMap.end())
-         return cast<llvm::ConstantStruct>(it->getSecond());
+         return cast<llvm::Constant>(it->getSecond());
 
-      llvm::SmallVector<llvm::Constant*, 8> Vals;
-      for (const auto &el : S->getElements())
-         Vals.push_back(getConstantVal(el));
+      llvm::Constant *V;
+      if (S->isAllZerosValue()) {
+         V = llvm::ConstantAggregateZero::get(getStorageType(S->getType()));
+      }
+      else {
+         llvm::SmallVector<llvm::Constant *, 8> Vals;
+         for (const auto &el : S->getElements())
+            Vals.push_back(getConstantVal(el));
 
-      auto V = llvm::ConstantStruct::get(cast<llvm::StructType>(
-         getStorageType(S->getType())), Vals);
+         V = llvm::ConstantStruct::get(cast<llvm::StructType>(
+            getStorageType(S->getType())), Vals);
+      }
 
-      ValueMap[S] = V;
+      addMappedValue(S, V);
       return V;
    }
 
@@ -1537,13 +1560,19 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       if (it != ValueMap.end())
          return cast<llvm::Constant>(it->getSecond());
 
-      llvm::SmallVector<llvm::Constant*, 8> Vals;
-      for (const auto &el : Tup->getVec())
-         Vals.push_back(getConstantVal(el));
+      llvm::Constant *V;
+      if (Tup->isAllZerosValue()) {
+         V = llvm::ConstantAggregateZero::get(getStorageType(Tup->getType()));
+      }
+      else {
+         llvm::SmallVector<llvm::Constant *, 8> Vals;
+         for (const auto &el : Tup->getVec())
+            Vals.push_back(getConstantVal(el));
 
-      auto V = llvm::ConstantStruct::getAnon(Ctx, Vals);
+         V = llvm::ConstantStruct::getAnon(Ctx, Vals);
+      }
 
-      ValueMap[Tup] = V;
+      addMappedValue(Tup, V);
       return V;
    }
 
@@ -1578,7 +1607,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       auto GV = new llvm::GlobalVariable(*M, V->getType(), true,
                                       llvm::GlobalVariable::InternalLinkage, V);
 
-      ValueMap[Class] = GV;
+      addMappedValue(Class, GV);
       return llvm::ConstantExpr::getBitCast(GV, getParameterType(C->getType()));
    }
 
@@ -1594,7 +1623,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
                                          llvm::GlobalVariable::InternalLinkage,
                                          InitVal);
 
-      ValueMap[U] = GV;
+      addMappedValue(U, GV);
       return GV;
    }
 
@@ -1636,7 +1665,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       llvm::Constant *Val = llvm::ConstantStruct::getAnon(
          Ctx, { getConstantVal(E->getCase()->getILValue()), Vals });
 
-      ValueMap[E] = Val;
+      addMappedValue(E, Val);
       return Val;
    }
 
@@ -1673,7 +1702,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
          Fns.push_back(toInt8Ptr(getFunction(fn)));
 
       auto V = llvm::ConstantArray::get(ArrTy, Fns);
-      ValueMap[VT] = V;
+      addMappedValue(VT, V);
 
       return V;
    }
@@ -1721,7 +1750,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       Values[MetaType::Conformances] = ConformanceArray;
       auto V = llvm::ConstantStruct::get(TypeInfoTy, Values);
 
-      ValueMap[TI] = V;
+      addMappedValue(TI, V);
       return V;
    }
 
@@ -1989,7 +2018,7 @@ llvm::Value *IRGen::visitStoreInst(StoreInst const& I)
          ElidedDebugLocalInst = nullptr;
       }
 
-      ValueMap[I.getDst()] = Src;
+      addMappedValue(I.getDst(), Src);
       return Src;
    }
 
@@ -2051,7 +2080,7 @@ llvm::Value *IRGen::visitInitInst(const InitInst &I)
          ElidedDebugLocalInst = nullptr;
       }
 
-      ValueMap[I.getDst()] = Src;
+      addMappedValue(I.getDst(), Src);
       return Src;
    }
 

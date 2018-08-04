@@ -186,6 +186,13 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
          );
 
          break;
+      case BuiltinType::f16:
+         MD = DI->createBasicType(
+            "f16",
+            16,
+            llvm::dwarf::DW_ATE_float
+         );
+         break;
       case BuiltinType::f32:
          MD = DI->createBasicType(
             "f32",
@@ -197,6 +204,20 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
          MD = DI->createBasicType(
             "f64",
             64,
+            llvm::dwarf::DW_ATE_float
+         );
+         break;
+      case BuiltinType::f80:
+         MD = DI->createBasicType(
+            "f80",
+            80,
+            llvm::dwarf::DW_ATE_float
+         );
+         break;
+      case BuiltinType::f128:
+         MD = DI->createBasicType(
+            "f128",
+            128,
             llvm::dwarf::DW_ATE_float
          );
          break;

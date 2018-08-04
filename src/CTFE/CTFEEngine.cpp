@@ -1409,6 +1409,10 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       return ConstantFloat::get(ValTy, Val.getDouble());
    }
 
+   if (type->isPointerType() && type->getPointeeType()->isInt8Ty()) {
+      return ConstantString::get(ILCtx, StringRef(buffer));
+   }
+
    if (type->isPointerType() || type->isReferenceType()) {
       llvm::APInt Int(sizeof(void*) * 8,
                       reinterpret_cast<unsigned long long>(buffer));

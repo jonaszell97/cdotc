@@ -100,8 +100,11 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
       case BK::u32: case BK::i32: return 4;
       case BK::u64: case BK::i64: return 8;
       case BK::u128: case BK::i128: return 16;
+      case BK::f16: return 2;
       case BK::f32: return 4;
       case BK::f64: return 8;
+      case BK::f80: return 16;
+      case BK::f128: return 16;
       case BK::Void: return 0;
       default:
          llvm_unreachable("bad builtin type kind!");

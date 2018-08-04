@@ -55,6 +55,12 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
       auto deinit = ty->getRecord()->getDeinitializer();
       assert(deinit && "trivially deinitializable type!");
 
+      if (ILGen.inCTFE()) {
+         if (!ILGen.registerCalledFunction(deinit, deinit)) {
+            return;
+         }
+      }
+
       auto fn = ILGen.getFunc(deinit);
       assert(fn && "deinitializer not declared");
 

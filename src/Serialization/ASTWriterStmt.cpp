@@ -77,8 +77,8 @@ static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
 {
    Record.push_back(C.K);
    switch (C.K) {
-   case IfCondition::Expr:
-      Record.AddStmt(C.ExprData.Cond);
+   case IfCondition::Expression:
+      Record.AddStmt(C.ExprData.Expr);
       break;
    case IfCondition::Binding:
       Record.AddDeclRef(C.BindingData.Decl);
@@ -265,6 +265,7 @@ void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
    Record.AddSourceRange(S->getBraceRange());
    Record.AddStmt(S->getSwitchValue());
    Record.push_back(S->hasMutableCaseArg());
+   Record.push_back(S->isIntegralSwitch());
    Record.AddIdentifierRef(S->getLabel());
 }
 
@@ -535,7 +536,7 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    Flags |= (S->isSelf() << 6);
    Flags |= (S->allowIncompleteTemplateArgs() << 7);
    Flags |= (S->allowNamespaceRef() << 8);
-   Flags |= (S->hasLeadingDot() << 8);
+   Flags |= (S->hasLeadingDot() << 9);
 
    Record.push_back(Flags);
    Record.push_back(S->getCaptureIndex());
@@ -581,12 +582,16 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
    for (auto &Arg : Args)
       Record.AddStmt(Arg);
 
-   Record.push_back(S->isPointerAccess());
-   Record.push_back(S->isUFCS());
-   Record.push_back(S->isDotInit());
-   Record.push_back(S->isDotDeinit());
-   Record.push_back(S->includesSelf());
-   Record.push_back(S->isDirectCall());
+   uint64_t Flags = 0;
+   Flags |= S->isPointerAccess();
+   Flags |= (S->isUFCS() << 1);
+   Flags |= (S->isDotInit() << 2);
+   Flags |= (S->isDotDeinit() << 3);
+   Flags |= (S->includesSelf() << 4);
+   Flags |= (S->isDirectCall() << 5);
+   Flags |= (S->hasLeadingDot() << 6);
+
+   Record.push_back(Flags);
    Record.push_back(S->getBuiltinKind());
 
    Record.AddDeclRef(S->getFunc());
@@ -698,18 +703,7 @@ void ASTStmtWriter::visitExpressionPattern(ExpressionPattern *S)
 {
    visitPatternExpr(S);
    Record.AddStmt(S->getExpr());
-}
-
-static void WriteCasePatternArg(ASTRecordWriter &Record,
-                                const CasePatternArgument &Arg) {
-   Record.push_back(Arg.isExpr());
-
-   if (Arg.isExpr()) {
-      Record.AddStmt(Arg.getExpr());
-   }
-   else {
-      Record.AddDeclRef(Arg.getDecl());
-   }
+   Record.AddDeclRef(S->getComparisonOp());
 }
 
 void ASTStmtWriter::visitCasePattern(CasePattern *S)
@@ -720,21 +714,21 @@ void ASTStmtWriter::visitCasePattern(CasePattern *S)
    Record.push_back(Args.size());
 
    for (auto &Arg : Args)
-      WriteCasePatternArg(Record, Arg);
+      WriteIfCondition(Arg, Record);
 
    Record.AddSourceLocation(S->getColonLoc());
    Record.AddSourceRange(S->getSourceRange());
+
+   Record.push_back(S->getKind());
+   Record.AddStmt(S->getParentExpr());
+
    Record.AddIdentifierRef(S->getCaseNameIdent());
+
    Record.push_back(S->hasBinding());
    Record.push_back(S->hasExpr());
+   Record.push_back(S->hasLeadingDot());
 
    Record.AddDeclRef(S->getCaseDecl());
-
-   auto VarDecls = S->getVarDecls();
-   Record.push_back(VarDecls.size());
-
-   for (auto &D : VarDecls)
-      Record.AddDeclRef(D);
 }
 
 void ASTStmtWriter::visitIsPattern(IsPattern *S)

@@ -50,6 +50,7 @@
 #endif
 #undef CDOT_TYPE_ATTR
 
+CDOT_VISITATION_POINT(Immediate)
 CDOT_VISITATION_POINT(BeforeDeclaration)
 CDOT_VISITATION_POINT(AfterDeclaration)
 CDOT_VISITATION_POINT(BeforeSema)

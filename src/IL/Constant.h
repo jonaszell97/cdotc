@@ -57,6 +57,8 @@ public:
 
    void replaceOperand(Constant *Prev, Constant *New);
 
+   bool isAllZerosValue() const { return ConstBits.AllZeros; }
+
 protected:
    Constant(TypeID id, ValueType ty)
       : Value(id, ty)

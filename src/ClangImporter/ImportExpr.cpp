@@ -138,7 +138,7 @@ static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
 
 static Expression *expressionFromCharToken(ImporterImpl &I,
                                            const clang::Token &Tok) {
-   LiteralParser LP(StringRef(Tok.getLiteralData(), Tok.getLength()));
+   LiteralParser LP(StringRef(Tok.getLiteralData() + 1, Tok.getLength() - 2));
    auto Result = LP.parseCharacter();
 
    auto SR = SourceRange(I.getSourceLoc(Tok.getLocation()),
@@ -157,7 +157,10 @@ static Expression *expressionFromStringToken(ImporterImpl &I,
    auto SR = SourceRange(I.getSourceLoc(Tok.getLocation()),
                          I.getSourceLoc(Tok.getEndLoc()));
 
-   return StringLiteral::Create(I.CI.getContext(), SR, move(Result.Str));
+   auto *S = StringLiteral::Create(I.CI.getContext(), SR, move(Result.Str));
+   S->setCString(true);
+
+   return S;
 }
 
 Expression *ImporterImpl::expressionFromLiteralToken(const clang::Token &Tok)

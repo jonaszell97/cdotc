@@ -169,13 +169,14 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    auto rhs = BinOp->getRhs();
 
    auto LhsResult = visitExpr(BinOp, lhs);
-   auto RhsResult = visitExpr(BinOp, rhs);
+   auto RhsResult = visitExpr(BinOp, rhs,
+                              BinOp->getFunctionType()->getParamTypes()[1]);
 
-   (void)LhsResult;
-   assert(LhsResult && "should not have built BinaryOperator!");
+   if (!LhsResult || !RhsResult)
+      return ExprError();
 
-   (void)RhsResult;
-   assert(RhsResult && "should not have built BinaryOperator!");
+   BinOp->setLhs(LhsResult.get());
+   BinOp->setRhs(RhsResult.get());
 
    op::OperatorKind preAssignOp = op::UnknownOp;
 
@@ -236,13 +237,13 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
    auto rhs = Expr->getRhs();
 
    auto LhsResult = visitExpr(Expr, lhs);
-   auto RhsResult = visitExpr(Expr, rhs);
+   auto RhsResult = visitExpr(Expr, rhs, lhs->getExprType()->stripReference());
 
-   (void)LhsResult;
-   assert(LhsResult && "should not have built AssignExpr!");
+   if (!LhsResult || !RhsResult)
+      return ExprError();
 
-   (void)RhsResult;
-   assert(RhsResult && "should not have built AssignExpr!");
+   Expr->setLhs(LhsResult.get());
+   Expr->setRhs(RhsResult.get());
 
    if (isa<SelfExpr>(lhs) && lhs->getExprType()->stripReference()->isClass()) {
       diagnose(Expr, err_generic_error, "cannot assign to 'self' in a class",
@@ -264,10 +265,13 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
 
 ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
 {
-   auto TargetResult = visitExpr(UnOp, UnOp->getTarget());
+   auto TargetResult = visitExpr(UnOp, UnOp->getTarget(),
+                                 UnOp->getFunctionType()->getParamTypes()[0]);
 
-   (void)TargetResult;
-   assert(TargetResult && "should not have built UnaryOperator!");
+   if (!TargetResult)
+      return ExprError();
+
+   UnOp->setTarget(TargetResult.get());
 
    auto target = UnOp->getTarget();
    if (!target->isTypeDependent()

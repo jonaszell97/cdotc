@@ -93,46 +93,35 @@ ParseResult Parser::parseExtension()
       }
    }
 
-   llvm::SmallVector<SourceType, 4> conformances;
-   llvm::SmallVector<StaticExpr*, 4> constraints;
+   SmallVector<SourceType, 4> Conformances;
+   if (lookahead().is(Ident_with)) {
+      advance();
+      advance();
 
-   auto next = lookahead();
-   while (!next.is(tok::open_brace)) {
-      if (next.is(Ident_with)) {
-         advance();
-         advance();
+      while (true) {
+         auto proto = parseType().tryGet();
+         Conformances.push_back(proto);
 
-         while (true) {
-            auto proto = parseType().tryGet();
-            conformances.push_back(proto);
-
-            if (lookahead().is(tok::comma)) {
-               advance();
-               advance();
-            }
-            else {
-               break;
-            }
+         if (lookahead().is(tok::comma)) {
+            advance();
+            advance();
+         }
+         else {
+            break;
          }
       }
-      else if (next.is(tok::kw_where)) {
-         advance();
-         advance();
+   }
 
-         constraints.push_back(StaticExpr::Create(
-            Context, parseExprSequence(false, false, true, false).tryGetExpr()));
-      }
-      else {
-         break;
-      }
-
-      next = lookahead();
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(tok::kw_where)) {
+      advance();
+      parseDeclConstraints(Constraints);
    }
 
    ExtensionDecl *decl = ExtensionDecl::Create(Context, CurDeclAttrs.Access,Loc,
-                                               ExtendedType, conformances);
+                                               ExtendedType, Conformances);
 
-   Context.setConstraints(decl, constraints);
+   Context.setConstraints(decl, Constraints);
    decl->setAccessLoc(CurDeclAttrs.AccessLoc);
 
    if (!expect(tok::open_brace)) {
@@ -429,8 +418,8 @@ void Parser::parseClassHead(RecordHead &Head)
          advance();
          advance();
 
-         Head.constraints.push_back(StaticExpr::Create(
-            Context, parseExprSequence(false, false, true, false).tryGetExpr()));
+         Head.constraints.push_back(StaticExpr::Create(Context,
+            parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
       }
       else {
          break;
@@ -477,8 +466,8 @@ ParseResult Parser::parseConstrDecl()
       advance();
       advance();
 
-      constraints.push_back(StaticExpr::Create(
-         Context, parseExprSequence(false, false, true, false).tryGetExpr()));
+      constraints.push_back(StaticExpr::Create(Context,
+         parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
    }
 
    Context.setConstraints(Init, constraints);
@@ -853,20 +842,16 @@ ParseResult Parser::parseAssociatedType()
       actualType = parseType().tryGet();
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(tok::kw_where)) {
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(tok::kw_where)) {
       advance();
-      advance();
-
-      constraints.push_back(StaticExpr::Create(
-         Context, parseExprSequence(false, false, true, false).tryGetExpr()));
+      parseDeclConstraints(Constraints);
    }
 
    auto AT = AssociatedTypeDecl::Create(Context, Loc, protoSpecifier,
-                                        move(name), actualType,
-                                        !ParsingProtocol);
+                                        name, actualType, !ParsingProtocol);
 
-   Context.setConstraints(AT, constraints);
+   Context.setConstraints(AT, Constraints);
    return ActOnDecl(AT);
 }
 
@@ -1044,8 +1029,8 @@ ParseResult Parser::parseMethodDecl()
       advance();
       advance();
 
-      constraints.push_back(StaticExpr::Create(
-         Context, parseExprSequence(false, false, true, false).tryGetExpr()));
+      constraints.push_back(StaticExpr::Create(Context,
+         parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
    }
 
    MethodDecl *methodDecl;

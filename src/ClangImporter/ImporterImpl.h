@@ -26,7 +26,7 @@ namespace clang {
    class FrontendInputFile;
    class IdentifierInfo;
    class Token;
-   class TypedefDecl;
+   class VarDecl;
 } // namespace clang
 
 namespace cdot {
@@ -35,6 +35,7 @@ namespace ast {
    class Decl;
    class EnumDecl;
    class Expression;
+   class GlobalVarDecl;
    class Statement;
    class StructDecl;
 }
@@ -85,7 +86,9 @@ public:
 
    /// Import the module in File into the given cdot module.
    bool importModule(StringRef File, ast::DeclContext *IntoMod,
-                     clang::FrontendInputFile &InputFile, bool IsCXX);
+                     clang::FrontendInputFile &InputFile,
+                     SourceLocation ImportLoc,
+                     bool IsCXX);
 
    /// Import the currently parsed macros.
    void importMacros(ast::DeclContext *DC);
@@ -126,8 +129,14 @@ public:
    /// Import an enum declaration.
    ast::EnumDecl *importEnum(clang::EnumDecl *ClangE);
 
+   /// Import an union declaration.
+   ast::StructDecl *importUnion(clang::RecordDecl *ClangU);
+
    /// Import a typedef declaration.
    ast::AliasDecl *importTypedef(clang::TypedefNameDecl *ClangTD);
+
+   /// Import a global variable declaration.
+   ast::GlobalVarDecl* importGlobalVar(clang::VarDecl *ClangVar);
 };
 
 } // namespace cdot

@@ -79,6 +79,9 @@ public:
    bool isInvalid() const { return FnBits.Invalid; }
    void setInvalid(bool V) { FnBits.Invalid = V; }
 
+   bool isReadyForCtfe() const { return FnBits.ReadyForCtfe; }
+   void setReadyForCtfe(bool V) { FnBits.ReadyForCtfe = V; }
+
    Function *getDeclarationIn(Module *M);
 
    ValueSymbolTable* getSymTab() const

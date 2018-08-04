@@ -49,6 +49,6 @@ Timer::~Timer()
    CI.TimerStr += "ms.\n";
 
    if (!CI.NumTimers) {
-      llvm::errs() << CI.TimerStr;
+      llvm::outs() << CI.TimerStr;
    }
 }

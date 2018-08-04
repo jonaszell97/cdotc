@@ -769,10 +769,13 @@ static void applyConversions(SemaPass &SP,
          if (ParamTys.size() > i)
             E->setContextualType(ParamTys[i]);
 
-         if (!SP.visitExpr(Caller, E)) {
+         auto Result = SP.visitExpr(Caller, E);
+         if (!Result) {
             ++i;
             continue;
          }
+
+         E = Result.get();
       }
       else if (E->getExprType()->isVoidType()) {
          SP.diagnose(E, diag::err_vararg_cannot_pass_void, E->getSourceRange());

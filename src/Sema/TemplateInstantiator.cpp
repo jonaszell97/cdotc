@@ -2132,6 +2132,7 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
    Inst->setParentExpr(copyOrNull(Ident->getParentExpr()));
    Inst->setIsPointerAccess(Ident->isPointerAccess());
    Inst->setAllowNamespaceRef(Ident->allowNamespaceRef());
+   Inst->setLeadingDot(Ident->hasLeadingDot());
 
    return Inst;
 }
@@ -2183,6 +2184,7 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
    call->setIncludesSelf(node->includesSelf());
    call->setDirectCall(node->isDirectCall());
    call->setIsPointerAccess(node->isPointerAccess());
+   call->setLeadingDot(node->hasLeadingDot());
 
    if (!node->isTypeDependent()) {
       assert(node->isValueDependent() && "instantiating non-dependent "
@@ -2429,13 +2431,13 @@ ArrayLiteral* InstantiatorImpl::visitArrayLiteral(ArrayLiteral *node)
 IfCondition InstantiatorImpl::visitIfCondition(const IfCondition &C)
 {
    switch (C.K) {
-   case IfCondition::Expr:
-      return IfCondition(visit(C.ExprData.Cond));
+   case IfCondition::Expression:
+      return IfCondition(visit(C.ExprData.Expr));
    case IfCondition::Binding:
       return IfCondition(clone(C.BindingData.Decl), C.BindingData.ConvSeq);
    case IfCondition::Pattern:
       return IfCondition(clone(C.PatternData.Pattern),
-                         visit(C.PatternData.Expr));
+                         copyOrNull(C.PatternData.Expr));
    }
 }
 
@@ -2514,18 +2516,18 @@ IsPattern* InstantiatorImpl::visitIsPattern(IsPattern *node)
 
 CasePattern* InstantiatorImpl::visitCasePattern(CasePattern *node)
 {
-   std::vector<CasePatternArgument> args;
-   for (const auto &arg : node->getArgs()) {
-      if (arg.isExpr()) {
-         args.emplace_back(visit(arg.getExpr()));
-      }
-      else {
-         args.emplace_back(clone(arg.getDecl()));
-      }
+   SmallVector<IfCondition, 4> Args;
+   for (auto &Arg : node->getArgs()) {
+      Args.push_back(visitIfCondition(Arg));
    }
 
-   return CasePattern::Create(Context, node->getSourceRange(),
-                              node->getCaseNameIdent(), args);
+   auto *Inst = CasePattern::Create(Context, node->getSourceRange(),
+                                    node->getKind(),
+                                    copyOrNull(node->getParentExpr()),
+                                    node->getCaseNameIdent(), Args);
+
+   Inst->setLeadingDot(node->hasLeadingDot());
+   return Inst;
 }
 
 DoStmt* InstantiatorImpl::visitDoStmt(DoStmt *node)
@@ -2819,18 +2821,41 @@ T *lookupExternalInstantiation(StringRef MangledName, SemaPass &SP)
       MangledName, Mod->getBaseModule()->getModule()->getDecl());
 }
 
-bool TemplateInstantiator::checkInstantiationDepth(NamedDecl *Template)
-{
-   if (InstantiationDepth > 512) {
-      SemaPass::DeclScopeRAII DSR(SP, cast<DeclContext>(Template));
-      SP.diagnose(Template, err_generic_error,
-                  "template instantiation depth exceeded",
-                  Template->getSourceLoc());
+bool TemplateInstantiator::checkInstantiationDepth(NamedDecl *Inst,
+                                                   NamedDecl *CurDecl,
+                                                   SourceLocation POI) {
+   auto It = InstantiationDepthMap.find(CurDecl);
+   if (It == InstantiationDepthMap.end()) {
+      InstantiationDepthMap[Inst] = 0;
+      return false;
+   }
+
+   if (It->getSecond() >= 512) {
+      SemaPass::DeclScopeRAII DSR(SP, cast<DeclContext>(CurDecl));
+      SP.diagnose(Inst, err_generic_error,
+                  "maximum template instantiation depth (512) exceeded",
+                  POI);
 
       return true;
    }
 
+   InstantiationDepthMap[Inst] = It->getSecond() + 1;
    return false;
+}
+
+unsigned TemplateInstantiator::getInstantiationDepth(NamedDecl *Decl)
+{
+   auto It = InstantiationDepthMap.find(Decl);
+   if (It == InstantiationDepthMap.end()) {
+      return 0;
+   }
+
+   return It->getSecond();
+}
+
+void TemplateInstantiator::setInstantiationDepth(NamedDecl *Decl,
+                                                 unsigned Depth) {
+   InstantiationDepthMap[Decl] = Depth;
 }
 
 bool checkTemplateArgRecursion(SemaPass &SP, RecordDecl *Inst,
@@ -2882,17 +2907,12 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
    bool AlreadyInstantiating = InstantiationDepth > 0;
 
    InstantiationDepthRAII IDR(*this);
-   if (checkInstantiationDepth(Template))
-      return RecordInstResult();
 
    // Check if this instantiation exists within our current compilation.
    void *insertPos;
    if (auto R = SP.getContext().getRecordTemplateInstantiation(Template,
                                                                *templateArgs,
                                                                insertPos)) {
-      if (checkTemplateArgRecursion(SP, R, templateArgs))
-         return RecordInstResult();
-
       if (isNew) *isNew = false;
       return R;
    }
@@ -2926,6 +2946,9 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
 
    auto Inst = Instantiator.instantiateRecordDecl(Template);
    if (!Inst)
+      return RecordInstResult();
+
+   if (checkInstantiationDepth(Inst, InstScope, POI.getSourceLoc()))
       return RecordInstResult();
 
    Inst->setInstantiationInfo(instInfo);
@@ -3021,6 +3044,9 @@ TemplateInstantiator::InstantiateFunction(StmtOrDecl POI,
    if (!Inst)
       return FunctionInstResult();
 
+   if (checkInstantiationDepth(Inst, InstScope, POI.getSourceLoc()))
+      return FunctionInstResult();
+
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
       POI.getSourceRange().getStart(), templateArgs, Template
    };
@@ -3067,6 +3093,12 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
    if (Template->isInvalid()) {
       POI.setIsInvalid(true);
       return MethodInstResult();
+   }
+
+   // Only instantiate the complete initializer, the base initializer will be
+   // synthesized afterwards.
+   if (Template->isBaseInitializer()) {
+      Template = cast<InitDecl>(Template)->getCompleteInit();
    }
 
    void *insertPos;
@@ -3124,6 +3156,9 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
    if (!Inst)
       return MethodInstResult();
 
+   if (checkInstantiationDepth(Inst, InstScope, POI.getSourceLoc()))
+      return MethodInstResult();
+
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
       POI.getSourceRange().getStart(), templateArgs, Template
    };
@@ -3174,11 +3209,11 @@ FunctionType* TemplateInstantiator::InstantiateFunctionType(
    SemaPass::DeclScopeRAII declScopeRAII(SP, Template);
    InstantiatorImpl Instantiator(SP, *FinalList, SOD);
 
-   llvm::SmallVector<FuncArgDecl*, 4> Args;
-   llvm::SmallVector<FunctionType::ParamInfo, 4> paramInfo;
+   SmallVector<FuncArgDecl*, 4> Args;
+   SmallVector<FunctionType::ParamInfo, 4> paramInfo;
    Instantiator.copyArgListAndFindVariadic(Template, Args);
 
-   llvm::SmallVector<QualType, 4> Tys;
+   SmallVector<QualType, 4> Tys;
    for (auto &Arg : Args) {
       if (!SP.visitSourceType(Arg->getType()))
          return nullptr;
@@ -3345,6 +3380,9 @@ TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
 
    auto Inst = Instantiator.instantiateAliasDecl(Template);
    if (!Inst)
+      return AliasInstResult();
+
+   if (checkInstantiationDepth(Inst, InstScope, instantiatedFrom))
       return AliasInstResult();
 
    Inst->setInstantiationInfo(InstInfo);

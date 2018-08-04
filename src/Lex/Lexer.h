@@ -93,6 +93,21 @@ public:
       Mode Prev;
    };
 
+   struct LookaheadRAII {
+      LookaheadRAII(Lexer &L);
+      ~LookaheadRAII();
+
+      void advance(bool ignoreNewline = true,
+                   bool significantWhitespace = false);
+
+   private:
+      Lexer &L;
+      llvm::SmallVector<Token, 8> Tokens;
+
+      Token LastTok;
+      Token CurTok;
+   };
+
    template<class ...Rest>
    void expect(tok::TokenType ty, Rest... rest)
    {

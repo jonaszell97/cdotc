@@ -201,6 +201,10 @@ bool Expression::isContextDependent() const
    case CharLiteralID:
    case BoolLiteralID:
       return true;
+   case IdentifierRefExprID:
+      return cast<IdentifierRefExpr>(this)->hasLeadingDot();
+   case CallExprID:
+      return cast<CallExpr>(this)->hasLeadingDot();
    case ParenExprID:
    case AttributedExprID:
       return ignoreParensAndImplicitCasts()->isContextDependent();
@@ -866,47 +870,41 @@ ExpressionPattern* ExpressionPattern::Create(ASTContext &C,
    return new(C) ExpressionPattern(ColonLoc, E);
 }
 
-SourceLocation CasePatternArgument::getSourceLoc() const
-{
-   return isExpr() ? Expr->getSourceLoc() : Decl->getSourceLoc();
-}
-
 CasePattern::CasePattern(SourceRange SR,
+                         enum Kind Kind,
+                         Expression *ParentExpr,
                          IdentifierInfo *caseName,
-                         llvm::MutableArrayRef<CasePatternArgument> args)
+                         MutableArrayRef<IfCondition> args)
    : PatternExpr(CasePatternID, SR.getEnd()),
-     SR(SR), caseName(caseName),
-     NumArgs((unsigned)args.size()), HasBinding(false), HasExpr(false)
+     SR(SR), K(Kind), ParentExpr(ParentExpr), caseName(caseName),
+     NumArgs((unsigned)args.size()), HasBinding(false), HasExpr(false),
+     LeadingDot(false)
 {
-   auto ptr = getTrailingObjects<CasePatternArgument>();
-   for (auto &arg : args) {
-      HasBinding |= !arg.isExpr();
-      HasExpr |= arg.isExpr();
-
-      new (ptr) CasePatternArgument(std::move(arg));
-      ++ptr;
-   }
+   std::copy(args.begin(), args.end(), getTrailingObjects<IfCondition>());
 }
 
 CasePattern*
 CasePattern::Create(ASTContext &C,
                     SourceRange SR,
+                    enum Kind Kind,
+                    Expression *ParentExpr,
                     IdentifierInfo *caseName,
-                    llvm::MutableArrayRef<CasePatternArgument> args) {
-   void *Mem = C.Allocate(totalSizeToAlloc<CasePatternArgument>(args.size()),
+                    MutableArrayRef<IfCondition> args) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(args.size()),
                           alignof(CasePattern));
 
-   return new(Mem) CasePattern(SR, caseName, args);
+   return new(Mem) CasePattern(SR, Kind, ParentExpr, caseName, args);
 }
 
 CasePattern::CasePattern(EmptyShell, unsigned N)
    : PatternExpr(CasePatternID, {}),
-     NumArgs(N)
+     ParentExpr(nullptr), NumArgs(N),
+     HasBinding(false), HasExpr(false), LeadingDot(false)
 {}
 
 CasePattern *CasePattern::CreateEmpty(ASTContext &C, unsigned N)
 {
-    void *Mem = C.Allocate(totalSizeToAlloc<CasePatternArgument>(N),
+    void *Mem = C.Allocate(totalSizeToAlloc<IfCondition>(N),
                            alignof(CasePattern));
     return new(Mem) CasePattern(EmptyShell(), N);
 }
@@ -1262,7 +1260,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(false), FoundResult(false), InTypePosition(InTypePos),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     LeadingDot(false)
+     LeadingDot(false), IssueDiag(true)
 {
    IdentifierInfo *II = nullptr;
    if (Name.isSimpleIdentifier())
@@ -1287,7 +1285,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(IsPointerAccess), FoundResult(false), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     LeadingDot(false)
+     LeadingDot(false), IssueDiag(true)
 {
    IdentifierInfo *II = nullptr;
    if (Name.isSimpleIdentifier())
@@ -1310,7 +1308,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc, IdentifierKind kind,
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     LeadingDot(false)
+     LeadingDot(false), IssueDiag(true)
 {
    setSemanticallyChecked(true);
    this->exprType = exprType;
@@ -1325,7 +1323,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     LeadingDot(false)
+     LeadingDot(false), IssueDiag(true)
 {
    setSemanticallyChecked(true);
    this->ND = ND;
@@ -1338,7 +1336,7 @@ IdentifierRefExpr::IdentifierRefExpr(EmptyShell)
      pointerAccess(false), FoundResult(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     LeadingDot(false)
+     LeadingDot(false), IssueDiag(true)
 {}
 
 SourceRange IdentifierRefExpr::getSourceRange() const
@@ -1486,7 +1484,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
      args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
-     BuiltinKind(0)
+     LeadingDot(false), BuiltinKind(0)
 {
    std::copy(Labels.begin(), Labels.end(),
              getTrailingObjects<IdentifierInfo*>());
@@ -1519,7 +1517,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
      ParentExpr(ParentExpr), args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
-     BuiltinKind(0)
+     LeadingDot(false), BuiltinKind(0)
 {
    std::copy(Labels.begin(), Labels.end(),
              getTrailingObjects<IdentifierInfo*>());
@@ -1548,7 +1546,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
      NumLabels(0), args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(false),
      IsDotDeinit(false), IncludesSelf(false), DirectCall(false),
-     BuiltinKind(0)
+     LeadingDot(false), BuiltinKind(0)
 {
    if (auto F = support::dyn_cast<FunctionDecl>(C)) {
       func = F;
@@ -1568,10 +1566,10 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
    }
 }
 
-CallExpr * CallExpr::Create(ASTContext &C, SourceLocation IdentLoc,
-                            SourceRange ParenRange,
-                            ASTVector<Expression *> &&args,
-                            CallableDecl *CD) {
+CallExpr *CallExpr::Create(ASTContext &C, SourceLocation IdentLoc,
+                           SourceRange ParenRange,
+                           ASTVector<Expression *> &&args,
+                           CallableDecl *CD) {
    return new(C) CallExpr(IdentLoc, ParenRange, std::move(args), CD);
 }
 
@@ -1579,7 +1577,7 @@ CallExpr::CallExpr(EmptyShell, unsigned N)
    : Expression(CallExprID),
      NumLabels(N), PointerAccess(false), IsUFCS(false), IsDotInit(false),
      IsDotDeinit(false), IncludesSelf(false), DirectCall(false),
-     BuiltinKind(0)
+     LeadingDot(false), BuiltinKind(0)
 {}
 
 CallExpr* CallExpr::CreateEmpty(ASTContext &C, unsigned N)
@@ -1592,8 +1590,13 @@ CallExpr* CallExpr::CreateEmpty(ASTContext &C, unsigned N)
 
 SourceRange CallExpr::getSourceRange() const
 {
-   if (!ParentExpr)
+   if (!ParentExpr) {
+      if (!IdentLoc) {
+         return ParenRange;
+      }
+
       return SourceRange(IdentLoc, ParenRange.getEnd());
+   }
 
    return SourceRange(ParentExpr->getSourceRange().getStart(),
                       ParenRange.getEnd());

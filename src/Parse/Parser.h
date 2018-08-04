@@ -310,13 +310,22 @@ public:
       return ret;
    }
 
-   ParseResult parseExprSequence(bool stopAtThen = false,
-                                 bool stopAtColon = false,
-                                 bool stopAtNewline = true,
-                                 bool AllowBraceClosure = true,
-                                 bool parsingType = false,
-                                 bool AllowTry = true,
-                                 bool stopAtGreater = false);
+   enum ExprSeqFlags {
+      F_None              = 0,
+      F_StopAtThen        = 1,
+      F_StopAtColon       = 1 << 1,
+      F_StopAtNewline     = 1 << 2,
+      F_AllowBraceClosure = 1 << 3,
+      F_ParsingType       = 1 << 4,
+      F_AllowTry          = 1 << 5,
+      F_StopAtGreater     = 1 << 6,
+      F_StopAtEquals      = 1 << 7,
+   };
+
+   static constexpr int DefaultFlags =
+      F_StopAtNewline | F_AllowBraceClosure | F_AllowTry;
+
+   ParseResult parseExprSequence(int Flags = DefaultFlags);
 
    void parseStmts(llvm::SmallVectorImpl<Statement*> &Stmts);
 
@@ -353,6 +362,7 @@ private:
 
    bool InRecordScope = false;
    bool ParsingProtocol = false;
+   bool AllowPattern = false;
 
    bool isModuleParser;
    bool DiscardDecls = false;
@@ -620,6 +630,8 @@ private:
    void maybeParseConvention(ArgumentConvention &Conv,
                              SourceLocation &Loc);
 
+   void parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints);
+
    ParseResult parseMacro();
 
    ParseResult parseTrailingClosure(bool ParseSubExpr);
@@ -649,6 +661,8 @@ private:
    ParseResult parseDoStmt(IdentifierInfo *Label = nullptr);
 
    ParseResult parseCollectionLiteral();
+   ParseResult parseArrayPattern(SourceLocation LSquareLoc,
+                                 ArrayRef<Expression*> ExprsSoFar);
 
    std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc,
                                            bool ImplicitUnderscores = false);
@@ -659,6 +673,16 @@ private:
    ParseResult parseLambdaExpr();
    ParseResult parseLambdaExpr(SourceLocation LParenLoc,
                                SmallVectorImpl<FuncArgDecl*> &Args);
+
+   void parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
+                           SmallVectorImpl<IdentifierInfo*> &Labels,
+                           bool &OnlyExprs,
+                           lex::tok::TokenType EndTok);
+
+   ParseResult parseCallPattern(bool skipName = false,
+                                Expression *ParentExpr = nullptr,
+                                bool pointerAccess = false,
+                                DeclarationName Name = {});
 
    ParseResult parseFunctionCall(bool skipName = false,
                                  Expression *ParentExpr = nullptr,
@@ -687,6 +711,7 @@ private:
    ParenExprKind getParenExprKind();
 
    ParseResult parseTupleLiteral();
+   ParseResult parseTuplePattern();
 
    struct RecordHead {
       RecordHead() : enumRawType() {}
@@ -732,7 +757,7 @@ private:
    ParseResult parseEnumCase();
    ParseResult parseAssociatedType();
 
-   ParseResult parsePattern();
+   ParseResult parsePattern(int ExprFlags = DefaultFlags);
 
    ASTVector<TemplateParamDecl*> tryParseTemplateParameters();
 
@@ -746,6 +771,7 @@ private:
                                  bool InTypePosition,
                                  bool AllowMissingTemplateArguments);
 
+   ParseTypeResult parseFunctionType();
    ParseTypeResult parseFunctionType(SourceLocation BeginLoc,
                                      ArrayRef<SourceType> ParamTys,
                                      ArrayRef<FunctionType::ParamInfo>ParamInfo,

@@ -1709,6 +1709,11 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/SaveAndRestore.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/StringSwitch.h">
 			<Option target="cdotc-tblgens"/>
 			<Option target="cdot-tblgen"/>

@@ -306,16 +306,17 @@ public:
    case AttrKind::Testable:
    case AttrKind::CompileTime:
       return Never;
+   case AttrKind::Align:
+      return AfterSema;
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
-   case AttrKind::Align:
-      return AfterSema;
-   case AttrKind::Extern:
    case AttrKind::Thin:
+   case AttrKind::_Builtin:
+      return Immediate;
+   case AttrKind::Extern:
    case AttrKind::VersionDecl:
    case AttrKind::VersionStmt:
-   case AttrKind::_Builtin:
       return BeforeDeclaration;
 
       }

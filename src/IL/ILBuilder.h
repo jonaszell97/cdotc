@@ -203,6 +203,8 @@ public:
    UndefValue *GetUndefValue(QualType Ty);
    MagicConstant *GetMagicConstant(unsigned char Kind);
 
+   Constant *GetAllZerosValue(QualType Ty);
+
    Argument *CreateArgument(QualType type,
                             ArgumentConvention Convention
                                = ArgumentConvention::Borrowed,

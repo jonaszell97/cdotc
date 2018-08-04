@@ -16,13 +16,13 @@
 #include "Sema/TemplateInstantiator.h"
 #include "Support/Casting.h"
 #include "Support/Format.h"
+#include "Support/SaveAndRestore.h"
 #include "Support/StringSwitch.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/SaveAndRestore.h>
 #include <AST/TypeVisitor.h>
 
 
@@ -296,7 +296,8 @@ void SemaPass::addDeclToContext(DeclContext &Ctx,
                 ? cast<RecordDecl>(&Ctx)->addDecl(Decl)
                 : Ctx.addDecl(declName, Decl);
 
-   diagnoseRedeclaration(Ctx, res, declName, Decl);
+   if (!Decl->isImportedFromClang())
+      diagnoseRedeclaration(Ctx, res, declName, Decl);
 }
 
 void SemaPass::addDeclToContext(DeclContext &Ctx, NamedDecl *Decl)
@@ -326,15 +327,15 @@ void SemaPass::makeDeclAvailable(DeclContext &Dst,
       return;
 
    auto Res = Dst.makeDeclAvailable(Name, Decl);
-   if (!IgnoreRedecl)
+   if (!IgnoreRedecl && !Decl->isImportedFromClang())
       diagnoseRedeclaration(Dst, Res, Name, Decl);
 }
 
-void SemaPass::makeDeclsAvailableIn(DeclContext &Dst, DeclContext &Src)
-{
+void SemaPass::makeDeclsAvailableIn(DeclContext &Dst, DeclContext &Src,
+                                    bool IgnoreRedecl) {
    for (auto &DeclList : Src.getAllNamedDecls()) {
       for (NamedDecl *ND : DeclList.getSecond().getAsLookupResult()) {
-         makeDeclAvailable(Dst, ND);
+         makeDeclAvailable(Dst, ND, IgnoreRedecl);
       }
    }
 }
@@ -1045,7 +1046,13 @@ bool IsPersistable(SemaPass &SP, QualType Ty)
    default:
       return true;
    case Type::PointerTypeID:
-   case Type::MutablePointerTypeID:
+   case Type::MutablePointerTypeID: {
+      if (Ty->getPointeeType()->isInt8Ty()) {
+         return true;
+      }
+
+      return false;
+   }
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
    case Type::MutableBorrowTypeID:
@@ -1725,7 +1732,11 @@ bool SemaPass::visitVarDecl(VarDecl *Decl)
    if (declaredType->isDependentType()) {
       if (auto val = Decl->getValue()) {
          val->setContextualType(declaredType);
-         (void) visitExpr(Decl, val);
+
+         auto Res = visitExpr(Decl, val);
+         if (Res) {
+            Decl->setValue(Res.get());
+         }
       }
 
       // dependant decls can only be type checked at instantiation time
@@ -2438,7 +2449,7 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
          maybeInstantiateMemberFunction(InitFn, Expr);
 
          if (inCTFE()) {
-            ILGen->prepareFunctionForCtfe(InitFn);
+            ILGen->prepareFunctionForCtfe(InitFn, Expr);
          }
       }
    }
@@ -2621,7 +2632,7 @@ ExprResult SemaPass::visitNoneLiteral(NoneLiteral *Expr)
       }
 
       diagnose(Expr, err_requires_contextual_type, Expr->getSourceRange(),
-               "'none'");
+               0 /*none*/);
 
       return {};
    }
@@ -2704,7 +2715,9 @@ ExprResult SemaPass::visitStringLiteral(StringLiteral *Expr)
    }
 
    if (inCTFE()) {
-      if (!ILGen->prepareFunctionForCtfe(StrInit)) {
+      ILGen->initStringInfo();
+
+      if (!ILGen->prepareFunctionForCtfe(StrInit, Expr)) {
          StrInit->getRecord()->setIsInvalid(true);
          Expr->setIsInvalid(true);
       }
@@ -2776,7 +2789,7 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation *Expr)
    }
 
    if (inCTFE()) {
-      ILGen->prepareFunctionForCtfe(PlusEquals);
+      ILGen->prepareFunctionForCtfe(PlusEquals, Expr);
    }
 
    Expr->setExprType(Context.getRecordType(Str));
@@ -2829,15 +2842,15 @@ void SemaPass::visitIfConditions(Statement *Stmt,
                                  MutableArrayRef<IfCondition> Conditions) {
    for (auto &C : Conditions) {
       switch (C.K) {
-      case IfCondition::Expr: {
+      case IfCondition::Expression: {
          // if the condition contains a declaration, it only lives in the
          // 'if' block
-         auto CondExpr = C.ExprData.Cond;
+         auto CondExpr = C.ExprData.Expr;
 
          // error here does not affect the stmt body
          auto CondRes = getAsOrCast(Stmt, CondExpr, Context.getBoolTy());
          if (CondRes)
-            C.ExprData.Cond = CondRes.get();
+            C.ExprData.Expr = CondRes.get();
 
          break;
       }
@@ -2863,13 +2876,13 @@ void SemaPass::visitIfConditions(Statement *Stmt,
          break;
       }
       case IfCondition::Pattern: {
-         auto ExprRes = visitExpr(Stmt, C.PatternData.Expr);
+         auto ExprRes = getRValue(Stmt, C.PatternData.Expr);
          if (!ExprRes)
             continue;
 
          C.PatternData.Expr = ExprRes.get();
 
-         visitPatternExpr(C.PatternData.Pattern, C.PatternData.Expr);
+         visitPatternExpr(Stmt, C.PatternData.Pattern, C.PatternData.Expr);
          break;
       }
       }
@@ -2996,71 +3009,62 @@ static bool checkDuplicates(SemaPass &SP, QualType MatchedVal, MatchStmt *Stmt)
    return valid;
 }
 
-static bool checkIfExhaustive(MatchStmt *node,
-                              QualType MatchedVal,
-                              llvm::SmallPtrSet<EnumCaseDecl*, 8>&neededCases) {
-   if (node->isHasDefault())
-      return true;
+static void checkIfExhaustive(
+               SemaPass &SP,
+               MatchStmt *Stmt,
+               QualType MatchedVal,
+               llvm::DenseMap<EnumCaseDecl*, SourceRange> &FullyCoveredCases) {
+   if (Stmt->isHasDefault())
+      return;
 
-   // FIXME numeric values can still technically be exhausted
-   if (!MatchedVal->isRecordType())
-      return false;
-
-   auto R = MatchedVal->getRecord();
-   if (!R->isEnum())
-      return false;
-
-   for (auto &decl : R->getDecls())
-      if (auto C = dyn_cast<EnumCaseDecl>(decl))
-         neededCases.insert(C);
-
-   for (auto &C : node->getCases()) {
-      if (!C->getPattern())
-         continue;
-
-      auto CP = dyn_cast<CasePattern>(C->getPattern());
-      if (!CP)
-         continue;
-
-      bool allCaseValsCovered = true;
-      for (auto &arg : CP->getArgs())
-         if (arg.isExpr()) {
-            allCaseValsCovered = false;
-            break;
-         }
-
-      if (allCaseValsCovered)
-         neededCases.erase(CP->getCaseDecl());
+   if (!MatchedVal->isRecordType() || !MatchedVal->isEnum()) {
+      SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
+      return;
    }
 
-   return neededCases.empty();
+   auto R = cast<EnumDecl>(MatchedVal->getRecord());
+
+   bool FirstMiss = true;
+   for (auto *Case : R->getCases()) {
+      if (FullyCoveredCases.find(Case) == FullyCoveredCases.end()) {
+         if (FirstMiss) {
+            FirstMiss = false;
+            SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
+         }
+
+         SP.diagnose(Stmt, note_missing_case, Case->getName(),
+                     Case->getSourceLoc());
+      }
+   }
 }
 
 StmtResult SemaPass::visitMatchStmt(MatchStmt *Stmt)
 {
-   QualType switchType;
-   auto switchValResult = getRValue(Stmt, Stmt->getSwitchValue());
-   if (switchValResult) {
-      Stmt->setSwitchValue(switchValResult.get());
-      switchType = Stmt->getSwitchValue()->getExprType();
+   QualType MatchType;
+
+   auto MatchValRes = getRValue(Stmt, Stmt->getSwitchValue());
+   if (MatchValRes) {
+      Stmt->setSwitchValue(MatchValRes.get());
+      MatchType = Stmt->getSwitchValue()->getExprType();
    }
    else {
-      switchType = UnknownAnyTy;
+      MatchType = UnknownAnyTy;
    }
 
-   size_t i = 0;
-   size_t numCases = Stmt->getCases().size();
-   llvm::DenseMap<EnumCaseDecl*, CasePattern*> FullyCoveredCases;
+   unsigned i = 0;
+   bool IntegralSwitch = true;
+   unsigned NumCases = (unsigned)Stmt->getCases().size();
+   llvm::DenseMap<EnumCaseDecl*, SourceRange> FullyCoveredCases;
 
    for (auto& C : Stmt->getCases()) {
-      bool isNotLast = i != numCases - 1;
+      bool isNotLast = i != NumCases - 1;
       bool nextCaseHasArguments = false;
 
       if (isNotLast) {
          auto &nextCase = Stmt->getCases()[i + 1];
          if (auto CP = dyn_cast_or_null<CasePattern>(nextCase->getPattern())) {
             for (auto &Arg : CP->getArgs()) {
-               if (!Arg.isExpr()) {
+               if (Arg.K == IfCondition::Binding) {
                   nextCaseHasArguments = true;
                   break;
                }
@@ -3095,28 +3099,53 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt *Stmt)
 
       Stmt->copyStatusFlags(C);
 
-      if (auto CP = dyn_cast_or_null<CasePattern>(C->getPattern())) {
-         if (CP->isInvalid())
-            continue;
+      EnumCaseDecl *Case = nullptr;
+      if (auto *Pat = C->getPattern()) {
+         if (auto CP = dyn_cast<CasePattern>(Pat)) {
+            if (CP->isInvalid())
+               continue;
 
-         bool ContainsExpressions = false;
-         for (auto &arg : CP->getArgs()) {
-            if (arg.isExpr()) {
-               ContainsExpressions = true;
-               break;
+            bool ContainsExpressions = false;
+            for (auto &arg : CP->getArgs()) {
+               if (arg.K == IfCondition::Expression) {
+                  ContainsExpressions = true;
+                  break;
+               }
+               if (arg.K == IfCondition::Binding
+                     && !arg.BindingData.Decl->isConst()) {
+                  Stmt->setHasMutableCaseArg(true);
+               }
             }
-            else if (!arg.getDecl()->isConst()) {
-               Stmt->setHasMutableCaseArg(true);
+
+            if (!ContainsExpressions)
+               Case = CP->getCaseDecl();
+
+            IntegralSwitch &= CP->getArgs().empty();
+         }
+         else if (auto *ExprPat = dyn_cast<ExpressionPattern>(Pat)) {
+            auto *Expr = ExprPat->getExpr()->ignoreParensAndImplicitCasts();
+            if (auto *I = dyn_cast<IntegerLiteral>(Expr)) {
+               IntegralSwitch &= I->getExprType()->isIntegerType();
+            }
+            else if (auto *EC = dyn_cast<EnumCaseExpr>(Expr)) {
+               IntegralSwitch &= EC->getArgs().empty();
+               Case = EC->getCase();
+            }
+            else {
+               IntegralSwitch = false;
             }
          }
+         else {
+            IntegralSwitch = false;
+         }
 
-         if (!ContainsExpressions) {
-            auto It = FullyCoveredCases.try_emplace(CP->getCaseDecl(), CP);
+         if (Case) {
+            auto It = FullyCoveredCases.try_emplace(Case, C->getSourceRange());
             if (!It.second) {
-               diagnose(Stmt, err_duplicate_case, CP->getCaseDecl()->getName(),
+               diagnose(Stmt, err_duplicate_case, Case->getName(),
                         Stmt->getSourceLoc());
                diagnose(Stmt, note_duplicate_case,
-                        It.first->getSecond()->getSourceLoc());
+                        It.first->getSecond());
             }
          }
       }
@@ -3124,24 +3153,14 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt *Stmt)
       ++i;
    }
 
+   Stmt->setIntegralSwitch(IntegralSwitch);
+
    if (Stmt->isTypeDependent())
       return Stmt;
 
-   llvm::SmallPtrSet<EnumCaseDecl*, 8> neededCases;
-   if (!checkIfExhaustive(Stmt, switchType, neededCases)) {
-      diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
+   checkIfExhaustive(*this, Stmt, MatchType, FullyCoveredCases);
+   checkDuplicates(*this, MatchType, Stmt);
 
-      if (!neededCases.empty()) {
-         for (auto C : neededCases) {
-            diagnose(Stmt, note_missing_case, C->getName(),
-                     C->getSourceLoc());
-         }
-      }
-
-      return Stmt;
-   }
-
-   checkDuplicates(*this, switchType, Stmt);
    return Stmt;
 }
 
@@ -3157,64 +3176,14 @@ StmtResult SemaPass::visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match)
    auto pattern = Stmt->getPattern();
    pattern->setContextualType(matchType);
 
-   visitPatternExpr(pattern, matchExpr);
-   if (!isa<ExpressionPattern>(pattern) || pattern->isInvalid())
-      return Stmt;
-
-   if (matchType->isUnknownAnyType())
-      return Stmt;
-
-   auto caseVal = cast<ExpressionPattern>(pattern)->getExpr()->getExprType();
-
-   auto *II = &Context.getIdentifiers().get("~=");
-   auto DeclName = Context.getDeclNameTable().getInfixOperatorName(*II);
-   auto matchOp = lookupFunction(DeclName, { matchExpr, pattern },
-                                 {}, {}, Stmt, true);
-
-   if (matchOp) {
-      auto &Cand = matchOp.getBestMatch();
-      if (!Cand.isBuiltinCandidate()) {
-         Stmt->setComparisonOp(Cand.Func);
-
-         if (auto M = dyn_cast<MethodDecl>(Stmt->getComparisonOp()))
-            maybeInstantiateMemberFunction(M, Stmt);
-
-         if (inCTFE()) {
-            ILGen->prepareFunctionForCtfe(Stmt->getComparisonOp());
-         }
-      }
-
-      return Stmt;
-   }
-
-   II = &Context.getIdentifiers().get("==");
-   DeclName = Context.getDeclNameTable().getInfixOperatorName(*II);
-   auto compOp = lookupFunction(DeclName, { matchExpr, pattern },
-                                {}, {}, Stmt, true);
-
-   if (compOp) {
-      auto &Cand = compOp.getBestMatch();
-      if (!Cand.isBuiltinCandidate()) {
-         Stmt->setComparisonOp(Cand.Func);
-
-         if (auto M = dyn_cast<MethodDecl>(Stmt->getComparisonOp()))
-            maybeInstantiateMemberFunction(M, Stmt);
-
-         if (inCTFE()) {
-            ILGen->prepareFunctionForCtfe(Stmt->getComparisonOp());
-         }
-      }
-
-      return Stmt;
-   }
-
-   diagnose(Stmt, err_invalid_match, Stmt->getSourceRange(),
-            matchType, caseVal);
+   visitPatternExpr(Match, pattern, matchExpr);
+   Stmt->copyStatusFlags(pattern);
 
    return Stmt;
 }
 
-void SemaPass::visitPatternExpr(PatternExpr *E,
+void SemaPass::visitPatternExpr(Statement *Stmt,
+                                PatternExpr *E,
                                 Expression *MatchVal) {
    switch (E->getTypeID()) {
    case Expression::CasePatternID:
@@ -3230,12 +3199,14 @@ void SemaPass::visitPatternExpr(PatternExpr *E,
       llvm_unreachable("not a pattern!");
    }
 
+   Stmt->copyStatusFlags(E);
    E->setSemanticallyChecked(true);
 }
 
 ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr,
                                             Expression *MatchVal) {
-   Expr->getExpr()->setContextualType(MatchVal->getExprType());
+   auto matchType = MatchVal->getExprType();
+   Expr->getExpr()->setContextualType(matchType);
 
    auto result = getRValue(Expr, Expr->getExpr());
    if (!result)
@@ -3243,6 +3214,69 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr,
 
    Expr->setExpr(result.get());
    Expr->setExprType(result.get()->getExprType());
+
+   auto caseVal = Expr->getExpr()->getExprType();
+
+   auto *MatchII = &Context.getIdentifiers().get("~=");
+   auto MatchName = Context.getDeclNameTable().getInfixOperatorName(*MatchII);
+   auto matchOp = lookupFunction(MatchName, { MatchVal, Expr->getExpr() },
+                                 {}, {}, Expr, true);
+
+   if (matchOp) {
+      auto &Cand = matchOp.getBestMatch();
+      if (!Cand.isBuiltinCandidate()) {
+         Expr->setComparisonOp(Cand.Func);
+
+         if (auto M = dyn_cast<MethodDecl>(Expr->getComparisonOp()))
+            maybeInstantiateMemberFunction(M, Expr);
+
+         if (inCTFE()) {
+            ILGen->prepareFunctionForCtfe(Expr->getComparisonOp(), Expr);
+         }
+      }
+
+      return Expr;
+   }
+
+   if (matchOp.isDependent()) {
+      Expr->setIsTypeDependent(true);
+      return Expr;
+   }
+
+   auto *EqualsII = &Context.getIdentifiers().get("==");
+   auto EqualsName = Context.getDeclNameTable().getInfixOperatorName(*EqualsII);
+   auto compOp = lookupFunction(EqualsName, { MatchVal, Expr->getExpr() },
+                                {}, {}, Expr, true);
+
+   if (compOp) {
+      auto &Cand = compOp.getBestMatch();
+      if (!Cand.isBuiltinCandidate()) {
+         Expr->setComparisonOp(Cand.Func);
+
+         if (auto M = dyn_cast<MethodDecl>(Expr->getComparisonOp()))
+            maybeInstantiateMemberFunction(M, Expr);
+
+         if (inCTFE()) {
+            ILGen->prepareFunctionForCtfe(Expr->getComparisonOp(), Expr);
+         }
+      }
+
+      return Expr;
+   }
+
+   if (compOp.isDependent()) {
+      Expr->setIsTypeDependent(true);
+      return Expr;
+   }
+
+   diagnose(Expr, err_invalid_match, Expr->getSourceRange(),
+            matchType, caseVal);
+
+   matchOp.diagnose(*this, MatchName, { MatchVal, Expr->getExpr() }, {},
+                    Expr, false);
+
+   compOp.diagnose(*this, EqualsName, { MatchVal, Expr->getExpr() }, {},
+                    Expr, false);
 
    return Expr;
 }
@@ -3252,112 +3286,335 @@ ExprResult SemaPass::visitIsPattern(IsPattern *node,
    llvm_unreachable("TODO!");
 }
 
-ExprResult SemaPass::visitCasePattern(CasePattern *Expr, Expression *MatchVal)
-{
-   auto contextual = MatchVal->getExprType()->stripReference();
-   if (contextual->isUnknownAnyType()) {
-      assert(EncounteredError && "set type to UnknownAny without erroring");
-      Expr->setIsInvalid(true);
+static ExprResult matchEnum(SemaPass &SP,
+                            CasePattern *Expr,
+                            Expression *MatchVal,
+                            EnumCaseDecl *Case) {
+   auto *E = cast<EnumDecl>(Case->getRecord());
+   if (!MatchVal->getExprType()->isRecordType()
+         || E != MatchVal->getExprType()->getRecord()) {
+      SP.diagnose(Expr, err_generic_error, "cannot match values",
+                  Expr->getSourceLoc());
+
       return ExprError();
    }
 
-   assert(contextual->isEnum() && "bad case pattern type!");
-
-   auto E = cast<EnumDecl>(contextual->getRecord());
    if (E->isTemplate()) {
       Expr->setIsTypeDependent(true);
    }
 
-   auto Case = E->hasCase(Expr->getCaseNameIdent());
-   if (!Case) {
-      if (E->isTemplate())
-         return Expr;
-
-      diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
-               E->getDeclName(), Expr->getCaseName(), false);
-
-      return ExprError();
-   }
-
    Expr->setCaseDecl(Case);
 
+   // Enum cases cannot have default arguments, so fast-path here.
    if (Expr->getArgs().size() != Case->getArgs().size()) {
-      diagnose(Expr, err_enum_case_wrong_no_args, Expr->getSourceRange(),
-               Case->getDeclName(), Case->getArgs().size(),
-               Expr->getArgs().size());
+      SP.diagnose(Expr, err_enum_case_wrong_no_args, Expr->getSourceRange(),
+                  Case->getDeclName(), Case->getArgs().size(),
+                  Expr->getArgs().size());
 
       return ExprError();
    }
 
-   size_t i = 0;
-   SmallVector<Expression*, 4> args;
+   auto &Context = SP.getContext();
+   auto &DeclCtx = SP.getDeclContext();
+
+   SmallVector<Expression*, 4> Args;
    SmallVector<IdentifierInfo*, 4> Labels;
-   ASTVector<LocalVarDecl*> varDecls;
 
-   for (auto &arg : Expr->getArgs()) {
-      if (arg.isExpr()) {
-         auto argResult = getRValue(Expr, arg.getExpr());
-         if (!argResult)
-            // difficult to recover
-            return ExprError();
+   unsigned i = 0;
+   for (auto &Arg : Expr->getArgs()) {
+      auto CaseArgTy = Case->getArgs()[i]->getType();
+      if (Arg.K == IfCondition::Expression) {
+         auto argResult = SP.getAsOrCast(Expr, Arg.ExprData.Expr, CaseArgTy);
+         if (!argResult) {
+            // Create a dummy expression with the correct type.
+            Args.push_back(BuiltinExpr::Create(Context,
+                                               CaseArgTy->stripReference()));
 
-         arg.setExpr(argResult.get());
-         args.push_back(arg.getExpr());
+            continue;
+         }
+
+         // This argument is just an expression, not further processing needed.
+         Arg.ExprData.Expr = argResult.get();
+         Args.push_back(Arg.ExprData.Expr);
+      }
+      else if (Arg.K == IfCondition::Pattern) {
+         auto *Pattern = Arg.PatternData.Pattern;
+
+         // Create a dummy expression with the correct type.
+         Args.push_back(BuiltinExpr::Create(Context,
+                                            CaseArgTy->stripReference()));
+
+         // Resolve the pattern.
+         SP.visitPatternExpr(Expr, Pattern, Args.back());
       }
       else {
-         auto *Var = arg.getDecl();
+         auto *Var = Arg.BindingData.Decl;
          Var->setDeclared(true);
          Var->setSemanticallyChecked(true);
 
-         auto ty = Case->getArgs()[i]->getType();
+         // Verify that mutability of the declaration and the matched value
+         // is compatible.
          if (Var->isConst()) {
-            ty = Context.getReferenceType(ty->stripReference());
+            CaseArgTy = Context.getReferenceType(CaseArgTy->stripReference());
          }
          else {
-            if (contextual->isNonMutableReferenceType()) {
-               diagnose(Expr, err_generic_error, "value is not mutable",
-                        Expr->getSourceLoc());
+            if (MatchVal->getExprType()->isNonMutableReferenceType()) {
+               SP.diagnose(Expr, err_generic_error, "value is not mutable",
+                           Expr->getSourceLoc());
             }
 
-            ty = Context.getMutableReferenceType(ty->stripReference());
+            CaseArgTy = Context.getMutableReferenceType(
+               CaseArgTy->stripReference());
          }
 
-         args.push_back(BuiltinExpr::Create(Context, ty->stripReference()));
+         // Create a dummy expression with the correct type.
+         Args.push_back(BuiltinExpr::Create(Context,
+                                            CaseArgTy->stripReference()));
 
-         auto typeref = SourceType(ty);
+         // Resolve the declarations name and type.
+         auto typeref = SourceType(CaseArgTy);
          Var->setType(typeref);
 
          DeclarationName DeclName =
             Context.getDeclNameTable().getLocalVarName(
-               Var->getDeclName(), getBlockScope()->getScopeID());
+               Var->getDeclName(), SP.getBlockScope()->getScopeID());
 
+         // Make the binding visible.
          if (Var->getLexicalContext()) {
-            makeDeclAvailable(getDeclContext(), DeclName, Var);
+            SP.makeDeclAvailable(DeclCtx, DeclName, Var);
          }
          else {
-            addDeclToContext(getDeclContext(), DeclName, Var);
+            SP.addDeclToContext(DeclCtx, DeclName, Var);
          }
-
-         varDecls.push_back(Var, Context);
       }
 
       Labels.push_back(Case->getArgs()[i]->getLabel());
       ++i;
    }
 
-   Expr->setVarDecls(move(varDecls));
+   auto CaseRes = SP.lookupCase(Expr->getCaseNameIdent(), E, Args, {}, Labels,
+                                Expr);
 
-   auto res = lookupCase(Expr->getCaseNameIdent(), E, args, {}, Labels, Expr);
-   if (res.isDependent()) {
+   if (CaseRes.isDependent()) {
       Expr->setIsTypeDependent(true);
    }
-   else if (!res) {
-      diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
-               E->getDeclName(), Expr->getCaseName(), !args.empty());
+   else if (!CaseRes) {
+      SP.diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
+                  E->getDeclName(), Expr->getCaseName(), !Args.empty());
    }
 
    Expr->setExprType(Context.getRecordType(E));
    return Expr;
+}
+
+static ExprResult matchCommon(SemaPass &SP,
+                              CasePattern *Expr,
+                              ArrayRef<QualType> NeededTys,
+                              QualType SingleNeededTy = QualType()) {
+   unsigned i = 0;
+   for (auto &Arg : Expr->getArgs()) {
+      QualType NeededTy;
+      if (SingleNeededTy) {
+         NeededTy = SingleNeededTy;
+      }
+      else {
+         NeededTy = NeededTys[i];
+      }
+
+      if (Arg.K == IfCondition::Expression) {
+         auto argResult = SP.getAsOrCast(Expr, Arg.ExprData.Expr, NeededTy);
+         if (!argResult) {
+            continue;
+         }
+
+         // This argument is just an expression, not further processing needed.
+         Arg.ExprData.Expr = argResult.get();
+      }
+      else if (Arg.K == IfCondition::Pattern) {
+         auto *Pattern = Arg.PatternData.Pattern;
+
+         // Create a dummy expression with the correct type.
+         auto DummyExpr = BuiltinExpr::CreateTemp(NeededTy);
+
+         // Resolve the pattern.
+         SP.visitPatternExpr(Expr, Pattern, &DummyExpr);
+      }
+      else {
+         auto *Var = Arg.BindingData.Decl;
+         Var->setDeclared(true);
+         Var->setSemanticallyChecked(true);
+
+         // Resolve the declarations name and type.
+         auto typeref = SourceType(NeededTy);
+         Var->setType(typeref);
+
+         DeclarationName DeclName =
+            SP.getContext().getDeclNameTable().getLocalVarName(
+               Var->getDeclName(), SP.getBlockScope()->getScopeID());
+
+         // Make the binding visible.
+         if (Var->getLexicalContext()) {
+            SP.makeDeclAvailable(SP.getDeclContext(), DeclName, Var);
+         }
+         else {
+            SP.addDeclToContext(SP.getDeclContext(), DeclName, Var);
+         }
+      }
+
+      ++i;
+   }
+
+   return Expr;
+}
+
+static ExprResult matchStruct(SemaPass &SP,
+                              CasePattern *Expr,
+                              Expression *MatchVal,
+                              StructDecl *S) {
+   if (!MatchVal->getExprType()->isRecordType()
+       || S != MatchVal->getExprType()->getRecord()) {
+      SP.diagnose(Expr, err_generic_error, "cannot match values",
+                  Expr->getSourceLoc());
+
+      return ExprError();
+   }
+   if (S->getStoredFields().size() != Expr->getArgs().size()) {
+      SP.diagnose(Expr, err_generic_error, "cannot match values",
+                  Expr->getSourceLoc());
+
+      return ExprError();
+   }
+   if (S->isTemplate()) {
+      Expr->setIsTypeDependent(true);
+   }
+
+   SmallVector<QualType, 4> NeededTys;
+   for (auto &F : S->getStoredFields()) {
+      NeededTys.push_back(F->getType());
+   }
+
+   return matchCommon(SP, Expr, NeededTys);
+}
+
+static ExprResult matchTuple(SemaPass &SP,
+                             CasePattern *Expr,
+                             Expression *MatchVal) {
+   QualType Ty = MatchVal->getExprType();
+   if (!Ty->isTupleType()
+         || Ty->asTupleType()->getArity() != Expr->getArgs().size()) {
+      SP.diagnose(Expr, err_generic_error, "cannot match values",
+               Expr->getSourceLoc());
+
+      return ExprError();
+   }
+   if (Ty->isDependentType()) {
+      Expr->setIsTypeDependent(true);
+   }
+
+   return matchCommon(SP, Expr,
+                      MatchVal->getExprType()->asTupleType()
+                              ->getContainedTypes());
+}
+
+static ExprResult matchArray(SemaPass &SP,
+                             CasePattern *Expr,
+                             Expression *MatchVal) {
+   QualType Ty = MatchVal->getExprType();
+   if (!Ty->isArrayType()
+       || Ty->asArrayType()->getNumElements() != Expr->getArgs().size()) {
+      SP.diagnose(Expr, err_generic_error, "cannot match values",
+                  Expr->getSourceLoc());
+
+      return ExprError();
+   }
+   if (Ty->isDependentType()) {
+      Expr->setIsTypeDependent(true);
+   }
+
+   return matchCommon(SP, Expr, {},
+                      MatchVal->getExprType()->asArrayType()
+                              ->getElementType());
+}
+
+ExprResult SemaPass::visitCasePattern(CasePattern *Expr, Expression *MatchVal)
+{
+   switch (Expr->getKind()) {
+   case CasePattern::K_Tuple:
+      return matchTuple(*this, Expr, MatchVal);
+   case CasePattern::K_Array:
+      return matchArray(*this, Expr, MatchVal);
+   case CasePattern::K_EnumOrStruct:
+      break;
+   }
+
+   DeclContext *LookupCtx = nullptr;
+   if (Expr->hasLeadingDot()) {
+      auto CtxTy = MatchVal->getExprType()->stripReference();
+      if (CtxTy->isMetaType())
+         CtxTy = CtxTy->asMetaType()->getUnderlyingType();
+
+      if (!CtxTy->isRecordType()) {
+         diagnose(Expr, err_requires_contextual_type, 2,
+                  Expr->getSourceRange());
+
+         return ExprError();
+      }
+
+      LookupCtx = CtxTy->getRecord();
+   }
+   else if (auto *ParentExpr = Expr->getParentExpr()) {
+      auto ParentRes = visitExpr(Expr, ParentExpr);
+      if (!ParentRes)
+         return ExprError();
+
+      if (auto Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
+         if (Ident->getKind() == IdentifierKind::Namespace) {
+            LookupCtx = Ident->getNamespaceDecl();
+         }
+         else if (Ident->getKind() == IdentifierKind::Import) {
+            LookupCtx = Ident->getImport();
+         }
+         else if (Ident->getKind() == IdentifierKind::Module) {
+            LookupCtx = Ident->getModule();
+         }
+      }
+
+      if (!LookupCtx) {
+         QualType ParentTy = ParentExpr->getExprType();
+         if (ParentTy->isMetaType())
+            ParentTy = ParentTy->asMetaType()->getUnderlyingType();
+
+         if (!ParentTy->isRecordType()) {
+            diagnose(Expr, err_generic_error, "cannot lookup member in type",
+                     Expr->getSourceRange());
+
+            return ExprError();
+         }
+
+         LookupCtx = ParentTy->getRecord();
+      }
+   }
+   else {
+      LookupCtx = &getDeclContext();
+   }
+
+   auto Lookup = MultiLevelLookup(*LookupCtx, Expr->getCaseNameIdent());
+   if (!Lookup) {
+      diagnoseMemberNotFound(LookupCtx, Expr, Expr->getCaseNameIdent());
+      return ExprError();
+   }
+
+   auto *ND = Lookup.front().front();
+   switch (ND->getKind()) {
+   case Decl::EnumCaseDeclID:
+      return matchEnum(*this, Expr, MatchVal, cast<EnumCaseDecl>(ND));
+   case Decl::StructDeclID:
+      return matchStruct(*this, Expr, MatchVal, cast<StructDecl>(ND));
+   default:
+      diagnose(Expr, err_generic_error, "cannot match values",
+               Expr->getSourceLoc());
+      return ExprError();
+   }
 }
 
 DeclResult SemaPass::visitFuncArgDecl(FuncArgDecl *Decl)
@@ -3428,8 +3685,10 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt *Stmt)
             }
          }
 
-         Stmt->setReturnValue(implicitCastIfNecessary(result.get(),
-                                                      declaredReturnType));
+         Stmt->setReturnValue(
+            implicitCastIfNecessary(result.get(), declaredReturnType, false,
+               diag::err_type_mismatch, Stmt->getReturnValue()->getSourceLoc(),
+               Stmt->getReturnValue()->getSourceRange()));
 
          retType = Stmt->getReturnValue()->getExprType();
       }
@@ -4005,13 +4264,159 @@ SemaPass::StaticExprResult SemaPass::evaluateAsBool(StmtOrDecl DependentStmt,
    return evaluateAs(DependentStmt, expr, Context.getBoolTy());
 }
 
+static bool refersToSelf(ArrayRef<IdentifierInfo*> NameQual,
+                         AssociatedTypeDecl *D) {
+   if (NameQual.size() == 1) {
+      return D->getDeclName() == NameQual.front();
+   }
+   if (NameQual.size() == 2) {
+      if (!NameQual.front()->isStr("Self"))
+         return false;
+
+      return D->getDeclName() == NameQual[1];
+   }
+
+   return false;
+}
+
 void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
 {
    for (auto *C : ConstrainedDecl->getConstraints()) {
       auto Result = checkConstraint(ConstrainedDecl, C);
       if (!Result && !ConstrainedDecl->isDependent()) {
-         diagnose(ConstrainedDecl, err_generic_error,
-                  "constraint is always false", C->getSourceRange());
+         diagnose(ConstrainedDecl, err_constraint_always_false,
+                  C->getSourceRange());
+      }
+   }
+
+   for (auto *C : Context.getExtConstraints(ConstrainedDecl)) {
+      DeclContext *CurCtx = dyn_cast<DeclContext>(ConstrainedDecl);
+      if (!CurCtx) {
+         CurCtx = ConstrainedDecl->getDeclContext()->lookThroughExtension();
+      }
+
+      DeclScopeRAII DSR(*this, CurCtx);
+      if (C->getKind() == DeclConstraint::Concept) {
+         auto *ConceptRef = C->getConceptRefExpr();
+         ConceptRef->setAllowIncompleteTemplateArgs(true);
+
+         auto Result = visitExpr(ConstrainedDecl, ConceptRef);
+         if (!Result)
+            continue;
+
+         if (ConceptRef->getKind() != IdentifierKind::Alias) {
+            diagnose(ConceptRef, err_cannot_be_used_as_concept,
+                     ConceptRef->getNamedDecl()->getSpecifierForDiagnostic(),
+                     ConceptRef->getNamedDecl()->getDeclName(),
+                     ConceptRef->getSourceRange());
+
+            continue;
+         }
+
+         auto *Concept = ConceptRef->getAlias();
+         auto Params = Concept->getTemplateParams();
+
+         if (Params.size() != 1 || !Params[0]->isTypeName()) {
+            diagnose(ConceptRef, err_not_a_valid_concept, 1,
+                     ConceptRef->getSourceRange());
+
+            continue;
+         }
+      }
+      else {
+         SmallVector<AssociatedTypeDecl*, 2> ReferencedATs;
+         SmallVectorImpl<AssociatedTypeDecl*> *Ptr = &ReferencedATs;
+         auto SAR = support::saveAndRestore(this->ReferencedATs, Ptr);
+
+         auto Result = visitSourceType(ConstrainedDecl, C->getType());
+         auto *AT = dyn_cast<AssociatedTypeDecl>(ConstrainedDecl);
+         if (Result
+               && AT
+               && C->getKind() == DeclConstraint::TypePredicate
+               && refersToSelf(C->getNameQualifier(), AT)) {
+            Context.addCovariance(AT, Result.get()->getRecord());
+         }
+
+         if (!ReferencedATs.empty()) {
+            auto *Mem = Context.Allocate<AssociatedTypeDecl*>(
+               ReferencedATs.size());
+
+            std::copy(ReferencedATs.begin(), ReferencedATs.end(), Mem);
+            C->setReferencedAssociatedTypes({ Mem, ReferencedATs.size() });
+         }
+      }
+
+      // Verify that the constrained type actually exists.
+      auto NameQual = C->getNameQualifier();
+
+      unsigned i = 0;
+      unsigned NameQualSize = (unsigned)NameQual.size();
+
+      for (auto *Ident : NameQual) {
+         if (Ident->isStr("Self") && i == 0) {
+            ++i;
+            continue;
+         }
+
+         auto Result = Lookup(*CurCtx, Ident);
+         if (!Result) {
+            diagnose(ConstrainedDecl, err_member_not_found,
+                     cast<NamedDecl>(CurCtx)->getSpecifierForDiagnostic(),
+                     cast<NamedDecl>(CurCtx)->getDeclName(),
+                     Ident->getIdentifier(), C->getSourceRange());
+
+            break;
+         }
+         if (Result.size() != 1) {
+            diagnose(ConstrainedDecl, err_ambiguous_reference,
+                     Ident->getIdentifier(), C->getSourceRange());
+
+            break;
+         }
+
+         if (auto *AT = dyn_cast<AssociatedTypeDecl>(Result.front())) {
+            if (i == NameQualSize - 1)
+               break;
+
+            auto Cov = Context.getCovariance(AT);
+            if (Cov.empty()) {
+               diagnose(ConstrainedDecl, err_unconstrained_lookup,
+                        AT->getDeclName(), C->getSourceRange());
+
+               break;
+            }
+
+            // FIXME multiple covariances
+            CurCtx = Cov.front();
+         }
+         else if (auto *P = dyn_cast<TemplateParamDecl>(Result.front())) {
+            if (i == NameQualSize - 1)
+               break;
+
+            auto Ty = P->getCovariance();
+            if (Ty->isUnknownAnyType())
+               break;
+
+            if (!Ty->isRecordType()) {
+               diagnose(ConstrainedDecl, err_generic_error,
+                        "cannot lookup member in type",
+                        C->getSourceRange());
+
+               break;
+            }
+
+            CurCtx = Ty->getRecord();
+         }
+         else {
+            diagnose(ConstrainedDecl, err_cannot_be_referenced_in_constraint,
+                     Result.front()->getSpecifierForDiagnostic(),
+                     Result.front()->getDeclName(),
+                     C->getSourceRange());
+
+            break;
+         }
+
+         ++i;
       }
    }
 }
@@ -4131,6 +4536,142 @@ bool SemaPass::checkConstraint(StmtOrDecl DependentDecl,
    }
 
    return cast<il::ConstantInt>(BoolRes.getValue())->getValue().getBoolValue();
+}
+
+bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
+                                   QualType ConstrainedType,
+                                   DeclConstraint *C) {
+   DeclContext *CurCtx = dyn_cast<DeclContext>(ConstrainedDecl);
+   if (!CurCtx) {
+      CurCtx = ConstrainedDecl->getDeclContext()->lookThroughExtension();
+   }
+
+   DeclScopeRAII DSR(*this, CurCtx);
+
+   switch (C->getKind()) {
+   case DeclConstraint::Concept: {
+      IdentifierRefExpr *ConceptRef = C->getConceptRefExpr();
+      AliasDecl *Concept = ConceptRef->getAlias();
+
+      ResolvedTemplateArg Arg(Concept->getTemplateParams().front(),
+                              ConstrainedType,
+                              C->getSourceRange().getStart());
+
+      auto *FinalList = sema::FinalTemplateArgumentList::Create(Context, Arg);
+      auto Inst = Instantiator.InstantiateAlias(Concept,
+                                                C->getSourceRange().getStart(),
+                                                FinalList);
+
+      if (!Inst.hasValue())
+         return true;
+
+      if (!ensureVisited(Inst.get()))
+         return true;
+
+      if (Inst.get()->getAliasExpr()->getExprType() != Context.getBoolTy()) {
+         diagnose(ConstrainedDecl, err_concept_must_be_bool,
+                  Inst.get()->getSourceRange());
+
+         return true;
+      }
+
+      return cast<il::ConstantInt>(Inst.get()->getAliasExpr()
+                                          ->getEvaluatedExpr())->getBoolValue();
+   }
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      auto &RHSSourceType = C->getType();
+
+      QualType RHSType;
+      if (!RHSSourceType.isResolved() || RHSSourceType->isDependentType()) {
+         auto Inst = Instantiator.InstantiateTypeExpr(cast<RecordDecl>(CurCtx),
+                                                      RHSSourceType.getTypeExpr());
+
+         if (!Inst) {
+            return true;
+         }
+
+         SourceType InstTy(Inst.get());
+         auto Result = visitSourceType(ConstrainedDecl, InstTy);
+         if (!Result) {
+            return true;
+         }
+
+         RHSType = Result.get();
+      }
+      else {
+         RHSType = RHSSourceType.getResolvedType();
+      }
+
+      if (C->getKind() == DeclConstraint::TypeEquality) {
+         return ConstrainedType.getCanonicalType()
+                == RHSType.getCanonicalType();
+      }
+      if (C->getKind() == DeclConstraint::TypeInequality) {
+         return ConstrainedType.getCanonicalType()
+                != RHSType.getCanonicalType();
+      }
+
+      bool Result;
+      if (!ConstrainedType->isRecordType() || !RHSType->isRecordType()) {
+         Result = false;
+      }
+      else {
+         auto Self = ConstrainedType->getRecord();
+         auto Other = RHSType->getRecord();
+
+         ensureDeclared(Self);
+         ensureDeclared(Other);
+
+         if (Self->isClass() && Other->isClass()) {
+            auto SelfClass = cast<ClassDecl>(Self);
+            auto OtherClass = cast<ClassDecl>(Other);
+
+            Result = OtherClass->isBaseClassOf(SelfClass);
+         }
+         else if (!isa<ProtocolDecl>(Other)) {
+            Result = false;
+         }
+         else {
+            auto &ConfTable = Context.getConformanceTable();
+            Result = ConfTable.conformsTo(Self, cast<ProtocolDecl>(Other));
+         }
+      }
+
+      if (C->getKind() == DeclConstraint::TypePredicateNegated)
+         Result = !Result;
+
+      return Result;
+   }
+   }
+}
+
+void SemaPass::printConstraint(llvm::raw_ostream &OS,
+                               QualType ConstrainedType,
+                               DeclConstraint *C) {
+   switch (C->getKind()) {
+   case DeclConstraint::Concept: {
+      IdentifierRefExpr *ConceptRef = C->getConceptRefExpr();
+      AliasDecl *Concept = ConceptRef->getAlias();
+
+      OS << Concept->getDeclName() << "<" << ConstrainedType << ">";
+      break;
+   }
+   case DeclConstraint::TypeEquality:
+      OS << ConstrainedType << " == " << C->getType().getResolvedType();
+      break;
+   case DeclConstraint::TypeInequality:
+      OS << ConstrainedType << " != " << C->getType().getResolvedType();
+      break;
+   case DeclConstraint::TypePredicate:
+      OS << ConstrainedType << " is " << C->getType().getResolvedType();
+      break;
+   case DeclConstraint::TypePredicateNegated:
+      OS << ConstrainedType << " !is " << C->getType().getResolvedType();
+      break;
+   }
 }
 
 bool SemaPass::getStringValue(Expression*,

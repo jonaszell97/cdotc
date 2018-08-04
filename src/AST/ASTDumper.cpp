@@ -89,16 +89,6 @@ private:
 
    bool visitVarDecl(VarDecl* node);
 
-   void visitCasePatternArg(CasePatternArgument &A)
-   {
-      if (A.isExpr()) {
-         visitExpr(A.getExpr());
-      }
-      else {
-//         visit(A.getDecl());
-      }
-   }
-
    void printAccessModifier(AccessSpecifier access)
    {
       switch (access) {

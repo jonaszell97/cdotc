@@ -382,27 +382,27 @@ public:
 
 struct IfCondition {
    enum Kind {
-      Expr,
+      Expression,
       Binding,
       Pattern,
    };
 
-   IfCondition(Expression *E)
-      : K(Expr), ExprData{ E }
+   IfCondition(ast::Expression *E)
+      : K(Expression), ExprData{ E }
    {}
 
-   IfCondition(LocalVarDecl *D, ConversionSequence *ConvSeq)
+   IfCondition(LocalVarDecl *D, ConversionSequence *ConvSeq = nullptr)
       : K(Binding), BindingData{ D, ConvSeq }
    {}
 
-   IfCondition(PatternExpr *Pat, Expression *E)
+   IfCondition(PatternExpr *Pat, ast::Expression *E = nullptr)
       : K(Pattern), PatternData{ Pat, E }
    {}
 
    Kind K;
 
    struct ExprDataType {
-      Expression *Cond = nullptr;
+      ast::Expression *Expr = nullptr;
    };
 
    struct BindingDataType {
@@ -412,7 +412,7 @@ struct IfCondition {
 
    struct PatternDataType {
       PatternExpr *Pattern = nullptr;
-      Expression *Expr = nullptr;
+      ast::Expression *Expr = nullptr;
    };
 
    union {
@@ -652,7 +652,6 @@ class CaseStmt: public Statement {
    SourceLocation CaseLoc;
    PatternExpr* pattern;
    Statement* body;
-   CallableDecl *comparisonOp = nullptr;
 
 public:
    static bool classofKind(NodeType kind) { return kind == CaseStmtID; }
@@ -672,9 +671,6 @@ public:
 
    void setPattern(PatternExpr *P) { pattern = P; }
    void setBody(Statement *body) { CaseStmt::body = body; }
-
-   CallableDecl *getComparisonOp() const { return comparisonOp; }
-   void setComparisonOp(CallableDecl *op) { comparisonOp = op; }
 };
 
 class MatchStmt final: public Statement,
@@ -682,7 +678,7 @@ class MatchStmt final: public Statement,
    MatchStmt(SourceLocation MatchLoc,
              SourceRange Braces,
              Expression* switchVal,
-             llvm::ArrayRef<CaseStmt*> cases,
+             ArrayRef<CaseStmt*> cases,
              IdentifierInfo *Label);
 
    MatchStmt(EmptyShell Empty, unsigned N);
@@ -693,8 +689,10 @@ protected:
    Expression* switchValue;
    unsigned NumCases;
 
-   bool hasDefault = false;
-   bool HasMutableCaseArg = false;
+   bool HasDefault        : 1;
+   bool HasMutableCaseArg : 1;
+   bool IntegralSwitch    : 1;
+
    IdentifierInfo *Label = nullptr;
 
 public:
@@ -736,11 +734,14 @@ public:
       return { getTrailingObjects<CaseStmt*>(), NumCases };
    }
 
-   bool isHasDefault() const { return hasDefault; }
-   void setHasDefault(bool hasDefault) { this->hasDefault = hasDefault; }
+   bool isHasDefault() const { return HasDefault; }
+   void setHasDefault(bool hasDefault) { this->HasDefault = hasDefault; }
 
    bool hasMutableCaseArg() const { return HasMutableCaseArg; }
    void setHasMutableCaseArg(bool V) { HasMutableCaseArg = V; }
+
+   bool isIntegralSwitch() const { return IntegralSwitch; }
+   void setIntegralSwitch(bool V) { IntegralSwitch = V; }
 
    IdentifierInfo* getLabel() const { return Label; }
    void setLabel(IdentifierInfo* V) { Label = V; }

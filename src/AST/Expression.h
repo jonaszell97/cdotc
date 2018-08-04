@@ -24,7 +24,7 @@ enum class KnownFunction : unsigned char;
 
 enum class BuiltinIdentifier: unsigned char {
    None, NULLPTR, FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN,
-   FLOAT_SNAN, DOUBLE_SNAN, __ctfe
+   FLOAT_SNAN, DOUBLE_SNAN, __ctfe, defaultValue
 };
 
 namespace il {
@@ -921,6 +921,7 @@ class ExpressionPattern: public PatternExpr {
    explicit ExpressionPattern(SourceLocation ColonLoc, Expression* expr);
 
    Expression* expr;
+   CallableDecl *comparisonOp = nullptr;
 
 public:
    static bool classofKind(NodeType kind){ return kind == ExpressionPatternID; }
@@ -936,57 +937,41 @@ public:
    void setExpr(Expression *E) { expr = E; }
 
    SourceRange getSourceRange() const { return expr->getSourceRange(); }
+
+   CallableDecl *getComparisonOp() const { return comparisonOp; }
+   void setComparisonOp(CallableDecl *op) { comparisonOp = op; }
 };
 
-struct CasePatternArgument {
-   explicit CasePatternArgument(Expression* expr)
-      : Expr(expr), IsExpr(true)
-   {}
-
-   CasePatternArgument(LocalVarDecl *Decl)
-      : Decl(Decl), IsExpr(false)
-   {}
-
-   Expression* getExpr() const { return Expr; }
-   LocalVarDecl *getDecl() const { return Decl; }
-   bool isExpr() const { return IsExpr; }
-   SourceLocation getSourceLoc() const;
-
-   void setExpr(Expression *E) const
-   {
-      assert(isExpr());
-      Expr = E;
-   }
-
-private:
-   union {
-      mutable Expression* Expr = nullptr;
-      mutable LocalVarDecl *Decl;
+class CasePattern final: public PatternExpr,
+                         TrailingObjects<CasePattern, IfCondition> {
+public:
+   enum Kind {
+      K_EnumOrStruct,
+      K_Tuple,
+      K_Array,
    };
 
-   bool IsExpr;
-};
-
-class CasePattern final:
-   public PatternExpr,
-   llvm::TrailingObjects<CasePattern, CasePatternArgument> {
 private:
    CasePattern(SourceRange SR,
+               enum Kind Kind,
+               Expression *ParentExpr,
                IdentifierInfo *caseName,
-               llvm::MutableArrayRef<CasePatternArgument> args);
+               MutableArrayRef<IfCondition> args);
 
    CasePattern(EmptyShell Empty, unsigned N);
 
    SourceRange SR;
 
+   Kind K;
+   Expression *ParentExpr;
    IdentifierInfo *caseName;
    unsigned NumArgs;
 
    bool HasBinding : 1;
    bool HasExpr    : 1;
+   bool LeadingDot : 1;
 
    EnumCaseDecl *CaseDecl = nullptr;
-   ASTVector<LocalVarDecl*> varDecls;
 
 public:
    static bool classofKind(NodeType kind){ return kind == CasePatternID; }
@@ -994,28 +979,30 @@ public:
 
    static CasePattern *Create(ASTContext &C,
                               SourceRange SR,
+                              enum Kind Kind,
+                              Expression *ParentExpr,
                               IdentifierInfo *caseName,
-                              llvm::MutableArrayRef<CasePatternArgument> args);
+                              MutableArrayRef<IfCondition> args);
 
    static CasePattern *CreateEmpty(ASTContext &C, unsigned N);
 
    SourceRange getSourceRange() const { return SR; }
 
+   enum Kind getKind() const { return K; }
+   void setKind(enum Kind V) { K = V; }
+
    void setSourceRange(const SourceRange &SR) { CasePattern::SR = SR; }
    void setCaseName(IdentifierInfo *Name) { CasePattern::caseName = Name; }
+
+   Expression* getParentExpr() const { return ParentExpr; }
+   void setParentExpr(Expression* V) { ParentExpr = V; }
 
    llvm::StringRef getCaseName() const { return caseName->getIdentifier(); }
    IdentifierInfo *getCaseNameIdent() const { return caseName; }
 
-   llvm::MutableArrayRef<CasePatternArgument> getArgs()
+   llvm::MutableArrayRef<IfCondition> getArgs()
    {
-      return { getTrailingObjects<CasePatternArgument>(), NumArgs };
-   }
-
-   llvm::MutableArrayRef<LocalVarDecl*> getVarDecls() { return varDecls; }
-   void setVarDecls(ASTVector<LocalVarDecl*> &&decls)
-   {
-      varDecls = std::move(decls);
+      return { getTrailingObjects<IfCondition>(), NumArgs };
    }
 
    EnumCaseDecl *getCaseDecl() const { return CaseDecl; }
@@ -1026,6 +1013,9 @@ public:
 
    void setHasBinding(bool HasBinding) { CasePattern::HasBinding = HasBinding; }
    void setHasExpr(bool HasExpr) { CasePattern::HasExpr = HasExpr; }
+
+   bool hasLeadingDot() const { return LeadingDot; }
+   void setLeadingDot(bool V) { LeadingDot = V; }
 
    SourceLocation getPeriodLoc() const { return SR.getStart(); }
 
@@ -1679,6 +1669,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    bool AllowIncompleteTemplateArgs : 1;
    bool AllowNamespaceRef : 1;
    bool LeadingDot      : 1;
+   bool IssueDiag       : 1;
 
    size_t captureIndex = 0;
 
@@ -1833,6 +1824,9 @@ public:
 
    bool hasLeadingDot() const { return LeadingDot; }
    void setLeadingDot(bool V) { LeadingDot = V; }
+
+   bool shouldIssueDiag() const { return IssueDiag; }
+   void setIssueDiag(bool V) { IssueDiag = V; }
 
    MethodDecl *getPartiallyAppliedMethod() const
    {
@@ -2089,6 +2083,7 @@ class CallExpr final: public Expression,
    bool IsDotDeinit     : 1;
    bool IncludesSelf    : 1;
    bool DirectCall      : 1;
+   bool LeadingDot      : 1;
    unsigned BuiltinKind : 10;
 
    CallableDecl *func = nullptr;
@@ -2196,6 +2191,9 @@ public:
 
    bool isDirectCall() const { return DirectCall; }
    void setDirectCall(bool b) { DirectCall = b; }
+
+   bool hasLeadingDot() const { return LeadingDot; }
+   void setLeadingDot(bool V) { LeadingDot = V; }
 
    unsigned getBuiltinKind() const { return BuiltinKind; }
    void setBuiltinKind(unsigned Kind) { BuiltinKind = Kind; }
@@ -2395,7 +2393,9 @@ public:
    enum Kind {
       Struct, Class,
       Enum, Union, Function,
-      DefaultConstructible, Pointer, Reference, Type
+      DefaultConstructible,
+      Pointer, Reference,
+      Type,
    };
 
    Kind getKind() const { return kind; }

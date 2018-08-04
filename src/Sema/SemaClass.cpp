@@ -381,10 +381,109 @@ DeclResult SemaPass::visitProtocolDecl(ProtocolDecl *P)
    return visitRecordCommon(P);
 }
 
-void SemaPass::calculateRecordSize(RecordDecl *R)
+static bool diagnoseCircularDependency(SemaPass &SP,
+                                       DependencyGraph<NamedDecl*> &Dep) {
+   auto pair = Dep.getOffendingPair();
+
+   // this pair should contain one RecordDecl and either a FieldDecl or an
+   // EnumCaseDecl
+   RecordDecl *R = nullptr;
+   NamedDecl *FieldOrCase = nullptr;
+
+   if (isa<RecordDecl>(pair.first)) {
+      R = cast<RecordDecl>(pair.first);
+   }
+   else if (isa<EnumCaseDecl>(pair.first)) {
+      FieldOrCase = cast<EnumCaseDecl>(pair.first);
+   }
+   else {
+      FieldOrCase = cast<FieldDecl>(pair.first);
+   }
+
+   if (isa<RecordDecl>(pair.second)) {
+      R = cast<RecordDecl>(pair.second);
+   }
+   else if (isa<EnumCaseDecl>(pair.second)) {
+      FieldOrCase = cast<EnumCaseDecl>(pair.second);
+   }
+   else {
+      FieldOrCase = cast<FieldDecl>(pair.second);
+   }
+
+   assert(R && FieldOrCase && "bad dependency pair!");
+
+   SP.diagnose(R, err_circular_data_members, R->getDeclName(),
+               FieldOrCase->getRecord()->getDeclName(), R->getSourceLoc());
+
+   SP.diagnose(note_other_field_here, FieldOrCase->getSourceLoc());
+
+   return true;
+}
+
+static bool diagnoseCircularConformance(SemaPass &SP,
+                                        DependencyGraph<ProtocolDecl*> &Dep) {
+   auto Pair = Dep.getOffendingPair();
+   SP.diagnose(Pair.first, err_circular_conformance, Pair.first->getSourceLoc(),
+               Pair.first->getDeclName(), Pair.second->getDeclName());
+
+   return true;
+}
+
+void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
 {
-   if (R->isInvalid())
+   if (R->isInvalid() || R->getSize())
       return;
+
+   if (CheckDependencies) {
+      if (auto *S = dyn_cast<StructDecl>(R)) {
+         for (auto *F : S->getFields()) {
+            auto &Vert = LayoutDependency.getOrAddVertex(F);
+            for (auto *DepVert : Vert.getIncoming()) {
+               auto *Dep = DepVert->getPtr();
+               assert(!Dep->isInvalid() && "finalizing invalid record");
+
+               auto *Rec = dyn_cast<RecordDecl>(Dep);
+               if (!Rec)
+                  continue;
+
+               if (Rec->isTemplateOrInTemplate()) {
+                  continue;
+               }
+
+               if (isa<ProtocolDecl>(
+                  Rec->getNonTransparentDeclContext()->lookThroughExtension())) {
+                  continue;
+               }
+
+               calculateRecordSize(Rec);
+            }
+         }
+      }
+      else if (auto *E = dyn_cast<EnumDecl>(R)) {
+         for (auto *C : E->getCases()) {
+            auto &Vert = LayoutDependency.getOrAddVertex(C);
+            for (auto *DepVert : Vert.getIncoming()) {
+               auto *Dep = DepVert->getPtr();
+               assert(!Dep->isInvalid() && "finalizing invalid record");
+
+               auto *Rec = dyn_cast<RecordDecl>(Dep);
+               if (!Rec)
+                  continue;
+
+               if (Rec->isTemplateOrInTemplate()) {
+                  continue;
+               }
+
+               if (isa<ProtocolDecl>(
+                  Rec->getNonTransparentDeclContext()->lookThroughExtension())) {
+                  continue;
+               }
+
+               calculateRecordSize(Rec);
+            }
+         }
+      }
+   }
 
    DeclScopeRAII declScopeRAII(*this, R);
 
@@ -509,54 +608,6 @@ void SemaPass::calculateRecordSize(RecordDecl *R)
    R->setNeedsRetainOrRelease(NeedsRetainOrRelease);
 }
 
-static bool diagnoseCircularDependency(SemaPass &SP,
-                                       DependencyGraph<NamedDecl*> &Dep) {
-   auto pair = Dep.getOffendingPair();
-
-   // this pair should contain one RecordDecl and either a FieldDecl or an
-   // EnumCaseDecl
-   RecordDecl *R = nullptr;
-   NamedDecl *FieldOrCase = nullptr;
-
-   if (isa<RecordDecl>(pair.first)) {
-      R = cast<RecordDecl>(pair.first);
-   }
-   else if (isa<EnumCaseDecl>(pair.first)) {
-      FieldOrCase = cast<EnumCaseDecl>(pair.first);
-   }
-   else {
-      FieldOrCase = cast<FieldDecl>(pair.first);
-   }
-
-   if (isa<RecordDecl>(pair.second)) {
-      R = cast<RecordDecl>(pair.second);
-   }
-   else if (isa<EnumCaseDecl>(pair.second)) {
-      FieldOrCase = cast<EnumCaseDecl>(pair.second);
-   }
-   else {
-      FieldOrCase = cast<FieldDecl>(pair.second);
-   }
-
-   assert(R && FieldOrCase && "bad dependency pair!");
-
-   SP.diagnose(R, err_circular_data_members, R->getDeclName(),
-               FieldOrCase->getRecord()->getDeclName(), R->getSourceLoc());
-
-   SP.diagnose(note_other_field_here, FieldOrCase->getSourceLoc());
-
-   return true;
-}
-
-static bool diagnoseCircularConformance(SemaPass &SP,
-                                        DependencyGraph<ProtocolDecl*> &Dep) {
-   auto Pair = Dep.getOffendingPair();
-   SP.diagnose(Pair.first, err_circular_conformance, Pair.first->getSourceLoc(),
-               Pair.first->getDeclName(), Pair.second->getDeclName());
-
-   return true;
-}
-
 bool SemaPass::finalizeRecordDecls()
 {
    if (EncounteredError)
@@ -590,7 +641,7 @@ bool SemaPass::finalizeRecordDecls()
          continue;
       }
 
-      calculateRecordSize(Rec);
+      calculateRecordSize(Rec, false);
    }
 
    for (auto &R : Order.first) {

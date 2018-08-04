@@ -6,6 +6,7 @@
 
 #include "AST/ASTContext.h"
 #include "Basic/FileManager.h"
+#include "Basic/FileUtils.h"
 #include "Basic/TargetInfo.h"
 #include "Driver/Compiler.h"
 #include "ImporterImpl.h"
@@ -34,10 +35,10 @@ namespace {
 
 /// Custom handler for diagnostics emitted from clang.
 class ClangDiagnosticConsumer: public clang::DiagnosticConsumer {
-   CompilerInstance &CI;
+   ImporterImpl &Importer;
 
 public:
-   ClangDiagnosticConsumer(CompilerInstance &CI) : CI(CI) {}
+   ClangDiagnosticConsumer(ImporterImpl &Importer) : Importer(Importer) {}
 
    void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
                          const clang::Diagnostic &Info) override;
@@ -107,7 +108,8 @@ void ClangDiagnosticConsumer::HandleDiagnostic(
       break;
    }
 
-   CI.getSema().diagnose(Kind, OutBuf.str());
+   Importer.CI.getSema().diagnose(Kind, OutBuf.str(),
+                                  Importer.getSourceLoc(Info.getLocation()));
 }
 
 void MacroHandler::MacroDefined(const clang::Token &MacroNameTok,
@@ -196,24 +198,8 @@ SourceRange ImporterImpl::getSourceLoc(clang::SourceRange Loc)
 
 static const char *DummyFileName = "dummy_file.c";
 
-static std::string exec(const std::string &cmd)
-{
-   std::array<char, 128> buffer{};
-   std::string result;
-
-   std::shared_ptr<FILE> pipe(popen(cmd.c_str(), "r"), pclose);
-   if (!pipe)
-      return "";
-
-   while (!feof(pipe.get())) {
-      if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
-         result += buffer.data();
-   }
-
-   return result;
-}
-
-static void addDefaultInvocationArgs(std::vector<std::string> &ArgStrings,
+static void addDefaultInvocationArgs(CompilerInstance &CI,
+                                     std::vector<std::string> &ArgStrings,
                                      const llvm::Triple &Target,
                                      bool IsCXX) {
    // Don't emit anything, just do syntax checking.
@@ -234,13 +220,22 @@ static void addDefaultInvocationArgs(std::vector<std::string> &ArgStrings,
 
    // Add system root directory.
    if (Target.isOSDarwin()) {
+      // FIXME
+      ArgStrings.emplace_back("-I/Applications/Xcode.app/Contents/Developer/"
+                              "Toolchains/"
+                              "XcodeDefault.xctoolchain/usr/include/c++/v1");
+
+      ArgStrings.emplace_back("-I/Applications/Xcode.app/Contents/Developer/"
+                              "Toolchains/XcodeDefault.xctoolchain/"
+                              "usr/lib/clang/9.1.0/include");
+
       ArgStrings.emplace_back("-isysroot");
    }
    else {
       ArgStrings.emplace_back("--sysroot");
    }
 
-   const char *SDKROOT = getenv("SDKROOT");
+   const char *SDKROOT = getenv("CDOT_SDKROOT");
    if (SDKROOT) {
       ArgStrings.emplace_back(SDKROOT);
    }
@@ -254,15 +249,21 @@ static void addDefaultInvocationArgs(std::vector<std::string> &ArgStrings,
       auto &xcrun = xcrunOrError.get();
       xcrun += " --show-sdk-path";
 
-      auto sysroot = exec(xcrun);
+      auto sysroot = fs::exec(xcrun);
       if (sysroot.empty())
          break;
 
       if (sysroot.back() == '\n')
          sysroot.pop_back();
 
+      setenv("CDOT_SDKROOT", sysroot.c_str(), true);
       ArgStrings.emplace_back(move(sysroot));
    } while(false);
+
+   // Add custom clang options from the command line.
+   for (auto &Opt : CI.getOptions().getClangOptions()) {
+      ArgStrings.push_back(Opt);
+   }
 
    // Add a single source file to keep clang happy.
    ArgStrings.emplace_back(DummyFileName);
@@ -280,7 +281,7 @@ void ImporterImpl::Initialize()
    std::vector<std::string> ArgStrings;
    ArgStrings.emplace_back(move(clangPathOrError.get()));
 
-   addDefaultInvocationArgs(ArgStrings,
+   addDefaultInvocationArgs(CI, ArgStrings,
                             CI.getContext().getTargetInfo().getTriple(),
                             IsCXX);
 
@@ -291,7 +292,7 @@ void ImporterImpl::Initialize()
       ArgCStrings.push_back(Str.c_str());
 
    auto DiagnosticOpts = std::make_unique<clang::DiagnosticOptions>();
-   auto DiagClient = std::make_unique<ClangDiagnosticConsumer>(CI);
+   auto DiagClient = std::make_unique<ClangDiagnosticConsumer>(*this);
 
    auto ClangDiags = clang::CompilerInstance::createDiagnostics(
       DiagnosticOpts.get(), DiagClient.release());
@@ -314,6 +315,7 @@ void ImporterImpl::Initialize()
 bool ImporterImpl::importModule(StringRef File,
                                 DeclContext *IntoMod,
                                 clang::FrontendInputFile &InputFile,
+                                SourceLocation ImportLoc,
                                 bool IsCXX) {
    support::Timer Timer(CI, "Clang Importer");
 
@@ -376,6 +378,11 @@ bool ImporterImpl::importModule(StringRef File,
       SourceID = FileInfo.SourceId;
       BaseOffset = FileInfo.BaseOffset;
    }
+   else {
+      auto File = CI.getFileMgr().getOpenedFile(ImportLoc);
+      SourceID = File.SourceId;
+      BaseOffset = File.BaseOffset;
+   }
 
    clang::Preprocessor &PP = Instance.getPreprocessor();
    PP.enableIncrementalProcessing();
@@ -393,9 +400,13 @@ bool ImporterImpl::importModule(StringRef File,
    // Finalize module.
    importMacros(IntoMod);
    action->EndSourceFile();
+   ppOpts.clearRemappedFiles();
 
    // Release the compiler instance.
    this->Instance = nullptr;
+   MacroNames.clear();
+   FileIDMap.clear();
+   DeclMap.clear();
 
    // Success.
    return false;
@@ -413,27 +424,30 @@ ClangImporter::~ClangImporter()
 }
 
 bool ClangImporter::importCModule(StringRef File,
-                                  DeclContext *IntoMod) {
+                                  DeclContext *IntoMod,
+                                  SourceLocation ImportLoc) {
    clang::FrontendInputFile InputFile(File, clang::InputKind::C);
-   return pImpl->importModule(File, IntoMod, InputFile, false);
+   return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false);
 }
 
 bool ClangImporter::importCXXModule(StringRef File,
-                                    DeclContext *IntoMod) {
+                                    DeclContext *IntoMod,
+                                    SourceLocation ImportLoc) {
    clang::FrontendInputFile InputFile(File, clang::InputKind::CXX);
-   return pImpl->importModule(File, IntoMod, InputFile, true);
+   return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, true);
 }
 
 bool ClangImporter::importSystemHeader(StringRef File,
-                                       DeclContext *IntoMod) {
+                                       DeclContext *IntoMod,
+                                       SourceLocation ImportLoc) {
    std::string buf;
    llvm::raw_string_ostream OS(buf);
 
    OS << "#include <" << File << ">";
 
    auto MemBuf = llvm::MemoryBuffer::getMemBuffer(OS.str());
-   clang::FrontendInputFile InputFile(MemBuf.release(), clang::InputKind::CXX);
+   clang::FrontendInputFile InputFile(MemBuf.release(), clang::InputKind::C);
 
-   return pImpl->importModule(File, IntoMod, InputFile, false);
+   return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false);
 }
 

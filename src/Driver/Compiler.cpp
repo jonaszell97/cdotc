@@ -51,9 +51,14 @@ static cl::list<string> InputFilenames(cl::Positional, cl::OneOrMore,
 static cl::list<string> IncludePaths("I", cl::ZeroOrMore,
                                      cl::desc("<include path(s)>"));
 
-/// Include paths to search for modules and source files.
-static cl::list<string> LinkerInput("l", cl::ZeroOrMore, cl::Prefix,
-                                     cl::desc("<linker input(s)>"));
+/// Libraries to pass on to the linker
+static cl::list<string> LinkedLibraries("l", cl::ZeroOrMore, cl::Prefix,
+                                        cl::desc("<linked libraries>"));
+
+
+/// Library search directories to pass to the linker
+static cl::list<string> LibrarySearchDirs("L", cl::ZeroOrMore, cl::Prefix,
+                                          cl::desc("<library search path(s)>"));
 
 /// If given, debug info will be emitted.
 static cl::opt<bool> EmitDebugInfo("g",  cl::desc("emit debug info"));
@@ -142,6 +147,17 @@ static cl::opt<bool> PrintPhases("print-phases",
                                 cl::desc("print duration of compilation "
                                          "phases"));
 
+
+/// Clang Options
+
+static cl::OptionCategory ClangCat("Clang Importer Options",
+                                   "These options will be passed directly to "
+                                   "the clang compiler.");
+
+/// Options to pass through to clang.
+static cl::list<string> ClangInput("Xclang", cl::ZeroOrMore, cl::cat(ClangCat),
+                                    cl::desc("<clang option(s)>"));
+
 CompilerInstance::CompilerInstance(CompilerOptions &&options)
    : options(std::move(options)),
      FileMgr(std::make_unique<fs::FileManager>()),
@@ -171,26 +187,35 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    /* Input Files */
 
    SmallVector<string, 4> files;
+   SmallString<64> ScratchBuf;
+
    for (auto &FileName : InputFilenames) {
       fs::getAllMatchingFiles(FileName, files);
 
-      SmallString<64> Buf;
       for (auto &f : files) {
-         Buf += f;
-         fs::makeAbsolute(Buf);
+         ScratchBuf += f;
+         fs::makeAbsolute(ScratchBuf);
 
-         options.addInput(Buf.str());
-         Buf.clear();
+         options.addInput(ScratchBuf.str());
+         ScratchBuf.clear();
       }
 
       files.clear();
    }
 
-   for (auto &LI : LinkerInput) {
-      std::string str = "-l";
-      str += move(LI);
+   for (auto &LI : LinkedLibraries) {
+      ScratchBuf += "-l";
+      ScratchBuf += LI;
 
-      options.linkerInput.emplace_back(move(str));
+      options.linkerInput.emplace_back(ScratchBuf.str());
+   }
+
+   ScratchBuf.clear();
+   for (auto &LI : LibrarySearchDirs) {
+      ScratchBuf += "-L";
+      ScratchBuf += LI;
+
+      options.linkerInput.emplace_back(ScratchBuf.str());
    }
 
    /* Output File */
@@ -201,10 +226,16 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    /* Include Paths */
 
    options.includePaths.emplace_back("./");
+   options.includePaths.emplace_back(fs::getIncludeDir());
    options.includePaths.emplace_back(fs::getLibraryDir());
 
    for (auto &Inc : IncludePaths) {
       options.includePaths.emplace_back(move(Inc));
+   }
+
+   /// Clang Input
+   for (auto &Opt : ClangInput) {
+      options.clangOptions.emplace_back(move(Opt));
    }
 
    /* Debug & Optimizations */

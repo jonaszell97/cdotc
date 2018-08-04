@@ -19,6 +19,48 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
+DeclConstraint::DeclConstraint(Kind K,
+                               SourceRange SR,
+                               ArrayRef<IdentifierInfo *> NameQual,
+                               SourceType RHS)
+   : K(K), SR(SR), NameQualifierSize((unsigned)NameQual.size()), Type(RHS)
+{
+   std::copy(NameQual.begin(), NameQual.end(),
+             getTrailingObjects<IdentifierInfo*>());
+}
+
+DeclConstraint::DeclConstraint(SourceRange SR,
+                               ArrayRef<IdentifierInfo*> NameQual,
+                               IdentifierRefExpr *ConceptRef)
+   : K(Concept), SR(SR), NameQualifierSize((unsigned)NameQual.size()),
+     ConceptRef(ConceptRef)
+{
+   std::copy(NameQual.begin(), NameQual.end(),
+             getTrailingObjects<IdentifierInfo*>());
+}
+
+DeclConstraint* DeclConstraint::Create(ASTContext &C,
+                                       Kind K,
+                                       SourceRange SR,
+                                       ArrayRef<IdentifierInfo*> NameQual,
+                                       SourceType RHS) {
+   void *Mem = C.Allocate(
+      totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
+      alignof(DeclConstraint));
+
+   return new(Mem) DeclConstraint(K, SR, NameQual, RHS);
+}
+
+DeclConstraint* DeclConstraint::Create(ASTContext &C,
+                                       SourceRange SR,
+                                       ArrayRef<IdentifierInfo*> NameQual,
+                                       IdentifierRefExpr *ConceptRef) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
+                          alignof(DeclConstraint));
+
+   return new(Mem) DeclConstraint(SR, NameQual, ConceptRef);
+}
+
 UsingDecl::UsingDecl(SourceRange Loc,
                      AccessSpecifier Access,
                      DeclarationName Name,

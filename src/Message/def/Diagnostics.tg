@@ -149,7 +149,7 @@ def err_if_let_must_have_value : Error<"'if let' declaration must define a value
 def err_if_let_val_must_be_boolean : Error<"'if let' declaration type must be boolean-convertible">
 def err_range_not_iterable : Error<"range expression of for-in statement must conform to 'Iterable'">
 def err_dict_key_not_hashable : Error<"dictionary keys must conform to 'Hashable'">
-def err_requires_contextual_type : Error<"$0 requires a contextual type">
+def err_requires_contextual_type : Error<"${ 0 | select('none', '__nullptr', member lookup with leading period)} requires a contextual type">
 def err_not_string_representable : Error<"value must conform to 'StringRepresentable'">
 def err_illegal_subscript : Error<"subscript operator cannot be applied to value of type $0">
 def err_subscript_index_not_integral : Error<"subscript indices have to be integral">
@@ -398,6 +398,14 @@ def err_conforming_to_non_protocol : Error<"$0 is not a protocol">
 def err_protocol_property_get_set : Error<"property in protocol must require a getter or setter">
 def err_does_not_conform : Error<"${ 0 | select(class, struct, enum, union, protocol) } $1 does not conform to protocol $2">
 
+def err_constraint_always_false : Error<"constraint is always false">
+def err_cannot_be_used_as_concept : Error <"$0 '$1' cannot be used as a constraint">
+def err_concept_must_be_bool : Error<"alias '$0' used as a constraint must return a boolean value">
+def err_not_a_valid_concept : Error<"alias '$0' cannot be used as a constraint because ${ 1 | select(its value is not boolean, it does not have exactly one type template parameter) }">
+
+def err_unconstrained_lookup : Error<"cannot lookup member in unconstrained associated type '$0'">
+def err_cannot_be_referenced_in_constraint : Error<"$0 '$1' cannot be referenced in a constraint">
+
 def err_incorrect_protocol_impl : Error<"${ 0 | select(class, struct, enum, union, protocol) } $1 does not correctly implement protocol $2">
 def note_incorrect_protocol_impl_prop : Note<"required ${ 0 | select(subscript, property) } ${ 0 | if('$1' ) }${ 2 | select(is missing, requires a getter, requires a setter, requires a getter and a setter) }">
 
@@ -423,7 +431,7 @@ def note_associated_type_missing : Note<"associated type '$0' must be defined">
 def err_no_such_associated_type : Error<"${ 0 | select(class, struct, enum, union, protocol) } '$1' does not conform to a protocol with an associated type named '$2'">
 def err_associated_type_ambiguous : Error<"reference to associated type '$0' is ambiguous">
 def err_associated_type_no_default : Error<"must specify a type for associated type '$0' because it does not have a default type">
-def err_associated_type_constraint : Note<"associated type '$0' does not satisfy a given constraint">
+def err_associated_type_constraint : Note<"associated type '$0' (aka $1) does not satisfy constraint: $2">
 
 def err_constraint_not_satisfied : Error<"unsatisified constraint${ 0 | if(: ) }$1">
 def note_constraint_here : Note<"constraint declared here">
@@ -522,7 +530,7 @@ def err_continue_from_last_case : Error<"cannot continue from last case in a mat
 def err_continue_case_with_bound_vals : Error<"cannot continue to case with bound values">
 
 def err_match_not_exhaustive : Error<"match statements must be exhaustive">
-def note_missing_case : Error<"case '$0' is either missing or contains expression checks">
+def note_missing_case : Note<"case '$0' is either missing or contains expression checks">
 
 /* FUNCTION RETURNS */
 def warn_main_return_type : Warning<"return type of 'main' will always be set to i64">

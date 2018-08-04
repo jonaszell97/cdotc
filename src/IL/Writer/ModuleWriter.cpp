@@ -396,23 +396,40 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       out << '"';
       break;
    case Value::ConstantArrayID: {
-      auto Elements = cast<ConstantArray>(C)->getVec();
+      auto *Arr = cast<ConstantArray>(C);
+      if (Arr->isAllZerosValue()) {
+         out << "zeroinitializer";
+         break;
+      }
+
+      auto Elements = Arr->getVec();
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
                 "[", ", ", "]");
       break;
    }
    case Value::ConstantTupleID: {
-      auto Elements = cast<ConstantTuple>(C)->getVec();
+      auto *Tup = cast<ConstantTuple>(C);
+      if (Tup->isAllZerosValue()) {
+         out << "zeroinitializer";
+         break;
+      }
+
+      auto Elements = Tup->getVec();
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
                 "(", ", ", ")");
       break;
    }
    case Value::ConstantStructID: {
       auto Struct = cast<ConstantStruct>(C);
-      auto Elements = Struct->getElements();
+      if (Struct->isAllZerosValue()) {
+         out << "zeroinitializer";
+         break;
+      }
 
+      auto Elements = Struct->getElements();
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
                 "struct { ", ", ", " }");
+
       break;
    }
    case Value::ConstantClassID: {

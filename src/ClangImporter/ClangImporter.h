@@ -5,6 +5,7 @@
 #ifndef CDOT_CLANGIMPORTER_H
 #define CDOT_CLANGIMPORTER_H
 
+#include "Lex/SourceLocation.h"
 #include "Support/LLVM.h"
 
 #include <llvm/ADT/StringRef.h>
@@ -30,14 +31,17 @@ public:
    ~ClangImporter();
 
    /// Import all declarations from File into Mod, interpreting it as a C file.
-   bool importCModule(StringRef File, ast::DeclContext *IntoMod);
+   bool importCModule(StringRef File, ast::DeclContext *IntoMod,
+                      SourceLocation ImportLoc);
 
    /// Import all declarations from File into Mod , interpreting it as a C++
    /// file.
-   bool importCXXModule(StringRef File, ast::DeclContext *IntoMod);
+   bool importCXXModule(StringRef File, ast::DeclContext *IntoMod,
+                        SourceLocation ImportLoc);
 
    /// Import all declarations from the system header File into Mod.
-   bool importSystemHeader(StringRef File, ast::DeclContext *IntoMod);
+   bool importSystemHeader(StringRef File, ast::DeclContext *IntoMod,
+                           SourceLocation ImportLoc);
 };
 
 } // namespace cdot

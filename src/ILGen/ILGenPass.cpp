@@ -22,6 +22,7 @@
 #include "Sema/Builtin.h"
 #include "Sema/SemaPass.h"
 #include "Serialization/ModuleFile.h"
+#include "Support/SaveAndRestore.h"
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/PrettyStackTrace.h>
@@ -399,6 +400,50 @@ il::Method* ILGenPass::getFunc(MethodDecl *M) const
    return cast_or_null<il::Method>(getFunc((CallableDecl*)M));
 }
 
+void ILGenPass::addDeclValuePair(NamedDecl *Decl, il::Value *Val)
+{
+   if (isa<LocalVarDecl>(Decl) || isa<FuncArgDecl>(Decl)) {
+      LocalDeclMap[cast<VarDecl>(Decl)] = Val;
+      ReverseLocalDeclMap[Val] = cast<VarDecl>(Decl);
+   }
+   else {
+      DeclMap[Decl] = Val;
+      ReverseDeclMap[Val] = Decl;
+   }
+}
+
+il::Value *ILGenPass::getValueForDecl(const NamedDecl *D)
+{
+   if (isa<LocalVarDecl>(D) || isa<FuncArgDecl>(D)) {
+      auto It = LocalDeclMap.find(cast<VarDecl>(const_cast<NamedDecl*>(D)));
+      if (It == LocalDeclMap.end())
+         return nullptr;
+
+      return It->second;
+   }
+   else {
+      auto It = DeclMap.find(const_cast<NamedDecl*>(D));
+      if (It == DeclMap.end())
+         return nullptr;
+
+      return It->second;
+   }
+}
+
+NamedDecl *ILGenPass::getDeclForValue(il::Value *V)
+{
+   auto It = ReverseDeclMap.find(V);
+   if (It == ReverseDeclMap.end()) {
+      auto It2 = ReverseLocalDeclMap.find(V);
+      if (It2 == ReverseLocalDeclMap.end())
+         return nullptr;
+
+      return It2->second;
+   }
+
+   return It->second;
+}
+
 CallableDecl* ILGenPass::getCallableDecl(il::Function const* F)
 {
    return dyn_cast_or_null<CallableDecl>(
@@ -425,7 +470,7 @@ private:
 
 } // anonymous namespace
 
-il::Constant* ILGenPass::getDefaultValue(QualType Ty)
+il::Value* ILGenPass::getDefaultValue(QualType Ty)
 {
    if (Ty->isIntegerType()) {
       return Builder.GetConstantInt(Ty, 0);
@@ -440,12 +485,16 @@ il::Constant* ILGenPass::getDefaultValue(QualType Ty)
    }
 
    if (Ty->isTupleType()) {
-      llvm::SmallVector<il::Constant*, 4> Vals;
+      auto *Alloc = Builder.CreateAlloca(Ty);
+      auto *Tup = Builder.CreateLoad(Alloc);
+
+      unsigned i = 0;
       for (const auto &ty : Ty->asTupleType()->getContainedTypes()) {
-         Vals.push_back(getDefaultValue(*ty));
+         Builder.CreateStore(getDefaultValue(*ty),
+                             Builder.CreateTupleExtract(Tup, i++));
       }
 
-      return Builder.GetConstantTuple(Vals);
+      return Tup;
    }
 
    if (Ty->isArrayType()) {
@@ -453,44 +502,40 @@ il::Constant* ILGenPass::getDefaultValue(QualType Ty)
       QualType ElementTy = ArrTy->getElementType();
 
       auto Val = getDefaultValue(ElementTy);
-      llvm::SmallVector<il::Constant*, 4> Vals;
-      Vals.append(ArrTy->getNumElements(), Val);
+      if (Val->isAllZerosValue()) {
+         return Builder.GetAllZerosValue(Ty);
+      }
 
-      return Builder.GetConstantArray(ArrTy, Vals);
+      if (auto *C = dyn_cast<Constant>(Val)) {
+         SmallVector<Constant*, 8> Constants;
+         Constants.reserve(ArrTy->getNumElements());
+
+         for (unsigned i = 0; i < ArrTy->getNumElements(); ++i) {
+            Constants.push_back(C);
+         }
+
+         return Builder.GetConstantArray(Constants);
+      }
+
+      auto Arr = Builder.CreateLoad(Builder.CreateAlloca(Ty));
+      for (unsigned i = 0; i < ArrTy->getNumElements(); ++i) {
+         Builder.CreateStore(Val, Builder.CreateGEP(Arr, i));
+      }
+
+      return Arr;
    }
 
    if (Ty->isRecordType()) {
       auto *S = cast<StructDecl>(Ty->getRecord());
       auto *Ctor = S->getParameterlessConstructor();
 
-      if (!prepareFunctionForCtfe(Ctor)) {
-         return nullptr;
-      }
-
-      ModuleRAII MR(*this, getCtfeModule());
-      auto *Init = getFunc(Ctor);
-
-      auto fn = Builder.CreateFunction("", Ty, {}, false, false);
-      fn->addDefinition();
-
-      FnDeleterRAII deleter(fn, getMandatoryPassManager());
-      InsertPointRAII insertPointRAII(*this, fn->getEntryBlock());
-
-      auto RetVal = Builder.CreateStructInit(S, Init, {});
-      Builder.CreateRet(RetVal);
-
-      ctfe::CTFEEngine engine(SP);
-      auto Result = engine.evaluateFunction(fn, {}, {});
-      if (!Result)
-         return nullptr;
-
-      return Result.getVal();
+      return Builder.CreateStructInit(S, getFunc(Ctor), {});
    }
 
    return nullptr;
 }
 
-il::Value* ILGenPass::getTuple(TupleType *Ty, llvm::ArrayRef<il::Value *> Vals)
+il::Value* ILGenPass::getTuple(TupleType *Ty, ArrayRef<il::Value *> Vals)
 {
    auto Alloc = Builder.CreateAlloca(Ty);
    size_t i = 0;
@@ -564,9 +609,8 @@ il::Constant* ILGenPass::getConstantVal(QualType Ty, const cdot::Variant &V)
          Builder.GetConstantInt(UWordTy, Str.size())
       };
 
-      return Builder.GetConstantClass(SP.getStringDecl(),
-                                      GetOrCreateTypeInfo(Ty),
-                                      Values);
+      return Builder.GetConstantStruct(SP.getStringDecl(),
+                                       Values);
    }
    case VariantType::Struct: {
       auto &fields = V.getFields();
@@ -685,7 +729,7 @@ void ILGenPass::DeclareGlobalVariable(GlobalVarDecl *decl)
                                          nullptr, OS.str(),
                                          decl->getSourceLoc());
 
-   if (SP.NeedsDeinitilization(decl->getType()))
+   if (SP.NeedsDeinitilization(decl->getType()) && !decl->isImportedFromClang())
       NonTrivialGlobals.insert(G);
 
    if (decl->getValue())
@@ -1083,8 +1127,17 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
          pushDefaultCleanup(ArgVal);
       }
 
-      if (ArgVal != &val)
-         Builder.CreateInit(&val, ArgVal);
+      if (ArgVal != &val) {
+         if (Arg->isCaptured()) {
+            auto *Ref = Builder.CreateIntrinsicCall(Intrinsic::unbox,
+                                                    Builder.CreateLoad(ArgVal));
+
+            Builder.CreateInit(&val, Ref);
+         }
+         else {
+            Builder.CreateInit(&val, ArgVal);
+         }
+      }
 
       addDeclValuePair(Arg, ArgVal);
    }
@@ -1244,8 +1297,7 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl *C)
       if (Init->isBaseInitializer()) {
          if (Init->getCompleteInit()->willHaveDefinition()
              || CanSynthesizeFunction(Init->getCompleteInit())) {
-            prepareFunctionForCtfe(Init->getCompleteInit());
-            return true;
+            return registerCalledFunction(Init->getCompleteInit(), Init);
          }
 
          return false;
@@ -1254,14 +1306,37 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl *C)
 
    if (auto Deinit = dyn_cast<DeinitDecl>(M)) {
       if (Deinit->isSynthesized()) {
-         prepareFunctionForCtfe(Deinit);
+         if (!SP.ensureDeclared(Deinit->getRecord()))
+            return false;
+
+         SP.calculateRecordSize(Deinit->getRecord());
+
+         auto *Fn = getFunc(Deinit);
+         if (!Fn)
+            DeclareFunction(Deinit);
+
+         visit(Deinit);
          return true;
       }
    }
 
    if (auto S = dyn_cast<StructDecl>(R)) {
       if (M == S->getMemberwiseInitializer()) {
+         if (!SP.ensureDeclared(S))
+            return false;
+
+         SP.calculateRecordSize(S);
          DefineMemberwiseInitializer(S);
+
+         return true;
+      }
+      if (M == S->getDefaultInitializer()) {
+         if (!SP.ensureDeclared(S))
+            return false;
+
+         SP.calculateRecordSize(S);
+         DefineDefaultInitializer(S);
+
          return true;
       }
    }
@@ -1269,103 +1344,17 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl *C)
    return false;
 }
 
-void ILGenPass::registerCalledFunction(CallableDecl *C,
-                                       il::Function *F,
-                                       Expression *Caller) {
+bool ILGenPass::registerCalledFunction(CallableDecl *C,
+                                       StmtOrDecl Caller) {
    if (!inCTFE())
-      return;
+      return true;
 
-   if (auto *Init = dyn_cast<InitDecl>(C)) {
-      auto *Deinit = Init->getRecord()->getDeinitializer();
-      registerCalledFunction(Deinit, getFunc(Deinit), Caller);
-   }
-
-   if ((F && !F->isDeclared()) || C->isKnownFunction()) {
-      return;
-   }
-
-   auto prepareCallChain = [&]() {
-      // don't use a SmallString here because this function is most
-      // likely called often and deep in the stack
-      std::string dependencyChain;
-      llvm::raw_string_ostream OS(dependencyChain);
-
-      unsigned i = 0;
-      for (auto &S : CtfeScopeStack) {
-         if (!S.CurrentFn)
-            continue;
-
-         if (i++ != 0) OS << " -> ";
-         OS << S.CurrentFn->getFullName();
-      }
-
-      if (!i)
-         return dependencyChain;
-
-      OS << " -> " << C->getFullName();
-      return OS.str();
-   };
-
-   // Check if the function is marked @compiletime.
-   if (!C->isCompileTimeEvaluable()) {
-      SP.diagnose(Caller, err_not_compiletime_evaluable, C->getDeclName(),
-                  C->getSourceLoc());
-
-      auto s = prepareCallChain();
-      if (s.empty()) {
-         SP.diagnose(note_called_here, Caller->getSourceLoc());
-      }
-      else {
-         SP.diagnose(note_call_chain, prepareCallChain(),
-                     Caller->getSourceLoc());
-      }
-
+   if (!prepareFunctionForCtfe(C, Caller)) {
       CtfeScopeStack.back().HadError = true;
-      return;
+      return false;
    }
 
-   if (!C->willHaveDefinition() && !CanSynthesizeFunction(C)) {
-      SP.diagnose(C, err_no_definition, C->getFullName(), C->getSourceLoc());
-
-      auto s = prepareCallChain();
-      if (s.empty()) {
-         SP.diagnose(note_called_here, Caller->getSourceLoc());
-      }
-      else {
-         SP.diagnose(note_call_chain, prepareCallChain(),
-                     Caller->getSourceLoc());
-      }
-
-      CtfeScopeStack.back().HadError = true;
-      return;
-   }
-
-   // if we're doing CTFE, we need the definition of this function, not
-   // only a declaration
-   for (auto &Scope : CtfeScopeStack) {
-      // circular dependence
-      if (Scope.CurrentFn == C) {
-         SP.diagnose(Caller, err_ctfe_circular_dependence, C->getFullName(),
-                     CtfeScopeStack.back().CurrentFn->getName(),
-                     Caller->getSourceLoc());
-
-         SP.diagnose(note_dependency_chain, prepareCallChain(),
-                     C->getSourceLoc());
-
-         CtfeScopeStack.back().HadError = true;
-         return;
-      }
-   }
-
-   CtfeScopeStack.back().HadError |= !prepareFunctionForCtfe(C);
-
-   // if this is an initializer, check if we need the corresponding
-   // deinitializer
-   if (auto Init = dyn_cast<InitDecl>(C)) {
-      if (auto Deinit = Init->getRecord()->getDeinitializer()) {
-         registerCalledFunction(Deinit, getFunc(Deinit), Caller);
-      }
-   }
+   return true;
 }
 
 namespace {
@@ -1407,7 +1396,9 @@ il::Value* ILGenPass::CreateCall(CallableDecl *C,
                                  bool DirectCall) {
 
    auto F = getFunc(C);
-   registerCalledFunction(C, F, Caller);
+   if (!registerCalledFunction(C, Caller)) {
+      return Builder.GetUndefValue(C->getReturnType());
+   }
 
    F = getFunc(C);
 
@@ -1709,15 +1700,144 @@ il::Instruction *ILGenPass::CreateStore(il::Value *src, il::Value *dst,
    return Builder.CreateAssign(src, dst);
 }
 
-bool ILGenPass::prepareFunctionForCtfe(CallableDecl *C)
-{
-   assert(!C->isTemplate() && "attempting to evaluate template!");
-   if (!SP.prepareFunctionForCtfe(C))
-      return false;
+namespace {
 
-   ModuleRAII MR(*this, getCtfeModule());
+class CtfeFunctionVisitor {
+   ILGenPass &ILGen;
+   StmtOrDecl Caller;
+   SmallPtrSet<il::Function*, 8> Visited;
+
+public:
+   CtfeFunctionVisitor(ILGenPass &ILGen, StmtOrDecl Caller)
+      : ILGen(ILGen), Caller(Caller)
+   {}
+
+   bool run(Function &F)
+   {
+      // Set here to avoid infinite recursion.
+      F.setReadyForCtfe(true);
+
+      std::queue<il::Function*> Worklist;
+      Worklist.push(&F);
+
+      while (!Worklist.empty()) {
+         auto *Next = Worklist.front();
+         Worklist.pop();
+
+         if (!Visited.insert(Next).second)
+            continue;
+
+         auto *C = cast_or_null<CallableDecl>(ILGen.getDeclForValue(Next));
+         if (C && !ILGen.registerCalledFunction(C, Caller)) {
+            return false;
+         }
+
+         for (auto &BB : *Next) {
+            for (auto &I : BB) {
+               if (auto CS = I.getAsImmutableCallSite()) {
+                  auto *CalledFn = CS.getCalledFunction();
+                  if (!CalledFn) {
+                      continue;
+                  }
+
+                  Worklist.push(CalledFn);
+               }
+            }
+         }
+      }
+
+      return true;
+   }
+};
+
+} // anonymous namespace
+
+ILGenPass::EnterCtfeScope::~EnterCtfeScope()
+{
+   auto HadError = ILGen.CtfeScopeStack.back().HadError;
+   ILGen.CtfeScopeStack.pop_back();
+
+   if (!ILGen.CtfeScopeStack.empty()) {
+      ILGen.CtfeScopeStack.back().HadError |= HadError;
+   }
+}
+
+bool ILGenPass::prepareFunctionForCtfe(CallableDecl *C, StmtOrDecl Caller,
+                                       bool NeedsCompileTimeAttr) {
+   assert(!C->isTemplate() && "attempting to evaluate template!");
+
+   EnterCtfeScope CtfeScope(*this, C);
 
    auto fn = getFunc(C);
+   if (fn) {
+      if (fn->isReadyForCtfe())
+         return true;
+
+      if (!fn->isDeclared()) {
+         return CtfeFunctionVisitor(*this, Caller).run(*fn);
+      }
+   }
+
+   // Utility function to emit the call chain that lead here.
+   auto prepareCallChain = [&]() {
+      // don't use a SmallString here because this function is most
+      // likely called often and deep in the stack
+      std::string dependencyChain;
+      llvm::raw_string_ostream OS(dependencyChain);
+
+      unsigned i = 0;
+      for (auto &S : CtfeScopeStack) {
+         if (!S.CurrentFn)
+            continue;
+
+         if (i++ != 0) OS << " -> ";
+         OS << S.CurrentFn->getFullName();
+      }
+
+      if (!i)
+         return dependencyChain;
+
+      OS << " -> " << C->getFullName();
+      return OS.str();
+   };
+
+   // Check if the function is marked @compiletime.
+   if (!C->isCompileTimeEvaluable() && NeedsCompileTimeAttr) {
+      SP.diagnose(Caller, err_not_compiletime_evaluable, C->getDeclName(),
+                  C->getSourceLoc());
+
+      auto s = prepareCallChain();
+      if (s.empty()) {
+         SP.diagnose(note_called_here, Caller.getSourceLoc());
+      }
+      else {
+         SP.diagnose(note_call_chain, prepareCallChain(),
+                     Caller.getSourceLoc());
+      }
+
+      CtfeScopeStack.back().HadError = true;
+      return false;
+   }
+
+   // Diagnose cyclic dependencies.
+   if (C->isBeingEvaluated()) {
+      SP.diagnose(C, diag::err_referenced_while_evaluating, 1 /*function*/,
+                  C->getDeclName(), C->getSourceLoc());
+
+      return false;
+   }
+
+   // Make sure the function and its context were semantically checked.
+   if (auto M = support::dyn_cast<MethodDecl>(C)) {
+      if (!SP.ensureDeclared(M->getRecord()))
+         return false;
+   }
+
+   if (!SP.ensureVisited(C))
+      return false;
+
+   // Make sure the IL function is declared.
+   ModuleRAII MR(*this, C->getModule()->getModule()->getILModule());
    if (!fn) {
       fn = DeclareFunction(C);
    }
@@ -1725,46 +1845,113 @@ bool ILGenPass::prepareFunctionForCtfe(CallableDecl *C)
    if (C->isInvalid())
       return false;
 
-   if (!fn->isDeclared()) {
-      VerifyFunction(fn);
-      if (fn->isInvalid())
-         return false;
-
-      CanonicalizeFunction(fn);
-      return !fn->isInvalid();
-   }
-
+   // Make sure any other implicitly needed functions are ready.
    if (auto Init = dyn_cast<InitDecl>(C)) {
       if (auto S = dyn_cast<StructDecl>(Init->getRecord()))
-         if (!prepareFunctionForCtfe(S->getDefaultInitializer()))
+         if (!registerCalledFunction(S->getDefaultInitializer(), Caller))
             return false;
 
       if (Init->isCompleteInitializer()) {
-         if (!prepareFunctionForCtfe(Init->getBaseInit()))
+         if (!registerCalledFunction(Init->getBaseInit(), Caller))
             return false;
       }
 
       if (auto Deinit = Init->getRecord()->getDeinitializer()) {
-         if (!prepareFunctionForCtfe(Deinit))
+         if (!registerCalledFunction(Deinit, Caller))
             return false;
       }
    }
 
-   EnterCtfeScope CtfeScope(*this, C);
-   visit(C);
+   // Make sure the function can be defined, and define it.
+   // We know how to handle some declared functions, e.g. from libc.
+   if (fn->isDeclared() && !C->isKnownFunction()) {
+      // Check if the function has a body or is synthesized.
+      if (!C->willHaveDefinition() && !CanSynthesizeFunction(C)) {
+         SP.diagnose(C, err_no_definition, C->getFullName(), C->getSourceLoc());
 
-   if (CtfeScopeStack.back().HadError)
-      return false;
+         auto s = prepareCallChain();
+         if (s.empty()) {
+            SP.diagnose(note_called_here, Caller.getSourceLoc());
+         }
+         else {
+            SP.diagnose(note_call_chain, prepareCallChain(),
+                        Caller.getSourceLoc());
+         }
 
-   if (!fn->isDeclared()) {
-      VerifyFunction(fn);
-      if (fn->isInvalid())
+         CtfeScopeStack.back().HadError = true;
          return false;
+      }
 
-      CanonicalizeFunction(fn);
+      // Detect circular dependencies.
+//      for (auto &Scope : CtfeScopeStack) {
+//         // circular dependence
+//         if (Scope.CurrentFn == C) {
+//            SP.diagnose(Caller, err_ctfe_circular_dependence, C->getFullName(),
+//                        CtfeScopeStack.back().CurrentFn->getFullName(),
+//                        Caller.getSourceLoc());
+//
+//            SP.diagnose(note_dependency_chain, prepareCallChain(),
+//                        C->getSourceLoc());
+//
+//            CtfeScopeStack.back().HadError = true;
+//            return false;
+//         }
+//      }
    }
 
-   return !fn->isInvalid();
+   if (!C->getBody())
+      return true;
+
+   bool EmitBodies = !PushToCtfeQueue;
+   CtfeQueue.push(C);
+
+   if (EmitBodies) {
+      PushToCtfeQueue = true;
+
+      std::unordered_map<VarDecl*, il::Value*> LocalDeclMap;
+      std::unordered_map<il::Value*, VarDecl*> ReverseLocalDeclMap;
+
+      bool Valid = true;
+      while (!CtfeQueue.empty()) {
+         auto *Next = CtfeQueue.front();
+         CtfeQueue.pop();
+
+         fn = getFunc(Next);
+
+         auto SAR1 = support::saveAndRestore(this->LocalDeclMap, LocalDeclMap);
+         auto SAR2 = support::saveAndRestore(this->ReverseLocalDeclMap,
+                                             ReverseLocalDeclMap);
+
+         DefineFunction(Next);
+
+         if (CtfeScopeStack.back().HadError) {
+            Valid = false;
+            continue;
+         }
+
+         VerifyFunction(fn);
+         if (fn->isInvalid()) {
+            Valid = false;
+            continue;
+         }
+
+         CanonicalizeFunction(fn);
+         if (fn->isInvalid()) {
+            Valid = false;
+            continue;
+         }
+
+         fn->setReadyForCtfe(true);
+
+         LocalDeclMap.clear();
+         ReverseLocalDeclMap.clear();
+      }
+
+      PushToCtfeQueue = false;
+      return Valid;
+   }
+
+   return true;
 }
 
 namespace {
@@ -1836,8 +2023,9 @@ il::PassManager& ILGenPass::getMandatoryPassManager()
 
 void ILGenPass::visitDeclContext(DeclContext *Ctx)
 {
-   for (auto *D : Ctx->getDecls())
+   for (auto *D : Ctx->getDecls()) {
       visit(D);
+   }
 }
 
 void ILGenPass::visitCompoundStmt(CompoundStmt *node)
@@ -1933,7 +2121,7 @@ il::Function* ILGenPass::CreateUnittestFun()
    auto &FileMgr = SP.getCompilationUnit().getFileMgr();
    for (UnittestDecl *D : Unittests) {
       // Initialize the anonymous test class.
-      Constant *StrView = MakeStringView(FileMgr.getFileName(D->getSourceLoc()));
+      Constant *StrView = MakeStdString(FileMgr.getFileName(D->getSourceLoc()));
       auto *File = Builder.CreateLoad(Builder.CreateGlobalVariable(StrView));
 
       auto *Init = *D->getTestClass()->getDecls<InitDecl>().begin();
@@ -2014,7 +2202,14 @@ void ILGenPass::DefineLazyGlobal(il::GlobalVariable *glob,
 
 void ILGenPass::visitDeclStmt(DeclStmt *Stmt)
 {
-   visit(Stmt->getDecl());
+   switch (Stmt->getDecl()->getKind()) {
+   case Decl::LocalVarDeclID:
+   case Decl::DestructuringDeclID:
+      visit(Stmt->getDecl());
+      break;
+   default:
+      break;
+   }
 }
 
 void ILGenPass::visitCompoundDecl(CompoundDecl *D)
@@ -2199,8 +2394,9 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl *Decl)
 void ILGenPass::visitGlobalVarDecl(GlobalVarDecl *node)
 {
    auto *GV = cast<il::GlobalVariable>(getValueForDecl(node));
-   if (auto *Val = node->getValue())
+   if (auto *Val = node->getValue()) {
       DefineLazyGlobal(GV, Val);
+   }
 }
 
 void ILGenPass::visitDestructuringDecl(DestructuringDecl *D)
@@ -2258,6 +2454,23 @@ void ILGenPass::visitCallableDecl(CallableDecl *node)
    if (node->isNative() || node->isTemplate())
       return;
 
+   for (auto *D : node->getDecls()) {
+      switch (D->getKind()) {
+      case Decl::LocalVarDeclID:
+      case Decl::DestructuringDeclID:
+         break;
+      case Decl::FunctionDeclID:
+         if (cast<FunctionDecl>(D)->isLambda()) {
+            break;
+         }
+
+         LLVM_FALLTHROUGH;
+      default:
+         visit(D);
+         break;
+      }
+   }
+
    DefineFunction(node);
 }
 
@@ -2288,7 +2501,7 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
          V = Builder.CreateCaptureExtract(Expr->getCaptureIndex());
       }
       else {
-         V = DeclMap[Expr->getNamedDecl()];
+         V = getValueForDecl(Expr->getNamedDecl());
       }
 
       if (Expr->getKind() == IdentifierKind::FunctionArg) {
@@ -2304,7 +2517,7 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
    case IdentifierKind::StaticField: {
       // check if the global variable has already been initialized
       // FIXME make this atomic
-      auto GV = cast<il::GlobalVariable>(DeclMap[Expr->getNamedDecl()]);
+      auto GV = cast<il::GlobalVariable>(getValueForDecl(Expr->getNamedDecl()));
 
       if (GV->getParent() != Builder.getModule()) {
          GV = GV->getDeclarationIn(Builder.getModule());
@@ -2427,7 +2640,7 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
    case IdentifierKind::PartiallyAppliedMethod: {
       il::Value *Self;
       if (auto *Ident = dyn_cast<IdentifierRefExpr>(Expr->getParentExpr())) {
-         Self = Builder.CreateLoad(DeclMap[Ident->getNamedDecl()]);
+         Self = Builder.CreateLoad(getValueForDecl(Ident->getNamedDecl()));
       }
       else {
          Self = Builder.CreateLoad(cast<Method>(getCurrentFn())->getSelf());
@@ -2520,6 +2733,8 @@ il::Function* ILGenPass::getPartiallyAppliedLambda(il::Method *M,
 il::Value* ILGenPass::visitBuiltinIdentExpr(BuiltinIdentExpr *node)
 {
    switch (node->getIdentifierKind()) {
+   case BuiltinIdentifier::defaultValue:
+      return getDefaultValue(node->getExprType());
    case BuiltinIdentifier::NULLPTR:
       return ConstantPointer::get(ValueType(Builder.getContext(),
                                             node->getExprType()));
@@ -2632,7 +2847,8 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr)
    class SmallVector<Value*, 4> args;
 
    CallableDecl *CalledFn = Expr->getFunc();
-   registerCalledFunction(CalledFn, getFunc(CalledFn), Expr);
+   if (!registerCalledFunction(CalledFn, Expr))
+      return Builder.GetUndefValue(Expr->getExprType());
 
    auto arg_it = CalledFn->arg_begin();
    auto arg_end = CalledFn->arg_end();
@@ -3378,9 +3594,9 @@ il::BasicBlock *ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
       }
 
       switch (C.K) {
-      case IfCondition::Expr: {
-         Builder.SetDebugLoc(C.ExprData.Cond->getSourceLoc());
-         NextConditionVal = visit(C.ExprData.Cond);
+      case IfCondition::Expression: {
+         Builder.SetDebugLoc(C.ExprData.Expr->getSourceLoc());
+         NextConditionVal = visit(C.ExprData.Expr);
 
          break;
       }
@@ -3460,182 +3676,97 @@ void ILGenPass::visitIfStmt(IfStmt *node)
 
 void ILGenPass::visitMatchStmt(MatchStmt *node)
 {
-   for (const auto &C : node->getCases()) {
-      auto P = C->getPattern();
-      if (!P)
-         continue;
-
-      if (auto CP = dyn_cast<CasePattern>(P)) {
-         if (!CP->getArgs().empty())
-            return HandlePatternSwitch(node);
-      }
-      else if (!isa<ExpressionPattern>(P)) {
-         return HandlePatternSwitch(node);
-      }
-   }
+   if (node->isIntegralSwitch())
+      return HandleIntegralSwitch(node);
 
    return HandleEqualitySwitch(node);
 }
 
-void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
+void ILGenPass::HandleEqualitySwitch(MatchStmt *Stmt)
 {
-   BasicBlock *defaultBB = nullptr;
-   BasicBlock *first = nullptr;
+   // The default destination that we branch to if no case matches.
+   BasicBlock *DefaultBB = nullptr;
 
-   llvm::SmallVector<il::BasicBlock*, 4> CompBlocks;
-   llvm::SmallVector<il::BasicBlock*, 4> CaseBlocks;
+   // The comparison blocks - for each case, we check here whether or not it
+   // matches.
+   SmallVector<il::BasicBlock*, 4> CompBlocks;
 
-   for (const auto &C : node->getCases()) {
-      if (!C->getBody()) {
-         CompBlocks.push_back(Builder.CreateBasicBlock("switch.cmp"));
-         CaseBlocks.push_back(nullptr);
-      }
-      else if (C->isDefault()) {
-         defaultBB = Builder.CreateBasicBlock("switch.default");
+   // The case body blocks.
+   SmallVector<il::BasicBlock*, 4> CaseBlocks;
 
-         // not inserting into both here to avoid double deleting in case of an
-         // integral switch
-         CompBlocks.push_back(nullptr);
-         CaseBlocks.push_back(defaultBB);
+   // Create the necessary basic blocks.
+   for (const auto &C : Stmt->getCases()) {
+      if (C->isDefault()) {
+         DefaultBB = Builder.CreateBasicBlock("match.body.default");
+         CaseBlocks.push_back(DefaultBB);
       }
       else {
-         CompBlocks.push_back(Builder.CreateBasicBlock("switch.cmp"));
-         CaseBlocks.push_back(Builder.CreateBasicBlock("switch.case"));
+         CompBlocks.push_back(Builder.CreateBasicBlock("match.cmp"));
+         CaseBlocks.push_back(Builder.CreateBasicBlock("match.body"));
       }
-
-      if (!first)
-         first = CompBlocks.back();
    }
 
-   auto IP = Builder.saveIP();
-
-   llvm::SmallVector<Value*, 8> CaseVals;
-   bool isIntegralSwitch = true;
-
-   size_t i = 0;
-   for (const auto &C : node->getCases()) {
-      if (C->isDefault()) {
-         CaseVals.push_back(nullptr);
-         continue;
-      }
-
-      Builder.SetInsertPoint(CompBlocks[i]);
-
-      switch (C->getPattern()->getTypeID()) {
-      case Expression::ExpressionPatternID: {
-         auto val = visit(cast<ExpressionPattern>(C->getPattern())->getExpr());
-         if (!isa<ConstantInt>(val))
-            isIntegralSwitch = false;
-
-         CaseVals.push_back(val);
-         break;
-      }
-      case Expression::IsPatternID: {
-         llvm_unreachable("nah");
-      }
-      case Expression::CasePatternID: {
-         auto *CP = cast<CasePattern>(C->getPattern());
-         if (!CP->getArgs().empty()) {
-            isIntegralSwitch = false;
-         }
-         else {
-            CaseVals.push_back(CP->getCaseDecl()->getILValue());
-         }
-
-         break;
-      }
-      default:
-         llvm_unreachable("not a pattern");
-      }
-
-      ++i;
-   }
-
-   Builder.restoreIP(IP);
-
-   if (isIntegralSwitch) {
-      for (const auto &BB : CompBlocks)
-         if (BB) BB->detachAndErase();
-
-      for (const auto &BB : CaseBlocks)
-         if (BB) BB->detachAndErase();
-
-      return HandleIntegralSwitch(node, CaseVals);
-   }
-
-   Builder.SetDebugLoc(node->getSwitchValue()->getSourceLoc());
+   Builder.SetDebugLoc(Stmt->getSwitchValue()->getSourceLoc());
    BeginBorrowInst *BeginBorrow = nullptr;
 
-   auto SwitchVal = visit(node->getSwitchValue());
+   auto SwitchVal = visit(Stmt->getSwitchValue());
    if (SwitchVal->isLvalue()) {
-      SourceRange SR = node->getSourceRange();
+      SourceRange SR = Stmt->getSourceRange();
       BeginBorrow = Builder.CreateBeginBorrow(SwitchVal, SR.getStart(),
                                               SR.getEnd(), false);
    }
 
-   auto MergeBB = Builder.CreateBasicBlock("switch.merge");
-   if (!defaultBB)
-      defaultBB = MergeBB;
+   auto MergeBB = Builder.CreateBasicBlock("match.merge");
+   if (!DefaultBB) {
+      DefaultBB = makeUnreachableBB();
+   }
 
-   Builder.CreateBr(first);
+   // If no case matches, go to the default block.
+   CompBlocks.push_back(DefaultBB);
 
-   i = 0;
-   for (const auto &C : node->getCases()) {
-      size_t j = i;
-      il::BasicBlock *BodyBB = CaseBlocks[i];
-      while (!BodyBB) {
-         assert(j < CaseBlocks.size() - 1);
-         BodyBB = CaseBlocks[j + 1];
+   // Branch to the first comparison, or the default block if there is none.
+   Builder.CreateBr(CompBlocks.front());
 
-         ++j;
+   bool AllCasesReturn = true;
+   unsigned i = 0;
+   for (auto *Case : Stmt->getCases()) {
+      auto *Body = CaseBlocks[i];
+      il::BasicBlock *NextBody = nullptr;
+      if (i + 1 < CaseBlocks.size()) {
+         NextBody = CaseBlocks[i + 1];
       }
 
-      if (!CompBlocks[i])
-         CompBlocks[i] = defaultBB;
+      if (!Case->isDefault()) {
+         auto *ThisComp = CompBlocks[i];
+         auto *NextCmp = CompBlocks[i + 1];
 
-      Builder.SetInsertPoint(CompBlocks[i]);
+         // Branch to the comparison block.
+         Builder.SetInsertPoint(ThisComp);
 
-      if (!C->isDefault()) {
-         auto val = CaseVals[i];
-         assert(val);
-
-         Value *isEqual;
-         if (C->getComparisonOp()) {
-            isEqual = CreateCall(C->getComparisonOp(), { SwitchVal, val },
-                                 C->getPattern());
-         }
-         else {
-            isEqual = CreateEqualityComp(SwitchVal, val);
-         }
-
-         auto nextComp = i >= CompBlocks.size() ? defaultBB
-                                                : CompBlocks[i + 1];
-
-         if (!nextComp)
-            nextComp = defaultBB;
-
-         Builder.CreateCondBr(isEqual, BodyBB, nextComp);
+         // Match the pattern, binding any values along the way.
+         visitPatternExpr(Case->getPattern(), SwitchVal, Body, NextCmp);
       }
 
-      if (auto Body = C->getBody()) {
-         CleanupRAII CS(*this);
-         Builder.SetInsertPoint(BodyBB);
+      // Visit the case body.
+      Builder.SetInsertPoint(Body);
 
-         if (i < CaseBlocks.size() - 1) {
-            BreakContinueStack.emplace_back(MergeBB, CaseBlocks[i + 1],
-                                            CS.getDepth(), node->getLabel());
-         }
-         else {
-            BreakContinueStack.emplace_back(MergeBB, nullptr, CS.getDepth(),
-                                            node->getLabel());
-         }
+      CleanupRAII CS(*this);
+      BreakContinueRAII BCR(*this, MergeBB, NextBody, CS.getDepth(),
+                            Stmt->getLabel());
 
-         visit(Body);
-         BreakContinueStack.pop_back();
+      visit(Case->getBody());
 
-         if (!Builder.GetInsertBlock()->getTerminator()) {
-            Builder.CreateBr(MergeBB);
-         }
+      auto Term = Builder.GetInsertBlock()->getTerminator();
+      if (!Term) {
+         AllCasesReturn = false;
+         Builder.CreateBr(MergeBB);
+      }
+      else if (isa<RetInst>(Term) || isa<UnreachableInst>(Term)
+               || isa<ThrowInst>(Term)) {
+         CS.popWithoutEmittingCleanups();
+      }
+      else {
+         AllCasesReturn = false;
       }
 
       ++i;
@@ -3646,10 +3777,39 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *node)
    if (BeginBorrow) {
       Builder.CreateEndBorrow(SwitchVal, BeginBorrow->getEndBorrowLoc(), false);
    }
+
+   if (AllCasesReturn) {
+      Builder.CreateUnreachable();
+   }
 }
 
-void ILGenPass::HandleIntegralSwitch(MatchStmt *node,
-                                     llvm::SmallVectorImpl<il::Value*> &values){
+void ILGenPass::HandleIntegralSwitch(MatchStmt *node)
+{
+   SmallVector<il::ConstantInt*, 4> values;
+   for (auto &Case : node->getCases()) {
+      auto *Pat = Case->getPattern();
+      if (!Pat) {
+         values.push_back(nullptr);
+         continue;
+      }
+
+      if (auto *CasePat = dyn_cast<CasePattern>(Pat)) {
+         values.push_back(cast<ConstantInt>(
+            CasePat->getCaseDecl()->getILValue()));
+      }
+      else {
+         auto *Expr = cast<ExpressionPattern>(Pat)->getExpr()
+            ->ignoreParensAndImplicitCasts();
+
+         if (auto *EC = dyn_cast<EnumCaseExpr>(Expr)) {
+            values.push_back(cast<ConstantInt>(EC->getCase()->getILValue()));
+         }
+         else {
+            values.push_back(cast<ConstantInt>(visit(Expr)));
+         }
+      }
+   }
+
    Builder.SetDebugLoc(node->getSwitchValue()->getSourceLoc());
 
    auto SwitchVal = visit(node->getSwitchValue());
@@ -3730,220 +3890,6 @@ il::BasicBlock* ILGenPass::makeUnreachableBB()
    return BB;
 }
 
-void ILGenPass::HandlePatternSwitch(MatchStmt *node)
-{
-   BeginBorrowInst *BeginBorrow = nullptr;
-
-   auto EnumVal = visit(node->getSwitchValue());
-   if (LookThroughLoad(EnumVal)->isLvalue()) {
-      SourceRange SR = node->getSourceRange();
-      BeginBorrow = Builder.CreateBeginBorrow(LookThroughLoad(EnumVal),
-                                              SR.getStart(), SR.getEnd(),
-                                              node->hasMutableCaseArg());
-   }
-
-   auto E = cast<EnumDecl>(EnumVal->getType()->getRecord());
-
-   assert(EnumVal->getType()->isEnum());
-   auto SwitchVal = Builder.CreateEnumRawValue(EnumVal);
-
-   auto Switch = Builder.CreateSwitch(SwitchVal);
-   auto MergeBB = Builder.CreateBasicBlock("switch.merge");
-   il::BasicBlock *DefaultBB = nullptr;
-
-   llvm::StringMap<il::BasicBlock*> CmpBBs;
-   for (auto C : E->getCases()) {
-      // create a basic bock for every unique enum case (not every switch case!)
-      auto BB = Builder.CreateBasicBlock(("match." + C->getName()).str());
-      CmpBBs.try_emplace(C->getName(), BB);
-
-      Switch->addCase(cast<ConstantInt>(C->getILValue()), BB);
-   }
-
-   SmallVector<il::BasicBlock*, 8> BodyBBs;
-   for (auto C : node->getCases()) {
-      if (!C->getBody())
-         BodyBBs.push_back(nullptr);
-      else
-         BodyBBs.push_back(Builder.CreateBasicBlock("match.body"));
-
-      if (C->isDefault()) {
-         DefaultBB = BodyBBs.back();
-         continue;
-      }
-
-      size_t i = 0;
-      auto CP = cast<CasePattern>(C->getPattern());
-      auto Case = E->hasCase(CP->getCaseNameIdent());
-      assert(Case && "case does not exist on enum!");
-
-      auto &bodyBB = BodyBBs.back();
-
-      auto arg_it = Case->arg_begin();
-      for (auto &arg : CP->getArgs()) {
-         if (!arg.isExpr()) {
-            QualType Ty = (*arg_it++)->getType();
-            if (arg.getDecl()->isConst()) {
-               Ty = SP.getContext().getReferenceType(Ty->stripReference());
-            }
-            else {
-               Ty = SP.getContext().getMutableReferenceType(Ty->stripReference());
-            }
-
-            bodyBB->addBlockArg(Ty);
-         }
-
-         ++i;
-      }
-   }
-
-   if (!DefaultBB)
-      DefaultBB = makeUnreachableBB();
-
-   bool AllCasesReturn = true;
-
-   size_t i = 0;
-   for (const auto &C : node->getCases()) {
-      size_t j = i;
-      BasicBlock *BodyBB = BodyBBs[j++];
-      while (!BodyBB)
-         BodyBB = BodyBBs[j++];
-
-      CasePattern *CP = nullptr;
-
-      if (!C->isDefault()) {
-         CP = cast<CasePattern>(C->getPattern());
-         auto &compBB = CmpBBs[CP->getCaseName()];
-
-         auto nextMergeBB = Builder.CreateBasicBlock("match.merge");
-         Builder.SetInsertPoint(compBB);
-
-         size_t k = 0;
-         bool ContainsExpr = false;
-         SmallVector<Value*, 4> BlockArgs;
-
-         if (CP->getArgs().empty()) {
-            Builder.CreateBr(BodyBB);
-         }
-         else for (auto &Arg : CP->getArgs()) {
-            bool IsConst = !Arg.isExpr() && Arg.getDecl()->isConst();
-            Value* val = Builder.CreateEnumExtract(EnumVal,
-                                                   CP->getCaseNameIdent(), k,
-                                                   IsConst);
-
-            if (Arg.isExpr()) {
-               ExprCleanupRAII ECR(*this);
-
-               auto expr = visit(Arg.getExpr());
-               auto cmp = CreateEqualityComp(Builder.CreateLoad(val), expr);
-
-               // if the values are equal, go to the next comparison,
-               // otherwise go to the next case
-               if (k == CP->getArgs().size() - 1) {
-                  Builder.CreateCondBr(cmp, BodyBB, nextMergeBB,
-                                       BlockArgs);
-               }
-               else {
-                  auto nextCmp = Builder.CreateBasicBlock("match.cmp.next");
-
-                  Builder.CreateCondBr(cmp, nextCmp, nextMergeBB);
-                  Builder.SetInsertPoint(nextCmp);
-               }
-
-               ContainsExpr = true;
-            }
-            else {
-               BlockArgs.push_back(val);
-               if (k == CP->getArgs().size() - 1) {
-                  Builder.CreateBr(BodyBB, BlockArgs);
-               }
-            }
-
-            ++k;
-         }
-
-         if (ContainsExpr) {
-            compBB = nextMergeBB;
-         }
-         else {
-            nextMergeBB->detachAndErase();
-         }
-      }
-
-      if (auto Body = C->getBody()) {
-         Builder.SetInsertPoint(BodyBB);
-
-         if (CP) {
-            unsigned k = 0;
-            auto it = CP->getVarDecls().begin();
-
-            for (auto &Arg : CP->getArgs()) {
-               if (Arg.isExpr())
-                  continue;
-
-               auto argVal = BodyBB->getBlockArg(k);
-               addDeclValuePair(*it++, argVal);
-               ++k;
-            }
-         }
-
-         CleanupRAII CR(*this);
-
-         if (i < node->getCases().size() - 1) {
-            BreakContinueStack.emplace_back(MergeBB, BodyBBs[i + 1], CR.getDepth(),
-                                       node->getLabel());
-         }
-         else {
-            BreakContinueStack.emplace_back(MergeBB, nullptr, CR.getDepth(),
-                                       node->getLabel());
-         }
-
-         visit(Body);
-         BreakContinueStack.pop_back();
-
-         auto Term = Builder.GetInsertBlock()->getTerminator();
-         if (!Term) {
-            AllCasesReturn = false;
-            Builder.CreateBr(MergeBB);
-         }
-         else if (isa<RetInst>(Term) || isa<UnreachableInst>(Term)
-                   || isa<ThrowInst>(Term)) {
-            CR.popWithoutEmittingCleanups();
-         }
-         else {
-            AllCasesReturn = false;
-         }
-      }
-
-      ++i;
-   }
-
-   for (auto &BB : CmpBBs) {
-      if (!BB.second->getTerminator()) {
-         Builder.SetInsertPoint(BB.second);
-         Builder.CreateBr(DefaultBB);
-      }
-   }
-
-   Switch->setDefault(DefaultBB);
-   Builder.SetInsertPoint(MergeBB);
-
-   if (BeginBorrow) {
-      Builder.CreateEndBorrow(LookThroughLoad(EnumVal),
-                              BeginBorrow->getEndBorrowLoc(),
-                              node->hasMutableCaseArg());
-   }
-
-   if (AllCasesReturn) {
-      Builder.CreateUnreachable();
-   }
-}
-
-void ILGenPass::HandleSwitch(MatchStmt *node)
-{
-
-}
-
 void ILGenPass::visitCaseStmt(CaseStmt *node)
 {
 
@@ -3961,29 +3907,46 @@ void ILGenPass::visitPatternExpr(PatternExpr *E,
                        MatchArgs, NoMatchArgs);
 
       return;
+   case Expression::ExpressionPatternID:
+      visitExpressionPattern(cast<ExpressionPattern>(E), MatchVal, MatchBB,
+                             NoMatchBB, MatchArgs, NoMatchArgs);
+
+      return;
    default:
       llvm_unreachable("not a pattern!");
    }
 }
 
-il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern *node)
-{
-   return visit(node->getExpr());
+il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern *node,
+                                             il::Value *MatchVal,
+                                             il::BasicBlock *MatchBB,
+                                             il::BasicBlock *NoMatchBB,
+                                             ArrayRef<Value*> MatchArgs,
+                                             ArrayRef<Value*> NoMatchArgs) {
+   ExprCleanupRAII ECR(*this);
+   auto *Expr = visit(node->getExpr());
+
+   Value *Eq;
+   if (auto *Op = node->getComparisonOp()) {
+      Eq = CreateCall(Op, { MatchVal, Expr }, node);
+   }
+   else {
+      Eq = CreateEqualityComp(MatchVal, Expr);
+   }
+
+   return Builder.CreateCondBr(Eq, MatchBB, NoMatchBB, MatchArgs, NoMatchArgs);
 }
 
-il::Value* ILGenPass::visitCasePattern(CasePattern *node,
-                                       il::Value *MatchVal,
-                                       il::BasicBlock *MatchBB,
-                                       il::BasicBlock *NoMatchBB,
-                                       ArrayRef<Value*> MatchArgs,
-                                       ArrayRef<Value*> NoMatchArgs) {
-   assert(MatchVal && "no value to match!");
-
-   if (MatchVal->isLvalue())
-      MatchVal = Builder.CreateLoad(MatchVal);
-
+static void visitEnumPattern(ILGenPass &ILGen,
+                             CasePattern *node,
+                             il::Value *MatchVal,
+                             il::BasicBlock *MatchBB,
+                             il::BasicBlock *NoMatchBB,
+                             ArrayRef<Value*> MatchArgs,
+                             ArrayRef<Value*> NoMatchArgs) {
    unsigned i = 0;
    auto *Case = node->getCaseDecl();
+   ILBuilder &Builder = ILGen.Builder;
 
    // Check if the raw values are equal.
    auto *GivenRawVal = Builder.CreateEnumRawValue(MatchVal);
@@ -3997,20 +3960,39 @@ il::Value* ILGenPass::visitCasePattern(CasePattern *node,
       Builder.SetInsertPoint(LastCmpBB);
 
       il::BasicBlock *NextCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
-      if (Arg.isExpr()) {
+      switch (Arg.K) {
+      case IfCondition::Expression: {
+         ILGenPass::ExprCleanupRAII ECR(ILGen);
+
          // Compare with the next extracted enum value.
          auto *GivenVal = Builder.CreateEnumExtract(MatchVal, Case, i, true);
-         auto *NeededVal = visit(Arg.getExpr());
+         auto *NeededVal = ILGen.visit(Arg.ExprData.Expr);
+         auto *Eq = ILGen.CreateEqualityComp(Builder.CreateLoad(GivenVal),
+                                             NeededVal);
 
-         auto *Eq = CreateEqualityComp(GivenVal, NeededVal);
          Builder.CreateCondBr(Eq, NextCmpBB, NoMatchBB, {}, NoMatchArgs);
+         break;
       }
-      else {
+      case IfCondition::Binding: {
          // Bind the declaration to the case value.
-         auto *GivenVal = Builder.CreateEnumExtract(MatchVal, Case, i, true);
-         addDeclValuePair(Arg.getDecl(), GivenVal);
+         auto *GivenVal = Builder.CreateEnumExtract(
+            MatchVal, Case, i, Arg.BindingData.Decl->isConst());
 
+         ILGen.addDeclValuePair(Arg.BindingData.Decl, GivenVal);
          Builder.CreateBr(NextCmpBB);
+
+         break;
+      }
+      case IfCondition::Pattern: {
+         // Recursively match the pattern, this time with the extracted enum
+         // value.
+         auto *GivenVal = Builder.CreateEnumExtract(MatchVal, Case, i, true);
+         ILGen.visitPatternExpr(Arg.PatternData.Pattern,
+                                Builder.CreateLoad(GivenVal), NextCmpBB,
+                                NoMatchBB, {}, NoMatchArgs);
+
+         break;
+      }
       }
 
       LastCmpBB = NextCmpBB;
@@ -4019,13 +4001,121 @@ il::Value* ILGenPass::visitCasePattern(CasePattern *node,
 
    Builder.SetInsertPoint(LastCmpBB);
    Builder.CreateBr(MatchBB, MatchArgs);
+}
+
+template<class Fn>
+static void visitPatternCommon(ILGenPass &ILGen,
+                               CasePattern *node,
+                               il::Value *MatchVal,
+                               il::BasicBlock *MatchBB,
+                               il::BasicBlock *NoMatchBB,
+                               ArrayRef<Value*> MatchArgs,
+                               ArrayRef<Value*> NoMatchArgs,
+                               const Fn &Supplier) {
+   unsigned i = 0;
+   ILBuilder &Builder = ILGen.Builder;
+
+   il::BasicBlock *LastCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
+   Builder.CreateBr(LastCmpBB);
+
+   for (auto &Arg : node->getArgs()) {
+      Builder.SetInsertPoint(LastCmpBB);
+
+      auto *GivenVal = Supplier(i);
+      il::BasicBlock *NextCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
+      switch (Arg.K) {
+      case IfCondition::Expression: {
+         ILGenPass::ExprCleanupRAII ECR(ILGen);
+
+         // Compare with the next extracted enum value.
+         auto *NeededVal = ILGen.visit(Arg.ExprData.Expr);
+         auto *Eq = ILGen.CreateEqualityComp(Builder.CreateLoad(GivenVal),
+                                             NeededVal);
+
+         Builder.CreateCondBr(Eq, NextCmpBB, NoMatchBB, {}, NoMatchArgs);
+         break;
+      }
+      case IfCondition::Binding: {
+         // Bind the declaration to the case value.
+         ILGen.addDeclValuePair(Arg.BindingData.Decl, GivenVal);
+
+         Builder.CreateBr(NextCmpBB);
+         break;
+      }
+      case IfCondition::Pattern: {
+         // Recursively match the pattern, this time with the extracted enum
+         // value.
+         ILGen.visitPatternExpr(Arg.PatternData.Pattern,
+                                Builder.CreateLoad(GivenVal), NextCmpBB,
+                                NoMatchBB, {}, NoMatchArgs);
+
+         break;
+      }
+      }
+
+      LastCmpBB = NextCmpBB;
+      ++i;
+   }
+
+   Builder.SetInsertPoint(LastCmpBB);
+   Builder.CreateBr(MatchBB, MatchArgs);
+}
+
+il::Value* ILGenPass::visitCasePattern(CasePattern *node,
+                                       il::Value *MatchVal,
+                                       il::BasicBlock *MatchBB,
+                                       il::BasicBlock *NoMatchBB,
+                                       ArrayRef<Value*> MatchArgs,
+                                       ArrayRef<Value*> NoMatchArgs) {
+   assert(MatchVal && "no value to match!");
+
+   if (MatchVal->isLvalue())
+      MatchVal = Builder.CreateLoad(MatchVal);
+
+   if (MatchVal->getType()->isEnum()) {
+      visitEnumPattern(*this, node, MatchVal, MatchBB, NoMatchBB,
+                       MatchArgs, NoMatchArgs);
+
+      return nullptr;
+   }
+
+   switch (node->getKind()) {
+   case CasePattern::K_EnumOrStruct: {
+      visitPatternCommon(*this, node, MatchVal, MatchBB, NoMatchBB,
+                         MatchArgs, NoMatchArgs, [&](unsigned i) {
+         return Builder.CreateStructGEP(MatchVal, i);
+      });
+
+      break;
+   }
+   case CasePattern::K_Tuple: {
+      visitPatternCommon(*this, node, MatchVal, MatchBB, NoMatchBB,
+                         MatchArgs, NoMatchArgs, [&](unsigned i) {
+         return Builder.CreateTupleExtract(MatchVal, i);
+      });
+
+      break;
+   }
+   case CasePattern::K_Array: {
+      visitPatternCommon(*this, node, MatchVal, MatchBB, NoMatchBB,
+                         MatchArgs, NoMatchArgs, [&](unsigned i) {
+         return Builder.CreateGEP(MatchVal, i);
+      });
+
+      break;
+   }
+   }
 
    return nullptr;
 }
 
-il::Value* ILGenPass::visitIsPattern(IsPattern *node)
-{
-   return nullptr;
+il::Value* ILGenPass::visitIsPattern(IsPattern *node,
+                                     il::Value *MatchVal,
+                                     il::BasicBlock *MatchBB,
+                                     il::BasicBlock *NoMatchBB,
+                                     ArrayRef<Value*> MatchArgs,
+                                     ArrayRef<Value*> NoMatchArgs) {
+   llvm_unreachable("unimplemented!");
 }
 
 void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
@@ -4349,23 +4439,101 @@ il::Value *ILGenPass::visitNoneLiteral(NoneLiteral *node)
    return Inst;
 }
 
-il::Constant *ILGenPass::MakeStringView(llvm::StringRef Str)
+void ILGenPass::initStringInfo()
 {
-   auto SV = SP.getStringViewDecl();
-   il::Constant *Vals[] = {
-      Builder.GetConstantString(Str),
-      Builder.GetConstantInt(SP.getContext().getUIntTy(),
-                             Str.size())
+   if (StrInfo.String)
+      return;
+
+   StrInfo.String = SP.getStringDecl();
+   StrInfo.StringBuffer = cast<StructDecl>(SP.getBuiltinDecl("StringBuffer"));
+   StrInfo.StringStorage = cast<StructDecl>(
+      SP.getBuiltinDecl("StringStorage"));
+   StrInfo.StringStorageStorage = cast<EnumDecl>(
+      SP.getBuiltinDecl("StringStorage.Storage"));
+
+   SP.ensureDeclared(StrInfo.String);
+   SP.ensureDeclared(StrInfo.StringBuffer);
+   SP.ensureDeclared(StrInfo.StringStorage);
+   SP.ensureDeclared(StrInfo.StringStorageStorage);
+
+   StrInfo.AtomicIntDecl = cast<StructDecl>(
+      SP.LookupSingle<FieldDecl>(*StrInfo.StringBuffer,
+                                 SP.getIdentifier("atomicRefCount"))
+                                 ->getType()->getRecord());
+
+   SP.ensureDeclared(StrInfo.AtomicIntDecl);
+
+   StrInfo.StringStorageDirectCase = SP.LookupSingle<EnumCaseDecl>(
+      *StrInfo.StringStorageStorage, SP.getIdentifier("Direct"));
+
+   auto *SubString = cast<StructDecl>(SP.getBuiltinDecl("SubString"));
+   SP.ensureDeclared(SubString);
+
+   SP.calculateRecordSize(SubString);
+   SP.calculateRecordSize(StrInfo.AtomicIntDecl);
+   SP.calculateRecordSize(StrInfo.StringBuffer);
+   SP.calculateRecordSize(StrInfo.StringStorageStorage);
+   SP.calculateRecordSize(StrInfo.StringStorage);
+   SP.calculateRecordSize(StrInfo.String);
+}
+
+il::Constant *ILGenPass::MakeStdString(llvm::StringRef Str)
+{
+   initStringInfo();
+
+   auto *Bytes = Builder.GetConstantString(Str);
+   auto Size = Builder.GetConstantInt(SP.getContext().getUIntTy(), Str.size());
+
+   // FIXME remove this hardcoded implementation dependency.
+   enum StringFlags : uint64_t {
+      /// Flag that is set when the String is purely ASCII.
+      ASCIIFlag = 0x1llu << 61llu,
+
+      /// Flag that is set when this String buffer owns its memory.
+      OwnedFlag = 0x1llu << 62llu,
+
+      /// Flag that is set when this String is using a small, inline representation.
+      SmallFlag = 0x1llu << 63llu,
+
+      /// Mask to extract the 61-bit capacity from a 64-bit value.
+      CapacityMask = ~(0b1110'0000llu << 55llu),
+
+      /// Number of bytes that fit into the small representation.
+      SmallCapacity = 23llu // 3 * sizeof(UInt64) - 1
    };
 
-   return Builder.GetConstantStruct(SV, Vals);
+   // Initialize the string flags.
+   uint64_t Flags = 0;
+   Flags |= ASCIIFlag;
+   Flags |= Str.size();
+
+   auto *Capacity = Builder.GetConstantInt(SP.getContext().getUIntTy(), Flags);
+   auto *Refcount = Builder.GetConstantStruct(
+      StrInfo.AtomicIntDecl,
+      Builder.GetConstantInt(SP.getContext().getUInt32Ty(), 0));
+
+   // Create the string buffer.
+   auto *StringBuffer = Builder.GetConstantStruct(
+      StrInfo.StringBuffer,
+      { Bytes, Size, Capacity, Refcount });
+
+   // Create the storage enum.
+   auto *StorageEnum = Builder.GetConstantEnum(StrInfo.StringStorageDirectCase,
+                                               StringBuffer);
+
+   // Create the string storage.
+   auto *Storage = Builder.GetConstantStruct(StrInfo.StringStorage,
+                                             StorageEnum);
+
+   // Create the final string.
+   return Builder.GetConstantStruct(StrInfo.String, Storage);
 }
 
 il::Value *ILGenPass::visitStringLiteral(StringLiteral *S)
 {
    Value *Str;
    if (auto Init = S->getExpressibleByInit()) {
-      auto Val = MakeStringView(S->getValue());
+      auto Val = MakeStdString(S->getValue());
       auto GV = Builder.CreateGlobalVariable(Val, false, "", S->getSourceLoc());
 
       return Builder.CreateStructInit(cast<StructDecl>(Init->getRecord()),
@@ -4380,7 +4548,9 @@ il::Value *ILGenPass::visitStringLiteral(StringLiteral *S)
          auto Len = Builder.GetConstantInt(USizeTy, str.size());
 
          auto Init = getFunc(SP.getStringInit());
-         registerCalledFunction(SP.getStringInit(), Init, S);
+         if (!registerCalledFunction(SP.getStringInit(), S)) {
+            return Builder.GetUndefValue(S->getExprType());
+         }
 
          auto globalStr = Builder.GetConstantString(str);
          Str = Builder.CreateStructInit(StringTy, cast<il::Method>(Init),
@@ -4389,7 +4559,7 @@ il::Value *ILGenPass::visitStringLiteral(StringLiteral *S)
          pushDefaultCleanup(Str);
       }
       else {
-         return MakeStringView(S->getValue());
+         return MakeStdString(S->getValue());
       }
    }
    else if (S->getExprType()->isArrayType()) {
@@ -4398,6 +4568,10 @@ il::Value *ILGenPass::visitStringLiteral(StringLiteral *S)
    else {
       assert(S->getExprType()->isPointerType() && "bad string literal type!");
       Str = Builder.GetConstantString(S->getValue());
+
+      if (Str->getType() != S->getExprType()) {
+         Str = Builder.CreateBitCast(CastKind::BitCast, Str, S->getExprType());
+      }
    }
 
    return Str;
@@ -4408,17 +4582,20 @@ il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
    auto Strings = node->getSegments();
    assert(!Strings.empty() && "empty string interpolation");
 
-   auto PlusEquals = getFunc(SP.getStringPlusEqualsString());
-   registerCalledFunction(SP.getStringPlusEqualsString(),
-                          PlusEquals, node);
+   auto PlusEquals = SP.getStringPlusEqualsString();
+   if (!registerCalledFunction(PlusEquals, node))
+      return Builder.GetUndefValue(node->getExprType());
 
-   Value *Str = visit(Strings.front());
-   assert(Str->getType()->getRecord() == SP.getStringDecl()
-          && "first interpolation segment should be a string!");
+   auto *EmptyCString = Builder.GetConstantString("");
+   auto *Str = Builder.CreateStructInit(SP.getStringDecl(),
+                                        getFunc(SP.getStringInit()),
+                                        { EmptyCString, UWordZero });
 
-   for (size_t i = 1; i < Strings.size(); ++i) {
-      auto &Seg = Strings[i];
+   auto *MutStr = Builder.CreateAlloca(Str->getType());
+   Builder.CreateInit(Str, MutStr);
 
+   auto *Fn = getFunc(PlusEquals);
+   for (auto *Seg : Strings) {
       // interpolation often produces empty strings in between interpolated
       // segments
       if (auto lit = dyn_cast<StringLiteral>(Seg)) {
@@ -4427,7 +4604,7 @@ il::Value *ILGenPass::visitStringInterpolation(StringInterpolation *node)
       }
 
       auto Val = visit(Seg);
-      Builder.CreateCall(PlusEquals, { Str, Val });
+      Builder.CreateCall(Fn, { MutStr, Val });
    }
 
    return Str;
@@ -4465,127 +4642,127 @@ il::Value *ILGenPass::visitUnaryOperator(UnaryOperator *UnOp)
    Value *Res = nullptr;
    bool sub = true;
    switch (UnOp->getKind()) {
-      case op::UnaryPlus:
-         // always a no-op
-         Res = val;
-         break;
-      case op::UnaryLNot:
-         if (val->getType()->isPointerType()) {
-            auto Null = Builder.GetConstantNull(val->getType());
-            Res = Builder.CreateCompEQ(val, Null);
-
-            break;
-         }
-
-         LLVM_FALLTHROUGH;
-      case op::UnaryNot:
-         Res = Builder.CreateNeg(val);
-         break;
-      case op::UnaryMin:
-         Res = Builder.CreateMin(val);
-         break;
-      case op::Deref:
-         assert(val->getType()->isPointerType()
-                && "dereferencing non-pointer ty");
-
-         Res = Builder.CreateBitCast(CastKind::BitCast, val,
-                                     UnOp->getExprType());
-
-         break;
-      case op::AddrOf:
-         assert(val->isLvalue() && "taking address of rvalue!");
-         Res = Builder.CreateBitCast(CastKind::BitCast, val,
-                                     UnOp->getExprType());
-
-         break;
-      case op::PreInc:
-      case op::PostInc:
-         sub = false;
-         LLVM_FALLTHROUGH;
-      case op::PostDec:
-      case op::PreDec: {
-         Value *ld = Builder.CreateLoad(val);
-
-         if (ld->getType()->isPointerType()) {
-            PointerType *ptrTy = ld->getType()->asPointerType();
-            auto step = getTargetInfo().getSizeOfType(ptrTy->getPointeeType());
-            auto ptrToInt = Builder.CreateIntegerCast(CastKind::PtrToInt, ld,
-                                                      SP.getContext().getIntTy());
-
-            il::Value *newVal;
-            if (sub) {
-               newVal = Builder.CreateSub(ptrToInt,
-                                          ConstantInt::get(ptrToInt->getType(),
-                                                           step));
-            }
-            else {
-               newVal = Builder.CreateAdd(ptrToInt,
-                                          ConstantInt::get(ptrToInt->getType(),
-                                                           step));
-            }
-
-            Res = Builder.CreateIntegerCast(CastKind::IntToPtr, newVal, ptrTy);
-            Builder.CreateStore(Res, val);
-
-            if (!UnOp->isPrefix())
-               Res = ld;
-         }
-         else if (ld->getType()->isIntegerType()) {
-            il::Value *newVal;
-            if (sub) {
-               newVal = Builder.CreateSub(ld, ConstantInt::get(ld->getType(),
-                                                               1));
-            }
-            else {
-               newVal = Builder.CreateAdd(ld, ConstantInt::get(ld->getType(),
-                                                               1));
-            }
-
-            Builder.CreateStore(newVal, val);
-
-            if (UnOp->isPrefix())
-               Res = newVal;
-            else
-               Res = ld;
-         }
-         else {
-            assert(ld->getType()->isFPType());
-            il::Value *newVal;
-            if (sub) {
-               newVal = Builder.CreateSub(ld, ConstantFloat::get(ld->getType(),
-                                                                 1.0f));
-            }
-            else {
-               newVal = Builder.CreateAdd(ld, ConstantFloat::get(ld->getType(),
-                                                                 1.0));
-            }
-
-            Builder.CreateStore(newVal, val);
-
-            if (UnOp->isPrefix())
-               Res = newVal;
-            else
-               Res = ld;
-         }
+   case op::UnaryPlus:
+      // always a no-op
+      Res = val;
+      break;
+   case op::UnaryLNot:
+      if (val->getType()->isPointerType()) {
+         auto Null = Builder.GetConstantNull(val->getType());
+         Res = Builder.CreateCompEQ(val, Null);
 
          break;
       }
-      case op::TypeOf: {
-         if (val->getType()->isClass()) {
-            Res = Builder.GetTypeInfo(val);
+
+      LLVM_FALLTHROUGH;
+   case op::UnaryNot:
+      Res = Builder.CreateNeg(val);
+      break;
+   case op::UnaryMin:
+      Res = Builder.CreateMin(val);
+      break;
+   case op::Deref:
+      assert(val->getType()->isPointerType()
+             && "dereferencing non-pointer ty");
+
+      Res = Builder.CreateBitCast(CastKind::BitCast, val,
+                                  UnOp->getExprType());
+
+      break;
+   case op::AddrOf:
+      assert(val->isLvalue() && "taking address of rvalue!");
+      Res = Builder.CreateBitCast(CastKind::BitCast, val,
+                                  UnOp->getExprType());
+
+      break;
+   case op::PreInc:
+   case op::PostInc:
+      sub = false;
+      LLVM_FALLTHROUGH;
+   case op::PostDec:
+   case op::PreDec: {
+      Value *ld = Builder.CreateLoad(val);
+
+      if (ld->getType()->isPointerType()) {
+         PointerType *ptrTy = ld->getType()->asPointerType();
+         auto step = getTargetInfo().getSizeOfType(ptrTy->getPointeeType());
+         auto ptrToInt = Builder.CreateIntegerCast(CastKind::PtrToInt, ld,
+                                                   SP.getContext().getIntTy());
+
+         il::Value *newVal;
+         if (sub) {
+            newVal = Builder.CreateSub(ptrToInt,
+                                       ConstantInt::get(ptrToInt->getType(),
+                                                        step));
          }
          else {
-            Res = GetOrCreateTypeInfo(UnOp->getTarget()->getExprType());
+            newVal = Builder.CreateAdd(ptrToInt,
+                                       ConstantInt::get(ptrToInt->getType(),
+                                                        step));
          }
 
-         Res = Builder.CreateBitCast(CastKind::BitCast,
-                                     Builder.CreateLoad(Res),
-                                     UnOp->getExprType());
+         Res = Builder.CreateIntegerCast(CastKind::IntToPtr, newVal, ptrTy);
+         Builder.CreateStore(Res, val);
 
-         break;
+         if (!UnOp->isPrefix())
+            Res = ld;
       }
-      default:
-         llvm_unreachable("not a unary operator!");
+      else if (ld->getType()->isIntegerType()) {
+         il::Value *newVal;
+         if (sub) {
+            newVal = Builder.CreateSub(ld, ConstantInt::get(ld->getType(),
+                                                            1));
+         }
+         else {
+            newVal = Builder.CreateAdd(ld, ConstantInt::get(ld->getType(),
+                                                            1));
+         }
+
+         Builder.CreateStore(newVal, val);
+
+         if (UnOp->isPrefix())
+            Res = newVal;
+         else
+            Res = ld;
+      }
+      else {
+         assert(ld->getType()->isFPType());
+         il::Value *newVal;
+         if (sub) {
+            newVal = Builder.CreateSub(ld, ConstantFloat::get(ld->getType(),
+                                                              1.0f));
+         }
+         else {
+            newVal = Builder.CreateAdd(ld, ConstantFloat::get(ld->getType(),
+                                                              1.0));
+         }
+
+         Builder.CreateStore(newVal, val);
+
+         if (UnOp->isPrefix())
+            Res = newVal;
+         else
+            Res = ld;
+      }
+
+      break;
+   }
+   case op::TypeOf: {
+      if (val->getType()->isClass()) {
+         Res = Builder.GetTypeInfo(val);
+      }
+      else {
+         Res = GetOrCreateTypeInfo(UnOp->getTarget()->getExprType());
+      }
+
+      Res = Builder.CreateBitCast(CastKind::BitCast,
+                                  Builder.CreateLoad(Res),
+                                  UnOp->getExprType());
+
+      break;
+   }
+   default:
+      llvm_unreachable("not a unary operator!");
    }
 
    assert(Res && "bad unary op kind");
@@ -5156,7 +5333,7 @@ il::Value *ILGenPass::visitLambdaExpr(LambdaExpr *Expr)
 
    SmallVector<Value*, 4> Captures;
    for (auto capt : Expr->getCaptures()) {
-      il::Value *val = DeclMap[capt];
+      il::Value *val = getValueForDecl(capt);
 
       L->addCapture(val->getType());
       Captures.push_back(val);

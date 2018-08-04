@@ -158,6 +158,9 @@ public:
    bool isLazilyInitialized() const { return GVBits.LazilyInitialized; }
    void setIsLazilyInitialized() { GVBits.LazilyInitialized = true; }
 
+   void dump() const;
+   void print(llvm::raw_ostream &OS) const;
+
 private:
    GlobalVariable(const GlobalVariable &var, Module &M);
 

@@ -255,6 +255,7 @@ void ASTStmtReader::visitMatchStmt(MatchStmt *S)
    S->setBraces(Record.readSourceRange());
    S->setSwitchValue(Record.readSubExpr());
    S->setHasMutableCaseArg(Record.readBool());
+   S->setIntegralSwitch(Record.readBool());
    S->setLabel(Record.getIdentifierInfo());
 }
 
@@ -584,14 +585,16 @@ void ASTStmtReader::visitCallExpr(CallExpr *S)
    while (NumArgs--)
       Args.push_back(Record.readSubExpr(), Record.getReader()->getContext());
 
-   S->setIsPointerAccess(Record.readBool());
-   S->setIsUFCS(Record.readBool());
-   S->setIsDotInit(Record.readBool());
-   S->setIsDotDeinit(Record.readBool());
-   S->setIncludesSelf(Record.readBool());
-   S->setDirectCall(Record.readBool());
-   S->setBuiltinKind(Record.readInt());
+   uint64_t Flags = Record.readInt();
+   S->setIsPointerAccess((Flags & 1) != 0);
+   S->setIsUFCS((Flags & (1 << 1)) != 0);
+   S->setIsDotInit((Flags & (1 << 2)) != 0);
+   S->setIsDotDeinit((Flags & (1 << 3)) != 0);
+   S->setIncludesSelf((Flags & (1 << 4)) != 0);
+   S->setDirectCall((Flags & (1 << 5)) != 0);
+   S->setLeadingDot((Flags & (1 << 6)) != 0);
 
+   S->setBuiltinKind(Record.readInt());
    S->setFunc(Record.readDeclAs<CallableDecl>());
    S->setParentExpr(Record.readSubExpr());
    S->setContext(Record.readDeclAs<DeclContext>());
@@ -704,38 +707,32 @@ void ASTStmtReader::visitExpressionPattern(ExpressionPattern *S)
 {
    visitPatternExpr(S);
    S->setExpr(Record.readSubExpr());
+   S->setComparisonOp(Record.readDeclAs<CallableDecl>());
 }
 
 void ASTStmtReader::visitCasePattern(CasePattern *S)
 {
    visitExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<CasePatternArgument>();
+   auto *Ptr = S->getTrailingObjects<IfCondition>();
    auto NumArgs = Record.readInt();
    while (NumArgs--) {
-      auto IsExpr = Record.readBool();
-      if (IsExpr) {
-         new (Ptr++) CasePatternArgument(Record.readSubExpr());
-      }
-      else {
-         new (Ptr++) CasePatternArgument(Record.readDeclAs<LocalVarDecl>());
-      }
+      *Ptr++ = ReadIfCondition();
    }
 
    S->setColonLoc(Record.readSourceLocation());
    S->setSourceRange(Record.readSourceRange());
+
+   S->setKind(Record.readEnum<CasePattern::Kind>());
+
+   S->setParentExpr(Record.readSubExpr());
    S->setCaseName(Record.getIdentifierInfo());
+
    S->setHasBinding(Record.readBool());
    S->setHasExpr(Record.readBool());
+   S->setLeadingDot(Record.readBool());
+
    S->setCaseDecl(Record.readDeclAs<EnumCaseDecl>());
-
-   ASTVector<LocalVarDecl*> VarDecls;
-   auto NumVarDecls = Record.readInt();
-   while (NumVarDecls--)
-      VarDecls.push_back(ReadDeclAs<LocalVarDecl>(),
-                         Record.getReader()->getContext());
-
-   S->setVarDecls(std::move(VarDecls));
 }
 
 void ASTStmtReader::visitIsPattern(IsPattern *S)
@@ -838,7 +835,7 @@ IfCondition ASTStmtReader::ReadIfCondition()
 {
    auto K = Record.readEnum<IfCondition::Kind>();
    switch (K) {
-   case IfCondition::Expr:
+   case IfCondition::Expression:
       return IfCondition(Record.readExpr());
    case IfCondition::Binding: {
       auto *D = Record.readDeclAs<LocalVarDecl>();

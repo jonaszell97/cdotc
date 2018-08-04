@@ -75,16 +75,6 @@ private:
 
    void visitVarDecl(VarDecl* node);
 
-   void visitCasePatternArg(const CasePatternArgument &A)
-   {
-      if (A.isExpr()) {
-         visitExpr(A.getExpr());
-      }
-      else {
-         visitDecl(A.getDecl());
-      }
-   }
-
    void printAccessModifier(AccessSpecifier access)
    {
       switch (access) {
@@ -714,8 +704,6 @@ void PrettyPrinterImpl::visitExpressionPattern(ExpressionPattern* expr)
 void PrettyPrinterImpl::visitCasePattern(CasePattern* expr)
 {
    out << "." << expr->getCaseName();
-   if (!expr->getArgs().empty())
-      WriteList(expr->getArgs(), &PrettyPrinterImpl::visitCasePatternArg);
 }
 
 void PrettyPrinterImpl::visitIsPattern(IsPattern* expr)

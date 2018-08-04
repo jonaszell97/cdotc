@@ -113,6 +113,7 @@ struct CompilerOptions {
 private:
    std::vector<std::string> includePaths;
    std::vector<std::string> linkerInput;
+   std::vector<std::string> clangOptions;
 
    std::unordered_map<InputKind, std::vector<std::string>> inFiles;
    std::unordered_map<OutputKind, std::string> outFiles;
@@ -156,6 +157,7 @@ public:
    }
 
    ArrayRef<std::string> getIncludeDirs() const { return includePaths; }
+   ArrayRef<std::string> getClangOptions() const { return clangOptions; }
 
    unsigned optimizationLevelAsNumber() const
    {

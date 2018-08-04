@@ -304,6 +304,25 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       auto *R = CtxTy->stripReference()->getRecord();
       if (!ensureDeclared(R)) {
+         Ident->setExprType(UnknownAnyTy);
+         Ident->setIsInvalid(true);
+
+         return ExprError();
+      }
+
+      Ident->setDeclCtx(R);
+   }
+   else if (Ident->hasLeadingDot()) {
+      auto CtxTy = Ident->getContextualType();
+      if (!CtxTy || !CtxTy->isRecordType()) {
+         diagnose(Ident, err_requires_contextual_type, 2,
+                  Ident->getSourceRange());
+
+         return ExprError();
+      }
+
+      auto *R = CtxTy->getRecord();
+      if (!ensureDeclared(R)) {
          Ident->setExprType(Context.getRecordType(R));
          return Ident;
       }
@@ -394,6 +413,10 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
          Ident->setFoundResult(true);
 
          return Ident;
+      }
+      if (!Ident->shouldIssueDiag()) {
+         Ident->setIsInvalid(true);
+         return ExprError();
       }
 
       if (Ident->isSynthesized()) {
@@ -602,6 +625,18 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       checkAccessibility(Alias, Ident);
 
+      if (TemplateArgs.empty()
+            && Alias->isTemplate()
+            && Ident->allowIncompleteTemplateArgs()) {
+         ensureVisited(Alias);
+
+         Ident->setKind(IdentifierKind::Alias);
+         Ident->setAlias(Alias);
+         Ident->setExprType(Alias->getType());
+
+         return Ident;
+      }
+
       auto AliasRes = checkAlias(MultiLevelResult, TemplateArgs, Ident);
       if (AliasRes.isTypeDependent() || AliasRes.isValueDependent()) {
          Ident->setIsTypeDependent(AliasRes.isTypeDependent());
@@ -782,6 +817,12 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
             AT = SubstAT;
       }
 
+      if (ReferencedATs) {
+         if (!Ident->getParentExpr() || isa<SelfExpr>(Ident->getParentExpr())) {
+            ReferencedATs->push_back(AT);
+         }
+      }
+
       ResultType = Context.getMetaType(Context.getAssociatedType(AT));
    }
    else if (auto Param = dyn_cast<TemplateParamDecl>(FoundDecl)) {
@@ -823,50 +864,58 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr *Ident)
    cdot::Type *builtinType;
 
    switch (Ident->getIdentifierKind()) {
-      default: llvm_unreachable("bad builtin ident!");
-      case BuiltinIdentifier::NULLPTR: {
-         if (Ident->getContextualType().isNull()) {
-            if (Ident->isDependent()) {
-               Ident->setExprType(UnknownAnyTy);
-               return Ident;
-            }
+   default: llvm_unreachable("bad builtin ident!");
+   case BuiltinIdentifier::defaultValue:
+      if (Ident->getContextualType()) {
+         assert(hasDefaultValue(Ident->getContextualType()));
+         Ident->setExprType(Ident->getContextualType());
+      }
 
-            diagnose(Ident, err_requires_contextual_type, Ident->getSourceLoc(),
-                     "__nullptr");
-
-            return ExprError();
+      assert(Ident->getExprType());
+      return Ident;
+   case BuiltinIdentifier::NULLPTR: {
+      if (Ident->getContextualType().isNull()) {
+         if (Ident->isDependent()) {
+            Ident->setExprType(UnknownAnyTy);
+            return Ident;
          }
 
-         if (Ident->getContextualType()->isRefcounted()
-             || Ident->getContextualType()->isThinFunctionTy()
-             || Ident->getContextualType()->isPointerType())
-            builtinType = *Ident->getContextualType();
-         else
-            builtinType = Ident->getContextualType()->getPointerTo(Context);
+         diagnose(Ident, err_requires_contextual_type, Ident->getSourceLoc(),
+                  1 /*__nullptr*/);
 
-         break;
+         return ExprError();
       }
-      case BuiltinIdentifier::FUNC:
-      case BuiltinIdentifier::MANGLED_FUNC: {
-         auto C = getFuncScope()->getCallableDecl();
-         llvm::StringRef str = Ident->getIdentifierKind()
-                                  == BuiltinIdentifier ::FUNC
-                               ? C->getName()
-                               : ILGen->getFunc(C)->getName();
 
-         return StringLiteral::Create(Context, Ident->getSourceRange(), str);
-      }
-      case BuiltinIdentifier::FLOAT_QNAN:
-      case BuiltinIdentifier::FLOAT_SNAN:
-         builtinType = Context.getFloatTy();
-         break;
-      case BuiltinIdentifier::DOUBLE_QNAN:
-      case BuiltinIdentifier::DOUBLE_SNAN:
-         builtinType = Context.getDoubleTy();
-         break;
-      case BuiltinIdentifier::__ctfe:
-         builtinType = Context.getBoolTy();
-         break;
+      if (Ident->getContextualType()->isRefcounted()
+          || Ident->getContextualType()->isThinFunctionTy()
+          || Ident->getContextualType()->isPointerType())
+         builtinType = *Ident->getContextualType();
+      else
+         builtinType = Ident->getContextualType()->getPointerTo(Context);
+
+      break;
+   }
+   case BuiltinIdentifier::FUNC:
+   case BuiltinIdentifier::MANGLED_FUNC: {
+      auto C = getFuncScope()->getCallableDecl();
+      llvm::StringRef str = Ident->getIdentifierKind()
+                               == BuiltinIdentifier ::FUNC
+                            ? C->getName()
+                            : ILGen->getFunc(C)->getName();
+
+      return StringLiteral::Create(Context, Ident->getSourceRange(), str);
+   }
+   case BuiltinIdentifier::FLOAT_QNAN:
+   case BuiltinIdentifier::FLOAT_SNAN:
+      builtinType = Context.getFloatTy();
+      break;
+   case BuiltinIdentifier::DOUBLE_QNAN:
+   case BuiltinIdentifier::DOUBLE_SNAN:
+      builtinType = Context.getDoubleTy();
+      break;
+   case BuiltinIdentifier::__ctfe:
+      builtinType = Context.getBoolTy();
+      break;
    }
 
    Ident->setExprType(builtinType);
@@ -1167,10 +1216,9 @@ bool SemaPass::checkAlias(AliasDecl *Alias, CandidateSet::Candidate &Cand)
 IdentifierRefExpr *SemaPass::wouldBeValidIdentifier(SourceLocation Loc,
                                                     IdentifierInfo *maybeIdent,
                                                     bool LHSOfAssignment) {
-   DiagnosticScopeRAII diagnosticScopeRAII(*this);
-
    auto *expr = new(Context) IdentifierRefExpr(Loc, maybeIdent);
    expr->setIsLHSOfAssignment(LHSOfAssignment);
+   expr->setIssueDiag(false);
 
    (void)visitExpr(expr);
    if (!expr->foundResult())
@@ -1654,15 +1702,11 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
 ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 {
    EnumDecl *E = Expr->getEnum();
-   if (E) {
-      ensureDeclared(E);
-   }
-
    if (!E) {
       auto ty = Expr->getContextualType();
       if (!ty) {
          diagnose(Expr, err_requires_contextual_type, Expr->getSourceLoc(),
-                  "unqualified enum case");
+                  1 /*__nullptr*/);
          return ExprError();
       }
 
@@ -1682,6 +1726,8 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 
       E = cast<EnumDecl>(rec);
    }
+
+   ensureDeclared(E);
 
    if (!E->hasCase(Expr->getIdentInfo())) {
       diagnose(Expr, err_enum_case_not_found, Expr->getSourceLoc(),
@@ -1723,6 +1769,7 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
 
    auto &Cand = CandSet.getBestMatch();
    auto Case = cast<EnumCaseDecl>(Cand.Func);
+
    checkAccessibility(Case, Expr);
 
    Expr->getArgs().clear();

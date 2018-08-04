@@ -459,5 +459,22 @@ std::string getTmpFileName(llvm::StringRef Ext)
    return TmpFile.str();
 }
 
+std::string exec(const std::string &cmd)
+{
+   std::array<char, 128> buffer{};
+   std::string result;
+
+   std::shared_ptr<FILE> pipe(popen(cmd.c_str(), "r"), pclose);
+   if (!pipe)
+      return "";
+
+   while (!feof(pipe.get())) {
+      if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
+         result += buffer.data();
+   }
+
+   return result;
+}
+
 } // namespace fs
 } // namespace cdot

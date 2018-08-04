@@ -128,7 +128,8 @@ private:
    using UndefMapTy = llvm::DenseMap<QualType, std::unique_ptr<UndefValue>>;
 
    IntMapTy IntConstants;
-   FPMapTy FPConstants;
+   FPMapTy FP32Constants;
+   FPMapTy FP64Constants;
    StringMapTy StringConstants;
    NullPtrMapTy NullConstants;
    UndefMapTy UndefConstants;
@@ -140,6 +141,10 @@ private:
    llvm::FoldingSet<ConstantClass> ClassConstants;
    llvm::FoldingSet<ConstantEnum> EnumConstants;
    llvm::FoldingSet<ConstantUnion> UnionConstants;
+
+   llvm::DenseMap<QualType, ConstantArray*> AllZeroArrayConstants;
+   llvm::DenseMap<QualType, ConstantTuple*> AllZeroTupleConstants;
+   llvm::DenseMap<QualType, ConstantStruct*> AllZeroStructConstants;
 
    llvm::FoldingSet<ConstantBitCastInst> BitCastConstants;
    llvm::FoldingSet<ConstantAddrOfInst> AddrOfConstants;

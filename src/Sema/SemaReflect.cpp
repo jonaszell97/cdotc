@@ -252,6 +252,19 @@ static RecordDecl *requireStringViewDecl(SemaPass &SP, Expression *Expr)
    return SV;
 }
 
+static RecordDecl *requireStringDecl(SemaPass &SP, Expression *Expr)
+{
+   auto SV = SP.getStringDecl();
+   if (!SV) {
+      SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
+                  "String");
+
+      return nullptr;
+   }
+
+   return SV;
+}
+
 il::Constant *ReflectionBuilder::BuildStringView(llvm::StringRef Str)
 {
    auto SV = requireStringViewDecl(SP, Expr);
@@ -259,7 +272,7 @@ il::Constant *ReflectionBuilder::BuildStringView(llvm::StringRef Str)
       return nullptr;
    }
 
-   return SP.getILGen().MakeStringView(Str);
+   return SP.getILGen().MakeStdString(Str);
 }
 
 il::Constant*
@@ -1007,13 +1020,13 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Expr->setIsMagicArgumentValue(true);
       }
 
-      auto SV = requireStringViewDecl(*this, Expr);
+      auto SV = requireStringDecl(*this, Expr);
       if (!SV) {
          return ExprError();
       }
 
       auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
-      il::Constant *CS = ILGen->MakeStringView(FileName);
+      il::Constant *CS = ILGen->MakeStdString(FileName);
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
@@ -1033,14 +1046,14 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      auto SV = requireStringViewDecl(*this, Expr);
+      auto SV = requireStringDecl(*this, Expr);
       if (!SV) {
          return ExprError();
       }
 
       auto &Builder = ILGen->Builder;
 
-      il::Constant *ConstFileName = ILGen->MakeStringView(FileName);
+      il::Constant *ConstFileName = ILGen->MakeStdString(FileName);
       il::Constant *ConstLoc = Builder.GetConstantStruct(SLDecl, {
          Builder.GetConstantInt(Context.getUIntTy(), LineAndCol.line),
          Builder.GetConstantInt(Context.getUIntTy(), LineAndCol.col),
@@ -1055,7 +1068,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Expr->setIsMagicArgumentValue(true);
       }
 
-      auto SV = requireStringViewDecl(*this, Expr);
+      auto SV = requireStringDecl(*this, Expr);
       if (!SV) {
          return ExprError();
       }
@@ -1067,7 +1080,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       auto FuncName = Fn->getFullName();
-      il::Constant *CS = ILGen->MakeStringView(FuncName);
+      il::Constant *CS = ILGen->MakeStdString(FuncName);
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
@@ -1077,7 +1090,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Expr->setIsMagicArgumentValue(true);
       }
 
-      auto SV = requireStringViewDecl(*this, Expr);
+      auto SV = requireStringDecl(*this, Expr);
       if (!SV) {
          return ExprError();
       }
@@ -1094,7 +1107,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       mangle.mangle(Fn, OS);
       OS.flush();
 
-      il::Constant *CS = ILGen->MakeStringView(MangledName);
+      il::Constant *CS = ILGen->MakeStdString(MangledName);
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
    }
@@ -1280,8 +1293,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      ResultExpr = StaticExpr::Create(Context, Ty, Expr->getSourceRange(),
-                                      ILGen->getDefaultValue(Ty));
+      ResultExpr = BuiltinIdentExpr::Create(Context, Expr->getSourceLoc(),
+                                            BuiltinIdentifier::defaultValue);
+      ResultExpr->setExprType(Ty);
    }
 
    if (!ResultExpr) {

@@ -69,6 +69,8 @@ class UnionDecl;
 class ProtocolDecl;
 class ExtensionDecl;
 class PrecedenceGroupDecl;
+class IdentifierRefExpr;
+class TemplateArgListExpr;
 
 template<class T>
 struct InstantiationInfo {
@@ -95,6 +97,78 @@ struct DefaultImplementable {
 
 protected:
    T *DefaultImpl = nullptr;
+};
+
+class DeclConstraint final: TrailingObjects<DeclConstraint, IdentifierInfo*> {
+public:
+   enum Kind {
+      TypePredicate, TypePredicateNegated,
+      TypeEquality, TypeInequality,
+      Concept,
+   };
+
+   static DeclConstraint *Create(ASTContext &C,
+                                 Kind K,
+                                 SourceRange SR,
+                                 ArrayRef<IdentifierInfo*> NameQual,
+                                 SourceType RHS);
+
+   static DeclConstraint *Create(ASTContext &C,
+                                 SourceRange SR,
+                                 ArrayRef<IdentifierInfo*> NameQual,
+                                 IdentifierRefExpr *ConceptRef);
+
+   Kind getKind() const { return K; }
+   SourceRange getSourceRange() const { return SR; }
+
+   const SourceType &getType() const
+   {
+      assert(K != Concept);
+      return Type;
+   }
+
+   IdentifierRefExpr *getConceptRefExpr() const
+   {
+      assert(K == Concept);
+      return ConceptRef;
+   }
+
+   ArrayRef<IdentifierInfo*> getNameQualifier() const
+   {
+      return { getTrailingObjects<IdentifierInfo*>(), NameQualifierSize };
+   }
+
+   ArrayRef<AssociatedTypeDecl*> getReferencedAssociatedTypes() const
+   {
+      return ReferencedAssociatedTypes;
+   }
+
+   void setReferencedAssociatedTypes(ArrayRef<AssociatedTypeDecl*> V)
+   {
+      ReferencedAssociatedTypes = V;
+   }
+
+   friend TrailingObjects;
+
+private:
+   DeclConstraint(Kind K, SourceRange SR,
+                  ArrayRef<IdentifierInfo*> NameQual,
+                  SourceType RHS);
+
+   DeclConstraint(SourceRange SR,
+                  ArrayRef<IdentifierInfo*> NameQual,
+                  IdentifierRefExpr *ConceptRef);
+
+   Kind K;
+   SourceRange SR;
+   unsigned NameQualifierSize;
+   ArrayRef<AssociatedTypeDecl*> ReferencedAssociatedTypes;
+
+   union {
+      SourceType Type;
+      IdentifierRefExpr *ConceptRef;
+   };
+
 };
 
 class UsingDecl final: public NamedDecl,

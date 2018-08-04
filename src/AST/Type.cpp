@@ -144,6 +144,14 @@ bool Type::isEmptyTupleType() const
    return false;
 }
 
+bool Type::isErrorType() const
+{
+   if (BuiltinType* BI = asBuiltinType())
+      return BI->isErrorTy();
+
+   return false;
+}
+
 PointerType* Type::getPointerTo(cdot::ast::ASTContext &Ctx) const
 {
    return Ctx.getPointerType(QualType(const_cast<Type*>(this)));

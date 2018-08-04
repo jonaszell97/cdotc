@@ -32,6 +32,7 @@ class StaticExpr;
 class Statement;
 class Decl;
 class DeclContext;
+class DeclConstraint;
 class NamedDecl;
 class CallableDecl;
 class RecordDecl;
@@ -67,9 +68,11 @@ public:
 
    const TargetInfo &getTargetInfo() const { return TI; }
 
-   using AttrVec       = llvm::SmallVector<Attr*, 0>;
-   using ConstraintVec = llvm::SmallVector<StaticExpr*, 0>;
-   using ExtensionVec  = llvm::SmallVector<ExtensionDecl*, 0>;
+   using AttrVec       = SmallVector<Attr*, 0>;
+   using ConstraintVec = SmallVector<StaticExpr*, 0>;
+   using ExtConstraintVec = SmallVector<DeclConstraint*, 0>;
+   using ExtensionVec  = SmallVector<ExtensionDecl*, 0>;
+   using CovarianceVec = SmallVector<RecordDecl*, 0>;
 
    mutable llvm::BumpPtrAllocator Allocator;
    mutable llvm::BumpPtrAllocator TmpAllocator;
@@ -83,7 +86,10 @@ private:
 
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
    mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
+   mutable llvm::DenseMap<const Decl*, ExtConstraintVec*> ExtConstraintMap;
    mutable llvm::DenseMap<const RecordDecl*, ExtensionVec*> ExtensionMap;
+   mutable llvm::DenseMap<const AssociatedTypeDecl*,
+                          CovarianceVec*> CovarianceMap;
 
    mutable llvm::DenseMap<const ProtocolDecl*,
                           llvm::DenseMap<const NamedDecl*, NamedDecl*>>
@@ -386,16 +392,23 @@ public:
    void insertTemplateInstantiation(NamedDecl *Inst,
                                     void *insertPos);
 
-   llvm::ArrayRef<Attr*> getAttributes(const Decl *D) const;
-   void setAttributes(const Decl *D, llvm::ArrayRef<Attr*> attrs) const;
+   ArrayRef<Attr*> getAttributes(const Decl *D) const;
+   void setAttributes(const Decl *D, ArrayRef<Attr*> attrs) const;
    void addAttribute(const Decl *D, Attr* attr) const;
-   void addAttributes(const Decl *D,  llvm::ArrayRef<Attr*> attrs) const;
+   void addAttributes(const Decl *D, ArrayRef<Attr*> attrs) const;
 
-   llvm::ArrayRef<StaticExpr*> getConstraints(const Decl *D) const;
-   void setConstraints(const Decl *D, llvm::ArrayRef<StaticExpr*> cvec) const;
+   ArrayRef<StaticExpr*> getConstraints(const Decl *D) const;
+   void setConstraints(const Decl *D, ArrayRef<StaticExpr*> cvec) const;
    void addConstraint(const Decl *D, StaticExpr* C) const;
 
-   llvm::ArrayRef<ExtensionDecl*> getExtensions(const RecordDecl *R) const;
+   ArrayRef<DeclConstraint*> getExtConstraints(const Decl *D) const;
+   void setConstraints(const Decl *D, ArrayRef<DeclConstraint*> cvec) const;
+   void addConstraint(const Decl *D, DeclConstraint* C) const;
+
+   ArrayRef<RecordDecl*> getCovariance(const AssociatedTypeDecl *AT) const;
+   void addCovariance(const AssociatedTypeDecl *AT, RecordDecl* Cov) const;
+
+   ArrayRef<ExtensionDecl*> getExtensions(const RecordDecl *R) const;
    void addExtension(const RecordDecl *R, ExtensionDecl* E) const;
 };
 

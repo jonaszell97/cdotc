@@ -165,6 +165,7 @@ public:
    bool isVoidType() const;
    bool isAutoType() const;
    bool isEmptyTupleType() const;
+   bool isErrorType() const;
 
    bool isLargeInteger() const { return isIntegerType() && getBitwidth() > 64; }
    bool isLargeFP() const { return isFPType() && getPrecision() > 64; }
@@ -1325,8 +1326,8 @@ public:
 
    friend class ast::ASTContext;
 
-   child_iterator child_begin() const { return child_iterator{}; }
-   child_iterator child_end() const { return child_iterator{}; }
+   child_iterator child_begin() const { return &forType; }
+   child_iterator child_end() const { return &forType + 1; }
 
    QualType getUnderlyingType() const { return forType; }
 

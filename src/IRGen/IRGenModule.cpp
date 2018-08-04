@@ -236,6 +236,45 @@ static void addModuleLib(IRGen &IRG,
       addModuleLib(IRG, Imp, args, VisitedModules);
 }
 
+static void addICULib(SmallVectorImpl<string> &LinkerArgs)
+{
+   const char *ICUArgs = getenv("CDOT_ICU_LIBS");
+   std::string Output;
+
+   if (!ICUArgs) {
+      auto execOrError = llvm::sys::findProgramByName("icu-config");
+      if (!execOrError)
+         return;
+
+      auto &&Cmd = execOrError.get();
+      Cmd += " --ldflags";
+
+      Output = fs::exec(Cmd);
+      setenv("CDOT_ICU_LIBS", Output.c_str(), true);
+
+      ICUArgs = Output.c_str();
+   }
+
+   SmallString<64> ScratchBuf;
+   char C;
+   unsigned i;
+
+   for (i = 0, C = ICUArgs[i]; C; C = ICUArgs[i++]) {
+      if (C == ' ') {
+         LinkerArgs.emplace_back(ScratchBuf.str());
+         ScratchBuf.clear();
+      }
+      else if (C != '\n') {
+         ScratchBuf += C;
+      }
+   }
+
+   if (!ScratchBuf.empty()) {
+      LinkerArgs.emplace_back(ScratchBuf.str());
+      ScratchBuf.clear();
+   }
+}
+
 void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
                            ArrayRef<StringRef> AdditionalFilesToLink) {
    prepareModuleForEmission(Module);
@@ -259,8 +298,8 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
       llvm::report_fatal_error("'clang' executable could not be found");
    }
 
-   llvm::SmallString<128> ScratchBuf;
-   llvm::SmallVector<string, 8> args{
+   SmallString<128> ScratchBuf;
+   SmallVector<string, 8> args{
       clangPathOrError.get(),
       TmpObjFile
    };
@@ -274,6 +313,8 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    for (auto &file : AdditionalFilesToLink) {
       args.push_back(file);
    }
+
+   addICULib(args);
 
    auto *Mod = CI.getCompilationModule();
    addModuleLib(*this, Mod, args);

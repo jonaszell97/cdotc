@@ -9,6 +9,7 @@
 #include "AST/EmptyASTVisitor.h"
 #include "AST/Expression.h"
 #include "AST/Statement.h"
+#include "AST/StmtOrDecl.h"
 #include "Basic/CastKind.h"
 #include "Basic/Precedence.h"
 #include "IL/ILBuilder.h"
@@ -17,6 +18,7 @@
 
 #include <stack>
 #include <unordered_map>
+#include <queue>
 
 #include <llvm/ADT/DenseSet.h>
 
@@ -47,7 +49,8 @@ public:
    void visit(Statement *node);
    void visit(Decl *D);
 
-   bool prepareFunctionForCtfe(CallableDecl *C);
+   bool prepareFunctionForCtfe(CallableDecl *C, StmtOrDecl Caller,
+                               bool NeedsCompileTimeAttr = true);
    ctfe::CTFEResult evaluateStaticExpr(Expression *expr);
 
    void ForwardDeclareRecord(RecordDecl* R);
@@ -118,10 +121,8 @@ public:
    void visitIfStmt(IfStmt *node);
 
    void visitMatchStmt(MatchStmt *node);
-   void HandleSwitch(MatchStmt *node);
-   void HandleEqualitySwitch(MatchStmt *node);
-   void HandleIntegralSwitch(MatchStmt *node,
-                             llvm::SmallVectorImpl<il::Value*> &values);
+   void HandleEqualitySwitch(MatchStmt *Stmt);
+   void HandleIntegralSwitch(MatchStmt *node);
 
    void HandlePatternSwitch(MatchStmt *node);
 
@@ -134,14 +135,26 @@ public:
                          ArrayRef<il::Value*> MatchArgs = {},
                          ArrayRef<il::Value*> NoMatchArgs = {});
 
-   il::Value *visitExpressionPattern(ExpressionPattern *node);
+   il::Value *visitExpressionPattern(ExpressionPattern *node,
+                                     il::Value *MatchVal = nullptr,
+                                     il::BasicBlock *MatchBB = nullptr,
+                                     il::BasicBlock *NoMatchBB = nullptr,
+                                     ArrayRef<il::Value*> MatchArgs = {},
+                                     ArrayRef<il::Value*> NoMatchArgs = {});
+
    il::Value *visitCasePattern(CasePattern *node,
                                il::Value *MatchVal = nullptr,
                                il::BasicBlock *MatchBB = nullptr,
                                il::BasicBlock *NoMatchBB = nullptr,
                                ArrayRef<il::Value*> MatchArgs = {},
                                ArrayRef<il::Value*> NoMatchArgs = {});
-   il::Value *visitIsPattern(IsPattern *node);
+
+   il::Value *visitIsPattern(IsPattern *node,
+                             il::Value *MatchVal = nullptr,
+                             il::BasicBlock *MatchBB = nullptr,
+                             il::BasicBlock *NoMatchBB = nullptr,
+                             ArrayRef<il::Value*> MatchArgs = {},
+                             ArrayRef<il::Value*> NoMatchArgs = {});
 
    void visitDiscardAssignStmt(DiscardAssignStmt *Stmt);
    void visitReturnStmt(ReturnStmt *Stmt);
@@ -207,7 +220,28 @@ public:
 
    void DeclareGlobalVariable(GlobalVarDecl *decl);
 
-   il::Constant *MakeStringView(llvm::StringRef Str);
+   struct StringInfo {
+      /// The String type.
+      StructDecl *String = nullptr;
+
+      /// The String Buffer type.
+      StructDecl *StringBuffer = nullptr;
+
+      /// The String Storage type.
+      StructDecl *StringStorage = nullptr;
+
+      /// The String Storage enum.
+      EnumDecl *StringStorageStorage = nullptr;
+
+      /// The Atomic<UInt32> type.
+      StructDecl *AtomicIntDecl = nullptr;
+
+      /// The String Storage direct case.
+      EnumCaseDecl *StringStorageDirectCase = nullptr;
+   };
+
+   void initStringInfo();
+   il::Constant *MakeStdString(llvm::StringRef Str);
 
    struct ModuleRAII {
       ModuleRAII(ILGenPass &ILGen, CallableDecl *C);
@@ -220,34 +254,15 @@ public:
       il::Module *savedModule;
    };
 
-   void addDeclValuePair(NamedDecl *Decl, il::Value *Val)
-   {
-      DeclMap[Decl] = Val;
-      ReverseDeclMap[Val] = Decl;
-   }
-
-   il::Value *getValueForDecl(const NamedDecl *D)
-   {
-      auto It = DeclMap.find(const_cast<NamedDecl*>(D));
-      if (It == DeclMap.end())
-         return nullptr;
-
-      return It->second;
-   }
+   void addDeclValuePair(NamedDecl *Decl, il::Value *Val);
+   il::Value *getValueForDecl(const NamedDecl *D);
 
    NamedDecl *getDeclForValue(const il::Value *V)
    {
       return getDeclForValue(const_cast<il::Value*>(V));
    }
 
-   NamedDecl *getDeclForValue(il::Value *V)
-   {
-      auto It = ReverseDeclMap.find(V);
-      if (It == ReverseDeclMap.end())
-         return nullptr;
-
-      return It->second;
-   }
+   NamedDecl *getDeclForValue(il::Value *V);
 
    CallableDecl *getCallableDecl(il::Function const* F);
 
@@ -362,7 +377,7 @@ public:
    il::Function *wrapNonLambdaFunction(il::Function *F);
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
 
-   il::Constant *getDefaultValue(QualType Ty);
+   il::Value *getDefaultValue(QualType Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);
 
    llvm::SmallVector<il::Argument*, 4> makeArgVec(
@@ -479,6 +494,8 @@ private:
    il::Module *CTFEModule = nullptr;
    il::Module *UnittestModule = nullptr;
 
+   StringInfo StrInfo;
+
    const IdentifierInfo *SelfII;
 
    llvm::StringMap<llvm::StringRef> BuiltinFns;
@@ -515,7 +532,9 @@ private:
 
    std::unordered_map<NamedDecl*, il::Value*> DeclMap;
    std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;
-   std::unordered_map<size_t, il::BasicBlock*> GlobalInitBBs;
+
+   std::unordered_map<VarDecl*, il::Value*> LocalDeclMap;
+   std::unordered_map<il::Value*, VarDecl*> ReverseLocalDeclMap;
 
    std::stack<CompoundStmt*> CompoundStmtStack;
 
@@ -614,10 +633,7 @@ private:
          ILGen.CtfeScopeStack.emplace_back(CalledFn);
       }
 
-      ~EnterCtfeScope()
-      {
-         ILGen.CtfeScopeStack.pop_back();
-      }
+      ~EnterCtfeScope();
 
    private:
       ILGenPass &ILGen;
@@ -625,6 +641,7 @@ private:
 
    CleanupScope *LastCleanupScope = nullptr;
 
+public:
    struct CleanupRAII: public CleanupScope {
       CleanupRAII(ILGenPass &ILGen)
          : CleanupScope(ILGen.Cleanups),
@@ -668,6 +685,7 @@ private:
       CleanupScope *SavedCleanupScope;
    };
 
+private:
    struct CompoundStmtRAII {
       CompoundStmtRAII(ILGenPass &ILGen, CompoundStmt *S) : ILGen(ILGen)
       {
@@ -696,14 +714,16 @@ private:
 
    std::vector<CtfeScope> CtfeScopeStack;
 
+   bool PushToCtfeQueue = false;
+   std::queue<ast::CallableDecl*> CtfeQueue;
+
    bool CanSynthesizeFunction(CallableDecl *C);
-   void registerCalledFunction(CallableDecl *C, il::Function *F,
-                               Expression *Caller);
 
    void registerReferencedGlobal(VarDecl *Decl,
                                  il::GlobalVariable *GV,
                                  Expression *RefExpr);
-
+public:
+   bool registerCalledFunction(CallableDecl *C, StmtOrDecl Caller);
    bool inCTFE() const { return !CtfeScopeStack.empty(); }
 };
 

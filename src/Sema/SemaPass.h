@@ -118,7 +118,8 @@ public:
                           NamedDecl *Decl,
                           bool IgnoreRedecl = false);
 
-   void makeDeclsAvailableIn(DeclContext &Dst, DeclContext &Src);
+   void makeDeclsAvailableIn(DeclContext &Dst, DeclContext &Src,
+                             bool IgnoreRedecl = false);
 
    MultiLevelLookupResult MultiLevelLookup(DeclContext &Ctx,
                                            DeclarationName Name,
@@ -438,7 +439,10 @@ public:
    StmtResult visitMatchStmt(MatchStmt *Stmt);
    StmtResult visitCaseStmt(CaseStmt *Stmt, MatchStmt *Match = nullptr);
 
-   void visitPatternExpr(PatternExpr *E, Expression *MatchVal);
+   void visitPatternExpr(Statement *DependentStmt,
+                         PatternExpr *E,
+                         Expression *MatchVal);
+
    ExprResult visitExpressionPattern(ExpressionPattern *node,
                                      Expression *MatchVal = nullptr);
    ExprResult visitCasePattern(CasePattern *Expr,
@@ -530,13 +534,25 @@ public:
                               bool WantMeta = false);
    TypeResult visitSourceType(const SourceType &Ty, bool WantMeta = false);
 
-   void registerExplicitConformances(RecordDecl *Rec);
-   void registerExplicitConformances(RecordDecl *Rec,
-                                     ArrayRef<SourceType> ConfTypes);
+   using ConformanceSet = SmallPtrSetImpl<ProtocolDecl*>;
 
-   void registerImplicitAndInheritedConformances(RecordDecl *Rec);
-   void registerImplicitAndInheritedConformances(RecordDecl *Rec,
-                                                ArrayRef<SourceType> ConfTypes);
+   void registerExplicitConformances(
+      RecordDecl *Rec,
+      ConformanceSet *AddedConformances = nullptr);
+
+   void registerExplicitConformances(
+      RecordDecl *Rec,
+      ArrayRef<SourceType> ConfTypes,
+      ConformanceSet *AddedConformances = nullptr);
+
+   void registerImplicitAndInheritedConformances(
+      RecordDecl *Rec,
+      ConformanceSet *AddedConformances = nullptr);
+
+   void registerImplicitAndInheritedConformances(
+      RecordDecl *Rec,
+      ArrayRef<SourceType> ConfTypes,
+      ConformanceSet *AddedConformances = nullptr);
 
    // disallow passing an rvalue as second parameter
    template<class T>
@@ -652,6 +668,14 @@ public:
                                      NamedDecl *ConstrainedDecl,
                                      ArrayRef<StaticExpr*> Constraints,
                                      DeclContext *Ctx = nullptr);
+
+   bool checkDeclConstraint(NamedDecl *ConstrainedDecl,
+                            QualType ConstrainedType,
+                            DeclConstraint *C);
+
+   void printConstraint(llvm::raw_ostream &OS,
+                        QualType ConstrainedType,
+                        DeclConstraint *C);
 
    bool checkConstraint(StmtOrDecl DependentDecl,
                         Expression *Constraint);
@@ -797,7 +821,8 @@ public:
          : StateBits(SP.StateUnion),
            EvaluatingGlobalVar(SP.EvaluatingGlobalVar),
            S(SP.currentScope), DoScopeStack(move(SP.DoScopeStack)),
-           TryScopeStack(move(SP.TryScopeStack))
+           TryScopeStack(move(SP.TryScopeStack)),
+           ReferencedATs(SP.ReferencedATs)
       {
       }
 
@@ -807,12 +832,11 @@ public:
 
       std::vector<bool> DoScopeStack;
       std::vector<bool> TryScopeStack;
+
+      SmallVectorImpl<AssociatedTypeDecl*> *ReferencedATs;
    };
 
-   SemaState getSemaState()
-   {
-      return SemaState(*this);
-   }
+   SemaState getSemaState() { return SemaState(*this); }
 
    void resetState(SemaState &State)
    {
@@ -821,6 +845,7 @@ public:
       currentScope = State.S;
       DoScopeStack = move(State.DoScopeStack);
       TryScopeStack = move(State.TryScopeStack);
+      ReferencedATs = State.ReferencedATs;
    }
 
    void clearState()
@@ -831,6 +856,7 @@ public:
 
       DoScopeStack.clear();
       TryScopeStack.clear();
+      ReferencedATs = nullptr;
    }
 
    struct DiagnosticScopeRAII {
@@ -1326,6 +1352,9 @@ private:
    /// Current associated type substitution.
    RecordDecl *AssociatedTypeSubst = nullptr;
 
+   /// Referenced associated types in the current declaration constraint.
+   SmallVectorImpl<AssociatedTypeDecl*> *ReferencedATs = nullptr;
+
    /// Global variable we're currently evaluating.
    GlobalVarDecl *EvaluatingGlobalVar = nullptr;
 
@@ -1346,7 +1375,7 @@ private:
    ClassDecl  *ArrayDecl      = nullptr;
    StructDecl *ArrayViewDecl  = nullptr;
    ClassDecl  *DictionaryDecl = nullptr;
-   ClassDecl  *StringDecl     = nullptr;
+   StructDecl  *StringDecl     = nullptr;
    StructDecl *StringViewDecl = nullptr;
    EnumDecl   *OptionDecl     = nullptr;
    StructDecl *TypeInfoDecl   = nullptr;
@@ -1395,7 +1424,7 @@ public:
    ClassDecl *getArrayDecl();
    StructDecl *getArrayViewDecl();
    ClassDecl *getDictionaryDecl();
-   ClassDecl *getStringDecl();
+   StructDecl *getStringDecl();
    StructDecl *getStringViewDecl();
    EnumDecl *getOptionDecl();
    StructDecl *getTypeInfoDecl();
@@ -1485,7 +1514,6 @@ public:
    bool ensureDeclared(Module *M);
    bool ensureVisited(Module *M);
 
-   bool prepareFunctionForCtfe(CallableDecl *Fn);
    bool prepareGlobalForCtfe(VarDecl *Decl);
 
    DeclResult declareAndVisit(Decl *D);
@@ -1865,7 +1893,7 @@ public:
 
    unsigned getSerializationFile(Decl *D);
 
-   void calculateRecordSize(RecordDecl *R);
+   void calculateRecordSize(RecordDecl *R, bool CheckDependencies = true);
    bool finalizeRecordDecls();
 
    void checkDefaultAccessibility(NamedDecl *ND);

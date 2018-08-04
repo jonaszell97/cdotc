@@ -212,8 +212,8 @@ protected:
    {
       for (auto &C : Stmt->getConditions()) {
          switch (C.K) {
-         case IfCondition::Expr:
-            if (!visit(C.ExprData.Cond))
+         case IfCondition::Expression:
+            if (!visit(C.ExprData.Expr))
                return true;
 
             break;
@@ -242,8 +242,8 @@ protected:
    {
       for (auto &C : Stmt->getConditions()) {
          switch (C.K) {
-         case IfCondition::Expr:
-            if (!visit(C.ExprData.Cond))
+         case IfCondition::Expression:
+            if (!visit(C.ExprData.Expr))
                return true;
 
             break;
@@ -489,10 +489,24 @@ protected:
 
    bool visitCasePattern(CasePattern* Stmt)
    {
-      for (auto &E : Stmt->getArgs())
-         if (E.isExpr())
-            if (!visit(E.getExpr()))
+      for (auto &C : Stmt->getArgs()) {
+         switch (C.K) {
+         case IfCondition::Expression:
+            if (!visit(C.ExprData.Expr))
                return true;
+
+            break;
+         case IfCondition::Binding:
+            break;
+         case IfCondition::Pattern:
+            if (!visit(C.PatternData.Pattern))
+               return true;
+            if (!visit(C.PatternData.Expr))
+               return true;
+
+            break;
+         }
+      }
 
       return true;
    }

@@ -52,6 +52,11 @@ static bool isIntOrFPType(QualType ty)
 void BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
                                                    DeclarationName op,
                                                    QualType lhsType) {
+   if (!lhsType)
+      return;
+
+   lhsType = lhsType->getCanonicalType();
+
    op::OperatorKind opKind;
    FixKind fix;
 

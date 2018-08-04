@@ -12,6 +12,7 @@
 #include "Support/Optional.h"
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/DenseMap.h>
 
 #include <queue>
 
@@ -149,10 +150,14 @@ public:
                                     SourceLocation instantiatedFrom,
                                     TemplateArgs *templateArgs);
 
+   unsigned getInstantiationDepth(ast::NamedDecl *Decl);
+   void setInstantiationDepth(ast::NamedDecl *Decl, unsigned Depth);
+
 private:
    ast::SemaPass &SP;
    unsigned InstantiationDepth = 0;
    std::queue<ast::NamedDecl*> PendingInstantiations;
+   llvm::DenseMap<ast::NamedDecl*, unsigned> InstantiationDepthMap;
 
    struct InstantiationDepthRAII {
       InstantiationDepthRAII(TemplateInstantiator &Inst)
@@ -161,17 +166,17 @@ private:
          ++Inst.InstantiationDepth;
       }
 
+      void pop()
+      {
+         assert(!Popped);
+         --Inst.InstantiationDepth;
+         Popped = true;
+      }
+
       ~InstantiationDepthRAII()
       {
          if (!Popped)
             pop();
-      }
-
-      void pop()
-      {
-         assert(!Popped && "popping twice!");
-         Popped = true;
-         --Inst.InstantiationDepth;
       }
 
    private:
@@ -179,7 +184,9 @@ private:
       bool Popped = false;
    };
 
-   bool checkInstantiationDepth(ast::NamedDecl *Inst);
+   bool checkInstantiationDepth(ast::NamedDecl *Inst,
+                                ast::NamedDecl *CurDecl,
+                                SourceLocation POI);
 };
 
 } // namespace cdot

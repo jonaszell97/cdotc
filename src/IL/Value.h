@@ -121,6 +121,11 @@ protected:
       bool Optimized : 1;
    };
 
+   struct ConstantBits {
+      ValueBits InstBits;
+      bool AllZeros : 1;
+   };
+
    struct FunctionBits {
       ValueBits InstBits;
       bool Throws   : 1;
@@ -135,6 +140,7 @@ protected:
       bool GlobalDtor   : 1;
       bool OverridePrevious : 1;
       bool Invalid : 1;
+      bool ReadyForCtfe : 1;
       unsigned CtorKind : 2;
    };
 
@@ -232,6 +238,7 @@ protected:
       unsigned SubclassData = 0;
       FunctionBits FnBits;
       ValueBits InstBits;
+      ConstantBits ConstBits;
       GlobalVariableBits GVBits;
       AllocaInstBits AllocaBits;
       EnumInitInstBits EnumInitBits;
@@ -337,6 +344,8 @@ public:
 
    bool isTagged() const { return InstBits.IsTagged; }
    void setTagged(bool B) { InstBits.IsTagged = B; }
+
+   bool isAllZerosValue() const;
 
    il::Context &getCtx() const { return type.getCtx(); }
    ast::ASTContext &getASTCtx() const;

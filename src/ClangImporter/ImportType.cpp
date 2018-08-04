@@ -37,6 +37,8 @@ QualType ImporterImpl::getType(clang::QualType Ty)
          return Ctx.getUnknownAnyTy();
 
       /// Integer types.
+      case clang::BuiltinType::Bool:
+         return Ctx.getBoolTy();
       case clang::BuiltinType::UChar:
       case clang::BuiltinType::Char_U:
       case clang::BuiltinType::SChar:
@@ -44,13 +46,11 @@ QualType ImporterImpl::getType(clang::QualType Ty)
          return Ctx.getIntegerTy(TI.getCharWidth(),
                                  Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Char16:
-         return Ctx.getIntegerTy(16,
-                                 Ty->isUnsignedIntegerType());
+         return Ctx.getIntegerTy(16, Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Char32:
       case clang::BuiltinType::WChar_S:
       case clang::BuiltinType::WChar_U:
-         return Ctx.getIntegerTy(32,
-                                 Ty->isUnsignedIntegerType());
+         return Ctx.getIntegerTy(32, Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Short:
       case clang::BuiltinType::UShort:
          return Ctx.getIntegerTy(TI.getShortWidth(),
@@ -74,26 +74,46 @@ QualType ImporterImpl::getType(clang::QualType Ty)
 
       /// Floating point types.
       case clang::BuiltinType::Half:
+         return Ctx.getf16Ty();
       case clang::BuiltinType::LongDouble:
+         switch (TI.getLongDoubleWidth()) {
+         case 64: return Ctx.getf64Ty();
+         case 128: return Ctx.getf128Ty();
+         default:
+            llvm_unreachable("unexpected long double width");
+         }
       case clang::BuiltinType::Float16:
+         return Ctx.getf16Ty();
       case clang::BuiltinType::Float128:
-         return QualType();
+         return Ctx.getf128Ty();
       case clang::BuiltinType::Float:
-         return Ctx.getFloatTy();
+         return Ctx.getf32Ty();
       case clang::BuiltinType::Double:
-         return Ctx.getDoubleTy();
-
+         return Ctx.getf64Ty();
       // Can't translate type.
       default:
          return QualType();
       }
    }
-   case clang::Type::Complex:
-      return QualType();
-   case clang::Type::Pointer: {
-      auto Pointee = getType(Ty->getPointeeType());
-      if (!Pointee)
+   case clang::Type::Complex: {
+      auto *C = cast<clang::ComplexType>(Ty);
+      auto ElTy = getType(C->getElementType());
+      if (!ElTy)
          return QualType();
+
+      return Ctx.getTupleType({ElTy, ElTy});
+   }
+   case clang::Type::Pointer: {
+      if (Ty->getPointeeType()->isCharType()) {
+         // import any char* as UnsafePtr<UInt8>
+         return Ctx.getUInt8PtrTy();
+      }
+
+      auto Pointee = getType(Ty->getPointeeType());
+      if (!Pointee) {
+         // Import as an opaque pointer.
+         return Ctx.getUInt8PtrTy();
+      }
 
       if (Ty.isConstQualified()) {
          return Ctx.getPointerType(Pointee);
@@ -106,8 +126,10 @@ QualType ImporterImpl::getType(clang::QualType Ty)
    case clang::Type::LValueReference:
    case clang::Type::RValueReference: {
       auto Pointee = getType(Ty->getPointeeType());
-      if (!Pointee)
-         return QualType();
+      if (!Pointee) {
+         // Import as an opaque pointer.
+         return Ctx.getUInt8PtrTy();
+      }
 
       if (Ty.isConstQualified()) {
          return Ctx.getReferenceType(Pointee);
@@ -125,7 +147,8 @@ QualType ImporterImpl::getType(clang::QualType Ty)
 
       return Ctx.getArrayType(ElementTy, Size.getZExtValue());
    }
-   case clang::Type::VariableArray: {
+   case clang::Type::VariableArray:
+   case clang::Type::IncompleteArray: {
       auto ElementTy = getType(Ty->getAsArrayTypeUnsafe()->getElementType());
       if (!ElementTy)
          return QualType();
@@ -208,7 +231,6 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return getType(Ty->castAs<clang::AtomicType>()->getValueType());
    case clang::Type::MemberPointer:
    case clang::Type::DependentSizedArray:
-   case clang::Type::IncompleteArray:
    case clang::Type::Vector:
    case clang::Type::ExtVector:
    case clang::Type::DependentSizedExtVector:

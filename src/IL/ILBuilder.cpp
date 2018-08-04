@@ -355,6 +355,35 @@ Constant* ILBuilder::GetTokenNone()
    return il::ConstantTokenNone::get(Ctx);
 }
 
+Constant *ILBuilder::GetAllZerosValue(QualType Ty)
+{
+   if (Ty->isIntegerType()) {
+      return GetConstantInt(Ty, 0);
+   }
+
+   if (Ty->isFPType()) {
+      return GetConstantFP(Ty, 0.0);
+   }
+
+   if (Ty->isPointerType()) {
+      return GetConstantNull(Ty);
+   }
+
+   if (Ty->isArrayType()) {
+      return ConstantArray::getAllZeros(ValueType(Ctx, Ty));
+   }
+
+   if (Ty->isStruct()) {
+      return ConstantStruct::getAllZeros(ValueType(Ctx, Ty));
+   }
+
+   if (Ty->isTupleType()) {
+      return ConstantTuple::getAllZeros(ValueType(Ctx, Ty));
+   }
+
+   llvm_unreachable("type does not have an all-zero value!");
+}
+
 Argument* ILBuilder::CreateArgument(QualType type,
                                     ArgumentConvention Convention,
                                     BasicBlock *parent,

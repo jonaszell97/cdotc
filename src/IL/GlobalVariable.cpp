@@ -7,6 +7,7 @@
 #include "AST/ASTContext.h"
 #include "Context.h"
 #include "Module.h"
+#include "Writer/ModuleWriter.h"
 
 namespace cdot {
 namespace il {
@@ -121,6 +122,17 @@ void GlobalVariable::makeMutable()
 {
    GVBits.Const = false;
    type = getASTCtx().getMutableReferenceType(type->getReferencedType());
+}
+
+void GlobalVariable::dump() const
+{
+   print(llvm::outs());
+}
+
+void GlobalVariable::print(llvm::raw_ostream &OS) const
+{
+   ModuleWriter Writer(this);
+   Writer.WriteTo(OS);
 }
 
 GlobalVariable* GlobalVariable::getDeclarationIn(Module *M)

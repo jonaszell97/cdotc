@@ -87,7 +87,7 @@ SourceLocation Token::getEndLoc() const
       llvm_unreachable("bad token kind");
    }
 
-   return SourceLocation(loc.getOffset() + Length);
+   return SourceLocation(loc.getOffset() + Length - 1);
 }
 
 template<unsigned N>

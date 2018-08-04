@@ -173,6 +173,7 @@ class ConstantArray final: public Constant, public llvm::FoldingSetNode {
 
 public:
    static ConstantArray *get(ValueType ty, llvm::ArrayRef<Constant*> vec);
+   static ConstantArray *getAllZeros(ValueType ty);
 
    llvm::ArrayRef<Constant*> getVec() const
    {
@@ -214,6 +215,7 @@ class ConstantTuple final: public Constant, public llvm::FoldingSetNode {
 public:
    static ConstantTuple *get(ValueType ty, llvm::ArrayRef<Constant*> vec);
    static ConstantTuple *getEmpty(il::Context &Ctx);
+   static ConstantTuple *getAllZeros(ValueType ty);
 
    llvm::ArrayRef<Constant*> getVec() const
    {
@@ -256,6 +258,8 @@ class ConstantStruct final: public Constant, public llvm::FoldingSetNode {
 public:
    static ConstantStruct *get(ValueType Ty,
                               llvm::ArrayRef<Constant*> vec);
+
+   static ConstantStruct *getAllZeros(ValueType ty);
 
    unsigned int getNumElements() const { return NumElements; }
 

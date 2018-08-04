@@ -1831,15 +1831,16 @@ Parser::checkBuiltinMacro(SemaPass &SP,
          return { ParseError(), true };
       }
 
+      auto Loc = SOD.getSourceLoc();
       auto FileName = Tokens.front().getText();
       if (MacroKind == BuiltinMacro::include_c) {
-         Importer.importCModule(FileName, &SP.getDeclContext());
+         Importer.importCModule(FileName, &SP.getDeclContext(), Loc);
       }
       else if (MacroKind == BuiltinMacro::include_system_header) {
-         Importer.importSystemHeader(FileName, &SP.getDeclContext());
+         Importer.importSystemHeader(FileName, &SP.getDeclContext(), Loc);
       }
       else {
-         Importer.importCXXModule(FileName, &SP.getDeclContext());
+         Importer.importCXXModule(FileName, &SP.getDeclContext(), Loc);
       }
 
       return { ParseError(), true };

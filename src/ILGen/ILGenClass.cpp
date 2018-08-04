@@ -673,8 +673,12 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
    if (Self->isLvalue())
       Self = Builder.CreateLoad(Self);
 
-   if (IsComplete)
-      Builder.CreateCall(getFunc(S->getDefaultInitializer()), Self);
+   if (IsComplete) {
+      auto *DefaultInit = S->getDefaultInitializer();
+      if (registerCalledFunction(DefaultInit, S)) {
+         Builder.CreateCall(getFunc(DefaultInit), Self);
+      }
+   }
 
    size_t i = 0;
    for (auto F : S->getFields()) {

@@ -81,6 +81,8 @@ private:
    bool NeedsStructReturn(QualType Ty);
    bool PassStructDirectly(QualType Ty);
 
+   void addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal);
+
    llvm::StructType *getStructTy(QualType Ty);
    llvm::StructType *getStructTy(ast::RecordDecl *R);
 

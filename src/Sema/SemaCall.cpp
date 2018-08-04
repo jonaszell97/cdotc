@@ -425,7 +425,7 @@ MethodDecl *SemaPass::maybeInstantiateMemberFunction(MethodDecl *M,
 }
 
 MethodDecl *SemaPass::InstantiateMethod(RecordDecl *R, StringRef Name,
-                                         StmtOrDecl SOD) {
+                                        StmtOrDecl SOD) {
    auto *II = &Context.getIdentifiers().get(Name);
    auto *M = LookupSingle<MethodDecl>(*R, II);
 
@@ -433,7 +433,7 @@ MethodDecl *SemaPass::InstantiateMethod(RecordDecl *R, StringRef Name,
    maybeInstantiateMemberFunction(M, SOD);
 
    if (inCTFE())
-      ILGen->prepareFunctionForCtfe(M);
+      ILGen->prepareFunctionForCtfe(M, SOD);
 
    return M;
 }
@@ -455,7 +455,7 @@ MethodDecl *SemaPass::InstantiateProperty(RecordDecl *R,
       maybeInstantiateMemberFunction(Getter, SOD);
 
       if (inCTFE())
-         ILGen->prepareFunctionForCtfe(Getter);
+         ILGen->prepareFunctionForCtfe(Getter, SOD);
 
       return Getter;
    }
@@ -470,7 +470,7 @@ MethodDecl *SemaPass::InstantiateProperty(RecordDecl *R,
    maybeInstantiateMemberFunction(Setter, SOD);
 
    if (inCTFE())
-      ILGen->prepareFunctionForCtfe(Setter);
+      ILGen->prepareFunctionForCtfe(Setter, SOD);
 
    return Setter;
 }
@@ -529,7 +529,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       return Call;
 
    // check if '.init' is called without a parent expression
-   if (!Call->getParentExpr() && Call->isDotInit()) {
+   if (!Call->getParentExpr() && Call->isDotInit() && !Call->includesSelf()) {
       diagnose(Call, err_dot_init_must_be_on_self, Call->getSourceRange());
       Call->setExprType(Context.getVoidType());
 
@@ -628,6 +628,24 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
 
       Call->setDirectCall(isa<SuperExpr>(ParentExpr)
                             || ContextAndIsStatic.second);
+   }
+   else if (Call->hasLeadingDot()) {
+      auto CtxTy = Call->getContextualType();
+      if (!CtxTy || !CtxTy->isRecordType()) {
+         diagnose(Call, err_requires_contextual_type, 2,
+                  Call->getSourceRange());
+
+         return ExprError();
+      }
+
+      auto *R = CtxTy->getRecord();
+      if (!ensureDeclared(R)) {
+         visitContextDependentArgs(*this, Call);
+         Call->setExprType(Context.getRecordType(R));
+         return Call;
+      }
+
+      Ctx = R;
    }
 
    if (!Ctx)
@@ -1048,11 +1066,13 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
       Call->setExprType(Context.getRecordType(R));
    }
 
-   Call->setIncludesSelf(true);
-   Call->setParentExpr(nullptr);
-   Call->getArgs().clear();
-   Call->getArgs().append(Context, CandSet.ResolvedArgs.begin(),
-                          CandSet.ResolvedArgs.end());
+   if (!Call->isDependent()) {
+      Call->setIncludesSelf(true);
+      Call->setParentExpr(nullptr);
+      Call->getArgs().clear();
+      Call->getArgs().append(Context, CandSet.ResolvedArgs.begin(),
+                             CandSet.ResolvedArgs.end());
+   }
 
    Call->setKind(CallKind::InitializerCall);
    Call->setFunc(method);
@@ -1296,6 +1316,24 @@ int SemaPass::ExprCanReturn(Expression *E, QualType Ty)
 
       return No;
    }
+   case Expression::IdentifierRefExprID:
+   case Expression::CallExprID: {
+      if (!Ty->isRecordType())
+         return No;
+
+      DeclarationName Name;
+      if (auto *Call = dyn_cast<CallExpr>(E)) {
+         Name = Call->getDeclName();
+      }
+      else {
+         Name = cast<IdentifierRefExpr>(E)->getDeclName();
+      }
+
+      auto *R = Ty->getRecord();
+      auto Result = Lookup(*R, Name);
+
+      return Result ? Yes : No;
+   }
    case Expression::EnumCaseExprID: {
       if (!Ty->isRecordType())
          return No;
@@ -1502,7 +1540,8 @@ QualType SemaPass::GetDefaultExprType(Expression *E)
 
       return Context.getLambdaType(RetTy, ParamTys);
    }
-   case Expression::EnumCaseExprID:
+   case Expression::IdentifierRefExprID:
+   case Expression::CallExprID:
    case Expression::BuiltinIdentExprID: {
       return QualType();
    }
@@ -1525,6 +1564,7 @@ void SemaPass::visitTypeDependentContextualExpr(Expression *E)
    case Expression::FPLiteralID:
    case Expression::StringLiteralID:
    case Expression::BuiltinIdentExprID:
+   case Expression::IdentifierRefExprID:
       // These expressions do not have any substatements that need to be
       // checked.
       return;
@@ -1545,11 +1585,11 @@ void SemaPass::visitTypeDependentContextualExpr(Expression *E)
 
       break;
    }
-   case Expression::EnumCaseExprID: {
-      auto *EC = cast<EnumCaseExpr>(E);
+   case Expression::CallExprID: {
+      auto *Call = cast<CallExpr>(E);
 
       // Check arguments.
-      for (auto *Arg : EC->getArgs()) {
+      for (auto *Arg : Call->getArgs()) {
          visitTypeDependentContextualExpr(Arg);
       }
 

@@ -413,6 +413,9 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
 size_t NamedDecl::getSpecifierForDiagnostic()
 {
    switch (kind) {
+   case ExtensionDeclID:
+      return cast<ExtensionDecl>(this)->getExtendedRecord()
+      ->getSpecifierForDiagnostic();
    case StructDeclID:
    case ClassDeclID:
    case EnumDeclID:

@@ -422,5 +422,13 @@ ImmutableCallSite Value::getAsImmutableCallSite() const
    return ImmutableCallSite();
 }
 
+bool Value::isAllZerosValue() const
+{
+   if (auto *C = dyn_cast<Constant>(this))
+      return C->isAllZerosValue();
+
+   return false;
+}
+
 } // namespace il
 } // namespace cdot

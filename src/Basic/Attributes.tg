@@ -12,6 +12,7 @@ class EnumArgAlias<let alias: string, let aliasee: string>
 class EnumArg<name: string, let cases: list<string>, optional: i1 = false, let defaultVal: string = "", let aliases: list<EnumArgAlias> = []> : Arg<name, optional>
 
 class VisitationPoint
+    def Immediate         : VisitationPoint
     def BeforeDeclaration : VisitationPoint
     def AfterDeclaration  : VisitationPoint
     def BeforeSema        : VisitationPoint
@@ -41,7 +42,7 @@ def Inline : DeclAttr<"inline", [CallableDecl]> {
 
 def Implicit : DeclAttr<"implicit", [CallableDecl]>
 def Thin : TypeAttr<"thin"> {
-    Visit = BeforeDeclaration
+    Visit = Immediate
     IgnoreFollowingParens = true
 }
 
@@ -82,6 +83,6 @@ def VersionStmt : StmtAttr<"version"> {
 
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
-    Visit = BeforeDeclaration
+    Visit = Immediate
     Args = [StringArg<"builtinName", true, "">]
 }

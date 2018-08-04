@@ -26,7 +26,7 @@
 
 #include <cassert>
 #include <cstdlib>
-#include <immintrin.h>
+
 #include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
@@ -164,7 +164,6 @@ void SemaPass::registerExtension(ExtensionDecl *Ext)
    // Always add the extension in a dependent context.
    if (ExtendedRec->inDependentContext() || isa<ProtocolDecl>(ExtendedRec)) {
       Ext->getExtendedRecord()->addExtension(Ext);
-      visitConstraints(Ext);
    }
    else {
       // Otherwise check if all constraints are satisfied.
@@ -472,7 +471,26 @@ void SemaPass::noteInstantiationContext()
       return;
 
    auto D = getCurrentDecl();
+   unsigned Depth = Instantiator.getInstantiationDepth(D);
+
+   // We are reporting an instantiation depth error right now.
+   bool PrintElidedMessage = false;
+   if (Depth >= 512) {
+      PrintElidedMessage = true;
+
+      unsigned i = 0;
+      while (i++ < (512 - 16)) {
+         D = getInstantiationScope(D);
+      }
+   }
+
+   unsigned i = 0;
    while (D) {
+      if (i++ > 16) {
+         PrintElidedMessage = true;
+         break;
+      }
+
       if (!D->isInstantiation()) {
          D = dyn_cast_or_null<NamedDecl>(D->getDeclContext());
          continue;
@@ -505,6 +523,13 @@ void SemaPass::noteInstantiationContext()
       }
 
       D = getInstantiationScope(D);
+   }
+
+   if (PrintElidedMessage) {
+      diagnose(note_generic_note,
+               "additional instantiation scopes elided");
+
+      return;
    }
 }
 
@@ -1171,12 +1196,12 @@ DeclResult SemaPass::declareUsingDecl(UsingDecl *UD)
    }
 
    if (UD->isWildcardImport()) {
-      makeDeclsAvailableIn(getDeclContext(), *declContext);
+      makeDeclsAvailableIn(getDeclContext(), *declContext, true);
       return UD;
    }
 
    assert(UsingTarget && "should have been diagnosed!");
-   makeDeclAvailable(getDeclContext(), UD->getDeclName(), UsingTarget);
+   makeDeclAvailable(getDeclContext(), UD->getDeclName(), UsingTarget, true);
 
    return UD;
 }
@@ -1287,15 +1312,19 @@ static void checkMainSignature(SemaPass &SP, CallableDecl *F)
       SP.diagnose(F, err_bad_main_sig, F->getSourceLoc());
 }
 
-static bool checkCompileTimeEvaluable(DeclContext *Ctx)
+static bool checkCompileTimeEvaluable(SemaPass &SP, DeclContext *Ctx)
 {
+   auto *Std = SP.getStdModule()->getDecl();
    while (Ctx) {
+      if (Ctx->getPrimaryCtx() == Std)
+         return true;
+
       if (auto *D = dyn_cast<Decl>(Ctx)) {
          if (D->hasAttribute<CompileTimeAttr>()) {
             return true;
          }
          if (auto *Ext = dyn_cast<ExtensionDecl>(Ctx)) {
-            if (checkCompileTimeEvaluable(Ext->getExtendedRecord())) {
+            if (checkCompileTimeEvaluable(SP, Ext->getExtendedRecord())) {
                return true;
             }
          }
@@ -1347,7 +1376,7 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
    }
 
    // Check if this function is callable at compile time.
-   if (!F->isCompileTimeEvaluable() && checkCompileTimeEvaluable(F)) {
+   if (!F->isCompileTimeEvaluable() && checkCompileTimeEvaluable(*this, F)) {
       F->setCompileTimeEvaluable(true);
    }
 
@@ -1851,8 +1880,8 @@ DeclResult SemaPass::declareGlobalVarDecl(GlobalVarDecl *Decl)
 }
 
 void SemaPass::registerExplicitConformances(RecordDecl *Rec,
-                                            llvm::ArrayRef<SourceType>
-                                                               ConfTypes) {
+                                            ArrayRef<SourceType> ConfTypes,
+                                            ConformanceSet *AddedConformances) {
    auto &ConfTable = Context.getConformanceTable();
 
    DependencyGraph<ProtocolDecl*>::Vertex *SelfVertex = nullptr;
@@ -1888,7 +1917,11 @@ void SemaPass::registerExplicitConformances(RecordDecl *Rec,
       ensureDeclared(PD);
       checkAccessibility(PD, Rec);
 
-      ConfTable.addExplicitConformance(Context, Rec, PD);
+      if (ConfTable.addExplicitConformance(Context, Rec, PD)) {
+         if (AddedConformances) {
+            AddedConformances->insert(PD);
+         }
+      }
 
       if (SelfVertex) {
          auto &Other = ConformanceDependency.getOrAddVertex(PD);
@@ -1897,23 +1930,33 @@ void SemaPass::registerExplicitConformances(RecordDecl *Rec,
    }
 }
 
-void SemaPass::registerExplicitConformances(RecordDecl *Rec)
-{
-   return registerExplicitConformances(Rec, Rec->getConformanceTypes());
+void SemaPass::registerExplicitConformances(RecordDecl *Rec,
+                                            ConformanceSet *AddedConformances) {
+   return registerExplicitConformances(Rec, Rec->getConformanceTypes(),
+                                       AddedConformances);
 }
 
 static void addSingleConformance(RecordDecl *Rec,
                                  ProtocolDecl *Conf,
                                  ASTContext &Context,
-                                 ConformanceTable &ConfTable) {
-   ConfTable.addImplicitConformance(Context, Rec, Conf);
+                                 ConformanceTable &ConfTable,
+                                 SemaPass::ConformanceSet *AddedConformances) {
+   if (ConfTable.addImplicitConformance(Context, Rec, Conf)) {
+      if (AddedConformances) {
+         AddedConformances->insert(Conf);
+      }
+   }
 
-   for (auto PConf : ConfTable.getAllConformances(Conf))
-      addSingleConformance(Rec, PConf->getProto(), Context, ConfTable);
+   for (auto PConf : ConfTable.getAllConformances(Conf)) {
+      addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+                           AddedConformances);
+   }
 }
 
-void SemaPass::registerImplicitAndInheritedConformances(RecordDecl *Rec,
-                                               ArrayRef<SourceType> ConfTypes) {
+void SemaPass::registerImplicitAndInheritedConformances(
+                                          RecordDecl *Rec,
+                                          ArrayRef<SourceType> ConfTypes,
+                                          ConformanceSet *AddedConformances) {
    auto &ConfTable = Context.getConformanceTable();
 
    for (auto &Conf : ConfTypes) {
@@ -1930,19 +1973,22 @@ void SemaPass::registerImplicitAndInheritedConformances(RecordDecl *Rec,
 
       auto PD = cast<ProtocolDecl>(Proto);
       for (auto PConf : ConfTable.getAllConformances(PD)) {
-         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable);
+         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+                              AddedConformances);
       }
    }
 }
 
-void SemaPass::registerImplicitAndInheritedConformances(RecordDecl *Rec)
-{
+void SemaPass::registerImplicitAndInheritedConformances(
+                                          RecordDecl *Rec,
+                                          ConformanceSet *AddedConformances) {
    auto &ConfTable = Context.getConformanceTable();
    auto ExplicitConformances = ConfTable.getExplicitConformances(Rec);
 
    for (auto Conf : ExplicitConformances) {
       for (auto PConf : ConfTable.getAllConformances(Conf)) {
-         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable);
+         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+                              AddedConformances);
       }
    }
 
@@ -1999,6 +2045,9 @@ DeclResult SemaPass::declareStructDecl(StructDecl *S)
 
    if (!declareRecordDecl(S))
       return DeclError();
+
+   if (S->isOpaque())
+      return S;
 
    declareDefaultInitializer(S);
 
@@ -2166,6 +2215,8 @@ DeclResult SemaPass::declareProtocolDecl(ProtocolDecl *P)
 
 DeclResult SemaPass::declareExtensionDecl(ExtensionDecl *Ext)
 {
+   visitConstraints(Ext);
+
    DeclContextRAII declContextRAII(*this, Ext);
    if (!declareDeclContext(Ext))
       return DeclError();
@@ -2181,8 +2232,8 @@ DeclResult SemaPass::declareExtensionDecl(ExtensionDecl *Ext)
 static void addDependencies(QualType FieldType,
                             DependencyGraph<NamedDecl*> &Dep,
                             DependencyGraph<NamedDecl*>::Vertex &FieldVert) {
-   if (FieldType->isTupleType()) {
-      for (auto &Cont : FieldType->asTupleType()->getContainedTypes()) {
+   if (FieldType->isTupleType() || FieldType->isArrayType()) {
+      for (auto &Cont : FieldType->children()) {
          addDependencies(Cont, Dep, FieldVert);
       }
    }
@@ -2635,22 +2686,27 @@ DeclResult SemaPass::declareAssociatedTypeDecl(AssociatedTypeDecl *Decl)
 {
    visitConstraints(Decl);
 
-   if (!Decl->getActualType())
-      return Decl;
+   if (Decl->getActualType()) {
+      auto TypeRes = visitSourceType(Decl, Decl->getActualType());
+      if (!TypeRes)
+         return DeclError();
 
-   auto TypeRes = visitSourceType(Decl, Decl->getActualType());
-   if (!TypeRes)
-      return DeclError();
+      auto Ty = TypeRes.get();
+      if (Ty->isAutoType()) {
+         Decl->getActualType().setResolvedType(UnknownAnyTy);
+      }
 
-   auto Ty = TypeRes.get();
-   if (Ty->isAutoType()) {
-      Decl->getActualType().setResolvedType(UnknownAnyTy);
+      if (Decl->isImplementation()) {
+         // update the AssociatedType associated with this declaration
+         Context.getAssociatedType(Decl)
+                ->setCanonicalType(Decl->getActualType());
+
+         return Decl;
+      }
    }
 
-   if (Decl->isImplementation()) {
-      // update the AssociatedType associated with this declaration
-      Context.getAssociatedType(Decl)->setCanonicalType(Decl->getActualType());
-   }
+   // Validate the constraints first.
+   visitConstraints(Decl);
 
    return Decl;
 }
@@ -2730,8 +2786,17 @@ DeclResult SemaPass::declareInitDecl(InitDecl *Init)
 {
    auto R = Init->getRecord();
    if (Init->getArgs().empty() && isa<StructDecl>(R)
-         && Init->isCompleteInitializer()) {
+         && Init->isCompleteInitializer()
+         && !Init->isMemberwise()) {
       cast<StructDecl>(R)->setParameterlessConstructor(Init);
+   }
+
+   if (R->isOpaque()) {
+      diagnose(R, err_generic_error,
+               "opaque type may not contain an initializer",
+               R->getSourceLoc());
+
+      return DeclError();
    }
 
    if (Init->isMemberwise()) {
@@ -3766,7 +3831,7 @@ EnumDecl* SemaPass::getOptionDecl()
    return OptionDecl;
 }
 
-ClassDecl* SemaPass::getStringDecl()
+StructDecl* SemaPass::getStringDecl()
 {
    if (!StringDecl) {
       auto Prelude = getPreludeModule();
@@ -3774,7 +3839,7 @@ ClassDecl* SemaPass::getStringDecl()
          return nullptr;
       
       auto *II = &Context.getIdentifiers().get("String");
-      StringDecl = LookupSingle<ClassDecl>(*Prelude->getDecl(), II);
+      StringDecl = LookupSingle<StructDecl>(*Prelude->getDecl(), II);
    }
 
    return StringDecl;
@@ -4059,7 +4124,7 @@ InitDecl *SemaPass::getStringInit()
       if (Result.empty())
          return nullptr;
 
-      StringInit = cast<InitDecl>(getBuiltinDecl("StringInit"));
+      StringInit = cast<InitDecl>(getBuiltinDecl("String.init(rawBytes:size:"));
    }
 
    return StringInit;
@@ -4072,14 +4137,16 @@ MethodDecl *SemaPass::getStringPlusEqualsString()
       if (!S)
          return nullptr;
 
-      auto &II = Context.getIdentifiers().get("+=");
-      DeclarationName DN = Context.getDeclNameTable().getInfixOperatorName(II);
+      if (auto *MF = S->getModFile()) {
+         auto &II = Context.getIdentifiers().get("+=");
+         DeclarationName DN = Context.getDeclNameTable().getInfixOperatorName(
+            II);
 
-      auto lookup = Lookup(*S, DN);
-      if (lookup.empty())
-         return nullptr;
+         MF->PerformExternalLookup(*S, DN);
+      }
 
-      StringPlusEqualsString = cast<MethodDecl>(lookup.front());
+      StringPlusEqualsString =
+         cast<MethodDecl>(getBuiltinDecl("String.infix +=(_:)"));
    }
 
    return StringPlusEqualsString;

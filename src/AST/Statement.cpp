@@ -386,6 +386,7 @@ MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
    : Statement(MatchStmtID),
      MatchLoc(MatchLoc), Braces(Braces),
      switchValue(switchVal), NumCases((unsigned)cases.size()),
+     HasDefault(false), HasMutableCaseArg(false), IntegralSwitch(false),
      Label(Label)
 {
    std::copy(cases.begin(), cases.end(), getTrailingObjects<CaseStmt*>());
@@ -393,7 +394,8 @@ MatchStmt::MatchStmt(SourceLocation MatchLoc, SourceRange Braces,
 
 MatchStmt::MatchStmt(EmptyShell, unsigned N)
    : Statement(MatchStmtID),
-     switchValue(nullptr), NumCases(N)
+     switchValue(nullptr), NumCases(N),
+     HasDefault(false), HasMutableCaseArg(false), IntegralSwitch(false)
 {}
 
 MatchStmt* MatchStmt::Create(ASTContext &C,

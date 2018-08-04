@@ -80,8 +80,9 @@ public:
       DF_ProtoRequirement    = DF_ProtoDefaultImpl << 1u,
       DF_Finalized           = DF_ProtoRequirement << 1u,
       DF_InstantiatedFromProtoImpl = DF_Finalized << 1u,
+      DF_ImportedFromClang   = DF_InstantiatedFromProtoImpl << 1u,
 
-      DF_Last                = DF_InstantiatedFromProtoImpl,
+      DF_Last                = DF_ImportedFromClang,
       StatusFlags            = DF_TypeDependent | DF_ValueDependent |
                                DF_IsInvalid,
    };
@@ -157,6 +158,9 @@ public:
 
    bool isImportedFromModule()const{return declFlagSet(DF_ImportedFromModule);}
    void setImportedFromModule(bool b) { setDeclFlag(DF_ImportedFromModule, b); }
+
+   bool isImportedFromClang()const { return declFlagSet(DF_ImportedFromClang); }
+   void setImportedFromClang(bool b) { setDeclFlag(DF_ImportedFromClang, b); }
 
    bool isBeingEvaluated() const { return declFlagSet(DF_BeingEvaluated); }
    void setBeingEvaluated(bool b) { setDeclFlag(DF_BeingEvaluated, b); }

@@ -14,7 +14,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-llvm::ArrayRef<Attr*> ASTContext::getAttributes(const Decl *D) const
+ArrayRef<Attr*> ASTContext::getAttributes(const Decl *D) const
 {
    auto it = AttributeMap.find(D);
    if (it == AttributeMap.end() || !it->getSecond())
@@ -24,12 +24,12 @@ llvm::ArrayRef<Attr*> ASTContext::getAttributes(const Decl *D) const
 }
 
 void ASTContext::setAttributes(const Decl *D,
-                               llvm::ArrayRef<Attr*> attrs) const {
+                               ArrayRef<Attr*> attrs) const {
    AttributeMap[D] = new(*this) AttrVec(attrs.begin(), attrs.end());
 }
 
 void ASTContext::addAttributes(const Decl *D,
-                               llvm::ArrayRef<Attr *> attrs) const {
+                               ArrayRef<Attr *> attrs) const {
    auto it = AttributeMap.find(D);
    if (it != AttributeMap.end()) {
       it->getSecond()->append(attrs.begin(), attrs.end());
@@ -54,7 +54,7 @@ void ASTContext::addAttribute(const Decl *D, Attr *attr) const
    }
 }
 
-llvm::ArrayRef<StaticExpr*> ASTContext::getConstraints(const Decl *D) const
+ArrayRef<StaticExpr*> ASTContext::getConstraints(const Decl *D) const
 {
    auto it = ConstraintMap.find(D);
    if (it == ConstraintMap.end() || !it->getSecond())
@@ -64,7 +64,7 @@ llvm::ArrayRef<StaticExpr*> ASTContext::getConstraints(const Decl *D) const
 }
 
 void ASTContext::setConstraints(const Decl *D,
-                                llvm::ArrayRef<StaticExpr *> cvec) const {
+                                ArrayRef<StaticExpr *> cvec) const {
    ConstraintMap[D] = new(*this) ConstraintVec(cvec.begin(), cvec.end());
 }
 
@@ -82,7 +82,59 @@ void ASTContext::addConstraint(const Decl *D,
    }
 }
 
-llvm::ArrayRef<ExtensionDecl*>
+ArrayRef<DeclConstraint*> ASTContext::getExtConstraints(const Decl *D) const
+{
+   auto it = ExtConstraintMap.find(D);
+   if (it == ExtConstraintMap.end() || !it->getSecond())
+      return {};
+
+   return *it->getSecond();
+}
+
+void ASTContext::setConstraints(const Decl *D,
+                                ArrayRef<DeclConstraint *> cvec) const {
+   ExtConstraintMap[D] = new(*this) ExtConstraintVec(cvec.begin(), cvec.end());
+}
+
+void ASTContext::addConstraint(const Decl *D,
+                               DeclConstraint *C) const {
+   auto it = ExtConstraintMap.find(D);
+   if (it != ExtConstraintMap.end()) {
+      it->getSecond()->push_back(C);
+   }
+   else {
+      auto Vec = new(*this) ExtConstraintVec;
+      Vec->push_back(C);
+
+      ExtConstraintMap[D] = Vec;
+   }
+}
+
+ArrayRef<RecordDecl*>
+ASTContext::getCovariance(const AssociatedTypeDecl *AT) const
+{
+   auto it = CovarianceMap.find(AT);
+   if (it == CovarianceMap.end() || !it->getSecond())
+      return {};
+
+   return *it->getSecond();
+}
+
+void ASTContext::addCovariance(const AssociatedTypeDecl *AT,
+                               RecordDecl *Cov) const {
+   auto it = CovarianceMap.find(AT);
+   if (it != CovarianceMap.end()) {
+      it->getSecond()->push_back(Cov);
+   }
+   else {
+      auto Vec = new(*this) CovarianceVec;
+      Vec->push_back(Cov);
+
+      CovarianceMap[AT] = Vec;
+   }
+}
+
+ArrayRef<ExtensionDecl*>
 ASTContext::getExtensions(const RecordDecl *R) const
 {
    auto it = ExtensionMap.find(R);
@@ -295,8 +347,8 @@ BoxType* ASTContext::getBoxType(QualType BoxedTy) const
 }
 
 FunctionType* ASTContext::getFunctionType(QualType returnType,
-                              llvm::ArrayRef<QualType> argTypes,
-                              llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
+                              ArrayRef<QualType> argTypes,
+                              ArrayRef<FunctionType::ParamInfo> paramInfo,
                               unsigned flags,
                               bool lambda) const {
    if (lambda)
@@ -347,7 +399,7 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
 }
 
 FunctionType* ASTContext::getFunctionType(QualType returnType,
-                                          llvm::ArrayRef<QualType> argTypes,
+                                          ArrayRef<QualType> argTypes,
                                           unsigned flags,
                                           bool lambda) const {
    llvm::SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
@@ -363,8 +415,8 @@ LambdaType* ASTContext::getLambdaType(FunctionType *FnTy)
 }
 
 LambdaType* ASTContext::getLambdaType(QualType returnType,
-                             llvm::ArrayRef<QualType> argTypes,
-                             llvm::ArrayRef<FunctionType::ParamInfo> paramInfo,
+                             ArrayRef<QualType> argTypes,
+                             ArrayRef<FunctionType::ParamInfo> paramInfo,
                              unsigned int flags) const {
    llvm::FoldingSetNodeID ID;
    FunctionType::Profile(ID, returnType, argTypes, paramInfo, flags, true);
@@ -410,7 +462,7 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
 }
 
 LambdaType* ASTContext::getLambdaType(QualType returnType,
-                                      llvm::ArrayRef<QualType> argTypes,
+                                      ArrayRef<QualType> argTypes,
                                       unsigned int flags) const {
    llvm::SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
    ParamInfo.resize(argTypes.size());
@@ -485,7 +537,7 @@ InferredSizeArrayType* ASTContext::getInferredSizeArrayType(QualType elTy) const
 }
 
 TupleType*
-ASTContext::getTupleType(llvm::ArrayRef<QualType> containedTypes) const
+ASTContext::getTupleType(ArrayRef<QualType> containedTypes) const
 {
    llvm::FoldingSetNodeID ID;
    TupleType::Profile(ID, containedTypes);

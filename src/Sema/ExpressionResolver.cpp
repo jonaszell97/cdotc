@@ -338,7 +338,7 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
 
    auto SemaRes = SP.visitExpr(ExprSeq, Target, ContextualType);
    if (!SemaRes) {
-      if (Ident) {
+      if (Ident && !Ident->isInvalid()) {
          SP.diagnose(ExprSeq, err_undeclared_identifer, Ident->getIdentInfo(),
                      Ident->getSourceLoc());
       }
@@ -666,13 +666,15 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
       if (LHS->getExprType()->isMetaType()) {
          bool CmpRes;
          if (Res.OpName.getInfixOperatorName()->isStr("==")) {
-            CmpRes = LHS->getExprType() == RHS->getExprType();
+            CmpRes = LHS->getExprType()->getCanonicalType()
+               == RHS->getExprType()->getCanonicalType();
          }
          else {
             assert(Res.OpName.getInfixOperatorName()->isStr("!=")
                    && "bad meta type operator!");
 
-            CmpRes = LHS->getExprType() != RHS->getExprType();
+            CmpRes = LHS->getExprType()->getCanonicalType()
+               != RHS->getExprType()->getCanonicalType();
          }
 
          return BoolLiteral::Create(SP.getContext(), Res.OpLoc,

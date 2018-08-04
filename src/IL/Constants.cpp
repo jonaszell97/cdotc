@@ -34,8 +34,11 @@ ConstantInt* ConstantInt::get(ValueType ty, llvm::APSInt &&value)
    }
 
    auto Val = new ConstantInt(ty, std::move(value));
-   Ctx.IntConstants[Val->getValue()] = std::unique_ptr<ConstantInt>(Val);
+   if (Val->getValue().isNullValue()) {
+      Val->ConstBits.AllZeros = true;
+   }
 
+   Ctx.IntConstants[Val->getValue()] = std::unique_ptr<ConstantInt>(Val);
    return Val;
 }
 
@@ -58,10 +61,14 @@ ConstantInt* ConstantInt::getTrue(Context &Ctx)
 
 ConstantInt* ConstantInt::getFalse(Context &Ctx)
 {
-   if (!Ctx.FalseVal)
-      Ctx.FalseVal = new ConstantInt(ValueType(Ctx, Ctx.getASTCtx().getInt1Ty()),
-                                     llvm::APSInt(llvm::APInt(1, 0, false),
-                                                  true));
+   if (!Ctx.FalseVal) {
+      Ctx.FalseVal = new ConstantInt(
+         ValueType(Ctx, Ctx.getASTCtx().getInt1Ty()),
+         llvm::APSInt(llvm::APInt(1, 0, false),
+                      true));
+
+      Ctx.FalseVal->ConstBits.AllZeros = true;
+   }
 
    return Ctx.FalseVal;
 }
@@ -79,13 +86,29 @@ ConstantFloat* ConstantFloat::get(ValueType Ty, double val)
 ConstantFloat* ConstantFloat::get(ValueType Ty, llvm::APFloat &&APF)
 {
    auto &Ctx = Ty.getCtx();
-   auto it = Ctx.FPConstants.find(APF);
-   if (it != Ctx.FPConstants.end()) {
+
+   Context::FPMapTy *Map;
+   if (Ty->isFloatTy()) {
+      Map = &Ctx.FP32Constants;
+   }
+   else if (Ty->isDoubleTy()) {
+      Map = &Ctx.FP64Constants;
+   }
+   else {
+      llvm_unreachable("bad floating point type!");
+   }
+
+   auto it = Map->find(APF);
+   if (it != Map->end()) {
       return it->getSecond().get();
    }
 
    auto Val = new ConstantFloat(Ty, std::move(APF));
-   Ctx.FPConstants[Val->getValue()] = std::unique_ptr<ConstantFloat>(Val);
+   if (Val->getValue().isZero()) {
+      Val->ConstBits.AllZeros = true;
+   }
+
+   (*Map)[Val->getValue()] = std::unique_ptr<ConstantFloat>(Val);
 
    return Val;
 }
@@ -129,6 +152,21 @@ ConstantArray *ConstantArray::get(ValueType ty,
    auto Val = new(Mem) ConstantArray(ty, vec);
 
    Ctx.ArrayConstants.InsertNode(Val, InsertPos);
+   return Val;
+}
+
+ConstantArray* ConstantArray::getAllZeros(il::ValueType Ty)
+{
+   auto &Ctx = Ty.getCtx();
+   auto It = Ctx.AllZeroArrayConstants.find(Ty);
+
+   if (It != Ctx.AllZeroArrayConstants.end())
+      return It->getSecond();
+
+   auto Val = new ConstantArray(Ty, {});
+   Val->ConstBits.AllZeros = true;
+
+   Ctx.AllZeroArrayConstants[Ty] = Val;
    return Val;
 }
 
@@ -184,6 +222,21 @@ ConstantTuple* ConstantTuple::getEmpty(il::Context &Ctx)
    return Tup;
 }
 
+ConstantTuple* ConstantTuple::getAllZeros(il::ValueType Ty)
+{
+   auto &Ctx = Ty.getCtx();
+   auto It = Ctx.AllZeroTupleConstants.find(Ty);
+
+   if (It != Ctx.AllZeroTupleConstants.end())
+      return It->getSecond();
+
+   auto Val = new ConstantTuple(Ty, {});
+   Val->ConstBits.AllZeros = true;
+
+   Ctx.AllZeroTupleConstants[Ty] = Val;
+   return Val;
+}
+
 void ConstantTuple::Profile(llvm::FoldingSetNodeID &ID,
                             QualType Ty,
                             llvm::ArrayRef<Constant *> Values) {
@@ -226,6 +279,21 @@ ConstantStruct* ConstantStruct::get(ValueType Ty,
    auto Val = new(Mem) ConstantStruct(Ty, vec);
 
    Ctx.StructConstants.InsertNode(Val, InsertPos);
+   return Val;
+}
+
+ConstantStruct* ConstantStruct::getAllZeros(il::ValueType Ty)
+{
+   auto &Ctx = Ty.getCtx();
+   auto It = Ctx.AllZeroStructConstants.find(Ty);
+
+   if (It != Ctx.AllZeroStructConstants.end())
+      return It->getSecond();
+
+   auto Val = new ConstantStruct(Ty, {});
+   Val->ConstBits.AllZeros = true;
+
+   Ctx.AllZeroStructConstants[Ty] = Val;
    return Val;
 }
 
@@ -473,6 +541,7 @@ ConstantPointer* ConstantPointer::get(ValueType ty)
       return it->getSecond().get();
 
    auto Ptr = new ConstantPointer(ty);
+   Ptr->ConstBits.AllZeros = true;
 
    Ctx.NullConstants.try_emplace(ty, std::unique_ptr<ConstantPointer>(Ptr));
    return Ptr;

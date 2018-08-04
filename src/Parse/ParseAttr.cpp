@@ -36,8 +36,10 @@ ParseResult Parser::parseAttributedDecl()
    for (auto &A : Attrs)
       checkAttrApplicability(Decl, A);
 
-   if (Decl)
+   if (Decl) {
       Decl.getDecl()->addAttributes(Attrs);
+      SP.checkDeclAttrs(Decl.getDecl(), Attr::VisitationPoint::Immediate);
+   }
 
    return Decl;
 }

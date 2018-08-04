@@ -129,6 +129,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    REPLACE(equalequal, double_equals);
    SAME_TOK(comma);
    REPLACE(hash, pound);
+   REPLACE(arrow, arrow_single);
 
    case cl::spaceship:
    case cl::periodstar:
@@ -353,6 +354,7 @@ static void importMacro(ImporterImpl &Importer,
                                   Ctx.getIdentifiers().get(Name->getName()),
                                   SourceType(Ctx.getAutoType()), SE, {});
 
+      Alias->setImportedFromClang(true);
       Sema.ActOnDecl(DC, Alias);
       return;
    }
@@ -502,6 +504,7 @@ static void importMacro(ImporterImpl &Importer,
    auto *MD = MacroDecl::Create(Ctx, Loc, AccessSpecifier::Public,
                                 MacroName, MacroDecl::Paren, Pat);
 
+   MD->setImportedFromClang(true);
    Sema.ActOnDecl(DC, MD);
 }
 

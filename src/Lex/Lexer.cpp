@@ -66,6 +66,38 @@ llvm::StringRef Lexer::getCurrentIdentifier() const
 
 // RAII utility classes
 
+Lexer::LookaheadRAII::LookaheadRAII(Lexer &L)
+   : L(L), LastTok(L.LastTok), CurTok(L.CurTok)
+{
+
+}
+
+Lexer::LookaheadRAII::~LookaheadRAII()
+{
+   L.LastTok = LastTok;
+   L.CurTok = CurTok;
+
+   // Keep the lookahead tokens that we didn't see yet.
+   Tokens.append(L.LookaheadVec.begin() + L.LookaheadIdx, L.LookaheadVec.end());
+   L.LookaheadVec = std::move(Tokens);
+
+   L.LookaheadIdx = 0;
+}
+
+void Lexer::LookaheadRAII::advance(bool ignoreNewline,
+                                   bool significantWhitespace) {
+   // Keep all tokens.
+   L.advance(false, true);
+
+   while ((ignoreNewline && L.currentTok().is(tok::newline))
+         || (!significantWhitespace && L.currentTok().is(tok::space))) {
+      Tokens.push_back(L.currentTok());
+      L.advance(false, true);
+   }
+
+   Tokens.push_back(L.currentTok());
+}
+
 void Lexer::printTokensTo(llvm::raw_ostream &out)
 {
    while (!eof()) {

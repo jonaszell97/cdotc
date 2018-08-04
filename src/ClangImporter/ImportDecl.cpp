@@ -7,6 +7,7 @@
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
 #include "Driver/Compiler.h"
+#include "Module/Module.h"
 #include "Sema/SemaPass.h"
 
 #include <clang/AST/ASTContext.h>
@@ -56,7 +57,7 @@ static AccessSpecifier getAccess(clang::AccessSpecifier AS)
 {
    switch (AS) {
    case clang::AccessSpecifier::AS_none:
-      return AccessSpecifier::Default;
+      return AccessSpecifier::Public;
    case clang::AccessSpecifier::AS_public:
       return AccessSpecifier::Public;
    case clang::AccessSpecifier::AS_private:
@@ -95,12 +96,17 @@ static FunctionDecl *importFunctionDecl(ImporterImpl &I,
          continue;
       }
 
-      auto *P = FuncArgDecl::Create(Ctx, Loc, Loc,
-                                    Name, Name.getIdentifierInfo(),
+      IdentifierInfo *Label = nullptr;
+      if (Name && !Name.getIdentifierInfo()->getIdentifier().startswith("_")) {
+         Label = Name.getIdentifierInfo();
+      }
+
+      auto *P = FuncArgDecl::Create(Ctx, Loc, Loc, Name, Label,
                                     ArgumentConvention::Borrowed,
                                     SourceType(ParamTy),
                                     nullptr, false, false, false);
 
+      P->setImportedFromClang(true);
       Args.push_back(P);
    }
 
@@ -109,6 +115,7 @@ static FunctionDecl *importFunctionDecl(ImporterImpl &I,
                                   I.getName(ClangFn->getDeclName()), Args,
                                   RetTy, nullptr, {});
 
+   F->setImportedFromClang(true);
    F->setCstyleVararg(ClangFn->isVariadic());
    F->setExternC(!I.IsCXX);
    F->setExternCXX(I.IsCXX);
@@ -134,6 +141,7 @@ static NamespaceDecl *importNamespace(ImporterImpl &I,
                                    I.getSourceLoc(NS->getLocStart()),
                                    Name);
 
+   D->setImportedFromClang(true);
    D->setRBraceLoc(I.getSourceLoc(NS->getRBraceLoc()));
 
    I.CI.getSema().ActOnDecl(&I.CI.getSema().getDeclContext(), D);
@@ -168,16 +176,14 @@ StructDecl *ImporterImpl::importStruct(clang::RecordDecl *ClangRec)
                                   getSourceLoc(ClangRec->getLocStart()),
                                   Name, {}, {});
 
+   Rec->setImportedFromClang(true);
    DeclMap[ClangRec] = Rec;
 
    for (clang::FieldDecl *F : ClangRec->fields()) {
       if (F->isBitField()) {
-         // TODO
-         Sema.diagnose(diag::warn_generic_warn,
-                       "cannot import bitfields",
-                       getSourceLoc(F->getLocStart()));
-
-         continue;
+         // Import as an opaque structure.
+         Rec->setOpaque(true);
+         break;
       }
 
       auto FieldTy = getType(F->getType());
@@ -191,15 +197,33 @@ StructDecl *ImporterImpl::importStruct(clang::RecordDecl *ClangRec)
          continue;
       }
 
+      SourceLocation FieldLoc = getSourceLoc(F->getLocStart());
+
+      Expression *DefaultVal = nullptr;
+      if (CI.getSema().hasDefaultValue(FieldTy)) {
+         DefaultVal = BuiltinIdentExpr::Create(Ctx, FieldLoc,
+                                               BuiltinIdentifier::defaultValue);
+         DefaultVal->setExprType(FieldTy);
+      }
+
       auto *Field = FieldDecl::Create(Ctx, getAccess(F->getAccess()),
-                                      SourceLocation(),
-                                      getSourceLoc(F->getLocStart()),
+                                      SourceLocation(), FieldLoc,
                                       getName(F->getDeclName()),
                                       SourceType(FieldTy), false,
-                                      F->getType().isConstQualified(), nullptr);
+                                      F->getType().isConstQualified(),
+                                      DefaultVal);
 
+      Field->setImportedFromClang(true);
       Sema.ActOnDecl(Rec, Field);
       DeclMap[F] = Field;
+   }
+
+   // Add implicit Copyable and ImplicitlyCopyable conformances.
+   if (auto *Copyable = Sema.getCopyableDecl()) {
+      Ctx.getConformanceTable().addExplicitConformance(Ctx, Rec, Copyable);
+   }
+   if (auto *Copyable = Sema.getImplicitlyCopyableDecl()) {
+      Ctx.getConformanceTable().addExplicitConformance(Ctx, Rec, Copyable);
    }
 
    Sema.ActOnDecl(&Sema.getDeclContext(), Rec);
@@ -233,6 +257,7 @@ EnumDecl *ImporterImpl::importEnum(clang::EnumDecl *ClangE)
                               Name, {}, {},
                               SourceType(getType(ClangE->getIntegerType())));
 
+   D->setImportedFromClang(true);
    DeclMap[ClangE] = D;
 
    for (clang::EnumConstantDecl *EnumVal : ClangE->enumerators()) {
@@ -243,6 +268,7 @@ EnumDecl *ImporterImpl::importEnum(clang::EnumDecl *ClangE)
                                         Loc, Loc, ValName, nullptr, {});
 
       // FIXME
+      Case->setImportedFromClang(true);
       Case->setRawValue((long)EnumVal->getInitVal().getSExtValue());
       Sema.ActOnDecl(D, Case);
 
@@ -254,9 +280,6 @@ EnumDecl *ImporterImpl::importEnum(clang::EnumDecl *ClangE)
    if (!ClangE->getDeclName()) {
       for (auto *Case : D->getCases()) {
          auto *EC = new(Ctx) EnumCaseExpr(Case->getSourceLoc(), Case);
-         EC->setExprType(Ctx.getRecordType(D));
-         EC->setSemanticallyChecked(true);
-
          auto *SE = StaticExpr::Create(Ctx, EC);
          auto *Alias = AliasDecl::Create(Ctx, Case->getSourceLoc(),
                                          AccessSpecifier::Public,
@@ -271,6 +294,277 @@ EnumDecl *ImporterImpl::importEnum(clang::EnumDecl *ClangE)
    Sema.ActOnDecl(&Sema.getDeclContext(), D);
    importDecls(ClangE, D);
    return D;
+}
+
+static CompoundStmt *CreateUnionGetterBody(SemaPass &SP, ASTContext &Ctx,
+                                           QualType FieldTy,
+                                           SourceLocation Loc) {
+   // Create a reference to 'self'.
+   auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
+
+   // Create a reference to 'self._storage'.
+   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
+                                                 SP.getIdentifier("_storage"));
+
+   // Cast '_storage' to a pointer.
+   ConversionSequenceBuilder Builder;
+   Builder.addStep(CastKind::BitCast, Ctx.getUInt8PtrTy());
+
+   auto *ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   auto *Cast = ImplicitCastExpr::Create(Ctx, StorageRef, ConvSeq);
+
+   // Cast that pointer to a pointer of the right type.
+   Builder = ConversionSequenceBuilder();
+   Builder.addStep(CastKind::BitCast, Ctx.getPointerType(FieldTy));
+
+   ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   Cast = ImplicitCastExpr::Create(Ctx, Cast, ConvSeq);
+
+   // Dereference the pointer.
+   auto *FnTy = Ctx.getFunctionType(Ctx.getMutableReferenceType(FieldTy),
+                                    {Ctx.getPointerType(FieldTy)});
+   Expression *Deref = UnaryOperator::Create(Ctx, Loc, op::Deref, FnTy, Cast,
+                                             true);
+
+   // Create a copy of the loaded value if necessary.
+   if (!SP.IsImplicitlyCopyableType(FieldTy)) {
+      Builder = ConversionSequenceBuilder();
+      Builder.addStep(CastKind::LValueToRValue,
+                      FnTy->getReturnType()->getReferencedType());
+
+      Builder.addStep(CastKind::Copy,
+                      FnTy->getReturnType()->getReferencedType());
+
+      ConvSeq = ConversionSequence::Create(Ctx, Builder);
+      Deref = ImplicitCastExpr::Create(Ctx, Deref, ConvSeq);
+   }
+
+   // Return the dereferenced pointer.
+   auto *Ret = ReturnStmt::Create(Ctx, Loc, Deref);
+
+   // Create the body.
+   return CompoundStmt::Create(Ctx, Ret, false, Loc, Loc);
+}
+
+static CompoundStmt *CreateUnionSetterBody(SemaPass &SP, ASTContext &Ctx,
+                                           QualType FieldTy,
+                                           SourceLocation Loc) {
+   // Create a reference to 'self'.
+   auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
+
+   // Create a reference to 'self._storage'.
+   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
+                                                 SP.getIdentifier("_storage"));
+
+   // Cast '_storage' to a pointer.
+   ConversionSequenceBuilder Builder;
+   Builder.addStep(CastKind::BitCast, Ctx.getUInt8PtrTy());
+
+   auto *ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   auto *Cast = ImplicitCastExpr::Create(Ctx, StorageRef, ConvSeq);
+
+   // Cast that pointer to a pointer of the right type.
+   Builder = ConversionSequenceBuilder();
+   Builder.addStep(CastKind::BitCast, Ctx.getPointerType(FieldTy));
+
+   ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   Cast = ImplicitCastExpr::Create(Ctx, Cast, ConvSeq);
+
+   // Dereference the pointer, yielding a reference.
+   auto *FnTy = Ctx.getFunctionType(Ctx.getMutableReferenceType(FieldTy),
+                                    {Ctx.getPointerType(FieldTy)});
+   auto *Deref = UnaryOperator::Create(Ctx, Loc, op::Deref, FnTy, Cast, true);
+
+   // Create a reference to the 'newValue' argument.
+   auto *NewValRef = new(Ctx) IdentifierRefExpr(Loc, nullptr,
+                                                SP.getIdentifier("newValue"));
+
+   // Store the pointer.
+   auto *Assign = AssignExpr::Create(Ctx, Loc, Deref, NewValRef, false);
+
+   // Create the body.
+   return CompoundStmt::Create(Ctx, Assign, false, Loc, Loc);
+}
+
+static PropDecl *CreateUnionAccessor(SemaPass &SP, ASTContext &Ctx,
+                                     QualType FieldTy,
+                                     DeclarationName Name,
+                                     SourceLocation Loc,
+                                     bool Const) {
+   CompoundStmt *GetterBody = CreateUnionGetterBody(SP, Ctx, FieldTy, Loc);
+   CompoundStmt *SetterBody = nullptr;
+
+   if (!Const) {
+      SetterBody = CreateUnionSetterBody(SP, Ctx, FieldTy, Loc);
+   }
+
+   return PropDecl::Create(Ctx, AccessSpecifier::Public, Loc, Name,
+                           SourceType(FieldTy), false, true,
+                           !Const, AccessSpecifier::Public,
+                           AccessSpecifier::Public, GetterBody, SetterBody,
+                           SP.getIdentifier("newValue"));
+}
+
+static InitDecl *CreateUnionInit(SemaPass &SP, ASTContext &Ctx,
+                                 QualType FieldTy,
+                                 DeclarationName Name,
+                                 SourceLocation Loc) {
+   // Create a reference to 'self'.
+   auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
+
+   // Create a reference to 'self._storage'.
+   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
+                                                 SP.getIdentifier("_storage"));
+
+   // Initialize with a default value to keep definitive initialization
+   // analysis happy.
+   auto *DefaultVal = BuiltinIdentExpr::Create(Ctx, Loc,
+                                               BuiltinIdentifier::defaultValue);
+   auto *DefaultAssign = AssignExpr::Create(Ctx, Loc, StorageRef, DefaultVal,
+                                            false);
+
+   // Cast '_storage' to a pointer.
+   ConversionSequenceBuilder Builder;
+   Builder.addStep(CastKind::BitCast, Ctx.getUInt8PtrTy());
+
+   auto *ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   auto *Cast = ImplicitCastExpr::Create(Ctx, StorageRef, ConvSeq);
+
+   // Cast that pointer to a pointer of the right type.
+   Builder = ConversionSequenceBuilder();
+   Builder.addStep(CastKind::BitCast, Ctx.getPointerType(FieldTy));
+
+   ConvSeq = ConversionSequence::Create(Ctx, Builder);
+   Cast = ImplicitCastExpr::Create(Ctx, Cast, ConvSeq);
+
+   // Dereference the pointer, yielding a reference.
+   auto *FnTy = Ctx.getFunctionType(Ctx.getMutableReferenceType(FieldTy),
+                                    {Ctx.getPointerType(FieldTy)});
+   auto *Deref = UnaryOperator::Create(Ctx, Loc, op::Deref, FnTy, Cast, true);
+
+   // Create a reference to the argument.
+   auto *NewValRef = new(Ctx) IdentifierRefExpr(Loc, nullptr, Name);
+
+   // Store the pointer.
+   auto *Assign = AssignExpr::Create(Ctx, Loc, Deref, NewValRef, false);
+
+   // Create the body.
+   auto *Body = CompoundStmt::Create(Ctx, { DefaultAssign,Assign }, false,
+                                     Loc, Loc);
+
+   // Create the argument.
+   auto *ArgDecl = FuncArgDecl::Create(Ctx, Loc, Loc, Name,
+                                       Name.getIdentifierInfo(),
+                                       ArgumentConvention::Owned,
+                                       SourceType(FieldTy),
+                                       nullptr, false, false, false);
+
+   // Create the initializer.
+   return InitDecl::Create(Ctx, AccessSpecifier::Public, Loc, ArgDecl, {},
+                           Body);
+}
+
+StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
+{
+   if (DeclMap.find(ClangU) != DeclMap.end())
+      return cast<StructDecl>(DeclMap[ClangU]);
+
+   assert(ClangU->isUnion() && "not a struct!");
+
+   auto &Ctx = CI.getContext();
+   auto &TI = CI.getContext().getTargetInfo();
+   auto &Sema = CI.getSema();
+
+   DeclarationName Name;
+   if (!ClangU->getDeclName()) {
+      std::string str;
+      str += "_UnnamedUnion_";
+      str += std::to_string(NumUnnamedStructs++);
+
+      Name = Ctx.getIdentifiers().get(str);
+   }
+   else {
+      Name = getName(ClangU->getDeclName());
+   }
+
+   auto *Rec = StructDecl::Create(Ctx, getAccess(ClangU->getAccess()),
+                                  getSourceLoc(ClangU->getLocStart()),
+                                  Name, {}, {});
+
+   Rec->setImportedFromClang(true);
+   DeclMap[ClangU] = Rec;
+
+   unsigned MaxSize = 0;
+   unsigned MaxAlign = 1;
+
+   for (clang::FieldDecl *F : ClangU->fields()) {
+      if (F->isBitField()) {
+         // Import as an opaque structure.
+         Rec->setOpaque(true);
+         break;
+      }
+
+      auto FieldTy = getType(F->getType());
+      if (!FieldTy) {
+         CI.getSema().diagnose(
+            diag::warn_generic_warn,
+            "type cannot be imported",
+            getSourceLoc(F->getTypeSourceInfo()
+                          ->getTypeLoc().getSourceRange()));
+
+         continue;
+      }
+
+      if (FieldTy->isRecordType()) {
+         if (!CI.getSema().ensureDeclared(FieldTy->getRecord())) {
+            continue;
+         }
+
+         CI.getSema().calculateRecordSize(FieldTy->getRecord());
+      }
+
+      auto Size = TI.getSizeOfType(FieldTy);
+      auto Align = TI.getAlignOfType(FieldTy);
+
+      if (Size > MaxSize) {
+         MaxSize = Size;
+      }
+      if (Align > MaxAlign) {
+         MaxAlign = Align;
+      }
+
+      SourceLocation FieldLoc = getSourceLoc(F->getLocStart());
+      auto *Prop = CreateUnionAccessor(CI.getSema(), Ctx, FieldTy,
+                                       getName(F->getDeclName()), FieldLoc,
+                                       F->getType().isConstQualified());
+
+      Prop->setImportedFromClang(true);
+      Sema.ActOnDecl(Rec, Prop);
+      DeclMap[F] = Prop;
+
+      auto *Init = CreateUnionInit(CI.getSema(), Ctx, FieldTy,
+                                   Prop->getDeclName(), FieldLoc);
+
+      Init->setImportedFromClang(true);
+      Sema.ActOnDecl(Rec, Init);
+   }
+
+   // Create the union storage
+   auto *Storage = FieldDecl::Create(Ctx, AccessSpecifier::Private,
+                                     Rec->getSourceLoc(), Rec->getSourceLoc(),
+                                     Sema.getIdentifier("_storage"),
+                                     SourceType(
+                                        Ctx.getArrayType(Ctx.getUInt8Ty(),
+                                                         MaxSize)),
+                                     false, false, nullptr);
+
+   Storage->setImportedFromClang(true);
+   Sema.ActOnDecl(Rec, Storage);
+
+   Sema.ActOnDecl(&Sema.getDeclContext(), Rec);
+   importDecls(ClangU, Rec);
+
+   return Rec;
 }
 
 AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl *ClangTD)
@@ -298,8 +592,43 @@ AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl *ClangTD)
                                    Name, SourceType(Ctx.getAutoTy()),
                                    SE, {});
 
+   Alias->setImportedFromClang(true);
    CI.getSema().ActOnDecl(&CI.getSema().getDeclContext(), Alias);
+
    return Alias;
+}
+
+GlobalVarDecl *ImporterImpl::importGlobalVar(clang::VarDecl *ClangVar)
+{
+   if (ClangVar->hasLocalStorage())
+      return nullptr;
+
+   auto &Ctx = CI.getContext();
+
+   auto Type = getType(ClangVar->getType());
+   if (!Type) {
+      CI.getSema().diagnose(
+         diag::warn_generic_warn,
+         "type cannot be imported",
+         getSourceLoc(ClangVar->getTypeSourceInfo()->getTypeLoc()
+                              .getSourceRange()));
+
+      return nullptr;
+   }
+
+   auto Access = getAccess(ClangVar->getAccess());
+   auto Loc = getSourceLoc(ClangVar->getLocation());
+   auto Name = getName(ClangVar->getDeclName());
+
+   auto *GV = GlobalVarDecl::Create(Ctx, Access, Loc, Loc,
+                                    ClangVar->getType().isConstQualified()
+                                       || ClangVar->isConstexpr(),
+                                    Name, SourceType(Type), nullptr);
+
+   GV->setImportedFromClang(true);
+   CI.getSema().ActOnDecl(&CI.getSema().getDeclContext(), GV);
+
+   return GV;
 }
 
 Decl* ImporterImpl::importDecl(clang::Decl *D)
@@ -309,6 +638,8 @@ Decl* ImporterImpl::importDecl(clang::Decl *D)
       return importFunctionDecl(*this, cast<clang::FunctionDecl>(D));
    case clang::Decl::Namespace:
       return importNamespace(*this, cast<clang::NamespaceDecl>(D));
+   case clang::Decl::Enum:
+      return importEnum(cast<clang::EnumDecl>(D));
    case clang::Decl::Record: {
       auto *R = cast<clang::RecordDecl>(D);
       switch (R->getTagKind()) {
@@ -316,6 +647,8 @@ Decl* ImporterImpl::importDecl(clang::Decl *D)
          return importStruct(R);
       case clang::TTK_Enum:
          return importEnum(cast<clang::EnumDecl>(R));
+      case clang::TTK_Union:
+         return importUnion(R);
       default:
          break;
       }
@@ -325,11 +658,33 @@ Decl* ImporterImpl::importDecl(clang::Decl *D)
    case clang::Decl::Typedef:
    case clang::Decl::TypeAlias:
       return importTypedef(cast<clang::TypedefNameDecl>(D));
+   case clang::Decl::Var:
+      return importGlobalVar(cast<clang::VarDecl>(D));
+   case clang::Decl::ExternCContext: {
+      auto *ExternC = CompoundDecl::Create(CI.getContext(),
+                                           SourceLocation(BaseOffset), true);
+
+      CI.getSema().ActOnDecl(&CI.getSema().getDeclContext(), ExternC);
+
+      SemaPass::DeclContextRAII DCR(CI.getSema(), ExternC);
+      for (auto *SubDecl : cast<clang::ExternCContextDecl>(D)->decls()) {
+         importDecl(SubDecl);
+      }
+
+      return nullptr;
+   }
    // Ignore these.
    case clang::Decl::EnumConstant:
    case clang::Decl::Field:
+   case clang::Decl::IndirectField:
    case clang::Decl::CXXMethod:
+   case clang::Decl::ParmVar:
+      return nullptr;
    default:
+      CI.getSema().diagnose(diag::warn_generic_warn,
+                            "cannot import declaration",
+                            getSourceLoc(D->getLocation()));
+
       return nullptr;
    }
 }
@@ -355,5 +710,14 @@ void ImporterImpl::importDecls(clang::ASTContext &C, DeclContext *DC)
          continue;
 
       importDecl(ClangDecl);
+   }
+
+   auto &Sema = CI.getSema();
+   if (isa<CallableDecl>(DC)) {
+      for (auto *D : DC->getDecls()) {
+         Sema.ensureVisited(D);
+      }
+
+      Sema.finalizeRecordDecls();
    }
 }

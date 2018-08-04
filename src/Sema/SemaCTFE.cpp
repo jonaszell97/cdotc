@@ -10,7 +10,7 @@
 namespace cdot {
 namespace ast {
 
-static bool prepareDeclForCtfe(SemaPass &Sema, Decl *Decl)
+static bool declareIfNotDeclared(SemaPass &Sema, Decl *Decl)
 {
    if (!Sema.isDeclared(Decl)) {
       SemaPass::DeclScopeRAII declContextRAII(Sema, Decl->getDeclContext());
@@ -24,7 +24,7 @@ static bool prepareDeclForCtfe(SemaPass &Sema, Decl *Decl)
 
 bool SemaPass::ensureDeclared(Decl *D)
 {
-   return prepareDeclForCtfe(*this, D);
+   return declareIfNotDeclared(*this, D);
 }
 
 bool SemaPass::ensureVisited(Decl *D)
@@ -65,39 +65,9 @@ bool SemaPass::ensureVisited(class Module *M)
    return true;
 }
 
-bool SemaPass::prepareFunctionForCtfe(CallableDecl *Fn)
-{
-   if (Fn->isBeingEvaluated()) {
-      diagnose(Fn, diag::err_referenced_while_evaluating, 1 /*function*/,
-               Fn->getDeclName(), Fn->getSourceLoc());
-
-      return false;
-   }
-
-   if (auto M = support::dyn_cast<MethodDecl>(Fn)) {
-      if (!prepareDeclForCtfe(*this, M->getRecord()))
-         return false;
-   }
-   else {
-      if (!prepareDeclForCtfe(*this, Fn))
-         return false;
-   }
-
-   if (!isVisited(Fn)) {
-      DeclScopeRAII declContextRAII(*this, Fn->getDeclContext());
-      ScopeResetRAII scopeResetRAII(*this);
-
-      auto Result = visitDecl(Fn);
-      if (!Result)
-         return false;
-   }
-
-   return true;
-}
-
 bool SemaPass::prepareGlobalForCtfe(VarDecl *Decl)
 {
-   if (!prepareDeclForCtfe(*this, Decl))
+   if (!declareIfNotDeclared(*this, Decl))
       return false;
 
    if (!isVisited(Decl)) {

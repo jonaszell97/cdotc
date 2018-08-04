@@ -67,6 +67,7 @@ void appendToPath(llvm::SmallVectorImpl<char> &Path, const llvm::Twine &Append);
 void appendToPath(std::string &Path, const llvm::Twine &Append);
 
 std::string getTmpFileName(llvm::StringRef Ext);
+std::string exec(const std::string &cmd);
 
 } // namespace fs
 } // namespace cdot
