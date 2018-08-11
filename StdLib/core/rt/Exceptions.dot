@@ -1,0 +1,27 @@
+
+module std.rt
+
+struct ErrorObj {
+    let typeInfo: UnsafePtr<TypeInfo>
+    let deinit: @thin (UnsafeMutablePtr<u8>) -> Void
+    var objPtr: u8
+}
+
+@extern(C)
+public def _cdot_PrintException(_ err: UnsafePtr<ErrorObj>) -> Never {
+    sys.reportFatalError("uncaught exception of type '${err->typeInfo->name}'")
+}
+
+@extern(C)
+public def _cdot_CleanupException(_ err: UnsafeMutablePtr<ErrorObj>) {
+    if let deinit = err->deinit {
+        deinit(builtin.addressOf(&err->objPtr))
+    }
+
+    _cdot_Free(err as! UnsafeMutableRawPtr)
+}
+
+@extern(C)
+public def _cdot_PureVirtual() -> Never {
+    sys.reportFatalError("pure virtual function called")
+}
