@@ -1,0 +1,58 @@
+
+module std.algorithm
+
+/// Sort the collection \param coll in-place given a comparator predicate 
+/// using the quick-sort algorithm.
+public def qsort<T : MutableCollection>(_ coll: mut ref T,
+                                       predicate isSmallerThan: (T.Element, T.Element) -> Bool) {
+    if coll.empty {
+        return
+    }
+
+    qsort(&coll, isSmallerThan, coll.startIndex, coll.index(before: coll.endIndex))
+}
+
+/// Sort the collection \param coll in-place using the quick-sort algorithm.
+public def qsort<T : MutableCollection>(_ coll: mut ref T) where T.Element is Comparable {
+    qsort(&coll, predicate: T.Element.infix <)
+}
+
+def swap<T : MutableCollection>(_ coll: mut ref T, _ i: T.Index, _ j: T.Index){
+    var tmp = coll[i]
+    coll[i] = coll[j]
+    coll[j] = tmp
+}
+
+def partition<T : MutableCollection>(_ coll: mut ref T,
+                                     _ isSmallerThan: (T.Element, T.Element) -> Bool,
+                                     _ lo: T.Index, _ hi: T.Index) -> T.Index {
+    var pivot = coll[lo]
+    var lo = coll.index(before: lo)
+    var hi = coll.index(after: hi)
+
+    loop {
+        loop {
+            lo = coll.index(after: lo)
+        } while isSmallerThan(coll[lo], pivot)
+
+        loop {
+            hi = coll.index(before: hi)
+        } while isSmallerThan(pivot, coll[hi])
+
+        if lo >= hi {
+            return hi
+        }
+
+        swap(&coll, lo, hi)
+    }
+}
+
+def qsort<T : MutableCollection>(_ coll: mut ref T,
+                                 _ isSmallerThan: (T.Element, T.Element) -> Bool,
+                                 _ lo: T.Index, _ hi: T.Index) {
+    if lo < hi {
+        let p = partition(&coll, isSmallerThan, lo, hi)
+        qsort(&coll, isSmallerThan, lo, p)
+        qsort(&coll, isSmallerThan, coll.index(after: p), hi)
+    }
+}

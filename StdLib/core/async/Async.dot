@@ -1,0 +1,309 @@
+
+module std.async
+
+using atomic.Atomic
+using sys.Thread
+
+struct CoroutineHandle {
+    /// Opaque handle to the coroutine.
+    private var handle: UnsafeRawPtr
+
+    /// Memberwise C'tor. This struct should only be constructed by the compiler.
+    private memberwise init
+
+    /// Resume this coroutine.
+    public def resume() {
+        builtin.coro_resume(handle)
+    }
+
+    /// Destroy this coroutine.
+    public def destroy() {
+        builtin.coro_destroy(handle)
+    }
+
+    /// @return The promise value of this coroutine.
+    public def getPromise<Promise>() -> Promise {
+        return builtin.loadFromPointer(builtin.coro_promise<Promise>(handle))
+    }
+
+    /// @return true iff this coroutine has run to completion.
+    public prop done: Bool {
+        return builtin.coro_done(handle)
+    }
+}
+
+/// Implement (implicit) copy operations for CoroutineHandle.
+/// Coroutine handles do not own their coroutine and can thus safely be copied.
+extend CoroutineHandle with Copyable, ImplicitlyCopyable {}
+
+public protocol Awaitable {
+    /// The type of the awaited value.
+    associatedType AwaitedType
+
+    /// The Awaiter type that waits for this Awaitable.
+    associatedType AwaiterType
+        where AwaiterType is Awaiter
+
+    /// Require a default initializer for an awaitable.
+    init
+
+    /// Resolve this promise with the given value.
+    def resolve(with value: owned AwaitedType)
+
+    /// Returns an awaiter for this awaitable instance.
+    def getAwaiter() -> AwaiterType
+}
+
+public protocol Awaiter {
+    /// The promise type of the awaited coroutine.
+    associatedType AwaitableType
+        where AwaitableType is Awaitable
+        where AwaitableType.AwaiterType == Self
+
+    /// @return @code{true} iff the awaited object is ready.
+    prop ready: Bool { get }
+
+    /// Notify the awaiter that a coroutine is waiting for the result.
+    /// @return @code{true} if the result is available immediately, @code{false} otherwise.
+    def awaitSuspend(_ handle: CoroutineHandle) -> Bool
+
+    /// Get the awaited value after coroutine resumption.
+    /// @return The awaited value.
+    def awaitResume() -> AwaitableType.AwaitedType
+}
+
+public class Promise<T> with Awaitable {
+    /// Status of a future.
+    enum Status {
+        case Pending, Resolved, Cancelled
+    }
+
+    /// The current status of this promise.
+    var _status: Atomic<Status>
+
+    /// The promise value.
+    internal var value: T?
+
+    /// Initialize a resolved promise.
+    public init (t: T) {
+        self.value = .Some(t)
+        self._status = Atomic<Status>(.Resolved)
+    }
+
+    /// Get this promises status.
+    prop status: Status {
+        return _status.load()
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Awaitable implementation
+    //===--------------------------------------------------------------------===//
+
+    /// The type of the awaited value.
+    associatedType AwaitedType = T
+
+    /// The Awaiter type that waits for this Awaitable.
+    associatedType AwaiterType = Future<T>
+
+    /// Default C'tor. Initialize without a value.
+    public init {
+        self.value = none
+        self._status = Atomic<Status>(.Pending)
+    }
+
+    /// Resolve this promise with the given value.
+    public def resolve(with t: owned T) {
+        var status = self.status
+        if status == .Resolved {
+            sys.reportFatalError("promise was resolved multiple times!")
+        }
+        
+        self.value = .Some(t)
+        self._status.store(.Resolved)
+    }
+
+    /// @return an awaiter for this awaitable instance.
+    def getAwaiter() -> AwaiterType {
+        return Future(awaiting: self)
+    }
+}
+
+public class Future<T> with Awaitable, Awaiter {
+    /// The promise that will provide this future's value.
+    var promise: Promise<T>
+
+    /// The coroutine handle.
+    var handle: CoroutineHandle?
+
+    /// The condition that we're waiting on, if any.
+    var waitCondition: Thread.Condition?
+
+    /// C'tor. Construct from an existing promise.
+    public init (awaiting promise: Promise<T>) {
+        self.promise = promise
+        self.handle = none
+        self.waitCondition = none
+    }
+
+    /// Wait until the promise is resolved and get the resolved value.
+    public def get() -> T {
+        wait()
+        return awaitResume()
+    }
+
+    /// Wait until the promise is resolved.
+    public def wait() {
+        if ready {
+            return
+        }
+        
+        if case .None = self.waitCondition {
+            var cond = Thread.createCondition(Thread.createMutex())
+            self.waitCondition = .Some(cond)
+
+            // acquire the mutex before locking.
+            cond.mutex.lock()
+
+            // wait on the condition
+            while !ready {
+                cond.wait()
+            }
+
+            // release the mutex once we're done.
+            cond.mutex.unlock()
+        }
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Awaitable implementation
+    //===--------------------------------------------------------------------===//
+
+    /// The type of the awaited value.
+    associatedType AwaitedType = T
+
+    /// The Awaiter type that waits for this Awaitable.
+    associatedType AwaiterType = Self
+    
+    /// Resolve this future with the given value.
+    public def resolve(with t: owned T) {
+        // Acquire the lock.
+        if case .Some(let cond) = self.waitCondition {
+            cond.mutex.lock()
+        }
+
+        // Resolve the promise.
+        self.promise.resolve(with: t)
+        
+        // Notify any threads that might be waiting on the resolution.
+        if case .Some(let cond) = self.waitCondition {
+            cond.notifyAll()
+
+            // Release the lock.
+            cond.mutex.unlock()
+        }
+
+        // Resume any coroutines waiting on the resolution.
+        if case .Some(let handle) = self.handle {
+            assert!(!handle.done, "resolving future twice!")
+            handle.resume()
+        }
+    }
+
+    /// Returns an awaiter for this awaitable instance.
+    def getAwaiter() -> Self {
+        return self
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Awaiter implementation
+    //===--------------------------------------------------------------------===//
+
+    /// The promise type of the awaited coroutine.
+    associatedType AwaitableType = Self
+
+    /// Default C'tor.
+    public init {
+        self.promise = Promise<T>()
+        self.handle = none
+        self.waitCondition = none
+    }
+
+    /// @return true iff the awaited object is ready.
+    prop ready: Bool {
+        return promise.status == .Resolved
+    }
+
+    /// Notify the awaiter of a new coroutine that is waiting for the result.
+    /// @return true if the result is available immediately, false otherwise.
+    def awaitSuspend(handle: CoroutineHandle) -> Bool {
+        assert!(!self.handle, "duplicate handle")
+        self.handle = .Some(handle)
+
+        return false
+    }
+
+    /// Get the awaited value after coroutine resumption.
+    /// @return The awaited value.
+    def awaitResume() -> AwaitedType {
+        match promise.value {
+        case .None:
+            unreachable!("coroutine did not yield a value!")
+        case .Some(let value):
+            return value
+        }
+    }
+}
+
+public class Task<T>: Thread with Awaitable {
+    /// The function that produces the result
+    var producer: Option<() -> T>
+
+    /// The future that we provide a value to.
+    var future: Future<T>
+
+    /// Memberwise C'tor.
+    public init (producer: () -> T) {
+        super.init()
+        self.producer = .Some(producer)
+        self.future = Future<T>()
+
+        self.start()
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Thread implementation
+    //===--------------------------------------------------------------------===//
+
+    private def override run() {
+        if case .Some(let producer) = self.producer {
+            resolve(with: producer())
+        }
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Awaitable implementation
+    //===--------------------------------------------------------------------===//
+
+    /// The type of the awaited value.
+    associatedType AwaitedType = T
+
+    /// The Awaiter type that waits for this Awaitable.
+    associatedType AwaiterType = Future<T>
+
+    /// Default C'tor.
+    public init {
+        super.init()
+        self.producer = none
+        self.future = Future<T>()
+    }
+    
+    /// Resolve this task with the given value.
+    public def resolve(with t: owned T) {
+        self.future.resolve(with: t)
+    }
+
+    /// Returns an awaiter for this awaitable instance.
+    def getAwaiter() -> Future<T> {
+        return self.future
+    }
+}

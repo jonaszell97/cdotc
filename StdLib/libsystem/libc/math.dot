@@ -1,0 +1,4 @@
+
+module libc.math
+
+include_system_header!("math.h")

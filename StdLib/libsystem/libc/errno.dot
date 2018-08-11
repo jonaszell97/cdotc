@@ -1,0 +1,4 @@
+
+module libc.errno
+
+include_system_header!("errno.h")

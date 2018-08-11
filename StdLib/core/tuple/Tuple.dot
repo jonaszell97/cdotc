@@ -1,0 +1,75 @@
+
+@version(None)
+module std.tuple
+
+import Variant from std.variant
+import { Arity, TypeAt } from std.reflect
+
+def _cdot_GetTupleValue<let Idx, ...TupleTys>(_ tup: (TupleTys...))
+    -> TypeAt<Idx, TupleTys...> where Idx < Arity<TupleTys...>
+{
+    alias OffsetOf<let InnerIdx, ...Tys>    = 0u where InnerIdx == 0
+    alias OffsetOf<let InnerIdx, T, ...Tys> = reflect.sizeOf<T> + OffsetOf<InnerIdx - 1, Tys...>
+        where InnerIdx > 0
+
+    alias Offset = OffsetOf<Idx, TupleTys...>
+
+    var ptr = builtin.addressOf(tup) as! UnsafePtr<u8>
+    return *((ptr + Offset) as! UnsafePtr<TypeAt<Idx, TupleTys...> >)
+}
+
+struct TupleIterator<FIXME, ...Tys> {
+    let tup: (Tys...)
+    var idx: isize = 0
+}
+
+extend TupleIterator with IteratorProtocol {
+    associatedType Element = Variant<Tys...>
+
+    def mutating next() -> Element? {
+        static for I in Array<Int>() {
+            if I == idx {
+                ++idx
+                return .Some(Element(_cdot_GetTupleValue<I>(tup)))
+            }
+        }
+        
+        return none
+    }
+}
+
+public def getIterator<...Tys>(_ tup: (Tys...)) -> TupleIterator<u64, Tys...> {
+    return TupleIterator<u64, Tys...>(tup: tup.copy())
+}
+
+public def toString<...Tys>(_ tup: (Tys...)) -> String {
+    var s = "("
+    var i = 0
+
+    for let el in tup {
+        if i++ != 0 { s += ", " }
+        s += el.toString()
+    }
+
+    s += ")"
+    return s
+}
+
+public def copy<...Tys>(_ tup: (Tys...)) -> (Tys...) {
+    return builtin.copy(tup)
+}
+
+extend String {
+    /// Initialize from a tuple.
+    public init<...Ts>(_ tup: borrow (Ts...)) {
+        self.init()
+
+        var i = 0
+        for let el in tup {
+            if i++ != 0 { self += ", " }
+            self += el.toString()
+        }
+
+        self += ")"
+    }
+}

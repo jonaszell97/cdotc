@@ -1,0 +1,53 @@
+
+module std.collection
+
+public class Stack<T> {
+    /// The container used for the stack.
+    var arr: [T]
+
+    /// Empty C'tor.
+    public init {
+        self.arr = [T]()
+    }
+
+    /// C'tor. Initialize from an array.
+    public init (arr: [T]) {
+        self.arr = arr
+    }
+
+    /// Pushes an element to the end of the stack.
+    /// \param el the element to push on the stack.
+    public def push(el: owned T) {
+        arr.push(el)
+    }
+
+    /// Pops an element from the stack and returns it.
+    /// \return the element that was enstackd first.
+    public def pop() -> T {
+        return arr.popVal()
+    }
+
+    /// Returns the next element on the stack without popping it.
+    /// \return the next element on the stack.
+    public prop front: T {
+        return arr.back
+    }
+
+    /// \return `true` iff the stack is empty.
+    public prop empty: Bool {
+        return arr.empty
+    }
+}
+
+unittest {
+    var s = Stack<Int>()
+    for let i in 0..10 {
+        s.push(i)
+    }
+
+    // assertEqual(3, 4, "odd, isn't it?")
+
+    for let i in 0..10 {
+        assertEqual(9 - i, s.pop())
+    }
+}

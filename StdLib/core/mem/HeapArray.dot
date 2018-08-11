@@ -1,0 +1,68 @@
+
+module std.mem
+
+/// An array with a fixed size that is only known at runtime. Provides a minimal
+/// interface to access the memory and automatically frees it after going out of scope.
+struct HeapArray<T> {
+    /// Pointer to the beginning of the heap-allocated array.
+    var data: UnsafeMutablePtr<T> { get }
+
+    /// Size of the allocated array (in multiples of sizeof(T)). Only used for catching
+    /// out-of-bounds errors.
+    var capacity: UInt { get }
+
+    /// Default C'tor.
+    init {
+        self.capacity = 0
+        self.data = __nullptr
+    }
+
+    /// C'tor. Allocates space for capacity objects of type T, initialized to the given value.
+    init (withCapacity capacity: UInt, initialValue val: T) {
+        self.capacity = capacity
+        if capacity == 0 {
+            self.data = 0 as! UnsafeMutablePtr<T>
+        }
+        else {
+            self.data = allocate<T>(capacity)
+        }
+
+        for let i in 0u..capacity {
+            builtin.uninitializedStore(val.copy(), to: self.data + i)
+        }
+    }
+
+    /// D'tor. Free the allocated memory.
+    deinit {
+        mem.deallocate(self.data)
+    }
+
+    /// Subscript access to the underlying memory.
+    subscript (index: UInt) -> T {
+        get {
+            require!(index < capacity, "array index out of bounds!")
+            return self.data[index]
+        }
+        set {
+            require!(index < capacity, "array index out of bounds!")
+            self.data[index] = newVal
+        }
+    }
+
+    /// Returns an array view to the underlying memory.
+    prop view: ArrayView<T> {
+        return ArrayView(data, capacity)
+    }
+
+    /// Returns the capacity of this array.
+    prop size: UInt {
+        return capacity
+    }
+}
+
+extend HeapArray where reflect.IsDefaultInitializable<T> {
+    /// C'tor. Allocates space for @param{capacity} objects of type T.
+    init (withCapacity capacity: UInt) {
+        self.init(withCapacity: capacity, initialValue: reflect.defaultValue<T>)
+    }
+}

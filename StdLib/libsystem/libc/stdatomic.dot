@@ -1,0 +1,4 @@
+
+module libc.stdatomic
+
+// include_system_header!("stdatomic.h")

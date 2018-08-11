@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "*.dot": "cdot",
+        "*.xjs": "cdot",
+        "*.s": "asm",
+        "*.inc": "cdot",
+        "*.td": "cpp",
+        "cstddef": "cpp",
+        "stdlib.h": "c",
+        "vector": "cpp",
+        "iosfwd": "cpp"
+    },
+    "python.linting.pylintEnabled": false
+}

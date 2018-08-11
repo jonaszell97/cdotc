@@ -1,0 +1,1226 @@
+
+module std.math
+
+public struct BigUInt {
+    alias IntTy    = u32
+    alias BufferTy = [IntTy]
+
+    var mag: BufferTy
+
+    /// Memberwise C'tor.
+    public memberwise init
+
+    alias UInt32Max = limits.max<UInt32>
+
+    internal static def trustedStripLeadingZeroInts(from val: mut ref BufferTy) {
+        var drop = 0
+
+        // Find first nonzero byte
+        for ; drop < val.size && val[drop] == 0; drop++ {}
+        if drop != 0 && drop == val.size {
+            --drop
+        }
+
+        val.removeFront(count: drop)
+    }
+
+    internal static def cdotIncrement(_ val: mut ref BufferTy) {
+        var lastSum = 0u32
+        var i = val.size - 1
+
+        loop {
+            val[i] = val[i] + 1
+            lastSum = val[i]
+
+            if i == 0 || lastSum != 0 {
+                break
+            }
+
+            --i
+        }
+        
+        if lastSum == 0 {
+            val.resize(to: val.size + 1, fillWith: 0)
+            val[0] = 1
+        }
+    }
+
+    def mutating intoZero() {
+        mag.resize(to: 1, fillWith: 0)
+        mag[0] = 0
+    }
+
+    def mutating intoOne() {
+        mag.resize(to: 1, fillWith: 0)
+        mag[0] = 1
+    }
+
+    def isZero() -> Bool {
+        return mag.size == 1 && mag[0] == 0
+    }
+
+    def isOne() -> Bool {
+        return mag.size == 1 && mag[0] == 1
+    }
+
+    def isSingleWord(_ val: UInt32) -> Bool {
+        return mag.size == 1 && mag[0] == val
+    }
+
+    def mutating normalize() {
+        if mag.empty {
+            intoZero()
+            return
+        }
+
+        var index = 0
+        if mag[index] != 0 {
+            return
+        }
+
+        var indexBound = index + mag.size
+        loop {
+            ++index
+            if index >= indexBound || mag[index] != 0 {
+                break
+            }
+        }
+
+        mag.removeFront(count: index)
+    }
+
+    private def bitLen(of w: UInt64) -> UInt64 {
+        return 64u - builtin.ctlz_u64(w)
+    }
+}
+
+// Unary operators
+extend BigUInt {
+    // UnaryPlus
+    def prefix +() -> BigUInt {
+        return self.copy()
+    }
+
+    // Not
+    def prefix ~() -> BigUInt {
+        var cpy = self.copy()
+        cpy.invert()
+        
+        return cpy
+    }
+
+    def mutating invert() {
+        for let i in 0..mag.size {
+            mag[i] = ~mag[i]
+        }
+    }
+
+    // Pre-/Post In-/Decrement
+    def mutating prefix ++() -> BigUInt {
+        self += 1
+        return self.copy()
+    }
+
+    def mutating prefix --() -> BigUInt {
+        self -= 1
+        return self.copy()
+    }
+
+    def mutating postfix ++() -> BigUInt {
+        var cpy = self.copy()
+        self += 1
+
+        return cpy
+    }
+
+    def mutating postfix --() -> BigUInt {
+        var cpy = self.copy()
+        self -= 1
+
+        return cpy
+    }
+}
+
+// Addition
+extend BigUInt {
+    def mutating infix +=(rhs: BigUInt) {
+        if rhs.isZero() {
+            return
+        }
+        if self.isZero() {
+            self = rhs.copy()
+            return
+        }
+        
+        mag = add(mag, rhs.mag)
+    }
+
+    def infix +(rhs: BigUInt) -> BigUInt {
+        var result = self.copy()
+        result += rhs
+
+        return result
+    }
+
+    internal static def add(_ x: BufferTy, _ y: BufferTy) -> BufferTy {
+        // ensure that x's size is greater than or equal to y's
+        if x.size < y.size {
+            return add(y, x)
+        }
+
+        var xIndex = x.size
+        var yIndex = y.size
+
+        // use a UInt64 for sum to detect carries
+        var sum = 0u
+
+        // maximum length of result: max(x.size, y.size) + 1
+        let bufferSize = math.max(xIndex, yIndex)
+
+        var result = BufferTy(repeat: 0u32, count: bufferSize)
+
+        // add common parts of both numbers
+        var carry = false
+        while yIndex > 0 {
+            sum = (x[--xIndex] as UInt) + (y[--yIndex] as UInt) + (carry as UInt)
+            carry = (sum >> 32) != 0
+            result[xIndex] = sum as IntTy
+        }
+
+        // copy remainder of longer number
+        carry = (sum >> 32) != 0
+        while xIndex-- > 0 {
+            result[xIndex] = x[xIndex] + (carry as UInt32)
+            carry = x[xIndex] == UInt32Max
+        }
+
+        // grow result if necessary
+        if carry {
+            result.pushFront(0x01)
+        }
+
+        return result
+    }
+
+    @discardableResult
+    private static def addOne(_ a: mut ref BufferTy, _ offset: Int,
+                              _ mlen: Int, _ carry: UInt) -> UInt {
+        var offset = (a.size - 1 - mlen - offset) as Int
+        var t = (a[offset] as UInt) + carry
+
+        a[offset] = t as UInt32
+        if t >> 32 == 0 {
+            return 0
+        }
+
+        var mlen = mlen as Int
+        while --mlen >= 0 {
+            if --offset < 0 { // Carry out of number
+                return 1;
+            }
+            else {
+                a[offset] = a[offset] + 1
+                if a[offset] != 0 {
+                    return 0
+                }
+            }
+        }
+
+        return 1
+    }
+}
+
+// Subtraction
+extend BigUInt {
+    def mutating infix -=(rhs: BigUInt) {
+        if rhs.isZero() {
+            return
+        }
+
+        let cmp = mag <=> rhs.mag
+        if cmp == 0 {
+            self.intoZero()
+            return
+        }
+        
+        mag = if cmp > 0 then subtract(mag, rhs.mag) else subtract(rhs.mag, mag)
+        trustedStripLeadingZeroInts(from: &mag)
+    }
+
+    def infix -(rhs: BigUInt) -> BigUInt {
+        var result = self.copy()
+        result -= rhs
+
+        return result
+    }
+
+    internal static def subtract(_ x: BufferTy, _ y: BufferTy) -> BufferTy {
+        var xIndex = x.size
+        var yIndex = y.size
+        var diff   = 0
+
+        // maximum length of result: max(x.size, y.size)
+        let bufferSize = math.max(xIndex, yIndex)
+        var result = BufferTy(repeat: 0u32, count: bufferSize)
+
+        // subtract common parts of both numbers
+        var borrow = 0 // borrow is always either -1 or 0
+        while yIndex > 0 {
+            diff = (x[--xIndex] as Int) - (y[--yIndex] as Int) + borrow
+            borrow = if (diff >> 32) != 0 then -1 else 0
+            result[xIndex] = diff as UInt32
+        }
+
+        // copy remainder of longer number
+        borrow = if (diff >> 32) != 0 then -1 else 0
+        while xIndex-- > 0 {
+            result[xIndex] = x[xIndex] + (borrow as UInt32)
+            borrow = if x[xIndex] == UInt32Max then -1 else 0
+        }
+
+        return result
+    }
+}
+
+// Multiplication
+extend BigUInt {
+    def mutating infix *=(rhs: BigUInt) {
+        if rhs.isZero() || isZero() {
+            intoZero()
+            return
+        }
+
+        mag = multiplyToLen(mag, mag.size, rhs.mag, rhs.mag.size)
+        trustedStripLeadingZeroInts(from: &mag)
+    }
+
+    def infix *(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy *= rhs
+
+        return cpy
+    }
+
+    private def multiplyToLen(_ x: BufferTy, _ xlen: Int,
+                              _ y: BufferTy, _ ylen: Int) -> BufferTy {
+        assert!(xlen > 0 && ylen > 0, "invalid buffer length")
+
+        var xstart = xlen - 1
+        var ystart = ylen - 1
+
+        var z = BufferTy(repeat: 0u32, count: xlen + ylen)
+
+        var carry = 0u
+        var j = ystart
+        var k = ystart + 1 + xstart
+
+        loop {
+            var product = (y[j] as UInt) * (x[xstart] as UInt) + carry
+            z[k] = product as IntTy
+            carry = product >> 32
+
+            if j == 0 {
+                break
+            }
+
+            --j
+            --k
+        }
+
+        z[xstart] = carry as IntTy
+
+        if xstart == 0 {
+            return z
+        }
+
+        var i = xstart - 1
+        loop {
+            carry = 0
+
+            j = ystart
+            k = ystart + 1 + i
+            loop {
+                var product = (y[j] as UInt) * (x[i] as UInt) + (z[k] as UInt) + carry
+                z[k] = product as IntTy
+                carry = product >> 32
+
+                if j == 0 {
+                    break
+                }
+
+                --j
+                --k
+            }
+
+            z[i] = carry as IntTy
+            if i == 0 {
+                break
+            }
+
+            --i
+        }
+
+        return z
+    }
+
+    private static def mutating squareToLen(_ x: BufferTy, len: Int) -> BufferTy {
+        var zlen = len << 1
+        var mag = BufferTy(repeat: 0u32, count: zlen)
+
+        // Store the squares, right shifted one bit (i.e., divided by 2)
+        var lastProductLowWord = 0u32
+        var j = 0
+        var i = 0
+        for ; j < len; j++ {
+            var piece = x[j] as UInt
+            var product = piece * piece
+
+            mag[i++] = ((lastProductLowWord << 31) | ((product >> 33) as UInt32))
+            mag[i++] = (product >> 1) as UInt32
+
+            lastProductLowWord = product as UInt32
+        }
+
+        // Add in off-diagonal sums
+        i = len as Int
+        var offset = 1
+        for ; i > 0; i-- {
+            var t = x[i - 1] as UInt
+            t = mulAdd(&mag, x, offset, i - 1, t)
+            addOne(&mag, offset - 1, i, t)
+
+            offset += 2
+        }
+
+        // Shift back up and set low bit
+        primitiveLeftShift(&mag, zlen, 1)
+        mag[zlen - 1] = mag[zlen - 1] | (x[len - 1] & 1)
+
+        return mag
+    }
+
+    private static def mulAdd(_ out: mut ref BufferTy, _ in: BufferTy,
+                              _ offset: Int, _ len: Int, _ k: UInt) -> UInt {
+        var carry = 0u
+        var offset = out.size - offset - 1
+
+        if len == 0 {
+            return carry
+        }
+
+        var j = len - 1
+        loop {
+            var product = (in[j] as UInt) * k + (out[offset] as UInt) + carry
+            out[offset--] = product as UInt32
+            
+            carry = product >> 32
+
+            if j == 0 {
+                break
+            }
+
+            --j
+        }
+
+        return carry
+    }
+
+    // Exp
+    def mutating infix **=(exponent: UInt) {
+        self.pow(exponent)
+    }
+
+    def infix **(exponent: UInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy **= exponent
+
+        return cpy
+    }
+
+    private def mutating pow(_ exponent: UInt) {
+        if self.isZero() {
+            if exponent == 0 {
+                self.intoOne()
+            }
+            
+            return
+        }
+
+        // Perform exponentiation using repeated squaring trick
+        var baseToPow2 = self.mag.copy()
+        self.mag = BufferTy()
+        self.mag.push(1)
+        
+        var exponent = exponent
+        while exponent != 0 {
+            if exponent & 1 == 1 {
+                self.mag = multiplyToLen(self.mag, self.mag.size,
+                                         baseToPow2, baseToPow2.size)
+                trustedStripLeadingZeroInts(from: &self.mag)
+            }
+
+            exponent >>= 1
+            if exponent != 0 {
+                baseToPow2 = squareToLen(baseToPow2, len: baseToPow2.size)
+                trustedStripLeadingZeroInts(from: &baseToPow2)
+            }
+        }
+    }
+
+    def mutating square() {
+        if isZero() {
+            return
+        }
+
+        mag = squareToLen(mag, len: mag.size)
+        trustedStripLeadingZeroInts(from: &mag)
+    }
+}
+
+// Division
+extend BigUInt {
+    def mutating infix /=(rhs: BigUInt) {
+        var Quot = BigUInt()
+        var Rem  = BigUInt()
+
+        self.divide(by: rhs, quotient: &Quot, rem: &Rem)
+        self = Quot
+    }
+
+    def infix /(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy /= rhs
+
+        return cpy
+    }
+
+    private def divide(by b: BigUInt, quotient: mut ref BigUInt, rem: mut ref BigUInt) {
+        if b.isZero() {
+            unreachable!("BigUInt divide by zero")
+        }
+
+        // dividend is zero
+        if isZero() {
+            quotient.intoZero()
+            rem.intoZero()
+            
+            return
+        }
+
+        var cmp = self <=> b
+
+        // dividend less than divisor
+        if cmp < 0 {
+            quotient.intoZero()
+            rem = self.copy()
+            
+            return
+        }
+
+        // dividend equal to divisor
+        if cmp == 0 {
+            quotient.intoOne()
+            rem.intoZero()
+
+            return
+        }
+
+        quotient.intoZero()
+
+        // special case one word divisor
+        if b.mag.size == 1 {
+            rem = self.copy()
+            rem.divideOneWord(b.mag[0], &quotient)
+
+            return
+        }
+
+        // copy divisor value to protect divisor
+        var d = b.mag.copy()
+        var dlen = b.mag.size
+
+        // remainder starts as dividend with space for a leading zero
+        rem.mag.resize(to: mag.size + 1, fillWith: 0)
+
+        for let i in 0..mag.size {
+            rem.mag[i] = mag[i]
+        }
+
+        var remOffset = 1
+        var nlen = rem.mag.size - remOffset
+
+        // Set the quotient size
+        var limit = nlen - dlen + 1
+        if quotient.mag.size < limit {
+            quotient.mag.resize(to: limit, fillWith: 0)
+        }
+
+        // D1 normalize the divisor
+        var shift = 32u - builtin.popcnt(d[0])
+        if shift > 0 {
+            // First shift will not grow array
+            primitiveLeftShift(&d, dlen, shift)
+
+            // But this one might
+            rem.shiftLeft(by: shift as Int)
+        }
+
+        // Must insert leading 0 in rem if its length did not change
+        if rem.mag.size == nlen {
+            remOffset = 0
+            rem.mag[0] = 0
+        }
+
+        var dh = d[0]
+        var dhLong = dh as UInt
+        var dl = d[1]
+        var qWord = ([UInt32; 2])()
+
+        // D2 Initialize j
+        for var j = 0; j < limit; j++ {
+            // D3 Calculate qhat
+            // estimate qhat
+            var qhat = 0u32
+            var qrem = 0u32
+            var skipCorrection = false
+            var nh = rem.mag[j + remOffset]
+            var nh2 = nh + 0x80000000
+            var nm = rem.mag[j + 1 + remOffset]
+
+            if nh == dh {
+                qhat = ~0
+                qrem = nh + nm
+                skipCorrection = qrem + 0x80000000 < nh2
+            }
+            else {
+                var nChunk = ((nh as UInt) << 32) | (nm as UInt)
+                if nChunk >= 0 {
+                    qhat = (nChunk / dhLong) as UInt32
+                    qrem = (nChunk - ((qhat as UInt) * dhLong)) as UInt32
+                }
+                else {
+                    divWord(&qWord, nChunk, dh)
+                    qhat = qWord[0] as UInt32
+                    qrem = qWord[1] as UInt32
+                }
+            }
+
+            if qhat == 0 {
+                continue
+            }
+
+            if !skipCorrection { // Correct qhat
+                var nl = rem.mag[j + 2 + remOffset] as UInt
+                var rs = ((qrem as UInt) << 32) | nl
+                var estProduct = (dl as UInt) * (qhat as UInt)
+
+                if estProduct > rs {
+                    qhat--
+                    qrem = ((qrem as UInt) + dhLong) as UInt32
+                    if (qrem as UInt) >= dhLong {
+                        estProduct = (dl as UInt) * (qhat as UInt)
+                        rs = ((qrem as UInt) << 32) | nl
+                        if estProduct > rs {
+                            qhat--
+                        }
+                    }
+                }
+            }
+
+            // D4 Multiply and subtract
+            rem.mag[j + remOffset] = 0
+            var borrow = mulsub(&rem.mag, d, qhat as Int,
+                                dlen as Int, (j + remOffset) as Int)
+
+            // D5 Test remainder
+            if borrow + 0x80000000 > nh2 {
+                // D6 Add back
+                divadd(d, &rem.mag, j + 1 + remOffset);
+                qhat--
+            }
+
+            // Store the quotient digit
+            quotient.mag[j] = qhat
+        } // D7 loop on j
+
+        if remOffset > 0 {
+            rem.mag.removeFront()
+        }
+
+        // D8 Unnormalize
+        if shift > 0 {
+            rem.shiftRight(by: shift as Int)
+        }
+
+        rem.normalize()
+        quotient.normalize()
+    }
+
+    def mutating divideOneWord(_ divisor: UInt, _ quotient: mut ref BigUInt) {
+        // Special case of one word dividend
+        if mag.size == 1 {
+            var remValue = mag[0] as UInt
+
+            quotient.mag[0] = (remValue / divisor) as UInt32
+            if quotient.mag[0] == 0 {
+                quotient.intoZero()
+            }
+
+            mag[0] = (remValue - ((quotient.mag[0] as UInt) * divisor)) as UInt32
+            if mag[0] == 0 {
+                intoZero()
+            }
+
+            return
+        }
+
+        quotient.mag.resize(to: mag.size, fillWith: 0)
+
+        // Normalize the divisor
+        var shift = 32u - bitLen(of: divisor)
+
+        var rem = mag[0] as UInt
+        if rem < divisor {
+            quotient.mag[0] = 0;
+        }
+        else {
+            quotient.mag[0] = (rem / divisor) as UInt32
+            rem = (rem - ((quotient.mag[0] as UInt) * divisor)) as UInt32
+        }
+
+        var xlen = mag.size
+        var qWord = ([UInt32; 2])()
+        while --xlen > 0 {
+            var dividendEstimate = (rem << 32) | (mag[mag.size - xlen] as UInt)
+            if dividendEstimate >= 0 {
+                qWord[0] = (dividendEstimate / divisor) as UInt32
+                qWord[1] = (dividendEstimate
+                    - ((qWord[0] as UInt) * divisor)) as UInt32
+            }
+            else {
+                divWord(&qWord, dividendEstimate, divisor)
+            }
+
+            quotient.mag[mag.size - xlen] = qWord[0] as UInt32
+            rem = qWord[1] as UInt
+        }
+
+        // Unnormalize
+        if shift > 0 {
+            rem %= divisor
+        }
+        
+        mag[0] = rem as UInt32
+        if mag[0] == 0 {
+            intoZero()
+        }
+        else {
+            mag.resize(to: 1, fillWith: 0)
+        }
+
+        quotient.normalize()
+    }
+
+    private def divWord<T>(_ result: mut ref T, _ n: UInt, _ d: UInt) {
+        if d == 1 {
+            result[0] = n as UInt32
+            result[1] = 0
+
+            return
+        }
+
+        // Approximate the quotient and remainder
+        var q = (n >> 1) / (d >> 1)
+        var r = n - q * d
+
+        // Correct the approximation
+        while r < 0 {
+            r += d
+            q--
+        }
+
+        while r >= d {
+            r -= d
+            q++
+        }
+
+        // n - q * d == r && 0 <= r < d, hence we're done.
+        result[0u] = q as UInt32
+        result[1u] = r as UInt32
+    }
+
+    private def mulsub(_ q: mut ref BufferTy, _ a: BufferTy,
+                       _ x: Int, _ len: Int, _ offset: Int) -> UInt32 {
+        var carry = 0u
+        var offset = offset
+        offset += len
+
+        var j = len - 1
+        loop {
+            var product = ((a[j] as UInt) * (x as UInt)) + carry
+            var difference = (q[offset] as UInt) - product
+
+            q[offset--] = difference as UInt32
+            carry = (product >> 32) + (if difference > ~product then 1 else 0)
+
+            if j == 0 {
+                break
+            }
+
+            --j
+        }
+
+        return carry as UInt32
+    }
+
+    @discardableResult
+    private def divadd(_ a: BufferTy, _ result: mut ref BufferTy,
+                       _ offset: Int) -> UInt32 {
+        var carry = 0u
+        var j = a.size - 1
+
+        loop {
+            var sum = (a[j] as UInt) + (result[j + offset] as UInt) + carry
+            result[j + offset] = sum as UInt32
+            carry = sum >> 32
+
+            if j == 0 {
+                break
+            }
+
+            --j
+        }
+
+        return carry as UInt32
+    }
+
+    // Remainder & Modulo
+
+    def mutating infix %=(rhs: BigUInt) {
+        assert!(!rhs.isZero(), "modulus must be > 0!")
+        self = self.rem(rhs)
+    }
+
+    def infix %(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy %= rhs
+
+        return cpy
+    }
+
+    def rem(_ rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        var Quot = BigUInt()
+        var Rem  = BigUInt()
+
+        cpy.divide(by: rhs, quotient: &Quot, rem: &Rem)
+        return cpy
+    }
+
+    def divRem(_ rhs: BigUInt) -> (BigUInt, BigUInt) {
+        var cpy = self.copy()
+        var Quot = BigUInt()
+        var Rem  = BigUInt()
+
+        cpy.divide(by: rhs, quotient: &Quot, rem: &Rem)
+        return (Quot, Rem)
+    }
+}
+
+// Bitwise ops
+extend BigUInt {
+    // And
+    def mutating infix &=(rhs: BigUInt) {
+        if rhs.mag.size > mag.size {
+            mag.reserveCapacity(rhs.mag.size)
+            while mag.size < rhs.mag.size {
+                mag.push(0)
+            }
+        }
+
+        for i in 0..mag.size {
+            mag[i] = mag[i] & rhs.mag[i]
+        }
+    }
+
+    def infix &(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy &= rhs
+
+        return cpy
+    }
+
+    // Or
+    def mutating infix |=(rhs: BigUInt) {
+        if rhs.mag.size > mag.size {
+            mag.reserveCapacity(rhs.mag.size)
+            while mag.size < rhs.mag.size {
+                mag.push(0)
+            }
+        }
+
+        for i in 0..mag.size {
+            mag[i] = mag[i] | rhs.mag[i]
+        }
+    }
+
+    def infix |(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy |= rhs
+
+        return cpy
+    }
+
+    // Xor
+    def mutating infix ^=(rhs: BigUInt) {
+        if rhs.mag.size > mag.size {
+            mag.reserveCapacity(rhs.mag.size)
+            while mag.size < rhs.mag.size {
+                mag.push(0)
+            }
+        }
+
+        for i in 0..mag.size {
+            mag[i] = mag[i] ^ rhs.mag[i]
+        }
+    }
+
+    def infix ^(rhs: BigUInt) -> BigUInt {
+        var cpy = self.copy()
+        cpy ^= rhs
+
+        return cpy
+    }
+
+    // Shl
+    def mutating infix <<=(n: Int) {
+        shiftLeft(by: n)
+    }
+
+    def infix <<(n: Int) -> BigUInt {
+        var cpy = self.copy()
+        cpy <<= n
+
+        return cpy
+    }
+
+    // Shr
+    def mutating infix >>=(n: Int) {
+        shiftRight(by: n)
+    }
+
+    def infix >>(n: Int) -> BigUInt {
+        var cpy = self.copy()
+        cpy >>= n
+
+        return cpy
+    }
+
+    internal def mutating shiftLeft(by n: Int) {
+        if n == 0 || self.isZero() {
+            return
+        }
+        if  n < 0 {
+            return shiftRight(by: -n)
+        }
+
+        // whole word shift amount
+        var wordShift = n / 32
+
+        // leftover bit shift amount
+        var bitShift  = (n as UInt32) % 32
+
+        var magLen = mag.size
+        
+        // if no bits need shifting, just do a memmove
+        if bitShift == 0 {
+            // initialize the shifted-in values with 0
+            mag.resize(to: magLen + wordShift, fillWith: 0)
+        }
+        else {
+            var i = 0
+            var leftOverBits = 32u32 - (bitShift as UInt32)
+            var highBits = mag[0] >> leftOverBits
+
+            if highBits != 0 {
+                mag.resize(to: magLen + wordShift + 1, fillWith: 0)
+                mag[i++] = highBits
+            }
+            else {
+                mag.resize(to: magLen + wordShift, fillWith: 0)
+            }
+
+            var j = 0
+            while j < magLen - 1 {
+                mag[i++] = (mag[j++] << bitShift) | (mag[j] >> leftOverBits)
+            }
+
+            mag[i] = mag[j] << bitShift
+        }
+    }
+
+    private static def primitiveLeftShift(_ a: mut ref BufferTy,
+                                          _ len: Int, _ n: UInt) {
+        if len == 0 || n == 0 {
+            return
+        }
+
+        var n2 = 32u - n
+        var i = 0
+        var c = a[i] as UInt
+        var m = i + len - 1
+
+        for ; i < m; i++ {
+            var b = c
+            c = a[i + 1]
+
+            a[i] = ((b << n) | (c >> n2)) as IntTy
+        }
+
+        a[len - 1] = a[len - 1] << (n as IntTy)
+    }
+
+    internal def mutating shiftRight(by n: Int) {
+        if n == 0 {
+            return
+        }
+        if n < 0 {
+            return shiftLeft(by: -n)
+        }
+
+        var nInts = n >> 5
+        var nBits = (n & 0x1f) as IntTy
+        var magLen = mag.size
+
+        // Special case: entire contents shifted off the end
+        if nInts >= magLen {
+            self.intoZero()
+            return
+        }
+
+        if nBits == 0 {
+            var newMagLen = magLen - nInts
+            mag.resize(to: newMagLen, fillWith: 0)
+        }
+        else {
+            var i = 0
+            var highBits = mag[0] >> nBits
+            if highBits != 0 {
+                mag.resize(to: magLen - nInts, fillWith: 0)
+                mag[i++] = highBits
+            }
+            else {
+                mag.resize(to: magLen - nInts - 1, fillWith: 0)
+            }
+
+            var nBits2 = 32u32 - nBits
+            var j = 0
+            while j < magLen - nInts - 1 {
+                mag[i++] = (mag[j++] << nBits2) | (mag[j] >> nBits)
+            }
+        }
+    }
+}
+
+// Operators with single word rhs
+extend BigUInt {
+    private macro int_binary_op{
+        ($($op:tok)*) => {
+            $(
+                def mutating infix ${$op=}<T>(rhs: T) where IsIntegral<T> {
+                    var rhsVal = BigUInt(integerLiteral: rhs as UInt)
+                    self ${$op=} rhsVal
+                }
+
+                def infix $op<T>(rhs: T) -> BigUInt where IsIntegral<T> {
+                    var cpy = self.copy()
+                    cpy ${$op=} rhs
+
+                    return cpy
+                }
+            )...
+        }
+    }
+
+    int_binary_op!{ + - * / % & | ^ }
+}
+
+extend BigUInt with ExpressibleByIntegerLiteral {
+    init (integerLiteral val: UInt64 = 0u) {
+        self.mag = BufferTy()
+        if val > limits.max<UInt32> {
+            self.mag.push((val >> 32) as UInt32)
+            self.mag.push(val as UInt32)
+        }
+        else {
+            self.mag.push(val as UInt32)
+        }
+    }
+}
+
+extend BigUInt {
+    init? (_ s: String) {
+        self.init(s, radix: 10u)
+    }
+
+    init? (_ s: String, radix: UInt) {
+        if s.empty {
+            return none
+        }
+
+        self.mag = BufferTy()
+        self.mag.push(0)
+
+        var i = 0
+
+        // figure out if we can shift instead of multiply
+        var shift = (if radix == 16 then 4
+                     else (if radix == 8 then 3
+                           else (if radix == 2 then 1 else 0)))
+
+        var slen = s.size
+        for ; i < slen; ++i {
+            if s[i] == '_' {
+                continue
+            }
+
+            var val = getDigitValue(of: s[i].ascii, radix)
+            if (val as UInt) >= radix {
+                return none
+            }
+
+            if shift != 0 {
+                self <<= shift
+            }
+            else {
+                self *= radix
+            }
+
+            self += val
+        }
+    }
+
+    internal static def getDigitValue(of c: UInt8, radix: UInt) -> UInt8 {
+        match radix {
+        case 2:
+        case 8:
+        case 10:
+            return c - '0'
+        case 16:
+            if c <= '9' && c >= '0' {
+                return c - '0'
+            }
+            
+            return (libc.toupper(c) - 'A') + 10u8
+        default:
+            unreachable!("bad radix!")
+        }
+    }
+}
+
+extend BigUInt with Comparable {
+    def infix <=>(rhs: BigUInt) -> Int {
+        return mag <=> rhs.mag
+    }
+}
+
+extend BigUInt with Copyable {
+    def copy() -> BigUInt {
+        return BigUInt(mag: mag.copy())
+    }
+}
+
+extend BigUInt with Randomizable {
+    static def random(withMaxLength maxLength: UInt) -> BigUInt {
+        var words = maxLength % 32
+        var buffer = BufferTy()
+
+        for let i in 0u..words {
+            buffer.push(UInt32.random())
+        }
+
+        return BigUInt(mag: buffer)
+    }
+
+    static def random() -> BigUInt {
+        return random(withMaxLength: 64)
+    }
+}
+
+extend BigUInt with Hashable {
+    def hashValue() -> UInt {
+        var hashCode = 0u
+        for let i in mag {
+            hashCode = 31 * hashCode + (i as UInt)
+        }
+
+        return hashCode
+    }
+}
+
+extend BigUInt with StringRepresentable {
+    static let digits: [u8; 36] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    def toString<let Base = 10>() -> String {
+        var s = ""
+        var val = copy()
+
+        static if Base == 2 {
+            s += "0b"
+        }
+        else static if Base == 8 {
+            s += "0c"
+        }
+        else static if Base == 10 {
+            // no prefix for decimal
+        }
+        else static if Base == 16 {
+            s += "0x"
+        }
+        else {
+            static_assert(false, "Base must be one of 2, 8, 10 or 16!")
+        }
+
+        if val.isZero() {
+            s += "0"
+            return s
+        }
+
+        let offset = s.size
+
+        // For the 2, 8 and 16 bit cases, we can just shift instead of divide
+        // because the number of bits per digit (1, 3 and 4 respectively) divides
+        // equally.  We just shift until the value is zero.
+        static if Base == 2 || Base == 8 || Base == 16 {
+            // Just shift tmp right for each digit width until it becomes zero
+            var ShiftAmt = (if Base == 16 then 4 else (if Base == 8 then 3 else 1))
+            alias MaskAmt = Base - 1
+
+            while !val.isZero() {
+                var Digit = (val.mag[0] & MaskAmt) as UInt
+                s += digits[Digit]
+
+                val.shiftLeft(by: ShiftAmt)
+            }
+        }
+        else {
+            let dividend = BigUInt(integerLiteral: Base as UInt)
+            var Rem = BigUInt()
+            var Quot = BigUInt()
+
+            while !val.isZero() {
+                Rem.intoZero()
+                Quot.intoZero()
+
+                val.divide(by: dividend, quotient: &Quot, rem: &Rem)
+                
+                assert!(Rem.mag.size == 1 && Rem.mag[0] < Base as UInt32, "division failed!")
+                s += digits[Rem.mag[0]]
+
+                val = Quot.copy()
+            }
+        }
+
+        s.reverse(fromIndex: offset)
+        return s
+    }
+}

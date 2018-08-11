@@ -1,0 +1,4 @@
+
+module libc.wctype
+
+include_system_header!("wctype.h")

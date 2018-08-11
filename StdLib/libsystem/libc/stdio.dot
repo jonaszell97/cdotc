@@ -1,0 +1,4 @@
+
+module libc.stdio
+
+include_system_header!("stdio.h")

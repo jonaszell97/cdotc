@@ -1,0 +1,68 @@
+
+module std.prelude
+
+public struct TypeInfo {
+    let baseClass: UnsafePtr<TypeInfo>
+    let vtable: UnsafePtr<UnsafeRawPtr>
+    let ptable: UnsafePtr<UnsafeRawPtr>
+    let name: UnsafePtr<u8>
+    let deinitializer: @thin (UnsafeMutableRawPtr) -> Void
+    let conformances: UnsafePtr<UnsafePtr<TypeInfo>>
+}
+
+@extern(C)
+public def _cdot_TypeInfoCmp(_ lhs: UnsafePtr<TypeInfo>,
+                             _ rhs: UnsafePtr<TypeInfo>) -> Bool {
+    var curr = lhs
+    while curr {
+        if curr == rhs {
+            return true
+        }
+
+        curr = curr->baseClass
+    }
+
+    if !lhs->conformances {
+        return false
+    }
+
+    var i = 0u
+    curr = lhs->conformances[i++]
+
+    while curr {
+        if curr == rhs {
+            return true
+        }
+
+        curr = lhs->conformances[i++]
+    }
+
+    return false
+}
+
+struct ClassHeader {
+    var strongRefcount: u64
+    var weakRefcount: u64
+    var typeInfo: UnsafePtr<TypeInfo>
+}
+
+struct AnyOption {
+    var discriminator: Int8
+    var objectRef: UnsafePtr<ClassHeader>
+}
+
+@extern(C)
+public def _cdot_DynamicDownCast(_ object: UnsafePtr<ClassHeader>,
+                                 _ lhs: UnsafePtr<TypeInfo>,
+                                 _ rhs: UnsafePtr<TypeInfo>) -> AnyOption {
+    var curr = lhs
+    while curr {
+        if curr == rhs {
+            return AnyOption(discriminator: 1, objectRef: object)
+        }
+
+        curr = curr->baseClass
+    }
+
+    return AnyOption(discriminator: 0, objectRef: __nullptr)
+}

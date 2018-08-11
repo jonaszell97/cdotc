@@ -1,0 +1,76 @@
+
+@compiletime
+module std.math
+
+alias π  = 3.141592653589793238463
+alias pi = π
+alias e  = 2.71828182845904
+
+/// \return the maximum of all passed values.
+def max<T>(currentMax: T) -> T {
+    return currentMax
+}
+
+/// \return the maximum of all passed values.
+def max<T, ...Rest>(currentMax: T, _ value: T, _ rest: Rest...) -> T {
+    return if value > currentMax then max(currentMax: value, rest...)
+                                 else max(currentMax: currentMax, rest...)
+}
+
+/// \return the maximum of all passed values.
+public def max<T, ...Rest>(_ lhs: T, _ rest: Rest...) -> T {
+    return max(currentMax: lhs, rest...)
+}
+
+/// \return the minimum of all passed values.
+def min<T>(currentMin: T) -> T {
+    return currentMin
+}
+
+/// \return the minimum of all passed values.
+def min<T, ...Rest>(currentMin: T, _ value: T, _ rest: Rest...) -> T {
+    return if value < currentMin then min(currentMin: value, rest...)
+                                 else min(currentMin: currentMin, rest...)
+}
+
+/// \return the minimum of all passed values.
+public def min<T, ...Rest>(_ lhs: T, _ rest: Rest...) -> T {
+    return min(currentMin: lhs, rest...)
+}
+
+/// \return the absolute of the given value.
+public def abs<T>(_ i: T) -> T {
+    return if i < 0 then -i else i
+}
+
+public def round(_ d: Double) -> Int {
+    return d as Int
+}
+
+public def ceil(_ d: Double) -> Int {
+    return builtin.ceil_f64(d) as Int
+}
+
+public def floor(_ d: Double) -> Int {
+    return builtin.floor_f64(d) as Int
+}
+
+public def log10(_ d: Double) -> Double {
+    return builtin.log10_f64(d)
+}
+
+public def log2(_ d: Double) -> Double {
+    return builtin.log2_f64(d)
+}
+
+public def ln(_ d: Double) -> Double {
+    return builtin.log_f64(d)
+}
+
+public def closestPowerOfTwo<T>(of num: T) -> T where IsIntegral<T> {
+    if num < 2 {
+        return num
+    }
+
+    return (1u << (64u - builtin.ctlz_u64((num as UInt64) - 1))) as T
+}

@@ -1,0 +1,4 @@
+
+module libc.stdint
+
+include_system_header!("stdint.h")

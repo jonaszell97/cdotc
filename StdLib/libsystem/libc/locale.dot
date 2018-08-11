@@ -1,0 +1,4 @@
+
+module libc.locale
+
+include_system_header!("locale.h")

@@ -1,0 +1,180 @@
+
+@version(POSIX)
+module std.sys.fs
+
+using std.fs.{OpenFlags, SeekOrigin, AccessMode}
+using libc.{ size_t, ssize_t, int, off_t, CString }
+using std.sys.posix
+
+/// Opaque value that represents an open file.
+alias FileDescriptor = libc.int
+
+/// A file descriptor indicating an error.
+alias InvalidFD = -1 as FileDescriptor
+
+/// Open the file with the given name for reading. Returns a FileDescriptor describing
+/// the file on success, or InvalidFD on error.
+def openFileForRead(_ fileName: String) -> FileDescriptor {
+    var openFlags = posix.OpenFlags.O_RDONLY
+    static if reflect.targetInfo.operatingSystem.isDarwin {
+        openFlags |= .O_CLOEXEC
+    }
+
+    var fileName = fileName
+    return fileName.withCString {
+        return posix.open($0, openFlags)
+    }
+}
+
+/// Open the file with the given name for writing. Returns a FileDescriptor describing
+/// the file on success, or InvalidFD on error.
+def openFileForWrite(_ fileName: String, _ flags: OpenFlags,
+                     _ mode: int = 0666) -> FileDescriptor {
+    var openFlags = posix.OpenFlags.O_CREAT
+    static if reflect.targetInfo.operatingSystem.isDarwin {
+        openFlags |= .O_CLOEXEC
+    }
+
+    if flags & .RW != 0 {
+        openFlags |= .O_RDWR
+    }
+    else {
+        openFlags |= .O_WRONLY
+    }
+
+    if flags & .Append != 0 {
+        openFlags |= .O_APPEND
+    }
+    if flags & .Excl != 0 {
+        openFlags |= .O_EXCL
+    }
+
+    var fileName = fileName
+    return fileName.withCString {
+        return posix.open($0, openFlags, mode)
+    }
+}
+
+/// Attempt to close the file described by the file descriptor.
+/// Returns 0 on success, and -1 on error.
+@discardableResult
+internal def closeFile(_ fd: FileDescriptor) -> Int {
+    return posix.close(fd)
+}
+
+/// If the file supports seeking, changes the offset to the given position.
+/// Otherwise, returns -1.
+internal def seek(_ fd: FileDescriptor, _ off: UInt, _ origin: SeekOrigin) -> UInt {
+    return posix.lseek(fd, off as off_t, origin) as UInt
+}
+
+/// Returns the size of the file described by the given file descriptor, or -1 if seeking
+/// is not supported.
+internal def getFileSize(_ fd: FileDescriptor) -> UInt {
+    // save current offset
+    var off = posix.lseek(fd, 0, .SEEK_CUR)
+
+    // move to the end of the file
+    var size = posix.lseek(fd, 0, .SEEK_END)
+
+    // rewind
+    posix.lseek(fd, off, .SEEK_SET)
+
+    return size as UInt
+}
+
+/// Write count objects of size objSize to the file described by this file handle.
+/// The objects will be read from the buffer bytes, which must be at least 
+/// n bytes long.
+@discardableResult
+internal def writeToFile(_ fd: FileDescriptor,
+                         _ bytes: CString,
+                         _ n: size_t) -> ssize_t {
+    return posix.write(fd, bytes, n)
+}
+
+/// Write count objects of size objSize to the file described by this file handle at the specified
+/// position, which must be lower than the current value returned by tell().
+/// The objects will be read from the buffer bytes, which must be at least 
+/// n bytes long.
+@discardableResult
+internal def writeToFileAtPosition(_ fd: FileDescriptor,
+                                   _ bytes: CString,
+                                   _ n: size_t,
+                                   _ pos: UInt) -> ssize_t {
+    return posix.pwrite(fd, bytes, n, pos as off_t)
+}
+
+/// Read count objects of size objSize to the file described by this file handle.
+/// The read objects will be stored in the buffer buf, which must be at least 
+/// objSize * count bytes long.
+@discardableResult
+internal def readFromFile(_ fd: FileDescriptor,
+                          _ buf: CString,
+                          _ n: size_t) -> ssize_t {
+    return posix.read(fd, buf, n)
+}
+
+/// Read count objects of size objSize to the file described by this file handle.
+/// The read objects will be stored in the buffer buf, which must be at least 
+/// objSize * count bytes long.
+@discardableResult
+internal def readFromFileAtPosition(_ fd: FileDescriptor,
+                                    _ buf: CString,
+                                    _ n: size_t,
+                                    _ pos: UInt) -> ssize_t {
+    return posix.pread(fd, buf, n, pos as off_t)
+}
+
+/// Returns the current offset of the handle in the file.
+internal def currentPosition(_ fd: FileDescriptor) -> off_t {
+    return posix.lseek(fd, 0, .SEEK_CUR)
+}
+
+/// Attempt to delete the file with the given name.
+/// @return true on failure, false on success.
+internal def deleteFile(_ fileName: String) -> Bool {
+    var fileName = fileName
+    var result = fileName.withCString {
+        return posix.remove($0)
+    }
+
+    return result < 0
+}
+
+/// Check whether or not a file exists and has the specified access permissions.
+/// @return true if the file exists, false otherwise.
+internal def fileExists(_ fileName: String, _ access: AccessMode) -> Bool {
+    var accessKind = posix.AccessMode.F_OK
+    if access & .Execute != 0 {
+        accessKind |= .X_OK
+    }
+    if access & .Read != 0 {
+        accessKind |= .R_OK
+    }
+    if access & .Write != 0 {
+        accessKind |= .W_OK
+    }
+
+    var fileName = fileName
+    var result = fileName.withCString {
+        return posix.access($0, accessKind)
+    }
+
+    return result == 0
+}
+
+/// System directory for temporary files.
+internal def tempDir() -> String {
+    @version(macOS) {
+        return String(rawBytes: libc.stdlib.getenv("TMPDIR"))
+    }
+    else @version(POSIX) {
+        return "/tmp/"
+    }
+    else {
+        static_assert(false, "unsupported system")
+    }
+}
+
+internal let PathSeperator = '/'

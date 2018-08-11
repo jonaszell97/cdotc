@@ -1,0 +1,5 @@
+cmake-build-debug/
+cmake-build-release/
+xcode_build/
+.idea/
+CMakeLists.txt.user

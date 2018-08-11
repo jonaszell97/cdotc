@@ -1,0 +1,4 @@
+
+module libc.string
+
+include_system_header!("string.h")

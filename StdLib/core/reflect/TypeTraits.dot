@@ -1,0 +1,18 @@
+
+module std.reflect
+
+struct defer< ...Args> {
+    let fn: (Args...) -> Void
+    let ...args: Args...
+
+    deinit {
+        (fn)(args...)
+    }
+}
+
+alias Arity             = 0
+alias Arity<T, ...Rest> = Arity<Rest...> + 1
+
+alias TypeAt<let Idx>             = Void
+alias TypeAt<let Idx, T, ...Rest> = T                        where Idx == 0
+alias TypeAt<let Idx, T, ...Rest> = TypeAt<Idx - 1, Rest...> where Idx != 0

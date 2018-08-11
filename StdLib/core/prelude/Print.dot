@@ -1,0 +1,24 @@
+
+module std.prelude
+
+/// Prints \param terminator to stdout. Used as a recursion breaker for `print` below.
+@compiletime
+public def print(separator: Char = ' ', terminator: Char = '\n') {
+    libc.printf("%c", terminator)
+}
+
+/// Prints \param t, and recursively \param args to stdout.
+/// \param separator is printed after each item except the last.
+/// \param terminator is printed after the last item.
+@compiletime
+public def print<T, ...Args>(_ t: T, _ args: Args...,
+                             separator: Char = ' ',
+                             terminator: Char = '\n') {
+    var s = String(_: t)
+    s.withCString {
+        libc.printf("%s", $0)
+    }
+
+    libc.printf("%c", separator)
+    print(args..., separator: separator, terminator: terminator)
+}

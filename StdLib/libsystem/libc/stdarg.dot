@@ -1,0 +1,4 @@
+
+module libc.stdarg
+
+// include_system_header!("stdarg.h")

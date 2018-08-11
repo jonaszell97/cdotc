@@ -1,0 +1,89 @@
+
+module std.sys
+
+enum TimeUnit {
+    case Seconds, Millis, Nanos
+}
+
+def currentTime() -> Int {
+    return libc.time(0 as! UnsafeMutableRawPtr) as Int
+}
+
+internal struct timeval {
+    let tv_sec: i64     /* seconds */
+    let tv_usec: i32    /* microseconds */
+}
+
+def highResolutionClock() -> Int {
+    alias OS = reflect.targetInfo.operatingSystem
+    static if OS == .windows {
+        declare C def QueryPerformanceCounter(UnsafeMutablePtr<u64>) -> Void
+
+        var val = 0u64
+        QueryPerformanceCounter(builtin.addressOf(&val))
+
+        return val as Int
+    }
+    else {
+        declare C def gettimeofday(UnsafeMutablePtr<timeval>, UnsafeMutableRawPtr) -> Void
+
+        var t = timeval(tv_sec: 0, tv_usec: 0)
+        gettimeofday(builtin.addressOf(&t), 0 as! UnsafeMutableRawPtr)
+
+        return t.tv_usec as Int
+    }
+}
+
+internal def elapsedTimeMicros(_ begin: Int, _ end: Int) -> Int {
+    let frequency: Int
+
+    alias OS = reflect.targetInfo.operatingSystem
+    static if OS == .windows {
+        declare C def QueryPerformanceFrequency(UnsafeMutablePtr<u64>) -> Void
+        var i = 0u64
+        QueryPerformanceFrequency(builtin.addressOf(&i))
+
+        frequency = i as Int
+    }
+    else {
+        frequency = 1
+    }
+
+    return (end - begin) / frequency
+}
+
+alias CLOCKS_PER_SEC = 1000000.0
+
+struct Timer {
+    internal let time: Int
+}
+
+def startTimer() -> Timer {
+    var t = Timer(time: highResolutionClock())
+    return t
+}
+
+def endTimer(_ t: owned Timer, _ unit: TimeUnit = .Millis) -> Int {
+    let endTime = highResolutionClock()
+    let quotient: Int
+    match unit {
+        case .Nanos:
+            quotient = 1
+        case .Millis:
+            quotient = 1000
+        case .Seconds:
+            quotient = 1_000_000
+    }
+
+    return elapsedTimeMicros(t.time, endTime) / quotient
+}
+
+macro benchmark {
+    ($code:stmt) => {{
+        var timer = startTimer()
+        $code;
+
+        var duration = endTimer(timer)
+        print("benchmark took ${duration}ms to complete")
+    }}
+}

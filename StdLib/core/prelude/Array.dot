@@ -1,0 +1,689 @@
+
+module std.prelude
+
+// public class Array<T> {
+//     var BeginPtr: UnsafeMutablePtr<T>
+//     var EndPtr: UnsafeMutablePtr<T>
+//     var CapPtr: UnsafeMutablePtr<T>
+
+//     alias DefaultCapacity = 8u
+//     alias ElementSize     = reflect.sizeOf<T>
+
+//     private init (_ data: UnsafePtr<T>, _ size: u64, _ cap: u64) {
+//         self.BeginPtr = allocate(cap)
+//         self.EndPtr = self.BeginPtr + size
+//         self.CapPtr = self.BeginPtr + cap
+
+//         libc.memcpy(self.BeginPtr as! UnsafeMutableRawPtr,
+//                     data as! UnsafeMutableRawPtr, size * ElementSize)
+//     }
+
+//     private init (_ BeginPtr: UnsafeMutablePtr<T>,
+//                   _ EndPtr: UnsafeMutablePtr<T>,
+//                   _ CapPtr: UnsafeMutablePtr<T>) {
+//         self.BeginPtr = BeginPtr
+//         self.EndPtr   = EndPtr
+//         self.CapPtr   = CapPtr
+//     }
+
+//     init (_ value: T, repeat: u64) {
+//         self.BeginPtr = allocate(repeat)
+//         self.EndPtr = self.BeginPtr + repeat
+//         self.CapPtr = self.EndPtr
+
+//         var ptr = self.BeginPtr
+//         for var i = 0u; i < repeat; ++i {
+//             builtin.uninitializedStore(value.copy(), to: ptr)
+//             ++ptr
+//         }
+//     }
+
+//     init (withInitialCapacity initialCapacity: u64) {
+//         self.BeginPtr = 0 as! UnsafeMutablePtr<T>
+//         self.EndPtr = 0 as! UnsafeMutablePtr<T>
+//         self.CapPtr = 0 as! UnsafeMutablePtr<T>
+
+//         reserve(initialCapacity)
+//     }
+
+//     init {
+//         self.BeginPtr = 0 as! UnsafeMutablePtr<T>
+//         self.EndPtr = 0 as! UnsafeMutablePtr<T>
+//         self.CapPtr = 0 as! UnsafeMutablePtr<T>
+
+//         reserve(DefaultCapacity)
+//     }
+
+//     deinit {
+//         for var ptr = self.BeginPtr; ptr != self.EndPtr; ++ptr {
+//             builtin.deinit(builtin.loadFromPointer(ptr))
+//         }
+
+//         // debug!("freeing $BeginPtr in ${reflect.function} (obj ${builtin.addressOf(self)})")
+//         _cdot_Free(BeginPtr as! UnsafeMutableRawPtr)
+//     }
+
+//     @inline(always)
+//     private static def allocate(_ size: UInt) -> UnsafeMutablePtr<T> {
+//         return mem.allocate<T>(size)
+//     }
+
+//     @inline(always)
+//     private def reallocate(_ size: UInt) -> UnsafeMutablePtr<T> {
+//         return mem.reallocate(pointer: BeginPtr, newAmount: size)
+//     }
+
+//     private def grow() {
+//         reserve(capacity << 1u)
+//     }
+
+//     def reserve(_ size: u64) {
+//         if size <= capacity {
+//             return
+//         }
+
+//         let currentSize = self.size
+
+//         self.BeginPtr = reallocate(size)
+//         self.EndPtr   = self.BeginPtr + currentSize
+//         self.CapPtr   = self.BeginPtr + size
+//     }
+
+//     def emplace< ...Ts>(_ ts: Ts...) {
+//         push(T(ts...))
+//     }
+
+//     def push(_ t: owned T) {
+//         while EndPtr >= CapPtr {
+//             grow()
+//         }
+
+//         builtin.uninitializedStore(&t, to: EndPtr)
+//         EndPtr = EndPtr + 1u
+//     }
+
+//     def infix += (t: T) {
+//         push(t)
+//     }
+
+//     def infix += (arr: [T]) {
+//         for var i = 0u; i < arr.size; ++i {
+//             push(arr[i])
+//         }
+//     }
+
+//     def pop(_ amount: UInt = 1) {
+//         assert!(size >= amount, "popping more values than exist")
+//         EndPtr = EndPtr - amount
+//     }
+
+//     def popVal() -> T {
+//         let val = self.back
+//         pop()
+
+//         return val
+//     }
+
+//     def popFront(_ amount: UInt = 1) {
+//         assert!(size >= amount, "popping more values than exist")
+//         libc.memmove(self.BeginPtr as! UnsafeMutableRawPtr,
+//                      (self.BeginPtr + amount) as! UnsafeMutableRawPtr,
+//                      (size - amount) * ElementSize)
+
+//         EndPtr = EndPtr - amount
+//     }
+
+//     def insertAtPosition(pos: UInt, _ t: owned T) {
+//         assert!(pos <= size, "insert position must be <= array size!")
+
+//         // special case, insert at end
+//         if pos == size {
+//             push(t)
+//             return
+//         }
+
+//         // grow if necessary
+//         if EndPtr >= CapPtr {
+//             grow()
+//         }
+
+//         // move following elements
+//         mem.move(to: (BeginPtr + pos + 1u) as! UnsafeMutableRawPtr,
+//                  from: (BeginPtr + pos) as! UnsafeMutableRawPtr,
+//                  size - pos)
+
+//         // insert new element
+//         builtin.uninitializedStore(&t, to: BeginPtr + pos)
+//         ++EndPtr
+//     }
+
+//     def pushFront(_ t: owned T) {
+//         insertAtPosition(pos: 0, t)
+//     }
+
+//     prop front: T {
+//         get {
+//             assert!(!empty, "called 'front' on empty collection")
+//             return BeginPtr[0]
+//         }
+//         set {
+//             assert!(!empty, "called 'front' on empty collection")
+//             BeginPtr[0] = newVal
+//         }
+//     }
+
+//     prop back: T {
+//         get {
+//             assert!(!empty, "called 'back' on empty collection")
+//             return BeginPtr[size - 1]
+//         }
+//         set {
+//             assert!(!empty, "called 'back' on empty collection")
+//             BeginPtr[size - 1] = newVal
+//         }
+//     }
+
+//     prop view: ArrayView<T> {
+//         return ArrayView(BeginPtr, size)
+//     }
+
+//     def set(_ idx: UInt, _ t: owned T) {
+//         assert!(idx < size, "index out of bounds (given index: $idx, size: $size)")
+//         BeginPtr[idx] = t
+//     }
+
+//     subscript (idx: UInt) -> T {
+//         get {
+//             assert!(idx < size, "index out of bounds (given index: $idx, size: $size)")
+//             return builtin.copy(BeginPtr[idx])
+//         }
+//         set {
+//             assert!(idx < size, "index out of bounds (given index: $idx, size: $size)")
+//             BeginPtr[idx] = newVal
+//         }
+//     }
+
+//     def clear() {
+//         reserve(0)
+//     }
+
+//     prop size: UInt {
+//         return EndPtr - BeginPtr
+//     }
+
+//     prop capacity: UInt {
+//         return CapPtr - BeginPtr
+//     }
+
+//     prop empty: Bool {
+//         return BeginPtr == EndPtr
+//     }
+
+//     prop unsafeBeginPtr: UnsafeMutablePtr<T> {
+//         return BeginPtr
+//     }
+// }
+
+// extend Array with Iterable {
+//     struct Iterator with IteratorProtocol {
+//         let arr: [T]
+//         var idx: u64 = 0
+
+//         associatedType Element = T
+
+//         def mutating next() -> T? {
+//             if  idx >= arr.size {
+//                 return none
+//             }
+
+//             return .Some(arr[idx++])
+//         }
+//     }
+
+//     associatedType Element = T
+//     associatedType It = Iterator
+
+//     def getIterator() -> It {
+//         return Iterator(arr: self)
+//     }
+// }
+
+// extend Array with StringRepresentable {
+//     def join<let Separator: String>() -> String {
+//         var s = "["
+
+//         var i = 0u
+//         for let el in self {
+//             if i++ != 0 {
+//                 s += Separator
+//             }
+
+//             s += String(el)
+//         }
+
+//         s += "]"
+//         return s
+//     }
+
+//     def toString() -> String {
+//         return join<", ">()
+//     }
+// }
+
+// extend Array with Equatable where T is Equatable {
+//     def infix ==(rhs: Self) -> Bool {
+//         if size != rhs.size {
+//             return false
+//         }
+
+//         for var i = 0u; i < size; ++i {
+//             if self[i] != rhs[i] {
+//                 return false
+//             }
+//         }
+
+//         return true
+//     }
+
+//     def containsOnly(t: T) -> Bool {
+//         for let el in self {
+//             if el != t {
+//                 return false
+//             }
+//         }
+
+//         return true
+//     }
+// }
+
+// extend Array with Comparable where T is Comparable {
+//     def infix <=>(rhs: Array) -> Int {
+//         if size < rhs.size {
+//             return -1
+//         }
+//         if size > rhs.size {
+//             return 1
+//         }
+
+//         for let i in 0u..size {
+//             var xxx = self[i]
+//             var yyy = rhs[i]
+
+//             var cmp = self[i] <=> rhs[i]
+//             if cmp < 0 {
+//                 return -1
+//             }
+//             if cmp > 0 {
+//                 return 1
+//             }
+//         }
+
+//         return 0
+//     }
+// }
+
+// extend Array with Copyable where T is Copyable {
+//     def copy() -> Array {
+//         var newAlloc = allocate(capacity * ElementSize) as! UnsafeMutablePtr<T>
+//         for let i in 0u..size {
+//             newAlloc[i] = BeginPtr[i].copy()
+//         }
+
+//         return Array(newAlloc, newAlloc + size, newAlloc + capacity)
+//     }
+
+//     def fillToCapacity(_ t: T) {
+//         var ptr = BeginPtr
+//         for let i in size..capacity {
+//             ptr[i] = t
+//         }
+
+//         EndPtr = CapPtr
+//     }
+
+//     def resize(_ to: UInt, _ t: T) {
+//         var cmp = size <=> to
+//         if cmp == 0 {
+//             return
+//         }
+//         if cmp > 0 {
+//             // run destructors
+//             while size > to {
+//                 builtin.deinit(BeginPtr[size - 1])
+//                 --EndPtr
+//             }
+
+//             return
+//         }
+
+//         reserve(to)
+//         for let i in size..to {
+//             BeginPtr[i] = t
+//         }
+
+//         EndPtr = BeginPtr + to
+//     }
+// }
+
+// public struct ArrayView<T> {
+//     internal let data: UnsafePtr<T> { get }
+//     internal let size: u64 { get }
+
+//     init (_ t: ref T) {
+//         self.data = builtin.addressOf(t)
+//         self.size = 1
+//     }
+
+//     internal init (_ data: UnsafePtr<T>, _ size: u64) {
+//         self.data = data
+//         self.size = size
+//     }
+
+//     init(_ arr: [T]) {
+//         self.data = arr.unsafeBeginPtr
+//         self.size = arr.size
+//     }
+
+//     init<let V: u64>(_ arr: borrow [T; V]) {
+//         self.data = (arr as! UnsafePtr<T>)
+//         self.size = V
+//     }
+
+//     subscript (idx: UInt) -> T {
+//         return data[idx].copy()
+//     }
+// }
+
+// public struct MutableArrayView<T> {
+//     internal let data: UnsafeMutablePtr<T> { get }
+//     internal let size: u64 { get }
+
+//     init (_ t: mut ref T) {
+//         self.data = builtin.addressOf(&t)
+//         self.size = 1
+//     }
+
+//     internal init (_ data: UnsafeMutablePtr<T>, _ size: u64) {
+//         self.data = data
+//         self.size = size
+//     }
+
+//     init(_ arr: [T]) {
+//         self.data = arr.unsafeBeginPtr
+//         self.size = arr.size
+//     }
+
+//     init<let V: u64>(_ arr: ref [T; V]) {
+//         self.data = (arr as! UnsafeMutablePtr<T>)
+//         self.size = V
+//     }
+
+//     subscript (idx: UInt) -> T {
+//         get {
+//             return data[idx]
+//         }
+//         set {
+//             data[idx] = newVal
+//         }
+//     }
+// }
+
+// macro array_view_impl{
+//     ($($name:tok)*) => { $(
+//         extend $name {
+//             init {
+//                 self.data = 0 as! UnsafePtr<T>
+//                 self.size = 0
+//             }
+
+//             prop front: T {
+//                 assert!(!empty, "called 'front' on empty collection")
+//                 return data[0]
+//             }
+
+//             prop back: T {
+//                 assert!(!empty, "called 'back' on empty collection")
+//                 return data[size - 1u]
+//             }
+
+//             prop empty: i1 {
+//                 return size == 0
+//             }
+//         }
+
+//         extend $name with Copyable, ImplicitlyCopyable {}
+
+//         extend $name with Iterable {
+//             struct Iterator with IteratorProtocol {
+//                 private let data: UnsafePtr<T>
+//                 private let size: u64 { get }
+//                 private var idx: u64 = 0
+
+//                 associatedType Element = T
+
+//                 init (_ view: $name) {
+//                     self.data = view.data
+//                     self.size = view.size
+//                     self.idx = 0
+//                 }
+
+//                 def mutating next() -> T? {
+//                     if idx >= size {
+//                         return none
+//                     }
+
+//                     return .Some(data[idx++].copy())
+//                 }
+//             }
+
+//             associatedType Element = T
+//             associatedType It = Iterator
+
+//             def getIterator() -> It {
+//                 return Iterator(self)
+//             }
+//         }
+
+//         extend $name with StringRepresentable {
+//             def toString<let begin: u8 = '[', let end: u8 = ']'>() -> String {
+//                 var s = ""
+//                 s += begin
+
+//                 var i = 0u
+//                 for let el in self {
+//                     if i++ != 0 {
+//                         s += ", "
+//                     }
+
+//                     s += String(el)
+//                 }
+
+//                 s += end
+//                 return s
+//             }
+//         }
+
+//         extend $name {
+//             def dropFront(_ drop: u64) -> Self {
+//                 if drop > size {
+//                     return Self()
+//                 }
+
+//                 return Self(data + drop, size - drop)
+//             }
+
+//             def dropBack(_ drop: u64) -> Self {
+//                 if drop > size {
+//                     return Self()
+//                 }
+
+//                 return Self(data, size - drop)
+//             }
+
+//             def takeFront(_ take: u64) -> Self {
+//                 if take > size {
+//                     return self
+//                 }
+
+//                 return Self(data, take)
+//             }
+
+//             def takeBack(_ take: u64) -> Self {
+//                 if take > size {
+//                     return self
+//                 }
+//                 return Self(data + (size - take), take)
+//             }
+//         }
+//     )... }
+// }
+
+// array_view_impl!{ ArrayView MutableArrayView }
+
+using std.collection.CowBuffer
+
+protocol ExpressibleByArrayLiteral {
+    associatedType Element
+    init (s: Array<Element>)
+}
+
+public struct Array<T> {
+    /// The copy-on-write buffer.
+    internal var buffer: CowBuffer<T>
+
+    /// Memberwise initializer.
+    internal memberwise init
+
+    /// Empty C'tor. Initializes an empty string.
+    init {
+        self.buffer = CowBuffer<T>()
+    }
+
+    /// Initialize from a static array. This is only called by the compiler
+    /// when the lifetime of the array is guaranteed to exceed the lifetime of
+    /// this array.
+    private init (staticBuffer bytes: UnsafePtr<T>, size: Int) {
+        self.buffer = CowBuffer<T>(staticBuffer: bytes, size)
+    }
+
+    /// C'tor. Initialize from an externally allocated array.
+    init (rawBytes bytes: UnsafePtr<T>, size: Int = -1) {
+        var size = size
+        if size == -1 {
+            size = libc.strlen(bytes) as Int
+        }
+
+        self.init()
+        self.buffer.owned = false
+        self.buffer.uncheckedAppend(bytes, size)
+    }
+
+    /// C'tor. Initialize with an initial capacity of bytes.
+    public init(withInitialCapacity capacity: Int) {
+        self.init()
+        buffer.grow(byAtLeast: capacity)
+    }
+
+    /// \return a pointer to the beginning of this arrays buffer.
+    prop unsafeBuffer: UnsafePtr<T> {
+        return buffer.bytes
+    }
+}
+
+extend Array with RandomAccessCollection {
+    /// \inherit
+    associatedType Element = T
+
+    /// \inherit
+    prop size: Int {
+        return buffer.bufferSize
+    }
+
+    /// \inherit
+    prop capacity: Int {
+        return buffer.bufferCapacity
+    }
+
+    /// \inherit
+    associatedType Index = Int
+
+    /// \inherit
+    prop startIndex: Index {
+        return 0
+    }
+
+    /// \inherit
+    prop endIndex: Index {
+        return size as Int
+    }
+
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        get {
+            _checkIndex(idx)
+            return buffer.bytes[idx]
+        }
+        set {
+            _checkIndex(idx)
+            buffer.bytes[idx] = newVal
+        }
+    }
+
+    /// \inherit
+    associatedType SubSequence = Self
+
+    /// \inherit
+    subscript (_ range: Range<Index>) -> SubSequence {
+        // Since this is not mutating, we need this ugly conversion here.
+        var SelfPtr = builtin.unsafeConstCast(builtin.addressOf(self))
+        return SelfPtr->slice(from: range.startIndex, length: range.size)
+    }
+
+    /// Return a subsequence starting at \param offset with length \param length.
+    def mutating slice(from offset: Index = 0,
+                       length: Int = limits.max<Int>) -> Self {
+        if offset >= size {
+            return Self()
+        }
+
+        var len = math.min(size - offset, length)
+        return Self(buffer: CowBuffer<T>(&buffer, offset, length))
+    }
+}
+
+extend Array with MutableCollection {
+    /// \inherit
+    def mutating insert(_ el: owned T, at idx: Index) {
+        buffer.insert(el, at: idx)
+    }
+
+    /// \inherit
+    def mutating remove(at position: Index) -> T {
+        _checkIndex(position)
+
+        var t = self[position]
+        buffer.remove(at: position)
+
+        return t
+    }
+
+    /// \inherit
+    def mutating clear() {
+        buffer.clear()
+    }
+
+    /// \inherit
+    def mutating reserveCapacity(_ capacity: Int) {
+        if capacity < self.capacity {
+            return
+        }
+
+        buffer.grow(byAtLeast: capacity - self.capacity)
+    }
+
+    /// \inherit
+    def mutating reverse(fromIndex position: Index) {
+        _checkIndex(position)
+        buffer.reverse(fromIndex: position)
+    }
+}

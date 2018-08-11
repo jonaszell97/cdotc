@@ -1,0 +1,113 @@
+
+@compiletime
+module std.prelude
+
+@extern(C)
+public def _cdot_AssertionFailure(_ cond: String,
+                                  _ msg: String,
+                                  _ loc: reflect.SourceLocation,
+                                  _ func: String) -> Never {
+    print("[21;31massertion failed:[0m '$cond', $msg (in function '$func', file '${loc.fileName}', line: ${loc.line})")
+    sys.abort()
+}
+
+macro assert(
+    ($cond:any, $msg:expr) => {
+        static if reflect.debug {
+            if !($cond) {
+                _cdot_AssertionFailure(stringify!($cond), $msg,
+                                       std.reflect.sourceLocation,
+                                       std.reflect.function)
+            }
+        }
+    }
+)
+
+macro assert_compiles{
+    ($code:any, $msg:expr) => {
+        static if !__traits(compiles, { $code }) {
+            static_assert(false, $msg)
+        }
+    }
+}
+
+macro require(
+    ($cond:any, $msg:expr) => {
+        if !($cond) {
+            _cdot_AssertionFailure(stringify!($cond), $msg, std.reflect.sourceLocation, 
+                                   std.reflect.function)
+        }
+    }
+)
+
+@extern(C)
+public def _cdot_PreconditionFailure(_ msg: String,
+                                     _ loc: reflect.SourceLocation,
+                                     _ func: String) -> Never {
+    print("precondition violated: $msg (in function '$func', file '${loc.fileName}', line: ${loc.line})")
+    sys.abort()
+}
+
+macro precondition(
+    ($cond:any, $msg:expr) => {
+        if !($cond) {
+            _cdot_PreconditionFailure($msg, std.reflect.sourceLocation, std.reflect.function)
+        }
+    }
+)
+
+@extern(C)
+public def _cdot_Unreachable(_ msg: String,
+                             _ loc: reflect.SourceLocation,
+                             _ func: String) -> Never {
+    print("[21;31munreachable executed:[0m $msg (in function '$func', file '${loc.fileName}', line: ${loc.line})")
+    sys.abort()
+}
+
+macro unreachable(
+    ($msg:expr) => {
+        _cdot_Unreachable($msg, std.reflect.sourceLocation, std.reflect.function)
+    },
+    () => {
+        _cdot_Unreachable("unreachable executed!", std.reflect.sourceLocation,
+                          std.reflect.function)
+    }
+)
+
+macro debug(
+    ($msg:expr) => {
+        static if reflect.debug {
+            print($msg)
+        }
+    }
+)
+
+macro ignore_code {
+    ($toks:any) => {}
+}
+
+macro compound_assign{
+    ($($op:tok)*) => {
+        $(
+            public def mutating infix ${$op=}(rhs: Self) {
+                self = self $op rhs
+            }
+        )...
+    }
+}
+
+macro enum_arithmetic{
+    () => {
+        static_assert(Self is enum, "enum_arithmetic!{} should only be applied to enums!")
+
+        alias __UnderlyingTy = reflect.underlyingType<Self>
+        public def infix |(rhs: Self) -> Self {
+            return ((self as __UnderlyingTy) | (rhs as __UnderlyingTy)) as Self
+        }
+        public def infix &(rhs: Self) -> __UnderlyingTy {
+            return (self as __UnderlyingTy) & (rhs as __UnderlyingTy)
+        }
+
+        compound_assign!{ | & }
+    }
+}

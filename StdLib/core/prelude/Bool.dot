@@ -1,0 +1,39 @@
+
+@version(None)
+module std
+
+using Builtin.Primitive.{int1}
+
+protocol BooleanProtocol {
+    def prefix ! () -> Self
+    def infix as Bool ()
+}
+
+@inline(always)
+struct Bool {
+    var val: int1
+
+    init {
+        val = 0
+    }
+}
+
+extend Bool with BooleanProtocol {
+    def prefix ! -> Bool {
+        return Bool(!val)
+    }
+    
+    def infix as Bool {
+        return self
+    }
+}
+
+extend Bool with StringRepresentable {
+    def infix as String {
+        if val {
+            return "true"
+        }
+
+        return "false"
+    }
+}
