@@ -643,6 +643,8 @@ public:
    void setParentCtxUnchecked(DeclContext *parent);
 
    DeclContext *lookThroughExtension() const;
+   bool isLocalContext() const;
+   bool inLocalContext() const;
 
    DeclContext* getPrimaryCtx() const { return primaryCtx; }
    void setPrimaryCtx(DeclContext* V);

@@ -785,6 +785,21 @@ DeclContext* DeclContext::lookThroughExtension() const
    return const_cast<DeclContext*>(this);
 }
 
+bool DeclContext::isLocalContext() const
+{
+   return isa<CallableDecl>(this);
+}
+
+bool DeclContext::inLocalContext() const
+{
+   for (auto *Ctx = this; Ctx; Ctx = Ctx->getParentCtx()) {
+      if (Ctx->isLocalContext())
+         return true;
+   }
+
+   return false;
+}
+
 void DeclContext::setPrimaryCtx(DeclContext *V)
 {
    assert(V->isPrimaryCtx());

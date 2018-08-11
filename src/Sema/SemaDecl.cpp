@@ -787,7 +787,7 @@ void SemaPass::ActOnRecordDecl(RecordDecl *R)
    for (auto &P : R->getTemplateParams())
       ActOnTemplateParamDecl(*R, P);
 
-   if (stage == Stage::Parsing) {
+   if (stage == Stage::Parsing && !getDeclContext().inLocalContext()) {
       DelayedDecls.push_back(R);
    }
 
