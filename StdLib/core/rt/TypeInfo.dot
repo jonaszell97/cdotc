@@ -1,5 +1,5 @@
 
-module std.prelude
+module std.rt
 
 public struct TypeInfo {
     let baseClass: UnsafePtr<TypeInfo>
@@ -8,6 +8,11 @@ public struct TypeInfo {
     let name: UnsafePtr<u8>
     let deinitializer: @thin (UnsafeMutableRawPtr) -> Void
     let conformances: UnsafePtr<UnsafePtr<TypeInfo>>
+}
+
+@extern(C)
+public def _cdot_GetTypeInfo(_ ptr: UnsafeMutablePtr<Refcounted>) -> UnsafePtr<TypeInfo> {
+    return ptr->typeInfo
 }
 
 @extern(C)
@@ -53,9 +58,8 @@ struct AnyOption {
 
 @extern(C)
 public def _cdot_DynamicDownCast(_ object: UnsafePtr<ClassHeader>,
-                                 _ lhs: UnsafePtr<TypeInfo>,
                                  _ rhs: UnsafePtr<TypeInfo>) -> AnyOption {
-    var curr = lhs
+    var curr = object->typeInfo
     while curr {
         if curr == rhs {
             return AnyOption(discriminator: 1, objectRef: object)
@@ -66,3 +70,6 @@ public def _cdot_DynamicDownCast(_ object: UnsafePtr<ClassHeader>,
 
     return AnyOption(discriminator: 0, objectRef: __nullptr)
 }
+
+@extern(C)
+public def _cdot_ProtoWrap
